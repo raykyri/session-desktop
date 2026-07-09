@@ -919,10 +919,7 @@ fn send_agent_turn(
         // Demote that stale working status so the queue can't deadlock. Skills that do
         // start a real turn re-promote via their own UserPromptSubmit/PreToolUse hooks.
         if let Some(current) = state.agent(&agent.id)?
-            && matches!(
-                current.status,
-                AgentStatus::Running | AgentStatus::Starting
-            )
+            && matches!(current.status, AgentStatus::Running | AgentStatus::Starting)
         {
             state.set_agent_status(&agent.id, AgentStatus::AwaitingInput)?;
         }
@@ -1031,6 +1028,8 @@ mod tests {
             parent_id: None,
             fork_point: None,
             root_session_id: None,
+            thread_id: None,
+            branch_id: None,
             paused: false,
             created_at: 1,
         }
@@ -1052,6 +1051,8 @@ mod tests {
             parent_id: None,
             fork_point: None,
             root_session_id: None,
+            thread_id: None,
+            branch_id: None,
             paused: false,
             created_at: 1,
         }
@@ -1757,7 +1758,10 @@ mod tests {
         );
         let json = serde_json::to_string(&turn).unwrap();
         assert!(json.contains(r#""kind":"fork""#), "unexpected json: {json}");
-        assert!(json.contains(r#""useWorktree":true"#), "unexpected json: {json}");
+        assert!(
+            json.contains(r#""useWorktree":true"#),
+            "unexpected json: {json}"
+        );
         let back: QueuedTurn = serde_json::from_str(&json).unwrap();
         assert_eq!(
             back.delivery,
@@ -1773,8 +1777,7 @@ mod tests {
         // field) still load, with no delivery directive.
         let legacy: QueuedTurn = serde_json::from_str(r#""plain text""#).unwrap();
         assert!(legacy.delivery.is_none());
-        let object: QueuedTurn =
-            serde_json::from_str(r#"{"text":"t","pauseAfter":true}"#).unwrap();
+        let object: QueuedTurn = serde_json::from_str(r#"{"text":"t","pauseAfter":true}"#).unwrap();
         assert!(object.delivery.is_none());
         assert!(object.pause_after);
     }
@@ -1791,7 +1794,9 @@ mod tests {
             QueueDeliveryAgentTurnRequest {
                 agent_id: "agent-1".to_string(),
                 data: "fork me".to_string(),
-                delivery: QueuedTurnDelivery::Fork { use_worktree: false },
+                delivery: QueuedTurnDelivery::Fork {
+                    use_worktree: false,
+                },
             },
         )
         .unwrap_err();
@@ -1850,7 +1855,9 @@ mod tests {
             QueueDeliveryAgentTurnRequest {
                 agent_id: "agent-1".to_string(),
                 data: "fork me".to_string(),
-                delivery: QueuedTurnDelivery::Fork { use_worktree: false },
+                delivery: QueuedTurnDelivery::Fork {
+                    use_worktree: false,
+                },
             },
         )
         .unwrap();
@@ -1864,7 +1871,9 @@ mod tests {
         assert_eq!(queued[0].text, "fork me");
         assert_eq!(
             queued[0].delivery,
-            Some(QueuedTurnDelivery::Fork { use_worktree: false })
+            Some(QueuedTurnDelivery::Fork {
+                use_worktree: false
+            })
         );
         let agent = state.agent("agent-1").unwrap().unwrap();
         assert!(matches!(agent.status, AgentStatus::Done));
@@ -1894,7 +1903,9 @@ mod tests {
                 "agent-1",
                 QueuedTurn::delivering(
                     "fork me".to_string(),
-                    QueuedTurnDelivery::Fork { use_worktree: false },
+                    QueuedTurnDelivery::Fork {
+                        use_worktree: false,
+                    },
                 ),
             )
             .unwrap();
