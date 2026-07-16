@@ -1146,6 +1146,7 @@ mod tests {
             info: PaneInfo {
                 id: id.to_string(),
                 title: id.to_string(),
+                last_osc_title: None,
                 kind: if agent_id.is_some() {
                     PaneKind::Agent
                 } else {
