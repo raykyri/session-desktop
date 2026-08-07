@@ -1523,6 +1523,7 @@ mod tests {
             workspace_root: temp_workspace(),
             socket_path: PathBuf::from("/tmp/qmux-test.sock"),
             adapters: AdapterConfigs {
+                acp: Default::default(),
                 claude: ClaudeAdapterConfig {
                     binary: Some("claude".to_string()),
                 },
@@ -1544,6 +1545,7 @@ mod tests {
 
     fn sample_agent(status: AgentStatus) -> AgentInfo {
         AgentInfo {
+            acp_agent: None,
             id: "agent-1".to_string(),
             group_id: "group-1".to_string(),
             adapter: "claude".to_string(),
@@ -1568,6 +1570,7 @@ mod tests {
 
     fn sample_agent_with_id(id: &str, status: AgentStatus, pane_id: Option<&str>) -> AgentInfo {
         AgentInfo {
+            acp_agent: None,
             id: id.to_string(),
             group_id: "group-1".to_string(),
             adapter: "claude".to_string(),
