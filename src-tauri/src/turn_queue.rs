@@ -1466,7 +1466,7 @@ mod tests {
     use crate::adapters::{ComposerPolicy, PermissionAction};
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        OpencodeAdapterConfig, QmuxConfig,
+        MuseAdapterConfig, OpencodeAdapterConfig, QmuxConfig,
     };
     use crate::state::{PaneBacklog, PaneInfo, PaneKind, PaneRuntime, PaneStatus};
     use crate::workspace::{detach_pane_agent, mark_agent_failed};
@@ -1537,6 +1537,9 @@ mod tests {
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
+                muse: MuseAdapterConfig {
+                    binary: Some("muse".to_string()),
+                },
             },
             legacy_claude_binary: None,
             claude_plugin_dir: std::path::PathBuf::new(),
@@ -1560,6 +1563,7 @@ mod tests {
             status,
             model: None,
             effort: None,
+            approval_mode: None,
             parent_id: None,
             fork_point: None,
             root_session_id: None,
@@ -1586,6 +1590,7 @@ mod tests {
             status,
             model: None,
             effort: None,
+            approval_mode: None,
             parent_id: None,
             fork_point: None,
             root_session_id: None,
