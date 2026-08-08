@@ -2364,7 +2364,8 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 }
 
 .settings-inline-link-button {
-  font-size: inherit;
+  font-size: var(--fs-sm);
+  opacity: 0.85;
 }
 
 .settings-shortcut-message {
