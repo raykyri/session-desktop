@@ -1914,10 +1914,6 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   opacity: 1;
 }
 
-.settings-completion-sound-row {
-  align-items: flex-start;
-}
-
 .settings-completion-sound-controls {
   display: flex;
   flex: none;
