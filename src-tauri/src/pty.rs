@@ -4399,7 +4399,7 @@ mod tests {
         AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root: PathBuf::from("/tmp/qmux-workspaces"),
-            socket_path: PathBuf::from("/tmp/qmux.sock"),
+            socket_path: PathBuf::from("/tmp/session.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -6121,7 +6121,7 @@ mod tests {
         );
         assert_eq!(
             env_value(&envs, "SESSION_SOCK"),
-            Some("/tmp/qmux.sock".to_string())
+            Some("/tmp/session.sock".to_string())
         );
         let token = env_value(&envs, "SESSION_TOKEN").expect("pane token env is present");
         assert_eq!(token, state.pane_token("pane-123").unwrap());

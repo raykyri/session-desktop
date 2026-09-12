@@ -2241,7 +2241,7 @@ mod tests {
                 "cwd": "/explicit/launch/dir",
                 "canonicalCwd": "/private/explicit/launch/dir",
                 "sessionId": Value::Null,
-                "sock": "/tmp/qmux.sock",
+                "sock": "/tmp/session.sock",
                 "token": "tok",
                 "updatedAt": 1,
             })

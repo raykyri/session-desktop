@@ -498,7 +498,7 @@ mod tests {
 
     #[test]
     fn pane_child_path_puts_the_shim_first_without_duplicates() {
-        let shim = PathBuf::from("/private/Session runtime/bin/qmux.sock");
+        let shim = PathBuf::from("/private/Session runtime/bin/session.sock");
         let inherited = env::join_paths([
             PathBuf::from("/usr/bin"),
             shim.clone(),
@@ -519,13 +519,13 @@ mod tests {
     #[test]
     fn pane_child_path_materializes_a_qmux_command_for_the_current_executable() {
         let root = temp_root("pane-child-path");
-        let socket = root.join("run/qmux.sock");
+        let socket = root.join("run/session.sock");
         let process_path_before = env::var_os("PATH");
 
         let child_path = pane_child_path(&socket).unwrap();
         let dirs = env::split_paths(OsStr::new(&child_path)).collect::<Vec<_>>();
 
-        assert_eq!(dirs[0], root.join("run/qmux-bin/qmux.sock"));
+        assert_eq!(dirs[0], root.join("run/qmux-bin/session.sock"));
         assert_eq!(
             fs::read_link(dirs[0].join("session")).unwrap(),
             session_cli_path().unwrap()
@@ -591,10 +591,10 @@ mod tests {
     fn session_cli_shim_refuses_to_replace_a_directory() {
         let root = temp_root("cli-shim-directory");
         let runtime = root.join("run");
-        let socket = runtime.join("qmux.sock");
+        let socket = runtime.join("session.sock");
         let cli = root.join("app/qmux");
         touch(&cli);
-        let occupied = runtime.join("qmux-bin/qmux.sock/session");
+        let occupied = runtime.join("qmux-bin/session.sock/session");
         fs::create_dir_all(&occupied).unwrap();
 
         let error = ensure_session_cli_shim(&socket, &cli).unwrap_err();
@@ -610,7 +610,7 @@ mod tests {
         let runtime = root.join("shared");
         fs::create_dir(&runtime).unwrap();
         fs::set_permissions(&runtime, fs::Permissions::from_mode(0o755)).unwrap();
-        let socket = runtime.join("qmux.sock");
+        let socket = runtime.join("session.sock");
         let cli = root.join("app/qmux");
         touch(&cli);
 

@@ -112,7 +112,7 @@ and execution are implemented by `src-tauri/src/research.rs`,
 
 Research data is stored under the configured qmux workspace root for compatibility.
 The development configuration in `qmux.config.json` uses `~/.qmux/workspaces` and
-`~/.qmux/run/qmux.sock`. Shipping builds use the existing platform application-data
+`~/.qmux/run/session.sock`. Shipping builds use the existing platform application-data
 location associated with the unchanged bundle identifier.
 
 See [docs/research-activity.md](docs/research-activity.md) for the activity feed and

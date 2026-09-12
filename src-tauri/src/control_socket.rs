@@ -1597,7 +1597,7 @@ mod tests {
 
     fn runtime_fixture() -> (AppState, PathBuf) {
         let dir = temp_dir();
-        let socket_path = dir.join("qmux.sock");
+        let socket_path = dir.join("session.sock");
         runtime_state(dir, socket_path)
     }
 
@@ -2363,7 +2363,7 @@ mod tests {
     #[test]
     fn inspect_socket_path_classifies_missing_owned_and_replaced_inodes() {
         let dir = temp_dir();
-        let path = dir.join("qmux.sock");
+        let path = dir.join("session.sock");
         assert_eq!(inspect_socket_path(&path, None), PathCheck::Missing);
 
         let _listener = UnixListener::bind(&path).unwrap();
@@ -2381,7 +2381,7 @@ mod tests {
     #[test]
     fn rebind_after_unlink_does_not_remove_a_replacement_socket() {
         let dir = temp_dir();
-        let path = dir.join("qmux.sock");
+        let path = dir.join("session.sock");
         let _original = UnixListener::bind(&path).unwrap();
         std::fs::remove_file(&path).unwrap();
 

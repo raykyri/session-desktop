@@ -652,8 +652,8 @@ fn notification_socket_path() -> Result<PathBuf, String> {
         return Ok(path);
     }
     dirs::runtime_dir()
-        .map(|root| root.join("qmux").join("qmux.sock"))
-        .or_else(|| dirs::data_dir().map(|root| root.join("qmux").join("run").join("qmux.sock")))
+        .map(|root| root.join("qmux").join("session.sock"))
+        .or_else(|| dirs::data_dir().map(|root| root.join("qmux").join("run").join("session.sock")))
         .ok_or_else(|| {
             "could not locate Session's control socket; set SESSION_SOCK explicitly".to_string()
         })
@@ -727,8 +727,8 @@ fn resolve_notification_socket_path(
         return config_dir.join(configured);
     }
     dirs::runtime_dir()
-        .map(|root| root.join("qmux").join("qmux.sock"))
-        .or_else(|| dirs::data_dir().map(|root| root.join("qmux").join("run").join("qmux.sock")))
+        .map(|root| root.join("qmux").join("session.sock"))
+        .or_else(|| dirs::data_dir().map(|root| root.join("qmux").join("run").join("session.sock")))
         .unwrap_or_else(|| config_dir.join(configured))
 }
 
@@ -1277,18 +1277,18 @@ mod tests {
         assert_eq!(
             resolve_notification_socket_path(
                 Path::new("/tmp/session-cli-home/config"),
-                Path::new("~/run/qmux.sock"),
+                Path::new("~/run/session.sock"),
                 Some(home),
             ),
-            PathBuf::from("/tmp/session-cli-home/run/qmux.sock")
+            PathBuf::from("/tmp/session-cli-home/run/session.sock")
         );
         assert_eq!(
             resolve_notification_socket_path(
                 Path::new("/tmp/session-cli-home/config"),
-                Path::new("run/qmux.sock"),
+                Path::new("run/session.sock"),
                 Some(home),
             ),
-            PathBuf::from("/tmp/session-cli-home/config/run/qmux.sock")
+            PathBuf::from("/tmp/session-cli-home/config/run/session.sock")
         );
     }
 }

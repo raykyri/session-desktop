@@ -1281,7 +1281,10 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
                 &remote_identity(),
                 "remote-token",
                 &[
-                    ("SESSION_SOCK".to_string(), "/local/qmux.sock".to_string()),
+                    (
+                        "SESSION_SOCK".to_string(),
+                        "/local/session.sock".to_string(),
+                    ),
                     ("SESSION_CLI".to_string(), "/Applications/qmux".to_string()),
                     ("SESSION_TOKEN".to_string(), "pane-token".to_string()),
                     ("SESSION_USER_TOKEN".to_string(), "user-token".to_string()),
@@ -1475,7 +1478,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
         let commands = remote_host()
             .tmux_session_commands(
                 &remote_identity(),
-                "/local/run/qmux.sock",
+                "/local/run/session.sock",
                 "remote-token",
                 "/srv/work/a b",
                 120,
@@ -1539,11 +1542,12 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
                 .windows(2)
                 .any(|pair| { pair == ["-o", "ObscureKeystrokeTiming=no"] })
         );
-        assert!(
-            commands.attach_argv.windows(2).any(|pair| {
-                pair == ["-R", "/tmp/qmux-pane-7-deadbeef.sock:/local/run/qmux.sock"]
-            })
-        );
+        assert!(commands.attach_argv.windows(2).any(|pair| {
+            pair == [
+                "-R",
+                "/tmp/qmux-pane-7-deadbeef.sock:/local/run/session.sock",
+            ]
+        }));
 
         let probe = commands.probe_argv.last().unwrap();
         assert!(probe.contains("'has-session' '-t' '=qmux-pane-7-deadbeef'"));
@@ -1633,7 +1637,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
     #[test]
     fn existing_session_commands_cannot_create_a_missing_session() {
         let commands = remote_host()
-            .existing_tmux_session_commands(&remote_identity(), "/local/run/qmux.sock")
+            .existing_tmux_session_commands(&remote_identity(), "/local/run/session.sock")
             .unwrap();
 
         assert!(commands.create_argv.is_empty());
@@ -1661,7 +1665,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
         let mut identity = remote_identity();
         identity.support_dir = Some("/srv/work/.qmux/support/pane-7".to_string());
         let commands = remote_host()
-            .existing_tmux_session_commands(&identity, "/local/run/qmux.sock")
+            .existing_tmux_session_commands(&identity, "/local/run/session.sock")
             .unwrap();
         assert!(
             commands
@@ -1674,7 +1678,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
         identity.support_dir = Some("/".to_string());
         assert!(
             remote_host()
-                .existing_tmux_session_commands(&identity, "/local/run/qmux.sock")
+                .existing_tmux_session_commands(&identity, "/local/run/session.sock")
                 .unwrap_err()
                 .contains("escapes")
         );
@@ -1682,7 +1686,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
         identity.support_dir = Some("/srv/work/.qmux/support/..".to_string());
         assert!(
             remote_host()
-                .existing_tmux_session_commands(&identity, "/local/run/qmux.sock")
+                .existing_tmux_session_commands(&identity, "/local/run/session.sock")
                 .unwrap_err()
                 .contains("not a managed pane directory")
         );
@@ -1695,7 +1699,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
         let err = for_group(Some(&reference))
             .tmux_session_commands(
                 &remote_identity(),
-                "/run/qmux.sock",
+                "/run/session.sock",
                 "remote-token",
                 "/srv/work",
                 80,
@@ -1723,7 +1727,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
                 args: vec!["agent".to_string()],
                 forwards: vec![SocketForward {
                     remote_path: "/tmp/qmux-remote.sock".to_string(),
-                    local_path: "/run/qmux.sock".to_string(),
+                    local_path: "/run/session.sock".to_string(),
                 }],
                 ..Default::default()
             },
@@ -1736,7 +1740,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
         assert!(!argv.iter().any(|arg| arg == "ControlPath=~/.ssh/qmux-%C"));
         assert!(
             argv.windows(2)
-                .any(|pair| pair == ["-R", "/tmp/qmux-remote.sock:/run/qmux.sock"]),
+                .any(|pair| pair == ["-R", "/tmp/qmux-remote.sock:/run/session.sock"]),
             "{argv:?}"
         );
         // Without this a reconnect after an unclean disconnect fails, because
