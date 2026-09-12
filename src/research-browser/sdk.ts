@@ -14,7 +14,7 @@ export interface ResearchBrowserSdk {
 export function connectResearchBrowser(): Promise<ResearchBrowserSdk> {
   if (window.parent === window)
     return Promise.reject(
-      new Error("Open this view inside qmux’s Research Browser"),
+      new Error("Open this view inside Session’s Research Browser"),
     );
   const global = window as Window & {
     __qmuxBrowserSdk?: Promise<ResearchBrowserSdk>;

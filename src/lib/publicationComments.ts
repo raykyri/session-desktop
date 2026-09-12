@@ -76,7 +76,7 @@ export function encodeProposalResolution(payload: ProposalResolutionPayload) {
   const normalized = validateProposalResolution(payload);
   const message =
     normalized.status === "accepted"
-      ? "Accepted this follow-up into the owner's qmux research tree."
+      ? "Accepted this follow-up into the owner's Session research tree."
       : "The owner declined this follow-up.";
   return `${PROPOSAL_RESOLUTION_MARKER_PREFIX}${encodeMarkerPayload(normalized)}${COMMENT_MARKER_SUFFIX}\n\n${message}`;
 }

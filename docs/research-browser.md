@@ -1,20 +1,20 @@
 # Research Browser templates (SDK v1)
 
-Research Browser replaces the Recent Activity tab. qmux owns its header, sidebar,
+Research Browser replaces the Recent Activity tab. Session owns its header, sidebar,
 data, research runs, and journal undo. The iframe owns the activity/conversation
 pages below that header. Editing or reloading the iframe leaves native runs alive.
 
 ## Iterate against your installed app
 
 The installed application needs a build containing the Research Browser host once.
-After that, frontend template changes do not require rebuilding qmux:
+After that, frontend template changes do not require rebuilding Session:
 
 ```sh
 npm install
 npm run dev:research-browser
 ```
 
-In qmux, open **Research Browser → View source**, enter
+In Session, open **Research Browser → View source**, enter
 `http://127.0.0.1:1421/research-browser.html` as the development server URL, and
 click **Load from server**. Edit
 `src/research-browser/ConversationPage.tsx`, `src/research-browser/view.css`, or the
@@ -31,7 +31,7 @@ npm run dev:research-browser -- examples/research-browser
 
 Load `http://127.0.0.1:1421/` for an `index.html`, or append your HTML filename.
 HTML, JS, CSS, TypeScript, and TSX are supported by the local Vite server. React and
-React DOM are resolved from qmux's dependencies, so a small template needs no
+React DOM are resolved from Session's dependencies, so a small template needs no
 separate package installation. JSX files should use `.tsx` or `.jsx` extensions.
 The server must stay running for external views. The bundled view works offline;
 **Use built-in view** in the same dialog restores it even if a template fails.
@@ -53,7 +53,7 @@ The bridge uses a versioned handshake and a private MessageChannel, with an expl
 method allowlist. It does not expose arbitrary native `invoke`, file reads, or SQL.
 Data operations use existing backend validation, revision checks, events, and runs.
 Never call Tauri directly from a template. Changes requiring new native operations
-still require a qmux update.
+still require a Session update.
 
 Routes, drafts, and scroll state are stored by the parent for this app session and
 survive iframe reloads and switching away from the tab. Back/Forward in the parent
@@ -70,18 +70,18 @@ With the provided server, use either import:
 import { connectResearchBrowser } from "@qmux/research-browser";
 // Plain HTML module scripts can import from "/@qmux/sdk".
 
-const qmux = await connectResearchBrowser();
-const snapshot = qmux.getSnapshot();
-const trees = await qmux.call("research.list", true); // include archived
-const detail = await qmux.call("research.getTree", trees[0].id);
-const content = await qmux.call("research.getNodeContent", detail.tree.rootNodeId);
+const session = await connectResearchBrowser();
+const snapshot = session.getSnapshot();
+const trees = await session.call("research.list", true); // include archived
+const detail = await session.call("research.getTree", trees[0].id);
+const content = await session.call("research.getNodeContent", detail.tree.rootNodeId);
 // content: { node, turns, children, sourceError?, responseRevision? }
 // Each turn includes its role and ordered text/tool blocks.
 
-const child = await qmux.call(
+const child = await session.call(
   "research.fork", content.node.id, "Explore an alternative", null, null, false,
 );
-await qmux.call("navigation.go", `/research/${child.treeId}/node/${child.id}`);
+await session.call("navigation.go", `/research/${child.treeId}/node/${child.id}`);
 ```
 
 The authoritative typed contract is `src/research-browser/protocol.ts`. Arguments
@@ -99,7 +99,7 @@ and return types retain existing backend API signatures:
 | Attention | `research.markViewed(treeId)` |
 | Journal | `journal.add(text)`, `journal.remove(id)`, `journal.retry(id)`, `journal.undo()`, `journal.dismissUndo()` |
 | Feed | `activity.loadOlder()` uses the parent's reconciled pagination |
-| Navigation | `navigation.go(route)`, `navigation.back()`, `navigation.forward()`, `navigation.openDocument(treeId, nodeId)`, `navigation.openTerminal(paneId)` |
+| Navigation | `navigation.go(route)`, `navigation.back()`, `navigation.forward()`, `navigation.openDocument(treeId, nodeId)` |
 | Native UI | `ui.openExternalUrl(url)`, `ui.writeClipboardText(text)`, `ui.reportError(message)` |
 | Session state | `viewState.save(key, value)` stores structured-cloneable data |
 
@@ -115,9 +115,9 @@ Calls time out after 60 seconds. A timed-out write may have completed: refresh b
 retrying. Writes are never automatically replayed after disconnect or timeout.
 
 ```ts
-const stop = qmux.subscribe((name, value) => {
+const stop = session.subscribe((name, value) => {
   if (name === "snapshot") {
-    const { activity, route, viewState, theme } = qmux.getSnapshot();
+    const { activity, route, viewState, theme } = session.getSnapshot();
     // Render the latest parent activity state, route, or restored view state.
   }
   if (name === "research.changed" || name === "reconnected") {
@@ -127,7 +127,7 @@ const stop = qmux.subscribe((name, value) => {
 // Stop when the subscribing component unmounts.
 stop();
 
-await qmux.call("viewState.save", "my-draft", "Remember this text");
+await session.call("viewState.save", "my-draft", "Remember this text");
 ```
 
 Subscribe before reading `getSnapshot()` to avoid a read/subscribe race. Initial
@@ -135,7 +135,7 @@ state is available when the connection resolves. The bundled conversation page
 subscribes before fetching, serializes refreshes, and periodically refetches to
 recover missed events and read streaming content. Custom templates should follow
 that pattern. Theme snapshots include the parent's data attributes and inline
-CSS variables; the bundled template imports qmux's styles as well.
+CSS variables; the bundled template imports Session's styles as well.
 
 The SDK forwards recognized application shortcuts from the iframe to the existing
 parent dispatcher, preserving ordinary text-editing chords. It also forwards

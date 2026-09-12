@@ -14,7 +14,6 @@ import {
   researchCycleTabIds,
   researchTreeIdFromTabId,
   researchTreeTabId,
-  terminalTabForMode,
 } from "../src/lib/sidebarMode";
 import {
   nextTreeInResearchScope,
@@ -166,55 +165,14 @@ test("a stale, duplicate, or cross-scope reorder is ignored", () => {
   );
 });
 
-test("sidebar mode parsing safely defaults old or corrupt preferences to Terminal", () => {
+test("sidebar mode parsing always selects Research", () => {
   assert.equal(parseSidebarMode("research"), "research");
-  assert.equal(parseSidebarMode("terminal"), "terminal");
-  assert.equal(parseSidebarMode("other"), "terminal");
-  assert.equal(parseSidebarMode(null), "terminal");
+  assert.equal(parseSidebarMode("terminal"), "research");
+  assert.equal(parseSidebarMode("other"), "research");
+  assert.equal(parseSidebarMode(null), "research");
 });
 
-test("switching to Terminal restores a valid prior tab without crossing scope", () => {
-  const terminalA = group("terminal-a", "terminal");
-  const terminalB = group("terminal-b", "terminal");
-  const research = group("research-a", "research");
-  const groups = [terminalA, research, terminalB];
-  const panes = [
-    pane("research-pane", research.id),
-    pane("terminal-a-pane", terminalA.id),
-    pane("terminal-b-pane", terminalB.id),
-  ];
-
-  assert.equal(
-    terminalTabForMode(panes, groups, "terminal-b-pane"),
-    "terminal-b-pane",
-  );
-  assert.equal(
-    terminalTabForMode(panes, groups, "research-pane"),
-    "terminal-a-pane",
-  );
-  assert.equal(terminalTabForMode(panes, groups, "home"), "terminal-a-pane");
-  assert.equal(terminalTabForMode([], groups, "missing"), null);
-});
-
-test("switching to Terminal prefers a pane whose group is expanded", () => {
-  const terminalA = group("terminal-a", "terminal");
-  const terminalB = group("terminal-b", "terminal");
-  terminalA.collapsed = true;
-  const groups = [terminalA, terminalB];
-  const panes = [
-    pane("terminal-a-pane", terminalA.id),
-    pane("terminal-b-pane", terminalB.id),
-  ];
-
-  // The stale-preference fallback must not activate a tab the sidebar hides.
-  assert.equal(terminalTabForMode(panes, groups, "missing"), "terminal-b-pane");
-
-  // Every group collapsed: any pane beats an empty Terminal stage.
-  terminalB.collapsed = true;
-  assert.equal(terminalTabForMode(panes, groups, "missing"), "terminal-a-pane");
-});
-
-test("research cycling stays on the document when no research terminals are visible", () => {
+test("research cycling stays on the document when it is the only item", () => {
   const research = group("research", "research");
   const groups = [research];
   const treeTabId = researchTreeTabId("tree");
@@ -230,7 +188,7 @@ test("research cycling stays on the document when no research terminals are visi
   assert.equal(cycleTabId(ids, treeTabId, -1), treeTabId);
 });
 
-test("research cycling wraps between documents and visible research terminals", () => {
+test("research cycling wraps between documents and excludes runtime panes", () => {
   const terminal = group("terminal", "terminal");
   const researchA = group("research-a", "research");
   const researchB = group("research-b", "research");
@@ -249,18 +207,15 @@ test("research cycling wraps between documents and visible research terminals", 
 
   const treeOneTabId = researchTreeTabId("tree-one");
   const treeTwoTabId = researchTreeTabId("tree-two");
-  assert.deepEqual(ids, [treeOneTabId, treeTwoTabId, "research-one", "research-two"]);
+  assert.deepEqual(ids, [treeOneTabId, treeTwoTabId]);
   assert.equal(cycleTabId(ids, treeOneTabId, 1), treeTwoTabId);
-  assert.equal(cycleTabId(ids, treeTwoTabId, 1), "research-one");
-  assert.equal(cycleTabId(ids, "research-one", 1), "research-two");
-  assert.equal(cycleTabId(ids, "research-two", 1), treeOneTabId);
-  assert.equal(cycleTabId(ids, treeOneTabId, -1), "research-two");
-  assert.equal(cycleTabId(ids, "research-one", -1), treeTwoTabId);
+  assert.equal(cycleTabId(ids, treeTwoTabId, 1), treeOneTabId);
+  assert.equal(cycleTabId(ids, treeOneTabId, -1), treeTwoTabId);
   assert.equal(researchTreeIdFromTabId(treeTwoTabId), "tree-two");
   assert.equal(researchTreeIdFromTabId("research-one"), null);
 });
 
-test("research cycling honours the folder scope the sidebar is filtered to", () => {
+test("research cycling honours the folder scope and excludes runtime panes", () => {
   const researchA = group("research-a", "research");
   const researchB = group("research-b", "research");
   const panes = [
@@ -268,8 +223,7 @@ test("research cycling honours the folder scope the sidebar is filtered to", () 
     pane("pane-b", researchB.id),
   ];
 
-  // Scoped to A: B's live terminal has no sidebar row, so it must not be
-  // reachable by cycling either.
+  // Runtime panes never appear in Session's research-only tab order.
   assert.deepEqual(
     researchCycleTabIds(
       panes,
@@ -277,7 +231,7 @@ test("research cycling honours the folder scope the sidebar is filtered to", () 
       [treeSummary("tree-a", researchA.id), treeSummary("tree-b", researchB.id)],
       researchA.id,
     ),
-    [researchTreeTabId("tree-a"), "pane-a"],
+    [researchTreeTabId("tree-a")],
   );
   assert.deepEqual(
     researchCycleTabIds(
@@ -286,7 +240,7 @@ test("research cycling honours the folder scope the sidebar is filtered to", () 
       [treeSummary("tree-a", researchA.id), treeSummary("tree-b", researchB.id)],
       researchB.id,
     ),
-    [researchTreeTabId("tree-b"), "pane-b"],
+    [researchTreeTabId("tree-b")],
   );
 });
 

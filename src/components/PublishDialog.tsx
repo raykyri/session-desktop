@@ -271,7 +271,7 @@ export default function PublishDialog({
               <p>{result.isPublic ? "Public Gist" : "Secret Gist"}</p>
             </div>
             <div className="publication-link-row">
-              <input readOnly value={result.shareUrl} aria-label="Published qmux URL" />
+              <input readOnly value={result.shareUrl} aria-label="Published Session URL" />
               <button
                 type="button"
                 className="icon-button"

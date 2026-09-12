@@ -1,4 +1,4 @@
-import type { HomeRailPastTurn } from "../components/HomeRails";
+import type { HomeRailPastTurn } from "./homeRailTypes";
 import type { HomeTurnSummary, Turn } from "../types";
 import { firstUserTurnText } from "./appHelpers";
 import { stripTaggedInstructionBlocksForPreview } from "./taggedInstructions";

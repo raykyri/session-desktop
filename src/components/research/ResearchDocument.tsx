@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Check, ChevronDown, Copy, ExternalLink, Highlighter, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, ScrollText, Share2, Terminal, Trash2, Wrench, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, Highlighter, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, ScrollText, Share2, Terminal, Trash2, Wrench, X } from "lucide-react";
 import {
   IS_MAC,
   isEditableTarget,
@@ -149,7 +149,6 @@ interface ResearchDocumentProps {
    * inputs). The refreshed tree detail flows back through the caller's
    * reconciliation, so the segment re-renders as Queued. */
   onRetryNode: (nodeId: string) => Promise<void>;
-  onOpenPane: (paneId: string) => void;
   linkActions: LinkActions;
   onError: (message: string) => void;
   onToast: (message: string, tone?: "normal" | "warning") => void;
@@ -158,8 +157,6 @@ interface ResearchDocumentProps {
   onPublicationBindingChange: (binding: PublicationBinding) => void;
   /** Reopens the application sidebar when research is using the full width. */
   onShowSidebar?: () => void;
-  onOpenTerminalMap?: () => void;
-  terminalMapOpen?: boolean;
   /** Show held-⌘ shortcut badges (the ⌘J follow-ups hint). */
   shortcutHintsShown: boolean;
   /** Workspace-level back/forward (Recent Activity ↔ documents). Used when
@@ -911,7 +908,6 @@ interface ThreadSegmentProps {
   onCopyAnswer: (view: SegmentView) => void;
   onOpenAnswerMenu: (trigger: HTMLButtonElement, nodeId: string) => void;
   onOpenFollowupMenu: (nodeId: string, clientX: number, clientY: number) => void;
-  onOpenPane: (paneId: string) => void;
   onCancelNode: (nodeId: string) => void;
   /** Whether this segment's settled node can be retried in place (predicate
    * plus archived gating, computed by the parent). */
@@ -1027,7 +1023,6 @@ interface ResearchAnswerPaneProps {
   onShowFullTrace: ThreadSegmentProps["onShowFullTrace"];
   onCopyAnswer: ThreadSegmentProps["onCopyAnswer"];
   onOpenAnswerMenu: ThreadSegmentProps["onOpenAnswerMenu"];
-  onOpenPane: ThreadSegmentProps["onOpenPane"];
   onCancelNode: ThreadSegmentProps["onCancelNode"];
   canRetryNode: ThreadSegmentProps["canRetryNode"];
   retryingNode: ThreadSegmentProps["retryingNode"];
@@ -1072,7 +1067,6 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
   onShowFullTrace,
   onCopyAnswer,
   onOpenAnswerMenu,
-  onOpenPane,
   onCancelNode,
   canRetryNode,
   retryingNode,
@@ -1265,15 +1259,6 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
             </button>
             {showRunControls ? (
               <div className="research-segment-actions">
-                {node.paneId ? (
-                  <button
-                    type="button"
-                    className="control-button research-segment-action"
-                    onClick={() => onOpenPane(node.paneId!)}
-                  >
-                    Open terminal
-                  </button>
-                ) : null}
                 <button
                   type="button"
                   className="control-button research-segment-action"
@@ -1532,7 +1517,6 @@ const ThreadSegment = memo(function ThreadSegment({
   onCopyAnswer,
   onOpenAnswerMenu,
   onOpenFollowupMenu,
-  onOpenPane,
   onCancelNode,
   canRetryNode,
   retryingNode,
@@ -1585,7 +1569,6 @@ const ThreadSegment = memo(function ThreadSegment({
           onShowFullTrace={onShowFullTrace}
           onCopyAnswer={onCopyAnswer}
           onOpenAnswerMenu={onOpenAnswerMenu}
-          onOpenPane={onOpenPane}
           onCancelNode={onCancelNode}
           canRetryNode={canRetryNode}
           retryingNode={retryingNode}
@@ -1628,7 +1611,6 @@ function ResearchDocument({
   onUpdateDocument,
   onCancel,
   onRetryNode,
-  onOpenPane,
   linkActions,
   onError,
   onToast,
@@ -1636,8 +1618,6 @@ function ResearchDocument({
   publicationBinding,
   onPublicationBindingChange,
   onShowSidebar,
-  onOpenTerminalMap,
-  terminalMapOpen,
   shortcutHintsShown,
   workspaceCanGoBack = false,
   workspaceCanGoForward = false,
@@ -4576,8 +4556,6 @@ function ResearchDocument({
   onCancelRef.current = onCancel;
   const onRetryNodeRef = useRef(onRetryNode);
   onRetryNodeRef.current = onRetryNode;
-  const onOpenPaneRef = useRef(onOpenPane);
-  onOpenPaneRef.current = onOpenPane;
   const onToastRef = useRef(onToast);
   onToastRef.current = onToast;
   const onErrorRef = useRef(onError);
@@ -4588,7 +4566,6 @@ function ResearchDocument({
     );
     selectNodeRef.current(nodeId);
   }, []);
-  const handleOpenPane = useCallback((paneId: string) => onOpenPaneRef.current(paneId), []);
   const handleCancelNode = useCallback((nodeId: string) => {
     setCancelling(true);
     onCancelRef.current(nodeId)
@@ -4743,8 +4720,6 @@ function ResearchDocument({
           onShowSidebar ? (
             <ResearchSidebarRestoreButton
               onClick={onShowSidebar}
-              onOpenTerminalMap={onOpenTerminalMap}
-              terminalMapOpen={terminalMapOpen}
             />
           ) : undefined
         }
@@ -5218,7 +5193,6 @@ function ResearchDocument({
         onCopyAnswer={handleCopyAnswer}
         onOpenAnswerMenu={openAnswerMenu}
         onOpenFollowupMenu={openFollowupMenu}
-        onOpenPane={handleOpenPane}
         onCancelNode={handleCancelNode}
         canRetryNode={!archived && canRetryResearchNode(node)}
         retryingNode={retryingNodeId === node.id}
@@ -5281,10 +5255,10 @@ function ResearchDocument({
             {displayNode.origin === "terminalExport" ? (
               <span
                 className="research-provenance-badge"
-                title="This conversation was exported from a terminal session: a point-in-time copy whose content ran with the terminal's full permissions. Review it before publishing."
+                title="This is a point-in-time copy of an imported conversation. Review it before publishing."
               >
                 <Terminal size={12} aria-hidden="true" />
-                Exported from terminal
+                Imported conversation
               </span>
             ) : null}
             {threadLength > 1 || legacyFollowupCount > 0 ? (
@@ -5301,8 +5275,6 @@ function ResearchDocument({
             {onShowSidebar ? (
               <ResearchSidebarRestoreButton
                 onClick={onShowSidebar}
-                onOpenTerminalMap={onOpenTerminalMap}
-                terminalMapOpen={terminalMapOpen}
               />
             ) : null}
             {selectedView?.hasTranscriptActivity && selectedNodeId ? (
@@ -5330,16 +5302,6 @@ function ResearchDocument({
                 }
               >
                 <ScrollText size={15} aria-hidden="true" />
-              </button>
-            ) : null}
-            {displayNode.paneId && (activeRun || cancellationNeedsRetry) ? (
-              <button
-                type="button"
-                className="control-button research-open-terminal"
-                onClick={() => onOpenPane(displayNode.paneId!)}
-              >
-                <ExternalLink size={14} aria-hidden="true" />
-                Open terminal
               </button>
             ) : null}
             {activeRun || cancellationNeedsRetry ? (

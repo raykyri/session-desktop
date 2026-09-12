@@ -89,7 +89,7 @@ function ResearchBrowser({ sdk }: { sdk: ResearchBrowserSdk }) {
 
 const root = createRoot(document.getElementById("root")!);
 root.render(
-  <p className="research-browser-placeholder">Connecting to qmux…</p>,
+  <p className="research-browser-placeholder">Connecting to Session…</p>,
 );
 void connectResearchBrowser()
   .then((sdk) => {

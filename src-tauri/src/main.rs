@@ -9,7 +9,6 @@ mod control;
 mod control_socket;
 mod events;
 mod file_server;
-mod global_task_launcher;
 mod headless_process;
 mod history;
 mod host;
@@ -115,7 +114,6 @@ fn handle_global_shortcut(
     event: tauri_plugin_global_shortcut::ShortcutEvent,
 ) {
     show_hide_shortcut::handle_global_shortcut(app, shortcut, event);
-    global_task_launcher::handle_global_shortcut(app, shortcut, event);
 }
 
 /// Menu ids for the custom items installed by `customize_app_menu`.
@@ -1914,7 +1912,7 @@ fn launch_fresh_research_pane(
                         // (launcher spawns assume a frontend caller holds the
                         // pane). Nothing holds this one, so announce it or the
                         // pane never enters the frontend list: Background
-                        // activity can't show it and "Open terminal" misses.
+                        // activity cannot surface the associated run.
                         state.emit(events::QmuxEvent::new(
                             "agent.spawned",
                             Some(pane.id.clone()),
@@ -3774,10 +3772,7 @@ fn main() {
             let state = state.clone();
             move |window, event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                    if window.label() == "global-task-launcher" {
-                        api.prevent_close();
-                        let _ = window.hide();
-                    } else if state.should_confirm_exit() {
+                    if state.should_confirm_exit() {
                         api.prevent_close();
                         state.request_exit_confirmation();
                     }
@@ -3848,9 +3843,6 @@ fn main() {
                 }
                 app.manage(show_hide_shortcut::ShowHideShortcutState::default());
                 show_hide_shortcut::init(app.handle(), &state.config().workspace_root);
-                app.manage(global_task_launcher::GlobalTaskLauncherState::default());
-                global_task_launcher::create_window(app)?;
-                global_task_launcher::init(app.handle(), &state.config().workspace_root);
                 // On macOS, give the window an NSVisualEffectView so the sidebar can
                 // read as a native, translucent source list (Finder/Mail/Xcode). The
                 // frontend paints the content panes opaque and leaves the sidebar
@@ -3909,6 +3901,13 @@ fn main() {
                 // panes into fresh PTYs before the command handlers go live so the
                 // webview's first list_panes() already sees the recovered session.
                 let recovered_panes = state.restore_session();
+                // Session has no terminal workspace. Persisted qmux panes are
+                // retired during migration instead of respawned invisibly.
+                for pane in recovered_panes {
+                    if let Err(err) = state.remove_pane(&pane.id) {
+                        eprintln!("Session: failed to retire legacy pane {}: {err}", pane.id);
+                    }
+                }
                 {
                     let workspace_root = state.config().workspace_root.clone();
                     let referenced = state
@@ -3931,30 +3930,14 @@ fn main() {
                 if let Some(warning) = state.take_recovery_warning() {
                     notify_startup_warning(app.handle(), &warning);
                 }
-                // Muse and Cursor pane bindings hand a hook the pane's
-                // control-socket token, and tokens are minted per process.
-                // Every binding left on disk by the previous run is therefore
-                // already useless — drop them before recovery writes fresh
-                // ones for the panes that do come back.
-                adapters::muse::clear_muse_bindings();
-                adapters::cursor::clear_cursor_bindings();
-                recovery::respawn_session(&state, recovered_panes);
-                // Re-level persisted nesting now that we know which panes actually
-                // came back (exited panes are not respawned).
-                state.normalize_pane_layout();
-                // Now that the surviving panes are known, sweep scrollback logs
-                // and trim scratch files no live pane owns — orphans a kill or an
-                // unrecovered pane left on disk holding raw terminal output.
-                // Backgrounded like the state-dir scratch sweep; the live pane-id
-                // set is captured up front and new panes self-heal a racing delete.
+                // Remove scrollback left by the retired terminal workspace.
                 {
                     let workspace_root = state.config().workspace_root.clone();
-                    let live_pane_ids: std::collections::HashSet<String> = state
-                        .list_panes()
-                        .map(|panes| panes.into_iter().map(|pane| pane.id).collect())
-                        .unwrap_or_default();
                     std::thread::spawn(move || {
-                        scrollback::remove_orphaned_scrollback(&workspace_root, &live_pane_ids);
+                        scrollback::remove_orphaned_scrollback(
+                            &workspace_root,
+                            &std::collections::HashSet::new(),
+                        );
                     });
                 }
                 app.manage(state.clone());
@@ -4196,13 +4179,9 @@ fn main() {
             show_hide_shortcut_get,
             show_hide_shortcut_set,
             show_hide_shortcut_capture_set,
-            global_task_launcher::global_task_launcher_hotkey_get,
-            global_task_launcher::global_task_launcher_hotkey_set,
-            global_task_launcher::global_task_launcher_open,
-            global_task_launcher::global_task_launcher_dismiss,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building qmux")
+        .expect("error while building Session")
         .run(move |app_handle, event| match event {
             tauri::RunEvent::ExitRequested { api, code, .. }
                 if code != Some(tauri::RESTART_EXIT_CODE) && exit_state.should_confirm_exit() =>

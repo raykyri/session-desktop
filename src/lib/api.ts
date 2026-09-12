@@ -29,8 +29,6 @@ import type {
   ConversationHistoryEntry,
   ConversationHistoryLaunchRequest,
   GlobalDraft,
-  GlobalTaskLauncherHotkey,
-  GlobalTaskLauncherSetting,
   GroupInfo,
   HomeTurnHistoryPage,
   InitialPaneSize,
@@ -321,26 +319,6 @@ export function setShowHideShortcut(accelerator: string | null) {
 
 export function setShowHideShortcutCaptureActive(active: boolean) {
   return invoke<ShowHideShortcutSetting>("show_hide_shortcut_capture_set", { active });
-}
-
-export function getGlobalTaskLauncherHotkey() {
-  return invoke<GlobalTaskLauncherSetting>("global_task_launcher_hotkey_get");
-}
-
-export function setGlobalTaskLauncherHotkey(hotkey: GlobalTaskLauncherHotkey | null) {
-  return invoke<GlobalTaskLauncherSetting>("global_task_launcher_hotkey_set", { hotkey });
-}
-
-/** Opens the standalone quick-launch window (the ⌘K palette's path to it). */
-export function openGlobalTaskLauncher() {
-  return invoke<void>("global_task_launcher_open");
-}
-
-// Hides the launcher and returns focus to the app it was summoned from. Use on
-// explicit dismissal (submit, Escape); a focus-loss dismissal should hide
-// directly, since the OS has already moved focus to wherever the user clicked.
-export function dismissGlobalTaskLauncher() {
-  return invoke<void>("global_task_launcher_dismiss");
 }
 
 export function updateMenuBar(snapshot: MenuBarSnapshot) {

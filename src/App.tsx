@@ -53,7 +53,6 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Pencil,
-  PictureInPicture2,
   Plus,
   RefreshCw,
   Rows2,
@@ -78,8 +77,6 @@ import {
   readyAdaptersFirst,
 } from "./lib/adapterReadiness";
 import CommandPalette, { type PaletteCommand } from "./components/CommandPalette";
-import GlobalTaskLauncher from "./components/GlobalTaskLauncher";
-import ConversationHistoryDialog from "./components/ConversationHistoryDialog";
 import NativeInput from "./components/NativeInput";
 import {
   ComposerSubmitShortcutGlyph,
@@ -89,10 +86,6 @@ import { LauncherSelect } from "./components/LauncherSelect";
 import type { LauncherSelectOption } from "./components/LauncherSelect";
 import { launcherTabAction } from "./lib/launcherKeyboard";
 import BrowserOverlay from "./components/BrowserOverlay";
-import ArtifactTray, { type ArtifactTrayPosition } from "./components/ArtifactTray";
-import AgentDebugPanel, {
-  type AgentDebugPanelPosition,
-} from "./components/AgentDebugPanel";
 import ImageLightbox from "./components/ImageLightbox";
 import {
   closeImageLightbox,
@@ -119,35 +112,21 @@ import {
   ThreadGraphRequestTracker,
   uniqueResolvedThreadIds,
 } from "./lib/threadGraphRefresh";
-import HomeGroupSelector from "./components/HomeGroupSelector";
-import type { HomeGroup } from "./components/HomeGroupSelector";
-import HomeRails from "./components/HomeRails";
-import TerminalMapButton from "./components/TerminalMapButton";
 import type {
   HomeRailPastTurn,
   HomeRailScrollPosition,
   HomeRailWorkstream,
-} from "./components/HomeRails";
+} from "./lib/homeRailTypes";
 import LinkContextMenu from "./components/LinkContextMenu";
 import PublishDialog, { type PublishDialogTarget } from "./components/PublishDialog";
-import SidebarModeToggle from "./components/SidebarModeToggle";
-import TerminalPane from "./components/TerminalPane";
-import type { TerminalPaneHandle } from "./components/TerminalPane";
-import TerminalPip from "./components/TerminalPip";
 import {
   UserNotificationStack,
   type UserNotificationItem,
   type UserNotificationTone,
 } from "./components/UserNotificationStack";
-import { shouldShowTerminalPip, shouldShowTerminalPipToggle } from "./lib/terminalPip";
-import TurnOverlay, {
-  formatTurnsTranscript,
-  type ConversationHistorySegment,
-  type TranscriptScrollPosition,
-} from "./components/TurnOverlay";
-import TurnPaneHeader from "./components/TurnPaneHeader";
+import { formatTurnsTranscript } from "./lib/transcriptFormat";
+import type { TranscriptScrollPosition } from "./lib/transcriptScroll";
 import type { LinkActions } from "./components/TranscriptMarkdown";
-import RecoveredQueuePanel from "./components/RecoveredQueuePanel";
 import ResearchSidebarSection, {
   type ResearchVisibilityFilter,
 } from "./components/research/ResearchSidebarSection";
@@ -162,7 +141,6 @@ import {
   workspaceIsInResearchScope,
 } from "./lib/researchScope";
 import ResearchDocument from "./components/research/ResearchDocument";
-import ExportToResearchDialog from "./components/research/ExportToResearchDialog";
 import ResearchBrowserHost from "./components/research/ResearchBrowserHost";
 import {
   normalizeNotificationLog,
@@ -230,7 +208,6 @@ import {
   visibleResearchTreeIds,
   type ResearchFolderState,
 } from "./lib/researchFolders";
-import type { OrphanedQueueGroup } from "./components/RecoveredQueuePanel";
 import {
   agentStatusLabel,
   agentStatusKeepsMachineAwake,
@@ -284,8 +261,6 @@ import {
 } from "./lib/terminalAttention";
 import {
   appShortcutAllowsRepeat,
-  appShortcutTargetsActivePane,
-  contextualizeAppShortcut,
   resolveAppShortcut,
   showHideShortcutConflict,
   type AppShortcutCommand,
@@ -297,7 +272,6 @@ import {
   browserOverlayShowsLink,
   closeAllBrowserOverlaysState,
   closeBrowserOverlayState,
-  resolveTranscriptOrBrowserToggle,
 } from "./lib/browserOverlay";
 import { artifactTrayVisible, isArtifactBrowserOpen } from "./lib/artifacts";
 import { createTranscriptScrollCaptureSlot } from "./lib/transcriptScroll";
@@ -431,12 +405,10 @@ import {
   replaceScopedGroupOrder,
 } from "./lib/workspaceScope";
 import {
-  parseSidebarMode,
   researchCycleTabIds,
   researchTreeIdFromTabId,
   researchTreeTabId,
   SIDEBAR_MODE_STORAGE_KEY,
-  terminalTabForMode,
   type SidebarMode,
 } from "./lib/sidebarMode";
 import { stripTaggedUserInstructionBlocks } from "./lib/taggedInstructions";
@@ -537,8 +509,6 @@ import {
   openRouterChatCompletion,
   getAgentDraft,
   getThreadGraph,
-  getGlobalTaskLauncherHotkey,
-  openGlobalTaskLauncher,
   getShowHideShortcut,
   activatePane,
   getRuntimeConfig,
@@ -623,7 +593,6 @@ import {
   setAgentDraft as persistAgentDraft,
   setAgentTranscript,
   setAgentTyping,
-  setGlobalTaskLauncherHotkey,
   setMenuBarVisible,
   setShowHideShortcut,
   setShowHideShortcutCaptureActive,
@@ -657,8 +626,6 @@ import type {
   ConversationHistorySnapshot,
   ConversationHistoryEntry,
   ConversationHistoryLaunchMode,
-  GlobalTaskLauncherHotkey,
-  GlobalTaskLauncherSetting,
   GlobalDraft,
   GroupInfo,
   InitialPaneSize,
@@ -692,6 +659,39 @@ import type { NativeTerminalTheme, ShowHideShortcutSetting } from "./lib/api";
 import type { MenuBarSnapshot, MenuBarStatusTone } from "./lib/api";
 
 const LEFT_SIDEBAR_DEFAULT_WIDTH = 268;
+
+interface TerminalPaneHandle {
+  focus: () => void;
+  openSearch: () => void;
+  requestPaste: (text?: string | null) => void;
+  reportUserInput: () => void;
+}
+
+interface ConversationHistorySegment {
+  snapshotId: string;
+  turns: Turn[];
+}
+
+interface ArtifactTrayPosition {
+  x: number;
+  y: number;
+}
+
+interface AgentDebugPanelPosition {
+  top: number;
+  right: number;
+}
+
+interface HomeGroup {
+  id: string;
+  name: string;
+  terminals: Array<{ agentId: string; title: string }>;
+}
+
+interface OrphanedQueueGroup {
+  agent: AgentInfo;
+  queuedTurns: QueuedTurn[];
+}
 
 type WorktreeCreateAction =
   | { kind: "open" }
@@ -760,35 +760,6 @@ type ResearchViewedAckOptions = {
    * to the sibling native view rather than the webview document. */
   exposureConfirmed?: boolean;
 };
-const GLOBAL_TASK_LAUNCHER_HOTKEY_OPTIONS: ReadonlyArray<{
-  value: GlobalTaskLauncherHotkey;
-  label: string;
-  accelerator: string | null;
-  /** Compact form for shortcut-hint slots (the ⌘K palette row). */
-  glyph: string;
-}> = [
-  { value: "doubleControl", label: "Double-tap Control", accelerator: null, glyph: "⌃ ⌃" },
-  { value: "doubleOption", label: "Double-tap Option", accelerator: null, glyph: "⌥ ⌥" },
-  { value: "doubleCommand", label: "Double-tap Command", accelerator: null, glyph: "⌘ ⌘" },
-  {
-    value: "Control+Space",
-    label: "Control-Space",
-    accelerator: "Control+Space",
-    glyph: "⌃Space",
-  },
-  {
-    value: "Option+Space",
-    label: "Option-Space",
-    accelerator: "Option+Space",
-    glyph: "⌥Space",
-  },
-  {
-    value: "Command+Space",
-    label: "Command-Space",
-    accelerator: "Command+Space",
-    glyph: "⌘Space",
-  },
-];
 // Legacy sentinel once used as the selected tab for the Home page. Kept so a
 // persisted last-tab id from an older build is ignored instead of restored.
 const HOME_TAB_ID = "__home__";
@@ -953,115 +924,6 @@ function claimResizePointer(event: ReactPointerEvent<HTMLDivElement>): () => voi
     }
     releaseNativePointer();
   };
-}
-
-function TerminalSplitResizer({
-  style,
-  layoutKey,
-  orientation,
-  onPointerDown,
-  onKeyDown,
-}: {
-  style: CSSProperties;
-  /** Undefined freezes position tracking (the drag already owns the pointer). */
-  layoutKey: string | undefined;
-  orientation?: "horizontal" | "vertical";
-  onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
-  onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
-}) {
-  // The AppKit event monitor sees the native terminal's mouse-down before
-  // React can issue its asynchronous whole-gesture pointer claim. If the
-  // divider lands on a terminal frame boundary (including a temporarily stale
-  // frame), Ghostty can otherwise capture and consume the first drag event.
-  // Registering the resting divider rect ahead of the gesture makes its very
-  // first press web-owned, with the same slop the DOM hit area uses so the two
-  // agree about presses just inside a neighbouring surface.
-  const nativeRegionRef = useNativeWebOverlayRegion<HTMLDivElement>(
-    IS_MAC,
-    layoutKey,
-    TERMINAL_SPLIT_RESIZER_SLOP_PX,
-  );
-  const hoverClaimRef = useRef<(() => void) | null>(null);
-  const column = orientation === "vertical";
-
-  // Claim the whole pointer stream on hover rather than on press. The claim is
-  // an IPC round trip, so issuing it from pointerdown leaves a window in which
-  // Ghostty still owns motion: a press followed immediately by a fast flick
-  // spends all of its movement inside that window, and since the divider only
-  // moves on pointermove the gesture produces no movement at all. Hovering
-  // always precedes the press, so by mouse-down the claim has landed.
-  const releaseHoverClaim = useCallback(() => {
-    hoverClaimRef.current?.();
-    hoverClaimRef.current = null;
-  }, []);
-  const claimOnHover = useCallback(() => {
-    if (!IS_MAC || hoverClaimRef.current) {
-      return;
-    }
-    const releaseNativePointer = claimNativeTerminalPointerForWebDrag();
-    // Safety nets for a hover that never reports its exit — the window losing
-    // key while the pointer rests on the divider, or the pointer leaving during
-    // an occlusion. A claim nobody releases leaves every terminal mouse-dead,
-    // and unlike a claim taken mid-press this one is sticky natively (no button
-    // is down when it lands), so AppKit's own pointer-up retirement never
-    // covers it. Events on this divider — including a captured drag, which
-    // retargets them here — are the gesture itself and must not retire it.
-    const onThisDivider = (target: EventTarget | null) => {
-      const element = nativeRegionRef.current;
-      return Boolean(element && target instanceof Node && element.contains(target));
-    };
-    const watchForExit = (pointerEvent: PointerEvent) => {
-      if (onThisDivider(pointerEvent.target)) {
-        return;
-      }
-      releaseHoverClaim();
-    };
-    // A press elsewhere is the case motion cannot catch: the app regains key
-    // with the cursor already off the divider and the user clicks without
-    // moving first, which would otherwise spend that click on the webview.
-    window.addEventListener("pointermove", watchForExit, true);
-    window.addEventListener("pointerdown", watchForExit, true);
-    // Losing key focus (another app, another window, focus entering the browser
-    // overlay's frame) ends the hover as far as this window can observe it.
-    window.addEventListener("blur", releaseHoverClaim);
-    hoverClaimRef.current = () => {
-      window.removeEventListener("pointermove", watchForExit, true);
-      window.removeEventListener("pointerdown", watchForExit, true);
-      window.removeEventListener("blur", releaseHoverClaim);
-      releaseNativePointer();
-    };
-  }, [nativeRegionRef, releaseHoverClaim]);
-  // A claim that outlives its control leaves every terminal mouse-dead, so the
-  // unmount path releases whatever the pointer-leave never got to.
-  useEffect(() => releaseHoverClaim, [releaseHoverClaim]);
-
-  return (
-    <div
-      ref={nativeRegionRef}
-      className={`terminal-split-resizer${column ? " is-column" : ""}`}
-      role="separator"
-      aria-label="Resize terminal split"
-      aria-orientation={column ? "vertical" : "horizontal"}
-      tabIndex={0}
-      style={style}
-      onPointerEnter={claimOnHover}
-      // Re-arms a claim the guards above retired while the pointer never left
-      // (a blur with the cursor resting here): pointerenter will not fire
-      // again, and this is a no-op whenever the claim is still held.
-      onPointerMove={claimOnHover}
-      onPointerDown={(event) => {
-        // A press can arrive without a hover (the divider moving under a
-        // resting cursor, a synthesized press): claim before starting so the
-        // gesture is never left to the drag claim alone.
-        claimOnHover();
-        onPointerDown(event);
-      }}
-      // Pointer capture suppresses boundary events until the drag releases it,
-      // so this fires once the gesture is over, not while it crosses a pane.
-      onPointerLeave={releaseHoverClaim}
-      onKeyDown={onKeyDown}
-    />
-  );
 }
 
 // Bounded retry for releasing a pane's output backlog (attachPane). A failure would
@@ -2336,30 +2198,22 @@ function MainApp() {
   // document shows an unexplained spinner forever: the content effect can't
   // run (no detail-derived node id), so no in-document retry can recover.
   const [activeResearchDetailError, setActiveResearchDetailError] = useState<string | null>(null);
-  const [sidebarMode, setSidebarModeState] = useState<SidebarMode>(() =>
-    parseSidebarMode(localStorage.getItem(SIDEBAR_MODE_STORAGE_KEY)),
-  );
+  const [sidebarMode, setSidebarModeState] = useState<SidebarMode>("research");
   const sidebarModeRef = useRef(sidebarMode);
   sidebarModeRef.current = sidebarMode;
-  const [activeSurface, setActiveSurfaceState] = useState<"pane" | "research">("pane");
+  const [activeSurface, setActiveSurfaceState] = useState<"pane" | "research">("research");
   const activeSurfaceRef = useRef(activeSurface);
   activeSurfaceRef.current = activeSurface;
-  const setActiveSurface = useCallback((surface: "pane" | "research") => {
-    if (surface !== activeSurfaceRef.current) {
-      activeTranscriptScrollCaptureSlotRef.current.capture();
-    }
-    activeSurfaceRef.current = surface;
-    setActiveSurfaceState(surface);
+  const setActiveSurface = useCallback((_surface: "pane" | "research") => {
+    activeSurfaceRef.current = "research";
+    setActiveSurfaceState("research");
   }, []);
   const lastTerminalTabIdRef = useRef<string>("");
-  const setSidebarMode = useCallback((mode: SidebarMode) => {
-    if (mode !== sidebarModeRef.current) {
-      captureSidebarScroll(sidebarModeRef.current);
-    }
-    sidebarModeRef.current = mode;
-    setSidebarModeState(mode);
-    localStorage.setItem(SIDEBAR_MODE_STORAGE_KEY, mode);
-  }, [captureSidebarScroll]);
+  const setSidebarMode = useCallback((_mode: SidebarMode) => {
+    sidebarModeRef.current = "research";
+    setSidebarModeState("research");
+    localStorage.setItem(SIDEBAR_MODE_STORAGE_KEY, "research");
+  }, []);
   // The Home rails' visibility filter: agent ids the user has hidden via the
   // group selector's checkboxes. Everything not in the set is shown, so new
   // terminals appear by default. Persists across restarts.
@@ -2539,7 +2393,11 @@ function MainApp() {
   // Application-level settings, loaded from localStorage once on mount and
   // persisted on every change. Shared by every pane. Font size is also adjustable
   // in-session with Cmd-=/Cmd--.
-  const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
+  const [settings, setSettings] = useState<AppSettings>(() => ({
+    ...loadSettings(),
+    codeMode: false,
+    researchSdkHarness: true,
+  }));
   const [availableBodyFonts, setAvailableBodyFonts] = useState<BodyFontOption[] | null>(null);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -2762,15 +2620,6 @@ function MainApp() {
     });
   const [showHideShortcutSaving, setShowHideShortcutSaving] = useState(false);
   const showHideShortcutRequestRef = useRef(0);
-  const [globalTaskLauncherSetting, setGlobalTaskLauncherSetting] =
-    useState<GlobalTaskLauncherSetting>({
-      hotkey: null,
-      registered: false,
-      error: null,
-    });
-  const [globalTaskLauncherHotkeySaving, setGlobalTaskLauncherHotkeySaving] =
-    useState(false);
-  const globalTaskLauncherHotkeyRequestRef = useRef(0);
   const showHideShortcutValue = showHideShortcutSetting.accelerator ?? "";
   const showHideShortcutMessage =
     showHideShortcutSetting.error ??
@@ -2785,11 +2634,6 @@ function MainApp() {
   const showHideShortcutConflictLabel = showHideShortcutConflict(
     showHideShortcutValue || null,
   );
-  const globalTaskLauncherHotkeyMessage =
-    globalTaskLauncherSetting.error ??
-    (globalTaskLauncherSetting.hotkey && !globalTaskLauncherSetting.registered
-      ? "Global quick launch hotkey is not active."
-      : null);
   const bodyFontFamily = bodyFontStackFor(settings.bodyFontId);
   const terminalFontSize = settings.fontSize;
   const terminalFontFamily = fontStackFor(settings.fontId);
@@ -2855,25 +2699,6 @@ function MainApp() {
     };
   }, []);
 
-  useEffect(() => {
-    let disposed = false;
-    void getGlobalTaskLauncherHotkey()
-      .then((setting) => {
-        if (!disposed) setGlobalTaskLauncherSetting(setting);
-      })
-      .catch((err) => {
-        if (!disposed) {
-          setGlobalTaskLauncherSetting((current) => ({
-            ...current,
-            registered: false,
-            error: unknownErrorMessage(err),
-          }));
-        }
-      });
-    return () => {
-      disposed = true;
-    };
-  }, []);
 
   // Seed the native host with the current terminal settings so a pane created
   // later can build its Ghostty surface at creation time instead of waiting
@@ -3241,11 +3066,6 @@ function MainApp() {
     // while the DOM overlay and native surface visibility settle.
     return claimNativeTerminalPointerForWebDrag();
   }, [assistantTurnReaderOpen]);
-  // PiP is opt-in per pane. Keeping the flag separate from transcript expansion
-  // lets a pane remember the choice across expand/restore and tab round trips.
-  const [terminalPipEnabledByPane, setTerminalPipEnabledByPane] = useState<
-    Record<string, boolean>
-  >({});
   // Tabs in a group share their right-pane visibility; switching groups restores
   // that group's choice. Groups without a choice start with the pane open.
   const [rightBarCollapsedByGroup, setRightBarCollapsedByGroup] = useState<
@@ -3586,24 +3406,9 @@ function MainApp() {
     if (activeSurface !== "pane" || selectedPane) {
       return;
     }
-    // A selected research terminal is intentionally short-lived. When it retires,
-    // return to its durable document instead of falling across into Terminal mode
-    // — including when it was the last pane of the session, where the empty-pane
-    // path would otherwise leave the surface on "pane" against a Research sidebar.
-    if (sidebarMode === "research" && activeResearchTreeId) {
-      setActiveSurface("research");
-      return;
-    }
-    const fallback = terminalTabForMode(
-      panes,
-      groups,
-      lastTerminalTabIdRef.current,
-    );
-    activePaneIdRef.current = fallback;
-    setActivePaneIdState(fallback);
-    if (fallback) {
-      setSidebarMode("terminal");
-    }
+    // Pane-backed research runs are short-lived. Return to the durable
+    // research surface as soon as one retires.
+    setActiveSurface("research");
   }, [
     activePaneId,
     activeResearchTreeId,
@@ -5121,12 +4926,6 @@ function MainApp() {
       );
       return Object.keys(next).length === Object.keys(current).length ? current : next;
     });
-    setTerminalPipEnabledByPane((current) => {
-      const next = Object.fromEntries(
-        Object.entries(current).filter(([paneId]) => ids.has(paneId)),
-      );
-      return Object.keys(next).length === Object.keys(current).length ? current : next;
-    });
     for (const [agentId, pending] of pendingFirstTitleByAgentRef.current) {
       if (!ids.has(pending.paneId)) {
         pendingFirstTitleByAgentRef.current.delete(agentId);
@@ -5796,10 +5595,6 @@ function MainApp() {
     toggleTranscriptExpandedForPane(paneId);
   }
 
-  function toggleTerminalPipForPane(paneId: string) {
-    setTerminalPipEnabledByPane((current) => toggledPaneRecord(current, paneId));
-  }
-
   function expandNewAgentTranscriptByDefault(pane: PaneInfo) {
     if (settingsRef.current.codeMode || pane.kind !== "agent") {
       return;
@@ -6168,25 +5963,6 @@ function MainApp() {
     focusedAssistantTurn,
     focusedAssistantTurnSurface,
   ]);
-  // A split with no docked right pane (columns, or any nested layout) leaves
-  // PiP and assistant-turn focus following the expanded overlay rather than the
-  // collapsed-bar flag.
-  const pipRightPaneCollapsed = splitOverlayTranscriptMode ? false : rightBarCollapsed;
-  const terminalPipToggleVisible = shouldShowTerminalPipToggle({
-    transcriptExpanded: activeTranscriptExpanded,
-    rightPaneCollapsed: pipRightPaneCollapsed,
-    nativeTerminalAvailable: IS_MAC,
-  });
-  const activeTerminalPipVisible = Boolean(
-    activePane &&
-      !focusedAssistantTurn &&
-      shouldShowTerminalPip({
-        transcriptExpanded: activeTranscriptExpanded,
-        toggledOn: Boolean(terminalPipEnabledByPane[activePane.id]),
-        rightPaneCollapsed: pipRightPaneCollapsed,
-        nativeTerminalAvailable: IS_MAC,
-      }),
-  );
   const activePaneHasTurnPaneHeader = Boolean(
     hasGlobalTurnSidebar && activePaneHasTurnSidebar,
   );
@@ -9321,21 +9097,6 @@ function MainApp() {
       setPaneContextMenu(null);
       setGroupMenu(null);
       setSettingsMenu(null);
-      if (mode === "terminal") {
-        const target = terminalTabForMode(
-          panesRef.current,
-          groupsRef.current,
-          lastTerminalTabIdRef.current,
-        );
-        if (target) {
-          focusPaneTab(target);
-        } else {
-          setSidebarMode("terminal");
-          setActiveSurface("pane");
-        }
-        return;
-      }
-
       setSidebarMode("research");
       // A journal left forward survives the round trip through terminal mode,
       // like a remembered research pane or tree.
@@ -11371,14 +11132,14 @@ function MainApp() {
   }, [terminalMapOpen]);
 
   function openResearchPaneTab(paneId: string) {
-    // The research detail that renders the "Open terminal" button trails
+    // The research detail for a newly created run trails
     // pane.removed by a debounced refresh, so the pane can already be gone
     // when the button is clicked. Falling through to focusPaneTab would
-    // classify the unknown id as a terminal-scope tab (setActivePaneId's
-    // recovery fallback) and evict the user from Research mode entirely;
+    // classify the unknown id as a legacy pane (setActivePaneId's recovery
+    // fallback) and evict the user from the research surface;
     // acknowledge and stay put instead.
     if (!panesRef.current.some((pane) => pane.id === paneId)) {
-      showAppToast("That research terminal has already closed.", "warning");
+      showAppToast("That research run has already closed.", "warning");
       return;
     }
     focusPaneTab(paneId);
@@ -11419,167 +11180,46 @@ function MainApp() {
   // navigation, pane/session actions gated on what the active pane supports,
   // and saved prompts that insert into the active agent's composer.
   function buildPaletteCommands(): PaletteCommand[] {
-    const commands: PaletteCommand[] = [];
-    const visiblePane = researchSurfaceActive ? undefined : activePane;
-    const visibleAgent = researchSurfaceActive ? undefined : activeAgent;
-    commands.push({
-      id: "nav:home",
-      section: "Go to",
-      title: "Terminal map",
-      action: () => toggleTerminalMap(),
-    });
-    for (const tree of researchTrees) {
-      commands.push({
-        id: `research:${tree.id}`,
-        section: "Research",
-        title: tree.title,
-        hint: tree.runningCount > 0 ? `${tree.runningCount} running` : undefined,
-        action: () => navigateToResearchDocument(tree.id),
-      });
-    }
-    for (const pane of sidebarPanes) {
-      commands.push({
-        id: `nav:${pane.id}`,
-        section: "Go to",
-        title: pane.title,
-        hint: groupById.get(pane.groupId)?.name,
-        action: () => focusPaneTab(pane.id),
-      });
-    }
-    commands.push({
-      id: "action:quick-launch",
-      section: "Actions",
-      title: "Quick launch: dispatch a task to an agent tab",
-      hint: GLOBAL_TASK_LAUNCHER_HOTKEY_OPTIONS.find(
-        (option) => option.value === globalTaskLauncherSetting.hotkey,
-      )?.glyph,
-      action: () => void openGlobalTaskLauncher().catch(() => undefined),
-    });
-    commands.push({
-      id: "action:conversation-history",
-      section: "Actions",
-      title: "Conversation history",
-      hint: "⇧⌘H",
-      action: () => toggleConversationHistory(),
-    });
-    commands.push({
-      id: "action:toggle-left-sidebar",
-      section: "Actions",
-      title: "Toggle left sidebar",
-      hint: LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL,
-      action: () => setLeftSidebarCollapsedForActivePane(!leftSidebarCollapsed),
-    });
-    commands.push({
-      id: "action:toggle-right-bar",
-      section: "Actions",
-      title: "Toggle right bar",
-      hint: RIGHT_BAR_TOGGLE_SHORTCUT_LABEL,
-      action: () => setRightBarCollapsedForPane(!rightBarCollapsed, activePane?.id),
-    });
-    commands.push({
-      id: "action:new-tab",
-      section: "Actions",
-      title: "New agent",
-      hint: !settings.codeMode && sidebarMode === "terminal" ? "⌘T" : undefined,
-      action: () => openNewAgentPopover(),
-    });
-    commands.push({
-      id: "action:new-research",
-      section: "Actions",
-      title: "New research",
-      hint: sidebarMode === "research" ? "⌘T" : undefined,
-      action: () => void createResearchFromSidebar(),
-    });
-    commands.push({
-      id: "action:new-document",
-      section: "Actions",
-      title: "New document",
-      hint: sidebarMode === "research" ? "⌘D" : undefined,
-      action: () => void createDocumentFromSidebar(),
-    });
-    commands.push({
-      id: "action:new-terminal",
-      section: "Actions",
-      title: "New shell",
-      hint: settings.codeMode && sidebarMode === "terminal" ? "⌘T" : undefined,
-      action: () => void addShellPane(),
-    });
-    if (
-      agentCanFork(visibleAgent) &&
-      visiblePane &&
-      groupById.get(visiblePane.groupId)?.scope === "terminal"
-    ) {
-      commands.push({
-        id: "action:fork",
+    const commands: PaletteCommand[] = researchTrees.map((tree) => ({
+      id: `research:${tree.id}`,
+      section: "Research",
+      title: tree.title,
+      hint: tree.runningCount > 0 ? `${tree.runningCount} running` : undefined,
+      action: () => navigateToResearchDocument(tree.id),
+    }));
+    commands.push(
+      {
+        id: "action:new-research",
         section: "Actions",
-        title: "Fork session",
-        action: () => void forkActivePane({ useWorktree: false }),
-      });
-      commands.push({
-        id: "action:fork-worktree",
-        section: "Actions",
-        title: "Fork session in worktree",
-        action: () => void forkPaneInWorktree(visiblePane),
-      });
-    }
-    if (activeBrowserOwnerId) {
-      commands.push({
-        id: "action:toggle-browser",
-        section: "Actions",
-        title: "Toggle browser overlay",
-        action: () => toggleActiveBrowserOverlay(),
-      });
-    }
-    if (visiblePane) {
-      commands.push({
-        id: "action:close-pane",
-        section: "Actions",
-        title: "Close tab",
-        hint: "⌘W",
-        action: () => requestClosePaneRef.current(visiblePane),
-      });
-    }
-    if (
-      visibleAgent ||
-      (splitOverlayTranscriptMode && splitOverlayTurnPaneSurfaces.length > 0)
-    ) {
-      commands.push({
-        id: "action:toggle-transcript",
-        section: "Actions",
-        title: "Expand or restore transcript",
-        hint: EXPAND_TOGGLE_SHORTCUT_LABEL,
-        action: () => toggleActiveTranscriptExpanded(),
-      });
-    }
-    commands.push({
-      id: "action:restore-closed",
-      section: "Actions",
-      title: "Reopen closed tab",
-      hint: sidebarMode === "research" ? undefined : "⇧⌘T",
-      action: () => void restoreClosedPane(),
-    });
-    commands.push({
-      id: "action:settings",
-      section: "Actions",
-      title: "Open Settings",
-      hint: "⌘,",
-      action: () => {
-        setSettingsMenu(null);
-        setSettingsOpen(true);
+        title: "New research",
+        hint: "⌘T",
+        action: () => void createResearchFromSidebar(),
       },
-    });
-    if (visibleAgent) {
-      for (const prompt of paletteSavedPrompts) {
-        commands.push({
-          id: `prompt:${prompt.scope}:${prompt.name}`,
-          section: "Insert prompt",
-          // Prompts are titleless; their first line stands in for a name.
-          title: prompt.content.trim().split("\n", 1)[0] || "(empty prompt)",
-          hint: prompt.scope === "global" ? "Global" : "Project",
-          action: () => requestComposerInsert(visibleAgent.id, prompt.content),
-        });
-      }
-    }
+      {
+        id: "action:new-document",
+        section: "Actions",
+        title: "New document",
+        hint: "⌘D",
+        action: () => void createDocumentFromSidebar(),
+      },
+      {
+        id: "action:toggle-left-sidebar",
+        section: "Actions",
+        title: "Toggle sidebar",
+        hint: LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL,
+        action: () => setLeftSidebarCollapsedForActivePane(!leftSidebarCollapsed),
+      },
+      {
+        id: "action:settings",
+        section: "Actions",
+        title: "Open Settings",
+        hint: "⌘,",
+        action: () => {
+          setSettingsMenu(null);
+          setSettingsOpen(true);
+        },
+      },
+    );
     return commands;
   }
 
@@ -14204,32 +13844,11 @@ function MainApp() {
     };
 
     const executeShortcut = (rawCommand: AppShortcutCommand, repeat: boolean) => {
-      const currentSidebarMode = sidebarModeRef.current;
-      const command = contextualizeAppShortcut(rawCommand, currentSidebarMode);
+      const command = rawCommand;
       if (repeat && !appShortcutAllowsRepeat(command)) {
         return;
       }
       switch (command.type) {
-        case "fontZoomIn":
-        case "fontZoomOut":
-        case "fontZoomReset":
-          setSettings((current) => ({
-            ...current,
-            fontSize:
-              command.type === "fontZoomReset"
-                ? TERMINAL_FONT_SIZE
-                : clampFontSize(
-                    current.fontSize + (command.type === "fontZoomOut" ? -1 : 1),
-                  ),
-          }));
-          return;
-        case "focusTab": {
-          const pane = numberedTabPanes[command.tabIndex];
-          if (pane) {
-            focusPaneTab(pane.id);
-          }
-          return;
-        }
         case "focusResearchTab": {
           const tabId = cycleableResearchTabIds[command.tabIndex];
           if (tabId) {
@@ -14237,56 +13856,17 @@ function MainApp() {
           }
           return;
         }
-        case "homeOrCycleAdapter":
-          if (newAgentOpenRef.current) {
-            cycleLauncherAdapter();
-          } else {
-            openNewAgentPopover();
-          }
-          return;
         case "openNewResearch":
           createResearchFromSidebar();
-          return;
-        case "focusHome":
-          toggleTerminalMap();
-          return;
-        case "openConversationHistory":
-          toggleConversationHistory();
           return;
         case "toggleLeftSidebar":
           setLeftSidebarCollapsedForActivePane(!leftSidebarCollapsedRef.current);
           return;
-        case "toggleRightBar":
-          setRightBarCollapsedForPane(
-            !rightBarCollapsedRef.current,
-            activePaneRef.current?.id,
-          );
+        case "cycleResearchTab":
+          cycleResearchTab(command.direction);
           return;
-        case "focusResearchHome":
-          createResearchFromSidebar();
-          return;
-        case "focusTerminalMode":
-          changeSidebarMode("terminal");
-          return;
-        case "toggleSidebarMode":
-          changeSidebarMode(currentSidebarMode === "terminal" ? "research" : "terminal");
-          return;
-        case "cyclePaneTab":
-          if (currentSidebarMode === "research") {
-            cycleResearchTab(command.direction);
-          } else {
-            cycleTab(command.direction, cycleableSidebarPanes);
-          }
-          return;
-        case "cycleAllTab":
-          cycleTab(command.direction, cycleableSidebarPanes);
-          return;
-        case "moveSidebarItem":
-          if (currentSidebarMode === "terminal") {
-            moveActiveTerminalPane(command.direction);
-          } else {
-            moveActiveResearchTree(command.direction);
-          }
+        case "moveResearchItem":
+          moveActiveResearchTree(command.direction);
           return;
         case "openSettings":
           setSettingsMenu(null);
@@ -14299,28 +13879,14 @@ function MainApp() {
           createDocumentFromSidebar();
           return;
         case "focusFollowups":
-          // Only the research stage renders a document; the mounted document
-          // (if any) scrolls its follow-up composer into view and focuses it.
-          if (currentSidebarMode === "research") {
-            requestResearchFollowupsFocus();
-          }
+          requestResearchFollowupsFocus();
           return;
         case "openFolderMenu":
-          // The folder switcher is only mounted on the research sidebar.
-          if (currentSidebarMode === "research") {
-            requestResearchFolderMenuToggle();
-          }
+          requestResearchFolderMenuToggle();
           return;
-        case "toggleTranscriptOrBrowser": {
+        case "toggleSourceBrowser": {
           const anyBrowserOpen = anyBrowserOverlayOpen(browserOverlayByPaneRef.current);
-          const action = resolveTranscriptOrBrowserToggle({
-            anyBrowserOpen,
-            canToggleTranscript: Boolean(
-              activeSurfaceRef.current === "pane" &&
-                canToggleActiveTranscriptExpandedRef.current,
-            ),
-          });
-          if (action.type === "close-browser") {
+          if (anyBrowserOpen) {
             closeAllBrowserOverlays();
             return;
           }
@@ -14328,97 +13894,22 @@ function MainApp() {
             if (hidden > 0) {
               return;
             }
-            if (action.type === "toggle-transcript") {
-              toggleActiveTranscriptExpandedRef.current();
-              return;
-            }
             const browserOwnerId =
               activeSurfaceRef.current === "research"
                 ? activeResearchTreeIdRef.current
                   ? researchBrowserOwnerId(activeResearchTreeIdRef.current)
                   : null
-                : (activePaneRef.current?.id ?? null);
+                : null;
             if (browserOwnerId) {
               toggleBrowserOverlay(browserOwnerId);
             }
           });
           return;
         }
-        case "splitPaneBelow": {
-          const pane =
-            activeSurfaceRef.current === "pane" ? activePaneRef.current : undefined;
-          if (
-            pane &&
-            groupsRef.current.find((group) => group.id === pane.groupId)?.scope === "terminal"
-          ) {
-            void splitPaneBelowRef.current(pane);
-          }
-          return;
-        }
-        case "splitPaneRight": {
-          const pane =
-            activeSurfaceRef.current === "pane" ? activePaneRef.current : undefined;
-          if (
-            pane &&
-            groupsRef.current.find((group) => group.id === pane.groupId)?.scope === "terminal"
-          ) {
-            void splitPaneRightRef.current(pane);
-          }
-          return;
-        }
-        case "restoreClosedPane":
-          void restoreClosedPane();
-          return;
-        case "closeUnavailableRemotePane": {
-          const pane =
-            activeSurfaceRef.current === "pane" ? activePaneRef.current : undefined;
-          if (pane && remotePaneCloseButtonVisible(pane)) {
-            closeUnavailableRemotePaneRef.current(pane);
-          }
-          return;
-        }
-        case "closePane": {
-          const pane =
-            activeSurfaceRef.current === "pane" ? activePaneRef.current : undefined;
-          if (pane) {
-            requestClosePaneRef.current(pane, { confirmAlways: Boolean(pane.remoteSession) });
-          }
-          return;
-        }
-        case "newGroup":
-          void createGroupFromSettingsMenu();
-          return;
-        case "newPane":
-          if (!settingsRef.current.codeMode) {
-            openNewAgentPopover();
-          } else {
-            void addShellPane();
-          }
       }
     };
 
-    nativeTerminalShortcutHandlerRef.current = (paneId, command, repeat) => {
-      if (activePaneRef.current?.id !== paneId) {
-        // The native monitor already consumed this chord's keyDown (and will
-        // swallow its keyUp) on behalf of `paneId`, so dropping it here eats
-        // the keystroke entirely. A mismatch means React's activation state
-        // is still catching up to the surface that really owns the keyboard
-        // (click-then-chord on a split, right-click activation in flight):
-        // adopt the native side's authority — activate that pane, then run
-        // the command against it. setActivePaneId updates activePaneRef /
-        // activePaneIdRef synchronously, so executeShortcut below targets it.
-        // A pane React no longer knows can still run commands that don't act
-        // on the active pane (mode toggles, Home, settings…); pane-targeted
-        // commands stay dropped rather than hitting a pane the user never
-        // aimed at.
-        if (!panesRef.current.some((pane) => pane.id === paneId)) {
-          if (!appShortcutTargetsActivePane(command)) {
-            executeShortcut(command, repeat);
-          }
-          return;
-        }
-        setActivePaneId(paneId);
-      }
+    nativeTerminalShortcutHandlerRef.current = (_paneId, command, repeat) => {
       executeShortcut(command, repeat);
     };
     nativeAppShortcutHandlerRef.current = executeShortcut;
@@ -14655,29 +14146,6 @@ function MainApp() {
       }
     } finally {
       setShowHideShortcutSaving(false);
-    }
-  }
-
-  async function updateGlobalTaskLauncherHotkey(hotkey: GlobalTaskLauncherHotkey | null) {
-    const request = ++globalTaskLauncherHotkeyRequestRef.current;
-    setGlobalTaskLauncherHotkeySaving(true);
-    setGlobalTaskLauncherSetting((current) => ({ ...current, hotkey, error: null }));
-    try {
-      const setting = await setGlobalTaskLauncherHotkey(hotkey);
-      if (globalTaskLauncherHotkeyRequestRef.current === request) {
-        setGlobalTaskLauncherSetting(setting);
-      }
-    } catch (err) {
-      if (globalTaskLauncherHotkeyRequestRef.current === request) {
-        setGlobalTaskLauncherSetting((current) => ({
-          ...current,
-          error: unknownErrorMessage(err),
-        }));
-      }
-    } finally {
-      if (globalTaskLauncherHotkeyRequestRef.current === request) {
-        setGlobalTaskLauncherHotkeySaving(false);
-      }
     }
   }
 
@@ -15324,645 +14792,6 @@ function MainApp() {
     );
   }
 
-  function renderTurnPaneResizer() {
-    return (
-      <div
-        className="turn-pane-resizer"
-        role="separator"
-        aria-label="Resize command queue"
-        aria-orientation="vertical"
-        aria-valuemin={TURN_PANE_MIN_WIDTH}
-        aria-valuemax={maxTurnPaneWidth()}
-        aria-valuenow={turnPaneWidth}
-        tabIndex={0}
-        onPointerDown={startTurnPaneResize}
-        onKeyDown={resizeTurnPaneWithKeyboard}
-      />
-    );
-  }
-
-  function turnPaneSplitCellStyle(surface: TurnPaneSurface): CSSProperties {
-    const index = activePaneSplit?.paneIds.indexOf(surface.pane.id) ?? -1;
-    return {
-      top: splitTrackPosition(surface.topFraction, Math.max(0, index)),
-      height: splitTrackSize(surface.heightFraction),
-    };
-  }
-
-  function renderFloatingTurnPaneControls(surface: TurnPaneSurface, expanded: boolean) {
-    const label = expanded ? "Restore transcript" : "Expand transcript";
-    const restoresLeftSidebar =
-      leftSidebarRestore.kind === "split-turn-pane" &&
-      leftSidebarRestore.paneId === surface.pane.id;
-    return (
-      <div className="turn-pane-floating-controls">
-        {terminalPipToggleVisible ? (
-          <button
-            type="button"
-            className={`control-button turn-pane-header-button${
-              terminalPipEnabledByPane[surface.pane.id] ? " is-active" : ""
-            }`}
-            title={
-              terminalPipEnabledByPane[surface.pane.id]
-                ? "Hide terminal preview"
-                : "Show terminal preview"
-            }
-            aria-label={
-              terminalPipEnabledByPane[surface.pane.id]
-                ? "Hide terminal picture in picture"
-                : "Show terminal picture in picture"
-            }
-            aria-pressed={Boolean(terminalPipEnabledByPane[surface.pane.id])}
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              activateTerminalPane(surface.pane.id);
-              toggleTerminalPipForPane(surface.pane.id);
-            }}
-          >
-            <PictureInPicture2 size={14} aria-hidden="true" />
-          </button>
-        ) : null}
-        <button
-          type="button"
-          className={`control-button turn-pane-header-button turn-pane-floating-expand-button${
-            expanded ? " is-active" : ""
-          }`}
-          title={`${label} (${EXPAND_TOGGLE_SHORTCUT_LABEL})`}
-          aria-label={label}
-          aria-pressed={expanded}
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            activateTerminalPane(surface.pane.id);
-            setTranscriptExpandedForPane(surface.pane.id, !expanded, true);
-          }}
-        >
-          {expanded ? (
-            <Minimize2 size={14} aria-hidden="true" />
-          ) : (
-            <Expand size={14} aria-hidden="true" />
-          )}
-        </button>
-        <div
-          className={`turn-pane-sidebar-controls${
-            restoresLeftSidebar ? " is-grouped" : ""
-          }`}
-        >
-          {restoresLeftSidebar ? (
-            <button
-              type="button"
-              className="icon-button turn-pane-header-button turn-pane-floating-restore-button"
-              title={`Show left sidebar (${LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL})`}
-              aria-label="Show left sidebar"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                setLeftSidebarCollapsedForActivePane(false);
-              }}
-            >
-              <PanelLeftOpen size={14} aria-hidden="true" />
-            </button>
-          ) : null}
-          {restoresLeftSidebar ? (
-            <TerminalMapButton
-              className="icon-button turn-pane-header-button turn-pane-floating-restore-button"
-              pressed={terminalMapOpen}
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                toggleTerminalMap();
-              }}
-            />
-          ) : null}
-          <button
-            type="button"
-            className="icon-button turn-pane-header-button turn-pane-floating-collapse-button"
-            title={`Collapse right bar (${RIGHT_BAR_TOGGLE_SHORTCUT_LABEL})`}
-            aria-label="Collapse right bar"
-            onPointerDown={(event) => event.stopPropagation()}
-            onClick={(event) => {
-              event.stopPropagation();
-              activateTerminalPane(surface.pane.id);
-              setRightBarCollapsedForPane(true, surface.pane.id);
-            }}
-          >
-            <PanelRightClose size={14} aria-hidden="true" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  function renderFloatingPaneRestoreControls() {
-    if (!floatingPaneRestoreControlsVisible) {
-      return null;
-    }
-
-    const surface = floatingRestoreButtonVisible ? activeTurnPaneSurface : null;
-    const splitIndex =
-      surface && activePaneSplit ? activePaneSplit.paneIds.indexOf(surface.pane.id) : -1;
-    // In split mode this control must remain in the active pane's track. Leaving
-    // it at the stage-wide `top: 8px` puts a lower pane's restore control over
-    // the top terminal; native pointer routing can then grant that sibling the
-    // keyboard during the opening gesture before the web overlay registration
-    // has crossed the bridge.
-    const style =
-      surface && splitRightPaneMode && splitIndex >= 0
-        ? { top: splitTrackPosition(surface.topFraction, splitIndex, 8) }
-        : undefined;
-    const grouped = floatingLeftSidebarRestoreVisible;
-
-    return (
-      <div
-        ref={floatingPaneRestoreControlsRef}
-        className={`turn-pane-floating-restore-controls${grouped ? " is-grouped" : ""}`}
-        style={style}
-      >
-        {floatingLeftSidebarRestoreVisible ? (
-          <button
-            type="button"
-            className="icon-button turn-pane-header-button turn-pane-floating-restore-button"
-            title={`Show left sidebar (${LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL})`}
-            aria-label="Show left sidebar"
-            onClick={() => setLeftSidebarCollapsedForActivePane(false)}
-          >
-            <PanelLeftOpen size={14} aria-hidden="true" />
-          </button>
-        ) : null}
-        {floatingLeftSidebarRestoreVisible ? (
-          <TerminalMapButton
-            className="icon-button turn-pane-header-button turn-pane-floating-restore-button"
-            pressed={terminalMapOpen}
-            onClick={toggleTerminalMap}
-          />
-        ) : null}
-        {floatingStageTranscriptExpandVisible ? (
-          <button
-            type="button"
-            className="icon-button turn-pane-header-button turn-pane-floating-restore-button"
-            title={`Expand transcripts (${EXPAND_TOGGLE_SHORTCUT_LABEL})`}
-            aria-label="Expand transcripts"
-            onClick={() => toggleActiveTranscriptExpanded()}
-          >
-            <Expand size={14} aria-hidden="true" />
-          </button>
-        ) : null}
-        {floatingRestoreButtonVisible && surface ? (
-          <button
-            type="button"
-            className="icon-button turn-pane-header-button turn-pane-floating-restore-button"
-            title={`Show right bar (${RIGHT_BAR_TOGGLE_SHORTCUT_LABEL})`}
-            aria-label="Show right bar"
-            onClick={() => {
-              activateTerminalPane(surface.pane.id);
-              setRightBarCollapsedForPane(false, surface.pane.id);
-            }}
-          >
-            <PanelRightOpen size={14} aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
-    );
-  }
-
-  function renderTurnPaneSurface(surface: TurnPaneSurface, showHeader: boolean) {
-    const agent = surface.agent;
-    // Scope-based, not node-based: the node index refreshes on a 250ms
-    // debounce, so a freshly spawned research pane would briefly present
-    // fork/queue affordances (and a composer below) that its run rejects.
-    // Group scope arrives with the pane itself.
-    const researchBound = groupById.get(surface.pane.groupId)?.scope === "research";
-    // Split cells are short and deliberately headerless, so keep the composer
-    // floating there even if this agent normally uses a transcript/queue split.
-    const queueSplit = showHeader && surface.queueSplit;
-    // Where the handed-off work lives. The pane's cwd is what the user is
-    // actually looking at; the worktree is the fallback for a pane that never
-    // reported one. Shared by the per-message handoffs in the transcript and
-    // the composer menu's whole-transcript one.
-    const handoffContext: HandoffContext = {
-      cwd: surface.pane.cwd || agent?.worktreeDir || null,
-      branch: agent?.branch ?? null,
-      agentLabel: surface.assistantLabel,
-      model: agent?.model ?? null,
-    };
-
-    return (
-      <TurnOverlay
-        turns={agent ? surface.turns : []}
-        conversationHistory={agent ? surface.conversationHistory : []}
-        hasPreviousConversation={agent && surface.hasPreviousConversation}
-        previousConversationLoading={surface.previousConversationLoading}
-        previousConversationError={surface.previousConversationError}
-        onLoadPreviousConversation={
-          agent && surface.previousConversationSnapshotId
-            ? () =>
-                void loadPreviousConversationForThread(
-                  threadIdForAgent(agent),
-                  surface.previousConversationSnapshotId,
-                )
-            : undefined
-        }
-        thinking={Boolean(
-          agent &&
-            thinkingAgentIds.has(agent.id) &&
-            (agent.status === "running" || agent.status === "starting"),
-        )}
-        thinkingLabel={
-          agent && Object.prototype.hasOwnProperty.call(processingNewMessageByAgent, agent.id)
-            ? "Processing new message…"
-            : "Working…"
-        }
-        showActivityDetail={settings.showToolCalls}
-        stickyUserMessages={settings.stickyUserMessages}
-        showAssistantTimestamps={settings.showAssistantTimestamps}
-        assistantTurnFocusEnabled={splitOverlayTranscriptMode || !rightBarCollapsed}
-        focusedAssistantTurnKey={
-          focusedAssistantTurn?.paneId === surface.pane.id
-            ? focusedAssistantTurn.itemKey
-            : null
-        }
-        onFocusAssistantTurn={(itemKey) => {
-          if (itemKey) {
-            activateTerminalPane(surface.pane.id);
-            setTranscriptExpandedForPane(surface.pane.id, true);
-            setFocusedAssistantTurn({
-              paneId: surface.pane.id,
-              itemKey,
-              restoreDockedOnClose: !activeTranscriptVisibleExpanded,
-              splitMode: splitLayoutActive,
-            });
-          } else {
-            if (focusedAssistantTurn?.restoreDockedOnClose) {
-              setTranscriptExpandedForPane(
-                focusedAssistantTurn.paneId,
-                false,
-                focusedAssistantTurn.splitMode,
-              );
-            }
-            setFocusedAssistantTurn(null);
-          }
-        }}
-        reduceMotion={settings.reduceMotion}
-        agentId={agent?.id ?? surface.pane.id}
-        getTranscriptScroll={getTranscriptScroll}
-        saveTranscriptScroll={saveTranscriptScroll}
-        registerScrollCapture={
-          surface.pane.id === activePane?.id
-            ? registerActiveTranscriptScrollCapture
-            : undefined
-        }
-        // The save request is a window event handled only by the prompt
-        // library menu inside TurnPaneHeader. Headerless surfaces (split
-        // cells, split right-pane mode) mount no listener, so offering the
-        // menu item there would dispatch into the void — hide it instead.
-        savePromptAgentId={showHeader ? (agent?.id ?? null) : null}
-        searchHotkeyActive={activeSurface === "pane" && surface.pane.id === activePane?.id}
-        assistantLabel={surface.assistantLabel}
-        notice={agent ? surface.transcriptNotice : null}
-        transcriptOptions={agent ? surface.transcriptOptions : []}
-        transcriptPath={agent?.transcriptPath ?? null}
-        onSelectTranscript={
-          agent ? (path) => void handleSelectTranscript(agent.id, path) : undefined
-        }
-        queueSplit={queueSplit}
-        queueSplitHeight={queueSplit ? surface.queueSplitHeight : undefined}
-        onQueueSplitHeightChange={
-          agent ? (height) => setQueueSplitHeightForAgent(agent.id, height) : undefined
-        }
-        linkActions={linkActionsForPane(surface.pane.id)}
-        onRegenerateTitleFromUserMessage={
-          agent && titleGenerationEnabled
-            ? (message) =>
-                void regeneratePaneTitleFromUserMessage(surface.pane.id, message, agent.id)
-            : undefined
-        }
-        titleGenerationBusy={regeneratingTitlePaneIds.has(surface.pane.id)}
-        // Preview: forks from a chosen message by synthesizing a truncated
-        // transcript, so it is offered only for adapters that support it.
-        onForkFromMessage={
-          agent && !researchBound && agentSupportsForkAtMessage(agent)
-            ? (anchor) =>
-                void forkPane(surface.pane, { useWorktree: false, anchor })
-            : undefined
-        }
-        handoffContext={handoffContext}
-        header={
-          showHeader ? (
-            <TurnPaneHeader
-              agentId={agent?.id ?? null}
-              sessionId={agent?.sessionId ?? null}
-              model={agent?.model ?? null}
-              transcriptOptions={agent ? surface.transcriptOptions : []}
-              transcriptPath={agent?.transcriptPath ?? null}
-              onSelectTranscript={(path) => {
-                if (agent) {
-                  void handleSelectTranscript(agent.id, path);
-                }
-              }}
-              onRefreshSessions={agent ? () => refreshTranscriptOptions(agent.id) : undefined}
-              showQueueSplit={Boolean(agent) && !researchBound}
-              queueSplit={surface.queueSplit}
-              onToggleQueueSplit={toggleActiveQueueSplit}
-              browserOpen={surface.browserOverlay?.open ?? false}
-              onToggleBrowser={toggleActiveBrowserOverlay}
-              artifactCount={artifactsForGroup(surface.pane.groupId).length}
-              artifactTrayOpen={!artifactTrayUiByWorkspace[surface.pane.groupId]?.closed}
-              onToggleArtifactTray={() =>
-                patchArtifactTrayUi(surface.pane.groupId, {
-                  closed: !artifactTrayUiByWorkspace[surface.pane.groupId]?.closed,
-                })
-              }
-              transcriptExpanded={activeTranscriptExpanded}
-              showTerminalPipToggle={terminalPipToggleVisible}
-              terminalPipEnabled={Boolean(terminalPipEnabledByPane[surface.pane.id])}
-              onToggleTerminalPip={() => toggleTerminalPipForPane(surface.pane.id)}
-              transcriptShortcutLabel={EXPAND_TOGGLE_SHORTCUT_LABEL}
-              onToggleTranscriptExpanded={toggleActiveTranscriptExpanded}
-              onCollapseRightBar={() =>
-                setRightBarCollapsedForPane(true, surface.pane.id)
-              }
-              onRestoreLeftSidebar={
-                leftSidebarRestore.kind === "turn-pane-header"
-                  ? () => setLeftSidebarCollapsedForActivePane(false)
-                  : undefined
-              }
-              onOpenTerminalMap={
-                leftSidebarRestore.kind === "turn-pane-header"
-                  ? toggleTerminalMap
-                  : undefined
-              }
-              terminalMapOpen={
-                leftSidebarRestore.kind === "turn-pane-header" ? terminalMapOpen : false
-              }
-              onInsertPrompt={
-                agent ? (text) => requestComposerInsert(agent.id, text) : undefined
-              }
-              promptProjectDir={promptProjectDirForPane(surface.pane)}
-              promptProjectPath={homeRelativePath(promptProjectDirForPane(surface.pane))}
-              stickyUserMessages={settings.stickyUserMessages}
-              onToggleStickyUserMessages={() =>
-                setSettings((current) => ({
-                  ...current,
-                  stickyUserMessages: !current.stickyUserMessages,
-                }))
-              }
-              notificationLog={notificationLog}
-              showNotifications={settings.showNotifications}
-              onShowNotificationsChange={(show) =>
-                setSettings((current) => ({ ...current, showNotifications: show }))
-              }
-              onMarkNotificationRead={handleMarkNotificationRead}
-              onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
-              onClearNotification={handleClearNotification}
-              onOpenNotificationPane={handleNotificationOpenPane}
-            />
-          ) : undefined
-        }
-        input={
-          <div className="turn-pane-input-stack">
-            {surface.orphanedQueues.length > 0 ? (
-              <RecoveredQueuePanel
-                queues={surface.orphanedQueues}
-                hasTargetAgent={Boolean(agent)}
-                agentLabel={launchAdapter.label}
-                onMoveTurn={(agentId, index, turn, expectedId) =>
-                  void moveQueuedTurnToAgent(agentId, agent?.id, index, turn, expectedId)
-                }
-                onDiscardTurn={(agentId, index, turn, expectedId) =>
-                  void discardRecoveredQueuedTurn(agentId, index, turn, expectedId)
-                }
-              />
-            ) : null}
-            {/* Research runs take one prompt at launch: hide the composer so
-                turns can't be queued into an agent that never drains them
-                (follow-ups branch from the research document instead). Keyed
-                off group scope so the composer never flashes in the debounce
-                window before the node index catches up. */}
-            {agent && groupById.get(surface.pane.groupId)?.scope !== "research" ? (
-              <NativeInput
-                pane={surface.pane}
-                agent={agent}
-                agentMayBeBackgrounded={
-                  shellJobByAgent[agent.id]?.paneId === surface.pane.id &&
-                  (shellJobByAgent[agent.id]?.state === "backgrounded" ||
-                    shellJobByAgent[agent.id]?.state === "stopped")
-                }
-                draft={surface.draft}
-                queuedTurns={surface.queuedTurns}
-                waitTargets={surface.waitTargets}
-                queueSplit={queueSplit}
-                requireCmdEnterToSend={settings.requireCmdEnterToSend}
-                pasteProtection={pasteProtection}
-                hasTranscript={surface.hasTranscript}
-                transcriptCopyPlainText={() => surface.getPlainTextTranscript()}
-                transcriptCopyJsonText={() =>
-                  formatTranscriptCopyJson({
-                    agent,
-                    pane: surface.pane,
-                    transcriptText: surface.getTranscript(),
-                    turns: surface.turns,
-                    hooks: hookEventsByAgentRef.current[agent.id] ?? [],
-                  })
-                }
-                // Anchored on the newest turn, so the composer's handoff covers
-                // the transcript as it stands — the per-message menus are the
-                // way to hand off from further back. Detail is forced on: the
-                // file paths a handoff reports live in the tool calls, which
-                // the pane itself may be configured to hide.
-                transcriptCopyHandoffText={() => {
-                  const items = buildTimelineItems(surface.turns, true);
-                  const anchorKey = latestHandoffAnchorKey(items);
-                  return anchorKey
-                    ? buildHandoffDocument({
-                        items,
-                        anchorKey,
-                        assistantLabel: surface.assistantLabel,
-                        context: handoffContext,
-                      })
-                    : null;
-                }}
-                onPublishTranscript={() => {
-                  const turnsSnapshot = surface.turns;
-                  const title =
-                    surface.pane.title.trim() ||
-                    `${surface.assistantLabel} transcript`;
-                  setPublicationTarget({
-                    kindLabel: "transcript",
-                    initialTitle: title,
-                    previewText: surface.getPlainTextTranscript(),
-                    buildDraft: (publicationTitle) =>
-                      createTranscriptPublicationDraft({
-                        title: publicationTitle,
-                        pane: surface.pane,
-                        agent,
-                        turns: turnsSnapshot,
-                        assistantLabel: surface.assistantLabel,
-                      }),
-                  });
-                }}
-                composerPolicy={getAgentUiAdapter(agent.adapter).composerPolicy(agent)}
-                shortcutLabelForPane={shortcutLabelForPaneId}
-                onQueueChange={setAgentQueuedTurns}
-                onQueueDropTargetChange={setQueueDropTargetAgentId}
-                onMoveQueuedTurn={(targetAgentId, index, turn, expectedId) =>
-                  void moveQueuedTurnToAgent(agent.id, targetAgentId, index, turn, expectedId)
-                }
-                onDraftChange={setAgentDraft}
-                registerDraftFlusher={registerComposerDraftFlusher}
-                onWaitTargetHover={setWaitTargetHoverAgentId}
-                onForkWithPrompt={({ useWorktree, prompt }) =>
-                  useWorktree
-                    ? forkPaneInWorktree(surface.pane, { prompt })
-                    : forkPane(surface.pane, { useWorktree: false, prompt })
-                }
-                onTurnSubmitted={(agentId, text, mode) => {
-                  // Show "Working…" the instant a send starts a run, before the
-                  // backend's status event round-trips. Gate on the agent being
-                  // ready to receive (a plain send): queued turns don't start work,
-                  // and an already-running agent is marked by its live status
-                  // events instead. Send Now keeps the live indicator lit with a
-                  // more precise label until the transcript catches the new turn.
-                  const policy = getAgentUiAdapter(agent.adapter).composerPolicy(agent);
-                  const shouldShowWorking =
-                    mode === "steer" ||
-                    (mode === "send" && policy.readyStatuses.includes(agent.status));
-                  if (agent.id === agentId && shouldShowWorking) {
-                    setThinkingAgentIds((prev) =>
-                      prev.has(agentId) ? prev : new Set(prev).add(agentId),
-                    );
-                  }
-                  if (agent.id === agentId && mode === "steer") {
-                    const baselineUserTurnId = latestUserTurnId(surface.turns);
-                    setProcessingNewMessageByAgent((current) =>
-                      current[agentId] === baselineUserTurnId
-                        ? current
-                        : { ...current, [agentId]: baselineUserTurnId },
-                    );
-                  }
-                  applyPendingFirstMessageTitle(agentId, text);
-                }}
-                onUserInput={stableNoteUserInput}
-                getQueueScroll={getQueueScroll}
-                saveQueueScroll={saveQueueScroll}
-                onError={setError}
-              />
-            ) : null}
-          </div>
-        }
-      />
-    );
-  }
-
-  function artifactsForGroup(groupId: string) {
-    return artifacts.filter((artifact) => artifact.groupId === groupId);
-  }
-
-  function patchArtifactTrayUi(
-    workspaceId: string,
-    patch: Partial<{
-      closed: boolean;
-      collapsed: boolean;
-      pos: ArtifactTrayPosition | null;
-    }>,
-  ) {
-    setArtifactTrayUiByWorkspace((current) => ({
-      ...current,
-      [workspaceId]: { ...current[workspaceId], ...patch },
-    }));
-  }
-
-  // The floating artifact tray for a workspace. A single pane and the top
-  // visible split host the shared tray; lower split cells never repeat it.
-  // Column splits parent it on the terminal stage so it stays visible without
-  // the docked right pane.
-  function renderArtifactTray(
-    surface: TurnPaneSurface,
-    workspaceHost = true,
-    nativeOverlay = false,
-  ) {
-    const trayArtifacts = artifactsForGroup(surface.pane.groupId);
-    const ui = artifactTrayUiByWorkspace[surface.pane.groupId];
-    if (!artifactTrayVisible(trayArtifacts.length > 0, ui?.closed, workspaceHost)) {
-      return null;
-    }
-    return (
-      <ArtifactTray
-        key={`artifact-tray-${surface.pane.groupId}`}
-        paneId={surface.pane.id}
-        artifacts={trayArtifacts}
-        paneExists={(paneId) => panes.some((pane) => pane.id === paneId)}
-        collapsed={ui?.collapsed ?? false}
-        position={ui?.pos ?? null}
-        nativeOverlay={nativeOverlay}
-        onPositionChange={(pos) => patchArtifactTrayUi(surface.pane.groupId, { pos })}
-        onSetCollapsed={(collapsed) =>
-          patchArtifactTrayUi(surface.pane.groupId, { collapsed })
-        }
-        onClose={() => patchArtifactTrayUi(surface.pane.groupId, { closed: true })}
-        onOpen={(artifact) => openArtifact(artifact, surface.pane.id)}
-        onOpenExternal={openArtifactExternally}
-        onReveal={revealArtifact}
-        onRemove={removeArtifact}
-        undo={
-          artifactUndo && artifactUndo.groupId === surface.pane.groupId
-            ? artifactUndo
-            : null
-        }
-        onUndo={undoArtifactRemove}
-        onHoverArtifact={(artifact) => {
-          // Hovering a sibling pane's row previews its source tab with the same
-          // wait-target treatment the queue menu uses.
-          const agentId =
-            artifact && artifact.paneId !== surface.pane.id
-              ? (agentByPaneId.get(artifact.paneId)?.id ?? null)
-              : null;
-          setWaitTargetHoverAgentId(agentId);
-        }}
-      />
-    );
-  }
-
-  function renderAgentDebugPanel(surface: TurnPaneSurface) {
-    if (
-      !settings.showDebugPanel ||
-      !surface.agent ||
-      surface.pane.id !== activePane?.id
-    ) {
-      return null;
-    }
-    return (
-      <AgentDebugPanel
-        key={`agent-debug-${surface.agent.id}`}
-        agent={surface.agent}
-        paneId={surface.pane.id}
-        targets={panes.flatMap((pane) => {
-          const targetAgent = agentByPaneId.get(pane.id);
-          return targetAgent
-            ? [
-                {
-                  agent: targetAgent,
-                  paneId: pane.id,
-                  label: displayPaneTitle(pane, targetAgent),
-                },
-              ]
-            : [];
-        })}
-        position={debugPanelPositionByPane[surface.pane.id] ?? null}
-        onPositionChange={(position) =>
-          setDebugPanelPositionByPane((current) => ({
-            ...current,
-            [surface.pane.id]: position,
-          }))
-        }
-        onQueueChange={setAgentQueuedTurns}
-        onClose={() =>
-          setSettings((current) => ({ ...current, showDebugPanel: false }))
-        }
-      />
-    );
-  }
-
   const selectResearchTreeFromSidebar = useCallback(
     (treeId: string) => {
       if (
@@ -16038,20 +14867,6 @@ function MainApp() {
             <button
               type="button"
               className="icon-button sidebar-header-button"
-              aria-label="Conversation history"
-              title="Conversation history (⇧⌘H)"
-              onClick={() => toggleConversationHistory()}
-            >
-              <History size={14} aria-hidden="true" />
-            </button>
-            <TerminalMapButton
-              className="icon-button sidebar-header-button"
-              pressed={terminalMapOpen}
-              onClick={toggleTerminalMap}
-            />
-            <button
-              type="button"
-              className="icon-button sidebar-header-button"
               title={`Collapse left sidebar (${LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL})`}
               aria-label="Collapse left sidebar"
               onClick={() => setLeftSidebarCollapsedForActivePane(true)}
@@ -16059,14 +14874,6 @@ function MainApp() {
               <PanelLeftClose size={14} aria-hidden="true" />
             </button>
           </div>
-        <SidebarModeToggle
-          mode={sidebarMode}
-          shortcutHintsShown={shortcutHintsShown}
-          runningResearchCount={runningResearchCount}
-          unseenResearchCount={unseenResearchCount}
-          failedResearchCount={failedResearchCount}
-          onChange={changeSidebarMode}
-        />
         {sidebarMode === "research" ? (
           <ResearchFolderSwitcher
             folders={researchGroups}
@@ -16131,7 +14938,7 @@ function MainApp() {
         <nav
           ref={paneListRef}
           className={`pane-list${draggingPaneId || draggingGroupId ? " is-dragging" : ""}`}
-          aria-label={sidebarMode === "terminal" ? "Terminal tabs" : "Research"}
+          aria-label="Research"
         >
           {/* Recent Activity uses the same row/select/copy nesting every
               research row uses. Its fixed-row inset mirrors the scrollable
@@ -16187,169 +14994,6 @@ function MainApp() {
               onRemove={removeResearchTreeFromSidebar}
               onReorder={reorderResearchTreesFromSidebar}
             />
-          ) : null}
-          {sidebarMode === "terminal" ? terminalGroups.map((group, groupIndex) => {
-            const groupPanes = panes.filter((pane) => pane.groupId === group.id);
-            const hasGroupPanes = groupPanes.length > 0;
-            const isActiveGroup = activePane?.groupId === group.id;
-            const isCollapsedGroup = group.collapsed;
-            const groupDisplayName = group.remote
-              ? `${displayGroupName(group)}@${group.remote.label}`
-              : displayGroupName(group);
-            const groupRootPath = groupRootDir(group);
-            const groupDropGap = groupDropTarget?.index ?? null;
-            const collapsedStatusAgents = isCollapsedGroup
-              ? collapsedGroupStatusAgents(groupPanes)
-              : [];
-            return (
-              <section
-                key={group.id}
-                className={`pane-group${hasGroupPanes ? " has-panes" : ""}${
-                  isActiveGroup ? " is-active-group" : ""
-                }${isCollapsedGroup ? " is-collapsed" : ""}${
-                  draggingGroupId === group.id ? " is-group-dragging" : ""
-                }${groupDropGap === groupIndex ? " is-group-drop-before" : ""}${
-                  groupDropGap === terminalGroups.length &&
-                  groupIndex === terminalGroups.length - 1
-                    ? " is-group-drop-after"
-                    : ""
-                }`}
-                data-group-id={group.id}
-                onContextMenu={(event) => openGroupMenu(event, group)}
-              >
-                <div
-                  className="pane-group-header"
-                  title={
-                    group.remote
-                      ? `${groupRootPath} on ${group.remote.label} (${group.remote.host})`
-                      : groupRootPath
-                  }
-                  onPointerDown={(event) => handleGroupHeaderPointerDown(event, group.id)}
-                  onPointerMove={handleGroupHeaderPointerMove}
-                  onPointerUp={handleGroupHeaderPointerUp}
-                  onPointerCancel={handleGroupHeaderPointerCancel}
-                >
-                  <span className="pane-group-heading">
-                    <span className="pane-group-title">
-                      {group.remote ? (
-                        <Globe
-                          className="pane-group-folder pane-group-remote-icon"
-                          size={13}
-                          aria-label={`Remote group on ${group.remote.label}`}
-                        />
-                      ) : (
-                        <Folder className="pane-group-folder" size={13} aria-hidden="true" />
-                      )}
-                      <span
-                        className="pane-group-name"
-                        title={groupDisplayName}
-                        onDoubleClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          openGroupRenameDialog(group);
-                        }}
-                      >
-                        {groupDisplayName}
-                      </span>
-                      {isCollapsedGroup ? (
-                        <span className="pane-group-count">{groupPanes.length}</span>
-                      ) : null}
-                      {collapsedStatusAgents.length > 0 ? (
-                        <span
-                          className="pane-group-status-icons"
-                          role="img"
-                          aria-label={collapsedStatusAgents
-                            .map(collapsedGroupStatusLabel)
-                            .join(", ")}
-                        >
-                          {collapsedStatusAgents.map((agent) => (
-                            <span
-                              key={agent.id}
-                              className={agentTabStatusDotClass(agent.status, false)}
-                              title={collapsedGroupStatusLabel(agent)}
-                              aria-hidden="true"
-                            />
-                          ))}
-                        </span>
-                      ) : null}
-                    </span>
-                  </span>
-                  <span className="pane-group-aux">
-                    <button
-                      type="button"
-                      className="control-button pane-group-collapse-button"
-                      aria-label={`${isCollapsedGroup ? "Expand" : "Collapse"} ${groupDisplayName}`}
-                      title={isCollapsedGroup ? "Expand group" : "Collapse group"}
-                      onPointerDown={(event) => {
-                        event.stopPropagation();
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void toggleGroupCollapsed(group);
-                      }}
-                    >
-                      {isCollapsedGroup ? (
-                        <ChevronsUpDown size={14} aria-hidden="true" />
-                      ) : (
-                        <ChevronsDownUp size={14} aria-hidden="true" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      className="control-button pane-group-menu-button"
-                      aria-label={`Group options for ${groupDisplayName}`}
-                      aria-haspopup="menu"
-                      aria-expanded={groupMenu?.groupId === group.id ? true : undefined}
-                      title="Group options"
-                      onMouseDown={(event) => {
-                        if (event.button !== 0) {
-                          return;
-                        }
-                        suppressGroupMenuButtonClickRef.current = true;
-                        toggleGroupMenuFromButton(event, group);
-                      }}
-                      onClick={(event) => {
-                        if (suppressGroupMenuButtonClickRef.current) {
-                          suppressGroupMenuButtonClickRef.current = false;
-                          event.preventDefault();
-                          event.stopPropagation();
-                          return;
-                        }
-                        toggleGroupMenuFromButton(event, group);
-                      }}
-                    >
-                      <MoreHorizontal size={14} aria-hidden="true" />
-                    </button>
-                  </span>
-                </div>
-                {!hasGroupPanes || isCollapsedGroup ? null : (
-                  <div className="pane-list-body">
-                    {groupPanes.map((pane, index) =>
-                      renderPaneTabRow(pane, index, groupPanes, group.id),
-                    )}
-                  </div>
-                )}
-              </section>
-            );
-          }) : null}
-          {sidebarMode === "research" && scopedResearchPanes.length > 0 ? (
-            <section className="research-live-terminals" aria-label="Live research terminals">
-              <div className="research-sidebar-heading">
-                <span>Live terminals</span>
-                <span
-                  className="research-workspace-total"
-                  aria-label={`${scopedResearchPanes.length} live research terminals`}
-                >
-                  {scopedResearchPanes.length}
-                </span>
-              </div>
-              <div className="pane-list-body">
-                {scopedResearchPanes.map((pane, index) =>
-                  renderPaneTabRow(pane, index, scopedResearchPanes, pane.groupId, false),
-                )}
-              </div>
-            </section>
           ) : null}
         </nav>
 
@@ -16991,14 +15635,6 @@ function MainApp() {
         commands={commandPaletteOpen ? buildPaletteCommands() : []}
       />
 
-      <ConversationHistoryDialog
-        open={conversationHistoryOpen}
-        launching={conversationHistoryLaunching}
-        onClose={() => setConversationHistoryOpen(false)}
-        onFocusPane={focusHistoryPane}
-        onLaunch={launchHistoryEntry}
-      />
-
       {settingsOpen ? (
         <div
           className="settings-backdrop"
@@ -17053,29 +15689,11 @@ function MainApp() {
               <button
                 type="button"
                 role="tab"
-                aria-selected={settingsTab === "remotes"}
-                className={`control-button${settingsTab === "remotes" ? " is-active" : ""}`}
-                onClick={() => setSettingsTab("remotes")}
-              >
-                Remotes
-              </button>
-              <button
-                type="button"
-                role="tab"
                 aria-selected={settingsTab === "theme"}
                 className={`control-button${settingsTab === "theme" ? " is-active" : ""}`}
                 onClick={() => setSettingsTab("theme")}
               >
                 Display
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={settingsTab === "mouseCursor"}
-                className={`control-button${settingsTab === "mouseCursor" ? " is-active" : ""}`}
-                onClick={() => setSettingsTab("mouseCursor")}
-              >
-                Cursor
               </button>
             </div>
 
@@ -17085,7 +15703,7 @@ function MainApp() {
                   <div>
                     <h3>Agent providers</h3>
                     <p className="settings-hint">
-                      qmux uses your existing coding agent subscriptions.
+                      Session uses the agent tools already installed on your Mac.
                     </p>
                   </div>
                   <button
@@ -17482,108 +16100,6 @@ function MainApp() {
             </div>
 
             <div className="settings-row">
-              <label htmlFor="settings-theme" className="settings-label">
-                Terminal theme
-              </label>
-              <div
-                className="settings-theme-field"
-                ref={themePickerRef}
-                onBlur={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget)) {
-                    closeThemePicker();
-                  }
-                }}
-              >
-                <button
-                  id="settings-theme"
-                  ref={themePickerTriggerRef}
-                  type="button"
-                  className="settings-select settings-theme-trigger"
-                  role="combobox"
-                  aria-haspopup="listbox"
-                  aria-expanded={themePickerOpen}
-                  aria-controls={themePickerOpen ? "settings-theme-options" : undefined}
-                  onClick={() => {
-                    if (themePickerOpen) {
-                      closeThemePicker();
-                    } else {
-                      openThemePicker();
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    if (
-                      !themePickerOpen &&
-                      (event.key === "ArrowDown" || event.key === "ArrowUp")
-                    ) {
-                      event.preventDefault();
-                      openThemePicker();
-                    }
-                  }}
-                >
-                  <span>
-                    {settings.themeId === DEFAULT_THEME_ID
-                      ? "qmux (default)"
-                      : settings.themeId}
-                  </span>
-                </button>
-                {themePickerOpen ? (
-                  <div
-                    id="settings-theme-options"
-                    className="settings-theme-options"
-                    role="listbox"
-                    aria-label="Terminal themes"
-                    onMouseLeave={() => setPreviewThemeId(null)}
-                  >
-                    {renderThemeOption(
-                      DEFAULT_THEME_ID,
-                      "qmux (default)",
-                      themeCatalog?.find((theme) => theme.name === DEFAULT_THEME_ID) ?? null,
-                    )}
-                    {selectedTheme === null && settings.themeId !== DEFAULT_THEME_ID
-                      ? // A stored theme the catalog doesn't have (or the catalog
-                        // is still loading): keep it available without silently
-                        // jumping the visible selection to the default.
-                        renderThemeOption(settings.themeId, settings.themeId, null)
-                      : null}
-                    {themeGroups.dark.length > 0 ? (
-                      <div role="group" aria-labelledby="settings-theme-dark-label">
-                        <div
-                          id="settings-theme-dark-label"
-                          className="settings-theme-group-label"
-                        >
-                          Dark
-                        </div>
-                        {themeGroups.dark.map((theme) =>
-                          renderThemeOption(theme.name, theme.name, theme),
-                        )}
-                      </div>
-                    ) : null}
-                    {themeGroups.light.length > 0 ? (
-                      <div role="group" aria-labelledby="settings-theme-light-label">
-                        <div
-                          id="settings-theme-light-label"
-                          className="settings-theme-group-label"
-                        >
-                          Light
-                        </div>
-                        {themeGroups.light.map((theme) =>
-                          renderThemeOption(theme.name, theme.name, theme),
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {effectiveTheme ? (
-                  <span className="settings-theme-preview" aria-hidden="true">
-                    {themePreviewColors(effectiveTheme).map((color, index) => (
-                      <span key={index} style={{ background: color }} />
-                    ))}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="settings-row">
               <label htmlFor="settings-body-font" className="settings-label">
                 Body font
               </label>
@@ -17607,63 +16123,6 @@ function MainApp() {
                   ))
                 )}
               </select>
-            </div>
-
-            <div className="settings-row">
-              <label htmlFor="settings-font" className="settings-label">
-                Terminal font
-              </label>
-              <select
-                id="settings-font"
-                className="settings-select"
-                value={settings.fontId}
-                onChange={(event) => {
-                  // Read the value synchronously: the setSettings updater runs
-                  // during render, by which point React has reset currentTarget
-                  // to null, so it must close over the value, not the event.
-                  const fontId = event.currentTarget.value;
-                  setSettings((current) => ({ ...current, fontId }));
-                }}
-              >
-                {FONT_OPTIONS.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="settings-row">
-              <span className="settings-label">Font size</span>
-              <div className="settings-stepper" role="group" aria-label="Font size">
-                <button className="control-button"
-                  type="button"
-                  aria-label="Decrease font size"
-                  disabled={settings.fontSize <= TERMINAL_FONT_SIZE_MIN}
-                  onClick={() =>
-                    setSettings((current) => ({
-                      ...current,
-                      fontSize: clampFontSize(current.fontSize - 1),
-                    }))
-                  }
-                >
-                  <Minus size={14} aria-hidden="true" />
-                </button>
-                <span className="settings-stepper-value">{settings.fontSize}px</span>
-                <button className="control-button"
-                  type="button"
-                  aria-label="Increase font size"
-                  disabled={settings.fontSize >= TERMINAL_FONT_SIZE_MAX}
-                  onClick={() =>
-                    setSettings((current) => ({
-                      ...current,
-                      fontSize: clampFontSize(current.fontSize + 1),
-                    }))
-                  }
-                >
-                  <Plus size={14} aria-hidden="true" />
-                </button>
-              </div>
             </div>
 
             <label className="settings-row settings-toggle">
@@ -17848,71 +16307,7 @@ function MainApp() {
             ) : (
               <>
             <label className="settings-row settings-toggle">
-              <span className="settings-label">
-                Code mode (enables worktrees, extra shell UI, etc.)
-              </span>
-              <input
-                type="checkbox"
-                className="settings-checkbox"
-                checked={settings.codeMode}
-                onChange={(event) => {
-                  const codeMode = event.currentTarget.checked;
-                  setSettings((current) => ({
-                    ...current,
-                    codeMode,
-                    showTabDirectories: codeMode,
-                    showToolCalls: codeMode,
-                    requireCmdEnterToSend: codeMode,
-                  }));
-                }}
-              />
-            </label>
-
-            <label className="settings-row settings-toggle">
-              <span className="settings-label settings-label-indented">Show tab directories</span>
-              <input
-                type="checkbox"
-                className="settings-checkbox"
-                checked={settings.showTabDirectories}
-                onChange={(event) => {
-                  const showTabDirectories = event.currentTarget.checked;
-                  setSettings((current) => ({ ...current, showTabDirectories }));
-                }}
-              />
-            </label>
-
-            <label className="settings-row settings-toggle">
-              <span className="settings-label settings-label-indented">Show tool calls</span>
-              <input
-                type="checkbox"
-                className="settings-checkbox"
-                checked={settings.showToolCalls}
-                onChange={(event) => {
-                  const showToolCalls = event.currentTarget.checked;
-                  setSettings((current) => ({ ...current, showToolCalls }));
-                }}
-              />
-            </label>
-
-            <label className="settings-row settings-toggle">
-              <span className="settings-label settings-label-indented">
-                Show assistant message timestamps
-              </span>
-              <input
-                type="checkbox"
-                className="settings-checkbox"
-                checked={settings.showAssistantTimestamps}
-                onChange={(event) => {
-                  const showAssistantTimestamps = event.currentTarget.checked;
-                  setSettings((current) => ({ ...current, showAssistantTimestamps }));
-                }}
-              />
-            </label>
-
-            <label className="settings-row settings-toggle">
-              <span className="settings-label settings-label-indented">
-                Require ⌘↵ to send
-              </span>
+              <span className="settings-label">Require ⌘↵ to send</span>
               <input
                 type="checkbox"
                 className="settings-checkbox"
@@ -17960,7 +16355,7 @@ function MainApp() {
               <div className="settings-label-stack">
                 <span className="settings-label">Native notifications</span>
                 <p className="settings-hint settings-hint-weak">
-                  Used by <code>qmux send</code> while qmux is in the background.
+                  Session can notify you when background research finishes.
                 </p>
               </div>
               {notificationPermission === null ? (
@@ -17989,37 +16384,6 @@ function MainApp() {
               )}
             </div>
 
-            <div className="settings-row">
-              <div className="settings-label-stack">
-                <label htmlFor="settings-worktree-location" className="settings-label">
-                  Worktree location
-                </label>
-                <p className="settings-hint settings-hint-weak">
-                  {settings.worktreeLocation === "localQmux"
-                    ? "New worktrees stored in <project>/.qmux/worktrees/<name>."
-                    : settings.worktreeLocation === "localClaude"
-                      ? "New worktrees stored in <project>/.claude/worktrees/<name>."
-                      : "New worktrees stored in qmux’s global workspace directory."}
-                </p>
-              </div>
-              <select
-                id="settings-worktree-location"
-                className="settings-select"
-                value={settings.worktreeLocation}
-                onChange={(event) => {
-                  const worktreeLocation =
-                    event.currentTarget.value as AppSettings["worktreeLocation"];
-                  setSettings((current) => ({ ...current, worktreeLocation }));
-                }}
-              >
-                {WORKTREE_LOCATION_OPTIONS.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             <div className="settings-row settings-research-instructions-row">
               <div className="settings-label-stack">
                 <label htmlFor="settings-research-instructions" className="settings-label">
@@ -18043,77 +16407,6 @@ function MainApp() {
                 }}
               />
             </div>
-
-            <div className="settings-row">
-              <div className="settings-label-stack">
-                <label htmlFor="settings-research-sdk-harness" className="settings-label">
-                  Headless Claude research
-                </label>
-                <p className="settings-hint settings-hint-weak">
-                  Run Claude research without a hidden terminal. Off falls back to the pane TUI.
-                </p>
-              </div>
-              <input
-                id="settings-research-sdk-harness"
-                type="checkbox"
-                checked={settings.researchSdkHarness}
-                onChange={(event) => {
-                  const researchSdkHarness = event.currentTarget.checked;
-                  setSettings((current) => ({ ...current, researchSdkHarness }));
-                }}
-              />
-            </div>
-
-            <div className="settings-row settings-shortcut-row">
-              <label htmlFor="settings-global-task-launcher-hotkey" className="settings-label">
-                Global quick launch hotkey
-              </label>
-              <select
-                id="settings-global-task-launcher-hotkey"
-                className="settings-select"
-                value={globalTaskLauncherSetting.hotkey ?? ""}
-                disabled={globalTaskLauncherHotkeySaving}
-                aria-invalid={globalTaskLauncherHotkeyMessage ? true : undefined}
-                aria-describedby={
-                  globalTaskLauncherHotkeyMessage
-                    ? "settings-global-task-launcher-hotkey-message"
-                    : undefined
-                }
-                onChange={(event) =>
-                  void updateGlobalTaskLauncherHotkey(
-                    event.currentTarget.value
-                      ? (event.currentTarget.value as GlobalTaskLauncherHotkey)
-                      : null,
-                  )
-                }
-              >
-                <option value="">Disabled</option>
-                {GLOBAL_TASK_LAUNCHER_HOTKEY_OPTIONS.map((option) => (
-                  <option
-                    key={option.value}
-                    value={option.value}
-                    disabled={Boolean(
-                      option.accelerator && option.accelerator === showHideShortcutValue,
-                    )}
-                  >
-                    {option.label}
-                    {option.accelerator === showHideShortcutValue ? " (used by Show/hide)" : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {globalTaskLauncherHotkeyMessage || globalTaskLauncherHotkeySaving ? (
-              <p
-                id="settings-global-task-launcher-hotkey-message"
-                className={`settings-hint settings-shortcut-message${
-                  globalTaskLauncherHotkeyMessage ? " is-error" : ""
-                }`}
-              >
-                {globalTaskLauncherHotkeySaving
-                  ? "Saving hotkey..."
-                  : globalTaskLauncherHotkeyMessage}
-              </p>
-            ) : null}
 
             <div className="settings-row settings-shortcut-row">
               <div className="settings-label">
@@ -18956,7 +17249,7 @@ function MainApp() {
             aria-labelledby="exit-dialog-title"
             aria-busy={quitting}
           >
-            <h2 id="exit-dialog-title">Quit qmux?</h2>
+            <h2 id="exit-dialog-title">Quit Session?</h2>
             {exitDialog.paneCount > 0 ? (
               <p>
                 Quitting will close{" "}
@@ -18988,7 +17281,7 @@ function MainApp() {
                 pendingLabel="Closing terminals..."
                 onClick={() => void confirmExit()}
               >
-                Quit qmux
+                Quit Session
               </ConfirmDialogActionButton>
             </div>
           </div>
@@ -19096,12 +17389,6 @@ function MainApp() {
               onShowSidebar={
                 researchSidebarRestoreInHeader ? showLeftSidebarInResearch : undefined
               }
-              onOpenTerminalMap={
-                researchSidebarRestoreInHeader ? toggleTerminalMap : undefined
-              }
-              terminalMapOpen={
-                researchSidebarRestoreInHeader ? terminalMapOpen : false
-              }
             />
           ) : null}
           {researchStageView === "multi-select" ? (
@@ -19112,7 +17399,6 @@ function MainApp() {
           ) : null}
           {researchStageView === "journal" ? (
             <ResearchBrowserHost
-              onOpenPane={handleResearchDocumentOpenPane}
               onAppShortcut={(command, repeat) => nativeAppShortcutHandlerRef.current(command, repeat)}
               items={recentActivityItems}
               researchTrees={[...researchTrees, ...archivedResearchTrees]}
@@ -19158,7 +17444,6 @@ function MainApp() {
               onUpdateDocument={editResearchDocument}
               onCancel={cancelResearchRun}
               onRetryNode={retryResearchRun}
-              onOpenPane={handleResearchDocumentOpenPane}
               linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}
               onError={setError}
               onToast={handleResearchDocumentToast}
@@ -19175,12 +17460,6 @@ function MainApp() {
               onShowSidebar={
                 researchSidebarRestoreInHeader ? showLeftSidebarInResearch : undefined
               }
-              onOpenTerminalMap={
-                researchSidebarRestoreInHeader ? toggleTerminalMap : undefined
-              }
-              terminalMapOpen={
-                researchSidebarRestoreInHeader ? terminalMapOpen : false
-              }
               workspaceCanGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
               workspaceCanGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
               onWorkspaceBack={goResearchWorkspaceBack}
@@ -19193,279 +17472,8 @@ function MainApp() {
               <span>Select a research item or start a new query</span>
             </div>
           </div>
-          {panes.map((pane) => (
-            <TerminalPane
-              key={pane.id}
-              ref={terminalPaneRefCallback(pane.id)}
-              pane={pane}
-              visible={visibleTerminalPaneIdSet.has(pane.id)}
-              active={pane.id === activePane?.id}
-              waitTargetPreview={
-                agentByPaneId.get(pane.id)?.id === waitTargetHoverAgentId
-              }
-              style={terminalPaneStyle(pane.id)}
-              fontSize={terminalFontSize}
-              fontFamily={terminalNativeFontFamily}
-              letterSpacing={terminalLetterSpacing}
-              cursorBlink={settings.cursorBlink}
-              cursorStyle={settings.cursorStyle}
-              scrollbackRows={settings.scrollbackRows}
-              scrollOnUserInput={settings.scrollOnUserInput}
-              scrollSensitivity={terminalScrollSensitivity}
-              lineHeight={settings.lineHeight}
-              copyOnSelect={settings.copyOnSelect}
-              selectionClearOnCopy={settings.selectionClearOnCopy}
-              themeName={terminalThemeName}
-              pasteProtection={pasteProtection}
-              deferGeometryUpdates={terminalGeometryResizing}
-              // The expanded transcript is an opaque overlay covering the whole
-              // stage; a visible pane under it must hold its native reveal one
-              // frame on switch so the overlay paints before the surface appears.
-              coveredByOverlay={
-                activeTranscriptVisibleExpanded && visibleTerminalPaneIdSet.has(pane.id)
-              }
-              readOnly={terminalPaneIsReadOnly(pane)}
-              // Only visible panes take the blocking signal: a hidden pane's
-              // surface neither owns the keyboard nor receives pointer events,
-              // and keeping its prop pinned false means opening a dialog/menu
-              // re-renders (and re-issues layout FFI for) only the panes on
-              // screen instead of every mounted tab.
-              inputBlocked={
-                visibleTerminalPaneIdSet.has(pane.id) &&
-                nativeTerminalInputBlocked
-              }
-              // A live web selection cedes the keyboard to WebKit just like a
-              // focused editable: the pane releases ownership, first responder
-              // hands to the webview, and Cmd+C copies the selected web text.
-              // Pinned false for hidden panes (like inputBlocked above): their
-              // surface can't own the keyboard regardless, so a composer focus
-              // or selection flip re-renders — and re-issues layout FFI for —
-              // only the panes on screen instead of every mounted tab.
-              webEditableFocused={
-                visibleTerminalPaneIdSet.has(pane.id) &&
-                (webEditableFocused || webSelectionActive || webTranscriptFocused)
-              }
-              requestAttach={requestPaneAttach}
-              onCloseRemote={() => void closePane(pane)}
-              onUserInput={stableNoteUserInput}
-              onActivate={activateTerminalPane}
-              onOverlayStateChange={updateTerminalOverlayState}
-            />
-          ))}
-          {terminalSplitDropStyle ? (
-            <div
-              className={`terminal-split-drop-placeholder${
-                terminalSplitDropIsColumn ? " is-column" : ""
-              }`}
-              style={terminalSplitDropStyle}
-              aria-hidden="true"
-            />
-          ) : null}
-          {terminalSplitResizeMaskStyle ? (
-            <div
-              className={`terminal-split-resize-mask${
-                terminalSplitResizeMaskIsColumn ? " is-column" : ""
-              }`}
-              style={terminalSplitResizeMaskStyle}
-              aria-hidden="true"
-            />
-          ) : null}
-          {activePaneSplit
-            ? terminalSplitDividers.map((divider) => (
-                <TerminalSplitResizer
-                  // Keyed by branch path, not a flat index: two branches can both
-                  // have a divider 0, and reusing one across a layout change
-                  // leaves a resizer mid-drag.
-                  key={`${activePaneSplit.id}:${divider.path}:${divider.index}`}
-                  style={splitRectStyle(divider.rect)}
-                  // Frozen while a split drag runs: the live fraction would
-                  // otherwise re-register every divider's native region on
-                  // every pointermove. Those invokes are not serialized, so a
-                  // stale one can land last and leave the region behind the
-                  // divider it describes. The gesture is pointer-claimed
-                  // anyway, and dropping the key resyncs every region once the
-                  // drag commits.
-                  layoutKey={
-                    terminalSplitResizeMask
-                      ? undefined
-                      : `${activePaneSplit.id}:${divider.path}:${divider.index}:${
-                          divider.axis === "horizontal"
-                            ? divider.rect.leftFraction
-                            : divider.rect.topFraction
-                        }:${divider.axis}`
-                  }
-                  orientation={divider.axis === "horizontal" ? "vertical" : "horizontal"}
-                  onPointerDown={(event) =>
-                    startTerminalSplitResize(event, activePaneSplit, divider)
-                  }
-                  onKeyDown={(event) =>
-                    resizeTerminalSplitWithKeyboard(event, activePaneSplit, divider)
-                  }
-                />
-              ))
-            : null}
-          {activeTurnPaneSurface &&
-          !researchSurfaceActive &&
-          splitOverlayTranscriptMode &&
-          !activeTranscriptVisibleExpanded
-            ? renderArtifactTray(activeTurnPaneSurface, true, true)
-            : null}
-          {!activeTranscriptVisibleExpanded && splitRightPaneMode && hasVisibleRightBar
-            ? visibleRightBarSurfaces.map((surface, index) => (
-                <section
-                  key={surface.pane.id}
-                  className={`turn-pane turn-pane-split-cell${
-                    surface.pane.id === activePane?.id ? " is-active" : ""
-                  }${
-                    surface.agent && surface.agent.id === queueDropTargetAgentId
-                      ? " is-queue-drop-target"
-                      : ""
-                  }${
-                    surface.agent?.id === waitTargetHoverAgentId
-                      ? " is-wait-target-preview"
-                      : ""
-                  }`}
-                  data-queue-drop-agent-id={surface.agent?.id}
-                  style={turnPaneSplitCellStyle(surface)}
-                  onPointerDownCapture={() => activateTerminalPane(surface.pane.id)}
-                  onFocusCapture={() => {
-                    // WebKit re-emits focus on its remembered element whenever
-                    // the webview regains first responder — which every
-                    // right-pane unmount/layout transition does. Only focus
-                    // the user caused (a click or key since the page became
-                    // focused) may switch the active pane, or quitting an
-                    // agent / starting a terminal would yank activation to
-                    // whichever sibling last held a composer or resizer.
-                    if (userInputSinceWindowFocus()) {
-                      activateTerminalPane(surface.pane.id);
-                    }
-                  }}
-                >
-                  {renderTurnPaneResizer()}
-                  {renderTurnPaneSurface(surface, false)}
-                  {renderArtifactTray(surface, index === 0)}
-                  {renderAgentDebugPanel(surface)}
-                  {renderFloatingTurnPaneControls(surface, false)}
-                </section>
-              ))
-            : null}
-          {!activeTranscriptVisibleExpanded && splitRightPaneMode && hasVisibleRightBar
-            ? splitRightPaneDividerOffsets.map((offset, index) => {
-                // The right-pane-colored gutter cover only reads correctly
-                // between two right panes. Against a full-width terminal it
-                // would float a right-pane patch over that terminal's resize
-                // handle instead.
-                const abovePaneId = activePaneSplit?.paneIds[index];
-                const belowPaneId = activePaneSplit?.paneIds[index + 1];
-                if (
-                  !abovePaneId ||
-                  !belowPaneId ||
-                  !splitTurnPaneSurfaceByPaneId.has(abovePaneId) ||
-                  !splitTurnPaneSurfaceByPaneId.has(belowPaneId)
-                ) {
-                  return null;
-                }
-                return (
-                  <div
-                    key={`turn-${activePaneSplit?.id ?? "split"}-${index}`}
-                    className="turn-pane-split-divider turn-pane-inline-split-divider"
-                    style={turnPaneInlineDividerStyle(offset, index)}
-                    aria-hidden="true"
-                  />
-                );
-              })
-            : null}
         </div>
       </section>
-
-      {/* Split expansion covers the terminal stage with every open right pane.
-          Tab order becomes left-to-right columns here, and flex gives every
-          transcript an equal-width column. */}
-      {activeTranscriptVisibleExpanded && splitLayoutActive ? (
-        <aside
-          className={`turn-pane is-expanded is-headerless-expanded is-split-expanded${
-            focusedAssistantTurnSurface ? " is-reader-mode" : ""
-          }`}
-        >
-          {expandedRightBarSurfaces.map((surface, index) => (
-            <section
-              key={surface.pane.id}
-              className={`turn-pane-expanded-split-cell${
-                surface.pane.id === activePane?.id ? " is-active" : ""
-              }${
-                surface.agent && surface.agent.id === queueDropTargetAgentId
-                  ? " is-queue-drop-target"
-                  : ""
-              }${
-                surface.agent?.id === waitTargetHoverAgentId
-                  ? " is-wait-target-preview"
-                  : ""
-              }`}
-              data-queue-drop-agent-id={surface.agent?.id}
-              onPointerDownCapture={() => activateTerminalPane(surface.pane.id)}
-              onFocusCapture={() => {
-                // As with the docked split cells, ignore WebKit restoring focus
-                // after the layout remount unless the user actually interacted.
-                if (userInputSinceWindowFocus()) {
-                  activateTerminalPane(surface.pane.id);
-                }
-              }}
-            >
-              {renderTurnPaneSurface(surface, false)}
-              {focusedAssistantTurnSurface ? null : renderArtifactTray(surface, index === 0)}
-              {focusedAssistantTurnSurface ? null : renderAgentDebugPanel(surface)}
-              {focusedAssistantTurnSurface
-                ? null
-                : renderFloatingTurnPaneControls(surface, true)}
-            </section>
-          ))}
-        </aside>
-      ) : activeTurnPaneSurface && hasVisibleRightBar && !splitRightPaneMode ? (
-        /* One aside serves both the expanded overlay and the docked right pane,
-           with stable child positions, so toggling Expand transcript restyles
-           the same TurnOverlay instance instead of remounting it — a remount
-           resets its scroll position and transient disclosure state. */
-        <aside
-          className={
-            activeTranscriptVisibleExpanded
-              ? `turn-pane is-expanded${focusedAssistantTurn ? " is-reader-mode" : ""}`
-              : "turn-pane"
-          }
-          onPointerDownCapture={() => activateTerminalPane(activeTurnPaneSurface.pane.id)}
-          onFocusCapture={() => activateTerminalPane(activeTurnPaneSurface.pane.id)}
-        >
-          {activeTranscriptVisibleExpanded ? null : renderTurnPaneResizer()}
-          {renderTurnPaneSurface(activeTurnPaneSurface, true)}
-          {focusedAssistantTurn ? null : renderArtifactTray(activeTurnPaneSurface)}
-          {focusedAssistantTurn ? null : renderAgentDebugPanel(activeTurnPaneSurface)}
-        </aside>
-      ) : null}
-      {/* Text-mode terminal mini-map while the transcript covers the stage:
-          polls Ghostty viewport text and paints it at the pane's grid shape.
-          Click restores. */}
-      {activeTerminalPipVisible && activePane ? (
-        <TerminalPip
-          paneId={activePane.id}
-          title={displayPaneTitle(activePane, agentByPaneId.get(activePane.id))}
-          hasPaneHeader={activePaneHasTurnPaneHeader}
-          columns={activePane.cols}
-          rows={activePane.rows}
-          theme={
-            themeCatalog?.find((theme) => theme.name === terminalThemeName) ??
-            effectiveTheme
-          }
-          fontFamily={terminalFontFamily}
-          fontSize={terminalFontSize}
-          onRestore={() => {
-            activateTerminalPane(activePane.id);
-            // Default splitMode follows splitRightPaneMode: non-split expansion
-            // lives in transcriptExpandedByPane; hardcoding true would leave
-            // single-pane expanded state stuck open.
-            setTranscriptExpandedForPane(activePane.id, false);
-          }}
-        />
-      ) : null}
-      {renderFloatingPaneRestoreControls()}
 
       {activeBrowserOwnerId && activeBrowserOverlay?.open ? (
         <BrowserOverlay
@@ -19570,116 +17578,12 @@ function MainApp() {
         onCreate={submitNewResearch}
       />
 
-      {newAgentOpen ? (
-        <div
-          className="confirm-dialog-backdrop new-agent-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeNewAgentPopover();
-            }
-          }}
-        >
-          {renderLauncher()}
-        </div>
-      ) : null}
-
-      {terminalMapOpen ? (
-        <div
-          className="confirm-dialog-backdrop terminal-map-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              closeTerminalMap();
-            }
-          }}
-        >
-          <div
-            ref={terminalMapDialogRef}
-            className="terminal-map-popover"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Terminal map"
-            tabIndex={-1}
-          >
-            <div className="home-board">
-              <HomeGroupSelector
-                groups={homeGroups}
-                draftsVisible={homeDraftsVisible}
-                onDraftsVisibleChange={setHomeDraftsVisibility}
-                hiddenTerminalIds={hiddenHomeTerminalIds}
-                onSetTerminalsHidden={setHomeTerminalsHidden}
-                onToggleTerminal={toggleHomeTerminal}
-              />
-              <HomeRails
-                workstreams={homeVisibleWorkstreams}
-                activePaneIds={visibleTerminalPaneIdSet}
-                drafts={globalDrafts}
-                draftsVisible={homeDraftsVisible}
-                onShowDrafts={showHomeDrafts}
-                onActivatePane={(paneId) => {
-                  closeTerminalMap();
-                  focusPaneTab(paneId);
-                }}
-                onLoadEarlierPastTurns={loadEarlierHomeTurnHistory}
-                onReorderQueuedTurn={(agentId, fromIndex, toIndex, text, expectedId) =>
-                  void reorderHomeQueuedTurn(agentId, fromIndex, toIndex, text, expectedId)
-                }
-                onMoveQueuedTurn={(fromAgentId, toAgentId, index, text, expectedId) =>
-                  void moveQueuedTurnToAgent(fromAgentId, toAgentId, index, text, expectedId)
-                }
-                onQueueTurn={queueHomeTurn}
-                onRemoveQueuedTurn={removeHomeQueuedTurn}
-                onUnpauseAgent={unpauseHomeAgent}
-                onSetQueuedTurnPause={setHomeQueuedTurnPause}
-                onSendNextQueuedTurn={sendNextHomeQueuedTurn}
-                onCreateDraft={createHomeDraft}
-                onDeleteDraft={deleteHomeDraft}
-                onAssignDraft={(draftId, agentId) => void assignHomeDraft(draftId, agentId)}
-                readRailScroll={readHomeRailScroll}
-                saveRailScroll={saveHomeRailScroll}
-                composerDrafts={homeComposerDrafts}
-                setComposerDrafts={setHomeComposerDrafts}
-              />
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       <ResearchFolderDialog
         open={newResearchFolderRequest !== null}
         itemCount={newResearchFolderRequest?.treeIds.length ?? 0}
         onClose={() => setNewResearchFolderRequest(null)}
         onCreate={confirmResearchFolderCreation}
       />
-
-      {exportResearchPane ? (
-        <ExportToResearchDialog
-          paneTitle={displayPaneTitle(
-            exportResearchPane,
-            agents.find((agent) => agent.paneId === exportResearchPane.id),
-          )}
-          folders={researchGroups}
-          defaultFolderId={researchScope}
-          onClose={() => setExportResearchPane(null)}
-          onExport={async ({ workspaceId, title }) => {
-            const workspace = await resolveResearchComposerWorkspace(workspaceId);
-            const detail = await exportPaneToResearch({
-              paneId: exportResearchPane.id,
-              workspaceId: workspace.id,
-              title,
-            });
-            // Bring the freshly exported tree forward: switch to the research
-            // surface, scope the sidebar to its folder, and select it with its
-            // detail already in hand — the same adoption a new-research submit
-            // uses, so an export is never left invisible behind the terminal.
-            adoptCreatedResearchTree(detail);
-            // Name the folder: the research sidebar shows one folder at a
-            // time, so an export into another scope is otherwise invisible.
-            showAppToast(`Exported to Research · ${workspace.name}`);
-          }}
-        />
-      ) : null}
 
       <PublishDialog
         target={publicationTarget}
@@ -19731,8 +17635,5 @@ function MainApp() {
 }
 
 export default function App() {
-  if (new URLSearchParams(window.location.search).has("global-task-launcher")) {
-    return <GlobalTaskLauncher />;
-  }
   return <MainApp />;
 }

@@ -46,7 +46,6 @@ export interface BrowserMethods {
   "journal.dismissUndo": () => void;
   "activity.loadOlder": () => void;
   "navigation.openDocument": (treeId: string, nodeId: string) => Promise<void>;
-  "navigation.openTerminal": (paneId: string) => void;
   "navigation.go": (route: string) => void;
   "navigation.back": () => void;
   "navigation.forward": () => void;

@@ -76,22 +76,3 @@ export function closeAllBrowserOverlaysState(
   }
   return changed ? next : overlays;
 }
-
-export type TranscriptOrBrowserToggle =
-  | { type: "close-browser" }
-  | { type: "toggle-transcript" }
-  | { type: "toggle-browser" };
-
-/** ⌘⇧E: a live browser always wins so the same chord can dismiss a leftover square. */
-export function resolveTranscriptOrBrowserToggle(input: {
-  anyBrowserOpen: boolean;
-  canToggleTranscript: boolean;
-}): TranscriptOrBrowserToggle {
-  if (input.anyBrowserOpen) {
-    return { type: "close-browser" };
-  }
-  if (input.canToggleTranscript) {
-    return { type: "toggle-transcript" };
-  }
-  return { type: "toggle-browser" };
-}

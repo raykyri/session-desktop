@@ -4,7 +4,7 @@ members = ["crates/qmux-proto", "crates/qmux-cli"]
 [package]
 name = "qmux"
 version = "0.3.3"
-description = "A multiplexing terminal."
+description = "A desktop workspace for branching agent research."
 authors = ["Raymond Zhong"]
 license = "MIT"
 edition = "2024"

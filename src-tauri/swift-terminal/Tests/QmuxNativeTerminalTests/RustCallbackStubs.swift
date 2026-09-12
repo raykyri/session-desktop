@@ -156,8 +156,5 @@ func nativeTerminalDidCancelInterfaceHealthCheckStub() {}
 @_cdecl("qmux_native_terminal_did_detect_unhealthy_webview")
 func nativeTerminalDidDetectUnhealthyWebViewStub(_: UInt64) {}
 
-@_cdecl("qmux_global_task_launcher_did_trigger")
-func globalTaskLauncherDidTriggerStub() {}
-
 @_cdecl("qmux_native_terminal_system_sleep_changed")
 func testSystemSleepChanged(_ sleeping: Int32) {}

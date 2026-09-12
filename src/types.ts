@@ -351,20 +351,6 @@ export interface ShellAgentJobInfo {
   state: ShellAgentJobState;
 }
 
-export type GlobalTaskLauncherHotkey =
-  | "doubleControl"
-  | "doubleOption"
-  | "doubleCommand"
-  | "Control+Space"
-  | "Option+Space"
-  | "Command+Space";
-
-export interface GlobalTaskLauncherSetting {
-  hotkey: GlobalTaskLauncherHotkey | null;
-  registered: boolean;
-  error?: string | null;
-}
-
 export type ResearchNodeStatus =
   | "queued"
   | "starting"

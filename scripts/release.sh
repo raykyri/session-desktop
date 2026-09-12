@@ -14,9 +14,6 @@ set -euo pipefail
 #   updater archive.
 #   Set QMUX_ALLOW_UNNOTARIZED=1 to build a release without notarizing
 #   (downloads will hit Gatekeeper).
-#   Zig and cargo-zigbuild are required to (re)build linux-musl qmux-cli
-#   (`brew install zig`, `cargo install cargo-zigbuild`). This script forces
-#   a rebuild so the DMG does not ship a stale CLI.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 repo_root="$(cd "$script_dir/.." >/dev/null && pwd)"
@@ -158,8 +155,8 @@ fi
 "$script_dir/generate-latest-json.sh"
 
 bundle_root="src-tauri/target/$target/release/bundle"
-dmg="$bundle_root/dmg/qmux_${version}_universal.dmg"
-archive="$bundle_root/macos/qmux.app.tar.gz"
+dmg="$bundle_root/dmg/Session_${version}_universal.dmg"
+archive="$bundle_root/macos/Session.app.tar.gz"
 signature="$archive.sig"
 manifest="$bundle_root/macos/latest.json"
 
@@ -176,7 +173,7 @@ checksums="$bundle_root/SHA256SUMS"
 
 gh release create "$tag" \
   --draft \
-  --title "qmux $tag" \
+  --title "Session $tag" \
   --generate-notes \
   --target "$(git rev-parse HEAD)" \
   "$dmg" "$archive" "$signature" "$manifest" "$checksums"

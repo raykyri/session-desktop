@@ -590,9 +590,10 @@ mod tests {
     fn built_in_skill_has_frontmatter_environment_gate_and_core_workflows() {
         assert!(SKILL.starts_with("---\nname: qmux\n"));
         assert!(SKILL.contains("test \"${QMUX_ENV:-}\" = 1"));
-        assert!(SKILL.contains("qmux pane wait-output"));
+        assert!(SKILL.contains("desktop product is Session"));
+        assert!(SKILL.contains("qmux context"));
         assert!(SKILL.contains("qmux agent wait"));
-        assert!(SKILL.contains("qmux split join"));
+        assert!(SKILL.contains("qmux artifact list"));
     }
 
     #[test]

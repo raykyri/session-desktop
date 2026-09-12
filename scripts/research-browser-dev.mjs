@@ -40,7 +40,7 @@ await server.listen();
 console.log(
   `Research Browser: http://127.0.0.1:1421/${root === resolve(repo) ? "research-browser.html" : ""}`,
 );
-console.log("In qmux, open Research Browser → View source and load that URL.");
+console.log("In Session, open Research Browser → View source and load that URL.");
 for (const signal of ["SIGINT", "SIGTERM"])
   process.once(signal, async () => {
     await server.close();

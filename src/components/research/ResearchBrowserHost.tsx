@@ -61,7 +61,6 @@ function storedState(): {
 
 export default function ResearchBrowserHost(
   props: RecentActivityPaneProps & {
-    onOpenPane: (paneId: string) => void;
     onAppShortcut: (command: AppShortcutCommand, repeat: boolean) => void;
   },
 ) {
@@ -211,7 +210,6 @@ export default function ResearchBrowserHost(
         inline: Boolean(node.inline),
       });
     },
-    "navigation.openTerminal": (paneId) => propsRef.current.onOpenPane(paneId),
     "navigation.go": navigate,
     "navigation.back": () => move(-1),
     "navigation.forward": () => move(1),
