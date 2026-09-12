@@ -88,10 +88,10 @@ impl ClaudeAdapter {
         }
     }
 
-    /// `--plugin-dir` args that inject the qmux-managed plugin (and its skills)
+    /// `--plugin-dir` args that inject the session-managed plugin (and its skills)
     /// into a launched Claude instance. Emitted only when the plugin directory
     /// actually exists, so a checkout without one launches cleanly. This is the
-    /// sole skill-injection vector: it points at a qmux-owned directory and never
+    /// sole skill-injection vector: it points at a session-owned directory and never
     /// touches the user's `~/.claude` or the project's `.claude`.
     fn plugin_dir_args(&self, host: &Host) -> Vec<String> {
         // The bundled plugin lives beside the Session app. It is not implicitly
@@ -112,7 +112,7 @@ impl ClaudeAdapter {
     fn ensure_binary(&self) -> Result<String, String> {
         let binary = ensure_on_path(&self.binary).ok_or_else(|| {
             format!(
-                "Claude adapter binary '{}' was not found on PATH or standard macOS tool paths. Install Claude Code or update adapters.claude.binary in qmux.config.json.",
+                "Claude adapter binary '{}' was not found on PATH or standard macOS tool paths. Install Claude Code or update adapters.claude.binary in session.config.json.",
                 self.binary
             )
         })?;
@@ -1496,33 +1496,33 @@ fn claude_boolean_flag(arg: &str) -> bool {
 fn validate_claude_shell_args(args: &[String]) -> Result<(), String> {
     for arg in args.iter().take_while(|arg| arg.as_str() != "--") {
         let reason = match arg.as_str() {
-            "--bare" | "--safe-mode" => Some("it disables the lifecycle hooks qMux requires"),
+            "--bare" | "--safe-mode" => Some("it disables the lifecycle hooks Session requires"),
             "--background" | "--bg" => {
-                Some("it detaches Claude from the pane that owns the qMux agent integration")
+                Some("it detaches Claude from the pane that owns the Session agent integration")
             }
             "--worktree" | "-w" => Some(
-                "Claude-created worktrees are not represented in qMux agent workspace state; use qMux's worktree fork instead",
+                "Claude-created worktrees are not represented in Session agent workspace state; use Session's worktree fork instead",
             ),
             "--tmux" => {
-                Some("it moves Claude out of the pane that owns the qMux agent integration")
+                Some("it moves Claude out of the pane that owns the Session agent integration")
             }
             "--settings" => Some(
-                "it can replace the qMux settings file that installs lifecycle hooks; use normal user or project settings instead",
+                "it can replace the Session settings file that installs lifecycle hooks; use normal user or project settings instead",
             ),
             _ if arg.starts_with("--worktree=") => Some(
-                "Claude-created worktrees are not represented in qMux agent workspace state; use qMux's worktree fork instead",
+                "Claude-created worktrees are not represented in Session agent workspace state; use Session's worktree fork instead",
             ),
             _ if arg.starts_with("--tmux=") => {
-                Some("it moves Claude out of the pane that owns the qMux agent integration")
+                Some("it moves Claude out of the pane that owns the Session agent integration")
             }
             _ if arg.starts_with("--settings=") => Some(
-                "it can replace the qMux settings file that installs lifecycle hooks; use normal user or project settings instead",
+                "it can replace the Session settings file that installs lifecycle hooks; use normal user or project settings instead",
             ),
             _ => None,
         };
         if let Some(reason) = reason {
             return Err(format!(
-                "qMux Claude integration does not support {arg} because {reason}"
+                "Session Claude integration does not support {arg} because {reason}"
             ));
         }
     }
@@ -1713,12 +1713,12 @@ fn hook_settings_nonce() -> Result<String, String> {
 /// Writes a per-pane, per-spawn Claude hook-settings file and returns its path for
 /// `--settings`.
 ///
-/// This used to write one fixed, shared `.qmux/qmux-hooks.json` that every Claude
+/// This used to write one fixed, shared `.session/session-hooks.json` that every Claude
 /// pane loaded. Because that path was stable and writable by any process running as
 /// the desktop user, a prompt-injected agent in one pane could overwrite it to inject
 /// a lifecycle-hook command into *another* pane's Claude — which runs with that pane's
 /// `SESSION_TOKEN` — crossing Session's per-pane authority boundary. Writing a fresh,
-/// unpredictably-named file per spawn under a `0700` `.qmux/hooks/` dir, created with
+/// unpredictably-named file per spawn under a `0700` `.session/hooks/` dir, created with
 /// `O_EXCL` at `0600`, removes the shared target and the pre-planted-file/symlink
 /// race: there is no stable path to overwrite, and a file planted at our random path
 /// makes the exclusive create fail (we error out rather than write through it). A
@@ -1746,7 +1746,7 @@ pub fn hook_settings_support_file(
         return Err(format!("invalid pane id for hook settings: {pane_id:?}"));
     }
 
-    let hooks_dir = config.workspace_root.join(".qmux").join("hooks");
+    let hooks_dir = config.workspace_root.join(".session").join("hooks");
     let session_cli = crate::launch_path::session_cli_path()
         .map_err(|err| format!("failed to resolve Session executable for hooks: {err}"))?;
     let mut hooks = serde_json::Map::new();
@@ -1805,7 +1805,7 @@ pub fn hook_settings_support_file(
     Ok((settings_path, support_file))
 }
 
-/// A skill the qmux-managed plugin makes available to launched Claude agents.
+/// A skill the session-managed plugin makes available to launched Claude agents.
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaudeSkill {
@@ -1816,11 +1816,11 @@ pub struct ClaudeSkill {
     /// Human label for the launcher checkbox (e.g. `Open in browser`).
     pub name: String,
     /// Slash command that invokes the skill, namespaced by the plugin
-    /// (e.g. `/qmux:open-in-browser`).
+    /// (e.g. `/session:open-in-browser`).
     pub command: String,
 }
 
-/// Enumerates the skills inside the qmux-managed Claude plugin (`<plugin>/skills/*`).
+/// Enumerates the skills inside the session-managed Claude plugin (`<plugin>/skills/*`).
 /// Returns an empty list when the plugin directory is absent so the launcher simply
 /// shows no skill checkboxes rather than erroring.
 pub fn list_skills(config: &SessionConfig) -> Vec<ClaudeSkill> {
@@ -1841,7 +1841,7 @@ pub fn list_skills(config: &SessionConfig) -> Vec<ClaudeSkill> {
             }
             // Skills are inline-only by default — invoked mid-conversation as a slash
             // command (fork, open-in-browser, …), which makes no sense as a "New agent"
-            // launch. Only skills that explicitly opt in with `qmux-launcher: true`
+            // launch. Only skills that explicitly opt in with `session-launcher: true`
             // appear in the new-agent launcher. Filtering here does not affect Claude's own
             // ability to run any skill inline; it loads the plugin dir independently.
             if !skill_shows_in_launcher(&skill_md) {
@@ -1880,7 +1880,7 @@ fn plugin_namespace(plugin_dir: &Path) -> String {
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
         })
-        .unwrap_or_else(|| "qmux".to_string())
+        .unwrap_or_else(|| "session".to_string())
 }
 
 /// Reads the `name:` value from a SKILL.md YAML frontmatter block. Cheap and safe:
@@ -1917,11 +1917,11 @@ fn skill_frontmatter_name(skill_md: &Path) -> Option<String> {
     None
 }
 
-/// Whether a skill opts into the new-agent launcher via a top-level `qmux-launcher: true`
+/// Whether a skill opts into the new-agent launcher via a top-level `session-launcher: true`
 /// frontmatter key. Skills are inline-only (invoked mid-conversation) by default, so a
 /// skill is hidden from the "New agent" launcher unless it explicitly opts in. Scans
 /// the same leading `---` block as `skill_frontmatter_name` and, like it, matches only
-/// the column-0 key — an indented `metadata:\n  qmux-launcher: ...` does not count.
+/// the column-0 key — an indented `metadata:\n  session-launcher: ...` does not count.
 fn skill_shows_in_launcher(skill_md: &Path) -> bool {
     let Ok(raw) = fs::read_to_string(skill_md) else {
         return false;
@@ -1935,7 +1935,7 @@ fn skill_shows_in_launcher(skill_md: &Path) -> bool {
             break;
         }
         // Use the raw line so an indented key nested under another mapping is ignored.
-        let Some(rest) = line.strip_prefix("qmux-launcher:") else {
+        let Some(rest) = line.strip_prefix("session-launcher:") else {
             continue;
         };
         // Strip an inline `#` comment and optional quotes, then require an explicit
@@ -2893,7 +2893,7 @@ mod tests {
     }
 
     #[test]
-    fn shell_args_reject_modes_that_bypass_qmux_lifecycle_tracking() {
+    fn shell_args_reject_modes_that_bypass_session_lifecycle_tracking() {
         for args in [
             svec(&["--bare"]),
             svec(&["--safe-mode"]),
@@ -3007,8 +3007,8 @@ mod tests {
     fn test_state() -> AppState {
         AppState::new(SessionConfig {
             remotes: Default::default(),
-            workspace_root: PathBuf::from("/tmp/qmux-hooks-test"),
-            socket_path: PathBuf::from("/tmp/qmux-hooks-test.sock"),
+            workspace_root: PathBuf::from("/tmp/session-hooks-test"),
+            socket_path: PathBuf::from("/tmp/session-hooks-test.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -3041,8 +3041,8 @@ mod tests {
     fn test_state_with_claude_binary(binary: &Path) -> AppState {
         AppState::new(SessionConfig {
             remotes: Default::default(),
-            workspace_root: unique_test_dir("qmux-claude-workspace"),
-            socket_path: unique_test_dir("qmux-claude-socket").join("session.sock"),
+            workspace_root: unique_test_dir("session-claude-workspace"),
+            socket_path: unique_test_dir("session-claude-socket").join("session.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -3074,7 +3074,7 @@ mod tests {
 
     #[test]
     fn remote_claude_uses_remote_binary_and_omits_the_local_plugin() {
-        let plugin_dir = unique_test_dir("qmux-claude-local-plugin");
+        let plugin_dir = unique_test_dir("session-claude-local-plugin");
         let adapter = ClaudeAdapter {
             binary: "/opt/remote/bin/claude".to_string(),
             plugin_dir: plugin_dir.clone(),
@@ -3084,7 +3084,7 @@ mod tests {
             label: "builder".to_string(),
             ssh: "builder.example".to_string(),
             session_cli: "/opt/remote/bin/session-cli".to_string(),
-            workspace_root: Some("/srv/qmux".to_string()),
+            workspace_root: Some("/srv/session".to_string()),
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
         });
 
@@ -3105,13 +3105,13 @@ mod tests {
     }
 
     #[test]
-    fn hook_settings_are_written_under_qmux_workspace_root() {
-        let workspace_root = unique_test_dir("qmux-claude-global-hooks");
-        let project_dir = unique_test_dir("qmux-claude-project");
+    fn hook_settings_are_written_under_session_workspace_root() {
+        let workspace_root = unique_test_dir("session-claude-global-hooks");
+        let project_dir = unique_test_dir("session-claude-project");
         let config = SessionConfig {
             remotes: Default::default(),
             workspace_root: workspace_root.clone(),
-            socket_path: unique_test_dir("qmux-claude-hooks-socket").join("session.sock"),
+            socket_path: unique_test_dir("session-claude-hooks-socket").join("session.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -3143,8 +3143,8 @@ mod tests {
         let (settings_path, support_file) = hook_settings_support_file(&config, "pane-1").unwrap();
         crate::pty::materialize_support_files(&[support_file]).unwrap();
 
-        // Per-pane, per-spawn file under a 0700 `.qmux/hooks/` dir, created 0600.
-        let hooks_dir = workspace_root.join(".qmux/hooks");
+        // Per-pane, per-spawn file under a 0700 `.session/hooks/` dir, created 0600.
+        let hooks_dir = workspace_root.join(".session/hooks");
         assert!(
             settings_path.starts_with(&hooks_dir),
             "unexpected hook path: {settings_path:?}"
@@ -3164,7 +3164,7 @@ mod tests {
             fs::metadata(&settings_path).unwrap().permissions().mode() & 0o777,
             0o600
         );
-        assert!(!project_dir.join(".qmux/qmux-hooks.json").exists());
+        assert!(!project_dir.join(".session/session-hooks.json").exists());
 
         // A second spawn for the same pane prunes the first file so the dir stays
         // bounded to one file per pane, and mints a fresh unguessable name.
@@ -3214,7 +3214,7 @@ mod tests {
             id: "agent-1".to_string(),
             group_id: "group-1".to_string(),
             adapter: "claude".to_string(),
-            worktree_dir: "/tmp/qmux-hooks-test".to_string(),
+            worktree_dir: "/tmp/session-hooks-test".to_string(),
             branch: None,
             active_workspace: None,
             pane_id: Some("pane-1".to_string()),
@@ -3291,7 +3291,7 @@ mod tests {
                     kind: PaneKind::Agent,
                     agent_id: Some("agent-1".to_string()),
                     group_id: "group-1".to_string(),
-                    cwd: "/tmp/qmux-hooks-test".to_string(),
+                    cwd: "/tmp/session-hooks-test".to_string(),
                     active_workspace: None,
                     remote_session: None,
                     remote_connection: None,
@@ -3323,8 +3323,8 @@ mod tests {
                 id: "group-1".to_string(),
                 name: "Remote".to_string(),
                 name_override: None,
-                dir: "/srv/qmux/project".to_string(),
-                managed_dir: "/tmp/qmux-hooks-test/group-1".to_string(),
+                dir: "/srv/session/project".to_string(),
+                managed_dir: "/tmp/session-hooks-test/group-1".to_string(),
                 base_repo: None,
                 base_ref: None,
                 parent_id: None,
@@ -3393,7 +3393,7 @@ mod tests {
                 "SessionStart",
                 json!({
                     "session_id": "remote-session-1",
-                    "transcript_path": "/tmp/qmux-attacker-controlled.jsonl"
+                    "transcript_path": "/tmp/session-attacker-controlled.jsonl"
                 }),
             ),
         );
@@ -3778,7 +3778,7 @@ mod tests {
 
     #[test]
     fn recovered_claude_resume_starts_idle() {
-        let dir = unique_test_dir("qmux-claude-recover");
+        let dir = unique_test_dir("session-claude-recover");
         let fake_claude = fake_claude_binary(&dir);
         let state = test_state_with_claude_binary(&fake_claude);
         let mut agent = sample_agent();
@@ -4726,7 +4726,7 @@ mod tests {
 
     #[test]
     fn skill_frontmatter_name_reads_declared_name_or_none() {
-        let dir = env::temp_dir().join(format!("qmux-skill-fm-{}", std::process::id()));
+        let dir = env::temp_dir().join(format!("session-skill-fm-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("SKILL.md");
@@ -4773,17 +4773,17 @@ mod tests {
 
     #[test]
     fn skill_shows_in_launcher_requires_explicit_opt_in() {
-        let dir = env::temp_dir().join(format!("qmux-skill-launch-{}", std::process::id()));
+        let dir = env::temp_dir().join(format!("session-skill-launch-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("SKILL.md");
 
         // Opted in.
-        fs::write(&path, "---\nname: x\nqmux-launcher: true\n---\n").unwrap();
+        fs::write(&path, "---\nname: x\nsession-launcher: true\n---\n").unwrap();
         assert!(skill_shows_in_launcher(&path));
 
         // Case-insensitive, with an inline comment stripped.
-        fs::write(&path, "---\nqmux-launcher: TRUE # opt in\n---\n").unwrap();
+        fs::write(&path, "---\nsession-launcher: TRUE # opt in\n---\n").unwrap();
         assert!(skill_shows_in_launcher(&path));
 
         // Absent key -> inline-only by default.
@@ -4791,15 +4791,15 @@ mod tests {
         assert!(!skill_shows_in_launcher(&path));
 
         // Explicit false stays hidden.
-        fs::write(&path, "---\nqmux-launcher: false\n---\n").unwrap();
+        fs::write(&path, "---\nsession-launcher: false\n---\n").unwrap();
         assert!(!skill_shows_in_launcher(&path));
 
         // A nested key under another mapping does not opt the skill in.
-        fs::write(&path, "---\nmetadata:\n  qmux-launcher: true\n---\n").unwrap();
+        fs::write(&path, "---\nmetadata:\n  session-launcher: true\n---\n").unwrap();
         assert!(!skill_shows_in_launcher(&path));
 
         // No frontmatter fence -> hidden.
-        fs::write(&path, "# No frontmatter\nqmux-launcher: true\n").unwrap();
+        fs::write(&path, "# No frontmatter\nsession-launcher: true\n").unwrap();
         assert!(!skill_shows_in_launcher(&path));
 
         let _ = fs::remove_dir_all(&dir);
@@ -4807,7 +4807,7 @@ mod tests {
 
     #[test]
     fn plugin_namespace_falls_back_to_dir_name_without_manifest() {
-        let plugin_dir = env::temp_dir().join(format!("qmux-ns-{}", std::process::id()));
+        let plugin_dir = env::temp_dir().join(format!("session-ns-{}", std::process::id()));
         let _ = fs::remove_dir_all(&plugin_dir);
         fs::create_dir_all(&plugin_dir).unwrap();
 
@@ -4820,8 +4820,8 @@ mod tests {
         // A manifest name takes precedence.
         let manifest_dir = plugin_dir.join(".claude-plugin");
         fs::create_dir_all(&manifest_dir).unwrap();
-        fs::write(manifest_dir.join("plugin.json"), r#"{"name":"qmux"}"#).unwrap();
-        assert_eq!(plugin_namespace(&plugin_dir), "qmux");
+        fs::write(manifest_dir.join("plugin.json"), r#"{"name":"session"}"#).unwrap();
+        assert_eq!(plugin_namespace(&plugin_dir), "session");
 
         let _ = fs::remove_dir_all(&plugin_dir);
     }
@@ -4834,22 +4834,22 @@ mod tests {
         };
 
         let plugin_dir =
-            env::temp_dir().join(format!("qmux-claude-plugin-list-{}", std::process::id()));
+            env::temp_dir().join(format!("session-claude-plugin-list-{}", std::process::id()));
         let _ = fs::remove_dir_all(&plugin_dir);
         let manifest_dir = plugin_dir.join(".claude-plugin");
         fs::create_dir_all(&manifest_dir).unwrap();
-        fs::write(manifest_dir.join("plugin.json"), r#"{"name":"qmux"}"#).unwrap();
+        fs::write(manifest_dir.join("plugin.json"), r#"{"name":"session"}"#).unwrap();
 
         let skill_dir = plugin_dir.join("skills").join("deep-research");
         fs::create_dir_all(&skill_dir).unwrap();
         fs::write(
             skill_dir.join("SKILL.md"),
-            "---\nname: deep-research\ndescription: d\nqmux-launcher: true\n---\n",
+            "---\nname: deep-research\ndescription: d\nsession-launcher: true\n---\n",
         )
         .unwrap();
         // A subdirectory without SKILL.md is not a skill.
         fs::create_dir_all(plugin_dir.join("skills").join("scratch")).unwrap();
-        // An inline-only skill (no `qmux-launcher: true`) is excluded from the launcher.
+        // An inline-only skill (no `session-launcher: true`) is excluded from the launcher.
         let inline_dir = plugin_dir.join("skills").join("fork");
         fs::create_dir_all(&inline_dir).unwrap();
         fs::write(
@@ -4861,7 +4861,7 @@ mod tests {
         let config = SessionConfig {
             remotes: Default::default(),
             workspace_root: env::temp_dir(),
-            socket_path: env::temp_dir().join("qmux-list.sock"),
+            socket_path: env::temp_dir().join("session-list.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -4894,7 +4894,7 @@ mod tests {
         assert_eq!(skills.len(), 1);
         assert_eq!(skills[0].id, "deep-research");
         assert_eq!(skills[0].name, "Deep research");
-        assert_eq!(skills[0].command, "/qmux:deep-research");
+        assert_eq!(skills[0].command, "/session:deep-research");
 
         let _ = fs::remove_dir_all(&plugin_dir);
     }
@@ -4909,7 +4909,7 @@ mod tests {
         let config = SessionConfig {
             remotes: Default::default(),
             workspace_root: env::temp_dir(),
-            socket_path: env::temp_dir().join("qmux-empty.sock"),
+            socket_path: env::temp_dir().join("session-empty.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -4932,7 +4932,7 @@ mod tests {
                 antigravity: Default::default(),
             },
             legacy_claude_binary: None,
-            claude_plugin_dir: env::temp_dir().join("qmux-nonexistent-claude-plugin-dir"),
+            claude_plugin_dir: env::temp_dir().join("session-nonexistent-claude-plugin-dir"),
             opencode_plugin_dir: PathBuf::new(),
             pi_extension_dir: PathBuf::new(),
             cursor_plugin_dir: PathBuf::new(),
@@ -4949,11 +4949,11 @@ mod tests {
         };
 
         let plugin_dir =
-            env::temp_dir().join(format!("qmux-claude-plugin-dup-{}", std::process::id()));
+            env::temp_dir().join(format!("session-claude-plugin-dup-{}", std::process::id()));
         let _ = fs::remove_dir_all(&plugin_dir);
         let manifest_dir = plugin_dir.join(".claude-plugin");
         fs::create_dir_all(&manifest_dir).unwrap();
-        fs::write(manifest_dir.join("plugin.json"), r#"{"name":"qmux"}"#).unwrap();
+        fs::write(manifest_dir.join("plugin.json"), r#"{"name":"session"}"#).unwrap();
 
         // Two distinct skill directories that declare the same frontmatter name.
         for dir in ["alpha", "beta"] {
@@ -4961,7 +4961,7 @@ mod tests {
             fs::create_dir_all(&skill_dir).unwrap();
             fs::write(
                 skill_dir.join("SKILL.md"),
-                "---\nname: shared\ndescription: d\nqmux-launcher: true\n---\n",
+                "---\nname: shared\ndescription: d\nsession-launcher: true\n---\n",
             )
             .unwrap();
         }
@@ -4969,7 +4969,7 @@ mod tests {
         let config = SessionConfig {
             remotes: Default::default(),
             workspace_root: env::temp_dir(),
-            socket_path: env::temp_dir().join("qmux-dup.sock"),
+            socket_path: env::temp_dir().join("session-dup.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -5004,7 +5004,11 @@ mod tests {
         let mut ids: Vec<&str> = skills.iter().map(|skill| skill.id.as_str()).collect();
         ids.sort_unstable();
         assert_eq!(ids, vec!["alpha", "beta"]);
-        assert!(skills.iter().all(|skill| skill.command == "/qmux:shared"));
+        assert!(
+            skills
+                .iter()
+                .all(|skill| skill.command == "/session:shared")
+        );
 
         let _ = fs::remove_dir_all(&plugin_dir);
     }
@@ -5053,7 +5057,7 @@ mod tests {
 
     #[test]
     fn synthesize_claude_keeps_ancestors_and_rewrites_session_id() {
-        let dir = unique_test_dir("qmux-claude-fork");
+        let dir = unique_test_dir("session-claude-fork");
         fs::create_dir_all(&dir).unwrap();
         let source = dir.join("11111111-1111-4111-8111-111111111111.jsonl");
         fs::write(&source, linear_fork_transcript("original-session")).unwrap();
@@ -5084,7 +5088,7 @@ mod tests {
 
     #[test]
     fn synthesize_claude_drops_sibling_branches() {
-        let dir = unique_test_dir("qmux-claude-fork-branch");
+        let dir = unique_test_dir("session-claude-fork-branch");
         fs::create_dir_all(&dir).unwrap();
         let source = dir.join("22222222-2222-4222-8222-222222222222.jsonl");
         // a1 has two children: the abandoned rewind branch `x1` and `u2`.
@@ -5111,7 +5115,7 @@ mod tests {
 
     #[test]
     fn synthesize_claude_tolerates_a_torn_trailing_record() {
-        let dir = unique_test_dir("qmux-claude-fork-torn");
+        let dir = unique_test_dir("session-claude-fork-torn");
         fs::create_dir_all(&dir).unwrap();
         let source = dir.join("33333333-3333-4333-8333-333333333333.jsonl");
         // Forking from a live session races the CLI's own append.
@@ -5132,7 +5136,7 @@ mod tests {
 
     #[test]
     fn synthesize_claude_refuses_the_first_message_and_unknown_anchors() {
-        let dir = unique_test_dir("qmux-claude-fork-reject");
+        let dir = unique_test_dir("session-claude-fork-reject");
         fs::create_dir_all(&dir).unwrap();
         let source = dir.join("44444444-4444-4444-8444-444444444444.jsonl");
         fs::write(&source, linear_fork_transcript("original-session")).unwrap();

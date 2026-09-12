@@ -28,7 +28,7 @@ function group(id: string, scope: GroupInfo["scope"]): GroupInfo {
     id,
     name: id,
     dir: `/tmp/${id}`,
-    managedDir: `/tmp/qmux/${id}`,
+    managedDir: `/tmp/session/${id}`,
     createdAt: 1,
     collapsed: false,
     scope,

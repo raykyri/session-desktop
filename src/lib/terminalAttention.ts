@@ -6,7 +6,7 @@ export interface TerminalAttentionState {
   paneId: string | null;
   paneExists: boolean;
   /**
-   * True when the qmux window is the focused app surface. This is not the same
+   * True when the session window is the focused app surface. This is not the same
    * as `document.hasFocus()`: a native Ghostty terminal can be first responder
    * while the webview document is blurred, and keyboard tab switches happen in
    * exactly that state.

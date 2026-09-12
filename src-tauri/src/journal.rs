@@ -148,7 +148,7 @@ pub async fn fetch_tweet_json(id: &str, token: &str) -> Result<String, String> {
         format!("https://cdn.syndication.twimg.com/tweet-result?id={id}&token={token}&lang=en");
     let response = http_client()?
         .get(url)
-        .header("User-Agent", "qmux")
+        .header("User-Agent", "session")
         .send()
         .await
         .map_err(|error| format!("tweet fetch failed: {error}"))?;

@@ -3,7 +3,7 @@
     "claudeCodeVersion": "2.1.240",
     "capturedAt": "2026-08-23",
     "sanitized": true,
-    "notes": "Captured from the installed CLI with qmux's read-only argv. Identity, account, paths, UUIDs, timestamps, usage, cost, and dynamic command inventories were removed or replaced."
+    "notes": "Captured from the installed CLI with Session's read-only argv. Identity, account, paths, UUIDs, timestamps, usage, cost, and dynamic command inventories were removed or replaced."
   },
   "success": {
     "stdin": [

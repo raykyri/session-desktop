@@ -194,7 +194,7 @@ fn same_origin(a: &Url, b: &Url) -> bool {
         && a.port_or_known_default() == b.port_or_known_default()
 }
 
-fn is_qmux_file_server_url(url: &Url, port: Option<u16>) -> bool {
+fn is_session_file_server_url(url: &Url, port: Option<u16>) -> bool {
     let Some(port) = port else {
         return false;
     };
@@ -205,9 +205,9 @@ fn is_qmux_file_server_url(url: &Url, port: Option<u16>) -> bool {
 
 fn validated_human_url(app: &AppHandle, state: &AppState, raw: &str) -> Result<Url, String> {
     let url = parse_http_url(raw)?;
-    if is_qmux_file_server_url(&url, state.file_server_port()) {
+    if is_session_file_server_url(&url, state.file_server_port()) {
         return Err(
-            "protected qmux file previews must remain in the sandboxed preview".to_string(),
+            "protected session file previews must remain in the sandboxed preview".to_string(),
         );
     }
     // During development the privileged app origin is itself http://127.0.0.1.
@@ -218,7 +218,7 @@ fn validated_human_url(app: &AppHandle, state: &AppState, raw: &str) -> Result<U
         && let Ok(app_url) = main.url()
         && same_origin(&url, &app_url)
     {
-        return Err("refusing to navigate the human browser to qmux's app origin".to_string());
+        return Err("refusing to navigate the human browser to session's app origin".to_string());
     }
     Ok(url)
 }
@@ -801,9 +801,9 @@ mod tests {
     fn recognizes_only_the_bound_file_server_port() {
         let protected = Url::parse("http://127.0.0.1:8123/token/file").unwrap();
         let dev = Url::parse("http://localhost:5173/").unwrap();
-        assert!(is_qmux_file_server_url(&protected, Some(8123)));
-        assert!(!is_qmux_file_server_url(&protected, Some(9000)));
-        assert!(!is_qmux_file_server_url(&dev, Some(8123)));
+        assert!(is_session_file_server_url(&protected, Some(8123)));
+        assert!(!is_session_file_server_url(&protected, Some(9000)));
+        assert!(!is_session_file_server_url(&dev, Some(8123)));
     }
 
     #[test]

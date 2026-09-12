@@ -200,8 +200,8 @@ export function resolvePublicationProposal(request: {
 }
 
 // The prompt library: reusable composer messages stored as markdown files, one
-// file per prompt, in a global (~/.qmux/prompts/) or per-project
-// (~/.qmux/projects/<basename>-<hash>/prompts/) scope. `projectDir` is the
+// file per prompt, in a global (~/.session/prompts/) or per-project
+// (~/.session/projects/<basename>-<hash>/prompts/) scope. `projectDir` is the
 // active pane's project directory (group dir, or base repo for worktrees);
 // omit it when no project context exists and only the global scope is served.
 export function listSavedPrompts(projectDir?: string | null) {
@@ -323,7 +323,7 @@ export function listenToMenuBarSelectPane(
   );
 }
 
-/** Skills the qmux-managed Claude plugin can inject into launched Claude agents. */
+/** Skills the session-managed Claude plugin can inject into launched Claude agents. */
 export function listClaudeSkills() {
   return invoke<ClaudeSkill[]>("list_claude_skills");
 }
@@ -950,7 +950,7 @@ export function openExternalUrl(url: string) {
   return invoke<void>("open_external_url", { url });
 }
 
-/** Opens the source file behind a protected qmux preview as a validated file:// URL. */
+/** Opens the source file behind a protected session preview as a validated file:// URL. */
 export function browserOpenPreviewExternal(url: string) {
   return invoke<void>("browser_open_preview_external", { url });
 }

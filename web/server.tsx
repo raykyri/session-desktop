@@ -3040,6 +3040,6 @@ if (isDirectRun) {
   const port = Number.parseInt(process.env.PORT ?? String(DEFAULT_PORT), 10);
   const server = createSessionWebServer();
   server.listen(port, host, () => {
-    console.log(`qmux web listening on http://${host}:${port}`);
+    console.log(`session web listening on http://${host}:${port}`);
   });
 }

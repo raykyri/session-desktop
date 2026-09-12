@@ -1,4 +1,4 @@
-qmux bundled completion sounds
+session bundled completion sounds
 ==============================
 
 Audio files in this directory that list a Creative Commons CC0 1.0 license
@@ -48,7 +48,7 @@ nokia.wav
 Display name: Nokia
 Composition source: The familiar phrase derived from Francisco Tarrega's
 1902 solo-guitar work Gran Vals.
-Recording: Generated specifically for qmux as a mono, 16-bit PCM rendering
+Recording: Generated specifically for session as a mono, 16-bit PCM rendering
 using additive synthesis. No third-party sound recording was used.
 
 
@@ -57,7 +57,7 @@ metal-gear.mp3
 
 Display name: Metal Gear
 Source: https://www.myinstants.com/media/sounds/tindeck_1.mp3
-Changes: Downloaded unchanged from the URL supplied for inclusion in qmux.
+Changes: Downloaded unchanged from the URL supplied for inclusion in session.
 License: Not stated by the source.
 
 
@@ -66,7 +66,7 @@ minecraft.mp3
 
 Display name: Minecraft
 Source: https://www.myinstants.com/media/sounds/minecraft_hit_soundmp3converter.mp3
-Changes: Downloaded unchanged from the URL supplied for inclusion in qmux.
+Changes: Downloaded unchanged from the URL supplied for inclusion in session.
 License: Not stated by the source.
 
 
@@ -75,7 +75,7 @@ door.mp3
 
 Display name: Door
 Source: https://www.myinstants.com/media/sounds/minecraft-door-open.mp3
-Changes: Downloaded unchanged from the URL supplied for inclusion in qmux.
+Changes: Downloaded unchanged from the URL supplied for inclusion in session.
 License: Not stated by the source.
 
 

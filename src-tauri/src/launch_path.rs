@@ -72,7 +72,7 @@ pub(crate) fn resolve_binary(binary: &str) -> Option<PathBuf> {
     )
 }
 
-/// Builds the PATH inherited by local pane processes, with a qmux-owned shim
+/// Builds the PATH inherited by local pane processes, with a session-owned shim
 /// directory first. The directory is namespaced by the configured socket name,
 /// so production and development instances sharing a runtime parent cannot
 /// redirect each other's panes to a different app binary.
@@ -176,7 +176,7 @@ fn ensure_session_cli_shim(socket_path: &Path, session_cli: &Path) -> Result<Pat
             socket_path.display()
         )
     })?;
-    let bin_root = runtime_dir.join("qmux-bin");
+    let bin_root = runtime_dir.join("session-bin");
     let shim_dir = bin_root.join(socket_name);
     ensure_runtime_directory(runtime_dir)?;
     ensure_owner_only_directory(&bin_root)?;
@@ -192,7 +192,7 @@ fn ensure_session_cli_shim(socket_path: &Path, session_cli: &Path) -> Result<Pat
     // complete link. PID plus a process-local sequence also avoids collisions
     // between simultaneous spawns and stale temporary links after a crash.
     let sequence = SHIM_TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let temporary = shim_dir.join(format!(".qmux.tmp-{}-{sequence}", std::process::id()));
+    let temporary = shim_dir.join(format!(".session.tmp-{}-{sequence}", std::process::id()));
     match fs::remove_file(&temporary) {
         Ok(()) => {}
         Err(err) if err.kind() == ErrorKind::NotFound => {}
@@ -422,7 +422,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = env::temp_dir().join(format!("qmux-{name}-{}-{nanos}", std::process::id()));
+        let root = env::temp_dir().join(format!("session-{name}-{}-{nanos}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         root
     }
@@ -517,7 +517,7 @@ mod tests {
     }
 
     #[test]
-    fn pane_child_path_materializes_a_qmux_command_for_the_current_executable() {
+    fn pane_child_path_materializes_a_session_command_for_the_current_executable() {
         let root = temp_root("pane-child-path");
         let socket = root.join("run/session.sock");
         let process_path_before = env::var_os("PATH");
@@ -525,7 +525,7 @@ mod tests {
         let child_path = pane_child_path(&socket).unwrap();
         let dirs = env::split_paths(OsStr::new(&child_path)).collect::<Vec<_>>();
 
-        assert_eq!(dirs[0], root.join("run/qmux-bin/session.sock"));
+        assert_eq!(dirs[0], root.join("run/session-bin/session.sock"));
         assert_eq!(
             fs::read_link(dirs[0].join("session")).unwrap(),
             session_cli_path().unwrap()
@@ -546,14 +546,14 @@ mod tests {
     fn session_cli_shim_is_private_socket_scoped_and_retargetable() {
         let root = temp_root("cli-shim");
         let runtime = root.join("run");
-        let socket = runtime.join("qmux-dev.sock");
-        let first_cli = root.join("first/qmux");
-        let second_cli = root.join("second/qmux");
+        let socket = runtime.join("session-dev.sock");
+        let first_cli = root.join("first/session");
+        let second_cli = root.join("second/session");
         touch(&first_cli);
         touch(&second_cli);
 
         let shim_dir = ensure_session_cli_shim(&socket, &first_cli).unwrap();
-        let expected_dir = runtime.join("qmux-bin/qmux-dev.sock");
+        let expected_dir = runtime.join("session-bin/session-dev.sock");
         assert_eq!(shim_dir, expected_dir);
         assert_eq!(fs::read_link(shim_dir.join("session")).unwrap(), first_cli);
         assert_eq!(
@@ -561,7 +561,7 @@ mod tests {
             0o700
         );
         assert_eq!(
-            fs::metadata(runtime.join("qmux-bin"))
+            fs::metadata(runtime.join("session-bin"))
                 .unwrap()
                 .permissions()
                 .mode()
@@ -581,7 +581,7 @@ mod tests {
                 .unwrap()
                 .file_name()
                 .to_string_lossy()
-                .starts_with(".qmux.tmp-")
+                .starts_with(".session.tmp-")
         }));
 
         fs::remove_dir_all(root).unwrap();
@@ -592,9 +592,9 @@ mod tests {
         let root = temp_root("cli-shim-directory");
         let runtime = root.join("run");
         let socket = runtime.join("session.sock");
-        let cli = root.join("app/qmux");
+        let cli = root.join("app/session");
         touch(&cli);
-        let occupied = runtime.join("qmux-bin/session.sock/session");
+        let occupied = runtime.join("session-bin/session.sock/session");
         fs::create_dir_all(&occupied).unwrap();
 
         let error = ensure_session_cli_shim(&socket, &cli).unwrap_err();
@@ -611,7 +611,7 @@ mod tests {
         fs::create_dir(&runtime).unwrap();
         fs::set_permissions(&runtime, fs::Permissions::from_mode(0o755)).unwrap();
         let socket = runtime.join("session.sock");
-        let cli = root.join("app/qmux");
+        let cli = root.join("app/session");
         touch(&cli);
 
         ensure_session_cli_shim(&socket, &cli).unwrap();
@@ -621,7 +621,7 @@ mod tests {
             0o755
         );
         assert_eq!(
-            fs::metadata(runtime.join("qmux-bin"))
+            fs::metadata(runtime.join("session-bin"))
                 .unwrap()
                 .permissions()
                 .mode()
@@ -673,12 +673,12 @@ mod tests {
         let root = temp_root("env-shebang");
         let interpreter_dir = root.join("interp");
         fs::create_dir_all(&interpreter_dir).unwrap();
-        let interpreter = interpreter_dir.join("qmux-test-node");
+        let interpreter = interpreter_dir.join("session-test-node");
         fs::write(&interpreter, "#!/bin/sh\nprintf 'found'\n").unwrap();
         fs::set_permissions(&interpreter, fs::Permissions::from_mode(0o755)).unwrap();
 
         let script = root.join("pi");
-        fs::write(&script, "#!/usr/bin/env qmux-test-node\n").unwrap();
+        fs::write(&script, "#!/usr/bin/env session-test-node\n").unwrap();
         fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
 
         let empty = root.join("empty");

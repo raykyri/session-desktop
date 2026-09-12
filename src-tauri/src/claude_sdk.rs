@@ -484,9 +484,9 @@ impl ClaudeSdkSession {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .env_remove("CLAUDECODE")
-            .env("CLAUDE_CODE_ENTRYPOINT", "sdk-qmux")
-            .env("CLAUDE_AGENT_SDK_VERSION", "qmux")
-            .env("CLAUDE_AGENT_SDK_CLIENT_APP", "qmux")
+            .env("CLAUDE_CODE_ENTRYPOINT", "sdk-session")
+            .env("CLAUDE_AGENT_SDK_VERSION", "session")
+            .env("CLAUDE_AGENT_SDK_CLIENT_APP", "session")
             .env("PWD", spec.cwd.as_os_str())
             .process_group(0);
         if let Some(model) = &spec.model {
@@ -523,7 +523,7 @@ impl ClaudeSdkSession {
             return Err("Claude Code stderr was not piped".to_string());
         };
         let stderr_reader = match thread::Builder::new()
-            .name("qmux-claude-sdk-stderr".into())
+            .name("session-claude-sdk-stderr".into())
             .spawn(move || copy_bounded_stderr(stderr, stderr_file))
         {
             Ok(reader) => reader,
@@ -534,7 +534,7 @@ impl ClaudeSdkSession {
         };
         let (tx, rx) = mpsc::sync_channel(MAX_PENDING_STDOUT_MESSAGES);
         if let Err(err) = thread::Builder::new()
-            .name("qmux-claude-sdk-stdout".into())
+            .name("session-claude-sdk-stdout".into())
             .spawn(move || read_stdout_lines(stdout, tx))
         {
             terminate_child_after_spawn_failure(&mut child);
@@ -1087,7 +1087,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or_default();
-        let dir = std::env::temp_dir().join(format!("qmux-claude-sdk-{nanos}"));
+        let dir = std::env::temp_dir().join(format!("session-claude-sdk-{nanos}"));
         fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -1104,7 +1104,7 @@ for value in required:
 for forbidden in ["acceptEdits", "--setting-sources=user,project", "--disallowedTools", "--plugin-dir"]:
     assert forbidden not in sys.argv, (forbidden, sys.argv)
 assert "CLAUDECODE" not in os.environ
-assert os.environ.get("CLAUDE_CODE_ENTRYPOINT") == "sdk-qmux"
+assert os.environ.get("CLAUDE_CODE_ENTRYPOINT") == "sdk-session"
 if os.path.exists("expect-optional"):
     assert "--model" in sys.argv and "sonnet" in sys.argv
     assert "--effort" in sys.argv and "high" in sys.argv

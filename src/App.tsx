@@ -609,7 +609,7 @@ type ResearchViewedAckOptions = {
 // Legacy sentinel once used as the selected tab for the Home page. Kept so a
 // persisted last-tab id from an older build is ignored instead of restored.
 const HOME_TAB_ID = "__home__";
-const ACTIVE_RESEARCH_TREE_KEY = "qmux.active-research-tree.v1";
+const ACTIVE_RESEARCH_TREE_KEY = "session.active-research-tree.v1";
 const RESEARCH_VISIBILITY_FILTER_OPTIONS: ReadonlyArray<{
   id: ResearchVisibilityFilter;
   label: string;
@@ -618,7 +618,7 @@ const RESEARCH_VISIBILITY_FILTER_OPTIONS: ReadonlyArray<{
   { id: "archived", label: "Show archived" },
   { id: "all", label: "Show all" },
 ];
-const ACTIVE_RESEARCH_PANE_KEY = "qmux.active-research-pane.v1";
+const ACTIVE_RESEARCH_PANE_KEY = "session.active-research-pane.v1";
 // Whether the Journal page is forward on the research surface. Selection-level
 // UI state, like the active tree id — the journal's contents live backend-side.
 
@@ -2174,7 +2174,7 @@ function MainApp() {
   );
   const promptRef = useRef(initialHomeLauncherPrompt);
   const [launcherAdapterId, setLauncherAdapterId] = useState<string | null>(null);
-  // Skills the qmux-managed Claude plugin can inject, and the single one selected
+  // Skills the session-managed Claude plugin can inject, and the single one selected
   // for this launch (prepended to the prompt as `/<plugin>:<skill>`). Single-select
   // because a leading slash command can only invoke one skill.
   const [availableSkills, setAvailableSkills] = useState<ClaudeSkill[]>([]);
@@ -3336,7 +3336,7 @@ function MainApp() {
       label: `${remote.label} copy`,
       // The UI only creates driveable remotes. A config entry may retain the
       // documented future-facing `herdr` value, but its editable copy should
-      // be immediately usable by qmux.
+      // be immediately usable by session.
       multiplexer: "tmux",
     });
     setRemoteSettingsDraftIsNew(true);
@@ -3579,7 +3579,7 @@ function MainApp() {
               className="form-field"
               type="text"
               value={draft.workspaceRoot}
-              placeholder="~/.qmux/workspaces"
+              placeholder="~/.session/workspaces"
               spellCheck={false}
               onChange={(event) => {
                 const workspaceRoot = event.currentTarget.value;
@@ -11937,7 +11937,7 @@ function MainApp() {
                 </div>
                 <p className="settings-hint">
                   Custom executable paths can be set under <code>adapters.*.binary</code> in
-                  <code> qmux.config.json</code>.
+                  <code> session.config.json</code>.
                 </p>
               </div>
             ) : settingsTab === "remotes" ? (
@@ -12134,7 +12134,7 @@ function MainApp() {
                                   </button>
                                 </div>
                                 <p className="settings-hint">
-                                  This remote is declared in <code>qmux.config.json</code>. Edit the
+                                  This remote is declared in <code>session.config.json</code>. Edit the
                                   file to change it, or copy it into an editable saved remote.
                                 </p>
                               </div>
@@ -12945,7 +12945,7 @@ function MainApp() {
             {closeDialog.kind === "researchFolderRemove" ? (
               <>
                 <p>Remove this folder from Session?</p>
-                <p>The folder and its files will remain on disk, with history in the .qmux directory.</p>
+                <p>The folder and its files will remain on disk, with history in the .session directory.</p>
                 {researchFolderRemovalError ? (
                   <p className="confirm-dialog-error" role="alert">
                     {researchFolderRemovalError}

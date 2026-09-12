@@ -503,7 +503,8 @@ mod tests {
 
     #[test]
     fn remote_metadata_is_persisted_and_stale_sessions_cannot_rebind() {
-        let root = std::env::temp_dir().join(format!("qmux-mirror-binding-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("session-mirror-binding-{}", std::process::id()));
         let state = AppState::new(
             serde_json::from_value(json!({
                 "workspaceRoot":root, "socketPath":root.join("unused.sock")
@@ -629,8 +630,10 @@ mod tests {
     }
     #[test]
     fn devin_document_mirror_reaches_the_turn_pipeline() {
-        let root =
-            std::env::temp_dir().join(format!("qmux-mirror-pipeline-devin-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "session-mirror-pipeline-devin-{}",
+            std::process::id()
+        ));
         fs::create_dir_all(&root).unwrap();
         let state = AppState::new(
             serde_json::from_value(json!({
@@ -699,7 +702,7 @@ mod tests {
 
     fn check_mirrored_pipeline(adapter: &str) {
         let root = std::env::temp_dir().join(format!(
-            "qmux-mirror-pipeline-{adapter}-{}",
+            "session-mirror-pipeline-{adapter}-{}",
             std::process::id()
         ));
         fs::create_dir_all(&root).unwrap();
@@ -800,7 +803,7 @@ mod tests {
     #[test]
     fn remote_backfill_completion_does_not_settle_live_agent() {
         let root =
-            std::env::temp_dir().join(format!("qmux-backfill-lifecycle-{}", std::process::id()));
+            std::env::temp_dir().join(format!("session-backfill-lifecycle-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let state = AppState::new(
             serde_json::from_value(json!({
@@ -889,7 +892,8 @@ mod tests {
 
     #[test]
     fn chunked_large_record_reassembles_after_checkpoint_recovery() {
-        let root = std::env::temp_dir().join(format!("qmux-large-mirror-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("session-large-mirror-{}", std::process::id()));
         fs::create_dir_all(&root).unwrap();
         let source = root.join("source.jsonl");
         let dir = root.join("mirror");
@@ -968,7 +972,7 @@ mod tests {
 
     #[test]
     fn checkpoint_recovers_uncommitted_suffix_and_rejects_duplicates() {
-        let dir = std::env::temp_dir().join(format!("qmux-mirror-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("session-mirror-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let mut cp = Checkpoint::default();
         let binding = test_binding("claude", "s");

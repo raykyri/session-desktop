@@ -92,7 +92,7 @@ test("anchored proposals round-trip their passage and extend the digest", () => 
     parseResearchProposal(
       encoded.replace(
         encoded.slice(
-          "<!-- qmux-proposal:v1 ".length,
+          "<!-- session-proposal:v1 ".length,
           encoded.indexOf(" -->"),
         ),
         Buffer.from(

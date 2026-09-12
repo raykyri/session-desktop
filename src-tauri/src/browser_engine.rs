@@ -23,9 +23,9 @@ use tungstenite::{Message, WebSocket, connect};
 const HEADLESS_SHELL_START_TIMEOUT: Duration = Duration::from_secs(8);
 const DEFAULT_CDP_TIMEOUT: Duration = Duration::from_secs(30);
 const CDP_READ_POLL: Duration = Duration::from_millis(20);
-const PROFILE_PREFIX: &str = "qmux-codex-browser-";
-const BROWSER_PID_FILE: &str = "QmuxBrowserProcessId";
-const BROWSER_EXECUTABLE_FILE: &str = "QmuxBrowserExecutable";
+const PROFILE_PREFIX: &str = "session-codex-browser-";
+const BROWSER_PID_FILE: &str = "SessionBrowserProcessId";
+const BROWSER_EXECUTABLE_FILE: &str = "SessionBrowserExecutable";
 /// Ceiling on remembered fire-and-forget command ids. Chromium answers every
 /// command, so the set drains on its own; the cap only stops a wedged socket
 /// from growing it without bound.
@@ -66,7 +66,7 @@ impl BrowserEngine {
         let event_subscribers = Arc::clone(&subscribers);
 
         thread::Builder::new()
-            .name("qmux-browser-cdp".to_string())
+            .name("session-browser-cdp".to_string())
             .spawn(move || run_engine(runtime, event_subscribers))
             .map_err(|err| format!("failed to start chrome-headless-shell controller: {err}"))?;
 
@@ -128,7 +128,7 @@ impl BrowserEngine {
                 params,
                 reply: reply_tx,
             })
-            .map_err(|_| "the qmux chrome-headless-shell controller stopped".to_string())?;
+            .map_err(|_| "the session chrome-headless-shell controller stopped".to_string())?;
         reply_rx
             .recv_timeout(timeout)
             .map_err(|_| format!("browser method '{method}' timed out"))?
@@ -363,10 +363,12 @@ impl ChromiumRuntime {
             }
             "markTab" | "nameSession" | "moveMouse" | "turnEnded" => Ok(Value::Null),
             "allowDownload" => {
-                Err("qmux automation does not support agent-initiated downloads yet".to_string())
+                Err("session automation does not support agent-initiated downloads yet".to_string())
             }
             "finalizeTabs" => self.finalize_tabs(&params, subscribers),
-            "claimUserTab" => Err("qmux does not expose tabs from the user's browser".to_string()),
+            "claimUserTab" => {
+                Err("session does not expose tabs from the user's browser".to_string())
+            }
             "executeUnhandledCommand" => Ok(Value::Null),
             _ => Err(format!("No handler registered for method: {method}")),
         }
@@ -703,7 +705,7 @@ impl ChromiumRuntime {
             Ok(command) => command,
             Err(mpsc::TryRecvError::Empty) => return Ok(false),
             Err(mpsc::TryRecvError::Disconnected) => {
-                return Err("the qmux chrome-headless-shell command queue closed".to_string());
+                return Err("the session chrome-headless-shell command queue closed".to_string());
             }
         };
         match command {
@@ -1140,12 +1142,12 @@ fn validate_cdp_command(method: &str, params: &Value) -> Result<(), String> {
     match method {
         "Browser.setDownloadBehavior" | "Page.setDownloadBehavior" => {
             return Err(
-                "qmux automation does not support agent-initiated downloads yet".to_string(),
+                "session automation does not support agent-initiated downloads yet".to_string(),
             );
         }
         "DOM.setFileInputFiles" => {
             return Err(
-                "qmux automation does not support agent-selected local file uploads yet"
+                "session automation does not support agent-selected local file uploads yet"
                     .to_string(),
             );
         }
@@ -1159,7 +1161,7 @@ fn validate_cdp_command(method: &str, params: &Value) -> Result<(), String> {
     if url == "about:blank" || url.starts_with("http://") || url.starts_with("https://") {
         return Ok(());
     }
-    Err("qmux automation only navigates to http(s) URLs".to_string())
+    Err("session automation only navigates to http(s) URLs".to_string())
 }
 
 /// Locates the `chrome-headless-shell` binary for the automation backend.
@@ -1534,7 +1536,7 @@ mod tests {
     fn profile_owner_pid_rejects_unowned_or_unsafe_names() {
         let temp = std::env::temp_dir();
         assert_eq!(
-            profile_owner_pid(&temp.join("qmux-codex-browser-42-123-0")),
+            profile_owner_pid(&temp.join("session-codex-browser-42-123-0")),
             Some(42)
         );
         assert_eq!(
@@ -1542,11 +1544,11 @@ mod tests {
             None
         );
         assert_eq!(
-            profile_owner_pid(&temp.join("qmux-codex-browser-0-123-0")),
+            profile_owner_pid(&temp.join("session-codex-browser-0-123-0")),
             None
         );
         assert_eq!(
-            profile_owner_pid(&temp.join("qmux-codex-browser-4294967295-123-0")),
+            profile_owner_pid(&temp.join("session-codex-browser-4294967295-123-0")),
             None
         );
     }
@@ -1633,7 +1635,7 @@ mod tests {
     fn playwright_discovery_uses_only_explicit_configuration() {
         // With PLAYWRIGHT_BROWSERS_PATH unset, Session must not fall back to
         // scanning the default per-user Playwright cache: it is user-writable,
-        // so a planted chrome-headless-shell there would be executed by qmux.
+        // so a planted chrome-headless-shell there would be executed by session.
         if std::env::var_os("PLAYWRIGHT_BROWSERS_PATH").is_some() {
             return; // Externally configured environment; nothing to assert.
         }

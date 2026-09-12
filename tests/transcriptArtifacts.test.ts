@@ -41,22 +41,22 @@ test("plain loopback HTML URLs receive an adjacent launch button", () => {
 
 test("transcript file links omit source positions and sentence periods from the href", () => {
   const withPosition = render("[source](/tmp/example.html:4)");
-  assert.match(withPosition, /href="qmux-file:\/tmp\/example\.html"/u);
+  assert.match(withPosition, /href="session-file:\/tmp\/example\.html"/u);
   assert.doesNotMatch(withPosition, /href="[^"]*example\.html:4/u);
 
   const withRange = render("[source](/tmp/example.ts:760-843)");
   assert.match(withRange, />source</u);
-  assert.match(withRange, /href="qmux-file:\/tmp\/example\.ts"/u);
+  assert.match(withRange, /href="session-file:\/tmp\/example\.ts"/u);
   assert.doesNotMatch(withRange, /href="[^"]*example\.ts:760/u);
 
   const withPeriod = render("[preview](/tmp/example.html.)");
-  assert.match(withPeriod, /href="qmux-file:\/tmp\/example\.html"/u);
+  assert.match(withPeriod, /href="session-file:\/tmp\/example\.html"/u);
   assert.doesNotMatch(withPeriod, /href="[^"]*example\.html\./u);
 });
 
 test("relative transcript links cannot expose the dummy parsing origin", () => {
   const html = render("[docs](/docs/intro) [guide](guide/intro)");
-  assert.doesNotMatch(html, /qmux\.invalid/u);
+  assert.doesNotMatch(html, /session\.invalid/u);
   assert.doesNotMatch(html, /<a\b/u);
   assert.match(html, />docs<\/span>/u);
   assert.match(html, />guide<\/span>/u);
@@ -69,49 +69,49 @@ test("Devin ref tags render as file and line-number links", () => {
   assert.match(snippetHtml, />write-workflows\.tsx:760-843</u);
   assert.match(
     snippetHtml,
-    /href="qmux-file:\/Users\/raymond\/Code\/multitool\/\.claude\/worktrees\/foks-experiment\/foks-ui\/src\/screens\/write-workflows\.tsx"/u,
+    /href="session-file:\/Users\/raymond\/Code\/multitool\/\.claude\/worktrees\/foks-experiment\/foks-ui\/src\/screens\/write-workflows\.tsx"/u,
   );
   assert.doesNotMatch(snippetHtml, /ref_snippet/u);
 
   const fileHtml = render('<ref_file file="/tmp/project/config.json" />');
   assert.match(fileHtml, />config\.json</u);
-  assert.match(fileHtml, /href="qmux-file:\/tmp\/project\/config\.json"/u);
+  assert.match(fileHtml, /href="session-file:\/tmp\/project\/config\.json"/u);
   assert.doesNotMatch(fileHtml, /ref_file/u);
 });
 
 test("filename-like inline code ending in .html or .md renders as a file link", () => {
   const html = render("See `dev/mock.html` and `docs/readme.md`.");
-  assert.match(html, /href="qmux-file:dev\/mock\.html"/u);
+  assert.match(html, /href="session-file:dev\/mock\.html"/u);
   assert.match(html, />dev\/mock\.html</u);
   assert.doesNotMatch(html, /<code>dev\/mock\.html<\/code>/u);
-  assert.match(html, /href="qmux-file:docs\/readme\.md"/u);
+  assert.match(html, /href="session-file:docs\/readme\.md"/u);
   assert.doesNotMatch(html, /<code>docs\/readme\.md<\/code>/u);
 
   const relative = render("`./dev/mock.html` `../out/index.html` `README.md`");
-  assert.match(relative, /href="qmux-file:\.\/dev\/mock\.html"/u);
-  assert.match(relative, /href="qmux-file:\.\.\/out\/index\.html"/u);
-  assert.match(relative, /href="qmux-file:README\.md"/u);
+  assert.match(relative, /href="session-file:\.\/dev\/mock\.html"/u);
+  assert.match(relative, /href="session-file:\.\.\/out\/index\.html"/u);
+  assert.match(relative, /href="session-file:README\.md"/u);
 
   const absolute = render("`/tmp/preview.html`");
-  assert.match(absolute, /href="qmux-file:\/tmp\/preview\.html"/u);
+  assert.match(absolute, /href="session-file:\/tmp\/preview\.html"/u);
   assert.doesNotMatch(absolute, /<code>\/tmp\/preview\.html<\/code>/u);
 
   // Research documents and other no-pane surfaces share this renderer but
   // have no cwd, so filename-like inline code stays literal there.
   const withoutArtifacts = render("See `dev/mock.html`.", false);
   assert.match(withoutArtifacts, /<code>dev\/mock\.html<\/code>/u);
-  assert.doesNotMatch(withoutArtifacts, /href="qmux-file:dev\/mock\.html"/u);
+  assert.doesNotMatch(withoutArtifacts, /href="session-file:dev\/mock\.html"/u);
 });
 
 test("filename-like inline code inside a markdown link does not nest anchors", () => {
   const html = render("[`dev/mock.html`](https://example.com/page)");
   assert.match(html, /href="https:\/\/example\.com\/page"/u);
   assert.match(html, /<code>dev\/mock\.html<\/code>/u);
-  assert.doesNotMatch(html, /href="qmux-file:dev\/mock\.html"/u);
+  assert.doesNotMatch(html, /href="session-file:dev\/mock\.html"/u);
   assert.doesNotMatch(html, /<a[\s\S]*<a/u);
 
   const local = render("[`dev/mock.html`](/tmp/dev/mock.html)");
-  assert.match(local, /href="qmux-file:\/tmp\/dev\/mock\.html"/u);
+  assert.match(local, /href="session-file:\/tmp\/dev\/mock\.html"/u);
   assert.match(local, /<code>dev\/mock\.html<\/code>/u);
   assert.doesNotMatch(local, /<a[\s\S]*<a/u);
 });
@@ -123,7 +123,7 @@ test("inline code that is not a strict filename stays literal", () => {
   assert.match(render("`open dev/mock.html`"), /<code>open dev\/mock\.html<\/code>/u);
   assert.match(render("`foo.mdx`"), /<code>foo\.mdx<\/code>/u);
   assert.match(render("`foo.htm`"), /<code>foo\.htm<\/code>/u);
-  assert.doesNotMatch(render("```\ndev/mock.html\n```"), /href="qmux-file:dev\/mock\.html"/u);
+  assert.doesNotMatch(render("```\ndev/mock.html\n```"), /href="session-file:dev\/mock\.html"/u);
 });
 
 test("an exact inline-code loopback HTML URL receives a launch button", () => {

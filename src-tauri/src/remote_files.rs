@@ -16,7 +16,7 @@ const STORE_DIR: &str = "remote-files";
 const ORPHAN_GRACE: Duration = Duration::from_secs(60 * 60);
 
 pub fn store_root(workspace_root: &Path) -> PathBuf {
-    workspace_root.join(".qmux").join(STORE_DIR)
+    workspace_root.join(".session").join(STORE_DIR)
 }
 
 fn store_root_is_directory(root: &Path) -> bool {
@@ -155,7 +155,7 @@ mod tests {
 
     fn test_root(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
-            "qmux-remote-files-{name}-{}-{}",
+            "session-remote-files-{name}-{}-{}",
             std::process::id(),
             SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
@@ -245,7 +245,7 @@ mod tests {
     fn refuses_a_symlinked_store_root() {
         let root = test_root("symlink");
         let outside = test_root("outside");
-        fs::create_dir_all(root.join(".qmux")).unwrap();
+        fs::create_dir_all(root.join(".session")).unwrap();
         fs::create_dir_all(&outside).unwrap();
         symlink(&outside, store_root(&root)).unwrap();
         let error = stage(

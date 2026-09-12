@@ -659,7 +659,7 @@ fn prepare_detached_archive_parent(folder: &Path) -> Result<PathBuf, String> {
 fn validate_detached_archive(archive: &DetachedResearchArchive) -> Result<(), String> {
     if !(1..=DETACHED_RESEARCH_ARCHIVE_VERSION).contains(&archive.version) {
         return Err(format!(
-            "unsupported detached research archive version {} (it may have been written by a newer qmux; upgrade this installation to restore it)",
+            "unsupported detached research archive version {} (it may have been written by a newer session; upgrade this installation to restore it)",
             archive.version
         ));
     }
@@ -1074,7 +1074,7 @@ fn read_detached_research_from_path(
         .unwrap_or(0);
     if !(1..=u64::from(DETACHED_RESEARCH_ARCHIVE_VERSION)).contains(&raw_version) {
         return Err(format!(
-            "unsupported detached research archive version {raw_version} (it may have been written by a newer qmux; upgrade this installation to restore it)"
+            "unsupported detached research archive version {raw_version} (it may have been written by a newer session; upgrade this installation to restore it)"
         ));
     }
     let mut archive: DetachedResearchArchive = serde_json::from_value(raw_value)
@@ -1168,7 +1168,7 @@ fn validated_snapshot_file_name(node_id: &str) -> Result<String, String> {
     Ok(format!("{node_id}.json"))
 }
 
-/// Snapshots live under the owner-protected `.qmux` state directory like every
+/// Snapshots live under the owner-protected `.session` state directory like every
 /// other durable prompt/response artifact — not loose in the workspace root.
 fn response_snapshot_path(workspace_root: &Path, node_id: &str) -> Result<PathBuf, String> {
     Ok(workspace_root
@@ -1177,7 +1177,7 @@ fn response_snapshot_path(workspace_root: &Path, node_id: &str) -> Result<PathBu
         .join(validated_snapshot_file_name(node_id)?))
 }
 
-/// Pre-`.qmux` location. Read (and removed) as a fallback so snapshots written
+/// Pre-`.session` location. Read (and removed) as a fallback so snapshots written
 /// by earlier builds of the research branch stay viewable.
 fn legacy_response_snapshot_path(workspace_root: &Path, node_id: &str) -> Result<PathBuf, String> {
     Ok(workspace_root
@@ -1361,7 +1361,7 @@ fn write_response_snapshot_inner(
     let parent = path.parent().expect("snapshot path has a parent");
     std::fs::create_dir_all(parent)
         .map_err(|err| format!("failed to create {}: {err}", parent.display()))?;
-    // Owner-only, matching the `.qmux` state dir it lives in (responses carry
+    // Owner-only, matching the `.session` state dir it lives in (responses carry
     // prompt text). Best-effort on an existing directory.
     #[cfg(unix)]
     {
@@ -1533,7 +1533,7 @@ pub fn prune_response_snapshots(
 }
 
 fn prune_research_logs(workspace_root: &Path, valid_node_ids: &HashSet<String>) {
-    let dir = workspace_root.join(".qmux").join("research-logs");
+    let dir = workspace_root.join(".session").join("research-logs");
     let entries = match std::fs::read_dir(&dir) {
         Ok(entries) => entries,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return,
@@ -1577,7 +1577,7 @@ pub fn remove_response_snapshot(workspace_root: &Path, node_id: &str) -> Result<
     }
     validated_snapshot_file_name(node_id)?;
     let log_path = workspace_root
-        .join(".qmux")
+        .join(".session")
         .join("research-logs")
         .join(format!("{node_id}.log"));
     match std::fs::remove_file(&log_path) {
@@ -2280,7 +2280,7 @@ pub const MAX_RESEARCH_LAUNCH_INSTRUCTION_BYTES: usize = 4 * 1024;
 /// (`transcript::strip_leading_tagged_instruction_blocks`, the frontend's
 /// `taggedInstructions` module), so every existing sanitizer — transcript
 /// display, copy, previews, conversation exports — already recognizes and
-/// strips the block as qmux-injected machinery rather than user words.
+/// strips the block as session-injected machinery rather than user words.
 pub const RESEARCH_LAUNCH_INSTRUCTION_TAG: &str = "research-instructions";
 
 /// Validates an instruction as entered in settings: trimmed, `None` when
@@ -2401,7 +2401,7 @@ pub fn document_turn(node_id: &str, markdown: &str) -> crate::transcript::Turn {
 /// the most likely place for secrets and injected text to hide, so exports
 /// keep only the fact that activity happened — the call count — never the
 /// payloads.
-pub const CONVERSATION_TOOL_ACTIVITY_TYPE: &str = "qmuxToolActivity";
+pub const CONVERSATION_TOOL_ACTIVITY_TYPE: &str = "sessionToolActivity";
 
 fn conversation_tool_activity_turn(
     node_id: &str,
@@ -2430,7 +2430,7 @@ fn conversation_tool_activity_turn(
     }
 }
 
-/// User text a conversation export keeps: the message with any qmux-injected
+/// User text a conversation export keeps: the message with any session-injected
 /// leading instruction blocks stripped away, mirroring the frontend's
 /// copy/publication sanitizers. `None` for text that is entirely injected
 /// machinery — instruction blocks, adapter interruption markers — or empty
@@ -2508,7 +2508,7 @@ pub const CONVERSATION_ATTACHMENT_MARKER: &str = "[image attachment]";
 ///   frames) are dropped uncounted.
 /// - User image attachments become [`CONVERSATION_ATTACHMENT_MARKER`] text so
 ///   exchange structure survives without the payload.
-/// - qmux-injected tagged-instruction blocks are stripped from user text
+/// - session-injected tagged-instruction blocks are stripped from user text
 ///   (whole-message and leading-block forms); adapter interruption markers
 ///   and records outside active context are dropped — none of that belongs in
 ///   the conversation the exported node will continue.
@@ -2802,7 +2802,7 @@ mod tests {
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
         let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("qmux-research-{nanos}-{seq}"));
+        let dir = std::env::temp_dir().join(format!("session-research-{nanos}-{seq}"));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -3032,7 +3032,7 @@ mod tests {
             .unwrap();
         assert_eq!(snapshot.revision, response_revision(&expected).unwrap());
         let log = workspace
-            .join(".qmux")
+            .join(".session")
             .join("research-logs")
             .join("node-1.log");
         std::fs::create_dir_all(log.parent().unwrap()).unwrap();
@@ -3672,7 +3672,7 @@ mod tests {
         // prompt so response-boundary matching still finds it.
         assert!(normalized_text(&sent).contains(&normalized_text("Why is the sky blue?")));
         // The leading block is exactly what the transcript/export sanitizers
-        // strip as qmux-injected machinery.
+        // strip as session-injected machinery.
         assert_eq!(
             crate::transcript::strip_leading_tagged_instruction_blocks(&sent),
             Some("\nWhy is the sky blue?")

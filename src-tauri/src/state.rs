@@ -209,7 +209,7 @@ fn propagated_workspace(
     next.cwd = target_cwd.to_string();
     if let Some(current) = current {
         next.source = current.source;
-        next.managed_by_qmux = current.managed_by_qmux;
+        next.managed_by_session = current.managed_by_session;
     }
     next
 }
@@ -348,7 +348,7 @@ struct AppStateInner {
     // Persistence stays off until restore_session() runs so constructing a state
     // (notably in tests) never touches disk. Once enabled, model mutations mark
     // the state dirty and the persister thread snapshots it to
-    // workspace_root/.qmux/state.json on a short debounce.
+    // workspace_root/.session/state.json on a short debounce.
     persist_enabled: AtomicBool,
     // Serializes the whole snapshot->write->rename in persist() so concurrent
     // saves commit in snapshot order. Without it, a slower older snapshot's
@@ -1303,7 +1303,7 @@ fn ensure_agent_thread_metadata(state: &AppState, model: &mut Model, agent: &mut
                 workspace_root,
             );
             // Builds that assigned agents thread ids before thread records
-            // existed wrote graphs to <worktree>/.qmux/threads/<id>.json and
+            // existed wrote graphs to <worktree>/.session/threads/<id>.json and
             // persisted no record, so the startup migration (which walks only
             // persisted records) never sees them. Minting a fresh global
             // record here would silently shadow that history behind an empty
@@ -1457,7 +1457,7 @@ pub struct PaneRuntime {
 pub struct RemoteSessionIdentity {
     /// The snapshotted remote id from the pane's workspace group.
     pub remote_id: String,
-    /// A qmux-specific tmux server, isolated from the user's default server.
+    /// A session-specific tmux server, isolated from the user's default server.
     pub tmux_server: String,
     /// A collision-resistant session name persisted across Session restarts.
     pub tmux_session: String,
@@ -1497,8 +1497,8 @@ impl RemoteSessionIdentity {
         };
         Ok(Self {
             remote_id: remote_id.to_string(),
-            tmux_server: "qmux".to_string(),
-            tmux_session: format!("qmux-{pane_slug}-{nonce}"),
+            tmux_server: "session".to_string(),
+            tmux_session: format!("session-{pane_slug}-{nonce}"),
             support_dir: None,
         })
     }
@@ -1582,7 +1582,7 @@ pub struct PaneInfo {
     /// live `AgentInfo.active_workspace` from transcript tailing instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_workspace: Option<ActiveWorkspace>,
-    /// Present only for panes whose process is owned by qmux-managed tmux on a
+    /// Present only for panes whose process is owned by session-managed tmux on a
     /// remote host. This identity, not a local ssh child pid, drives recovery.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_session: Option<RemoteSessionIdentity>,
@@ -1591,7 +1591,7 @@ pub struct PaneInfo {
     pub remote_connection: Option<RemoteConnectionInfo>,
     /// Host passed to a client `ssh` process that lives in a group which is
     /// not itself bound to that machine. Restart re-runs `ssh` instead of a
-    /// local login shell. Absent for ordinary shells and qmux-managed remote
+    /// local login shell. Absent for ordinary shells and session-managed remote
     /// panes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ssh_target: Option<String>,
@@ -2153,8 +2153,8 @@ impl AppState {
         std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/"))
     }
 
-    /// Empty, qmux-managed working directory used when the user has not chosen
-    /// a project for research. It is deliberately separate from `.qmux`, which
+    /// Empty, session-managed working directory used when the user has not chosen
+    /// a project for research. It is deliberately separate from `.session`, which
     /// contains private state and terminal credentials.
     pub fn default_research_dir(&self) -> std::path::PathBuf {
         self.inner
@@ -3850,7 +3850,7 @@ impl AppState {
     }
 
     /// Snapshots the source side of a fork before the child process starts.
-    /// The returned reference names immutable qmux-owned content, so it remains
+    /// The returned reference names immutable session-owned content, so it remains
     /// stable after either pane closes or the source transcript is rewritten.
     pub fn capture_conversation_history(
         &self,
@@ -6557,7 +6557,7 @@ impl AppState {
             if total_bytes.saturating_add(added_bytes)
                 > research::MAX_RESEARCH_HIGHLIGHT_BYTES_TOTAL
             {
-                return Err("qmux contains too much saved research highlight data".to_string());
+                return Err("session contains too much saved research highlight data".to_string());
             }
             let node = model
                 .research_nodes
@@ -7441,7 +7441,7 @@ impl AppState {
                 > research::MAX_RESEARCH_HIGHLIGHT_BYTES_TOTAL
             {
                 return Err(
-                    "import would exceed qmux's research highlight storage limit".to_string(),
+                    "import would exceed session's research highlight storage limit".to_string(),
                 );
             }
             (
@@ -11505,7 +11505,7 @@ impl AppState {
                         // locally launched agent may still be using its launch
                         // workspace. Preserve the ownership meaning normally
                         // assigned by record_agent_active_workspace.
-                        next.managed_by_qmux = agent.branch.is_some()
+                        next.managed_by_session = agent.branch.is_some()
                             && next.git_root.as_deref().is_some_and(|root| {
                                 crate::adapters::same_dir(root, &agent.worktree_dir)
                             });
@@ -12875,7 +12875,7 @@ mod tests {
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
         let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("qmux-state-{nanos}-{seq}"));
+        let dir = std::env::temp_dir().join(format!("session-state-{nanos}-{seq}"));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -12884,7 +12884,7 @@ mod tests {
         SessionConfig {
             remotes: Default::default(),
             workspace_root,
-            socket_path: PathBuf::from("/tmp/qmux-test.sock"),
+            socket_path: PathBuf::from("/tmp/session-test.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -12920,7 +12920,7 @@ mod tests {
             group_id: "group-1".to_string(),
             adapter: "claude".to_string(),
             worktree_dir: "/tmp/work/agent-1".to_string(),
-            branch: Some("qmux/group-1/agent-1".to_string()),
+            branch: Some("session/group-1/agent-1".to_string()),
             active_workspace: None,
             pane_id: Some("pane-7".to_string()),
             orphaned_queue_pane_id: None,
@@ -12947,7 +12947,7 @@ mod tests {
             name: "group-1".to_string(),
             name_override: None,
             dir: "/tmp/work".to_string(),
-            managed_dir: "/tmp/qmux-workspaces/group-1".to_string(),
+            managed_dir: "/tmp/session-workspaces/group-1".to_string(),
             base_repo: Some("/tmp/repo".to_string()),
             base_ref: Some("HEAD".to_string()),
             parent_id: None,
@@ -12965,14 +12965,16 @@ mod tests {
         group.scope = WorkspaceScope::Terminal;
         group.id = id.to_string();
         group.name = id.to_string();
-        group.managed_dir = format!("/tmp/qmux-workspaces/{id}");
+        group.managed_dir = format!("/tmp/session-workspaces/{id}");
         group.agents.clear();
         group
     }
 
     #[test]
     fn global_drafts_crud_and_claim() {
-        let state = AppState::new(test_config(PathBuf::from("/tmp/qmux-state-global-drafts")));
+        let state = AppState::new(test_config(PathBuf::from(
+            "/tmp/session-state-global-drafts",
+        )));
 
         assert!(state.create_global_draft("   ".to_string()).is_err());
         let draft = state
@@ -13010,7 +13012,7 @@ mod tests {
 
     #[test]
     fn interface_drafts_survive_webview_reloads_but_not_app_restarts() {
-        let workspace = PathBuf::from("/tmp/qmux-state-interface-drafts");
+        let workspace = PathBuf::from("/tmp/session-state-interface-drafts");
         let state = AppState::new(test_config(workspace.clone()));
         state
             .set_interface_draft(
@@ -13297,7 +13299,9 @@ mod tests {
 
     #[test]
     fn research_tree_crud_keeps_nodes_scoped_to_the_tree() {
-        let state = AppState::new(test_config(PathBuf::from("/tmp/qmux-state-research-crud")));
+        let state = AppState::new(test_config(PathBuf::from(
+            "/tmp/session-state-research-crud",
+        )));
         state.insert_group_after(sample_group(), None).unwrap();
         let detail = state
             .create_research_tree(CreateResearchTreeRequest {
@@ -13940,7 +13944,7 @@ mod tests {
     #[test]
     fn research_tree_creation_requires_an_existing_group() {
         let state = AppState::new(test_config(PathBuf::from(
-            "/tmp/qmux-state-research-missing",
+            "/tmp/session-state-research-missing",
         )));
         let err = state
             .create_research_tree(CreateResearchTreeRequest {
@@ -14026,7 +14030,9 @@ mod tests {
 
     #[test]
     fn research_node_tracks_agent_status_and_response_preview() {
-        let state = AppState::new(test_config(PathBuf::from("/tmp/qmux-state-research-run")));
+        let state = AppState::new(test_config(PathBuf::from(
+            "/tmp/session-state-research-run",
+        )));
         state.insert_group_after(sample_group(), None).unwrap();
         state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
         let detail = state
@@ -14298,7 +14304,7 @@ mod tests {
     #[test]
     fn research_waits_for_subagents_and_a_later_parent_completion() {
         let state = AppState::new(test_config(PathBuf::from(
-            "/tmp/qmux-state-research-subagents",
+            "/tmp/session-state-research-subagents",
         )));
         state.insert_group_after(sample_group(), None).unwrap();
         state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
@@ -14416,7 +14422,9 @@ mod tests {
 
     #[test]
     fn research_child_inherits_parent_launch_context() {
-        let state = AppState::new(test_config(PathBuf::from("/tmp/qmux-state-research-child")));
+        let state = AppState::new(test_config(PathBuf::from(
+            "/tmp/session-state-research-child",
+        )));
         state.insert_group_after(sample_group(), None).unwrap();
         state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
         let detail = state
@@ -14495,7 +14503,7 @@ mod tests {
     #[test]
     fn detaching_completed_research_pane_preserves_native_checkpoint() {
         let state = AppState::new(test_config(PathBuf::from(
-            "/tmp/qmux-state-research-detach",
+            "/tmp/session-state-research-detach",
         )));
         state.insert_group_after(sample_group(), None).unwrap();
         state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
@@ -15422,7 +15430,7 @@ mod tests {
         let mut turn = sample_user_turn(&agent.id, "answer");
         turn.role = "assistant".to_string();
         state.append_harness_turn(turn).unwrap();
-        std::fs::write(workspace.join(".qmux"), b"not a directory").unwrap();
+        std::fs::write(workspace.join(".session"), b"not a directory").unwrap();
 
         let err = state
             .finish_research_sdk_run(&node_id, &agent.id, true, None)
@@ -15440,7 +15448,7 @@ mod tests {
             state.research_node_content(&node_id).unwrap().turns.len(),
             1
         );
-        std::fs::remove_file(workspace.join(".qmux")).unwrap();
+        std::fs::remove_file(workspace.join(".session")).unwrap();
         state.remove_research_tree(&tree_id).unwrap();
         assert!(state.agent(&agent.id).unwrap().is_none());
         std::fs::remove_dir_all(workspace).unwrap();
@@ -15900,7 +15908,7 @@ mod tests {
     fn restore_splits_legacy_research_runtime_out_of_a_terminal_group() {
         let workspace = temp_workspace();
         let managed = workspace.join("legacy-managed");
-        std::fs::create_dir_all(managed.join(".qmux")).unwrap();
+        std::fs::create_dir_all(managed.join(".session")).unwrap();
         let mut group = sample_terminal_group();
         group.dir = workspace.display().to_string();
         group.managed_dir = managed.display().to_string();
@@ -16089,7 +16097,7 @@ mod tests {
                 .unwrap()
                 .file_name()
                 .to_string_lossy()
-                == ".qmux")
+                == ".session")
         );
         std::fs::remove_dir_all(workspace).unwrap();
     }
@@ -16173,7 +16181,7 @@ mod tests {
         for index in 1..=2 {
             let group_id = format!("legacy-{index}");
             let managed_dir = workspace.join(format!("managed-{index}"));
-            std::fs::create_dir_all(managed_dir.join(".qmux")).unwrap();
+            std::fs::create_dir_all(managed_dir.join(".session")).unwrap();
             let mut group = sample_terminal_group();
             group.id = group_id.clone();
             group.dir = shared_dir.display().to_string();
@@ -17647,7 +17655,7 @@ mod tests {
 
         let workspace = temp_workspace();
         let mut config = test_config(workspace.clone());
-        config.socket_path = workspace.join("qmux-test.sock");
+        config.socket_path = workspace.join("session-test.sock");
         let state = AppState::new(config.clone());
 
         // Nothing recorded yet: never claim ownership.
@@ -18883,7 +18891,7 @@ mod tests {
         // file-server root must be a real, absolute directory).
         assert!(
             state
-                .update_pane_cwd("pane-1", "/no/such/qmux/dir/at/all".to_string())
+                .update_pane_cwd("pane-1", "/no/such/session/dir/at/all".to_string())
                 .is_err()
         );
         assert!(
@@ -18905,7 +18913,7 @@ mod tests {
             host: "devbox".to_string(),
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
             session_cli: None,
-            workspace_root: Some("/srv/qmux/workspaces".to_string()),
+            workspace_root: Some("/srv/session/workspaces".to_string()),
         });
         state.insert_group_after(group, None).unwrap();
         state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
@@ -18920,8 +18928,8 @@ mod tests {
                     git_root: Some("/srv/code/project/feature".to_string()),
                     branch: Some("feature/remote".to_string()),
                     kind: ActiveWorkspaceKind::LinkedWorktree,
-                    source: crate::workspace::ActiveWorkspaceSource::Qmux,
-                    managed_by_qmux: false,
+                    source: crate::workspace::ActiveWorkspaceSource::Session,
+                    managed_by_session: false,
                 },
             )
             .unwrap();
@@ -18961,8 +18969,8 @@ mod tests {
             git_root: Some("relative/root".to_string()),
             branch: Some("main".to_string()),
             kind: ActiveWorkspaceKind::MainCheckout,
-            source: crate::workspace::ActiveWorkspaceSource::Qmux,
-            managed_by_qmux: false,
+            source: crate::workspace::ActiveWorkspaceSource::Session,
+            managed_by_session: false,
         };
         assert!(
             state
@@ -18991,7 +18999,7 @@ mod tests {
         };
         git(&["init", "-b", "main"]);
         git(&["config", "user.email", "test@example.com"]);
-        git(&["config", "user.name", "qmux test"]);
+        git(&["config", "user.name", "session test"]);
         git(&["commit", "--allow-empty", "-m", "init"]);
 
         let state = AppState::new(test_config(workspace.clone()));
@@ -19045,7 +19053,7 @@ mod tests {
         };
         git(&["init", "-b", "main"]);
         git(&["config", "user.email", "test@example.com"]);
-        git(&["config", "user.name", "qmux test"]);
+        git(&["config", "user.name", "session test"]);
         git(&["commit", "--allow-empty", "-m", "init"]);
         std::os::unix::fs::symlink(&repo, &repo_alias).unwrap();
         git(&[
@@ -19116,7 +19124,7 @@ mod tests {
             .unwrap();
         // Report the same checkout through a symlink spelling. The exact-cwd
         // fallback reaches the not-yet-observed agent, while canonical identity
-        // still recognizes its qmux-managed launch root.
+        // still recognizes its session-managed launch root.
         state
             .update_pane_cwd("pane-reporter", repo_alias_cwd.clone())
             .unwrap();
@@ -19187,7 +19195,7 @@ mod tests {
             alias_agent
                 .active_workspace
                 .as_ref()
-                .is_some_and(|workspace| workspace.managed_by_qmux)
+                .is_some_and(|workspace| workspace.managed_by_session)
         );
         assert_eq!(alias_agent.branch.as_deref(), Some("launch-alias"));
 
@@ -19199,7 +19207,7 @@ mod tests {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace));
 
-        let base = std::env::temp_dir().join(format!("qmux-gsc-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("session-gsc-{}", std::process::id()));
         let dir_old = base.join("old");
         let dir_new = base.join("new");
         let dir_agent = base.join("agent");
@@ -19246,7 +19254,7 @@ mod tests {
         let state = AppState::new(test_config(workspace));
 
         let base = std::env::temp_dir().join(format!(
-            "qmux-spawn-cwd-{}-{}",
+            "session-spawn-cwd-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -20791,8 +20799,8 @@ mod tests {
         legacy_pane.depth = 3;
         legacy_pane.remote_session = Some(RemoteSessionIdentity {
             remote_id: "devbox".to_string(),
-            tmux_server: "qmux".to_string(),
-            tmux_session: "qmux-pane-7-deadbeef".to_string(),
+            tmux_server: "session".to_string(),
+            tmux_session: "session-pane-7-deadbeef".to_string(),
             support_dir: None,
         });
         legacy_pane.remote_connection = Some(RemoteConnectionInfo {
@@ -20828,7 +20836,7 @@ mod tests {
             pane.remote_session
                 .as_ref()
                 .map(|identity| identity.tmux_session.as_str()),
-            Some("qmux-pane-7-deadbeef")
+            Some("session-pane-7-deadbeef")
         );
         assert_eq!(
             pane.remote_connection,
@@ -20870,9 +20878,9 @@ mod tests {
         let second = RemoteSessionIdentity::new("devbox", "pane:unsafe/name").unwrap();
 
         assert_eq!(first.remote_id, "devbox");
-        assert_eq!(first.tmux_server, "qmux");
+        assert_eq!(first.tmux_server, "session");
         assert_ne!(first.tmux_session, second.tmux_session);
-        assert!(first.tmux_session.starts_with("qmux-pane_unsafe_name-"));
+        assert!(first.tmux_session.starts_with("session-pane_unsafe_name-"));
         assert!(
             first
                 .tmux_session
@@ -20979,8 +20987,8 @@ mod tests {
     #[test]
     fn osc_title_sanitization_strips_grok_branding_suffix() {
         assert_eq!(
-            sanitize_last_osc_title("qmux - grok", None).as_deref(),
-            Some("qmux")
+            sanitize_last_osc_title("session - grok", None).as_deref(),
+            Some("session")
         );
         assert_eq!(
             sanitize_last_osc_title("  Fix the build  - Grok  ", None).as_deref(),

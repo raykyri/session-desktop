@@ -15,7 +15,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-const MANAGED_CLI: &str = "~/.qmux/bin/session-cli";
+const MANAGED_CLI: &str = "~/.session/bin/session-cli";
 const DEFAULT_CLI_NAME: &str = "session-cli";
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -72,13 +72,8 @@ pub fn rust_target_from_uname(stdout: &str) -> Result<&'static str, String> {
 pub fn is_managed_cli(configured: Option<&str>) -> bool {
     match configured.map(str::trim).filter(|value| !value.is_empty()) {
         None => true,
-        Some(DEFAULT_CLI_NAME)
-        | Some(MANAGED_CLI)
-        | Some("qmux-cli")
-        | Some("~/.qmux/bin/qmux-cli") => true,
-        Some(path) => {
-            path.ends_with("/.qmux/bin/session-cli") || path.ends_with("/.qmux/bin/qmux-cli")
-        }
+        Some(DEFAULT_CLI_NAME) | Some(MANAGED_CLI) => true,
+        Some(path) => path.ends_with("/.session/bin/session-cli"),
     }
 }
 
@@ -190,7 +185,7 @@ pub fn ensure_cli(host: &Host) -> Result<EnsureCliResult, String> {
         )
     })?;
 
-    let dest_dir = host.expand_home("~/.qmux/bin")?;
+    let dest_dir = host.expand_home("~/.session/bin")?;
     install_cli(host, &dest_dir, &expanded, &bytes)?;
     let version = remote_cli_version(host, &expanded).ok_or_else(|| {
         format!("installed session-cli at {expanded} but could not read --version")
@@ -271,7 +266,7 @@ fn install_cli(host: &Host, dest_dir: &str, dest_path: &str, bytes: &[u8]) -> Re
         args: vec![
             "-c".to_string(),
             INSTALL_SCRIPT.to_string(),
-            "qmux-install-cli".to_string(),
+            "session-install-cli".to_string(),
             dest_dir.to_string(),
             dest_path.to_string(),
         ],
@@ -324,12 +319,8 @@ mod tests {
         assert!(is_managed_cli(None));
         assert!(is_managed_cli(Some("")));
         assert!(is_managed_cli(Some("session-cli")));
-        assert!(is_managed_cli(Some("~/.qmux/bin/session-cli")));
-        assert!(is_managed_cli(Some("/home/dev/.qmux/bin/session-cli")));
+        assert!(is_managed_cli(Some("~/.session/bin/session-cli")));
+        assert!(is_managed_cli(Some("/home/dev/.session/bin/session-cli")));
         assert!(!is_managed_cli(Some("/opt/session-cli")));
-        assert!(is_managed_cli(Some("qmux-cli")));
-        assert!(is_managed_cli(Some("~/.qmux/bin/qmux-cli")));
-        assert!(is_managed_cli(Some("/home/dev/.qmux/bin/qmux-cli")));
-        assert!(!is_managed_cli(Some("/opt/qmux-cli")));
     }
 }

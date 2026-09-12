@@ -1,6 +1,6 @@
 // Pure helpers for rendering exported-conversation research nodes. An export
 // collapses tool activity into marker turns (a Raw block whose value is
-// `{ type: "qmuxToolActivity", toolCalls: N }`, written by
+// `{ type: "sessionToolActivity", toolCalls: N }`, written by
 // src-tauri/src/research.rs); buildTimelineItems routes assistant Raw blocks
 // into thinking activities, so the viewer needs to recognize those markers
 // inside activity items and render them as quiet "N tool calls" chips instead
@@ -9,7 +9,7 @@
 import type { ActivityItem } from "./turnTimeline";
 
 /** Mirror of research.rs CONVERSATION_TOOL_ACTIVITY_TYPE. */
-export const CONVERSATION_TOOL_ACTIVITY_TYPE = "qmuxToolActivity";
+export const CONVERSATION_TOOL_ACTIVITY_TYPE = "sessionToolActivity";
 
 /** The collapsed tool-call count carried by one marker value, or null when
  * the value is not an export activity marker. A marker with a malformed

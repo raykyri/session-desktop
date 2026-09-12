@@ -88,7 +88,7 @@ pub enum RemoteMultiplexer {
 
 /// The remote host a group is bound to.
 ///
-/// Created from a `remotes` entry in `qmux.config.json` and then snapshotted
+/// Created from a `remotes` entry in `session.config.json` and then snapshotted
 /// here, so editing that entry never moves a group whose worktrees already live
 /// on the old machine. `plan_to_spec` wraps this group's panes in ssh plus the
 /// named multiplexer; adapters opt in through `AgentAdapter::supports_remote`.
@@ -100,12 +100,11 @@ pub struct RemoteRef {
     /// Display label, e.g. the ssh-config alias.
     pub label: String,
     /// Connection target: an ssh-config alias or `user@host` string. Auth and
-    /// address resolution belong to the system `ssh` client, never to qmux.
+    /// address resolution belong to the system `ssh` client, never to session.
     pub host: String,
     pub multiplexer: RemoteMultiplexer,
     /// How to invoke the Session CLI on that host; defaults to `session-cli`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[serde(alias = "qmuxCli")]
     pub session_cli: Option<String>,
     /// Where agent worktrees live there. The group's `managed_dir` is always
     /// local, so a remote group needs somewhere on its own machine to put them.
@@ -124,7 +123,7 @@ pub struct GroupInfo {
     /// group this is a path on the remote host, so it must only be validated
     /// through the group-aware helpers below, never by a bare local stat.
     pub dir: String,
-    /// Qmux-owned storage for the group's manifest and any generated worktrees.
+    /// Session-owned storage for the group's manifest and any generated worktrees.
     /// Always local, remote groups included: the manifest describes the group,
     /// it does not live with the group's processes.
     pub managed_dir: String,
@@ -225,7 +224,7 @@ pub enum ActiveWorkspaceKind {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ActiveWorkspaceSource {
-    Qmux,
+    Session,
     Claude,
     Codex,
 }
@@ -242,7 +241,7 @@ pub struct ActiveWorkspace {
     pub branch: Option<String>,
     pub kind: ActiveWorkspaceKind,
     pub source: ActiveWorkspaceSource,
-    pub managed_by_qmux: bool,
+    pub managed_by_session: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -551,7 +550,7 @@ pub fn rename_research_workspace(
 /// Moves a research workspace to a different directory. While a folder is
 /// open its research history (trees, nodes, responses) lives in Session's global
 /// state, so a move repoints the durable record and relocates only the
-/// research-specific state a folder can carry — a detached `.qmux` research
+/// research-specific state a folder can carry — a detached `.session` research
 /// archive belonging to this workspace. The old folder itself and the rest of
 /// its contents are never modified or deleted.
 pub fn move_research_workspace(
@@ -696,7 +695,7 @@ pub fn remove_research_workspace(
         .collect::<Vec<_>>();
     if archive.trees.is_empty() {
         // A folder with no research history has nothing to preserve, so it
-        // must not gain a `.qmux` archive as a side effect of being removed.
+        // must not gain a `.session` archive as a side effect of being removed.
         // The archive write would also recreate a folder the user already
         // deleted from disk, and fail outright on a read-only folder —
         // leaving an *unused* folder impossible to remove.
@@ -770,7 +769,7 @@ pub fn remove_research_workspace(
     Ok(detached_tree_ids)
 }
 
-/// The manifest directory is qmux-internal bookkeeping for this group and
+/// The manifest directory is session-internal bookkeeping for this group and
 /// nothing else: research runs never create worktrees under it, so once the
 /// record is gone it holds only the stale group.json. Deleting it here (and
 /// only here — Terminal groups may own worktrees) keeps removed folders
@@ -778,7 +777,7 @@ pub fn remove_research_workspace(
 /// record that ever pointed managed_dir at the user's own folder.
 fn remove_research_workspace_manifest_dir(workspace: &GroupInfo) {
     if workspace.managed_dir != workspace.dir
-        && Path::new(&workspace.managed_dir).join(".qmux").is_dir()
+        && Path::new(&workspace.managed_dir).join(".session").is_dir()
         && let Err(err) = fs::remove_dir_all(&workspace.managed_dir)
         && !matches!(err.kind(), std::io::ErrorKind::NotFound)
     {
@@ -840,7 +839,7 @@ pub(crate) fn create_group_record(
         .clone()
         .unwrap_or_else(|| generated_name.clone());
     let managed_dir = unique_group_dir(&state.config().workspace_root, &display_name)?;
-    fs::create_dir_all(managed_dir.join(".qmux"))
+    fs::create_dir_all(managed_dir.join(".session"))
         .map_err(|err| format!("failed to create group dir {}: {err}", dir.display()))?;
 
     let group = GroupInfo {
@@ -881,7 +880,7 @@ pub(crate) fn clone_group_record_for_scope(
         source.name_override.as_deref().unwrap_or(&source.name)
     );
     let managed_dir = unique_group_dir(&state.config().workspace_root, &display_name)?;
-    fs::create_dir_all(managed_dir.join(".qmux")).map_err(|err| {
+    fs::create_dir_all(managed_dir.join(".session")).map_err(|err| {
         format!(
             "failed to create migrated research workspace {}: {err}",
             managed_dir.display()
@@ -1164,7 +1163,7 @@ fn prepare_agent_workspace_locked(
         match base_repo.as_deref().filter(|repo| is_git_repo(&host, repo)) {
             Some(base_repo) => {
                 let branch_name = worktree_name.map(ToString::to_string).unwrap_or_else(|| {
-                    format!("qmux/{}/{}", sanitize_ref_segment(&group.id), agent_name)
+                    format!("session/{}/{}", sanitize_ref_segment(&group.id), agent_name)
                 });
                 create_worktree(&host, base_repo, &dir, &branch_name, &base_ref)?;
                 branch = Some(branch_name);
@@ -1187,7 +1186,7 @@ fn prepare_agent_workspace_locked(
         .then(|| {
             resolve_active_workspace(
                 &worktree_dir,
-                ActiveWorkspaceSource::Qmux,
+                ActiveWorkspaceSource::Session,
                 use_worktree && branch.is_some(),
             )
         })
@@ -1278,14 +1277,14 @@ pub fn recover_shell_agent_from_session_start(
         }
         existing
     } else {
-        // Retain a qmux-minted id when the record itself disappeared. The running
+        // Retain a session-minted id when the record itself disappeared. The running
         // shell supervisor and every later hook still carry that id; changing it
         // here would prevent the supervisor from detaching this recovered binding
         // when the native agent process exits. Never accept an arbitrary id as a
         // durable key—the hook payload is pane-authenticated but can still be
         // influenced by code running inside that pane.
         let recovered_agent_id = preferred_agent_id
-            .filter(|agent_id| is_qmux_agent_id(agent_id))
+            .filter(|agent_id| is_session_agent_id(agent_id))
             .map(ToString::to_string);
         prepare_agent_workspace_locked(
             state,
@@ -1297,7 +1296,7 @@ pub fn recover_shell_agent_from_session_start(
                 model: None,
                 effort: None,
                 // This is an agent running inside the shell's own directory, not a
-                // qmux-managed isolated worktree.
+                // session-managed isolated worktree.
                 use_worktree: false,
             },
             recovered_agent_id,
@@ -1326,7 +1325,7 @@ pub fn recover_shell_agent_from_session_start(
     Ok(recovered)
 }
 
-fn is_qmux_agent_id(value: &str) -> bool {
+fn is_session_agent_id(value: &str) -> bool {
     let Some(rest) = value.strip_prefix("agent-") else {
         return false;
     };
@@ -1991,7 +1990,7 @@ fn worktree_root(
     };
     let (relative_root, exclude_pattern) = match location {
         WorktreeLocation::Global => unreachable!(),
-        WorktreeLocation::LocalQmux => (Path::new(".qmux/worktrees"), "/.qmux/worktrees/"),
+        WorktreeLocation::LocalSession => (Path::new(".session/worktrees"), "/.session/worktrees/"),
         WorktreeLocation::LocalClaude => (Path::new(".claude/worktrees"), "/.claude/worktrees/"),
     };
 
@@ -2032,7 +2031,7 @@ pub(crate) fn configured_worktree_root_for_cwd(
     };
     let relative_root = match location {
         WorktreeLocation::Global => unreachable!(),
-        WorktreeLocation::LocalQmux => Path::new(".qmux/worktrees"),
+        WorktreeLocation::LocalSession => Path::new(".session/worktrees"),
         WorktreeLocation::LocalClaude => Path::new(".claude/worktrees"),
     };
     Ok(Some(project_root.join(relative_root)))
@@ -2203,7 +2202,7 @@ fn git_rev_parse_path(host: &Host, cwd: &str, spec: &str) -> Result<PathBuf, Str
 }
 
 /// The repository's primary checkout. A linked worktree's `--show-toplevel` is
-/// the worktree itself; allocating under that would nest `.qmux/worktrees`
+/// the worktree itself; allocating under that would nest `.session/worktrees`
 /// inside another worktree. Prefer the parent of `--git-common-dir` when that
 /// is the main `.git`.
 ///
@@ -2477,7 +2476,7 @@ pub fn checkout_repository_branch(
 pub fn resolve_active_workspace(
     cwd: &str,
     source: ActiveWorkspaceSource,
-    managed_by_qmux: bool,
+    managed_by_session: bool,
 ) -> Option<ActiveWorkspace> {
     if !Path::new(cwd).is_absolute() {
         return None;
@@ -2494,7 +2493,7 @@ pub fn resolve_active_workspace(
             branch: None,
             kind: ActiveWorkspaceKind::Directory,
             source,
-            managed_by_qmux,
+            managed_by_session,
         });
     };
     let git_root = fs::canonicalize(&git_root).unwrap_or_else(|_| PathBuf::from(&git_root));
@@ -2512,7 +2511,7 @@ pub fn resolve_active_workspace(
         branch,
         kind,
         source,
-        managed_by_qmux,
+        managed_by_session,
     })
 }
 
@@ -2572,7 +2571,7 @@ fn resolve_active_workspace_on_host(
             branch: None,
             kind: ActiveWorkspaceKind::Directory,
             source,
-            managed_by_qmux: false,
+            managed_by_session: false,
         });
     };
     let resolve = |raw: &str| {
@@ -2590,7 +2589,7 @@ fn resolve_active_workspace_on_host(
         branch: (!branch.is_empty() && branch != "HEAD").then_some(branch),
         kind,
         source,
-        managed_by_qmux: false,
+        managed_by_session: false,
     })
 }
 
@@ -2690,8 +2689,8 @@ pub fn resolve_pane_workspace(cwd: &str) -> Option<ActiveWorkspace> {
         git_root: Some(git_root.display().to_string()),
         branch,
         kind,
-        source: ActiveWorkspaceSource::Qmux,
-        managed_by_qmux: false,
+        source: ActiveWorkspaceSource::Session,
+        managed_by_session: false,
     })
 }
 
@@ -2739,7 +2738,7 @@ pub fn record_agent_active_workspace(
         Some(workspace) => workspace,
         None => return Ok(None),
     };
-    workspace.managed_by_qmux = current.branch.is_some()
+    workspace.managed_by_session = current.branch.is_some()
         && workspace.git_root.as_deref().is_some_and(|root| {
             if host.is_local() {
                 fs::canonicalize(root).ok() == fs::canonicalize(&current.worktree_dir).ok()
@@ -2834,7 +2833,7 @@ fn verify_base_ref(host: &Host, base_repo: &str, base_ref: &str) -> Result<(), S
 }
 
 pub(crate) fn write_group_manifest(group: &GroupInfo) -> Result<(), String> {
-    let manifest_path = PathBuf::from(&group.managed_dir).join(".qmux/group.json");
+    let manifest_path = PathBuf::from(&group.managed_dir).join(".session/group.json");
     let parent = manifest_path
         .parent()
         .ok_or_else(|| format!("group manifest {} has no parent", manifest_path.display()))?;
@@ -2903,13 +2902,13 @@ pub(crate) fn remove_pristine_group_scaffold(group: &GroupInfo) {
         return;
     }
     let managed_dir = PathBuf::from(&group.managed_dir);
-    let qmux_dir = managed_dir.join(".qmux");
-    if !dir_holds_nothing_but(&managed_dir, ".qmux")
-        || !dir_holds_nothing_but(&qmux_dir, "group.json")
+    let session_dir = managed_dir.join(".session");
+    if !dir_holds_nothing_but(&managed_dir, ".session")
+        || !dir_holds_nothing_but(&session_dir, "group.json")
     {
         return;
     }
-    let manifest = qmux_dir.join("group.json");
+    let manifest = session_dir.join("group.json");
     if let Err(err) = fs::remove_file(&manifest)
         && err.kind() != std::io::ErrorKind::NotFound
     {
@@ -2922,12 +2921,12 @@ pub(crate) fn remove_pristine_group_scaffold(group: &GroupInfo) {
     // Content racing in after the check above surfaces here as
     // DirectoryNotEmpty. The directory is preserved either way; say so rather
     // than swallowing it, since by this point the check claimed it was empty.
-    if let Err(err) = fs::remove_dir(&qmux_dir)
+    if let Err(err) = fs::remove_dir(&session_dir)
         && err.kind() != std::io::ErrorKind::NotFound
     {
         eprintln!(
             "session: failed to remove rolled-back group metadata directory {}: {err}",
-            qmux_dir.display()
+            session_dir.display()
         );
         return;
     }
@@ -3054,7 +3053,7 @@ mod tests {
     fn a_remote_id_binds_the_group_to_that_machine() {
         // Without this the whole feature can be a no-op: the request is
         // accepted, a group is created, and it is silently local.
-        let root = std::env::temp_dir().join("qmux-remote-id");
+        let root = std::env::temp_dir().join("session-remote-id");
         let state = test_state_with_remotes(
             root,
             std::collections::BTreeMap::from([(
@@ -3090,14 +3089,14 @@ mod tests {
 
     #[test]
     fn a_remote_group_without_a_dir_opens_in_the_remote_home() {
-        crate::host::seed_remote_home("user@qmux-remote-home-dir", "/home/dev");
-        let root = std::env::temp_dir().join("qmux-remote-home-dir");
+        crate::host::seed_remote_home("user@session-remote-home-dir", "/home/dev");
+        let root = std::env::temp_dir().join("session-remote-home-dir");
         let state = test_state_with_remotes(
             root,
             std::collections::BTreeMap::from([(
                 "devbox".to_string(),
                 crate::config::SavedRemote {
-                    host: "user@qmux-remote-home-dir".to_string(),
+                    host: "user@session-remote-home-dir".to_string(),
                     label: Some("Dev box".to_string()),
                     ..Default::default()
                 },
@@ -3166,7 +3165,7 @@ mod tests {
 
     #[test]
     fn an_unknown_remote_id_fails_before_a_group_exists() {
-        let root = std::env::temp_dir().join("qmux-remote-id-unknown");
+        let root = std::env::temp_dir().join("session-remote-id-unknown");
         let state = test_state_with_workspace(root);
         let before = state.list_groups().expect("groups").len();
 
@@ -3191,7 +3190,7 @@ mod tests {
 
     #[test]
     fn a_remote_worktree_is_allocated_under_the_host_root() {
-        let root = std::env::temp_dir().join("qmux-remote-alloc");
+        let root = std::env::temp_dir().join("session-remote-alloc");
         let state = test_state_with_workspace(root);
         let mut group =
             allocation_group(Path::new("/srv/code/project"), Path::new("/local/managed"));
@@ -3200,7 +3199,7 @@ mod tests {
 
         let dir = allocate_agent_worktree_dir(
             &state,
-            &remote_host(Some("/srv/qmux")),
+            &remote_host(Some("/srv/session")),
             Some("/srv/code/project"),
             &group,
             "agent-1",
@@ -3210,15 +3209,15 @@ mod tests {
         // The group's managed directory is a path on *this* machine. Using it
         // would put the worktree where the remote agent cannot reach it — which
         // is exactly what happened before the host was threaded through here.
-        assert_eq!(dir, PathBuf::from("/srv/qmux/group-9/agent-1"));
+        assert_eq!(dir, PathBuf::from("/srv/session/group-9/agent-1"));
         assert!(!dir.starts_with("/local"), "must not land locally: {dir:?}");
     }
 
     #[test]
     fn a_remote_host_without_a_root_still_lands_remotely() {
-        let root = std::env::temp_dir().join("qmux-remote-alloc-default");
+        let root = std::env::temp_dir().join("session-remote-alloc-default");
         let state = test_state_with_workspace(root);
-        // The default root is `~/.qmux/workspaces`, and every argument sent
+        // The default root is `~/.session/workspaces`, and every argument sent
         // over ssh is quoted, so it has to be expanded here or the worktree
         // lands in a directory literally named `~`.
         host::seed_remote_home("user@devbox", "/home/dev");
@@ -3230,7 +3229,7 @@ mod tests {
             "a",
         )
         .expect("allocates");
-        assert!(dir.starts_with("/home/dev/.qmux/workspaces"), "{dir:?}");
+        assert!(dir.starts_with("/home/dev/.session/workspaces"), "{dir:?}");
         assert!(dir.is_absolute(), "the bridge requires an absolute cwd");
     }
 
@@ -3278,7 +3277,7 @@ mod tests {
     }
 
     fn test_state() -> AppState {
-        test_state_with_workspace(PathBuf::from("/tmp/qmux-workspace-tests"))
+        test_state_with_workspace(PathBuf::from("/tmp/session-workspace-tests"))
     }
 
     fn temp_workspace(prefix: &str) -> PathBuf {
@@ -3286,7 +3285,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
-        let dir = std::env::temp_dir().join(format!("qmux-workspace-{prefix}-{nanos}"));
+        let dir = std::env::temp_dir().join(format!("session-workspace-{prefix}-{nanos}"));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -3314,7 +3313,7 @@ mod tests {
         };
         git(&repo, &["init", "-b", "main"]);
         git(&repo, &["config", "user.email", "test@example.com"]);
-        git(&repo, &["config", "user.name", "qmux test"]);
+        git(&repo, &["config", "user.name", "session test"]);
         git(&repo, &["commit", "--allow-empty", "-m", "init"]);
         git(
             &repo,
@@ -3329,9 +3328,12 @@ mod tests {
         fs::create_dir_all(&nested).unwrap();
         fs::create_dir_all(&nested_main).unwrap();
 
-        let main =
-            resolve_active_workspace(repo.to_str().unwrap(), ActiveWorkspaceSource::Qmux, false)
-                .unwrap();
+        let main = resolve_active_workspace(
+            repo.to_str().unwrap(),
+            ActiveWorkspaceSource::Session,
+            false,
+        )
+        .unwrap();
         let canonical_repo = fs::canonicalize(&repo).unwrap();
         let canonical_linked = fs::canonicalize(&linked).unwrap();
         assert_eq!(main.kind, ActiveWorkspaceKind::MainCheckout);
@@ -3350,7 +3352,7 @@ mod tests {
         assert_eq!(current.git_root.as_deref(), canonical_linked.to_str());
         assert_eq!(current.branch.as_deref(), Some("feature/test"));
         assert_eq!(current.source, ActiveWorkspaceSource::Codex);
-        assert!(current.managed_by_qmux);
+        assert!(current.managed_by_session);
 
         let main_from_nested = git_main_checkout(&Host::Local, nested.to_str().unwrap()).unwrap();
         let main_from_nested_main =
@@ -3387,7 +3389,7 @@ mod tests {
         };
         git(&repo, &["init", "-b", "main"]);
         git(&repo, &["config", "user.email", "test@example.com"]);
-        git(&repo, &["config", "user.name", "qmux test"]);
+        git(&repo, &["config", "user.name", "session test"]);
         git(&repo, &["commit", "--allow-empty", "-m", "init"]);
         git(
             &repo,
@@ -3407,8 +3409,8 @@ mod tests {
         assert_eq!(main.kind, ActiveWorkspaceKind::MainCheckout);
         assert_eq!(main.git_root.as_deref(), canonical_repo.to_str());
         assert_eq!(main.branch.as_deref(), Some("main"));
-        assert_eq!(main.source, ActiveWorkspaceSource::Qmux);
-        assert!(!main.managed_by_qmux);
+        assert_eq!(main.source, ActiveWorkspaceSource::Session);
+        assert!(!main.managed_by_session);
 
         let worktree = resolve_pane_workspace(linked.to_str().unwrap()).unwrap();
         assert_eq!(worktree.kind, ActiveWorkspaceKind::LinkedWorktree);
@@ -3444,7 +3446,7 @@ mod tests {
         // (accepted regression versus the per-field agent resolver).
         assert_eq!(resolve_pane_workspace(unborn.to_str().unwrap()), None);
         assert_eq!(resolve_pane_workspace("relative/path"), None);
-        assert_eq!(resolve_pane_workspace("/no/such/qmux/dir"), None);
+        assert_eq!(resolve_pane_workspace("/no/such/session/dir"), None);
 
         fs::remove_dir_all(workspace).ok();
     }
@@ -3480,7 +3482,7 @@ mod tests {
         };
         git(&repo, &["init", "-b", "main"]);
         git(&repo, &["config", "user.email", "test@example.com"]);
-        git(&repo, &["config", "user.name", "qmux test"]);
+        git(&repo, &["config", "user.name", "session test"]);
         git(&repo, &["commit", "--allow-empty", "-m", "init"]);
         git(
             &repo,
@@ -3523,7 +3525,7 @@ mod tests {
         persistence::save_preferences(
             &state.config().workspace_root,
             &persistence::AppPreferences {
-                worktree_location: Some(WorktreeLocation::LocalQmux),
+                worktree_location: Some(WorktreeLocation::LocalSession),
                 ..Default::default()
             },
         )
@@ -3537,24 +3539,24 @@ mod tests {
                 &group,
             )
             .unwrap(),
-            Some(fs::canonicalize(&repo).unwrap().join(".qmux/worktrees"))
+            Some(fs::canonicalize(&repo).unwrap().join(".session/worktrees"))
         );
         let created = create_shell_worktree(
             &state,
             &Host::Local,
             &group,
             linked.to_str().unwrap(),
-            "qmux-feature-shell",
+            "session-feature-shell",
         )
         .unwrap();
         let canonical_repo = fs::canonicalize(&repo).unwrap();
         let canonical_created = fs::canonicalize(&created).unwrap();
         assert_eq!(
             created.file_name().and_then(|name| name.to_str()),
-            Some("qmux-feature-shell")
+            Some("session-feature-shell")
         );
         assert!(
-            canonical_created.starts_with(canonical_repo.join(".qmux/worktrees")),
+            canonical_created.starts_with(canonical_repo.join(".session/worktrees")),
             "{canonical_created:?}"
         );
         assert!(
@@ -3586,18 +3588,22 @@ mod tests {
         .unwrap()
         .trim()
         .to_string();
-        assert_eq!(created_branch, "qmux-feature-shell");
+        assert_eq!(created_branch, "session-feature-shell");
 
         let collision = create_shell_worktree(
             &state,
             &Host::Local,
             &group,
             linked.to_str().unwrap(),
-            "qmux-feature-shell",
+            "session-feature-shell",
         )
         .unwrap_err();
         assert!(collision.contains("already exists"), "{collision}");
-        assert!(!repo.join(".qmux/worktrees/qmux-feature-shell-1").exists());
+        assert!(
+            !repo
+                .join(".session/worktrees/session-feature-shell-1")
+                .exists()
+        );
 
         persistence::save_preferences(
             &state.config().workspace_root,
@@ -3622,17 +3628,17 @@ mod tests {
             &Host::Local,
             &group,
             linked.to_str().unwrap(),
-            "qmux-global-shell",
+            "session-global-shell",
         )
         .unwrap();
-        assert_eq!(global_created, managed.join("qmux-global-shell"));
+        assert_eq!(global_created, managed.join("session-global-shell"));
 
         let err = create_shell_worktree(
             &state,
             &Host::Local,
             &group,
             workspace.to_str().unwrap(),
-            "qmux-invalid-shell",
+            "session-invalid-shell",
         )
         .unwrap_err();
         assert!(err.contains("not inside a git repository"), "{err}");
@@ -3672,7 +3678,7 @@ mod tests {
         };
         git(&repo, &["init", "-b", "main"]);
         git(&repo, &["config", "user.email", "test@example.com"]);
-        git(&repo, &["config", "user.name", "qmux test"]);
+        git(&repo, &["config", "user.name", "session test"]);
         git(&repo, &["commit", "--allow-empty", "-m", "init"]);
         git(&repo, &["branch", "feature/available"]);
         git(&repo, &["remote", "add", "origin", "."]);
@@ -3702,7 +3708,7 @@ mod tests {
         persistence::save_preferences(
             &state.config().workspace_root,
             &persistence::AppPreferences {
-                worktree_location: Some(WorktreeLocation::LocalQmux),
+                worktree_location: Some(WorktreeLocation::LocalSession),
                 ..Default::default()
             },
         )
@@ -3760,7 +3766,7 @@ mod tests {
 
     #[test]
     fn suggested_shell_worktree_name_includes_the_group_name() {
-        let group = allocation_group(Path::new("/tmp/qmux"), Path::new("/tmp/managed"));
+        let group = allocation_group(Path::new("/tmp/session"), Path::new("/tmp/managed"));
         let name = suggested_shell_worktree_name(&group);
         assert!(name.starts_with("brave-otter-"), "{name}");
         assert!(validate_worktree_name(&name).is_ok());
@@ -3788,14 +3794,14 @@ mod tests {
         };
         git(&["init", "-b", "main"]);
         git(&["config", "user.email", "test@example.com"]);
-        git(&["config", "user.name", "qmux test"]);
+        git(&["config", "user.name", "session test"]);
         git(&["commit", "--allow-empty", "-m", "init"]);
 
         let state = test_state_with_workspace(workspace.join("state"));
         persistence::save_preferences(
             &state.config().workspace_root,
             &persistence::AppPreferences {
-                worktree_location: Some(WorktreeLocation::LocalQmux),
+                worktree_location: Some(WorktreeLocation::LocalSession),
                 ..Default::default()
             },
         )
@@ -3855,7 +3861,7 @@ mod tests {
         );
         assert_eq!(
             resolve_active_workspace(
-                "/definitely/missing/qmux-command-directory",
+                "/definitely/missing/session-command-directory",
                 ActiveWorkspaceSource::Claude,
                 false,
             ),
@@ -3897,7 +3903,7 @@ mod tests {
         )
         .unwrap();
         let managed_dir = PathBuf::from(&group.managed_dir);
-        assert!(managed_dir.join(".qmux/group.json").is_file());
+        assert!(managed_dir.join(".session/group.json").is_file());
 
         remove_pristine_group_scaffold(&group);
 
@@ -3935,10 +3941,10 @@ mod tests {
         assert!(managed_dir.is_dir());
         // All-or-nothing: a directory that survives keeps the manifest that
         // says what it is, rather than being left unidentifiable.
-        assert!(managed_dir.join(".qmux/group.json").is_file());
+        assert!(managed_dir.join(".session/group.json").is_file());
     }
 
-    // The same guarantee one level down: scratch left in `.qmux` by a manifest
+    // The same guarantee one level down: scratch left in `.session` by a manifest
     // writer that died mid-rename must not cost the group its manifest either.
     #[test]
     fn rolled_back_group_scaffold_preserves_stranded_manifest_scratch() {
@@ -3961,13 +3967,13 @@ mod tests {
         )
         .unwrap();
         let managed_dir = PathBuf::from(&group.managed_dir);
-        let scratch = managed_dir.join(".qmux/.group.json.tmp-1234-0");
+        let scratch = managed_dir.join(".session/.group.json.tmp-1234-0");
         std::fs::write(&scratch, "partial").unwrap();
 
         remove_pristine_group_scaffold(&group);
 
         assert!(scratch.is_file());
-        assert!(managed_dir.join(".qmux/group.json").is_file());
+        assert!(managed_dir.join(".session/group.json").is_file());
     }
 
     fn sample_agent(id: &str, pane_id: Option<&str>, status: AgentStatus) -> AgentInfo {
@@ -3975,7 +3981,7 @@ mod tests {
             id: id.to_string(),
             group_id: "group-1".to_string(),
             adapter: "claude".to_string(),
-            worktree_dir: "/tmp/qmux-workspace-tests".to_string(),
+            worktree_dir: "/tmp/session-workspace-tests".to_string(),
             branch: None,
             active_workspace: None,
             pane_id: pane_id.map(ToString::to_string),
@@ -4237,11 +4243,11 @@ mod tests {
     }
 
     #[test]
-    fn session_start_recovery_only_preserves_qmux_agent_ids() {
-        assert!(is_qmux_agent_id("agent-1784252381261-2616"));
-        assert!(!is_qmux_agent_id("agent-stale"));
-        assert!(!is_qmux_agent_id("../agent-1-2"));
-        assert!(!is_qmux_agent_id("agent-1-2-extra"));
+    fn session_start_recovery_only_preserves_session_agent_ids() {
+        assert!(is_session_agent_id("agent-1784252381261-2616"));
+        assert!(!is_session_agent_id("agent-stale"));
+        assert!(!is_session_agent_id("../agent-1-2"));
+        assert!(!is_session_agent_id("agent-1-2-extra"));
     }
 
     #[test]
@@ -4269,7 +4275,7 @@ mod tests {
         let renamed = rename_group(&state, &group.id, Some("  Research  ".to_string())).unwrap();
 
         assert_eq!(renamed.name_override.as_deref(), Some("Research"));
-        let manifest_path = PathBuf::from(&renamed.managed_dir).join(".qmux/group.json");
+        let manifest_path = PathBuf::from(&renamed.managed_dir).join(".session/group.json");
         let manifest: GroupInfo =
             serde_json::from_str(&std::fs::read_to_string(manifest_path).unwrap()).unwrap();
         assert_eq!(manifest.name_override.as_deref(), Some("Research"));
@@ -4315,7 +4321,7 @@ mod tests {
 
     #[test]
     fn default_research_workspace_is_scoped_persistent_and_idempotent() {
-        let root = std::env::temp_dir().join(format!("qmux-default-research-{}", now_millis()));
+        let root = std::env::temp_dir().join(format!("session-default-research-{}", now_millis()));
         let state = test_state_with_workspace(root.clone());
 
         let first = ensure_default_research_workspace(&state).unwrap();
@@ -4625,7 +4631,7 @@ mod tests {
         .unwrap();
         let error =
             create_research_workspace(&state, None, project.display().to_string()).unwrap_err();
-        assert!(error.contains("newer qmux"), "{error}");
+        assert!(error.contains("newer session"), "{error}");
         assert!(
             error.contains(&archive_dir.display().to_string()),
             "{error}"
@@ -4688,7 +4694,7 @@ mod tests {
                 .display()
                 .to_string()
         );
-        // Neither folder gains or loses anything: no `.qmux` appears, the
+        // Neither folder gains or loses anything: no `.session` appears, the
         // source keeps its contents, and the destination keeps its own.
         assert!(source.join("draft.md").is_file());
         assert!(!source.join(crate::persistence::STATE_DIR).exists());
@@ -5095,7 +5101,7 @@ mod tests {
         let collapsed = set_group_collapsed(&state, &group.id, true).unwrap();
 
         assert!(collapsed.collapsed);
-        let manifest_path = PathBuf::from(&collapsed.managed_dir).join(".qmux/group.json");
+        let manifest_path = PathBuf::from(&collapsed.managed_dir).join(".session/group.json");
         let manifest: GroupInfo =
             serde_json::from_str(&std::fs::read_to_string(manifest_path).unwrap()).unwrap();
         assert!(manifest.collapsed);
@@ -5448,8 +5454,8 @@ mod tests {
     }
 
     #[test]
-    fn allocates_non_git_worktrees_in_local_qmux_root() {
-        let workspace = temp_workspace("local-qmux");
+    fn allocates_non_git_worktrees_in_local_session_root() {
+        let workspace = temp_workspace("local-session");
         let project = workspace.join("project");
         let managed = workspace.join("managed/group");
         fs::create_dir_all(&project).unwrap();
@@ -5458,7 +5464,7 @@ mod tests {
         persistence::save_preferences(
             &state.config().workspace_root,
             &persistence::AppPreferences {
-                worktree_location: Some(WorktreeLocation::LocalQmux),
+                worktree_location: Some(WorktreeLocation::LocalSession),
                 ..Default::default()
             },
         )
@@ -5486,7 +5492,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             first,
-            canonical_project.join(".qmux/worktrees/brave-otter-agent-1")
+            canonical_project.join(".session/worktrees/brave-otter-agent-1")
         );
         fs::create_dir_all(&first).unwrap();
         let collision = allocate_agent_worktree_dir(
@@ -5499,7 +5505,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             collision,
-            canonical_project.join(".qmux/worktrees/brave-otter-agent-1-1")
+            canonical_project.join(".session/worktrees/brave-otter-agent-1-1")
         );
         fs::remove_dir_all(workspace).ok();
     }
@@ -5515,7 +5521,7 @@ mod tests {
         persistence::save_preferences(
             &state.config().workspace_root,
             &persistence::AppPreferences {
-                worktree_location: Some(WorktreeLocation::LocalQmux),
+                worktree_location: Some(WorktreeLocation::LocalSession),
                 ..Default::default()
             },
         )
@@ -5650,7 +5656,7 @@ mod tests {
 
     #[test]
     fn soft_delete_branch_removes_merged_keeps_unmerged() {
-        let repo = std::env::temp_dir().join(format!("qmux-branch-{}", now_millis()));
+        let repo = std::env::temp_dir().join(format!("session-branch-{}", now_millis()));
         fs::create_dir_all(&repo).unwrap();
         let repo_str = repo.to_string_lossy().to_string();
 
@@ -5670,7 +5676,7 @@ mod tests {
 
         git(&["init", "-b", "main"]);
         git(&["config", "user.email", "test@example.com"]);
-        git(&["config", "user.name", "qmux test"]);
+        git(&["config", "user.name", "session test"]);
         git(&["commit", "--allow-empty", "-m", "init"]);
 
         // A branch at HEAD is fully merged, so the soft delete removes it.

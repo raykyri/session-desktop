@@ -11,12 +11,12 @@ mod muse;
 mod public_cli;
 pub mod transcript_stream;
 
+use serde::Deserialize;
+use serde_json::{Value, json};
 use session_proto::{
     BrowserOpenFileHeader, ControlRequest, ControlResponse, MAX_REMOTE_OPEN_FILE_BYTES,
     WorkspaceObservation, WorkspaceObservationKind,
 };
-use serde::Deserialize;
-use serde_json::{Value, json};
 use std::env;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
@@ -183,7 +183,9 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
                 "activeWorkspace": inspect_workspace(&cwd),
             });
             if initial && env::var("SESSION_REMOTE").ok().as_deref() == Some("1") {
-                retry_initial_remote_report(|| request_silent("pane.set_workspace", payload.clone()))?;
+                retry_initial_remote_report(|| {
+                    request_silent("pane.set_workspace", payload.clone())
+                })?;
             } else {
                 request_silent("pane.set_workspace", payload)?;
             }
@@ -448,7 +450,8 @@ fn request_remote_file_open(target: &str) -> Result<(), String> {
         return Err(format!("'{name}' is not a browser-previewable file"));
     }
 
-    let socket_path = env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
+    let socket_path =
+        env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
     let token = env::var("SESSION_TOKEN").map_err(|_| "SESSION_TOKEN is not set".to_string())?;
     let mut stream = UnixStream::connect(&socket_path)
         .map_err(|err| format!("failed to connect to {socket_path}: {err}"))?;
@@ -652,8 +655,10 @@ fn notification_socket_path() -> Result<PathBuf, String> {
         return Ok(path);
     }
     dirs::runtime_dir()
-        .map(|root| root.join("qmux").join("session.sock"))
-        .or_else(|| dirs::data_dir().map(|root| root.join("qmux").join("run").join("session.sock")))
+        .map(|root| root.join("session").join("session.sock"))
+        .or_else(|| {
+            dirs::data_dir().map(|root| root.join("session").join("run").join("session.sock"))
+        })
         .ok_or_else(|| {
             "could not locate Session's control socket; set SESSION_SOCK explicitly".to_string()
         })
@@ -670,7 +675,7 @@ fn configured_notification_socket_path() -> Result<Option<PathBuf>, String> {
             cwd.join(path)
         })
     } else if cfg!(debug_assertions) {
-        let path = cwd.join("qmux.config.json");
+        let path = cwd.join("session.config.json");
         path.exists().then_some(path)
     } else {
         None
@@ -727,14 +732,17 @@ fn resolve_notification_socket_path(
         return config_dir.join(configured);
     }
     dirs::runtime_dir()
-        .map(|root| root.join("qmux").join("session.sock"))
-        .or_else(|| dirs::data_dir().map(|root| root.join("qmux").join("run").join("session.sock")))
+        .map(|root| root.join("session").join("session.sock"))
+        .or_else(|| {
+            dirs::data_dir().map(|root| root.join("session").join("run").join("session.sock"))
+        })
         .unwrap_or_else(|| config_dir.join(configured))
 }
 
 fn run_agent_exec(adapter_id: String, args: Vec<String>) -> Result<(), String> {
-    let pane_id = env::var("SESSION_PANE_ID")
-        .map_err(|_| "SESSION_PANE_ID is not set; run this from a Session shell pane".to_string())?;
+    let pane_id = env::var("SESSION_PANE_ID").map_err(|_| {
+        "SESSION_PANE_ID is not set; run this from a Session shell pane".to_string()
+    })?;
     let cwd = env::current_dir()
         .map_err(|err| format!("failed to read current directory for agent launch: {err}"))?;
     let supervisor_pid = std::process::id();
@@ -889,7 +897,8 @@ pub(crate) fn request_public(
     operation: &str,
     arguments: Value,
 ) -> Result<session_proto::PublicControlResponse, String> {
-    let socket_path = env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
+    let socket_path =
+        env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
     let token = env::var("SESSION_USER_TOKEN")
         .or_else(|_| env::var("SESSION_TOKEN"))
         .map_err(|_| "neither SESSION_USER_TOKEN nor SESSION_TOKEN is set".to_string())?;
@@ -949,7 +958,8 @@ fn request_with_timeout(
     payload: Value,
     timeout: Duration,
 ) -> Result<String, String> {
-    let socket_path = env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
+    let socket_path =
+        env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
     let token = env::var("SESSION_TOKEN").map_err(|_| "SESSION_TOKEN is not set".to_string())?;
     send_request_with_timeout(&socket_path, &token, command, payload, timeout)
 }
@@ -1136,7 +1146,7 @@ mod tests {
         };
         git(&repo, &["init", "-b", "main"]);
         git(&repo, &["config", "user.email", "test@example.com"]);
-        git(&repo, &["config", "user.name", "qmux test"]);
+        git(&repo, &["config", "user.name", "session test"]);
         git(&repo, &["commit", "--allow-empty", "-m", "init"]);
         git(
             &repo,

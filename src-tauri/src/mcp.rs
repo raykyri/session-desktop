@@ -29,7 +29,7 @@ pub fn handle_call(
 ) -> Result<Value, String> {
     let caller = state
         .agent_by_pane(authed_pane)?
-        .ok_or_else(|| "qmux MCP is available only inside an active agent pane".to_string())?;
+        .ok_or_else(|| "session MCP is available only inside an active agent pane".to_string())?;
     let agents = state
         .list_agents()?
         .into_iter()
@@ -51,7 +51,7 @@ pub fn handle_call(
         "release_agent" => release_agent(state, &caller, &graph, arguments),
         "get_artifacts" => get_artifacts(state, &caller, &graph, arguments),
         "report_to_parent" => report_to_parent(state, &caller, arguments),
-        other => Err(format!("unknown qmux MCP tool '{other}'")),
+        other => Err(format!("unknown session MCP tool '{other}'")),
     }
 }
 
@@ -467,7 +467,7 @@ fn report_to_parent(
     let parent_id = caller
         .parent_id
         .as_deref()
-        .ok_or_else(|| "this agent has no qmux parent".to_string())?;
+        .ok_or_else(|| "this agent has no session parent".to_string())?;
     let mut text = format!(
         "[report from agent {} · status: {}]\n\nSummary: {}",
         caller.id,

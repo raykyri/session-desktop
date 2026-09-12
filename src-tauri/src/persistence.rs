@@ -50,7 +50,7 @@ const MIN_MIGRATABLE_STATE_VERSION: u32 = 2;
 const STATE_FILE: &str = "state.json";
 const PREFERENCES_FILE: &str = "preferences.json";
 const V2_BACKUP_FILE: &str = "state.v2.bak";
-pub(crate) const STATE_DIR: &str = ".qmux";
+pub(crate) const STATE_DIR: &str = ".session";
 
 /// Snapshot of everything a Session restart needs to recreate panes, agents,
 /// groups and queued turns. Live PTY handles are intentionally absent: a
@@ -102,7 +102,7 @@ pub struct PersistedState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_tab_id: Option<String>,
     /// Per-thread routing and storage metadata. The thread snapshot itself lives in
-    /// `<workspaceRoot>/.qmux/threads/<thread-id>.json`; this tells Session where to find
+    /// `<workspaceRoot>/.session/threads/<thread-id>.json`; this tells Session where to find
     /// it and what branch a default view should focus.
     #[serde(default)]
     pub threads: HashMap<String, ThreadRecord>,
@@ -173,7 +173,7 @@ pub fn state_path(workspace_root: &Path) -> PathBuf {
 pub enum WorktreeLocation {
     #[default]
     Global,
-    LocalQmux,
+    LocalSession,
     LocalClaude,
 }
 
@@ -181,7 +181,7 @@ pub enum WorktreeLocation {
 #[serde(rename_all = "camelCase")]
 pub struct AppPreferences {
     /// Remotes created and managed through the settings UI. Explicit entries
-    /// in `qmux.config.json` remain authoritative on an id collision.
+    /// in `session.config.json` remain authoritative on an id collision.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub remotes: std::collections::BTreeMap<String, crate::config::SavedRemote>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -459,7 +459,7 @@ pub fn preflight_state(workspace_root: &Path) -> Result<Option<Vec<u8>>, String>
                  \x20 • File on iCloud/a network volume: wait for the volume to come back online.\n\n\
                  To start fresh on purpose instead — your current session file is moved aside to a \
                  .bak first, so nothing is lost — relaunch with:\n\
-                 \x20 SESSION_RESET_STATE=1 open -a qmux",
+                 \x20 SESSION_RESET_STATE=1 open -a session",
                 path = path.display()
             ));
         }
@@ -487,7 +487,7 @@ pub fn preflight_state(workspace_root: &Path) -> Result<Option<Vec<u8>>, String>
                 Ok(None)
             }
             Err(rename_err) => Err(format!(
-                "persisted state {} was written by a newer qmux (state version {version}) and could not be moved aside to reset: {rename_err}",
+                "persisted state {} was written by a newer session (state version {version}) and could not be moved aside to reset: {rename_err}",
                 path.display()
             )),
         };
@@ -500,7 +500,7 @@ pub fn preflight_state(workspace_root: &Path) -> Result<Option<Vec<u8>>, String>
          start. Launch the newer Session instead, or update this copy.\n\n\
          To start fresh on purpose — your current session file is moved aside to a .bak \
          first, so nothing is lost — relaunch with:\n\
-         \x20 SESSION_RESET_STATE=1 open -a qmux",
+         \x20 SESSION_RESET_STATE=1 open -a session",
         path = path.display()
     ))
 }
@@ -1156,7 +1156,7 @@ mod tests {
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
         let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("qmux-persist-{nanos}-{seq}"));
+        let dir = std::env::temp_dir().join(format!("session-persist-{nanos}-{seq}"));
         fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -1229,7 +1229,7 @@ mod tests {
         let remote = crate::config::SavedRemote {
             host: "user@devbox".to_string(),
             label: Some("Dev box".to_string()),
-            workspace_root: Some("/srv/qmux".to_string()),
+            workspace_root: Some("/srv/session".to_string()),
             ..Default::default()
         };
         save_preferences(
@@ -1480,7 +1480,7 @@ mod tests {
                     "id": "group-1",
                     "name": "work",
                     "dir": "/tmp/work",
-                    "managedDir": "/tmp/qmux/group-1",
+                    "managedDir": "/tmp/session/group-1",
                     "baseRepo": null,
                     "baseRef": null,
                     "parentId": null,

@@ -7,7 +7,7 @@ const store = new Map<string, string>();
   getItem: (key: string) => store.get(key) ?? null,
   setItem: (key: string, value: string) => store.set(key, value),
 };
-const key = "qmux.settings.v1";
+const key = "session.settings.v1";
 
 test("retired local title provider does not enable a remote provider", () => {
   store.set(key, JSON.stringify({

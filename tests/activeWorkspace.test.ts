@@ -17,8 +17,8 @@ function agent(overrides: Partial<AgentInfo> = {}): AgentInfo {
     id: "agent-1",
     groupId: "group-1",
     adapter: "codex",
-    worktreeDir: "/repo/.qmux/worktrees/agent-1",
-    branch: "qmux/agent-1",
+    worktreeDir: "/repo/.session/worktrees/agent-1",
+    branch: "session/agent-1",
     status: "running",
     paused: false,
     createdAt: 1,
@@ -54,7 +54,7 @@ test("live command cwd and branch override launch metadata for display", () => {
       branch: "feature/other",
       kind: "linkedWorktree",
       source: "codex",
-      managedByQmux: false,
+      managedBySession: false,
     },
   });
 
@@ -63,7 +63,7 @@ test("live command cwd and branch override launch metadata for display", () => {
   assert.equal(agentDisplayWorktreeRoot(current), "/repo/other");
 });
 
-test("main checkout does not masquerade as the Qmux launch worktree", () => {
+test("main checkout does not masquerade as the Session launch worktree", () => {
   const current = agent({
     activeWorkspace: {
       cwd: "/repo/src",
@@ -71,7 +71,7 @@ test("main checkout does not masquerade as the Qmux launch worktree", () => {
       branch: "main",
       kind: "mainCheckout",
       source: "claude",
-      managedByQmux: false,
+      managedBySession: false,
     },
   });
 
@@ -88,7 +88,7 @@ test("an observed branchless directory does not inherit the launch branch", () =
       branch: null,
       kind: "directory",
       source: "codex",
-      managedByQmux: false,
+      managedBySession: false,
     },
   });
 
@@ -107,14 +107,14 @@ test("older agent payloads retain launch-directory fallbacks", () => {
 
 test("macOS /private/tmp aliases do not show a redundant Launch directory", () => {
   const current = agent({
-    worktreeDir: "/tmp/qmux-worktree",
+    worktreeDir: "/tmp/session-worktree",
     activeWorkspace: {
-      cwd: "/private/tmp/qmux-worktree",
-      gitRoot: "/private/tmp/qmux-worktree",
-      branch: "qmux/agent-1",
+      cwd: "/private/tmp/session-worktree",
+      gitRoot: "/private/tmp/session-worktree",
+      branch: "session/agent-1",
       kind: "linkedWorktree",
       source: "codex",
-      managedByQmux: true,
+      managedBySession: true,
     },
   });
 
@@ -122,14 +122,14 @@ test("macOS /private/tmp aliases do not show a redundant Launch directory", () =
   assert.equal(
     agentShowsLaunchDirectory(
       agent({
-        worktreeDir: "/tmp/qmux-worktree/",
+        worktreeDir: "/tmp/session-worktree/",
         activeWorkspace: {
-          cwd: "/private/tmp/qmux-worktree",
+          cwd: "/private/tmp/session-worktree",
           gitRoot: null,
           branch: null,
           kind: "directory",
           source: "codex",
-          managedByQmux: false,
+          managedBySession: false,
         },
       }),
     ),
@@ -139,14 +139,14 @@ test("macOS /private/tmp aliases do not show a redundant Launch directory", () =
 
 test("a nested command cwd still shows the launch directory", () => {
   const current = agent({
-    worktreeDir: "/tmp/qmux-worktree",
+    worktreeDir: "/tmp/session-worktree",
     activeWorkspace: {
-      cwd: "/tmp/qmux-worktree/packages/app",
-      gitRoot: "/tmp/qmux-worktree",
-      branch: "qmux/agent-1",
+      cwd: "/tmp/session-worktree/packages/app",
+      gitRoot: "/tmp/session-worktree",
+      branch: "session/agent-1",
       kind: "linkedWorktree",
       source: "codex",
-      managedByQmux: true,
+      managedBySession: true,
     },
   });
 
@@ -160,8 +160,8 @@ test("a branch tab names a checkout different from the first tab", () => {
       gitRoot: "/repo/app",
       branch: "main",
       kind: "mainCheckout",
-      source: "qmux",
-      managedByQmux: false,
+      source: "session",
+      managedBySession: false,
     },
   });
   const other = pane({
@@ -172,8 +172,8 @@ test("a branch tab names a checkout different from the first tab", () => {
       gitRoot: "/repo/tools",
       branch: "main",
       kind: "mainCheckout",
-      source: "qmux",
-      managedByQmux: false,
+      source: "session",
+      managedBySession: false,
     },
   });
 
@@ -190,8 +190,8 @@ test("branch tabs in the first tab's checkout do not repeat its root", () => {
       gitRoot: "/repo",
       branch: "feature/app",
       kind: "mainCheckout",
-      source: "qmux",
-      managedByQmux: false,
+      source: "session",
+      managedBySession: false,
     },
   });
 
@@ -208,8 +208,8 @@ test("branch location comparison falls back to a non-Git first tab cwd", () => {
       gitRoot: "/repo/app",
       branch: "feature/app",
       kind: "mainCheckout",
-      source: "qmux",
-      managedByQmux: false,
+      source: "session",
+      managedBySession: false,
     },
   });
 
@@ -225,7 +225,7 @@ test("agent branch locations use live checkout roots", () => {
       branch: "feature/tools",
       kind: "mainCheckout",
       source: "codex",
-      managedByQmux: false,
+      managedBySession: false,
     },
   });
 
@@ -242,8 +242,8 @@ test("branchless tabs do not get a checkout label", () => {
       gitRoot: "/repo/detached",
       branch: null,
       kind: "linkedWorktree",
-      source: "qmux",
-      managedByQmux: false,
+      source: "session",
+      managedBySession: false,
     },
   });
 
@@ -252,14 +252,14 @@ test("branchless tabs do not get a checkout label", () => {
 
 test("a recovered first shell in a worktree does not relabel the group's checkout", () => {
   const recovered = pane({
-    cwd: "/repo/.qmux/worktrees/agent-1",
+    cwd: "/repo/.session/worktrees/agent-1",
     activeWorkspace: {
-      cwd: "/repo/.qmux/worktrees/agent-1",
-      gitRoot: "/repo/.qmux/worktrees/agent-1",
-      branch: "qmux/agent-1",
+      cwd: "/repo/.session/worktrees/agent-1",
+      gitRoot: "/repo/.session/worktrees/agent-1",
+      branch: "session/agent-1",
       kind: "linkedWorktree",
-      source: "qmux",
-      managedByQmux: true,
+      source: "session",
+      managedBySession: true,
     },
   });
   const main = pane({
@@ -270,8 +270,8 @@ test("a recovered first shell in a worktree does not relabel the group's checkou
       gitRoot: "/repo",
       branch: "main",
       kind: "mainCheckout",
-      source: "qmux",
-      managedByQmux: false,
+      source: "session",
+      managedBySession: false,
     },
   });
 
@@ -292,8 +292,8 @@ test("other checkouts still label when the first tab has no git metadata after r
       gitRoot: "/other",
       branch: "main",
       kind: "mainCheckout",
-      source: "qmux",
-      managedByQmux: false,
+      source: "session",
+      managedBySession: false,
     },
   });
 
@@ -308,8 +308,8 @@ test("other checkouts still label when the first tab has no git metadata after r
           gitRoot: "/repo",
           branch: "feature/app",
           kind: "mainCheckout",
-          source: "qmux",
-          managedByQmux: false,
+          source: "session",
+          managedBySession: false,
         },
       }),
       undefined,

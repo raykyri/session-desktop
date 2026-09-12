@@ -42,9 +42,9 @@ test("removes nested and consecutive tagged instruction blocks", () => {
 
 test("removes the attributed session agent-driver instruction block", () => {
   const message = [
-    '<qmux_instruction source="agent_driver">',
+    '<session_instruction source="agent_driver">',
     "Do not change the working tree or codebase unless explicitly instructed to.",
-    "</qmux_instruction>",
+    "</session_instruction>",
     "Inspect the failing request.",
   ].join("\n");
 
@@ -178,7 +178,7 @@ test("generic tagged-block stripping preserves fenced and indented code", () => 
 // block — leading normally, trailing when the prompt begins with a slash
 // command. Both forms must strip back to the user's own words in the
 // user-message display/copy path and in previews, like any other
-// qmux-injected instruction block.
+// session-injected instruction block.
 test("strips the research launch instruction block the backend prepends", () => {
   const sent = [
     "<research-instructions>",

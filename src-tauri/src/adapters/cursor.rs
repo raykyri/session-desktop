@@ -64,7 +64,7 @@ impl CursorAdapter {
     fn ensure_binary(&self) -> Result<String, String> {
         let binary = ensure_on_path(&self.binary).ok_or_else(|| {
             format!(
-                "Cursor adapter binary '{}' was not found on PATH or standard macOS tool paths. Install Cursor Agent (`cursor-agent`) or update adapters.cursor.binary in qmux.config.json.",
+                "Cursor adapter binary '{}' was not found on PATH or standard macOS tool paths. Install Cursor Agent (`cursor-agent`) or update adapters.cursor.binary in session.config.json.",
                 self.binary
             )
         })?;
@@ -1089,7 +1089,7 @@ fn ensure_source_cursor_plugin(source: &Path) -> Result<(), String> {
     let hooks = source.join("hooks").join("hooks.json");
     if !source.is_dir() || !manifest.is_file() || !hooks.is_file() {
         return Err(format!(
-            "Cursor integration plugin was not found at {}. Reinstall qmux or set SESSION_CURSOR_PLUGIN_DIR to the bundled qmux-cursor-plugin directory.",
+            "Cursor integration plugin was not found at {}. Reinstall session or set SESSION_CURSOR_PLUGIN_DIR to the bundled session-cursor-plugin directory.",
             source.display()
         ));
     }
@@ -1107,7 +1107,7 @@ pub(crate) fn cursor_integration_home() -> Result<PathBuf, String> {
             "XDG_DATA_HOME and HOME are not set; cannot configure the Cursor integration"
                 .to_string()
         })?;
-    Ok(data_home.join("qmux").join("cursor"))
+    Ok(data_home.join("session").join("cursor"))
 }
 
 fn cursor_bindings_dir() -> Result<PathBuf, String> {
@@ -1133,7 +1133,10 @@ fn ensure_cursor_plugin_overlay(source: &Path) -> Result<PathBuf, String> {
     ]);
     let stamp_path = home.join("installed.stamp");
     if file_matches(&stamp_path, &fingerprint)
-        && plugin_dir.join("scripts").join("qmux-notify.sh").is_file()
+        && plugin_dir
+            .join("scripts")
+            .join("session-notify.sh")
+            .is_file()
     {
         return Ok(plugin_dir);
     }
@@ -1151,7 +1154,7 @@ fn ensure_cursor_plugin_overlay(source: &Path) -> Result<PathBuf, String> {
         &manifest,
     )?;
     write_if_changed(&plugin_dir.join("hooks").join("hooks.json"), &hooks)?;
-    let shim_path = plugin_dir.join("scripts").join("qmux-notify.sh");
+    let shim_path = plugin_dir.join("scripts").join("session-notify.sh");
     write_if_changed(&shim_path, &shim)?;
     fs::set_permissions(&shim_path, fs::Permissions::from_mode(0o755))
         .map_err(|err| format!("failed to chmod {}: {err}", shim_path.display()))?;
@@ -1390,12 +1393,12 @@ mod tests {
     #[test]
     fn project_slug_strips_leading_slash_and_replaces_separators() {
         assert_eq!(
-            cursor_project_slug("/tmp/qmux-cursor-spike/workspace"),
-            "tmp-qmux-cursor-spike-workspace"
+            cursor_project_slug("/tmp/session-cursor-spike/workspace"),
+            "tmp-session-cursor-spike-workspace"
         );
         assert_eq!(
-            cursor_project_slug("/Users/raymond/Code/qmux/"),
-            "Users-raymond-Code-qmux"
+            cursor_project_slug("/Users/raymond/Code/session/"),
+            "Users-raymond-Code-session"
         );
     }
 
@@ -1403,13 +1406,13 @@ mod tests {
     fn transcript_path_uses_home_slug_and_session_id() {
         let path = cursor_transcript_path(
             Path::new("/Users/raymond"),
-            "/tmp/qmux-cursor-spike/workspace",
+            "/tmp/session-cursor-spike/workspace",
             "d68b3651-d521-4263-aad5-5cabcb413035",
         );
         assert_eq!(
             path,
             PathBuf::from(
-                "/Users/raymond/.cursor/projects/tmp-qmux-cursor-spike-workspace/agent-transcripts/d68b3651-d521-4263-aad5-5cabcb413035/d68b3651-d521-4263-aad5-5cabcb413035.jsonl"
+                "/Users/raymond/.cursor/projects/tmp-session-cursor-spike-workspace/agent-transcripts/d68b3651-d521-4263-aad5-5cabcb413035/d68b3651-d521-4263-aad5-5cabcb413035.jsonl"
             )
         );
     }
@@ -1520,7 +1523,7 @@ mod tests {
     #[test]
     fn launch_args_inject_plugin_workspace_and_delimited_prompt() {
         let args = build_cursor_args(
-            PathBuf::from("/opt/qmux-cursor-plugin"),
+            PathBuf::from("/opt/session-cursor-plugin"),
             Path::new("/tmp/work"),
             Some("composer-2.5"),
             Some("plan"),
@@ -1532,7 +1535,7 @@ mod tests {
             args,
             vec![
                 "--plugin-dir",
-                "/opt/qmux-cursor-plugin",
+                "/opt/session-cursor-plugin",
                 "--workspace",
                 "/tmp/work",
                 "--model",
@@ -1548,7 +1551,7 @@ mod tests {
     #[test]
     fn resume_args_pass_session_id_without_a_prompt() {
         let (args, resumed) = build_cursor_resume_args(
-            PathBuf::from("/opt/qmux-cursor-plugin"),
+            PathBuf::from("/opt/session-cursor-plugin"),
             Path::new("/tmp/work"),
             None,
             Some("plan"),
@@ -1571,12 +1574,12 @@ mod tests {
     #[test]
     fn generated_hook_shim_forwards_without_needing_the_environment() {
         let shim = cursor_hook_shim(
-            Path::new("/Applications/qmux.app/qmux"),
-            Path::new("/data/qmux/cursor/bindings"),
+            Path::new("/Applications/session.app/session"),
+            Path::new("/data/session/cursor/bindings"),
         );
         assert!(shim.contains("cursor-notify"));
-        assert!(shim.contains("'/Applications/qmux.app/qmux'"));
-        assert!(shim.contains("'/data/qmux/cursor/bindings'"));
+        assert!(shim.contains("'/Applications/session.app/session'"));
+        assert!(shim.contains("'/data/session/cursor/bindings'"));
         assert!(!shim.contains("SESSION_SOCK"));
         assert!(shim.contains("printf '%s\\n' '{}'"));
     }
@@ -1645,7 +1648,7 @@ mod tests {
         assert!(err.contains("plan or ask"), "{err}");
 
         let err = build_cursor_args(
-            PathBuf::from("/opt/qmux-cursor-plugin"),
+            PathBuf::from("/opt/session-cursor-plugin"),
             Path::new("/tmp/work"),
             None,
             Some("yolo"),
@@ -1675,8 +1678,8 @@ mod tests {
     fn test_state() -> AppState {
         AppState::new(SessionConfig {
             remotes: Default::default(),
-            workspace_root: PathBuf::from("/tmp/qmux-cursor-test"),
-            socket_path: PathBuf::from("/tmp/qmux-cursor-test.sock"),
+            workspace_root: PathBuf::from("/tmp/session-cursor-test"),
+            socket_path: PathBuf::from("/tmp/session-cursor-test.sock"),
             adapters: Default::default(),
             legacy_claude_binary: None,
             claude_plugin_dir: PathBuf::new(),
@@ -1691,7 +1694,7 @@ mod tests {
             id: "agent-1".to_string(),
             group_id: "group-1".to_string(),
             adapter: "cursor".to_string(),
-            worktree_dir: "/tmp/qmux-cursor-test".to_string(),
+            worktree_dir: "/tmp/session-cursor-test".to_string(),
             branch: None,
             active_workspace: None,
             pane_id: Some("pane-1".to_string()),

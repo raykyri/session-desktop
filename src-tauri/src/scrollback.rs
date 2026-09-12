@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, LazyLock, Mutex, MutexGuard};
 
 const SCROLLBACK_DIR: &str = "terminal";
-const STATE_DIR: &str = ".qmux";
+const STATE_DIR: &str = ".session";
 const LOG_EXTENSION: &str = "pty";
 const REMOTE_HISTORY_EXTENSION: &str = "remote-history";
 /// Per-pane cap for durable terminal output — the size a trim retains. This is
@@ -1068,7 +1068,7 @@ mod tests {
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
         let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("qmux-scrollback-{nanos}-{seq}"));
+        let dir = std::env::temp_dir().join(format!("session-scrollback-{nanos}-{seq}"));
         fs::create_dir_all(&dir).unwrap();
         dir
     }

@@ -53,7 +53,7 @@ fn next_data(stream: &Stream) -> Frame {
 }
 #[test]
 fn claude_partial_line_and_reconnect_resume_without_duplicate_records() {
-    let dir = std::env::temp_dir().join(format!("qmux-stream-process-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("session-stream-process-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join("session.jsonl");
     fs::write(
@@ -93,7 +93,7 @@ fn claude_partial_line_and_reconnect_resume_without_duplicate_records() {
 }
 #[test]
 fn codex_discovers_rollout_by_session_and_rejects_wrong_hint() {
-    let dir = std::env::temp_dir().join(format!("qmux-stream-discovery-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("session-stream-discovery-{}", std::process::id()));
     let sessions = dir.join("sessions/2026/09/04");
     fs::create_dir_all(&sessions).unwrap();
     let path = sessions.join("rollout-date-codex-session.jsonl");
@@ -119,7 +119,7 @@ fn codex_discovers_rollout_by_session_and_rejects_wrong_hint() {
 #[test]
 fn large_image_record_resumes_mid_record_and_delivers_following_messages() {
     use session_cli::transcript_stream::MAX_CHUNK;
-    let dir = std::env::temp_dir().join(format!("qmux-large-stream-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("session-large-stream-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join("large-session.jsonl");
     let record = serde_json::json!({"type":"user", "message":{"content":[

@@ -199,7 +199,7 @@ fn default_title(state: &AppState, source_pane_id: Option<&str>) -> String {
         })
         .map(|pane| pane.title)
         .filter(|title| !title.trim().is_empty())
-        .unwrap_or_else(|| "qmux".to_string());
+        .unwrap_or_else(|| "session".to_string());
     // Terminal titles originate in child processes, not in this command's
     // validated payload. Collapse control/whitespace and cap them before they
     // cross into either AppKit or the DOM.
@@ -219,7 +219,7 @@ fn default_title(state: &AppState, source_pane_id: Option<&str>) -> String {
         .join(" ");
     let normalized = normalized.chars().take(MAX_TITLE_CHARS).collect::<String>();
     if normalized.is_empty() {
-        "qmux".to_string()
+        "session".to_string()
     } else {
         normalized
     }

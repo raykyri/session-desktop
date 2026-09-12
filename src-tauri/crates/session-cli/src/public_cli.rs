@@ -334,7 +334,9 @@ fn parse_split(mut args: Vec<String>) -> Result<(String, Value), String> {
 
 fn parse_read(kind: &str, mut args: Vec<String>) -> Result<(String, Value), String> {
     if args.is_empty() {
-        return Err(format!("usage: session {kind} read <id> [--source <source>]"));
+        return Err(format!(
+            "usage: session {kind} read <id> [--source <source>]"
+        ));
     }
     let id = args.remove(0);
     let mut source = None;

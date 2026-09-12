@@ -1,4 +1,4 @@
-//! Minimal MCP stdio bridge for agents launched by qmux.
+//! Minimal MCP stdio bridge for agents launched by session.
 //!
 //! Tool calls are not executed here. They cross the authenticated per-pane
 //! control socket, where the app resolves the caller from its unforgeable token

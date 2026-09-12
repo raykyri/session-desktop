@@ -656,7 +656,7 @@ test("thinkingProseText accepts plain strings and alternate field names", () => 
 test("thinkingProseText returns null for shapes without prose", () => {
   // Export markers and unfamiliar objects fall back to JSON rendering.
   assert.equal(
-    thinkingProseText({ type: "qmuxToolActivity", toolCalls: 3 }),
+    thinkingProseText({ type: "sessionToolActivity", toolCalls: 3 }),
     null,
   );
   assert.equal(thinkingProseText({ thinking: "   " }), null);

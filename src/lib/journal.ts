@@ -1,6 +1,6 @@
 // The journal data model. This module is the single canonical definition of
 // the journal format: the backend stores the state as an opaque versioned
-// blob inside .qmux/state.json (dedupe-by-id is its only structural
+// blob inside .session/state.json (dedupe-by-id is its only structural
 // knowledge), so every semantic rule about what an entry is lives here.
 //
 // Shape, and the room left for what comes next:

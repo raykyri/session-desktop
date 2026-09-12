@@ -29,7 +29,7 @@ pub fn reconcile_session_id(
         .is_some_and(|expected| expected != observed)
     {
         return Err(format!(
-            "{label} reported a different session id than qmux requested"
+            "{label} reported a different session id than session requested"
         ));
     }
     *expected = Some(observed);
@@ -283,7 +283,7 @@ mod tests {
         assert_eq!(session_id.as_deref(), Some("requested-1"));
 
         let mismatch = reconcile_session_id(&mut session_id, Some("different-1"), "test")
-            .expect_err("a CLI must not redirect qmux to a different session");
+            .expect_err("a CLI must not redirect session to a different session");
         assert!(mismatch.contains("different session id"));
 
         let mut empty = None;
@@ -297,7 +297,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("qmux-jsonl-{}-{unique}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("session-jsonl-{}-{unique}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let script = dir.join("fake-jsonl");
         fs::write(
@@ -347,8 +348,10 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let dir =
-            std::env::temp_dir().join(format!("qmux-jsonl-cancel-{}-{unique}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "session-jsonl-cancel-{}-{unique}",
+            std::process::id()
+        ));
         fs::create_dir_all(&dir).unwrap();
         let script = dir.join("fake-jsonl-flood");
         fs::write(

@@ -103,7 +103,7 @@ fn generate_research_metadata(
     );
     let stderr_log = config
         .workspace_root
-        .join(".qmux")
+        .join(".session")
         .join("research-logs")
         .join(format!("{}-{field}.log", node.id));
     run_research_metadata_process(&binary, &args, &cwd, &stderr_log, flavor, field)
@@ -377,7 +377,7 @@ struct MetadataSchemaFile {
 impl MetadataSchemaFile {
     fn create(config: &SessionConfig, schema: &str) -> Result<Self, String> {
         let id = new_uuid_v4()?;
-        let directory = config.workspace_root.join(".qmux").join("tmp");
+        let directory = config.workspace_root.join(".session").join("tmp");
         std::fs::create_dir_all(&directory).map_err(|err| {
             format!(
                 "failed to create metadata schema directory {}: {err}",
@@ -478,7 +478,8 @@ mod research_title_tests {
 
     #[test]
     fn research_recap_process_accepts_structured_output_and_rejects_failures() {
-        let dir = std::env::temp_dir().join(format!("qmux-recap-test-{}", new_uuid_v4().unwrap()));
+        let dir =
+            std::env::temp_dir().join(format!("session-recap-test-{}", new_uuid_v4().unwrap()));
         std::fs::create_dir_all(&dir).unwrap();
         let event = serde_json::json!({
             "type": "item.completed",

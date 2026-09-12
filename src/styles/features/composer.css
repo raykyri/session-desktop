@@ -327,7 +327,7 @@
   overflow-y: auto;
 }
 
-/* qMux command completion is anchored to the textarea's top edge and portaled so
+/* Session command completion is anchored to the textarea's top edge and portaled so
    it can grow upward over the transcript without being clipped by the input rail. */
 .composer-slash-popover {
   width: min(320px, calc(100vw - 24px));
@@ -434,7 +434,7 @@
 }
 
 /* Stack the session title over its gray last-modified subtext as plain block
-   flow. A flex button (any direction) renders the rows blank in WebKit (qmux's
+   flow. A flex button (any direction) renders the rows blank in WebKit (session's
    WKWebView) — it collapses the children — so the row stays block and the title/
    meta carry explicit line-heights and margins so they don't run together. */
 .turn-pane-session-list .turn-pane-session-menu-item.session-menu-item {

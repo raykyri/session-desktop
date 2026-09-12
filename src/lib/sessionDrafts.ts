@@ -1,6 +1,6 @@
 import { getInterfaceDraft, setInterfaceDraft } from "./api";
 
-const STORAGE_PREFIX = "qmux.interface-draft.";
+const STORAGE_PREFIX = "session.interface-draft.";
 const SAVE_DEBOUNCE_MS = 120;
 /** Small composers flush to the process-local backend immediately so a hard
  * WebContent kill (which may skip `pagehide`) still keeps the latest draft.

@@ -1,10 +1,10 @@
 // Sentinel scheme used for absolute local file paths in transcript markdown.
 // Agents often write `[preview](/Users/.../report.html)`; resolving that against
-// a base URL would turn it into `https://qmux.invalid/Users/...` and send the
+// a base URL would turn it into `https://session.invalid/Users/...` and send the
 // human browser at a non-existent host (or worse, load a custom-protocol path
-// that panics). Instead we keep the path as a qmux-file: URL that openLink
+// that panics). Instead we keep the path as a session-file: URL that openLink
 // recognizes and routes through the token-scoped file server.
-export const SESSION_FILE_HREF_PREFIX = "qmux-file:";
+export const SESSION_FILE_HREF_PREFIX = "session-file:";
 
 // Transcript renderers and Ghostty commonly include display-only suffixes in a
 // detected path: source positions (`/path/to/file.ts:36`, `:36:8`, or a Devin
@@ -74,14 +74,14 @@ export function safeHref(href: unknown): string | undefined {
   }
   let url: URL;
   try {
-    url = new URL(href, "https://qmux.invalid/");
+    url = new URL(href, "https://session.invalid/");
   } catch {
     return undefined;
   }
   // Never expose the synthetic parsing origin as a real destination. Preserve
   // path-shaped inputs that absoluteLocalFilePath may have missed as local file
   // links, but reject every other relative destination as non-navigable.
-  if (url.hostname === "qmux.invalid") {
+  if (url.hostname === "session.invalid") {
     return absoluteLocalFilePath(url.pathname) !== undefined
       ? `${SESSION_FILE_HREF_PREFIX}${url.pathname}`
       : undefined;
@@ -90,7 +90,7 @@ export function safeHref(href: unknown): string | undefined {
   // ("//host") href passes the protocol check once resolved against the base,
   // but handing the raw string downstream would let it resolve unpredictably.
   // Normalizing here means openLink always receives a fully qualified
-  // http(s)/mailto URL (or a qmux-file: local path).
+  // http(s)/mailto URL (or a session-file: local path).
   return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "mailto:"
     ? url.href
     : undefined;
@@ -143,7 +143,7 @@ export function inlineCodeFilePath(value: unknown): string | undefined {
 }
 
 /** Local filesystem path from a markdown href, or undefined. Absolute paths
- *  are returned as-is; relative `qmux-file:` targets must already have passed
+ *  are returned as-is; relative `session-file:` targets must already have passed
  *  `inlineCodeFilePath`. */
 export function absoluteLocalFilePath(href: string): string | undefined {
   const trimmed = href.trim();
@@ -155,7 +155,7 @@ export function absoluteLocalFilePath(href: string): string | undefined {
     if (path.startsWith("/")) {
       return withoutTrailingPathDecoration(path);
     }
-    // Relative qmux-file hrefs are only those minted from strict filename-like
+    // Relative session-file hrefs are only those minted from strict filename-like
     // inline code (e.g. `dev/mock.html`), never arbitrary relative destinations.
     return inlineCodeFilePath(path);
   }
@@ -267,7 +267,7 @@ export function canPreviewLocalFilePath(path: string): boolean {
 }
 
 /**
- * A loopback HTML document that qmux can offer as an explicit browser preview.
+ * A loopback HTML document that session can offer as an explicit browser preview.
  * Parse the URL instead of matching a prefix so lookalike hosts such as
  * `localhost.example.com` never receive the local-preview affordance.
  */
