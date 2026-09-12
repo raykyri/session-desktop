@@ -62,23 +62,6 @@ test("relative transcript links cannot expose the dummy parsing origin", () => {
   assert.match(html, />guide<\/span>/u);
 });
 
-test("Devin ref tags render as file and line-number links", () => {
-  const snippet =
-    '<ref_snippet file="/Users/raymond/Code/multitool/.claude/worktrees/foks-experiment/foks-ui/src/screens/write-workflows.tsx" lines="760-843" />';
-  const snippetHtml = render(snippet);
-  assert.match(snippetHtml, />write-workflows\.tsx:760-843</u);
-  assert.match(
-    snippetHtml,
-    /href="session-file:\/Users\/raymond\/Code\/multitool\/\.claude\/worktrees\/foks-experiment\/foks-ui\/src\/screens\/write-workflows\.tsx"/u,
-  );
-  assert.doesNotMatch(snippetHtml, /ref_snippet/u);
-
-  const fileHtml = render('<ref_file file="/tmp/project/config.json" />');
-  assert.match(fileHtml, />config\.json</u);
-  assert.match(fileHtml, /href="session-file:\/tmp\/project\/config\.json"/u);
-  assert.doesNotMatch(fileHtml, /ref_file/u);
-});
-
 test("filename-like inline code ending in .html or .md renders as a file link", () => {
   const html = render("See `dev/mock.html` and `docs/readme.md`.");
   assert.match(html, /href="session-file:dev\/mock\.html"/u);

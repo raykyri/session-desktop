@@ -211,7 +211,7 @@ test("strips the research launch instruction block appended after slash commands
   );
 });
 
-test("unwraps cursor-agent timestamp and user_query envelopes as the prompt", () => {
+test("unwraps timestamp and user_query envelopes as the prompt", () => {
   const message = [
     "<timestamp>Wednesday, Aug 19, 2026, 3:52 PM (UTC-4)</timestamp>",
     "<user_query>",
@@ -230,12 +230,12 @@ test("unwraps cursor-agent timestamp and user_query envelopes as the prompt", ()
   );
 });
 
-test("preserves image markers around a cursor-agent user_query envelope", () => {
+test("preserves image markers around a user_query envelope", () => {
   const message = [
     "[Image]",
     "<timestamp>Wednesday, Aug 19, 2026, 4:25 PM (UTC-4)</timestamp>",
     "<user_query>",
-    "cursor-agent transcripts seem to not have user messages, they're mistakenly collapsed: [Image #1]",
+    "transcripts seem to not have user messages, they're mistakenly collapsed: [Image #1]",
     "</user_query>",
   ].join("\n");
 

@@ -57,13 +57,8 @@ fn session_directory(root: &Path, binding: &Binding) -> PathBuf {
         .join(encoded(&binding.session))
 }
 fn mirror(dir: &Path, checkpoint: &Checkpoint, binding: &Binding) -> PathBuf {
-    let extension = if binding.adapter == "devin" {
-        "json"
-    } else {
-        "jsonl"
-    };
     dir.join(checkpoint.generation.to_string())
-        .join(format!("{}.{extension}", binding.session))
+        .join(format!("{}.jsonl", binding.session))
 }
 fn save_json(path: &Path, value: &impl Serialize) -> Result<(), String> {
     let temp = path.with_extension("tmp");
@@ -117,10 +112,7 @@ pub fn observe(state: &AppState, pane: &str, payload: &Value) {
         let Some(agent) = state.agent_by_pane(pane)? else {
             return Ok(());
         };
-        if !matches!(
-            agent.adapter.as_str(),
-            "claude" | "codex" | "devin" | "antigravity"
-        ) {
+        if !matches!(agent.adapter.as_str(), "claude" | "codex" | "antigravity") {
             return Ok(());
         }
         let Some(session) = agent.session_id.clone() else {
@@ -627,77 +619,6 @@ mod tests {
     #[test]
     fn antigravity_mirror_reaches_turn_pipeline_and_resets_cleanly() {
         check_mirrored_pipeline("antigravity");
-    }
-    #[test]
-    fn devin_document_mirror_reaches_the_turn_pipeline() {
-        let root = std::env::temp_dir().join(format!(
-            "session-mirror-pipeline-devin-{}",
-            std::process::id()
-        ));
-        fs::create_dir_all(&root).unwrap();
-        let state = AppState::new(
-            serde_json::from_value(json!({
-                "workspaceRoot": root, "socketPath": root.join("unused.sock")
-            }))
-            .unwrap(),
-        );
-        state
-            .insert_agent(
-                serde_json::from_value(json!({
-                    "id":"devin-agent", "groupId":"g", "adapter":"devin",
-                    "worktreeDir":"/remote/project", "paneId":"p", "sessionId":"session",
-                    "status":"running", "createdAt":1
-                }))
-                .unwrap(),
-            )
-            .unwrap();
-        let dir = root.join("mirror");
-        let binding = test_binding("devin", "session");
-        let mut checkpoint = Checkpoint::default();
-        let data = json!({
-            "session_id":"session",
-            "steps":[{"step_id":1,"source":"user","message":"hello"}]
-        })
-        .to_string();
-        let frame = Frame {
-            session: "session".into(),
-            path: "/remote/devin.json".into(),
-            start: 0,
-            reset: true,
-            historical_end: data.len() as u64,
-            cursor: Cursor {
-                offset: data.len() as u64,
-                identity: "inode".into(),
-                anchor: data.as_bytes()[data.len().saturating_sub(256)..].to_vec(),
-            },
-            data,
-        };
-        let path = accept(&dir, &binding, &mut checkpoint, frame).unwrap();
-        assert_eq!(path.extension().and_then(|ext| ext.to_str()), Some("json"));
-        state
-            .mutate_agent("devin-agent", |agent| {
-                agent.transcript_path = Some(path.to_string_lossy().into())
-            })
-            .unwrap();
-        crate::transcript::start_transcript_tail(
-            state.clone(),
-            "devin-agent".into(),
-            path.to_string_lossy().into(),
-            "devin".into(),
-        );
-        let deadline = Instant::now() + Duration::from_secs(5);
-        loop {
-            let turns = state.list_turns(Some("devin-agent")).unwrap();
-            if turns.len() == 1 {
-                assert!(serde_json::to_string(&turns).unwrap().contains("hello"));
-                break;
-            }
-            assert!(Instant::now() < deadline, "Devin mirror produced no turn");
-            thread::sleep(Duration::from_millis(20));
-        }
-        state
-            .mutate_agent("devin-agent", |agent| agent.transcript_path = None)
-            .unwrap();
     }
 
     fn check_mirrored_pipeline(adapter: &str) {

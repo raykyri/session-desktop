@@ -1,12 +1,7 @@
 pub mod antigravity;
 pub mod claude;
 pub mod codex;
-pub mod cursor;
-pub mod devin;
 pub mod grok;
-pub mod muse;
-pub mod opencode;
-pub mod pi;
 
 use crate::config::SessionConfig;
 use crate::events::SessionEvent;
@@ -26,12 +21,7 @@ use crate::workspace::{
 use antigravity::AntigravityAdapter;
 use claude::ClaudeAdapter;
 use codex::CodexAdapter;
-use cursor::CursorAdapter;
-use devin::DevinAdapter;
 use grok::GrokAdapter;
-use muse::MuseAdapter;
-use opencode::OpencodeAdapter;
-use pi::PiAdapter;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -685,8 +675,7 @@ pub struct PreparedShellAgentLaunch {
     pub envs: Vec<LaunchEnv>,
     /// Whether `session agent-exec` should bind and supervise this process as an
     /// agent. Adapters can return `false` for utility invocations of a shared
-    /// CLI (for example `pi install`) that must pass through the shell wrapper
-    /// without creating an agent.
+    /// CLI that must pass through the shell wrapper without creating an agent.
     pub supervised: bool,
 }
 
@@ -740,8 +729,7 @@ pub enum TranscriptLifecycleEvent {
     TurnStarted,
     /// A native transcript record that the turn ended successfully. Used when
     /// the adapter's Stop/idle hook is missing, never fires, or fires too
-    /// early (Cursor's `--plugin-dir` observer is skipped at the `stop` call
-    /// site; Codex emits `Stop` between review jobs and internally queued
+    /// early (Codex emits `Stop` between review jobs and internally queued
     /// prompts, then continues the same turn).
     TurnCompleted,
 }
@@ -869,7 +857,7 @@ pub trait AgentAdapter: Send + Sync {
 
     /// Resolves a transcript with adapter-owned session-tree state. Linear
     /// adapters ignore the leaf and retain their existing resolver; tree-shaped
-    /// adapters such as Pi override this to select the native active ancestry.
+    /// adapters override this to select the native active ancestry.
     fn resolve_transcript_turns_at_leaf(
         &self,
         agent_id: &str,
@@ -1140,10 +1128,6 @@ fn adapter_login_command(adapter_id: &str, binary: &str) -> Option<String> {
     match adapter_id {
         "claude" => Some(format!("{binary} auth login")),
         "codex" | "grok" => Some(format!("{binary} login")),
-        "opencode" => Some(format!("{binary} auth login")),
-        "cursor" => Some(format!("{binary} login")),
-        "devin" => Some(format!("{binary} auth login")),
-        "antigravity" => Some(binary),
         _ => None,
     }
 }
@@ -1152,11 +1136,7 @@ fn adapter_install_url(adapter_id: &str) -> Option<&'static str> {
     match adapter_id {
         "claude" => Some("https://docs.anthropic.com/en/docs/claude-code/setup"),
         "codex" => Some("https://developers.openai.com/codex/cli"),
-        "opencode" => Some("https://opencode.ai/docs/"),
         "grok" => Some("https://docs.x.ai/docs/grok-code-fast-1"),
-        "pi" => Some("https://github.com/badlogic/pi-mono"),
-        "cursor" => Some("https://cursor.com/docs/cli/overview"),
-        "devin" => Some("https://docs.devin.ai/work-with-devin/devin-cli"),
         "antigravity" => Some("https://antigravity.google/docs/cli/reference"),
         _ => None,
     }
@@ -1167,8 +1147,6 @@ fn adapter_update_command(adapter_id: &str, binary: &str) -> Option<String> {
     match adapter_id {
         "claude" => Some(format!("{binary} update")),
         "codex" => Some("npm install -g @openai/codex@latest".to_string()),
-        "opencode" => Some(format!("{binary} upgrade")),
-        "pi" => Some("npm install -g @mariozechner/pi-coding-agent@latest".to_string()),
         _ => None,
     }
 }
@@ -1607,12 +1585,7 @@ pub fn adapter_registry(config: &SessionConfig) -> AdapterRegistry {
     AdapterRegistry::new(vec![
         Box::new(ClaudeAdapter::new(config)),
         Box::new(CodexAdapter::new(config)),
-        Box::new(OpencodeAdapter::new(config)),
         Box::new(GrokAdapter::new(config)),
-        Box::new(MuseAdapter::new(config)),
-        Box::new(PiAdapter::new(config)),
-        Box::new(CursorAdapter::new(config)),
-        Box::new(DevinAdapter::new(config)),
         Box::new(AntigravityAdapter::new(config)),
     ])
 }
@@ -2193,7 +2166,6 @@ mod tests {
     use super::*;
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig,
     };
     use std::path::PathBuf;
 
@@ -2203,31 +2175,19 @@ mod tests {
             workspace_root: PathBuf::from("/tmp/session-adapter-tests"),
             socket_path: PathBuf::from("/tmp/session-adapter-tests.sock"),
             adapters: AdapterConfigs {
-                pi: Default::default(),
                 claude: ClaudeAdapterConfig {
                     binary: Some("claude".to_string()),
                 },
                 codex: CodexAdapterConfig {
                     binary: Some("codex".to_string()),
                 },
-                opencode: OpencodeAdapterConfig {
-                    binary: Some("opencode".to_string()),
-                },
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                muse: MuseAdapterConfig {
-                    binary: Some("muse".to_string()),
-                },
-                cursor: Default::default(),
-                devin: Default::default(),
                 antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: PathBuf::new(),
-            opencode_plugin_dir: PathBuf::new(),
-            pi_extension_dir: PathBuf::new(),
-            cursor_plugin_dir: PathBuf::new(),
         }
     }
 
@@ -2248,26 +2208,16 @@ mod tests {
         let registry = adapter_registry(&test_config());
 
         let metadata = registry.metadata();
-        assert_eq!(metadata.len(), 9);
+        assert_eq!(metadata.len(), 4);
         assert_eq!(metadata[0].id, "claude");
         assert!(metadata[0].default);
         assert_eq!(metadata[1].id, "codex");
         assert!(!metadata[1].default);
-        assert_eq!(metadata[2].id, "opencode");
+        assert_eq!(metadata[2].id, "grok");
         assert!(!metadata[2].default);
-        assert_eq!(metadata[3].id, "grok");
+        assert_eq!(metadata[3].id, "antigravity");
         assert!(!metadata[3].default);
-        assert_eq!(metadata[4].id, "muse");
-        assert!(!metadata[4].default);
-        assert_eq!(metadata[5].id, "pi");
-        assert!(!metadata[5].default);
-        assert_eq!(metadata[6].id, "cursor");
-        assert!(!metadata[6].default);
-        assert_eq!(metadata[7].id, "devin");
-        assert!(!metadata[7].default);
-        assert_eq!(metadata[8].id, "antigravity");
-        assert!(!metadata[8].default);
-        assert_eq!(metadata[8].login_command.as_deref(), Some("'agy'"));
+        assert_eq!(metadata[3].login_command, None);
         assert!(
             metadata
                 .iter()
@@ -2279,17 +2229,14 @@ mod tests {
                 .iter()
                 .filter(|adapter| !matches!(
                     adapter.id.as_str(),
-                    "claude" | "codex" | "devin" | "antigravity"
+                    "claude" | "codex" | "antigravity"
                 ))
                 .all(|adapter| !adapter.supports_remote)
         );
         assert!(
             metadata
                 .iter()
-                .filter(|adapter| matches!(
-                    adapter.id.as_str(),
-                    "claude" | "codex" | "devin" | "antigravity"
-                ))
+                .filter(|adapter| matches!(adapter.id.as_str(), "claude" | "codex" | "antigravity"))
                 .all(|adapter| adapter.supports_remote)
         );
         assert!(
@@ -2298,24 +2245,15 @@ mod tests {
                 .all(|adapter| adapter.target.kind == "local")
         );
         let config = test_config();
-        assert!(!adapter_supports_fork(&config, "cursor"));
-        assert!(!adapter_supports_fork_at_message(&config, "cursor"));
+        assert!(adapter_supports_fork(&config, "claude"));
+        assert!(adapter_supports_fork(&config, "codex"));
         assert!(adapter_supports_fork(&config, "grok"));
-        assert!(adapter_supports_fork(&config, "opencode"));
-        assert!(adapter_supports_fork(&config, "pi"));
         assert!(adapter_supports_research(&config, "claude"));
         assert!(adapter_supports_research(&config, "codex"));
         assert!(adapter_supports_research(&config, "grok"));
-        assert!(!adapter_supports_research(&config, "opencode"));
-        assert!(!adapter_supports_research(&config, "pi"));
         assert!(!adapter_supports_research(&config, "antigravity"));
-        assert!(adapter_supports_fork_at_message(&config, "pi"));
-        // Muse has no fork command either — no `--fork-session` flag and no
-        // `fork` subcommand — so branching a session is not offered.
-        assert!(!adapter_supports_fork(&config, "muse"));
-        assert!(!adapter_supports_fork_at_message(&config, "muse"));
-        assert!(!adapter_supports_fork(&config, "devin"));
-        assert!(!adapter_supports_fork_at_message(&config, "devin"));
+        assert!(adapter_supports_fork_at_message(&config, "claude"));
+        assert!(adapter_supports_fork_at_message(&config, "codex"));
         assert!(!adapter_supports_fork(&config, "antigravity"));
         assert!(!adapter_supports_fork_at_message(&config, "antigravity"));
     }
@@ -2411,17 +2349,14 @@ mod tests {
 
         let metadata = probe_adapter_metadata_for_config(&config, Some(&remote), true)
             .expect("remote metadata");
-        assert_eq!(metadata.len(), 9);
+        assert_eq!(metadata.len(), 4);
         assert!(metadata.iter().all(|adapter| {
             adapter.target.kind == "remote" && adapter.target.id.as_deref() == Some("build-host")
         }));
         assert!(
             metadata
                 .iter()
-                .filter(|adapter| matches!(
-                    adapter.id.as_str(),
-                    "claude" | "codex" | "devin" | "antigravity"
-                ))
+                .filter(|adapter| matches!(adapter.id.as_str(), "claude" | "codex" | "antigravity"))
                 .all(|adapter| adapter.readiness == AdapterReadiness::Error
                     && adapter
                         .message
@@ -2433,7 +2368,7 @@ mod tests {
                 .iter()
                 .filter(|adapter| !matches!(
                     adapter.id.as_str(),
-                    "claude" | "codex" | "devin" | "antigravity"
+                    "claude" | "codex" | "antigravity"
                 ))
                 .all(|adapter| adapter.readiness == AdapterReadiness::Error
                     && adapter
@@ -2471,7 +2406,7 @@ mod tests {
     fn stale_remote_shell_wrappers_bypass_local_adapter_preparation() {
         let mut config = test_config();
         // This executable and cwd deliberately do not exist on the Mac.
-        config.adapters.devin.binary = Some("/remote/tools/devin".into());
+        config.adapters.grok.binary = Some("/remote/tools/grok".into());
         let state = AppState::new(config);
         let identity = crate::state::RemoteSessionIdentity::new("r", "p").unwrap();
         let remote = serde_json::from_value(json!({

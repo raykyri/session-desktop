@@ -1333,38 +1333,26 @@ mod tests {
     fn test_state(root: &Path, base: &Path, pane_id: &str) -> AppState {
         use crate::config::{
             AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-            MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
+            SessionConfig,
         };
         let config = SessionConfig {
             remotes: Default::default(),
             workspace_root: base.join("state"),
             socket_path: base.join("x.sock"),
             adapters: AdapterConfigs {
-                pi: Default::default(),
                 claude: ClaudeAdapterConfig {
                     binary: Some("claude".to_string()),
                 },
                 codex: CodexAdapterConfig {
                     binary: Some("codex".to_string()),
                 },
-                opencode: OpencodeAdapterConfig {
-                    binary: Some("opencode".to_string()),
-                },
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                muse: MuseAdapterConfig {
-                    binary: Some("muse".to_string()),
-                },
-                cursor: Default::default(),
-                devin: Default::default(),
                 antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: PathBuf::new(),
-            opencode_plugin_dir: PathBuf::new(),
-            pi_extension_dir: PathBuf::new(),
-            cursor_plugin_dir: PathBuf::new(),
         };
         let state = AppState::new(config);
         state

@@ -1573,8 +1573,7 @@ fn write_response(stream: &mut UnixStream, result: Result<Value, String>) -> std
 mod tests {
     use super::*;
     use crate::config::{
-        AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
+        AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig, SessionConfig,
     };
 
     use crate::state::{HostPtyBackend, PaneBackend, PaneInfo, PaneRuntime, PaneStatus};
@@ -1607,31 +1606,19 @@ mod tests {
             workspace_root,
             socket_path: socket_path.clone(),
             adapters: AdapterConfigs {
-                pi: Default::default(),
                 claude: ClaudeAdapterConfig {
                     binary: Some("claude".to_string()),
                 },
                 codex: CodexAdapterConfig {
                     binary: Some("codex".to_string()),
                 },
-                opencode: OpencodeAdapterConfig {
-                    binary: Some("opencode".to_string()),
-                },
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                muse: MuseAdapterConfig {
-                    binary: Some("muse".to_string()),
-                },
-                cursor: Default::default(),
-                devin: Default::default(),
                 antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: std::path::PathBuf::new(),
-            opencode_plugin_dir: std::path::PathBuf::new(),
-            pi_extension_dir: std::path::PathBuf::new(),
-            cursor_plugin_dir: std::path::PathBuf::new(),
         });
         (state, socket_path)
     }

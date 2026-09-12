@@ -52,7 +52,7 @@ const GROK_HOOK_EVENTS: &[&str] = &[
 
 /// Adapter for the xAI Grok Build CLI. Grok ships a Claude-compatible hook system
 /// (shell commands run at lifecycle events, event JSON on stdin), so Session integrates
-/// it like its Claude and Codex adapters rather than like OpenCode: a Session-managed
+/// it like its Claude and Codex adapters: a Session-managed
 /// hook file is installed at `~/.grok/hooks/session.json` and a shim forwards each
 /// lifecycle event back to Session via `session notify <event>`. The hook command no-ops
 /// outside Session (it checks for the `SESSION_*` env vars only Session-launched panes set),
@@ -83,8 +83,8 @@ impl GrokAdapter {
 
     /// The Session-managed JSONL transcript fallback path for an agent, used when Grok's
     /// `SessionStart` hook does not report a transcript path of its own. It is shaped
-    /// for `parse_transcript_line` and tailed with the same pipeline used for Claude,
-    /// Codex, and OpenCode.
+    /// for `parse_transcript_line` and tailed with the same pipeline used for Claude
+    /// and Codex.
     fn transcript_path_for(state: &AppState, agent_id: &str) -> PathBuf {
         state
             .config()
@@ -1722,9 +1722,8 @@ fn finish_agent_after_failure(state: &AppState, agent: &AgentInfo) -> Result<boo
 /// Grok Build uses Claude-compatible rollout transcripts (the path it reports in
 /// the SessionStart hook under `transcript_path`). We therefore support the native
 /// Claude-style JSONL format first (same as the Claude adapter). We also support
-/// the synthetic "response_item" format (used by Codex/OpenCode and the Session
-/// opencode plugin) as a fallback for the session-managed transcript path or future
-/// Grok plugin writers.
+/// the synthetic "response_item" format (used by Codex) as a fallback for the
+/// session-managed transcript path or future Grok plugin writers.
 ///
 /// ```json
 /// // Native (Claude/Grok rollout)
@@ -2052,7 +2051,7 @@ fn parse_transcript_lifecycle_event(line: &str) -> Option<TranscriptLifecycleEve
         .then_some(TranscriptLifecycleEvent::Interrupted)
 }
 
-/// Parses blocks from a synthetic response_item payload (mirrors Codex/OpenCode shape).
+/// Parses blocks from a synthetic response_item payload (mirrors Codex shape).
 fn parse_grok_synthetic_message_blocks(content: Option<&Value>) -> Option<Vec<TurnBlock>> {
     match content? {
         Value::String(text) => Some(vec![TurnBlock::Text { text: text.clone() }]),
@@ -2110,7 +2109,6 @@ mod tests {
     use super::*;
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig,
     };
     use crate::state::AppState;
     use std::path::PathBuf;
@@ -2121,31 +2119,19 @@ mod tests {
             workspace_root: PathBuf::from("/tmp/session-grok-tests"),
             socket_path: PathBuf::from("/tmp/session-grok-tests.sock"),
             adapters: AdapterConfigs {
-                pi: Default::default(),
                 claude: ClaudeAdapterConfig {
                     binary: Some("claude".to_string()),
                 },
                 codex: CodexAdapterConfig {
                     binary: Some("codex".to_string()),
                 },
-                opencode: OpencodeAdapterConfig {
-                    binary: Some("opencode".to_string()),
-                },
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                muse: MuseAdapterConfig {
-                    binary: Some("muse".to_string()),
-                },
-                cursor: Default::default(),
-                devin: Default::default(),
                 antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: PathBuf::new(),
-            opencode_plugin_dir: PathBuf::new(),
-            pi_extension_dir: PathBuf::new(),
-            cursor_plugin_dir: PathBuf::new(),
         }
     }
 
@@ -2461,7 +2447,7 @@ mod tests {
         assert_eq!(event.event_type, "agent.session_start");
         let agent = state.agent("agent-1").unwrap().expect("agent exists");
         assert_eq!(agent.session_id.as_deref(), Some("grok-session-1"));
-        // SessionStart does not promote to Running (matches Claude/Codex/OpenCode).
+        // SessionStart does not promote to Running (matches Claude/Codex).
         assert!(matches!(agent.status, AgentStatus::Starting));
         // session id alone is enough to bind native chat history under the agent
         // workspace; the legacy Session-managed fallback is only used when identity

@@ -31,22 +31,6 @@ pub struct SessionConfig {
     /// to the config JSON (it is derived, not configured).
     #[serde(skip)]
     pub claude_plugin_dir: PathBuf,
-    /// Directory of the session-managed opencode plugin whose JS files are injected
-    /// into launched opencode agents via `OPENCODE_CONFIG_DIR`. Resolved at load
-    /// time from `SESSION_OPENCODE_PLUGIN_DIR` or `<cwd>/session-opencode-plugin`; never
-    /// read from or written to the config JSON (it is derived, not configured).
-    #[serde(skip)]
-    pub opencode_plugin_dir: PathBuf,
-    /// Directory containing Session's observer-only Pi extension. Resolved at
-    /// load time and never serialized into user config.
-    #[serde(skip)]
-    pub pi_extension_dir: PathBuf,
-    /// Directory of the session-managed Cursor observer plugin injected into
-    /// launched `cursor-agent` processes via `--plugin-dir`. Resolved at load
-    /// time from `SESSION_CURSOR_PLUGIN_DIR` or `<cwd>/session-cursor-plugin`; never
-    /// read from or written to the config JSON.
-    #[serde(skip)]
-    pub cursor_plugin_dir: PathBuf,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -57,17 +41,7 @@ pub struct AdapterConfigs {
     #[serde(default)]
     pub codex: CodexAdapterConfig,
     #[serde(default)]
-    pub opencode: OpencodeAdapterConfig,
-    #[serde(default)]
     pub grok: GrokAdapterConfig,
-    #[serde(default)]
-    pub muse: MuseAdapterConfig,
-    #[serde(default)]
-    pub pi: PiAdapterConfig,
-    #[serde(default)]
-    pub cursor: CursorAdapterConfig,
-    #[serde(default)]
-    pub devin: DevinAdapterConfig,
     #[serde(default)]
     pub antigravity: AntigravityAdapterConfig,
 }
@@ -88,42 +62,7 @@ pub struct CodexAdapterConfig {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct OpencodeAdapterConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub binary: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct GrokAdapterConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub binary: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MuseAdapterConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub binary: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PiAdapterConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub binary: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CursorAdapterConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub binary: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DevinAdapterConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub binary: Option<String>,
 }
@@ -286,9 +225,6 @@ impl SessionConfig {
             default_socket_path.as_deref(),
         );
         config.claude_plugin_dir = resolve_claude_plugin_dir(&cwd);
-        config.opencode_plugin_dir = resolve_opencode_plugin_dir(&cwd);
-        config.pi_extension_dir = resolve_pi_extension_dir(&cwd);
-        config.cursor_plugin_dir = resolve_cursor_plugin_dir(&cwd);
 
         fs::create_dir_all(&config.workspace_root).map_err(|err| {
             format!(
@@ -430,16 +366,6 @@ impl SessionConfig {
         )
     }
 
-    pub fn opencode_binary(&self) -> String {
-        expand_binary(
-            self.adapters
-                .opencode
-                .binary
-                .clone()
-                .unwrap_or_else(|| "opencode".to_string()),
-        )
-    }
-
     pub fn grok_binary(&self) -> String {
         expand_binary(
             self.adapters
@@ -447,46 +373,6 @@ impl SessionConfig {
                 .binary
                 .clone()
                 .unwrap_or_else(|| "grok".to_string()),
-        )
-    }
-
-    pub fn muse_binary(&self) -> String {
-        expand_binary(
-            self.adapters
-                .muse
-                .binary
-                .clone()
-                .unwrap_or_else(|| "muse".to_string()),
-        )
-    }
-
-    pub fn pi_binary(&self) -> String {
-        expand_binary(
-            self.adapters
-                .pi
-                .binary
-                .clone()
-                .unwrap_or_else(|| "pi".to_string()),
-        )
-    }
-
-    pub fn cursor_binary(&self) -> String {
-        expand_binary(
-            self.adapters
-                .cursor
-                .binary
-                .clone()
-                .unwrap_or_else(|| "cursor-agent".to_string()),
-        )
-    }
-
-    pub fn devin_binary(&self) -> String {
-        expand_binary(
-            self.adapters
-                .devin
-                .binary
-                .clone()
-                .unwrap_or_else(|| "devin".to_string()),
         )
     }
 
@@ -537,23 +423,8 @@ impl SessionConfig {
                 codex: CodexAdapterConfig {
                     binary: Some("codex".to_string()),
                 },
-                opencode: OpencodeAdapterConfig {
-                    binary: Some("opencode".to_string()),
-                },
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
-                },
-                muse: MuseAdapterConfig {
-                    binary: Some("muse".to_string()),
-                },
-                pi: PiAdapterConfig {
-                    binary: Some("pi".to_string()),
-                },
-                cursor: CursorAdapterConfig {
-                    binary: Some("cursor-agent".to_string()),
-                },
-                devin: DevinAdapterConfig {
-                    binary: Some("devin".to_string()),
                 },
                 antigravity: AntigravityAdapterConfig {
                     binary: Some("agy".to_string()),
@@ -564,9 +435,6 @@ impl SessionConfig {
             // Overwritten by load() once the cwd is known; this default is only a
             // placeholder for the no-config-file path.
             claude_plugin_dir: PathBuf::new(),
-            opencode_plugin_dir: PathBuf::new(),
-            pi_extension_dir: PathBuf::new(),
-            cursor_plugin_dir: PathBuf::new(),
         })
     }
 }
@@ -602,52 +470,9 @@ fn pick_claude_plugin_dir(
     pick_plugin_dir(cwd, override_dir, exe_dir, "session-claude-plugin")
 }
 
-/// Resolves the session-managed opencode plugin directory. Honors an explicit
-/// `SESSION_OPENCODE_PLUGIN_DIR` override (absolutized against the cwd when relative);
-/// otherwise picks the first existing candidate so the plugin loads regardless of
-/// how Session is launched. Mirrors `resolve_claude_plugin_dir`.
-fn resolve_opencode_plugin_dir(cwd: &Path) -> PathBuf {
-    let override_os = env::var_os("SESSION_OPENCODE_PLUGIN_DIR").filter(|value| !value.is_empty());
-    let exe_dir = env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(Path::to_path_buf));
-    pick_plugin_dir(
-        cwd,
-        override_os.as_deref().map(Path::new),
-        exe_dir.as_deref(),
-        "session-opencode-plugin",
-    )
-}
-
-fn resolve_pi_extension_dir(cwd: &Path) -> PathBuf {
-    let override_os = env::var_os("SESSION_PI_EXTENSION_DIR").filter(|value| !value.is_empty());
-    let exe_dir = env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(Path::to_path_buf));
-    pick_plugin_dir(
-        cwd,
-        override_os.as_deref().map(Path::new),
-        exe_dir.as_deref(),
-        "session-pi-extension",
-    )
-}
-
-fn resolve_cursor_plugin_dir(cwd: &Path) -> PathBuf {
-    let override_os = env::var_os("SESSION_CURSOR_PLUGIN_DIR").filter(|value| !value.is_empty());
-    let exe_dir = env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(Path::to_path_buf));
-    pick_plugin_dir(
-        cwd,
-        override_os.as_deref().map(Path::new),
-        exe_dir.as_deref(),
-        "session-cursor-plugin",
-    )
-}
-
-/// Shared plugin-directory resolver used by both the Claude and opencode plugin
-/// lookups. The explicit override always wins; otherwise the first existing
-/// candidate is used, falling back to `<cwd>/<default_name>` when none exist.
+/// Shared plugin-directory resolver used by the Claude plugin lookup. The
+/// explicit override always wins; otherwise the first existing candidate is
+/// used, falling back to `<cwd>/<default_name>` when none exist.
 fn pick_plugin_dir(
     cwd: &Path,
     override_dir: Option<&Path>,
@@ -1023,32 +848,6 @@ mod tests {
     }
 
     #[test]
-    fn opencode_binary_defaults_and_can_be_configured() {
-        let default_config: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock"
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(default_config.opencode_binary(), "opencode");
-
-        let configured: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock",
-              "adapters": {
-                "opencode": {
-                  "binary": "/opt/bin/opencode"
-                }
-              }
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(configured.opencode_binary(), "/opt/bin/opencode");
-    }
-
-    #[test]
     fn grok_binary_defaults_and_can_be_configured() {
         let default_config: SessionConfig = serde_json::from_str(
             r#"{
@@ -1072,106 +871,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(configured.grok_binary(), "/opt/bin/grok");
-    }
-
-    #[test]
-    fn muse_binary_defaults_and_can_be_configured() {
-        let default_config: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock"
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(default_config.muse_binary(), "muse");
-
-        let configured: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock",
-              "adapters": {
-                "muse": {
-                  "binary": "/opt/bin/muse"
-                }
-              }
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(configured.muse_binary(), "/opt/bin/muse");
-    }
-
-    #[test]
-    fn pi_binary_defaults_and_can_be_configured() {
-        let default_config: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock"
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(default_config.pi_binary(), "pi");
-
-        let configured: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock",
-              "adapters": { "pi": { "binary": "/opt/bin/pi" } }
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(configured.pi_binary(), "/opt/bin/pi");
-    }
-
-    #[test]
-    fn cursor_binary_defaults_and_can_be_configured() {
-        let default_config: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock"
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(default_config.cursor_binary(), "cursor-agent");
-
-        let configured: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock",
-              "adapters": {
-                "cursor": {
-                  "binary": "/opt/bin/cursor-agent"
-                }
-              }
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(configured.cursor_binary(), "/opt/bin/cursor-agent");
-    }
-
-    #[test]
-    fn devin_binary_defaults_and_can_be_configured() {
-        let default_config: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock"
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(default_config.devin_binary(), "devin");
-
-        let configured: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock",
-              "adapters": {
-                "devin": {
-                  "binary": "/opt/bin/devin"
-                }
-              }
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(configured.devin_binary(), "/opt/bin/devin");
     }
 
     #[test]

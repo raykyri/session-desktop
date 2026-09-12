@@ -99,22 +99,9 @@ export function playCompletionSound(soundId: CompletionSoundId) {
   return invoke<void>("completion_sound_play", { soundId });
 }
 
-/** Keeps the reload-safe backend lifecycle player aligned with Display settings. */
+/** Keeps the reload-safe backend lifecycle player aligned with settings. */
 export function setCompletionSound(soundId: CompletionSoundId) {
   return invoke<void>("completion_sound_set", { soundId });
-}
-
-export interface NotificationPermissionInfo {
-  supported: boolean;
-  status: "NotDetermined" | "Denied" | "Authorized" | "Provisional" | "Ephemeral" | "Unknown" | "Unavailable";
-}
-
-export function getNotificationPermission() {
-  return invoke<NotificationPermissionInfo>("notification_permission_status");
-}
-
-export function requestNotificationPermission() {
-  return invoke<NotificationPermissionInfo>("notification_request_permission");
 }
 
 export function launchConversationHistory(request: ConversationHistoryLaunchRequest) {
@@ -484,22 +471,6 @@ export function deleteJournalEntry(id: string) {
  * cannot reach X directly). `token` comes from syndicationToken(id). */
 export function fetchJournalTweet(id: string, token: string) {
   return invoke<string>("journal_fetch_tweet", { id, token });
-}
-
-export function getNotificationLog() {
-  return invoke<unknown>("notification_log_get");
-}
-
-export function markNotificationRead(id: string) {
-  return invoke<unknown>("notification_log_mark_read", { id });
-}
-
-export function markAllNotificationsRead() {
-  return invoke<unknown>("notification_log_mark_all_read");
-}
-
-export function clearNotificationLogEntry(id: string) {
-  return invoke<unknown>("notification_log_clear", { id });
 }
 
 export function getResearchTree(treeId: string) {

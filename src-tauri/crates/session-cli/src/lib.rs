@@ -5,9 +5,7 @@
 //! the app — a remote box reached over ssh — can still service hooks, cwd
 //! reporting, and forks once a transport exists.
 
-mod cursor;
 mod mcp;
-mod muse;
 mod public_cli;
 pub mod transcript_stream;
 
@@ -144,28 +142,6 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
             )?;
             Ok(true)
         }
-        "muse-notify" => {
-            // Muse's hook environment has no SESSION_* variables to identify the
-            // pane with, so this command resolves it from the payload instead.
-            // See the `muse` module.
-            let event = args
-                .next()
-                .ok_or_else(|| "usage: session muse-notify <event> [bindings-dir]".to_string())?;
-            // The generated shim always supplies the directory, because Muse
-            // strips every variable it could otherwise be derived from.
-            muse::notify(event, args.next())?;
-            Ok(true)
-        }
-        "cursor-notify" => {
-            // cursor-agent runs plugin hooks with a constructed env that does
-            // not inherit SESSION_*. The generated plugin shim therefore resolves
-            // the pane from a binding file, the same way muse-notify does.
-            let event = args
-                .next()
-                .ok_or_else(|| "usage: session cursor-notify <event> [bindings-dir]".to_string())?;
-            cursor::notify(event, args.next())?;
-            Ok(true)
-        }
         "cwd" => {
             // Reports the shell pane's current directory so a restart can reopen it
             // where the user left off. The server binds the update to the pane that
@@ -236,14 +212,6 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
         }
         "grok" => {
             run_agent_exec("grok".to_string(), args.collect())?;
-            Ok(true)
-        }
-        "muse" => {
-            run_agent_exec("muse".to_string(), args.collect())?;
-            Ok(true)
-        }
-        "devin" => {
-            run_agent_exec("devin".to_string(), args.collect())?;
             Ok(true)
         }
         "antigravity" | "agy" => {
@@ -498,7 +466,7 @@ fn request_remote_file_open(target: &str) -> Result<(), String> {
     }
 }
 
-const SEND_USAGE: &str = "usage: session send [--title <text>] [--mode <auto|native|overlay>] [--tone <info|success|warning|error>] [--sound|--no-sound] [--timeout <seconds>] [--stdin] [--] <message>";
+const SEND_USAGE: &str = "usage: session send [--title <text>] [--mode <auto|overlay>] [--tone <info|success|warning|error>] [--sound|--no-sound] [--timeout <seconds>] [--stdin] [--] <message>";
 
 #[derive(Debug, PartialEq)]
 struct NotificationSendArgs {
@@ -539,10 +507,7 @@ fn run_notification_send(args: Vec<String>) -> Result<(), String> {
             "sound": parsed.sound,
             "timeoutMs": parsed.timeout_ms,
         }),
-        // macOS permission/settings IPC and Notification Center scheduling can
-        // occasionally exceed the two-second hook fast path. Avoid reporting a
-        // false failure for a notification the app is still delivering.
-        Duration::from_secs(10),
+        Duration::from_secs(2),
     )?;
     let response = serde_json::from_str::<ControlResponse>(&raw)
         .map_err(|error| format!("invalid Session response: {error}"))?;
@@ -582,15 +547,14 @@ fn parse_notification_send(
             "--title" => title = Some(take_send_value(&mut args, &argument)?),
             "--mode" => {
                 let value = take_send_value(&mut args, &argument)?;
-                if !matches!(value.as_str(), "auto" | "native" | "overlay") {
+                if !matches!(value.as_str(), "auto" | "overlay") {
                     return Err(format!(
-                        "invalid notification mode {value:?}; expected auto, native, or overlay"
+                        "invalid notification mode {value:?}; expected auto or overlay"
                     ));
                 }
                 mode = value;
             }
             "--auto" => mode = "auto".to_string(),
-            "--native" => mode = "native".to_string(),
             "--overlay" => mode = "overlay".to_string(),
             "--tone" => {
                 let value = take_send_value(&mut args, &argument)?;
@@ -853,19 +817,6 @@ pub(crate) fn request_silent(command: &str, payload: Value) -> Result<(), String
     request(command, payload).map(|_| ())
 }
 
-/// As [`request_silent`], but with the socket and token supplied by the caller
-/// rather than read from the environment. The Muse hook path needs this: its
-/// shim runs with `SESSION_*` stripped and recovers both values from the pane
-/// binding file instead.
-pub(crate) fn request_silent_with(
-    socket_path: &str,
-    token: &str,
-    command: &str,
-    payload: Value,
-) -> Result<(), String> {
-    send_request(socket_path, token, command, payload).map(|_| ())
-}
-
 fn request_and_print(command: &str, payload: Value) -> Result<(), String> {
     let response = request(command, payload)?;
     println!("{response}");
@@ -962,15 +913,6 @@ fn request_with_timeout(
         env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
     let token = env::var("SESSION_TOKEN").map_err(|_| "SESSION_TOKEN is not set".to_string())?;
     send_request_with_timeout(&socket_path, &token, command, payload, timeout)
-}
-
-fn send_request(
-    socket_path: &str,
-    token: &str,
-    command: &str,
-    payload: Value,
-) -> Result<String, String> {
-    send_request_with_timeout(socket_path, token, command, payload, Duration::from_secs(2))
 }
 
 fn send_request_with_timeout(
@@ -1221,7 +1163,7 @@ mod tests {
             vec![
                 "--title".into(),
                 "Tests".into(),
-                "--native".into(),
+                "--overlay".into(),
                 "--tone".into(),
                 "success".into(),
                 "--no-sound".into(),
@@ -1239,7 +1181,7 @@ mod tests {
             NotificationSendArgs {
                 title: Some("Tests".into()),
                 body: "-all passed".into(),
-                mode: "native".into(),
+                mode: "overlay".into(),
                 tone: "success".into(),
                 sound: Some(false),
                 timeout_ms: 12_000,

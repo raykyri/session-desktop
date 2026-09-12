@@ -1321,9 +1321,6 @@ mod tests {
             adapters: Default::default(),
             legacy_claude_binary: None,
             claude_plugin_dir: PathBuf::new(),
-            opencode_plugin_dir: PathBuf::new(),
-            pi_extension_dir: PathBuf::new(),
-            cursor_plugin_dir: PathBuf::new(),
         }
     }
 

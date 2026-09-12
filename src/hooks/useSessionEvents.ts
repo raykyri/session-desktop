@@ -123,7 +123,6 @@ export interface UseSessionEventsHandlers {
   onBrowserEscapeRequested?: () => void;
   onResearchChanged?: (event: SessionEvent) => void;
   onUserNotificationRequested?: (event: SessionEvent) => void;
-  onNotificationOpenPane?: (paneId: string) => void;
 }
 
 function stringField(value: unknown, field: string): string | null {
@@ -170,7 +169,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
     onBrowserEscapeRequested,
     onResearchChanged,
     onUserNotificationRequested,
-    onNotificationOpenPane,
   } = handlers;
 
   useEffect(() => {
@@ -218,9 +216,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
       }
       if (event.type === "app.notification_requested") {
         onUserNotificationRequested?.(event);
-      }
-      if (event.type === "app.notification_open_pane" && event.paneId) {
-        onNotificationOpenPane?.(event.paneId);
       }
       const hookEvent = transcriptHookEvent(event);
       if (hookEvent) {

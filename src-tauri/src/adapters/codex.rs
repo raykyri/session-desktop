@@ -3064,7 +3064,6 @@ mod tests {
     use super::*;
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig,
     };
     use crate::state::{AppState, PaneInfo, PaneRuntime, PaneStatus};
     use portable_pty::{Child, ChildKiller, ExitStatus, PtySize, native_pty_system};
@@ -5278,31 +5277,19 @@ trusted_hash = "sha256:trusted"
             workspace_root: temp_dir(),
             socket_path: PathBuf::from("/tmp/session-codex-test.sock"),
             adapters: AdapterConfigs {
-                pi: Default::default(),
                 claude: ClaudeAdapterConfig {
                     binary: Some("claude".to_string()),
                 },
                 codex: CodexAdapterConfig {
                     binary: Some("codex".to_string()),
                 },
-                opencode: OpencodeAdapterConfig {
-                    binary: Some("opencode".to_string()),
-                },
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                muse: MuseAdapterConfig {
-                    binary: Some("muse".to_string()),
-                },
-                cursor: Default::default(),
-                devin: Default::default(),
                 antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: PathBuf::new(),
-            opencode_plugin_dir: PathBuf::new(),
-            pi_extension_dir: PathBuf::new(),
-            cursor_plugin_dir: PathBuf::new(),
         })
     }
 

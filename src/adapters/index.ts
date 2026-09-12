@@ -2,12 +2,7 @@ import type { ComponentType, ReactNode } from "react";
 import { antigravityUiAdapter } from "./antigravity";
 import { claudeUiAdapter } from "./claude";
 import { codexUiAdapter } from "./codex";
-import { cursorUiAdapter } from "./cursor";
-import { devinUiAdapter } from "./devin";
 import { grokUiAdapter } from "./grok";
-import { museUiAdapter } from "./muse";
-import { opencodeUiAdapter } from "./opencode";
-import { piUiAdapter } from "./pi";
 import type { AgentInfo, PaneInfo, RuntimeConfig, Turn, TurnBlock } from "../types";
 
 export type AgentStatus = AgentInfo["status"];
@@ -48,12 +43,7 @@ export interface AgentUiAdapter {
 export const agentUiAdapters = [
   claudeUiAdapter,
   codexUiAdapter,
-  opencodeUiAdapter,
   grokUiAdapter,
-  museUiAdapter,
-  piUiAdapter,
-  cursorUiAdapter,
-  devinUiAdapter,
   antigravityUiAdapter,
 ];
 

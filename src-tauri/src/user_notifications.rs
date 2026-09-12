@@ -5,7 +5,6 @@ use serde_json::json;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tauri::Manager;
 
 const MAX_TITLE_CHARS: usize = 120;
 const MAX_BODY_CHARS: usize = 4_096;
@@ -24,6 +23,8 @@ static RECENT_REQUESTS: LazyLock<Mutex<HashMap<String, VecDeque<Instant>>>> =
 #[serde(rename_all = "camelCase")]
 pub enum NotificationMode {
     Auto,
+    /// Kept so older `session send --native` payloads still deserialize.
+    /// Delivery is always the in-app overlay.
     Native,
     Overlay,
 }
@@ -44,6 +45,7 @@ pub struct SendNotificationRequest {
     pub title: Option<String>,
     pub body: String,
     #[serde(default = "default_mode")]
+    #[allow(dead_code)]
     pub mode: NotificationMode,
     #[serde(default = "default_tone")]
     pub tone: NotificationTone,
@@ -51,13 +53,6 @@ pub struct SendNotificationRequest {
     pub sound: Option<bool>,
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NotificationPermissionInfo {
-    pub supported: bool,
-    pub status: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -202,7 +197,7 @@ fn default_title(state: &AppState, source_pane_id: Option<&str>) -> String {
         .unwrap_or_else(|| "session".to_string());
     // Terminal titles originate in child processes, not in this command's
     // validated payload. Collapse control/whitespace and cap them before they
-    // cross into either AppKit or the DOM.
+    // reach the overlay toast.
     let without_controls = candidate
         .chars()
         .map(|character| {
@@ -258,18 +253,6 @@ fn emit_log_changed(state: &AppState, log: &NotificationLog) {
     ));
 }
 
-fn main_window_is_focused(state: &AppState) -> bool {
-    let Some(app) = state.app_handle() else {
-        return false;
-    };
-    let Some(window) = app.get_webview_window("main") else {
-        return false;
-    };
-    window.is_visible().unwrap_or(false)
-        && !window.is_minimized().unwrap_or(true)
-        && window.is_focused().unwrap_or(false)
-}
-
 pub fn dispatch(
     state: &AppState,
     source_pane_id: Option<&str>,
@@ -297,173 +280,8 @@ pub fn dispatch(
     let log = state.append_notification_log(entry)?;
     emit_log_changed(state, &log);
 
-    let wants_overlay = request.mode == NotificationMode::Overlay
-        || (request.mode == NotificationMode::Auto && main_window_is_focused(state));
-    if wants_overlay {
-        overlay_event(state, source_pane_id, &id, &title, created_at, &request);
-        return Ok(json!({ "accepted": true, "delivery": "overlay" }));
-    }
-
-    match show_native(state, source_pane_id, &title, &request) {
-        Ok(()) => Ok(json!({ "accepted": true, "delivery": "native" })),
-        Err(error) => {
-            overlay_event(state, source_pane_id, &id, &title, created_at, &request);
-            Ok(json!({
-                "accepted": true,
-                "delivery": "overlay",
-                "fallbackReason": error,
-            }))
-        }
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn show_native(
-    state: &AppState,
-    source_pane_id: Option<&str>,
-    title: &str,
-    request: &SendNotificationRequest,
-) -> Result<(), String> {
-    use mac_usernotifications::{AuthorizationStatus, Notification};
-
-    let settings = mac_usernotifications::blocking::get_notification_settings()
-        .map_err(|error| format!("native notification settings unavailable: {error}"))?;
-    if !matches!(
-        settings.authorization_status,
-        AuthorizationStatus::Authorized
-            | AuthorizationStatus::Provisional
-            | AuthorizationStatus::Ephemeral
-    ) {
-        return Err(format!(
-            "native notification permission is {:?}",
-            settings.authorization_status
-        ));
-    }
-
-    let mut notification = Notification::new()
-        .title(title)
-        .message(&request.body)
-        // Bound response bookkeeping even if Notification Center never reports a
-        // dismissal (for example, Clear All). The notification itself is allowed
-        // to remain useful for a full day.
-        .timeout(Duration::from_secs(24 * 60 * 60));
-    if request.sound.unwrap_or(true) {
-        notification = notification.default_sound();
-    }
-    let handle = notification
-        .send_blocking()
-        .map_err(|error| format!("native notification delivery failed: {error}"))?;
-
-    if let (Some(pane_id), Some(app)) = (source_pane_id.map(str::to_string), state.app_handle()) {
-        let state = state.clone();
-        tauri::async_runtime::spawn(async move {
-            if let Ok(response) = handle.response().await
-                && response.is_default_action()
-                && state
-                    .list_panes()
-                    .is_ok_and(|panes| panes.iter().any(|pane| pane.id == pane_id))
-            {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.unminimize();
-                    let _ = window.set_focus();
-                }
-                state.emit(SessionEvent::new(
-                    "app.notification_open_pane",
-                    Some(pane_id.clone()),
-                    None,
-                    json!({ "paneId": pane_id }),
-                ));
-            }
-        });
-    }
-    Ok(())
-}
-
-#[cfg(not(target_os = "macos"))]
-fn show_native(
-    _state: &AppState,
-    _source_pane_id: Option<&str>,
-    _title: &str,
-    _request: &SendNotificationRequest,
-) -> Result<(), String> {
-    Err("native notifications are unavailable on this platform".to_string())
-}
-
-#[tauri::command]
-pub fn notification_log_get(state: tauri::State<'_, AppState>) -> Result<NotificationLog, String> {
-    state.notification_log()
-}
-
-#[tauri::command]
-pub fn notification_log_mark_read(
-    state: tauri::State<'_, AppState>,
-    id: String,
-) -> Result<NotificationLog, String> {
-    let log = state.mark_notification_read(&id)?;
-    emit_log_changed(&state, &log);
-    Ok(log)
-}
-
-#[tauri::command]
-pub fn notification_log_mark_all_read(
-    state: tauri::State<'_, AppState>,
-) -> Result<NotificationLog, String> {
-    let log = state.mark_all_notifications_read()?;
-    emit_log_changed(&state, &log);
-    Ok(log)
-}
-
-#[tauri::command]
-pub fn notification_log_clear(
-    state: tauri::State<'_, AppState>,
-    id: String,
-) -> Result<NotificationLog, String> {
-    let log = state.clear_notification(&id)?;
-    emit_log_changed(&state, &log);
-    Ok(log)
-}
-
-#[tauri::command(async)]
-pub async fn notification_permission_status() -> Result<NotificationPermissionInfo, String> {
-    permission_status().await
-}
-
-#[tauri::command(async)]
-pub async fn notification_request_permission() -> Result<NotificationPermissionInfo, String> {
-    request_permission().await
-}
-
-#[cfg(target_os = "macos")]
-async fn permission_status() -> Result<NotificationPermissionInfo, String> {
-    let settings = mac_usernotifications::get_notification_settings()
-        .await
-        .map_err(|error| format!("failed to read notification permission: {error}"))?;
-    Ok(NotificationPermissionInfo {
-        supported: true,
-        status: format!("{:?}", settings.authorization_status),
-    })
-}
-
-#[cfg(not(target_os = "macos"))]
-async fn permission_status() -> Result<NotificationPermissionInfo, String> {
-    Ok(NotificationPermissionInfo {
-        supported: false,
-        status: "Unavailable".to_string(),
-    })
-}
-
-#[cfg(target_os = "macos")]
-async fn request_permission() -> Result<NotificationPermissionInfo, String> {
-    mac_usernotifications::request_auth()
-        .await
-        .map_err(|error| format!("failed to request notification permission: {error}"))?;
-    permission_status().await
-}
-
-#[cfg(not(target_os = "macos"))]
-async fn request_permission() -> Result<NotificationPermissionInfo, String> {
-    permission_status().await
+    overlay_event(state, source_pane_id, &id, &title, created_at, &request);
+    Ok(json!({ "accepted": true, "delivery": "overlay" }))
 }
 
 #[cfg(test)]
