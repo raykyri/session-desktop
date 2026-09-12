@@ -1,4 +1,4 @@
-use crate::events::QmuxEvent;
+use crate::events::SessionEvent;
 use crate::host::{self, Host};
 use crate::persistence::{self, WorktreeLocation};
 use crate::state::AppState;
@@ -80,7 +80,7 @@ pub fn validate_launch_workspace(
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum RemoteMultiplexer {
-    /// The default because it is the one qmux can currently drive.
+    /// The default because it is the one Session can currently drive.
     #[default]
     Tmux,
     Herdr,
@@ -103,9 +103,10 @@ pub struct RemoteRef {
     /// address resolution belong to the system `ssh` client, never to qmux.
     pub host: String,
     pub multiplexer: RemoteMultiplexer,
-    /// How to invoke the qmux CLI on that host; defaults to `qmux-cli`.
+    /// How to invoke the Session CLI on that host; defaults to `session-cli`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub qmux_cli: Option<String>,
+    #[serde(alias = "qmuxCli")]
+    pub session_cli: Option<String>,
     /// Where agent worktrees live there. The group's `managed_dir` is always
     /// local, so a remote group needs somewhere on its own machine to put them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -171,7 +172,7 @@ pub struct AgentInfo {
     /// Best-effort, display-only workspace most recently observed from this
     /// agent's command stream. This is deliberately separate from
     /// `worktree_dir` / `branch`: those fields describe the launch workspace
-    /// qmux owns and are used by resume, fork, and cleanup.
+    /// Session owns and are used by resume, fork, and cleanup.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_workspace: Option<ActiveWorkspace>,
     pub pane_id: Option<String>,
@@ -200,7 +201,7 @@ pub struct AgentInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub branch_id: Option<String>,
     /// Adapter-owned leaf within a native session tree. This is intentionally
-    /// separate from `branch_id`, which identifies qmux's own thread-graph
+    /// separate from `branch_id`, which identifies Session's own thread-graph
     /// branch and must remain stable when an agent rewinds or switches leaves.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_leaf_id: Option<String>,
@@ -350,7 +351,7 @@ fn group_dir_matches(group: &GroupInfo, canonical: &Path, requested: &Path) -> b
 }
 
 /// Reads a user-picked folder's detached archive for open/repoint decisions.
-/// An unreadable archive (corrupted manifest, a version from a newer qmux, a
+/// An unreadable archive (corrupted manifest, a version from a newer Session, a
 /// damaged response file) must not strand the user with a bare decode error:
 /// these call sites are the only in-app way to use the folder at all, so the
 /// error has to say where the archive lives and how to proceed without it.
@@ -392,7 +393,7 @@ fn create_research_workspace_locked(
     if let Some(bundle) = read_detached_research_for_folder(&canonical)? {
         // A completed node whose response file is absent from the archive
         // (a partial copy between machines, a hand-deleted file) is already
-        // damaged outside qmux — refusing the whole import here turned one
+        // damaged outside Session — refusing the whole import here turned one
         // missing file into a folder that could never be opened again,
         // stranding every intact prompt and answer alongside it. Import
         // everything that survived instead; import_detached_research clears
@@ -404,7 +405,7 @@ fn create_research_workspace_locked(
                 && !bundle.responses.contains_key(&node.id)
             {
                 eprintln!(
-                    "qmux: detached research response {} is missing from {}; importing the node without it",
+                    "session: detached research response {} is missing from {}; importing the node without it",
                     node.id,
                     canonical.display()
                 );
@@ -448,7 +449,7 @@ fn create_research_workspace_locked(
             // The global import and its cleanup receipt are already durable.
             // Startup retries this exact archive instead of risking deletion
             // of some other archive later placed in the folder.
-            eprintln!("qmux: {err}");
+            eprintln!("session: {err}");
         }
         return state
             .group(&imported.id)?
@@ -473,7 +474,7 @@ pub fn reconcile_imported_research_archives(state: &AppState) {
     let groups = match state.list_groups() {
         Ok(groups) => groups,
         Err(err) => {
-            eprintln!("qmux: failed to list imported research cleanup receipts: {err}");
+            eprintln!("session: failed to list imported research cleanup receipts: {err}");
             return;
         }
     };
@@ -481,7 +482,7 @@ pub fn reconcile_imported_research_archives(state: &AppState) {
         group.scope == WorkspaceScope::Research && group.imported_research_archive_id.is_some()
     }) {
         if let Err(err) = reconcile_imported_research_archive(state, &group) {
-            eprintln!("qmux: {err}");
+            eprintln!("session: {err}");
         }
     }
 }
@@ -548,7 +549,7 @@ pub fn rename_research_workspace(
 }
 
 /// Moves a research workspace to a different directory. While a folder is
-/// open its research history (trees, nodes, responses) lives in qmux's global
+/// open its research history (trees, nodes, responses) lives in Session's global
 /// state, so a move repoints the durable record and relocates only the
 /// research-specific state a folder can carry — a detached `.qmux` research
 /// archive belonging to this workspace. The old folder itself and the rest of
@@ -644,7 +645,7 @@ pub fn move_research_workspace(
             // workspace's own history is safe in global state either way.
             // Leave it with the old folder rather than failing the move.
             eprintln!(
-                "qmux: leaving unreadable detached research behind in {}: {err}",
+                "session: leaving unreadable detached research behind in {}: {err}",
                 workspace.dir
             );
         }
@@ -653,7 +654,7 @@ pub fn move_research_workspace(
     workspace.name = group_name_for_dir(&canonical);
     write_group_manifest(&workspace)?;
     state.update_group(workspace.clone())?;
-    state.emit(crate::events::QmuxEvent::new(
+    state.emit(crate::events::SessionEvent::new(
         "group.updated",
         None,
         None,
@@ -756,13 +757,13 @@ pub fn remove_research_workspace(
         // The verified pending form is intentionally importable: after the
         // global commit there is no data-loss reason to report removal as a
         // failure merely because the final directory rename did not land.
-        eprintln!("qmux: detached research remains in recoverable pending form: {err}");
+        eprintln!("session: detached research remains in recoverable pending form: {err}");
     }
     for node_id in node_ids {
         if let Err(err) =
             crate::research::remove_response_snapshot(&state.config().workspace_root, &node_id)
         {
-            eprintln!("qmux: failed to remove detached global response {node_id}: {err}");
+            eprintln!("session: failed to remove detached global response {node_id}: {err}");
         }
     }
     remove_research_workspace_manifest_dir(&workspace);
@@ -782,7 +783,7 @@ fn remove_research_workspace_manifest_dir(workspace: &GroupInfo) {
         && !matches!(err.kind(), std::io::ErrorKind::NotFound)
     {
         eprintln!(
-            "qmux: failed to remove research workspace manifest dir {}: {err}",
+            "session: failed to remove research workspace manifest dir {}: {err}",
             workspace.managed_dir
         );
     }
@@ -806,7 +807,7 @@ fn create_scoped_group(
     let after_group_id = request.after_group_id.clone();
     let group = create_group_record(state, request, scope)?;
     state.insert_group_after(group.clone(), after_group_id.as_deref())?;
-    state.emit(crate::events::QmuxEvent::new(
+    state.emit(crate::events::SessionEvent::new(
         "group.created",
         None,
         None,
@@ -938,7 +939,7 @@ fn set_group_dir_record(
     group.base_ref = None;
     write_group_manifest(&group)?;
     state.update_group(group.clone())?;
-    state.emit(crate::events::QmuxEvent::new(
+    state.emit(crate::events::SessionEvent::new(
         "group.updated",
         None,
         None,
@@ -973,7 +974,7 @@ fn rename_group_record(
         .filter(|name| !name.is_empty());
     write_group_manifest(&group)?;
     state.update_group(group.clone())?;
-    state.emit(crate::events::QmuxEvent::new(
+    state.emit(crate::events::SessionEvent::new(
         "group.updated",
         None,
         None,
@@ -993,7 +994,7 @@ pub fn set_group_collapsed(
     group.collapsed = collapsed;
     write_group_manifest(&group)?;
     state.update_group(group.clone())?;
-    state.emit(crate::events::QmuxEvent::new(
+    state.emit(crate::events::SessionEvent::new(
         "group.updated",
         None,
         None,
@@ -1225,9 +1226,9 @@ fn prepare_agent_workspace_locked(
 }
 
 /// Restores the pane-to-agent binding when an authenticated SessionStart is the
-/// first lifecycle signal qmux can observe for a shell-launched agent.
+/// first lifecycle signal Session can observe for a shell-launched agent.
 ///
-/// Normally qmux's injected `codex` / `claude` / `opencode` / `grok` shell
+/// Normally Session's injected `codex` / `claude` / `opencode` / `grok` shell
 /// function calls `agent.prepare_shell_launch` before exec. That creates and
 /// attaches the agent early enough for the right pane to exist before a fast
 /// SessionStart hook. If that preparation record is later lost or detached while
@@ -1316,7 +1317,7 @@ pub fn recover_shell_agent_from_session_start(
     // starts a transcript-tail thread. Its first read may immediately emit the
     // full history, and the frontend must know which right pane owns those
     // turns first.
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.spawned",
         Some(pane.id.clone()),
         Some(recovered.id.clone()),
@@ -1364,7 +1365,7 @@ pub fn attach_agent_pane(
                 // while the old source still owns this pane and drain post-fork input
                 // into the terminal being replaced.
                 state.cancel_agent_fork_barrier_for_source(&detached_id)?;
-                state.emit(crate::events::QmuxEvent::new(
+                state.emit(crate::events::SessionEvent::new(
                     "agent.detached",
                     Some(pane_id.clone()),
                     Some(detached_id.clone()),
@@ -1439,11 +1440,11 @@ fn detach_known_pane_agent(
             "Forked terminal exited before its initial prompt was accepted",
         ) {
             eprintln!(
-                "qmux: failed to release fork barrier for detached agent {}: {err}",
+                "session: failed to release fork barrier for detached agent {}: {err}",
                 detached.id
             );
         }
-        state.emit(crate::events::QmuxEvent::new(
+        state.emit(crate::events::SessionEvent::new(
             "agent.detached",
             Some(pane_id.to_string()),
             Some(detached.id.clone()),
@@ -1545,7 +1546,7 @@ pub fn acknowledge_agent(
         })?
         .ok_or_else(|| format!("agent {agent_id} was not found"))?;
     if acked.get() {
-        state.emit(crate::events::QmuxEvent::new(
+        state.emit(crate::events::SessionEvent::new(
             "agent.acknowledged",
             agent.pane_id.clone(),
             Some(agent.id.clone()),
@@ -1574,7 +1575,7 @@ pub fn clear_agent_working_status(state: &AppState, agent_id: &str) -> Result<Ag
     let agent = state
         .agent(agent_id)?
         .ok_or_else(|| format!("agent {agent_id} was not found"))?;
-    state.emit(crate::events::QmuxEvent::new(
+    state.emit(crate::events::SessionEvent::new(
         "agent.working_status_cleared",
         agent.pane_id.clone(),
         Some(agent.id.clone()),
@@ -1583,7 +1584,7 @@ pub fn clear_agent_working_status(state: &AppState, agent_id: &str) -> Result<Ag
     Ok(agent)
 }
 
-/// How long after a lone Esc keystroke into a working agent's pane qmux waits for
+/// How long after a lone Esc keystroke into a working agent's pane Session waits for
 /// counter-evidence before concluding the user interrupted the turn.
 const ESC_INTERRUPT_GRACE: std::time::Duration = std::time::Duration::from_secs(3);
 
@@ -1596,7 +1597,7 @@ fn adapter_interrupts_on_lone_escape(adapter: &str) -> bool {
     adapter == "claude"
 }
 
-/// Handles a lone Esc typed into a working agent's pane. In the agent TUIs qmux
+/// Handles a lone Esc typed into a working agent's pane. In the agent TUIs Session
 /// hosts (see `adapter_interrupts_on_lone_escape`), Esc while a turn is running means
 /// "interrupt" — and a turn canceled during its thinking phase produces no Stop hook,
 /// no transcript line, and no idle notification (verified against Claude Code 2.1.x),
@@ -1635,7 +1636,7 @@ pub fn watch_agent_after_escape(state: &AppState, pane_id: &str) {
         let resolved = resolve_agent_escape_watch(&state, &agent_id, baseline);
         state.end_agent_escape_watch(&agent_id);
         if let Some(agent) = resolved {
-            state.emit(crate::events::QmuxEvent::new(
+            state.emit(crate::events::SessionEvent::new(
                 "agent.interrupted",
                 agent.pane_id.clone(),
                 Some(agent.id.clone()),
@@ -1797,8 +1798,8 @@ pub fn remove_captured_worktree(removal: CapturedWorktreeRemoval) -> Result<(), 
     // the worktree removal the user confirmed has already succeeded.
     match soft_delete_branch(&host, &run_dir, &branch) {
         Ok(true) => {}
-        Ok(false) => eprintln!("qmux: kept branch {branch}: not fully merged"),
-        Err(err) => eprintln!("qmux: {err}"),
+        Ok(false) => eprintln!("session: kept branch {branch}: not fully merged"),
+        Err(err) => eprintln!("session: {err}"),
     }
 
     Ok(())
@@ -2003,9 +2004,9 @@ fn worktree_root(
     Ok(root)
 }
 
-/// Resolves the parent directory qmux would use for a newly requested Git
+/// Resolves the parent directory Session would use for a newly requested Git
 /// worktree without creating it or changing the repository's exclude file.
-/// Agent adapters use this to describe qmux's placement policy to tools that
+/// Agent adapters use this to describe Session's placement policy to tools that
 /// may create worktrees themselves.
 pub(crate) fn configured_worktree_root_for_cwd(
     state: &AppState,
@@ -2753,7 +2754,7 @@ pub fn record_agent_active_workspace(
         workspace,
     )?;
     if let Some(agent) = updated.as_ref() {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.workspace_changed",
             agent.pane_id.clone(),
             Some(agent.id.clone()),
@@ -2913,7 +2914,7 @@ pub(crate) fn remove_pristine_group_scaffold(group: &GroupInfo) {
         && err.kind() != std::io::ErrorKind::NotFound
     {
         eprintln!(
-            "qmux: failed to remove rolled-back group manifest {}: {err}",
+            "session: failed to remove rolled-back group manifest {}: {err}",
             manifest.display()
         );
         return;
@@ -2925,7 +2926,7 @@ pub(crate) fn remove_pristine_group_scaffold(group: &GroupInfo) {
         && err.kind() != std::io::ErrorKind::NotFound
     {
         eprintln!(
-            "qmux: failed to remove rolled-back group metadata directory {}: {err}",
+            "session: failed to remove rolled-back group metadata directory {}: {err}",
             qmux_dir.display()
         );
         return;
@@ -2934,7 +2935,7 @@ pub(crate) fn remove_pristine_group_scaffold(group: &GroupInfo) {
         && err.kind() != std::io::ErrorKind::NotFound
     {
         eprintln!(
-            "qmux: failed to remove rolled-back group directory {}: {err}",
+            "session: failed to remove rolled-back group directory {}: {err}",
             managed_dir.display()
         );
     }
@@ -2984,7 +2985,7 @@ mod tests {
     use super::*;
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig, QmuxConfig,
+        MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
     };
     use std::process::Command;
 
@@ -2994,7 +2995,7 @@ mod tests {
             label: "workbox".to_string(),
             host: "workbox".to_string(),
             multiplexer: RemoteMultiplexer::Tmux,
-            qmux_cli: None,
+            session_cli: None,
             workspace_root: None,
         }
     }
@@ -3044,7 +3045,7 @@ mod tests {
             label: "devbox".to_string(),
             host: "user@devbox".to_string(),
             multiplexer: RemoteMultiplexer::Tmux,
-            qmux_cli: None,
+            session_cli: None,
             workspace_root: root.map(str::to_string),
         }))
     }
@@ -3243,7 +3244,7 @@ mod tests {
     ) -> AppState {
         std::fs::create_dir_all(&workspace_root).unwrap();
         let socket_path = workspace_root.join("qmux.sock");
-        AppState::new(QmuxConfig {
+        AppState::new(SessionConfig {
             remotes,
             workspace_root,
             socket_path,
@@ -4524,7 +4525,7 @@ mod tests {
         manifest["nodes"][0]["responseSnapshotAt"] = serde_json::json!(2);
         std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
 
-        // Simulate the archive losing the response file outside qmux — a
+        // Simulate the archive losing the response file outside Session — a
         // partial copy between machines, or a hand-deleted file.
         let response_file = project
             .join(crate::persistence::STATE_DIR)
@@ -4613,7 +4614,7 @@ mod tests {
         );
         assert!(error.contains("move"), "{error}");
 
-        // An archive from a newer qmux gets the same actionable framing plus
+        // An archive from a newer Session gets the same actionable framing plus
         // the version hint.
         let mut manifest = serde_json::to_value(sample_detached_manifest(&project)).unwrap();
         manifest["version"] = serde_json::json!(999);

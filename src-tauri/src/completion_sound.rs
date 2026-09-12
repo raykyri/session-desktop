@@ -1,4 +1,4 @@
-use crate::events::QmuxEvent;
+use crate::events::SessionEvent;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::sync::LazyLock;
@@ -143,11 +143,11 @@ impl CompletionSoundState {
     /// Returns the allowlisted macOS system sound name for a genuine live chat
     /// completion. Lifecycle state lives in the app process, so a WebView crash
     /// or reload cannot erase a Running observation before the matching Done.
-    pub fn observe_event(&mut self, event: &QmuxEvent) -> Option<String> {
+    pub fn observe_event(&mut self, event: &SessionEvent) -> Option<String> {
         self.observe_event_at(event, Instant::now())
     }
 
-    fn observe_event_at(&mut self, event: &QmuxEvent, now: Instant) -> Option<String> {
+    fn observe_event_at(&mut self, event: &SessionEvent, now: Instant) -> Option<String> {
         if event.event_type == "group.created"
             && let Some(group) = event.payload.get("group")
             && group.get("scope").and_then(|value| value.as_str()) == Some("research")
@@ -230,8 +230,8 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    fn agent_event(event_type: &str, agent_id: &str, status: &str) -> QmuxEvent {
-        QmuxEvent::new(
+    fn agent_event(event_type: &str, agent_id: &str, status: &str) -> SessionEvent {
+        SessionEvent::new(
             event_type,
             None,
             Some(agent_id.to_string()),
@@ -244,8 +244,8 @@ mod tests {
         agent_id: &str,
         group_id: &str,
         status: &str,
-    ) -> QmuxEvent {
-        QmuxEvent::new(
+    ) -> SessionEvent {
+        SessionEvent::new(
             event_type,
             None,
             Some(agent_id.to_string()),

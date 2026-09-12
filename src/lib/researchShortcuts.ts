@@ -5,8 +5,8 @@
 // target component is mounted at most once (the active document, the research
 // sidebar's switcher), so the events carry no addressing detail.
 
-const FOCUS_FOLLOWUPS_EVENT = "qmux:research-focus-followups";
-const TOGGLE_FOLDER_MENU_EVENT = "qmux:research-toggle-folder-menu";
+const FOCUS_FOLLOWUPS_EVENT = "session:research-focus-followups";
+const TOGGLE_FOLDER_MENU_EVENT = "session:research-toggle-folder-menu";
 
 /** Asks the mounted research document to bring its follow-up composer into
  * view and focus it. No-op when no document is on the research stage. */

@@ -1,4 +1,4 @@
-use crate::events::QmuxEvent;
+use crate::events::SessionEvent;
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -233,7 +233,7 @@ fn overlay_event(
     created_at: i64,
     request: &SendNotificationRequest,
 ) {
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "app.notification_requested",
         source_pane_id.map(str::to_string),
         None,
@@ -250,7 +250,7 @@ fn overlay_event(
 }
 
 fn emit_log_changed(state: &AppState, log: &NotificationLog) {
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "app.notification_log_changed",
         None,
         None,
@@ -368,7 +368,7 @@ fn show_native(
                     let _ = window.unminimize();
                     let _ = window.set_focus();
                 }
-                state.emit(QmuxEvent::new(
+                state.emit(SessionEvent::new(
                     "app.notification_open_pane",
                     Some(pane_id.clone()),
                     None,

@@ -91,7 +91,7 @@ export interface PaneInfo {
   // Wall-clock millis when the pane was last focused. Stamped by the backend at
   // spawn and on activation; feeds the group spawn-cwd heuristic.
   lastActiveAt?: number;
-  // True for panes recreated from persisted state after a qmux restart.
+  // True for panes recreated from persisted state after a Session restart.
   recovered?: boolean;
   // Deprecated compatibility field. Flat tab layouts always use zero.
   depth?: number;
@@ -203,7 +203,7 @@ export interface RemoteChoice {
   label: string;
   host: string;
   multiplexer: RemoteMultiplexer;
-  qmuxCli?: string | null;
+  sessionCli?: string | null;
   workspaceRoot?: string | null;
   source: "config" | "preferences";
   /** False for a multiplexer qmux cannot drive yet — list it, but don't offer
@@ -215,12 +215,12 @@ export interface SavedRemote {
   host: string;
   label?: string | null;
   multiplexer: RemoteMultiplexer;
-  qmuxCli?: string | null;
+  sessionCli?: string | null;
   workspaceRoot?: string | null;
 }
 
 export interface RemoteProbeCheck {
-  id: "ssh" | "tmux" | "qmuxCli";
+  id: "ssh" | "tmux" | "sessionCli";
   label: string;
   status: "passed" | "failed" | "skipped";
   message: string;
@@ -237,8 +237,8 @@ export interface RemoteRef {
   label: string;
   host: string;
   multiplexer: RemoteMultiplexer;
-  /** How to invoke the qmux CLI on that host; defaults to `qmux-cli`. */
-  qmuxCli?: string | null;
+  /** How to invoke the Session CLI on that host; defaults to `session-cli`. */
+  sessionCli?: string | null;
   /** Where agent worktrees live there. A group's `managedDir` is always local,
    * so a remote group needs somewhere on its own machine to put them. */
   workspaceRoot?: string | null;
@@ -330,7 +330,7 @@ export interface RepositoryInventory {
 }
 
 /** One artifact-tray entry: a file or loopback URL opened from an agent pane via
- * `qmux open`. File artifacts carry `path` (canonical, absolute) and are re-opened
+ * `session open`. File artifacts carry `path` (canonical, absolute) and are re-opened
  * through `browserOpenLocalPath`, which mints a fresh file-server URL; URL
  * artifacts carry the loopback `url` directly. */
 export interface ArtifactInfo {
@@ -899,7 +899,7 @@ export interface TranscriptCopyPayload {
   hooks: TranscriptHookEvent[];
 }
 
-export interface QmuxEvent {
+export interface SessionEvent {
   type: string;
   paneId?: string | null;
   agentId?: string | null;

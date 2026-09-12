@@ -7,8 +7,8 @@ use super::{
     prepared_shell_agent, record_shell_fork_lineage, record_shell_session_lineage,
     reusable_session_agent, shell_cli_model, shell_quote_arg, shell_quote_path,
 };
-use crate::config::QmuxConfig;
-use crate::events::QmuxEvent;
+use crate::config::SessionConfig;
+use crate::events::SessionEvent;
 use crate::host::Host;
 use crate::pty::{
     CommandPlan, InitialPaneSize, PaneMeta, SupportFile, agent_pane_envs,
@@ -81,7 +81,7 @@ pub struct ClaudeAdapter {
 }
 
 impl ClaudeAdapter {
-    pub fn new(config: &QmuxConfig) -> Self {
+    pub fn new(config: &SessionConfig) -> Self {
         Self {
             binary: config.claude_binary(),
             plugin_dir: config.claude_plugin_dir.clone(),
@@ -94,7 +94,7 @@ impl ClaudeAdapter {
     /// sole skill-injection vector: it points at a qmux-owned directory and never
     /// touches the user's `~/.claude` or the project's `.claude`.
     fn plugin_dir_args(&self, host: &Host) -> Vec<String> {
-        // The bundled plugin lives beside the qmux app. It is not implicitly
+        // The bundled plugin lives beside the Session app. It is not implicitly
         // present on an SSH host, and passing its Mac path would make Claude
         // reject an otherwise valid remote launch. Lifecycle hooks are shipped
         // separately as a pane-owned settings file; remote plugin installation
@@ -756,7 +756,7 @@ impl ClaudeAdapter {
             );
         }
 
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.recovered",
             Some(pane.id.clone()),
             Some(restored.id.clone()),
@@ -869,7 +869,7 @@ impl ClaudeAdapter {
         // response returns — there is no PTY-spawn step in between to
         // materialize support files. Route the tiny settings plan through the
         // owning pane's host so a remote shell receives remote paths and its
-        // configured qmux-cli in the generated hook commands.
+        // configured session-cli in the generated hook commands.
         let settings_path = match hook_settings_support_file(state.config(), &request.pane_id)
             .and_then(|(settings_path, hook_settings)| {
                 let mut support_plan = CommandPlan {
@@ -922,7 +922,7 @@ impl ClaudeAdapter {
 
         let agent_id = agent.id.clone();
         let worktree_dir = agent.worktree_dir.clone();
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.spawned",
             Some(request.pane_id),
             Some(agent_id),
@@ -1195,7 +1195,7 @@ impl ClaudeAdapter {
                 let waiting_on_subagents = if let Some(agent) = agent.as_mut() {
                     // Claude 2.1.145+ reports its live task registry directly on
                     // Stop. This closes the race where a background agent is
-                    // launched before qmux observes SubagentStart (and also covers
+                    // launched before Session observes SubagentStart (and also covers
                     // background work that is not a subagent). Older versions omit
                     // the field and continue to rely on the hook-backed tracker.
                     // Only tasks still marked running count: a registry that
@@ -1279,7 +1279,7 @@ impl ClaudeAdapter {
                 "agent.session_end"
             }
             other => {
-                return Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+                return Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
                     format!("agent.hook.{other}"),
                     pane_id,
                     agent.map(|agent| agent.id),
@@ -1323,7 +1323,7 @@ impl ClaudeAdapter {
             );
         }
 
-        Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+        Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
             event_type,
             pane_id,
             agent.map(|agent| agent.id),
@@ -1553,7 +1553,7 @@ fn claude_utility_command(arg: &str) -> bool {
 /// invocation isn't resuming a specific session.
 fn claude_resume_session_id(args: &[String]) -> Option<&str> {
     // A native Claude fork resumes the source transcript but deliberately creates a
-    // different session. Reusing the source qmux record would let the fork's hooks
+    // different session. Reusing the source Session record would let the fork's hooks
     // overwrite the source tab's session/transcript identity.
     if args
         .iter()
@@ -1717,7 +1717,7 @@ fn hook_settings_nonce() -> Result<String, String> {
 /// pane loaded. Because that path was stable and writable by any process running as
 /// the desktop user, a prompt-injected agent in one pane could overwrite it to inject
 /// a lifecycle-hook command into *another* pane's Claude — which runs with that pane's
-/// `QMUX_TOKEN` — crossing qmux's per-pane authority boundary. Writing a fresh,
+/// `SESSION_TOKEN` — crossing Session's per-pane authority boundary. Writing a fresh,
 /// unpredictably-named file per spawn under a `0700` `.qmux/hooks/` dir, created with
 /// `O_EXCL` at `0600`, removes the shared target and the pre-planted-file/symlink
 /// race: there is no stable path to overwrite, and a file planted at our random path
@@ -1732,10 +1732,10 @@ fn hook_settings_nonce() -> Result<String, String> {
 /// contract carries the previous inline writer's security behavior: owner-only
 /// directory chain, per-pane prefix pruning, and O_EXCL creation at 0600.
 pub fn hook_settings_support_file(
-    config: &QmuxConfig,
+    config: &SessionConfig,
     pane_id: &str,
 ) -> Result<(PathBuf, SupportFile), String> {
-    // qmux mints pane ids itself, but validate before using one in a filename so a
+    // Session mints pane ids itself, but validate before using one in a filename so a
     // malformed caller can never traverse out of the hooks dir or spoof another pane's
     // prefix during the prune below.
     if pane_id.is_empty()
@@ -1747,8 +1747,8 @@ pub fn hook_settings_support_file(
     }
 
     let hooks_dir = config.workspace_root.join(".qmux").join("hooks");
-    let qmux_cli = crate::launch_path::qmux_cli_path()
-        .map_err(|err| format!("failed to resolve qmux executable for hooks: {err}"))?;
+    let session_cli = crate::launch_path::session_cli_path()
+        .map_err(|err| format!("failed to resolve Session executable for hooks: {err}"))?;
     let mut hooks = serde_json::Map::new();
     for event in CLAUDE_HOOK_EVENTS {
         hooks.insert(
@@ -1759,7 +1759,7 @@ pub fn hook_settings_support_file(
                     "hooks": [
                         {
                             "type": "command",
-                            "command": format!("{} notify {}", shell_quote_path(&qmux_cli), event)
+                            "command": format!("{} notify {}", shell_quote_path(&session_cli), event)
                         }
                     ]
                 }
@@ -1776,7 +1776,7 @@ pub fn hook_settings_support_file(
                     "hooks": [
                         {
                             "type": "command",
-                            "command": format!("{} notify {}", shell_quote_path(&qmux_cli), event)
+                            "command": format!("{} notify {}", shell_quote_path(&session_cli), event)
                         }
                     ]
                 }))
@@ -1823,7 +1823,7 @@ pub struct ClaudeSkill {
 /// Enumerates the skills inside the qmux-managed Claude plugin (`<plugin>/skills/*`).
 /// Returns an empty list when the plugin directory is absent so the launcher simply
 /// shows no skill checkboxes rather than erroring.
-pub fn list_skills(config: &QmuxConfig) -> Vec<ClaudeSkill> {
+pub fn list_skills(config: &SessionConfig) -> Vec<ClaudeSkill> {
     let plugin_dir = &config.claude_plugin_dir;
     let skills_dir = plugin_dir.join("skills");
     let Ok(entries) = fs::read_dir(&skills_dir) else {
@@ -1867,7 +1867,7 @@ pub fn list_skills(config: &QmuxConfig) -> Vec<ClaudeSkill> {
 /// The plugin's namespace, taken from `.claude-plugin/plugin.json`'s `name`, which
 /// is how Claude prefixes the skill's slash command. When the manifest is missing or
 /// nameless, fall back to the plugin directory name (Claude's own default) rather
-/// than a hardcoded `qmux`, so the displayed command matches what Claude registers.
+/// than a hardcoded `session`, so the displayed command matches what Claude registers.
 fn plugin_namespace(plugin_dir: &Path) -> String {
     let manifest = plugin_dir.join(".claude-plugin").join("plugin.json");
     fs::read_to_string(&manifest)
@@ -1975,7 +1975,7 @@ fn finish_agent_after_idle(state: &AppState, agent: &AgentInfo) -> Result<bool, 
         Ok(IdleResolution::Drained) => Ok(true),
         Ok(IdleResolution::Paused | IdleResolution::Idle) => Ok(false),
         Err(err) => {
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "agent.queue_error",
                 agent.pane_id.clone(),
                 Some(agent.id.clone()),
@@ -1989,7 +1989,7 @@ fn finish_agent_after_idle(state: &AppState, agent: &AgentInfo) -> Result<bool, 
 /// Holds queued follow-ups after a failed stop. Never drains.
 fn finish_agent_after_failure(state: &AppState, agent: &AgentInfo) -> Result<bool, String> {
     if let Err(err) = advance_after_failure(state, &agent.id) {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.queue_error",
             agent.pane_id.clone(),
             Some(agent.id.clone()),
@@ -2190,7 +2190,7 @@ fn agent_runs_locally(state: &AppState, agent: &AgentInfo) -> bool {
 ///
 /// A hook arrives over the control socket carrying the pane's token, so a
 /// prompt-injected agent can forge one. We can't fully validate the *first* path —
-/// SessionStart is how qmux discovers it, and Claude may not have written the file
+/// SessionStart is how Session discovers it, and Claude may not have written the file
 /// to disk yet — but we require a `.jsonl` extension, and once the agent is bound
 /// we require any later path to be a sibling in the same session directory. Claude
 /// keeps a project's sessions in one flat directory, so a legitimate rotation
@@ -3005,7 +3005,7 @@ mod tests {
     }
 
     fn test_state() -> AppState {
-        AppState::new(QmuxConfig {
+        AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root: PathBuf::from("/tmp/qmux-hooks-test"),
             socket_path: PathBuf::from("/tmp/qmux-hooks-test.sock"),
@@ -3039,7 +3039,7 @@ mod tests {
     }
 
     fn test_state_with_claude_binary(binary: &Path) -> AppState {
-        AppState::new(QmuxConfig {
+        AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root: unique_test_dir("qmux-claude-workspace"),
             socket_path: unique_test_dir("qmux-claude-socket").join("qmux.sock"),
@@ -3083,7 +3083,7 @@ mod tests {
             id: "remote-1".to_string(),
             label: "builder".to_string(),
             ssh: "builder.example".to_string(),
-            qmux_cli: "/opt/remote/bin/qmux-cli".to_string(),
+            session_cli: "/opt/remote/bin/session-cli".to_string(),
             workspace_root: Some("/srv/qmux".to_string()),
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
         });
@@ -3108,7 +3108,7 @@ mod tests {
     fn hook_settings_are_written_under_qmux_workspace_root() {
         let workspace_root = unique_test_dir("qmux-claude-global-hooks");
         let project_dir = unique_test_dir("qmux-claude-project");
-        let config = QmuxConfig {
+        let config = SessionConfig {
             remotes: Default::default(),
             workspace_root: workspace_root.clone(),
             socket_path: unique_test_dir("qmux-claude-hooks-socket").join("qmux.sock"),
@@ -3338,7 +3338,7 @@ mod tests {
                     label: "Remote".to_string(),
                     host: "remote.example".to_string(),
                     multiplexer: RemoteMultiplexer::Tmux,
-                    qmux_cli: None,
+                    session_cli: None,
                     workspace_root: None,
                 }),
                 agents: vec!["agent-1".to_string()],
@@ -3370,7 +3370,7 @@ mod tests {
         }
     }
 
-    fn ingest(state: &AppState, notification: AdapterNotification) -> QmuxEvent {
+    fn ingest(state: &AppState, notification: AdapterNotification) -> SessionEvent {
         match ClaudeAdapter::new(state.config()).ingest_notification(state, notification) {
             Ok(AdapterNotificationOutcome::Event(event)) => event,
             Err(err) => panic!("{err}"),
@@ -4812,7 +4812,7 @@ mod tests {
         let _ = fs::remove_dir_all(&plugin_dir);
         fs::create_dir_all(&plugin_dir).unwrap();
 
-        // No manifest -> directory name (what Claude itself would use), not "qmux".
+        // No manifest -> directory name (what Claude itself would use), not "Session".
         assert_eq!(
             plugin_namespace(&plugin_dir),
             plugin_dir.file_name().unwrap().to_string_lossy()
@@ -4859,7 +4859,7 @@ mod tests {
         )
         .unwrap();
 
-        let config = QmuxConfig {
+        let config = SessionConfig {
             remotes: Default::default(),
             workspace_root: env::temp_dir(),
             socket_path: env::temp_dir().join("qmux-list.sock"),
@@ -4907,7 +4907,7 @@ mod tests {
             MuseAdapterConfig, OpencodeAdapterConfig,
         };
 
-        let config = QmuxConfig {
+        let config = SessionConfig {
             remotes: Default::default(),
             workspace_root: env::temp_dir(),
             socket_path: env::temp_dir().join("qmux-empty.sock"),
@@ -4967,7 +4967,7 @@ mod tests {
             .unwrap();
         }
 
-        let config = QmuxConfig {
+        let config = SessionConfig {
             remotes: Default::default(),
             workspace_root: env::temp_dir(),
             socket_path: env::temp_dir().join("qmux-dup.sock"),

@@ -2,7 +2,7 @@
 // bytes in ~/.claude/image-cache and writes "[Image: source: <path>]" as its own
 // text block, images referenced inline in a typed prompt appear as "[Image #N]",
 // and Codex serializes clipboard attachments as an empty <image ...></image>
-// block whose name may be "[Image]" or "[Image #N]". Images pasted into a qmux
+// block whose name may be "[Image]" or "[Image #N]". Images pasted into a Session
 // composer/queue are stored as "[Image: <path>]"
 // with an absolute path (the form delivered to the agent as text). All shapes
 // collapse to a muted "[Image]" chip in compact views, or a thumbnail where the
@@ -49,7 +49,7 @@ export function collapseImageMarkers(text: string): string {
   return text.replace(imageMarkerPattern(), COLLAPSED_IMAGE_LABEL);
 }
 
-// Both the Claude Code "[Image: source: <path>]" marker and the qmux
+// Both the Claude Code "[Image: source: <path>]" marker and the Session
 // "[Image: <path>]" paste marker carry an on-disk path; the "source: " prefix is
 // optional so one extractor handles both.
 const IMAGE_MARKER_PATH = /^\[Image: (?:source: )?([^\]\n]*)\]$/;

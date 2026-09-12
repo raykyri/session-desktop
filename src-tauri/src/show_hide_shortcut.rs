@@ -50,7 +50,7 @@ pub fn init<R: Runtime>(app: &AppHandle<R>, workspace_root: &Path) {
     let accelerator = match persistence::load_preferences(workspace_root) {
         Ok(preferences) => preferences.show_hide_shortcut,
         Err(err) => {
-            eprintln!("qmux: failed to read show/hide shortcut preference: {err}");
+            eprintln!("session: failed to read show/hide shortcut preference: {err}");
             None
         }
     };
@@ -69,7 +69,7 @@ pub fn init<R: Runtime>(app: &AppHandle<R>, workspace_root: &Path) {
                 Some(Ok(())) => inner.registered_accelerator = configured_accelerator,
                 Some(Err(err)) => {
                     inner.last_error = Some(err.clone());
-                    eprintln!("qmux: failed to register show/hide shortcut: {err}");
+                    eprintln!("session: failed to register show/hide shortcut: {err}");
                 }
                 None => {}
             }
@@ -78,7 +78,7 @@ pub fn init<R: Runtime>(app: &AppHandle<R>, workspace_root: &Path) {
             let mut inner = state.inner.lock().unwrap();
             inner.configured_accelerator = accelerator;
             inner.last_error = Some(err.clone());
-            eprintln!("qmux: invalid show/hide shortcut preference: {err}");
+            eprintln!("session: invalid show/hide shortcut preference: {err}");
         }
     }
 }
@@ -98,7 +98,7 @@ pub fn handle_global_shortcut<R: Runtime>(
         return;
     }
     if let Err(err) = toggle_qmux_visibility(app) {
-        eprintln!("qmux: failed to toggle app visibility: {err}");
+        eprintln!("session: failed to toggle app visibility: {err}");
     }
 }
 
@@ -361,7 +361,7 @@ pub(crate) fn replace_active_registration(
     Ok(())
 }
 
-/// While the capture input is focused no qmux shortcut may stay registered or
+/// While the capture input is focused no Session shortcut may stay registered or
 /// macOS will consume that chord before the webview can record it. Probe a new
 /// chord synchronously, then release it until capture ends.
 fn probe_registration(
@@ -465,10 +465,10 @@ pub fn toggle_qmux_visibility<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<(
     };
 
     // A human-browser page can temporarily give key-window status to WebKit's
-    // own AppKit UI (for example a popup or panel) while qmux remains the active
+    // own AppKit UI (for example a popup or panel) while Session remains the active
     // application. Tauri's window focus check then reports false and turns a
     // requested hide into a no-op show. Application activation is the stable
-    // macOS boundary: it still distinguishes qmux from whichever external app
+    // macOS boundary: it still distinguishes Session from whichever external app
     // should be replaced when the global shortcut is pressed there.
     #[cfg(target_os = "macos")]
     let app_is_active = crate::native_terminal::application_is_active();

@@ -1,6 +1,6 @@
-//! The qmux in-pane CLI. On the local machine the qmux app binary doubles as
+//! The Session in-pane CLI. On the local machine the Session app binary doubles as
 //! the CLI (the app's `main` dispatches through [`run_cli_if_requested`]
-//! before starting Tauri); the standalone `qmux-cli` binary built from this
+//! before starting Tauri); the standalone `session-cli` binary built from this
 //! crate carries the same commands without the app, so a host that never runs
 //! the app — a remote box reached over ssh — can still service hooks, cwd
 //! reporting, and forks once a transport exists.
@@ -11,7 +11,7 @@ mod muse;
 mod public_cli;
 pub mod transcript_stream;
 
-use qmux_proto::{
+use session_proto::{
     BrowserOpenFileHeader, ControlRequest, ControlResponse, MAX_REMOTE_OPEN_FILE_BYTES,
     WorkspaceObservation, WorkspaceObservationKind,
 };
@@ -27,8 +27,8 @@ use std::time::{Duration, Instant};
 
 const INITIAL_REMOTE_REPORT_TIMEOUT: Duration = Duration::from_secs(5);
 const INITIAL_REMOTE_REPORT_RETRY_INTERVAL: Duration = Duration::from_millis(50);
-const MCP_USAGE_HINT: &str = "Add `qmux mcp` as a stdio MCP server in your agent CLI.\nRun it inside a qmux agent pane so it inherits the authenticated environment.";
-const SYNTAX_ERROR_PREFIX: &str = "\u{1d}qmux-syntax:";
+const MCP_USAGE_HINT: &str = "Add `session mcp` as a stdio MCP server in your agent CLI.\nRun it inside a session agent pane so it inherits the authenticated environment.";
+const SYNTAX_ERROR_PREFIX: &str = "\u{1d}session-syntax:";
 
 fn syntax_error(message: String) -> String {
     format!("{SYNTAX_ERROR_PREFIX}{message}")
@@ -64,13 +64,13 @@ struct PreparedLaunchEnv {
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn version_line() -> String {
-    format!("qmux-cli {VERSION}")
+    format!("session-cli {VERSION}")
 }
 
-/// Parses `qmux-cli 0.3.2` (and trailing noise) into the version token.
+/// Parses `session-cli 0.3.2` (and trailing noise) into the version token.
 pub fn parse_version_line(line: &str) -> Option<&str> {
     line.trim()
-        .strip_prefix("qmux-cli ")?
+        .strip_prefix("session-cli ")?
         .split_whitespace()
         .next()
 }
@@ -78,7 +78,7 @@ pub fn parse_version_line(line: &str) -> Option<&str> {
 pub fn run_cli_if_requested() -> Result<bool, String> {
     let mut args = env::args().skip(1);
     let Some(command) = args.next() else {
-        if env::var_os("QMUX_SOCK").is_some() && env::var_os("QMUX_TOKEN").is_some() {
+        if env::var_os("SESSION_SOCK").is_some() && env::var_os("SESSION_TOKEN").is_some() {
             println!("{MCP_USAGE_HINT}");
             return Ok(true);
         }
@@ -122,7 +122,7 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
         "notify" => {
             let event = args
                 .next()
-                .ok_or_else(|| "usage: qmux notify <event>".to_string())?;
+                .ok_or_else(|| "usage: session notify <event>".to_string())?;
             let mut stdin = String::new();
             std::io::stdin()
                 .read_to_string(&mut stdin)
@@ -130,27 +130,27 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
             let mut payload = parse_payload(&stdin);
             add_transcript_path(
                 &mut payload,
-                env::var("QMUX_TRANSCRIPT_PATH").ok().as_deref(),
+                env::var("SESSION_TRANSCRIPT_PATH").ok().as_deref(),
             );
             request_silent(
                 "hook.notify",
                 json!({
                     "event": event,
-                    "paneId": env::var("QMUX_PANE_ID").ok(),
-                    "agentId": env::var("QMUX_AGENT_ID").ok(),
-                    "adapterId": env::var("QMUX_ADAPTER_ID").ok(),
+                    "paneId": env::var("SESSION_PANE_ID").ok(),
+                    "agentId": env::var("SESSION_AGENT_ID").ok(),
+                    "adapterId": env::var("SESSION_ADAPTER_ID").ok(),
                     "payload": payload,
                 }),
             )?;
             Ok(true)
         }
         "muse-notify" => {
-            // Muse's hook environment has no QMUX_* variables to identify the
+            // Muse's hook environment has no SESSION_* variables to identify the
             // pane with, so this command resolves it from the payload instead.
             // See the `muse` module.
             let event = args
                 .next()
-                .ok_or_else(|| "usage: qmux muse-notify <event> [bindings-dir]".to_string())?;
+                .ok_or_else(|| "usage: session muse-notify <event> [bindings-dir]".to_string())?;
             // The generated shim always supplies the directory, because Muse
             // strips every variable it could otherwise be derived from.
             muse::notify(event, args.next())?;
@@ -158,11 +158,11 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
         }
         "cursor-notify" => {
             // cursor-agent runs plugin hooks with a constructed env that does
-            // not inherit QMUX_*. The generated plugin shim therefore resolves
+            // not inherit SESSION_*. The generated plugin shim therefore resolves
             // the pane from a binding file, the same way muse-notify does.
             let event = args
                 .next()
-                .ok_or_else(|| "usage: qmux cursor-notify <event> [bindings-dir]".to_string())?;
+                .ok_or_else(|| "usage: session cursor-notify <event> [bindings-dir]".to_string())?;
             cursor::notify(event, args.next())?;
             Ok(true)
         }
@@ -173,16 +173,16 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
             let initial = match args.next().as_deref() {
                 None => false,
                 Some("--initial") if args.next().is_none() => true,
-                _ => return Err(syntax_error("usage: qmux cwd [--initial]".to_string())),
+                _ => return Err(syntax_error("usage: session cwd [--initial]".to_string())),
             };
             let cwd = env::current_dir()
                 .map_err(|err| format!("failed to read current directory: {err}"))?;
             let payload = json!({
-                "paneId": env::var("QMUX_PANE_ID").ok(),
+                "paneId": env::var("SESSION_PANE_ID").ok(),
                 "cwd": cwd.display().to_string(),
                 "activeWorkspace": inspect_workspace(&cwd),
             });
-            if initial && env::var("QMUX_REMOTE").ok().as_deref() == Some("1") {
+            if initial && env::var("SESSION_REMOTE").ok().as_deref() == Some("1") {
                 retry_initial_remote_report(|| request_silent("pane.set_workspace", payload.clone()))?;
             } else {
                 request_silent("pane.set_workspace", payload)?;
@@ -192,7 +192,7 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
         "pane-write" => {
             let pane_id = args
                 .next()
-                .ok_or_else(|| "usage: qmux pane-write <pane-id> <text>".to_string())?;
+                .ok_or_else(|| "usage: session pane-write <pane-id> <text>".to_string())?;
             let data = args.collect::<Vec<_>>().join(" ");
             request_and_print(
                 "pane.write",
@@ -208,7 +208,7 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
         "agent-exec" => {
             let adapter_id = args
                 .next()
-                .ok_or_else(|| "usage: qmux agent-exec <adapter-id> [args...]".to_string())?;
+                .ok_or_else(|| "usage: session agent-exec <adapter-id> [args...]".to_string())?;
             run_agent_exec(adapter_id, args.collect())?;
             Ok(true)
         }
@@ -220,7 +220,7 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
             // at the prompt, so the wrapper discards this command's output.
             request_silent(
                 "agent.detach_pane",
-                json!({ "paneId": env::var("QMUX_PANE_ID").ok() }),
+                json!({ "paneId": env::var("SESSION_PANE_ID").ok() }),
             )?;
             Ok(true)
         }
@@ -292,19 +292,19 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
         "open" => {
             let target = args
                 .next()
-                .ok_or_else(|| "usage: qmux open <file|url>".to_string())?;
+                .ok_or_else(|| "usage: session open <file|url>".to_string())?;
             if args.next().is_some() {
-                return Err(syntax_error("usage: qmux open <file|url>".to_string()));
+                return Err(syntax_error("usage: session open <file|url>".to_string()));
             }
-            if env::var("QMUX_REMOTE").ok().as_deref() == Some("1") {
+            if env::var("SESSION_REMOTE").ok().as_deref() == Some("1") {
                 if target.starts_with("http://") || target.starts_with("https://") {
                     return Err(
-                        "remote qmux open supports files only; remote URLs are not forwarded"
+                        "remote session open supports files only; remote URLs are not forwarded"
                             .to_string(),
                     );
                 }
                 request_remote_file_open(&target)?;
-                println!("Opened {target} in the qmux browser overlay.");
+                println!("Opened {target} in the session browser overlay.");
                 return Ok(true);
             }
             let cwd = env::current_dir()
@@ -315,7 +315,7 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
                 .get("url")
                 .and_then(Value::as_str)
                 .unwrap_or(target.as_str());
-            println!("Opened {url} in the qmux browser overlay.");
+            println!("Opened {url} in the session browser overlay.");
             Ok(true)
         }
         "ping" => {
@@ -326,8 +326,8 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
             println!("{}", public_cli::HELP);
             Ok(true)
         }
-        _ if env::var("QMUX_ENV").ok().as_deref() == Some("1") => {
-            Err(syntax_error(format!("unknown qmux command '{command}'")))
+        _ if env::var("SESSION_ENV").ok().as_deref() == Some("1") => {
+            Err(syntax_error(format!("unknown session command '{command}'")))
         }
         _ => Ok(false),
     }
@@ -351,7 +351,7 @@ fn retry_initial_remote_report(
 }
 
 /// Inspect the shell's cwd where the shell actually runs. In a remote pane this
-/// is deliberately done by qmux-cli on the remote host, not by the desktop.
+/// is deliberately done by session-cli on the remote host, not by the desktop.
 fn inspect_workspace(cwd: &Path) -> WorkspaceObservation {
     let reported = cwd.display().to_string();
     let canonical = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
@@ -444,12 +444,12 @@ fn request_remote_file_open(target: &str) -> Result<(), String> {
         .and_then(|value| value.to_str())
         .ok_or_else(|| "remote preview filename is not valid UTF-8".to_string())?
         .to_string();
-    if !qmux_proto::is_safe_browser_preview_name(&name) {
+    if !session_proto::is_safe_browser_preview_name(&name) {
         return Err(format!("'{name}' is not a browser-previewable file"));
     }
 
-    let socket_path = env::var("QMUX_SOCK").map_err(|_| "QMUX_SOCK is not set".to_string())?;
-    let token = env::var("QMUX_TOKEN").map_err(|_| "QMUX_TOKEN is not set".to_string())?;
+    let socket_path = env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
+    let token = env::var("SESSION_TOKEN").map_err(|_| "SESSION_TOKEN is not set".to_string())?;
     let mut stream = UnixStream::connect(&socket_path)
         .map_err(|err| format!("failed to connect to {socket_path}: {err}"))?;
     let timeout = Some(Duration::from_secs(60));
@@ -482,20 +482,20 @@ fn request_remote_file_open(target: &str) -> Result<(), String> {
         .read_line(&mut response)
         .map_err(|err| format!("failed to read remote preview response: {err}"))?;
     if read == 0 {
-        return Err("qmux closed the remote preview connection without a response".to_string());
+        return Err("Session closed the remote preview connection without a response".to_string());
     }
     let response = serde_json::from_str::<ControlResponse>(response.trim_end())
-        .map_err(|err| format!("invalid qmux response: {err}"))?;
+        .map_err(|err| format!("invalid Session response: {err}"))?;
     if response.ok {
         Ok(())
     } else {
         Err(response
             .error
-            .unwrap_or_else(|| "qmux remote preview failed".to_string()))
+            .unwrap_or_else(|| "Session remote preview failed".to_string()))
     }
 }
 
-const SEND_USAGE: &str = "usage: qmux send [--title <text>] [--mode <auto|native|overlay>] [--tone <info|success|warning|error>] [--sound|--no-sound] [--timeout <seconds>] [--stdin] [--] <message>";
+const SEND_USAGE: &str = "usage: session send [--title <text>] [--mode <auto|native|overlay>] [--tone <info|success|warning|error>] [--sound|--no-sound] [--timeout <seconds>] [--stdin] [--] <message>";
 
 #[derive(Debug, PartialEq)]
 struct NotificationSendArgs {
@@ -521,9 +521,9 @@ fn run_notification_send(args: Vec<String>) -> Result<(), String> {
     })
     .map_err(syntax_error)?;
     let socket_path = notification_socket_path()?;
-    // A pane token gives the notification a trusted source pane. Outside qmux
+    // A pane token gives the notification a trusted source pane. Outside Session
     // the empty token selects the peer-credential-gated notification-only path.
-    let token = env::var("QMUX_TOKEN").unwrap_or_default();
+    let token = env::var("SESSION_TOKEN").unwrap_or_default();
     let raw = send_request_with_timeout(
         socket_path.to_string_lossy().as_ref(),
         &token,
@@ -542,13 +542,13 @@ fn run_notification_send(args: Vec<String>) -> Result<(), String> {
         Duration::from_secs(10),
     )?;
     let response = serde_json::from_str::<ControlResponse>(&raw)
-        .map_err(|error| format!("invalid qmux response: {error}"))?;
+        .map_err(|error| format!("invalid Session response: {error}"))?;
     if response.ok {
         Ok(())
     } else {
         Err(response
             .error
-            .unwrap_or_else(|| "qmux rejected the notification".to_string()))
+            .unwrap_or_else(|| "Session rejected the notification".to_string()))
     }
 }
 
@@ -612,12 +612,12 @@ fn parse_notification_send(
             }
             "--stdin" => stdin = true,
             "--help" | "-h" => return Err(SEND_USAGE.to_string()),
-            _ => return Err(format!("unknown qmux send option {argument:?}")),
+            _ => return Err(format!("unknown session send option {argument:?}")),
         }
     }
 
     if stdin && !message.is_empty() {
-        return Err("qmux send accepts either --stdin or a message, not both".to_string());
+        return Err("session send accepts either --stdin or a message, not both".to_string());
     }
     let body = if stdin {
         read_stdin()?
@@ -645,7 +645,7 @@ fn take_send_value(args: &mut Vec<String>, flag: &str) -> Result<String, String>
 }
 
 fn notification_socket_path() -> Result<PathBuf, String> {
-    if let Some(path) = env::var_os("QMUX_SOCK").filter(|value| !value.is_empty()) {
+    if let Some(path) = env::var_os("SESSION_SOCK").filter(|value| !value.is_empty()) {
         return Ok(PathBuf::from(path));
     }
     if let Some(path) = configured_notification_socket_path()? {
@@ -655,13 +655,13 @@ fn notification_socket_path() -> Result<PathBuf, String> {
         .map(|root| root.join("qmux").join("qmux.sock"))
         .or_else(|| dirs::data_dir().map(|root| root.join("qmux").join("run").join("qmux.sock")))
         .ok_or_else(|| {
-            "could not locate qmux's control socket; set QMUX_SOCK explicitly".to_string()
+            "could not locate Session's control socket; set SESSION_SOCK explicitly".to_string()
         })
 }
 
 fn configured_notification_socket_path() -> Result<Option<PathBuf>, String> {
     let cwd = env::current_dir().map_err(|error| format!("failed to read cwd: {error}"))?;
-    let explicit = env::var_os("QMUX_CONFIG").filter(|value| !value.is_empty());
+    let explicit = env::var_os("SESSION_CONFIG").filter(|value| !value.is_empty());
     let config_path = if let Some(path) = explicit.as_ref() {
         let path = PathBuf::from(path);
         Some(if path.is_absolute() {
@@ -680,13 +680,13 @@ fn configured_notification_socket_path() -> Result<Option<PathBuf>, String> {
     };
     let raw = std::fs::read_to_string(&config_path).map_err(|error| {
         format!(
-            "failed to read qmux config {}: {error}",
+            "failed to read Session config {}: {error}",
             config_path.display()
         )
     })?;
     let config = serde_json::from_str::<Value>(&raw).map_err(|error| {
         format!(
-            "failed to parse qmux config {}: {error}",
+            "failed to parse Session config {}: {error}",
             config_path.display()
         )
     })?;
@@ -695,7 +695,7 @@ fn configured_notification_socket_path() -> Result<Option<PathBuf>, String> {
         .and_then(Value::as_str)
         .ok_or_else(|| {
             format!(
-                "qmux config {} has no string socketPath",
+                "Session config {} has no string socketPath",
                 config_path.display()
             )
         })?;
@@ -733,8 +733,8 @@ fn resolve_notification_socket_path(
 }
 
 fn run_agent_exec(adapter_id: String, args: Vec<String>) -> Result<(), String> {
-    let pane_id = env::var("QMUX_PANE_ID")
-        .map_err(|_| "QMUX_PANE_ID is not set; run this from a qmux shell pane".to_string())?;
+    let pane_id = env::var("SESSION_PANE_ID")
+        .map_err(|_| "SESSION_PANE_ID is not set; run this from a Session shell pane".to_string())?;
     let cwd = env::current_dir()
         .map_err(|err| format!("failed to read current directory for agent launch: {err}"))?;
     let supervisor_pid = std::process::id();
@@ -754,7 +754,7 @@ fn run_agent_exec(adapter_id: String, args: Vec<String>) -> Result<(), String> {
             "args": args,
             "shellJobId": shell_job_id,
             "supervisorPid": supervisor_pid,
-            "preparedAgentId": env::var("QMUX_PREPARED_AGENT_ID").ok(),
+            "preparedAgentId": env::var("SESSION_PREPARED_AGENT_ID").ok(),
         }),
     )?;
     let launch = serde_json::from_value::<PreparedAgentLaunch>(launch)
@@ -769,13 +769,13 @@ fn run_agent_exec(adapter_id: String, args: Vec<String>) -> Result<(), String> {
     // The containing shell is a user principal. The agent process receives the
     // pane token needed by hooks/MCP, but never inherits cross-pane user power.
     if launch.supervised {
-        command.env_remove("QMUX_USER_TOKEN");
+        command.env_remove("SESSION_USER_TOKEN");
     }
     // Lifecycle notifications normally resolve their adapter through the bound
     // agent id. Preserve an explicit hint as well so an authenticated SessionStart
     // can reconstruct that binding if preparation state was lost.
     if launch.supervised {
-        command.env("QMUX_ADAPTER_ID", &adapter_id);
+        command.env("SESSION_ADAPTER_ID", &adapter_id);
     }
 
     // The agent must own Ctrl-C/Ctrl-\ itself, so restore the default disposition in the
@@ -812,7 +812,7 @@ fn run_agent_exec(adapter_id: String, args: Vec<String>) -> Result<(), String> {
         let _ = request_silent(
             "agent.detach_pane",
             json!({
-                "paneId": env::var("QMUX_PANE_ID").ok(),
+                "paneId": env::var("SESSION_PANE_ID").ok(),
                 "jobId": shell_job_id,
                 "agentId": agent_id,
             }),
@@ -830,7 +830,7 @@ fn prepared_agent_id(launch: &PreparedAgentLaunch) -> Result<Option<String>, Str
     launch
         .envs
         .iter()
-        .find(|env| env.key == "QMUX_AGENT_ID")
+        .find(|env| env.key == "SESSION_AGENT_ID")
         .map(|env| Some(env.value.clone()))
         .ok_or_else(|| "prepared shell launch is missing its agent id".to_string())
 }
@@ -847,7 +847,7 @@ pub(crate) fn request_silent(command: &str, payload: Value) -> Result<(), String
 
 /// As [`request_silent`], but with the socket and token supplied by the caller
 /// rather than read from the environment. The Muse hook path needs this: its
-/// shim runs with `QMUX_*` stripped and recovers both values from the pane
+/// shim runs with `SESSION_*` stripped and recovers both values from the pane
 /// binding file instead.
 pub(crate) fn request_silent_with(
     socket_path: &str,
@@ -875,24 +875,24 @@ pub(crate) fn request_value_with_timeout(
 ) -> Result<Value, String> {
     let raw = request_with_timeout(command, payload, timeout)?;
     let response = serde_json::from_str::<ControlResponse>(&raw)
-        .map_err(|err| format!("invalid qmux response: {err}"))?;
+        .map_err(|err| format!("invalid Session response: {err}"))?;
     if response.ok {
         Ok(response.data)
     } else {
         Err(response
             .error
-            .unwrap_or_else(|| "qmux request failed".to_string()))
+            .unwrap_or_else(|| "Session request failed".to_string()))
     }
 }
 
 pub(crate) fn request_public(
     operation: &str,
     arguments: Value,
-) -> Result<qmux_proto::PublicControlResponse, String> {
-    let socket_path = env::var("QMUX_SOCK").map_err(|_| "QMUX_SOCK is not set".to_string())?;
-    let token = env::var("QMUX_USER_TOKEN")
-        .or_else(|_| env::var("QMUX_TOKEN"))
-        .map_err(|_| "neither QMUX_USER_TOKEN nor QMUX_TOKEN is set".to_string())?;
+) -> Result<session_proto::PublicControlResponse, String> {
+    let socket_path = env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
+    let token = env::var("SESSION_USER_TOKEN")
+        .or_else(|_| env::var("SESSION_TOKEN"))
+        .map_err(|_| "neither SESSION_USER_TOKEN nor SESSION_TOKEN is set".to_string())?;
     let timeout = public_request_timeout(operation, &arguments);
     let raw = send_request_with_timeout(
         &socket_path,
@@ -902,23 +902,23 @@ pub(crate) fn request_public(
         timeout,
     )?;
     let outer = serde_json::from_str::<ControlResponse>(&raw)
-        .map_err(|error| format!("invalid qmux response: {error}"))?;
+        .map_err(|error| format!("invalid Session response: {error}"))?;
     if !outer.ok {
         return Err(outer
             .error
-            .unwrap_or_else(|| "qmux request failed".to_string()));
+            .unwrap_or_else(|| "Session request failed".to_string()));
     }
     decode_public_response(outer.data)
 }
 
-fn decode_public_response(data: Value) -> Result<qmux_proto::PublicControlResponse, String> {
-    let response = serde_json::from_value::<qmux_proto::PublicControlResponse>(data)
-        .map_err(|error| format!("invalid qmux public response: {error}"))?;
-    if response.api_version != qmux_proto::PUBLIC_API_VERSION {
+fn decode_public_response(data: Value) -> Result<session_proto::PublicControlResponse, String> {
+    let response = serde_json::from_value::<session_proto::PublicControlResponse>(data)
+        .map_err(|error| format!("invalid Session public response: {error}"))?;
+    if response.api_version != session_proto::PUBLIC_API_VERSION {
         return Err(format!(
-            "unsupported qmux public API version {}; this CLI supports version {}",
+            "unsupported Session public API version {}; this CLI supports version {}",
             response.api_version,
-            qmux_proto::PUBLIC_API_VERSION
+            session_proto::PUBLIC_API_VERSION
         ));
     }
     Ok(response)
@@ -949,8 +949,8 @@ fn request_with_timeout(
     payload: Value,
     timeout: Duration,
 ) -> Result<String, String> {
-    let socket_path = env::var("QMUX_SOCK").map_err(|_| "QMUX_SOCK is not set".to_string())?;
-    let token = env::var("QMUX_TOKEN").map_err(|_| "QMUX_TOKEN is not set".to_string())?;
+    let socket_path = env::var("SESSION_SOCK").map_err(|_| "SESSION_SOCK is not set".to_string())?;
+    let token = env::var("SESSION_TOKEN").map_err(|_| "SESSION_TOKEN is not set".to_string())?;
     send_request_with_timeout(&socket_path, &token, command, payload, timeout)
 }
 
@@ -1035,7 +1035,7 @@ mod tests {
     #[test]
     fn mcp_usage_hint_is_at_most_two_lines_and_names_the_server_command() {
         assert!(MCP_USAGE_HINT.lines().count() <= 2);
-        assert!(MCP_USAGE_HINT.contains("qmux mcp"));
+        assert!(MCP_USAGE_HINT.contains("session mcp"));
         assert!(MCP_USAGE_HINT.contains("stdio"));
     }
 
@@ -1065,7 +1065,7 @@ mod tests {
         let launch = prepared_launch(
             true,
             vec![PreparedLaunchEnv {
-                key: "QMUX_AGENT_ID".to_string(),
+                key: "SESSION_AGENT_ID".to_string(),
                 value: "agent-1".to_string(),
             }],
         );
@@ -1078,10 +1078,12 @@ mod tests {
     #[test]
     fn version_line_matches_package_and_parses() {
         let line = version_line();
-        assert_eq!(line, format!("qmux-cli {VERSION}"));
+        assert_eq!(line, format!("session-cli {VERSION}"));
         assert_eq!(parse_version_line(&line), Some(VERSION));
-        assert_eq!(parse_version_line("qmux-cli 0.3.2\n"), Some("0.3.2"));
+        assert_eq!(parse_version_line("session-cli 0.3.2\n"), Some("0.3.2"));
         assert_eq!(parse_version_line("not-a-version"), None);
+        // Matching package versions do not make an old helper speak SESSION_* envs.
+        assert_eq!(parse_version_line(&format!("qmux-cli {VERSION}")), None);
     }
 
     #[test]
@@ -1115,7 +1117,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = std::env::temp_dir().join(format!("qmux-cli-workspace-{nonce}"));
+        let root = std::env::temp_dir().join(format!("session-cli-workspace-{nonce}"));
         let repo = root.join("repo");
         let linked = root.join("linked");
         std::fs::create_dir_all(&repo).unwrap();
@@ -1195,12 +1197,12 @@ mod tests {
     fn public_response_rejects_an_unknown_api_version() {
         let error = decode_public_response(json!({
             "ok": true,
-            "apiVersion": qmux_proto::PUBLIC_API_VERSION + 1,
+            "apiVersion": session_proto::PUBLIC_API_VERSION + 1,
             "result": {},
             "error": null
         }))
         .unwrap_err();
-        assert!(error.contains("unsupported qmux public API version"));
+        assert!(error.contains("unsupported Session public API version"));
     }
 
     #[test]
@@ -1271,22 +1273,22 @@ mod tests {
 
     #[test]
     fn notification_socket_config_expands_home_and_relative_paths() {
-        let home = Path::new("/tmp/qmux-cli-home");
+        let home = Path::new("/tmp/session-cli-home");
         assert_eq!(
             resolve_notification_socket_path(
-                Path::new("/tmp/qmux-cli-home/config"),
+                Path::new("/tmp/session-cli-home/config"),
                 Path::new("~/run/qmux.sock"),
                 Some(home),
             ),
-            PathBuf::from("/tmp/qmux-cli-home/run/qmux.sock")
+            PathBuf::from("/tmp/session-cli-home/run/qmux.sock")
         );
         assert_eq!(
             resolve_notification_socket_path(
-                Path::new("/tmp/qmux-cli-home/config"),
+                Path::new("/tmp/session-cli-home/config"),
                 Path::new("run/qmux.sock"),
                 Some(home),
             ),
-            PathBuf::from("/tmp/qmux-cli-home/config/run/qmux.sock")
+            PathBuf::from("/tmp/session-cli-home/config/run/qmux.sock")
         );
     }
 }

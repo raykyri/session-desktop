@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 
-use crate::events::QmuxEvent;
+use crate::events::SessionEvent;
 use crate::state::AppState;
 
 static APP_STATE: OnceLock<Mutex<Option<AppState>>> = OnceLock::new();
@@ -63,14 +63,14 @@ fn apply_deferred_pane_report(report: &DeferredPaneReport) {
             let event_title = match state.update_last_osc_title(pane_id, title) {
                 Ok(title) => title.unwrap_or_default(),
                 Err(err) => {
-                    eprintln!("qmux: failed to record native title for pane {pane_id}: {err}");
+                    eprintln!("session: failed to record native title for pane {pane_id}: {err}");
                     // Persistence is best-effort. Preserve the pre-existing live
                     // behavior even if the model is temporarily unavailable; the
                     // frontend still applies its own sanitization.
                     title.clone()
                 }
             };
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "terminal.title_changed",
                 Some(pane_id.clone()),
                 None,
@@ -79,12 +79,12 @@ fn apply_deferred_pane_report(report: &DeferredPaneReport) {
         }
         DeferredPaneReport::Cwd { pane_id, cwd } => {
             if let Err(err) = state.update_pane_cwd(pane_id, cwd.clone()) {
-                eprintln!("qmux: rejected native cwd update for pane {pane_id}: {err}");
+                eprintln!("session: rejected native cwd update for pane {pane_id}: {err}");
             }
         }
     });
 }
-/// Whether the webview's qmux-event listener is live. The native shortcut
+/// Whether the webview's session-event listener is live. The native shortcut
 /// classifiers report a chord as "handled" — which makes Swift consume its
 /// keyDown and keyUp — purely by emitting an event; while no listener exists
 /// (startup, a page reload) that emit is dropped by Tauri and the chord would
@@ -352,7 +352,7 @@ fn classify_app_shortcut(
 }
 
 /// Native shortcut routing without a live terminal has web-target semantics.
-/// In particular, Cmd-K opens qmux's palette there, while the terminal
+/// In particular, Cmd-K opens Session's palette there, while the terminal
 /// classifier above must leave the same chord to Ghostty's clear-screen binding.
 fn classify_web_app_shortcut(
     key: &str,
@@ -1105,7 +1105,7 @@ mod imp {
         }
     }
 
-    /// Returns the theme catalog as JSON: the qmux default plus every bundled
+    /// Returns the theme catalog as JSON: the Session default plus every bundled
     /// Ghostty color scheme, with the colors the settings UI needs for
     /// previews.
     pub fn theme_catalog() -> Result<String, String> {
@@ -1421,7 +1421,7 @@ pub extern "C" fn qmux_native_terminal_did_resize(
     }
     with_app_state(|state| {
         if let Err(err) = crate::pty::resize_native_host_pane(state, &pane_id, columns, rows) {
-            eprintln!("qmux: failed to resize native pane {pane_id}: {err}");
+            eprintln!("session: failed to resize native pane {pane_id}: {err}");
         }
         // A grid resize is also the surest sign the surface can replay at its
         // real width now; finish any attach that was parked waiting for it.
@@ -1443,7 +1443,7 @@ pub extern "C" fn qmux_native_terminal_did_change_annotation_viewport(
         return;
     };
     with_app_state(|state| {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "terminal.annotation_viewport_changed",
             Some(pane_id),
             None,
@@ -1487,7 +1487,7 @@ pub extern "C" fn qmux_native_terminal_did_write(
     let bytes = unsafe { std::slice::from_raw_parts(bytes, bytes_len) }.to_vec();
     with_app_state(|state| {
         if let Err(err) = crate::pty::write_native_host_input(state, &pane_id, bytes) {
-            eprintln!("qmux: failed to write native terminal input for pane {pane_id}: {err}");
+            eprintln!("session: failed to write native terminal input for pane {pane_id}: {err}");
         }
     });
 }
@@ -1497,7 +1497,7 @@ fn emit_native_event(event_type: &str, pane_id: *const std::ffi::c_char) {
         return;
     };
     with_app_state(|state| {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             event_type,
             Some(pane_id),
             None,
@@ -1517,7 +1517,7 @@ pub extern "C" fn qmux_native_terminal_system_sleep_changed(sleeping: i32) {
 }
 
 /// AppKit observed a wake, suspension gap, memory-pressure recovery, or display
-/// transition while qmux has an active visible window. Start the document
+/// transition while Session has an active visible window. Start the document
 /// event-loop half of the health check. A stale readiness flag is intentional:
 /// if the old document died without a navigation, the probe is dropped and the
 /// timeout reloads it.
@@ -1573,7 +1573,7 @@ pub extern "C" fn qmux_native_terminal_did_request_paste(
         return;
     };
     with_app_state(|state| {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "terminal.paste_requested",
             Some(pane_id),
             None,
@@ -1606,7 +1606,7 @@ pub extern "C" fn qmux_native_terminal_did_request_browser_escape() -> i32 {
     }
     let mut emitted = false;
     with_app_state(|state| {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "browser.escape_requested",
             None,
             None,
@@ -1629,7 +1629,7 @@ fn is_remote_close_shortcut(
 }
 
 /// A possible application shortcut typed while a native pane owned the
-/// keyboard. Only exact qmux commands are consumed; every unrecognized chord
+/// keyboard. Only exact Session commands are consumed; every unrecognized chord
 /// returns to AppKit/Ghostty unchanged.
 #[unsafe(no_mangle)]
 pub extern "C" fn qmux_native_terminal_did_receive_shortcut(
@@ -1676,7 +1676,7 @@ pub extern "C" fn qmux_native_terminal_did_receive_shortcut(
                 })
             });
             if closeable.is_some() {
-                state.emit(QmuxEvent::new(
+                state.emit(SessionEvent::new(
                     "terminal.shortcut",
                     Some(pane_id.clone()),
                     None,
@@ -1701,7 +1701,7 @@ pub extern "C" fn qmux_native_terminal_did_receive_shortcut(
     let (command, tab_index) = shortcut.event_fields();
     let mut emitted = false;
     with_app_state(|state| {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "terminal.shortcut",
             Some(pane_id),
             None,
@@ -1744,7 +1744,7 @@ pub extern "C" fn qmux_native_terminal_did_receive_app_shortcut(
     let (command, tab_index) = shortcut.event_fields();
     let mut emitted = false;
     with_app_state(|state| {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "app.shortcut",
             None,
             None,
@@ -1768,7 +1768,7 @@ pub extern "C" fn qmux_native_terminal_did_change_command_modifier(
         return;
     };
     with_app_state(|state| {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "terminal.command_modifier_changed",
             Some(pane_id),
             None,
@@ -1797,7 +1797,7 @@ pub extern "C" fn qmux_native_terminal_did_open_url(
             2 => "html",
             _ => "unknown",
         };
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "terminal.open_url",
             Some(pane_id),
             None,
@@ -1895,7 +1895,7 @@ pub fn native_terminal_action(pane_id: String, action: String) -> Result<(), Str
 #[tauri::command]
 pub fn native_terminal_paste_approved_text(pane_id: String, text: String) -> Result<(), String> {
     // The paste boundary must stay unforgeable here just like on the pane_write
-    // path: Ghostty frames these bytes in bracketed-paste markers, and the qmux
+    // path: Ghostty frames these bytes in bracketed-paste markers, and the Session
     // approval dialog this text passed through suppresses Ghostty's own
     // unsafe-paste prompt — so an embedded end marker would terminate the paste
     // early and hand the remainder to the shell as typed input.
@@ -2012,7 +2012,7 @@ mod tests {
             true
         ));
         // A child WKWebView is outside the app document, so neither its outer
-        // responder nor its content descendants can deliver qmux shortcuts to
+        // responder nor its content descendants can deliver Session shortcuts to
         // the React window listener.
         assert!(super::imp::should_claim_web_app_shortcut(
             false,

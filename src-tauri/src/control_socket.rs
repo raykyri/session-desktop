@@ -4,18 +4,18 @@ use crate::adapters::{
     notification_adapter_hint,
 };
 use crate::connection_limit::ConnectionLimiter;
-use crate::events::QmuxEvent;
+use crate::events::SessionEvent;
 use crate::pty::{PaneWriteOptions, write_pane};
 use crate::state::{AppState, PaneKind, canonical_loopback_artifact_url};
 use crate::workspace::{
     LaunchOrigin, recover_shell_agent_from_session_start, validate_launch_workspace,
 };
-use qmux_proto::{
+use serde::Deserialize;
+use serde_json::{Value, json};
+use session_proto::{
     BrowserOpenFileHeader, ControlRequest, ControlResponse, PublicControlRequest,
     WorkspaceObservation, WorkspaceObservationKind,
 };
-use serde::Deserialize;
-use serde_json::{Value, json};
 use std::fs;
 use std::io::{BufRead, BufReader, ErrorKind, Read, Write};
 use std::os::fd::AsRawFd;
@@ -479,7 +479,7 @@ fn wait_for_conflict_to_clear(
     warn_control_socket(
         state,
         &format!(
-            "The qmux control socket at {} was replaced by another process. CLI commands will not reach this instance until that socket is removed. qmux will not delete it automatically.",
+            "The Session control socket at {} was replaced by another process. CLI commands will not reach this instance until that socket is removed. qmux will not delete it automatically.",
             socket_path.display()
         ),
     );
@@ -546,7 +546,7 @@ fn run_listener_generation(
                                 accept_error = None;
                                 if let Err(err) = stream.set_nonblocking(false) {
                                     eprintln!(
-                                        "qmux: failed to configure control socket client as blocking: {err}"
+                                        "session: failed to configure control socket client as blocking: {err}"
                                     );
                                     continue;
                                 }
@@ -674,13 +674,13 @@ fn enter_watch_state(
     };
     if next == SocketWatchState::Healthy {
         eprintln!(
-            "qmux: control socket recovered at {}",
+            "session: control socket recovered at {}",
             socket_path.display()
         );
     } else if let Some(error) = error {
-        eprintln!("qmux: {event}: {error}");
+        eprintln!("session: {event}: {error}");
     } else {
-        eprintln!("qmux: {event} at {}", socket_path.display());
+        eprintln!("session: {event} at {}", socket_path.display());
     }
     emit_watch_event(
         state,
@@ -705,7 +705,7 @@ fn emit_watch_event(
     let identity = |pair: Option<(u64, u64)>| {
         pair.map(|(device, inode)| json!({ "device": device, "inode": inode }))
     };
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         event,
         None,
         None,
@@ -719,12 +719,12 @@ fn emit_watch_event(
 }
 
 fn warn_control_socket(state: &AppState, message: &str) {
-    eprintln!("qmux: {message}");
+    eprintln!("session: {message}");
     if let Some(app) = state.app_handle() {
         use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
         app.dialog()
             .message(message)
-            .title("qmux")
+            .title("Session")
             .kind(MessageDialogKind::Warning)
             .show(|_| {});
     }
@@ -893,7 +893,7 @@ fn pane_credential(state: &AppState, token: &str) -> Result<(String, ControlCred
     } else if let Some(pane) = state.pane_for_user_token(token) {
         Ok((pane, ControlCredential::InteractiveUser))
     } else {
-        Err("invalid QMUX_TOKEN".to_string())
+        Err("invalid SESSION_TOKEN".to_string())
     }
 }
 
@@ -902,7 +902,7 @@ fn handle_request_with_peer(
     request: ControlRequest,
     same_user_peer: bool,
 ) -> Result<Value, String> {
-    // `qmux send` is intentionally usable outside qmux panes. An empty token is
+    // `session send` is intentionally usable outside Session panes. An empty token is
     // accepted for this one non-mutating command only when the kernel says the
     // Unix-socket peer has our uid. The socket and its parent are also 0600/0700,
     // but checking the peer prevents a permissive-filesystem regression from
@@ -926,7 +926,7 @@ fn handle_request_with_peer(
     let user_credential = credential == ControlCredential::InteractiveUser;
 
     if user_credential && request.command != "cli.call" {
-        return Err("QMUX_USER_TOKEN is valid only for public CLI operations".to_string());
+        return Err("SESSION_USER_TOKEN is valid only for public CLI operations".to_string());
     }
     if credential == ControlCredential::RemotePane {
         ensure_remote_command_allowed(state, &authed_pane, &request.command)?;
@@ -1045,7 +1045,7 @@ fn handle_request_with_peer(
                     crate::shell_jobs::emit_job_removed(state, &info);
                     crate::workspace::detach_pane_agent_if_matches(state, &authed_pane, agent_id)?
                 }
-                // Compatibility for a shell wrapper launched by an older qmux build.
+                // Compatibility for a shell wrapper launched by an older Session build.
                 _ => crate::workspace::detach_pane_agent(state, &authed_pane)?,
             };
             // The exited agent may have left its TUI's terminal modes active in
@@ -1056,7 +1056,7 @@ fn handle_request_with_peer(
             if detached.is_some()
                 && let Err(err) = crate::pty::reset_pane_terminal_modes(state, &authed_pane)
             {
-                eprintln!("qmux: failed to reset terminal modes for pane {authed_pane}: {err}");
+                eprintln!("session: failed to reset terminal modes for pane {authed_pane}: {err}");
             }
             Ok(json!({ "detached": detached.is_some() }))
         }
@@ -1123,7 +1123,7 @@ fn handle_request_with_peer(
                 if state.agent(agent_id)?.is_some() {
                     ensure_agent_scope(state, &authed_pane, agent_id)?;
                 } else if let Some(bound) = state.agent_by_pane(&authed_pane)? {
-                    // A recovered record may have a new qmux id while the already
+                    // A recovered record may have a new Session id while the already
                     // running process keeps reporting the stale/missing prepared id.
                     // The pane token is the authority boundary, so route that unknown
                     // id to the agent now bound to the same authenticated pane.
@@ -1155,7 +1155,7 @@ fn handle_request_with_peer(
                     crate::turn_queue::release_ready_fork_barrier_for_child(state, &agent_id)
             {
                 eprintln!(
-                    "qmux: failed to release fork barrier after hook from agent {agent_id}: {err}"
+                    "session: failed to release fork barrier after hook from agent {agent_id}: {err}"
                 );
             }
             Ok(json!({ "notified": true }))
@@ -1169,7 +1169,7 @@ fn handle_request_with_peer(
             let payload = serde_json::from_value::<AppendPayload>(request.payload)
                 .map_err(|err| format!("invalid transcript.append payload: {err}"))?;
 
-            // The destination is qmux's own record for the agent bound to the
+            // The destination is Session's own record for the agent bound to the
             // authenticated pane; this request cannot name a path. SSH-forwarded
             // credentials are rejected before reaching this arm, so only a local
             // pane process can append to its validated local transcript binding.
@@ -1255,7 +1255,7 @@ fn handle_request_with_peer(
                 payload.target.trim(),
                 payload.cwd.as_deref(),
             )?;
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "browser.open",
                 Some(authed_pane.clone()),
                 None,
@@ -1264,7 +1264,7 @@ fn handle_request_with_peer(
             // Panes with an attached agent also collect the target into the
             // workspace artifact tray. This deliberately covers both callers a
             // pane token can represent: the agent itself, and the user typing
-            // `qmux open` while that agent is backgrounded — the PTY offers no
+            // `session open` while that agent is backgrounded — the PTY offers no
             // way to tell them apart, and both belong in the tray. Best-effort:
             // a tray failure must not fail the open.
             if state.agent_by_pane(&authed_pane)?.is_some() {
@@ -1327,7 +1327,7 @@ fn handle_browser_open_file<R: Read>(
         state.pane_file_token(&authed_pane)?
     };
     let url = crate::file_server::file_url(port, &token, &canonical);
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "browser.open",
         Some(authed_pane.clone()),
         None,
@@ -1574,7 +1574,7 @@ mod tests {
     use super::*;
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig, QmuxConfig,
+        MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
     };
 
     use crate::state::{HostPtyBackend, PaneBackend, PaneInfo, PaneRuntime, PaneStatus};
@@ -1602,7 +1602,7 @@ mod tests {
     }
 
     fn runtime_state(workspace_root: PathBuf, socket_path: PathBuf) -> (AppState, PathBuf) {
-        let state = AppState::new(QmuxConfig {
+        let state = AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root,
             socket_path: socket_path.clone(),
@@ -1780,7 +1780,7 @@ mod tests {
                     label: "Remote".to_string(),
                     host: "example.test".to_string(),
                     multiplexer: RemoteMultiplexer::Tmux,
-                    qmux_cli: None,
+                    session_cli: None,
                     workspace_root: None,
                 }),
                 agents: Vec::new(),
@@ -1893,7 +1893,7 @@ mod tests {
         let state = test_state();
         let err = handle_line(&state, &request_line("nope", "ping", Value::Null)).unwrap_err();
         assert!(
-            err.contains("invalid QMUX_TOKEN"),
+            err.contains("invalid SESSION_TOKEN"),
             "unexpected error: {err}"
         );
     }
@@ -2025,7 +2025,7 @@ mod tests {
 
         let err = handle_line_with_peer(&state, &request_line("", "ping", Value::Null), true)
             .unwrap_err();
-        assert!(err.contains("invalid QMUX_TOKEN"));
+        assert!(err.contains("invalid SESSION_TOKEN"));
 
         let err = handle_line_with_peer(&state, &notification, false).unwrap_err();
         assert!(err.contains("same-user local peer"));
@@ -2044,7 +2044,7 @@ mod tests {
             true,
         )
         .unwrap_err();
-        assert!(err.contains("invalid QMUX_TOKEN"));
+        assert!(err.contains("invalid SESSION_TOKEN"));
     }
 
     #[test]
@@ -2175,7 +2175,7 @@ mod tests {
         assert!(state.list_artifacts().unwrap().is_empty());
 
         // A pane with an attached agent records the target — whether the agent
-        // ran `qmux open` or the user did while the agent was backgrounded.
+        // ran `session open` or the user did while the agent was backgrounded.
         state.insert_agent(agent_bound_to("pane-2")).unwrap();
         let agent_token = state.pane_token("pane-2").unwrap();
         handle_line(&state, &request_line(&agent_token, "browser.open", payload)).unwrap();

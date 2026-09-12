@@ -12,7 +12,7 @@ import type {
   ResearchTreeDetail,
   Turn,
 } from "../src/types";
-import { createQmuxWebServer } from "./server";
+import { createSessionWebServer } from "./server";
 import { getAgentUiAdapter } from "../src/adapters";
 
 const pane: PaneInfo = {
@@ -84,7 +84,7 @@ test("the public server renders a valid transcript without executing raw HTML", 
       }),
       { status: 200, headers: { ETag: '"v1"' } },
     );
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -142,7 +142,7 @@ test("the public server renders transcript TeX math as MathJax SVG", async (t) =
       }),
       { status: 200, headers: { ETag: '"v1"' } },
     );
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -253,7 +253,7 @@ test("the public server renders deep-linked research nodes and verifies their fi
       }),
       { status: 200, headers: { ETag: '"research-v1"' } },
     );
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -354,7 +354,7 @@ test("the public server renders a published conversation as labelled turn bubble
       }),
       { status: 200, headers: { ETag: '"conv-v1"' } },
     );
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -386,7 +386,7 @@ test("the public server redirects pinned-revision URLs to the latest view", asyn
   const fetchImpl: typeof fetch = async () => {
     throw new Error("pinned-revision redirects must not call GitHub");
   };
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -472,7 +472,7 @@ test("the public server rejects a research file that does not match publication.
       }),
       { status: 200 },
     );
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -503,7 +503,7 @@ test("the public server reports malformed publication.json as unprocessable", as
       }),
       { status: 200 },
     );
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -552,7 +552,7 @@ test("the public server follows a trusted raw URL for truncated publication.json
     }
     return new Response(index, { status: 200 });
   };
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -585,7 +585,7 @@ test("the public server refuses truncated files from non-GitHub raw hosts", asyn
       }),
       { status: 200 },
     );
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -603,7 +603,7 @@ test("the public server rejects an oversized GitHub API response before reading 
       status: 200,
       headers: { "Content-Length": "20000001" },
     });
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -650,7 +650,7 @@ test("the public server evicts old publication cache entries", async (t) => {
   };
   // This test deliberately issues 130 requests from one address; the per-client
   // rate limit is exercised separately.
-  const server = createQmuxWebServer({ fetchImpl, rateLimit: null });
+  const server = createSessionWebServer({ fetchImpl, rateLimit: null });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -708,7 +708,7 @@ test("the public server caps concurrent publication loads", async (t) => {
       { status: 200 },
     );
   };
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -739,7 +739,7 @@ test("the public server negative-caches a missing Gist", async (t) => {
     fetchCount += 1;
     return new Response("Not Found", { status: 404 });
   };
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -763,7 +763,7 @@ test("the public server rate-limits the publication route per client", async (t)
     fetchCount += 1;
     return new Response("Not Found", { status: 404 });
   };
-  const server = createQmuxWebServer({
+  const server = createSessionWebServer({
     fetchImpl,
     rateLimit: { windowMs: 60_000, maxRequests: 3 },
   });
@@ -789,7 +789,7 @@ test("the public server rate-limits the publication route per client", async (t)
 test("the public server uses Fly-Client-IP for rate limits on Fly", async (t) => {
   const fetchImpl: typeof fetch = async () =>
     new Response("Not Found", { status: 404 });
-  const server = createQmuxWebServer({
+  const server = createSessionWebServer({
     fetchImpl,
     rateLimit: { windowMs: 60_000, maxRequests: 1 },
     trustFlyClientIp: true,
@@ -824,7 +824,7 @@ test("the public server uses Fly-Client-IP for rate limits on Fly", async (t) =>
 test("the public server ignores Fly-Client-IP outside Fly", async (t) => {
   const fetchImpl: typeof fetch = async () =>
     new Response("Not Found", { status: 404 });
-  const server = createQmuxWebServer({
+  const server = createSessionWebServer({
     fetchImpl,
     rateLimit: { windowMs: 60_000, maxRequests: 1 },
     trustFlyClientIp: false,
@@ -857,7 +857,7 @@ test("the public server backs off all ids after an upstream rate limit", async (
       headers: { "x-ratelimit-remaining": "0" },
     });
   };
-  const server = createQmuxWebServer({ fetchImpl });
+  const server = createSessionWebServer({ fetchImpl });
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   t.after(() => server.close());
@@ -879,7 +879,7 @@ test("the landing page presents Session as a research workspace", async (t) => {
   const fetchImpl: typeof fetch = async () => {
     throw new Error("the landing page must not call upstream");
   };
-  const server = createQmuxWebServer({
+  const server = createSessionWebServer({
     fetchImpl,
     publicOrigin: "https://qmux.app",
   });

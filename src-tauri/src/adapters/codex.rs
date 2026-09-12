@@ -7,8 +7,8 @@ use super::{
     record_shell_fork_lineage, record_shell_session_lineage, reusable_session_agent,
     shell_cli_model, shell_quote_arg, shell_quote_path,
 };
-use crate::config::QmuxConfig;
-use crate::events::QmuxEvent;
+use crate::config::SessionConfig;
+use crate::events::SessionEvent;
 use crate::host::{self, Host};
 use crate::pty::{
     CommandPlan, InitialPaneSize, PaneMeta, agent_pane_envs, plan_to_spec, recoverable_dir,
@@ -36,9 +36,9 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
-const CODEX_QMUX_PROFILE: &str = "qmux-codex";
+const CODEX_SESSION_PROFILE: &str = "qmux-codex";
 const CODEX_CODE_MODE_HOST: &str = "codex-code-mode-host";
-const CODEX_QMUX_WORKTREE_INSTRUCTIONS: &str = "Qmux worktree policy: When you directly create a Git worktree for the user, ensure the directory in the QMUX_WORKTREE_ROOT environment variable exists and use it as the worktree's parent directory. Do not use QMUX_WORKSPACE_ROOT as the worktree parent. Treat QMUX_WORKTREE_ROOT as an opaque filesystem path.";
+const CODEX_SESSION_WORKTREE_INSTRUCTIONS: &str = "Session worktree policy: When you directly create a Git worktree for the user, ensure the directory in the SESSION_WORKTREE_ROOT environment variable exists and use it as the worktree's parent directory. Do not use SESSION_WORKSPACE_ROOT as the worktree parent. Treat SESSION_WORKTREE_ROOT as an opaque filesystem path.";
 const CODEX_HOOK_EVENTS: &[&str] = &[
     "SessionStart",
     "UserPromptSubmit",
@@ -58,7 +58,7 @@ pub struct CodexAdapter {
 }
 
 impl CodexAdapter {
-    pub fn new(config: &QmuxConfig) -> Self {
+    pub fn new(config: &SessionConfig) -> Self {
         Self {
             binary: config.codex_binary(),
         }
@@ -115,11 +115,11 @@ impl CodexAdapter {
         if host.is_local() {
             Ok((Some(ensure_codex_integration()?), None))
         } else {
-            let qmux_cli = host
+            let session_cli = host
                 .remote()
-                .map(|remote| remote.qmux_cli.clone())
+                .map(|remote| remote.session_cli.clone())
                 .ok_or_else(|| "remote Codex launch lost its host configuration".to_string())?;
-            Ok((None, Some(qmux_cli)))
+            Ok((None, Some(session_cli)))
         }
     }
 }
@@ -438,7 +438,7 @@ impl CodexAdapter {
             &options,
             worktree_root
                 .as_deref()
-                .map(|_| CODEX_QMUX_WORKTREE_INSTRUCTIONS),
+                .map(|_| CODEX_SESSION_WORKTREE_INSTRUCTIONS),
             remote_hook_cli.as_deref(),
             tail_args,
         );
@@ -493,7 +493,7 @@ impl CodexAdapter {
         agent: &AgentInfo,
     ) -> Result<PaneInfo, String> {
         let host = self.host_for_group(state, &agent.group_id)?;
-        // Older qmux versions could persist a hook-reported side-conversation id
+        // Older Session versions could persist a hook-reported side-conversation id
         // beside the original rollout path. The rollout is the durable authority,
         // so repair that hybrid before choosing which Codex session to resume. A
         // remote rollout path cannot be opened through the local filesystem.
@@ -523,7 +523,7 @@ impl CodexAdapter {
             &options,
             worktree_root
                 .as_deref()
-                .map(|_| CODEX_QMUX_WORKTREE_INSTRUCTIONS),
+                .map(|_| CODEX_SESSION_WORKTREE_INSTRUCTIONS),
             remote_hook_cli.as_deref(),
             agent.session_id.as_deref(),
         );
@@ -568,7 +568,7 @@ impl CodexAdapter {
         if host.is_local() {
             ensure_codex_transcript_tail(state, &restored);
         }
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.recovered",
             Some(pane.id.clone()),
             Some(restored.id.clone()),
@@ -649,7 +649,7 @@ impl CodexAdapter {
             &options,
             worktree_root
                 .as_deref()
-                .map(|_| CODEX_QMUX_WORKTREE_INSTRUCTIONS),
+                .map(|_| CODEX_SESSION_WORKTREE_INSTRUCTIONS),
             remote_hook_cli.as_deref(),
             &session_id,
             if has_initial_prompt {
@@ -807,7 +807,7 @@ impl CodexAdapter {
             &options,
             worktree_root
                 .as_deref()
-                .map(|_| CODEX_QMUX_WORKTREE_INSTRUCTIONS),
+                .map(|_| CODEX_SESSION_WORKTREE_INSTRUCTIONS),
             remote_hook_cli.as_deref(),
             request.args,
         );
@@ -839,7 +839,7 @@ impl CodexAdapter {
         let agent_id = agent.id.clone();
         let launch_cwd = shell_cwd.display().to_string();
 
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.spawned",
             Some(request.pane_id),
             Some(agent_id),
@@ -1055,7 +1055,7 @@ impl CodexAdapter {
                 }
             }
             other => {
-                return Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+                return Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
                     format!("agent.hook.{other}"),
                     pane_id,
                     agent.map(|agent| agent.id),
@@ -1098,7 +1098,7 @@ impl CodexAdapter {
             );
         }
 
-        Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+        Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
             event_type,
             pane_id,
             agent.map(|agent| agent.id),
@@ -1309,21 +1309,21 @@ fn build_codex_fork_args(
     )
 }
 
-/// Local Codex panes use qmux's generated profile in the user's CODEX_HOME.
+/// Local Codex panes use Session's generated profile in the user's CODEX_HOME.
 /// A remote pane must not point CODEX_HOME at a pane support directory: doing
 /// so would hide the remote user's auth, config, and session history. Instead,
-/// inject only the qmux lifecycle hooks as process-local config overrides and
+/// inject only the Session lifecycle hooks as process-local config overrides and
 /// leave the remote Codex home untouched.
 fn push_codex_hook_integration(args: &mut Vec<String>, remote_hook_cli: Option<&str>) {
-    let Some(qmux_cli) = remote_hook_cli else {
+    let Some(session_cli) = remote_hook_cli else {
         args.push("--profile".to_string());
-        args.push(CODEX_QMUX_PROFILE.to_string());
+        args.push(CODEX_SESSION_PROFILE.to_string());
         return;
     };
 
     args.push("--config".to_string());
     args.push("features.hooks=true".to_string());
-    let command_prefix = shell_quote_arg(qmux_cli);
+    let command_prefix = shell_quote_arg(session_cli);
     for event in CODEX_HOOK_EVENTS {
         let command = toml_string(&format!("{command_prefix} notify {event}"));
         let entry = if *event == "SessionStart" {
@@ -1356,7 +1356,7 @@ fn codex_worktree_root(
 
 fn add_codex_worktree_root_env(envs: &mut Vec<(String, String)>, root: Option<&str>) {
     if let Some(root) = root {
-        envs.push(("QMUX_WORKTREE_ROOT".to_string(), root.to_string()));
+        envs.push(("SESSION_WORKTREE_ROOT".to_string(), root.to_string()));
     }
 }
 
@@ -1440,7 +1440,7 @@ fn codex_effective_cwd(host: &Host, shell_cwd: &Path, args: &[String]) -> Result
     } else {
         // This path belongs to the SSH host. It is already passed to Codex and
         // tmux as an opaque remote path, so never canonicalize or stat it on
-        // the machine running the qmux UI.
+        // the machine running the Session UI.
         Ok(cwd)
     }
 }
@@ -1682,9 +1682,9 @@ fn codex_inline_value_flag(arg: &str) -> bool {
 
 fn ensure_codex_integration() -> Result<PathBuf, String> {
     let codex_home = codex_home()?;
-    let qmux_cli = crate::launch_path::qmux_cli_path()
+    let session_cli = crate::launch_path::session_cli_path()
         .map_err(|err| format!("{err} (needed for Codex hooks)"))?;
-    write_codex_integration_files(&codex_home, &qmux_cli)?;
+    write_codex_integration_files(&codex_home, &session_cli)?;
     Ok(codex_home)
 }
 
@@ -1695,7 +1695,7 @@ fn codex_home() -> Result<PathBuf, String> {
         .ok_or_else(|| "CODEX_HOME and HOME are not set; cannot configure Codex hooks".to_string())
 }
 
-fn write_codex_integration_files(codex_home: &Path, qmux_cli: &Path) -> Result<(), String> {
+fn write_codex_integration_files(codex_home: &Path, session_cli: &Path) -> Result<(), String> {
     let qmux_dir = codex_home.join("qmux");
     fs::create_dir_all(&qmux_dir)
         .map_err(|err| format!("failed to create {}: {err}", qmux_dir.display()))?;
@@ -1707,9 +1707,9 @@ fn write_codex_integration_files(codex_home: &Path, qmux_cli: &Path) -> Result<(
     fs::set_permissions(&shim_path, fs::Permissions::from_mode(0o755))
         .map_err(|err| format!("failed to chmod {}: {err}", shim_path.display()))?;
 
-    let profile_path = codex_home.join(format!("{CODEX_QMUX_PROFILE}.config.toml"));
+    let profile_path = codex_home.join(format!("{CODEX_SESSION_PROFILE}.config.toml"));
     let existing_profile = fs::read_to_string(&profile_path).ok();
-    let profile = codex_profile_toml(&shim_path, qmux_cli, existing_profile.as_deref());
+    let profile = codex_profile_toml(&shim_path, session_cli, existing_profile.as_deref());
     fs::write(&profile_path, profile)
         .map_err(|err| format!("failed to write {}: {err}", profile_path.display()))?;
 
@@ -1722,21 +1722,25 @@ event="${1:-}"
 if [ -z "$event" ]; then
   exit 0
 fi
-if [ -z "${QMUX_SOCK:-}" ] || [ -z "${QMUX_TOKEN:-}" ] || [ -z "${QMUX_PANE_ID:-}" ] || [ -z "${QMUX_AGENT_ID:-}" ] || [ -z "${QMUX_CLI:-}" ]; then
+if [ -z "${SESSION_SOCK:-}" ] || [ -z "${SESSION_TOKEN:-}" ] || [ -z "${SESSION_PANE_ID:-}" ] || [ -z "${SESSION_AGENT_ID:-}" ] || [ -z "${SESSION_CLI:-}" ]; then
   exit 0
 fi
-exec "$QMUX_CLI" notify "$event"
+exec "$SESSION_CLI" notify "$event"
 "#
 }
 
-fn codex_profile_toml(shim_path: &Path, qmux_cli: &Path, existing_profile: Option<&str>) -> String {
+fn codex_profile_toml(
+    shim_path: &Path,
+    session_cli: &Path,
+    existing_profile: Option<&str>,
+) -> String {
     let command_prefix = shell_quote_path(shim_path);
     let mut raw = String::new();
     raw.push_str("# Generated by qMux. Do not edit.\n");
     raw.push_str(
         "# This profile enables qMux Codex lifecycle hooks only for qMux-launched panes.\n",
     );
-    raw.push_str(&format!("# qMux executable: {}\n\n", qmux_cli.display()));
+    raw.push_str(&format!("# qMux executable: {}\n\n", session_cli.display()));
     raw.push_str("[features]\n");
     raw.push_str("hooks = true\n\n");
 
@@ -1853,7 +1857,7 @@ fn codex_config_overrides_hooks(value: &str) -> bool {
 }
 
 /// Makes the durable rollout authoritative over a previously persisted hook id.
-/// This repairs hybrid identities written by qmux versions that committed
+/// This repairs hybrid identities written by Session versions that committed
 /// SessionStart before validating its transcript.
 fn reconcile_codex_agent_identity(
     state: &AppState,
@@ -2265,7 +2269,7 @@ fn bind_codex_transcript_path(
     )?;
 
     if let Some(agent) = updated {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.transcript_bound",
             agent.pane_id.clone(),
             Some(agent.id.clone()),
@@ -2320,7 +2324,7 @@ fn emit_codex_transcript_notice(
     message: Option<&str>,
     path: Option<&str>,
 ) {
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "transcript.notice",
         None,
         Some(agent_id.to_string()),
@@ -3218,7 +3222,7 @@ mod tests {
             Some(Path::new("/tmp/qmux/.qmux/workspaces")),
             Some("gpt-5"),
             &options,
-            Some("Use QMUX_WORKTREE_ROOT.\nTreat it as an opaque path."),
+            Some("Use SESSION_WORKTREE_ROOT.\nTreat it as an opaque path."),
             None,
             vec!["--".to_string(), "start here".to_string()],
         );
@@ -3235,7 +3239,7 @@ mod tests {
                 "--profile",
                 "qmux-codex",
                 "--config",
-                "developer_instructions=\"Use QMUX_WORKTREE_ROOT.\\nTreat it as an opaque path.\"",
+                "developer_instructions=\"Use SESSION_WORKTREE_ROOT.\\nTreat it as an opaque path.\"",
                 "--sandbox",
                 "workspace-write",
                 "--ask-for-approval",
@@ -3292,7 +3296,7 @@ mod tests {
         assert_eq!(
             envs.last(),
             Some(&(
-                "QMUX_WORKTREE_ROOT".to_string(),
+                "SESSION_WORKTREE_ROOT".to_string(),
                 "/repo/.claude/worktrees".to_string()
             ))
         );
@@ -3352,7 +3356,7 @@ mod tests {
             None,
             &CodexLaunchOptions::default(),
             None,
-            Some("/opt/qmux tools/qmux-cli"),
+            Some("/opt/qmux tools/session-cli"),
             Vec::new(),
         );
 
@@ -3364,10 +3368,11 @@ mod tests {
         assert!(args.iter().any(|arg| {
             arg.starts_with("hooks.SessionStart=")
                 && arg.contains("matcher=\"startup|resume\"")
-                && arg.contains("'/opt/qmux tools/qmux-cli' notify SessionStart")
+                && arg.contains("'/opt/qmux tools/session-cli' notify SessionStart")
         }));
         assert!(args.iter().any(|arg| {
-            arg.starts_with("hooks.Stop=") && arg.contains("'/opt/qmux tools/qmux-cli' notify Stop")
+            arg.starts_with("hooks.Stop=")
+                && arg.contains("'/opt/qmux tools/session-cli' notify Stop")
         }));
     }
 
@@ -3485,7 +3490,7 @@ mod tests {
             id: "remote-1".to_string(),
             label: "builder".to_string(),
             ssh: "builder.example".to_string(),
-            qmux_cli: "qmux-cli".to_string(),
+            session_cli: "session-cli".to_string(),
             workspace_root: Some("/srv/qmux".to_string()),
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
         });
@@ -3508,7 +3513,7 @@ mod tests {
         );
         let (codex_home, hook_cli) = adapter.integration_for_host(&host).unwrap();
         assert_eq!(codex_home, None);
-        assert_eq!(hook_cli.as_deref(), Some("qmux-cli"));
+        assert_eq!(hook_cli.as_deref(), Some("session-cli"));
     }
 
     #[test]
@@ -3744,9 +3749,9 @@ mod tests {
     #[test]
     fn generated_profile_uses_stable_qmux_shim_and_inline_hooks() {
         let codex_home = temp_dir();
-        let qmux_cli = Path::new("/Applications/qmux app/qmux");
+        let session_cli = Path::new("/Applications/qmux app/qmux");
 
-        write_codex_integration_files(&codex_home, qmux_cli).unwrap();
+        write_codex_integration_files(&codex_home, session_cli).unwrap();
 
         let profile_path = codex_home.join("qmux-codex.config.toml");
         let shim_path = codex_home.join("qmux").join("qmux-codex-hook");
@@ -3768,14 +3773,14 @@ mod tests {
             );
         }
         assert!(profile.contains("qMux executable: /Applications/qmux app/qmux"));
-        assert!(shim.contains("QMUX_SOCK"));
-        assert!(shim.contains("exec \"$QMUX_CLI\" notify \"$event\""));
+        assert!(shim.contains("SESSION_SOCK"));
+        assert!(shim.contains("exec \"$SESSION_CLI\" notify \"$event\""));
     }
 
     #[test]
     fn generated_profile_preserves_codex_hook_trust_state() {
         let codex_home = temp_dir();
-        let qmux_cli = Path::new("/Applications/qmux app/qmux");
+        let session_cli = Path::new("/Applications/qmux app/qmux");
         let profile_path = codex_home.join("qmux-codex.config.toml");
 
         fs::write(
@@ -3797,7 +3802,7 @@ trusted_hash = "sha256:trusted"
         )
         .unwrap();
 
-        write_codex_integration_files(&codex_home, qmux_cli).unwrap();
+        write_codex_integration_files(&codex_home, session_cli).unwrap();
 
         let profile = fs::read_to_string(profile_path).unwrap();
         assert!(profile.contains("command = \"'/"));
@@ -5264,7 +5269,7 @@ trusted_hash = "sha256:trusted"
     }
 
     fn test_state() -> AppState {
-        AppState::new(QmuxConfig {
+        AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root: temp_dir(),
             socket_path: PathBuf::from("/tmp/qmux-codex-test.sock"),
@@ -5470,7 +5475,7 @@ trusted_hash = "sha256:trusted"
         }
     }
 
-    fn ingest(state: &AppState, notification: AdapterNotification) -> QmuxEvent {
+    fn ingest(state: &AppState, notification: AdapterNotification) -> SessionEvent {
         match CodexAdapter::new(state.config()).ingest_notification(state, notification) {
             Ok(AdapterNotificationOutcome::Event(event)) => event,
             Err(err) => panic!("{err}"),
@@ -5612,7 +5617,7 @@ trusted_hash = "sha256:trusted"
         let source = dir.join("rollout-2026-06-21T20-08-03-abc.jsonl");
         fs::write(&source, codex_fork_rollout("original-session")).unwrap();
 
-        // Index 10 is the second turn's user `response_item` — the line a qmux
+        // Index 10 is the second turn's user `response_item` — the line a Session
         // Turn anchors to, since only `response_item` records become Turns.
         let result = synthesize_truncated_codex_session(&source, &codex_anchor(10)).unwrap();
 

@@ -1,8 +1,8 @@
 use serde_json::{Value, json};
 
-pub const SKILL: &str = include_str!("qmux_skill.md");
+pub const SKILL: &str = include_str!("session_skill.md");
 
-pub const HELP: &str = "usage: qmux <command> [options]\n\nControl commands:\n  send [options] <message>\n  context\n  workspace <list|get|create|rename>\n  pane <list|current|get|read|create|send|run|wait-output|rename|focus|close>\n  agent <list|get|read|start|fork|prompt|wait|focus|release>\n  artifact <list|open>\n  split <list|join|leave|resize>\n\nIntegrations:\n  mcp, open, fork, claude, codex, grok, muse\n\nRun `qmux <group> --help` for group commands or `qmux --skill` for agent instructions.";
+pub const HELP: &str = "usage: session <command> [options]\n\nControl commands:\n  send [options] <message>\n  context\n  workspace <list|get|create|rename>\n  pane <list|current|get|read|create|send|run|wait-output|rename|focus|close>\n  agent <list|get|read|start|fork|prompt|wait|focus|release>\n  artifact <list|open>\n  split <list|join|leave|resize>\n\nIntegrations:\n  mcp, open, fork, claude, codex, grok, muse\n\nRun `session <group> --help` for group commands or `session --skill` for agent instructions.";
 
 pub fn run(command: &str, args: Vec<String>) -> Result<bool, String> {
     if let Some(help) = group_help(command)
@@ -21,7 +21,7 @@ pub fn run(command: &str, args: Vec<String>) -> Result<bool, String> {
     } else {
         serde_json::to_string(&response)
     }
-    .map_err(|error| format!("failed to encode qmux CLI response: {error}"))?;
+    .map_err(|error| format!("failed to encode Session CLI response: {error}"))?;
     if response.ok {
         println!("{encoded}");
         Ok(true)
@@ -33,17 +33,17 @@ pub fn run(command: &str, args: Vec<String>) -> Result<bool, String> {
 fn group_help(command: &str) -> Option<&'static str> {
     match command {
         "workspace" => Some(
-            "usage: qmux workspace <command>\n\n  list\n  get <workspace-id>\n  create [--name <name>] [--dir <path>]\n  rename <workspace-id> <name>",
+            "usage: session workspace <command>\n\n  list\n  get <workspace-id>\n  create [--name <name>] [--dir <path>]\n  rename <workspace-id> <name>",
         ),
         "pane" => Some(
-            "usage: qmux pane <command>\n\n  list\n  current\n  get <pane-id>\n  read <pane-id> [--source terminal|viewport] [--lines <count>]\n  create [--current-workspace] [--cwd <path>] [--no-focus]\n  send <pane-id> <text> [--submit]\n  run <pane-id> <command>\n  wait-output <pane-id> (--match <text>|--regex <pattern>) [--timeout <duration>]\n  rename <pane-id> <name>\n  focus <pane-id>\n  close <pane-id>",
+            "usage: session pane <command>\n\n  list\n  current\n  get <pane-id>\n  read <pane-id> [--source terminal|viewport] [--lines <count>]\n  create [--current-workspace] [--cwd <path>] [--no-focus]\n  send <pane-id> <text> [--submit]\n  run <pane-id> <command>\n  wait-output <pane-id> (--match <text>|--regex <pattern>) [--timeout <duration>]\n  rename <pane-id> <name>\n  focus <pane-id>\n  close <pane-id>",
         ),
         "agent" => Some(
-            "usage: qmux agent <command>\n\n  list\n  get <agent-id>\n  read <agent-id> [--source transcript|terminal] [--turns <count>] [--lines <count>]\n  start [name] [--adapter <id>] [--prompt <text>] [--worktree] [--model <id>] [--effort <level>] [--cwd <path>] [--no-focus]\n  fork <agent-id> [--prompt <text>] [--worktree] [--no-focus]\n  prompt <agent-id> <text>\n  wait <agent-id> [--until <state>] [--timeout <duration>]\n  focus <agent-id>\n  release <agent-id>",
+            "usage: session agent <command>\n\n  list\n  get <agent-id>\n  read <agent-id> [--source transcript|terminal] [--turns <count>] [--lines <count>]\n  start [name] [--adapter <id>] [--prompt <text>] [--worktree] [--model <id>] [--effort <level>] [--cwd <path>] [--no-focus]\n  fork <agent-id> [--prompt <text>] [--worktree] [--no-focus]\n  prompt <agent-id> <text>\n  wait <agent-id> [--until <state>] [--timeout <duration>]\n  focus <agent-id>\n  release <agent-id>",
         ),
-        "artifact" => Some("usage: qmux artifact <command>\n\n  list\n  open <artifact-id>"),
+        "artifact" => Some("usage: session artifact <command>\n\n  list\n  open <artifact-id>"),
         "split" => Some(
-            "usage: qmux split <command>\n\n  list\n  join <pane-id> <other-pane-id>\n  leave <pane-id>\n  resize <split-id> <pane-id> <fraction>",
+            "usage: session split <command>\n\n  list\n  join <pane-id> <other-pane-id>\n  leave <pane-id>\n  resize <split-id> <pane-id> <fraction>",
         ),
         _ => None,
     }
@@ -110,7 +110,7 @@ fn parse_workspace_create(mut args: Vec<String>) -> Result<(String, Value), Stri
 
 fn parse_rename(kind: &str, args: Vec<String>) -> Result<(String, Value), String> {
     if args.len() != 2 {
-        return Err(format!("usage: qmux {kind} rename <id> <name>"));
+        return Err(format!("usage: session {kind} rename <id> <name>"));
     }
     Ok((
         format!("{kind}.rename"),
@@ -139,7 +139,7 @@ fn parse_pane_create(mut args: Vec<String>) -> Result<(String, Value), String> {
 fn parse_pane_send(mut args: Vec<String>, run: bool) -> Result<(String, Value), String> {
     if args.len() < 2 {
         return Err(format!(
-            "usage: qmux pane {} <pane-id> <text>",
+            "usage: session pane {} <pane-id> <text>",
             if run { "run" } else { "send" }
         ));
     }
@@ -159,7 +159,7 @@ fn parse_pane_send(mut args: Vec<String>, run: bool) -> Result<(String, Value), 
 
 fn parse_wait_output(mut args: Vec<String>) -> Result<(String, Value), String> {
     if args.is_empty() {
-        return Err("usage: qmux pane wait-output <pane-id> --match <text>".into());
+        return Err("usage: session pane wait-output <pane-id> --match <text>".into());
     }
     let id = args.remove(0);
     let mut text = None;
@@ -236,7 +236,7 @@ fn parse_agent_start(mut args: Vec<String>) -> Result<(String, Value), String> {
 
 fn parse_agent_fork(mut args: Vec<String>) -> Result<(String, Value), String> {
     if args.is_empty() {
-        return Err("usage: qmux agent fork <agent-id> [--prompt <prompt>] [--worktree]".into());
+        return Err("usage: session agent fork <agent-id> [--prompt <prompt>] [--worktree]".into());
     }
     let id = args.remove(0);
     let mut prompt = None;
@@ -258,7 +258,7 @@ fn parse_agent_fork(mut args: Vec<String>) -> Result<(String, Value), String> {
 
 fn parse_agent_prompt(mut args: Vec<String>) -> Result<(String, Value), String> {
     if args.len() < 2 {
-        return Err("usage: qmux agent prompt <agent-id> <text>".into());
+        return Err("usage: session agent prompt <agent-id> <text>".into());
     }
     let id = args.remove(0);
     strip_option_delimiter(&mut args);
@@ -271,7 +271,7 @@ fn parse_agent_prompt(mut args: Vec<String>) -> Result<(String, Value), String> 
 fn parse_agent_wait(mut args: Vec<String>) -> Result<(String, Value), String> {
     if args.is_empty() {
         return Err(
-            "usage: qmux agent wait <agent-id> [--until <state>] [--timeout <duration>]".into(),
+            "usage: session agent wait <agent-id> [--until <state>] [--timeout <duration>]".into(),
         );
     }
     let id = args.remove(0);
@@ -305,7 +305,7 @@ fn parse_split(mut args: Vec<String>) -> Result<(String, Value), String> {
         "list" => no_args("split list", args, "split.list"),
         "join" => {
             if args.len() != 2 {
-                return Err("usage: qmux split join <pane-id> <other-pane-id>".into());
+                return Err("usage: session split join <pane-id> <other-pane-id>".into());
             }
             Ok((
                 "split.join".into(),
@@ -315,7 +315,7 @@ fn parse_split(mut args: Vec<String>) -> Result<(String, Value), String> {
         "leave" => one_id("split leave", args, "split.leave"),
         "resize" => {
             if args.len() != 3 {
-                return Err("usage: qmux split resize <split-id> <pane-id> <fraction>".into());
+                return Err("usage: session split resize <split-id> <pane-id> <fraction>".into());
             }
             let fraction = args[2]
                 .parse::<f64>()
@@ -334,7 +334,7 @@ fn parse_split(mut args: Vec<String>) -> Result<(String, Value), String> {
 
 fn parse_read(kind: &str, mut args: Vec<String>) -> Result<(String, Value), String> {
     if args.is_empty() {
-        return Err(format!("usage: qmux {kind} read <id> [--source <source>]"));
+        return Err(format!("usage: session {kind} read <id> [--source <source>]"));
     }
     let id = args.remove(0);
     let mut source = None;
@@ -362,21 +362,21 @@ fn parse_read(kind: &str, mut args: Vec<String>) -> Result<(String, Value), Stri
 
 fn pop_subcommand(group: &str, args: &mut Vec<String>) -> Result<String, String> {
     if args.is_empty() {
-        return Err(format!("usage: qmux {group} <command>"));
+        return Err(format!("usage: session {group} <command>"));
     }
     Ok(args.remove(0))
 }
 
 fn no_args(label: &str, args: Vec<String>, operation: &str) -> Result<(String, Value), String> {
     if !args.is_empty() {
-        return Err(format!("usage: qmux {label}"));
+        return Err(format!("usage: session {label}"));
     }
     Ok((operation.to_string(), json!({})))
 }
 
 fn one_id(label: &str, args: Vec<String>, operation: &str) -> Result<(String, Value), String> {
     if args.len() != 1 {
-        return Err(format!("usage: qmux {label} <id>"));
+        return Err(format!("usage: session {label} <id>"));
     }
     Ok((operation.to_string(), json!({ "id": args[0] })))
 }
@@ -588,12 +588,12 @@ mod tests {
 
     #[test]
     fn built_in_skill_has_frontmatter_environment_gate_and_core_workflows() {
-        assert!(SKILL.starts_with("---\nname: qmux\n"));
-        assert!(SKILL.contains("test \"${QMUX_ENV:-}\" = 1"));
-        assert!(SKILL.contains("desktop product is Session"));
-        assert!(SKILL.contains("qmux context"));
-        assert!(SKILL.contains("qmux agent wait"));
-        assert!(SKILL.contains("qmux artifact list"));
+        assert!(SKILL.starts_with("---\nname: session\n"));
+        assert!(SKILL.contains("test \"${SESSION_ENV:-}\" = 1"));
+        assert!(SKILL.contains("SESSION_CLI"));
+        assert!(SKILL.contains("session context"));
+        assert!(SKILL.contains("session agent wait"));
+        assert!(SKILL.contains("session artifact list"));
     }
 
     #[test]

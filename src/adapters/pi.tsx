@@ -3,7 +3,7 @@ import type { AgentUiAdapter, ComposerPolicy } from ".";
 export const PI_ADAPTER_ID = "pi";
 
 // Mirrors PiAdapter::composer_policy. Pi owns authentication, model/thinking
-// selection, trust, and extension UI inside its native TUI, so the qmux launcher
+// selection, trust, and extension UI inside its native TUI, so the Session launcher
 // intentionally exposes no adapter options.
 const piComposerPolicy: ComposerPolicy = {
   readyStatuses: ["awaitingInput", "done", "idle"],

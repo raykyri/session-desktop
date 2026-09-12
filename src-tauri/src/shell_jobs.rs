@@ -1,4 +1,4 @@
-use crate::events::QmuxEvent;
+use crate::events::SessionEvent;
 use crate::state::{AppState, ShellAgentJobInfo, ShellAgentJobState};
 use serde_json::json;
 use std::collections::HashMap;
@@ -75,7 +75,7 @@ fn recover_shell_terminal_modes(state: &AppState, info: &ShellAgentJobInfo) {
     }
     if let Err(err) = crate::pty::reset_live_pane_terminal_modes(state, &info.pane_id) {
         eprintln!(
-            "qmux: failed to reset live terminal modes for shell job {}: {err}",
+            "session: failed to reset live terminal modes for shell job {}: {err}",
             info.job_id
         );
     }
@@ -89,7 +89,7 @@ fn job_state_returns_terminal_to_shell(state: ShellAgentJobState) -> bool {
 }
 
 pub fn emit_job_state(state: &AppState, info: &ShellAgentJobInfo) {
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.shell_job_state_changed",
         Some(info.pane_id.clone()),
         Some(info.agent_id.clone()),
@@ -98,7 +98,7 @@ pub fn emit_job_state(state: &AppState, info: &ShellAgentJobInfo) {
 }
 
 pub fn emit_job_removed(state: &AppState, info: &ShellAgentJobInfo) {
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.shell_job_removed",
         Some(info.pane_id.clone()),
         Some(info.agent_id.clone()),
@@ -112,7 +112,7 @@ fn retire_missing_job(state: &AppState, info: ShellAgentJobInfo) {
         Ok(Some(_)) => {
             if let Err(err) = crate::pty::reset_pane_terminal_modes(state, &info.pane_id) {
                 eprintln!(
-                    "qmux: failed to reset terminal modes for vanished shell job {}: {err}",
+                    "session: failed to reset terminal modes for vanished shell job {}: {err}",
                     info.job_id
                 );
             }
@@ -120,7 +120,7 @@ fn retire_missing_job(state: &AppState, info: ShellAgentJobInfo) {
         Ok(None) => {}
         Err(err) => {
             eprintln!(
-                "qmux: failed to detach vanished shell agent job {}: {err}",
+                "session: failed to detach vanished shell agent job {}: {err}",
                 info.job_id
             );
         }

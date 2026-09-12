@@ -87,7 +87,7 @@ test("hook failures stay connected and surface as No hooks in pane status", () =
   assert.equal(connection.state, "connected");
   assert.equal(remoteHooksNeedAttention(connection), true);
   assert.equal(remoteConnectionLabel(connection), "Connected · No hooks");
-  assert.match(remoteConnectionDetails(connection), /invalid QMUX_TOKEN/);
+  assert.match(remoteConnectionDetails(connection), /invalid SESSION_TOKEN/);
   assert.match(remoteConnectionDetails(connection), /terminal remains usable/);
   const panes = ["healthy", "authenticationFailed"].map(hookHealth => ({
     remoteSession: { remoteId: "r" }, remoteConnection: parseRemoteConnection({ state: "connected", hookHealth }),

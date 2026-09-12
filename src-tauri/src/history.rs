@@ -1,7 +1,7 @@
 //! Global, resumable conversation history.
 //!
 //! Claude and Codex keep durable JSONL transcripts outside qmux. This scanner
-//! treats those stores as the source of truth, merges live qmux ownership onto
+//! treats those stores as the source of truth, merges live Session ownership onto
 //! each entry, and launches only entries rediscovered during the command. The
 //! latter is an authorization boundary: the webview chooses an opaque history
 //! id, never an arbitrary transcript path or session id.

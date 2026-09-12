@@ -79,7 +79,7 @@ pub fn schedule(state: &AppState, node_id: &str) {
             state.save_research_recap(&node, &snapshot.revision, text)
         })();
         if let Err(err) = result {
-            eprintln!("qmux: recap generation failed for {}: {err}", node.id);
+            eprintln!("session: recap generation failed for {}: {err}", node.id);
         }
     });
 }

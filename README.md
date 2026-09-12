@@ -4,9 +4,9 @@ Session is a desktop research workspace for running long-form investigations wit
 coding agents. It keeps questions, follow-ups, sources, notes, and generated
 documents together in a durable research tree.
 
-The application is derived from qmux. This branch keeps qmux's existing bundle,
-code-signing, storage, protocol, command, and app identifiers for compatibility;
-the shipped application and all product-facing copy use the name **Session**.
+The application is derived from qmux. The app, CLI, packages, and environment
+variables use **Session**. Apple identity and existing storage/data formats are
+preserved; see [the cutover guide](docs/session-cutover.md).
 
 ## Features
 
@@ -72,23 +72,23 @@ the app entrypoint, the website server, and tests, including literal lazy import
 and type-only imports; it does not audit Rust command registration or unused exports
 inside otherwise reachable modules.
 
-The Tauri product name is `Session`. Keep `app.qmux.desktop`, the current signing
-configuration, qmux storage keys, `.qmux` data directories, `QMUX_*` environment
-variables, and internal protocol names unchanged until a separate migration is
-designed. Those strings are compatibility identifiers rather than product copy.
+The Tauri product name is `Session`; the executable is `session`, with standalone
+`session-cli` and shared `session-proto` crates. Apple bundle/Keychain identity,
+signing keys, native bridge symbols, and existing data paths remain unchanged.
+See [docs/session-cutover.md](docs/session-cutover.md) for environment changes and
+restart/deployment requirements.
 
 ## Publishing configuration
 
 Research publishing uses a GitHub OAuth App with Device Flow and the `gist` scope.
-The existing environment variable and hosted-service names remain compatibility
-identifiers:
+Configure publishing through these app-owned environment variables:
 
 ```sh
-QMUX_GITHUB_CLIENT_ID=<oauth-client-id> npm run dev:tauri
+SESSION_GITHUB_CLIENT_ID=<oauth-client-id> npm run dev:tauri
 ```
 
 Published links default to `https://qmux.app/p/<gist-id>`. Use
-`QMUX_SHARE_BASE_URL` to point development builds at another origin.
+`SESSION_SHARE_BASE_URL` to point development builds at another origin.
 
 ## Keyboard shortcuts
 

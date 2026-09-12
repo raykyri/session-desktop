@@ -1,5 +1,5 @@
 use crate::adapters::{ShellCommandIntegration, adapter_registry};
-use crate::events::QmuxEvent;
+use crate::events::SessionEvent;
 use crate::host::Host;
 use crate::remote_terminal::{
     RemoteAttachment, RemoteAttachmentController, RemoteClientHandshake, RemoteHistoryCheckpoint,
@@ -320,7 +320,7 @@ fn plan_to_spec_with_identity(
         let registry = crate::adapters::adapter_registry(state.config());
         if !registry.get(&agent.adapter)?.supports_remote() {
             return Err(format!(
-                "the {} adapter cannot run on remote '{}' yet; it resolves paths on the machine qmux is running on",
+                "the {} adapter cannot run on remote '{}' yet; it resolves paths on the machine Session is running on",
                 agent.adapter,
                 host.label()
             ));
@@ -344,7 +344,7 @@ fn plan_to_spec_with_identity(
             None => RemoteSessionIdentity::new(&target.id, pane_id)?,
         };
         // The tmux session includes a random nonce and is collision-resistant
-        // across qmux workspaces/processes. Scope support files to that durable
+        // across Session workspaces/processes. Scope support files to that durable
         // identity rather than the sequential pane id, which can repeat.
         let support_dir =
             relocate_remote_support_files(&host, pane_id, &identity.tmux_session, &mut plan)?;
@@ -409,8 +409,8 @@ fn relocate_remote_support_files(
     let local_cli = plan
         .envs
         .iter()
-        .find_map(|(key, value)| (key == "QMUX_CLI").then(|| value.clone()));
-    let remote_cli = host.remote().map(|target| target.qmux_cli.clone());
+        .find_map(|(key, value)| (key == "SESSION_CLI").then(|| value.clone()));
+    let remote_cli = host.remote().map(|target| target.session_cli.clone());
     let mut root_rewrites = Vec::new();
 
     for file in &mut plan.support_files {
@@ -442,9 +442,9 @@ fn relocate_remote_support_files(
     }
     for (key, value) in &mut plan.envs {
         rewrite(value);
-        if key == "QMUX_ORIGINAL_ZDOTDIR" {
+        if key == "SESSION_ORIGINAL_ZDOTDIR" {
             *value = host.expand_home("~")?;
-        } else if key == "QMUX_ORIGINAL_BASHRC" {
+        } else if key == "SESSION_ORIGINAL_BASHRC" {
             *value = host.expand_home("~/.bashrc")?;
         }
     }
@@ -744,7 +744,7 @@ fn ensure_shell_agent_startup_supported_for(shell: &str) -> Result<(), String> {
 
 /// Opens a regular shell pane and automatically launches an agent command after
 /// the user's shell configuration has loaded. The command deliberately does not
-/// `exec`: `qmux agent-exec` supervises the adapter and returns to the live shell
+/// `exec`: `session agent-exec` supervises the adapter and returns to the live shell
 /// prompt when the agent exits, matching an agent typed manually in a terminal.
 pub fn spawn_shell_agent_command_pane(
     state: &AppState,
@@ -755,10 +755,10 @@ pub fn spawn_shell_agent_command_pane(
     agent_args: &[String],
     prepared_agent_id: &str,
 ) -> Result<PaneInfo, String> {
-    let qmux_cli = crate::launch_path::qmux_cli_path()
-        .map_err(|err| format!("failed to resolve qmux executable for fork launch: {err}"))?;
+    let session_cli = crate::launch_path::session_cli_path()
+        .map_err(|err| format!("failed to resolve Session executable for fork launch: {err}"))?;
     let startup_command =
-        shell_agent_exec_command(&qmux_cli, adapter_id, agent_args, prepared_agent_id);
+        shell_agent_exec_command(&session_cli, adapter_id, agent_args, prepared_agent_id);
     let spec = shell_spawn_spec(
         state,
         pane_id,
@@ -772,17 +772,17 @@ pub fn spawn_shell_agent_command_pane(
 }
 
 fn shell_agent_exec_command(
-    qmux_cli: &Path,
+    session_cli: &Path,
     adapter_id: &str,
     agent_args: &[String],
     prepared_agent_id: &str,
 ) -> String {
     let mut command = vec![
         format!(
-            "QMUX_PREPARED_AGENT_ID={}",
+            "SESSION_PREPARED_AGENT_ID={}",
             shell_quote_str(prepared_agent_id)
         ),
-        shell_quote(&qmux_cli),
+        shell_quote(&session_cli),
         "agent-exec".to_string(),
         shell_quote_str(adapter_id),
     ];
@@ -1042,11 +1042,11 @@ fn shell_spawn_spec_with_identity(
     let remote = state.group(&group_id)?.and_then(|group| group.remote);
     let host = crate::host::for_group(remote.as_ref());
     let shell = host.interactive_shell(&pane_shell())?;
-    let qmux_cli = if let Some(target) = host.remote() {
-        PathBuf::from(&target.qmux_cli)
+    let session_cli = if let Some(target) = host.remote() {
+        PathBuf::from(&target.session_cli)
     } else {
-        crate::launch_path::qmux_cli_path().map_err(|err| {
-            format!("failed to resolve qmux executable for shell integration: {err}")
+        crate::launch_path::session_cli_path().map_err(|err| {
+            format!("failed to resolve Session executable for shell integration: {err}")
         })?
     };
     let mut envs = shell_pane_envs(state, &pane_id)?;
@@ -1059,7 +1059,7 @@ fn shell_spawn_spec_with_identity(
     let login_shell = state.use_login_shell();
     match agent_shell_function_injection(
         &shell,
-        &qmux_cli,
+        &session_cli,
         &pane_id,
         &shell_commands,
         startup_command.as_deref(),
@@ -1072,20 +1072,24 @@ fn shell_spawn_spec_with_identity(
                 let remote_home = host.expand_home("~")?;
                 let remote_bashrc = host.expand_home("~/.bashrc")?;
                 match shell_kind(&shell) {
-                    ShellKind::Zsh => upsert_env(&mut envs, "QMUX_ORIGINAL_ZDOTDIR", remote_home),
-                    ShellKind::Bash => upsert_env(&mut envs, "QMUX_ORIGINAL_BASHRC", remote_bashrc),
+                    ShellKind::Zsh => {
+                        upsert_env(&mut envs, "SESSION_ORIGINAL_ZDOTDIR", remote_home)
+                    }
+                    ShellKind::Bash => {
+                        upsert_env(&mut envs, "SESSION_ORIGINAL_BASHRC", remote_bashrc)
+                    }
                     ShellKind::Unsupported => {}
                 }
             }
             support_files = injection.support_files;
-            envs.push(("QMUX_AGENT_FUNCTIONS".to_string(), "1".to_string()));
+            envs.push(("SESSION_AGENT_FUNCTIONS".to_string(), "1".to_string()));
             if startup_command.is_none() || recovered {
                 let mut fallback_envs = plain_shell_envs;
-                fallback_envs.push(("QMUX_AGENT_FUNCTIONS".to_string(), "failed".to_string()));
+                fallback_envs.push(("SESSION_AGENT_FUNCTIONS".to_string(), "failed".to_string()));
                 support_file_fallback = Some(SupportFileFallback {
                     args: Vec::new(),
                     envs: fallback_envs,
-                    error_env_key: Some("QMUX_AGENT_FUNCTIONS_ERROR".to_string()),
+                    error_env_key: Some("SESSION_AGENT_FUNCTIONS_ERROR".to_string()),
                 });
             }
         }
@@ -1105,7 +1109,7 @@ fn shell_spawn_spec_with_identity(
                 ));
             }
             envs.push((
-                "QMUX_AGENT_FUNCTIONS".to_string(),
+                "SESSION_AGENT_FUNCTIONS".to_string(),
                 "unsupported".to_string(),
             ));
         }
@@ -1113,8 +1117,8 @@ fn shell_spawn_spec_with_identity(
             if startup_command.is_some() && !recovered {
                 return Err(err);
             }
-            envs.push(("QMUX_AGENT_FUNCTIONS".to_string(), "failed".to_string()));
-            envs.push(("QMUX_AGENT_FUNCTIONS_ERROR".to_string(), err));
+            envs.push(("SESSION_AGENT_FUNCTIONS".to_string(), "failed".to_string()));
+            envs.push(("SESSION_AGENT_FUNCTIONS_ERROR".to_string(), err));
         }
     }
 
@@ -1149,53 +1153,55 @@ pub fn recoverable_dir(path: &str) -> Option<PathBuf> {
     path.is_dir().then_some(path)
 }
 
-pub fn qmux_pane_envs(state: &AppState, pane_id: &str) -> Result<Vec<(String, String)>, String> {
+pub fn session_pane_envs(state: &AppState, pane_id: &str) -> Result<Vec<(String, String)>, String> {
     let mut envs = vec![
-        ("QMUX_PANE_ID".to_string(), pane_id.to_string()),
+        ("SESSION_PANE_ID".to_string(), pane_id.to_string()),
         (
-            "QMUX_SOCK".to_string(),
+            "SESSION_SOCK".to_string(),
             state.config().socket_path.display().to_string(),
         ),
-        ("QMUX_TOKEN".to_string(), state.pane_token(pane_id)?),
+        ("SESSION_TOKEN".to_string(), state.pane_token(pane_id)?),
         (
-            "QMUX_WORKSPACE_ROOT".to_string(),
+            "SESSION_WORKSPACE_ROOT".to_string(),
             state.config().workspace_root.display().to_string(),
         ),
-        ("QMUX_ENV".to_string(), "1".to_string()),
+        ("SESSION_ENV".to_string(), "1".to_string()),
     ];
-    // Expose the qmux executable so in-pane tooling (hooks, agent wrappers, the
-    // fork skill) can call back without depending on `qmux` being on PATH. The
-    // one place any pane's QMUX_CLI is set, and required rather than
+    // Expose the Session executable so in-pane tooling (hooks, agent wrappers, the
+    // fork skill) can call back without depending on `session` being on PATH. The
+    // one place any pane's SESSION_CLI is set, and required rather than
     // best-effort: every launch path already fails without a resolvable CLI, so
     // a pane that started with the variable missing would only fail later and
     // less legibly.
     envs.push((
-        "QMUX_CLI".to_string(),
-        crate::launch_path::qmux_cli_path()?.display().to_string(),
+        "SESSION_CLI".to_string(),
+        crate::launch_path::session_cli_path()?
+            .display()
+            .to_string(),
     ));
     Ok(envs)
 }
 
 /// Envs for an agent pane: the standard pane wiring plus the agent binding.
-/// The one place the `QMUX_AGENT_ID` pairing is added, so no launch path can
+/// The one place the `SESSION_AGENT_ID` pairing is added, so no launch path can
 /// forget it or spell it differently.
 pub fn agent_pane_envs(
     state: &AppState,
     pane_id: &str,
     agent_id: &str,
 ) -> Result<Vec<(String, String)>, String> {
-    let mut envs = qmux_pane_envs(state, pane_id)?;
-    envs.push(("QMUX_AGENT_ID".to_string(), agent_id.to_string()));
+    let mut envs = session_pane_envs(state, pane_id)?;
+    envs.push(("SESSION_AGENT_ID".to_string(), agent_id.to_string()));
     Ok(envs)
 }
 
 fn shell_pane_envs(state: &AppState, pane_id: &str) -> Result<Vec<(String, String)>, String> {
-    let mut envs = qmux_pane_envs(state, pane_id)?;
+    let mut envs = session_pane_envs(state, pane_id)?;
     envs.push((
-        "QMUX_USER_TOKEN".to_string(),
+        "SESSION_USER_TOKEN".to_string(),
         state.pane_user_token(pane_id)?,
     ));
-    envs.push(("QMUX_SHELL_INTEGRATION".to_string(), "1".to_string()));
+    envs.push(("SESSION_SHELL_INTEGRATION".to_string(), "1".to_string()));
     Ok(envs)
 }
 
@@ -1244,7 +1250,7 @@ fn remove_shell_integration_dir(pane_id: &str) {
         Err(err) => {
             // A stale scratch dir is non-fatal and not worth surfacing to the UI.
             eprintln!(
-                "qmux: failed to clean up shell integration dir {}: {err}",
+                "session: failed to clean up shell integration dir {}: {err}",
                 root.display()
             );
         }
@@ -1257,7 +1263,7 @@ fn remove_shell_integration_dir(pane_id: &str) {
 /// backend to materialize on whichever host runs the shell.
 fn agent_shell_function_injection(
     shell: &str,
-    qmux_cli: &Path,
+    session_cli: &Path,
     pane_id: &str,
     shell_commands: &[ShellCommandIntegration],
     startup_command: Option<&str>,
@@ -1277,14 +1283,19 @@ fn agent_shell_function_injection(
             let support_files = vec![SupportFile {
                 root: shell_integration_root(),
                 path: rcfile,
-                contents: zsh_init_script(qmux_cli, shell_commands, startup_command, login_shell),
+                contents: zsh_init_script(
+                    session_cli,
+                    shell_commands,
+                    startup_command,
+                    login_shell,
+                ),
                 mode: 0o644,
                 create_new: false,
                 prune_prefix: None,
             }];
             let mut envs = vec![("ZDOTDIR".to_string(), zdotdir.display().to_string())];
             if let Some(zdotdir) = original_zdotdir() {
-                envs.push(("QMUX_ORIGINAL_ZDOTDIR".to_string(), zdotdir));
+                envs.push(("SESSION_ORIGINAL_ZDOTDIR".to_string(), zdotdir));
             }
             Ok(Some(ShellFunctionInjection {
                 args: vec!["-i".to_string()],
@@ -1297,14 +1308,19 @@ fn agent_shell_function_injection(
             let support_files = vec![SupportFile {
                 root: shell_integration_root(),
                 path: rcfile.clone(),
-                contents: bash_init_script(qmux_cli, shell_commands, startup_command, login_shell),
+                contents: bash_init_script(
+                    session_cli,
+                    shell_commands,
+                    startup_command,
+                    login_shell,
+                ),
                 mode: 0o644,
                 create_new: false,
                 prune_prefix: None,
             }];
             let mut envs = Vec::new();
             if let Some(bashrc) = original_bashrc() {
-                envs.push(("QMUX_ORIGINAL_BASHRC".to_string(), bashrc));
+                envs.push(("SESSION_ORIGINAL_BASHRC".to_string(), bashrc));
             }
             Ok(Some(ShellFunctionInjection {
                 args: vec![
@@ -1333,13 +1349,13 @@ fn shell_kind(shell: &str) -> ShellKind {
 }
 
 fn zsh_init_script(
-    qmux_cli: &Path,
+    session_cli: &Path,
     shell_commands: &[ShellCommandIntegration],
     startup_command: Option<&str>,
     login_shell: bool,
 ) -> String {
-    let cli = shell_quote(qmux_cli);
-    let qmux_function = shell_qmux_function(&cli);
+    let cli = shell_quote(session_cli);
+    let session_function = shell_session_function(&cli);
     let agent_functions = shell_agent_functions(&cli, shell_commands);
     let startup = zsh_startup_command(startup_command);
     // A login shell also sources the user's .zprofile (before .zshrc) and .zlogin
@@ -1364,41 +1380,41 @@ fn zsh_init_script(
   fi"#
     };
     format!(
-        r#"# Generated by qmux. Do not edit.
-if [ -n "${{QMUX_ORIGINAL_ZDOTDIR:-}}" ]; then
-  __qmux_zdotdir="$ZDOTDIR"
-  export ZDOTDIR="$QMUX_ORIGINAL_ZDOTDIR"
+        r#"# Generated by Session. Do not edit.
+if [ -n "${{SESSION_ORIGINAL_ZDOTDIR:-}}" ]; then
+  __session_zdotdir="$ZDOTDIR"
+  export ZDOTDIR="$SESSION_ORIGINAL_ZDOTDIR"
   # /etc/zshrc ran while ZDOTDIR was the per-pane integration dir, so on macOS
   # HISTFILE points at a scratch file that is deleted with the pane. Re-derive
   # it from the restored ZDOTDIR; the user's .zshrc below can still override.
   case "${{HISTFILE:-}}" in
-    "$__qmux_zdotdir"/*) HISTFILE="$ZDOTDIR/.zsh_history" ;;
+    "$__session_zdotdir"/*) HISTFILE="$ZDOTDIR/.zsh_history" ;;
   esac
-  unset __qmux_zdotdir
+  unset __session_zdotdir
 {user_config}
 fi
-{qmux_function}
+{session_function}
 {agent_functions}
-if [ -n "${{QMUX_PANE_ID:-}}" ]; then
-  __qmux_initial_cwd_report=1
-  __qmux_report_cwd() {{
-    {cli} cwd ${{__qmux_initial_cwd_report:+--initial}} >/dev/null 2>&1
-    unset __qmux_initial_cwd_report
+if [ -n "${{SESSION_PANE_ID:-}}" ]; then
+  __session_initial_cwd_report=1
+  __session_report_cwd() {{
+    {cli} cwd ${{__session_initial_cwd_report:+--initial}} >/dev/null 2>&1
+    unset __session_initial_cwd_report
   }}
-  autoload -Uz add-zsh-hook 2>/dev/null && add-zsh-hook precmd __qmux_report_cwd
+  autoload -Uz add-zsh-hook 2>/dev/null && add-zsh-hook precmd __session_report_cwd
 fi
 {startup}"#,
     )
 }
 
 fn bash_init_script(
-    qmux_cli: &Path,
+    session_cli: &Path,
     shell_commands: &[ShellCommandIntegration],
     startup_command: Option<&str>,
     login_shell: bool,
 ) -> String {
-    let cli = shell_quote(qmux_cli);
-    let qmux_function = shell_qmux_function(&cli);
+    let cli = shell_quote(session_cli);
+    let session_function = shell_session_function(&cli);
     let agent_functions = shell_agent_functions(&cli, shell_commands);
     let startup = bash_startup_command(startup_command);
     // A login shell sources the first existing of the user's login profile files —
@@ -1408,32 +1424,32 @@ fn bash_init_script(
     // reproduce the login file lookup here instead. A non-login shell sources
     // ~/.bashrc directly, as bash does for interactive non-login shells.
     let user_config = if login_shell {
-        r#"for __qmux_login_rc in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
-  if [ -r "$__qmux_login_rc" ]; then
-    . "$__qmux_login_rc"
+        r#"for __session_login_rc in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+  if [ -r "$__session_login_rc" ]; then
+    . "$__session_login_rc"
     break
   fi
 done
-unset __qmux_login_rc"#
+unset __session_login_rc"#
     } else {
-        r#"if [ -n "${QMUX_ORIGINAL_BASHRC:-}" ] && [ -r "$QMUX_ORIGINAL_BASHRC" ]; then
-  . "$QMUX_ORIGINAL_BASHRC"
+        r#"if [ -n "${SESSION_ORIGINAL_BASHRC:-}" ] && [ -r "$SESSION_ORIGINAL_BASHRC" ]; then
+  . "$SESSION_ORIGINAL_BASHRC"
 fi"#
     };
     format!(
-        r#"# Generated by qmux. Do not edit.
+        r#"# Generated by Session. Do not edit.
 {user_config}
-{qmux_function}
+{session_function}
 {agent_functions}
-if [ -n "${{QMUX_PANE_ID:-}}" ]; then
-  __qmux_initial_cwd_report=1
-  __qmux_report_cwd() {{
-    {cli} cwd ${{__qmux_initial_cwd_report:+--initial}} >/dev/null 2>&1
-    unset __qmux_initial_cwd_report
+if [ -n "${{SESSION_PANE_ID:-}}" ]; then
+  __session_initial_cwd_report=1
+  __session_report_cwd() {{
+    {cli} cwd ${{__session_initial_cwd_report:+--initial}} >/dev/null 2>&1
+    unset __session_initial_cwd_report
   }}
   case "$PROMPT_COMMAND" in
-    *__qmux_report_cwd*) ;;
-    *) PROMPT_COMMAND="__qmux_report_cwd${{PROMPT_COMMAND:+; $PROMPT_COMMAND}}" ;;
+    *__session_report_cwd*) ;;
+    *) PROMPT_COMMAND="__session_report_cwd${{PROMPT_COMMAND:+; $PROMPT_COMMAND}}" ;;
   esac
 fi
 {startup}"#,
@@ -1448,37 +1464,37 @@ fn zsh_startup_command(startup_command: Option<&str>) -> String {
         return String::new();
     };
     format!(
-        r#"__qmux_startup_command() {{
-  add-zsh-hook -d precmd __qmux_startup_command 2>/dev/null || true
-  unfunction __qmux_startup_command 2>/dev/null || true
+        r#"__session_startup_command() {{
+  add-zsh-hook -d precmd __session_startup_command 2>/dev/null || true
+  unfunction __session_startup_command 2>/dev/null || true
   {command}
 }}
 if autoload -Uz add-zsh-hook 2>/dev/null; then
-  add-zsh-hook precmd __qmux_startup_command || __qmux_startup_command
+  add-zsh-hook precmd __session_startup_command || __session_startup_command
 else
-  __qmux_startup_command
+  __session_startup_command
 fi
 "#
     )
 }
 
 /// Appends a one-shot function to Bash's `PROMPT_COMMAND`, after any user and
-/// qmux cwd-reporting hooks. The function removes itself before launching so the
+/// session cwd-reporting hooks. The function removes itself before launching so the
 /// agent runs only for the first prompt and the surviving shell remains normal.
 fn bash_startup_command(startup_command: Option<&str>) -> String {
     let Some(command) = startup_command else {
         return String::new();
     };
     format!(
-        r#"__qmux_startup_command() {{
+        r#"__session_startup_command() {{
   case "$PROMPT_COMMAND" in
-    "__qmux_startup_command") PROMPT_COMMAND="" ;;
-    *"; __qmux_startup_command") PROMPT_COMMAND="${{PROMPT_COMMAND%; __qmux_startup_command}}" ;;
+    "__session_startup_command") PROMPT_COMMAND="" ;;
+    *"; __session_startup_command") PROMPT_COMMAND="${{PROMPT_COMMAND%; __session_startup_command}}" ;;
   esac
-  unset -f __qmux_startup_command
+  unset -f __session_startup_command
   {command}
 }}
-PROMPT_COMMAND="${{PROMPT_COMMAND:+$PROMPT_COMMAND; }}__qmux_startup_command"
+PROMPT_COMMAND="${{PROMPT_COMMAND:+$PROMPT_COMMAND; }}__session_startup_command"
 "#
     )
 }
@@ -1501,11 +1517,11 @@ fn shell_agent_functions(cli: &str, shell_commands: &[ShellCommandIntegration]) 
         .join("\n")
 }
 
-/// Defines `qmux` as a passthrough to the bundled CLI so the user can run
-/// subcommands such as `qmux fork` from the shell prompt without `qmux` being
+/// Defines `session` as a passthrough to the bundled CLI so the user can run
+/// subcommands such as `session fork` from the shell prompt without `session` being
 /// on PATH — mirroring the injected agent functions.
-fn shell_qmux_function(cli: &str) -> String {
-    format!("unalias qmux 2>/dev/null || true\nqmux() {{\n  {cli} \"$@\"\n}}")
+fn shell_session_function(cli: &str) -> String {
+    format!("unalias session 2>/dev/null || true\nsession() {{\n  {cli} \"$@\"\n}}")
 }
 
 fn original_zdotdir() -> Option<String> {
@@ -1881,7 +1897,7 @@ fn spawn_portable_pty(
     let mut command = CommandBuilder::new(spec.program);
     command.args(spec.args);
     command.cwd(spec.cwd.clone());
-    scrub_inherited_qmux_context(&mut command);
+    scrub_inherited_session_context(&mut command);
     for (key, value) in base_envs {
         command.env(key, value);
     }
@@ -2080,7 +2096,7 @@ fn run_remote_bootstrap(
 }
 
 fn record_remote_startup(state: &AppState, pane_id: &str, stage: &str, elapsed: u128) {
-    eprintln!("qmux: remote startup pane={pane_id} stage={stage} elapsed_ms={elapsed}");
+    eprintln!("session: remote startup pane={pane_id} stage={stage} elapsed_ms={elapsed}");
     let _ = state.mutate_remote_connection(pane_id, |connection| {
         connection
             .startup_timings
@@ -2097,7 +2113,7 @@ fn record_remote_startup_elapsed(state: &AppState, pane_id: &str, stage: &str) {
                 .or_insert_with(|| {
                     let elapsed = crate::state::now_millis().saturating_sub(start);
                     eprintln!(
-                        "qmux: remote startup pane={pane_id} stage={stage} elapsed_ms={elapsed}"
+                        "session: remote startup pane={pane_id} stage={stage} elapsed_ms={elapsed}"
                     );
                     elapsed
                 });
@@ -2461,7 +2477,7 @@ fn spawn_remote_attachment(
     *command = format!(
         "sh -c {} qmux {}",
         crate::adapters::shell_quote_arg(
-            r#"printf '\033]777;qmux-client-pid=%s\007' "$$"; exec "$@""#
+            r#"printf '\033]777;session-client-pid=%s\007' "$$"; exec "$@""#
         ),
         command
     );
@@ -2485,7 +2501,7 @@ fn spawn_remote_attachment(
     let mut command = CommandBuilder::new(program);
     command.args(args);
     command.cwd(state.default_open_dir());
-    scrub_inherited_qmux_context(&mut command);
+    scrub_inherited_session_context(&mut command);
     command.env("TERM", "xterm-256color");
     let writer = pair
         .master
@@ -2665,7 +2681,7 @@ fn cleanup_remote_support(commands: &crate::host::RemoteTmuxCommands) {
             "remove remote pane support files",
         )
     {
-        eprintln!("qmux: {err}");
+        eprintln!("session: {err}");
     }
 }
 
@@ -2741,7 +2757,7 @@ fn synchronize_remote_history(
     if let Err(err) =
         write_remote_history_checkpoint(&state.config().workspace_root, pane_id, &tail)
     {
-        eprintln!("qmux: failed to persist remote history checkpoint for pane {pane_id}: {err}");
+        eprintln!("session: failed to persist remote history checkpoint for pane {pane_id}: {err}");
     }
     Ok(())
 }
@@ -2888,7 +2904,7 @@ fn remote_hook_health(output: Result<Output, String>) -> RemoteHookHealth {
         RemoteHookHealth::Healthy
     } else if response
         .as_ref()
-        .is_some_and(|value| value["ok"] == false && value["error"] == "invalid QMUX_TOKEN")
+        .is_some_and(|value| value["ok"] == false && value["error"] == "invalid SESSION_TOKEN")
     {
         RemoteHookHealth::AuthenticationFailed
     } else {
@@ -3271,7 +3287,7 @@ fn schedule_remote_reconnect(
                             && let Ok(agent) =
                                 crate::workspace::mark_agent_failed(&state, &agent.id)
                         {
-                            state.emit(QmuxEvent::new(
+                            state.emit(SessionEvent::new(
                                 "agent.remote_session_ended",
                                 Some(pane_id.clone()),
                                 Some(agent.id.clone()),
@@ -3337,7 +3353,7 @@ fn attach_remote_generation(
         }
         let token = std::str::from_utf8(&output.stdout)
             .ok()
-            .and_then(|text| text.trim_end().strip_prefix("QMUX_TOKEN="))
+            .and_then(|text| text.trim_end().strip_prefix("SESSION_TOKEN="))
             .ok_or("remote session hook credential is missing")?;
         if !controller.recovery_is_current(revision) {
             return Err("recovery superseded".into());
@@ -3429,38 +3445,40 @@ fn attach_remote_generation(
     Ok(())
 }
 
-/// A qmux process can itself be launched from inside another qmux pane. The PTY
+/// A Session process can itself be launched from inside another session pane. The PTY
 /// command builder inherits that outer process environment, so remove every
 /// pane/session credential before applying this pane's freshly-derived envs.
 /// Shell panes receive their new user credential below; agent panes never do.
-fn scrub_inherited_qmux_context(command: &mut CommandBuilder) {
+fn scrub_inherited_session_context(command: &mut CommandBuilder) {
     const CONTEXT_KEYS: &[&str] = &[
-        "QMUX_ENV",
-        "QMUX_PANE_ID",
-        "QMUX_AGENT_ID",
-        "QMUX_ADAPTER_ID",
-        "QMUX_TOKEN",
-        "QMUX_USER_TOKEN",
-        "QMUX_SOCK",
-        "QMUX_CLI",
-        "QMUX_WORKSPACE_ROOT",
-        "QMUX_SHELL_INTEGRATION",
-        "QMUX_PREPARED_AGENT_ID",
-        "QMUX_FORK_POINT",
-        "QMUX_ROOT_SESSION_ID",
-        "QMUX_AGENT_FUNCTIONS",
-        "QMUX_AGENT_FUNCTIONS_ERROR",
-        "QMUX_ORIGINAL_ZDOTDIR",
-        "QMUX_ORIGINAL_BASHRC",
+        "SESSION_ENV",
+        "SESSION_PANE_ID",
+        "SESSION_AGENT_ID",
+        "SESSION_ADAPTER_ID",
+        "SESSION_TOKEN",
+        "SESSION_USER_TOKEN",
+        "SESSION_SOCK",
+        "SESSION_CLI",
+        "SESSION_WORKSPACE_ROOT",
+        "SESSION_WORKTREE_ROOT",
+        "SESSION_SHELL_INTEGRATION",
+        "SESSION_PREPARED_AGENT_ID",
+        "SESSION_FORK_POINT",
+        "SESSION_ROOT_SESSION_ID",
+        "SESSION_AGENT_FUNCTIONS",
+        "SESSION_AGENT_FUNCTIONS_ERROR",
+        "SESSION_ORIGINAL_ZDOTDIR",
+        "SESSION_ORIGINAL_BASHRC",
     ];
     for key in CONTEXT_KEYS {
         command.env_remove(key);
+        command.env_remove(key.replacen("SESSION_", "QMUX_", 1));
     }
 }
 
 /// Marks a pane's frontend listener as live and flushes any output buffered
 /// before it attached. Called once per pane, after the webview registers its
-/// `qmux-event` listener, so the cold-start prompt is never lost to a startup
+/// `session-event` listener, so the cold-start prompt is never lost to a startup
 /// race. The buffered bytes are flushed before `ready` releases the reader to
 /// deliver live, preserving output order. For native surfaces the flush also
 /// waits for the surface's first real geometry fit (see `DEFERRED_ATTACHES`);
@@ -3545,7 +3563,7 @@ pub fn attach_pane(state: &AppState, pane_id: String) -> Result<(), String> {
 }
 
 /// Clears terminal modes a program may have left active in a pane that
-/// outlives it. A shell-launched agent (`qmux agent-exec codex ...`) that is
+/// outlives it. A shell-launched agent (`session agent-exec codex ...`) that is
 /// killed or crashes never restores what its TUI pushed — kitty keyboard
 /// flags, mouse/focus reporting, bracketed paste, the alternate screen — and
 /// the surviving shell's surface keeps all of it: the replay reset in
@@ -3615,7 +3633,7 @@ pub fn complete_pending_attach(state: &AppState, pane_id: &str) {
     let pane_id = pane_id.to_string();
     std::thread::spawn(move || {
         if let Err(err) = attach_pane(&state, pane_id.clone()) {
-            eprintln!("qmux: failed to complete deferred attach for pane {pane_id}: {err}");
+            eprintln!("session: failed to complete deferred attach for pane {pane_id}: {err}");
         }
     });
 }
@@ -3776,7 +3794,7 @@ fn write_native_data_and_submit(
         }
         if quiet_rechecks < timing.data_quiet_rechecks {
             eprintln!(
-                "qmux: native paste input did not become quiescent after {} rechecks; \
+                "session: native paste input did not become quiescent after {} rechecks; \
                  submitting from the latest observed PTY boundary",
                 timing.data_max_rechecks
             );
@@ -3811,12 +3829,12 @@ fn write_native_data_and_submit(
         Ok(()) => {
             if let Some(err) = synthetic_submit_error {
                 eprintln!(
-                    "qmux: native synthetic submit failed ({err}); delivered the raw submit byte \
+                    "session: native synthetic submit failed ({err}); delivered the raw submit byte \
                      through the pane writer instead"
                 );
             } else {
                 eprintln!(
-                    "qmux: native synthetic submit emitted no acknowledged PTY input; delivered \
+                    "session: native synthetic submit emitted no acknowledged PTY input; delivered \
                      the raw submit byte through the pane writer instead"
                 );
             }
@@ -4048,7 +4066,7 @@ pub fn resize_pane(state: &AppState, pane_id: String, cols: u16, rows: u16) -> R
         && let Some(process_group) = master.process_group_leader()
     {
         // Signal the foreground group, not just the pane's direct child. An
-        // agent launched from a shell pane runs below qmux's agent-exec
+        // agent launched from a shell pane runs below Session's agent-exec
         // supervisor, while a dedicated agent pane has the same process as
         // its group leader. SIGWINCH is ignored by default, so an exit/detach
         // race is harmless.
@@ -4057,7 +4075,7 @@ pub fn resize_pane(state: &AppState, pane_id: String, cols: u16, rows: u16) -> R
             let err = std::io::Error::last_os_error();
             if err.raw_os_error() != Some(libc::ESRCH) {
                 eprintln!(
-                    "qmux: failed to explicitly notify agent pane {pane_id} of resize: {err}"
+                    "session: failed to explicitly notify agent pane {pane_id} of resize: {err}"
                 );
             }
         }
@@ -4094,7 +4112,7 @@ pub(crate) fn clear_remote_native_screen(state: &AppState, pane_id: &str) -> boo
     match state.pane_remote_control(pane_id) {
         Ok(Some(_)) => {
             if let Err(err) = write_native_host_input(state, pane_id, vec![0x0c]) {
-                eprintln!("qmux: failed to clear remote terminal {pane_id}: {err}");
+                eprintln!("session: failed to clear remote terminal {pane_id}: {err}");
             }
             // Even a disconnected remote owns this chord. Falling through
             // would clear only the local renderer and conceal the failure.
@@ -4102,7 +4120,7 @@ pub(crate) fn clear_remote_native_screen(state: &AppState, pane_id: &str) -> boo
         }
         Ok(None) => false,
         Err(err) => {
-            eprintln!("qmux: failed to resolve clear-screen target {pane_id}: {err}");
+            eprintln!("session: failed to resolve clear-screen target {pane_id}: {err}");
             true
         }
     }
@@ -4276,7 +4294,7 @@ fn start_native_input_writer(
                     if let Some(acknowledge) = acknowledge {
                         let _ = acknowledge.send(Err(err.clone()));
                     }
-                    eprintln!("qmux: {err}");
+                    eprintln!("session: {err}");
                     return;
                 }
             }
@@ -4345,7 +4363,7 @@ pub fn pane_activity(state: &AppState, pane_id: String) -> Result<PaneActivity, 
     let Some(root_pid) = root_pid else {
         return Ok(PaneActivity::idle());
     };
-    // The qmux bridge is implementation plumbing, not user work. Do not make
+    // The Session bridge is implementation plumbing, not user work. Do not make
     // it inflate the close-warning count or trigger a warning on its own.
     let processes = user_running_processes(running_descendant_processes(root_pid));
     if processes.is_empty() {
@@ -4362,7 +4380,7 @@ pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
     let native_surface = state.pane_is_native(&pane_id)? == Some(true);
     let pane_agent_id = state.agent_by_pane(&pane_id)?.map(|agent| agent.id);
     if let Err(err) = state.capture_last_closed_pane(&pane_id) {
-        eprintln!("qmux: failed to capture closed pane {pane_id}: {err}");
+        eprintln!("session: failed to capture closed pane {pane_id}: {err}");
     }
     if let Some((controller, _, commands)) = state.pane_remote_control(&pane_id)? {
         if controller.initial_launch_in_progress() {
@@ -4403,7 +4421,7 @@ pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
                 "Forked terminal exited before its initial prompt was accepted",
             )
         {
-            eprintln!("qmux: failed to release fork barrier for closed agent {agent_id}: {err}");
+            eprintln!("session: failed to release fork barrier for closed agent {agent_id}: {err}");
         }
         state.remove_pane(&pane_id)?;
         if native_surface {
@@ -4413,7 +4431,7 @@ pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
         if let Some(agent_id) = pane_agent_id
             && let Err(err) = release_waiters_for_agent(state, &agent_id)
         {
-            eprintln!("qmux: failed to release waiters for closed agent {agent_id}: {err}");
+            eprintln!("session: failed to release waiters for closed agent {agent_id}: {err}");
         }
         return Ok(());
     }
@@ -4443,7 +4461,7 @@ pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
             return Err(err);
         }
         eprintln!(
-            "qmux: kill for pane {pane_id} errored but the child has exited; reclaiming: {err}"
+            "session: kill for pane {pane_id} errored but the child has exited; reclaiming: {err}"
         );
     }
     if let Some(agent_id) = pane_agent_id.as_deref()
@@ -4453,7 +4471,7 @@ pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
             "Forked terminal exited before its initial prompt was accepted",
         )
     {
-        eprintln!("qmux: failed to release fork barrier for closed agent {agent_id}: {err}");
+        eprintln!("session: failed to release fork barrier for closed agent {agent_id}: {err}");
     }
     state.remove_pane(&pane_id)?;
     if native_surface {
@@ -4463,14 +4481,14 @@ pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
     if let Some(agent_id) = pane_agent_id
         && let Err(err) = release_waiters_for_agent(state, &agent_id)
     {
-        eprintln!("qmux: failed to release waiters for closed agent {agent_id}: {err}");
+        eprintln!("session: failed to release waiters for closed agent {agent_id}: {err}");
     }
     Ok(())
 }
 
 pub fn native_pane_did_close(state: &AppState, pane_id: &str, process_alive: bool) {
     if process_alive && let Err(err) = state.settle_research_pane_cancelled(pane_id) {
-        eprintln!("qmux: failed to cancel user-closed research pane {pane_id}: {err}");
+        eprintln!("session: failed to cancel user-closed research pane {pane_id}: {err}");
     }
     // A delegate delivery for a pane no longer in the model (a late or
     // duplicate close) has nothing left to tear down.
@@ -4478,7 +4496,7 @@ pub fn native_pane_did_close(state: &AppState, pane_id: &str, process_alive: boo
         || state.pane_remote_control(pane_id).ok().flatten().is_some())
         && let Err(err) = kill_pane(state, pane_id.to_string())
     {
-        eprintln!("qmux: failed to close host-managed pane {pane_id}: {err}");
+        eprintln!("session: failed to close host-managed pane {pane_id}: {err}");
     }
 }
 
@@ -4508,7 +4526,7 @@ pub fn kill_all_panes(state: &AppState) {
     let children = match state.all_pane_children() {
         Ok(children) => children,
         Err(err) => {
-            eprintln!("qmux: failed to enumerate panes for exit cleanup: {err}");
+            eprintln!("session: failed to enumerate panes for exit cleanup: {err}");
             return;
         }
     };
@@ -4520,7 +4538,7 @@ pub fn kill_all_panes(state: &AppState) {
     // app still completes every best-effort teardown before its process exits.
     for_each_concurrently(children, |(pane_id, child)| {
         if let Err(err) = kill_child(&pane_id, child) {
-            eprintln!("qmux: failed to kill pane {pane_id} on exit: {err}");
+            eprintln!("session: failed to kill pane {pane_id} on exit: {err}");
         }
         // The reader-thread EOF path that normally removes these dirs won't run once
         // the process is exiting, so clean them up here instead of leaking them into
@@ -4703,14 +4721,14 @@ fn start_reader_thread(
                                 crate::native_terminal::receive(&pane_id, chunk, false)
                         {
                             eprintln!(
-                                "qmux: failed to render output for native pane {pane_id}: {err}"
+                                "session: failed to render output for native pane {pane_id}: {err}"
                             );
                         }
                         record_scrollback(&state, &pane_id, chunk);
                     }
                 }
                 Err(err) => {
-                    state.emit(QmuxEvent::new(
+                    state.emit(SessionEvent::new(
                         "pty.read_error",
                         Some(pane_id.clone()),
                         None,
@@ -4722,7 +4740,7 @@ fn start_reader_thread(
         }
         // The PTY hit EOF, so the child has exited (or is about to). Reap it before
         // dropping the handle so it does not linger as a zombie occupying a PID slot
-        // for the life of the qmux process, and report its real exit code rather
+        // for the life of the Session process, and report its real exit code rather
         // than a blanket `None`. A pane killed via `kill_pane` is already reaped and
         // removed there, so this returns None and emits the exit with no code.
         let exit_code = if let Some(remote) = remote {
@@ -4758,7 +4776,7 @@ fn start_reader_thread(
                 "Forked terminal exited before its initial prompt was accepted",
             )
         {
-            eprintln!("qmux: failed to release fork barrier for exited agent {agent_id}: {err}");
+            eprintln!("session: failed to release fork barrier for exited agent {agent_id}: {err}");
         }
         // A natural exit normally leaves no undo snapshot (unlike `kill_pane`), but if this
         // is the group's last pane and the group still has queued turns, removing it would
@@ -4769,12 +4787,12 @@ fn start_reader_thread(
             .unwrap_or(false)
             && let Err(err) = state.capture_last_closed_pane(&pane_id)
         {
-            eprintln!("qmux: failed to capture exited pane {pane_id}: {err}");
+            eprintln!("session: failed to capture exited pane {pane_id}: {err}");
         }
         if let Err(err) = state.remove_pane(&pane_id) {
             // A failure here (e.g. a poisoned model lock) leaves a dead pane in
             // state; log it so the stale entry has a trace rather than vanishing.
-            eprintln!("qmux: failed to remove exited pane {pane_id}: {err}");
+            eprintln!("session: failed to remove exited pane {pane_id}: {err}");
         }
         if native_surface {
             let _ = crate::native_terminal::remove(&pane_id);
@@ -4783,10 +4801,10 @@ fn start_reader_thread(
         if let Some(agent_id) = pane_agent_id
             && let Err(err) = release_waiters_for_agent(&state, &agent_id)
         {
-            eprintln!("qmux: failed to release waiters for exited agent {agent_id}: {err}");
+            eprintln!("session: failed to release waiters for exited agent {agent_id}: {err}");
         }
         remove_shell_integration_dir(&pane_id);
-        state.emit(QmuxEvent::pty_exit(pane_id, exit_code));
+        state.emit(SessionEvent::pty_exit(pane_id, exit_code));
     });
 }
 
@@ -4907,7 +4925,7 @@ fn append_capped(buffer: &mut Vec<u8>, chunk: &[u8]) {
 
 fn record_scrollback(state: &AppState, pane_id: &str, chunk: &[u8]) {
     if let Err(err) = append_pane_scrollback(&state.config().workspace_root, pane_id, chunk) {
-        eprintln!("qmux: failed to record scrollback for pane {pane_id}: {err}");
+        eprintln!("session: failed to record scrollback for pane {pane_id}: {err}");
     }
 }
 
@@ -4981,7 +4999,7 @@ fn running_descendant_processes(pid: u32) -> Vec<RunningProcess> {
 fn user_running_processes(processes: Vec<RunningProcess>) -> Vec<RunningProcess> {
     processes
         .into_iter()
-        .filter(|process| !process.name.eq_ignore_ascii_case("qmux"))
+        .filter(|process| !process.name.eq_ignore_ascii_case("session"))
         .collect()
 }
 
@@ -5136,7 +5154,7 @@ mod tests {
     use super::*;
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig, QmuxConfig,
+        MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
     };
     use crate::scrollback::read_pane_scrollback;
     use crate::workspace::{AgentInfo, AgentStatus, GroupInfo, WorkspaceScope};
@@ -5379,7 +5397,7 @@ mod tests {
     }
 
     fn test_state() -> AppState {
-        AppState::new(QmuxConfig {
+        AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root: PathBuf::from("/tmp/qmux-workspaces"),
             socket_path: PathBuf::from("/tmp/qmux.sock"),
@@ -5414,7 +5432,7 @@ mod tests {
 
     fn test_state_with_workspace(workspace_root: PathBuf) -> AppState {
         let socket_path = workspace_root.join("qmux-test.sock");
-        AppState::new(QmuxConfig {
+        AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root,
             socket_path,
@@ -5495,7 +5513,7 @@ mod tests {
             label: "workbox".to_string(),
             host: "workbox".to_string(),
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
-            qmux_cli: None,
+            session_cli: None,
             workspace_root: Some("/srv/qmux".to_string()),
         }
     }
@@ -5534,22 +5552,28 @@ mod tests {
         .unwrap();
         assert_eq!(spec.program, pane_shell());
         assert_eq!(spec.cwd, std::env::temp_dir());
-        assert_eq!(env_value(&spec.envs, "QMUX_PANE_ID").unwrap(), "pane-spec");
-        assert!(env_value(&spec.envs, "QMUX_SOCK").is_some());
-        assert!(env_value(&spec.envs, "QMUX_TOKEN").is_some());
         assert_eq!(
-            env_value(&spec.envs, "QMUX_WORKSPACE_ROOT").unwrap(),
+            env_value(&spec.envs, "SESSION_PANE_ID").unwrap(),
+            "pane-spec"
+        );
+        assert!(env_value(&spec.envs, "SESSION_SOCK").is_some());
+        assert!(env_value(&spec.envs, "SESSION_TOKEN").is_some());
+        assert_eq!(
+            env_value(&spec.envs, "SESSION_WORKSPACE_ROOT").unwrap(),
             workspace.display().to_string()
         );
         assert_eq!(
-            env_value(&spec.envs, "QMUX_SHELL_INTEGRATION").unwrap(),
+            env_value(&spec.envs, "SESSION_SHELL_INTEGRATION").unwrap(),
             "1"
         );
         // Integration availability depends on the environment's shell, but the
         // plan must always record the outcome one way or the other.
         match shell_kind(&spec.program) {
             ShellKind::Zsh | ShellKind::Bash => {
-                assert_eq!(env_value(&spec.envs, "QMUX_AGENT_FUNCTIONS").unwrap(), "1");
+                assert_eq!(
+                    env_value(&spec.envs, "SESSION_AGENT_FUNCTIONS").unwrap(),
+                    "1"
+                );
                 assert_eq!(spec.support_files.len(), 1);
                 assert!(spec.support_file_fallback.is_some());
                 assert!(
@@ -5560,7 +5584,7 @@ mod tests {
             }
             ShellKind::Unsupported => {
                 assert_eq!(
-                    env_value(&spec.envs, "QMUX_AGENT_FUNCTIONS").unwrap(),
+                    env_value(&spec.envs, "SESSION_AGENT_FUNCTIONS").unwrap(),
                     "unsupported"
                 );
                 assert!(spec.support_files.is_empty());
@@ -5685,7 +5709,7 @@ mod tests {
         assert_eq!(file.mode, 0o644);
         assert!(!file.create_new);
         assert!(file.prune_prefix.is_none());
-        assert!(file.contents.contains("Generated by qmux"));
+        assert!(file.contents.contains("Generated by Session"));
     }
 
     #[test]
@@ -5709,17 +5733,17 @@ mod tests {
         // will materialize.
         assert_eq!(file.path.display().to_string(), injection.args[1]);
         assert_eq!(file.root, shell_integration_root());
-        assert!(file.contents.contains("Generated by qmux"));
+        assert!(file.contents.contains("Generated by Session"));
     }
 
     #[test]
     fn agent_pane_envs_extends_pane_envs_with_the_agent_binding() {
         let state = test_state();
         let envs = agent_pane_envs(&state, "pane-a", "agent-7").unwrap();
-        let base = qmux_pane_envs(&state, "pane-a").unwrap();
+        let base = session_pane_envs(&state, "pane-a").unwrap();
         assert_eq!(envs[..base.len()], base[..]);
-        assert_eq!(env_value(&envs, "QMUX_AGENT_ID").unwrap(), "agent-7");
-        assert!(env_value(&envs, "QMUX_USER_TOKEN").is_none());
+        assert_eq!(env_value(&envs, "SESSION_AGENT_ID").unwrap(), "agent-7");
+        assert!(env_value(&envs, "SESSION_USER_TOKEN").is_none());
     }
 
     #[test]
@@ -6328,7 +6352,7 @@ mod tests {
             label: "Test".into(),
             host: "unused.invalid".into(),
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
-            qmux_cli: None,
+            session_cli: None,
             workspace_root: Some(root.display().to_string()),
         };
         let host = crate::host::for_group(Some(&remote));
@@ -6455,7 +6479,7 @@ mod tests {
             RemoteHookHealth::Healthy
         );
         assert_eq!(
-            probe(r#"{"ok":false,"error":"invalid QMUX_TOKEN"}"#, 0),
+            probe(r#"{"ok":false,"error":"invalid SESSION_TOKEN"}"#, 0),
             RemoteHookHealth::AuthenticationFailed
         );
         assert_eq!(
@@ -6482,9 +6506,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires QMUX_TEST_SSH_TARGET; creates and removes isolated remote test shells"]
+    #[ignore = "requires SESSION_TEST_SSH_TARGET; creates and removes isolated remote test shells"]
     fn pending_remote_shell_opens_and_cancels_without_orphans() {
-        let target = std::env::var("QMUX_TEST_SSH_TARGET").expect("QMUX_TEST_SSH_TARGET");
+        let target = std::env::var("SESSION_TEST_SSH_TARGET").expect("SESSION_TEST_SSH_TARGET");
         let workspace = temp_workspace();
         let state = test_state_with_workspace(workspace.clone());
         let _control = crate::control_socket::start_control_socket(state.clone()).unwrap();
@@ -6499,7 +6523,7 @@ mod tests {
             label: "Pending test".into(),
             host: target,
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
-            qmux_cli: None,
+            session_cli: None,
             workspace_root: Some(remote_root.clone()),
         };
         let host = crate::host::for_group(Some(&remote));
@@ -6590,13 +6614,13 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires QMUX_TEST_SSH_TARGET and mutates a qmux-prefixed tmux session there"]
+    #[ignore = "requires SESSION_TEST_SSH_TARGET and mutates a qmux-prefixed tmux session there"]
     fn managed_remote_tmux_round_trip() {
-        let target = std::env::var("QMUX_TEST_SSH_TARGET").expect("QMUX_TEST_SSH_TARGET");
+        let target = std::env::var("SESSION_TEST_SSH_TARGET").expect("SESSION_TEST_SSH_TARGET");
         let workspace = temp_workspace();
         let state = test_state_with_workspace(workspace.clone());
         // The SSH attachment is required to fail closed when its reverse hook
-        // forward cannot be created, so exercise it against a real qmux control
+        // forward cannot be created, so exercise it against a real Session control
         // listener rather than the stale/nonexistent path older versions of
         // this test tolerated.
         let _control = crate::control_socket::start_control_socket(state.clone()).unwrap();
@@ -6605,7 +6629,7 @@ mod tests {
             label: target.clone(),
             host: target,
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
-            qmux_cli: None,
+            session_cli: None,
             workspace_root: Some("/tmp/qmux-integration-workspaces".to_string()),
         };
         let group = create_group(
@@ -6749,7 +6773,7 @@ mod tests {
         let round_trip = gap_armed && reconnected && wait_for(b"remote-got-1:hello from qmux");
 
         // Replace the process-local runtime with the persisted pane identity,
-        // simulating a qmux restart. Recovery must attach the existing session
+        // simulating a Session restart. Recovery must attach the existing session
         // and must not execute any create command.
         let snapshot = state
             .list_panes()
@@ -6900,8 +6924,8 @@ mod tests {
             }],
             support_file_fallback: Some(SupportFileFallback {
                 args: Vec::new(),
-                envs: vec![("QMUX_AGENT_FUNCTIONS".to_string(), "failed".to_string())],
-                error_env_key: Some("QMUX_AGENT_FUNCTIONS_ERROR".to_string()),
+                envs: vec![("SESSION_AGENT_FUNCTIONS".to_string(), "failed".to_string())],
+                error_env_key: Some("SESSION_AGENT_FUNCTIONS_ERROR".to_string()),
             }),
             initial_size: None,
             recovered: true,
@@ -6915,11 +6939,11 @@ mod tests {
         assert!(spec.args.is_empty());
         assert!(spec.support_files.is_empty());
         assert_eq!(
-            env_value(&spec.envs, "QMUX_AGENT_FUNCTIONS").as_deref(),
+            env_value(&spec.envs, "SESSION_AGENT_FUNCTIONS").as_deref(),
             Some("failed")
         );
         assert!(
-            env_value(&spec.envs, "QMUX_AGENT_FUNCTIONS_ERROR")
+            env_value(&spec.envs, "SESSION_AGENT_FUNCTIONS_ERROR")
                 .is_some_and(|error| error.contains("escapes"))
         );
     }
@@ -6938,8 +6962,8 @@ mod tests {
     }
 
     #[test]
-    fn init_scripts_define_agent_functions_through_qmux() {
-        let qmux_cli = PathBuf::from("/Applications/qmux app/qmux");
+    fn init_scripts_define_agent_functions_through_session() {
+        let session_cli = PathBuf::from("/Applications/qmux app/qmux");
         let shell_commands = [
             ShellCommandIntegration {
                 command_name: "codex",
@@ -6951,8 +6975,8 @@ mod tests {
             },
         ];
 
-        let zsh_script = zsh_init_script(&qmux_cli, &shell_commands, None, true);
-        let bash_script = bash_init_script(&qmux_cli, &shell_commands, None, true);
+        let zsh_script = zsh_init_script(&session_cli, &shell_commands, None, true);
+        let bash_script = bash_init_script(&session_cli, &shell_commands, None, true);
 
         for script in [zsh_script, bash_script] {
             assert!(script.contains("codex() {"));
@@ -6964,21 +6988,21 @@ mod tests {
             // Detach is handled by agent-exec after the adapter process truly exits.
             // The shell wrapper must not detach after job-control stop/background.
             assert!(!script.contains("agent-detach"));
-            assert!(!script.contains("local __qmux_status=$?"));
-            assert!(!script.contains("return $__qmux_status"));
-            // `qmux` itself is a passthrough so `qmux open <file>` works at the prompt
-            // without qmux being on PATH.
-            assert!(script.contains("unalias qmux"));
-            assert!(script.contains("qmux() {"));
+            assert!(!script.contains("local __session_status=$?"));
+            assert!(!script.contains("return $__session_status"));
+            // `session` itself is a passthrough so `session open <file>` works at the prompt
+            // without Session being on PATH.
+            assert!(script.contains("unalias session"));
+            assert!(script.contains("session() {"));
             assert!(script.contains("'/Applications/qmux app/qmux' \"$@\""));
             // Shell integration reports cwd changes so restarts reopen the last dir.
             assert!(script.contains("'/Applications/qmux app/qmux' cwd"));
-            assert!(script.contains("${__qmux_initial_cwd_report:+--initial}"));
-            assert!(script.contains("unset __qmux_initial_cwd_report"));
-            assert!(script.contains("__qmux_report_cwd"));
+            assert!(script.contains("${__session_initial_cwd_report:+--initial}"));
+            assert!(script.contains("unset __session_initial_cwd_report"));
+            assert!(script.contains("__session_report_cwd"));
             // Every prompt reports, even when PWD is unchanged, so an in-place
             // `git switch` refreshes the branch shown on the tab.
-            assert!(!script.contains("__qmux_last_pwd"));
+            assert!(!script.contains("__session_last_pwd"));
             // No resume requested: the script must not auto-run an agent on startup.
             assert!(!script.contains("--resume"));
         }
@@ -6986,16 +7010,16 @@ mod tests {
 
     #[test]
     fn zsh_init_script_resets_histfile_left_pointing_at_integration_dir() {
-        let qmux_cli = PathBuf::from("/Applications/qmux app/qmux");
+        let session_cli = PathBuf::from("/Applications/qmux app/qmux");
 
-        let script = zsh_init_script(&qmux_cli, &[], None, false);
+        let script = zsh_init_script(&session_cli, &[], None, false);
 
         // macOS's /etc/zshrc sets HISTFILE from ZDOTDIR before our rc runs, so a
         // pane would otherwise read/write history in the deleted-on-close scratch
         // dir. The reset must happen before the user's .zshrc is sourced so a
         // user-set HISTFILE still wins.
         assert!(script.contains(r#"case "${HISTFILE:-}" in"#));
-        assert!(script.contains(r#""$__qmux_zdotdir"/*) HISTFILE="$ZDOTDIR/.zsh_history" ;;"#));
+        assert!(script.contains(r#""$__session_zdotdir"/*) HISTFILE="$ZDOTDIR/.zsh_history" ;;"#));
         let reset_pos = script.find("HISTFILE=\"$ZDOTDIR/.zsh_history\"").unwrap();
         let source_pos = script.find(r#"source "$ZDOTDIR/.zshrc""#).unwrap();
         assert!(reset_pos < source_pos);
@@ -7016,48 +7040,48 @@ mod tests {
 
         assert_eq!(
             command,
-            "QMUX_PREPARED_AGENT_ID='agent-42' '/Applications/qmux app/qmux' agent-exec 'codex' 'fork' 'sess'\\''1' 'line one\nline two'"
+            "SESSION_PREPARED_AGENT_ID='agent-42' '/Applications/qmux app/qmux' agent-exec 'codex' 'fork' 'sess'\\''1' 'line one\nline two'"
         );
     }
 
     #[test]
     fn init_scripts_run_startup_command_from_one_shot_prompt_hooks() {
-        let qmux_cli = PathBuf::from("/Applications/qmux app/qmux");
+        let session_cli = PathBuf::from("/Applications/qmux app/qmux");
         let shell_commands = [ShellCommandIntegration {
             command_name: "claude",
             adapter_id: "claude",
         }];
         let resume = "claude --resume 'sess-1'";
 
-        let zsh_script = zsh_init_script(&qmux_cli, &shell_commands, Some(resume), true);
-        let bash_script = bash_init_script(&qmux_cli, &shell_commands, Some(resume), true);
+        let zsh_script = zsh_init_script(&session_cli, &shell_commands, Some(resume), true);
+        let bash_script = bash_init_script(&session_cli, &shell_commands, Some(resume), true);
 
         assert!(zsh_script.contains("claude() {"));
-        assert!(zsh_script.contains("__qmux_startup_command() {"));
-        assert!(zsh_script.contains("add-zsh-hook precmd __qmux_startup_command"));
+        assert!(zsh_script.contains("__session_startup_command() {"));
+        assert!(zsh_script.contains("add-zsh-hook precmd __session_startup_command"));
         assert!(zsh_script.contains(resume));
 
         assert!(bash_script.contains("claude() {"));
-        assert!(bash_script.contains("__qmux_startup_command() {"));
+        assert!(bash_script.contains("__session_startup_command() {"));
         assert!(bash_script.contains(
-            r#"PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND; }__qmux_startup_command""#
+            r#"PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND; }__session_startup_command""#
         ));
         assert!(bash_script.contains(resume));
 
         for script in [zsh_script, bash_script] {
             let user_rc = script.find("source \"$ZDOTDIR/.zshrc\"").or_else(|| {
                 script
-                    .find(". \"$__qmux_login_rc\"")
-                    .or_else(|| script.find(". \"$QMUX_ORIGINAL_BASHRC\""))
+                    .find(". \"$__session_login_rc\"")
+                    .or_else(|| script.find(". \"$SESSION_ORIGINAL_BASHRC\""))
             });
-            let startup_hook = script.find("__qmux_startup_command() {").unwrap();
+            let startup_hook = script.find("__session_startup_command() {").unwrap();
             assert!(user_rc.is_some_and(|user_rc| user_rc < startup_hook));
         }
     }
 
     #[test]
     fn init_scripts_source_login_files_only_in_login_mode() {
-        let qmux_cli = PathBuf::from("/Applications/qmux app/qmux");
+        let session_cli = PathBuf::from("/Applications/qmux app/qmux");
         let shell_commands = [ShellCommandIntegration {
             command_name: "claude",
             adapter_id: "claude",
@@ -7065,43 +7089,43 @@ mod tests {
 
         // Login zsh sources .zprofile and .zlogin around the always-sourced .zshrc;
         // a non-login shell sources only .zshrc.
-        let zsh_login = zsh_init_script(&qmux_cli, &shell_commands, None, true);
+        let zsh_login = zsh_init_script(&session_cli, &shell_commands, None, true);
         assert!(zsh_login.contains("source \"$ZDOTDIR/.zprofile\""));
         assert!(zsh_login.contains("source \"$ZDOTDIR/.zshrc\""));
         assert!(zsh_login.contains("source \"$ZDOTDIR/.zlogin\""));
 
-        let zsh_plain = zsh_init_script(&qmux_cli, &shell_commands, None, false);
+        let zsh_plain = zsh_init_script(&session_cli, &shell_commands, None, false);
         assert!(zsh_plain.contains("source \"$ZDOTDIR/.zshrc\""));
         assert!(!zsh_plain.contains(".zprofile"));
         assert!(!zsh_plain.contains(".zlogin"));
 
         // Login bash reproduces bash's own login-file lookup (which conventionally
         // pulls in .bashrc); a non-login shell sources the captured .bashrc directly.
-        let bash_login = bash_init_script(&qmux_cli, &shell_commands, None, true);
+        let bash_login = bash_init_script(&session_cli, &shell_commands, None, true);
         assert!(bash_login.contains("$HOME/.bash_profile"));
         assert!(bash_login.contains("$HOME/.bash_login"));
         assert!(bash_login.contains("$HOME/.profile"));
-        assert!(!bash_login.contains("QMUX_ORIGINAL_BASHRC"));
+        assert!(!bash_login.contains("SESSION_ORIGINAL_BASHRC"));
 
-        let bash_plain = bash_init_script(&qmux_cli, &shell_commands, None, false);
-        assert!(bash_plain.contains("QMUX_ORIGINAL_BASHRC"));
+        let bash_plain = bash_init_script(&session_cli, &shell_commands, None, false);
+        assert!(bash_plain.contains("SESSION_ORIGINAL_BASHRC"));
         assert!(!bash_plain.contains(".bash_profile"));
     }
 
     #[test]
     fn base_qmux_envs_include_pane_socket_token_and_workspace() {
         let state = test_state();
-        let envs = qmux_pane_envs(&state, "pane-123").expect("envs mint a token");
+        let envs = session_pane_envs(&state, "pane-123").expect("envs mint a token");
 
         assert_eq!(
-            env_value(&envs, "QMUX_PANE_ID"),
+            env_value(&envs, "SESSION_PANE_ID"),
             Some("pane-123".to_string())
         );
         assert_eq!(
-            env_value(&envs, "QMUX_SOCK"),
+            env_value(&envs, "SESSION_SOCK"),
             Some("/tmp/qmux.sock".to_string())
         );
-        let token = env_value(&envs, "QMUX_TOKEN").expect("pane token env is present");
+        let token = env_value(&envs, "SESSION_TOKEN").expect("pane token env is present");
         assert_eq!(token, state.pane_token("pane-123").unwrap());
         assert_eq!(token.len(), 64);
         assert_ne!(
@@ -7109,7 +7133,7 @@ mod tests {
             state.pane_token("other-pane").unwrap()
         );
         assert_eq!(
-            env_value(&envs, "QMUX_WORKSPACE_ROOT"),
+            env_value(&envs, "SESSION_WORKSPACE_ROOT"),
             Some("/tmp/qmux-workspaces".to_string())
         );
     }
@@ -7117,18 +7141,25 @@ mod tests {
     #[test]
     fn child_context_scrub_removes_outer_qmux_identity_before_fresh_envs() {
         let mut command = CommandBuilder::new("/usr/bin/true");
-        command.env("QMUX_USER_TOKEN", "outer-user-token");
-        command.env("QMUX_AGENT_ID", "outer-agent");
-        command.env("QMUX_FORK_POINT", "outer-fork-point");
+        command.env("SESSION_USER_TOKEN", "outer-user-token");
+        command.env("SESSION_AGENT_ID", "outer-agent");
+        command.env("SESSION_FORK_POINT", "outer-fork-point");
+        command.env("SESSION_WORKTREE_ROOT", "/outer/worktrees");
+        command.env("QMUX_USER_TOKEN", "legacy-user-token");
+        command.env("QMUX_WORKTREE_ROOT", "/legacy/worktrees");
 
-        scrub_inherited_qmux_context(&mut command);
+        scrub_inherited_session_context(&mut command);
 
+        assert!(command.get_env("SESSION_USER_TOKEN").is_none());
+        assert!(command.get_env("SESSION_AGENT_ID").is_none());
+        assert!(command.get_env("SESSION_FORK_POINT").is_none());
+        assert!(command.get_env("SESSION_WORKTREE_ROOT").is_none());
         assert!(command.get_env("QMUX_USER_TOKEN").is_none());
-        assert!(command.get_env("QMUX_AGENT_ID").is_none());
-        assert!(command.get_env("QMUX_FORK_POINT").is_none());
-        command.env("QMUX_TOKEN", "fresh-pane-token");
+        assert!(command.get_env("QMUX_WORKTREE_ROOT").is_none());
+
+        command.env("SESSION_TOKEN", "fresh-pane-token");
         assert_eq!(
-            command.get_env("QMUX_TOKEN"),
+            command.get_env("SESSION_TOKEN"),
             Some("fresh-pane-token".as_ref())
         );
     }
@@ -7139,10 +7170,10 @@ mod tests {
         let envs = shell_pane_envs(&state, "pane-123").expect("envs mint a token");
 
         assert_eq!(
-            env_value(&envs, "QMUX_SHELL_INTEGRATION"),
+            env_value(&envs, "SESSION_SHELL_INTEGRATION"),
             Some("1".to_string())
         );
-        assert!(env_value(&envs, "QMUX_AGENT_ID").is_none());
+        assert!(env_value(&envs, "SESSION_AGENT_ID").is_none());
     }
 
     #[test]
@@ -7872,13 +7903,13 @@ mod tests {
     }
 
     #[test]
-    fn pane_activity_process_filter_excludes_qmux() {
+    fn pane_activity_process_filter_excludes_session() {
         let processes = user_running_processes(vec![
             RunningProcess {
-                name: "qmux".to_string(),
+                name: "session".to_string(),
             },
             RunningProcess {
-                name: "QMUX".to_string(),
+                name: "SESSION".to_string(),
             },
             RunningProcess {
                 name: "node".to_string(),

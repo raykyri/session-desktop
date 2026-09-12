@@ -15,7 +15,7 @@ pub fn check_on_startup(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(err) = check_and_prompt(app).await {
-            eprintln!("qmux: update check failed: {err}");
+            eprintln!("session: update check failed: {err}");
         }
     });
 }

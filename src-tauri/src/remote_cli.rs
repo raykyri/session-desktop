@@ -1,6 +1,6 @@
-//! Installs a matching standalone `qmux-cli` onto a remote host.
+//! Installs a matching standalone `session-cli` onto a remote host.
 //!
-//! Local qmux uses the app binary as the CLI. A remote pane needs the
+//! Local Session uses the app binary as the CLI. A remote pane needs the
 //! linux-musl artifact bundled in the app, pushed over the same BatchMode SSH
 //! path that provisions support files.
 
@@ -9,14 +9,14 @@ use crate::persistence;
 use crate::pty;
 use crate::state::AppState;
 use crate::workspace::RemoteRef;
-use qmux_cli::{VERSION, parse_version_line};
+use session_cli::{VERSION, parse_version_line};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-const MANAGED_CLI: &str = "~/.qmux/bin/qmux-cli";
-const DEFAULT_CLI_NAME: &str = "qmux-cli";
+const MANAGED_CLI: &str = "~/.qmux/bin/session-cli";
+const DEFAULT_CLI_NAME: &str = "session-cli";
 const UPLOAD_TIMEOUT: Duration = Duration::from_secs(120);
 
 const INSTALL_SCRIPT: &str = r#"
@@ -25,17 +25,17 @@ umask 077
 dest_dir=$1
 dest_path=$2
 mkdir -p -- "$dest_dir"
-[ -d "$dest_dir" ] && [ ! -L "$dest_dir" ] || { echo 'qmux-cli directory is unsafe' >&2; exit 65; }
+[ -d "$dest_dir" ] && [ ! -L "$dest_dir" ] || { echo 'session-cli directory is unsafe' >&2; exit 65; }
 chmod 700 -- "$dest_dir"
-tmp=$dest_dir/.qmux-cli-upload.$$
+tmp=$dest_dir/.session-cli-upload.$$
 if ! mkdir -- "$tmp"; then
-  echo 'could not reserve qmux-cli upload directory' >&2
+  echo 'could not reserve session-cli upload directory' >&2
   exit 66
 fi
 trap 'rm -rf -- "$tmp"' EXIT HUP INT TERM
-cat > "$tmp/qmux-cli"
-chmod 755 -- "$tmp/qmux-cli"
-mv -f -- "$tmp/qmux-cli" "$dest_path"
+cat > "$tmp/session-cli"
+chmod 755 -- "$tmp/session-cli"
+mv -f -- "$tmp/session-cli" "$dest_path"
 rm -rf -- "$tmp"
 trap - EXIT HUP INT TERM
 "#;
@@ -64,7 +64,7 @@ pub fn rust_target_from_uname(stdout: &str) -> Result<&'static str, String> {
         ("Linux", "x86_64") => Ok("x86_64-unknown-linux-musl"),
         ("Linux", "aarch64" | "arm64") => Ok("aarch64-unknown-linux-musl"),
         _ => Err(format!(
-            "no bundled qmux-cli for '{line}'; linux x86_64 and aarch64 are supported"
+            "no bundled session-cli for '{line}'; linux x86_64 and aarch64 are supported"
         )),
     }
 }
@@ -72,8 +72,13 @@ pub fn rust_target_from_uname(stdout: &str) -> Result<&'static str, String> {
 pub fn is_managed_cli(configured: Option<&str>) -> bool {
     match configured.map(str::trim).filter(|value| !value.is_empty()) {
         None => true,
-        Some(DEFAULT_CLI_NAME) | Some(MANAGED_CLI) => true,
-        Some(path) => path.ends_with("/.qmux/bin/qmux-cli"),
+        Some(DEFAULT_CLI_NAME)
+        | Some(MANAGED_CLI)
+        | Some("qmux-cli")
+        | Some("~/.qmux/bin/qmux-cli") => true,
+        Some(path) => {
+            path.ends_with("/.qmux/bin/session-cli") || path.ends_with("/.qmux/bin/qmux-cli")
+        }
     }
 }
 
@@ -91,17 +96,17 @@ pub fn bundled_cli_path(target: &str) -> Result<PathBuf, String> {
     }
     let Some(dir) = candidates
         .into_iter()
-        .find(|dir| dir.join(target).join("qmux-cli").is_file())
+        .find(|dir| dir.join(target).join("session-cli").is_file())
     else {
         return Err(format!(
             "remote terminal support is not included in Session ({target})"
         ));
     };
-    Ok(dir.join(target).join("qmux-cli"))
+    Ok(dir.join(target).join("session-cli"))
 }
 
-/// Ensures a version-matching CLI exists on `remote`, updating `qmux_cli` to
-/// the managed absolute path when qmux owns the install.
+/// Ensures a version-matching CLI exists on `remote`, updating `session_cli` to
+/// the managed absolute path when Session owns the install.
 pub fn prepare_remote_ref(
     state: &AppState,
     remote: &mut RemoteRef,
@@ -112,7 +117,7 @@ pub fn prepare_remote_ref(
         result.skipped,
         Some(EnsureSkip::CustomCli | EnsureSkip::UnsupportedHost)
     ) {
-        remote.qmux_cli = Some(result.path.clone());
+        remote.session_cli = Some(result.path.clone());
         persist_managed_path(state, &remote.id, &result.path)?;
     }
     Ok(result)
@@ -125,12 +130,12 @@ fn persist_managed_path(state: &AppState, remote_id: &str, path: &str) -> Result
     persistence::update_preferences(&state.config().workspace_root, |preferences| {
         if let Some(saved) = preferences.remotes.get_mut(remote_id) {
             let current = saved
-                .qmux_cli
+                .session_cli
                 .as_deref()
                 .map(str::trim)
                 .filter(|value| !value.is_empty());
             if is_managed_cli(current) {
-                saved.qmux_cli = Some(path.to_string());
+                saved.session_cli = Some(path.to_string());
             }
         }
     })
@@ -139,11 +144,11 @@ fn persist_managed_path(state: &AppState, remote_id: &str, path: &str) -> Result
 pub fn ensure_cli(host: &Host) -> Result<EnsureCliResult, String> {
     let target = host
         .remote()
-        .ok_or_else(|| "qmux-cli provisioning requires a remote host".to_string())?;
-    let configured = Some(target.qmux_cli.as_str());
+        .ok_or_else(|| "session-cli provisioning requires a remote host".to_string())?;
+    let configured = Some(target.session_cli.as_str());
     if !is_managed_cli(configured) {
         return Ok(EnsureCliResult {
-            path: target.qmux_cli.clone(),
+            path: target.session_cli.clone(),
             version: String::new(),
             installed: false,
             skipped: Some(EnsureSkip::CustomCli),
@@ -180,34 +185,37 @@ pub fn ensure_cli(host: &Host) -> Result<EnsureCliResult, String> {
     let local_cli = bundled_cli_path(rust_target)?;
     let bytes = fs::read(&local_cli).map_err(|err| {
         format!(
-            "failed to read bundled qmux-cli {}: {err}",
+            "failed to read bundled session-cli {}: {err}",
             local_cli.display()
         )
     })?;
 
     let dest_dir = host.expand_home("~/.qmux/bin")?;
     install_cli(host, &dest_dir, &expanded, &bytes)?;
-    let version = remote_cli_version(host, &expanded)
-        .ok_or_else(|| format!("installed qmux-cli at {expanded} but could not read --version"))?;
+    let version = remote_cli_version(host, &expanded).ok_or_else(|| {
+        format!("installed session-cli at {expanded} but could not read --version")
+    })?;
     if !remote_transcript_stream_supported(host, &expanded) {
         return Err(
-            "bundled qmux-cli is missing transcript streaming; rebuild remote-cli artifacts".into(),
+            "bundled session-cli is missing transcript streaming; rebuild remote-cli artifacts"
+                .into(),
         );
     }
     if !remote_open_file_supported(host, &expanded) {
         return Err(
-            "bundled qmux-cli is missing remote file opening; rebuild remote-cli artifacts".into(),
+            "bundled session-cli is missing remote file opening; rebuild remote-cli artifacts"
+                .into(),
         );
     }
     if !remote_workspace_observation_supported(host, &expanded) {
         return Err(
-            "bundled qmux-cli is missing remote workspace observation; rebuild remote-cli artifacts"
+            "bundled session-cli is missing remote workspace observation; rebuild remote-cli artifacts"
                 .into(),
         );
     }
     if version != VERSION {
         return Err(format!(
-            "installed qmux-cli at {expanded} reported {version}, expected {VERSION}"
+            "installed session-cli at {expanded} reported {version}, expected {VERSION}"
         ));
     }
     Ok(EnsureCliResult {
@@ -272,7 +280,7 @@ fn install_cli(host: &Host, dest_dir: &str, dest_path: &str, bytes: &[u8]) -> Re
     let output = pty::remote_command_output_with_timeout(
         command,
         Some(bytes.to_vec()),
-        &format!("install qmux-cli on {}", host.label()),
+        &format!("install session-cli on {}", host.label()),
         UPLOAD_TIMEOUT,
     )?;
     if output.status.success() {
@@ -280,9 +288,12 @@ fn install_cli(host: &Host, dest_dir: &str, dest_path: &str, bytes: &[u8]) -> Re
     }
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
     Err(if stderr.is_empty() {
-        format!("failed to install qmux-cli on {}", host.label())
+        format!("failed to install session-cli on {}", host.label())
     } else {
-        format!("failed to install qmux-cli on {}: {stderr}", host.label())
+        format!(
+            "failed to install session-cli on {}: {stderr}",
+            host.label()
+        )
     })
 }
 
@@ -312,6 +323,10 @@ mod tests {
     fn managed_cli_accepts_defaults_and_the_expanded_path() {
         assert!(is_managed_cli(None));
         assert!(is_managed_cli(Some("")));
+        assert!(is_managed_cli(Some("session-cli")));
+        assert!(is_managed_cli(Some("~/.qmux/bin/session-cli")));
+        assert!(is_managed_cli(Some("/home/dev/.qmux/bin/session-cli")));
+        assert!(!is_managed_cli(Some("/opt/session-cli")));
         assert!(is_managed_cli(Some("qmux-cli")));
         assert!(is_managed_cli(Some("~/.qmux/bin/qmux-cli")));
         assert!(is_managed_cli(Some("/home/dev/.qmux/bin/qmux-cli")));

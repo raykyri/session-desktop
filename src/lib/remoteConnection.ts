@@ -180,7 +180,7 @@ function connectedDetails(connection: RemoteConnectionInfo): string[] {
   const details: string[] = [];
   if (connection.hookHealth === "checking") details.push("Checking agent hooks; the terminal is ready.");
   if (connection.hookHealth === "healthy") details.push("Agent hook authentication verified.");
-  if (connection.hookHealth === "authenticationFailed") details.push("Agent hook authentication failed (invalid QMUX_TOKEN). The terminal remains usable, but agent tracking may not update.");
+  if (connection.hookHealth === "authenticationFailed") details.push("Agent hook authentication failed (invalid SESSION_TOKEN). The terminal remains usable, but agent tracking may not update.");
   if (connection.hookHealth === "unavailable") details.push("Agent hooks could not be verified. The terminal remains usable, but agent tracking may not update.");
   if (connection.reason === "systemWake") details.push(connection.recoveryAction === "reattached"
     ? "Reattached to the existing session after sleep."

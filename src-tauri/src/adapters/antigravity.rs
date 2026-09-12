@@ -5,8 +5,8 @@ use super::{
     native_timestamp_ms, prepared_shell_agent, record_shell_session_lineage,
     reusable_session_agent, shell_cli_model, shell_quote_arg, shell_quote_path,
 };
-use crate::config::QmuxConfig;
-use crate::events::QmuxEvent;
+use crate::config::SessionConfig;
+use crate::events::SessionEvent;
 use crate::host::{Host, RemoteCommand};
 use crate::pty::{
     CommandPlan, InitialPaneSize, PaneMeta, agent_pane_envs, plan_to_spec, recoverable_dir,
@@ -35,7 +35,7 @@ pub struct AntigravityAdapter {
 }
 
 impl AntigravityAdapter {
-    pub fn new(config: &QmuxConfig) -> Self {
+    pub fn new(config: &SessionConfig) -> Self {
         Self {
             binary: config.antigravity_binary(),
         }
@@ -213,7 +213,7 @@ impl AntigravityAdapter {
             );
         }
 
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.recovered",
             Some(pane.id.clone()),
             Some(restored.id.clone()),
@@ -331,7 +331,7 @@ impl AntigravityAdapter {
 
         let mut envs = agent_pane_envs(state, &request.pane_id, &agent.id)?;
         if let Some(session_id) = resume_session_id {
-            envs.push(("QMUX_ROOT_SESSION_ID".to_string(), session_id));
+            envs.push(("SESSION_ROOT_SESSION_ID".to_string(), session_id));
         }
         let launch_envs = if host.is_local() {
             envs
@@ -357,7 +357,7 @@ impl AntigravityAdapter {
         let agent_id = agent.id.clone();
         let launch_cwd = shell_cwd.display().to_string();
 
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.spawned",
             Some(request.pane_id),
             Some(agent_id),
@@ -391,7 +391,7 @@ impl AntigravityAdapter {
         };
 
         let Some(current) = agent else {
-            return Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+            return Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
                 "agent.unknown",
                 notification.pane_id,
                 None,
@@ -518,7 +518,7 @@ impl AntigravityAdapter {
                     .map_err(|err| format!("failed to encode send tracking: {err}"))?,
             );
         }
-        Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+        Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
             event_type,
             notification.pane_id,
             Some(current.id.clone()),
@@ -532,7 +532,7 @@ fn finish_agent_after_stop(state: &AppState, agent: &AgentInfo) -> Result<bool, 
         Ok(IdleResolution::Drained) => Ok(true),
         Ok(IdleResolution::Paused | IdleResolution::Idle) => Ok(false),
         Err(err) => {
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "agent.queue_error",
                 agent.pane_id.clone(),
                 Some(agent.id.clone()),
@@ -1027,11 +1027,11 @@ if [ -z "$event" ]; then
   respond
   exit 0
 fi
-if [ -z "${QMUX_SOCK:-}" ] || [ -z "${QMUX_TOKEN:-}" ] || [ -z "${QMUX_PANE_ID:-}" ] || [ -z "${QMUX_AGENT_ID:-}" ] || [ -z "${QMUX_CLI:-}" ]; then
+if [ -z "${SESSION_SOCK:-}" ] || [ -z "${SESSION_TOKEN:-}" ] || [ -z "${SESSION_PANE_ID:-}" ] || [ -z "${SESSION_AGENT_ID:-}" ] || [ -z "${SESSION_CLI:-}" ]; then
   respond
   exit 0
 fi
-"$QMUX_CLI" notify "$event"
+"$SESSION_CLI" notify "$event"
 respond
 "#
 }
@@ -1313,8 +1313,8 @@ mod tests {
         assert!(parse_transcript_line("agent-1", 5, line).is_none());
     }
 
-    fn test_config() -> QmuxConfig {
-        QmuxConfig {
+    fn test_config() -> SessionConfig {
+        SessionConfig {
             remotes: Default::default(),
             workspace_root: PathBuf::from("/tmp/qmux-antigravity-tests"),
             socket_path: PathBuf::from("/tmp/qmux-antigravity-tests.sock"),

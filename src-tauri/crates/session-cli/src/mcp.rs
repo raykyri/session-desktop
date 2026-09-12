@@ -69,8 +69,8 @@ where
                     json!({
                         "protocolVersion": protocol,
                         "capabilities": { "tools": { "listChanged": false } },
-                        "serverInfo": { "name": "qmux", "version": env!("CARGO_PKG_VERSION") },
-                        "instructions": "You are running inside qmux. Use these tools whenever the user asks you to delegate, parallelize work, inspect delegates, or coordinate another agent. Typical flow: spawn_agent (optionally in a worktree with a prompt), wait_for_children, summarize_children, send_prompt for follow-up, then release_agent. Delegates should finish with report_to_parent. Writes and release are limited to direct relatives; reads stay inside your live workspace lineage."
+                        "serverInfo": { "name": "session", "version": env!("CARGO_PKG_VERSION") },
+                        "instructions": "You are running inside Session. Use these tools whenever the user asks you to delegate, parallelize work, inspect delegates, or coordinate another agent. Typical flow: spawn_agent (optionally in a worktree with a prompt), wait_for_children, summarize_children, send_prompt for follow-up, then release_agent. Delegates should finish with report_to_parent. Writes and release are limited to direct relatives; reads stay inside your live workspace lineage."
                     }),
                 )
             }
@@ -145,7 +145,7 @@ fn tool_definitions() -> Vec<Value> {
     vec![
         tool(
             "whoami",
-            "Show your qmux identity, lineage, workspace, and capability policy.",
+            "Show your Session identity, lineage, workspace, and capability policy.",
             object(json!({}), &[]),
         ),
         tool(

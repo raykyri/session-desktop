@@ -63,7 +63,7 @@ export function resolveGitHubWebAuthConfig(
     options.oauthClientSecret ?? process.env.GITHUB_OAUTH_CLIENT_SECRET,
   );
   const sessionSecret = normalized(
-    options.sessionSecret ?? process.env.QMUX_SESSION_SECRET,
+    options.sessionSecret ?? process.env.SESSION_SESSION_SECRET,
   );
   const configuredValues = [clientId, clientSecret, sessionSecret].filter(Boolean).length;
   if (configuredValues === 0) {
@@ -71,14 +71,14 @@ export function resolveGitHubWebAuthConfig(
   }
   if (!clientId || !clientSecret || !sessionSecret) {
     throw new Error(
-      "GitHub web comments require GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET, and QMUX_SESSION_SECRET.",
+      "GitHub web comments require GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET, and SESSION_SESSION_SECRET.",
     );
   }
   if (sessionSecret.length < 32) {
-    throw new Error("QMUX_SESSION_SECRET must contain at least 32 characters.");
+    throw new Error("SESSION_SESSION_SECRET must contain at least 32 characters.");
   }
   const publicOrigin = validatedPublicOrigin(
-    options.publicOrigin ?? process.env.QMUX_PUBLIC_ORIGIN ?? "http://127.0.0.1:8787",
+    options.publicOrigin ?? process.env.SESSION_PUBLIC_ORIGIN ?? "http://127.0.0.1:8787",
   );
   return {
     clientId,
@@ -172,7 +172,7 @@ export async function completeGitHubAuthorization(
     headers: {
       Accept: "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "qmux-publisher",
+      "User-Agent": "session-publisher",
     },
     body: new URLSearchParams({
       client_id: config.clientId,
@@ -206,7 +206,7 @@ export async function completeGitHubAuthorization(
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${accessToken}`,
-      "User-Agent": "qmux-publisher",
+      "User-Agent": "session-publisher",
       "X-GitHub-Api-Version": "2026-03-10",
     },
     redirect: "error",
@@ -304,7 +304,7 @@ export function validatedPublicOrigin(value: string) {
     parsed.search ||
     parsed.hash
   ) {
-    throw new Error("QMUX_PUBLIC_ORIGIN must be an HTTP(S) origin without a path.");
+    throw new Error("SESSION_PUBLIC_ORIGIN must be an HTTP(S) origin without a path.");
   }
   return parsed.origin;
 }

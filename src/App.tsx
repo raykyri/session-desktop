@@ -256,7 +256,7 @@ import {
 } from "./lib/researchShortcuts";
 import type { PublicationBinding } from "./lib/publication";
 import { useNativeWebOverlayRegion } from "./hooks/useNativeWebOverlayRegion";
-import { useQmuxEvents } from "./hooks/useQmuxEvents";
+import { useSessionEvents } from "./hooks/useSessionEvents";
 import type {
   BrowserOverlayMode,
   BrowserOverlaySize,
@@ -303,7 +303,7 @@ import {
   canPreviewLocalFilePath,
   canRenderInInternalBrowser,
   isFileServerUrl,
-  pathFromQmuxFileHref,
+  pathFromSessionFileHref,
   resolveLocalLinkPath,
   terminalLinkTarget,
 } from "./lib/links";
@@ -524,7 +524,7 @@ import type {
   PaneInfo,
   PaneSplitAxis,
   PaneSplitInfo,
-  QmuxEvent,
+  SessionEvent,
   QueuedTurn,
   RecentActivityCursor,
   RecentResearchQuery,
@@ -598,7 +598,7 @@ function remoteSettingsDraft(remote: RemoteChoice): RemoteSettingsDraft {
     label: remote.label,
     host: remote.host,
     workspaceRoot: remote.workspaceRoot ?? "",
-    qmuxCli: remote.qmuxCli ?? "",
+    sessionCli: remote.sessionCli ?? "",
     multiplexer: remote.multiplexer,
   };
 }
@@ -608,7 +608,7 @@ function savedRemoteFromSettingsDraft(draft: RemoteSettingsDraft): SavedRemote {
     host: draft.host.trim(),
     label: draft.label.trim() || null,
     multiplexer: draft.multiplexer,
-    qmuxCli: draft.qmuxCli.trim() || null,
+    sessionCli: draft.sessionCli.trim() || null,
     workspaceRoot: draft.workspaceRoot.trim() || null,
   };
 }
@@ -642,7 +642,7 @@ const RESEARCH_VISIBILITY_FILTER_OPTIONS: ReadonlyArray<{
 const ACTIVE_RESEARCH_PANE_KEY = "qmux.active-research-pane.v1";
 // Whether the Journal page is forward on the research surface. Selection-level
 // UI state, like the active tree id — the journal's contents live backend-side.
-const WARM_QMUX_TERMINAL_THEME_ID = "qmux-warm";
+const WARM_SESSION_TERMINAL_THEME_ID = "qmux-warm";
 // Browser-overlay / link-action owner for a research tree's document. Keyed
 // per tree so an overlay opened from one tree's links doesn't follow the user
 // into another tree (each tree keeps its own overlay, like panes do).
@@ -1022,7 +1022,7 @@ function unknownErrorMessage(err: unknown): string {
 
 // Recognizes the errors Apple Foundation Models raise when the on-device model
 // can't be used at all: Apple Intelligence disabled, the model still
-// downloading, an ineligible device, or qmux's own build/OS guards. These are
+// downloading, an ineligible device, or Session's own build/OS guards. These are
 // not transient — retrying on the next message just reproduces the same
 // failure — so the caller turns off title generation when one is seen. Returns a
 // short, user-facing reason clause, or null when the error is something else.
@@ -1668,7 +1668,7 @@ function MainApp() {
   const [agentsHydrated, setAgentsHydrated] = useState(false);
   // Agents we believe are actively working *right now*, used to show the
   // "Working…" indicator at the bottom of the transcript. This is driven by live
-  // status transitions (see useQmuxEvents), not the raw status field: an agent
+  // status transitions (see useSessionEvents), not the raw status field: an agent
   // restored into a working status — or loaded that way from the boot snapshot —
   // must not light up, since it isn't genuinely doing work. Membership is added
   // only on a live event that moves the agent into a working status (and on the
@@ -2223,12 +2223,12 @@ function MainApp() {
   const terminalNativeFontFamily = nativeFontFamilyFor(settings.fontId);
   const terminalLetterSpacing = letterSpacingFor(settings.fontId);
   const terminalScrollSensitivity = scrollSensitivityFor(settings.mouseWheelSensitivity);
-  // The application color theme only adjusts qmux's built-in terminal palette;
+  // The application color theme only adjusts Session's built-in terminal palette;
   // explicitly selected Ghostty themes keep their authored backgrounds.
   const effectiveThemeId = previewThemeId ?? settings.themeId;
   const terminalThemeName =
     effectiveThemeId === DEFAULT_THEME_ID && settings.colorTheme === "orange-blob"
-      ? WARM_QMUX_TERMINAL_THEME_ID
+      ? WARM_SESSION_TERMINAL_THEME_ID
       : effectiveThemeId;
 
   // Apply the app accent before paint so switching (and restoring) color themes
@@ -2318,7 +2318,7 @@ function MainApp() {
     terminalNativeFontFamily,
     terminalScrollSensitivity,
   ]);
-  // The theme catalog (qmux default first, then every bundled Ghostty scheme).
+  // The theme catalog (Session default first, then every bundled Ghostty scheme).
   // Loaded once at startup: the theme select needs it when settings open, and
   // --terminal-bg below needs the selected theme's background right away.
   const [themeCatalog, setThemeCatalog] = useState<NativeTerminalTheme[] | null>(null);
@@ -2357,7 +2357,7 @@ function MainApp() {
     return () => window.removeEventListener("mousedown", handlePointerDown, true);
   }, [closeThemePicker, themePickerOpen]);
   // Chrome that sits flush against terminal pixels (the stage, split gutters,
-  // the empty state) follows a selected Ghostty theme. The built-in qmux theme
+  // the empty state) follows a selected Ghostty theme. The built-in Session theme
   // removes the inline override so the application surface token can tint it.
   useEffect(() => {
     const background =
@@ -2854,7 +2854,7 @@ function MainApp() {
   groupByIdRef.current = groupById;
   // Picks the next active pane after one closes, honoring split membership and skipping
   // collapsed groups — the same rules forgetClosedPane uses. Stable + ref-backed so the
-  // pane.removed handler (captured once by useQmuxEvents) selects consistently with the
+  // pane.removed handler (captured once by useSessionEvents) selects consistently with the
   // user-initiated close path.
   const selectPaneAfterCloseWithContext = useCallback(
     (panesForSelection: PaneInfo[], closedPaneId: string) => {
@@ -3597,7 +3597,7 @@ function MainApp() {
       label: "",
       host: "",
       workspaceRoot: "",
-      qmuxCli: "",
+      sessionCli: "",
       multiplexer: "tmux",
     });
     setRemoteSettingsDraftIsNew(true);
@@ -3746,7 +3746,7 @@ function MainApp() {
       return (
         <div className="settings-remote-probe-loading" role="status">
           <LoaderCircle size={14} className="is-spinning" aria-hidden="true" />
-          Checking SSH, tmux, qmux-cli, and agent providers…
+          Checking SSH, tmux, session-cli, and agent providers…
         </div>
       );
     }
@@ -3876,17 +3876,17 @@ function MainApp() {
             />
           </label>
           <label htmlFor={`${fieldPrefix}-cli`}>
-            <span>qmux CLI <small>optional</small></span>
+            <span>Session CLI <small>optional</small></span>
             <input
               id={`${fieldPrefix}-cli`}
               className="form-field"
               type="text"
-              value={draft.qmuxCli}
-              placeholder="qmux-cli"
+              value={draft.sessionCli}
+              placeholder="session-cli"
               spellCheck={false}
               onChange={(event) => {
-                const qmuxCli = event.currentTarget.value;
-                changeRemoteSettingsDraft((current) => ({ ...current, qmuxCli }));
+                const sessionCli = event.currentTarget.value;
+                changeRemoteSettingsDraft((current) => ({ ...current, sessionCli }));
               }}
             />
           </label>
@@ -4513,7 +4513,7 @@ function MainApp() {
 
   const openLinkForPane = useCallback(
     (paneId: string | null | undefined, url: string) => {
-      const localPath = pathFromQmuxFileHref(url);
+      const localPath = pathFromSessionFileHref(url);
       const fileServerPort = configRef.current?.fileServerPort ?? null;
       if (localPath) {
         if (!paneId) {
@@ -4892,7 +4892,7 @@ function MainApp() {
   }
 
   // Navigate the overlay's selected browser. A bare host (no scheme) gets http://
-  // so `localhost:5173` works; file paths still go through `qmux open`.
+  // so `localhost:5173` works; file paths still go through `session open`.
   function navigateActiveBrowserOverlay(rawInput: string) {
     const trimmed = rawInput.trim();
     if (!activeBrowserOwnerId || !trimmed) {
@@ -6022,7 +6022,7 @@ function MainApp() {
       documentVisible: document.visibilityState === "visible",
     };
     // App focus covers both the webview and a native terminal first-responder
-    // inside the focused qmux window. document.hasFocus() alone misses the
+    // inside the focused Session window. document.hasFocus() alone misses the
     // latter, which is exactly how keyboard tab switches arrive.
     const appFocused = document.hasFocus() || nativeWindowFocusedRef.current;
     const allowed = intentional
@@ -6494,7 +6494,7 @@ function MainApp() {
         if (!cancelled) {
           // An empty installation starts with no selected pane. Creating a
           // shell is an explicit user action, which lets a first-time user
-          // enter Research without qmux manufacturing an unrelated Terminal
+          // enter Research without Session manufacturing an unrelated Terminal
           // workspace first.
           setPanesPreservingRecoveredDismissals(existingPanes);
           activePaneIdRef.current = null;
@@ -6548,7 +6548,7 @@ function MainApp() {
   useEffect(() => {
     // If the pane was already visible when Done arrived, acknowledge it as soon
     // as the event reaches React instead of waiting for another focus change.
-    // Ambient: requires the qmux window to be focused so a backgrounded app
+    // Ambient: requires the Session window to be focused so a backgrounded app
     // does not clear Done on a still-selected pane.
     acknowledgePaneIfDone(activePaneId);
   }, [activePaneId, activeSurface, agents, paneSplits]);
@@ -6672,7 +6672,7 @@ function MainApp() {
         if (remaining <= 0) {
           const stillOpen = panesRef.current.some((pane) => pane.id === paneId);
           console.error(
-            `qmux: failed to attach pane ${paneId}${stillOpen ? "" : " (pane already closed)"}:`,
+            `session: failed to attach pane ${paneId}${stillOpen ? "" : " (pane already closed)"}:`,
             err,
           );
           if (stillOpen) {
@@ -7887,7 +7887,7 @@ function MainApp() {
     [scheduleResearchRefresh],
   );
   const handleResearchEvent = useCallback(
-    (rawEvent: QmuxEvent) => {
+    (rawEvent: SessionEvent) => {
       const parsed = parseResearchEvent(rawEvent);
       if (parsed.kind !== "event") {
         if (parsed.kind !== "notResearch") {
@@ -8802,7 +8802,7 @@ function MainApp() {
   }, []);
 
 
-  useQmuxEvents({
+  useSessionEvents({
     appendHookEvent,
     setPanes: setPanesPreservingRecoveredDismissals,
     // PTY lifecycle bookkeeping must not implicitly leave a research document when
@@ -11273,7 +11273,7 @@ function MainApp() {
 
     // Clear the skill selection each time the launcher opens.
     setSelectedSkillId(null);
-    // PATH can change while qmux stays open (for example after installing a
+    // PATH can change while Session stays open (for example after installing a
     // provider), so refresh binary readiness whenever the launcher is opened.
     void refreshAdapterReadiness({
       targetId: launcherRemote ? launcherGroup?.id ?? null : null,
@@ -11534,7 +11534,7 @@ function MainApp() {
   const renamingGroup = renameGroupId ? groupById.get(renameGroupId) : undefined;
   const renamingResearchFolder =
     renamingGroup?.scope === "research" ? renamingGroup : undefined;
-  const linkMenuLocalPath = linkMenu ? pathFromQmuxFileHref(linkMenu.url) : undefined;
+  const linkMenuLocalPath = linkMenu ? pathFromSessionFileHref(linkMenu.url) : undefined;
   const linkMenuPaneId = linkMenu?.paneId ?? null;
   const worktreeStartBranch = worktreeCreateDialog?.startRef
     ? worktreeCreateDialog.inventory?.branches.find(
@@ -11839,7 +11839,7 @@ function MainApp() {
                           type="button"
                           role="menuitem"
                           className="control-button"
-                          // A multiplexer qmux cannot drive is shown rather than
+                          // A multiplexer Session cannot drive is shown rather than
                           // hidden, so the remote is discoverable and the reason it
                           // is unavailable is visible.
                           disabled={!remote.usable}
@@ -12740,8 +12740,8 @@ function MainApp() {
                                     <dd>{remote.workspaceRoot ?? "Default"}</dd>
                                   </div>
                                   <div>
-                                    <dt>qmux CLI</dt>
-                                    <dd>{remote.qmuxCli ?? "qmux-cli"}</dd>
+                                    <dt>Session CLI</dt>
+                                    <dd>{remote.sessionCli ?? "session-cli"}</dd>
                                   </div>
                                 </dl>
                                 {remoteSettingsError ? (
@@ -13143,7 +13143,7 @@ function MainApp() {
             ) : null}
             {showHideShortcutConflictLabel ? (
               <p className="settings-hint settings-shortcut-message">
-                {`qmux also uses this shortcut to ${showHideShortcutConflictLabel}; while registered system-wide, it will show/hide the app instead.`}
+                {`Session also uses this shortcut to ${showHideShortcutConflictLabel}; while registered system-wide, it will show/hide the app instead.`}
               </p>
             ) : null}
 
@@ -13628,9 +13628,9 @@ function MainApp() {
               {worktreeCreateDialog.action.kind === "fork"
                 ? "Use letters, numbers, hyphens, or underscores. The worktree and branch use this exact name and start at this tab’s current commit."
                 : worktreeStartBranch?.checkedOutPath
-                  ? `This branch is already checked out at ${formatPaneDir(worktreeStartBranch.checkedOutPath)}. qmux will open that checkout.`
+                  ? `This branch is already checked out at ${formatPaneDir(worktreeStartBranch.checkedOutPath)}. Session will open that checkout.`
                   : worktreeStartBranch?.remote
-                    ? `Use letters, numbers, hyphens, or underscores. qmux creates a local branch and worktree with this name, tracking ${worktreeStartBranch.name}.`
+                    ? `Use letters, numbers, hyphens, or underscores. Session creates a local branch and worktree with this name, tracking ${worktreeStartBranch.name}.`
                     : worktreeStartBranch
                       ? `Use letters, numbers, hyphens, or underscores. The worktree uses this name and checks out ${worktreeStartBranch.name}.`
                       : "Use letters, numbers, hyphens, or underscores. The worktree and new branch use this exact name and start at this tab’s current commit."}
@@ -13745,7 +13745,7 @@ function MainApp() {
             ) : null}
             {closeDialog.kind === "researchFolderRemove" ? (
               <>
-                <p>Remove this folder from qmux?</p>
+                <p>Remove this folder from Session?</p>
                 <p>The folder and its files will remain on disk, with history in the .qmux directory.</p>
                 {researchFolderRemovalError ? (
                   <p className="confirm-dialog-error" role="alert">
@@ -13797,7 +13797,7 @@ function MainApp() {
                     </>
                   ) : (
                     <span className="confirm-dialog-changes">
-                      Qmux could not check the worktree {formatPaneDir(closeDialog.worktreeDir)} for
+                      Session could not check the worktree {formatPaneDir(closeDialog.worktreeDir)} for
                       uncommitted changes. Deleting it may discard work.
                     </span>
                   )}{" "}

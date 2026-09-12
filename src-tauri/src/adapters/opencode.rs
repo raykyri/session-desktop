@@ -5,8 +5,8 @@ use super::{
     prepared_shell_agent, record_shell_session_lineage, reusable_session_agent, shell_cli_model,
     shell_quote_arg,
 };
-use crate::config::QmuxConfig;
-use crate::events::QmuxEvent;
+use crate::config::SessionConfig;
+use crate::events::SessionEvent;
 use crate::pty::{
     CommandPlan, InitialPaneSize, PaneMeta, agent_pane_envs, plan_to_spec, recoverable_dir,
     spawn_pty,
@@ -32,7 +32,7 @@ pub struct OpencodeAdapter {
 }
 
 impl OpencodeAdapter {
-    pub fn new(config: &QmuxConfig) -> Self {
+    pub fn new(config: &SessionConfig) -> Self {
         Self {
             binary: config.opencode_binary(),
             plugin_dir: config.opencode_plugin_dir.clone(),
@@ -50,7 +50,7 @@ impl OpencodeAdapter {
     }
 
     /// The qmux-managed JSONL transcript path for an agent. The opencode plugin
-    /// appends one JSON line per message part here; qmux tails it with the same
+    /// appends one JSON line per message part here; Session tails it with the same
     /// transcript pipeline used for Claude and Codex.
     fn transcript_path_for(state: &AppState, agent_id: &str, session_id: &str) -> PathBuf {
         let session_id = if !session_id.is_empty()
@@ -79,7 +79,7 @@ impl OpencodeAdapter {
         let entrypoint = self.plugin_dir.join("plugins").join("qmux-notify.js");
         if !self.plugin_dir.is_dir() || !entrypoint.is_file() {
             return Err(format!(
-                "OpenCode integration plugin was not found at {}. Reinstall qmux or set QMUX_OPENCODE_PLUGIN_DIR to the bundled qmux-opencode-plugin directory.",
+                "OpenCode integration plugin was not found at {}. Reinstall qmux or set SESSION_OPENCODE_PLUGIN_DIR to the bundled qmux-opencode-plugin directory.",
                 entrypoint.display()
             ));
         }
@@ -362,7 +362,10 @@ impl OpencodeAdapter {
             .map(str::trim)
             .filter(|session_id| !session_id.is_empty())
         {
-            envs.push(("QMUX_ROOT_SESSION_ID".to_string(), session_id.to_string()));
+            envs.push((
+                "SESSION_ROOT_SESSION_ID".to_string(),
+                session_id.to_string(),
+            ));
         }
         envs.push(config_dir_env);
 
@@ -409,7 +412,7 @@ impl OpencodeAdapter {
             );
         }
 
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.recovered",
             Some(pane.id.clone()),
             Some(restored.id.clone()),
@@ -480,7 +483,7 @@ impl OpencodeAdapter {
 
         let pane_id = state.next_id("pane");
         let mut envs = agent_pane_envs(state, &pane_id, &agent.id)?;
-        envs.push(("QMUX_FORK_POINT".to_string(), session_id.clone()));
+        envs.push(("SESSION_FORK_POINT".to_string(), session_id.clone()));
         envs.push(config_dir_env);
         attach_opencode_agent_pane(state, &agent.id, pane_id.clone(), has_initial_prompt)?;
 
@@ -598,16 +601,16 @@ impl OpencodeAdapter {
         let args = build_opencode_args_from_shell(None, &request.args);
         let mut envs = agent_pane_envs(state, &request.pane_id, &agent.id)?;
         if let Some(session_id) = resume_session_id {
-            envs.push(("QMUX_ROOT_SESSION_ID".to_string(), session_id));
+            envs.push(("SESSION_ROOT_SESSION_ID".to_string(), session_id));
         }
         if let Some(fork_point) = fork_point {
-            envs.push(("QMUX_FORK_POINT".to_string(), fork_point));
+            envs.push(("SESSION_FORK_POINT".to_string(), fork_point));
         }
         envs.push(config_dir_env);
         let agent_id = agent.id.clone();
         let launch_cwd = shell_cwd.display().to_string();
 
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.spawned",
             Some(request.pane_id),
             Some(agent_id),
@@ -665,7 +668,7 @@ impl OpencodeAdapter {
                             agent.session_id = Some(session_id);
                         }
                         // Bind the qmux-managed transcript path. The opencode plugin
-                        // writes JSONL here; qmux tails it with the same pipeline used
+                        // writes JSONL here; Session tails it with the same pipeline used
                         // for Claude and Codex.
                         if let Some(transcript_path) = transcript_path.clone() {
                             agent.transcript_path = Some(transcript_path);
@@ -817,7 +820,7 @@ impl OpencodeAdapter {
                 }
             }
             other => {
-                return Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+                return Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
                     format!("agent.hook.{other}"),
                     pane_id,
                     agent.map(|agent| agent.id),
@@ -860,7 +863,7 @@ impl OpencodeAdapter {
             );
         }
 
-        Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+        Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
             event_type,
             pane_id,
             agent.map(|agent| agent.id),
@@ -1207,7 +1210,7 @@ fn finish_agent_after_stop(state: &AppState, agent: &AgentInfo) -> Result<bool, 
         Ok(IdleResolution::Drained) => Ok(true),
         Ok(IdleResolution::Paused | IdleResolution::Idle) => Ok(false),
         Err(err) => {
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "agent.queue_error",
                 agent.pane_id.clone(),
                 Some(agent.id.clone()),
@@ -1220,7 +1223,7 @@ fn finish_agent_after_stop(state: &AppState, agent: &AgentInfo) -> Result<bool, 
 
 fn finish_agent_after_failure(state: &AppState, agent: &AgentInfo) -> Result<bool, String> {
     if let Err(err) = advance_after_failure(state, &agent.id) {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.queue_error",
             agent.pane_id.clone(),
             Some(agent.id.clone()),
@@ -1230,7 +1233,7 @@ fn finish_agent_after_failure(state: &AppState, agent: &AgentInfo) -> Result<boo
     Ok(false)
 }
 
-/// Parses a line written by the qmux opencode plugin into a `Turn`.
+/// Parses a line written by the Session opencode plugin into a `Turn`.
 ///
 /// The plugin writes one JSON line per message part, shaped as:
 /// ```json
@@ -1402,8 +1405,8 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
-    fn test_config() -> QmuxConfig {
-        QmuxConfig {
+    fn test_config() -> SessionConfig {
+        SessionConfig {
             remotes: Default::default(),
             workspace_root: PathBuf::from("/tmp/qmux-opencode-tests"),
             socket_path: PathBuf::from("/tmp/qmux-opencode-tests.sock"),
@@ -1529,7 +1532,7 @@ mod tests {
         }
     }
 
-    fn ingest(state: &AppState, notification: AdapterNotification) -> QmuxEvent {
+    fn ingest(state: &AppState, notification: AdapterNotification) -> SessionEvent {
         let outcome = OpencodeAdapter::new(state.config())
             .ingest_notification(state, notification)
             .unwrap();

@@ -100,7 +100,7 @@ impl JsonlProcess {
             })?;
         let _ = writeln!(
             log,
-            "qmux: {label} research spawn binary={binary} cwd={}",
+            "session: {label} research spawn binary={binary} cwd={}",
             cwd.display()
         );
 
@@ -257,7 +257,7 @@ fn copy_bounded(mut source: impl Read, mut target: impl Write) {
             overflowed = keep < read;
         }
         if overflowed && !marker_written {
-            let _ = target.write_all(b"\nqmux: stderr log truncated at 4 MB\n");
+            let _ = target.write_all(b"\nsession: stderr log truncated at 4 MB\n");
             marker_written = true;
         }
     }
@@ -338,7 +338,7 @@ mod tests {
 
         assert_eq!(source.position(), (MAX_STDERR_LOG_BYTES + 8192) as u64);
         assert!(target.len() < MAX_STDERR_LOG_BYTES + 128);
-        assert!(target.ends_with(b"qmux: stderr log truncated at 4 MB\n"));
+        assert!(target.ends_with(b"session: stderr log truncated at 4 MB\n"));
     }
 
     #[test]

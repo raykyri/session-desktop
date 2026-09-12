@@ -255,10 +255,10 @@ interface ResearchHighlightApi {
   Highlight: new () => ResearchNativeHighlight;
 }
 
-const RESEARCH_HIGHLIGHT_NAME = "qmux-research-highlights";
-const RESEARCH_QUERY_ANCHOR_NAME = "qmux-research-query-anchors";
-const RESEARCH_OVERLAP_NAME = "qmux-research-highlight-overlaps";
-const RESEARCH_SELECTED_NAME = "qmux-research-selected-highlights";
+const RESEARCH_HIGHLIGHT_NAME = "session-research-highlights";
+const RESEARCH_QUERY_ANCHOR_NAME = "session-research-query-anchors";
+const RESEARCH_OVERLAP_NAME = "session-research-highlight-overlaps";
+const RESEARCH_SELECTED_NAME = "session-research-selected-highlights";
 // Stacking order for the highlight layers that repaint over the shared base
 // tone: overlap regions above the base paint and the selection tone above
 // everything.

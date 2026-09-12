@@ -374,7 +374,7 @@ pub fn flush_dirty_thread_graphs() {
         let result = write_snapshot_to_disk(&pending.key.0, &pending.graph);
         if let Err(err) = &result {
             eprintln!(
-                "qmux: failed to flush thread graph {}: {err}",
+                "session: failed to flush thread graph {}: {err}",
                 pending.key.1
             );
         }

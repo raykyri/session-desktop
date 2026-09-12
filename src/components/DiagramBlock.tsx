@@ -77,12 +77,12 @@ function getViz(): Promise<Viz> {
 // HTML-reparse, namespace confusion) a hand-rolled denylist misses. DOMPurify strips
 // scripts, event handlers, foreignObject, and javascript:/data: URIs; the hook below
 // additionally routes anchor destinations through our safeHref allowlist and the
-// delegated React click handler (data-qmux-href) so a diagram link is never directly
+// delegated React click handler (data-session-href) so a diagram link is never directly
 // navigable, and keeps non-anchor references local (#id) so injected paint-server /
 // use / image references can't fetch external resources.
 const DIAGRAM_SANITIZE_CONFIG = {
   USE_PROFILES: { svg: true, svgFilters: true },
-  ADD_ATTR: ["data-qmux-href"],
+  ADD_ATTR: ["data-session-href"],
 };
 
 function diagramSanitizerHook(node: Element): void {
@@ -100,7 +100,7 @@ function diagramSanitizerHook(node: Element): void {
     }
     const safe = safeHref(raw);
     if (safe) {
-      node.setAttribute("data-qmux-href", safe);
+      node.setAttribute("data-session-href", safe);
       node.setAttribute("href", "#");
     }
     return;
@@ -177,7 +177,7 @@ async function renderDiagram(lang: DiagramLang, code: string): Promise<string> {
   assertDiagramWithinLimits(code);
   if (lang === "mermaid") {
     const mermaid = await getMermaid();
-    const id = `qmux-mermaid-${mermaidSeq++}`;
+    const id = `session-mermaid-${mermaidSeq++}`;
     const { svg } = await mermaid.render(id, code);
     return sanitizeSvg(assertRenderedSvgWithinLimits(svg));
   }
@@ -228,7 +228,7 @@ interface DiagramBlockProps {
 
 function diagramLinkFromEvent(event: ReactMouseEvent<HTMLElement>): string | null {
   const target = event.target instanceof Element ? event.target : null;
-  const href = target?.closest("a[data-qmux-href]")?.getAttribute("data-qmux-href");
+  const href = target?.closest("a[data-session-href]")?.getAttribute("data-session-href");
   return safeHref(href) ?? null;
 }
 

@@ -8,8 +8,8 @@ pub mod muse;
 pub mod opencode;
 pub mod pi;
 
-use crate::config::QmuxConfig;
-use crate::events::QmuxEvent;
+use crate::config::SessionConfig;
+use crate::events::SessionEvent;
 use crate::pty::{
     InitialPaneSize, ensure_shell_agent_startup_supported, spawn_shell_agent_command_pane,
 };
@@ -45,7 +45,7 @@ pub use claude::{PrepareShellClaudeLaunchRequest, SpawnClaudeRequest};
 
 /// Single-quotes a path for safe interpolation into a POSIX shell command,
 /// escaping embedded single quotes. Shared by the Claude and Codex adapters,
-/// which both embed the qmux CLI path into generated hook commands.
+/// which both embed the Session CLI path into generated hook commands.
 pub(crate) fn shell_quote_path(path: &Path) -> String {
     let raw = path.display().to_string();
     format!("'{}'", raw.replace('\'', "'\\''"))
@@ -63,7 +63,7 @@ pub(crate) fn shell_quote_arg(value: &str) -> String {
 /// A hook arrives over the control socket carrying the pane's token, so a
 /// prompt-injected agent can forge a `SessionStart` and point `transcript_path`
 /// at any file. We can't fully validate the *first* path (SessionStart is how
-/// qmux discovers it, and the agent may not have written the file yet), but we
+/// Session discovers it, and the agent may not have written the file yet), but we
 /// constrain it several ways: a `.jsonl` extension, an absolute path (a relative
 /// one would resolve against an unknown cwd), and — when the target already
 /// exists — a regular file, so a forged hook can't aim the tailer at a directory,
@@ -306,7 +306,7 @@ pub(crate) fn maybe_record_agent_model(
         agent.model = Some(model);
     })?;
     if let Some(agent) = updated.as_ref() {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.updated",
             agent.pane_id.clone(),
             Some(agent.id.clone()),
@@ -369,8 +369,8 @@ pub(crate) fn prepared_shell_agent(
 }
 
 /// Records native lineage on a fresh agent created by a shell-level fork command.
-/// The CLI resumes `fork_point` but creates a new native session, so the source qmux
-/// record must remain separate. Preserve qmux parent/root lineage when its source is
+/// The CLI resumes `fork_point` but creates a new native session, so the source Session
+/// record must remain separate. Preserve Session parent/root lineage when its source is
 /// known in the same workspace.
 pub(crate) fn record_shell_fork_lineage(
     state: &AppState,
@@ -412,14 +412,14 @@ pub(crate) fn record_shell_fork_lineage(
             Ok(Some(history)) => {
                 if let Err(err) = state.record_conversation_history(&updated, history) {
                     eprintln!(
-                        "qmux: could not record conversation history for shell fork {}: {err}",
+                        "session: could not record conversation history for shell fork {}: {err}",
                         updated.id
                     );
                 }
             }
             Ok(None) => {}
             Err(err) => eprintln!(
-                "qmux: could not capture conversation history for shell fork {}: {err}",
+                "session: could not capture conversation history for shell fork {}: {err}",
                 updated.id
             ),
         }
@@ -447,7 +447,7 @@ fn same_path(a: &str, b: &str) -> bool {
 }
 
 /// Native CLIs may accept either a session id or a transcript path for resume
-/// and fork selectors. Match both forms so qmux keeps one record and preserves
+/// and fork selectors. Match both forms so Session keeps one record and preserves
 /// lineage regardless of which spelling the user gives the CLI.
 fn native_session_selector_matches(agent: &AgentInfo, selector: &str, cwd: &str) -> bool {
     if agent.session_id.as_deref() == Some(selector) {
@@ -683,7 +683,7 @@ pub struct PreparedShellAgentLaunch {
     pub cwd: String,
     pub args: Vec<String>,
     pub envs: Vec<LaunchEnv>,
-    /// Whether `qmux agent-exec` should bind and supervise this process as an
+    /// Whether `session agent-exec` should bind and supervise this process as an
     /// agent. Adapters can return `false` for utility invocations of a shared
     /// CLI (for example `pi install`) that must pass through the shell wrapper
     /// without creating an agent.
@@ -717,11 +717,11 @@ pub(crate) fn subagent_id(payload: &Value) -> Option<&str> {
 }
 
 pub enum AdapterNotificationOutcome {
-    Event(QmuxEvent),
+    Event(SessionEvent),
 }
 
 impl AdapterNotificationOutcome {
-    pub fn into_events(self) -> Vec<QmuxEvent> {
+    pub fn into_events(self) -> Vec<SessionEvent> {
         match self {
             AdapterNotificationOutcome::Event(event) => vec![event],
         }
@@ -1472,7 +1472,7 @@ fn cached_adapter_metadata(key: &str) -> Option<Vec<AdapterMetadata>> {
 }
 
 pub fn probe_adapter_metadata_for_config(
-    config: &QmuxConfig,
+    config: &SessionConfig,
     remote_target: Option<&crate::workspace::RemoteRef>,
     force: bool,
 ) -> Result<Vec<AdapterMetadata>, String> {
@@ -1522,14 +1522,14 @@ pub fn probe_adapter_metadata_for_config(
         // entry. Editing or removing a config entry must never silently move or
         // disable an existing workspace that still points at its original host.
         let host = crate::host::for_group(Some(remote));
-        let qmux_cli_error = host
+        let session_cli_error = host
             .remote()
-            .map(|target| target.qmux_cli.as_str())
-            .and_then(|qmux_cli| match run_remote_command_presence_probe(&host, qmux_cli) {
+            .map(|target| target.session_cli.as_str())
+            .and_then(|session_cli| match run_remote_command_presence_probe(&host, session_cli) {
                 Ok(output) if output.success => None,
                 Ok(_) => Some(format!(
-                    "Remote '{}' does not provide the configured qmuxCli '{}'; install qmux-cli there or update the remote configuration.",
-                    remote_label, qmux_cli
+                    "Remote '{}' does not provide the configured sessionCli '{}'; install session-cli there or update the remote configuration.",
+                    remote_label, session_cli
                 )),
                 Err(err) => Some(err),
             });
@@ -1539,7 +1539,7 @@ pub fn probe_adapter_metadata_for_config(
                 if !metadata.supports_remote {
                     return (metadata, None);
                 }
-                if let Some(err) = qmux_cli_error.as_ref() {
+                if let Some(err) = session_cli_error.as_ref() {
                     let mut metadata = metadata;
                     metadata.message = Some(err.clone());
                     return (metadata, None);
@@ -1586,7 +1586,7 @@ pub fn probe_adapter_metadata_for_config(
 }
 
 pub fn ensure_adapter_ready_for_research(
-    config: &QmuxConfig,
+    config: &SessionConfig,
     adapter_id: &str,
 ) -> Result<AdapterMetadata, String> {
     let metadata = probe_adapter_metadata_for_config(config, None, false)?
@@ -1603,7 +1603,7 @@ pub fn ensure_adapter_ready_for_research(
     }
 }
 
-pub fn adapter_registry(config: &QmuxConfig) -> AdapterRegistry {
+pub fn adapter_registry(config: &SessionConfig) -> AdapterRegistry {
     AdapterRegistry::new(vec![
         Box::new(ClaudeAdapter::new(config)),
         Box::new(CodexAdapter::new(config)),
@@ -1659,7 +1659,7 @@ pub fn agent_fork(
 
 /// Forks an ordinary terminal agent into a new persistent shell pane. The child
 /// agent/worktree is reserved up front, then the shell starts the adapter through
-/// the same `qmux agent-exec` path used when a user types the command manually.
+/// the same `session agent-exec` path used when a user types the command manually.
 /// When the adapter exits, the supervisor detaches it and leaves the shell prompt.
 fn fork_agent_in_shell(
     state: &AppState,
@@ -1699,7 +1699,7 @@ fn fork_agent_in_shell(
         Ok(history) => history,
         Err(err) => {
             eprintln!(
-                "qmux: could not capture conversation history for fork of {}: {err}",
+                "session: could not capture conversation history for fork of {}: {err}",
                 source.id
             );
             None
@@ -1738,7 +1738,7 @@ fn fork_agent_in_shell(
         && let Err(err) = state.record_conversation_history(&agent, history)
     {
         eprintln!(
-            "qmux: could not record conversation history for fork {}: {err}",
+            "session: could not record conversation history for fork {}: {err}",
             agent.id
         );
     }
@@ -1787,7 +1787,7 @@ fn fork_agent_in_shell(
         Ok(pane) => pane,
         Err(err) => {
             let failed = mark_agent_spawn_failed(state, &agent.id, &pane_id)?;
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "agent.spawn_failed",
                 Some(pane_id),
                 Some(failed.id.clone()),
@@ -1802,13 +1802,13 @@ fn fork_agent_in_shell(
 /// Adapters with a native fork command. Owns the fork-eligibility check (and its
 /// error message) for both the dispatch below and the queue engine's fail-fast
 /// validation, so a new forkable adapter is added in one place.
-pub fn adapter_supports_fork(config: &QmuxConfig, adapter_id: &str) -> bool {
+pub fn adapter_supports_fork(config: &SessionConfig, adapter_id: &str) -> bool {
     adapter_registry(config)
         .get(adapter_id)
         .is_ok_and(|adapter| adapter.supports_fork())
 }
 
-pub fn adapter_supports_research(config: &QmuxConfig, adapter_id: &str) -> bool {
+pub fn adapter_supports_research(config: &SessionConfig, adapter_id: &str) -> bool {
     adapter_registry(config)
         .get(adapter_id)
         .is_ok_and(|adapter| adapter.supports_research())
@@ -1821,7 +1821,7 @@ pub fn adapter_supports_research(config: &QmuxConfig, adapter_id: &str) -> bool 
 /// format we can safely truncate qualify; the rest inherit the trait's default
 /// `Err` and are filtered out of the UI by `supports_fork_at_message`.
 #[cfg(test)]
-pub fn adapter_supports_fork_at_message(config: &QmuxConfig, adapter_id: &str) -> bool {
+pub fn adapter_supports_fork_at_message(config: &SessionConfig, adapter_id: &str) -> bool {
     adapter_registry(config)
         .get(adapter_id)
         .is_ok_and(|adapter| adapter.supports_fork_at_message())
@@ -1888,7 +1888,7 @@ pub(crate) fn new_uuid_v4() -> Result<String, String> {
 /// default adapter when it can fork (the new run's own follow-ups branch from
 /// its session), else the first fork-capable adapter. The frontend mirrors
 /// this preference to resolve adapter-specific composer affordances.
-pub fn default_fork_adapter(config: &QmuxConfig) -> Result<String, String> {
+pub fn default_fork_adapter(config: &SessionConfig) -> Result<String, String> {
     let base = adapter_registry(config).metadata();
     let key = adapter_probe_cache_key(&base, None);
     let metadata = cached_adapter_metadata(&key).unwrap_or(base);
@@ -1934,7 +1934,7 @@ fn fork_agent_source_with_placement(
         Ok(history) => history,
         Err(err) => {
             eprintln!(
-                "qmux: could not capture conversation history for fork of {}: {err}",
+                "session: could not capture conversation history for fork of {}: {err}",
                 source.id
             );
             None
@@ -1948,7 +1948,7 @@ fn fork_agent_source_with_placement(
         && let Err(err) = state.record_conversation_history(&agent, history)
     {
         eprintln!(
-            "qmux: could not record conversation history for fork {}: {err}",
+            "session: could not record conversation history for fork {}: {err}",
             agent.id
         );
     }
@@ -1972,12 +1972,12 @@ fn finish_fork_spawn(
         let placed = state.place_pane_after(&pane.id, source_pane);
         if let Err(err) = placed {
             eprintln!(
-                "qmux: fork of agent {} spawned but could not be placed relative to pane {source_pane}: {err}",
+                "session: fork of agent {} spawned but could not be placed relative to pane {source_pane}: {err}",
                 source.id
             );
         }
     }
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.forked",
         Some(pane.id.clone()),
         Some(agent.id.clone()),
@@ -2028,13 +2028,13 @@ pub fn spawn_sibling_agent_session(
         // live pane into a reported failure.
         if let Err(err) = state.place_pane_after(&pane.id, source_pane) {
             eprintln!(
-                "qmux: sibling session for agent {} spawned but could not be placed after pane {source_pane}: {err}",
+                "session: sibling session for agent {} spawned but could not be placed after pane {source_pane}: {err}",
                 source.id
             );
         }
     }
     let agent = state.agent_by_pane(&pane.id)?;
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.spawned",
         Some(pane.id.clone()),
         agent.as_ref().map(|agent| agent.id.clone()),
@@ -2095,7 +2095,7 @@ pub fn agent_prepare_shell_launch(
                     .is_none_or(|bound| bound == pane_id)
             {
                 let failed = mark_agent_spawn_failed(state, &agent_id, &pane_id)?;
-                state.emit(QmuxEvent::new(
+                state.emit(SessionEvent::new(
                     "agent.spawn_failed",
                     Some(pane_id),
                     Some(failed.id.clone()),
@@ -2109,7 +2109,7 @@ pub fn agent_prepare_shell_launch(
         let agent_id = prepared
             .envs
             .iter()
-            .find(|env| env.key == "QMUX_AGENT_ID")
+            .find(|env| env.key == "SESSION_AGENT_ID")
             .map(|env| env.value.clone())
             .ok_or_else(|| "prepared shell launch is missing its agent id".to_string())?;
         let info = state.register_shell_agent_job(job_id, agent_id, pane_id, supervisor_pid)?;
@@ -2197,8 +2197,8 @@ mod tests {
     };
     use std::path::PathBuf;
 
-    fn test_config() -> QmuxConfig {
-        QmuxConfig {
+    fn test_config() -> SessionConfig {
+        SessionConfig {
             remotes: Default::default(),
             workspace_root: PathBuf::from("/tmp/qmux-adapter-tests"),
             socket_path: PathBuf::from("/tmp/qmux-adapter-tests.sock"),
@@ -2391,7 +2391,7 @@ mod tests {
                 .success
         );
         assert!(
-            !run_remote_command_presence_probe(&host, "/definitely missing/qmux-cli")
+            !run_remote_command_presence_probe(&host, "/definitely missing/session-cli")
                 .unwrap()
                 .success
         );
@@ -2404,7 +2404,7 @@ mod tests {
             host: "127.0.0.1".to_string(),
             label: Some("Build host".to_string()),
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
-            qmux_cli: None,
+            session_cli: None,
             workspace_root: None,
         }
         .to_ref("build-host");

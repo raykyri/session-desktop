@@ -87,7 +87,7 @@ export PATH="$repo_root/node_modules/.bin:$PATH"
 
 # Shipped bundles must include the Foundation Models tab-title bridge; without
 # this the bridge is optional and a missing Swift toolchain only warns.
-export QMUX_REQUIRE_FOUNDATION_MODELS=1
+export SESSION_REQUIRE_FOUNDATION_MODELS=1
 
 # createUpdaterArtifacts makes the bundler sign the updater .tar.gz, which fails
 # without the private half of the updater keypair. Pick up the local key when the
@@ -120,9 +120,9 @@ if [[ "$(uname -s)" == "Darwin" && -n "${APPLE_SIGNING_IDENTITY:-}" ]]; then
 fi
 
 # Release DMGs must run on both Apple Silicon and Intel Macs, so default to a
-# universal binary. Override with e.g. QMUX_BUILD_TARGET=aarch64-apple-darwin
+# universal binary. Override with e.g. SESSION_BUILD_TARGET=aarch64-apple-darwin
 # for a faster single-arch build.
-build_target="${QMUX_BUILD_TARGET:-universal-apple-darwin}"
+build_target="${SESSION_BUILD_TARGET:-universal-apple-darwin}"
 
 if [[ "$build_target" == "universal-apple-darwin" ]] && command -v rustup >/dev/null; then
   rustup target add aarch64-apple-darwin x86_64-apple-darwin

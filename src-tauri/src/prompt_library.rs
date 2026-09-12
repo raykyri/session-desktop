@@ -124,7 +124,7 @@ impl ProjectStore {
     /// The path is canonicalized first so symlinked or differently-spelled
     /// routes to the same project share one store; a project that can't be
     /// canonicalized (deleted, permission) falls back to hashing the path as
-    /// given. In practice qmux group dirs are already canonical (workspace.rs
+    /// given. In practice Session group dirs are already canonical (workspace.rs
     /// canonicalizes them at creation), so both branches agree.
     fn resolve(project: &Path) -> Result<Self, String> {
         let canonical = project

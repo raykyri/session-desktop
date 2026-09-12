@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  QMUX_FILE_HREF_PREFIX,
+  SESSION_FILE_HREF_PREFIX,
   absoluteLocalFilePath,
   canPreviewLocalFilePath,
   inlineCodeFilePath,
   isFileServerUrl,
-  isQmuxFileHref,
+  isSessionFileHref,
   loopbackHtmlUrl,
   pathFromFileServerUrl,
-  pathFromQmuxFileHref,
+  pathFromSessionFileHref,
   resolveLocalLinkPath,
   safeHref,
   terminalLinkTarget,
@@ -45,15 +45,15 @@ test("safeHref blocks javascript and custom schemes", () => {
 test("safeHref does not promote absolute Unix paths to https://qmux.invalid", () => {
   const path = "/Users/raymond/Code/multitool/dev/menubar-design-variants.html";
   const href = safeHref(path);
-  assert.equal(href, `${QMUX_FILE_HREF_PREFIX}${path}`);
+  assert.equal(href, `${SESSION_FILE_HREF_PREFIX}${path}`);
   assert.ok(href && !href.startsWith("https://"), `got ${href}`);
-  assert.equal(pathFromQmuxFileHref(href!), path);
+  assert.equal(pathFromSessionFileHref(href!), path);
 });
 
 test("safeHref recognizes file: URLs and common filesystem roots", () => {
   assert.equal(
     safeHref("file:///Users/raymond/report.html"),
-    `${QMUX_FILE_HREF_PREFIX}/Users/raymond/report.html`,
+    `${SESSION_FILE_HREF_PREFIX}/Users/raymond/report.html`,
   );
   assert.equal(
     absoluteLocalFilePath("/home/ray/out/diagram.svg"),
@@ -68,18 +68,18 @@ test("safeHref recognizes file: URLs and common filesystem roots", () => {
 test("local file links drop trailing source positions and sentence periods before opening", () => {
   assert.equal(
     safeHref("/Users/raymond/Code/foks/README-FOKS.md:36"),
-    `${QMUX_FILE_HREF_PREFIX}/Users/raymond/Code/foks/README-FOKS.md`,
+    `${SESSION_FILE_HREF_PREFIX}/Users/raymond/Code/foks/README-FOKS.md`,
   );
   assert.equal(
     safeHref("/Users/raymond/Code/foks/example.ts:760-843"),
-    `${QMUX_FILE_HREF_PREFIX}/Users/raymond/Code/foks/example.ts`,
+    `${SESSION_FILE_HREF_PREFIX}/Users/raymond/Code/foks/example.ts`,
   );
   assert.equal(
     absoluteLocalFilePath("file:///tmp/example.ts:36:8"),
     "/tmp/example.ts",
   );
   assert.equal(
-    absoluteLocalFilePath(`${QMUX_FILE_HREF_PREFIX}/tmp/example.ts:36`),
+    absoluteLocalFilePath(`${SESSION_FILE_HREF_PREFIX}/tmp/example.ts:36`),
     "/tmp/example.ts",
   );
   assert.equal(
@@ -87,7 +87,7 @@ test("local file links drop trailing source positions and sentence periods befor
     "/workspace/out/example.ts",
   );
   assert.equal(
-    pathFromQmuxFileHref(`${QMUX_FILE_HREF_PREFIX}/tmp/example.ts:36:8`),
+    pathFromSessionFileHref(`${SESSION_FILE_HREF_PREFIX}/tmp/example.ts:36:8`),
     "/tmp/example.ts",
   );
   assert.equal(
@@ -96,11 +96,11 @@ test("local file links drop trailing source positions and sentence periods befor
   );
   assert.equal(
     safeHref("/Users/raymond/Code/foks/example.html."),
-    `${QMUX_FILE_HREF_PREFIX}/Users/raymond/Code/foks/example.html`,
+    `${SESSION_FILE_HREF_PREFIX}/Users/raymond/Code/foks/example.html`,
   );
   assert.equal(absoluteLocalFilePath("file:///tmp/example.html."), "/tmp/example.html");
   assert.equal(
-    pathFromQmuxFileHref(`${QMUX_FILE_HREF_PREFIX}/tmp/example.html.`),
+    pathFromSessionFileHref(`${SESSION_FILE_HREF_PREFIX}/tmp/example.html.`),
     "/tmp/example.html",
   );
 });
@@ -184,13 +184,13 @@ test("absoluteLocalFilePath accepts extension-bearing multi-segment paths", () =
   assert.equal(absoluteLocalFilePath("/only-one-segment.html"), undefined);
 });
 
-test("isQmuxFileHref and pathFromQmuxFileHref round-trip", () => {
+test("isSessionFileHref and pathFromSessionFileHref round-trip", () => {
   const path = "/Users/me/file.html";
-  const href = `${QMUX_FILE_HREF_PREFIX}${path}`;
-  assert.equal(isQmuxFileHref(href), true);
-  assert.equal(isQmuxFileHref("https://example.com"), false);
-  assert.equal(pathFromQmuxFileHref(href), path);
-  assert.equal(pathFromQmuxFileHref("https://example.com"), undefined);
+  const href = `${SESSION_FILE_HREF_PREFIX}${path}`;
+  assert.equal(isSessionFileHref(href), true);
+  assert.equal(isSessionFileHref("https://example.com"), false);
+  assert.equal(pathFromSessionFileHref(href), path);
+  assert.equal(pathFromSessionFileHref("https://example.com"), undefined);
 });
 
 test("local preview hints allow renderable files and reject binary packages", () => {

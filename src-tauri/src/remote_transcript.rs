@@ -1,11 +1,11 @@
 //! Desktop-owned SSH transcript readers. Remote hooks supply metadata only;
 //! all local destinations are derived here, never from a remote pathname.
-use crate::events::QmuxEvent;
+use crate::events::SessionEvent;
 use crate::host::{self, Host, RemoteCommand};
 use crate::state::AppState;
-use qmux_cli::transcript_stream::{Cursor, Frame, MAX_CHUNK, MAX_FRAME};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use session_cli::transcript_stream::{Cursor, Frame, MAX_CHUNK, MAX_FRAME};
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
@@ -81,7 +81,7 @@ fn save_json(path: &Path, value: &impl Serialize) -> Result<(), String> {
 }
 
 fn live_host(state: &AppState, binding: &Binding) -> Option<Host> {
-    if !qmux_cli::transcript_stream::valid_session(&binding.session) {
+    if !session_cli::transcript_stream::valid_session(&binding.session) {
         return None;
     }
     let agent = state.agent(&binding.agent).ok()??;
@@ -127,7 +127,7 @@ pub fn observe(state: &AppState, pane: &str, payload: &Value) {
             return Ok(());
         };
         if agent.fork_point.as_deref() == Some(session.as_str())
-            || !qmux_cli::transcript_stream::valid_session(&session)
+            || !session_cli::transcript_stream::valid_session(&session)
         {
             return Ok(());
         }
@@ -202,7 +202,7 @@ pub fn observe(state: &AppState, pane: &str, payload: &Value) {
         Ok(())
     })();
     if let Err(error) = result {
-        eprintln!("qmux: remote transcript setup: {error}");
+        eprintln!("session: remote transcript setup: {error}");
     }
 }
 
@@ -240,7 +240,7 @@ pub fn restore(state: &AppState, pane: &str) {
 }
 
 fn notice(state: &AppState, binding: &Binding, message: Option<&str>) {
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "transcript.notice",
         Some(binding.pane.clone()),
         Some(binding.agent.clone()),
@@ -353,7 +353,7 @@ fn worker(state: AppState, root: PathBuf) {
             )
         })();
         if let Err(error) = result {
-            eprintln!("qmux: remote transcript {}: {error}", binding.agent);
+            eprintln!("session: remote transcript {}: {error}", binding.agent);
             notice(
                 &state,
                 &binding,
@@ -730,7 +730,7 @@ mod tests {
                 .write_all(line.as_bytes())
                 .unwrap();
             let frame =
-                qmux_cli::transcript_stream::read_frame(&source, "session", &checkpoint.cursor)
+                session_cli::transcript_stream::read_frame(&source, "session", &checkpoint.cursor)
                     .unwrap();
             let path = accept(&dir, &binding, &mut checkpoint, frame).unwrap();
             state
@@ -759,8 +759,9 @@ mod tests {
         }
         // Same session, rewritten file: the new generation must replace turns.
         fs::write(&source, message_line(adapter, "replacement")).unwrap();
-        let frame = qmux_cli::transcript_stream::read_frame(&source, "session", &checkpoint.cursor)
-            .unwrap();
+        let frame =
+            session_cli::transcript_stream::read_frame(&source, "session", &checkpoint.cursor)
+                .unwrap();
         let path = accept(&dir, &binding, &mut checkpoint, frame).unwrap();
         state
             .mutate_agent("remote-test-agent", |agent| {
@@ -903,7 +904,7 @@ mod tests {
         let mut cp = Checkpoint::default();
         let binding = test_binding("claude", "session");
         let first =
-            qmux_cli::transcript_stream::read_frame(&source, "session", &cp.cursor).unwrap();
+            session_cli::transcript_stream::read_frame(&source, "session", &cp.cursor).unwrap();
         assert!(!first.data.ends_with('\n'));
         let path = accept(&dir, &binding, &mut cp, first).unwrap();
         // Mid-record progress is durable, and an interrupted write is discarded.
@@ -916,7 +917,7 @@ mod tests {
         cp = recover(&dir, &binding).unwrap();
         while cp.cursor.offset < contents.len() as u64 {
             let frame =
-                qmux_cli::transcript_stream::read_frame(&source, "session", &cp.cursor).unwrap();
+                session_cli::transcript_stream::read_frame(&source, "session", &cp.cursor).unwrap();
             assert!(!frame.data.is_empty());
             assert_eq!(accept(&dir, &binding, &mut cp, frame).unwrap(), path);
         }

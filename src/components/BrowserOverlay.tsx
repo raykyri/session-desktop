@@ -194,7 +194,7 @@ export default function BrowserOverlay({
     }
     try {
       const parsed = new URL(url);
-      parsed.searchParams.set("qmux-body-font", bodyFontId);
+      parsed.searchParams.set("session-body-font", bodyFontId);
       return parsed.toString();
     } catch {
       return url;
@@ -223,7 +223,7 @@ export default function BrowserOverlay({
       }
       const message = event.data as { type?: unknown; x?: unknown; y?: unknown } | null;
       if (
-        message?.type !== "qmux-preview-scroll" ||
+        message?.type !== "session-preview-scroll" ||
         typeof message.x !== "number" ||
         typeof message.y !== "number" ||
         !Number.isFinite(message.x) ||
@@ -653,7 +653,7 @@ export default function BrowserOverlay({
   // monitor deliberately leaves keys to a healthy WKWebView responder — so
   // every app shortcut (⌘-backtick, the ⌘⇧E toggle that closes this overlay…)
   // goes dead the moment a click lands inside the frame. Report frame focus
-  // to the native layer so the monitor claims ⌘ chords for qmux while it
+  // to the native layer so the monitor claims ⌘ chords for Session while it
   // holds. Focus crossing into an iframe blurs the host window (its browsing
   // context loses focus) and leaves activeElement on the frame element, so
   // sample on window focus transitions — the framed document never forwards
@@ -1155,14 +1155,14 @@ export default function BrowserOverlay({
             src={frameUrl}
             title="Browser overlay"
             // allow-scripts (so scripted reports still render) without
-            // allow-same-origin (opaque origin isolates the preview from qmux).
+            // allow-same-origin (opaque origin isolates the preview from Session).
             sandbox={sandbox ? "allow-scripts" : undefined}
             referrerPolicy="no-referrer"
             onLoad={() => {
               const scroll = frameScrollRef.current;
               if (scroll?.url === frameUrl) {
                 frameRef.current?.contentWindow?.postMessage(
-                  { type: "qmux-preview-scroll-restore", x: scroll.x, y: scroll.y },
+                  { type: "session-preview-scroll-restore", x: scroll.x, y: scroll.y },
                   "*",
                 );
               }
@@ -1171,7 +1171,7 @@ export default function BrowserOverlay({
         ) : (
           <div className="browser-overlay-empty">
             <p>
-              Nothing loaded yet. Run <code>qmux open &lt;file&gt;</code> (or enter a
+              Nothing loaded yet. Run <code>session open &lt;file&gt;</code> (or enter a
               <code>http://localhost</code> URL above) to render a page here.
             </p>
           </div>

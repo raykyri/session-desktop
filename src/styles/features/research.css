@@ -985,7 +985,7 @@
 
 /* Saved highlights use a faint gold wash. Colors are literal because
    highlight pseudos resolve custom properties unreliably. */
-::highlight(qmux-research-highlights) {
+::highlight(session-research-highlights) {
   color: inherit;
   background: rgba(216, 196, 95, 0.14);
 }
@@ -994,7 +994,7 @@
    is currently being composed against). Painted ~20% stronger than a plain
    saved highlight so a passage that owns a margin card reads as distinct from
    an ordinary highlight, while staying the same gold family. */
-::highlight(qmux-research-query-anchors) {
+::highlight(session-research-query-anchors) {
   color: inherit;
   background: rgba(216, 196, 95, 0.17);
 }
@@ -1002,7 +1002,7 @@
 /* Regions where annotations stack (highlight over highlight, or a follow-up
    anchor over a saved highlight): repainted near the text color so depth is
    visible without deepening the gold. Above the base layers via priority. */
-::highlight(qmux-research-highlight-overlaps) {
+::highlight(session-research-highlight-overlaps) {
   color: inherit;
   background: rgba(211, 216, 212, 0.16);
 }
@@ -1012,7 +1012,7 @@
    selected annotation reads like ordinary selected text; matches
    --status-info-fg, spelled literally because highlight pseudos resolve
    custom properties unreliably. */
-::highlight(qmux-research-selected-highlights) {
+::highlight(session-research-selected-highlights) {
   color: inherit;
   background: #6da7ec;
 }

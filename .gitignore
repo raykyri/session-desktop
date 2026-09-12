@@ -12,12 +12,11 @@ src-tauri/gen/
 .claude/
 
 # Legacy in-repo session dir: older builds stored session data and thread graphs
-# in the checkout. Active state now lives in the global qmux data root, but keep
+# in the checkout. Active state now lives in the global Session data root, but keep
 # this ignored so legacy data and retained thread recovery copies are never
 # accidentally committed.
 .qmux/
 src-tauri/swift-terminal/.build/
 
-# Cross-compiled linux-musl qmux-cli binaries produced by
-# scripts/build-remote-cli.sh and copied into the app bundle.
-src-tauri/remote-cli/*/qmux-cli
+# Cross-compiled linux-musl session-cli binaries supplied by remote-support builds.
+src-tauri/remote-cli/*/session-cli

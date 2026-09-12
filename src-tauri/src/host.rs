@@ -1,6 +1,6 @@
 //! Where an agent's work actually runs.
 //!
-//! Everything in qmux has always assumed the agent, its git worktree, and the
+//! Everything in Session has always assumed the agent, its git worktree, and the
 //! control socket share one machine. This module is the seam that stops
 //! assuming it: a [`Host`] is either the local machine (byte-for-byte today's
 //! behaviour) or an ssh destination, and every command that has to run *where
@@ -20,7 +20,7 @@
 //!
 //! `ssh host git worktree add -- <path> <ref>` does not pass an argv. ssh joins
 //! everything after the destination with spaces and hands the string to a shell
-//! on the far side, which re-splits it. qmux already defends the worktree path
+//! on the far side, which re-splits it. Session already defends the worktree path
 //! and base ref against option-injection with `--` and `--end-of-options`; a
 //! second shell would undo that by splitting on whitespace an attacker
 //! controls. So every argument is single-quoted here before it is joined, and
@@ -39,8 +39,8 @@ use std::sync::{LazyLock, Mutex};
 const CONNECT_TIMEOUT_SECONDS: u32 = 10;
 /// Where worktrees land on a host that does not name a `workspaceRoot`.
 const DEFAULT_REMOTE_WORKSPACE_ROOT: &str = "~/.qmux/workspaces";
-/// How the qmux CLI is invoked on a host that does not name one.
-const DEFAULT_REMOTE_CLI: &str = "qmux-cli";
+/// How the Session CLI is invoked on a host that does not name one.
+const DEFAULT_REMOTE_CLI: &str = "session-cli";
 
 /// A remote host, flattened out of the group's [`RemoteRef`] into the shape the
 /// transport actually needs.
@@ -53,8 +53,8 @@ pub struct RemoteTarget {
     /// Connection target: an ssh-config alias or `user@host`. Auth and address
     /// resolution belong to the system `ssh` client, never to qmux.
     pub ssh: String,
-    /// How to invoke the qmux CLI over there. It services hooks for remote panes.
-    pub qmux_cli: String,
+    /// How to invoke the Session CLI over there. It services hooks for remote panes.
+    pub session_cli: String,
     /// Where agent worktrees live on that machine.
     pub workspace_root: Option<String>,
     /// Chooses how a pane survives a dropped connection.
@@ -62,7 +62,7 @@ pub struct RemoteTarget {
 }
 
 /// Resolved execution target. `Local` is the default everywhere and behaves
-/// exactly as qmux did before this module existed.
+/// exactly as Session did before this module existed.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum Host {
     #[default]
@@ -73,7 +73,7 @@ pub enum Host {
 /// Derives the host from a group's remote binding.
 ///
 /// `None` — a group with no remote — is the local machine, which is every group
-/// qmux has ever created, so nothing needs migrating.
+/// Session has ever created, so nothing needs migrating.
 pub fn for_group(remote: Option<&RemoteRef>) -> Host {
     match remote {
         None => Host::Local,
@@ -81,8 +81,8 @@ pub fn for_group(remote: Option<&RemoteRef>) -> Host {
             id: remote.id.clone(),
             label: remote.label.clone(),
             ssh: remote.host.clone(),
-            qmux_cli: remote
-                .qmux_cli
+            session_cli: remote
+                .session_cli
                 .clone()
                 .unwrap_or_else(|| DEFAULT_REMOTE_CLI.to_string()),
             workspace_root: remote.workspace_root.clone(),
@@ -133,7 +133,7 @@ pub struct RemoteCommand<'a> {
     pub forwards: Vec<SocketForward>,
 }
 
-/// Fully quoted SSH invocations for one durable qmux tmux session.
+/// Fully quoted SSH invocations for one durable Session tmux session.
 ///
 /// Creation and attachment are deliberately separate. Only `create_argv` may
 /// create the named session; every recovery path uses `attach_argv`, so a dead
@@ -178,16 +178,16 @@ impl Host {
         );
         let script = format!(
             r#"set -eu
-token=$({read_env} QMUX_TOKEN)
-sock=$({read_env} QMUX_SOCK)
-cli=$({read_env} QMUX_CLI)
-case "$token" in QMUX_TOKEN=?*) ;; *) exit 1 ;; esac
-case "$sock" in QMUX_SOCK=?*) ;; *) exit 1 ;; esac
-case "$cli" in QMUX_CLI=?*) ;; *) exit 1 ;; esac
-QMUX_TOKEN=${{token#QMUX_TOKEN=}}
-QMUX_SOCK=${{sock#QMUX_SOCK=}}
-export QMUX_TOKEN QMUX_SOCK
-exec "${{cli#QMUX_CLI=}}" ping
+token=$({read_env} SESSION_TOKEN)
+sock=$({read_env} SESSION_SOCK)
+cli=$({read_env} SESSION_CLI)
+case "$token" in SESSION_TOKEN=?*) ;; *) exit 1 ;; esac
+case "$sock" in SESSION_SOCK=?*) ;; *) exit 1 ;; esac
+case "$cli" in SESSION_CLI=?*) ;; *) exit 1 ;; esac
+SESSION_TOKEN=${{token#SESSION_TOKEN=}}
+SESSION_SOCK=${{sock#SESSION_SOCK=}}
+export SESSION_TOKEN SESSION_SOCK
+exec "${{cli#SESSION_CLI=}}" ping
 "#
         );
         Ok(self
@@ -214,7 +214,7 @@ exec "${{cli#QMUX_CLI=}}" ping
             "show-environment".to_string(),
             "-t".to_string(),
             format!("={}", identity.tmux_session),
-            "QMUX_TOKEN".to_string(),
+            "SESSION_TOKEN".to_string(),
         ]);
         Ok(self
             .ssh_argv(
@@ -350,7 +350,7 @@ exec "${{cli#QMUX_CLI=}}" ping
             "escape-time".to_string(),
             "0".to_string(),
             ";".to_string(),
-            // tmux is a durability layer for qmux, not a second interactive
+            // tmux is a durability layer for Session, not a second interactive
             // multiplexer. Disabling both prefixes lets every control byte
             // reach the pane, while hiding the status line keeps the managed
             // session visually indistinguishable from a direct terminal.
@@ -538,7 +538,7 @@ exec "${{cli#QMUX_CLI=}}" ping
     /// Rewrites a prepared pane environment for execution inside an existing
     /// remote tmux session. This is also used by shell-level agent launches:
     /// their command is prepared by the local control server, so its freshly
-    /// minted credentials initially name the local qmux CLI/socket and must be
+    /// minted credentials initially name the local Session CLI/socket and must be
     /// rebound to the already-forwarded remote endpoint before exec.
     pub fn tmux_pane_envs(
         &self,
@@ -623,7 +623,7 @@ exec "${{cli#QMUX_CLI=}}" ping
     /// The full `ssh …` argv for `remote`, or `None` on a local host.
     ///
     /// Exposed separately from [`Host::command`] because a pane is spawned
-    /// through qmux's pty layer, which wants a program and args rather than a
+    /// through Session's pty layer, which wants a program and args rather than a
     /// built `Command`.
     pub fn ssh_argv(
         &self,
@@ -823,7 +823,7 @@ exec "${{cli#QMUX_CLI=}}" ping
     /// is its security property, and it applies to paths as much as to refs —
     /// so a `~/…` path reaches the far side's shell as a literal tilde. Left
     /// alone, the default workspace root produces a directory actually named
-    /// `~`, and the path qmux then hands the agent is not absolute.
+    /// `~`, and the path Session then hands the agent is not absolute.
     pub fn expand_home(&self, path: &str) -> Result<String, String> {
         let Some(target) = self.remote() else {
             return Ok(path.to_string());
@@ -845,7 +845,7 @@ exec "${{cli#QMUX_CLI=}}" ping
     /// Creates `dir` (and its parents) on this host.
     ///
     /// A remote group's directories are remote: `std::fs` here would make a
-    /// stray tree on the machine qmux runs on and leave the agent pointed at a
+    /// stray tree on the machine Session runs on and leave the agent pointed at a
     /// path that does not exist.
     pub fn create_dir_all(&self, dir: &Path) -> Result<(), String> {
         if self.is_local() {
@@ -920,18 +920,18 @@ fn remote_pane_envs(
         // Never copy a local pane credential or an interactive-user credential
         // across SSH. The explicit token below belongs to the restricted remote
         // namespace and is the only control authority a remote process receives.
-        if valid_env_name(key) && !matches!(key.as_str(), "QMUX_TOKEN" | "QMUX_USER_TOKEN") {
+        if valid_env_name(key) && !matches!(key.as_str(), "SESSION_TOKEN" | "SESSION_USER_TOKEN") {
             resolved.insert(key.clone(), value.clone());
         }
     }
     // Local paths mean nothing on the far side. Apply these after caller envs
     // so an untrusted or stale launch specification cannot override them.
-    resolved.insert("QMUX_SOCK".to_string(), remote_socket.to_string());
-    resolved.insert("QMUX_CLI".to_string(), target.qmux_cli.clone());
-    resolved.insert("QMUX_REMOTE".to_string(), "1".to_string());
-    resolved.insert("QMUX_TOKEN".to_string(), remote_token.to_string());
+    resolved.insert("SESSION_SOCK".to_string(), remote_socket.to_string());
+    resolved.insert("SESSION_CLI".to_string(), target.session_cli.clone());
+    resolved.insert("SESSION_REMOTE".to_string(), "1".to_string());
+    resolved.insert("SESSION_TOKEN".to_string(), remote_token.to_string());
     if let Some(root) = remote_workspace_root {
-        resolved.insert("QMUX_WORKSPACE_ROOT".to_string(), root.to_string());
+        resolved.insert("SESSION_WORKSPACE_ROOT".to_string(), root.to_string());
     }
     resolved.into_iter().collect()
 }
@@ -1035,13 +1035,13 @@ fn remote_command_line(remote: &RemoteCommand<'_>) -> String {
 mod tests {
     use super::*;
 
-    fn remote_ref(workspace_root: Option<&str>, qmux_cli: Option<&str>) -> RemoteRef {
+    fn remote_ref(workspace_root: Option<&str>, session_cli: Option<&str>) -> RemoteRef {
         RemoteRef {
             id: "saved-1".to_string(),
             label: "devbox".to_string(),
             host: "user@devbox".to_string(),
             multiplexer: RemoteMultiplexer::Tmux,
-            qmux_cli: qmux_cli.map(str::to_string),
+            session_cli: session_cli.map(str::to_string),
             workspace_root: workspace_root.map(str::to_string),
         }
     }
@@ -1079,9 +1079,9 @@ mod tests {
             r#"#!/bin/sh
 for key do :; done
 case "$key" in
-QMUX_TOKEN) printf 'QMUX_TOKEN=%s\n' "$TEST_TOKEN" ;;
-QMUX_SOCK) printf 'QMUX_SOCK=%s\n' "$TEST_SOCK" ;;
-QMUX_CLI) printf 'QMUX_CLI=%s\n' "$TEST_CLI" ;;
+SESSION_TOKEN) printf 'SESSION_TOKEN=%s\n' "$TEST_TOKEN" ;;
+SESSION_SOCK) printf 'SESSION_SOCK=%s\n' "$TEST_SOCK" ;;
+SESSION_CLI) printf 'SESSION_CLI=%s\n' "$TEST_CLI" ;;
 *) exit 1 ;;
 esac
 "#,
@@ -1090,7 +1090,7 @@ esac
         std::fs::write(
             &cli,
             r#"#!/bin/sh
-test "$1" = ping && test "$QMUX_TOKEN" = "$TEST_TOKEN" && test "$QMUX_SOCK" = "$TEST_SOCK" || exit 1
+test "$1" = ping && test "$SESSION_TOKEN" = "$TEST_TOKEN" && test "$SESSION_SOCK" = "$TEST_SOCK" || exit 1
 printf '{"ok":true,"data":{"status":"ok"}}\n'
 "#,
         )
@@ -1107,8 +1107,8 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
             .env("TEST_TOKEN", "literal '$(exit 99)' token")
             .env("TEST_SOCK", "/remote/socket with spaces")
             .env("TEST_CLI", &cli)
-            .env("QMUX_TOKEN", "wrong inherited token")
-            .env("QMUX_SOCK", "/wrong/socket")
+            .env("SESSION_TOKEN", "wrong inherited token")
+            .env("SESSION_SOCK", "/wrong/socket")
             .output()
             .unwrap();
         std::fs::remove_dir_all(dir).unwrap();
@@ -1183,7 +1183,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
         let argv = argv(
             &remote_host(),
             RemoteCommand {
-                program: "qmux-cli",
+                program: "session-cli",
                 args: vec!["agent".to_string()],
                 ..Default::default()
             },
@@ -1257,10 +1257,10 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
         let argv = argv(
             &remote_host(),
             RemoteCommand {
-                program: "qmux-cli",
+                program: "session-cli",
                 args: vec!["agent".to_string()],
                 envs: vec![
-                    ("QMUX_TOKEN".to_string(), "tok'en".to_string()),
+                    ("SESSION_TOKEN".to_string(), "tok'en".to_string()),
                     ("AGENT_CWD".to_string(), "/a b".to_string()),
                 ],
                 ..Default::default()
@@ -1269,7 +1269,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
         );
         assert_eq!(
             argv.last().unwrap(),
-            r"env QMUX_TOKEN='tok'\''en' AGENT_CWD='/a b' 'qmux-cli' 'agent'"
+            r"env SESSION_TOKEN='tok'\''en' AGENT_CWD='/a b' 'session-cli' 'agent'"
         );
     }
 
@@ -1281,10 +1281,10 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
                 &remote_identity(),
                 "remote-token",
                 &[
-                    ("QMUX_SOCK".to_string(), "/local/qmux.sock".to_string()),
-                    ("QMUX_CLI".to_string(), "/Applications/qmux".to_string()),
-                    ("QMUX_TOKEN".to_string(), "pane-token".to_string()),
-                    ("QMUX_USER_TOKEN".to_string(), "user-token".to_string()),
+                    ("SESSION_SOCK".to_string(), "/local/qmux.sock".to_string()),
+                    ("SESSION_CLI".to_string(), "/Applications/qmux".to_string()),
+                    ("SESSION_TOKEN".to_string(), "pane-token".to_string()),
+                    ("SESSION_USER_TOKEN".to_string(), "user-token".to_string()),
                 ],
             )
             .unwrap()
@@ -1292,19 +1292,22 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
             .collect::<BTreeMap<_, _>>();
 
         assert_eq!(
-            envs.get("QMUX_SOCK").map(String::as_str),
+            envs.get("SESSION_SOCK").map(String::as_str),
             Some("/tmp/qmux-pane-7-deadbeef.sock")
         );
-        assert_eq!(envs.get("QMUX_CLI").map(String::as_str), Some("qmux-cli"));
         assert_eq!(
-            envs.get("QMUX_WORKSPACE_ROOT").map(String::as_str),
+            envs.get("SESSION_CLI").map(String::as_str),
+            Some("session-cli")
+        );
+        assert_eq!(
+            envs.get("SESSION_WORKSPACE_ROOT").map(String::as_str),
             Some("/srv/work")
         );
         assert_eq!(
-            envs.get("QMUX_TOKEN").map(String::as_str),
+            envs.get("SESSION_TOKEN").map(String::as_str),
             Some("remote-token")
         );
-        assert!(!envs.contains_key("QMUX_USER_TOKEN"));
+        assert!(!envs.contains_key("SESSION_USER_TOKEN"));
     }
 
     #[test]
@@ -1463,7 +1466,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
         assert!(output.status.success());
         assert_eq!(
             String::from_utf8(output.stdout).unwrap().trim_end(),
-            "QMUX_TOKEN=test-token"
+            "SESSION_TOKEN=test-token"
         );
     }
 
@@ -1477,12 +1480,12 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
                 "/srv/work/a b",
                 120,
                 40,
-                "/opt/qmux agent",
+                "/opt/session agent",
                 &["--prompt".to_string(), "it's safe".to_string()],
                 &[
-                    ("QMUX_SOCK".to_string(), "/wrong/local.sock".to_string()),
-                    ("QMUX_CLI".to_string(), "/wrong/local/qmux".to_string()),
-                    ("QMUX_TOKEN".to_string(), "token value".to_string()),
+                    ("SESSION_SOCK".to_string(), "/wrong/local.sock".to_string()),
+                    ("SESSION_CLI".to_string(), "/wrong/local/qmux".to_string()),
+                    ("SESSION_TOKEN".to_string(), "token value".to_string()),
                     ("BAD-NAME".to_string(), "dropped".to_string()),
                 ],
             )
@@ -1492,12 +1495,12 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
         assert!(create.contains("'tmux' '-L' 'qmux' '-f' '/dev/null' 'new-session' '-d'"));
         assert!(create.contains("'-s' 'qmux-pane-7-deadbeef'"));
         assert!(create.contains("'-x' '120' '-y' '40' '-c' '/srv/work/a b'"));
-        assert!(create.contains("'-e' 'QMUX_CLI=qmux-cli'"));
-        assert!(create.contains("'-e' 'QMUX_SOCK=/tmp/qmux-pane-7-deadbeef.sock'"));
-        assert!(create.contains("'-e' 'QMUX_TOKEN=remote-token'"));
-        assert!(!create.contains("QMUX_USER_TOKEN"));
+        assert!(create.contains("'-e' 'SESSION_CLI=session-cli'"));
+        assert!(create.contains("'-e' 'SESSION_SOCK=/tmp/qmux-pane-7-deadbeef.sock'"));
+        assert!(create.contains("'-e' 'SESSION_TOKEN=remote-token'"));
+        assert!(!create.contains("SESSION_USER_TOKEN"));
         assert!(!create.contains("BAD-NAME"));
-        assert!(create.ends_with("'--' '/opt/qmux agent' '--prompt' 'it'\\''s safe'"));
+        assert!(create.ends_with("'--' '/opt/session agent' '--prompt' 'it'\\''s safe'"));
         assert!(
             commands
                 .create_argv
@@ -1716,7 +1719,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
         let argv = argv(
             &remote_host(),
             RemoteCommand {
-                program: "qmux-cli",
+                program: "session-cli",
                 args: vec!["agent".to_string()],
                 forwards: vec![SocketForward {
                     remote_path: "/tmp/qmux-remote.sock".to_string(),
@@ -1757,7 +1760,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
 
     #[test]
     fn a_group_without_a_remote_is_the_local_machine() {
-        // Every group qmux has ever created, so this is what keeps the change
+        // Every group Session has ever created, so this is what keeps the change
         // from needing a migration.
         assert_eq!(for_group(None), Host::Local);
         assert!(Host::Local.remote().is_none());
@@ -1765,19 +1768,22 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
 
     #[test]
     fn a_groups_remote_becomes_its_host() {
-        let host = for_group(Some(&remote_ref(Some("/srv/work"), Some("/opt/qmux-cli"))));
+        let host = for_group(Some(&remote_ref(
+            Some("/srv/work"),
+            Some("/opt/session-cli"),
+        )));
         let target = host.remote().expect("remote");
 
         assert_eq!(host.label(), "devbox");
         assert_eq!(target.ssh, "user@devbox");
-        assert_eq!(target.qmux_cli, "/opt/qmux-cli");
+        assert_eq!(target.session_cli, "/opt/session-cli");
         assert_eq!(target.multiplexer, RemoteMultiplexer::Tmux);
     }
 
     #[test]
     fn a_remote_that_names_no_cli_gets_the_default() {
         let host = for_group(Some(&remote_ref(None, None)));
-        assert_eq!(host.remote().unwrap().qmux_cli, DEFAULT_REMOTE_CLI);
+        assert_eq!(host.remote().unwrap().session_cli, DEFAULT_REMOTE_CLI);
     }
 
     #[test]

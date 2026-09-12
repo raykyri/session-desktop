@@ -3044,62 +3044,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0c5ccf5294c6ccd63a74f1565028353830a9c2f5eb0c682c355c471726a6e3f"
 
 [[package]]
-name = "qmux"
-version = "0.3.3"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "dirs",
- "getrandom 0.2.17",
- "keyring",
- "libc",
- "mac-usernotifications",
- "names",
- "objc2",
- "objc2-app-kit",
- "objc2-foundation",
- "portable-pty",
- "pulldown-cmark",
- "qmux-cli",
- "qmux-proto",
- "regex",
- "reqwest",
- "rustls",
- "serde",
- "serde_json",
- "sha2",
- "tauri",
- "tauri-build",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-dialog",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-single-instance",
- "tauri-plugin-updater",
- "tungstenite",
- "url",
- "window-vibrancy 0.7.1",
-]
-
-[[package]]
-name = "qmux-cli"
-version = "0.3.3"
-dependencies = [
- "dirs",
- "libc",
- "qmux-proto",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "qmux-proto"
-version = "0.3.3"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3767,6 +3711,62 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "170fb83ab34de17dc69aa7c67482b22218ddb85da56546f9bd6b929e32a05930"
 dependencies = [
  "stable_deref_trait",
+]
+
+[[package]]
+name = "session"
+version = "0.3.3"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "dirs",
+ "getrandom 0.2.17",
+ "keyring",
+ "libc",
+ "mac-usernotifications",
+ "names",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "portable-pty",
+ "pulldown-cmark",
+ "regex",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "session-cli",
+ "session-proto",
+ "sha2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-dialog",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-updater",
+ "tungstenite",
+ "url",
+ "window-vibrancy 0.7.1",
+]
+
+[[package]]
+name = "session-cli"
+version = "0.3.3"
+dependencies = [
+ "dirs",
+ "libc",
+ "serde",
+ "serde_json",
+ "session-proto",
+]
+
+[[package]]
+name = "session-proto"
+version = "0.3.3"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

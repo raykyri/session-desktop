@@ -28,7 +28,7 @@ import type {
   GroupInfo,
   PaneInfo,
   PaneSplitInfo,
-  QmuxEvent,
+  SessionEvent,
   QueuedTurn,
   TranscriptHookEvent,
   Turn,
@@ -62,7 +62,7 @@ const MAX_TURNS_PER_AGENT = 200;
 // matching how the inline effect behaved before it was extracted. State setters
 // from useState are stable, and the three helper callbacks read through refs
 // internally, so the first-render capture stays correct.
-export interface UseQmuxEventsHandlers {
+export interface UseSessionEventsHandlers {
   // Records a transcript hook event for the copy-as-JSON export. Nothing renders
   // hook events, so the store lives outside React state (see App) and appending
   // must never trigger a render.
@@ -138,8 +138,8 @@ export interface UseQmuxEventsHandlers {
     kind: "unknown" | "text" | "html",
   ) => void;
   onTerminalTitleChanged?: (paneId: string, title: string) => void;
-  onResearchChanged?: (event: QmuxEvent) => void;
-  onUserNotificationRequested?: (event: QmuxEvent) => void;
+  onResearchChanged?: (event: SessionEvent) => void;
+  onUserNotificationRequested?: (event: SessionEvent) => void;
   onNotificationOpenPane?: (paneId: string) => void;
 }
 
@@ -156,7 +156,7 @@ function agentPromptSubmittedText(payload: Record<string, unknown>): string | nu
   return stringField(hookPayload, "prompt") ?? stringField(hookPayload, "input");
 }
 
-export function useQmuxEvents(handlers: UseQmuxEventsHandlers) {
+export function useSessionEvents(handlers: UseSessionEventsHandlers) {
   const {
     appendHookEvent,
     setPanes,
@@ -223,7 +223,7 @@ export function useQmuxEvents(handlers: UseQmuxEventsHandlers) {
       onAgentThreadGraphDirty?.(agentId);
     };
 
-    const handleEvent = (event: QmuxEvent) => {
+    const handleEvent = (event: SessionEvent) => {
       if (event.type === "app.interface_health_probe") {
         const generation = event.payload.generation;
         if (typeof generation === "number" && Number.isSafeInteger(generation)) {
@@ -586,7 +586,7 @@ export function useQmuxEvents(handlers: UseQmuxEventsHandlers) {
       }
     };
 
-    const pendingEvents: QmuxEvent[] = [];
+    const pendingEvents: SessionEvent[] = [];
     let coalesceTimer: number | null = null;
     const flushPendingEvents = () => {
       coalesceTimer = null;

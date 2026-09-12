@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct QmuxConfig {
+pub struct SessionConfig {
     pub workspace_root: PathBuf,
     pub socket_path: PathBuf,
     #[serde(default)]
@@ -28,23 +28,23 @@ pub struct QmuxConfig {
     pub legacy_claude_binary: Option<String>,
     /// Directory of the qmux-managed Claude plugin whose `skills/` are injected
     /// into launched Claude agents via `--plugin-dir`. Resolved at load time from
-    /// `QMUX_CLAUDE_PLUGIN_DIR` or `<cwd>/qmux-claude-plugin`; never read from or written
+    /// `SESSION_CLAUDE_PLUGIN_DIR` or `<cwd>/qmux-claude-plugin`; never read from or written
     /// to the config JSON (it is derived, not configured).
     #[serde(skip)]
     pub claude_plugin_dir: PathBuf,
     /// Directory of the qmux-managed opencode plugin whose JS files are injected
     /// into launched opencode agents via `OPENCODE_CONFIG_DIR`. Resolved at load
-    /// time from `QMUX_OPENCODE_PLUGIN_DIR` or `<cwd>/qmux-opencode-plugin`; never
+    /// time from `SESSION_OPENCODE_PLUGIN_DIR` or `<cwd>/qmux-opencode-plugin`; never
     /// read from or written to the config JSON (it is derived, not configured).
     #[serde(skip)]
     pub opencode_plugin_dir: PathBuf,
-    /// Directory containing qmux's observer-only Pi extension. Resolved at
+    /// Directory containing Session's observer-only Pi extension. Resolved at
     /// load time and never serialized into user config.
     #[serde(skip)]
     pub pi_extension_dir: PathBuf,
     /// Directory of the qmux-managed Cursor observer plugin injected into
     /// launched `cursor-agent` processes via `--plugin-dir`. Resolved at load
-    /// time from `QMUX_CURSOR_PLUGIN_DIR` or `<cwd>/qmux-cursor-plugin`; never
+    /// time from `SESSION_CURSOR_PLUGIN_DIR` or `<cwd>/qmux-cursor-plugin`; never
     /// read from or written to the config JSON.
     #[serde(skip)]
     pub cursor_plugin_dir: PathBuf,
@@ -150,7 +150,8 @@ pub struct SavedRemote {
     #[serde(default)]
     pub multiplexer: RemoteMultiplexer,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub qmux_cli: Option<String>,
+    #[serde(alias = "qmuxCli")]
+    pub session_cli: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_root: Option<String>,
 }
@@ -167,7 +168,7 @@ impl SavedRemote {
             label: self.label.clone().unwrap_or_else(|| id.to_string()),
             host: self.host.clone(),
             multiplexer: self.multiplexer,
-            qmux_cli: self.qmux_cli.clone(),
+            session_cli: self.session_cli.clone(),
             workspace_root: self.workspace_root.clone(),
         }
     }
@@ -181,13 +182,13 @@ pub struct RemoteChoice {
     pub host: String,
     pub multiplexer: RemoteMultiplexer,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub qmux_cli: Option<String>,
+    pub session_cli: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_root: Option<String>,
     /// Config-file entries are explicit, read-only declarations. Preference
     /// entries are owned by the settings UI and can be edited or removed.
     pub source: RemoteSource,
-    /// False for a multiplexer qmux cannot drive yet, so a picker can list the
+    /// False for a multiplexer Session cannot drive yet, so a picker can list the
     /// entry without offering a launch that is going to fail.
     pub usable: bool,
 }
@@ -237,7 +238,7 @@ fn remote_choices_from(
             label: remote.label.clone().unwrap_or_else(|| id.clone()),
             host: remote.host.clone(),
             multiplexer: remote.multiplexer,
-            qmux_cli: remote.qmux_cli.clone(),
+            session_cli: remote.session_cli.clone(),
             workspace_root: remote.workspace_root.clone(),
             source,
             usable: remote.multiplexer == RemoteMultiplexer::Tmux,
@@ -245,12 +246,12 @@ fn remote_choices_from(
         .collect()
 }
 
-impl QmuxConfig {
+impl SessionConfig {
     pub fn load() -> Result<Self, String> {
         let cwd = env::current_dir().map_err(|err| format!("failed to read cwd: {err}"))?;
 
         // Which config applies:
-        // - `QMUX_CONFIG=<file>` is explicit intent, honored in every build; a
+        // - `SESSION_CONFIG=<file>` is explicit intent, honored in every build; a
         //   missing or malformed file is an error rather than a silent fallback.
         // - Otherwise dev builds discover `<cwd>/qmux.config.json`, so a checkout
         //   keeps its state in `<repo>/.qmux` when run from the repo.
@@ -258,7 +259,7 @@ impl QmuxConfig {
         //   must live in the same place no matter how the app is launched (Finder
         //   gives cwd `/`, a terminal gives the project directory), otherwise each
         //   launch style reads and writes its own divergent session history.
-        let explicit = env::var_os("QMUX_CONFIG").filter(|value| !value.is_empty());
+        let explicit = env::var_os("SESSION_CONFIG").filter(|value| !value.is_empty());
         let (mut config, config_dir) = if let Some(explicit) = explicit {
             let path = absolutize(&cwd, Path::new(&explicit));
             let dir = path
@@ -279,8 +280,8 @@ impl QmuxConfig {
         // home-based data dir. This keeps a config sitting at the filesystem root
         // or in a system directory from materializing a `.qmux` outside userspace.
         let home = env::var_os("HOME").map(PathBuf::from);
-        let default_workspace_root = qmux_data_root().map(|root| root.join("workspaces"));
-        let default_socket_path = qmux_runtime_root().map(|root| root.join("qmux.sock"));
+        let default_workspace_root = session_data_root().map(|root| root.join("workspaces"));
+        let default_socket_path = session_runtime_root().map(|root| root.join("qmux.sock"));
         config.workspace_root = resolve_root(
             &config_dir,
             home.as_deref(),
@@ -305,11 +306,11 @@ impl QmuxConfig {
             )
         })?;
 
-        // Keep qmux's private state tree owner-only, matching the 0700/0600 treatment
+        // Keep Session's private state tree owner-only, matching the 0700/0600 treatment
         // the control socket and shell-integration files already get. `.qmux` holds the
         // persisted state (composer drafts, queued-turn prompts), preferences, hook
         // settings, and per-pane terminal scrollback logs — which can capture any secret
-        // echoed to a terminal and the pane's own QMUX_TOKEN. Runs on every startup so a
+        // echoed to a terminal and the pane's own SESSION_TOKEN. Runs on every startup so a
         // tree created by an older, unhardened build is tightened on the next launch.
         // Best-effort: the individual writers below also create their files 0600.
         {
@@ -514,7 +515,7 @@ impl QmuxConfig {
     fn read_config_file(path: &Path) -> Result<Self, String> {
         let raw = fs::read_to_string(path)
             .map_err(|err| format!("failed to read {}: {err}", path.display()))?;
-        serde_json::from_str::<QmuxConfig>(&raw)
+        serde_json::from_str::<SessionConfig>(&raw)
             .map_err(|err| format!("failed to parse {}: {err}", path.display()))
     }
 
@@ -535,8 +536,8 @@ impl QmuxConfig {
 
     fn default_config() -> Result<Self, String> {
         let data_root =
-            qmux_data_root().ok_or_else(|| "could not determine data directory".to_string())?;
-        let runtime_root = qmux_runtime_root()
+            session_data_root().ok_or_else(|| "could not determine data directory".to_string())?;
+        let runtime_root = session_runtime_root()
             .ok_or_else(|| "could not determine runtime directory".to_string())?;
         Ok(Self {
             workspace_root: data_root.join("workspaces"),
@@ -583,11 +584,11 @@ impl QmuxConfig {
 }
 
 /// Resolves the qmux-managed Claude plugin directory. Honors an explicit
-/// `QMUX_CLAUDE_PLUGIN_DIR` override (absolutized against the cwd when relative);
+/// `SESSION_CLAUDE_PLUGIN_DIR` override (absolutized against the cwd when relative);
 /// otherwise picks the first existing candidate so skills load regardless of how
-/// qmux is launched — not only when the process cwd happens to be the repo root.
+/// Session is launched — not only when the process cwd happens to be the repo root.
 fn resolve_claude_plugin_dir(cwd: &Path) -> PathBuf {
-    let override_os = env::var_os("QMUX_CLAUDE_PLUGIN_DIR").filter(|value| !value.is_empty());
+    let override_os = env::var_os("SESSION_CLAUDE_PLUGIN_DIR").filter(|value| !value.is_empty());
     let exe_dir = env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(Path::to_path_buf));
@@ -600,7 +601,7 @@ fn resolve_claude_plugin_dir(cwd: &Path) -> PathBuf {
 
 /// Pure resolver (testable): the explicit override always wins; otherwise the first
 /// existing candidate is used, falling back to `<cwd>/qmux-claude-plugin` when none exist.
-/// Candidates cover the ways qmux runs:
+/// Candidates cover the ways Session runs:
 /// - `<cwd>/qmux-claude-plugin` — dev (`tauri dev`) or a binary run from the repo root.
 /// - `<exe_dir>/qmux-claude-plugin` — plugin copied next to the binary.
 /// - `<exe_dir>/../Resources/qmux-claude-plugin` — the macOS `.app` bundle (Finder launch).
@@ -614,11 +615,11 @@ fn pick_claude_plugin_dir(
 }
 
 /// Resolves the qmux-managed opencode plugin directory. Honors an explicit
-/// `QMUX_OPENCODE_PLUGIN_DIR` override (absolutized against the cwd when relative);
+/// `SESSION_OPENCODE_PLUGIN_DIR` override (absolutized against the cwd when relative);
 /// otherwise picks the first existing candidate so the plugin loads regardless of
-/// how qmux is launched. Mirrors `resolve_claude_plugin_dir`.
+/// how Session is launched. Mirrors `resolve_claude_plugin_dir`.
 fn resolve_opencode_plugin_dir(cwd: &Path) -> PathBuf {
-    let override_os = env::var_os("QMUX_OPENCODE_PLUGIN_DIR").filter(|value| !value.is_empty());
+    let override_os = env::var_os("SESSION_OPENCODE_PLUGIN_DIR").filter(|value| !value.is_empty());
     let exe_dir = env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(Path::to_path_buf));
@@ -631,7 +632,7 @@ fn resolve_opencode_plugin_dir(cwd: &Path) -> PathBuf {
 }
 
 fn resolve_pi_extension_dir(cwd: &Path) -> PathBuf {
-    let override_os = env::var_os("QMUX_PI_EXTENSION_DIR").filter(|value| !value.is_empty());
+    let override_os = env::var_os("SESSION_PI_EXTENSION_DIR").filter(|value| !value.is_empty());
     let exe_dir = env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(Path::to_path_buf));
@@ -644,7 +645,7 @@ fn resolve_pi_extension_dir(cwd: &Path) -> PathBuf {
 }
 
 fn resolve_cursor_plugin_dir(cwd: &Path) -> PathBuf {
-    let override_os = env::var_os("QMUX_CURSOR_PLUGIN_DIR").filter(|value| !value.is_empty());
+    let override_os = env::var_os("SESSION_CURSOR_PLUGIN_DIR").filter(|value| !value.is_empty());
     let exe_dir = env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(Path::to_path_buf));
@@ -680,23 +681,23 @@ fn pick_plugin_dir(
         .unwrap_or_else(|| cwd.join(default_name))
 }
 
-/// Base directory for qmux's persistent data (workspaces and persisted state)
+/// Base directory for Session's persistent data (workspaces and persisted state)
 /// when it isn't being resolved relative to a project cwd. Platform-conventional:
 /// `~/Library/Application Support/qmux` on macOS and `$XDG_DATA_HOME/qmux`
 /// (`~/.local/share/qmux`) on Linux. `None` only when the home directory can't be
 /// determined.
-fn qmux_data_root() -> Option<PathBuf> {
+fn session_data_root() -> Option<PathBuf> {
     dirs::data_dir().map(|dir| dir.join("qmux"))
 }
 
-/// Directory for qmux's control socket. On Linux this is the per-user runtime dir
+/// Directory for Session's control socket. On Linux this is the per-user runtime dir
 /// (`$XDG_RUNTIME_DIR/qmux`, a tmpfs owned 0700 by the user); where no runtime dir
 /// exists (macOS, or `$XDG_RUNTIME_DIR` unset) it falls back to a `run/` subdir of
 /// the persistent data root.
-fn qmux_runtime_root() -> Option<PathBuf> {
+fn session_runtime_root() -> Option<PathBuf> {
     dirs::runtime_dir()
         .map(|dir| dir.join("qmux"))
-        .or_else(|| qmux_data_root().map(|dir| dir.join("run")))
+        .or_else(|| session_data_root().map(|dir| dir.join("run")))
 }
 
 /// Whether `cwd` sits inside the user's home directory, the condition under which
@@ -770,8 +771,8 @@ fn absolutize(cwd: &Path, path: &Path) -> PathBuf {
 mod remote_tests {
     use super::*;
 
-    fn config(remotes: &[(&str, SavedRemote)]) -> QmuxConfig {
-        let mut config = QmuxConfig::default_config().expect("defaults");
+    fn config(remotes: &[(&str, SavedRemote)]) -> SessionConfig {
+        let mut config = SessionConfig::default_config().expect("defaults");
         config.remotes = remotes
             .iter()
             .map(|(id, remote)| (id.to_string(), remote.clone()))
@@ -787,6 +788,41 @@ mod remote_tests {
     }
 
     #[test]
+    fn legacy_remote_cli_fields_survive_the_session_cutover() {
+        let saved: SavedRemote = serde_json::from_value(serde_json::json!({
+            "host": "devbox", "qmuxCli": "/opt/custom-cli", "workspaceRoot": "/srv/research"
+        }))
+        .unwrap();
+        assert_eq!(saved.session_cli.as_deref(), Some("/opt/custom-cli"));
+        let encoded = serde_json::to_value(&saved).unwrap();
+        assert_eq!(encoded["sessionCli"], "/opt/custom-cli");
+        assert!(encoded.get("qmuxCli").is_none());
+        assert_eq!(
+            serde_json::from_value::<SavedRemote>(encoded).unwrap(),
+            saved
+        );
+
+        let reference: RemoteRef = serde_json::from_value(serde_json::json!({
+            "id": "box", "label": "Box", "host": "devbox", "multiplexer": "tmux",
+            "qmuxCli": "~/.qmux/bin/qmux-cli", "workspaceRoot": "/srv/research"
+        }))
+        .unwrap();
+        assert_eq!(
+            reference.session_cli.as_deref(),
+            Some("~/.qmux/bin/qmux-cli")
+        );
+        assert!(crate::remote_cli::is_managed_cli(
+            reference.session_cli.as_deref()
+        ));
+        let encoded = serde_json::to_value(&reference).unwrap();
+        assert!(encoded.get("qmuxCli").is_none());
+        assert_eq!(
+            serde_json::from_value::<RemoteRef>(encoded).unwrap(),
+            reference
+        );
+    }
+
+    #[test]
     fn a_saved_remote_is_snapshotted_into_the_group_not_referenced() {
         let config = config(&[(
             "devbox",
@@ -794,7 +830,7 @@ mod remote_tests {
                 host: "user@devbox".to_string(),
                 label: Some("Dev box".to_string()),
                 multiplexer: RemoteMultiplexer::Tmux,
-                qmux_cli: Some("/opt/qmux-cli".to_string()),
+                session_cli: Some("/opt/session-cli".to_string()),
                 workspace_root: Some("/srv/qmux".to_string()),
             },
         )]);
@@ -803,7 +839,7 @@ mod remote_tests {
         assert_eq!(reference.id, "devbox");
         assert_eq!(reference.label, "Dev box");
         assert_eq!(reference.host, "user@devbox");
-        assert_eq!(reference.qmux_cli.as_deref(), Some("/opt/qmux-cli"));
+        assert_eq!(reference.session_cli.as_deref(), Some("/opt/session-cli"));
         assert_eq!(reference.workspace_root.as_deref(), Some("/srv/qmux"));
 
         // The copy is the point: a group already holding worktrees on that
@@ -821,7 +857,7 @@ mod remote_tests {
             .saved_remote("box")
             .expect("declared");
         assert_eq!(reference.label, "box");
-        // tmux is the default because it is the one qmux can drive.
+        // tmux is the default because it is the one Session can drive.
         assert_eq!(reference.multiplexer, RemoteMultiplexer::Tmux);
     }
 
@@ -894,7 +930,7 @@ mod remote_tests {
 
     #[test]
     fn remotes_parse_from_config_with_only_a_host() {
-        let parsed: QmuxConfig = serde_json::from_str(
+        let parsed: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -915,7 +951,7 @@ mod tests {
 
     #[test]
     fn adapter_binary_overrides_legacy_claude_binary() {
-        let config: QmuxConfig = serde_json::from_str(
+        let config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -934,7 +970,7 @@ mod tests {
 
     #[test]
     fn legacy_claude_binary_is_used_when_adapter_binary_is_absent() {
-        let config: QmuxConfig = serde_json::from_str(
+        let config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -948,7 +984,7 @@ mod tests {
 
     #[test]
     fn codex_binary_defaults_and_can_be_configured() {
-        let default_config: QmuxConfig = serde_json::from_str(
+        let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock"
@@ -957,7 +993,7 @@ mod tests {
         .unwrap();
         assert_eq!(default_config.codex_binary(), "codex");
 
-        let configured: QmuxConfig = serde_json::from_str(
+        let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -974,7 +1010,7 @@ mod tests {
 
     #[test]
     fn tilde_binary_expands_against_home() {
-        let configured: QmuxConfig = serde_json::from_str(
+        let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -991,7 +1027,7 @@ mod tests {
         }
 
         // Bare command names (PATH lookup) and absolute paths are never rewritten.
-        let plain: QmuxConfig = serde_json::from_str(
+        let plain: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -1005,7 +1041,7 @@ mod tests {
 
     #[test]
     fn opencode_binary_defaults_and_can_be_configured() {
-        let default_config: QmuxConfig = serde_json::from_str(
+        let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock"
@@ -1014,7 +1050,7 @@ mod tests {
         .unwrap();
         assert_eq!(default_config.opencode_binary(), "opencode");
 
-        let configured: QmuxConfig = serde_json::from_str(
+        let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -1031,7 +1067,7 @@ mod tests {
 
     #[test]
     fn grok_binary_defaults_and_can_be_configured() {
-        let default_config: QmuxConfig = serde_json::from_str(
+        let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock"
@@ -1040,7 +1076,7 @@ mod tests {
         .unwrap();
         assert_eq!(default_config.grok_binary(), "grok");
 
-        let configured: QmuxConfig = serde_json::from_str(
+        let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -1057,7 +1093,7 @@ mod tests {
 
     #[test]
     fn muse_binary_defaults_and_can_be_configured() {
-        let default_config: QmuxConfig = serde_json::from_str(
+        let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock"
@@ -1066,7 +1102,7 @@ mod tests {
         .unwrap();
         assert_eq!(default_config.muse_binary(), "muse");
 
-        let configured: QmuxConfig = serde_json::from_str(
+        let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -1083,7 +1119,7 @@ mod tests {
 
     #[test]
     fn pi_binary_defaults_and_can_be_configured() {
-        let default_config: QmuxConfig = serde_json::from_str(
+        let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock"
@@ -1092,7 +1128,7 @@ mod tests {
         .unwrap();
         assert_eq!(default_config.pi_binary(), "pi");
 
-        let configured: QmuxConfig = serde_json::from_str(
+        let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -1105,7 +1141,7 @@ mod tests {
 
     #[test]
     fn cursor_binary_defaults_and_can_be_configured() {
-        let default_config: QmuxConfig = serde_json::from_str(
+        let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock"
@@ -1114,7 +1150,7 @@ mod tests {
         .unwrap();
         assert_eq!(default_config.cursor_binary(), "cursor-agent");
 
-        let configured: QmuxConfig = serde_json::from_str(
+        let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -1131,7 +1167,7 @@ mod tests {
 
     #[test]
     fn devin_binary_defaults_and_can_be_configured() {
-        let default_config: QmuxConfig = serde_json::from_str(
+        let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock"
@@ -1140,7 +1176,7 @@ mod tests {
         .unwrap();
         assert_eq!(default_config.devin_binary(), "devin");
 
-        let configured: QmuxConfig = serde_json::from_str(
+        let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -1157,7 +1193,7 @@ mod tests {
 
     #[test]
     fn antigravity_binary_defaults_and_can_be_configured() {
-        let default_config: QmuxConfig = serde_json::from_str(
+        let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock"
@@ -1166,7 +1202,7 @@ mod tests {
         .unwrap();
         assert_eq!(default_config.antigravity_binary(), "agy");
 
-        let configured: QmuxConfig = serde_json::from_str(
+        let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
               "socketPath": ".qmux/run/qmux.sock",
@@ -1183,7 +1219,7 @@ mod tests {
 
     #[test]
     fn default_paths_live_under_platform_data_dir() {
-        let config = QmuxConfig::default_config().unwrap();
+        let config = SessionConfig::default_config().unwrap();
         let data_root = dirs::data_dir().unwrap().join("qmux");
 
         // Workspaces and persisted state live under the platform data dir

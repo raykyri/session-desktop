@@ -49,7 +49,7 @@ use adapters::{
     MessageAnchor, SpawnAgentRequest, SpawnClaudeRequest, agent_fork as fork_agent_pane,
     agent_spawn as spawn_agent_pane, fork_agent_source,
 };
-use config::{QmuxConfig, RuntimeConfig};
+use config::{RuntimeConfig, SessionConfig};
 use control_socket::start_control_socket;
 use menu_bar::{menu_bar_set_visible, menu_bar_update};
 use native_terminal::{
@@ -124,9 +124,9 @@ const NEW_WINDOW_MENU_ID: &str = "qmux-new-window";
 #[cfg(desktop)]
 const RELOAD_INTERFACE_MENU_ID: &str = "qmux-reload-interface";
 
-/// Reworks the default menu for qmux's single-window behavior:
+/// Reworks the default menu for Session's single-window behavior:
 ///
-/// - Adds "New Window" to the otherwise-empty File menu. Since qmux owns one shared
+/// - Adds "New Window" to the otherwise-empty File menu. Since Session owns one shared
 ///   session in one window, the action surfaces that window rather than constructing
 ///   a second webview over the same state.
 /// - Adds "Reload Interface" to the View menu. It is native (rather than a DOM
@@ -265,11 +265,11 @@ fn validate_ui_remote(id: &str, remote: &config::SavedRemote) -> Result<(), Stri
         return Err("remote label is invalid".to_string());
     }
     if remote
-        .qmux_cli
+        .session_cli
         .as_deref()
         .is_some_and(|path| path.chars().any(char::is_control))
     {
-        return Err("qmux CLI path is invalid".to_string());
+        return Err("Session CLI path is invalid".to_string());
     }
     if let Some(root) = remote.workspace_root.as_deref()
         && (!root.starts_with('/') && !root.starts_with("~/"))
@@ -302,8 +302,8 @@ fn normalize_ui_remote(mut remote: config::SavedRemote) -> config::SavedRemote {
         .take()
         .map(|label| label.trim().to_string())
         .filter(|label| !label.is_empty());
-    remote.qmux_cli = remote
-        .qmux_cli
+    remote.session_cli = remote
+        .session_cli
         .take()
         .map(|path| path.trim().to_string())
         .filter(|path| !path.is_empty());
@@ -466,10 +466,10 @@ fn probe_remote_blocking(
                 message: "Connect successfully before checking tmux.".to_string(),
             },
             RemoteProbeCheck {
-                id: "qmuxCli",
-                label: "qmux CLI",
+                id: "sessionCli",
+                label: "Session CLI",
                 status: RemoteProbeStatus::Skipped,
-                message: "Connect successfully before checking qmux-cli.".to_string(),
+                message: "Connect successfully before checking session-cli.".to_string(),
             },
         ]);
         return Ok(RemoteProbeResult {
@@ -518,10 +518,10 @@ fn probe_remote_blocking(
                 Some(remote_cli::EnsureSkip::CustomCli | remote_cli::EnsureSkip::UnsupportedHost)
             ) =>
         {
-            let qmux_cli = host
+            let session_cli = host
                 .remote()
-                .map(|target| target.qmux_cli.clone())
-                .unwrap_or_else(|| "qmux-cli".to_string());
+                .map(|target| target.session_cli.clone())
+                .unwrap_or_else(|| "session-cli".to_string());
             let cli = remote_probe_output(
                 &host,
                 "sh",
@@ -529,29 +529,29 @@ fn probe_remote_blocking(
                     "-c".to_string(),
                     "command -v \"$1\"".to_string(),
                     "qmux-remote-probe".to_string(),
-                    qmux_cli.clone(),
+                    session_cli.clone(),
                 ],
             );
             let cli_ok = cli.as_ref().is_ok_and(|output| output.status.success());
             checks.push(match cli {
                 Ok(output) if output.status.success() => RemoteProbeCheck {
-                    id: "qmuxCli",
-                    label: "qmux CLI",
+                    id: "sessionCli",
+                    label: "Session CLI",
                     status: RemoteProbeStatus::Passed,
                     message: String::from_utf8_lossy(&output.stdout).trim().to_string(),
                 },
                 Ok(output) => RemoteProbeCheck {
-                    id: "qmuxCli",
-                    label: "qmux CLI",
+                    id: "sessionCli",
+                    label: "Session CLI",
                     status: RemoteProbeStatus::Failed,
                     message: remote_probe_failure(
                         &output,
-                        &format!("'{qmux_cli}' was not found on the remote machine."),
+                        &format!("'{session_cli}' was not found on the remote machine."),
                     ),
                 },
                 Err(error) => RemoteProbeCheck {
-                    id: "qmuxCli",
-                    label: "qmux CLI",
+                    id: "sessionCli",
+                    label: "Session CLI",
                     status: RemoteProbeStatus::Failed,
                     message: error,
                 },
@@ -560,24 +560,24 @@ fn probe_remote_blocking(
         }
         Ok(result) => {
             let message = if result.installed {
-                format!("Installed qmux-cli {} → {}", result.version, result.path)
+                format!("Installed session-cli {} → {}", result.version, result.path)
             } else {
-                format!("qmux-cli {} at {}", result.version, result.path)
+                format!("session-cli {} at {}", result.version, result.path)
             };
             checks.push(RemoteProbeCheck {
-                id: "qmuxCli",
-                label: "qmux CLI",
+                id: "sessionCli",
+                label: "Session CLI",
                 status: RemoteProbeStatus::Passed,
                 message,
             });
             let mut cli_remote = remote_ref.clone();
-            cli_remote.qmux_cli = Some(result.path);
+            cli_remote.session_cli = Some(result.path);
             (true, cli_remote)
         }
         Err(error) => {
             checks.push(RemoteProbeCheck {
-                id: "qmuxCli",
-                label: "qmux CLI",
+                id: "sessionCli",
+                label: "Session CLI",
                 status: RemoteProbeStatus::Failed,
                 message: error,
             });
@@ -696,7 +696,7 @@ async fn openrouter_chat_completion(
         .post("https://openrouter.ai/api/v1/chat/completions")
         .header("Authorization", format!("Bearer {key}"))
         .header("Content-Type", "application/json")
-        .header("X-Title", "qmux")
+        .header("X-Title", "Session")
         .json(&payload)
         .send()
         .await
@@ -856,7 +856,7 @@ fn notify_fatal_startup(message: &str) {
     // newlines are fine inside the quoted literal.
     let escaped = message.replace('\\', "\\\\").replace('"', "\\\"");
     let script = format!(
-        "display dialog \"{escaped}\" with title \"qmux\" buttons {{\"Quit\"}} default button \"Quit\" with icon stop"
+        "display dialog \"{escaped}\" with title \"Session\" buttons {{\"Quit\"}} default button \"Quit\" with icon stop"
     );
     let _ = std::process::Command::new("osascript")
         .arg("-e")
@@ -879,7 +879,7 @@ fn notify_startup_warning(app: &tauri::AppHandle, message: &str) {
 
     app.dialog()
         .message(message)
-        .title("qmux")
+        .title("Session")
         .kind(MessageDialogKind::Warning)
         .show(|_| {});
 }
@@ -924,17 +924,17 @@ fn open_external_url(state: tauri::State<'_, AppState>, url: String) -> Result<(
 }
 
 fn validated_preview_url(url: &str, file_server_port: u16) -> Result<Url, String> {
-    let parsed = Url::parse(url).map_err(|err| format!("invalid qmux preview URL: {err}"))?;
+    let parsed = Url::parse(url).map_err(|err| format!("invalid Session preview URL: {err}"))?;
     if parsed.scheme() != "http"
         || !matches!(parsed.host_str(), Some("127.0.0.1" | "localhost"))
         || parsed.port_or_known_default() != Some(file_server_port)
     {
-        return Err("refusing to resolve a URL outside the qmux file server".to_string());
+        return Err("refusing to resolve a URL outside the Session file server".to_string());
     }
     Ok(parsed)
 }
 
-/// Opens the source file behind a protected qmux preview without disclosing the
+/// Opens the source file behind a protected Session preview without disclosing the
 /// preview capability to the external application. The URL is validated against
 /// the live file-server port and resolved through the same pane roots/exact grants
 /// enforced by the server before it becomes a file:// URL.
@@ -1029,7 +1029,7 @@ fn open_local_link(
             "sandbox": false,
         }));
     }
-    state.emit(events::QmuxEvent::new(
+    state.emit(events::SessionEvent::new(
         "browser.open",
         Some(pane_id.to_string()),
         None,
@@ -1139,9 +1139,9 @@ fn artifact_restore(
     state.restore_artifact(artifact)
 }
 
-/// Opens an artifact outside qmux: URL artifacts in the default browser, file
+/// Opens an artifact outside session: URL artifacts in the default browser, file
 /// artifacts with the OS default app for that file type (a browser for .html).
-/// The target comes from qmux state by id, never from arbitrary frontend input.
+/// The target comes from Session state by id, never from arbitrary frontend input.
 #[tauri::command(async)]
 fn artifact_open_external(
     state: tauri::State<'_, AppState>,
@@ -1245,7 +1245,7 @@ fn reveal_path_in_file_manager(path: &std::path::Path) -> Result<(), String> {
 
 /// Resolve and open the HTML fragment named by a transcript
 /// `::codex-inline-vis` directive. The file name is untrusted transcript text;
-/// the owning session and visualization root come only from qmux state.
+/// the owning session and visualization root come only from Session state.
 #[tauri::command(async)]
 async fn browser_open_codex_inline_visualization(
     state: tauri::State<'_, AppState>,
@@ -1287,7 +1287,7 @@ async fn browser_open_codex_inline_visualization(
             "{}?codex-inline-vis=1",
             file_server::file_url(port, &token, &canonical)
         );
-        state.emit(events::QmuxEvent::new(
+        state.emit(events::SessionEvent::new(
             "browser.open",
             Some(pane_id),
             None,
@@ -1301,7 +1301,7 @@ async fn browser_open_codex_inline_visualization(
 
 /// Resolve and open an absolute HTML-fragment path from the current Codex
 /// `visualize` content-reference contract. The transcript path is untrusted:
-/// it must resolve beneath this pane's own roots or qmux's durable designs
+/// it must resolve beneath this pane's own roots or Session's durable designs
 /// directory before it receives an exact preview grant.
 #[tauri::command(async)]
 async fn browser_open_codex_visualization_reference(
@@ -1341,7 +1341,7 @@ async fn browser_open_codex_visualization_reference(
             "{}?codex-inline-vis=1",
             file_server::file_url(port, &token, &canonical)
         );
-        state.emit(events::QmuxEvent::new(
+        state.emit(events::SessionEvent::new(
             "browser.open",
             Some(pane_id),
             None,
@@ -1716,7 +1716,9 @@ fn fail_research_launch(state: &AppState, node_id: &str, pane_id: &str, error: S
     match kill_pane(state, pane_id.to_string()) {
         Ok(()) => state.clear_last_closed_pane_for_pane(pane_id),
         Err(cleanup_error) => {
-            eprintln!("qmux: failed to clean up unbound research pane {pane_id}: {cleanup_error}");
+            eprintln!(
+                "session: failed to clean up unbound research pane {pane_id}: {cleanup_error}"
+            );
         }
     }
     let _ = state.fail_research_node(node_id, error.clone());
@@ -1736,7 +1738,7 @@ fn reclaim_settled_research_launch(state: &AppState, node: &research::ResearchNo
         Ok(()) => state.clear_last_closed_pane_for_pane(pane_id),
         Err(err) => {
             if state.pane_exists(pane_id).unwrap_or(false) {
-                eprintln!("qmux: failed to reclaim settled research pane {pane_id}: {err}");
+                eprintln!("session: failed to reclaim settled research pane {pane_id}: {err}");
             }
         }
     }
@@ -1913,7 +1915,7 @@ fn launch_fresh_research_pane(
                         // pane). Nothing holds this one, so announce it or the
                         // pane never enters the frontend list: Background
                         // activity cannot surface the associated run.
-                        state.emit(events::QmuxEvent::new(
+                        state.emit(events::SessionEvent::new(
                             "agent.spawned",
                             Some(pane.id.clone()),
                             Some(agent.id.clone()),
@@ -2048,7 +2050,7 @@ async fn save_pasted_image(data_base64: String, extension: String) -> Result<Str
 /// fails, the failed tree remains visible (and removable) in the sidebar.
 fn remove_unlaunched_research_tree(state: &AppState, tree_id: &str) {
     if let Err(err) = state.remove_research_tree(tree_id) {
-        eprintln!("qmux: failed to remove unlaunched research tree {tree_id}: {err}");
+        eprintln!("session: failed to remove unlaunched research tree {tree_id}: {err}");
     }
 }
 
@@ -2074,7 +2076,7 @@ async fn get_research_node_content(
             }
             Ok(None) => None,
             Err(err) => {
-                eprintln!("qmux: unreadable research response snapshot {node_id}: {err}");
+                eprintln!("session: unreadable research response snapshot {node_id}: {err}");
                 Some(err)
             }
         };
@@ -2667,7 +2669,7 @@ async fn group_create_with_shell(
                     Ok(()) => remove_pristine_group_scaffold(&group),
                     Err(remove_err) => {
                         eprintln!(
-                            "qmux: failed to roll back group {} after its first shell failed to spawn: {remove_err}",
+                            "session: failed to roll back group {} after its first shell failed to spawn: {remove_err}",
                             group.id
                         );
                     }
@@ -3061,7 +3063,7 @@ fn pane_attach(state: tauri::State<'_, AppState>, pane_id: String) -> Result<(),
     attach_pane(&state, pane_id)
 }
 
-/// Marks the webview's qmux-event listener as live. Until this arrives (and
+/// Marks the webview's session-event listener as live. Until this arrives (and
 /// again after any page navigation clears it, see `on_page_load` below), the
 /// native shortcut classifiers decline to consume chords: their events would
 /// be dropped by Tauri with nobody subscribed, turning consumed keystrokes
@@ -3323,7 +3325,7 @@ fn agent_set_queued_turn_pause(
         expected_id.as_deref(),
     )?;
     if let Some(agent) = state.agent(&agent_id)? {
-        state.emit(events::QmuxEvent::new(
+        state.emit(events::SessionEvent::new(
             "agent.queued_turn_reordered",
             agent.pane_id.clone(),
             Some(agent.id),
@@ -3556,13 +3558,13 @@ fn acknowledge_interface_health_probe(generation: u64) {
 }
 
 /// Called by AppKit after a wake, suspension gap, pressure recovery, or display
-/// transition once qmux is visible. The native side separately snapshots
+/// transition once Session is visible. The native side separately snapshots
 /// WKWebView to exercise the compositor; this event/ack round trip waits for
 /// frontend animation frames and proves the document can still schedule paint.
 #[cfg(desktop)]
 pub(crate) fn begin_interface_health_probe(state: AppState) -> u64 {
     let generation = INTERFACE_HEALTH.begin();
-    state.emit(events::QmuxEvent::new(
+    state.emit(events::SessionEvent::new(
         "app.interface_health_probe",
         None,
         None,
@@ -3586,7 +3588,7 @@ pub(crate) fn begin_interface_health_probe(state: AppState) -> u64 {
 #[cfg(desktop)]
 /// How long to wait before retrying a health-driven reload that was deferred
 /// because the main window was unfocused, minimized, or hidden. Short enough
-/// that returning to qmux recovers a hung document quickly; claim helpers
+/// that returning to Session recovers a hung document quickly; claim helpers
 /// no-op if the generation was cancelled or already reloaded.
 const INTERFACE_HEALTH_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 
@@ -3634,7 +3636,7 @@ pub(crate) fn request_unhealthy_interface_reload(
         if !claimed {
             return;
         }
-        eprintln!("qmux: {reason}; reloading interface");
+        eprintln!("session: {reason}; reloading interface");
         reload_main_webview(&app_handle_on_main);
     });
 }
@@ -3676,11 +3678,11 @@ fn prepare_main_webview_reload(app: Option<&tauri::AppHandle>) {
 fn reload_main_webview(app: &tauri::AppHandle) {
     prepare_main_webview_reload(Some(app));
     let Some(window) = app.get_webview_window("main") else {
-        eprintln!("qmux: cannot reload interface because the main webview is missing");
+        eprintln!("session: cannot reload interface because the main webview is missing");
         return;
     };
     if let Err(err) = window.reload() {
-        eprintln!("qmux: failed to reload interface: {err}");
+        eprintln!("session: failed to reload interface: {err}");
     }
 }
 
@@ -3732,17 +3734,17 @@ fn main() {
         eprintln!("{err}");
         std::process::exit(1);
     });
-    match qmux_cli::run_cli_if_requested() {
+    match session_cli::run_cli_if_requested() {
         Ok(true) => return,
         Ok(false) => {}
         Err(err) => {
-            let (message, exit_code) = qmux_cli::error_report(&err);
+            let (message, exit_code) = session_cli::error_report(&err);
             eprintln!("{message}");
             std::process::exit(exit_code);
         }
     }
 
-    let config = QmuxConfig::load().unwrap_or_else(|err| {
+    let config = SessionConfig::load().unwrap_or_else(|err| {
         eprintln!("{err}");
         std::process::exit(1);
     });
@@ -3756,7 +3758,7 @@ fn main() {
         // instance. Instances are deduped per app identifier and user session; the
         // second launch hands off to this callback in the surviving process, which
         // just surfaces the existing window. (CLI subcommands returned above and
-        // never get here, so `qmux open` etc. are unaffected.)
+        // never get here, so `session open` etc. are unaffected.)
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             show_main_window(app);
         }))
@@ -3781,7 +3783,7 @@ fn main() {
         })
         .on_menu_event(handle_app_menu_event)
         // A page navigation (reload, dev HMR full-reload) tears down the old
-        // document's qmux-event listener and all DOM-owned native routing.
+        // document's session-event listener and all DOM-owned native routing.
         // Reset both so native shortcut classifiers stop consuming chords and
         // stale pointer/keyboard ownership cannot outlive the old document.
         .on_page_load(|webview, payload| {
@@ -3802,12 +3804,12 @@ fn main() {
     #[cfg(target_os = "macos")]
     let builder = builder.on_web_content_process_terminate(|webview| {
         let label = webview.label();
-        eprintln!("qmux: WebContent process terminated for {label}; reloading");
+        eprintln!("session: WebContent process terminated for {label}; reloading");
         if label == "main" {
             prepare_main_webview_reload(Some(webview.app_handle()));
         }
         if let Err(err) = webview.reload() {
-            eprintln!("qmux: failed to reload webview {label}: {err}");
+            eprintln!("session: failed to reload webview {label}: {err}");
         }
     });
 
@@ -3839,7 +3841,7 @@ fn main() {
                 // (window-closing) behavior and ⌘Q its instant-quit behavior rather
                 // than aborting startup.
                 if let Err(err) = customize_app_menu(app) {
-                    eprintln!("qmux: failed to customize app menu: {err}");
+                    eprintln!("session: failed to customize app menu: {err}");
                 }
                 app.manage(show_hide_shortcut::ShowHideShortcutState::default());
                 show_hide_shortcut::init(app.handle(), &state.config().workspace_root);
@@ -3854,35 +3856,37 @@ fn main() {
                         && let Err(err) =
                             apply_vibrancy(&window, NSVisualEffectMaterial::Sidebar, None, None)
                     {
-                        eprintln!("qmux: failed to apply window vibrancy: {err}");
+                        eprintln!("session: failed to apply window vibrancy: {err}");
                     }
                 }
                 // Loopback static server for the browser overlay. Start before the
-                // control socket so an early `qmux open` (or a transcript file link)
+                // control socket so an early `session open` (or a transcript file link)
                 // that races startup cannot hit "the file server is not running".
                 // Best-effort: if it can't bind, the app still runs (file previews
                 // just won't work until relaunch).
                 match file_server::start_file_server(state.clone()) {
                     Ok(info) => state.set_file_server(info.port),
-                    Err(err) => eprintln!("qmux: failed to start file server: {err}"),
+                    Err(err) => eprintln!("session: failed to start file server: {err}"),
                 }
                 app.manage(start_control_socket(state.clone()).map_err(std::io::Error::other)?);
                 match browser_backend::start_browser_discovery(Some(state.clone())) {
                     Ok(socket) => {
                         eprintln!(
-                            "qmux: experimental Codex browser discovery listening at {}",
+                            "session: experimental Codex browser discovery listening at {}",
                             socket.path().display()
                         );
                         app.manage(socket);
                     }
-                    Err(err) => eprintln!("qmux: failed to start Codex browser discovery: {err}"),
+                    Err(err) => {
+                        eprintln!("session: failed to start Codex browser discovery: {err}")
+                    }
                 }
                 // Refuse to continue if the saved session exists but can't be read:
                 // starting empty here would let the first save overwrite it with
                 // nothing and no backup. Abort loudly (terminal + GUI) so a relaunch
                 // after fixing the transient cause restores the session intact.
                 if let Err(err) = state.preflight_persisted_state() {
-                    eprintln!("\nqmux: {err}\n");
+                    eprintln!("\nsession: {err}\n");
                     notify_fatal_startup(&err);
                     std::process::exit(1);
                 }
@@ -3901,7 +3905,7 @@ fn main() {
                 // panes into fresh PTYs before the command handlers go live so the
                 // webview's first list_panes() already sees the recovered session.
                 let recovered_panes = state.restore_session();
-                // Session has no terminal workspace. Persisted qmux panes are
+                // Session has no terminal workspace. Persisted Session panes are
                 // retired during migration instead of respawned invisibly.
                 for pane in recovered_panes {
                     if let Err(err) = state.remove_pane(&pane.id) {
@@ -3926,7 +3930,7 @@ fn main() {
                 workspace::reconcile_imported_research_archives(&state);
                 // Recovery fell back to an empty session (state discarded to a .bak)
                 // or dropped entries: say so in a dialog, since a Finder launch never
-                // shows stderr and silent session loss looks like qmux ate the tabs.
+                // shows stderr and silent session loss looks like Session ate the tabs.
                 if let Some(warning) = state.take_recovery_warning() {
                     notify_startup_warning(app.handle(), &warning);
                 }
@@ -4265,13 +4269,13 @@ mod remote_settings_tests {
         let remote = normalize_ui_remote(SavedRemote {
             host: "  user@devbox  ".to_string(),
             label: Some("  Dev box  ".to_string()),
-            qmux_cli: Some("   ".to_string()),
+            session_cli: Some("   ".to_string()),
             workspace_root: Some("  ~/.qmux/workspaces  ".to_string()),
             ..Default::default()
         });
         assert_eq!(remote.host, "user@devbox");
         assert_eq!(remote.label.as_deref(), Some("Dev box"));
-        assert_eq!(remote.qmux_cli, None);
+        assert_eq!(remote.session_cli, None);
         assert_eq!(remote.workspace_root.as_deref(), Some("~/.qmux/workspaces"));
         validate_ui_remote("devbox", &remote).unwrap();
     }

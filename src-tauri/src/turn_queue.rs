@@ -2,7 +2,7 @@ use crate::adapters::{
     FORK_UNSUPPORTED_ERROR, adapter_supports_fork, agent_composer_policy, fork_agent_source,
     spawn_sibling_agent_session,
 };
-use crate::events::QmuxEvent;
+use crate::events::SessionEvent;
 use crate::pty::{PaneWriteOptions, write_pane, write_pane_detailed};
 use crate::state::{
     AgentSendSource, AgentTurnClaim, AppState, GlobalDraft, IdleAdvance, QueuedTurn,
@@ -210,7 +210,7 @@ pub fn move_queued_agent_turn(
         request.expected_data.as_deref(),
         request.expected_id.as_deref(),
     )?;
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.queued_turn_removed",
         source_pane_id.clone(),
         Some(source_id.clone()),
@@ -240,7 +240,7 @@ pub fn move_queued_agent_turn(
             let pending =
                 state.insert_agent_turn_at(&request.from_agent_id, request.index, removed_turn)?;
             let restored = state.agent_queued_turns(&request.from_agent_id)?;
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "agent.turn_queued",
                 source_pane_id,
                 Some(source_id),
@@ -437,7 +437,7 @@ pub fn queue_wait_agent_turn(
         request.wait_for_label.as_deref(),
     )?;
     let queued_turns = state.agent_queued_turns(&agent.id)?;
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.turn_queued",
         agent.pane_id.clone(),
         Some(agent.id.clone()),
@@ -498,7 +498,7 @@ pub fn queue_delivery_agent_turn(
         Ok(result) => Ok(result),
         Err(err) => {
             let queued_turns = state.agent_queued_turns(&agent.id)?;
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "agent.queue_error",
                 agent.pane_id.clone(),
                 Some(agent.id.clone()),
@@ -528,7 +528,7 @@ pub fn remove_queued_agent_turn(
         request.expected_id.as_deref(),
     )?;
     let pending_turns = queued_turns.len();
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.queued_turn_removed",
         agent.pane_id.clone(),
         Some(agent_id.clone()),
@@ -558,7 +558,7 @@ pub fn reorder_queued_agent_turn(
         request.expected_data.as_deref(),
         request.expected_id.as_deref(),
     )?;
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.queued_turn_reordered",
         pane_id.clone(),
         Some(agent_id.clone()),
@@ -573,7 +573,7 @@ pub fn reorder_queued_agent_turn(
             Ok(true) => {
                 queued_turns = state.agent_queued_turns(&agent_id)?;
                 if let Some(updated) = state.agent(&agent_id)? {
-                    state.emit(QmuxEvent::new(
+                    state.emit(SessionEvent::new(
                         "agent.running",
                         updated.pane_id.clone(),
                         Some(updated.id.clone()),
@@ -584,7 +584,7 @@ pub fn reorder_queued_agent_turn(
             Ok(false) => {}
             Err(err) => {
                 queued_turns = state.agent_queued_turns(&agent_id)?;
-                state.emit(QmuxEvent::new(
+                state.emit(SessionEvent::new(
                     "agent.queue_error",
                     pane_id,
                     Some(agent_id.clone()),
@@ -813,7 +813,7 @@ fn send_claimed_turn(
         }
     };
     let queued_turns = state.agent_queued_turns(agent_id)?;
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.queued_turn_sent",
         agent.pane_id.clone(),
         Some(agent.id),
@@ -1048,7 +1048,7 @@ pub fn release_waiters_for_agent(state: &AppState, target_agent_id: &str) -> Res
                     if result.source_running
                         && let Some(updated) = state.agent(&source.id)?
                     {
-                        state.emit(QmuxEvent::new(
+                        state.emit(SessionEvent::new(
                             "agent.running",
                             updated.pane_id.clone(),
                             Some(updated.id.clone()),
@@ -1057,7 +1057,7 @@ pub fn release_waiters_for_agent(state: &AppState, target_agent_id: &str) -> Res
                     }
                 }
                 Err(err) => {
-                    state.emit(QmuxEvent::new(
+                    state.emit(SessionEvent::new(
                         "agent.queue_error",
                         source.pane_id.clone(),
                         Some(source.id.clone()),
@@ -1134,7 +1134,7 @@ fn resume_source_after_fork_barrier(
     } else {
         "agent.fork_ready"
     };
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         event_type,
         source.pane_id.clone(),
         Some(source.id.clone()),
@@ -1155,7 +1155,7 @@ fn resume_source_after_fork_barrier(
         match drain_agent_turn_queue(state, source_agent_id) {
             Ok(true) => {
                 if let Some(updated) = state.agent(source_agent_id)? {
-                    state.emit(QmuxEvent::new(
+                    state.emit(SessionEvent::new(
                         "agent.running",
                         updated.pane_id.clone(),
                         Some(updated.id.clone()),
@@ -1166,7 +1166,7 @@ fn resume_source_after_fork_barrier(
             Ok(false) => {}
             Err(err) => {
                 let queued_turns = state.agent_queued_turns(source_agent_id)?;
-                state.emit(QmuxEvent::new(
+                state.emit(SessionEvent::new(
                     "agent.queue_error",
                     source.pane_id.clone(),
                     Some(source.id.clone()),
@@ -1207,7 +1207,7 @@ pub fn unpause_agent(
     };
 
     let queued_turns = state.agent_queued_turns(agent_id)?;
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.unpaused",
         agent.pane_id.clone(),
         Some(agent.id.clone()),
@@ -1345,7 +1345,7 @@ fn queue_agent_turn_with_admission(
         state.enqueue_agent_queued_turn(&agent.id, turn)?
     };
     let queued_turns = state.agent_queued_turns(&agent.id)?;
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.turn_queued",
         agent.pane_id.clone(),
         Some(agent.id.clone()),
@@ -1601,7 +1601,10 @@ fn send_agent_turn(
     let send_id = match state.record_agent_send(&agent.id, turn.text.clone(), source) {
         Ok(send_id) => Some(send_id),
         Err(err) => {
-            eprintln!("qmux: failed to record send for agent {}: {err}", agent.id);
+            eprintln!(
+                "session: failed to record send for agent {}: {err}",
+                agent.id
+            );
             None
         }
     };
@@ -1765,7 +1768,7 @@ fn run_agent_submit_watch(
             SubmitWatchDecision::StandDown => {
                 if status == SubmitWatchStatus::StillPendingWithPromptActivity {
                     eprintln!(
-                        "qmux: a turn sent to agent {agent_id} never matched its prompt echo, \
+                        "session: a turn sent to agent {agent_id} never matched its prompt echo, \
                          but a prompt was submitted after it; standing down to avoid a duplicate"
                     );
                 }
@@ -1784,7 +1787,7 @@ fn run_agent_submit_watch(
                     },
                 );
                 eprintln!(
-                    "qmux: re-sent Return for agent {agent_id}; a sent turn appeared unsubmitted"
+                    "session: re-sent Return for agent {agent_id}; a sent turn appeared unsubmitted"
                 );
             }
             SubmitWatchDecision::Reclaim => {
@@ -1816,23 +1819,23 @@ fn reclaim_unconfirmed_send(
         Ok(Some(queued_turns)) => queued_turns,
         Ok(None) => return,
         Err(err) => {
-            eprintln!("qmux: failed to reclaim an unconfirmed turn for agent {agent_id}: {err}");
+            eprintln!("session: failed to reclaim an unconfirmed turn for agent {agent_id}: {err}");
             return;
         }
     };
-    eprintln!("qmux: a turn sent to agent {agent_id} never started; returned it to the queue");
+    eprintln!("session: a turn sent to agent {agent_id} never started; returned it to the queue");
     if let Ok(Some(agent)) = state.agent(agent_id)
         && matches!(agent.status, AgentStatus::Running | AgentStatus::Starting)
     {
         let _ = state.set_agent_status(agent_id, AgentStatus::AwaitingInput);
     }
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.turn_queued",
         Some(pane_id.to_string()),
         Some(agent_id.to_string()),
         json!({ "pendingTurns": queued_turns.len(), "queuedTurns": queued_turns.clone() }),
     ));
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.queue_error",
         Some(pane_id.to_string()),
         Some(agent_id.to_string()),
@@ -1882,7 +1885,7 @@ mod tests {
     use crate::adapters::ComposerPolicy;
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig, QmuxConfig,
+        MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
     };
     use crate::state::{PaneBacklog, PaneInfo, PaneKind, PaneRuntime, PaneStatus};
     use crate::workspace::{detach_pane_agent, mark_agent_failed};
@@ -1933,7 +1936,7 @@ mod tests {
     }
 
     fn test_state() -> AppState {
-        AppState::new(QmuxConfig {
+        AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root: temp_workspace(),
             socket_path: PathBuf::from("/tmp/qmux-test.sock"),

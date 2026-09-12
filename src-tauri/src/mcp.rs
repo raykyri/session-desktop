@@ -1,11 +1,11 @@
 //! Capability-scoped MCP orchestration operations.
 //!
-//! The stdio protocol lives in `qmux-cli`; this module is the authority
-//! boundary. Every call begins with a pane id resolved from `QMUX_TOKEN`, then
-//! derives the caller and permitted lineage from live qmux state.
+//! The stdio protocol lives in `session-cli`; this module is the authority
+//! boundary. Every call begins with a pane id resolved from `SESSION_TOKEN`, then
+//! derives the caller and permitted lineage from live Session state.
 
 use crate::adapters::{SpawnAgentRequest, agent_fork, agent_spawn};
-use crate::events::QmuxEvent;
+use crate::events::SessionEvent;
 use crate::state::AppState;
 use crate::turn_queue::{SubmitAgentTurnMode, SubmitAgentTurnRequest, submit_agent_turn};
 use crate::workspace::{AgentInfo, AgentStatus};
@@ -128,11 +128,11 @@ fn spawn_child(state: &AppState, caller: &AgentInfo, arguments: Value) -> Result
         && let Err(err) = state.place_pane_after(&pane.id, parent_pane)
     {
         eprintln!(
-            "qmux: MCP child {} could not be placed after {parent_pane}: {err}",
+            "session: MCP child {} could not be placed after {parent_pane}: {err}",
             child.id
         );
     }
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.spawned",
         Some(pane.id.clone()),
         Some(child.id.clone()),

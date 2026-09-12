@@ -21,7 +21,7 @@ import type {
   Turn,
 } from "../src/types";
 import { safeReturnTo } from "./githubAuth";
-import { createQmuxRequestHandler } from "./server";
+import { createSessionRequestHandler } from "./server";
 
 const pane: PaneInfo = {
   id: "pane-comments",
@@ -96,7 +96,7 @@ test("transcripts render without the comment bridge", async () => {
     }
     throw new Error(`unexpected fetch ${url}`);
   };
-  const handler = createQmuxRequestHandler({
+  const handler = createSessionRequestHandler({
     fetchImpl,
     githubToken: "reader-token",
     oauthClientId: "client-id",
@@ -216,7 +216,7 @@ test("comment pagination is capped even when every upstream comment is invalid",
     }
     throw new Error(`unexpected fetch ${url}`);
   };
-  const handler = createQmuxRequestHandler({
+  const handler = createSessionRequestHandler({
     fetchImpl,
     githubToken: "reader-token",
   });
@@ -288,7 +288,7 @@ test("comment pagination keeps the newest bounded page window", async () => {
     }
     throw new Error(`unexpected fetch ${url}`);
   };
-  const handler = createQmuxRequestHandler({
+  const handler = createSessionRequestHandler({
     fetchImpl,
     githubToken: "reader-token",
   });
@@ -457,7 +457,7 @@ test("published research accepts structured follow-up proposals and owner resolu
     }
     throw new Error(`unexpected fetch ${init?.method ?? "GET"} ${url}`);
   };
-  const handler = createQmuxRequestHandler({
+  const handler = createSessionRequestHandler({
     fetchImpl,
     githubToken: "reader-token",
     oauthClientId: "client-id",
@@ -559,7 +559,7 @@ test("OAuth return paths reject response-header control characters", () => {
   assert.equal(safeReturnTo("//example.com"), "/");
 });
 
-type RequestHandler = ReturnType<typeof createQmuxRequestHandler>;
+type RequestHandler = ReturnType<typeof createSessionRequestHandler>;
 
 function request(
   method: string,

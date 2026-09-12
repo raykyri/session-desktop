@@ -42,7 +42,7 @@ test("SSH aliases seed an unsaved remote with collision-safe defaults", () => {
     label: "Prod-West",
     host: "Prod-West",
     workspaceRoot: "",
-    qmuxCli: "",
+    sessionCli: "",
     multiplexer: "tmux",
   });
 });
