@@ -1,12 +1,11 @@
 use super::{
     AdapterNotification, AdapterNotificationOutcome, AgentAdapter, ComposerPolicy,
-    FORK_AT_MESSAGE_EMPTY_ERROR, LaunchEnv, MessageAnchor, PermissionAction,
-    PrepareShellAgentLaunchRequest, PreparedShellAgentLaunch, ShellCommandIntegration,
-    SpawnAgentRequest, TranscriptLifecycleEvent, WorkspaceObservation, apply_shell_cli_model,
-    ensure_on_path, model_from_claude_native_transcript_line, new_uuid_v4,
-    parse_transcript_records, prepared_shell_agent, record_shell_fork_lineage,
-    record_shell_session_lineage, reusable_session_agent, shell_cli_model, shell_quote_arg,
-    shell_quote_path,
+    FORK_AT_MESSAGE_EMPTY_ERROR, LaunchEnv, MessageAnchor, PrepareShellAgentLaunchRequest,
+    PreparedShellAgentLaunch, ShellCommandIntegration, SpawnAgentRequest, TranscriptLifecycleEvent,
+    WorkspaceObservation, apply_shell_cli_model, ensure_on_path,
+    model_from_claude_native_transcript_line, new_uuid_v4, parse_transcript_records,
+    prepared_shell_agent, record_shell_fork_lineage, record_shell_session_lineage,
+    reusable_session_agent, shell_cli_model, shell_quote_arg, shell_quote_path,
 };
 use crate::config::QmuxConfig;
 use crate::events::QmuxEvent;
@@ -317,18 +316,6 @@ impl AgentAdapter for ClaudeAdapter {
                 AgentStatus::AwaitingPermission,
             ],
             steer_statuses: vec![AgentStatus::Starting, AgentStatus::Running],
-            permission_actions: vec![
-                PermissionAction {
-                    id: "approve",
-                    label: "Approve",
-                    input: "y",
-                },
-                PermissionAction {
-                    id: "deny",
-                    label: "Deny",
-                    input: "n",
-                },
-            ],
         }
     }
 }
@@ -2719,28 +2706,8 @@ fn parse_transcript_lifecycle_event(line: &str) -> Option<TranscriptLifecycleEve
     super::parse_claude_native_lifecycle_event(line)
 }
 
-// Thin wrappers so existing tests inside this module continue to call by the original names.
-// These are test-only because the main Claude transcript parsing logic now delegates directly.
+// Compatibility shim retained for the transcript parser tests.
 #[cfg(test)]
-#[allow(dead_code)]
-fn claude_content_has_interruption_marker(content: &Value) -> bool {
-    super::claude_native_content_has_interruption_marker(content)
-}
-
-#[cfg(test)]
-#[allow(dead_code)]
-fn is_claude_interruption_marker(text: &str) -> bool {
-    super::is_claude_interruption_marker(text)
-}
-
-#[cfg(test)]
-#[allow(dead_code)]
-fn parse_blocks(content: &Value) -> Vec<TurnBlock> {
-    super::parse_claude_native_blocks(content)
-}
-
-#[cfg(test)]
-#[allow(dead_code)]
 fn parse_block(value: &Value) -> Option<TurnBlock> {
     super::parse_claude_native_block(value)
 }

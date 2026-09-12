@@ -1,8 +1,10 @@
+import { RESEARCH_FOLDER_SCOPE_KEY, useResearchNavigationState } from "./hooks/useResearchNavigationState";
+import { useUserNotifications } from "./hooks/useUserNotifications";
+import { CompletionSoundSetting } from "./components/settings/CompletionSoundSetting";
 import { recordRemoteStartup, reconcileRemoteReservation } from "./lib/remoteStartup";
 import RemoteConnectionDetailsText from "./components/RemoteConnectionDetailsText";
 import {
   remoteConnectionLabel,
-  remotePaneCloseButtonVisible,
   shouldCloseRemotePaneOnControlD,
 } from "./lib/remoteConnection";
 import { reconnectPane } from "./lib/api";
@@ -26,39 +28,30 @@ import type {
 import {
   Check,
   ChevronDown,
-  ChevronLeft,
   ChevronsDownUp,
   ChevronsUpDown,
   Columns2,
   Eye,
   EyeOff,
-  Expand,
   FileText,
   FileUp,
   Folder,
   FolderGit2,
   Globe,
   GitBranch,
-  History,
   Layers,
   LoaderCircle,
   MessageSquareText,
-  Minimize2,
   Minus,
-  MoreHorizontal,
   PanelBottomClose,
   PanelBottomOpen,
   PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
   Pencil,
   Plus,
   RefreshCw,
   Rows2,
   Settings,
   SquareTerminal,
-  Volume2,
   X,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -77,14 +70,7 @@ import {
   readyAdaptersFirst,
 } from "./lib/adapterReadiness";
 import CommandPalette, { type PaletteCommand } from "./components/CommandPalette";
-import NativeInput from "./components/NativeInput";
-import {
-  ComposerSubmitShortcutGlyph,
-  isComposerSubmitShortcut,
-} from "./components/ComposerSubmitShortcut";
-import { LauncherSelect } from "./components/LauncherSelect";
 import type { LauncherSelectOption } from "./components/LauncherSelect";
-import { launcherTabAction } from "./lib/launcherKeyboard";
 import BrowserOverlay from "./components/BrowserOverlay";
 import ImageLightbox from "./components/ImageLightbox";
 import {
@@ -99,14 +85,9 @@ import {
   subscribeDiagramLightbox,
 } from "./lib/diagramLightbox";
 import ConfirmDialogActionButton from "./components/ConfirmDialogActionButton";
-import { queuedTurnDeliveryLabel } from "./components/QueuedTurnCard";
 import {
-  latestUserTurnTimestamp,
   mergeRailPastTurns,
-  railLatestUserTurn,
   railPastTurnSummaries,
-  railPastTurns,
-  railQueuedTurnText,
 } from "./lib/homeRails";
 import {
   ThreadGraphRequestTracker,
@@ -114,15 +95,11 @@ import {
 } from "./lib/threadGraphRefresh";
 import type {
   HomeRailPastTurn,
-  HomeRailScrollPosition,
-  HomeRailWorkstream,
 } from "./lib/homeRailTypes";
 import LinkContextMenu from "./components/LinkContextMenu";
 import PublishDialog, { type PublishDialogTarget } from "./components/PublishDialog";
 import {
   UserNotificationStack,
-  type UserNotificationItem,
-  type UserNotificationTone,
 } from "./components/UserNotificationStack";
 import { formatTurnsTranscript } from "./lib/transcriptFormat";
 import type { TranscriptScrollPosition } from "./lib/transcriptScroll";
@@ -137,15 +114,10 @@ import {
   resolveResearchScope,
   treeForResearchScope,
   treesForResearchScope,
-  type ResearchFolderScope,
   workspaceIsInResearchScope,
 } from "./lib/researchScope";
 import ResearchDocument from "./components/research/ResearchDocument";
 import ResearchBrowserHost from "./components/research/ResearchBrowserHost";
-import {
-  normalizeNotificationLog,
-  type NotificationLogEntry,
-} from "./lib/notificationLog";
 import {
   applyJournalTweetHydration,
   activityCursorIsBefore,
@@ -214,23 +186,17 @@ import {
   desiredPreventSleepState,
   agentCanFork,
   agentDisplayBranch,
-  agentDisplayCheckoutRoot,
   agentDisplayDirectory,
-  agentDisplayWorktreeRoot,
-  agentSupportsForkAtMessage,
   agentStatusTone,
   clamp,
   clampContextMenuToViewport,
   cycleTabId,
   defaultPaneTitle,
   firstUserTurnText,
-  formatTranscriptCopyJson,
   isEditableTarget,
-  latestTurnTimestamp,
   IS_MAC,
   isTerminalTarget,
   measureTerminalCellSize,
-  paneBranchLocationLabel,
   repositoryWorktreeName,
   selectPaneAfterClose,
   statusLabel,
@@ -245,7 +211,6 @@ import {
   type RemoteSettingsDraft,
 } from "./lib/remoteSettings";
 import {
-  agentTabStatusDotClass,
   agentTabStatusPill,
   queueWaitsOnOtherAgent,
 } from "./lib/composerActions";
@@ -265,7 +230,6 @@ import {
   showHideShortcutConflict,
   type AppShortcutCommand,
 } from "./lib/appShortcuts";
-import { requestComposerInsert } from "./lib/promptLibrary";
 import { nativeHumanBrowserOwnerIds } from "./lib/humanBrowserState";
 import {
   anyBrowserOverlayOpen,
@@ -273,7 +237,6 @@ import {
   closeAllBrowserOverlaysState,
   closeBrowserOverlayState,
 } from "./lib/browserOverlay";
-import { artifactTrayVisible, isArtifactBrowserOpen } from "./lib/artifacts";
 import { createTranscriptScrollCaptureSlot } from "./lib/transcriptScroll";
 import { TranscriptOptionsRequestTracker } from "./lib/transcriptSessions";
 import {
@@ -283,17 +246,13 @@ import {
   overlayLiveTurnState,
   threadIdForAgent,
 } from "./lib/threadGraph";
-import { buildTimelineItems, formatPlainTextTranscript } from "./lib/turnTimeline";
 import {
-  buildHandoffDocument,
-  latestHandoffAnchorKey,
-  type HandoffContext,
-} from "./lib/handoff";
+  formatPlainTextTranscript,
+} from "./lib/turnTimeline";
 import {
   requestResearchFollowupsFocus,
   requestResearchFolderMenuToggle,
 } from "./lib/researchShortcuts";
-import { createTranscriptPublicationDraft } from "./lib/publicationDrafts";
 import type { PublicationBinding } from "./lib/publication";
 import { useNativeWebOverlayRegion } from "./hooks/useNativeWebOverlayRegion";
 import { useQmuxEvents } from "./hooks/useQmuxEvents";
@@ -305,20 +264,10 @@ import type {
   CloseDialogState,
   ExitDialogState,
   ExitPreflightRequest,
-  GroupDropTarget,
-  GroupPointerDrag,
   PaneContextMenuState,
-  PaneDropTarget,
-  PaneTabPointerDrag,
 } from "./appTypes";
 import {
-  movePaneAdjacentToPane,
   movePaneAfter,
-  movePaneAcrossGroups,
-  movePaneBy,
-  movePaneToGap,
-  paneCanMoveAcrossGroups,
-  type PaneLayoutItem,
   toLayout,
 } from "./lib/paneTree";
 import {
@@ -326,42 +275,28 @@ import {
   canSplitPaneInTree,
   canToggleTurnSidebar,
   detachPaneFromSplitMemberships,
-  fullStageSplitRect,
   joinPaneSplit,
   normalizePaneSplitsForPanes,
-  paneAtStagePoint,
   paneSplitAxis,
   paneSplitFlagIsEnabled,
   paneSplitForPane,
   paneSplitIsNested,
-  paneSplitLayout,
   paneSplitsEqual,
   paneSnapshotForPersistedPaneSplits,
   reservedTerminalStageWidth,
-  resizeSplitNodeFractions,
   setPaneSplitFlagEnabled,
   splitAxisForPane,
   splitBranchChildCountForPane,
-  splitBranchContentExtent,
-  splitBranchOffsets,
-  splitBranchSpanRect,
-  splitCalc,
   splitFractions,
-  splitRectOffsets,
-  splitRectPixels,
   togglePaneSplitAxis,
 } from "./lib/paneSplits";
-import type { SplitDivider, SplitRect } from "./lib/paneSplits";
 import {
   activeSidebarScrollRegion,
-  leftSidebarRestorePlacement,
   sidebarScrollRegionsForMode,
   type SidebarScrollRegion,
 } from "./lib/sidebarControls";
 import {
   TERMINAL_FONT_SIZE,
-  TERMINAL_FONT_SIZE_MAX,
-  TERMINAL_FONT_SIZE_MIN,
 } from "./lib/terminalFont";
 import {
   canPreviewLocalFilePath,
@@ -374,7 +309,6 @@ import {
 import {
   canGoWorkspaceBack,
   canGoWorkspaceForward,
-  initResearchWorkspaceHistory,
   pushResearchWorkspaceHistory,
   researchWorkspaceHistoryBack,
   researchWorkspaceHistoryForward,
@@ -402,7 +336,6 @@ import {
   paneScope,
   panesForScope,
   researchAttention,
-  replaceScopedGroupOrder,
 } from "./lib/workspaceScope";
 import {
   researchCycleTabIds,
@@ -420,13 +353,11 @@ import {
   SESSION_DRAFT_KEYS,
 } from "./lib/sessionDrafts";
 import {
-  COMPLETION_SOUND_OPTIONS,
   type CompletionSoundId,
 } from "./lib/completionSounds";
 import {
   bodyFontStackFor,
   clampConfirmPasteOverChars,
-  clampFontSize,
   clampLineHeight,
   clampResearchLaunchInstruction,
   clampScrollbackRows,
@@ -438,7 +369,6 @@ import {
   DEFAULT_THEME_ID,
   DEFAULT_BODY_FONT_ID,
   detectAvailableBodyFonts,
-  FONT_OPTIONS,
   fontStackFor,
   nativeFontFamilyFor,
   LINE_HEIGHT_MAX,
@@ -447,32 +377,23 @@ import {
   letterSpacingFor,
   loadSettings,
   MOUSE_WHEEL_SENSITIVITY_OPTIONS,
-  pasteProtectionFor,
   saveSettings,
   SCROLLBACK_ROWS_MAX,
   SCROLLBACK_ROWS_MIN,
   scrollSensitivityFor,
   SYSTEM_BODY_FONT_ID,
   TAB_TITLE_PROVIDER_OPTIONS,
-  WORKTREE_LOCATION_OPTIONS,
   type AppSettings,
   type BodyFontOption,
 } from "./lib/settings";
 import {
   acknowledgeAgent,
-  artifactFileUrl,
-  artifactList,
-  artifactOpenExternal,
-  artifactRemove,
-  artifactRestore,
-  artifactReveal,
   attachPane,
   browserOpenLocalPathExternal,
   browserOpenTerminalPath,
   browserOpenPreviewExternal,
   browserRevealLocalPath,
   claimNativeTerminalPointerForWebDrag,
-  clearAgentWorkingStatus,
   closeWorktreePane,
   confirmAppExit,
   createGroupWithShell,
@@ -489,7 +410,6 @@ import {
   createResearchDocument,
   createResearchTree,
   updateResearchDocument,
-  exportPaneToResearch,
   forkResearchNode,
   markResearchTreeViewed,
   renameResearchNode,
@@ -500,7 +420,6 @@ import {
   restoreResearchTree,
   retryResearchNode,
   forkAgent,
-  getConversationHistorySnapshot,
   getActiveTab,
   getPaneSplits,
   getLauncherAdapterPreference,
@@ -524,22 +443,15 @@ import {
   listenToMenuBarSelectPane,
   listGroups,
   listAgents,
-  listShellAgentJobs,
   listSshConfigAliases,
   listClaudeSkills,
   listNativeTerminalThemes,
-  listSavedPrompts,
   listAgentTranscripts,
   listAgentTurnQueue,
-  listGlobalDrafts,
   listHomeTurnHistory,
-  launchConversationHistory,
-  createGlobalDraft,
-  deleteGlobalDraft,
   destroyHumanBrowser,
   hideAllHumanBrowsers,
   reloadHumanBrowser,
-  assignGlobalDraft,
   listTurns,
   listPanes,
   listPublications,
@@ -553,15 +465,8 @@ import {
   updateJournalEntry as persistUpdatedJournalEntry,
   deleteJournalEntry as persistDeletedJournalEntry,
   fetchJournalTweet,
-  getNotificationLog,
-  markNotificationRead,
-  markAllNotificationsRead,
-  clearNotificationLogEntry,
   getResearchTree,
   markAppWindowReady,
-  moveQueuedAgentTurn,
-  reorderQueuedAgentTurn,
-  movePaneToGroup,
   openExternalUrl,
   browserOpenCodexInlineVisualization,
   browserOpenCodexVisualizationReference,
@@ -573,15 +478,11 @@ import {
   type NotificationPermissionInfo,
   pickGroupDirectory,
   placePaneAfter,
-  removeQueuedAgentTurn,
   removeGroup,
   renameGroup,
   renamePane,
-  reorderGroups,
   readMarkdownDocumentFile,
-  restoreLastClosedPane,
   seedNativeTerminalSettings,
-  setLauncherAdapterPreference,
   setActiveTab,
   setGroupCollapsed,
   setCompletionSound,
@@ -591,7 +492,6 @@ import {
   setPaneLayout,
   setPaneSplits as persistPaneSplits,
   setAgentDraft as persistAgentDraft,
-  setAgentTranscript,
   setAgentTyping,
   setMenuBarVisible,
   setShowHideShortcut,
@@ -601,32 +501,22 @@ import {
   setResearchLaunchInstruction,
   setResearchSdkHarness,
   setWorktreeLocation,
-  spawnAgent,
   spawnShell,
   openPaneWorktree,
   openRepositoryBranch,
   openRepositoryWorktree,
   paneRepositoryInventory,
   suggestPaneWorktreeName,
-  sendNextQueuedAgentTurn,
-  setQueuedTurnPause,
-  submitAgentTurn,
-  submitPaneInput,
   upsertRemote,
-  unpauseAgent,
   updateMenuBar,
   worktreeStatus,
 } from "./lib/api";
 import type {
   AgentAdapterMetadata,
   AgentInfo,
-  ArtifactInfo,
   ClaudeSkill,
   ConversationHistoryRef,
   ConversationHistorySnapshot,
-  ConversationHistoryEntry,
-  ConversationHistoryLaunchMode,
-  GlobalDraft,
   GroupInfo,
   InitialPaneSize,
   MessageAnchor,
@@ -647,8 +537,6 @@ import type {
   RepositoryBranch,
   RepositoryInventory,
   SavedRemote,
-  SavedPrompt,
-  ShellAgentJobInfo,
   ThreadGraph,
   TranscriptHookEvent,
   TranscriptOption,
@@ -670,22 +558,6 @@ interface TerminalPaneHandle {
 interface ConversationHistorySegment {
   snapshotId: string;
   turns: Turn[];
-}
-
-interface ArtifactTrayPosition {
-  x: number;
-  y: number;
-}
-
-interface AgentDebugPanelPosition {
-  top: number;
-  right: number;
-}
-
-interface HomeGroup {
-  id: string;
-  name: string;
-  terminals: Array<{ agentId: string; title: string }>;
 }
 
 interface OrphanedQueueGroup {
@@ -739,17 +611,11 @@ function savedRemoteFromSettingsDraft(draft: RemoteSettingsDraft): SavedRemote {
     workspaceRoot: draft.workspaceRoot.trim() || null,
   };
 }
-
-// How long the artifact tray's undo footer holds the last removal.
-const ARTIFACT_UNDO_MS = 10_000;
 const LEFT_SIDEBAR_MIN_WIDTH = 208;
 const LEFT_SIDEBAR_MAX_WIDTH = 420;
 // Below this width the New shell/New agent buttons drop their icons to keep the
 // labels readable. (The icon-only Settings cog always keeps its icon.)
 const LEFT_SIDEBAR_COMPACT_WIDTH = 270;
-
-const PANE_TAB_DRAG_START_THRESHOLD = 4;
-const PANE_TAB_DRAG_CLICK_SUPPRESS_MS = 100;
 type ResearchViewedAckOptions = {
   /** A real exposure edge (selection, focus, composer close) should check the
    * backend even when the current sidebar snapshot carries no attention bit. */
@@ -764,8 +630,6 @@ type ResearchViewedAckOptions = {
 // persisted last-tab id from an older build is ignored instead of restored.
 const HOME_TAB_ID = "__home__";
 const ACTIVE_RESEARCH_TREE_KEY = "qmux.active-research-tree.v1";
-const RESEARCH_VISIBILITY_FILTER_KEY = "qmux.research-visibility-filter.v1";
-const LEGACY_SHOW_ARCHIVED_RESEARCH_KEY = "qmux.show-archived-research.v1";
 const RESEARCH_VISIBILITY_FILTER_OPTIONS: ReadonlyArray<{
   id: ResearchVisibilityFilter;
   label: string;
@@ -775,15 +639,8 @@ const RESEARCH_VISIBILITY_FILTER_OPTIONS: ReadonlyArray<{
   { id: "all", label: "Show all" },
 ];
 const ACTIVE_RESEARCH_PANE_KEY = "qmux.active-research-pane.v1";
-const RESEARCH_FOLDER_SCOPE_KEY = "qmux.research-folder-scope.v1";
 // Whether the Journal page is forward on the research surface. Selection-level
 // UI state, like the active tree id — the journal's contents live backend-side.
-const JOURNAL_OPEN_KEY = "qmux.journal-open.v1";
-// Agent ids whose Home rail the user has hidden via the group selector. Persisted
-// as a JSON array; a terminal's absence means it's shown (new terminals default
-// visible).
-const HOME_HIDDEN_TERMINALS_KEY = "qmux.home-hidden-terminals.v1";
-const HOME_DRAFTS_VISIBLE_KEY = "qmux.home-drafts-visible.v1";
 const WARM_QMUX_TERMINAL_THEME_ID = "qmux-warm";
 // Browser-overlay / link-action owner for a research tree's document. Keyed
 // per tree so an overlay opened from one tree's links doesn't follow the user
@@ -875,39 +732,6 @@ function researchDocumentIsVisible(
   );
 }
 
-// Structural equality for drag drop targets. Drop targets are recomputed as
-// fresh objects on every pointermove of a tab/group drag; without an equality
-// gate each move committed an identical target and re-rendered the whole app.
-function paneDropTargetsEqual(
-  a: PaneDropTarget | null,
-  b: PaneDropTarget | null,
-): boolean {
-  if (a === b) {
-    return true;
-  }
-  if (!a || !b) {
-    return false;
-  }
-  switch (a.kind) {
-    case "gap":
-      return b.kind === "gap" && a.groupId === b.groupId && a.index === b.index;
-    case "terminal-split":
-      return (
-        b.kind === "terminal-split" &&
-        a.groupId === b.groupId &&
-        a.targetPaneId === b.targetPaneId &&
-        a.position === b.position
-      );
-  }
-}
-
-function groupDropTargetsEqual(
-  a: GroupDropTarget | null,
-  b: GroupDropTarget | null,
-): boolean {
-  return a === b || (a !== null && b !== null && a.index === b.index);
-}
-
 function claimResizePointer(event: ReactPointerEvent<HTMLDivElement>): () => void {
   const handle = event.currentTarget;
   const pointerId = event.pointerId;
@@ -935,7 +759,6 @@ const ATTACH_MAX_RETRY_MS = 2000;
 const BROWSER_OVERLAY_LEFT_MARGIN = 64;
 const EXPAND_TOGGLE_SHORTCUT_LABEL = "⌘⇧E / Ctrl+Shift+E";
 const LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL = "⇧⌘G";
-const RIGHT_BAR_TOGGLE_SHORTCUT_LABEL = "⇧⌘L";
 const TERMINAL_MIN_WIDTH = 380;
 const TURN_PANE_MIN_WIDTH = 300;
 const TURN_PANE_DEFAULT_WIDTH = 420;
@@ -945,20 +768,12 @@ const TERMINAL_VERTICAL_PADDING = 20;
 const TERMINAL_SPLIT_MIN_HEIGHT = 140;
 const TERMINAL_SPLIT_MIN_WIDTH = 200;
 const TERMINAL_SPLIT_GUTTER_PX = 8;
-// Hit slop grown around the gutter on both sides, so a press that lands a
-// couple of pixels inside a neighbouring terminal still grabs the divider.
-// Kept in sync with `.terminal-split-resizer::after` in terminal.css.
-const TERMINAL_SPLIT_RESIZER_SLOP_PX = 3;
 const DEFAULT_INITIAL_COLS = 100;
 const DEFAULT_INITIAL_ROWS = 24;
 const MIN_INITIAL_COLS = 20;
 const MIN_INITIAL_ROWS = 5;
 const MAX_INITIAL_COLS = 500;
 const MAX_INITIAL_ROWS = 200;
-const PANE_CONTEXT_MENU_WIDTH = 320;
-const PANE_CONTEXT_MENU_ESTIMATED_HEIGHT = 190;
-const GROUP_CONTEXT_MENU_WIDTH = 220;
-const GROUP_CONTEXT_MENU_ESTIMATED_HEIGHT = 270;
 const SETTINGS_CONTEXT_MENU_WIDTH = 180;
 const SETTINGS_CONTEXT_MENU_TERMINAL_HEIGHT = 66;
 const SETTINGS_CONTEXT_MENU_RESEARCH_HEIGHT = 134;
@@ -972,10 +787,6 @@ const FIRST_MESSAGE_TITLE_LOOKAHEAD_LIMIT = 5;
 const APP_TOAST_TIMEOUT_MS = 5000;
 const TITLE_GENERATION_TEST_MESSAGE =
   "Review the launch plan, identify the highest-risk blockers, and suggest next steps.";
-// How long the composer can sit idle before its draft is flushed to disk. The
-// in-memory copy updates on every keystroke (so tab switches never lose it); the
-// disk write is debounced so a paused composer — and a restart — can recover it.
-const DRAFT_FLUSH_DEBOUNCE_MS = 1000;
 // Upper bound on the per-agent hook-event history. This feed accumulates for an
 // agent's whole lifetime (it backs the "copy transcript as JSON" export), so
 // without a cap a long-running, tool-heavy agent grows the array without limit.
@@ -1174,18 +985,6 @@ function themeCssColor(hex: string): string | null {
     return null;
   }
   return hex.startsWith("#") ? hex : `#${hex}`;
-}
-
-/**
- * The swatch strip shown next to the theme select: background, foreground,
- * then the six primary ANSI accents (red through cyan) when the scheme
- * defines them.
- */
-function themePreviewColors(theme: NativeTerminalTheme): string[] {
-  const swatches = [theme.background, theme.foreground, ...theme.palette.slice(1, 7)];
-  return swatches
-    .map((color) => themeCssColor(color))
-    .filter((color): color is string => color !== null);
 }
 
 function focusConfirmDialogButton(button: HTMLButtonElement | null, force = false) {
@@ -1706,10 +1505,6 @@ function MainApp() {
   const activeTranscriptScrollCaptureSlotRef = useRef(
     createTranscriptScrollCaptureSlot(),
   );
-  const registerActiveTranscriptScrollCapture = useCallback(
-    (capture: () => void) => activeTranscriptScrollCaptureSlotRef.current.register(capture),
-    [],
-  );
   const launcherInputRef = useRef<HTMLTextAreaElement | null>(null);
   // Keep active-tab actions reachable from the global keydown listener without
   // re-registering it on every state change.
@@ -1720,9 +1515,6 @@ function MainApp() {
   const splitPaneRightRef = useRef<(pane: PaneInfo) => void | Promise<void>>(() => {});
   const canToggleActiveTranscriptExpandedRef = useRef(false);
   const toggleActiveTranscriptExpandedRef = useRef<() => void>(() => {});
-  const paneTabPointerDragRef = useRef<PaneTabPointerDrag | null>(null);
-  const groupPointerDragRef = useRef<GroupPointerDrag | null>(null);
-  const suppressGroupMenuButtonClickRef = useRef(false);
   const browserOverlayByPaneRef = useRef<Record<string, BrowserOverlayState>>({});
   const nativeHumanBrowserOwnerIdsRef = useRef<Set<string>>(new Set());
   const activeBrowserOwnerIdRef = useRef<string | null>(null);
@@ -1731,24 +1523,11 @@ function MainApp() {
   const browserEscapeDispatcherRef = useRef<() => "exclusive" | "theme" | null>(
     () => null,
   );
-  const terminalSplitResizeRef = useRef<{
-    splitId: string;
-    path: string;
-    index: number;
-    startClient: number;
-    /** Pixels the resized branch shares among its children, gutters excluded. */
-    stageExtent: number;
-    startSplit: PaneSplitInfo;
-  } | null>(null);
   // Debounced "user is typing" hold per agent: while active the backend won't
   // auto-drain that agent's queue. Holds the agent id + the pending release timer.
   const agentTypingRef = useRef<{ agentId: string; timer: number } | null>(null);
-  const paneDropTargetRef = useRef<PaneDropTarget | null>(null);
-  const groupDropTargetRef = useRef<GroupDropTarget | null>(null);
   const paneReorderPersistChainRef = useRef<Promise<void>>(Promise.resolve());
   const paneReorderRequestSeqRef = useRef(0);
-  const groupReorderPersistChainRef = useRef<Promise<void>>(Promise.resolve());
-  const groupReorderRequestSeqRef = useRef(0);
   const researchTreeReorderPersistChainRef = useRef<Promise<void>>(Promise.resolve());
   const researchTreeReorderRequestSeqRef = useRef(0);
   const pendingFirstTitleByAgentRef = useRef<Map<string, PendingFirstMessageTitle>>(new Map());
@@ -1774,7 +1553,6 @@ function MainApp() {
   const titleGenerationTestSeqRef = useRef(0);
   const activeTabPersistenceReadyRef = useRef(false);
   const appToastTimerRef = useRef<number | null>(null);
-  const suppressPaneTabClickRef = useRef(false);
   const dismissedRecoveredPaneIdsRef = useRef<Set<string>>(new Set());
   const [config, setConfig] = useState<RuntimeConfig | null>(null);
   const [adapterProbeLoading, setAdapterProbeLoading] = useState(false);
@@ -1869,7 +1647,7 @@ function MainApp() {
   const [terminalTitleByPane, setTerminalTitleByPane] = useState<
     Record<string, string | null>
   >({});
-  const [terminalOverlayBlockedPaneIds, setTerminalOverlayBlockedPaneIds] = useState<Set<string>>(
+  const [terminalOverlayBlockedPaneIds] = useState<Set<string>>(
     () => new Set(),
   );
   const [manuallyTitledPaneIds, setManuallyTitledPaneIds] = useState<Set<string>>(
@@ -1887,17 +1665,6 @@ function MainApp() {
   // placeholder above. Until listAgents() succeeds, it is not safe to infer
   // that the backend has no active agents and release its existing wake lock.
   const [agentsHydrated, setAgentsHydrated] = useState(false);
-  const [shellJobByAgent, setShellJobByAgent] = useState<
-    Record<string, ShellAgentJobInfo>
-  >({});
-  const shellJobEventVersionRef = useRef(0);
-  const setShellJobByAgentFromEvent = useCallback(
-    (update: SetStateAction<Record<string, ShellAgentJobInfo>>) => {
-      shellJobEventVersionRef.current += 1;
-      setShellJobByAgent(update);
-    },
-    [],
-  );
   // Agents we believe are actively working *right now*, used to show the
   // "Working…" indicator at the bottom of the transcript. This is driven by live
   // status transitions (see useQmuxEvents), not the raw status field: an agent
@@ -1926,9 +1693,6 @@ function MainApp() {
   /** One auto-retry budget per agent+requestKey after an initial history load fails. */
   const homeHistoryRetryBudgetByAgentRef = useRef(new Map<string, string>());
   const [queuedTurnsByAgent, setQueuedTurnsByAgentState] = useState<Record<string, QueuedTurn[]>>({});
-  // Application-global prompt drafts (the home Drafts rail). Backend-owned;
-  // hydrated at boot and kept fresh by drafts.changed events.
-  const [globalDrafts, setGlobalDrafts] = useState<GlobalDraft[]>([]);
   // Per-agent hook-event history. It backs only the "copy transcript as JSON"
   // export — nothing renders it — so it lives outside React state: hooks fire on
   // every tool call of a busy agent, and putting each one through setState was a
@@ -1961,74 +1725,6 @@ function MainApp() {
   const transcriptOptionsRequestTrackerRef = useRef(new TranscriptOptionsRequestTracker());
   const loadingConversationThreadIdsRef = useRef(new Set<string>());
   const conversationHistoryRequestSequenceRef = useRef(new Map<string, number>());
-  const nextConversationHistoryRequestSequenceRef = useRef(0);
-  const loadPreviousConversationForThread = useCallback(async (
-    rootThreadId: string,
-    snapshotId: string | null,
-  ) => {
-    if (!snapshotId || loadingConversationThreadIdsRef.current.has(rootThreadId)) {
-      return;
-    }
-    loadingConversationThreadIdsRef.current.add(rootThreadId);
-    const requestSequence = ++nextConversationHistoryRequestSequenceRef.current;
-    conversationHistoryRequestSequenceRef.current.set(rootThreadId, requestSequence);
-    const requestIsCurrent = () =>
-      conversationHistoryRequestSequenceRef.current.get(rootThreadId) === requestSequence;
-    setConversationHistoryByThread((history) => ({
-      ...history,
-      [rootThreadId]: {
-        snapshots: history[rootThreadId]?.snapshots ?? [],
-        loading: true,
-        error: null,
-      },
-    }));
-    try {
-      const snapshot = await getConversationHistorySnapshot(snapshotId);
-      if (!requestIsCurrent()) {
-        return;
-      }
-      if (!snapshot) {
-        throw new Error("No earlier conversation is available");
-      }
-      setConversationHistoryByThread((history) => {
-        const existing = history[rootThreadId]?.snapshots ?? [];
-        if (existing.some((item) => item.id === snapshot.id)) {
-          return {
-            ...history,
-            [rootThreadId]: { snapshots: existing, loading: false, error: null },
-          };
-        }
-        return {
-          ...history,
-          [rootThreadId]: {
-            snapshots: [...existing, snapshot],
-            loading: false,
-            error: null,
-          },
-        };
-      });
-    } catch (err) {
-      if (!requestIsCurrent()) {
-        return;
-      }
-      setConversationHistoryByThread((history) => ({
-        ...history,
-        [rootThreadId]: {
-          snapshots: history[rootThreadId]?.snapshots ?? [],
-          loading: false,
-          error: err instanceof Error ? err.message : String(err),
-        },
-      }));
-    } finally {
-      if (requestIsCurrent()) {
-        loadingConversationThreadIdsRef.current.delete(rootThreadId);
-      }
-    }
-  }, []);
-  const [waitTargetHoverAgentId, setWaitTargetHoverAgentId] = useState<string | null>(null);
-  // The agent whose split cell a queued-card drag is currently hovering, so that
-  // cell can render as the drop target while dragging a card between splits.
-  const [queueDropTargetAgentId, setQueueDropTargetAgentId] = useState<string | null>(null);
   const [draftsByAgent, setDraftsByAgentState] = useState<Record<string, string>>({});
   const [activePaneId, setActivePaneIdState] = useState<string | null>(null);
   const activePaneIdRef = useRef(activePaneId);
@@ -2128,37 +1824,18 @@ function MainApp() {
         }
       });
   }, []);
-  const [journalOpen, setJournalOpenState] = useState(
-    () => localStorage.getItem(JOURNAL_OPEN_KEY) === "true",
-  );
-  const journalOpenRef = useRef(journalOpen);
-  journalOpenRef.current = journalOpen;
-  const setJournalOpen = useCallback((open: boolean) => {
-    journalOpenRef.current = open;
-    setJournalOpenState(open);
-    localStorage.setItem(JOURNAL_OPEN_KEY, open ? "true" : "false");
-  }, []);
-  const [researchWorkspaceHistory, setResearchWorkspaceHistory] = useState(() =>
-    initResearchWorkspaceHistory(
-      localStorage.getItem(JOURNAL_OPEN_KEY) === "true" ? { kind: "journal" } : null,
-    ),
-  );
-  const researchWorkspaceHistoryRef = useRef(researchWorkspaceHistory);
-  researchWorkspaceHistoryRef.current = researchWorkspaceHistory;
-  const [researchVisibilityFilter, setResearchVisibilityFilter] =
-    useState<ResearchVisibilityFilter>(() => {
-      const stored = localStorage.getItem(RESEARCH_VISIBILITY_FILTER_KEY);
-      if (stored === "active" || stored === "archived" || stored === "all") {
-        return stored;
-      }
-      return localStorage.getItem(LEGACY_SHOW_ARCHIVED_RESEARCH_KEY) === "true"
-        ? "all"
-        : "active";
-    });
-  const changeResearchVisibilityFilter = useCallback((filter: ResearchVisibilityFilter) => {
-    setResearchVisibilityFilter(filter);
-    localStorage.setItem(RESEARCH_VISIBILITY_FILTER_KEY, filter);
-  }, []);
+  const {
+    journalOpen,
+    journalOpenRef,
+    setJournalOpen,
+    researchWorkspaceHistory,
+    researchWorkspaceHistoryRef,
+    setResearchWorkspaceHistory,
+    researchVisibilityFilter,
+    changeResearchVisibilityFilter,
+    researchFolderScope,
+    changeResearchFolderScope,
+  } = useResearchNavigationState();
   // Read by mark-viewed acknowledgment (a stable callback) to decide whether
   // any attention badge was actually lit without threading the lists through
   // its dependencies.
@@ -2166,19 +1843,6 @@ function MainApp() {
   const archivedResearchTreesRef = useRef(archivedResearchTrees);
   researchTreesRef.current = researchTrees;
   archivedResearchTreesRef.current = archivedResearchTrees;
-  // Which single folder the Research sidebar is scoped to. The raw stored
-  // value is resolved against live research workspaces wherever it is read.
-  const [researchFolderScope, setResearchFolderScope] = useState<ResearchFolderScope>(
-    () => localStorage.getItem(RESEARCH_FOLDER_SCOPE_KEY),
-  );
-  const changeResearchFolderScope = useCallback((scope: ResearchFolderScope) => {
-    setResearchFolderScope(scope);
-    if (scope) {
-      localStorage.setItem(RESEARCH_FOLDER_SCOPE_KEY, scope);
-    } else {
-      localStorage.removeItem(RESEARCH_FOLDER_SCOPE_KEY);
-    }
-  }, []);
   const [researchActivity, setResearchActivity] = useState<ResearchNode[]>([]);
   const [activeResearchDetail, setActiveResearchDetail] = useState<ResearchTreeDetail | null>(null);
   const activeResearchDetailRef = useRef(activeResearchDetail);
@@ -2204,92 +1868,15 @@ function MainApp() {
   const [activeSurface, setActiveSurfaceState] = useState<"pane" | "research">("research");
   const activeSurfaceRef = useRef(activeSurface);
   activeSurfaceRef.current = activeSurface;
-  const setActiveSurface = useCallback((_surface: "pane" | "research") => {
+  const showResearchSurface = useCallback(() => {
     activeSurfaceRef.current = "research";
     setActiveSurfaceState("research");
   }, []);
   const lastTerminalTabIdRef = useRef<string>("");
-  const setSidebarMode = useCallback((_mode: SidebarMode) => {
+  const showResearchSidebar = useCallback(() => {
     sidebarModeRef.current = "research";
     setSidebarModeState("research");
     localStorage.setItem(SIDEBAR_MODE_STORAGE_KEY, "research");
-  }, []);
-  // The Home rails' visibility filter: agent ids the user has hidden via the
-  // group selector's checkboxes. Everything not in the set is shown, so new
-  // terminals appear by default. Persists across restarts.
-  const [hiddenHomeTerminalIds, setHiddenHomeTerminalIds] = useState<Set<string>>(() => {
-    try {
-      const raw = localStorage.getItem(HOME_HIDDEN_TERMINALS_KEY);
-      const parsed = raw ? (JSON.parse(raw) as unknown) : null;
-      return Array.isArray(parsed)
-        ? new Set(parsed.filter((id): id is string => typeof id === "string"))
-        : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-  const persistHiddenHomeTerminalIds = useCallback((next: Set<string>) => {
-    localStorage.setItem(HOME_HIDDEN_TERMINALS_KEY, JSON.stringify(Array.from(next)));
-  }, []);
-  const [homeDraftsVisible, setHomeDraftsVisible] = useState(() => {
-    try {
-      return localStorage.getItem(HOME_DRAFTS_VISIBLE_KEY) !== "false";
-    } catch {
-      return true;
-    }
-  });
-  const setHomeDraftsVisibility = useCallback((visible: boolean) => {
-    setHomeDraftsVisible(visible);
-    localStorage.setItem(HOME_DRAFTS_VISIBLE_KEY, String(visible));
-  }, []);
-  const showHomeDrafts = useCallback(() => setHomeDraftsVisibility(true), [
-    setHomeDraftsVisibility,
-  ]);
-  // Show/hide a batch of terminals in one write (a group checkbox toggling all
-  // its terminals at once).
-  const setHomeTerminalsHidden = useCallback(
-    (agentIds: string[], hidden: boolean) => {
-      setHiddenHomeTerminalIds((current) => {
-        const next = new Set(current);
-        for (const id of agentIds) {
-          if (hidden) {
-            next.add(id);
-          } else {
-            next.delete(id);
-          }
-        }
-        persistHiddenHomeTerminalIds(next);
-        return next;
-      });
-    },
-    [persistHiddenHomeTerminalIds],
-  );
-  // Flip one terminal's visibility (a dropdown row in the group menu).
-  const toggleHomeTerminal = useCallback(
-    (agentId: string) => {
-      setHiddenHomeTerminalIds((current) => {
-        const next = new Set(current);
-        if (next.has(agentId)) {
-          next.delete(agentId);
-        } else {
-          next.add(agentId);
-        }
-        persistHiddenHomeTerminalIds(next);
-        return next;
-      });
-    },
-    [persistHiddenHomeTerminalIds],
-  );
-  // Per-rail scroll positions for the home view, kept here so leaving Home and
-  // coming back restores each column (same shape as the queue/transcript scroll
-  // stores above). Ephemeral by design: dropped on app restart.
-  const homeRailScrollByAgentRef = useRef<Record<string, HomeRailScrollPosition>>({});
-  const readHomeRailScroll = useCallback(
-    (agentId: string) => homeRailScrollByAgentRef.current[agentId] ?? null,
-    [],
-  );
-  const saveHomeRailScroll = useCallback((agentId: string, position: HomeRailScrollPosition) => {
-    homeRailScrollByAgentRef.current[agentId] = position;
   }, []);
   // Half-typed home-rail composer text, keyed by rail id. App-owned so a tab
   // away can unmount Home without losing it; the transient backend mirror also
@@ -2354,7 +1941,7 @@ function MainApp() {
       if (next !== activePaneIdRef.current) {
         activeTranscriptScrollCaptureSlotRef.current.capture();
       }
-      setActiveSurface("pane");
+      showResearchSurface();
       activePaneIdRef.current = next;
       activePaneRef.current =
         next && next !== HOME_TAB_ID
@@ -2369,7 +1956,7 @@ function MainApp() {
         next === HOME_TAB_ID
           ? "terminal"
           : (groupsRef.current.find((group) => group.id === pane?.groupId)?.scope ?? "terminal");
-      setSidebarMode(mode);
+      showResearchSidebar();
       if (mode === "terminal") {
         lastTerminalTabIdRef.current = next;
       } else if (pane) {
@@ -2378,7 +1965,7 @@ function MainApp() {
         localStorage.setItem(ACTIVE_RESEARCH_PANE_KEY, pane.id);
       }
     },
-    [setSidebarMode],
+    [showResearchSidebar],
   );
   const [shortcutHintsVisible, setShortcutHintsVisible] = useState(false);
   const [turnPaneWidth, setTurnPaneWidth] = useState(TURN_PANE_DEFAULT_WIDTH);
@@ -2406,7 +1993,6 @@ function MainApp() {
   const [previewThemeId, setPreviewThemeId] = useState<string | null>(null);
   const themePickerRef = useRef<HTMLDivElement | null>(null);
   const themePickerTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const themeOptionRefs = useRef(new Map<string, HTMLButtonElement>());
   const closeThemePicker = useCallback(() => {
     setThemePickerOpen(false);
     setPreviewThemeId(null);
@@ -2415,7 +2001,6 @@ function MainApp() {
     () => readSessionDraftJson(SESSION_DRAFT_KEYS.newResearchModal) !== null,
   );
   const [newAgentOpen, setNewAgentOpen] = useState(false);
-  const [newAgentError, setNewAgentError] = useState<string | null>(null);
   const [terminalMapOpen, setTerminalMapOpen] = useState(false);
   const newAgentOpenRef = useRef(newAgentOpen);
   newAgentOpenRef.current = newAgentOpen;
@@ -2509,13 +2094,9 @@ function MainApp() {
   const markdownImportRequestSeqRef = useRef(0);
   const markdownDropBlockedRef = useRef(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  const [conversationHistoryOpen, setConversationHistoryOpen] = useState(false);
+  const [conversationHistoryOpen] = useState(false);
   const conversationHistoryOpenRef = useRef(conversationHistoryOpen);
   conversationHistoryOpenRef.current = conversationHistoryOpen;
-  const [conversationHistoryLaunching, setConversationHistoryLaunching] = useState(false);
-  // Saved prompts shown in the palette's "Insert prompt" section, refreshed on
-  // each open so edits made in the library menu or on disk show up.
-  const [paletteSavedPrompts, setPaletteSavedPrompts] = useState<SavedPrompt[]>([]);
   // True while a web editable (composer, rename input, search field…) holds DOM
   // focus. Native terminal panes must never claim first responder then, or they
   // would steal the keyboard mid-typing.
@@ -2756,125 +2337,10 @@ function MainApp() {
       cancelled = true;
     };
   }, []);
-  const selectedTheme = useMemo(
-    () => themeCatalog?.find((theme) => theme.name === settings.themeId) ?? null,
-    [settings.themeId, themeCatalog],
-  );
   const effectiveTheme = useMemo(
     () => themeCatalog?.find((theme) => theme.name === effectiveThemeId) ?? null,
     [effectiveThemeId, themeCatalog],
   );
-  const themeGroups = useMemo(() => {
-    const named = (themeCatalog ?? []).filter((theme) => theme.name !== DEFAULT_THEME_ID);
-    return {
-      dark: named.filter((theme) => theme.isDark),
-      light: named.filter((theme) => !theme.isDark),
-    };
-  }, [themeCatalog]);
-  const themeOptionNames = useMemo(() => {
-    const names = [DEFAULT_THEME_ID];
-    if (selectedTheme === null && settings.themeId !== DEFAULT_THEME_ID) {
-      names.push(settings.themeId);
-    }
-    names.push(...themeGroups.dark.map((theme) => theme.name));
-    names.push(...themeGroups.light.map((theme) => theme.name));
-    return names;
-  }, [selectedTheme, settings.themeId, themeGroups]);
-
-  const focusThemeOption = useCallback((themeId: string) => {
-    themeOptionRefs.current.get(themeId)?.focus();
-  }, []);
-
-  const openThemePicker = useCallback(() => {
-    setThemePickerOpen(true);
-    setPreviewThemeId(null);
-    requestAnimationFrame(() => focusThemeOption(settingsRef.current.themeId));
-  }, [focusThemeOption]);
-
-  const chooseTheme = useCallback((themeId: string) => {
-    setSettings((current) => ({ ...current, themeId }));
-    setThemePickerOpen(false);
-    setPreviewThemeId(null);
-    requestAnimationFrame(() => themePickerTriggerRef.current?.focus());
-  }, []);
-
-  const handleThemeOptionKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLButtonElement>, themeId: string) => {
-      let nextIndex: number | null = null;
-      const currentIndex = themeOptionNames.indexOf(themeId);
-      if (event.key === "ArrowDown") {
-        nextIndex = Math.min(currentIndex + 1, themeOptionNames.length - 1);
-      } else if (event.key === "ArrowUp") {
-        nextIndex = Math.max(currentIndex - 1, 0);
-      } else if (event.key === "Home") {
-        nextIndex = 0;
-      } else if (event.key === "End") {
-        nextIndex = themeOptionNames.length - 1;
-      } else if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        closeThemePicker();
-        requestAnimationFrame(() => themePickerTriggerRef.current?.focus());
-        return;
-      } else {
-        return;
-      }
-
-      event.preventDefault();
-      const nextThemeId = themeOptionNames[nextIndex];
-      if (nextThemeId) {
-        focusThemeOption(nextThemeId);
-      }
-    },
-    [closeThemePicker, focusThemeOption, themeOptionNames],
-  );
-
-  function renderThemeOption(
-    themeId: string,
-    label: string,
-    theme: NativeTerminalTheme | null,
-  ) {
-    const selected = settings.themeId === themeId;
-    const previewed = effectiveThemeId === themeId;
-    return (
-      <button
-        key={themeId}
-        ref={(node) => {
-          if (node) {
-            themeOptionRefs.current.set(themeId, node);
-          } else {
-            themeOptionRefs.current.delete(themeId);
-          }
-        }}
-        type="button"
-        role="option"
-        aria-selected={selected}
-        className={`settings-theme-option${previewed ? " is-previewed" : ""}`}
-        onMouseEnter={() => setPreviewThemeId(themeId)}
-        onFocus={() => setPreviewThemeId(themeId)}
-        // macOS WebKit does not focus buttons on mouse-down. Without keeping
-        // focus on the trigger, the field's blur handler sees relatedTarget as
-        // null and unmounts this list before the ensuing click can select it.
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => chooseTheme(themeId)}
-        onKeyDown={(event) => handleThemeOptionKeyDown(event, themeId)}
-      >
-        <span className="settings-theme-option-name">{label}</span>
-        {theme ? (
-          <span className="settings-theme-option-preview" aria-hidden="true">
-            {themePreviewColors(theme).map((color, index) => (
-              <span key={index} style={{ background: color }} />
-            ))}
-          </span>
-        ) : null}
-        <Check
-          size={13}
-          className="settings-theme-option-check"
-          aria-hidden="true"
-        />
-      </button>
-    );
-  }
 
   useEffect(() => {
     if (!themePickerOpen) {
@@ -2904,7 +2370,6 @@ function MainApp() {
       document.documentElement.style.removeProperty("--terminal-bg");
     }
   }, [effectiveTheme, effectiveThemeId]);
-  const pasteProtection = useMemo(() => pasteProtectionFor(settings), [settings]);
   const shortcutHintsShown = settings.showShortcutHints && shortcutHintsVisible;
   // The launcher prompt is deliberately NOT React state: as app-root state it
   // re-rendered the entire component tree on every keystroke (the composer had
@@ -2915,10 +2380,6 @@ function MainApp() {
   );
   const promptRef = useRef(initialHomeLauncherPrompt);
   const [launcherAdapterId, setLauncherAdapterId] = useState<string | null>(null);
-  const [launcherOptionsByAdapter, setLauncherOptionsByAdapter] = useState<
-    Record<string, Record<string, unknown>>
-  >({});
-  const [createInWorktree, setCreateInWorktree] = useState(false);
   // Skills the qmux-managed Claude plugin can inject, and the single one selected
   // for this launch (prepended to the prompt as `/<plugin>:<skill>`). Single-select
   // because a leading slash command can only invoke one skill.
@@ -2928,17 +2389,24 @@ function MainApp() {
   // of the composer so typed text starts after the immutable command.
   const [skillPrefixWidth, setSkillPrefixWidth] = useState(0);
   const skillPrefixRef = useRef<HTMLSpanElement | null>(null);
-  // Guard for the new-agent launcher: addAgentPane awaits spawnAgent, so a held
-  // Enter or double submit would otherwise spawn several agents (and worktrees)
-  // from one intended launch.
-  const launchingAgentRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [appToast, setAppToast] = useState<{
     message: string;
     tone: "normal" | "warning";
   } | null>(null);
-  const [userNotifications, setUserNotifications] = useState<UserNotificationItem[]>([]);
-  const [notificationLog, setNotificationLog] = useState<NotificationLogEntry[]>([]);
+  const {
+    userNotifications,
+    handleUserNotificationRequested,
+    handleNotificationOpenPane,
+    dismissUserNotification,
+  } = useUserNotifications({
+    settings,
+    onOpenPane: (paneId) => {
+      if (panesRef.current.some((pane) => pane.id === paneId)) {
+        focusPaneTab(paneId);
+      }
+    },
+  });
   const [notificationPermission, setNotificationPermission] =
     useState<NotificationPermissionInfo | null>(null);
   const [notificationPermissionBusy, setNotificationPermissionBusy] = useState(false);
@@ -3001,49 +2469,17 @@ function MainApp() {
   }, [exportResearchPane, panes]);
   const [paneSplits, setPaneSplitsState] = useState<PaneSplitInfo[]>([]);
   paneSplitsRef.current = paneSplits;
-  const [draggingPaneId, setDraggingPaneId] = useState<string | null>(null);
-  const [paneDropTarget, setPaneDropTarget] = useState<PaneDropTarget | null>(null);
+  const [draggingPaneId] = useState<string | null>(null);
   // Shared by every pointer drag that changes a terminal host rectangle. DOM
   // layout keeps following the pointer while the native frames stay committed
   // at their pre-drag size until pointerup/pointercancel.
   const [terminalGeometryResizing, setTerminalGeometryResizing] = useState(false);
-  // A split drag additionally keeps the committed divider position so the
-  // mismatched band between it and the live divider can be veiled.
-  const [terminalSplitResizeMask, setTerminalSplitResizeMask] = useState<{
-    splitId: string;
-    /** Path of the branch being resized, so a nested divider is identified
-     * uniquely — a flat index would collide across branches. */
-    path: string;
-    index: number;
-    startOffset: number;
-  } | null>(null);
-  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
-  const [groupDropTarget, setGroupDropTarget] = useState<GroupDropTarget | null>(null);
+  const [draggingGroupId] = useState<string | null>(null);
   // Per-pane browser overlay state, so each tab keeps its own page and open/closed.
   const [browserOverlayByPane, setBrowserOverlayByPane] = useState<
     Record<string, BrowserOverlayState>
   >({});
   browserOverlayByPaneRef.current = browserOverlayByPane;
-  // Artifact tray: files/URLs agent panes opened via `qmux open`. The backend owns
-  // the durable list (oldest first); this mirror is hydrated at startup and kept
-  // current by artifact.added/removed events.
-  const [artifacts, setArtifacts] = useState<ArtifactInfo[]>([]);
-  // The last tray removal, held for the undo footer until it times out or the
-  // user restores it.
-  const [artifactUndo, setArtifactUndo] = useState<ArtifactInfo | null>(null);
-  const artifactUndoTimerRef = useRef<number | null>(null);
-  // Per-workspace tray chrome: closed (paperclip toggle / titlebar ×), collapsed
-  // to the titlebar, and the dragged position (null = default top-right anchor).
-  // This is intentionally a hard cutover from pane-keyed state: every tab in a
-  // workspace reads and updates the same entry.
-  const [artifactTrayUiByWorkspace, setArtifactTrayUiByWorkspace] = useState<
-    Record<string, { closed?: boolean; collapsed?: boolean; pos?: ArtifactTrayPosition | null }>
-  >({});
-  // The panel is globally enabled from Display settings, but each pane remembers
-  // its own in-session dragged position as the user switches between agents.
-  const [debugPanelPositionByPane, setDebugPanelPositionByPane] = useState<
-    Record<string, AgentDebugPanelPosition | null>
-  >({});
   const [transcriptExpandedByPane, setTranscriptExpandedByPane] = useState<
     Record<string, boolean>
   >({});
@@ -3071,8 +2507,8 @@ function MainApp() {
   const [rightBarCollapsedByGroup, setRightBarCollapsedByGroup] = useState<
     Record<string, boolean>
   >({});
-  const [queueSplitByAgent, setQueueSplitByAgent] = useState<Record<string, boolean>>({});
-  const [queueSplitHeightByAgent, setQueueSplitHeightByAgent] = useState<Record<string, number>>(
+  const [queueSplitByAgent] = useState<Record<string, boolean>>({});
+  const [queueSplitHeightByAgent] = useState<Record<string, number>>(
     {},
   );
   // Right-click chooser for a link: web URLs choose internal vs external;
@@ -3247,7 +2683,6 @@ function MainApp() {
     }
     return result;
   }, [agents, threadGraphs, turns]);
-  const activeAgent = activePane ? agentByPaneId.get(activePane.id) : undefined;
   const activePaneSplitMembership = useMemo(
     () => paneSplitForPane(paneSplits, activePane?.id),
     [activePane?.id, paneSplits],
@@ -3275,10 +2710,6 @@ function MainApp() {
   const splitOverlayTranscriptMode = splitLayoutActive && !splitRightPaneMode;
   const activeSplitFractions = useMemo(
     () => (activePaneSplit ? splitFractions(activePaneSplit) : []),
-    [activePaneSplit],
-  );
-  const activeSplitLayout = useMemo(
-    () => (activePaneSplit ? paneSplitLayout(activePaneSplit, TERMINAL_SPLIT_GUTTER_PX) : null),
     [activePaneSplit],
   );
   // Width the stage must keep for the current layout. Memoized as a number so
@@ -3319,10 +2750,6 @@ function MainApp() {
   const visibleTerminalPaneIdSet = useMemo(
     () => new Set(visibleTerminalPaneIds),
     [visibleTerminalPaneIds],
-  );
-  const activeSplitMemberIdSet = useMemo(
-    () => new Set(activePaneSplitMembership?.paneIds ?? []),
-    [activePaneSplitMembership],
   );
   const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
   const terminalGroups = useMemo(() => groupsForScope(groups, "terminal"), [groups]);
@@ -3408,7 +2835,7 @@ function MainApp() {
     }
     // Pane-backed research runs are short-lived. Return to the durable
     // research surface as soon as one retires.
-    setActiveSurface("research");
+    showResearchSurface();
   }, [
     activePaneId,
     activeResearchTreeId,
@@ -3416,7 +2843,7 @@ function MainApp() {
     groups,
     panes,
     selectedPane,
-    setSidebarMode,
+    showResearchSidebar,
     sidebarMode,
   ]);
   // Kept current so callbacks captured once (e.g. the events hook's first-render
@@ -3755,17 +3182,6 @@ function MainApp() {
       void fetchHomeTurnHistoryPage(agent, null);
     }
   }, [fetchHomeTurnHistoryPage, historyTargetAgents, terminalMapOpen]);
-  const loadEarlierHomeTurnHistory = useCallback(
-    (agentId: string) => {
-      const history = homeTurnHistoryByAgentRef.current[agentId];
-      const agent = agentsRef.current.find((candidate) => candidate.id === agentId);
-      if (!agent || !history || history.loading || history.nextBefore === null) {
-        return;
-      }
-      void fetchHomeTurnHistoryPage(agent, history.nextBefore);
-    },
-    [fetchHomeTurnHistoryPage],
-  );
   const flushDirtyThreadGraphs = useCallback(() => {
     threadGraphRefreshTimerRef.current = null;
     const dirtyAgentIds = [...dirtyThreadGraphAgentIdsRef.current];
@@ -3873,14 +3289,6 @@ function MainApp() {
       }
     }
   }, [activeResearchDetail]);
-  const researchPanes = useMemo(
-    () => panesForScope(panes, groups, "research"),
-    [groups, panes],
-  );
-  const scopedResearchPanes = useMemo(
-    () => researchPanes.filter((pane) => pane.groupId === researchScope),
-    [researchPanes, researchScope],
-  );
   const cycleableResearchTrees = useMemo(() => {
     if (researchVisibilityFilter === "archived") {
       return archivedResearchTrees;
@@ -3929,14 +3337,6 @@ function MainApp() {
   }, [cycleableResearchTabIds]);
   const researchAttentionState = useMemo(() => researchAttention(researchTrees), [researchTrees]);
   const runningResearchCount = researchAttentionState.runningCount;
-  const unseenResearchCount = researchAttentionState.unseenCount;
-  const failedResearchCount = researchAttentionState.failedCount;
-  // Row index per pane id, so each sidebar row doesn't linear-scan the pane
-  // list (O(panes²) per render across the rows).
-  const sidebarPaneIndexById = useMemo(
-    () => new Map(sidebarPanes.map((pane, index) => [pane.id, index])),
-    [sidebarPanes],
-  );
   const cycleableSidebarPanes = useMemo(
     () =>
       sidebarPanes.filter((pane) => groupById.get(pane.groupId)?.collapsed !== true),
@@ -4139,19 +3539,6 @@ function MainApp() {
       return `Restored, ${tabStatus}`;
     }
     return pane.recovered ? "Restored" : tabStatus;
-  }
-
-  function collapsedGroupStatusAgents(groupPanes: PaneInfo[]): AgentInfo[] {
-    return groupPanes
-      .map((pane) => agentByPaneId.get(pane.id))
-      .filter(
-        (agent): agent is AgentInfo =>
-          agent !== undefined && agent.status !== "done" && agent.status !== "idle",
-      );
-  }
-
-  function collapsedGroupStatusLabel(agent: AgentInfo) {
-    return agentStatusLabel(agent.status) ?? agent.status;
   }
 
   function showAppToast(message: string, tone: "normal" | "warning" = "normal") {
@@ -4564,20 +3951,6 @@ function MainApp() {
     );
   }
 
-  function setPaneTitleRegenerationBusy(paneId: string, busy: boolean) {
-    const next = new Set(regeneratingTitlePaneIdsRef.current);
-    if (busy) {
-      next.add(paneId);
-    } else {
-      next.delete(paneId);
-    }
-    if (next.size === regeneratingTitlePaneIdsRef.current.size) {
-      return;
-    }
-    regeneratingTitlePaneIdsRef.current = next;
-    setRegeneratingTitlePaneIds(next);
-  }
-
   // When Apple Foundation Models report they're unavailable (Apple Intelligence
   // off, model not ready, ineligible device), turn off automatic tab titles so
   // the failure doesn't recur on every message, and return a friendly notice for
@@ -4730,78 +4103,6 @@ function MainApp() {
         `Couldn't set terminal title: ${err instanceof Error ? err.message : String(err)}`,
         "warning",
       );
-    }
-  }
-
-  async function regeneratePaneTitleFromUserMessage(
-    paneId: string,
-    rawMessage: string,
-    expectedAgentId?: string,
-  ) {
-    if (regeneratingTitlePaneIdsRef.current.has(paneId)) {
-      return;
-    }
-
-    const titleConfig = firstMessageTitleConfig(settingsRef.current, configRef.current);
-    if (!titleConfig) {
-      showAppToast("Title generation is disabled or unavailable.", "warning");
-      return;
-    }
-
-    const sourceMessage = firstMessageTitleSource(rawMessage);
-    if (!sourceMessage) {
-      showAppToast("No title text remains after removing instruction blocks.", "warning");
-      return;
-    }
-
-    const requestSeq = (titleRegenerationSeqByPaneRef.current[paneId] ?? 0) + 1;
-    titleRegenerationSeqByPaneRef.current[paneId] = requestSeq;
-    setPaneTitleRegenerationBusy(paneId, true);
-
-    try {
-      const title = await generateFirstMessageTitle(sourceMessage, titleConfig);
-      if (titleRegenerationSeqByPaneRef.current[paneId] !== requestSeq) {
-        return;
-      }
-      if (!title) {
-        showAppToast(`${firstMessageTitleProviderLabel(titleConfig)} returned no title.`, "warning");
-        return;
-      }
-
-      const pane = panesRef.current.find((candidate) => candidate.id === paneId);
-      const paneAgent = pane
-        ? agentsRef.current.find((agent) => agent.paneId === pane.id)
-        : undefined;
-      if (!pane || !paneStillBelongsToAgent(pane, paneAgent, expectedAgentId)) {
-        return;
-      }
-
-      const updated = await renamePane(paneId, title);
-      if (titleRegenerationSeqByPaneRef.current[paneId] !== requestSeq) {
-        return;
-      }
-      setManuallyTitledPaneIds((current) => {
-        const next = new Set(current);
-        next.add(paneId);
-        return next;
-      });
-      setPanesPreservingRecoveredDismissals((current) =>
-        current.map((candidate) =>
-          candidate.id === paneId ? { ...candidate, title: updated.title } : candidate,
-        ),
-      );
-      showAppToast(`Renamed tab: ${updated.title}`);
-    } catch (err) {
-      const message = unknownErrorMessage(err);
-      const friendly = noteFoundationTitleUnavailable(titleConfig, message);
-      showAppToast(
-        friendly ?? `${firstMessageTitleProviderLabel(titleConfig)} title error: ${message}`,
-        "warning",
-      );
-    } finally {
-      if (titleRegenerationSeqByPaneRef.current[paneId] === requestSeq) {
-        setPaneTitleRegenerationBusy(paneId, false);
-      }
     }
   }
 
@@ -5099,12 +4400,6 @@ function MainApp() {
     () => getAgentUiAdapter(effectiveLauncherAdapterId),
     [effectiveLauncherAdapterId],
   );
-  const launchAdapterMetadata = launcherRuntimeAdapters.find(
-    (adapter) => adapter.id === launchAdapter.id,
-  );
-  const launchAdapterReady = !config || adapterCanLaunchTerminal(launchAdapterMetadata);
-  const launcherOptions = launcherOptionsByAdapter[launchAdapter.id] ?? {};
-  const LauncherOptions = launchAdapter.LauncherOptions;
   // The bundled Claude plugin lives with the local app and is deliberately not
   // assumed to exist on an SSH host. Remote Claude keeps lifecycle hooks but
   // does not advertise slash-command skills it cannot load.
@@ -5160,31 +4455,6 @@ function MainApp() {
       })),
     [launcherAdapters],
   );
-  function rememberLauncherAdapter(adapterId: string) {
-    setLauncherAdapterId(adapterId);
-    void setLauncherAdapterPreference(adapterId).catch(() => undefined);
-  }
-  function focusLauncherInput() {
-    requestAnimationFrame(() => launcherInputRef.current?.focus());
-  }
-  function cycleLauncherAdapter() {
-    if (launcherAdapterOptions.length === 0) {
-      return;
-    }
-
-    const currentIndex = launcherAdapterOptions.findIndex(
-      (option) => option.value === launchAdapter.id,
-    );
-    const enabledOptions = launcherAdapterOptions.filter((option) => !option.disabled);
-    const enabledIndex = enabledOptions.findIndex((option) => option.value === launchAdapter.id);
-    const nextIndex =
-      enabledIndex === -1 ? 0 : (enabledIndex + 1) % enabledOptions.length;
-    const nextAdapterId = enabledOptions[nextIndex]?.value;
-    if (nextAdapterId && nextAdapterId !== launchAdapter.id) {
-      rememberLauncherAdapter(nextAdapterId);
-    }
-    focusLauncherInput();
-  }
   // Called on each keystroke in an agent's composer or terminal. Sets a backend
   // "typing" hold (so a finishing turn won't auto-drain into what the user is typing)
   // and schedules its release INPUT_DEQUEUE_HOLD_MS after the last keystroke; the
@@ -5470,14 +4740,6 @@ function MainApp() {
     });
   }
 
-  function toggleActiveQueueSplit() {
-    const agentId = activeAgent?.id;
-    if (!agentId) {
-      return;
-    }
-    setQueueSplitByAgent((current) => ({ ...current, [agentId]: !(current[agentId] ?? false) }));
-  }
-
   function toggledPaneRecord(current: Record<string, boolean>, paneId: string) {
     const next = { ...current };
     if (next[paneId]) {
@@ -5604,10 +4866,6 @@ function MainApp() {
     );
   }
 
-  function setQueueSplitHeightForAgent(agentId: string, height: number) {
-    setQueueSplitHeightByAgent((current) => ({ ...current, [agentId]: height }));
-  }
-
   function refreshActiveBrowserOverlay() {
     if (!activeBrowserOwnerId) {
       return;
@@ -5630,25 +4888,6 @@ function MainApp() {
       };
     });
   }
-
-  const getQueueScroll = useCallback(
-    (agentId: string) => queueScrollByAgentRef.current[agentId],
-    [],
-  );
-  const saveQueueScroll = useCallback((agentId: string, scrollTop: number) => {
-    queueScrollByAgentRef.current[agentId] = scrollTop;
-  }, []);
-
-  const getTranscriptScroll = useCallback(
-    (agentId: string) => transcriptScrollByAgentRef.current[agentId],
-    [],
-  );
-  const saveTranscriptScroll = useCallback(
-    (agentId: string, position: TranscriptScrollPosition) => {
-      transcriptScrollByAgentRef.current[agentId] = position;
-    },
-    [],
-  );
 
   // Navigate the overlay's selected browser. A bare host (no scheme) gets http://
   // so `localhost:5173` works; file paths still go through `qmux open`.
@@ -5864,9 +5103,6 @@ function MainApp() {
         .map((pane, index) => turnPaneSurfaceForPane(pane, index))
         .filter((surface) => surface.hasTurnSidebar)
     : [];
-  const splitTurnPaneSurfaceByPaneId = new Map(
-    splitTurnPaneSurfaces.map((surface) => [surface.pane.id, surface]),
-  );
   const visibleTurnPaneSurfaces = splitRightPaneMode
     ? splitTurnPaneSurfaces
     : splitOverlayTranscriptMode
@@ -5888,41 +5124,6 @@ function MainApp() {
     leftSidebarCollapsed &&
     sidebarMode === "research" &&
     (researchStageView === "document" || researchStageView === "composer");
-  const leftSidebarRestore = leftSidebarRestorePlacement({
-    leftSidebarCollapsed,
-    researchHeaderOwnsRestore: researchSidebarRestoreInHeader,
-    splitRightPaneMode,
-    activePaneId: activePane?.id,
-    visibleRightBarPaneIds: visibleRightBarSurfaces.map((surface) => surface.pane.id),
-  });
-  const floatingLeftSidebarRestoreVisible =
-    leftSidebarRestore.kind === "floating";
-  const floatingRestoreButtonVisible = rightBarCollapsed && activePaneCanToggleTurnSidebar;
-  const floatingStageTranscriptExpandVisible =
-    splitOverlayTranscriptMode &&
-    splitOverlayTurnPaneSurfaces.length > 0 &&
-    !(
-      activePaneSplit &&
-      paneSplitFlagIsEnabled(splitTranscriptExpandedByPane, activePaneSplit.paneIds)
-    );
-  const floatingPaneRestoreControlsVisible =
-    floatingLeftSidebarRestoreVisible ||
-    floatingRestoreButtonVisible ||
-    floatingStageTranscriptExpandVisible;
-  const floatingPaneRestoreControlsLayoutKey = [
-    floatingLeftSidebarRestoreVisible ? "left" : "",
-    floatingRestoreButtonVisible ? "right" : "",
-    floatingStageTranscriptExpandVisible ? "expand" : "",
-    splitRightPaneMode ? activePane?.id : "",
-    splitRightPaneMode ? activeTurnPaneSurface?.topFraction : "",
-  ].join(":");
-  // These controls can float over a native terminal. Register the whole group,
-  // including the seam between two buttons, so Ghostty cannot capture any part
-  // of the rendered control area.
-  const floatingPaneRestoreControlsRef = useNativeWebOverlayRegion<HTMLDivElement>(
-    floatingPaneRestoreControlsVisible,
-    floatingPaneRestoreControlsLayoutKey,
-  );
   const hasGlobalTurnSidebar = hasVisibleRightBar && !splitRightPaneMode;
   const splitTranscriptExpanded = Boolean(
     activePaneSplit &&
@@ -5941,9 +5142,6 @@ function MainApp() {
         (surface) => surface.pane.id === focusedAssistantTurn.paneId,
       )
     : undefined;
-  const expandedRightBarSurfaces = focusedAssistantTurnSurface
-    ? [focusedAssistantTurnSurface]
-    : overlayTurnPaneSurfaces;
   useEffect(() => {
     if (
       focusedAssistantTurn &&
@@ -6087,115 +5285,6 @@ function MainApp() {
     }
     void setNativeTerminalKeyboardOwner(desiredNativeKeyboardOwner).catch(() => undefined);
   }, [desiredNativeKeyboardOwner]);
-  // The body calls component-scoped helpers (turnInfoForAgent, displayPaneTitle,
-  // paneTabStatus*, queuedTurnsForAgent, paneWaitsOnOtherPane) that are recreated
-  // each render, so they are intentionally NOT in the dep array. Instead we depend
-  // on the state atoms those helpers read — keep this list in sync when a helper
-  // starts reading new state, or the memo will serve stale workstreams.
-  const homeRailWorkstreams = useMemo<HomeRailWorkstream[]>(() => {
-    // Only the terminal-map popover renders the rails, but this memo's inputs
-    // churn with every event batch — recomputing the per-agent latest-turn
-    // extraction (a regex pass over each latest user message) for a hidden map
-    // was pure waste.
-    if (!terminalMapOpen) {
-      return [];
-    }
-    // A pane files under its root sidebar group (nested child groups fold into
-    // their root ancestor) — the unit the home workspace tabs select between.
-    const rootGroupIdOf = (groupId: string): string => {
-      let current = groupById.get(groupId);
-      const seen = new Set<string>();
-      while (current?.parentId && !seen.has(current.id)) {
-        seen.add(current.id);
-        const parent = groupById.get(current.parentId);
-        if (!parent) {
-          break;
-        }
-        current = parent;
-      }
-      return current?.id ?? groupId;
-    };
-    return sidebarPanes.flatMap((pane) => {
-      const agent = agentByPaneId.get(pane.id);
-      if (!agent) {
-        return [];
-      }
-      const statusClass = agent.status === "awaitingInput" ? "status-awaiting-input" : "";
-      const turnInfo = turnInfoForAgent(agent);
-      const homeHistory = homeTurnHistoryByAgent[agent.id];
-      return [
-        {
-          agentId: agent.id,
-          paneId: pane.id,
-          rootGroupId: rootGroupIdOf(pane.groupId),
-          title: displayPaneTitle(pane, agent),
-          statusTone: paneTabStatusTone(agent),
-          statusClass,
-          waitingOnPane: paneWaitsOnOtherPane(agent),
-          paused: agent.paused ?? false,
-          latestUserTurn: railLatestUserTurn(turnInfo.turns),
-          currentStartedAt: latestUserTurnTimestamp(turnInfo.turns),
-          currentSettledAt: latestTurnTimestamp(turnInfo.turns),
-          pastTurns: mergeRailPastTurns(
-            homeHistory?.pastTurns ?? [],
-            railPastTurns(turnInfo.turns),
-          ),
-          hasEarlierPastTurns: homeHistory?.nextBefore != null,
-          loadingEarlierPastTurns: homeHistory?.loading ?? false,
-          queuedTurns: (queuedTurnsByAgent[agent.id] ?? []).map((turn) => ({
-            id: turn.id,
-            text: railQueuedTurnText(turn.text),
-            rawText: turn.text,
-            pauseAfter: turn.pauseAfter,
-            waitForAgentId: turn.waitFor?.agentId ?? null,
-            waitForLabel: turn.waitFor?.label ?? null,
-            deliveryLabel: turn.delivery ? queuedTurnDeliveryLabel(turn.delivery) : null,
-          })),
-        },
-      ];
-    });
-  }, [
-    agentByPaneId,
-    agentTurnInfoById,
-    groupById,
-    homeTurnHistoryByAgent,
-    queuedTurnsByAgent,
-    sidebarPanes,
-    terminalMapOpen,
-    terminalTitleByPane,
-  ]);
-
-  // One selector group per root sidebar group that owns at least one agent, in
-  // the sidebar's pane order, each carrying its terminals for the per-terminal
-  // dropdown. Like the workstreams memo above, displayGroupName is a
-  // component-scoped helper kept out of the deps; groupById covers the state it
-  // reads.
-  const homeGroups = useMemo<HomeGroup[]>(() => {
-    const groups = new Map<string, HomeGroup>();
-    for (const workstream of homeRailWorkstreams) {
-      let group = groups.get(workstream.rootGroupId);
-      if (!group) {
-        const info = groupById.get(workstream.rootGroupId);
-        group = {
-          id: workstream.rootGroupId,
-          name: info ? displayGroupName(info) : "Workspace",
-          terminals: [],
-        };
-        groups.set(workstream.rootGroupId, group);
-      }
-      group.terminals.push({ agentId: workstream.agentId, title: workstream.title });
-    }
-    return Array.from(groups.values());
-  }, [groupById, homeRailWorkstreams]);
-
-  // The rails show every workstream the user hasn't hidden, across all groups.
-  const homeVisibleWorkstreams = useMemo(
-    () =>
-      homeRailWorkstreams.filter(
-        (workstream) => !hiddenHomeTerminalIds.has(workstream.agentId),
-      ),
-    [hiddenHomeTerminalIds, homeRailWorkstreams],
-  );
 
   // Load session lists when a pane's right side is visible so transcript pickers are ready.
   useEffect(() => {
@@ -6298,48 +5387,11 @@ function MainApp() {
     setQueuedTurnsByAgentState(nextQueues);
   }
 
-  // Records a composer draft: the in-memory copy updates immediately so the text
-  // is there when the user returns to the tab, while the disk write is debounced
-  // (clearing flushes at once so a sent/emptied draft never lingers in state.json).
-  function setAgentDraft(agentId: string, draft: string) {
-    const nextDrafts = { ...draftsByAgentRef.current };
-    if (draft) {
-      nextDrafts[agentId] = draft;
-    } else {
-      delete nextDrafts[agentId];
-    }
-    draftsByAgentRef.current = nextDrafts;
-    setDraftsByAgentState(nextDrafts);
-
-    const timers = draftFlushTimersRef.current;
-    const pending = timers[agentId];
-    if (pending !== undefined) {
-      clearTimeout(pending);
-      delete timers[agentId];
-    }
-    if (!draft) {
-      void persistAgentDraft(agentId, "").catch(() => undefined);
-      return;
-    }
-    timers[agentId] = setTimeout(() => {
-      delete timers[agentId];
-      void persistAgentDraft(agentId, draftsByAgentRef.current[agentId] ?? "").catch(
-        () => undefined,
-      );
-    }, DRAFT_FLUSH_DEBOUNCE_MS);
-  }
-
   // Composer-local edit flushers, registered by each mounted NativeInput. The
   // composer holds keystrokes locally behind a short debounce, so a quit/close
   // flush must first pull those edits into draftsByAgentRef before writing to
   // disk — otherwise the last moments of typing are invisible to it.
   const composerDraftFlushersRef = useRef(new Set<() => void>());
-  const registerComposerDraftFlusher = useCallback((flush: () => void) => {
-    composerDraftFlushersRef.current.add(flush);
-    return () => {
-      composerDraftFlushersRef.current.delete(flush);
-    };
-  }, []);
 
   // Flushes every still-pending debounced draft right now (used when the window is
   // going away, so the last second of typing is not lost on a quick close).
@@ -6357,23 +5409,6 @@ function MainApp() {
         () => undefined,
       );
     }
-  }
-
-  // Normalizes an absolute path for display by anchoring home-relative paths
-  // with ~. Unlike formatPaneDir, the rest of the path is kept intact — used
-  // where the full location matters (e.g. the prompt library's Project hint).
-  function homeRelativePath(rawPath: string | null): string | null {
-    if (!rawPath) {
-      return null;
-    }
-    const homeDir = config?.homeDir;
-    if (homeDir && rawPath === homeDir) {
-      return "~";
-    }
-    if (homeDir && rawPath.startsWith(`${homeDir}/`)) {
-      return `~/${rawPath.slice(homeDir.length + 1)}`;
-    }
-    return rawPath;
   }
 
   // Compact directory label for a pane tab. Worktrees under the workspace root
@@ -6903,216 +5938,6 @@ function MainApp() {
     }
   }
 
-  async function handleSelectTranscript(agentId: string, path: string | null) {
-    setError(null);
-    try {
-      const updated = await setAgentTranscript(agentId, path);
-      // The command repoints the agent but emits no agent.* event, so apply the
-      // returned agent directly to keep the dropdown's selection in sync.
-      setAgents((current) =>
-        current.map((agent) => (agent.id === updated.id ? updated : agent)),
-      );
-      if (path) {
-        // Re-read every visible picker: this agent's active flag changed and a
-        // sibling's "In use" badge may have changed with it.
-        refreshVisibleTranscriptOptions();
-      } else {
-        // With no bound transcript there is no directory to rescan from; keep the
-        // already-loaded menu visible, just without an active row.
-        setTranscriptOptionsByAgent((current) => ({
-          ...current,
-          [agentId]: (current[agentId] ?? []).map((option) => ({
-            ...option,
-            isActive: false,
-          })),
-        }));
-        setTranscriptNoticeByAgent((current) => ({ ...current, [agentId]: null }));
-        refreshVisibleTranscriptOptions(agentId);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function discardRecoveredQueuedTurn(
-    agentId: string,
-    index: number,
-    turn: string,
-    expectedId?: string,
-  ) {
-    setError(null);
-    try {
-      const result = await removeQueuedAgentTurn(agentId, index, turn, expectedId);
-      setAgentQueuedTurns(agentId, result.queuedTurns);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  // Moves one queued turn from an agent's queue to another agent. Used both by the
-  // recovered-queue panel and by dragging a queued card onto another split's cell.
-  async function moveQueuedTurnToAgent(
-    agentId: string,
-    targetAgentId: string | null | undefined,
-    index: number,
-    turn: string,
-    expectedId?: string,
-  ) {
-    if (!targetAgentId || targetAgentId === agentId) {
-      return;
-    }
-
-    setError(null);
-    try {
-      // One atomic backend call removes from the source and hands the turn to the
-      // target (rolling back on failure), so the turn can't end up in both queues.
-      const result = await moveQueuedAgentTurn(agentId, targetAgentId, index, turn, expectedId);
-      setAgentQueuedTurns(agentId, result.sourceQueuedTurns);
-      setAgentQueuedTurns(targetAgentId, result.targetQueuedTurns);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  // Home-rail card reorder: same shape as the composer's persistQueueReorder,
-  // pulling the backend's truth back if the call fails mid-flight.
-  async function reorderHomeQueuedTurn(
-    agentId: string,
-    fromIndex: number,
-    toIndex: number,
-    turn: string,
-    expectedId?: string,
-  ) {
-    setError(null);
-    try {
-      const result = await reorderQueuedAgentTurn(agentId, fromIndex, toIndex, turn, expectedId);
-      setAgentQueuedTurns(agentId, result.queuedTurns);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      try {
-        setAgentQueuedTurns(agentId, await listAgentTurnQueue(agentId));
-      } catch {
-        // Best-effort resync.
-      }
-    }
-  }
-
-  // Home-rail ghost composer: send straight through when the agent is ready
-  // for input, otherwise queue behind it (never steer a running agent from
-  // the overview). Returns whether the turn was accepted so the rail knows to
-  // clear its draft.
-  async function queueHomeTurn(agentId: string, text: string): Promise<boolean> {
-    setError(null);
-    try {
-      const result = await submitAgentTurn(agentId, text, "auto");
-      setAgentQueuedTurns(agentId, result.queuedTurns);
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      return false;
-    }
-  }
-
-  // Home-rail … menu: drop a queued turn (Remove, and the edit-recall's removal
-  // step). Returns whether the backend dropped it so an edit only pulls text in
-  // on success.
-  async function removeHomeQueuedTurn(
-    agentId: string,
-    index: number,
-    rawText: string,
-    expectedId?: string,
-  ): Promise<boolean> {
-    setError(null);
-    try {
-      const result = await removeQueuedAgentTurn(agentId, index, rawText, expectedId);
-      setAgentQueuedTurns(agentId, result.queuedTurns);
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      return false;
-    }
-  }
-
-  // Home-rail card menu: push the top queued turn immediately, the same command
-  // behind the composer menu's "Send top queued item now!".
-  async function sendNextHomeQueuedTurn(agentId: string) {
-    setError(null);
-    try {
-      const result = await sendNextQueuedAgentTurn(agentId);
-      setAgentQueuedTurns(agentId, result.queuedTurns);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  // Home-rail card menu: toggle a queued turn's pause-after-send flag, the same
-  // command behind the composer menu's "Pause after top queued item".
-  async function setHomeQueuedTurnPause(
-    agentId: string,
-    index: number,
-    pauseAfter: boolean,
-    rawText: string,
-    expectedId?: string,
-  ) {
-    setError(null);
-    try {
-      setAgentQueuedTurns(
-        agentId,
-        await setQueuedTurnPause(agentId, index, pauseAfter, rawText, expectedId),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  // Home-rail card menu: clear a paused queue, mirroring the composer's Unpause
-  // button (the backend drains the next turn if the agent is idle).
-  async function unpauseHomeAgent(agentId: string) {
-    setError(null);
-    try {
-      const result = await unpauseAgent(agentId);
-      setAgentQueuedTurns(agentId, result.queuedTurns);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function createHomeDraft(text: string): Promise<boolean> {
-    setError(null);
-    try {
-      const draft = await createGlobalDraft(text);
-      // The drafts.changed event carries the full list moments later; append
-      // eagerly so the card appears without waiting on the round-trip.
-      setGlobalDrafts((current) =>
-        current.some((existing) => existing.id === draft.id) ? current : [...current, draft],
-      );
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      return false;
-    }
-  }
-
-  async function deleteHomeDraft(draftId: string) {
-    setError(null);
-    try {
-      setGlobalDrafts(await deleteGlobalDraft(draftId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function assignHomeDraft(draftId: string, agentId: string) {
-    setError(null);
-    try {
-      const result = await assignGlobalDraft(draftId, agentId);
-      setGlobalDrafts(result.drafts);
-      setAgentQueuedTurns(agentId, result.queuedTurns);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
   function paneIdsForSplitStatusGroup(paneId: string): string[] {
     const split = paneSplitForPane(paneSplitsRef.current, paneId);
     if (!split) {
@@ -7126,18 +5951,6 @@ function MainApp() {
   function agentsForSplitStatusGroup(paneId: string): AgentInfo[] {
     const paneIds = new Set(paneIdsForSplitStatusGroup(paneId));
     return agentsRef.current.filter((agent) => agent.paneId && paneIds.has(agent.paneId));
-  }
-
-  function agentsForAgentStatusGroup(agentId: string): AgentInfo[] {
-    const agent = agentsRef.current.find((candidate) => candidate.id === agentId);
-    if (!agent) {
-      return [];
-    }
-    if (!agent.paneId) {
-      return [agent];
-    }
-    const groupedAgents = agentsForSplitStatusGroup(agent.paneId);
-    return groupedAgents.length > 0 ? groupedAgents : [agent];
   }
 
   function replaceAgents(updatedAgents: AgentInfo[]) {
@@ -7183,48 +5996,6 @@ function MainApp() {
       replaceAgents(
         checkBackend ? applicableSpeculativeAcknowledgements(acknowledged) : acknowledged,
       );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function acknowledgeAgentStatus(agentId: string, includeFailed = false) {
-    await acknowledgeAgentStatuses(agentsForAgentStatusGroup(agentId), includeFailed);
-  }
-
-  async function clearAgentWorkingIndicator(agentId: string) {
-    const targetAgents = agentsForAgentStatusGroup(agentId).filter(
-      (agent) => agent.status === "running" || agent.status === "starting",
-    );
-    if (targetAgents.length === 0) {
-      return;
-    }
-    const targetAgentIds = targetAgents.map((agent) => agent.id);
-    const targetAgentIdSet = new Set(targetAgentIds);
-    setError(null);
-    try {
-      replaceAgents(await Promise.all(targetAgentIds.map((id) => clearAgentWorkingStatus(id))));
-      setThinkingAgentIds((current) => {
-        if (targetAgentIds.every((id) => !current.has(id))) {
-          return current;
-        }
-        const next = new Set(current);
-        for (const id of targetAgentIds) {
-          next.delete(id);
-        }
-        return next;
-      });
-      setProcessingNewMessageByAgent((current) => {
-        let changed = false;
-        const next = { ...current };
-        for (const id of targetAgentIdSet) {
-          if (Object.prototype.hasOwnProperty.call(next, id)) {
-            delete next[id];
-            changed = true;
-          }
-        }
-        return changed ? next : current;
-      });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -7346,291 +6117,6 @@ function MainApp() {
       : {}),
   } as CSSProperties;
 
-  // The fraction of the split container's height minus this track's share of the
-  // gutters, as a CSS calc() term.
-  function splitTrackExtent(fraction: number): string {
-    const gutterCount = Math.max(0, (activePaneSplit?.paneIds.length ?? 1) - 1);
-    const totalGutter = gutterCount * TERMINAL_SPLIT_GUTTER_PX;
-    return `${fraction * 100}% - ${fraction * totalGutter}px`;
-  }
-
-  function splitTrackPosition(
-    fraction: number,
-    precedingGutters: number,
-    inset = 0,
-  ): string {
-    return `calc(${splitTrackExtent(fraction)} + ${
-      precedingGutters * TERMINAL_SPLIT_GUTTER_PX + inset
-    }px)`;
-  }
-
-  function splitTrackSize(fraction: number): string {
-    return `calc(${splitTrackExtent(fraction)})`;
-  }
-
-  // Which split panes reserve the inline turn-pane strip, keyed as a string so
-  // the style memo below only invalidates when membership actually changes
-  // (splitTurnPaneSurfaceByPaneId itself is rebuilt every render).
-  const reservedInlineTurnPaneKey = rightBarCollapsed
-    ? ""
-    : splitTurnPaneSurfaces.map((surface) => surface.pane.id).join("\n");
-
-  function splitRectStyle(rect: SplitRect): CSSProperties {
-    return { ...splitRectOffsets(rect), right: "auto", bottom: "auto" };
-  }
-
-  // The rectangle a visible pane occupies on the stage. With no split there is
-  // one pane filling it, which is what drag-to-split targets before any split
-  // exists.
-  function splitRectForVisiblePane(paneId: string): SplitRect | null {
-    if (activeSplitLayout) {
-      return activeSplitLayout.panes.get(paneId) ?? null;
-    }
-    return visibleTerminalPaneIds[0] === paneId ? fullStageSplitRect() : null;
-  }
-
-  // Per-pane split styles with stable identities: TerminalPane receives the
-  // style as a prop and lists it in its native layout-sync effect deps, so a
-  // fresh object every render would defeat its memo and re-issue a layout FFI
-  // call per visible pane on every unrelated App re-render.
-  const terminalPaneStyleByPaneId = useMemo(() => {
-    const styles = new Map<string, CSSProperties>();
-    if (!activePaneSplit || !activeSplitLayout) {
-      return styles;
-    }
-    const reservedInlineTurnPaneIds = new Set(
-      reservedInlineTurnPaneKey ? reservedInlineTurnPaneKey.split("\n") : [],
-    );
-    activePaneSplit.paneIds.forEach((paneId) => {
-      const rect = activeSplitLayout.panes.get(paneId);
-      if (!rect) {
-        return;
-      }
-      const style = splitRectStyle(rect);
-      if (reservedInlineTurnPaneIds.has(paneId)) {
-        // Only reachable in splitRightPaneMode — a plain top/bottom stack, where
-        // every pane spans the stage width and gives up the same right-hand
-        // strip. Keep reserving it while the transcript is expanded: the overlay
-        // covers the stage, so the strip is invisible, and holding terminal
-        // geometry constant means expand/collapse never resizes the PTY. A
-        // resize would SIGWINCH full-screen TUIs (Claude Code clears and
-        // re-lays-out on every resize), losing their scroll position.
-        style.width = "auto";
-        style.right = "var(--inline-turn-pane-width)";
-      }
-      styles.set(paneId, style);
-    });
-    return styles;
-  }, [activePaneSplit, activeSplitLayout, reservedInlineTurnPaneKey]);
-
-  function terminalPaneStyle(paneId: string): CSSProperties | undefined {
-    return terminalPaneStyleByPaneId.get(paneId);
-  }
-
-  /** Axis a drop on this pane would split along: whatever its own branch uses. */
-  function terminalSplitDropAxis(paneId: string): PaneSplitAxis {
-    if (!activePaneSplit) {
-      return activeSplitAxis;
-    }
-    return splitAxisForPane(activePaneSplit, paneId) ?? activeSplitAxis;
-  }
-
-  function terminalSplitDropPlaceholderStyle(): CSSProperties | undefined {
-    if (paneDropTarget?.kind !== "terminal-split") {
-      return undefined;
-    }
-    const rect = splitRectForVisiblePane(paneDropTarget.targetPaneId);
-    if (!rect) {
-      return undefined;
-    }
-    const style = splitRectStyle(rect);
-    const far = paneDropTarget.position === "below";
-    if (terminalSplitDropAxis(paneDropTarget.targetPaneId) === "horizontal") {
-      const halfFraction = rect.widthFraction / 2;
-      const halfPx = rect.widthPx / 2;
-      style.width = splitCalc(halfFraction, halfPx);
-      if (far) {
-        style.left = splitCalc(rect.leftFraction + halfFraction, rect.leftPx + halfPx);
-      }
-      return style;
-    }
-    const halfFraction = rect.heightFraction / 2;
-    const halfPx = rect.heightPx / 2;
-    style.height = splitCalc(halfFraction, halfPx);
-    if (far) {
-      style.top = splitCalc(rect.topFraction + halfFraction, rect.topPx + halfPx);
-    }
-    return style;
-  }
-
-  const terminalSplitDropStyle = terminalSplitDropPlaceholderStyle();
-  const terminalSplitDropIsColumn =
-    paneDropTarget?.kind === "terminal-split" &&
-    terminalSplitDropAxis(paneDropTarget.targetPaneId) === "horizontal";
-
-  const terminalSplitDividers = activeSplitLayout?.dividers ?? [];
-
-  // The inline right-bar gutter covers sit in the transcript strip, which only
-  // exists for a plain top/bottom stack, so they keep the flat single-axis math
-  // and take their own left/right/width from CSS.
-  const splitRightPaneDividerOffsets =
-    splitRightPaneMode && activePaneSplit
-      ? activePaneSplit.paneIds
-          .slice(0, -1)
-          .map((_, index) =>
-            activeSplitFractions.slice(0, index + 1).reduce((sum, value) => sum + value, 0),
-          )
-      : [];
-
-  function turnPaneInlineDividerStyle(offset: number, index: number): CSSProperties {
-    return {
-      top: splitTrackPosition(offset, index),
-      height: TERMINAL_SPLIT_GUTTER_PX,
-    };
-  }
-
-  // Veils the region the divider has swept, in the branch's own coordinates.
-  // Node-local offsets are plain comparable numbers; the composed
-  // fraction/pixel pairs are not, because the pixel term moves opposite to the
-  // fraction term as gutters are redistributed.
-  const terminalSplitResizeMaskStyle = (() => {
-    const mask = terminalSplitResizeMask;
-    if (!mask || !activeSplitLayout || activePaneSplit?.id !== mask.splitId) {
-      return undefined;
-    }
-    const branch = activeSplitLayout.branches.get(mask.path);
-    if (!branch) {
-      return undefined;
-    }
-    const currentOffset = splitBranchOffsets(branch)[mask.index + 1];
-    if (
-      currentOffset === undefined ||
-      Math.abs(currentOffset - mask.startOffset) < Number.EPSILON
-    ) {
-      return undefined;
-    }
-    return splitRectStyle(
-      splitBranchSpanRect(
-        branch,
-        Math.min(currentOffset, mask.startOffset),
-        Math.abs(currentOffset - mask.startOffset),
-        mask.index,
-        TERMINAL_SPLIT_GUTTER_PX,
-      ),
-    );
-  })();
-
-  const terminalSplitResizeMaskIsColumn =
-    terminalSplitResizeMask &&
-    activeSplitLayout?.branches.get(terminalSplitResizeMask.path)?.axis === "horizontal";
-
-  function startTerminalSplitResize(
-    event: ReactPointerEvent<HTMLDivElement>,
-    split: PaneSplitInfo,
-    divider: SplitDivider,
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-    const branch = activeSplitLayout?.branches.get(divider.path);
-    const stageRect = mainStageRef.current?.getBoundingClientRect();
-    if (!branch || !stageRect) {
-      return;
-    }
-    const horizontal = divider.axis === "horizontal";
-    const minExtent = horizontal ? TERMINAL_SPLIT_MIN_WIDTH : TERMINAL_SPLIT_MIN_HEIGHT;
-    const stage = { width: stageRect.width, height: stageRect.height };
-    // Drag deltas are fractions of the branch's own content, not the stage, so a
-    // nested divider tracks the pointer at its own scale.
-    const contentExtent = splitBranchContentExtent(branch, stage, TERMINAL_SPLIT_GUTTER_PX);
-    if (contentExtent < minExtent * branch.fractions.length || contentExtent <= 0) {
-      return;
-    }
-
-    const releasePointer = claimResizePointer(event);
-    let latestSplit = split;
-    const startOffset = splitBranchOffsets(branch)[divider.index + 1];
-    // Hold the resize cursor and suppress selection for the whole gesture, as
-    // the sidebar and turn-pane drags do. Without it the cursor reverts to the
-    // terminal I-beam the moment the pointer leaves the 8px gutter and WebKit
-    // starts selecting stage content behind the drag.
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-    document.body.style.cursor = horizontal ? "col-resize" : "row-resize";
-    document.body.style.userSelect = "none";
-    setTerminalGeometryResizing(true);
-    setTerminalSplitResizeMask({
-      splitId: split.id,
-      path: divider.path,
-      index: divider.index,
-      startOffset,
-    });
-    terminalSplitResizeRef.current = {
-      splitId: split.id,
-      path: divider.path,
-      index: divider.index,
-      startClient: horizontal ? event.clientX : event.clientY,
-      stageExtent: contentExtent,
-      startSplit: split,
-    };
-
-    const handlePointerMove = (pointerEvent: PointerEvent) => {
-      const drag = terminalSplitResizeRef.current;
-      if (!drag || drag.splitId !== split.id) {
-        return;
-      }
-      const client = horizontal ? pointerEvent.clientX : pointerEvent.clientY;
-      latestSplit = resizeSplitNodeFractions(
-        drag.startSplit,
-        drag.path,
-        drag.index,
-        (client - drag.startClient) / drag.stageExtent,
-      );
-      setPaneSplitsState((current) =>
-        current.map((candidate) => (candidate.id === latestSplit.id ? latestSplit : candidate)),
-      );
-    };
-
-    const finishResize = () => {
-      window.removeEventListener("pointermove", handlePointerMove, true);
-      window.removeEventListener("pointerup", finishResize, true);
-      window.removeEventListener("pointercancel", finishResize, true);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      releasePointer();
-      terminalSplitResizeRef.current = null;
-      setTerminalGeometryResizing(false);
-      setTerminalSplitResizeMask(null);
-      savePaneSplits(
-        paneSplits.map((candidate) => (candidate.id === latestSplit.id ? latestSplit : candidate)),
-      );
-    };
-
-    window.addEventListener("pointermove", handlePointerMove, true);
-    window.addEventListener("pointerup", finishResize, true);
-    window.addEventListener("pointercancel", finishResize, true);
-  }
-
-  function resizeTerminalSplitWithKeyboard(
-    event: ReactKeyboardEvent<HTMLDivElement>,
-    split: PaneSplitInfo,
-    divider: SplitDivider,
-  ) {
-    const horizontal = divider.axis === "horizontal";
-    const backward = horizontal ? "ArrowLeft" : "ArrowUp";
-    const forward = horizontal ? "ArrowRight" : "ArrowDown";
-    if (event.key !== backward && event.key !== forward) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    const step = event.shiftKey ? 0.08 : 0.03;
-    const delta = event.key === forward ? step : -step;
-    const resized = resizeSplitNodeFractions(split, divider.path, divider.index, delta);
-    savePaneSplits(
-      paneSplits.map((candidate) => (candidate.id === resized.id ? resized : candidate)),
-    );
-  }
-
   const contextMenuPane = paneContextMenu
     ? panes.find((pane) => pane.id === paneContextMenu.paneId)
     : undefined;
@@ -7653,7 +6139,6 @@ function MainApp() {
     : null;
   const groupMenuGroup = groupMenu ? groups.find((group) => group.id === groupMenu.groupId) : null;
   const appleFoundationTitleAvailable = appleFoundationModelsTitleAvailable(config);
-  const titleGenerationEnabled = firstMessageTitleConfig(settings, config) !== null;
   const titleGenerationTestVisible =
     settings.tabTitleProvider === "openRouter" ||
     settings.tabTitleProvider === "appleFoundationModels";
@@ -7712,7 +6197,6 @@ function MainApp() {
           storedResearchSdkHarness,
           queueEntries,
           draftEntries,
-          storedGlobalDrafts,
         ] =
           await Promise.all([
             getOpenRouterKey().catch(() => ""),
@@ -7740,7 +6224,6 @@ function MainApp() {
                   ] as const,
               ),
             ),
-            listGlobalDrafts().catch((): GlobalDraft[] => []),
           ]);
         if (cancelled) {
           return;
@@ -7794,7 +6277,6 @@ function MainApp() {
           ...Object.fromEntries(queueEntries),
           ...queuedTurnsByAgentRef.current,
         });
-        setGlobalDrafts(storedGlobalDrafts);
         const restoredDrafts = {
           ...Object.fromEntries(
             draftEntries.filter((entry): entry is [string, string] => Boolean(entry[1])),
@@ -7825,8 +6307,6 @@ function MainApp() {
           existingRecentActivity,
           existingResearchFolders,
           existingPublications,
-          existingArtifacts,
-          existingNotificationLog,
         ] = await Promise.all([
           getRuntimeConfig(),
           getLauncherAdapterPreference().catch(() => null),
@@ -7842,8 +6322,6 @@ function MainApp() {
             .catch(() => ({ items: [], nextCursor: null })),
           listResearchFolders().catch(emptyResearchFolderState),
           listPublications().catch((): PublicationBinding[] => []),
-          artifactList().catch((): ArtifactInfo[] => []),
-          getNotificationLog().catch((): unknown => null),
         ]);
         if (cancelled) {
           return;
@@ -7860,7 +6338,6 @@ function MainApp() {
         );
         setAgents(existingAgents);
         setAgentsHydrated(true);
-        setArtifacts(existingArtifacts);
         const partitionedResearchTrees = partitionResearchTrees(existingResearchTrees);
         setResearchTrees(partitionedResearchTrees.active);
         setArchivedResearchTrees(partitionedResearchTrees.archived);
@@ -7894,7 +6371,6 @@ function MainApp() {
             localStorage.removeItem(RESEARCH_FOLDERS_STORAGE_KEY);
           }
         }
-        setNotificationLog(normalizeNotificationLog(existingNotificationLog));
         setPublicationBindings(existingPublications);
         void hydrateSecondaryFast(existingAgents);
         const savedResearchTreeId = localStorage.getItem(ACTIVE_RESEARCH_TREE_KEY);
@@ -7928,7 +6404,7 @@ function MainApp() {
               activeResearchPaneIdRef.current = null;
               setActiveResearchPaneId(null);
               localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
-              setActiveSurface("research");
+              showResearchSurface();
             }
             return;
           }
@@ -7952,9 +6428,9 @@ function MainApp() {
                 setActiveResearchPaneId(restoredResearchPane.id);
                 activePaneIdRef.current = restoredResearchPane.id;
                 setActivePaneIdState(restoredResearchPane.id);
-                setActiveSurface("pane");
+                showResearchSurface();
               } else if (sidebarModeRef.current === "research") {
-                setActiveSurface("research");
+                showResearchSurface();
                 if (
                   researchDocumentIsVisible(
                     researchTreeToRestore.id,
@@ -7988,7 +6464,7 @@ function MainApp() {
               setActiveResearchTreeId(researchTreeToRestore.id);
               localStorage.setItem(ACTIVE_RESEARCH_TREE_KEY, researchTreeToRestore.id);
               setActiveResearchDetailError(err instanceof Error ? err.message : String(err));
-              setActiveSurface("research");
+              showResearchSurface();
             } else {
               localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
             }
@@ -8211,35 +6687,6 @@ function MainApp() {
     attempt(ATTACH_MAX_RETRIES, ATTACH_INITIAL_RETRY_MS);
   }, []);
 
-  // Releases a pane's pre-attach output backlog. While the backend subscription is
-  // still being set up, the request is parked and flushed by handleEventsReady, so
-  // no cold-start output is delivered before a listener exists to receive it.
-  const requestPaneAttach = useCallback(
-    (paneId: string) => {
-      if (eventsReadyRef.current) {
-        attachPaneWithRetry(paneId);
-      } else {
-        pendingAttachRef.current.add(paneId);
-      }
-    },
-    [attachPaneWithRetry],
-  );
-
-  const hydrateShellAgentJobs = useCallback(async () => {
-    // Subscribe first, then hydrate. If a foreground/background transition lands
-    // while the snapshot is in flight, retry instead of letting that older snapshot
-    // overwrite the live event (or dropping some other recovered job entirely).
-    for (;;) {
-      const eventVersion = shellJobEventVersionRef.current;
-      const jobs = await listShellAgentJobs();
-      if (eventVersion !== shellJobEventVersionRef.current) {
-        continue;
-      }
-      setShellJobByAgent(Object.fromEntries(jobs.map((job) => [job.agentId, job])));
-      return;
-    }
-  }, []);
-
   const handleEventsReady = useCallback(() => {
     eventsReadyRef.current = true;
     const pending = pendingAttachRef.current;
@@ -8247,8 +6694,7 @@ function MainApp() {
     for (const paneId of pending) {
       attachPaneWithRetry(paneId);
     }
-    void hydrateShellAgentJobs().catch(() => undefined);
-  }, [attachPaneWithRetry, hydrateShellAgentJobs]);
+  }, [attachPaneWithRetry]);
 
   function savePaneSplits(nextSplits: PaneSplitInfo[], paneSnapshot = panes) {
     const normalized = normalizePaneSplitsForPanes(nextSplits, paneSnapshot);
@@ -8278,27 +6724,6 @@ function MainApp() {
     });
   }, [panes]);
 
-  // Stable per-pane ref callbacks. An inline `ref={(h) => ...}` is a new function
-  // each render, which would defeat TerminalPane's React.memo; returning the same
-  // callback per pane id keeps the ref prop stable.
-  const paneRefCallbacks = useRef(new Map<string, (handle: TerminalPaneHandle | null) => void>());
-  const terminalPaneRefCallback = useCallback((paneId: string) => {
-    const existing = paneRefCallbacks.current.get(paneId);
-    if (existing) {
-      return existing;
-    }
-    const callback = (handle: TerminalPaneHandle | null) => {
-      if (handle) {
-        terminalPaneRefs.current.set(paneId, handle);
-      } else {
-        terminalPaneRefs.current.delete(paneId);
-        paneRefCallbacks.current.delete(paneId);
-      }
-    };
-    paneRefCallbacks.current.set(paneId, callback);
-    return callback;
-  }, []);
-
   const openNativeTerminalSearch = useCallback((paneId: string) => {
     terminalPaneRefs.current.get(paneId)?.openSearch();
   }, []);
@@ -8325,119 +6750,6 @@ function MainApp() {
         exposureConfirmed: true,
       }).catch(() => undefined);
     }
-  }, []);
-  // Keeps the artifact mirror in step with backend tray mutations. `added`
-  // carries the new entry plus any ids it displaced (a dedupe bump or the
-  // per-group cap); re-sorting by createdAt keeps undo restores — which the
-  // backend inserts mid-list — in chronological order.
-  const handleArtifactEvent = useCallback((event: QmuxEvent) => {
-    if (event.type === "artifact.added") {
-      const artifact = event.payload.artifact as ArtifactInfo | undefined;
-      if (!artifact || typeof artifact.id !== "string") {
-        return;
-      }
-      const removedIds = new Set(
-        Array.isArray(event.payload.removedIds)
-          ? (event.payload.removedIds as unknown[]).filter(
-              (id): id is string => typeof id === "string",
-            )
-          : [],
-      );
-      setArtifacts((current) =>
-        [
-          ...current.filter(
-            (entry) => entry.id !== artifact.id && !removedIds.has(entry.id),
-          ),
-          artifact,
-        ].sort((a, b) => a.createdAt - b.createdAt),
-      );
-      return;
-    }
-    if (event.type === "artifact.removed") {
-      const id = event.payload.id;
-      if (typeof id === "string") {
-        setArtifacts((current) => current.filter((entry) => entry.id !== id));
-      }
-    }
-  }, []);
-
-  function clearArtifactUndoTimer() {
-    if (artifactUndoTimerRef.current !== null) {
-      window.clearTimeout(artifactUndoTimerRef.current);
-      artifactUndoTimerRef.current = null;
-    }
-  }
-
-  const removeArtifact = useCallback((artifact: ArtifactInfo) => {
-    void artifactRemove(artifact.id)
-      .then((removed) => {
-        clearArtifactUndoTimer();
-        setArtifactUndo(removed);
-        artifactUndoTimerRef.current = window.setTimeout(() => {
-          setArtifactUndo(null);
-          artifactUndoTimerRef.current = null;
-        }, ARTIFACT_UNDO_MS);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function undoArtifactRemove() {
-    if (!artifactUndo) {
-      return;
-    }
-    clearArtifactUndoTimer();
-    const restoring = artifactUndo;
-    setArtifactUndo(null);
-    void artifactRestore(restoring).catch((err) =>
-      setError(err instanceof Error ? err.message : String(err)),
-    );
-  }
-
-  // Opens a tray entry, or closes the browser when that entry already owns it.
-  // Files go through browserOpenLocalPath, which re-validates the path against
-  // the target pane's roots, previews renderable formats with a fresh token URL,
-  // and reveals binaries safely. Entries whose source
-  // pane still exists open there (activating that tab, which is what the muted
-  // cross-pane rows promise); if the pane is gone the tray's own pane hosts it.
-  const openArtifact = useCallback(
-    (artifact: ArtifactInfo, fallbackPaneId: string) => {
-      const sourceExists = panesRef.current.some((pane) => pane.id === artifact.paneId);
-      const targetPaneId = sourceExists ? artifact.paneId : fallbackPaneId;
-      if (targetPaneId !== activePaneIdRef.current) {
-        activateTerminalPane(targetPaneId);
-      }
-      if (isArtifactBrowserOpen(browserOverlayByPaneRef.current[targetPaneId], artifact.id)) {
-        setBrowserOverlayByPane((current) => {
-          const overlay = current[targetPaneId];
-          if (!isArtifactBrowserOpen(overlay, artifact.id)) {
-            return current;
-          }
-          return closeBrowserOverlayState(current, targetPaneId);
-        });
-        return;
-      }
-      if (artifact.path) {
-        void browserOpenLocalPath(targetPaneId, artifact.path, artifact.id).catch((err) => {
-          setError(err instanceof Error ? err.message : String(err));
-        });
-      } else if (artifact.url) {
-        openBrowserOverlay(targetPaneId, artifact.url, false, artifact.id);
-      }
-    },
-    [activateTerminalPane, openBrowserOverlay],
-  );
-
-  const openArtifactExternally = useCallback((artifact: ArtifactInfo) => {
-    void artifactOpenExternal(artifact.id).catch((err) =>
-      setError(err instanceof Error ? err.message : String(err)),
-    );
-  }, []);
-
-  const revealArtifact = useCallback((artifact: ArtifactInfo) => {
-    void artifactReveal(artifact.id).catch((err) =>
-      setError(err instanceof Error ? err.message : String(err)),
-    );
   }, []);
 
   const clearResearchUnseen = useCallback((treeId: string) => {
@@ -8721,8 +7033,8 @@ function MainApp() {
     const requestSeq = researchDetailRequestSeqRef.current + 1;
     researchDetailRequestSeqRef.current = requestSeq;
     dismissPristineNewDocumentComposer();
-    setSidebarMode("research");
-    setActiveSurface("research");
+    showResearchSidebar();
+    showResearchSurface();
     setJournalOpen(false);
     // A single selection always dissolves a sidebar multi-selection; leaving
     // it standing would keep the placeholder covering the opened document.
@@ -8769,7 +7081,7 @@ function MainApp() {
     dismissPristineNewDocumentComposer,
     markVisibleResearchTreeViewed,
     setJournalOpen,
-    setSidebarMode,
+    showResearchSidebar,
   ]);
   const recordResearchWorkspaceVisit = useCallback((visit: ResearchWorkspaceVisit) => {
     setResearchWorkspaceHistory((current) => {
@@ -8840,8 +7152,8 @@ function MainApp() {
     // selected; otherwise its detail can repaint behind the launcher.
     researchDetailRequestSeqRef.current += 1;
     dismissPristineNewDocumentComposer();
-    setSidebarMode("research");
-    setActiveSurface("research");
+    showResearchSidebar();
+    showResearchSurface();
     setJournalOpen(false);
     setResearchMultiSelectIds([]);
     activeResearchPaneIdRef.current = null;
@@ -8852,7 +7164,7 @@ function MainApp() {
     setActiveResearchDetail(null);
     setActiveResearchDetailError(null);
     localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
-  }, [dismissPristineNewDocumentComposer, setActiveSurface, setJournalOpen, setSidebarMode]);
+  }, [dismissPristineNewDocumentComposer, showResearchSurface, setJournalOpen, showResearchSidebar]);
   // Brings the Journal page forward on the research surface. Tree selection is
   // left standing (the journal outranks the document in the stage selector),
   // so closing the journal by picking a tree is a plain selection.
@@ -8862,8 +7174,8 @@ function MainApp() {
     // never shows a selected row behind the tab that is actually forward.
     researchDetailRequestSeqRef.current += 1;
     dismissPristineNewDocumentComposer();
-    setSidebarMode("research");
-    setActiveSurface("research");
+    showResearchSidebar();
+    showResearchSurface();
     setResearchMultiSelectIds([]);
     activeResearchPaneIdRef.current = null;
     setActiveResearchPaneId(null);
@@ -8874,7 +7186,7 @@ function MainApp() {
     setActiveResearchDetailError(null);
     localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
     setJournalOpen(true);
-  }, [dismissPristineNewDocumentComposer, setActiveSurface, setJournalOpen, setSidebarMode]);
+  }, [dismissPristineNewDocumentComposer, showResearchSurface, setJournalOpen, showResearchSidebar]);
   const openJournal = useCallback(() => {
     const treeId = activeResearchTreeIdRef.current;
     setResearchWorkspaceHistory((current) => {
@@ -9092,16 +7404,19 @@ function MainApp() {
       }
     }
   }, [hydrateJournalTweet, journalOpen, recentActivityItems]);
+
+
+
   const changeSidebarMode = useCallback(
-    (mode: SidebarMode) => {
+    (_mode: SidebarMode) => {
       setPaneContextMenu(null);
       setGroupMenu(null);
       setSettingsMenu(null);
-      setSidebarMode("research");
+      showResearchSidebar();
       // A journal left forward survives the round trip through terminal mode,
       // like a remembered research pane or tree.
       if (journalOpenRef.current) {
-        setActiveSurface("research");
+        showResearchSurface();
         return;
       }
       const researchPaneId = activeResearchPaneIdRef.current;
@@ -9114,7 +7429,7 @@ function MainApp() {
         focusPaneTab(researchPane.id);
         return;
       }
-      setActiveSurface("research");
+      showResearchSurface();
       const currentTreeId = activeResearchTreeIdRef.current;
       if (!currentTreeId) {
         focusResearchHome();
@@ -9141,7 +7456,7 @@ function MainApp() {
       researchTrees,
       selectResearchTree,
       setActivePaneId,
-      setSidebarMode,
+      showResearchSidebar,
     ],
   );
   const createResearchFromSidebar = useCallback(() => {
@@ -9151,15 +7466,15 @@ function MainApp() {
     // stage), the mismatch the boot-restore path treats as unrecoverable.
     setNewAgentOpen(false);
     setTerminalMapOpen(false);
-    setSidebarMode("research");
-    setActiveSurface("research");
+    showResearchSidebar();
+    showResearchSurface();
     setNewResearchOpen(true);
-  }, [setActiveSurface, setSidebarMode]);
+  }, [showResearchSurface, showResearchSidebar]);
   const createDocumentFromSidebar = useCallback(() => {
     // The composer is a research-surface page, not a modal: opening it also
     // brings the research surface forward so it is actually visible.
-    setSidebarMode("research");
-    setActiveSurface("research");
+    showResearchSidebar();
+    showResearchSurface();
     if (newDocumentOpenRef.current && newDocumentDirtyRef.current) {
       // Re-invoking "new document" surfaces the existing draft. Resetting
       // here would change the composer's resetKey and silently erase it.
@@ -9173,7 +7488,7 @@ function MainApp() {
     });
     newDocumentOpenRef.current = true;
     setNewDocumentOpen(true);
-  }, [setActiveSurface, setSidebarMode]);
+  }, [showResearchSurface, showResearchSidebar]);
 
   // Native drag events bypass DOM modal backdrops. Keep the always-on listener
   // from stacking a document composer over an open modal. An open composer
@@ -9335,7 +7650,7 @@ function MainApp() {
             });
             newDocumentOpenRef.current = true;
             setNewDocumentOpen(true);
-            setActiveSurface("research");
+            showResearchSurface();
           })
           .catch((err) => {
             if (
@@ -9958,8 +8273,8 @@ function MainApp() {
       // document submit's own composer is dirty here, so it is unaffected and
       // closes itself right after this adopt.
       dismissPristineNewDocumentComposer();
-      setSidebarMode("research");
-      setActiveSurface("research");
+      showResearchSidebar();
+      showResearchSurface();
       activeResearchPaneIdRef.current = null;
       setActiveResearchPaneId(null);
       localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
@@ -9977,7 +8292,7 @@ function MainApp() {
     [
       changeResearchFolderScope,
       dismissPristineNewDocumentComposer,
-      setSidebarMode,
+      showResearchSidebar,
     ],
   );
   const submitNewResearch = useCallback(
@@ -10484,76 +8799,6 @@ function MainApp() {
     }
   }, []);
 
-  const handleUserNotificationRequested = useCallback((event: QmuxEvent) => {
-    const { id, title, body, tone, timeoutMs, sound, createdAt } = event.payload;
-    if (
-      typeof id !== "string" ||
-      typeof title !== "string" ||
-      typeof body !== "string" ||
-      typeof timeoutMs !== "number" ||
-      !Number.isFinite(timeoutMs)
-    ) {
-      return;
-    }
-    if (!settingsRef.current.showNotifications) {
-      return;
-    }
-    const normalizedTone: UserNotificationTone =
-      tone === "success" || tone === "warning" || tone === "error" ? tone : "info";
-    setUserNotifications((current) =>
-      [
-        ...current.filter((notification) => notification.id !== id),
-        {
-          id,
-          title,
-          body,
-          tone: normalizedTone,
-          timeoutMs: Math.min(30_000, Math.max(1_000, timeoutMs)),
-          paneId: event.paneId ?? null,
-          createdAt:
-            typeof createdAt === "number" && Number.isFinite(createdAt)
-              ? createdAt
-              : Date.now(),
-        },
-      ].slice(-20),
-    );
-    if (sound === true) {
-      void playCompletionSound(settingsRef.current.completionSound).catch(() => undefined);
-    }
-  }, []);
-
-  const handleNotificationLogChanged = useCallback((event: QmuxEvent) => {
-    setNotificationLog(normalizeNotificationLog(event.payload));
-  }, []);
-
-  const notificationOpenPaneRef = useRef<(paneId: string) => void>(() => undefined);
-  notificationOpenPaneRef.current = (paneId) => {
-    if (panesRef.current.some((pane) => pane.id === paneId)) {
-      focusPaneTab(paneId);
-    }
-  };
-  const handleNotificationOpenPane = useCallback(
-    (paneId: string) => notificationOpenPaneRef.current(paneId),
-    [],
-  );
-  const dismissUserNotification = useCallback((id: string) => {
-    setUserNotifications((current) =>
-      current.filter((notification) => notification.id !== id),
-    );
-  }, []);
-  const adoptNotificationLog = useCallback((value: unknown) => {
-    setNotificationLog(normalizeNotificationLog(value));
-  }, []);
-  const handleMarkNotificationRead = useCallback((id: string) => {
-    void markNotificationRead(id).then(adoptNotificationLog).catch(() => undefined);
-  }, [adoptNotificationLog]);
-  const handleMarkAllNotificationsRead = useCallback(() => {
-    void markAllNotificationsRead().then(adoptNotificationLog).catch(() => undefined);
-  }, [adoptNotificationLog]);
-  const handleClearNotification = useCallback((id: string) => {
-    dismissUserNotification(id);
-    void clearNotificationLogEntry(id).then(adoptNotificationLog).catch(() => undefined);
-  }, [adoptNotificationLog, dismissUserNotification]);
 
   useQmuxEvents({
     appendHookEvent,
@@ -10568,9 +8813,7 @@ function MainApp() {
     setThinkingAgentIds,
     setTurns,
     setTranscriptNoticeByAgent,
-    setShellJobByAgent: setShellJobByAgentFromEvent,
     setAgentQueuedTurns,
-    setGlobalDrafts,
     shouldRefreshAgentThreadGraph: (agentId: string) =>
       retainedGraphHistoryAgentIdsRef.current.has(agentId),
     onAgentThreadGraphDirty: scheduleAgentThreadGraphRefresh,
@@ -10585,7 +8828,6 @@ function MainApp() {
     onEventsReady: handleEventsReady,
     onAgentSpawned: handleAgentSpawned,
     onAgentPromptSubmitted: handleAgentPromptSubmitted,
-    onArtifactEvent: handleArtifactEvent,
     onPaneFocusRequested: (paneId: string) => {
       if (!panesRef.current.some((pane) => pane.id === paneId)) {
         return;
@@ -10611,7 +8853,6 @@ function MainApp() {
     onTerminalTitleChanged: handleTerminalTitleChange,
     onResearchChanged: handleResearchEvent,
     onUserNotificationRequested: handleUserNotificationRequested,
-    onNotificationLogChanged: handleNotificationLogChanged,
     onNotificationOpenPane: handleNotificationOpenPane,
   });
 
@@ -10862,52 +9103,6 @@ function MainApp() {
     }
   }
 
-  async function restoreClosedPane() {
-    setError(null);
-    try {
-      const pane = await restoreLastClosedPane();
-      if (!pane) {
-        return;
-      }
-
-      const [latestPanes, latestAgents, latestGroups] = await Promise.all([
-        listPanes(),
-        listAgents(),
-        listGroups(),
-      ]);
-      setPanesPreservingRecoveredDismissals(latestPanes);
-      setAgents(latestAgents);
-      setGroups(latestGroups);
-      setActivePaneId(pane.id);
-
-      const restoredAgent = latestAgents.find(
-        (agent) => agent.paneId === pane.id || agent.id === pane.agentId,
-      );
-      if (restoredAgent) {
-        void refreshAgentTurnQueue(restoredAgent.id).catch(() => undefined);
-        void getAgentDraft(restoredAgent.id)
-          .then((draft) => {
-            const nextDrafts = { ...draftsByAgentRef.current };
-            if (draft) {
-              nextDrafts[restoredAgent.id] = draft;
-            } else {
-              delete nextDrafts[restoredAgent.id];
-            }
-            draftsByAgentRef.current = nextDrafts;
-            setDraftsByAgentState(nextDrafts);
-          })
-          .catch(() => undefined);
-      }
-
-      requestAnimationFrame(() => {
-        terminalPaneRefs.current.get(pane.id)?.focus();
-      });
-      showAppToast("Tab restored");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
   function focusPaneTab(paneId: string) {
     if (document.activeElement instanceof HTMLElement &&
         document.activeElement.closest(".turn-timeline")) {
@@ -10940,17 +9135,11 @@ function MainApp() {
   function openNewAgentPopover() {
     setTerminalMapOpen(false);
     setNewResearchOpen(false);
-    setNewAgentError(null);
     setNewAgentOpen(true);
     if (sidebarModeRef.current !== "terminal") {
-      setSidebarMode("terminal");
-      setActiveSurface("pane");
+      showResearchSidebar();
+      showResearchSurface();
     }
-  }
-
-  function closeNewAgentPopover() {
-    setNewAgentError(null);
-    setNewAgentOpen(false);
   }
 
   useEffect(() => {
@@ -11081,32 +9270,6 @@ function MainApp() {
     };
   }, [launcherGroup?.id, launcherRemote?.id, refreshAdapterReadiness]);
 
-  function toggleTerminalMap() {
-    if (terminalMapOpenRef.current) {
-      setTerminalMapOpen(false);
-      return;
-    }
-    setNewAgentOpen(false);
-    setNewResearchOpen(false);
-    setConversationHistoryOpen(false);
-    setTerminalMapOpen(true);
-  }
-
-  function toggleConversationHistory() {
-    if (conversationHistoryOpenRef.current) {
-      setConversationHistoryOpen(false);
-      return;
-    }
-    setNewAgentOpen(false);
-    setNewResearchOpen(false);
-    setTerminalMapOpen(false);
-    setConversationHistoryOpen(true);
-  }
-
-  function closeTerminalMap() {
-    setTerminalMapOpen(false);
-  }
-
   // Escape is handled here in bubble phase so a rail/group menu's capture
   // listener can consume the key first. The app-level capture dispatcher
   // would otherwise close the whole map before those menus see it.
@@ -11149,10 +9312,6 @@ function MainApp() {
   // do not defeat that boundary; refs keep their behavior current.
   const researchDocumentOpenPaneRef = useRef(openResearchPaneTab);
   researchDocumentOpenPaneRef.current = openResearchPaneTab;
-  const handleResearchDocumentOpenPane = useCallback(
-    (paneId: string) => researchDocumentOpenPaneRef.current(paneId),
-    [],
-  );
   const researchDocumentToastRef = useRef(showAppToast);
   researchDocumentToastRef.current = showAppToast;
   const handleResearchDocumentToast = useCallback(
@@ -11160,21 +9319,6 @@ function MainApp() {
       researchDocumentToastRef.current(message, tone),
     [],
   );
-
-  // The prompt library's project scope follows the pane's group directory; a
-  // worktree group resolves to its base repo so prompts don't fork with the
-  // tree. Null (no pane, or group without a dir) hides the Project section.
-  function promptProjectDirForPane(pane: PaneInfo | undefined): string | null {
-    if (!pane) {
-      return null;
-    }
-    const group = groupById.get(pane.groupId);
-    if (!group) {
-      return null;
-    }
-    const baseRepo = group.baseRepo?.trim();
-    return baseRepo ? baseRepo : group.dir || null;
-  }
 
   // The ⌘K palette's command list, rebuilt on each open from live state: tab
   // navigation, pane/session actions gated on what the active pane supports,
@@ -11248,543 +9392,6 @@ function MainApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function handleGroupHeaderPointerDown(event: ReactPointerEvent<HTMLDivElement>, groupId: string) {
-    if (event.button !== 0) {
-      return;
-    }
-    if (
-      event.target instanceof HTMLElement &&
-      event.target.closest(".pane-group-collapse-button, .pane-group-menu-button")
-    ) {
-      return;
-    }
-    groupPointerDragRef.current = {
-      pointerId: event.pointerId,
-      groupId,
-      startX: event.clientX,
-      startY: event.clientY,
-      active: false,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function handleGroupHeaderPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    const drag = groupPointerDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) {
-      return;
-    }
-
-    if (!drag.active) {
-      const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
-      if (distance < PANE_TAB_DRAG_START_THRESHOLD) {
-        return;
-      }
-      drag.active = true;
-      setDraggingGroupId(drag.groupId);
-      updateGroupDropTarget(null);
-      updatePaneDropTarget(null);
-    }
-
-    event.preventDefault();
-    updateGroupDropTarget(computeGroupDragDropTarget(event.clientX, event.clientY, drag.groupId));
-  }
-
-  function handleGroupHeaderPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
-    const drag = groupPointerDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) {
-      return;
-    }
-
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      // The pointer may already have been released by the platform.
-    }
-
-    groupPointerDragRef.current = null;
-    if (!drag.active) {
-      return;
-    }
-
-    event.preventDefault();
-    const target =
-      groupDropTargetRef.current ??
-      computeGroupDragDropTarget(event.clientX, event.clientY, drag.groupId);
-    clearGroupDrag();
-    if (target === null) {
-      return;
-    }
-    applyGroupDropTarget(drag.groupId, target);
-  }
-
-  function handleGroupHeaderPointerCancel(event: ReactPointerEvent<HTMLDivElement>) {
-    const drag = groupPointerDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) {
-      return;
-    }
-    groupPointerDragRef.current = null;
-    clearGroupDrag();
-  }
-
-  function handlePaneTabPointerDown(event: ReactPointerEvent<HTMLDivElement>, paneId: string) {
-    if (event.button !== 0) {
-      return;
-    }
-    if (
-      event.target instanceof HTMLElement &&
-      event.target.closest(".pane-tab-close, .pane-tab-status-clickable, .pane-tab-dot-button")
-    ) {
-      return;
-    }
-    paneTabPointerDragRef.current = {
-      pointerId: event.pointerId,
-      paneId,
-      startX: event.clientX,
-      startY: event.clientY,
-      active: false,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function handlePaneTabPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    const drag = paneTabPointerDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) {
-      return;
-    }
-
-    if (!drag.active) {
-      const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
-      if (distance < PANE_TAB_DRAG_START_THRESHOLD) {
-        return;
-      }
-      drag.active = true;
-      setDraggingPaneId(drag.paneId);
-      updatePaneDropTarget(null);
-    }
-
-    event.preventDefault();
-    updatePaneDropTarget(computePaneDragDropTarget(event.clientX, event.clientY, drag.paneId));
-  }
-
-  function handlePaneTabPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
-    const drag = paneTabPointerDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) {
-      return;
-    }
-
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      // The pointer may already have been released by the platform.
-    }
-
-    paneTabPointerDragRef.current = null;
-    if (!drag.active) {
-      return;
-    }
-
-    event.preventDefault();
-    suppressPaneTabClickRef.current = true;
-    window.setTimeout(() => {
-      suppressPaneTabClickRef.current = false;
-    }, PANE_TAB_DRAG_CLICK_SUPPRESS_MS);
-
-    const target =
-      paneDropTargetRef.current ??
-      computePaneDragDropTarget(event.clientX, event.clientY, drag.paneId);
-    clearPaneTabDrag();
-    if (target === null) {
-      return;
-    }
-    applyDropTarget(drag.paneId, target);
-  }
-
-  function handlePaneTabPointerCancel(event: ReactPointerEvent<HTMLDivElement>) {
-    const drag = paneTabPointerDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) {
-      return;
-    }
-    paneTabPointerDragRef.current = null;
-    clearPaneTabDrag();
-  }
-
-  function handlePaneTabClick(paneId: string) {
-    if (suppressPaneTabClickRef.current) {
-      return;
-    }
-    const researchNode = researchNodeByPaneId.get(paneId);
-    if (researchNode && researchNode.treeId !== activeResearchTreeIdRef.current) {
-      // Keep the durable document paired with the short-lived terminal. If the
-      // pane retires while selected, the fallback effect returns to this tree.
-      void selectResearchTree(researchNode.treeId);
-    }
-    focusPaneTab(paneId);
-  }
-
-  function handlePaneTabDoubleClick(pane: PaneInfo) {
-    if (suppressPaneTabClickRef.current) {
-      return;
-    }
-    openRenameDialog(pane);
-  }
-
-  function updatePaneDropTarget(target: PaneDropTarget | null) {
-    if (paneDropTargetsEqual(paneDropTargetRef.current, target)) {
-      return;
-    }
-    paneDropTargetRef.current = target;
-    setPaneDropTarget(target);
-  }
-
-  function updateGroupDropTarget(target: GroupDropTarget | null) {
-    if (groupDropTargetsEqual(groupDropTargetRef.current, target)) {
-      return;
-    }
-    groupDropTargetRef.current = target;
-    setGroupDropTarget(target);
-  }
-
-  function clearPaneTabDrag() {
-    paneDropTargetRef.current = null;
-    setDraggingPaneId(null);
-    setPaneDropTarget(null);
-  }
-
-  function clearGroupDrag() {
-    groupDropTargetRef.current = null;
-    setDraggingGroupId(null);
-    setGroupDropTarget(null);
-  }
-
-  // Classifies a pointer position during a drag into a gap before or after a row.
-  // Gaps adjacent to the dragged tab are suppressed because they are no-op moves.
-  function computePaneDragDropTarget(
-    clientX: number,
-    clientY: number,
-    dragId: string,
-  ): PaneDropTarget | null {
-    const stage = mainStageRef.current;
-    if (stage && pointInRect(stage.getBoundingClientRect(), clientX, clientY)) {
-      return computeTerminalSplitDropTarget(clientX, clientY, dragId);
-    }
-
-    const list = paneListRef.current;
-    if (list && pointInRect(list.getBoundingClientRect(), clientX, clientY)) {
-      return computeSidebarDropTarget(list, clientY, dragId);
-    }
-
-    return null;
-  }
-
-  function pointInRect(rect: DOMRect, clientX: number, clientY: number) {
-    return (
-      clientX >= rect.left &&
-      clientX <= rect.right &&
-      clientY >= rect.top &&
-      clientY <= rect.bottom
-    );
-  }
-
-  function computeGroupDragDropTarget(
-    clientX: number,
-    clientY: number,
-    dragGroupId: string,
-  ): GroupDropTarget | null {
-    const list = paneListRef.current;
-    if (!list || !pointInRect(list.getBoundingClientRect(), clientX, clientY)) {
-      return null;
-    }
-
-    const rows = Array.from(list.querySelectorAll(".pane-group")).filter(
-      (child): child is HTMLElement =>
-        child instanceof HTMLElement && child.classList.contains("pane-group"),
-    );
-    const dragIndex = terminalGroups.findIndex((group) => group.id === dragGroupId);
-    if (rows.length === 0 || dragIndex < 0) {
-      return null;
-    }
-
-    const gapTarget = (index: number): GroupDropTarget | null =>
-      index === dragIndex || index === dragIndex + 1 ? null : { index };
-
-    for (const row of rows) {
-      const rowIndex = terminalGroups.findIndex((group) => group.id === row.dataset.groupId);
-      if (rowIndex < 0) {
-        continue;
-      }
-      const rect = row.getBoundingClientRect();
-      if (clientY < rect.top) {
-        return gapTarget(rowIndex);
-      }
-      if (clientY <= rect.bottom) {
-        return gapTarget(clientY < rect.top + rect.height / 2 ? rowIndex : rowIndex + 1);
-      }
-    }
-    const lastVisibleIndex = terminalGroups.findIndex(
-      (group) => group.id === rows[rows.length - 1]?.dataset.groupId,
-    );
-    return gapTarget(lastVisibleIndex >= 0 ? lastVisibleIndex + 1 : terminalGroups.length);
-  }
-
-  function computeSidebarDropTarget(
-    container: HTMLElement,
-    clientY: number,
-    dragId: string,
-  ): PaneDropTarget | null {
-    const dragPane = panes.find((pane) => pane.id === dragId);
-    if (!dragPane) {
-      return null;
-    }
-    const dragGroupPanes = panes.filter((pane) => pane.groupId === dragPane.groupId);
-    // Ordinary shell tabs may drop into another terminal group. Agent tabs stay
-    // within their workspace because their worktree and queue state are group-bound.
-    const allowCrossGroup = paneCanMoveAcrossGroups(dragGroupPanes, dragId);
-    const rows = Array.from(container.querySelectorAll(".pane-tab-row")).filter(
-      (child): child is HTMLElement =>
-        child instanceof HTMLElement &&
-        child.classList.contains("pane-tab-row") &&
-        typeof child.dataset.groupId === "string" &&
-        (allowCrossGroup || child.dataset.groupId === dragPane.groupId) &&
-        child.dataset.paneDragDisabled !== "true" &&
-        // The fixed Home row isn't a reorder target and isn't in `panes`, so
-        // excluding it keeps row indexes aligned with the group pane arrays below.
-        !child.classList.contains("pane-home-row"),
-    );
-    if (rows.length === 0) {
-      return null;
-    }
-    const dragIndex = dragGroupPanes.findIndex((pane) => pane.id === dragId);
-    const gapTarget = (groupId: string, index: number): PaneDropTarget | null =>
-      groupId === dragPane.groupId && dragIndex >= 0 && (index === dragIndex || index === dragIndex + 1)
-        ? null // dropping into/adjacent to its own block is a no-op
-        : { kind: "gap", groupId, index };
-
-    // Rows arrive in DOM order, section by section, so a per-group counter recovers
-    // each row's index within its own group's pane array.
-    const rowCountByGroup = new Map<string, number>();
-    for (const row of rows) {
-      const groupId = row.dataset.groupId as string;
-      const index = rowCountByGroup.get(groupId) ?? 0;
-      rowCountByGroup.set(groupId, index + 1);
-      const rect = row.getBoundingClientRect();
-      if (clientY >= rect.bottom) {
-        continue;
-      }
-      return gapTarget(groupId, clientY < rect.top + rect.height / 2 ? index : index + 1);
-    }
-    const lastGroupId = rows[rows.length - 1].dataset.groupId as string;
-    return gapTarget(lastGroupId, rowCountByGroup.get(lastGroupId) ?? 0);
-  }
-
-  function computeTerminalSplitDropTarget(
-    clientX: number,
-    clientY: number,
-    dragId: string,
-  ): PaneDropTarget | null {
-    const stageRect = mainStageRef.current?.getBoundingClientRect();
-    const dragPane = panes.find((pane) => pane.id === dragId);
-    if (!stageRect || !dragPane || visibleTerminalPanes.length === 0) {
-      return null;
-    }
-    // A 2-D hit test: the old single-axis cursor walk had no way to tell nested
-    // panes apart, since several of them share a band along either axis.
-    const stage = { width: stageRect.width, height: stageRect.height };
-    const x = clientX - stageRect.left;
-    const y = clientY - stageRect.top;
-    const inStage = x >= 0 && x <= stage.width && y >= 0 && y <= stage.height;
-    const targetPaneId = activeSplitLayout
-      ? paneAtStagePoint(activeSplitLayout, stage, x, y)
-      : inStage
-        ? (visibleTerminalPaneIds[0] ?? null)
-        : null;
-    const targetPane = targetPaneId ? paneById.get(targetPaneId) : undefined;
-    if (!targetPane || targetPane.id === dragId || targetPane.groupId !== dragPane.groupId) {
-      return null;
-    }
-    const rect = splitRectForVisiblePane(targetPane.id);
-    if (!rect) {
-      return null;
-    }
-    // The drop splits along the axis the target's own branch already uses, so
-    // dragging never invents a nesting the split gestures did not.
-    const box = splitRectPixels(rect, stage);
-    const horizontal = terminalSplitDropAxis(targetPane.id) === "horizontal";
-    return {
-      kind: "terminal-split",
-      groupId: targetPane.groupId,
-      targetPaneId: targetPane.id,
-      position: horizontal
-        ? x < box.left + box.width / 2
-          ? "above"
-          : "below"
-        : y < box.top + box.height / 2
-          ? "above"
-          : "below",
-    };
-  }
-
-  function applyDropTarget(dragId: string, target: PaneDropTarget) {
-    if (target.kind === "terminal-split") {
-      void splitDraggedPaneIntoTerminal(dragId, target);
-      return;
-    }
-    const dragPane = panes.find((pane) => pane.id === dragId);
-    if (!dragPane) {
-      return;
-    }
-    if (target.groupId !== dragPane.groupId) {
-      applyCrossGroupDropTarget(dragPane, target);
-      return;
-    }
-    const groupPanes = panes.filter((pane) => pane.groupId === target.groupId);
-    const next = movePaneToGap(groupPanes, dragId, target.index);
-    applyPaneLayout(target.groupId, next);
-  }
-
-  // Moves a shell tab into another terminal group. Optimistically reorders both
-  // groups locally, then persists order and the group change
-  // as one backend mutation; the backend removes the source group if this emptied it.
-  function applyCrossGroupDropTarget(
-    dragPane: PaneInfo,
-    target: Extract<PaneDropTarget, { kind: "gap" }>,
-  ) {
-    const paneSnapshot = panes;
-    const sourceGroupPanes = paneSnapshot.filter((pane) => pane.groupId === dragPane.groupId);
-    const scopeOf = (groupId: string) => groups.find((group) => group.id === groupId)?.scope;
-    if (
-      !paneCanMoveAcrossGroups(sourceGroupPanes, dragPane.id) ||
-      scopeOf(dragPane.groupId) !== "terminal" ||
-      scopeOf(target.groupId) !== "terminal"
-    ) {
-      return;
-    }
-    const targetGroupPanes = paneSnapshot.filter((pane) => pane.groupId === target.groupId);
-    const moved = movePaneAcrossGroups(
-      sourceGroupPanes,
-      targetGroupPanes,
-      dragPane.id,
-      target.groupId,
-      target.index,
-    );
-    if (!moved) {
-      return;
-    }
-    const next = panesWithGroupOrders(
-      new Map([
-        [dragPane.groupId, moved.source],
-        [target.groupId, moved.target],
-      ]),
-      paneSnapshot,
-    );
-    // No sameLayout no-op check here: a cross-group move can keep the flat order
-    // identical while still changing group membership.
-    commitPaneLayout(next, () => movePaneToGroup(dragPane.id, target.groupId, toLayout(next)));
-  }
-
-  function applyGroupDropTarget(dragGroupId: string, target: GroupDropTarget) {
-    const dragIndex = terminalGroups.findIndex((group) => group.id === dragGroupId);
-    if (dragIndex < 0 || target.index === dragIndex || target.index === dragIndex + 1) {
-      return;
-    }
-
-    const withoutDragged = terminalGroups.filter((group) => group.id !== dragGroupId);
-    const insertIndex = clamp(
-      target.index > dragIndex ? target.index - 1 : target.index,
-      0,
-      withoutDragged.length,
-    );
-    const dragGroup = terminalGroups[dragIndex];
-    const next = [
-      ...withoutDragged.slice(0, insertIndex),
-      dragGroup,
-      ...withoutDragged.slice(insertIndex),
-    ];
-    applyGroupOrder(next);
-  }
-
-  async function splitDraggedPaneIntoTerminal(
-    dragId: string,
-    target: Extract<PaneDropTarget, { kind: "terminal-split" }>,
-  ) {
-    setError(null);
-    const dragPane = panes.find((pane) => pane.id === dragId);
-    const targetPane = panes.find((pane) => pane.id === target.targetPaneId);
-    if (
-      !dragPane ||
-      !targetPane ||
-      dragPane.groupId !== target.groupId ||
-      targetPane.groupId !== target.groupId
-    ) {
-      return;
-    }
-
-    const groupPanes = panes.filter((pane) => pane.groupId === target.groupId);
-    const nextGroupPanes = movePaneAdjacentToPane(
-      groupPanes,
-      dragId,
-      target.targetPaneId,
-      target.position,
-    );
-    const nextPanes = panesWithGroupOrder(target.groupId, nextGroupPanes);
-    const nextLayout = toLayout(nextPanes);
-    const layoutChanged = !sameLayout(nextLayout, toLayout(panes));
-    const topPaneId = target.position === "above" ? dragId : target.targetPaneId;
-    const belowPaneId = target.position === "above" ? target.targetPaneId : dragId;
-    const detachedSplits = detachPaneFromSplitMemberships(paneSplits, dragId);
-    const optimisticSplits = joinPaneSplit(detachedSplits, nextPanes, topPaneId, belowPaneId, {
-      insertedPaneId: dragId,
-      source: "drag-half",
-    });
-    const requestSeq = paneReorderRequestSeqRef.current + 1;
-    paneReorderRequestSeqRef.current = requestSeq;
-    // Keep panes and splits consistent during the optimistic reorder so the
-    // pane-change normalization effect doesn't persist the pre-drop split shape.
-    setPanesPreservingRecoveredDismissals(nextPanes);
-    setPaneSplitsState(optimisticSplits);
-
-    const persist = paneReorderPersistChainRef.current
-      .catch(() => undefined)
-      .then(() => (layoutChanged ? setPaneLayout(nextLayout) : nextPanes));
-
-    paneReorderPersistChainRef.current = persist
-      .then((orderedPanes) => {
-        if (paneReorderRequestSeqRef.current !== requestSeq) {
-          return;
-        }
-
-        setPanesPreservingRecoveredDismissals(orderedPanes);
-        savePaneSplits(
-          joinPaneSplit(detachedSplits, orderedPanes, topPaneId, belowPaneId, {
-            insertedPaneId: dragId,
-            source: "drag-half",
-          }),
-          orderedPanes,
-        );
-        setActivePaneId(dragId);
-        setLastActiveGroupId(target.groupId);
-        requestAnimationFrame(() => {
-          terminalPaneRefs.current.get(dragId)?.focus();
-        });
-      })
-      .catch((err) => {
-        if (paneReorderRequestSeqRef.current !== requestSeq) {
-          return;
-        }
-        setError(err instanceof Error ? err.message : String(err));
-        void Promise.all([
-          listPanes(),
-          getPaneSplits().catch(() => paneSplits),
-        ])
-          .then(([latestPanes, latestSplits]) => {
-            if (paneReorderRequestSeqRef.current === requestSeq) {
-              setPanesPreservingRecoveredDismissals(latestPanes);
-              setPaneSplitsState(normalizePaneSplitsForPanes(latestSplits, latestPanes));
-            }
-          })
-          .catch(() => undefined);
-      });
-  }
-
   function panesWithGroupOrder(
     groupId: string,
     nextGroupPanes: PaneInfo[],
@@ -11807,145 +9414,8 @@ function MainApp() {
     return next;
   }
 
-  // Optimistically applies a new flat tab order and persists it, with the
-  // same request-sequence guard the old reorder used so stale responses never clobber
-  // a newer local state.
-  function applyPaneLayout(
-    groupId: string,
-    nextGroupPanes: PaneInfo[],
-    paneSnapshot = panes,
-  ) {
-    const next = panesWithGroupOrder(groupId, nextGroupPanes, paneSnapshot);
-    const nextLayout = toLayout(next);
-    if (sameLayout(nextLayout, toLayout(paneSnapshot))) {
-      return; // structural no-op — don't churn a backend round-trip
-    }
-    commitPaneLayout(next, () => setPaneLayout(nextLayout));
-  }
-
-  // Shared optimistic-update + persistence chain for tab-layout mutations. The
-  // persist call is chained behind any in-flight layout write, and only the latest
-  // request may apply the backend's response (or resync after a failure).
-  function commitPaneLayout(next: PaneInfo[], persistLayout: () => Promise<PaneInfo[]>) {
-    const requestSeq = paneReorderRequestSeqRef.current + 1;
-    paneReorderRequestSeqRef.current = requestSeq;
-    // Keyboard repeats can arrive before React commits the optimistic state.
-    // Keep the imperative snapshot current so each press advances one slot.
-    panesRef.current = next;
-    setPanesPreservingRecoveredDismissals(next);
-
-    const persist = paneReorderPersistChainRef.current
-      .catch(() => undefined)
-      .then(persistLayout);
-    paneReorderPersistChainRef.current = persist
-      .then((orderedPanes) => {
-        if (paneReorderRequestSeqRef.current === requestSeq) {
-          panesRef.current = orderedPanes;
-          setPanesPreservingRecoveredDismissals(orderedPanes);
-        }
-      })
-      .catch(() => {
-        // A layout change is non-critical, and a pane added/closed mid-edit makes the
-        // request "stale" — both are benign, so resync from the backend instead of
-        // surfacing an error. Only the latest request's resync is allowed to land.
-        if (paneReorderRequestSeqRef.current !== requestSeq) {
-          return;
-        }
-        void listPanes()
-          .then((latest) => {
-            if (paneReorderRequestSeqRef.current === requestSeq) {
-              panesRef.current = latest;
-              setPanesPreservingRecoveredDismissals(latest);
-            }
-          })
-          .catch(() => undefined);
-      });
-  }
-
-  function moveActiveTerminalPane(direction: -1 | 1) {
-    if (sidebarModeRef.current !== "terminal") {
-      return;
-    }
-    const paneId = activePaneIdRef.current;
-    if (!paneId || paneId === HOME_TAB_ID) {
-      return;
-    }
-    const currentPanes = panesRef.current;
-    const pane = currentPanes.find((candidate) => candidate.id === paneId);
-    if (
-      !pane ||
-      groupsRef.current.find((group) => group.id === pane.groupId)?.scope !== "terminal"
-    ) {
-      return;
-    }
-    const groupPanes = currentPanes.filter((candidate) => candidate.groupId === pane.groupId);
-    const nextGroupPanes = movePaneBy(groupPanes, paneId, direction);
-    if (nextGroupPanes !== groupPanes) {
-      applyPaneLayout(pane.groupId, nextGroupPanes, currentPanes);
-    }
-  }
-
-  function applyGroupOrder(nextTerminalGroups: GroupInfo[]) {
-    const nextGroups = replaceScopedGroupOrder(groups, "terminal", nextTerminalGroups);
-    const nextIds = nextGroups.map((group) => group.id);
-    if (sameStringList(nextIds, groups.map((group) => group.id))) {
-      return;
-    }
-
-    const requestSeq = groupReorderRequestSeqRef.current + 1;
-    groupReorderRequestSeqRef.current = requestSeq;
-    setGroups(nextGroups);
-
-    const persist = groupReorderPersistChainRef.current
-      .catch(() => undefined)
-      .then(() => reorderGroups(nextIds));
-    groupReorderPersistChainRef.current = persist
-      .then((orderedGroups) => {
-        if (groupReorderRequestSeqRef.current === requestSeq) {
-          setGroups(orderedGroups);
-        }
-      })
-      .catch(() => {
-        if (groupReorderRequestSeqRef.current !== requestSeq) {
-          return;
-        }
-        void listGroups()
-          .then((latest) => {
-            if (groupReorderRequestSeqRef.current === requestSeq) {
-              setGroups(latest);
-            }
-          })
-          .catch(() => undefined);
-      });
-  }
-
-  function sameLayout(a: PaneLayoutItem[], b: PaneLayoutItem[]) {
-    return (
-      a.length === b.length &&
-      a.every((item, index) => item.paneId === b[index].paneId)
-    );
-  }
-
   function sameStringList(a: string[], b: string[]) {
     return a.length === b.length && a.every((item, index) => item === b[index]);
-  }
-
-  function openPaneContextMenu(event: ReactMouseEvent, pane: PaneInfo) {
-    event.preventDefault();
-    event.stopPropagation();
-    setGroupMenu(null);
-    setSettingsMenu(null);
-    const { x, y } = clampContextMenuToViewport({
-      x: event.clientX,
-      y: event.clientY,
-      width: PANE_CONTEXT_MENU_WIDTH,
-      height: PANE_CONTEXT_MENU_ESTIMATED_HEIGHT,
-    });
-    setPaneContextMenu({
-      paneId: pane.id,
-      x,
-      y,
-    });
   }
 
   // The "Restored" badge is a one-time, post-restart hint, cleared automatically
@@ -11969,13 +9439,6 @@ function MainApp() {
       });
       return changed ? next : current;
     });
-  }
-
-  function openRenameDialog(pane: PaneInfo) {
-    const paneAgent = agents.find((agent) => agent.paneId === pane.id);
-    setRenameValue(displayPaneTitle(pane, paneAgent));
-    setRenameGroupId(null);
-    setRenamePaneId(pane.id);
   }
 
   function openGroupRenameDialog(group: GroupInfo) {
@@ -12487,25 +9950,6 @@ function MainApp() {
     };
   }, [remoteDeleteConfirm]);
 
-  function handlePaneTabClosePointerDown(
-    event: ReactPointerEvent<HTMLElement>,
-    pane: PaneInfo,
-  ) {
-    if (event.button !== 0) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    void requestClosePane(pane, { confirmAlways: true });
-  }
-
-  function handlePaneTabCloseClick(event: ReactMouseEvent<HTMLElement>, pane: PaneInfo) {
-    event.stopPropagation();
-    if (event.detail === 0) {
-      void requestClosePane(pane, { confirmAlways: true });
-    }
-  }
-
   // Resolves the worktree close dialog: always closes the pane, and additionally
   // deletes the worktree when the user chose to.
   async function resolveCloseDialog(choice: "keep" | "delete") {
@@ -12614,113 +10058,6 @@ function MainApp() {
     }
   }
 
-  async function addAgentPane() {
-    // Re-entry guard: spawnAgent is awaited below before the launcher closes, so a
-    // held Enter or a rapid double submit would otherwise spawn several agents (and
-    // worktrees) from one launch. Reset in `finally` so a failed launch can retry.
-    if (launchingAgentRef.current) {
-      return;
-    }
-    if (!launchAdapterReady) {
-      setNewAgentError(
-        launchAdapterMetadata
-          ? adapterReadinessMessage(launchAdapterMetadata)
-          : `${launchAdapter.label} is not available.`,
-      );
-      return;
-    }
-    launchingAgentRef.current = true;
-    const trimmed = promptRef.current.trim();
-    // A selected skill is sent as a leading slash command so the launched agent
-    // invokes it before the user's prompt (e.g. `/qmux:open-in-browser <prompt>`).
-    const finalPrompt = selectedSkill ? `${selectedSkill.command} ${trimmed}`.trim() : trimmed;
-    setNewAgentError(null);
-    rememberLauncherAdapter(launchAdapter.id);
-    try {
-      const targetGroupId = launchGroupId();
-      const pane = await spawnAgent({
-        adapterId: launchAdapter.id,
-        prompt: finalPrompt,
-        groupId: targetGroupId,
-        baseRepo: null,
-        baseRef: "HEAD",
-        initialSize: estimateInitialPaneSize(true),
-        useWorktree: createInWorktree,
-        options: launcherOptions,
-      });
-      const orderedPanes = panesWithNewTabInLaunchPosition(pane, targetGroupId);
-      setPanesPreservingRecoveredDismissals(orderedPanes);
-      setActivePaneId(pane.id);
-      setLastActiveGroupId(pane.groupId);
-      expandNewAgentTranscriptByDefault(pane);
-      if (pane.agentId) {
-        setAgentQueuedTurns(pane.agentId, []);
-        pendingFirstTitleByAgentRef.current.set(
-          pane.agentId,
-          createPendingFirstMessageTitle(pane.id, selectedSkill?.command ?? null),
-        );
-        applyPendingFirstMessageTitle(pane.agentId, trimmed);
-      }
-      clearLauncherPrompt();
-      setSelectedSkillId(null);
-      closeNewAgentPopover();
-      const [latestAgents] = await Promise.all([listAgents(), refreshGroups()]);
-      setAgents(latestAgents);
-    } catch (err) {
-      setNewAgentError(err instanceof Error ? err.message : String(err));
-      void refreshAdapterReadiness({
-        targetId: launcherRemote ? launcherGroup?.id ?? null : null,
-        groupId: launcherRemote ? launcherGroup?.id ?? null : null,
-        force: true,
-      }).catch(() => undefined);
-    } finally {
-      launchingAgentRef.current = false;
-    }
-  }
-
-  async function launchHistoryEntry(
-    entry: ConversationHistoryEntry,
-    mode: ConversationHistoryLaunchMode,
-    prompt: string,
-  ) {
-    if (conversationHistoryLaunching) return;
-    setConversationHistoryLaunching(true);
-    setError(null);
-    try {
-      const pane = await launchConversationHistory({
-        historyId: entry.id,
-        mode,
-        prompt: prompt || null,
-      });
-      const orderedPanes = panesWithNewTabInLaunchPosition(pane, pane.groupId);
-      setPanesPreservingRecoveredDismissals(orderedPanes);
-      setActivePaneId(pane.id);
-      setLastActiveGroupId(pane.groupId);
-      expandNewAgentTranscriptByDefault(pane);
-      if (mode !== "resume" && pane.agentId && prompt.trim()) {
-        pendingFirstTitleByAgentRef.current.set(
-          pane.agentId,
-          createPendingFirstMessageTitle(pane.id),
-        );
-        applyPendingFirstMessageTitle(pane.agentId, prompt);
-      }
-      const [latestAgents] = await Promise.all([listAgents(), refreshGroups()]);
-      setAgents(latestAgents);
-      setConversationHistoryOpen(false);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(message);
-      throw new Error(message);
-    } finally {
-      setConversationHistoryLaunching(false);
-    }
-  }
-
-  function focusHistoryPane(paneId: string) {
-    setConversationHistoryOpen(false);
-    focusPaneTab(paneId);
-  }
-
   // Forks the active session into a new tab (resuming it) — as a sibling right
   // after the current tab, nested under it when `nest` is set, or joined into a
   // split directly below it when `splitBelow` is set — and focuses the fork. The
@@ -12779,17 +10116,6 @@ function MainApp() {
     }
   }
 
-  async function forkActivePane(options: { useWorktree: boolean }) {
-    if (!activePane || !activeAgent) {
-      return;
-    }
-    if (options.useWorktree) {
-      await forkPaneInWorktree(activePane);
-    } else {
-      await forkPane(activePane, options);
-    }
-  }
-
   // Stable identity for the terminal input handler. The impl above is a plain
   // function that closes over fresh state / unstable helpers, so passing it directly
   // gives a new identity every render — defeating TerminalPane's React.memo (making
@@ -12802,28 +10128,6 @@ function MainApp() {
   terminalHandlersRef.current = {
     noteUserInput,
   };
-  const stableNoteUserInput = useCallback(
-    (agentId: string) => {
-      const paneId = agentsRef.current.find((agent) => agent.id === agentId)?.paneId ?? null;
-      acknowledgePaneIfDone(paneId, true);
-      terminalHandlersRef.current.noteUserInput(agentId);
-    },
-    [],
-  );
-  const updateTerminalOverlayState = useCallback((paneId: string, open: boolean) => {
-    setTerminalOverlayBlockedPaneIds((current) => {
-      if (current.has(paneId) === open) {
-        return current;
-      }
-      const next = new Set(current);
-      if (open) {
-        next.add(paneId);
-      } else {
-        next.delete(paneId);
-      }
-      return next;
-    });
-  }, []);
   // Mirror active-tab state into refs so the always-on keydown listener never reads
   // stale state.
   useEffect(() => {
@@ -13772,37 +11076,6 @@ function MainApp() {
   }, []);
 
   useEffect(() => {
-    const focusTabById = (tabId: string) => {
-      focusPaneTab(tabId);
-    };
-
-    const cycleTab = (
-      direction: -1 | 1,
-      cyclePanes = sidebarPanes,
-    ) => {
-      const tabIds = cyclePanes.map((pane) => pane.id);
-      if (tabIds.length === 0) {
-        return;
-      }
-      const currentActivePaneId = activePaneIdRef.current;
-      const listedIndex = tabIds.indexOf(currentActivePaneId ?? "");
-      let fallbackIndex: number;
-      if (listedIndex !== -1) {
-        fallbackIndex = listedIndex;
-      } else {
-        fallbackIndex = direction === 1 ? -1 : 0;
-      }
-      const nextTabId = cycleTabId(
-        tabIds,
-        currentActivePaneId,
-        direction,
-        paneSplits,
-        fallbackIndex,
-      );
-      if (nextTabId) {
-        focusTabById(nextTabId);
-      }
-    };
 
     const focusResearchTabById = (tabId: string) => {
       const treeId = researchTreeIdFromTabId(tabId);
@@ -13990,24 +11263,14 @@ function MainApp() {
     sidebarMode,
   ]);
 
-  useEffect(() => {
-    if (!commandPaletteOpen) {
-      return;
-    }
-    void listSavedPrompts(promptProjectDirForPane(activePane))
-      .then((library) => setPaletteSavedPrompts(library.prompts))
-      .catch(() => setPaletteSavedPrompts([]));
-  }, [commandPaletteOpen, activePane, groupById]);
 
   useEffect(() => {
     if (!newAgentOpen) {
       return;
     }
 
-    // New agents default to no worktree and no skill each time the launcher opens.
-    setCreateInWorktree(false);
+    // Clear the skill selection each time the launcher opens.
     setSelectedSkillId(null);
-    setNewAgentError(null);
     // PATH can change while qmux stays open (for example after installing a
     // provider), so refresh binary readiness whenever the launcher is opened.
     void refreshAdapterReadiness({
@@ -14054,15 +11317,6 @@ function MainApp() {
     textarea.style.height = "auto";
     textarea.style.height = `${textarea.scrollHeight}px`;
   }, []);
-  const clearLauncherPrompt = useCallback(() => {
-    promptRef.current = "";
-    clearSessionDraft(SESSION_DRAFT_KEYS.homeLauncher);
-    const textarea = launcherInputRef.current;
-    if (textarea) {
-      textarea.value = "";
-    }
-    growLauncherInput();
-  }, [growLauncherInput]);
   useEffect(() => {
     let disposed = false;
     void loadSessionDraftJson<{ text: string }>(SESSION_DRAFT_KEYS.homeLauncher)
@@ -14188,49 +11442,6 @@ function MainApp() {
       });
   }
 
-  function startTurnPaneResize(event: ReactPointerEvent<HTMLDivElement>) {
-    event.preventDefault();
-    const releasePointer = claimResizePointer(event);
-    const startX = event.clientX;
-    const startWidth = turnPaneWidth;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    setTerminalGeometryResizing(true);
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      const nextWidth = startWidth + startX - moveEvent.clientX;
-      setTurnPaneWidth(clampTurnPaneWidth(nextWidth));
-    };
-    const stopResize = () => {
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", stopResize);
-      window.removeEventListener("pointercancel", stopResize);
-      releasePointer();
-      setTerminalGeometryResizing(false);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", stopResize);
-    window.addEventListener("pointercancel", stopResize);
-  }
-
-  function resizeTurnPaneWithKeyboard(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
-      return;
-    }
-
-    event.preventDefault();
-    const step = event.shiftKey ? 40 : 16;
-    setTurnPaneWidth((current) =>
-      clampTurnPaneWidth(current + (event.key === "ArrowLeft" ? step : -step)),
-    );
-  }
-
   function startSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
     const releasePointer = claimResizePointer(event);
@@ -14274,238 +11485,6 @@ function MainApp() {
     );
   }
 
-  // The launcher form lives in the new-agent popover and creates a new agent
-  // in the selected group.
-  const renderLauncher = () => (
-    <form
-      className="command-launcher new-agent-launcher"
-      role="dialog"
-      aria-modal="true"
-      aria-label="New agent"
-      onKeyDown={(event) => {
-        const tabAction = launcherTabAction(event, false);
-        if (tabAction) {
-          event.preventDefault();
-          event.stopPropagation();
-          if (tabAction === "cycle-provider") {
-            cycleLauncherAdapter();
-          }
-          focusLauncherInput();
-          return;
-        }
-        if (event.key === "Escape") {
-          // The adapter/model picker portals above this form. Let it dismiss
-          // itself instead of tearing down the whole launcher.
-          if (document.querySelector(".launcher-select-popover")) {
-            return;
-          }
-          event.preventDefault();
-          closeNewAgentPopover();
-          return;
-        }
-        // Swallow Undo/Redo (⌘Z / ⌘⇧Z, Ctrl on other platforms). The prompt is
-        // cleared programmatically on launch (outside the WebView's undo
-        // history), so native undo could resurrect a sent prompt — or, with no
-        // applicable history, blur the textarea and hand focus back to the
-        // terminal. Trapping the combo keeps focus (and the caret) put.
-        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
-          event.preventDefault();
-          return;
-        }
-        if (isComposerSubmitShortcut(event, settings.requireCmdEnterToSend)) {
-          event.preventDefault();
-          void addAgentPane();
-        }
-      }}
-      onSubmit={(event) => {
-        event.preventDefault();
-        void addAgentPane();
-      }}
-    >
-      {selectedSkill ? (
-        <span
-          ref={skillPrefixRef}
-          className="command-launcher-skill-prefix"
-          aria-hidden="true"
-        >
-          {`${selectedSkill.command} `}
-        </span>
-      ) : null}
-      <textarea
-        ref={launcherInputRef}
-        id="agent-prompt"
-        className="command-launcher-input"
-        defaultValue={promptRef.current}
-        onChange={(event) => {
-          promptRef.current = event.currentTarget.value;
-          if (promptRef.current) {
-            saveSessionDraftJson(SESSION_DRAFT_KEYS.homeLauncher, {
-              text: promptRef.current,
-            });
-          } else {
-            clearSessionDraft(SESSION_DRAFT_KEYS.homeLauncher);
-          }
-          growLauncherInput();
-        }}
-        rows={2}
-        placeholder="What should we investigate next?"
-        style={selectedSkill ? { textIndent: `${skillPrefixWidth}px` } : undefined}
-      />
-      <div className="command-launcher-overlay">
-        <div className="command-launcher-overlay-group">
-          {settings.codeMode ? (
-            <label className="command-launcher-worktree">
-              <input
-                type="checkbox"
-                checked={createInWorktree}
-                onChange={(event) => {
-                  setCreateInWorktree(event.currentTarget.checked);
-                  focusLauncherInput();
-                }}
-              />
-              <span>New worktree</span>
-            </label>
-          ) : null}
-          {skillsEnabled && availableSkills.length > 0 ? (
-            <div className="command-launcher-skills">
-              {availableSkills.map((skill) => (
-                <label
-                  key={skill.id}
-                  className="command-launcher-worktree command-launcher-skill"
-                  title={skill.command}
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedSkillId === skill.id}
-                    onChange={() => {
-                      // Single-select: re-clicking the active skill clears it.
-                      setSelectedSkillId((current) =>
-                        current === skill.id ? null : skill.id,
-                      );
-                      focusLauncherInput();
-                    }}
-                  />
-                  <span>{skill.name}</span>
-                </label>
-              ))}
-            </div>
-          ) : null}
-          {LauncherOptions ? (
-            <div className="command-launcher-options">
-              <LauncherOptions
-                value={launcherOptions}
-                config={config}
-                onChange={(next) => {
-                  setLauncherOptionsByAdapter((current) => ({
-                    ...current,
-                    [launchAdapter.id]: next,
-                  }));
-                  focusLauncherInput();
-                }}
-              />
-            </div>
-          ) : null}
-        </div>
-        <div className="command-launcher-controls">
-          <div className="command-launcher-adapter-select">
-            <LauncherSelect
-              value={launchAdapter.id}
-              options={launcherAdapterOptions}
-              ariaLabel="Agent"
-              onChange={(adapterId) => {
-                setNewAgentError(null);
-                rememberLauncherAdapter(adapterId);
-                focusLauncherInput();
-              }}
-            />
-          </div>
-          <button
-            type="submit"
-            className="control-button command-launcher-send"
-            disabled={!launchAdapterReady}
-            aria-label={`Launch ${launchAdapter.label}`}
-            title={
-              launchAdapterReady
-                ? `Launch ${launchAdapter.label}`
-                : launchAdapterMetadata
-                  ? adapterReadinessMessage(launchAdapterMetadata)
-                  : `${launchAdapter.label} is unavailable`
-            }
-          >
-            <ComposerSubmitShortcutGlyph
-              requireCmdEnter={settings.requireCmdEnterToSend}
-              ariaHidden
-            />
-          </button>
-        </div>
-      </div>
-      {newAgentError ||
-      (config && !launcherRuntimeAdapters.some(adapterCanLaunchTerminal)) ? (
-        <div className="new-research-footer">
-          <p className="new-research-error" role="alert">
-            {newAgentError ??
-              launcherRuntimeAdapters.find((adapter) => adapter.message)?.message ??
-              "No agent CLI was found. Install a supported agent or configure its binary path."}
-          </p>
-          {config &&
-          !launcherRemote &&
-          !launcherRuntimeAdapters.some(adapterCanLaunchTerminal) ? (
-            <button
-              type="button"
-              className="control-button new-research-setup-button"
-              onClick={() => {
-                closeNewAgentPopover();
-                setSettingsTab("agents");
-                setSettingsOpen(true);
-              }}
-            >
-              Review agents
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-    </form>
-  );
-
-  function openGroupMenu(event: ReactMouseEvent, group: GroupInfo) {
-    event.preventDefault();
-    event.stopPropagation();
-    setPaneContextMenu(null);
-    setSettingsMenu(null);
-    setGroupMenu({
-      groupId: group.id,
-      ...clampContextMenuToViewport({
-        x: event.clientX,
-        y: event.clientY,
-        width: GROUP_CONTEXT_MENU_WIDTH,
-        height: GROUP_CONTEXT_MENU_ESTIMATED_HEIGHT,
-      }),
-    });
-  }
-
-  function toggleGroupMenuFromButton(event: ReactMouseEvent<HTMLButtonElement>, group: GroupInfo) {
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = event.clientX || rect.right;
-    const y = event.clientY || rect.bottom;
-    setPaneContextMenu(null);
-    setSettingsMenu(null);
-    setGroupMenu((current) =>
-      current?.groupId === group.id
-        ? null
-        : {
-            groupId: group.id,
-            ...clampContextMenuToViewport({
-              x,
-              y,
-              width: GROUP_CONTEXT_MENU_WIDTH,
-              height: GROUP_CONTEXT_MENU_ESTIMATED_HEIGHT,
-            }),
-          },
-    );
-  }
-
   function toggleSettingsMenuFromButton(event: ReactMouseEvent<HTMLButtonElement>) {
     event.preventDefault();
     event.stopPropagation();
@@ -14524,274 +11503,6 @@ function MainApp() {
     setGroupMenu(null);
     setSettingsMenu((current) => (current ? null : { x, y }));
   }
-
-  function renderPaneTabRow(
-    pane: PaneInfo,
-    index: number,
-    groupPanes: PaneInfo[],
-    groupId: string,
-    allowDrag = true,
-  ) {
-    const paneAgent = agentByPaneId.get(pane.id);
-    const paneDisplayTitle = displayPaneTitle(pane, paneAgent);
-    const paneTitleIsUserSet = paneHasUserSetTitle(pane, paneAgent);
-    const canClearWorkingStatus =
-      allowDrag && (paneAgent?.status === "running" || paneAgent?.status === "starting");
-    const paneTopQueueWaitsOnOtherPane = paneWaitsOnOtherPane(paneAgent);
-    const paneDotClass = agentTabStatusDotClass(paneAgent?.status, paneTopQueueWaitsOnOtherPane);
-    const paneStatus = paneTabStatusLabel(pane, paneAgent);
-    const paneStatusQueueClass =
-      paneAgent &&
-      (paneAgent.status === "running" || paneAgent.status === "idle") &&
-      queuedTurnsForAgent(paneAgent).length > 0
-        ? paneTopQueueWaitsOnOtherPane
-          ? " pane-tab-status-waiting"
-          : " pane-tab-status-queued"
-        : "";
-    const paneSplit = paneSplitForPane(paneSplits, pane.id);
-    // Every split keeps a bracket in the sidebar so its membership remains legible
-    // after focus moves elsewhere. The active split additionally renders as one
-    // connected card. Members are contiguous within their group, so neighbouring
-    // split ids identify the bracket's top and bottom caps.
-    const paneInActiveSplit =
-      Boolean(activePaneSplitMembership) && activeSplitMemberIdSet.has(pane.id);
-    const previousPaneSplit = paneSplitForPane(paneSplits, groupPanes[index - 1]?.id);
-    const nextPaneSplit = paneSplitForPane(paneSplits, groupPanes[index + 1]?.id);
-    const isSplitFirst = Boolean(paneSplit) && previousPaneSplit?.id !== paneSplit?.id;
-    const isSplitLast = Boolean(paneSplit) && nextPaneSplit?.id !== paneSplit?.id;
-    const paneDir = agentDisplayDirectory(paneAgent, pane.cwd);
-    const splitMembersShareDir = Boolean(
-      paneSplit &&
-        paneSplit.paneIds.length > 1 &&
-        paneSplit.paneIds.every((paneId) => {
-          const splitPane = paneById.get(paneId);
-          if (!splitPane) {
-            return false;
-          }
-          const splitPaneAgent = agentByPaneId.get(paneId);
-          return agentDisplayDirectory(splitPaneAgent, splitPane.cwd) === paneDir;
-        }),
-    );
-    const hidePaneDir =
-      splitMembersShareDir && paneSplit?.paneIds[paneSplit.paneIds.length - 1] !== pane.id;
-    // Shell tabs carry their own backend-resolved workspace observation; agent
-    // tabs keep using their transcript-tailed live workspace (with the launch
-    // worktree as fallback before the first observation lands).
-    const paneShellWorkspace = paneAgent ? null : (pane.activeWorkspace ?? null);
-    const paneBranch =
-      agentDisplayBranch(paneAgent) ?? (paneShellWorkspace?.branch ?? null);
-    const paneGroup = groupById.get(groupId);
-    const rootShell = groupPanes.find((candidate) => candidate.kind === "shell") ?? groupPanes[0];
-    const paneBranchLocationName =
-      paneGroup?.scope === "terminal"
-        ? paneBranchLocationLabel(
-            pane,
-            paneAgent,
-            rootShell,
-            rootShell ? agentByPaneId.get(rootShell.id) : undefined,
-            paneGroup.dir,
-          )
-        : null;
-    const paneWorktreeRoot =
-      agentDisplayWorktreeRoot(paneAgent) ??
-      (paneShellWorkspace?.kind === "linkedWorktree"
-        ? (paneShellWorkspace.gitRoot ?? null)
-        : null);
-    const paneCheckoutRoot = paneAgent
-      ? agentDisplayCheckoutRoot(paneAgent)
-      : (paneShellWorkspace?.gitRoot ?? null);
-    // Name comes from the root alone so a detached-HEAD worktree still badges
-    // (with just the directory name) instead of silently hiding the indicator.
-    const paneWorktreeName = paneWorktreeRoot
-      ? (paneWorktreeRoot.split("/").filter(Boolean).pop() ?? null)
-      : null;
-    const showPaneWorktreeBadge = Boolean(paneWorktreeName && !paneBranchLocationName);
-    const hasGitMeta = Boolean(paneBranch || paneWorktreeName);
-    const paneGitMetaTitle = [
-      paneBranchLocationName ? paneCheckoutRoot : null,
-      paneBranch,
-      showPaneWorktreeBadge ? paneWorktreeRoot : null,
-    ]
-      .filter(Boolean)
-      .join(" ");
-    const dropGap =
-      allowDrag && paneDropTarget?.kind === "gap" && paneDropTarget.groupId === groupId
-        ? paneDropTarget.index
-        : null;
-    const isDraggingRow = allowDrag && draggingPaneId === pane.id;
-    const shortcutIndex = sidebarPaneIndexById.get(pane.id) ?? -1;
-    const className = [
-      "pane-tab-row",
-      pane.id === activePane?.id ? "is-selected" : "",
-      paneSplit ? "is-split-member" : "",
-      paneInActiveSplit ? "is-split-active" : "",
-      isSplitFirst ? "is-split-first" : "",
-      isSplitLast ? "is-split-last" : "",
-      paneAgent?.id === waitTargetHoverAgentId ? "is-wait-target-preview" : "",
-      canClearWorkingStatus ? "has-clearable-status" : "",
-      isDraggingRow ? "is-dragging" : "",
-      dropGap === index ? "is-drop-before" : "",
-      dropGap === groupPanes.length && index === groupPanes.length - 1 ? "is-drop-after" : "",
-    ]
-      .filter(Boolean)
-      .join(" ");
-
-    return (
-      <div
-        key={pane.id}
-        className={className}
-        data-pane-id={pane.id}
-        data-group-id={groupId}
-        data-pane-drag-disabled={allowDrag ? undefined : "true"}
-        onContextMenu={
-          allowDrag
-            ? (event) => openPaneContextMenu(event, pane)
-            : (event) => event.preventDefault()
-        }
-        onPointerDown={allowDrag ? (event) => handlePaneTabPointerDown(event, pane.id) : undefined}
-        onPointerMove={allowDrag ? handlePaneTabPointerMove : undefined}
-        onPointerUp={allowDrag ? handlePaneTabPointerUp : undefined}
-        onPointerCancel={allowDrag ? handlePaneTabPointerCancel : undefined}
-        onClick={() => handlePaneTabClick(pane.id)}
-        onDoubleClick={allowDrag ? () => handlePaneTabDoubleClick(pane) : undefined}
-      >
-        {paneSplit ? <span className="pane-tab-split-bracket" aria-hidden="true" /> : null}
-        <button
-          type="button"
-          className="control-button pane-tab"
-          onClick={(event) => {
-            event.stopPropagation();
-            handlePaneTabClick(pane.id);
-          }}
-          onDoubleClick={
-            allowDrag
-              ? (event) => {
-                  event.stopPropagation();
-                  handlePaneTabDoubleClick(pane);
-                }
-              : undefined
-          }
-        >
-          <span
-            className={`${paneDotClass}${canClearWorkingStatus ? " is-clearable-placeholder" : ""}`}
-            aria-hidden="true"
-          />
-          <span className="pane-tab-content">
-            <span className={`pane-tab-title${paneTitleIsUserSet ? " is-user-set" : ""}`}>
-              {paneDisplayTitle}
-            </span>
-            {settings.codeMode && settings.showTabDirectories && paneDir && !hidePaneDir ? (
-              <span className="pane-tab-path" title={paneDir}>
-                {formatPaneDir(paneDir)}
-              </span>
-            ) : null}
-            {settings.codeMode && hasGitMeta ? (
-              <span className="pane-tab-gitmeta" title={paneGitMetaTitle}>
-                {paneBranchLocationName ? (
-                  <span className="pane-tab-gitmeta-location">{paneBranchLocationName}</span>
-                ) : null}
-                {paneBranchLocationName && paneBranch ? " · " : null}
-                {paneBranch ? (
-                  <span className="pane-tab-gitmeta-branch">{paneBranch}</span>
-                ) : null}
-                {paneBranch && showPaneWorktreeBadge ? "\u00A0" : null}
-                {showPaneWorktreeBadge ? (
-                  <span className="pane-tab-gitmeta-worktree">
-                    <FolderGit2 size={11} aria-hidden="true" className="pane-tab-gitmeta-icon" />
-                    {paneWorktreeName}
-                  </span>
-                ) : null}
-              </span>
-            ) : null}
-          </span>
-          {(pane.recovered && !pane.remoteSession) || paneStatus ? (
-            <span className="pane-tab-meta">
-              {pane.recovered && !pane.remoteSession ? (
-                <small className="pane-tab-status" title="Restored after restart">
-                  Restored
-                </small>
-              ) : null}
-              {paneStatus ? (
-                paneAgent?.status === "failed" ? (
-                  <small
-                    className="pane-tab-status pane-tab-status-clickable"
-                    role="button"
-                    tabIndex={0}
-                    title="Dismiss failed status"
-                    aria-label="Dismiss failed status"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void acknowledgeAgentStatus(paneAgent.id, true);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void acknowledgeAgentStatus(paneAgent.id, true);
-                      }
-                    }}
-                  >
-                    {paneStatus}
-                  </small>
-                ) : (
-                  <small className={`pane-tab-status${paneStatusQueueClass}`}>
-                    {paneStatus}
-                  </small>
-                )
-              ) : null}
-            </span>
-          ) : null}
-        </button>
-        {canClearWorkingStatus && paneAgent ? (
-          <button
-            type="button"
-            className="control-button pane-tab-clear-status pane-tab-dot-button"
-            aria-label={`Clear working status for ${paneDisplayTitle}`}
-            title="Clear working status"
-            onPointerDown={(event) => {
-              event.stopPropagation();
-            }}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-            }}
-            onClick={(event) => {
-              event.stopPropagation();
-              void clearAgentWorkingIndicator(paneAgent.id);
-            }}
-          >
-            <span
-              className={paneDotClass}
-              aria-hidden="true"
-            />
-          </button>
-        ) : null}
-        <a
-          className="pane-tab-close"
-          role="button"
-          tabIndex={0}
-          aria-label={`Close ${paneDisplayTitle}`}
-          title={`Close ${paneDisplayTitle}`}
-          onPointerDown={(event) => handlePaneTabClosePointerDown(event, pane)}
-          onClick={(event) => handlePaneTabCloseClick(event, pane)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              event.stopPropagation();
-              void requestClosePane(pane, { confirmAlways: true });
-            }
-          }}
-        >
-          <X size={13.5} aria-hidden="true" />
-        </a>
-        {shortcutHintsShown && shortcutIndex >= 0 && shortcutIndex < 9 ? (
-          <span className="pane-tab-shortcut-hint" aria-hidden="true">
-            ⌘{shortcutIndex + 1}
-          </span>
-        ) : null}
-      </div>
-    );
-  }
-
   const selectResearchTreeFromSidebar = useCallback(
     (treeId: string) => {
       if (
@@ -14920,8 +11631,8 @@ function MainApp() {
                   // this can't defer to focusResearchHome (which would clear
                   // it). Keeping sidebarMode pinned prevents a surface/mode
                   // mismatch if this is ever reached outside research mode.
-                  setSidebarMode("research");
-                  setActiveSurface("research");
+                  showResearchSidebar();
+                  showResearchSurface();
                 }
               }
             }}
@@ -16319,37 +13030,13 @@ function MainApp() {
               />
             </label>
 
-            <div className="settings-row">
-              <label htmlFor="settings-completion-sound" className="settings-label">
-                Completion sound
-              </label>
-              <div className="settings-completion-sound-controls">
-                <select
-                  id="settings-completion-sound"
-                  className="settings-select settings-completion-sound-select"
-                  value={settings.completionSound}
-                  onChange={(event) => {
-                    const completionSound = event.currentTarget.value as CompletionSoundId;
-                    setSettings((current) => ({ ...current, completionSound }));
-                    void testCompletionSound(completionSound);
-                  }}
-                >
-                  {COMPLETION_SOUND_OPTIONS.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="control-button settings-completion-sound-test"
-                  onClick={() => void testCompletionSound(settings.completionSound)}
-                >
-                  <Volume2 size={14} aria-hidden="true" />
-                  Test
-                </button>
-              </div>
-            </div>
+            <CompletionSoundSetting
+              value={settings.completionSound}
+              onChange={(completionSound) => {
+                setSettings((current) => ({ ...current, completionSound }));
+              }}
+              onPreview={(sound) => void testCompletionSound(sound)}
+            />
 
             <div className="settings-row">
               <div className="settings-label-stack">

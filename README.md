@@ -56,11 +56,21 @@ npm run dev:tauri
 Build and validate:
 
 ```sh
+npm run preflight
 npm run build
-npm test
-cargo fmt --manifest-path src-tauri/Cargo.toml --check
-cargo check --manifest-path src-tauri/Cargo.toml
 ```
+
+`npm run preflight` is shared with the release script. It checks frontend/server
+TypeScript (including unused symbols), module reachability, Rust formatting, and
+all unit, server integration, and Rust tests. For a faster frontend-only check, use
+`npm run check:types` and `npm run test:unit`.
+
+Use `npm run test:node -- tests/example.test.ts` for focused TypeScript tests.
+This runner and `dev:site` share `tsconfig.runtime.json`, so JSX uses the same
+automatic React transform as the builds. The module reachability check recognizes
+both Vite entrypoints, the website server, and tests, including literal lazy imports
+and type-only imports; it does not audit Rust command registration or unused exports
+inside otherwise reachable modules.
 
 The Tauri product name is `Session`. Keep `app.qmux.desktop`, the current signing
 configuration, qmux storage keys, `.qmux` data directories, `QMUX_*` environment

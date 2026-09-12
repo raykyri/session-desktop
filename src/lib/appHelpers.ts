@@ -6,7 +6,6 @@ import { FONT_OPTIONS } from "./settings";
 import { findAgentUiAdapter } from "../adapters";
 import type {
   AgentInfo,
-  GlobalDraft,
   PaneInfo,
   PaneSplitInfo,
   QmuxEvent,
@@ -88,16 +87,6 @@ export function firstUserTurnText(turn: Turn): string | null {
   return null;
 }
 
-export function latestUserTurnText(turns: Turn[]): string | null {
-  for (let index = turns.length - 1; index >= 0; index -= 1) {
-    const text = firstUserTurnText(turns[index]);
-    if (text) {
-      return text;
-    }
-  }
-  return null;
-}
-
 /** When active context last moved: the newest included, non-superseded turn
  * that carries a native timestamp. */
 export function latestTurnTimestamp(turns: Turn[]): number | null {
@@ -108,33 +97,6 @@ export function latestTurnTimestamp(turns: Turn[]): number | null {
     }
     if (typeof turn.timestamp === "number") {
       return turn.timestamp;
-    }
-  }
-  return null;
-}
-
-/** The last words the agent said: the final non-empty text block of the most
- * recent assistant turn that has one. Tool-only turns (an agent mid-work) are
- * walked past so the latest spoken reply still surfaces. */
-export function latestAssistantTurnText(turns: Turn[]): string | null {
-  for (let index = turns.length - 1; index >= 0; index -= 1) {
-    const turn = turns[index];
-    if (
-      turn.role !== "assistant" ||
-      turn.status === "superseded" ||
-      turn.contextStatus === "rolledBack"
-    ) {
-      continue;
-    }
-    for (let blockIndex = turn.blocks.length - 1; blockIndex >= 0; blockIndex -= 1) {
-      const block = turn.blocks[blockIndex];
-      if (block.type !== "text") {
-        continue;
-      }
-      const trimmed = block.text.trim();
-      if (trimmed) {
-        return trimmed;
-      }
     }
   }
   return null;
@@ -410,15 +372,6 @@ export function isAgentInfo(value: unknown): value is AgentInfo {
   );
 }
 
-export function isGlobalDraft(value: unknown): value is GlobalDraft {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as Record<string, unknown>).id === "string" &&
-    typeof (value as Record<string, unknown>).text === "string"
-  );
-}
-
 export function isQueuedTurn(value: unknown): value is QueuedTurn {
   return (
     typeof value === "object" &&
@@ -526,29 +479,6 @@ export function reconcileReplacedTurns(
     return current;
   }
   return next;
-}
-
-// Preserves object identity across thread-graph refetches. A refetch
-// re-deserializes every graph into fresh objects even when nothing changed,
-// but downstream memoization (the per-agent turn-info cache in App) keys on
-// graph identity to avoid rebuilding branch turn lists — and, transitively,
-// re-parsing the visible transcript's markdown. Content equality falls back to
-// a JSON comparison, gated behind cheap discriminators so clearly-changed
-// graphs never pay for it. Returns the previous array itself when every graph
-// (and their order) is unchanged, so the state update is a no-op.
-export function reconcileThreadGraphs(
-  previous: ThreadGraph[],
-  next: ThreadGraph[],
-): ThreadGraph[] {
-  const previousById = new Map(previous.map((graph) => [graph.threadId, graph]));
-  const reconciled = next.map((graph) => reconcileThreadGraph(previousById.get(graph.threadId), graph));
-  if (
-    reconciled.length === previous.length &&
-    reconciled.every((graph, index) => graph === previous[index])
-  ) {
-    return previous;
-  }
-  return reconciled;
 }
 
 function reconcileThreadGraph(prior: ThreadGraph | undefined, graph: ThreadGraph): ThreadGraph {
