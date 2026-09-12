@@ -186,7 +186,7 @@ fn launch_claude(
     let log_dir = state
         .config()
         .workspace_root
-        .join(".qmux")
+        .join(".session")
         .join("research-logs");
     let stderr_log = log_dir.join(format!("{}.log", node.id));
     let spec = ClaudeSdkSpawnSpec {
@@ -206,7 +206,7 @@ fn launch_claude(
     let claude_version = version.display();
 
     thread::Builder::new()
-        .name(format!("qmux-research-sdk-{node_id}"))
+        .name(format!("session-research-sdk-{node_id}"))
         .spawn(move || {
             run_session(
                 runtime_state,
@@ -360,7 +360,7 @@ fn launch_jsonl(
     let stderr_log = state
         .config()
         .workspace_root
-        .join(".qmux")
+        .join(".session")
         .join("research-logs")
         .join(format!("{}.log", node.id));
     let args = match flavor {
@@ -388,7 +388,7 @@ fn launch_jsonl(
     let agent_id = agent.id.clone();
     let initial_session_id = grok_session_id;
     thread::Builder::new()
-        .name(format!("qmux-research-jsonl-{node_id}"))
+        .name(format!("session-research-jsonl-{node_id}"))
         .spawn(move || {
             run_jsonl_session(
                 runtime_state,
@@ -1476,7 +1476,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or_default();
-        let dir = std::env::temp_dir().join(format!("qmux-research-sdk-{nanos}"));
+        let dir = std::env::temp_dir().join(format!("session-research-sdk-{nanos}"));
         fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -1750,7 +1750,7 @@ time.sleep(2)
         SessionConfig {
             remotes: Default::default(),
             workspace_root,
-            socket_path: PathBuf::from("/tmp/qmux-research-sdk-test.sock"),
+            socket_path: PathBuf::from("/tmp/session-research-sdk-test.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -2212,7 +2212,7 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
         assert_eq!(session_id.as_deref(), Some("requested-1"));
 
         let mismatch = reconcile_session_id(&mut session_id, Some("different-1"), "Grok")
-            .expect_err("a CLI must not redirect qmux to a different session");
+            .expect_err("a CLI must not redirect session to a different session");
         assert!(mismatch.contains("different session id"));
         let mut empty = None;
         assert!(reconcile_session_id(&mut empty, Some("../../unsafe"), "Grok").is_err());

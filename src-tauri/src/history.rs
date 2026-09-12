@@ -1,6 +1,6 @@
 //! Global, resumable conversation history.
 //!
-//! Claude and Codex keep durable JSONL transcripts outside qmux. This scanner
+//! Claude and Codex keep durable JSONL transcripts outside session. This scanner
 //! treats those stores as the source of truth, merges live Session ownership onto
 //! each entry, and launches only entries rediscovered during the command. The
 //! latter is an authorization boundary: the webview chooses an opaque history
@@ -64,7 +64,7 @@ pub struct HistoryLaunchRequest {
 
 pub fn list(state: &AppState) -> Result<Vec<HistoryEntry>, String> {
     let mut entries = scan_stores()?;
-    merge_qmux_state(state, &mut entries)?;
+    merge_session_state(state, &mut entries)?;
     entries.sort_by(|left, right| {
         right
             .last_active_at
@@ -147,7 +147,7 @@ fn canonical_or_original(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
-fn merge_qmux_state(state: &AppState, entries: &mut [HistoryEntry]) -> Result<(), String> {
+fn merge_session_state(state: &AppState, entries: &mut [HistoryEntry]) -> Result<(), String> {
     let agents = state.list_agents()?;
     let recent = state.list_recent_sessions(MAX_HISTORY_ENTRIES)?;
     for entry in entries {
@@ -544,7 +544,7 @@ mod tests {
 
     fn temp_file(name: &str, contents: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-history-{}-{}",
+            "session-history-{}-{}",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)

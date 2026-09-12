@@ -27,7 +27,7 @@ async fn check_and_prompt(app: AppHandle) -> Result<(), String> {
     };
 
     let message = format!(
-        "qmux {} is available (you have {}).\n\nDownload and install it now?",
+        "session {} is available (you have {}).\n\nDownload and install it now?",
         update.version,
         app.package_info().version
     );
@@ -43,7 +43,7 @@ async fn check_and_prompt(app: AppHandle) -> Result<(), String> {
     if ask(
         &app,
         "Update Installed",
-        "The update will take effect the next time qmux starts.\n\nRestart now?",
+        "The update will take effect the next time session starts.\n\nRestart now?",
         "Restart",
         "Not Now",
     )

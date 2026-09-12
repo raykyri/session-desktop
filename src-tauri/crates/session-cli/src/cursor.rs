@@ -137,7 +137,7 @@ fn default_bindings_dir() -> Option<PathBuf> {
     let data_home = env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))?;
-    Some(data_home.join("qmux").join("cursor").join("bindings"))
+    Some(data_home.join("session").join("cursor").join("bindings"))
 }
 
 fn read_bindings(dir: &Path) -> Vec<PaneBinding> {
@@ -203,7 +203,8 @@ mod tests {
     }
 
     fn write_bindings(name: &str, documents: &[Value]) -> PathBuf {
-        let home = env::temp_dir().join(format!("qmux-cursor-cli-{name}-{}", std::process::id()));
+        let home =
+            env::temp_dir().join(format!("session-cursor-cli-{name}-{}", std::process::id()));
         let dir = home.join("bindings");
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(&dir).unwrap();

@@ -27,7 +27,7 @@ func shouldClaimBrowserEscape(
 /// Native fallback is reserved for responder states that cannot deliver a key
 /// to the DOM. A healthy WebKit descendant must keep the event so focused
 /// inputs and component-level shortcut exclusions continue to work. The child
-/// human-browser WKWebView is a separate document, however, so recognized qmux
+/// human-browser WKWebView is a separate document, however, so recognized Session
 /// shortcuts must be claimed for both its outer view and content descendants.
 /// The legacy iframe fallback follows the same rule when explicitly armed.
 func shouldClaimWebAppShortcut(

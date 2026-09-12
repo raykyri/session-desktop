@@ -7,8 +7,8 @@ import {
 } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-const SESSION_COOKIE = "qmux_session";
-const OAUTH_STATE_COOKIE = "qmux_oauth_state";
+const SESSION_COOKIE = "session_auth";
+const OAUTH_STATE_COOKIE = "session_oauth_state";
 const SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 const OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60;
 const MAX_OAUTH_RESPONSE_BYTES = 128 * 1024;

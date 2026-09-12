@@ -21,7 +21,7 @@ export interface ResearchFolderState {
   collapsed: string[];
 }
 
-export const RESEARCH_FOLDERS_STORAGE_KEY = "qmux.research-folders.v1";
+export const RESEARCH_FOLDERS_STORAGE_KEY = "session.research-folders.v1";
 
 export function emptyResearchFolderState(): ResearchFolderState {
   return { folders: [], membership: {}, starred: [], collapsed: [] };

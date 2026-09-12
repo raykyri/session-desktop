@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readActivityFeedState, saveActivityFeedState } from "../src/lib/activityFeedState";
 
-const key = "qmux.research-browser.state.v1";
+const key = "session.research-browser.state.v1";
 function storage(initial: string | null = null) {
   const values = new Map<string, string>(initial === null ? [] : [[key, initial]]);
   return {

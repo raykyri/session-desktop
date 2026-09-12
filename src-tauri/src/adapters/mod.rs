@@ -316,7 +316,7 @@ pub(crate) fn maybe_record_agent_model(
     Ok(updated)
 }
 
-/// Resolves a qmux-reserved agent for an automatically started shell command.
+/// Resolves a session-reserved agent for an automatically started shell command.
 /// Ordinary commands typed by the user do not carry `prepared_agent_id` and keep
 /// the existing create/reuse behavior. A prepared id must describe an unbound
 /// agent for this adapter, pane group, and effective cwd so a forged environment
@@ -648,7 +648,7 @@ pub struct SpawnAgentRequest {
     pub use_worktree: Option<bool>,
     #[serde(default)]
     pub options: Value,
-    /// Qmux lineage to persist before the new process is allowed to start.
+    /// Session lineage to persist before the new process is allowed to start.
     /// User launches omit it; orchestration surfaces set it to their caller.
     #[serde(default)]
     pub parent_id: Option<String>,
@@ -898,7 +898,7 @@ pub trait AgentAdapter: Send + Sync {
 
     /// Display-only command cwd carried by a native transcript record. Only
     /// adapters whose formats expose an authoritative cwd opt in; lifecycle
-    /// behavior continues to use the agent's qmux-owned launch workspace.
+    /// behavior continues to use the agent's session-owned launch workspace.
     fn transcript_workspace_observation(&self, _line: &str) -> Option<WorkspaceObservation> {
         None
     }
@@ -1074,7 +1074,7 @@ pub struct AdapterMetadata {
     /// hidden rather than disabled for adapters without it.
     pub supports_fork_at_message: bool,
     pub supports_remote: bool,
-    /// Executable name/path from qmux.config.json after home expansion.
+    /// Executable name/path from session.config.json after home expansion.
     pub configured_binary: String,
     /// Resolved executable used for launch, absent when it cannot be found.
     pub resolved_binary: Option<String>,
@@ -1204,7 +1204,7 @@ fn run_remote_command_presence_probe(
         args: vec![
             "-c".to_string(),
             "command -v \"$1\" >/dev/null 2>&1".to_string(),
-            "qmux-remote-probe".to_string(),
+            "session-remote-probe".to_string(),
             program.to_string(),
         ],
         ..Default::default()
@@ -2200,8 +2200,8 @@ mod tests {
     fn test_config() -> SessionConfig {
         SessionConfig {
             remotes: Default::default(),
-            workspace_root: PathBuf::from("/tmp/qmux-adapter-tests"),
-            socket_path: PathBuf::from("/tmp/qmux-adapter-tests.sock"),
+            workspace_root: PathBuf::from("/tmp/session-adapter-tests"),
+            socket_path: PathBuf::from("/tmp/session-adapter-tests.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -2324,7 +2324,7 @@ mod tests {
     fn runtime_metadata_reports_a_missing_configured_binary() {
         let mut config = test_config();
         config.adapters.claude.binary =
-            Some("/definitely/missing/qmux-test-provider-binary".to_string());
+            Some("/definitely/missing/session-test-provider-binary".to_string());
 
         let metadata = adapter_registry(&config).metadata();
         let claude = metadata
@@ -2333,7 +2333,7 @@ mod tests {
             .expect("claude metadata");
         assert_eq!(
             claude.configured_binary,
-            "/definitely/missing/qmux-test-provider-binary"
+            "/definitely/missing/session-test-provider-binary"
         );
         assert_eq!(claude.resolved_binary, None);
         assert_eq!(claude.readiness, AdapterReadiness::Missing);
@@ -2548,7 +2548,7 @@ mod tests {
                 id: "agent-1".to_string(),
                 group_id: "group-1".to_string(),
                 adapter: "unsupported".to_string(),
-                worktree_dir: "/tmp/qmux-adapter-tests".to_string(),
+                worktree_dir: "/tmp/session-adapter-tests".to_string(),
                 branch: None,
                 active_workspace: None,
                 pane_id: Some("pane-1".to_string()),
@@ -2682,7 +2682,7 @@ mod tests {
         let state = AppState::new(test_config());
         // A real directory so both the recorded launch dir and the shell's reported $PWD
         // can be canonicalized to the same target.
-        let base = std::env::temp_dir().join(format!("qmux-reuse-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("session-reuse-{}", std::process::id()));
         std::fs::create_dir_all(&base).unwrap();
         let launch_dir = base.display().to_string();
         state
@@ -2868,7 +2868,7 @@ mod tests {
             .insert_agent(session_agent(
                 "prepared-agent",
                 None,
-                "/tmp/qmux-adapter-tests",
+                "/tmp/session-adapter-tests",
                 "placeholder",
             ))
             .unwrap();
@@ -2879,7 +2879,7 @@ mod tests {
             Some("prepared-agent"),
             "pane-new",
             "group-1",
-            "/tmp/qmux-adapter-tests",
+            "/tmp/session-adapter-tests",
         )
         .unwrap()
         .unwrap();
@@ -2891,7 +2891,7 @@ mod tests {
             Some("prepared-agent"),
             "pane-new",
             "group-1",
-            "/tmp/qmux-adapter-tests",
+            "/tmp/session-adapter-tests",
         )
         .unwrap_err();
         assert!(err.contains("uses adapter"));
@@ -2908,7 +2908,7 @@ mod tests {
                 Some("prepared-agent"),
                 "pane-live",
                 "group-1",
-                "/tmp/qmux-adapter-tests",
+                "/tmp/session-adapter-tests",
             )
             .unwrap()
             .is_some()
@@ -2919,7 +2919,7 @@ mod tests {
             Some("prepared-agent"),
             "pane-new",
             "group-1",
-            "/tmp/qmux-adapter-tests",
+            "/tmp/session-adapter-tests",
         )
         .unwrap_err();
         assert!(err.contains("already attached"));

@@ -42,7 +42,7 @@ test("safeHref blocks javascript and custom schemes", () => {
   assert.equal(safeHref("asset://localhost/etc/passwd"), undefined);
 });
 
-test("safeHref does not promote absolute Unix paths to https://qmux.invalid", () => {
+test("safeHref does not promote absolute Unix paths to https://session.invalid", () => {
   const path = "/Users/raymond/Code/multitool/dev/menubar-design-variants.html";
   const href = safeHref(path);
   assert.equal(href, `${SESSION_FILE_HREF_PREFIX}${path}`);
@@ -158,16 +158,16 @@ test("inlineCodeFilePath rejects spaces, URLs, and non-filename text", () => {
   assert.equal(inlineCodeFilePath("café.md"), undefined);
 });
 
-test("safeHref keeps relative qmux-file hrefs minted from inline code", () => {
-  assert.equal(safeHref("qmux-file:dev/mock.html"), "qmux-file:dev/mock.html");
-  assert.equal(safeHref("qmux-file:docs/readme.md"), "qmux-file:docs/readme.md");
-  assert.equal(safeHref("qmux-file:foo.ts"), undefined);
-  assert.equal(safeHref("qmux-file:foo bar.html"), undefined);
+test("safeHref keeps relative session-file hrefs minted from inline code", () => {
+  assert.equal(safeHref("session-file:dev/mock.html"), "session-file:dev/mock.html");
+  assert.equal(safeHref("session-file:docs/readme.md"), "session-file:docs/readme.md");
+  assert.equal(safeHref("session-file:foo.ts"), undefined);
+  assert.equal(safeHref("session-file:foo bar.html"), undefined);
 });
 
 test("safeHref rejects relative links that only resolve against the dummy base", () => {
   // /docs/intro has no file extension and no known FS root — leave it alone.
-  // Resolving against the dummy base would make https://qmux.invalid/docs/intro,
+  // Resolving against the dummy base would make https://session.invalid/docs/intro,
   // which is not a real destination and must never reach the native browser.
   // The same applies to document-relative and fragment-only destinations.
   assert.equal(safeHref("/docs/intro"), undefined);
@@ -197,7 +197,7 @@ test("local preview hints allow renderable files and reject binary packages", ()
   assert.equal(canPreviewLocalFilePath("/tmp/report.HTML"), true);
   assert.equal(canPreviewLocalFilePath("/tmp/notes.markdown"), true);
   assert.equal(canPreviewLocalFilePath("C:\\tmp\\chart.PNG"), true);
-  assert.equal(canPreviewLocalFilePath("/tmp/qmux_0.3.1_universal.dmg"), false);
+  assert.equal(canPreviewLocalFilePath("/tmp/session_0.3.1_universal.dmg"), false);
   assert.equal(canPreviewLocalFilePath("/tmp/installer.pkg"), false);
   assert.equal(canPreviewLocalFilePath("/tmp/archive.zip"), false);
   assert.equal(canPreviewLocalFilePath("/tmp/no-extension"), false);

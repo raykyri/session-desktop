@@ -3,10 +3,10 @@ import type { ResearchVisibilityFilter } from "../components/research/ResearchSi
 import { initResearchWorkspaceHistory } from "../lib/researchHistory";
 import type { ResearchFolderScope } from "../lib/researchScope";
 
-const RESEARCH_VISIBILITY_FILTER_KEY = "qmux.research-visibility-filter.v1";
-const LEGACY_SHOW_ARCHIVED_RESEARCH_KEY = "qmux.show-archived-research.v1";
-export const RESEARCH_FOLDER_SCOPE_KEY = "qmux.research-folder-scope.v1";
-const JOURNAL_OPEN_KEY = "qmux.journal-open.v1";
+const RESEARCH_VISIBILITY_FILTER_KEY = "session.research-visibility-filter.v1";
+const LEGACY_SHOW_ARCHIVED_RESEARCH_KEY = "session.show-archived-research.v1";
+export const RESEARCH_FOLDER_SCOPE_KEY = "session.research-folder-scope.v1";
+const JOURNAL_OPEN_KEY = "session.journal-open.v1";
 
 /** Owns persisted research navigation preferences and the in-session back/forward history. */
 export function useResearchNavigationState() {

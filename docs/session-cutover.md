@@ -16,19 +16,17 @@ external scripts, and deployment secrets. Examples include `SESSION_CONFIG`,
 `SESSION_BUILD_TARGET`, `SESSION_GITHUB_CLIENT_ID`, `SESSION_SHARE_BASE_URL`,
 `SESSION_PUBLIC_ORIGIN`, and `SESSION_SESSION_SECRET`. The app supplies fresh
 `SESSION_SOCK`, `SESSION_TOKEN`, `SESSION_CLI`, and pane/agent variables to children;
-do not copy credentials from an old process. Both old and new inherited context
-are cleared before fresh pane credentials are installed.
+do not copy credentials from an old process. Inherited Session context is cleared
+before fresh pane credentials are installed.
 
 The Codex adapter now supplies `SESSION_WORKTREE_ROOT` and matching developer
 instructions. An already-running agent's older launcher instructions still apply
 until that process is relaunched; an external launcher must update its producers
 and instructions together.
 
-Remote configuration now exposes `sessionCli`. Existing `qmuxCli` fields still
-load, including custom paths; subsequent serialization uses the new field. Old
-managed `~/.qmux/bin/qmux-cli` paths are recognized for reprovisioning as
-`~/.qmux/bin/session-cli`. Custom CLI paths are never overwritten: their owners
-must install a matching helper. Remote provisioning still requires a bundled
+Remote configuration exposes only `sessionCli`; the legacy field is ignored.
+Managed helpers live at `~/.session/bin/session-cli`. Custom CLI paths are never
+overwritten: their owners must install a matching helper. Remote provisioning still requires a bundled
 helper for the remote architecture; this change does not add remote support to
 builds that omit those artifacts.
 
@@ -41,16 +39,15 @@ builds that omit those artifacts.
   symbols for surviving functions. The native archive
   retains `QmuxNativeTerminal` and `QMUX_NATIVE_BRIDGE_STAMP`; renderer-only
   symbols, `QMUX_GHOSTTY_PACKAGE_PATH`, and `QMUX_NATIVE_DEBUG` are retired.
-- `qmux.config.json`, `.qmux/` directories, the macOS
-  `~/Library/Application Support/qmux` data root, Linux data/runtime roots,
-  browser storage keys, and existing generated integration file paths.
-  Existing data is read in place; no data directory is moved or deleted.
-- Workspace/participant identity fields, `qmuxToolActivity`,
-  `qmux_instruction`, publication proposal markers, and `qmux-file:` links.
-  These names identify persisted content, not product branding.
-- Existing remote tmux identities and SSH control paths, which allow recovery and
-  cleanup of sessions created before this cutover.
-- `qmux.app`, the Fly app name, web authentication cookies, updater endpoints,
+- `session.config.json`, `.session/` directories, the macOS
+  `~/Library/Application Support/session` data root, Linux data/runtime roots,
+  and `session.*` browser storage keys are the only current storage locations.
+- Persisted workspace/participant fields, `sessionToolActivity`,
+  `session_instruction`, `session-proposal` markers, and `session-file:` links use
+  Session names. Generated hooks, profiles, plugin files, remote tmux identities,
+  SSH control paths, and browser automation profiles also use Session prefixes.
+  No legacy values or paths are read or migrated.
+- `qmux.app`, the Fly app name, updater endpoints,
   and release download URLs. Hosting and update delivery need a separate
   deployment cutover. Existing clients still request their embedded old endpoint.
 
@@ -71,15 +68,15 @@ Apple bundle, signing, and Keychain identifiers are unchanged.
 Use `--source terminal` for stored process output. Research SDK/JSONL execution,
 PTY input ordering, remote recovery, and process cleanup remain available.
 
-Settings retain the `qmux.settings.v1` key. The app reads legacy `fontSize` as
+Settings use the `session.settings.v1` key. The app reads legacy `fontSize` as
 `textSize` to preserve research typography; obsolete terminal themes, fonts,
 cursor and scroll settings no longer control the app. Browser loading appearance
 uses the application palette, including a native startup fallback.
 
 ## Control socket filename
 
-The default control socket is now `session.sock` in the existing runtime directory.
-The checked-in development configuration uses `~/.qmux/run/session.sock`. Both
+The default control socket is `session.sock` in the Session runtime directory.
+The checked-in development configuration uses `~/.session/run/session.sock`. Both
 app and CLI discovery use the new filename; explicit `socketPath` and
 `SESSION_SOCK` overrides remain supported. Restart Session and update any external
 configuration that explicitly points to the old socket when cutting over.

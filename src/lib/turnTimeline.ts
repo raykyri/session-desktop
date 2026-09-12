@@ -42,7 +42,7 @@ export interface MessageItem {
    * the optional end-of-assistant-group timestamp footer.
    */
   timestamp?: number | null;
-  /** Native/qmux turns whose text or activity was folded into this visible
+  /** Native/session turns whose text or activity was folded into this visible
    * message. */
   sourceTurnIds: string[];
   /** Source turn for each entry in `blocks`, kept separately because one

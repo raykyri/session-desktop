@@ -1,7 +1,7 @@
 [package]
 name = "session-cli"
 version = "0.3.3"
-description = "The qmux in-pane CLI: hook notifies, cwd reporting, forks, and agent supervision."
+description = "The session in-pane CLI: hook notifies, cwd reporting, forks, and agent supervision."
 license = "MIT"
 edition = "2024"
 

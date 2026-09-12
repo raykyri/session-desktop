@@ -4,9 +4,8 @@ Session is a desktop research workspace for running long-form investigations wit
 coding agents. It keeps questions, follow-ups, sources, notes, and generated
 documents together in a durable research tree.
 
-The application is derived from qmux. The app, CLI, packages, and environment
-variables use **Session**. Apple identity and existing storage/data formats are
-preserved; see [the cutover guide](docs/session-cutover.md).
+The application has completed its product, storage, and integration cutover to
+**Session**. Apple identity and hosted-service identifiers are preserved; see [the cutover guide](docs/session-cutover.md).
 
 ## Features
 
@@ -21,7 +20,7 @@ preserved; see [the cutover guide](docs/session-cutover.md).
 
 Session intentionally has no terminal surface, terminal tabs, transcript side pane,
 terminal map, shell launcher, or terminal appearance settings. Research runtimes may
-still use process and compatibility infrastructure inherited from qmux internally.
+still use process and compatibility infrastructure inherited from session internally.
 
 ## Install
 
@@ -110,9 +109,9 @@ Research Activity feed, are in `src/components/research/`. Durable research stat
 and execution are implemented by `src-tauri/src/research.rs`,
 `research_runtime.rs`, and `state.rs`.
 
-Research data is stored under the configured qmux workspace root for compatibility.
-The development configuration in `qmux.config.json` uses `~/.qmux/workspaces` and
-`~/.qmux/run/session.sock`. Shipping builds use the existing platform application-data
+Research data is stored under the configured Session workspace root.
+The development configuration in `session.config.json` uses `~/.session/workspaces` and
+`~/.session/run/session.sock`. Shipping builds use the existing platform application-data
 location associated with the unchanged bundle identifier.
 
 See [docs/research-activity.md](docs/research-activity.md) for the activity feed and

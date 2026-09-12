@@ -160,7 +160,7 @@ fn save_pasted_image_within(
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
     let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
-    let path = cache_dir.join(format!("qmux-paste-{nanos}-{seq}.{ext}"));
+    let path = cache_dir.join(format!("session-paste-{nanos}-{seq}.{ext}"));
     fs::write(&path, &bytes).map_err(|err| format!("failed to write {}: {err}", path.display()))?;
     let absolute = fs::canonicalize(&path).unwrap_or(path);
     Ok(absolute.to_string_lossy().into_owned())
@@ -179,7 +179,7 @@ mod tests {
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
         let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("qmux-image-files-{nanos}-{seq}"));
+        let dir = std::env::temp_dir().join(format!("session-image-files-{nanos}-{seq}"));
         fs::create_dir_all(&dir).unwrap();
         dir
     }

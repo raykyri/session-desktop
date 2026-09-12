@@ -32,7 +32,7 @@ test("marker values identify and count; foreign values do not", () => {
   );
   assert.equal(conversationToolCallCount({ type: "thinking", text: "hidden" }), null);
   assert.equal(conversationToolCallCount(null), null);
-  assert.equal(conversationToolCallCount("qmuxToolActivity"), null);
+  assert.equal(conversationToolCallCount("sessionToolActivity"), null);
 });
 
 test("labels pluralize", () => {

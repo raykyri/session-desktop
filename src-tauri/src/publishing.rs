@@ -39,8 +39,8 @@ const MAX_PROPOSAL_PROMPT_CHARACTERS: usize = 10_000;
 const MAX_PROPOSAL_ANSWER_CHARACTERS: usize = 40_000;
 const MAX_PROPOSAL_QUOTE_CHARACTERS: usize = 2_000;
 const MAX_PROPOSAL_CONTEXT_CHARACTERS: usize = 500;
-const PROPOSAL_MARKER_PREFIX: &str = "<!-- qmux-proposal:v1 ";
-const PROPOSAL_RESOLUTION_MARKER_PREFIX: &str = "<!-- qmux-proposal-resolution:v1 ";
+const PROPOSAL_MARKER_PREFIX: &str = "<!-- session-proposal:v1 ";
+const PROPOSAL_RESOLUTION_MARKER_PREFIX: &str = "<!-- session-proposal-resolution:v1 ";
 const COMMENT_MARKER_SUFFIX: &str = " -->";
 
 static PUBLICATIONS_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
@@ -480,7 +480,7 @@ pub async fn publishing_publish(
     // A publication id that is already bound must go through sync: creating a
     // second gist here would silently overwrite the binding and orphan the
     // first gist — still live on GitHub (possibly public) with no local record
-    // and no way left to manage it from qmux. This is reachable when the
+    // and no way left to manage it from Session. This is reachable when the
     // binding failed to save after a publish (that path deliberately returns
     // success-with-warning) or when a stale view still shows Publish.
     if let Some(existing) = publication_binding(&workspace_root, &request.publication_id)? {
@@ -2822,7 +2822,7 @@ mod tests {
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
         let seq = WORKSPACE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("qmux-publishing-{nanos}-{seq}"));
+        let dir = std::env::temp_dir().join(format!("session-publishing-{nanos}-{seq}"));
         fs::create_dir_all(&dir).unwrap();
         dir
     }

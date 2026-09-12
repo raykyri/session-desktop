@@ -28,9 +28,9 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-/// The xAI Grok Build lifecycle hook events qMux installs. Grok discovers global
+/// The xAI Grok Build lifecycle hook events Session installs. Grok discovers global
 /// hooks from `~/.grok/hooks/*.json` (not `user-settings.json`); each entry runs a
-/// command per event with the event JSON on stdin. qMux drives the agent timeline
+/// command per event with the event JSON on stdin. Session drives the agent timeline
 /// from the same core events it uses for Claude. Grok has no pre-decision permission
 /// event, but its passive `PermissionDenied` event still keeps status/activity honest.
 const GROK_HOOK_EVENTS: &[&str] = &[
@@ -51,11 +51,11 @@ const GROK_HOOK_EVENTS: &[&str] = &[
 ];
 
 /// Adapter for the xAI Grok Build CLI. Grok ships a Claude-compatible hook system
-/// (shell commands run at lifecycle events, event JSON on stdin), so qMux integrates
-/// it like its Claude and Codex adapters rather than like OpenCode: a qMux-managed
-/// hook file is installed at `~/.grok/hooks/qmux.json` and a shim forwards each
-/// lifecycle event back to qMux via `session notify <event>`. The hook command no-ops
-/// outside qMux (it checks for the `SESSION_*` env vars only qMux-launched panes set),
+/// (shell commands run at lifecycle events, event JSON on stdin), so Session integrates
+/// it like its Claude and Codex adapters rather than like OpenCode: a Session-managed
+/// hook file is installed at `~/.grok/hooks/session.json` and a shim forwards each
+/// lifecycle event back to Session via `session notify <event>`. The hook command no-ops
+/// outside Session (it checks for the `SESSION_*` env vars only Session-launched panes set),
 /// so standalone `grok` runs are unaffected. Agent status (running, idle, awaiting
 /// permission) is driven by these hooks; the transcript timeline binds to the
 /// transcript path the `SessionStart` hook reports when Grok provides one.
@@ -74,14 +74,14 @@ impl GrokAdapter {
     pub(crate) fn ensure_binary(&self) -> Result<String, String> {
         let binary = ensure_on_path(&self.binary).ok_or_else(|| {
             format!(
-                "Grok adapter binary '{}' was not found on PATH or standard macOS tool paths. Install the Grok CLI or update adapters.grok.binary in qmux.config.json.",
+                "Grok adapter binary '{}' was not found on PATH or standard macOS tool paths. Install the Grok CLI or update adapters.grok.binary in session.config.json.",
                 self.binary
             )
         })?;
         Ok(binary.display().to_string())
     }
 
-    /// The qMux-managed JSONL transcript fallback path for an agent, used when Grok's
+    /// The Session-managed JSONL transcript fallback path for an agent, used when Grok's
     /// `SessionStart` hook does not report a transcript path of its own. It is shaped
     /// for `parse_transcript_line` and tailed with the same pipeline used for Claude,
     /// Codex, and OpenCode.
@@ -89,7 +89,7 @@ impl GrokAdapter {
         state
             .config()
             .workspace_root
-            .join(".qmux")
+            .join(".session")
             .join("grok")
             .join(format!("{agent_id}.jsonl"))
     }
@@ -397,7 +397,7 @@ impl GrokAdapter {
     }
 
     /// Forks a Grok session into a new independent session using
-    /// `--resume <source> --fork-session`, optionally in a qMux worktree.
+    /// `--resume <source> --fork-session`, optionally in a Session worktree.
     pub fn fork_pane(
         &self,
         state: &AppState,
@@ -664,7 +664,7 @@ impl GrokAdapter {
                         // The hook arrives over the control socket under the pane's
                         // token, so a prompt-injected agent can forge this path.
                         // Reject a non-.jsonl or non-sibling path before tailing it;
-                        // a rejected path falls back to the qMux-managed transcript
+                        // a rejected path falls back to the Session-managed transcript
                         // path under workspace_root.
                         .filter(|candidate| {
                             grok_hook_transcript_path_acceptable(
@@ -713,7 +713,7 @@ impl GrokAdapter {
                             }
                             // Prefer (1) a usable hook path, (2) repair of a persisted
                             // updates binding, (3) native session lookup, else keep any
-                            // already-good path. Only fall back to the qMux-managed file
+                            // already-good path. Only fall back to the Session-managed file
                             // when nothing is recorded yet — a sparse SessionStart must
                             // not yank the tail off a live chat_history binding.
                             if let Some(transcript_path) = hook_transcript_path
@@ -929,7 +929,7 @@ impl GrokAdapter {
 }
 
 /// Reads Grok's currently live background work from a main-agent Stop payload.
-/// Prefer a present point-in-time snapshot over qMux's hook-derived tracker: an
+/// Prefer a present point-in-time snapshot over Session's hook-derived tracker: an
 /// explicit empty list reconciles a missing SubagentStop. Preserve `None` for an
 /// absent or malformed field, though, so schema/version gaps fail closed to the
 /// tracker instead of becoming a false parent-completion boundary.
@@ -962,7 +962,7 @@ impl GrokLaunchOptions {
     }
 }
 
-/// Builds the argument list for a qMux-launched Grok process. Uses the xAI Grok
+/// Builds the argument list for a Session-launched Grok process. Uses the xAI Grok
 /// Build CLI contract: `--cwd <dir>` for the working directory, `--model <model>`,
 /// and the initial prompt as a trailing positional argument (which starts the
 /// interactive TUI and submits the prompt immediately — unlike `-p/--prompt`, which
@@ -1044,9 +1044,9 @@ fn build_grok_args_from_shell(cwd: &Path, tail_args: &[String]) -> Vec<String> {
     args
 }
 
-/// Ensures the qMux Grok hook integration is present. Writes are skipped when
-/// the shim script and `hooks/qmux.json` already match the expected content.
-/// Best-effort cleanup also strips stale qMux entries from the legacy
+/// Ensures the Session Grok hook integration is present. Writes are skipped when
+/// the shim script and `hooks/session.json` already match the expected content.
+/// Best-effort cleanup also strips stale Session entries from the legacy
 /// `user-settings.json` location (Grok never loads hooks from there).
 fn ensure_grok_integration() -> Result<(), String> {
     let grok_home = grok_home()?;
@@ -1062,10 +1062,10 @@ fn grok_home() -> Result<PathBuf, String> {
         .ok_or_else(|| "GROK_HOME and HOME are not set; cannot configure Grok hooks".to_string())
 }
 
-/// Path of the qMux-owned global hook file under `$GROK_HOME/hooks/`. Grok merges
+/// Path of the Session-owned global hook file under `$GROK_HOME/hooks/`. Grok merges
 /// every `*.json` in that directory as always-trusted global hooks.
 fn grok_hooks_file_path(grok_home: &Path) -> PathBuf {
-    grok_home.join("hooks").join("qmux.json")
+    grok_home.join("hooks").join("session.json")
 }
 
 /// Native Grok conversations live at
@@ -1128,7 +1128,7 @@ pub(crate) fn research_session_transcript_path(cwd: &Path, session_id: &str) -> 
     grok_session_transcript_path(&home, &cwd.display().to_string(), session_id)
 }
 
-/// Whether a Grok hook-reported path contains conversation records qMux can render.
+/// Whether a Grok hook-reported path contains conversation records Session can render.
 ///
 /// Current Grok versions report `updates.jsonl` as `transcript_path` when resuming a
 /// session. That sibling file is an internal JSON-RPC/UI update stream, not chat
@@ -1141,7 +1141,7 @@ fn grok_hook_transcript_path_acceptable(current: Option<&str>, candidate: &str) 
 }
 
 /// Maps Grok's unusable UI `updates.jsonl` stream to the sibling conversation file
-/// qMux can render. Leaves every other path unchanged (including legacy rollouts).
+/// Session can render. Leaves every other path unchanged (including legacy rollouts).
 ///
 /// Prefer this rewrite over discarding the hook path and rediscovering via cwd
 /// encoding: the absolute path Grok reports already names the correct session
@@ -1253,11 +1253,11 @@ fn percent_encode_grok_cwd(cwd: &str) -> String {
 }
 
 fn write_grok_integration_files(grok_home: &Path) -> Result<(), String> {
-    let qmux_dir = grok_home.join("qmux");
-    fs::create_dir_all(&qmux_dir)
-        .map_err(|err| format!("failed to create {}: {err}", qmux_dir.display()))?;
+    let session_dir = grok_home.join("session");
+    fs::create_dir_all(&session_dir)
+        .map_err(|err| format!("failed to create {}: {err}", session_dir.display()))?;
 
-    let shim_path = qmux_dir.join("qmux-grok-hook");
+    let shim_path = session_dir.join("session-grok-hook");
 
     // Only rewrite the shim when missing, content differs, or permissions are wrong.
     if !shim_is_up_to_date(&shim_path) {
@@ -1273,14 +1273,14 @@ fn write_grok_integration_files(grok_home: &Path) -> Result<(), String> {
 
     let hooks_path = grok_hooks_file_path(grok_home);
     let desired = grok_hooks_file_contents(&shim_path);
-    // qMux fully owns this file; rewrite only when content drifts (missing events,
+    // Session fully owns this file; rewrite only when content drifts (missing events,
     // stale shim path, leftover matchers from older installs).
     if !hooks_file_is_up_to_date(&hooks_path, &desired) {
         fs::write(&hooks_path, desired)
             .map_err(|err| format!("failed to write {}: {err}", hooks_path.display()))?;
     }
 
-    // Older qMux versions installed hooks into `user-settings.json`, which Grok
+    // Older Session versions installed hooks into `user-settings.json`, which Grok
     // does not load. Strip our entries so the dead config does not confuse users
     // or re-surface after a manual merge; failures here are non-fatal.
     let _ = strip_stale_user_settings_hooks(grok_home, &shim_path);
@@ -1289,7 +1289,7 @@ fn write_grok_integration_files(grok_home: &Path) -> Result<(), String> {
 }
 
 /// POSIX shim that forwards a Grok lifecycle event to `session notify <event>`. No-ops
-/// (exit 0) unless launched inside a qMux pane, so a standalone `grok` run that
+/// (exit 0) unless launched inside a Session pane, so a standalone `grok` run that
 /// inherits the globally-installed hook is unaffected. The event JSON Grok writes to
 /// the shim's stdin is passed through to Session, which reads it as the hook payload.
 fn grok_hook_shim() -> &'static str {
@@ -1305,7 +1305,7 @@ exec "$SESSION_CLI" notify "$event"
 "#
 }
 
-/// Builds the qMux-owned `hooks/qmux.json` document. Grok's lifecycle events
+/// Builds the Session-owned `hooks/session.json` document. Grok's lifecycle events
 /// (`SessionStart`, `UserPromptSubmit`, `Stop`, …) reject a `matcher` field
 /// (`LifecycleMatcherNotAllowed`), so entries omit it; an omitted matcher on tool
 /// events matches every tool.
@@ -1338,15 +1338,15 @@ fn grok_hooks_file_contents(shim_path: &Path) -> String {
     raw
 }
 
-/// Whether a hook matcher entry is one qMux installed, i.e. one of its `command`s
-/// runs the qMux Grok shim. Used when stripping stale entries from the legacy
+/// Whether a hook matcher entry is one Session installed, i.e. one of its `command`s
+/// runs the Session Grok shim. Used when stripping stale entries from the legacy
 /// `user-settings.json` path. Matches on filename so absolute paths from previous
 /// installations are cleaned up too.
-fn is_qmux_grok_hook_entry(entry: &Value, shim_path: &Path) -> bool {
+fn is_session_grok_hook_entry(entry: &Value, shim_path: &Path) -> bool {
     let needle = shim_path
         .file_name()
         .and_then(|name| name.to_str())
-        .unwrap_or("qmux-grok-hook");
+        .unwrap_or("session-grok-hook");
     entry
         .get("hooks")
         .and_then(Value::as_array)
@@ -1378,8 +1378,8 @@ fn hooks_file_is_up_to_date(hooks_path: &Path, desired: &str) -> bool {
     fs::read_to_string(hooks_path).is_ok_and(|content| content == desired)
 }
 
-/// Removes qMux-owned hook entries from the legacy `user-settings.json` location.
-/// Pre-fix qMux versions wrote hooks there, but Grok only discovers global hooks
+/// Removes Session-owned hook entries from the legacy `user-settings.json` location.
+/// Pre-fix Session versions wrote hooks there, but Grok only discovers global hooks
 /// from `~/.grok/hooks/*.json` (and Claude/Cursor compat paths). Leaving the stale
 /// entries is harmless at runtime but confuses anyone inspecting settings; strip
 /// them when present. Returns `Ok(true)` when the file was rewritten.
@@ -1399,14 +1399,14 @@ fn strip_stale_user_settings_hooks(grok_home: &Path, shim_path: &Path) -> Result
 
     let mut changed = false;
     // Walk every event (including ones we no longer install, e.g. PermissionRequest)
-    // so leftover qMux entries from older versions are fully removed.
+    // so leftover Session entries from older versions are fully removed.
     let event_keys: Vec<String> = hooks.keys().cloned().collect();
     for event in event_keys {
         let Some(list) = hooks.get_mut(&event).and_then(Value::as_array_mut) else {
             continue;
         };
         let before = list.len();
-        list.retain(|item| !is_qmux_grok_hook_entry(item, shim_path));
+        list.retain(|item| !is_session_grok_hook_entry(item, shim_path));
         if list.len() != before {
             changed = true;
         }
@@ -1634,7 +1634,7 @@ fn grok_subcommand(arg: &str) -> bool {
     )
 }
 
-/// Whether the user already supplied a `--cwd` so qMux does not add a duplicate one
+/// Whether the user already supplied a `--cwd` so Session does not add a duplicate one
 /// when forwarding shell args.
 fn args_contain_directory(args: &[String]) -> bool {
     args.iter()
@@ -1723,7 +1723,7 @@ fn finish_agent_after_failure(state: &AppState, agent: &AgentInfo) -> Result<boo
 /// the SessionStart hook under `transcript_path`). We therefore support the native
 /// Claude-style JSONL format first (same as the Claude adapter). We also support
 /// the synthetic "response_item" format (used by Codex/OpenCode and the Session
-/// opencode plugin) as a fallback for the qmux-managed transcript path or future
+/// opencode plugin) as a fallback for the session-managed transcript path or future
 /// Grok plugin writers.
 ///
 /// ```json
@@ -1758,7 +1758,7 @@ fn parse_transcript_line(agent_id: &str, source_index: usize, line: &str) -> Opt
         return Some(turn);
     }
 
-    // Fallback: synthetic response_item format (for the .qmux/grok fallback path
+    // Fallback: synthetic response_item format (for the .session/grok fallback path
     // or if a future plugin emits it).
     if value.get("type").and_then(Value::as_str) != Some("response_item") {
         return None;
@@ -1924,12 +1924,12 @@ fn parse_grok_chat_history_value(
     })
 }
 
-/// Normalize Grok user-message text so qMux renders a real user bubble.
+/// Normalize Grok user-message text so Session renders a real user bubble.
 ///
 /// Current Grok chat histories wrap user-authored text in a `<user_query>`
 /// envelope and may also prefix an `<image_files>` harness block when the
 /// prompt included attachments. Leaving either tag in the transcript makes
-/// qMux's generic injected-instruction detector classify the whole turn as
+/// Session's generic injected-instruction detector classify the whole turn as
 /// private harness context — collapsing the user's words into a
 /// `<image_files> <user_query>` chip (or nothing) and never showing them as a
 /// message. Extract the query body and turn listed image paths into
@@ -2118,8 +2118,8 @@ mod tests {
     fn test_config() -> SessionConfig {
         SessionConfig {
             remotes: Default::default(),
-            workspace_root: PathBuf::from("/tmp/qmux-grok-tests"),
-            socket_path: PathBuf::from("/tmp/qmux-grok-tests.sock"),
+            workspace_root: PathBuf::from("/tmp/session-grok-tests"),
+            socket_path: PathBuf::from("/tmp/session-grok-tests.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -2158,7 +2158,7 @@ mod tests {
             id: "agent-1".to_string(),
             group_id: "group-1".to_string(),
             adapter: "grok".to_string(),
-            worktree_dir: "/tmp/qmux-grok-tests".to_string(),
+            worktree_dir: "/tmp/session-grok-tests".to_string(),
             branch: None,
             active_workspace: None,
             pane_id: None,
@@ -2207,7 +2207,7 @@ mod tests {
 
     #[test]
     fn build_args_adds_cwd_model_and_positional_prompt() {
-        let args = build_grok_args(Path::new("/tmp/qmux"), Some("grok-code"), "fix the bug");
+        let args = build_grok_args(Path::new("/tmp/session"), Some("grok-code"), "fix the bug");
 
         // The prompt is a trailing positional, after --cwd and --model, delimited
         // with `--` so leading-dash text can't be parsed as a flag.
@@ -2215,7 +2215,7 @@ mod tests {
             args,
             vec![
                 "--cwd",
-                "/tmp/qmux",
+                "/tmp/session",
                 "--model",
                 "grok-code",
                 "--",
@@ -2226,22 +2226,25 @@ mod tests {
 
     #[test]
     fn build_args_omit_empty_prompt_and_model() {
-        let args = build_grok_args(Path::new("/tmp/qmux"), None, "  ");
+        let args = build_grok_args(Path::new("/tmp/session"), None, "  ");
 
-        assert_eq!(args, vec!["--cwd", "/tmp/qmux"]);
+        assert_eq!(args, vec!["--cwd", "/tmp/session"]);
     }
 
     #[test]
     fn resume_args_include_session_id_when_present() {
-        let (args, resumed) =
-            build_grok_resume_args(Path::new("/tmp/qmux"), Some("grok-code"), Some(" sess-1 "));
+        let (args, resumed) = build_grok_resume_args(
+            Path::new("/tmp/session"),
+            Some("grok-code"),
+            Some(" sess-1 "),
+        );
 
         assert!(resumed);
         assert_eq!(
             args,
             vec![
                 "--cwd",
-                "/tmp/qmux",
+                "/tmp/session",
                 "--model",
                 "grok-code",
                 "--resume",
@@ -2252,16 +2255,16 @@ mod tests {
 
     #[test]
     fn resume_args_fall_back_to_fresh_launch_without_session_id() {
-        let (args, resumed) = build_grok_resume_args(Path::new("/tmp/qmux"), None, Some("   "));
+        let (args, resumed) = build_grok_resume_args(Path::new("/tmp/session"), None, Some("   "));
 
         assert!(!resumed);
-        assert_eq!(args, vec!["--cwd", "/tmp/qmux"]);
+        assert_eq!(args, vec!["--cwd", "/tmp/session"]);
     }
 
     #[test]
     fn fork_args_resume_into_new_session_and_append_prompt() {
         let args = build_grok_fork_args(
-            Path::new("/tmp/qmux"),
+            Path::new("/tmp/session"),
             Some("grok-build"),
             "source-session",
             Some(" continue here "),
@@ -2271,7 +2274,7 @@ mod tests {
             args,
             vec![
                 "--cwd",
-                "/tmp/qmux",
+                "/tmp/session",
                 "--model",
                 "grok-build",
                 "--resume",
@@ -2303,16 +2306,16 @@ mod tests {
 
     #[test]
     fn shell_args_supply_cwd_only_when_absent() {
-        // No cwd in the user's args: qMux adds the pane cwd.
+        // No cwd in the user's args: Session adds the pane cwd.
         let args = build_grok_args_from_shell(
-            Path::new("/tmp/qmux"),
+            Path::new("/tmp/session"),
             &["--model".to_string(), "grok-code".to_string()],
         );
-        assert_eq!(args, vec!["--cwd", "/tmp/qmux", "--model", "grok-code"]);
+        assert_eq!(args, vec!["--cwd", "/tmp/session", "--model", "grok-code"]);
 
         // User already passed a cwd: forward verbatim, no duplicate.
         let args = build_grok_args_from_shell(
-            Path::new("/tmp/qmux"),
+            Path::new("/tmp/session"),
             &["--cwd".to_string(), "/elsewhere".to_string()],
         );
         assert_eq!(args, vec!["--cwd", "/elsewhere"]);
@@ -2321,7 +2324,8 @@ mod tests {
     #[test]
     fn shell_cwd_override_drives_agent_workspace_identity() {
         let args = |values: &[&str]| values.iter().map(ToString::to_string).collect::<Vec<_>>();
-        let root = std::env::temp_dir().join(format!("qmux-grok-shell-cwd-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("session-grok-shell-cwd-{}", std::process::id()));
         let shell = root.join("shell");
         let project = root.join("project");
         fs::create_dir_all(&shell).unwrap();
@@ -2460,7 +2464,7 @@ mod tests {
         // SessionStart does not promote to Running (matches Claude/Codex/OpenCode).
         assert!(matches!(agent.status, AgentStatus::Starting));
         // session id alone is enough to bind native chat history under the agent
-        // workspace; the legacy qMux-managed fallback is only used when identity
+        // workspace; the legacy Session-managed fallback is only used when identity
         // is still completely unknown.
         assert!(
             agent
@@ -2763,14 +2767,14 @@ mod tests {
         let state = test_state();
         let path = GrokAdapter::transcript_path_for(&state, "agent-42");
 
-        assert!(path.ends_with(".qmux/grok/agent-42.jsonl"));
-        assert!(path.starts_with("/tmp/qmux-grok-tests"));
+        assert!(path.ends_with(".session/grok/agent-42.jsonl"));
+        assert!(path.starts_with("/tmp/session-grok-tests"));
     }
 
     #[test]
     fn native_session_transcript_path_encodes_cwd_and_confines_session_id() {
         let home =
-            std::env::temp_dir().join(format!("qmux-grok-session-path-{}", std::process::id()));
+            std::env::temp_dir().join(format!("session-grok-session-path-{}", std::process::id()));
         fs::create_dir_all(home.join("sessions")).unwrap();
 
         let path = grok_session_transcript_path(
@@ -2794,7 +2798,7 @@ mod tests {
     #[test]
     fn native_session_transcript_path_resolves_verified_hashed_cwd_group() {
         let home = std::env::temp_dir().join(format!(
-            "qmux-grok-hashed-session-path-{}",
+            "session-grok-hashed-session-path-{}",
             std::process::id()
         ));
         let group = home.join("sessions").join("long-path-deadbeef");
@@ -2816,7 +2820,7 @@ mod tests {
     #[test]
     fn native_session_cwd_is_confined_to_the_agent_workspace() {
         let root =
-            std::env::temp_dir().join(format!("qmux-grok-session-cwd-{}", std::process::id()));
+            std::env::temp_dir().join(format!("session-grok-session-cwd-{}", std::process::id()));
         let expected = root.join("project");
         let other = root.join("other");
         fs::create_dir_all(&expected).unwrap();
@@ -2997,7 +3001,7 @@ mod tests {
 
         assert_eq!(event.event_type, "agent.session_start");
         let agent = state.agent("agent-1").unwrap().expect("agent exists");
-        // The hook-provided path wins over the qMux-managed fallback.
+        // The hook-provided path wins over the Session-managed fallback.
         assert_eq!(
             agent.transcript_path.as_deref(),
             Some("/home/user/.grok/sessions/grok-session-1/rollout.jsonl")
@@ -3015,7 +3019,7 @@ mod tests {
         state.insert_agent(agent).unwrap();
 
         // A late/duplicate SessionStart (e.g. after a resume) that omits the field
-        // must not rebind the tail to the qMux fallback path.
+        // must not rebind the tail to the Session fallback path.
         let event = ingest(&state, hook_for_agent("SessionStart", "agent-1", json!({})));
 
         assert_eq!(event.event_type, "agent.session_start");
@@ -3065,7 +3069,7 @@ mod tests {
         // the updates binding in place after the path was simply rejected.
         let state = test_state();
         let mut agent = sample_agent();
-        agent.worktree_dir = "/tmp/qmux-agent-workspace".to_string();
+        agent.worktree_dir = "/tmp/session-agent-workspace".to_string();
         agent.status = AgentStatus::Idle;
         agent.session_id = Some("grok-session-1".to_string());
         agent.transcript_path = Some(
@@ -3237,7 +3241,7 @@ mod tests {
                 "agent-1",
                 json!({
                     "sessionId": "forked-session",
-                    "cwd": "/tmp/qmux-grok-tests",
+                    "cwd": "/tmp/session-grok-tests",
                     "prompt": "continue"
                 }),
             ),
@@ -3260,7 +3264,7 @@ mod tests {
                 "agent-1",
                 json!({
                     "sessionId": "other-session",
-                    "cwd": "/tmp/qmux-grok-tests"
+                    "cwd": "/tmp/session-grok-tests"
                 }),
             ),
         );
@@ -3336,22 +3340,22 @@ mod tests {
     #[test]
     fn grok_hook_shim_is_env_gated_and_forwards_notify() {
         let shim = grok_hook_shim();
-        // No-ops outside qMux: every required env var is checked.
+        // No-ops outside Session: every required env var is checked.
         assert!(shim.contains("SESSION_SOCK"));
         assert!(shim.contains("SESSION_TOKEN"));
         assert!(shim.contains("SESSION_PANE_ID"));
         assert!(shim.contains("SESSION_AGENT_ID"));
         assert!(shim.contains("SESSION_CLI"));
-        // Inside qMux it forwards the event to `session notify`.
+        // Inside Session it forwards the event to `session notify`.
         assert!(shim.contains(r#"exec "$SESSION_CLI" notify "$event""#));
     }
 
     #[test]
     fn grok_hooks_document_installs_events_without_matchers() {
-        let shim = Path::new("/home/user/.grok/qmux/qmux-grok-hook");
+        let shim = Path::new("/home/user/.grok/session/session-grok-hook");
         let doc = grok_hooks_document(shim);
 
-        // Every qMux event gets exactly one entry whose command runs the shim,
+        // Every Session event gets exactly one entry whose command runs the shim,
         // and lifecycle events must not carry a matcher (Grok rejects them).
         for event in GROK_HOOK_EVENTS {
             let entries = doc["hooks"][event].as_array().expect("event array");
@@ -3361,8 +3365,8 @@ mod tests {
                 "{event} must omit matcher"
             );
             assert!(
-                is_qmux_grok_hook_entry(&entries[0], shim),
-                "missing qMux hook entry for {event}"
+                is_session_grok_hook_entry(&entries[0], shim),
+                "missing Session hook entry for {event}"
             );
             let command = entries[0]["hooks"][0]["command"].as_str().unwrap();
             assert_eq!(command, format!("'{}' {event}", shim.display()));
@@ -3374,18 +3378,18 @@ mod tests {
     #[test]
     fn write_grok_integration_files_creates_shim_and_hooks_file() {
         let home =
-            std::env::temp_dir().join(format!("qmux-grok-home-create-{}", std::process::id()));
+            std::env::temp_dir().join(format!("session-grok-home-create-{}", std::process::id()));
         let _ = fs::remove_dir_all(&home);
 
         write_grok_integration_files(&home).unwrap();
 
-        let shim_path = home.join("qmux").join("qmux-grok-hook");
+        let shim_path = home.join("session").join("session-grok-hook");
         let shim_meta = fs::metadata(&shim_path).expect("shim written");
         // Executable bit set so Grok can run it.
         assert_eq!(shim_meta.permissions().mode() & 0o111, 0o111);
 
         // Grok discovers global hooks from hooks/*.json — not user-settings.json.
-        let hooks_path = home.join("hooks").join("qmux.json");
+        let hooks_path = home.join("hooks").join("session.json");
         let hooks_raw = fs::read_to_string(&hooks_path).unwrap();
         assert_eq!(hooks_raw, grok_hooks_file_contents(&shim_path));
         let hooks: Value = serde_json::from_str(&hooks_raw).unwrap();
@@ -3406,13 +3410,14 @@ mod tests {
 
     #[test]
     fn write_grok_integration_files_is_noop_when_already_correct() {
-        let home = std::env::temp_dir().join(format!("qmux-grok-home-noop-{}", std::process::id()));
+        let home =
+            std::env::temp_dir().join(format!("session-grok-home-noop-{}", std::process::id()));
         let _ = fs::remove_dir_all(&home);
 
         write_grok_integration_files(&home).unwrap();
 
-        let shim_path = home.join("qmux").join("qmux-grok-hook");
-        let hooks_path = home.join("hooks").join("qmux.json");
+        let shim_path = home.join("session").join("session-grok-hook");
+        let hooks_path = home.join("hooks").join("session.json");
 
         // Make both files unwritable (shim keeps its exec bits) so any rewrite
         // attempt fails rather than silently producing identical bytes.
@@ -3432,13 +3437,13 @@ mod tests {
     #[test]
     fn write_grok_integration_files_repairs_missing_or_stale_hooks() {
         let home =
-            std::env::temp_dir().join(format!("qmux-grok-home-repair-{}", std::process::id()));
+            std::env::temp_dir().join(format!("session-grok-home-repair-{}", std::process::id()));
         let _ = fs::remove_dir_all(&home);
 
         write_grok_integration_files(&home).unwrap();
 
-        let shim_path = home.join("qmux").join("qmux-grok-hook");
-        let hooks_path = home.join("hooks").join("qmux.json");
+        let shim_path = home.join("session").join("session-grok-hook");
+        let hooks_path = home.join("hooks").join("session.json");
 
         // Corrupt the hooks file: drop Stop and leave a stale SessionStart path.
         let corrupted = json!({
@@ -3447,7 +3452,7 @@ mod tests {
                     "matcher": "",
                     "hooks": [{
                         "type": "command",
-                        "command": "'/old/home/.grok/qmux/qmux-grok-hook' SessionStart"
+                        "command": "'/old/home/.grok/session/session-grok-hook' SessionStart"
                     }]
                 }],
                 "UserPromptSubmit": [{
@@ -3476,11 +3481,11 @@ mod tests {
     #[test]
     fn write_grok_integration_files_strips_legacy_user_settings_hooks() {
         let home =
-            std::env::temp_dir().join(format!("qmux-grok-home-legacy-{}", std::process::id()));
+            std::env::temp_dir().join(format!("session-grok-home-legacy-{}", std::process::id()));
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(&home).unwrap();
 
-        let shim = home.join("qmux").join("qmux-grok-hook");
+        let shim = home.join("session").join("session-grok-hook");
         // Simulate the pre-fix install: hooks only lived in user-settings.json.
         // Keep a user-owned SessionStart entry that must survive cleanup.
         let legacy = json!({
@@ -3523,12 +3528,12 @@ mod tests {
         write_grok_integration_files(&home).unwrap();
 
         // New install path exists.
-        assert!(home.join("hooks").join("qmux.json").exists());
+        assert!(home.join("hooks").join("session.json").exists());
 
         let cleaned: Value =
             serde_json::from_str(&fs::read_to_string(home.join("user-settings.json")).unwrap())
                 .unwrap();
-        // Unrelated settings preserved; user SessionStart hook kept; qMux entries gone.
+        // Unrelated settings preserved; user SessionStart hook kept; Session entries gone.
         assert_eq!(cleaned["model"], "grok-code-fast");
         let session_start = cleaned["hooks"]["SessionStart"].as_array().unwrap();
         assert_eq!(session_start.len(), 1);

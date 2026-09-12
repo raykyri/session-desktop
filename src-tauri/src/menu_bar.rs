@@ -4,12 +4,12 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 use tauri::{AppHandle, Emitter};
 
-const TRAY_ID: &str = "qmux-menu-bar";
-const SHOW_WINDOW_ID: &str = "qmux-menu-bar-show-window";
-const HIDE_WINDOW_ID: &str = "qmux-menu-bar-hide-window";
-const SELECT_PANE_PREFIX: &str = "qmux-menu-bar-select-pane:";
+const TRAY_ID: &str = "session-menu-bar";
+const SHOW_WINDOW_ID: &str = "session-menu-bar-show-window";
+const HIDE_WINDOW_ID: &str = "session-menu-bar-hide-window";
+const SELECT_PANE_PREFIX: &str = "session-menu-bar-select-pane:";
 const SELECT_PANE_EVENT: &str = "menu-bar-select-pane";
-const TOGGLE_GROUP_PREFIX: &str = "qmux-menu-bar-toggle-group:";
+const TOGGLE_GROUP_PREFIX: &str = "session-menu-bar-toggle-group:";
 const MAX_TAB_TITLE_CHARS: usize = 40;
 #[cfg(target_os = "macos")]
 const GROUP_HEADER_STATUS_INDICATOR_INSET: f64 = 38.0;
@@ -322,12 +322,12 @@ fn build_menu(
 fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
     match event.id().as_ref() {
         SHOW_WINDOW_ID => {
-            if let Err(err) = crate::show_hide_shortcut::show_qmux_window(app) {
+            if let Err(err) = crate::show_hide_shortcut::show_session_window(app) {
                 eprintln!("session: failed to show app from menu bar: {err}");
             }
         }
         HIDE_WINDOW_ID => {
-            if let Err(err) = crate::show_hide_shortcut::hide_qmux_window(app) {
+            if let Err(err) = crate::show_hide_shortcut::hide_session_window(app) {
                 eprintln!("session: failed to hide app from menu bar: {err}");
             }
         }
@@ -340,7 +340,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
                 apply_collapsed_state_from_handles();
                 reopen_tray_menu();
             } else if let Some(pane_id) = id.strip_prefix(SELECT_PANE_PREFIX) {
-                if let Err(err) = crate::show_hide_shortcut::show_qmux_window(app) {
+                if let Err(err) = crate::show_hide_shortcut::show_session_window(app) {
                     eprintln!("session: failed to show app from menu bar tab selection: {err}");
                 }
                 if let Err(err) = app.emit(
@@ -901,8 +901,8 @@ mod tests {
 
     #[test]
     fn group_header_shows_count_when_collapsed() {
-        assert_eq!(group_header_label("qmux", false, 3), "qmux");
-        assert_eq!(group_header_label("qmux", true, 3), "qmux (3)");
+        assert_eq!(group_header_label("session", false, 3), "session");
+        assert_eq!(group_header_label("session", true, 3), "session (3)");
         assert_eq!(group_header_label("   ", true, 0), "Group (0)");
     }
 

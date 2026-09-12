@@ -150,7 +150,7 @@ test("drops thinking blocks and system messages", () => {
   assert.match(document, /### Claude\nWorking on it\./);
 });
 
-test("strips qmux tagged instructions and instruction-only messages", () => {
+test("strips session tagged instructions and instruction-only messages", () => {
   const turns = [
     turn("user", [
       text(

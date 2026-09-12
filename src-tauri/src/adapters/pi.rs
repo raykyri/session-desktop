@@ -47,7 +47,7 @@ impl PiAdapter {
     fn ensure_binary(&self) -> Result<String, String> {
         let binary = ensure_on_path(&self.binary).ok_or_else(|| {
             format!(
-                "Pi adapter binary '{}' was not found on PATH or standard macOS tool paths. Install Pi or update adapters.pi.binary in qmux.config.json.",
+                "Pi adapter binary '{}' was not found on PATH or standard macOS tool paths. Install Pi or update adapters.pi.binary in session.config.json.",
                 self.binary
             )
         })?;
@@ -79,7 +79,7 @@ impl PiAdapter {
         let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if !pi_version_is_compatible(&version) {
             return Err(format!(
-                "qmux requires Pi {MIN_PI_MAJOR}.{MIN_PI_MINOR}.{MIN_PI_PATCH} or newer; '{binary}' reported {version:?}"
+                "session requires Pi {MIN_PI_MAJOR}.{MIN_PI_MINOR}.{MIN_PI_PATCH} or newer; '{binary}' reported {version:?}"
             ));
         }
         Ok(binary)
@@ -89,7 +89,7 @@ impl PiAdapter {
         let entrypoint = self.extension_dir.join("index.js");
         if !self.extension_dir.is_dir() || !entrypoint.is_file() {
             return Err(format!(
-                "Pi integration extension was not found at {}. Reinstall qmux or set SESSION_PI_EXTENSION_DIR to the bundled qmux-pi-extension directory.",
+                "Pi integration extension was not found at {}. Reinstall session or set SESSION_PI_EXTENSION_DIR to the bundled session-pi-extension directory.",
                 entrypoint.display()
             ));
         }
@@ -100,7 +100,7 @@ impl PiAdapter {
         let entrypoint = self.extension_dir.join("session-helper.js");
         if !entrypoint.is_file() {
             return Err(format!(
-                "Pi SessionManager helper was not found at {}. Reinstall qmux or set SESSION_PI_EXTENSION_DIR to the bundled qmux-pi-extension directory.",
+                "Pi SessionManager helper was not found at {}. Reinstall session or set SESSION_PI_EXTENSION_DIR to the bundled session-pi-extension directory.",
                 entrypoint.display()
             ));
         }
@@ -934,13 +934,13 @@ fn validate_pi_supervised_args(args: &[String]) -> Result<(), String> {
         }
         if matches!(arg.as_str(), "--no-session" | "--print" | "-p") {
             return Err(format!(
-                "qmux Pi integration does not support {arg} because native session tracking requires an interactive persisted session"
+                "session Pi integration does not support {arg} because native session tracking requires an interactive persisted session"
             ));
         }
         if let Some(mode) = arg.strip_prefix("--mode=") {
             if mode != "text" {
                 return Err(format!(
-                    "qmux Pi integration does not support --mode {mode}; use Pi's native text TUI"
+                    "session Pi integration does not support --mode {mode}; use Pi's native text TUI"
                 ));
             }
         } else if arg == "--mode" {
@@ -948,7 +948,7 @@ fn validate_pi_supervised_args(args: &[String]) -> Result<(), String> {
                 && mode != "text"
             {
                 return Err(format!(
-                    "qmux Pi integration does not support --mode {mode}; use Pi's native text TUI"
+                    "session Pi integration does not support --mode {mode}; use Pi's native text TUI"
                 ));
             }
             index += 1;
@@ -1460,11 +1460,11 @@ mod tests {
             args(&["--session", "session.jsonl", "continue here"])
         );
 
-        let mut launch = args(&["--extension", "qmux-pi-extension/index.js"]);
+        let mut launch = args(&["--extension", "session-pi-extension/index.js"]);
         append_pi_initial_prompt(&mut launch, Some("start here"));
         assert_eq!(
             launch,
-            args(&["--extension", "qmux-pi-extension/index.js", "start here"])
+            args(&["--extension", "session-pi-extension/index.js", "start here"])
         );
         assert!(!launch.iter().any(|arg| arg == "--"));
 

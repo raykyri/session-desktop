@@ -44,7 +44,7 @@ impl AntigravityAdapter {
     pub(crate) fn ensure_binary(&self) -> Result<String, String> {
         let binary = ensure_on_path(&self.binary).ok_or_else(|| {
             format!(
-                "Antigravity adapter binary '{}' was not found on PATH or standard tool paths. Install the Antigravity CLI (`agy`) or update adapters.antigravity.binary in qmux.config.json.",
+                "Antigravity adapter binary '{}' was not found on PATH or standard tool paths. Install the Antigravity CLI (`agy`) or update adapters.antigravity.binary in session.config.json.",
                 self.binary
             )
         })?;
@@ -1067,7 +1067,7 @@ fn merge_hooks_json(existing: &str, shim_path: &Path) -> Result<String, String> 
     let map = parsed
         .as_object_mut()
         .ok_or_else(|| "existing hooks file must contain a JSON object".to_string())?;
-    map.insert("qmux".to_string(), antigravity_hooks_spec(shim_path));
+    map.insert("session".to_string(), antigravity_hooks_spec(shim_path));
     let mut formatted = serde_json::to_string_pretty(&parsed)
         .map_err(|err| format!("failed to encode Antigravity hooks: {err}"))?;
     formatted.push('\n');
@@ -1079,7 +1079,7 @@ fn ensure_antigravity_integration_for_host(host: &Host) -> Result<(), String> {
         return ensure_antigravity_integration();
     }
     let home = remote_antigravity_home(host)?;
-    let shim_path = home.join("qmux").join("qmux-antigravity-hook");
+    let shim_path = home.join("session").join("session-antigravity-hook");
     let hooks_path = PathBuf::from(host.expand_home("~/.gemini/config/hooks.json")?);
     let existing = remote_read_optional_file(host, &hooks_path)?;
     let updated = merge_hooks_json(&existing, &shim_path).map_err(|err| {
@@ -1102,7 +1102,7 @@ fn remote_antigravity_home(host: &Host) -> Result<PathBuf, String> {
         args: vec![
             "-c".to_string(),
             "printf '%s' \"${ANTIGRAVITY_APP_DATA_DIR:-${ANTIGRAVITY_HOME:-$HOME/.gemini/antigravity-cli}}\"".to_string(),
-            "qmux-antigravity-home".to_string(),
+            "session-antigravity-home".to_string(),
         ],
         ..Default::default()
     });
@@ -1131,7 +1131,7 @@ fn remote_read_optional_file(host: &Host, path: &Path) -> Result<String, String>
         args: vec![
             "-c".to_string(),
             "set -eu; path=$1; if [ -f \"$path\" ] && [ ! -L \"$path\" ]; then cat -- \"$path\"; elif [ -e \"$path\" ] || [ -L \"$path\" ]; then exit 65; fi".to_string(),
-            "qmux-read-file".to_string(),
+            "session-read-file".to_string(),
             path.display().to_string(),
         ],
         ..Default::default()
@@ -1153,8 +1153,8 @@ fn remote_write_file(host: &Host, path: &Path, mode: u32, contents: &[u8]) -> Re
         program: "sh",
         args: vec![
             "-c".to_string(),
-            "set -eu; path=$1; mode=$2; parent=${path%/*}; umask 077; mkdir -p -- \"$parent\"; [ -d \"$parent\" ] && [ ! -L \"$parent\" ] || exit 65; tmp=$parent/.qmux-write.$$; trap 'rm -f -- \"$tmp\"' EXIT HUP INT TERM; cat > \"$tmp\"; chmod \"$mode\" \"$tmp\"; mv -f -- \"$tmp\" \"$path\"; trap - EXIT HUP INT TERM".to_string(),
-            "qmux-write-file".to_string(),
+            "set -eu; path=$1; mode=$2; parent=${path%/*}; umask 077; mkdir -p -- \"$parent\"; [ -d \"$parent\" ] && [ ! -L \"$parent\" ] || exit 65; tmp=$parent/.session-write.$$; trap 'rm -f -- \"$tmp\"' EXIT HUP INT TERM; cat > \"$tmp\"; chmod \"$mode\" \"$tmp\"; mv -f -- \"$tmp\" \"$path\"; trap - EXIT HUP INT TERM".to_string(),
+            "session-write-file".to_string(),
             path.display().to_string(),
             format!("{mode:o}"),
         ],
@@ -1178,11 +1178,11 @@ fn remote_write_file(host: &Host, path: &Path, mode: u32, contents: &[u8]) -> Re
 
 pub(crate) fn ensure_antigravity_integration() -> Result<(), String> {
     let home = antigravity_home()?;
-    let qmux_dir = home.join("qmux");
-    fs::create_dir_all(&qmux_dir)
-        .map_err(|err| format!("failed to create {}: {err}", qmux_dir.display()))?;
+    let session_dir = home.join("session");
+    fs::create_dir_all(&session_dir)
+        .map_err(|err| format!("failed to create {}: {err}", session_dir.display()))?;
 
-    let shim_path = qmux_dir.join("qmux-antigravity-hook");
+    let shim_path = session_dir.join("session-antigravity-hook");
     let shim_content = antigravity_hook_shim();
     let write_shim = match fs::read_to_string(&shim_path) {
         Ok(existing) => existing != shim_content,
@@ -1316,8 +1316,8 @@ mod tests {
     fn test_config() -> SessionConfig {
         SessionConfig {
             remotes: Default::default(),
-            workspace_root: PathBuf::from("/tmp/qmux-antigravity-tests"),
-            socket_path: PathBuf::from("/tmp/qmux-antigravity-tests.sock"),
+            workspace_root: PathBuf::from("/tmp/session-antigravity-tests"),
+            socket_path: PathBuf::from("/tmp/session-antigravity-tests.sock"),
             adapters: Default::default(),
             legacy_claude_binary: None,
             claude_plugin_dir: PathBuf::new(),
@@ -1393,7 +1393,7 @@ mod tests {
 
     #[test]
     fn hook_schema_distinguishes_lifecycle_and_tool_handlers() {
-        let hooks = antigravity_hooks_spec(Path::new("/bin/qmux-antigravity-hook"));
+        let hooks = antigravity_hooks_spec(Path::new("/bin/session-antigravity-hook"));
         assert_eq!(hooks["PreInvocation"][0]["type"], "command");
         assert!(hooks["PreInvocation"][0].get("hooks").is_none());
         assert_eq!(hooks["PostToolUse"][0]["matcher"], "*");
@@ -1405,17 +1405,17 @@ mod tests {
     #[test]
     fn merge_hooks_json_preserves_other_keys() {
         let existing = r#"{"custom-checker":{"PreToolUse":[]}}"#;
-        let shim = Path::new("/bin/qmux-antigravity-hook");
+        let shim = Path::new("/bin/session-antigravity-hook");
         let merged = merge_hooks_json(existing, shim).unwrap();
         let val: Value = serde_json::from_str(&merged).unwrap();
         assert!(val.get("custom-checker").is_some());
-        assert!(val.get("qmux").is_some());
+        assert!(val.get("session").is_some());
     }
 
     #[test]
     fn invalid_hooks_json_is_not_replaced() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-antigravity-hooks-{}-{}",
+            "session-antigravity-hooks-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -1432,7 +1432,7 @@ mod tests {
 
     #[test]
     fn transcript_paths_are_confined_to_the_reported_conversation() {
-        let home = Path::new("/tmp/qmux-antigravity-home");
+        let home = Path::new("/tmp/session-antigravity-home");
         let expected = transcript_path_for_session(home, "conversation-123");
         assert_eq!(
             antigravity_notification_transcript_path_in(
@@ -1473,7 +1473,7 @@ mod tests {
     #[test]
     fn latest_user_prompt_reads_the_native_transcript_envelope() {
         let path = std::env::temp_dir().join(format!(
-            "qmux-antigravity-transcript-{}-{}.jsonl",
+            "session-antigravity-transcript-{}-{}.jsonl",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -1501,7 +1501,7 @@ mod tests {
             id: "agent-1".to_string(),
             group_id: "group-1".to_string(),
             adapter: "antigravity".to_string(),
-            worktree_dir: "/tmp/qmux-antigravity-tests".to_string(),
+            worktree_dir: "/tmp/session-antigravity-tests".to_string(),
             branch: None,
             active_workspace: None,
             pane_id: None,

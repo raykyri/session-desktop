@@ -47,10 +47,10 @@ const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 /// Backoff after a failed accept, so persistent accept errors (e.g. EMFILE under
 /// FD exhaustion) can't spin the accept loop hot.
 const ACCEPT_ERROR_BACKOFF: Duration = Duration::from_millis(100);
-const DM_SANS_ROMAN_LATIN_PATH: &str = "/__qmux/fonts/DMSans-Variable-Latin.woff2";
-const DM_SANS_ROMAN_LATIN_EXT_PATH: &str = "/__qmux/fonts/DMSans-Variable-LatinExt.woff2";
-const DM_SANS_ITALIC_LATIN_PATH: &str = "/__qmux/fonts/DMSans-VariableItalic-Latin.woff2";
-const DM_SANS_ITALIC_LATIN_EXT_PATH: &str = "/__qmux/fonts/DMSans-VariableItalic-LatinExt.woff2";
+const DM_SANS_ROMAN_LATIN_PATH: &str = "/__session/fonts/DMSans-Variable-Latin.woff2";
+const DM_SANS_ROMAN_LATIN_EXT_PATH: &str = "/__session/fonts/DMSans-Variable-LatinExt.woff2";
+const DM_SANS_ITALIC_LATIN_PATH: &str = "/__session/fonts/DMSans-VariableItalic-Latin.woff2";
+const DM_SANS_ITALIC_LATIN_EXT_PATH: &str = "/__session/fonts/DMSans-VariableItalic-LatinExt.woff2";
 const DM_SANS_ROMAN_LATIN: &[u8] =
     include_bytes!("../../src/assets/fonts/DMSans-Variable-Latin.woff2");
 const DM_SANS_ROMAN_LATIN_EXT: &[u8] =
@@ -59,8 +59,8 @@ const DM_SANS_ITALIC_LATIN: &[u8] =
     include_bytes!("../../src/assets/fonts/DMSans-VariableItalic-Latin.woff2");
 const DM_SANS_ITALIC_LATIN_EXT: &[u8] =
     include_bytes!("../../src/assets/fonts/DMSans-VariableItalic-LatinExt.woff2");
-const VALLEY_SANS_ROMAN_PATH: &str = "/__qmux/fonts/ValleySans-Variable.woff2";
-const VALLEY_SANS_ITALIC_PATH: &str = "/__qmux/fonts/ValleySans-VariableItalic.woff2";
+const VALLEY_SANS_ROMAN_PATH: &str = "/__session/fonts/ValleySans-Variable.woff2";
+const VALLEY_SANS_ITALIC_PATH: &str = "/__session/fonts/ValleySans-VariableItalic.woff2";
 const VALLEY_SANS_ROMAN: &[u8] = include_bytes!("../../src/assets/fonts/ValleySans-Variable.woff2");
 const VALLEY_SANS_ITALIC: &[u8] =
     include_bytes!("../../src/assets/fonts/ValleySans-VariableItalic.woff2");
@@ -152,9 +152,9 @@ pub fn resolve_tokenized_file_path(
         .ok_or_else(|| "invalid Session preview URL".to_string())?;
     let (token, encoded_path) = after_root.split_at(slash);
     let decoded = percent_decode(encoded_path)
-        .ok_or_else(|| "invalid path encoding in qmux preview URL".to_string())?;
+        .ok_or_else(|| "invalid path encoding in session preview URL".to_string())?;
     resolve_file_token_path(state, token, Path::new(&decoded))
-        .ok_or_else(|| "qmux preview file is no longer authorized".to_string())
+        .ok_or_else(|| "session preview file is no longer authorized".to_string())
 }
 
 fn resolve_file_token_path(state: &AppState, token: &str, requested: &Path) -> Option<PathBuf> {
@@ -655,7 +655,7 @@ fn html_preview_scroll_bridge() -> String {
 /// executable reports use exact-file tokens. `connect-src 'none'` blocks all scripted
 /// network egress, and `object-src`/`base-uri`/`form-action` are locked down for good
 /// measure. Inline scripts/styles are permitted because a served report legitimately
-/// carries its own, while the sandbox keeps its opaque origin isolated from qmux.
+/// carries its own, while the sandbox keeps its opaque origin isolated from session.
 fn file_content_csp(port: u16) -> String {
     let origin = format!("http://127.0.0.1:{port}");
     format!(
@@ -809,8 +809,8 @@ svg, canvas, img { max-width: 100%; }\
 .text-center { text-align: center !important; }\
 .text-nowrap { white-space: nowrap; }\
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }\
-.qmux-visualization-error { margin: 0 0 12px; padding: 9px 11px; border: 1px solid color-mix(in srgb, var(--destructive) 60%, var(--border)); border-radius: 7px; color: var(--foreground); background: color-mix(in srgb, var(--destructive) 12%, var(--background)); }\
-.qmux-visualization-error[hidden] { display: none; }\
+.session-visualization-error { margin: 0 0 12px; padding: 9px 11px; border: 1px solid color-mix(in srgb, var(--destructive) 60%, var(--border)); border-radius: 7px; color: var(--foreground); background: color-mix(in srgb, var(--destructive) 12%, var(--background)); }\
+.session-visualization-error[hidden] { display: none; }\
 [data-lucide] { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; font-style: normal; }\
 [data-lucide]:empty::before { content: '\\25c7'; font-size: 11px; }\
 :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }";
@@ -819,11 +819,11 @@ svg, canvas, img { max-width: 100%; }\
 // loaded only the isolated document can see a CSP-blocked dependency or a
 // fragment script crash. Keep the warning deliberately generic: source paths
 // and exception details do not need to escape into rendered UI.
-const CODEX_INLINE_VIS_ERROR_REPORTER: &str = r#"<div id="qmux-visualization-error" class="qmux-visualization-error" role="alert" hidden></div>
+const CODEX_INLINE_VIS_ERROR_REPORTER: &str = r#"<div id="session-visualization-error" class="session-visualization-error" role="alert" hidden></div>
 <script>
 (() => {
   const reveal = (message) => {
-    const notice = document.getElementById("qmux-visualization-error");
+    const notice = document.getElementById("session-visualization-error");
     if (!notice) return;
     notice.textContent = message;
     notice.hidden = false;
@@ -887,14 +887,14 @@ img { max-width: 100%; }\
 hr { border: none; border-top: 1px solid rgba(127, 127, 127, 0.3); }";
 
 const VALLEY_SANS_MARKDOWN_FONT_FACE_CSS: &str = "\
-@font-face { font-family: 'Valley Sans'; src: url('/__qmux/fonts/ValleySans-Variable.woff2') format('woff2'); font-style: normal; font-weight: 100 900; font-display: swap; }\
-@font-face { font-family: 'Valley Sans'; src: url('/__qmux/fonts/ValleySans-VariableItalic.woff2') format('woff2'); font-style: italic; font-weight: 100 900; font-display: swap; }";
+@font-face { font-family: 'Valley Sans'; src: url('/__session/fonts/ValleySans-Variable.woff2') format('woff2'); font-style: normal; font-weight: 100 900; font-display: swap; }\
+@font-face { font-family: 'Valley Sans'; src: url('/__session/fonts/ValleySans-VariableItalic.woff2') format('woff2'); font-style: italic; font-weight: 100 900; font-display: swap; }";
 
 const DM_SANS_MARKDOWN_FONT_FACE_CSS: &str = "\
-@font-face { font-family: 'DM Sans'; src: url('/__qmux/fonts/DMSans-Variable-LatinExt.woff2') format('woff2'); font-style: normal; font-weight: 100 1000; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }\
-@font-face { font-family: 'DM Sans'; src: url('/__qmux/fonts/DMSans-Variable-Latin.woff2') format('woff2'); font-style: normal; font-weight: 100 1000; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }\
-@font-face { font-family: 'DM Sans'; src: url('/__qmux/fonts/DMSans-VariableItalic-LatinExt.woff2') format('woff2'); font-style: italic; font-weight: 100 1000; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }\
-@font-face { font-family: 'DM Sans'; src: url('/__qmux/fonts/DMSans-VariableItalic-Latin.woff2') format('woff2'); font-style: italic; font-weight: 100 1000; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }";
+@font-face { font-family: 'DM Sans'; src: url('/__session/fonts/DMSans-Variable-LatinExt.woff2') format('woff2'); font-style: normal; font-weight: 100 1000; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }\
+@font-face { font-family: 'DM Sans'; src: url('/__session/fonts/DMSans-Variable-Latin.woff2') format('woff2'); font-style: normal; font-weight: 100 1000; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }\
+@font-face { font-family: 'DM Sans'; src: url('/__session/fonts/DMSans-VariableItalic-LatinExt.woff2') format('woff2'); font-style: italic; font-weight: 100 1000; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }\
+@font-face { font-family: 'DM Sans'; src: url('/__session/fonts/DMSans-VariableItalic-Latin.woff2') format('woff2'); font-style: italic; font-weight: 100 1000; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }";
 
 fn markdown_font_face_css(font_id: Option<&str>) -> &'static str {
     match font_id {
@@ -1116,7 +1116,7 @@ mod tests {
     fn markdown_page_csp_allows_only_the_scroll_bridge_script() {
         let csp = markdown_page_csp(12345);
         let script_hash = STANDARD.encode(Sha256::digest(HTML_PREVIEW_SCROLL_SCRIPT.as_bytes()));
-        // Only the exact qmux-injected bridge may execute; scripts embedded in the
+        // Only the exact session-injected bridge may execute; scripts embedded in the
         // Markdown remain blocked because the policy still excludes unsafe-inline.
         assert!(
             csp.contains(&format!("script-src 'sha256-{script_hash}'")),
@@ -1140,7 +1140,7 @@ mod tests {
             None,
         );
         assert!(page.contains(source));
-        assert!(page.contains("qmux-visualization-error"));
+        assert!(page.contains("session-visualization-error"));
         assert!(page.contains("could not load one of its resources"));
         assert!(page.contains("unhandledrejection"));
         assert!(!page.contains("/tmp/activity.fragment.html"));
@@ -1185,7 +1185,7 @@ mod tests {
 
         let valley = embedded_font_response(VALLEY_SANS_ROMAN_PATH, false).unwrap();
         assert_eq!(valley.body, VALLEY_SANS_ROMAN);
-        assert!(embedded_font_response("/__qmux/fonts/unknown.woff2", false).is_none());
+        assert!(embedded_font_response("/__session/fonts/unknown.woff2", false).is_none());
     }
 
     #[test]
@@ -1324,7 +1324,7 @@ mod tests {
     /// tests that need to distinguish a pane root from a forbidden sibling.
     fn non_temp_test_dir(label: &str) -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("target/qmux-file-server-tests")
+            .join("target/session-file-server-tests")
             .join(format!("{label}-{}", std::process::id()))
     }
 
@@ -1504,7 +1504,7 @@ mod tests {
 
     #[test]
     fn renders_markdown_as_html_unless_raw_is_requested() {
-        let base = std::env::temp_dir().join(format!("qmux-fs-md-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("session-fs-md-{}", std::process::id()));
         let root = base.join("ws");
         std::fs::create_dir_all(&root).unwrap();
         let source = "# Hello\n\nSome *text* in a table:\n\n| a | b |\n| - | - |\n| 1 | 2 |\n";
@@ -1547,8 +1547,10 @@ mod tests {
 
     #[test]
     fn resolves_only_thread_scoped_codex_inline_visualizations() {
-        let base =
-            std::env::temp_dir().join(format!("qmux-fs-inline-vis-resolve-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!(
+            "session-fs-inline-vis-resolve-{}",
+            std::process::id()
+        ));
         let root = base.join("visualizations");
         let thread = root
             .join("2026")
@@ -1601,7 +1603,7 @@ mod tests {
     #[test]
     fn resolves_current_codex_visualization_references_only_under_approved_roots() {
         let base = std::env::temp_dir().join(format!(
-            "qmux-fs-visualization-reference-{}",
+            "session-fs-visualization-reference-{}",
             std::process::id()
         ));
         let designs = base.join("workspace-metadata/designs");
@@ -1726,7 +1728,7 @@ mod tests {
 
     #[test]
     fn resolve_under_roots_blocks_traversal_outside_roots() {
-        let base = std::env::temp_dir().join(format!("qmux-fs-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("session-fs-{}", std::process::id()));
         let root = base.join("root");
         let outside = base.join("outside");
         std::fs::create_dir_all(&root).unwrap();

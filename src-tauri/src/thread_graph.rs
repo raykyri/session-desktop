@@ -650,7 +650,7 @@ pub struct ThreadParticipant {
 pub enum ThreadParticipantKind {
     User,
     Assistant,
-    Qmux,
+    Session,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -759,7 +759,7 @@ fn focused_branch_id_for_agent(graph: &ThreadGraph, agent: &AgentInfo) -> String
 
 pub fn snapshot_path(storage_root: &str, thread_id: &str) -> PathBuf {
     Path::new(storage_root)
-        .join(".qmux")
+        .join(".session")
         .join("threads")
         .join(format!("{thread_id}.json"))
 }
@@ -776,7 +776,7 @@ fn conversation_history_snapshot_path(
         return Err("invalid conversation history snapshot id".to_string());
     }
     Ok(Path::new(storage_root)
-        .join(".qmux")
+        .join(".session")
         .join("conversation-history")
         .join(format!("{snapshot_id}.json")))
 }
@@ -1841,7 +1841,7 @@ mod tests {
 
     #[test]
     fn conversation_history_captures_cutoff_and_persists_snapshot_reference() {
-        let worktree = temp_worktree("qmux-thread-conversation-history");
+        let worktree = temp_worktree("session-thread-conversation-history");
         let parent = sample_agent(worktree.display().to_string());
         let parent_turns = vec![
             sample_turn("agent-1", "agent-1-0", "user", 0),
@@ -1931,7 +1931,7 @@ mod tests {
 
     #[test]
     fn home_history_pages_compact_past_prompts_in_chronological_order() {
-        let worktree = temp_worktree("qmux-thread-graph-home-history");
+        let worktree = temp_worktree("session-thread-graph-home-history");
         let agent = sample_agent(worktree.display().to_string());
         let mut turns = Vec::new();
         for index in 0..5 {
@@ -2016,7 +2016,7 @@ mod tests {
 
     #[test]
     fn successful_flush_keeps_matching_clean_graph_warm() {
-        let agent = sample_agent("/tmp/qmux-thread-graph-cache".to_string());
+        let agent = sample_agent("/tmp/session-thread-graph-cache".to_string());
         let key = ("root".to_string(), "thread-1".to_string());
         let now = Instant::now();
         let mut cache = HashMap::from([(key.clone(), cached_entry(&agent, true, 7, now, 1, 0))]);
@@ -2045,7 +2045,7 @@ mod tests {
 
     #[test]
     fn stale_flush_completion_preserves_newer_dirty_graph() {
-        let agent = sample_agent("/tmp/qmux-thread-graph-cache-race".to_string());
+        let agent = sample_agent("/tmp/session-thread-graph-cache-race".to_string());
         let key = ("root".to_string(), "thread-1".to_string());
         let now = Instant::now();
         let mut cache = HashMap::from([(key.clone(), cached_entry(&agent, true, 11, now, 1, 0))]);
@@ -2071,7 +2071,7 @@ mod tests {
 
     #[test]
     fn failed_flush_marks_matching_graph_dirty_for_retry() {
-        let agent = sample_agent("/tmp/qmux-thread-graph-cache-retry".to_string());
+        let agent = sample_agent("/tmp/session-thread-graph-cache-retry".to_string());
         let key = ("root".to_string(), "thread-1".to_string());
         let now = Instant::now();
         let mut cache = HashMap::from([(key.clone(), cached_entry(&agent, true, 17, now, 1, 0))]);
@@ -2095,7 +2095,7 @@ mod tests {
 
     #[test]
     fn clean_graph_cache_expires_idle_entries_and_evicts_lru_over_byte_cap() {
-        let agent = sample_agent("/tmp/qmux-thread-graph-cache-bounds".to_string());
+        let agent = sample_agent("/tmp/session-thread-graph-cache-bounds".to_string());
         let now = Instant::now();
         let expired_key = ("root".to_string(), "expired".to_string());
         let oldest_key = ("root".to_string(), "oldest".to_string());
@@ -2161,7 +2161,7 @@ mod tests {
 
     #[test]
     fn snapshot_round_trips_owner_only_graph() {
-        let worktree = temp_worktree("qmux-thread-graph-roundtrip");
+        let worktree = temp_worktree("session-thread-graph-roundtrip");
         let agent = sample_agent(worktree.display().to_string());
         let mut turn = sample_turn("agent-1", "turn-1", "user", 0);
         turn.context_status = Some(TurnContextStatus::RolledBack);
@@ -2197,7 +2197,7 @@ mod tests {
 
     #[test]
     fn duplicate_append_preserves_graph_position() {
-        let worktree = temp_worktree("qmux-thread-graph-append");
+        let worktree = temp_worktree("session-thread-graph-append");
         let agent = sample_agent(worktree.display().to_string());
         let first = sample_turn("agent-1", "turn-1", "user", 0);
         let second = sample_turn("agent-1", "turn-2", "assistant", 1);
@@ -2252,7 +2252,7 @@ mod tests {
     // back to reassigning the whole list in order.
     #[test]
     fn replace_reassigns_orders_when_reused_ids_would_break_list_order() {
-        let worktree = temp_worktree("qmux-thread-graph-reused-ids");
+        let worktree = temp_worktree("session-thread-graph-reused-ids");
         let agent = sample_agent(worktree.display().to_string());
         let store = ThreadStore::new(worktree.clone());
         for (id, index) in [
@@ -2312,7 +2312,7 @@ mod tests {
     // graph identity and downstream memoization survive the refresh.
     #[test]
     fn consistent_replace_keeps_created_orders_without_reallocating() {
-        let worktree = temp_worktree("qmux-thread-graph-consistent-replace");
+        let worktree = temp_worktree("session-thread-graph-consistent-replace");
         let agent = sample_agent(worktree.display().to_string());
         let store = ThreadStore::new(worktree.clone());
         let turns = vec![
@@ -2345,7 +2345,7 @@ mod tests {
     // real tail below it and render every continued message above the last one.
     #[test]
     fn colliding_append_moves_to_the_branch_tail() {
-        let worktree = temp_worktree("qmux-thread-graph-colliding-append");
+        let worktree = temp_worktree("session-thread-graph-colliding-append");
         let agent = sample_agent(worktree.display().to_string());
         let store = ThreadStore::new(worktree.clone());
         for (id, index) in [("agent-1-5", 5), ("agent-1-9", 9), ("agent-1-12", 12)] {
@@ -2385,7 +2385,7 @@ mod tests {
     // indexes appends cleanly at the tail.
     #[test]
     fn append_after_truncating_replace_lands_at_the_branch_tail() {
-        let worktree = temp_worktree("qmux-thread-graph-truncating-replace");
+        let worktree = temp_worktree("session-thread-graph-truncating-replace");
         let agent = sample_agent(worktree.display().to_string());
         let store = ThreadStore::new(worktree.clone());
         let full = (0..5)
@@ -2431,8 +2431,8 @@ mod tests {
 
     #[test]
     fn legacy_record_migrates_without_removing_source_snapshot() {
-        let legacy_root = temp_worktree("qmux-thread-graph-legacy");
-        let global_root = temp_worktree("qmux-thread-graph-global");
+        let legacy_root = temp_worktree("session-thread-graph-legacy");
+        let global_root = temp_worktree("session-thread-graph-global");
         let agent = sample_agent(legacy_root.display().to_string());
         ThreadStore::new(legacy_root.clone())
             .replace_agent_branch_turns(&agent, &[sample_turn("agent-1", "legacy-turn", "user", 0)])
@@ -2469,8 +2469,8 @@ mod tests {
 
     #[test]
     fn existing_global_snapshot_wins_during_migration() {
-        let legacy_root = temp_worktree("qmux-thread-graph-stale");
-        let global_root = temp_worktree("qmux-thread-graph-current");
+        let legacy_root = temp_worktree("session-thread-graph-stale");
+        let global_root = temp_worktree("session-thread-graph-current");
         let agent = sample_agent(legacy_root.display().to_string());
         ThreadStore::new(legacy_root.clone())
             .replace_agent_branch_turns(&agent, &[sample_turn("agent-1", "stale-turn", "user", 0)])
@@ -2497,7 +2497,7 @@ mod tests {
 
     #[test]
     fn scoped_refresh_preserves_graph_nodes_and_other_branches() {
-        let worktree = temp_worktree("qmux-thread-graph-shared");
+        let worktree = temp_worktree("session-thread-graph-shared");
         let source = sample_agent_with(
             "agent-source",
             "claude",
@@ -2548,7 +2548,7 @@ mod tests {
 
     #[test]
     fn created_order_is_monotonic_across_contributors() {
-        let worktree = temp_worktree("qmux-thread-graph-order");
+        let worktree = temp_worktree("session-thread-graph-order");
         let first = sample_agent_with(
             "agent-first",
             "claude",

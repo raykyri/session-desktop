@@ -47,10 +47,11 @@ native behaviors currently housed in the terminal bridge. Keep Session buildable
 and usable after each stage. Land stages in order; dependency deletion follows
 runtime decoupling, not the other way around.
 
-Preserve `app.qmux.desktop`, Apple signing and Keychain identity, existing storage
-paths and persisted formats, and the existing C ABI names for native functions
-that survive. Leave `src-tauri/swift/FoundationTitleGenerator.swift`, its Rust
-entry points, and its build behavior intact. Retired renderer functions do not
+Preserve `app.qmux.desktop`, Apple signing and Keychain identity, and the existing
+C ABI names for native functions that survive. A later hard cutover moved storage
+paths and persisted formats to Session names. The later Foundation Models removal
+also deleted `src-tauri/swift/FoundationTitleGenerator.swift` and its Rust entry
+points. Retired renderer functions do not
 need permanent dummy compatibility implementations once all callers are removed.
 
 Do not combine this work with a hosting migration, data reset, wholesale adapter

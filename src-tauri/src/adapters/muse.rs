@@ -42,8 +42,8 @@ const MUSE_HOOK_EVENTS: &[&str] = &[
     "SubagentStop",
 ];
 
-/// Id of the qmux-owned Muse plugin. Also the name `muse plugins approve` takes.
-const MUSE_PLUGIN_ID: &str = "qmux-hooks";
+/// Id of the session-owned Muse plugin. Also the name `muse plugins approve` takes.
+const MUSE_PLUGIN_ID: &str = "session-hooks";
 
 /// Bumped whenever the generated plugin sources change shape. The installed
 /// stamp records a fingerprint of the rendered files, so this is only a
@@ -87,7 +87,7 @@ impl MuseAdapter {
     fn ensure_binary(&self) -> Result<String, String> {
         let binary = ensure_on_path(&self.binary).ok_or_else(|| {
             format!(
-                "Muse adapter binary '{}' was not found on PATH or standard macOS tool paths. Install the Muse CLI or update adapters.muse.binary in qmux.config.json.",
+                "Muse adapter binary '{}' was not found on PATH or standard macOS tool paths. Install the Muse CLI or update adapters.muse.binary in session.config.json.",
                 self.binary
             )
         })?;
@@ -697,7 +697,7 @@ impl MuseAdapter {
     }
 }
 
-/// Launcher options for a qmux-started Muse agent. Deliberately conservative:
+/// Launcher options for a session-started Muse agent. Deliberately conservative:
 /// no `--yolo`, and no worktree flag (Session owns worktrees, so Muse's own `-w`
 /// would nest a second one inside the first).
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -918,7 +918,7 @@ pub(crate) fn muse_integration_home() -> Result<PathBuf, String> {
         .ok_or_else(|| {
             "XDG_DATA_HOME and HOME are not set; cannot configure the Muse integration".to_string()
         })?;
-    Ok(data_home.join("qmux").join("muse"))
+    Ok(data_home.join("session").join("muse"))
 }
 
 /// Where Muse itself keeps session logs: `$XDG_DATA_HOME/muse/sessions`.
@@ -1016,7 +1016,7 @@ fn muse_binding_path(dir: &Path, pane_id: &str) -> PathBuf {
     dir.join(format!("{}.json", sanitize_binding_name(pane_id)))
 }
 
-/// Pane ids are qmux-minted (`pane-12`), but they name a file, so refuse to let
+/// Pane ids are session-minted (`pane-12`), but they name a file, so refuse to let
 /// anything but an id-shaped value through rather than trusting the format.
 fn sanitize_binding_name(pane_id: &str) -> String {
     pane_id
@@ -1237,7 +1237,7 @@ fn ensure_muse_integration(binary: &str, cli_path: &Path) -> Result<(), String> 
     fs::create_dir_all(&home)
         .map_err(|err| format!("failed to create {}: {err}", home.display()))?;
 
-    let shim_path = home.join("qmux-muse-hook");
+    let shim_path = home.join("session-muse-hook");
     let shim = muse_hook_shim(cli_path, &muse_bindings_dir()?);
     if !file_matches(&shim_path, &shim) || !is_executable(&shim_path) {
         fs::write(&shim_path, &shim)
@@ -1349,9 +1349,9 @@ fn muse_plugin_manifest() -> Value {
     json!({
         "schemaVersion": 1,
         "name": MUSE_PLUGIN_ID,
-        "displayName": "qmux",
+        "displayName": "session",
         "version": MUSE_PLUGIN_VERSION,
-        "description": "Forwards Muse lifecycle events to qmux.",
+        "description": "Forwards Muse lifecycle events to session.",
         "compat": { "source": "native", "manifestDir": ".muse-plugin" },
         "capabilities": {
             "skills": [],
@@ -1403,7 +1403,7 @@ fn run_muse_plugin_command(binary: &str, args: &[&str]) -> Result<(), String> {
         .find(|text| !text.is_empty())
         .unwrap_or("no output");
     Err(format!(
-        "qmux could not install its Muse hook plugin (`muse {}` failed): {detail}",
+        "session could not install its Muse hook plugin (`muse {}` failed): {detail}",
         args.join(" ")
     ))
 }
@@ -1705,8 +1705,8 @@ mod tests {
     fn test_config() -> SessionConfig {
         SessionConfig {
             remotes: Default::default(),
-            workspace_root: PathBuf::from("/tmp/qmux-muse-tests"),
-            socket_path: PathBuf::from("/tmp/qmux-muse-tests.sock"),
+            workspace_root: PathBuf::from("/tmp/session-muse-tests"),
+            socket_path: PathBuf::from("/tmp/session-muse-tests.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -1858,15 +1858,18 @@ mod tests {
     #[test]
     fn hook_shim_forwards_to_the_cli_without_needing_the_environment() {
         let shim = muse_hook_shim(
-            Path::new("/Applications/qmux.app/qmux"),
-            Path::new("/data/qmux/muse/bindings"),
+            Path::new("/Applications/session.app/session"),
+            Path::new("/data/session/muse/bindings"),
         );
-        assert!(shim.contains("'/Applications/qmux.app/qmux'"), "{shim}");
+        assert!(
+            shim.contains("'/Applications/session.app/session'"),
+            "{shim}"
+        );
         // Muse's env whitelist strips both the SESSION_* variables the other shims
         // guard on and the XDG paths this one would otherwise derive, so the
         // bindings directory has to travel as an argument.
         assert!(
-            shim.contains("muse-notify \"$event\" '/data/qmux/muse/bindings'"),
+            shim.contains("muse-notify \"$event\" '/data/session/muse/bindings'"),
             "{shim}"
         );
         assert!(!shim.contains("SESSION_"), "{shim}");
@@ -1894,9 +1897,9 @@ mod tests {
 
     #[test]
     fn plugin_sources_are_written_and_fingerprinted_stably() {
-        let dir = std::env::temp_dir().join(format!("qmux-muse-plugin-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("session-muse-plugin-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
-        let shim = Path::new("/tmp/qmux-muse-hook");
+        let shim = Path::new("/tmp/session-muse-hook");
 
         let first = write_muse_plugin_sources(&dir, shim).unwrap();
         let second = write_muse_plugin_sources(&dir, shim).unwrap();
@@ -2124,7 +2127,7 @@ mod tests {
         ensure_muse_integration(&binary, Path::new(&cli)).expect("integration installs");
 
         let home = muse_integration_home().expect("integration home");
-        assert!(home.join("qmux-muse-hook").is_file());
+        assert!(home.join("session-muse-hook").is_file());
         assert!(home.join("installed.stamp").is_file());
         // A second call must be a no-op — the stamp is what keeps two
         // subprocesses off every launch.
@@ -2189,7 +2192,7 @@ mod tests {
 
     #[test]
     fn session_discovery_finds_the_newest_day_without_walking_history() {
-        let root = env::temp_dir().join(format!("qmux-muse-sessions-{}", std::process::id()));
+        let root = env::temp_dir().join(format!("session-muse-sessions-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let sessions = root.join("muse").join("sessions");
         // Two years of history, plus today's session in the newest directory.
@@ -2227,7 +2230,7 @@ mod tests {
 
     #[test]
     fn claiming_a_binding_keeps_the_directory_it_was_launched_in() {
-        let home = env::temp_dir().join(format!("qmux-muse-claim-{}", std::process::id()));
+        let home = env::temp_dir().join(format!("session-muse-claim-{}", std::process::id()));
         let dir = home.join("bindings");
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(&dir).unwrap();

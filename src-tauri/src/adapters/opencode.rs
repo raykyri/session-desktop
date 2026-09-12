@@ -42,14 +42,14 @@ impl OpencodeAdapter {
     fn ensure_binary(&self) -> Result<String, String> {
         let binary = ensure_on_path(&self.binary).ok_or_else(|| {
             format!(
-                "OpenCode adapter binary '{}' was not found on PATH or standard macOS tool paths. Install OpenCode CLI or update adapters.opencode.binary in qmux.config.json.",
+                "OpenCode adapter binary '{}' was not found on PATH or standard macOS tool paths. Install OpenCode CLI or update adapters.opencode.binary in session.config.json.",
                 self.binary
             )
         })?;
         Ok(binary.display().to_string())
     }
 
-    /// The qmux-managed JSONL transcript path for an agent. The opencode plugin
+    /// The session-managed JSONL transcript path for an agent. The opencode plugin
     /// appends one JSON line per message part here; Session tails it with the same
     /// transcript pipeline used for Claude and Codex.
     fn transcript_path_for(state: &AppState, agent_id: &str, session_id: &str) -> PathBuf {
@@ -66,20 +66,20 @@ impl OpencodeAdapter {
         state
             .config()
             .workspace_root
-            .join(".qmux")
+            .join(".session")
             .join("opencode")
             .join(agent_id)
             .join(format!("{session_id}.jsonl"))
     }
 
-    /// `OPENCODE_CONFIG_DIR` pointing at the qmux-managed plugin. Without this
+    /// `OPENCODE_CONFIG_DIR` pointing at the session-managed plugin. Without this
     /// entrypoint the process still opens, but every integration surface silently
     /// disappears, so fail clearly instead of presenting a permanently stale agent.
     fn config_dir_env(&self) -> Result<(String, String), String> {
-        let entrypoint = self.plugin_dir.join("plugins").join("qmux-notify.js");
+        let entrypoint = self.plugin_dir.join("plugins").join("session-notify.js");
         if !self.plugin_dir.is_dir() || !entrypoint.is_file() {
             return Err(format!(
-                "OpenCode integration plugin was not found at {}. Reinstall qmux or set SESSION_OPENCODE_PLUGIN_DIR to the bundled qmux-opencode-plugin directory.",
+                "OpenCode integration plugin was not found at {}. Reinstall session or set SESSION_OPENCODE_PLUGIN_DIR to the bundled session-opencode-plugin directory.",
                 entrypoint.display()
             ));
         }
@@ -667,7 +667,7 @@ impl OpencodeAdapter {
                         if let Some(session_id) = session_id.clone() {
                             agent.session_id = Some(session_id);
                         }
-                        // Bind the qmux-managed transcript path. The opencode plugin
+                        // Bind the session-managed transcript path. The opencode plugin
                         // writes JSONL here; Session tails it with the same pipeline used
                         // for Claude and Codex.
                         if let Some(transcript_path) = transcript_path.clone() {
@@ -678,7 +678,7 @@ impl OpencodeAdapter {
                         // promotes the agent to Running.
                     })?;
 
-                    // Start tailing the qmux-managed transcript file. The plugin may
+                    // Start tailing the session-managed transcript file. The plugin may
                     // not have written anything yet, so the tail waits for the file
                     // to appear rather than erroring.
                     if let Some(transcript_path) = updated.and_then(|agent| agent.transcript_path) {
@@ -955,7 +955,7 @@ fn validate_opencode_shell_args(args: &[String]) -> Result<(), String> {
         }
         if arg == "--pure" || arg == "--pure=true" {
             return Err(
-                "qMux OpenCode integration does not support --pure because it disables the required lifecycle plugin"
+                "Session OpenCode integration does not support --pure because it disables the required lifecycle plugin"
                     .to_string(),
             );
         }
@@ -969,7 +969,7 @@ fn validate_opencode_shell_args(args: &[String]) -> Result<(), String> {
         }
         if arg == "attach" {
             return Err(
-                "qMux OpenCode integration does not support attach because the existing server does not inherit qMux lifecycle and transcript configuration"
+                "Session OpenCode integration does not support attach because the existing server does not inherit Session lifecycle and transcript configuration"
                     .to_string(),
             );
         }
@@ -1408,8 +1408,8 @@ mod tests {
     fn test_config() -> SessionConfig {
         SessionConfig {
             remotes: Default::default(),
-            workspace_root: PathBuf::from("/tmp/qmux-opencode-tests"),
-            socket_path: PathBuf::from("/tmp/qmux-opencode-tests.sock"),
+            workspace_root: PathBuf::from("/tmp/session-opencode-tests"),
+            socket_path: PathBuf::from("/tmp/session-opencode-tests.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -1448,7 +1448,7 @@ mod tests {
             id: "agent-1".to_string(),
             group_id: "group-1".to_string(),
             adapter: "opencode".to_string(),
-            worktree_dir: "/tmp/qmux-opencode-tests".to_string(),
+            worktree_dir: "/tmp/session-opencode-tests".to_string(),
             branch: None,
             active_workspace: None,
             pane_id: None,
@@ -1495,7 +1495,7 @@ mod tests {
                     kind: PaneKind::Agent,
                     agent_id: Some("agent-1".to_string()),
                     group_id: "group-1".to_string(),
-                    cwd: "/tmp/qmux-opencode-tests".to_string(),
+                    cwd: "/tmp/session-opencode-tests".to_string(),
                     active_workspace: None,
                     remote_session: None,
                     remote_connection: None,
@@ -1547,10 +1547,10 @@ mod tests {
     }
 
     #[test]
-    fn config_dir_requires_the_qmux_plugin_entrypoint() {
+    fn config_dir_requires_the_session_plugin_entrypoint() {
         let missing = OpencodeAdapter {
             binary: "opencode".to_string(),
-            plugin_dir: PathBuf::from("/definitely/missing/qmux-opencode-plugin"),
+            plugin_dir: PathBuf::from("/definitely/missing/session-opencode-plugin"),
         };
         assert!(
             missing
@@ -1560,11 +1560,15 @@ mod tests {
         );
 
         let dir = std::env::temp_dir().join(format!(
-            "qmux-opencode-plugin-entrypoint-{}",
+            "session-opencode-plugin-entrypoint-{}",
             std::process::id()
         ));
         fs::create_dir_all(dir.join("plugins")).unwrap();
-        fs::write(dir.join("plugins").join("qmux-notify.js"), "export {};\n").unwrap();
+        fs::write(
+            dir.join("plugins").join("session-notify.js"),
+            "export {};\n",
+        )
+        .unwrap();
         let adapter = OpencodeAdapter {
             binary: "opencode".to_string(),
             plugin_dir: dir.clone(),
@@ -1579,7 +1583,7 @@ mod tests {
     #[test]
     fn build_args_adds_cwd_model_and_prompt() {
         let args = build_opencode_args(
-            Path::new("/tmp/qmux"),
+            Path::new("/tmp/session"),
             Some("anthropic/claude-sonnet-4-5"),
             "fix the bug",
         );
@@ -1591,23 +1595,23 @@ mod tests {
                 "anthropic/claude-sonnet-4-5",
                 "--prompt",
                 "fix the bug",
-                "/tmp/qmux"
+                "/tmp/session"
             ]
         );
     }
 
     #[test]
     fn build_args_omit_empty_prompt_and_model() {
-        let args = build_opencode_args(Path::new("/tmp/qmux"), None, "  ");
+        let args = build_opencode_args(Path::new("/tmp/session"), None, "  ");
 
-        assert_eq!(args, vec!["/tmp/qmux"]);
+        assert_eq!(args, vec!["/tmp/session"]);
     }
 
     #[test]
     fn shell_project_override_drives_agent_workspace_without_rewriting_args() {
         let values = |items: &[&str]| items.iter().map(ToString::to_string).collect::<Vec<_>>();
         let root = std::env::temp_dir().join(format!(
-            "qmux-opencode-shell-project-{}",
+            "session-opencode-shell-project-{}",
             std::process::id()
         ));
         let shell = root.join("shell");
@@ -1647,7 +1651,7 @@ mod tests {
     }
 
     #[test]
-    fn shell_args_reject_modes_without_the_qmux_plugin() {
+    fn shell_args_reject_modes_without_the_session_plugin() {
         let values = |items: &[&str]| items.iter().map(ToString::to_string).collect::<Vec<_>>();
 
         assert!(validate_opencode_shell_args(&values(&["--pure"])).is_err());
@@ -1668,7 +1672,7 @@ mod tests {
     #[test]
     fn resume_args_include_session_id_when_present() {
         let (args, resumed) = build_opencode_resume_args(
-            Path::new("/tmp/qmux"),
+            Path::new("/tmp/session"),
             Some("anthropic/claude-sonnet-4-5"),
             Some(" session-123 "),
         );
@@ -1681,23 +1685,24 @@ mod tests {
                 "anthropic/claude-sonnet-4-5",
                 "--session",
                 "session-123",
-                "/tmp/qmux"
+                "/tmp/session"
             ]
         );
     }
 
     #[test]
     fn resume_args_fall_back_to_fresh_launch_without_session_id() {
-        let (args, resumed) = build_opencode_resume_args(Path::new("/tmp/qmux"), None, Some("   "));
+        let (args, resumed) =
+            build_opencode_resume_args(Path::new("/tmp/session"), None, Some("   "));
 
         assert!(!resumed);
-        assert_eq!(args, vec!["/tmp/qmux"]);
+        assert_eq!(args, vec!["/tmp/session"]);
     }
 
     #[test]
     fn fork_args_resume_into_new_session_and_append_prompt() {
         let args = build_opencode_fork_args(
-            Path::new("/tmp/qmux"),
+            Path::new("/tmp/session"),
             Some("anthropic/claude-sonnet-4-5"),
             "source-session",
             Some(" continue here "),
@@ -1713,7 +1718,7 @@ mod tests {
                 "--fork",
                 "--prompt",
                 "continue here",
-                "/tmp/qmux",
+                "/tmp/session",
             ]
         );
     }
@@ -1768,7 +1773,7 @@ mod tests {
             "--model".to_string(),
             "anthropic/claude-sonnet-4-5".to_string()
         ]));
-        assert!(!args_contain_prompt(&["/tmp/qmux".to_string()]));
+        assert!(!args_contain_prompt(&["/tmp/session".to_string()]));
 
         assert!(args_contain_prompt(&[
             "--prompt".to_string(),
@@ -1856,13 +1861,13 @@ mod tests {
         assert_eq!(agent.session_id.as_deref(), Some("opencode-session-1"));
         // SessionStart does not promote to Running (matches Claude/Codex idle convention).
         assert!(matches!(agent.status, AgentStatus::Starting));
-        // Transcript path is bound to the qmux-managed JSONL file.
+        // Transcript path is bound to the session-managed JSONL file.
         assert!(
             agent
                 .transcript_path
                 .as_deref()
                 .unwrap()
-                .ends_with("/.qmux/opencode/agent-1/opencode-session-1.jsonl")
+                .ends_with("/.session/opencode/agent-1/opencode-session-1.jsonl")
         );
     }
 
@@ -2237,15 +2242,15 @@ mod tests {
         let state = test_state();
         let path = OpencodeAdapter::transcript_path_for(&state, "agent-42", "session-123");
 
-        assert!(path.ends_with(".qmux/opencode/agent-42/session-123.jsonl"));
-        assert!(path.starts_with("/tmp/qmux-opencode-tests"));
+        assert!(path.ends_with(".session/opencode/agent-42/session-123.jsonl"));
+        assert!(path.starts_with("/tmp/session-opencode-tests"));
     }
 
     #[test]
     fn transcript_path_rejects_unsafe_session_components() {
         let state = test_state();
         let path = OpencodeAdapter::transcript_path_for(&state, "agent-42", "../outside");
-        assert!(path.ends_with(".qmux/opencode/agent-42/pending.jsonl"));
+        assert!(path.ends_with(".session/opencode/agent-42/pending.jsonl"));
     }
 
     #[derive(Debug)]

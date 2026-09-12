@@ -479,10 +479,10 @@ test("published research accepts structured follow-up proposals and owner resolu
       "GET",
       `/auth/github/callback?code=oauth-code&state=${encodeURIComponent(state)}`,
       "",
-      { cookie: cookiePair(begin.setCookies(), "qmux_oauth_state") },
+      { cookie: cookiePair(begin.setCookies(), "session_oauth_state") },
     ),
   );
-  const sessionCookie = cookiePair(callback.setCookies(), "qmux_session");
+  const sessionCookie = cookiePair(callback.setCookies(), "session_auth");
   const page = await dispatch(
     handler,
     request("GET", `/p/proposal12345/n/${publicRootId}`, "", {
@@ -548,7 +548,7 @@ test("published research accepts structured follow-up proposals and owner resolu
   );
   assert.equal(logout.statusCode, 303);
   assert.match(
-    logout.setCookies().find((value) => value.startsWith("qmux_session=")) ?? "",
+    logout.setCookies().find((value) => value.startsWith("session_auth=")) ?? "",
     /Max-Age=0/,
   );
 });

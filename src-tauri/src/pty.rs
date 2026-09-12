@@ -1143,7 +1143,7 @@ enum ShellKind {
 /// Shared parent for all per-pane shell integration scratch directories. The
 /// `SupportFile` root, so materialization keeps the whole subtree owner-only.
 fn shell_integration_root() -> PathBuf {
-    env::temp_dir().join("qmux-shell-init")
+    env::temp_dir().join("session-shell-init")
 }
 
 /// Per-pane scratch directory holding generated shell rc files. The location is
@@ -1658,7 +1658,7 @@ if [ -n "$prefix" ]; then
     rm -rf -- "$candidate"
   done
 fi
-tmp_dir=$parent/.qmux-upload.$$
+tmp_dir=$parent/.session-upload.$$
 if ! mkdir -- "$tmp_dir"; then
   echo 'could not reserve support upload directory' >&2
   exit 66
@@ -1708,7 +1708,7 @@ fn materialize_remote_support_files(host: &Host, files: &[SupportFile]) -> Resul
             args: vec![
                 "-c".to_string(),
                 REMOTE_SUPPORT_FILE_SCRIPT.to_string(),
-                "qmux-support".to_string(),
+                "session-support".to_string(),
                 managed_root.clone(),
                 root.to_string(),
                 path.to_string(),
@@ -1948,7 +1948,7 @@ fn remote_bootstrap_script(
                 prefix.into(),
             ];
             script.push_str(&format!(
-                "if ! printf %s {} | sh -c {} qmux-support {} >/dev/null; then exit 73; fi\n",
+                "if ! printf %s {} | sh -c {} session-support {} >/dev/null; then exit 73; fi\n",
                 shell_quote_str(&file.contents),
                 shell_quote_str(REMOTE_SUPPORT_FILE_SCRIPT),
                 args.iter()
@@ -2341,7 +2341,7 @@ fn spawn_remote_attachment(
         .last_mut()
         .ok_or("remote attachment command is empty")?;
     *command = format!(
-        "sh -c {} qmux {}",
+        "sh -c {} session {}",
         crate::adapters::shell_quote_arg(
             r#"printf '\033]777;session-client-pid=%s\007' "$$"; exec "$@""#
         ),
@@ -2784,7 +2784,9 @@ fn retire_remote_master(commands: &crate::host::RemoteTmuxCommands) {
     let argv = &commands.probe_argv;
     // Never terminate a user-owned/default SSH master, or a test helper.
     if argv.first().map(String::as_str) != Some("ssh")
-        || !argv.iter().any(|arg| arg == "ControlPath=~/.ssh/qmux-%C")
+        || !argv
+            .iter()
+            .any(|arg| arg == "ControlPath=~/.ssh/session-%C")
     {
         return;
     }
@@ -2801,7 +2803,7 @@ fn retire_remote_master(commands: &crate::host::RemoteTmuxCommands) {
     let _ = remote_command_output_with_timeout(
         command,
         None,
-        "retire stale qmux SSH transport",
+        "retire stale session SSH transport",
         Duration::from_secs(2),
     );
 }
@@ -3316,7 +3318,6 @@ fn scrub_inherited_session_context(command: &mut CommandBuilder) {
     ];
     for key in CONTEXT_KEYS {
         command.env_remove(key);
-        command.env_remove(key.replacen("SESSION_", "QMUX_", 1));
     }
 }
 
@@ -4398,7 +4399,7 @@ mod tests {
     fn test_state() -> AppState {
         AppState::new(SessionConfig {
             remotes: Default::default(),
-            workspace_root: PathBuf::from("/tmp/qmux-workspaces"),
+            workspace_root: PathBuf::from("/tmp/session-workspaces"),
             socket_path: PathBuf::from("/tmp/session.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
@@ -4430,7 +4431,7 @@ mod tests {
     }
 
     fn test_state_with_workspace(workspace_root: PathBuf) -> AppState {
-        let socket_path = workspace_root.join("qmux-test.sock");
+        let socket_path = workspace_root.join("session-test.sock");
         AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root,
@@ -4469,7 +4470,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
-        let dir = std::env::temp_dir().join(format!("qmux-pty-scrollback-{nanos}"));
+        let dir = std::env::temp_dir().join(format!("session-pty-scrollback-{nanos}"));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -4513,7 +4514,7 @@ mod tests {
             host: "workbox".to_string(),
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
             session_cli: None,
-            workspace_root: Some("/srv/qmux".to_string()),
+            workspace_root: Some("/srv/session".to_string()),
         }
     }
 
@@ -4668,7 +4669,7 @@ mod tests {
             std::env::temp_dir(),
             None,
             false,
-            Some("qmux-agent-startup".to_string()),
+            Some("session-agent-startup".to_string()),
         );
 
         match shell_kind(&pane_shell()) {
@@ -4687,7 +4688,7 @@ mod tests {
     fn zsh_injection_plans_rc_support_file_and_zdotdir() {
         let injection = agent_shell_function_injection(
             "/bin/zsh",
-            Path::new("/Applications/qmux.app/qmux"),
+            Path::new("/Applications/session.app/session"),
             "pane-z",
             &[],
             None,
@@ -4715,7 +4716,7 @@ mod tests {
     fn bash_injection_plans_rcfile_argument_and_support_file() {
         let injection = agent_shell_function_injection(
             "/bin/bash",
-            Path::new("/Applications/qmux.app/qmux"),
+            Path::new("/Applications/session.app/session"),
             "pane-b",
             &[],
             None,
@@ -4783,7 +4784,7 @@ mod tests {
             CommandPlan {
                 program: "/bin/bash".to_string(),
                 args: vec!["--rcfile".to_string(), local_path.display().to_string()],
-                cwd: PathBuf::from("/srv/qmux"),
+                cwd: PathBuf::from("/srv/session"),
                 envs: vec![(
                     "ZDOTDIR".to_string(),
                     local_root.join("pane-remote").display().to_string(),
@@ -4802,7 +4803,7 @@ mod tests {
         .unwrap();
         let remote = spec.remote.as_ref().expect("remote plan");
         let support_dir = remote.identity.support_dir.as_deref().unwrap();
-        assert!(support_dir.starts_with("/srv/qmux/.qmux/support/qmux-pane-remote-"));
+        assert!(support_dir.starts_with("/srv/session/.session/support/session-pane-remote-"));
         let remote_path = format!("{support_dir}/bashrc");
         assert_eq!(spec.args[1], remote_path);
         assert_eq!(spec.support_files[0].path, PathBuf::from(&remote_path));
@@ -4903,12 +4904,12 @@ mod tests {
         assert_eq!(spec.cwd, PathBuf::from("/srv/code/project"));
         let remote = spec.remote.expect("remote execution plan");
         assert_eq!(remote.identity.remote_id, "remote-1");
-        assert_eq!(remote.identity.tmux_server, "qmux");
+        assert_eq!(remote.identity.tmux_server, "session");
         assert!(
             remote
                 .identity
                 .tmux_session
-                .starts_with("qmux-pane-remote-")
+                .starts_with("session-pane-remote-")
         );
     }
 
@@ -5240,7 +5241,7 @@ mod tests {
             probe_remote_session(&[
                 "/bin/sh".into(),
                 "-c".into(),
-                "echo 'error connecting to /tmp/qmux-test (No such file or directory)' >&2; exit 1"
+                "echo 'error connecting to /tmp/session-test (No such file or directory)' >&2; exit 1"
                     .into()
             ]),
             Ok(false)
@@ -5311,7 +5312,7 @@ mod tests {
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 "printf created > \"$1\"; exit 1".to_string(),
-                "qmux-create-test".to_string(),
+                "session-create-test".to_string(),
                 marker_arg.clone(),
             ],
             configure_argv: Vec::new(),
@@ -5325,12 +5326,12 @@ mod tests {
                 "/bin/sh".to_string(),
                 "-c".to_string(),
                 "rm -f -- \"$1\"".to_string(),
-                "qmux-cleanup-test".to_string(),
+                "session-cleanup-test".to_string(),
                 marker_arg,
             ],
             forward_cleanup_argv: Vec::new(),
             support_cleanup_argv: Vec::new(),
-            remote_socket_path: "/tmp/qmux-create-test.sock".to_string(),
+            remote_socket_path: "/tmp/session-create-test.sock".to_string(),
         };
 
         let result = run_remote_argv(&commands.create_argv, "create remote tmux session")
@@ -5355,7 +5356,7 @@ mod tests {
         };
         let host = crate::host::for_group(Some(&remote));
         let identity = RemoteSessionIdentity::new(&remote.id, "bootstrap").unwrap();
-        let support = root.join(".qmux/support").join(&identity.tmux_session);
+        let support = root.join(".session/support").join(&identity.tmux_session);
         let file = SupportFile {
             root: support.clone(),
             path: support.join("rc"),
@@ -5612,7 +5613,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires SESSION_TEST_SSH_TARGET and mutates a qmux-prefixed tmux session there"]
+    #[ignore = "requires SESSION_TEST_SSH_TARGET and mutates a session-prefixed tmux session there"]
     fn managed_remote_tmux_round_trip() {
         let target = std::env::var("SESSION_TEST_SSH_TARGET").expect("SESSION_TEST_SSH_TARGET");
         let workspace = temp_workspace();
@@ -5628,7 +5629,7 @@ mod tests {
             host: target,
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
             session_cli: None,
-            workspace_root: Some("/tmp/qmux-integration-workspaces".to_string()),
+            workspace_root: Some("/tmp/session-integration-workspaces".to_string()),
         };
         let group = create_group(
             &state,
@@ -5644,8 +5645,9 @@ mod tests {
         )
         .unwrap();
         let pane_id = "pane-remote-integration".to_string();
-        let support_dir =
-            PathBuf::from("/tmp/qmux-integration-workspaces/.qmux/support/pane-remote-integration");
+        let support_dir = PathBuf::from(
+            "/tmp/session-integration-workspaces/.session/support/pane-remote-integration",
+        );
         let support_path = support_dir.join("probe.txt");
         let mut identity = RemoteSessionIdentity::new("integration-remote", &pane_id).unwrap();
         identity.support_dir = Some(support_dir.display().to_string());
@@ -5765,10 +5767,10 @@ mod tests {
                 .unwrap()
                 .lock()
                 .unwrap()
-                .write_all(b"hello from qmux\r")
+                .write_all(b"hello from session\r")
                 .unwrap();
         }
-        let round_trip = gap_armed && reconnected && wait_for(b"remote-got-1:hello from qmux");
+        let round_trip = gap_armed && reconnected && wait_for(b"remote-got-1:hello from session");
 
         // Replace the process-local runtime with the persisted pane identity,
         // simulating a Session restart. Recovery must attach the existing session
@@ -5840,7 +5842,7 @@ mod tests {
     #[test]
     fn materialize_support_files_rejects_paths_outside_their_root() {
         let error = materialize_support_files(&[SupportFile {
-            root: PathBuf::from("/tmp/qmux-sf-root"),
+            root: PathBuf::from("/tmp/session-sf-root"),
             path: PathBuf::from("/etc/passwd"),
             contents: String::new(),
             mode: 0o600,
@@ -5856,8 +5858,8 @@ mod tests {
     // unsanitized id would pass the prefix test and write anywhere on disk.
     #[test]
     fn materialize_support_files_rejects_parent_traversal_within_their_root() {
-        let root = std::env::temp_dir().join("qmux-sf-traversal");
-        let escapee = root.join("..").join("qmux-sf-escaped.json");
+        let root = std::env::temp_dir().join("session-sf-traversal");
+        let escapee = root.join("..").join("session-sf-escaped.json");
         let _ = fs::remove_file(&escapee);
         let error = materialize_support_files(&[SupportFile {
             root: root.clone(),
@@ -5877,7 +5879,7 @@ mod tests {
     // reachable by another account under a world-writable /tmp.
     #[test]
     fn materialize_support_files_locks_down_the_whole_directory_chain() {
-        let root = std::env::temp_dir().join("qmux-sf-chain");
+        let root = std::env::temp_dir().join("session-sf-chain");
         let _ = fs::remove_dir_all(&root);
         let nested = root.join("pane-chain").join("zsh");
         let path = nested.join(".zshrc");
@@ -5913,7 +5915,7 @@ mod tests {
             cwd: std::env::temp_dir(),
             envs: vec![("ZDOTDIR".to_string(), "/tmp/generated".to_string())],
             support_files: vec![SupportFile {
-                root: PathBuf::from("/tmp/qmux-sf-root"),
+                root: PathBuf::from("/tmp/session-sf-root"),
                 path: PathBuf::from("/etc/passwd"),
                 contents: String::new(),
                 mode: 0o600,
@@ -5961,7 +5963,7 @@ mod tests {
 
     #[test]
     fn init_scripts_define_agent_functions_through_session() {
-        let session_cli = PathBuf::from("/Applications/qmux app/qmux");
+        let session_cli = PathBuf::from("/Applications/session app/session");
         let shell_commands = [
             ShellCommandIntegration {
                 command_name: "codex",
@@ -5978,10 +5980,12 @@ mod tests {
 
         for script in [zsh_script, bash_script] {
             assert!(script.contains("codex() {"));
-            assert!(script.contains("'/Applications/qmux app/qmux' agent-exec codex \"$@\""));
+            assert!(script.contains("'/Applications/session app/session' agent-exec codex \"$@\""));
             assert!(script.contains("unalias codex"));
             assert!(script.contains("claude() {"));
-            assert!(script.contains("'/Applications/qmux app/qmux' agent-exec claude \"$@\""));
+            assert!(
+                script.contains("'/Applications/session app/session' agent-exec claude \"$@\"")
+            );
             assert!(script.contains("unalias claude"));
             // Detach is handled by agent-exec after the adapter process truly exits.
             // The shell wrapper must not detach after job-control stop/background.
@@ -5992,9 +5996,9 @@ mod tests {
             // without Session being on PATH.
             assert!(script.contains("unalias session"));
             assert!(script.contains("session() {"));
-            assert!(script.contains("'/Applications/qmux app/qmux' \"$@\""));
+            assert!(script.contains("'/Applications/session app/session' \"$@\""));
             // Shell integration reports cwd changes so restarts reopen the last dir.
-            assert!(script.contains("'/Applications/qmux app/qmux' cwd"));
+            assert!(script.contains("'/Applications/session app/session' cwd"));
             assert!(script.contains("${__session_initial_cwd_report:+--initial}"));
             assert!(script.contains("unset __session_initial_cwd_report"));
             assert!(script.contains("__session_report_cwd"));
@@ -6008,7 +6012,7 @@ mod tests {
 
     #[test]
     fn zsh_init_script_resets_histfile_left_pointing_at_integration_dir() {
-        let session_cli = PathBuf::from("/Applications/qmux app/qmux");
+        let session_cli = PathBuf::from("/Applications/session app/session");
 
         let script = zsh_init_script(&session_cli, &[], None, false);
 
@@ -6026,7 +6030,7 @@ mod tests {
     #[test]
     fn shell_agent_exec_command_quotes_every_dynamic_argument() {
         let command = shell_agent_exec_command(
-            Path::new("/Applications/qmux app/qmux"),
+            Path::new("/Applications/session app/session"),
             "codex",
             &[
                 "fork".to_string(),
@@ -6038,13 +6042,13 @@ mod tests {
 
         assert_eq!(
             command,
-            "SESSION_PREPARED_AGENT_ID='agent-42' '/Applications/qmux app/qmux' agent-exec 'codex' 'fork' 'sess'\\''1' 'line one\nline two'"
+            "SESSION_PREPARED_AGENT_ID='agent-42' '/Applications/session app/session' agent-exec 'codex' 'fork' 'sess'\\''1' 'line one\nline two'"
         );
     }
 
     #[test]
     fn init_scripts_run_startup_command_from_one_shot_prompt_hooks() {
-        let session_cli = PathBuf::from("/Applications/qmux app/qmux");
+        let session_cli = PathBuf::from("/Applications/session app/session");
         let shell_commands = [ShellCommandIntegration {
             command_name: "claude",
             adapter_id: "claude",
@@ -6079,7 +6083,7 @@ mod tests {
 
     #[test]
     fn init_scripts_source_login_files_only_in_login_mode() {
-        let session_cli = PathBuf::from("/Applications/qmux app/qmux");
+        let session_cli = PathBuf::from("/Applications/session app/session");
         let shell_commands = [ShellCommandIntegration {
             command_name: "claude",
             adapter_id: "claude",
@@ -6111,7 +6115,7 @@ mod tests {
     }
 
     #[test]
-    fn base_qmux_envs_include_pane_socket_token_and_workspace() {
+    fn base_session_envs_include_pane_socket_token_and_workspace() {
         let state = test_state();
         let envs = session_pane_envs(&state, "pane-123").expect("envs mint a token");
 
@@ -6132,19 +6136,17 @@ mod tests {
         );
         assert_eq!(
             env_value(&envs, "SESSION_WORKSPACE_ROOT"),
-            Some("/tmp/qmux-workspaces".to_string())
+            Some("/tmp/session-workspaces".to_string())
         );
     }
 
     #[test]
-    fn child_context_scrub_removes_outer_qmux_identity_before_fresh_envs() {
+    fn child_context_scrub_removes_outer_session_identity_before_fresh_envs() {
         let mut command = CommandBuilder::new("/usr/bin/true");
         command.env("SESSION_USER_TOKEN", "outer-user-token");
         command.env("SESSION_AGENT_ID", "outer-agent");
         command.env("SESSION_FORK_POINT", "outer-fork-point");
         command.env("SESSION_WORKTREE_ROOT", "/outer/worktrees");
-        command.env("QMUX_USER_TOKEN", "legacy-user-token");
-        command.env("QMUX_WORKTREE_ROOT", "/legacy/worktrees");
 
         scrub_inherited_session_context(&mut command);
 
@@ -6152,8 +6154,6 @@ mod tests {
         assert!(command.get_env("SESSION_AGENT_ID").is_none());
         assert!(command.get_env("SESSION_FORK_POINT").is_none());
         assert!(command.get_env("SESSION_WORKTREE_ROOT").is_none());
-        assert!(command.get_env("QMUX_USER_TOKEN").is_none());
-        assert!(command.get_env("QMUX_WORKTREE_ROOT").is_none());
 
         command.env("SESSION_TOKEN", "fresh-pane-token");
         assert_eq!(
@@ -6360,10 +6360,10 @@ mod tests {
         fs::create_dir_all(&repo).unwrap();
         git(&repo, &["init", "-b", "main"]);
         git(&repo, &["config", "user.email", "test@example.com"]);
-        git(&repo, &["config", "user.name", "qmux test"]);
+        git(&repo, &["config", "user.name", "session test"]);
         git(&repo, &["commit", "--allow-empty", "-m", "init"]);
 
-        let branch = "qmux/test-agent";
+        let branch = "session/test-agent";
         let worktree_arg = worktree.to_string_lossy().to_string();
         git(
             &repo,
@@ -6472,7 +6472,7 @@ mod tests {
             kill_argv: Vec::new(),
             forward_cleanup_argv: Vec::new(),
             support_cleanup_argv: Vec::new(),
-            remote_socket_path: "/tmp/qmux-offline.sock".to_string(),
+            remote_socket_path: "/tmp/session-offline.sock".to_string(),
         };
         state
             .insert_pane(PaneRuntime {

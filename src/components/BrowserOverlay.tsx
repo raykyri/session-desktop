@@ -1137,7 +1137,7 @@ export default function BrowserOverlay({
           <div className="browser-overlay-empty">
             <p>
               {automationSnapshot?.error ??
-                "Connecting to the qmux automation browser…"}
+                "Connecting to the session automation browser…"}
             </p>
           </div>
         ) : humanBrowser ? (

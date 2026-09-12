@@ -101,9 +101,9 @@ pub fn start_browser_discovery(
         fs::set_permissions(&directory, fs::Permissions::from_mode(0o1777))
             .map_err(|err| format!("failed to secure {}: {err}", directory.display()))?;
     }
-    remove_stale_qmux_sockets(&directory);
+    remove_stale_session_sockets(&directory);
 
-    let socket_path = directory.join(format!("qmux-{}.sock", std::process::id()));
+    let socket_path = directory.join(format!("session-{}.sock", std::process::id()));
     match fs::remove_file(&socket_path) {
         Ok(()) => {}
         Err(err) if err.kind() == ErrorKind::NotFound => {}
@@ -154,7 +154,7 @@ pub fn start_browser_discovery(
     let listener_shutdown = Arc::clone(&shutdown);
 
     if let Err(err) = thread::Builder::new()
-        .name("qmux-browser-discovery".to_string())
+        .name("session-browser-discovery".to_string())
         .spawn(move || {
             while !listener_shutdown.load(Ordering::Acquire) {
                 match listener.accept() {
@@ -167,7 +167,7 @@ pub fn start_browser_discovery(
                         }
                         let backend = Arc::clone(&listener_backend);
                         let _ = thread::Builder::new()
-                            .name("qmux-browser-discovery-client".to_string())
+                            .name("session-browser-discovery-client".to_string())
                             .spawn(move || {
                                 if let Err(err) = serve_connection(stream, backend) {
                                     eprintln!("session: browser discovery client failed: {err}");
@@ -197,17 +197,17 @@ pub fn start_browser_discovery(
     })
 }
 
-fn remove_stale_qmux_sockets(directory: &Path) {
+fn remove_stale_session_sockets(directory: &Path) {
     let Ok(entries) = fs::read_dir(directory) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        let is_qmux_socket = path
+        let is_session_socket = path
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.starts_with("qmux-") && name.ends_with(".sock"));
-        if is_qmux_socket && UnixStream::connect(&path).is_err() {
+            .is_some_and(|name| name.starts_with("session-") && name.ends_with(".sock"));
+        if is_session_socket && UnixStream::connect(&path).is_err() {
             let _ = fs::remove_file(path);
         }
     }
@@ -225,7 +225,7 @@ fn serve_connection(mut stream: UnixStream, backend: Arc<BrowserBackend>) -> Res
     let writer_backend = Arc::clone(&backend);
     let writer_pane_id = pane_id.clone();
     thread::Builder::new()
-        .name("qmux-browser-client-writer".to_string())
+        .name("session-browser-client-writer".to_string())
         .spawn(move || {
             while let Ok(message) = writer_rx.recv() {
                 if !event_is_visible_to_pane(&writer_backend, writer_pane_id.as_deref(), &message) {
@@ -249,7 +249,7 @@ fn serve_connection(mut stream: UnixStream, backend: Arc<BrowserBackend>) -> Res
         let worker_writer_tx = writer_tx.clone();
         let worker_request_rx = Arc::clone(&request_rx);
         thread::Builder::new()
-            .name(format!("qmux-browser-client-worker-{worker_index}"))
+            .name(format!("session-browser-client-worker-{worker_index}"))
             .spawn(move || {
                 loop {
                     let work = {
@@ -355,10 +355,10 @@ fn handle_request(
                 "jsonrpc": "2.0",
                 "id": id,
                 "result": {
-                    "id": "qmux",
-                    "name": "qmux Browser",
+                    "id": "session",
+                    "name": "session Browser",
                     "type": "iab",
-                    "family": "qmux",
+                    "family": "session",
                     "capabilities": {
                         "browser": [],
                         "tab": []
@@ -410,7 +410,7 @@ fn handle_request(
                 "error": {
                     "code": -32001,
                     "message": backend.engine_error.as_deref().unwrap_or(
-                        "qmux chrome-headless-shell automation is unavailable"
+                        "session chrome-headless-shell automation is unavailable"
                     )
                 }
             }),
@@ -711,7 +711,7 @@ impl BrowserDiscoverySocket {
     fn engine(&self) -> Result<&BrowserEngine, String> {
         self._backend.engine.as_deref().ok_or_else(|| {
             self._backend.engine_error.clone().unwrap_or_else(|| {
-                "qmux chrome-headless-shell automation is unavailable".to_string()
+                "session chrome-headless-shell automation is unavailable".to_string()
             })
         })
     }
@@ -727,7 +727,7 @@ impl BrowserDiscoverySocket {
         let selected = created
             .get("id")
             .and_then(Value::as_u64)
-            .ok_or_else(|| "qmux chrome-headless-shell returned an invalid tab".to_string())?;
+            .ok_or_else(|| "session chrome-headless-shell returned an invalid tab".to_string())?;
         lock_or_recover(&self._backend.tab_by_pane).insert(pane_id.to_string(), selected);
         lock_or_recover(&self._backend.pane_by_tab).insert(selected, pane_id.to_string());
         Ok(selected)
@@ -1075,7 +1075,7 @@ fn start_screencast_pump(backend: &Arc<BrowserBackend>) -> Result<(), String> {
     engine.set_screencast_sink(Some(frames_tx));
     let pump_backend = Arc::clone(backend);
     thread::Builder::new()
-        .name("qmux-browser-screencast".to_string())
+        .name("session-browser-screencast".to_string())
         .spawn(move || {
             // One budget across every mirrored pane, so the bridge's total
             // cost is bounded however many panes are streaming at once.

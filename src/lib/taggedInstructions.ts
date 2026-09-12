@@ -377,7 +377,7 @@ function parseOpeningTagAt(value: string, start: number): { tag: string; end: nu
   }
   const opening = value.slice(start + 1, openingEnd);
   const tag =
-    opening === 'qmux_instruction source="agent_driver"' ? "qmux_instruction" : opening;
+    opening === 'session_instruction source="agent_driver"' ? "session_instruction" : opening;
   return isInstructionTagName(tag) ? { tag, end: openingEnd + 1 } : null;
 }
 

@@ -5,7 +5,7 @@ export interface ActivityFeedState {
 
 // Keep the existing session key so replacing the iframe does not discard the
 // note the user was writing or their position in the activity feed.
-const ACTIVITY_FEED_STATE_KEY = "qmux.research-browser.state.v1";
+const ACTIVITY_FEED_STATE_KEY = "session.research-browser.state.v1";
 type FeedStorage = Pick<Storage, "getItem" | "setItem">;
 
 function record(value: unknown): Record<string, unknown> {

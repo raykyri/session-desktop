@@ -60,7 +60,7 @@ const DEVIN_HOOK_EVENTS: &[&str] = &[
 /// the TUI in a session pane and wraps `devin` in Session shells. Each spawn copies
 /// the user's `~/.config/devin/config.json`, injects `session notify` hooks, and
 /// passes that file as `--config` so the original user file is never written.
-/// Conversation history is `--export`ed to a qmux-owned ATIF JSON file and
+/// Conversation history is `--export`ed to a session-owned ATIF JSON file and
 /// parsed as a whole document for the sidebar timeline.
 ///
 /// There is no CLI fork flag (`/fork` is TUI-only). Remote launches copy the
@@ -80,7 +80,7 @@ impl DevinAdapter {
     fn ensure_binary(&self) -> Result<String, String> {
         let binary = ensure_on_path(&self.binary).ok_or_else(|| {
             format!(
-                "Devin adapter binary '{}' was not found on PATH or standard macOS tool paths. Install the Devin CLI or update adapters.devin.binary in qmux.config.json.",
+                "Devin adapter binary '{}' was not found on PATH or standard macOS tool paths. Install the Devin CLI or update adapters.devin.binary in session.config.json.",
                 self.binary
             )
         })?;
@@ -765,7 +765,7 @@ fn devin_export_path(config: &SessionConfig, agent_id: &str) -> Result<PathBuf, 
     }
     Ok(config
         .workspace_root
-        .join(".qmux")
+        .join(".session")
         .join("devin")
         .join(format!("{agent_id}.json")))
 }
@@ -980,7 +980,7 @@ fn load_user_devin_config_for_host(host: &Host) -> Result<Value, String> {
         args: vec![
             "-c".to_string(),
             "set -eu; path=${XDG_CONFIG_HOME:-$HOME/.config}/devin/config.json; if [ -f \"$path\" ] && [ ! -L \"$path\" ]; then cat -- \"$path\"; elif [ -e \"$path\" ] || [ -L \"$path\" ]; then exit 65; fi".to_string(),
-            "qmux-read-devin-config".to_string(),
+            "session-read-devin-config".to_string(),
         ],
         ..Default::default()
     });
@@ -1082,7 +1082,7 @@ fn hook_config_support_file_from(
         return Err("Devin config must be a JSON object".to_string());
     }
 
-    let support_root = config.workspace_root.join(".qmux");
+    let support_root = config.workspace_root.join(".session");
     let hooks_dir = support_root.join("hooks");
     let session_cli = crate::launch_path::session_cli_path()
         .map_err(|err| format!("failed to resolve Session executable for Devin hooks: {err}"))?;
@@ -1269,10 +1269,12 @@ fn validate_devin_supervised_args(args: &[String]) -> Result<(), String> {
 
 fn rejected_devin_flag(arg: &str) -> Option<&'static str> {
     if arg == "--config" || arg.starts_with("--config=") {
-        return Some("it replaces the user config file; qmux injects per-pane hook config itself");
+        return Some(
+            "it replaces the user config file; session injects per-pane hook config itself",
+        );
     }
     if arg == "--export" || arg.starts_with("--export=") {
-        return Some("qmux binds Devin's conversation export itself");
+        return Some("session binds Devin's conversation export itself");
     }
     None
 }
@@ -1408,8 +1410,8 @@ mod tests {
     fn test_config() -> SessionConfig {
         SessionConfig {
             remotes: Default::default(),
-            workspace_root: PathBuf::from("/tmp/qmux-devin-tests"),
-            socket_path: PathBuf::from("/tmp/qmux-devin-tests.sock"),
+            workspace_root: PathBuf::from("/tmp/session-devin-tests"),
+            socket_path: PathBuf::from("/tmp/session-devin-tests.sock"),
             adapters: AdapterConfigs {
                 devin: DevinAdapterConfig {
                     binary: Some("devin".to_string()),
@@ -1433,7 +1435,7 @@ mod tests {
             id: "agent-1".to_string(),
             group_id: "group-1".to_string(),
             adapter: "devin".to_string(),
-            worktree_dir: "/tmp/qmux-devin-tests".to_string(),
+            worktree_dir: "/tmp/session-devin-tests".to_string(),
             branch: None,
             active_workspace: None,
             pane_id: None,
@@ -1610,17 +1612,17 @@ mod tests {
     #[test]
     fn prepend_managed_flags_put_config_and_export_first() {
         let args = prepend_devin_managed_flags(
-            Path::new("/tmp/qmux-hooks/devin-pane.json"),
-            Path::new("/tmp/qmux-devin/agent-1.json"),
+            Path::new("/tmp/session-hooks/devin-pane.json"),
+            Path::new("/tmp/session-devin/agent-1.json"),
             build_devin_args(Some("swe-1-7"), Some("smart"), "hello"),
         );
         assert_eq!(
             args,
             vec![
                 "--config",
-                "/tmp/qmux-hooks/devin-pane.json",
+                "/tmp/session-hooks/devin-pane.json",
                 "--export",
-                "/tmp/qmux-devin/agent-1.json",
+                "/tmp/session-devin/agent-1.json",
                 "--permission-mode",
                 "smart",
                 "--model",
@@ -1633,7 +1635,7 @@ mod tests {
 
     #[test]
     fn hook_config_preserves_user_settings_and_injects_notify() {
-        let workspace_root = unique_test_dir("qmux-devin-hooks");
+        let workspace_root = unique_test_dir("session-devin-hooks");
         let config = SessionConfig {
             workspace_root: workspace_root.clone(),
             socket_path: workspace_root.join("session.sock"),
@@ -1650,7 +1652,7 @@ mod tests {
         let (path, support_file) = hook_config_support_file_from(&config, "pane-1", user).unwrap();
         crate::pty::materialize_support_files(&[support_file]).unwrap();
 
-        assert!(path.starts_with(workspace_root.join(".qmux/hooks")));
+        assert!(path.starts_with(workspace_root.join(".session/hooks")));
         let name = path.file_name().unwrap().to_str().unwrap();
         assert!(name.starts_with("devin-pane-1-") && name.ends_with(".json"));
         assert_eq!(
@@ -1682,7 +1684,7 @@ mod tests {
 
     #[test]
     fn missing_user_config_still_marks_setup_complete() {
-        let missing = unique_test_dir("qmux-devin-missing-config").join("config.json");
+        let missing = unique_test_dir("session-devin-missing-config").join("config.json");
         let document = load_devin_config_document(&missing).unwrap();
         assert_eq!(document["shell"]["setup_complete"], true);
         assert_eq!(document["version"], 1);
@@ -1813,7 +1815,7 @@ mod tests {
         let path = devin_export_path(&test_config(), "agent-1").unwrap();
         assert_eq!(
             path,
-            PathBuf::from("/tmp/qmux-devin-tests/.qmux/devin/agent-1.json")
+            PathBuf::from("/tmp/session-devin-tests/.session/devin/agent-1.json")
         );
         assert!(devin_export_path(&test_config(), "../agent").is_err());
     }

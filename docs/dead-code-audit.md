@@ -22,7 +22,7 @@ checks and removed the additional orphan composer tree they identified.
   closed-pane restoration remains supported.
 
 Backend command registration, persisted formats, notification/artifact storage,
-qmux compatibility identifiers, platform-specific code, vendor patches, examples,
+Apple, hosted-service, and native compatibility identifiers, platform-specific code, vendor patches, examples,
 and design mockups were retained. A missing frontend caller alone does not establish
 that a registered backend command or persisted field can safely be removed.
 

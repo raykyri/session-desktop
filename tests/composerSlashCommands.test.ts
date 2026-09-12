@@ -34,7 +34,7 @@ test("completes a selected command with a message separator", () => {
   assert.equal(completeComposerSlashCommand(fork), "/fork ");
 });
 
-test("parses fork commands and strips only the qmux command prefix", () => {
+test("parses fork commands and strips only the session command prefix", () => {
   assert.deepEqual(parseComposerSlashCommand("/fork investigate this"), {
     kind: "ready",
     command: {

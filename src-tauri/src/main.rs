@@ -111,11 +111,11 @@ fn handle_global_shortcut(
 
 /// Menu ids for the custom items installed by `customize_app_menu`.
 #[cfg(desktop)]
-const QUIT_MENU_ID: &str = "qmux-quit";
+const QUIT_MENU_ID: &str = "session-quit";
 #[cfg(desktop)]
-const NEW_WINDOW_MENU_ID: &str = "qmux-new-window";
+const NEW_WINDOW_MENU_ID: &str = "session-new-window";
 #[cfg(desktop)]
-const RELOAD_INTERFACE_MENU_ID: &str = "qmux-reload-interface";
+const RELOAD_INTERFACE_MENU_ID: &str = "session-reload-interface";
 
 /// Reworks the default menu for Session's single-window behavior:
 ///
@@ -319,7 +319,7 @@ fn upsert_remote(
     validate_ui_remote(&id, &remote)?;
     if state.config().remotes.contains_key(&id) {
         return Err(format!(
-            "remote '{id}' is declared in qmux.config.json and cannot be changed here"
+            "remote '{id}' is declared in session.config.json and cannot be changed here"
         ));
     }
     persistence::update_preferences(&state.config().workspace_root, move |preferences| {
@@ -336,7 +336,7 @@ fn delete_remote(
     let id = id.trim().to_string();
     if state.config().remotes.contains_key(&id) {
         return Err(format!(
-            "remote '{id}' is declared in qmux.config.json and cannot be removed here"
+            "remote '{id}' is declared in session.config.json and cannot be removed here"
         ));
     }
     let mut removed = false;
@@ -521,7 +521,7 @@ fn probe_remote_blocking(
                 vec![
                     "-c".to_string(),
                     "command -v \"$1\"".to_string(),
-                    "qmux-remote-probe".to_string(),
+                    "session-remote-probe".to_string(),
                     session_cli.clone(),
                 ],
             );
@@ -4240,13 +4240,16 @@ mod remote_settings_tests {
             host: "  user@devbox  ".to_string(),
             label: Some("  Dev box  ".to_string()),
             session_cli: Some("   ".to_string()),
-            workspace_root: Some("  ~/.qmux/workspaces  ".to_string()),
+            workspace_root: Some("  ~/.session/workspaces  ".to_string()),
             ..Default::default()
         });
         assert_eq!(remote.host, "user@devbox");
         assert_eq!(remote.label.as_deref(), Some("Dev box"));
         assert_eq!(remote.session_cli, None);
-        assert_eq!(remote.workspace_root.as_deref(), Some("~/.qmux/workspaces"));
+        assert_eq!(
+            remote.workspace_root.as_deref(),
+            Some("~/.session/workspaces")
+        );
         validate_ui_remote("devbox", &remote).unwrap();
     }
 

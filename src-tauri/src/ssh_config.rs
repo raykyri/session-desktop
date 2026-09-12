@@ -243,7 +243,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!("qmux-ssh-config-{nonce}"));
+        let dir = std::env::temp_dir().join(format!("session-ssh-config-{nonce}"));
         fs::create_dir_all(dir.join("config.d")).unwrap();
         dir
     }

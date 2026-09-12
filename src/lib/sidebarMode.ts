@@ -3,7 +3,7 @@ import { type ResearchFolderScope, workspaceIsInResearchScope } from "./research
 
 export type SidebarMode = "terminal" | "research";
 
-export const SIDEBAR_MODE_STORAGE_KEY = "qmux.sidebar-mode.v1";
+export const SIDEBAR_MODE_STORAGE_KEY = "session.sidebar-mode.v1";
 const RESEARCH_TREE_TAB_PREFIX = "__research_tree__:";
 
 export function researchTreeTabId(treeId: string): string {

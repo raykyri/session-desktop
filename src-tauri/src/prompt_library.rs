@@ -4,10 +4,10 @@
 //! out of sync. The prompt's name is its filename stem; its content is the file
 //! body.
 //!
-//! Prompts live in one of two scopes: `global` (`~/.qmux/prompts/`, visible from
+//! Prompts live in one of two scopes: `global` (`~/.session/prompts/`, visible from
 //! every project) and `project`, keyed by the active pane's project directory and
-//! stored centrally at `~/.qmux/projects/<basename>-<hash>/prompts/` — one flat
-//! level per project path, so repos never grow a `.qmux` dir. The store dir name
+//! stored centrally at `~/.session/projects/<basename>-<hash>/prompts/` — one flat
+//! level per project path, so repos never grow a `.session` dir. The store dir name
 //! combines the project's basename (readable) with a short SHA-256 of its
 //! canonical path (collision-proof); `meta.json` alongside records the full path
 //! since the hash is not reversible. Moving a prompt between scopes is a save
@@ -75,7 +75,7 @@ struct ProjectMeta<'a> {
     path: &'a str,
 }
 
-fn qmux_home() -> Result<PathBuf, String> {
+fn session_home() -> Result<PathBuf, String> {
     std::env::var_os("HOME")
         .filter(|home| !home.is_empty())
         .map(|home| PathBuf::from(home).join(persistence::STATE_DIR))
@@ -83,7 +83,7 @@ fn qmux_home() -> Result<PathBuf, String> {
 }
 
 fn global_dir() -> Result<PathBuf, String> {
-    Ok(qmux_home()?.join(PROMPTS_DIR))
+    Ok(session_home()?.join(PROMPTS_DIR))
 }
 
 /// A filesystem-safe, bounded prefix of the project's basename. Only used for
@@ -112,7 +112,7 @@ fn sanitized_basename(path: &Path) -> String {
     }
 }
 
-/// One project's resolved central store: `~/.qmux/projects/<basename>-<hash>`.
+/// One project's resolved central store: `~/.session/projects/<basename>-<hash>`.
 /// Resolving canonicalizes and hashes the path, so callers resolve once and
 /// reuse it rather than re-deriving per operation.
 struct ProjectStore {
@@ -136,7 +136,7 @@ impl ProjectStore {
             .take(HASH_CHARS / 2)
             .map(|byte| format!("{byte:02x}"))
             .collect();
-        let dir = qmux_home()?
+        let dir = session_home()?
             .join(PROJECTS_DIR)
             .join(format!("{}-{hash}", sanitized_basename(&canonical)));
         Ok(Self { dir, canonical })
@@ -487,7 +487,7 @@ mod tests {
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
         let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("qmux-prompts-{label}-{nanos}-{seq}"));
+        let dir = std::env::temp_dir().join(format!("session-prompts-{label}-{nanos}-{seq}"));
         fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -508,7 +508,7 @@ mod tests {
         assert_eq!(stem.file_name().unwrap(), PROJECTS_DIR);
         // <sanitized-basename>-<12 hex chars>
         let (prefix, hash) = name.rsplit_once('-').unwrap();
-        assert!(prefix.starts_with("qmux-prompts-store"));
+        assert!(prefix.starts_with("session-prompts-store"));
         assert_eq!(hash.len(), HASH_CHARS);
         assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
         assert!(store.canonical.is_absolute());
@@ -584,7 +584,7 @@ mod tests {
         )
         .unwrap();
 
-        // Clean up the real ~/.qmux/projects entry this test created.
+        // Clean up the real ~/.session/projects entry this test created.
         let _ = fs::remove_dir_all(store.dir);
     }
 

@@ -68,7 +68,7 @@ export interface CodexVisualizationReference {
   path: string;
   title?: string;
   /** Reserved by the Codex contract for a future wider presentation. V1
-   * deliberately opens every reference in qmux's existing browser overlay. */
+   * deliberately opens every reference in session's existing browser overlay. */
   mode?: "wide";
 }
 

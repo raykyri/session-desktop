@@ -733,7 +733,7 @@ mod tests {
             kill_argv: Vec::new(),
             forward_cleanup_argv: Vec::new(),
             support_cleanup_argv: Vec::new(),
-            remote_socket_path: "/tmp/qmux-test.sock".to_string(),
+            remote_socket_path: "/tmp/session-test.sock".to_string(),
         };
         let history = RemoteHistoryCheckpoint::new(Vec::new());
         let backend =

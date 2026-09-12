@@ -185,7 +185,7 @@ fn start_control_socket_runtime(
     let thread_state = state.clone();
     let thread_path = socket_path.clone();
     let handle = thread::Builder::new()
-        .name("qmux-control-socket".to_string())
+        .name("session-control-socket".to_string())
         .spawn(move || {
             supervise_control_socket(
                 thread_state,
@@ -446,7 +446,7 @@ fn recover_missing_socket(
                     warn_control_socket(
                         state,
                         &format!(
-                            "qmux could not restore the control socket at {}: {err}. CLI commands will fail until it recovers.",
+                            "session could not restore the control socket at {}: {err}. CLI commands will fail until it recovers.",
                             socket_path.display()
                         ),
                     );
@@ -479,7 +479,7 @@ fn wait_for_conflict_to_clear(
     warn_control_socket(
         state,
         &format!(
-            "The Session control socket at {} was replaced by another process. CLI commands will not reach this instance until that socket is removed. qmux will not delete it automatically.",
+            "The Session control socket at {} was replaced by another process. CLI commands will not reach this instance until that socket is removed. session will not delete it automatically.",
             socket_path.display()
         ),
     );
@@ -552,7 +552,7 @@ fn run_listener_generation(
                                 }
                                 let state = state.clone();
                                 let _ = thread::Builder::new()
-                                    .name("qmux-control-client".to_string())
+                                    .name("session-control-client".to_string())
                                     .spawn(move || {
                                         let _slot = slot;
                                         handle_client(state, stream);
@@ -1002,8 +1002,8 @@ fn handle_request_with_peer(
                         crate::workspace::ActiveWorkspaceKind::LinkedWorktree
                     }
                 },
-                source: crate::workspace::ActiveWorkspaceSource::Qmux,
-                managed_by_qmux: false,
+                source: crate::workspace::ActiveWorkspaceSource::Session,
+                managed_by_session: false,
             };
             // Bind the workspace update to the authenticated pane regardless of any claimed
             // paneId, mirroring pane.set_cwd and hook.notify.
@@ -1592,7 +1592,7 @@ mod tests {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn test_state() -> AppState {
-        runtime_state(temp_dir(), PathBuf::from("/tmp/qmux-control-test.sock")).0
+        runtime_state(temp_dir(), PathBuf::from("/tmp/session-control-test.sock")).0
     }
 
     fn runtime_fixture() -> (AppState, PathBuf) {
@@ -1696,7 +1696,7 @@ mod tests {
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
         let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("qmux-control-{nanos}-{seq}"));
+        let dir = std::env::temp_dir().join(format!("session-control-{nanos}-{seq}"));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }

@@ -133,9 +133,7 @@ pub fn valid_session(session: &str) -> bool {
 }
 
 pub fn discover(adapter: &str, session: &str, hint: Option<&Path>) -> Result<PathBuf, String> {
-    if !matches!(adapter, "claude" | "codex" | "devin" | "antigravity")
-        || !valid_session(session)
-    {
+    if !matches!(adapter, "claude" | "codex" | "devin" | "antigravity") || !valid_session(session) {
         return Err("invalid transcript adapter or session".into());
     }
     if let Some(path) = hint
@@ -312,7 +310,7 @@ mod tests {
     #[test]
     fn utf8_character_split_at_chunk_boundary_is_preserved() {
         let path =
-            std::env::temp_dir().join(format!("qmux-chunk-utf8-{}.jsonl", std::process::id()));
+            std::env::temp_dir().join(format!("session-chunk-utf8-{}.jsonl", std::process::id()));
         let contents = format!("{{\"text\":\"{}😀tail\"}}\n", "a".repeat(MAX_CHUNK - 10));
         fs::write(&path, &contents).unwrap();
         let first = read_frame(&path, "s", &Cursor::default()).unwrap();
@@ -326,7 +324,7 @@ mod tests {
     #[test]
     fn incomplete_utf8_waits_for_a_complete_record() {
         let path =
-            std::env::temp_dir().join(format!("qmux-stream-utf8-{}.jsonl", std::process::id()));
+            std::env::temp_dir().join(format!("session-stream-utf8-{}.jsonl", std::process::id()));
         fs::write(&path, b"{}\n{\"text\":\"\xf0\x9f").unwrap();
         let first = read_frame(&path, "s", &Cursor::default()).unwrap();
         assert_eq!(first.data, "{}\n");
@@ -343,7 +341,8 @@ mod tests {
     }
     #[test]
     fn partial_records_resume_and_rewrites_reset() {
-        let path = std::env::temp_dir().join(format!("qmux-stream-{}.jsonl", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("session-stream-{}.jsonl", std::process::id()));
         fs::write(&path, "{\"a\":1}\n{\"b\":").unwrap();
         let first = read_frame(&path, "session", &Cursor::default()).unwrap();
         assert_eq!(first.data, "{\"a\":1}\n");
@@ -366,10 +365,8 @@ mod tests {
     }
     #[test]
     fn devin_documents_require_the_matching_session_and_stream_without_a_newline() {
-        let path = std::env::temp_dir().join(format!(
-            "qmux-stream-devin-{}.json",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("session-stream-devin-{}.json", std::process::id()));
         let contents = r#"{"session_id":"devin-session","steps":[]}"#;
         fs::write(&path, contents).unwrap();
         assert!(belongs(&path, "devin", "devin-session"));
@@ -393,9 +390,7 @@ mod tests {
     #[test]
     fn antigravity_paths_are_confined_to_the_conversation_log_directory() {
         let home = Path::new("/home/test/.gemini/config");
-        let expected = home.join(
-            "brain/conversation-1/.system_generated/logs/transcript.jsonl",
-        );
+        let expected = home.join("brain/conversation-1/.system_generated/logs/transcript.jsonl");
         assert!(antigravity_path_matches(&expected, home, "conversation-1"));
         assert!(antigravity_path_matches(
             &expected.with_file_name("transcript_full.jsonl"),
@@ -411,7 +406,7 @@ mod tests {
 
     #[test]
     fn rejects_symlinks_and_wrong_sessions() {
-        let dir = std::env::temp_dir().join(format!("qmux-stream-safe-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("session-stream-safe-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("rollout.jsonl");
         fs::write(

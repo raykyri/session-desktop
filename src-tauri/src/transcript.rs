@@ -612,7 +612,7 @@ fn workspace_observation_belongs_to_agent(
     }
     // Claude rewrites copied fork history's top-level `sessionId` to the child
     // id, so identity alone cannot distinguish inherited commands. Their record
-    // timestamps still predate the Qmux child. Requiring a timestamp at or after
+    // timestamps still predate the Session child. Requiring a timestamp at or after
     // child creation retains the first real child command even when it is already
     // present in the initial snapshot, while leaving the launch cwd authoritative
     // until then.
@@ -1463,7 +1463,7 @@ fn truncate_preview(text: &str) -> String {
     format!("{head}…")
 }
 
-/// Strips qmux-injected tagged instruction blocks from the front of a user
+/// Strips session-injected tagged instruction blocks from the front of a user
 /// message, mirroring `stripLeadingTaggedInstructionBlocks` in
 /// src/lib/taggedInstructions.ts: repeated `# `-labelled prefix lines and
 /// line-structured `<tag>…</tag>` blocks (depth-matched) are removed until
@@ -1669,8 +1669,8 @@ fn parse_opening_tag(line: &str) -> Option<&str> {
         return None;
     }
     let tag = &line[1..line.len() - 1];
-    if tag == r#"qmux_instruction source="agent_driver""# {
-        return Some("qmux_instruction");
+    if tag == r#"session_instruction source="agent_driver""# {
+        return Some("session_instruction");
     }
     is_instruction_tag_name(tag).then_some(tag)
 }
@@ -2106,7 +2106,7 @@ mod append_tests {
     fn scratch() -> PathBuf {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let dir = std::env::temp_dir().join(format!(
-            "qmux-append-{}-{}",
+            "session-append-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, AtomicOrdering::Relaxed)
         ));
@@ -2363,7 +2363,7 @@ mod tests {
     #[test]
     fn read_reports_only_the_newline_terminated_prefix_as_consumed() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-consumed-{}",
+            "session-transcript-consumed-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -2385,7 +2385,7 @@ mod tests {
     #[test]
     fn json_document_rereads_from_the_start_when_rewritten() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-json-{}",
+            "session-transcript-json-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -2594,7 +2594,7 @@ mod tests {
     #[test]
     fn incremental_read_returns_only_appended_bytes_then_resets_on_shrink() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-read-{}",
+            "session-transcript-read-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -2628,7 +2628,7 @@ mod tests {
     #[test]
     fn initial_read_keeps_a_bounded_tail_with_absolute_line_index() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-tail-window-{}",
+            "session-transcript-tail-window-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -2655,7 +2655,7 @@ mod tests {
     #[test]
     fn incremental_read_holds_back_a_partial_multibyte_tail_without_erroring() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-utf8-{}",
+            "session-transcript-utf8-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -2683,7 +2683,7 @@ mod tests {
     #[test]
     fn incremental_read_advances_by_raw_bytes_over_an_invalid_utf8_line() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-badutf8-{}",
+            "session-transcript-badutf8-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -2719,7 +2719,7 @@ mod tests {
     #[test]
     fn read_resets_when_an_in_place_rewrite_moves_the_last_newline() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-rewrite-{}",
+            "session-transcript-rewrite-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -2789,7 +2789,7 @@ mod tests {
         use std::os::unix::fs::symlink;
 
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-symlinks-{}",
+            "session-transcript-symlinks-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -2821,7 +2821,7 @@ mod tests {
     #[test]
     fn read_transcript_meta_extracts_first_user_message_and_line_count() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-meta-{}",
+            "session-transcript-meta-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -2848,7 +2848,7 @@ mod tests {
     #[test]
     fn read_transcript_meta_extracts_codex_user_message() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-codex-meta-{}",
+            "session-transcript-codex-meta-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -2915,7 +2915,7 @@ mod tests {
         // The exact attributed Session driver block is trusted and stripped.
         assert_eq!(
             strip_leading_tagged_instruction_blocks(
-                "<qmux_instruction source=\"agent_driver\">\nsafety\n</qmux_instruction>\nkept"
+                "<session_instruction source=\"agent_driver\">\nsafety\n</session_instruction>\nkept"
             ),
             Some("kept")
         );
@@ -2934,7 +2934,7 @@ mod tests {
     #[test]
     fn read_transcript_meta_skips_tagged_instruction_previews() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-tagged-meta-{}",
+            "session-transcript-tagged-meta-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -2976,7 +2976,7 @@ mod tests {
     #[test]
     fn read_transcript_meta_unwraps_cursor_user_query_preview() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-cursor-meta-{}",
+            "session-transcript-cursor-meta-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -3003,7 +3003,7 @@ mod tests {
     #[test]
     fn read_transcript_meta_stops_preview_scan_after_five_user_messages() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-preview-limit-{}",
+            "session-transcript-preview-limit-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -3034,7 +3034,7 @@ mod tests {
     #[test]
     fn read_transcript_meta_skips_oversized_records_with_bounded_buffering() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-bounded-meta-{}",
+            "session-transcript-bounded-meta-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -3058,7 +3058,7 @@ mod tests {
     #[test]
     fn codex_transcript_cwd_reads_session_meta_cwd() {
         let dir = std::env::temp_dir().join(format!(
-            "qmux-transcript-codex-cwd-{}",
+            "session-transcript-codex-cwd-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())
@@ -3198,7 +3198,7 @@ mod tests {
     #[test]
     fn opencode_picker_lists_rotated_agent_sessions_only() {
         let dir = temp_dir();
-        let agent_dir = dir.join(".qmux").join("opencode").join("agent-1");
+        let agent_dir = dir.join(".session").join("opencode").join("agent-1");
         fs::create_dir_all(&agent_dir).unwrap();
         let first = agent_dir.join("session-1.jsonl");
         let second = agent_dir.join("session-2.jsonl");
@@ -3324,7 +3324,7 @@ mod tests {
         AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root: temp_dir(),
-            socket_path: PathBuf::from("/tmp/qmux-transcript-test.sock"),
+            socket_path: PathBuf::from("/tmp/session-transcript-test.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -3359,7 +3359,7 @@ mod tests {
             id: "agent-1".to_string(),
             group_id: "group-1".to_string(),
             adapter: "claude".to_string(),
-            worktree_dir: "/tmp/qmux-transcript-test".to_string(),
+            worktree_dir: "/tmp/session-transcript-test".to_string(),
             branch: None,
             active_workspace: None,
             pane_id: Some("pane-1".to_string()),
@@ -3383,7 +3383,7 @@ mod tests {
 
     fn temp_dir() -> PathBuf {
         std::env::temp_dir().join(format!(
-            "qmux-transcript-test-{}",
+            "session-transcript-test-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos())

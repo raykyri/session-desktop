@@ -93,7 +93,7 @@ export async function detectAvailableBodyFonts(): Promise<BodyFontOption[]> {
 
 export type ColorTheme = "green-blob" | "orange-blob";
 export type TabTitleProvider = "openRouter" | "disabled";
-export type WorktreeLocation = "global" | "localQmux" | "localClaude";
+export type WorktreeLocation = "global" | "localSession" | "localClaude";
 
 export const COLOR_THEME_OPTIONS: { id: ColorTheme; label: string }[] = [
   { id: "green-blob", label: "Cool" },
@@ -107,7 +107,7 @@ export const TAB_TITLE_PROVIDER_OPTIONS: { id: TabTitleProvider; label: string }
 
 export const WORKTREE_LOCATION_OPTIONS: { id: WorktreeLocation; label: string }[] = [
   { id: "global", label: "Global (default)" },
-  { id: "localQmux", label: "Local .qmux/" },
+  { id: "localSession", label: "Local .session/" },
   { id: "localClaude", label: "Local .claude/" },
 ];
 
@@ -162,7 +162,7 @@ export interface AppSettings {
   confirmPasteOverChars: number;
   /** show Cmd-held shortcut badges in the sidebar */
   showShortcutHints: boolean;
-  /** show qmux's native menu bar icon */
+  /** show session's native menu bar icon */
   showMenuBarIcon: boolean;
   /** disable decorative/status pulse animations */
   reduceMotion: boolean;
@@ -288,7 +288,7 @@ export function pasteProtectionFor(settings: AppSettings): PasteProtectionSettin
 
 // Bumped if the stored shape ever changes incompatibly; an unknown blob simply
 // falls back to defaults.
-const STORAGE_KEY = "qmux.settings.v1";
+const STORAGE_KEY = "session.settings.v1";
 
 /**
  * Reads the persisted application settings from localStorage. Any missing,

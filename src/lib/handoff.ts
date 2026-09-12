@@ -162,7 +162,7 @@ interface HandoffAnchor {
  * - A user anchor is an outstanding ask, so it lands under "Current request"
  *   and the history is context for carrying it out. This is deliberately
  *   unlike "Fork from here", which branches *before* the message because it
- *   re-opens the turn inside qmux rather than exporting it.
+ *   re-opens the turn inside session rather than exporting it.
  * - An assistant anchor has no ask to transfer: it is where the previous agent
  *   stopped, so it lands under "Where the previous agent left off" and the
  *   receiving agent is told to carry on from it.
@@ -350,7 +350,7 @@ export function latestHandoffAnchorKey(items: MessageItem[]): string | null {
 
 function preamble(assistantAnchor: boolean, context?: HandoffContext | null) {
   const agent = context?.agentLabel?.trim();
-  const who = agent ? `${agent}, running in qmux,` : "Another coding agent";
+  const who = agent ? `${agent}, running in session,` : "Another coding agent";
   return [
     "# Session handoff",
     "",

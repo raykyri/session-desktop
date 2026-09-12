@@ -97,7 +97,7 @@ pub fn handle_global_shortcut<R: Runtime>(
     {
         return;
     }
-    if let Err(err) = toggle_qmux_visibility(app) {
+    if let Err(err) = toggle_session_visibility(app) {
         eprintln!("session: failed to toggle app visibility: {err}");
     }
 }
@@ -459,7 +459,7 @@ fn finish_shortcut_capture(
     }
 }
 
-pub fn toggle_qmux_visibility<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+pub fn toggle_session_visibility<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let Some(window) = app.get_webview_window("main") else {
         return Ok(());
     };
@@ -475,26 +475,26 @@ pub fn toggle_qmux_visibility<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<(
     #[cfg(not(target_os = "macos"))]
     let app_is_active = window.is_focused().unwrap_or(false);
 
-    let should_hide = should_hide_qmux_window(
+    let should_hide = should_hide_session_window(
         window.is_visible().unwrap_or(false),
         window.is_minimized().unwrap_or(false),
         app_is_active,
     );
 
     if should_hide {
-        hide_qmux_window(app)?;
+        hide_session_window(app)?;
     } else {
-        show_qmux_window(app)?;
+        show_session_window(app)?;
     }
 
     Ok(())
 }
 
-fn should_hide_qmux_window(is_visible: bool, is_minimized: bool, app_is_active: bool) -> bool {
+fn should_hide_session_window(is_visible: bool, is_minimized: bool, app_is_active: bool) -> bool {
     is_visible && !is_minimized && app_is_active
 }
 
-pub fn show_qmux_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+pub fn show_session_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let Some(window) = app.get_webview_window("main") else {
         return Ok(());
     };
@@ -512,12 +512,12 @@ pub fn show_qmux_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 }
 
 #[cfg(target_os = "macos")]
-pub fn hide_qmux_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+pub fn hide_session_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     app.hide()
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn hide_qmux_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+pub fn hide_session_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let Some(window) = app.get_webview_window("main") else {
         return Ok(());
     };
@@ -732,7 +732,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        std::env::temp_dir().join(format!("qmux-shortcut-{nanos}"))
+        std::env::temp_dir().join(format!("session-shortcut-{nanos}"))
     }
 
     #[test]
@@ -778,18 +778,18 @@ mod tests {
 
     #[test]
     fn active_app_hides_even_when_an_auxiliary_browser_window_is_key() {
-        assert!(should_hide_qmux_window(true, false, true));
+        assert!(should_hide_session_window(true, false, true));
     }
 
     #[test]
     fn inactive_visible_app_is_shown_instead_of_hidden() {
-        assert!(!should_hide_qmux_window(true, false, false));
+        assert!(!should_hide_session_window(true, false, false));
     }
 
     #[test]
     fn hidden_or_minimized_active_app_is_shown() {
-        assert!(!should_hide_qmux_window(false, false, true));
-        assert!(!should_hide_qmux_window(true, true, true));
+        assert!(!should_hide_session_window(false, false, true));
+        assert!(!should_hide_session_window(true, true, true));
     }
 
     #[test]

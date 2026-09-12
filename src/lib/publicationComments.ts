@@ -1,7 +1,7 @@
 const PUBLIC_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/;
 const COMMENT_MARKER_SUFFIX = " -->";
-const PROPOSAL_MARKER_PREFIX = "<!-- qmux-proposal:v1 ";
-const PROPOSAL_RESOLUTION_MARKER_PREFIX = "<!-- qmux-proposal-resolution:v1 ";
+const PROPOSAL_MARKER_PREFIX = "<!-- session-proposal:v1 ";
+const PROPOSAL_RESOLUTION_MARKER_PREFIX = "<!-- session-proposal-resolution:v1 ";
 export const MAX_RESEARCH_PROPOSAL_PROMPT_CHARACTERS = 10_000;
 export const MAX_RESEARCH_PROPOSAL_ANSWER_CHARACTERS = 40_000;
 export const MAX_RESEARCH_PROPOSAL_QUOTE_CHARACTERS = 2_000;

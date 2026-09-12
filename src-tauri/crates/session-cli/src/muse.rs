@@ -45,7 +45,7 @@ pub fn notify(event: String, bindings_dir: Option<String>) -> Result<(), String>
         return Ok(());
     };
     let Some(binding) = resolve_binding(&dir, &payload) else {
-        // Not a qmux-launched Muse session (or its pane is gone). Say nothing:
+        // Not a session-launched Muse session (or its pane is gone). Say nothing:
         // Muse surfaces hook stderr in the session log, and a standalone run
         // must not be littered with Session diagnostics.
         return Ok(());
@@ -141,7 +141,7 @@ fn default_bindings_dir() -> Option<PathBuf> {
     let data_home = env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))?;
-    Some(data_home.join("qmux").join("muse").join("bindings"))
+    Some(data_home.join("session").join("muse").join("bindings"))
 }
 
 fn read_bindings(dir: &Path) -> Vec<PaneBinding> {
@@ -207,7 +207,7 @@ mod tests {
     }
 
     fn write_bindings(name: &str, documents: &[Value]) -> PathBuf {
-        let home = env::temp_dir().join(format!("qmux-muse-cli-{name}-{}", std::process::id()));
+        let home = env::temp_dir().join(format!("session-muse-cli-{name}-{}", std::process::id()));
         let dir = home.join("bindings");
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(&dir).unwrap();

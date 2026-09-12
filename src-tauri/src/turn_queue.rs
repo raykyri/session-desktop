@@ -32,7 +32,7 @@ pub enum AgentDebugInputKind {
     TextAndReturn,
 }
 
-/// qMux sends leading-`!` text through the agent TUI, but the TUI handles it as a
+/// Session sends leading-`!` text through the agent TUI, but the TUI handles it as a
 /// shell escape rather than an agent turn. Those commands may not emit a normal
 /// Stop/idle hook after they finish, so they must not enter the running lifecycle.
 pub(crate) fn is_shell_escape_turn(text: &str) -> bool {
@@ -56,7 +56,7 @@ enum QueuedComposerCommand<'a> {
     Fork { prompt: &'a str, use_worktree: bool },
 }
 
-/// Recognizes qMux composer commands only at byte zero, with the same exact-token
+/// Recognizes Session composer commands only at byte zero, with the same exact-token
 /// and space/tab separator rules as the frontend parser. Delaying this until a
 /// queued turn is claimed means edits, reorders, moves, and restored queues all
 /// dispatch from the text the user can actually see.
@@ -1423,7 +1423,7 @@ fn deliver_queued_turn_to_new_pane(
     }
 }
 
-/// Dispatches a qMux slash command parsed from the front of a plain queued turn.
+/// Dispatches a Session slash command parsed from the front of a plain queued turn.
 /// The stored text keeps the command visible in the queue; only the launch prompt
 /// has its command prefix removed.
 fn deliver_queued_composer_command(
@@ -1471,10 +1471,10 @@ struct TurnSendError {
     text_delivered: bool,
 }
 
-/// Encode a qMux-authored Grok turn as ordinary terminal input rather than a
+/// Encode a Session-authored Grok turn as ordinary terminal input rather than a
 /// bracketed paste. Grok treats every bracketed-paste event as an instruction to
 /// inspect the host clipboard for attachments; a sidebar send could therefore
-/// append an unrelated clipboard image to the text qMux supplied. Alt+Enter is
+/// append an unrelated clipboard image to the text Session supplied. Alt+Enter is
 /// Grok's documented, terminal-portable newline chord, so it preserves multiline
 /// drafts without generating a paste event.
 ///
@@ -1932,7 +1932,7 @@ mod tests {
             .map(|duration| duration.as_nanos())
             .unwrap_or_default();
         let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("qmux-turn-queue-{nanos}-{seq}"));
+        let dir = std::env::temp_dir().join(format!("session-turn-queue-{nanos}-{seq}"));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -1941,7 +1941,7 @@ mod tests {
         AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root: temp_workspace(),
-            socket_path: PathBuf::from("/tmp/qmux-test.sock"),
+            socket_path: PathBuf::from("/tmp/session-test.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {

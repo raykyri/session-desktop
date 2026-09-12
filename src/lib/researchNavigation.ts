@@ -42,7 +42,7 @@ export interface SavedResearchNavigation {
   followupDraft?: SavedResearchFollowupDraft;
 }
 
-const RESEARCH_NAVIGATION_KEY = "qmux.research-navigation.v1";
+const RESEARCH_NAVIGATION_KEY = "session.research-navigation.v1";
 export const RESEARCH_SCROLL_POSITION_TTL_MS = 15 * 60 * 1000;
 
 let store: Record<string, SavedResearchNavigation> | null = null;

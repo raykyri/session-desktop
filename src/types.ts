@@ -73,7 +73,7 @@ export interface PaneInfo {
    * root, branch), resolved by the backend at spawn and on each shell prompt.
    * Agent tabs leave this unset and use AgentInfo.activeWorkspace instead. */
   activeWorkspace?: ActiveWorkspace | null;
-  /** Durable coordinates of a qmux-owned tmux session on a remote host. */
+  /** Durable coordinates of a session-owned tmux session on a remote host. */
   remoteSession?: RemoteSessionIdentity | null;
   /** Health of the disposable SSH attachment to a durable remote session. */
   remoteConnection?: RemoteConnectionInfo | null;
@@ -201,7 +201,7 @@ export interface RemoteChoice {
   sessionCli?: string | null;
   workspaceRoot?: string | null;
   source: "config" | "preferences";
-  /** False for a multiplexer qmux cannot drive yet — list it, but don't offer
+  /** False for a multiplexer session cannot drive yet — list it, but don't offer
    * a launch that is going to fail. */
   usable: boolean;
 }
@@ -272,7 +272,7 @@ export interface AgentInfo {
   threadId?: string | null;
   branchId?: string | null;
   /** Adapter-owned leaf within the agent's native session tree. This is not
-   * qmux's thread-graph branch id and may change when the native agent forks. */
+   * session's thread-graph branch id and may change when the native agent forks. */
   nativeLeafId?: string | null;
   status:
     | "starting"
@@ -296,8 +296,8 @@ export interface ActiveWorkspace {
   gitRoot?: string | null;
   branch?: string | null;
   kind: "directory" | "gitCheckout" | "mainCheckout" | "linkedWorktree";
-  source: "qmux" | "claude" | "codex";
-  managedByQmux: boolean;
+  source: "session" | "claude" | "codex";
+  managedBySession: boolean;
 }
 
 export interface RepositoryWorktree {
@@ -717,13 +717,13 @@ export interface HomeTurnHistoryPage {
 
 export interface HandoffNode extends BaseThreadNode {
   kind: "handoff";
-  participant: { kind: "qmux"; actorId: "qmux"; label: "qmux" };
+  participant: { kind: "session"; actorId: "session"; label: "session" };
   handoff: HandoffPayload;
 }
 
 export interface BranchStartNode extends BaseThreadNode {
   kind: "branchStart";
-  participant: { kind: "qmux"; actorId: "qmux"; label: "qmux" };
+  participant: { kind: "session"; actorId: "session"; label: "session" };
   branchStart: {
     parentBranchId?: string | null;
     baseTurnId?: string | null;
@@ -732,7 +732,7 @@ export interface BranchStartNode extends BaseThreadNode {
 }
 
 export interface ThreadParticipant {
-  kind: "user" | "assistant" | "qmux";
+  kind: "user" | "assistant" | "session";
   actorId: string;
   adapter?: string | null;
   agentId?: string | null;
@@ -775,8 +775,8 @@ export interface TranscriptOption {
   boundToOtherAgent: boolean;
 }
 
-// Where a saved prompt lives: "global" is ~/.qmux/prompts/ (visible from every
-// workspace), "project" is <workspaceRoot>/.qmux/prompts/ (this workspace only).
+// Where a saved prompt lives: "global" is ~/.session/prompts/ (visible from every
+// workspace), "project" is <workspaceRoot>/.session/prompts/ (this workspace only).
 export type PromptScope = "global" | "project";
 
 // A reusable composer message from the prompt library. Backed by a markdown file
