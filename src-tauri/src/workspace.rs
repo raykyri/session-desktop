@@ -189,7 +189,7 @@ pub struct AgentInfo {
     /// Tool-approval policy the session was launched with, persisted like
     /// `effort` so a respawn does not silently fall back to the CLI's default —
     /// which would be a quieter, more permissive session than the user chose.
-    /// Muse and Devin set this today. Absent when the adapter default applies.
+    /// Absent when the adapter default applies.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub approval_mode: Option<String>,
     pub parent_id: Option<String>,
@@ -1227,7 +1227,7 @@ fn prepare_agent_workspace_locked(
 /// Restores the pane-to-agent binding when an authenticated SessionStart is the
 /// first lifecycle signal Session can observe for a shell-launched agent.
 ///
-/// Normally Session's injected `codex` / `claude` / `opencode` / `grok` shell
+/// Normally Session's injected `codex` / `claude` / `grok` shell
 /// function calls `agent.prepare_shell_launch` before exec. That creates and
 /// attaches the agent early enough for the right pane to exist before a fast
 /// SessionStart hook. If that preparation record is later lost or detached while
@@ -2983,8 +2983,7 @@ fn now_millis() -> u128 {
 mod tests {
     use super::*;
     use crate::config::{
-        AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
+        AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig, SessionConfig,
     };
     use std::process::Command;
 
@@ -3248,31 +3247,19 @@ mod tests {
             workspace_root,
             socket_path,
             adapters: AdapterConfigs {
-                pi: Default::default(),
                 claude: ClaudeAdapterConfig {
                     binary: Some("claude".to_string()),
                 },
                 codex: CodexAdapterConfig {
                     binary: Some("codex".to_string()),
                 },
-                opencode: OpencodeAdapterConfig {
-                    binary: Some("opencode".to_string()),
-                },
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                muse: MuseAdapterConfig {
-                    binary: Some("muse".to_string()),
-                },
-                cursor: Default::default(),
-                devin: Default::default(),
                 antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: std::path::PathBuf::new(),
-            opencode_plugin_dir: std::path::PathBuf::new(),
-            pi_extension_dir: std::path::PathBuf::new(),
-            cursor_plugin_dir: std::path::PathBuf::new(),
         })
     }
 
@@ -5340,7 +5327,6 @@ mod tests {
         assert!(adapter_interrupts_on_lone_escape("claude"));
         assert!(!adapter_interrupts_on_lone_escape("codex"));
         assert!(!adapter_interrupts_on_lone_escape("grok"));
-        assert!(!adapter_interrupts_on_lone_escape("opencode"));
     }
 
     #[test]

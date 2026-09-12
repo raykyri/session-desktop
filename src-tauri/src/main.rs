@@ -72,8 +72,8 @@ use show_hide_shortcut::{
 };
 use sleep::SleepGuard;
 use state::{
-    AgentDeliveryDebugInfo, AppState, ArtifactInfo, PaneInfo, PaneLayoutEntry, PaneSplitInfo,
-    QueuedTurn, RecentSessionInfo, ShellAgentJobInfo,
+    AppState, ArtifactInfo, PaneInfo, PaneLayoutEntry, PaneSplitInfo, QueuedTurn,
+    RecentSessionInfo, ShellAgentJobInfo,
 };
 use tauri::{Manager, Url};
 use transcript::{
@@ -81,14 +81,13 @@ use transcript::{
     set_agent_transcript as repoint_agent_transcript,
 };
 use turn_queue::{
-    AgentDebugInputKind, AssignGlobalDraftRequest, AssignGlobalDraftResult,
-    MoveQueuedAgentTurnRequest, MoveQueuedAgentTurnResult, QueueDeliveryAgentTurnRequest,
-    QueueWaitAgentTurnRequest, RemoveQueuedAgentTurnRequest, RemoveQueuedAgentTurnResult,
-    ReorderQueuedAgentTurnRequest, ReorderQueuedAgentTurnResult, SendNextQueuedAgentTurnResult,
-    SubmitAgentTurnRequest, SubmitAgentTurnResult, debug_agent_input, move_queued_agent_turn,
-    queue_delivery_agent_turn, queue_wait_agent_turn, remove_queued_agent_turn,
-    reorder_queued_agent_turn, send_next_queued_agent_turn, set_agent_typing, submit_agent_turn,
-    unpause_agent,
+    AssignGlobalDraftRequest, AssignGlobalDraftResult, MoveQueuedAgentTurnRequest,
+    MoveQueuedAgentTurnResult, QueueDeliveryAgentTurnRequest, QueueWaitAgentTurnRequest,
+    RemoveQueuedAgentTurnRequest, RemoveQueuedAgentTurnResult, ReorderQueuedAgentTurnRequest,
+    ReorderQueuedAgentTurnResult, SendNextQueuedAgentTurnResult, SubmitAgentTurnRequest,
+    SubmitAgentTurnResult, move_queued_agent_turn, queue_delivery_agent_turn,
+    queue_wait_agent_turn, remove_queued_agent_turn, reorder_queued_agent_turn,
+    send_next_queued_agent_turn, set_agent_typing, submit_agent_turn, unpause_agent,
 };
 use workspace::{
     AgentInfo, AgentStatus, CreateGroupRequest, GroupInfo, LaunchOrigin, RepositoryInventory,
@@ -3247,23 +3246,6 @@ fn agent_send_next_queued_turn(
 }
 
 #[tauri::command(async)]
-fn agent_debug_input(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-    kind: AgentDebugInputKind,
-) -> Result<(), String> {
-    debug_agent_input(&state, &agent_id, kind)
-}
-
-#[tauri::command]
-fn agent_delivery_debug(
-    state: tauri::State<'_, AppState>,
-    agent_id: String,
-) -> Result<AgentDeliveryDebugInfo, String> {
-    state.agent_delivery_debug(&agent_id)
-}
-
-#[tauri::command(async)]
 fn agent_set_queued_turn_pause(
     state: tauri::State<'_, AppState>,
     agent_id: String,
@@ -4072,12 +4054,6 @@ fn main() {
             native_support_set_browser_background,
             completion_sound_play,
             completion_sound_set,
-            user_notifications::notification_permission_status,
-            user_notifications::notification_request_permission,
-            user_notifications::notification_log_get,
-            user_notifications::notification_log_mark_read,
-            user_notifications::notification_log_mark_all_read,
-            user_notifications::notification_log_clear,
             agent_submit_turn,
             agent_queue_wait_turn,
             agent_queue_delivery_turn,
@@ -4090,8 +4066,6 @@ fn main() {
             delete_global_draft,
             assign_global_draft,
             agent_send_next_queued_turn,
-            agent_debug_input,
-            agent_delivery_debug,
             agent_set_queued_turn_pause,
             agent_unpause,
             agent_set_typing,

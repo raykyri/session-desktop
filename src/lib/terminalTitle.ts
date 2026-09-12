@@ -1,22 +1,13 @@
-import { OPENCODE_ADAPTER_ID } from "../adapters/opencode";
-
 export const MAX_TERMINAL_TITLE_CHARS = 160;
 
 /** Normalize an OSC title while removing known CLI branding. */
-export function sanitizeTerminalTitle(
-  rawTitle: string,
-  adapterId?: string | null,
-): string | null {
+export function sanitizeTerminalTitle(rawTitle: string): string | null {
   let title = rawTitle
     .replace(/[\u0000-\u001f\u007f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   if (!title) {
     return null;
-  }
-
-  if (adapterId === OPENCODE_ADAPTER_ID) {
-    title = title.replace(/^OC \|\s*/, "").trimStart();
   }
 
   // Grok's CLI brands OSC 0/2 titles with a trailing " - grok". Keep this

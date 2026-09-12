@@ -24,14 +24,6 @@ pub enum SubmitAgentTurnMode {
     Steer,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum AgentDebugInputKind {
-    TextOnly,
-    ReturnOnly,
-    TextAndReturn,
-}
-
 /// Session sends leading-`!` text through the agent TUI, but the TUI handles it as a
 /// shell escape rather than an agent turn. Those commands may not emit a normal
 /// Stop/idle hook after they finish, so they must not enter the running lifecycle.
@@ -1544,42 +1536,6 @@ fn turn_write_options(agent: &AgentInfo, pane_id: String, turn: &QueuedTurn) -> 
     }
 }
 
-fn debug_input_write_options(
-    agent: &AgentInfo,
-    pane_id: String,
-    kind: AgentDebugInputKind,
-) -> PaneWriteOptions {
-    let mut options = turn_write_options(agent, pane_id, &QueuedTurn::new(".".to_string()));
-    match kind {
-        AgentDebugInputKind::TextOnly => options.submit = false,
-        AgentDebugInputKind::ReturnOnly => {
-            options.data.clear();
-            options.paste = false;
-        }
-        AgentDebugInputKind::TextAndReturn => {}
-    }
-    options
-}
-
-/// Sends one diagnostic payload through the exact transport options used by a
-/// normal queued turn for this adapter. This deliberately bypasses status,
-/// outstanding-send, and recovery bookkeeping: the Debug panel uses it to isolate
-/// the payload and Return legs themselves from the higher-level turn pipeline.
-pub fn debug_agent_input(
-    state: &AppState,
-    agent_id: &str,
-    kind: AgentDebugInputKind,
-) -> Result<(), String> {
-    let agent = state
-        .agent(agent_id)?
-        .ok_or_else(|| format!("Agent {agent_id} was not found"))?;
-    let pane_id = agent
-        .pane_id
-        .clone()
-        .ok_or_else(|| format!("Agent {agent_id} does not have an attached pane"))?;
-    write_pane(state, debug_input_write_options(&agent, pane_id, kind))
-}
-
 /// Writes one turn into the agent's own pane: reserve prompt-correlation, paste
 /// and submit, promote the status, then arm the submit-confirmation watch. Does
 /// not requeue on failure — the caller owns the turn and decides (a queue drain
@@ -1886,8 +1842,7 @@ mod tests {
     use super::*;
     use crate::adapters::ComposerPolicy;
     use crate::config::{
-        AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
+        AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig, SessionConfig,
     };
     use crate::state::{PaneBacklog, PaneInfo, PaneKind, PaneRuntime, PaneStatus};
     use crate::workspace::{detach_pane_agent, mark_agent_failed};
@@ -1943,31 +1898,19 @@ mod tests {
             workspace_root: temp_workspace(),
             socket_path: PathBuf::from("/tmp/session-test.sock"),
             adapters: AdapterConfigs {
-                pi: Default::default(),
                 claude: ClaudeAdapterConfig {
                     binary: Some("claude".to_string()),
                 },
                 codex: CodexAdapterConfig {
                     binary: Some("codex".to_string()),
                 },
-                opencode: OpencodeAdapterConfig {
-                    binary: Some("opencode".to_string()),
-                },
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                muse: MuseAdapterConfig {
-                    binary: Some("muse".to_string()),
-                },
-                cursor: Default::default(),
-                devin: Default::default(),
                 antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: std::path::PathBuf::new(),
-            opencode_plugin_dir: std::path::PathBuf::new(),
-            pi_extension_dir: std::path::PathBuf::new(),
-            cursor_plugin_dir: std::path::PathBuf::new(),
         })
     }
 
@@ -2429,34 +2372,6 @@ mod tests {
         assert_eq!(options.data, "hello\x1b\rworld    indented");
         assert!(!options.paste);
         assert!(options.submit);
-    }
-
-    #[test]
-    fn debug_input_uses_the_queued_transport_with_independent_submit_legs() {
-        let agent = sample_agent(AgentStatus::Done);
-        let text =
-            debug_input_write_options(&agent, "pane-1".to_string(), AgentDebugInputKind::TextOnly);
-        assert_eq!(text.data, ".");
-        assert!(text.paste);
-        assert!(!text.submit);
-
-        let submit = debug_input_write_options(
-            &agent,
-            "pane-1".to_string(),
-            AgentDebugInputKind::ReturnOnly,
-        );
-        assert!(submit.data.is_empty());
-        assert!(!submit.paste);
-        assert!(submit.submit);
-
-        let combined = debug_input_write_options(
-            &agent,
-            "pane-1".to_string(),
-            AgentDebugInputKind::TextAndReturn,
-        );
-        assert_eq!(combined.data, ".");
-        assert!(combined.paste);
-        assert!(combined.submit);
     }
 
     #[test]
@@ -3016,7 +2931,7 @@ mod tests {
     fn queue_delivery_new_session_queues_behind_a_busy_agent_for_any_adapter() {
         let state = test_state();
         let mut agent = sample_agent(AgentStatus::Running);
-        agent.adapter = "opencode".to_string();
+        agent.adapter = "antigravity".to_string();
         state.insert_agent(agent).unwrap();
 
         let result = queue_delivery_agent_turn(

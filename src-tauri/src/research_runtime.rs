@@ -1459,8 +1459,7 @@ impl TurnMapper {
 mod tests {
     use super::*;
     use crate::config::{
-        AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
+        AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig, SessionConfig,
     };
     use crate::research::{CreateResearchTreeRequest, ResearchNodeStatus, ResearchRuntime};
     use crate::workspace::{GroupInfo, WorkspaceScope};
@@ -1752,31 +1751,19 @@ time.sleep(2)
             workspace_root,
             socket_path: PathBuf::from("/tmp/session-research-sdk-test.sock"),
             adapters: AdapterConfigs {
-                pi: Default::default(),
                 claude: ClaudeAdapterConfig {
                     binary: Some(claude.display().to_string()),
                 },
                 codex: CodexAdapterConfig {
                     binary: Some(codex.display().to_string()),
                 },
-                opencode: OpencodeAdapterConfig {
-                    binary: Some("opencode".to_string()),
-                },
                 grok: GrokAdapterConfig {
                     binary: Some(grok.display().to_string()),
                 },
-                muse: MuseAdapterConfig {
-                    binary: Some("muse".to_string()),
-                },
-                cursor: Default::default(),
-                devin: Default::default(),
                 antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: PathBuf::new(),
-            opencode_plugin_dir: PathBuf::new(),
-            pi_extension_dir: PathBuf::new(),
-            cursor_plugin_dir: PathBuf::new(),
         }
     }
 

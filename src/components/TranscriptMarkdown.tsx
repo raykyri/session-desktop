@@ -23,7 +23,6 @@ import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { placePanePopover, turnPaneRectFrom } from "../lib/appHelpers";
 import { writeClipboardText } from "../lib/clipboard";
-import { rewriteDevinFileRefs } from "../lib/devinFileRefs";
 import {
   inlineCodeFilePath,
   loopbackHtmlUrl,
@@ -799,7 +798,7 @@ export default memo(function TranscriptMarkdown({
   artifactLinks = false,
 }: TranscriptMarkdownProps) {
   const math = useSyncExternalStore(subscribeToMathPlugins, readMathPlugins, readMathPlugins);
-  const source = rewriteDevinFileRefs(text);
+  const source = text;
   if (oversizedContent && source.length > oversizedContent.maxCharacters) {
     const displayLimit = oversizedContent.maxDisplayCharacters;
     const shown =

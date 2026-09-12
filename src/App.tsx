@@ -453,9 +453,6 @@ import {
   browserOpenLocalPath,
   paneActivity,
   playCompletionSound,
-  getNotificationPermission,
-  requestNotificationPermission,
-  type NotificationPermissionInfo,
   pickGroupDirectory,
   placePaneAfter,
   removeGroup,
@@ -1424,7 +1421,7 @@ function MainApp() {
   const activeBrowserOwnerIdRef = useRef<string | null>(null);
   const toggleActiveBrowserOverlayRef = useRef<() => void>(() => {});
   const closeActiveBrowserOverlayRef = useRef<() => void>(() => {});
-  const browserEscapeDispatcherRef = useRef<() => "exclusive" | "theme" | null>(
+  const browserEscapeDispatcherRef = useRef<() => "exclusive" | null>(
     () => null,
   );
   // Debounced "user is typing" hold per agent: while active the backend won't
@@ -1937,9 +1934,7 @@ function MainApp() {
     () => lastUserInputSeqRef.current > lastWindowFocusSeqRef.current,
     [],
   );
-  const [settingsTab, setSettingsTab] = useState<
-    "basic" | "agents" | "remotes" | "theme" | "mouseCursor"
-  >("basic");
+  const [settingsTab, setSettingsTab] = useState<"basic" | "agents" | "remotes">("basic");
   const [expandedSettingsAgentIds, setExpandedSettingsAgentIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -2117,25 +2112,6 @@ function MainApp() {
       }
     },
   });
-  const [notificationPermission, setNotificationPermission] =
-    useState<NotificationPermissionInfo | null>(null);
-  const [notificationPermissionBusy, setNotificationPermissionBusy] = useState(false);
-  useEffect(() => {
-    if (!settingsOpen) return;
-    let disposed = false;
-    void getNotificationPermission()
-      .then((permission) => {
-        if (!disposed) setNotificationPermission(permission);
-      })
-      .catch(() => {
-        if (!disposed) {
-          setNotificationPermission({ supported: false, status: "Unavailable" });
-        }
-      });
-    return () => {
-      disposed = true;
-    };
-  }, [settingsOpen]);
   const [folderPickerStatus, setFolderPickerStatus] = useState<string | null>(null);
   const [worktreeCreateDialog, setWorktreeCreateDialog] =
     useState<WorktreeCreateDialogState | null>(null);
@@ -3128,7 +3104,7 @@ function MainApp() {
       ? terminalTitleByPane[pane.id]
       : pane.lastOscTitle;
     const normalizedTerminalTitle = terminalTitle
-      ? sanitizeTerminalTitle(terminalTitle, agent?.adapter)
+      ? sanitizeTerminalTitle(terminalTitle)
       : null;
     return normalizedTerminalTitle && paneUsesDefaultTitle(pane, agent)
       ? normalizedTerminalTitle
@@ -5623,14 +5599,8 @@ function MainApp() {
     : "";
   const contextMenuTerminalTitle = contextMenuPane
     ? Object.prototype.hasOwnProperty.call(terminalTitleByPane, contextMenuPane.id)
-      ? sanitizeTerminalTitle(
-          terminalTitleByPane[contextMenuPane.id] ?? "",
-          contextMenuAgent?.adapter,
-        )
-      : sanitizeTerminalTitle(
-          contextMenuPane.lastOscTitle ?? "",
-          contextMenuAgent?.adapter,
-        )
+      ? sanitizeTerminalTitle(terminalTitleByPane[contextMenuPane.id] ?? "")
+      : sanitizeTerminalTitle(contextMenuPane.lastOscTitle ?? "")
     : null;
   const groupMenuGroup = groupMenu ? groups.find((group) => group.id === groupMenu.groupId) : null;
   const titleGenerationTestVisible = settings.tabTitleProvider === "openRouter";
@@ -7940,20 +7910,6 @@ function MainApp() {
     }
   }, []);
 
-  const enableNativeNotifications = useCallback(async () => {
-    setNotificationPermissionBusy(true);
-    try {
-      setNotificationPermission(await requestNotificationPermission());
-    } catch (err) {
-      showAppToast(
-        `Couldn't enable native notifications: ${unknownErrorMessage(err)}`,
-        "warning",
-      );
-    } finally {
-      setNotificationPermissionBusy(false);
-    }
-  }, []);
-
   useSessionEvents({
     appendHookEvent,
     setPanes: setPanesPreservingRecoveredDismissals,
@@ -7999,7 +7955,6 @@ function MainApp() {
     },
     onResearchChanged: handleResearchEvent,
     onUserNotificationRequested: handleUserNotificationRequested,
-    onNotificationOpenPane: handleNotificationOpenPane,
   });
 
   async function addShellPane() {
@@ -9566,7 +9521,7 @@ function MainApp() {
   // browser is visible: the outer app webview, the child human-browser
   // WKWebView, or a native terminal whose ownership release is still crossing
   // the bridge. The native monitor funnels all three through this live
-  // dispatcher. The DOM listener below uses it too so lightbox/theme/browser
+  // dispatcher. The DOM listener below uses it too so lightbox/browser
   // priority stays single-sourced.
   browserEscapeDispatcherRef.current = () => {
     if (getImageLightbox() !== null) {
@@ -9986,13 +9941,11 @@ function MainApp() {
   // controls when it closes. Keep settingsTab so reopening returns to the same
   // section.
   useEffect(() => {
-    if (!settingsOpen || settingsTab !== "theme") {
-    }
     if (!settingsOpen) {
       setOpenRouterKeyVisible(false);
       setShowHideShortcutCapturing(false);
     }
-  }, [settingsOpen, settingsTab]);
+  }, [settingsOpen]);
 
   // Focus and select the name when the rename dialog opens, so the user can type
   // a new name straight away.
@@ -11298,15 +11251,6 @@ function MainApp() {
               >
                 Agents
               </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={settingsTab === "theme"}
-                className={`control-button${settingsTab === "theme" ? " is-active" : ""}`}
-                onClick={() => setSettingsTab("theme")}
-              >
-                Display
-              </button>
             </div>
 
             {settingsTab === "agents" ? (
@@ -11469,10 +11413,6 @@ function MainApp() {
                     );
                   })}
                 </div>
-                <p className="settings-hint">
-                  Custom executable paths can be set under <code>adapters.*.binary</code> in
-                  <code> session.config.json</code>.
-                </p>
               </div>
             ) : settingsTab === "remotes" ? (
               <div className="settings-content settings-remotes" role="tabpanel">
@@ -11686,10 +11626,180 @@ function MainApp() {
                   ) : null}
                 </div>
               </div>
-            ) : settingsTab === "basic" || settingsTab === "theme" ? (
+            ) : settingsTab === "basic" ? (
               <div className="settings-content" role="tabpanel">
-            {settingsTab === "theme" ? (
-              <>
+            <label className="settings-row settings-toggle">
+              <span className="settings-label">Require ⌘↵ to send</span>
+              <input
+                type="checkbox"
+                className="settings-checkbox"
+                checked={settings.requireCmdEnterToSend}
+                onChange={(event) => {
+                  const requireCmdEnterToSend = event.currentTarget.checked;
+                  setSettings((current) => ({ ...current, requireCmdEnterToSend }));
+                }}
+              />
+            </label>
+
+            <CompletionSoundSetting
+              value={settings.completionSound}
+              onChange={(completionSound) => {
+                setSettings((current) => ({ ...current, completionSound }));
+              }}
+              onPreview={(sound) => void testCompletionSound(sound)}
+            />
+
+            <div className="settings-row settings-research-instructions-row">
+              <div className="settings-label-stack">
+                <label htmlFor="settings-research-instructions" className="settings-label">
+                  Research instructions
+                </label>
+                <p className="settings-hint settings-hint-weak">
+                  Sent with every research launch
+                </p>
+              </div>
+              <textarea
+                id="settings-research-instructions"
+                className="form-field settings-input settings-textarea"
+                rows={1}
+                placeholder={DEFAULT_RESEARCH_LAUNCH_INSTRUCTION}
+                value={settings.researchLaunchInstruction}
+                onChange={(event) => {
+                  const researchLaunchInstruction = clampResearchLaunchInstruction(
+                    event.currentTarget.value,
+                  );
+                  setSettings((current) => ({ ...current, researchLaunchInstruction }));
+                }}
+              />
+            </div>
+
+            <div className="settings-row settings-shortcut-row">
+              <div className="settings-label">
+                <label htmlFor="settings-show-hide-shortcut">Show/hide app shortcut</label>
+                {showHideShortcutValue ? (
+                  <>
+                    {" "}
+                    <button
+                      type="button"
+                      className="settings-link-button settings-inline-link-button"
+                      disabled={showHideShortcutSaving}
+                      onClick={clearShowHideShortcut}
+                    >
+                      Clear
+                    </button>
+                  </>
+                ) : null}
+              </div>
+              <input
+                id="settings-show-hide-shortcut"
+                className="form-field settings-input settings-shortcut-input"
+                data-shortcut-capture="show-hide"
+                value={showHideShortcutValue}
+                placeholder="e.g. Option+Space"
+                readOnly
+                aria-invalid={showHideShortcutMessage ? true : undefined}
+                aria-describedby={
+                  showHideShortcutMessage ? "settings-show-hide-shortcut-message" : undefined
+                }
+                onPointerDown={() => setShowHideShortcutCapturing(true)}
+                onFocus={() => setShowHideShortcutCapturing(true)}
+                onBlur={() => setShowHideShortcutCapturing(false)}
+                onKeyDown={captureShowHideShortcut}
+              />
+            </div>
+            {showHideShortcutMessage || showHideShortcutSaving ? (
+              <p
+                id="settings-show-hide-shortcut-message"
+                className={`settings-hint settings-shortcut-message${
+                  showHideShortcutMessage ? " is-error" : ""
+                }`}
+              >
+                {showHideShortcutSaving ? "Saving shortcut..." : showHideShortcutMessage}
+              </p>
+            ) : null}
+            {showHideShortcutConflictLabel ? (
+              <p className="settings-hint settings-shortcut-message">
+                {`Session also uses this shortcut to ${showHideShortcutConflictLabel}; while registered system-wide, it will show/hide the app instead.`}
+              </p>
+            ) : null}
+
+            <label className="settings-row settings-toggle">
+              <span className="settings-label">Keep awake while agents run (&gt;10% battery)</span>
+              <input
+                type="checkbox"
+                className="settings-checkbox"
+                checked={settings.preventSleep}
+                onChange={(event) => {
+                  // Capture before the updater, which runs after currentTarget
+                  // has been nulled out.
+                  const preventSleep = event.currentTarget.checked;
+                  setSettings((current) => ({ ...current, preventSleep }));
+                }}
+              />
+            </label>
+
+            <label className="settings-row settings-toggle">
+              <span className="settings-label">Show menu bar icon</span>
+              <input
+                type="checkbox"
+                className="settings-checkbox"
+                checked={settings.showMenuBarIcon}
+                onChange={(event) => {
+                  const showMenuBarIcon = event.currentTarget.checked;
+                  setSettings((current) => ({ ...current, showMenuBarIcon }));
+                }}
+              />
+            </label>
+
+            <label className="settings-row settings-toggle">
+              <span className="settings-label">Use login shell</span>
+              <input
+                type="checkbox"
+                className="settings-checkbox"
+                checked={settings.useLoginShell}
+                onChange={(event) => {
+                  const useLoginShell = event.currentTarget.checked;
+                  setSettings((current) => ({ ...current, useLoginShell }));
+                }}
+              />
+            </label>
+
+            <label className="settings-row settings-toggle">
+              <span className="settings-label">Confirm multi-line paste</span>
+              <input
+                type="checkbox"
+                className="settings-checkbox"
+                checked={settings.confirmMultiLinePaste}
+                onChange={(event) => {
+                  const confirmMultiLinePaste = event.currentTarget.checked;
+                  setSettings((current) => ({ ...current, confirmMultiLinePaste }));
+                }}
+              />
+            </label>
+
+            <div className="settings-row">
+              <label htmlFor="settings-confirm-paste-over" className="settings-label">
+                Confirm paste over chars
+              </label>
+              <input
+                id="settings-confirm-paste-over"
+                className="form-field settings-input settings-number-input"
+                type="number"
+                min={CONFIRM_PASTE_OVER_CHARS_MIN}
+                max={CONFIRM_PASTE_OVER_CHARS_MAX}
+                step={1000}
+                value={settings.confirmPasteOverChars}
+                onChange={(event) => {
+                  const confirmPasteOverChars = clampConfirmPasteOverChars(
+                    Number(event.currentTarget.value),
+                  );
+                  setSettings((current) => ({ ...current, confirmPasteOverChars }));
+                }}
+              />
+            </div>
+
+            <div className="settings-divider" role="separator" />
+
             <div className="settings-row">
               <label htmlFor="settings-color-theme" className="settings-label">
                 Color theme
@@ -11887,233 +11997,6 @@ function MainApp() {
                 ) : null}
               </div>
             ) : null}
-
-            <div className="settings-divider" role="separator" />
-
-            <label className="settings-row settings-toggle">
-              <span className="settings-label">Show debug panel</span>
-              <input
-                type="checkbox"
-                className="settings-checkbox"
-                checked={settings.showDebugPanel}
-                onChange={(event) => {
-                  const showDebugPanel = event.currentTarget.checked;
-                  setSettings((current) => ({ ...current, showDebugPanel }));
-                }}
-              />
-            </label>
-              </>
-            ) : (
-              <>
-            <label className="settings-row settings-toggle">
-              <span className="settings-label">Require ⌘↵ to send</span>
-              <input
-                type="checkbox"
-                className="settings-checkbox"
-                checked={settings.requireCmdEnterToSend}
-                onChange={(event) => {
-                  const requireCmdEnterToSend = event.currentTarget.checked;
-                  setSettings((current) => ({ ...current, requireCmdEnterToSend }));
-                }}
-              />
-            </label>
-
-            <CompletionSoundSetting
-              value={settings.completionSound}
-              onChange={(completionSound) => {
-                setSettings((current) => ({ ...current, completionSound }));
-              }}
-              onPreview={(sound) => void testCompletionSound(sound)}
-            />
-
-            <div className="settings-row">
-              <div className="settings-label-stack">
-                <span className="settings-label">Native notifications</span>
-                <p className="settings-hint settings-hint-weak">
-                  Session can notify you when background research finishes.
-                </p>
-              </div>
-              {notificationPermission === null ? (
-                <span className="settings-hint">Checking…</span>
-              ) : notificationPermission.supported &&
-                (notificationPermission.status === "Authorized" ||
-                  notificationPermission.status === "Provisional" ||
-                  notificationPermission.status === "Ephemeral") ? (
-                <span className="settings-hint">Enabled</span>
-              ) : notificationPermission.supported &&
-                notificationPermission.status !== "Denied" ? (
-                <button
-                  type="button"
-                  className="control-button"
-                  disabled={notificationPermissionBusy}
-                  onClick={() => void enableNativeNotifications()}
-                >
-                  {notificationPermissionBusy ? "Enabling…" : "Enable"}
-                </button>
-              ) : (
-                <span className="settings-hint">
-                  {notificationPermission.status === "Denied"
-                    ? "Denied in System Settings"
-                    : "Unavailable"}
-                </span>
-              )}
-            </div>
-
-            <div className="settings-row settings-research-instructions-row">
-              <div className="settings-label-stack">
-                <label htmlFor="settings-research-instructions" className="settings-label">
-                  Research instructions
-                </label>
-                <p className="settings-hint settings-hint-weak">
-                  Sent with every research launch
-                </p>
-              </div>
-              <textarea
-                id="settings-research-instructions"
-                className="form-field settings-input settings-textarea"
-                rows={1}
-                placeholder={DEFAULT_RESEARCH_LAUNCH_INSTRUCTION}
-                value={settings.researchLaunchInstruction}
-                onChange={(event) => {
-                  const researchLaunchInstruction = clampResearchLaunchInstruction(
-                    event.currentTarget.value,
-                  );
-                  setSettings((current) => ({ ...current, researchLaunchInstruction }));
-                }}
-              />
-            </div>
-
-            <div className="settings-row settings-shortcut-row">
-              <div className="settings-label">
-                <label htmlFor="settings-show-hide-shortcut">Show/hide app shortcut</label>
-                {showHideShortcutValue ? (
-                  <>
-                    {" "}
-                    <button
-                      type="button"
-                      className="settings-link-button settings-inline-link-button"
-                      disabled={showHideShortcutSaving}
-                      onClick={clearShowHideShortcut}
-                    >
-                      Clear
-                    </button>
-                  </>
-                ) : null}
-              </div>
-              <input
-                id="settings-show-hide-shortcut"
-                className="form-field settings-input settings-shortcut-input"
-                data-shortcut-capture="show-hide"
-                value={showHideShortcutValue}
-                placeholder="e.g. Option+Space"
-                readOnly
-                aria-invalid={showHideShortcutMessage ? true : undefined}
-                aria-describedby={
-                  showHideShortcutMessage ? "settings-show-hide-shortcut-message" : undefined
-                }
-                onPointerDown={() => setShowHideShortcutCapturing(true)}
-                onFocus={() => setShowHideShortcutCapturing(true)}
-                onBlur={() => setShowHideShortcutCapturing(false)}
-                onKeyDown={captureShowHideShortcut}
-              />
-            </div>
-            {showHideShortcutMessage || showHideShortcutSaving ? (
-              <p
-                id="settings-show-hide-shortcut-message"
-                className={`settings-hint settings-shortcut-message${
-                  showHideShortcutMessage ? " is-error" : ""
-                }`}
-              >
-                {showHideShortcutSaving ? "Saving shortcut..." : showHideShortcutMessage}
-              </p>
-            ) : null}
-            {showHideShortcutConflictLabel ? (
-              <p className="settings-hint settings-shortcut-message">
-                {`Session also uses this shortcut to ${showHideShortcutConflictLabel}; while registered system-wide, it will show/hide the app instead.`}
-              </p>
-            ) : null}
-
-            <label className="settings-row settings-toggle">
-              <span className="settings-label">Keep awake while agents run (&gt;10% battery)</span>
-              <input
-                type="checkbox"
-                className="settings-checkbox"
-                checked={settings.preventSleep}
-                onChange={(event) => {
-                  // See the font select above: capture before the updater, which
-                  // runs after currentTarget has been nulled out.
-                  const preventSleep = event.currentTarget.checked;
-                  setSettings((current) => ({ ...current, preventSleep }));
-                }}
-              />
-            </label>
-
-            <label className="settings-row settings-toggle">
-              <span className="settings-label">Show menu bar icon</span>
-              <input
-                type="checkbox"
-                className="settings-checkbox"
-                checked={settings.showMenuBarIcon}
-                onChange={(event) => {
-                  const showMenuBarIcon = event.currentTarget.checked;
-                  setSettings((current) => ({ ...current, showMenuBarIcon }));
-                }}
-              />
-            </label>
-              </>
-            )}
-              </div>
-            ) : settingsTab === "mouseCursor" ? (
-              <div className="settings-content" role="tabpanel">
-                <label className="settings-row settings-toggle">
-                  <span className="settings-label">Use login shell</span>
-                  <input
-                    type="checkbox"
-                    className="settings-checkbox"
-                    checked={settings.useLoginShell}
-                    onChange={(event) => {
-                      const useLoginShell = event.currentTarget.checked;
-                      setSettings((current) => ({ ...current, useLoginShell }));
-                    }}
-                  />
-                </label>
-
-                <div className="settings-divider" role="separator" />
-
-                <label className="settings-row settings-toggle">
-                  <span className="settings-label">Confirm multi-line paste</span>
-                  <input
-                    type="checkbox"
-                    className="settings-checkbox"
-                    checked={settings.confirmMultiLinePaste}
-                    onChange={(event) => {
-                      const confirmMultiLinePaste = event.currentTarget.checked;
-                      setSettings((current) => ({ ...current, confirmMultiLinePaste }));
-                    }}
-                  />
-                </label>
-
-                <div className="settings-row">
-                  <label htmlFor="settings-confirm-paste-over" className="settings-label">
-                    Confirm paste over chars
-                  </label>
-                  <input
-                    id="settings-confirm-paste-over"
-                    className="form-field settings-input settings-number-input"
-                    type="number"
-                    min={CONFIRM_PASTE_OVER_CHARS_MIN}
-                    max={CONFIRM_PASTE_OVER_CHARS_MAX}
-                    step={1000}
-                    value={settings.confirmPasteOverChars}
-                    onChange={(event) => {
-                      const confirmPasteOverChars = clampConfirmPasteOverChars(
-                        Number(event.currentTarget.value),
-                      );
-                      setSettings((current) => ({ ...current, confirmPasteOverChars }));
-                    }}
-                  />
-                </div>
-
               </div>
             ) : null}
           </div>

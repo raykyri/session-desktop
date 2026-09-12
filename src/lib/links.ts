@@ -7,8 +7,8 @@
 export const SESSION_FILE_HREF_PREFIX = "session-file:";
 
 // Transcript renderers and Ghostty commonly include display-only suffixes in a
-// detected path: source positions (`/path/to/file.ts:36`, `:36:8`, or a Devin
-// snippet range `:36-40`) and the sentence-ending period after a filename.
+// detected path: source positions (`/path/to/file.ts:36` or `:36:8`) and the
+// sentence-ending period after a filename.
 // Neither belongs to the filesystem path. Apply this only inside local-path
 // parsing so URL ports and punctuation keep their original meaning.
 function withoutTrailingPathDecoration(path: string): string {

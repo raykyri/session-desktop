@@ -1584,10 +1584,7 @@ fn adapter_label(adapter: &str) -> &str {
     match adapter {
         "claude" => "Claude",
         "codex" => "Codex",
-        "opencode" => "OpenCode",
         "grok" => "Grok",
-        "muse" => "Muse",
-        "cursor" => "Cursor",
         "antigravity" => "Antigravity",
         _ => "Agent",
     }

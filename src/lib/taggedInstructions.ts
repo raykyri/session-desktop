@@ -55,10 +55,10 @@ export function taggedUserInstructionDetails(text: string): TaggedUserInstructio
   };
 }
 
-// Cursor Agent (and Grok) wrap the user's words in a `<user_query>` envelope
-// and may prefix a `<timestamp>` metadata chip. Those tags are not injected
-// instructions — leaving them in place makes the detector collapse the whole
-// turn into a `<timestamp> <user_query>` chip and never show the prompt.
+// Grok wraps the user's words in a `<user_query>` envelope and may prefix a
+// `<timestamp>` metadata chip. Those tags are not injected instructions —
+// leaving them in place makes the detector collapse the whole turn into a
+// `<timestamp> <user_query>` chip and never show the prompt.
 export function unwrapUserQueryEnvelope(text: string): string {
   if (!text.includes("<timestamp>") && !text.includes("<user_query>")) {
     return text;

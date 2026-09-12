@@ -816,47 +816,6 @@ pub struct AgentOutstandingSend {
     pub source: AgentSendSource,
 }
 
-/// Debug-only view of a turn's delivery state. `QueuedTurn::possibly_pasted` is
-/// intentionally absent from normal persistence/API serialization, but it is the
-/// key signal when a retry will submit a bare Return instead of pasting again.
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentDeliveryDebugTurn {
-    pub id: String,
-    pub text: String,
-    pub pause_after: bool,
-    pub wait_for: Option<QueuedTurnWait>,
-    pub delivery: Option<QueuedTurnDelivery>,
-    pub possibly_pasted: bool,
-}
-
-impl From<&QueuedTurn> for AgentDeliveryDebugTurn {
-    fn from(turn: &QueuedTurn) -> Self {
-        Self {
-            id: turn.id.clone(),
-            text: turn.text.clone(),
-            pause_after: turn.pause_after,
-            wait_for: turn.wait_for.clone(),
-            delivery: turn.delivery.clone(),
-            possibly_pasted: turn.possibly_pasted,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentDeliveryDebugInfo {
-    pub typing: bool,
-    pub draining: bool,
-    pub pending_pause: bool,
-    pub activity_revision: u64,
-    pub status_revision: u64,
-    pub queued_turns: Vec<AgentDeliveryDebugTurn>,
-    pub inflight: Option<AgentDeliveryDebugTurn>,
-    pub outstanding_sends: Vec<AgentOutstandingSend>,
-    pub submit_watch_send_ids: Vec<u64>,
-}
-
 /// A prompt queued application-wide before it has an owner — the home view's
 /// Drafts rail. Assigning one to an agent marks it consumed (kept for a while
 /// as history) rather than deleting it, so an assignment that queues work is
@@ -1198,21 +1157,7 @@ fn strip_grok_terminal_title_suffix(title: &str) -> &str {
     title
 }
 
-fn strip_opencode_terminal_title_prefix(title: &str) -> &str {
-    title
-        .strip_prefix("OC |")
-        .map(str::trim_start)
-        .unwrap_or(title)
-}
-
-fn sanitize_last_osc_title(raw_title: &str, adapter_id: Option<&str>) -> Option<String> {
-    // Leave room for OpenCode's prefix and separator so removing them does not
-    // shorten an otherwise valid 160-character title.
-    let input_limit = if adapter_id == Some("opencode") {
-        MAX_LAST_OSC_TITLE_CHARS + "OC | ".chars().count()
-    } else {
-        MAX_LAST_OSC_TITLE_CHARS
-    };
+fn sanitize_last_osc_title(raw_title: &str) -> Option<String> {
     let mut title = String::new();
     let mut chars = 0_usize;
     let mut pending_space = false;
@@ -1226,7 +1171,7 @@ fn sanitize_last_osc_title(raw_title: &str, adapter_id: Option<&str>) -> Option<
             continue;
         }
         if pending_space {
-            if chars >= input_limit {
+            if chars >= MAX_LAST_OSC_TITLE_CHARS {
                 truncated = true;
                 break;
             }
@@ -1234,21 +1179,12 @@ fn sanitize_last_osc_title(raw_title: &str, adapter_id: Option<&str>) -> Option<
             chars += 1;
             pending_space = false;
         }
-        if chars >= input_limit {
+        if chars >= MAX_LAST_OSC_TITLE_CHARS {
             truncated = true;
             break;
         }
         title.push(ch);
         chars += 1;
-    }
-
-    // OpenCode's branding is a prefix, so remove it before applying the length
-    // cap. Otherwise a long title would retain the prefix after truncation.
-    if adapter_id == Some("opencode") {
-        let stripped = strip_opencode_terminal_title_prefix(&title);
-        if stripped.len() != title.len() {
-            title = stripped.to_string();
-        }
     }
 
     if truncated {
@@ -4357,15 +4293,6 @@ impl AppState {
         Ok(RecentActivityPage { items, next_cursor })
     }
 
-    pub fn notification_log(&self) -> Result<crate::user_notifications::NotificationLog, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model.notification_log.clone())
-    }
-
     pub fn append_notification_log(
         &self,
         entry: crate::user_notifications::NotificationLogEntry,
@@ -4377,68 +4304,6 @@ impl AppState {
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
             crate::user_notifications::record_log_entry(&mut model.notification_log, entry);
-            model.notification_log.clone()
-        };
-        self.persist();
-        Ok(log)
-    }
-
-    pub fn mark_notification_read(
-        &self,
-        id: &str,
-    ) -> Result<crate::user_notifications::NotificationLog, String> {
-        let log = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            if let Some(entry) = model
-                .notification_log
-                .entries
-                .iter_mut()
-                .find(|entry| entry.id == id)
-            {
-                entry.read = true;
-            }
-            model.notification_log.clone()
-        };
-        self.persist();
-        Ok(log)
-    }
-
-    pub fn mark_all_notifications_read(
-        &self,
-    ) -> Result<crate::user_notifications::NotificationLog, String> {
-        let log = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            for entry in &mut model.notification_log.entries {
-                entry.read = true;
-            }
-            model.notification_log.clone()
-        };
-        self.persist();
-        Ok(log)
-    }
-
-    pub fn clear_notification(
-        &self,
-        id: &str,
-    ) -> Result<crate::user_notifications::NotificationLog, String> {
-        let log = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            model
-                .notification_log
-                .entries
-                .retain(|entry| entry.id != id);
             model.notification_log.clone()
         };
         self.persist();
@@ -10387,61 +10252,6 @@ impl AppState {
         Ok(model.agent_typing.contains(agent_id))
     }
 
-    /// Snapshot of the transient machinery between an agent queue and its PTY.
-    /// Exposed only to the opt-in in-app Debug panel; it does not mutate or clear
-    /// tracking, so observing a missed submit cannot change its recovery behavior.
-    pub fn agent_delivery_debug(&self, agent_id: &str) -> Result<AgentDeliveryDebugInfo, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        if !model.agents.contains_key(agent_id) {
-            return Err(format!("Agent {agent_id} was not found"));
-        }
-        let mut submit_watch_send_ids = model
-            .agent_submit_watch
-            .iter()
-            .filter_map(|(id, send_id)| (id == agent_id).then_some(*send_id))
-            .collect::<Vec<_>>();
-        submit_watch_send_ids.sort_unstable();
-        Ok(AgentDeliveryDebugInfo {
-            typing: model.agent_typing.contains(agent_id),
-            draining: model.agent_draining.contains(agent_id),
-            pending_pause: model.agent_pending_pause.contains(agent_id),
-            activity_revision: model
-                .agent_activity
-                .get(agent_id)
-                .copied()
-                .unwrap_or_default(),
-            status_revision: model
-                .agent_status_activity
-                .get(agent_id)
-                .copied()
-                .unwrap_or_default(),
-            queued_turns: model
-                .agent_turn_queues
-                .get(agent_id)
-                .into_iter()
-                .flatten()
-                .map(AgentDeliveryDebugTurn::from)
-                .collect(),
-            inflight: model
-                .agent_inflight
-                .get(agent_id)
-                .map(AgentDeliveryDebugTurn::from),
-            outstanding_sends: model
-                .agent_send_tracking
-                .get(agent_id)
-                .map(|tracking| tracking.outstanding_sends.iter().cloned().collect())
-                .unwrap_or_default(),
-            submit_watch_send_ids,
-        })
-    }
-
-    /// Stores the agent's composer draft and snapshots it to disk. A trimmed-empty
-    /// draft drops the entry so recovery never restores stray whitespace and the
-    /// map does not grow an entry per cleared composer.
     /// The current millisecond wall clock, matching SessionEvent timestamps.
     fn now_millis() -> u64 {
         SystemTime::now()
@@ -10597,6 +10407,9 @@ impl AppState {
         Ok(())
     }
 
+    /// Stores the agent's composer draft and snapshots it to disk. A trimmed-empty
+    /// draft drops the entry so recovery never restores stray whitespace and the
+    /// map does not grow an entry per cleared composer.
     pub fn set_agent_draft(&self, agent_id: &str, draft: String) -> Result<(), String> {
         {
             let mut model = self
@@ -11567,13 +11380,7 @@ impl AppState {
                 .model
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
-            let adapter_id = model
-                .panes
-                .get(pane_id)
-                .and_then(|pane| pane.info.agent_id.as_ref())
-                .and_then(|agent_id| model.agents.get(agent_id))
-                .map(|agent| agent.adapter.clone());
-            let title = sanitize_last_osc_title(raw_title, adapter_id.as_deref());
+            let title = sanitize_last_osc_title(raw_title);
             let Some(pane) = model.panes.get_mut(pane_id) else {
                 // Native title callbacks can arrive after pane teardown. Treat
                 // that as a harmless late delivery rather than surfacing an
@@ -12860,7 +12667,6 @@ mod tests {
     use super::*;
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig,
     };
     use crate::persistence::PersistedState;
     use crate::scrollback::{append_pane_scrollback, read_pane_scrollback};
@@ -12889,31 +12695,19 @@ mod tests {
             workspace_root,
             socket_path: PathBuf::from("/tmp/session-test.sock"),
             adapters: AdapterConfigs {
-                pi: Default::default(),
                 claude: ClaudeAdapterConfig {
                     binary: Some("claude".to_string()),
                 },
                 codex: CodexAdapterConfig {
                     binary: Some("codex".to_string()),
                 },
-                opencode: OpencodeAdapterConfig {
-                    binary: Some("opencode".to_string()),
-                },
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                muse: MuseAdapterConfig {
-                    binary: Some("muse".to_string()),
-                },
-                cursor: Default::default(),
-                devin: Default::default(),
                 antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: std::path::PathBuf::new(),
-            opencode_plugin_dir: std::path::PathBuf::new(),
-            pi_extension_dir: std::path::PathBuf::new(),
-            cursor_plugin_dir: std::path::PathBuf::new(),
         }
     }
 
@@ -18236,29 +18030,6 @@ mod tests {
     }
 
     #[test]
-    fn delivery_debug_snapshot_exposes_transient_queue_and_submit_state() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state.insert_agent(sample_agent("agent-1")).unwrap();
-        state
-            .enqueue_agent_turn("agent-1", "queued".to_string())
-            .unwrap();
-        state.set_agent_typing("agent-1", true).unwrap();
-        let send_id = state
-            .record_agent_send("agent-1", ".".to_string(), AgentSendSource::DirectSend)
-            .unwrap();
-        assert!(state.begin_agent_submit_watch("agent-1", send_id));
-
-        let snapshot = state.agent_delivery_debug("agent-1").unwrap();
-        assert!(snapshot.typing);
-        assert_eq!(snapshot.queued_turns.len(), 1);
-        assert_eq!(snapshot.queued_turns[0].text, "queued");
-        assert_eq!(snapshot.outstanding_sends.len(), 1);
-        assert_eq!(snapshot.outstanding_sends[0].id, send_id);
-        assert_eq!(snapshot.submit_watch_send_ids, vec![send_id]);
-    }
-
-    #[test]
     fn begin_direct_send_is_refused_while_a_drain_owns_the_agent() {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace.clone()));
@@ -20967,20 +20738,20 @@ mod tests {
     #[test]
     fn osc_title_sanitization_matches_the_frontend_contract() {
         assert_eq!(
-            sanitize_last_osc_title("  Build\u{1b}\n  42%  ", None).as_deref(),
+            sanitize_last_osc_title("  Build\u{1b}\n  42%  ").as_deref(),
             Some("Build 42%")
         );
-        assert_eq!(sanitize_last_osc_title(" \n\t\u{7f} ", None), None);
+        assert_eq!(sanitize_last_osc_title(" \n\t\u{7f} "), None);
         let truncated = format!("{}…", "x".repeat(MAX_LAST_OSC_TITLE_CHARS - 1));
         assert_eq!(
-            sanitize_last_osc_title(&"x".repeat(MAX_LAST_OSC_TITLE_CHARS + 20), None).as_deref(),
+            sanitize_last_osc_title(&"x".repeat(MAX_LAST_OSC_TITLE_CHARS + 20)).as_deref(),
             Some(truncated.as_str())
         );
         assert_eq!(
-            sanitize_last_osc_title(
-                &format!("{}   more", "x".repeat(MAX_LAST_OSC_TITLE_CHARS - 1)),
-                None
-            )
+            sanitize_last_osc_title(&format!(
+                "{}   more",
+                "x".repeat(MAX_LAST_OSC_TITLE_CHARS - 1)
+            ))
             .expect("non-empty title")
             .chars()
             .count(),
@@ -20991,95 +20762,27 @@ mod tests {
     #[test]
     fn osc_title_sanitization_strips_grok_branding_suffix() {
         assert_eq!(
-            sanitize_last_osc_title("session - grok", None).as_deref(),
+            sanitize_last_osc_title("session - grok").as_deref(),
             Some("session")
         );
         assert_eq!(
-            sanitize_last_osc_title("  Fix the build  - Grok  ", None).as_deref(),
+            sanitize_last_osc_title("  Fix the build  - Grok  ").as_deref(),
             Some("Fix the build")
         );
         assert_eq!(
-            sanitize_last_osc_title("src/App.tsx\t-\tGROK", None).as_deref(),
+            sanitize_last_osc_title("src/App.tsx\t-\tGROK").as_deref(),
             Some("src/App.tsx")
         );
         // A title that is only the branding suffix collapses to empty.
-        assert_eq!(
-            sanitize_last_osc_title("x - grok", None).as_deref(),
-            Some("x")
-        );
+        assert_eq!(sanitize_last_osc_title("x - grok").as_deref(), Some("x"));
         // Only a trailing suffix is stripped.
         assert_eq!(
-            sanitize_last_osc_title("grok - tools - grok", None).as_deref(),
+            sanitize_last_osc_title("grok - tools - grok").as_deref(),
             Some("grok - tools")
         );
         assert_eq!(
-            sanitize_last_osc_title("keep - grok around", None).as_deref(),
+            sanitize_last_osc_title("keep - grok around").as_deref(),
             Some("keep - grok around")
-        );
-    }
-
-    #[test]
-    fn osc_title_sanitization_strips_opencode_branding_only_for_opencode() {
-        assert_eq!(
-            sanitize_last_osc_title("OC | Fix the build", Some("opencode")).as_deref(),
-            Some("Fix the build")
-        );
-        assert_eq!(
-            sanitize_last_osc_title("OC |", Some("opencode")).as_deref(),
-            None
-        );
-        assert_eq!(
-            sanitize_last_osc_title("OC | Fix the build", Some("claude")).as_deref(),
-            Some("OC | Fix the build")
-        );
-        assert_eq!(
-            sanitize_last_osc_title(&format!("OC | {}", "x".repeat(200)), Some("opencode"))
-                .expect("non-empty title")
-                .chars()
-                .count(),
-            MAX_LAST_OSC_TITLE_CHARS
-        );
-        let exact_title = "x".repeat(MAX_LAST_OSC_TITLE_CHARS);
-        assert_eq!(
-            sanitize_last_osc_title(&format!("OC | {exact_title}"), Some("opencode")).as_deref(),
-            Some(exact_title.as_str())
-        );
-    }
-
-    #[test]
-    fn opencode_osc_titles_are_normalized_before_storage_and_recovery() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        {
-            let state = AppState::new(config.clone());
-            assert!(state.restore_session().is_empty());
-            let mut agent = sample_agent("agent-1");
-            agent.adapter = "opencode".to_string();
-            agent.pane_id = Some("pane-1".to_string());
-            state.insert_agent(agent).unwrap();
-            let mut pane = sample_pane_runtime("pane-1");
-            pane.info.agent_id = Some("agent-1".to_string());
-            state.insert_pane(pane).unwrap();
-
-            assert_eq!(
-                state
-                    .update_last_osc_title("pane-1", "OC | Review the title path")
-                    .unwrap()
-                    .as_deref(),
-                Some("Review the title path")
-            );
-            assert_eq!(
-                state.list_panes().unwrap()[0].last_osc_title.as_deref(),
-                Some("Review the title path")
-            );
-        }
-
-        let restored = AppState::new(config);
-        let panes = restored.restore_session();
-        assert_eq!(
-            panes[0].last_osc_title.as_deref(),
-            Some("Review the title path")
         );
     }
 

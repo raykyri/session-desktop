@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 
 pub const SKILL: &str = include_str!("session_skill.md");
 
-pub const HELP: &str = "usage: session <command> [options]\n\nControl commands:\n  send [options] <message>\n  context\n  workspace <list|get|create|rename>\n  pane <list|current|get|read|create|send|run|wait-output|rename|focus|close>\n  agent <list|get|read|start|fork|prompt|wait|focus|release>\n  artifact <list|open>\n  split <list|join|leave|resize>\n\nIntegrations:\n  mcp, open, fork, claude, codex, grok, muse\n\nRun `session <group> --help` for group commands or `session --skill` for agent instructions.";
+pub const HELP: &str = "usage: session <command> [options]\n\nControl commands:\n  send [options] <message>\n  context\n  workspace <list|get|create|rename>\n  pane <list|current|get|read|create|send|run|wait-output|rename|focus|close>\n  agent <list|get|read|start|fork|prompt|wait|focus|release>\n  artifact <list|open>\n  split <list|join|leave|resize>\n\nIntegrations:\n  mcp, open, fork, claude, codex, grok\n\nRun `session <group> --help` for group commands or `session --skill` for agent instructions.";
 
 pub fn run(command: &str, args: Vec<String>) -> Result<bool, String> {
     if let Some(help) = group_help(command)

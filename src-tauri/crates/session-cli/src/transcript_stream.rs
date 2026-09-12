@@ -1,4 +1,4 @@
-//! Read-only, bounded transcript transport for JSONL and whole ATIF JSON.
+//! Read-only, bounded transcript transport for JSONL.
 //! Invoked by the desktop over SSH, never through the forwarded control socket.
 //! Cursor offsets refer to source bytes.
 use serde::{Deserialize, Serialize};
@@ -51,21 +51,6 @@ fn belongs(path: &Path, adapter: &str, session: &str) -> bool {
 }
 
 fn matches_session(file: &mut File, path: &Path, adapter: &str, session: &str) -> bool {
-    if adapter == "devin" {
-        if path.extension().and_then(|s| s.to_str()) != Some("json") {
-            return false;
-        }
-        let Ok(value) = serde_json::from_reader::<_, serde_json::Value>(
-            Read::by_ref(file).take(MAX_SESSION_META as u64 + 1),
-        ) else {
-            return false;
-        };
-        return value
-            .get("session_id")
-            .or_else(|| value.get("sessionId"))
-            .and_then(serde_json::Value::as_str)
-            == Some(session);
-    }
     if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
         return false;
     }
@@ -133,16 +118,13 @@ pub fn valid_session(session: &str) -> bool {
 }
 
 pub fn discover(adapter: &str, session: &str, hint: Option<&Path>) -> Result<PathBuf, String> {
-    if !matches!(adapter, "claude" | "codex" | "devin" | "antigravity") || !valid_session(session) {
+    if !matches!(adapter, "claude" | "codex" | "antigravity") || !valid_session(session) {
         return Err("invalid transcript adapter or session".into());
     }
     if let Some(path) = hint
         && belongs(path, adapter, session)
     {
         return Ok(path.into());
-    }
-    if adapter == "devin" {
-        return Err("transcript is not available yet".into());
     }
     if adapter == "antigravity" {
         let path = antigravity_transcript_path(session)?;
@@ -207,7 +189,7 @@ fn anchor(file: &mut File, offset: u64) -> Result<Vec<u8>, String> {
 }
 
 pub fn read_frame(path: &Path, session: &str, previous: &Cursor) -> Result<Frame, String> {
-    read_open_frame(open_regular(path)?, path, session, previous, false)
+    read_open_frame(open_regular(path)?, path, session, previous)
 }
 
 fn read_open_frame(
@@ -215,7 +197,6 @@ fn read_open_frame(
     path: &Path,
     session: &str,
     previous: &Cursor,
-    complete_document: bool,
 ) -> Result<Frame, String> {
     let meta = file.metadata().map_err(|e| e.to_string())?;
     let identity = format!("{}:{}", meta.dev(), meta.ino());
@@ -240,7 +221,7 @@ fn read_open_frame(
     }
     // Hold the incomplete last record at EOF. Full chunks can split a record;
     // a cursor in that record resumes byte-for-byte, including after reconnect.
-    if read_len < MAX_CHUNK && !complete_document {
+    if read_len < MAX_CHUNK {
         let complete = bytes
             .iter()
             .rposition(|byte| *byte == b'\n')
@@ -287,7 +268,7 @@ pub fn run(args: Vec<String>) -> Result<(), String> {
         if !matches_session(&mut file, &path, &args[0], &args[1]) {
             return Err("transcript session changed".into());
         }
-        let mut frame = read_open_frame(file, &path, &args[1], &cursor, args[0] == "devin")?;
+        let mut frame = read_open_frame(file, &path, &args[1], &cursor)?;
         if frame.reset {
             historical_end = frame.historical_end;
         }
@@ -361,29 +342,6 @@ mod tests {
         let reset = read_frame(&path, "session", &next.cursor).unwrap();
         assert!(reset.reset);
         assert_eq!(reset.start, 0);
-        fs::remove_file(path).unwrap();
-    }
-    #[test]
-    fn devin_documents_require_the_matching_session_and_stream_without_a_newline() {
-        let path =
-            std::env::temp_dir().join(format!("session-stream-devin-{}.json", std::process::id()));
-        let contents = r#"{"session_id":"devin-session","steps":[]}"#;
-        fs::write(&path, contents).unwrap();
-        assert!(belongs(&path, "devin", "devin-session"));
-        assert!(!belongs(&path, "devin", "other"));
-        assert_eq!(
-            discover("devin", "devin-session", Some(&path)).unwrap(),
-            path
-        );
-        let frame = read_open_frame(
-            open_regular(&path).unwrap(),
-            &path,
-            "devin-session",
-            &Cursor::default(),
-            true,
-        )
-        .unwrap();
-        assert_eq!(frame.data, contents);
         fs::remove_file(path).unwrap();
     }
 

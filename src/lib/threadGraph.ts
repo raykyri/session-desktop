@@ -280,18 +280,8 @@ export function adapterLabel(adapter: string) {
       return "Claude";
     case "codex":
       return "Codex";
-    case "opencode":
-      return "OpenCode";
     case "grok":
       return "Grok";
-    case "muse":
-      return "Muse";
-    case "pi":
-      return "Pi";
-    case "cursor":
-      return "Cursor";
-    case "devin":
-      return "Devin";
     case "antigravity":
       return "Antigravity";
     default:

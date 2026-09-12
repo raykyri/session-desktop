@@ -4319,8 +4319,7 @@ fn running_process_from_line(line: &str) -> Option<RunningProcess> {
 mod tests {
     use super::*;
     use crate::config::{
-        AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
+        AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig, SessionConfig,
     };
     use crate::scrollback::read_pane_scrollback;
     use crate::workspace::{AgentInfo, AgentStatus, GroupInfo, WorkspaceScope};
@@ -4402,31 +4401,19 @@ mod tests {
             workspace_root: PathBuf::from("/tmp/session-workspaces"),
             socket_path: PathBuf::from("/tmp/session.sock"),
             adapters: AdapterConfigs {
-                pi: Default::default(),
                 claude: ClaudeAdapterConfig {
                     binary: Some("claude".to_string()),
                 },
                 codex: CodexAdapterConfig {
                     binary: Some("codex".to_string()),
                 },
-                opencode: OpencodeAdapterConfig {
-                    binary: Some("opencode".to_string()),
-                },
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                muse: MuseAdapterConfig {
-                    binary: Some("muse".to_string()),
-                },
-                cursor: Default::default(),
-                devin: Default::default(),
                 antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: std::path::PathBuf::new(),
-            opencode_plugin_dir: std::path::PathBuf::new(),
-            pi_extension_dir: std::path::PathBuf::new(),
-            cursor_plugin_dir: std::path::PathBuf::new(),
         })
     }
 
@@ -4437,31 +4424,19 @@ mod tests {
             workspace_root,
             socket_path,
             adapters: AdapterConfigs {
-                pi: Default::default(),
                 claude: ClaudeAdapterConfig {
                     binary: Some("claude".to_string()),
                 },
                 codex: CodexAdapterConfig {
                     binary: Some("codex".to_string()),
                 },
-                opencode: OpencodeAdapterConfig {
-                    binary: Some("opencode".to_string()),
-                },
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                muse: MuseAdapterConfig {
-                    binary: Some("muse".to_string()),
-                },
-                cursor: Default::default(),
-                devin: Default::default(),
                 antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: std::path::PathBuf::new(),
-            opencode_plugin_dir: std::path::PathBuf::new(),
-            pi_extension_dir: std::path::PathBuf::new(),
-            cursor_plugin_dir: std::path::PathBuf::new(),
         })
     }
 
@@ -4828,7 +4803,7 @@ mod tests {
         .unwrap();
 
         let mut agent = sample_remote_agent(&group.id);
-        agent.adapter = "pi".to_string();
+        agent.adapter = "grok".to_string();
         state.insert_agent(agent.clone()).unwrap();
 
         let error = plan_to_spec(
@@ -4844,7 +4819,7 @@ mod tests {
                 recovered: false,
             },
             CommandPlan {
-                program: "/usr/local/bin/pi".to_string(),
+                program: "/usr/local/bin/grok".to_string(),
                 args: Vec::new(),
                 cwd: PathBuf::from("/srv/code/project"),
                 envs: Vec::new(),
@@ -4856,7 +4831,7 @@ mod tests {
 
         // Silently succeeding would launch this adapter over there with paths
         // and integration files that were resolved only on the local machine.
-        assert!(error.contains("pi"), "{error}");
+        assert!(error.contains("grok"), "{error}");
         assert!(error.contains("cannot run on remote"), "{error}");
     }
 

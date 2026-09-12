@@ -18,7 +18,7 @@ checks and removed the additional orphan composer tree they identified.
   drafts, and terminal attachment sequencing remain supported.
 - Uncalled frontend API wrappers, utility exports, and private helper cascades.
 - Rust `PermissionAction` metadata, three uncalled Claude test shims, unused
-  Cursor/Muse binding sweeps, and the dormant full-session respawn path. Explicit
+  binding sweeps, and the dormant full-session respawn path. Explicit
   closed-pane restoration remains supported.
 
 Backend command registration, persisted formats, notification/artifact storage,
