@@ -55,11 +55,10 @@ pub fn read_transcript_image(path: &Path) -> Result<String, String> {
 }
 
 /// Confinement-root-injectable core of [`read_transcript_image`], kept separate
-/// so tests can point `allowed_roots` at scratch directories. Mirrors
-/// `research::read_markdown_document_file_within`: canonicalize (resolving
-/// symlinks and `..`) before any check, verify location, extension, file type,
-/// and size against the real target, and never buffer more than the cap even if
-/// the file grows between inspection and reading.
+/// so tests can point `allowed_roots` at scratch directories. Canonicalize
+/// (resolving symlinks and `..`) before any check, verify location, extension,
+/// file type, and size against the real target, and never buffer more than the
+/// cap even if the file grows between inspection and reading.
 fn read_transcript_image_within(path: &Path, allowed_roots: &[&Path]) -> Result<String, String> {
     let canonical = fs::canonicalize(path)
         .map_err(|err| format!("failed to resolve {}: {err}", path.display()))?;

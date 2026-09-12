@@ -12,10 +12,14 @@ test("research prompts preserve Markdown blockquotes", () => {
       parentNodeId: null,
       queryQuote: null,
       prompt: "> foo\n> bar",
+      adapter: "claude",
+      model: "fable",
       onSelectNode: () => {},
     }),
   );
 
+  assert.match(html, /You asked Claude Fable/);
+  assert.ok(html.indexOf("You asked Claude Fable") < html.indexOf("<blockquote>"));
   assert.match(html, /<blockquote>/);
   assert.match(html, /foo<br\/>[\n]?bar/);
 });

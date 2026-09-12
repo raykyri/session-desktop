@@ -78,6 +78,15 @@ pub fn entry_id(entry: &Value) -> Option<&str> {
         .filter(|id| !id.is_empty())
 }
 
+/// Only link and X-post entries remain visible after the Home hard cutover.
+/// Legacy notes stay in durable state but must not consume activity-page slots.
+pub fn entry_is_visible(entry: &Value) -> bool {
+    matches!(
+        entry.get("kind").and_then(Value::as_str),
+        Some("link" | "tweet")
+    )
+}
+
 /// Millisecond ordering key shared with research nodes. Invalid legacy dates
 /// remain addressable, but sort behind every valid activity item just as the
 /// frontend's former `Date.parse` implementation did.
@@ -218,6 +227,14 @@ mod tests {
         assert_eq!(entry_id(&valid), Some("a"));
         assert_eq!(entry_occurred_at(&valid), 250);
         assert_eq!(entry_occurred_at(&invalid), 0);
+    }
+
+    #[test]
+    fn only_links_and_tweets_are_visible_in_home() {
+        assert!(entry_is_visible(&json!({"kind": "link"})));
+        assert!(entry_is_visible(&json!({"kind": "tweet"})));
+        assert!(!entry_is_visible(&json!({"kind": "note"})));
+        assert!(!entry_is_visible(&json!({})));
     }
 
     #[test]

@@ -468,10 +468,6 @@ export function listRecentActivity(
   });
 }
 
-export function appendJournalEntry(entry: JournalEntry) {
-  return invoke<boolean>("journal_append", { entry });
-}
-
 export function restoreJournalEntry(entry: JournalEntry) {
   return invoke<boolean>("journal_restore", { entry });
 }
@@ -525,14 +521,6 @@ export function generateResearchAgentTitle(nodeId: string) {
   return invoke<string>("generate_research_agent_title", { nodeId });
 }
 
-export function createResearchDocument(request: {
-  markdown: string;
-  title?: string | null;
-  workspaceId: string;
-}) {
-  return invoke<ResearchTreeDetail>("create_research_document", { request });
-}
-
 export function updateResearchDocument(request: {
   nodeId: string;
   markdown: string;
@@ -542,13 +530,6 @@ export function updateResearchDocument(request: {
   expectedHighlightIds: string[];
 }) {
   return invoke<UpdateResearchDocumentResult>("update_research_document", { request });
-}
-
-/** Reads a Markdown file selected through the native window drop API. The
- * backend enforces the extension, UTF-8 encoding, regular-file requirement,
- * and document byte cap before returning any content to the webview. */
-export function readMarkdownDocumentFile(path: string) {
-  return invoke<string>("read_markdown_document_file", { path });
 }
 
 /** Reads a pasted image referenced by a transcript "[Image: source: <path>]"

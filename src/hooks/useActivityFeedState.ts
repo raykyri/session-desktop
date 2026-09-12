@@ -11,10 +11,6 @@ export function useActivityFeedState() {
     timerRef.current = undefined;
     if (stateRef.current) saveActivityFeedState(stateRef.current);
   }, []);
-  const onDraftChange = useCallback((draft: string) => {
-    stateRef.current = { ...stateRef.current!, draft };
-    flush();
-  }, [flush]);
   const onScrollChange = useCallback((scrollTop: number) => {
     if (!Number.isFinite(scrollTop)) return;
     const top = Math.max(0, scrollTop);
@@ -31,9 +27,7 @@ export function useActivityFeedState() {
     };
   }, [flush]);
   return {
-    initialDraft: stateRef.current.draft,
     initialScrollTop: stateRef.current.scrollTop,
-    onDraftChange,
     onScrollChange,
   };
 }

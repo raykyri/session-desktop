@@ -16,13 +16,12 @@ fn events_listener_ready() -> bool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AppShortcutCommand {
     FocusResearchTab(u8),
-    OpenNewResearch,
+    FocusResearchHome,
     CycleResearchTab(i8),
     MoveResearchItem(i8),
     OpenSettings,
     OpenCommandPalette,
     ToggleLeftSidebar,
-    NewDocument,
     FocusFollowups,
     OpenFolderMenu,
     ToggleSourceBrowser,
@@ -32,7 +31,7 @@ impl AppShortcutCommand {
     fn event_fields(self) -> (&'static str, Option<u8>) {
         match self {
             Self::FocusResearchTab(index) => ("focusResearchTab", Some(index)),
-            Self::OpenNewResearch => ("openNewResearch", None),
+            Self::FocusResearchHome => ("focusResearchHome", None),
             Self::CycleResearchTab(-1) => ("cycleResearchTabPrevious", None),
             Self::CycleResearchTab(_) => ("cycleResearchTabNext", None),
             Self::MoveResearchItem(-1) => ("moveResearchItemUp", None),
@@ -40,7 +39,6 @@ impl AppShortcutCommand {
             Self::OpenSettings => ("openSettings", None),
             Self::OpenCommandPalette => ("openCommandPalette", None),
             Self::ToggleLeftSidebar => ("toggleLeftSidebar", None),
-            Self::NewDocument => ("newDocument", None),
             Self::FocusFollowups => ("focusFollowups", None),
             Self::OpenFolderMenu => ("openFolderMenu", None),
             Self::ToggleSourceBrowser => ("toggleSourceBrowser", None),
@@ -87,12 +85,11 @@ fn classify_web_app_shortcut(
     }
     if command && !control && !option {
         return match (key, shift) {
-            ("n" | "t", false) => Some(AppShortcutCommand::OpenNewResearch),
+            ("n" | "t", false) => Some(AppShortcutCommand::FocusResearchHome),
             ("g", true) => Some(AppShortcutCommand::ToggleLeftSidebar),
             ("[", true) => Some(AppShortcutCommand::CycleResearchTab(-1)),
             ("]", true) => Some(AppShortcutCommand::CycleResearchTab(1)),
             ("k", false) => Some(AppShortcutCommand::OpenCommandPalette),
-            ("d", false) => Some(AppShortcutCommand::NewDocument),
             ("j", false) => Some(AppShortcutCommand::FocusFollowups),
             ("o", false) => Some(AppShortcutCommand::OpenFolderMenu),
             ("e", true) => Some(AppShortcutCommand::ToggleSourceBrowser),
@@ -757,9 +754,8 @@ mod shortcut_tests {
     #[test]
     fn native_commands_use_the_current_research_wire_names() {
         for (key, shift, control, option, command, expected) in [
-            ("n", false, false, false, true, ("openNewResearch", None)),
-            ("t", false, false, false, true, ("openNewResearch", None)),
-            ("d", false, false, false, true, ("newDocument", None)),
+            ("n", false, false, false, true, ("focusResearchHome", None)),
+            ("t", false, false, false, true, ("focusResearchHome", None)),
             ("k", false, false, false, true, ("openCommandPalette", None)),
             (
                 "4",

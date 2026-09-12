@@ -1,19 +1,18 @@
 # Session
 
 Session is a desktop research workspace for running long-form investigations with
-coding agents. It keeps questions, follow-ups, sources, notes, and generated
-documents together in a durable research tree.
+coding agents. It keeps questions, follow-ups, sources, and generated answers
+together in a durable research tree.
 
 The application has completed its product, storage, and integration cutover to
-**Session**. Apple identity and hosted-service identifiers are preserved; see [the cutover guide](docs/session-cutover.md).
+**Session**. The desktop app uses the Session Apple identity; legacy hosted-service URLs remain documented in [the cutover guide](docs/session-cutover.md).
 
 ## Features
 
 - Run research with supported Claude Code, Codex, and Grok installations.
 - Branch from any answer while preserving the context that led to it.
 - Organize research trees into local workspaces and sidebar folders.
-- Create and edit Markdown documents alongside generated answers.
-- Browse recent research activity and keep a lightweight research journal.
+- Browse recent research activity from Home.
 - Inspect source links and local artifacts in the built-in browser.
 - Save highlights, review full run activity, and publish answers or trees.
 - Recover research history, drafts, active runs, and navigation state after restart.
@@ -91,11 +90,9 @@ Published links default to `https://qmux.app/p/<gist-id>`. Use
 
 ## Keyboard shortcuts
 
-- `Cmd-T`: start a new research query.
-- `Cmd-D`: create a new document.
+- `Cmd-N` or `Cmd-T`: open Home and its research-query composer.
 - `Cmd-J`: focus the open document's follow-up composer.
 - `Cmd-O`: open or close the research workspace menu.
-- `Cmd-N`: open the research home view.
 - `Cmd/Ctrl-[` and `Cmd/Ctrl-]`, `Alt-Left` and `Alt-Right`: move through
   research history.
 - `Cmd-1` through `Cmd-9`: focus the corresponding research item.
@@ -105,14 +102,14 @@ Published links default to `https://qmux.app/p/<gist-id>`. Use
 ## Architecture
 
 The React frontend lives under `src/`. Research views, including the in-app
-Research Activity feed, are in `src/components/research/`. Durable research state
+Home feed, are in `src/components/research/`. Durable research state
 and execution are implemented by `src-tauri/src/research.rs`,
 `research_runtime.rs`, and `state.rs`.
 
 Research data is stored under the configured Session workspace root.
 The development configuration in `session.config.json` uses `~/.session/workspaces` and
-`~/.session/run/session.sock`. Shipping builds use the existing platform application-data
-location associated with the unchanged bundle identifier.
+`~/.session/run/session.sock`. Shipping builds use the platform application-data location for
+`dev.session.desktop`.
 
-See [docs/research-activity.md](docs/research-activity.md) for the activity feed and
+See [docs/home.md](docs/home.md) for the activity feed and
 its navigation and journal actions.

@@ -22,7 +22,7 @@ export interface ActivityEvent<TSource = unknown> {
   actor: { kind: "user" | "agent" | "system"; label: string };
   action: { kind: "saved" | "asked" | "created" | "completed"; label: string };
   object: {
-    kind: "note" | "link" | "post" | "research-query" | "artifact" | "task";
+    kind: "link" | "post" | "research-query" | "artifact" | "task";
     id: string;
     label: string;
   };
@@ -73,9 +73,6 @@ function journalTimestamp(entry: JournalEntry): number {
 }
 
 function journalObject(entry: JournalEntry): ActivityEvent["object"] {
-  if (entry.kind === "note") {
-    return { kind: "note", id: entry.id, label: "Note" };
-  }
   if (entry.kind === "link") {
     return { kind: "link", id: entry.id, label: "Link" };
   }
@@ -88,15 +85,13 @@ export function activityEventFromJournalEntry(entry: JournalEntry): RecentActivi
       ? entry.tweet?.author.handle
         ? `@${entry.tweet.author.handle}`
         : "X"
-      : entry.kind === "link"
-        ? (() => {
-            try {
-              return new URL(entry.url).hostname;
-            } catch {
-              return "Saved link";
-            }
-          })()
-        : undefined;
+      : (() => {
+          try {
+            return new URL(entry.url).hostname;
+          } catch {
+            return "Saved link";
+          }
+        })();
   return {
     id: `journal:${entry.id}`,
     actor: { kind: "user", label: "You" },

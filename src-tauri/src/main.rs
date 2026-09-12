@@ -62,10 +62,10 @@ use pty::{
     spawn_ssh_shell_pane, write_pane,
 };
 use research::{
-    CreateResearchDocumentRequest, CreateResearchTreeRequest, RecentResearchQueryCursor,
-    RecentResearchQueryPage, ResearchBranchRemoval, ResearchFolderState, ResearchHighlight,
-    ResearchHighlightAnchor, ResearchNode, ResearchNodeContent, ResearchTree, ResearchTreeDetail,
-    ResearchTreeSummary, UpdateResearchDocumentRequest, UpdateResearchDocumentResult,
+    CreateResearchTreeRequest, RecentResearchQueryCursor, RecentResearchQueryPage,
+    ResearchBranchRemoval, ResearchFolderState, ResearchHighlight, ResearchHighlightAnchor,
+    ResearchNode, ResearchNodeContent, ResearchTree, ResearchTreeDetail, ResearchTreeSummary,
+    UpdateResearchDocumentRequest, UpdateResearchDocumentResult,
 };
 use show_hide_shortcut::{
     show_hide_shortcut_capture_set, show_hide_shortcut_get, show_hide_shortcut_set,
@@ -1630,14 +1630,6 @@ fn list_research_folders(state: tauri::State<'_, AppState>) -> Result<ResearchFo
 }
 
 #[tauri::command]
-fn journal_append(
-    state: tauri::State<'_, AppState>,
-    entry: serde_json::Value,
-) -> Result<bool, String> {
-    state.append_journal_entry(entry)
-}
-
-#[tauri::command]
 fn journal_restore(
     state: tauri::State<'_, AppState>,
     entry: serde_json::Value,
@@ -1933,27 +1925,6 @@ fn launch_fresh_research_pane(
 }
 
 #[tauri::command]
-async fn create_research_document(
-    state: tauri::State<'_, AppState>,
-    request: CreateResearchDocumentRequest,
-) -> Result<ResearchTreeDetail, String> {
-    let state = state.inner().clone();
-    // Blocking: the document body is written to its response snapshot (fsync'd
-    // file IO) before the records commit.
-    tauri::async_runtime::spawn_blocking(move || {
-        // Same admission as create_research_tree: the insert must be atomic
-        // with the workspace checks or a concurrent folder removal could
-        // detach the workspace out from under the new records. There is no
-        // run to launch, so admission is the whole command.
-        let _guard = workspace::lock_research_workspace_mutations()?;
-        validate_launch_workspace(&state, Some(&request.group_id), LaunchOrigin::Research)?;
-        state.create_research_document(request)
-    })
-    .await
-    .map_err(|err| format!("create_research_document task failed: {err}"))?
-}
-
-#[tauri::command]
 async fn export_pane_to_research(
     state: tauri::State<'_, AppState>,
     request: research::ExportPaneToResearchRequest,
@@ -1999,15 +1970,6 @@ async fn update_research_document(
     })
     .await
     .map_err(|err| format!("update_research_document task failed: {err}"))?
-}
-
-#[tauri::command]
-async fn read_markdown_document_file(path: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        research::read_markdown_document_file(std::path::Path::new(&path))
-    })
-    .await
-    .map_err(|err| format!("read_markdown_document_file task failed: {err}"))?
 }
 
 /// Reads a pasted image referenced by a transcript "[Image: source: <path>]"
@@ -4033,7 +3995,6 @@ fn main() {
             reorder_research_trees,
             list_research_folders,
             set_research_folders,
-            journal_append,
             journal_restore,
             journal_update,
             journal_remove,
@@ -4043,10 +4004,8 @@ fn main() {
             list_recent_activity,
             get_research_tree,
             create_research_tree,
-            create_research_document,
             export_pane_to_research,
             update_research_document,
-            read_markdown_document_file,
             read_transcript_image,
             save_pasted_image,
             get_research_node_content,

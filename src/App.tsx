@@ -33,8 +33,6 @@ import {
   Columns2,
   Eye,
   EyeOff,
-  FileText,
-  FileUp,
   Folder,
   FolderGit2,
   Globe,
@@ -122,18 +120,13 @@ import { useActivityFeedState } from "./hooks/useActivityFeedState";
 import {
   applyJournalTweetHydration,
   activityCursorIsBefore,
-  classifyJournalInput,
-  createJournalEntry,
-  newJournalEntryId,
   normalizeRecentActivityPage,
   recentActivityItemCursor,
   type JournalEntry,
   type RecentActivityItem,
 } from "./lib/journal";
 import { syndicationToken, tweetSnapshotFromSyndication } from "./lib/journalTweets";
-import NewDocumentPane from "./components/research/NewDocumentPane";
-import NewResearchDialog from "./components/research/NewResearchDialog";
-import { isMarkdownDocumentPath } from "./lib/researchDocuments";
+import ResearchQueryComposer from "./components/research/ResearchQueryComposer";
 import {
   moveResearchTreeIdBy,
   replaceResearchTreeScopeOrder,
@@ -398,7 +391,6 @@ import {
   ensureDefaultResearchWorkspace,
   archiveResearchTree,
   cancelResearchNode,
-  createResearchDocument,
   createResearchTree,
   updateResearchDocument,
   forkResearchNode,
@@ -449,7 +441,6 @@ import {
   listResearchFolders,
   listResearchTrees,
   setResearchFolders,
-  appendJournalEntry as persistNewJournalEntry,
   restoreJournalEntry as persistRestoredJournalEntry,
   updateJournalEntry as persistUpdatedJournalEntry,
   deleteJournalEntry as persistDeletedJournalEntry,
@@ -470,7 +461,6 @@ import {
   removeGroup,
   renameGroup,
   renamePane,
-  readMarkdownDocumentFile,
   setActiveTab,
   setGroupCollapsed,
   setCompletionSound,
@@ -619,8 +609,8 @@ const RESEARCH_VISIBILITY_FILTER_OPTIONS: ReadonlyArray<{
   { id: "all", label: "Show all" },
 ];
 const ACTIVE_RESEARCH_PANE_KEY = "session.active-research-pane.v1";
-// Whether the Journal page is forward on the research surface. Selection-level
-// UI state, like the active tree id — the journal's contents live backend-side.
+// Whether Home is forward on the research surface. Selection-level UI state,
+// like the active tree id; the feed contents live backend-side.
 
 // Browser-overlay / link-action owner for a research tree's document. Keyed
 // per tree so an overlay opened from one tree's links doesn't follow the user
@@ -637,9 +627,10 @@ const INPUT_DEQUEUE_HOLD_MS = 1500;
 const THREAD_GRAPH_REFRESH_DEBOUNCE_MS = 300;
 
 function partitionResearchTrees(trees: ResearchTreeSummary[]) {
+  const visibleTrees = trees.filter((tree) => tree.kind !== "document");
   return {
-    active: trees.filter((tree) => !tree.archivedAt),
-    archived: trees.filter((tree) => Boolean(tree.archivedAt)),
+    active: visibleTrees.filter((tree) => !tree.archivedAt),
+    archived: visibleTrees.filter((tree) => Boolean(tree.archivedAt)),
   };
 }
 
@@ -648,6 +639,9 @@ function upsertResearchTreeSummary(
   summary: ResearchTreeSummary,
   prepend = false,
 ): ResearchTreeSummary[] {
+  if (summary.kind === "document") {
+    return trees.filter((tree) => tree.id !== summary.id);
+  }
   const index = trees.findIndex((tree) => tree.id === summary.id);
   if (index === -1) {
     return prepend ? [summary, ...trees] : [...trees, summary];
@@ -747,7 +741,7 @@ const DEFAULT_INITIAL_ROWS = 24;
 const MIN_INITIAL_COLS = 20;
 const MIN_INITIAL_ROWS = 5;
 
-const SETTINGS_CONTEXT_MENU_WIDTH = 180;
+const SETTINGS_CONTEXT_MENU_WIDTH = 196;
 const SETTINGS_CONTEXT_MENU_TERMINAL_HEIGHT = 66;
 const SETTINGS_CONTEXT_MENU_RESEARCH_HEIGHT = 134;
 const MAX_FIRST_MESSAGE_TITLE_CHARS = 80;
@@ -1897,9 +1891,6 @@ function MainApp() {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [newResearchOpen, setNewResearchOpen] = useState(
-    () => readSessionDraftJson(SESSION_DRAFT_KEYS.newResearchModal) !== null,
-  );
   const [newAgentOpen, setNewAgentOpen] = useState(false);
   const [terminalMapOpen, setTerminalMapOpen] = useState(false);
   const newAgentOpenRef = useRef(newAgentOpen);
@@ -1907,80 +1898,9 @@ function MainApp() {
   const terminalMapOpenRef = useRef(terminalMapOpen);
   terminalMapOpenRef.current = terminalMapOpen;
   const terminalMapDialogRef = useRef<HTMLDivElement | null>(null);
-  const [recoveredNewDocumentContext] = useState(() =>
-    readSessionDraftJson<{
-      workspaceId: string | null;
-    }>(SESSION_DRAFT_KEYS.newDocumentContext),
-  );
-  const [newDocumentOpen, setNewDocumentOpen] = useState(
-    () => recoveredNewDocumentContext !== null,
-  );
-  const newDocumentOpenRef = useRef(newDocumentOpen);
-  newDocumentOpenRef.current = newDocumentOpen;
-  // True while the new-document composer holds an unsaved draft. Sidebar
-  // navigation dismisses a pristine composer like any page switch, but a
-  // draft-holding one stays up (its own Cancel is the deliberate exit) so an
-  // imported or half-written document can't be lost to a stray click.
-  const newDocumentDirtyRef = useRef(false);
-  const [newDocumentInitialMarkdown, setNewDocumentInitialMarkdown] = useState("");
-  // The draft's destination folder, captured when the composer opens. Binding
-  // the live sidebar scope instead would silently retarget an open draft when
-  // the user peeks at another folder mid-composition.
-  const [newDocumentWorkspaceId, setNewDocumentWorkspaceId] = useState<string | null>(
-    recoveredNewDocumentContext?.workspaceId ?? null,
-  );
-  const closeNewDocumentComposer = useCallback(() => {
-    newDocumentDirtyRef.current = false;
-    newDocumentOpenRef.current = false;
-    setNewDocumentOpen(false);
-    setNewDocumentInitialMarkdown("");
-    clearSessionDraft(SESSION_DRAFT_KEYS.newDocumentContext);
-    clearSessionDraft(SESSION_DRAFT_KEYS.newDocumentFields);
+  const changeResearchMultiSelection = useCallback((ids: string[]) => {
+    setResearchMultiSelectIds(ids);
   }, []);
-  const dismissPristineNewDocumentComposer = useCallback(() => {
-    if (newDocumentOpenRef.current && !newDocumentDirtyRef.current) {
-      closeNewDocumentComposer();
-    }
-  }, [closeNewDocumentComposer]);
-  const handleNewDocumentDirtyChange = useCallback((dirty: boolean) => {
-    newDocumentDirtyRef.current = dirty;
-  }, []);
-  useEffect(() => {
-    let disposed = false;
-    void loadSessionDraftJson<{ workspaceId: string | null }>(
-      SESSION_DRAFT_KEYS.newDocumentContext,
-    )
-      .then((restored) => {
-        if (!disposed && restored && !newDocumentOpenRef.current) {
-          setNewDocumentWorkspaceId(restored.workspaceId);
-          newDocumentOpenRef.current = true;
-          setNewDocumentOpen(true);
-        }
-      })
-      .catch(() => undefined);
-    void loadSessionDraftJson<{ prompt?: string }>(SESSION_DRAFT_KEYS.newResearchModal)
-      .then((restored) => {
-        if (!disposed && restored?.prompt) {
-          setNewResearchOpen(true);
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      disposed = true;
-    };
-  }, []);
-  // Multi-selecting in the sidebar is navigation like a single click: it must
-  // dismiss a pristine composer, or its placeholder stays hidden behind the
-  // composer page and the selection appears to do nothing.
-  const changeResearchMultiSelection = useCallback(
-    (ids: string[]) => {
-      if (ids.length > 0) {
-        dismissPristineNewDocumentComposer();
-      }
-      setResearchMultiSelectIds(ids);
-    },
-    [dismissPristineNewDocumentComposer],
-  );
   const [publicationTarget, setPublicationTarget] = useState<PublishDialogTarget | null>(null);
   const [publicationBindings, setPublicationBindings] = useState<PublicationBinding[]>([]);
   const handlePublicationBindingChange = useCallback((binding: PublicationBinding) => {
@@ -1989,10 +1909,6 @@ function MainApp() {
       ...current.filter((candidate) => candidate.publicationId !== binding.publicationId),
     ]);
   }, []);
-  const [markdownDropTargetActive, setMarkdownDropTargetActive] = useState(false);
-  const sidebarRef = useRef<HTMLElement | null>(null);
-  const markdownImportRequestSeqRef = useRef(0);
-  const markdownDropBlockedRef = useRef(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [conversationHistoryOpen] = useState(false);
   const conversationHistoryOpenRef = useRef(conversationHistoryOpen);
@@ -2563,15 +2479,11 @@ function MainApp() {
   // forward) as a hidden keep-alive for its draft.
   const researchStageView = !researchSurfaceActive
     ? null
-    : newDocumentOpen
-      ? ("composer" as const)
-      : researchMultiSelection.length > 1
-        ? ("multi-select" as const)
-        : journalOpen
-          ? ("journal" as const)
-          : activeResearchTreeId
-            ? ("document" as const)
-            : ("home" as const);
+    : researchMultiSelection.length > 1
+      ? ("multi-select" as const)
+      : journalOpen || !activeResearchTreeId
+        ? ("journal" as const)
+        : ("document" as const);
   // Menu badges and the folder-replace dialog both count every tree that keeps
   // a folder alive, so archived trees are included (removal is blocked on them).
   const researchFolderTreeCounts = useMemo(() => {
@@ -4775,7 +4687,7 @@ function MainApp() {
   const researchSidebarRestoreInHeader =
     leftSidebarCollapsed &&
     sidebarMode === "research" &&
-    (researchStageView === "document" || researchStageView === "composer");
+    researchStageView === "document";
   const hasGlobalTurnSidebar = hasVisibleRightBar && !splitRightPaneMode;
   const splitTranscriptExpanded = Boolean(
     activePaneSplit &&
@@ -4858,7 +4770,6 @@ function MainApp() {
     settingsOpen ||
       imageLightbox !== null ||
       diagramLightbox !== null ||
-      newResearchOpen ||
       newAgentOpen ||
       terminalMapOpen ||
       newResearchFolderRequest !== null ||
@@ -6481,17 +6392,12 @@ function MainApp() {
   );
   const markVisibleResearchTreeViewed = useCallback(
     async (treeId: string, options: ResearchViewedAckOptions = {}) => {
-      // An open composer page covers the document view, so an unread tree
-      // selected behind a draft-holding composer is not actually seen. The
-      // composer's close path re-marks the active tree.
-      const documentVisible =
-        !newDocumentOpenRef.current &&
-        researchDocumentIsVisible(
-          treeId,
-          sidebarModeRef.current,
-          activeSurfaceRef.current,
-          activeResearchTreeIdRef.current,
-        );
+      const documentVisible = researchDocumentIsVisible(
+        treeId,
+        sidebarModeRef.current,
+        activeSurfaceRef.current,
+        activeResearchTreeIdRef.current,
+      );
       // Watching the run's own terminal counts as viewing the tree: the user
       // reached that pane from this document and is looking at the same run,
       // so the unseen badge must not survive it.
@@ -6571,21 +6477,9 @@ function MainApp() {
       document.removeEventListener("visibilitychange", markCurrent);
     };
   }, [markVisibleResearchTreeViewed]);
-  // Closing the composer uncovers the document selected behind it, so the
-  // view that was suppressed while the page was up gets recorded now.
-  useEffect(() => {
-    if (newDocumentOpen) {
-      return;
-    }
-    const treeId = activeResearchTreeIdRef.current;
-    if (treeId) {
-      void markVisibleResearchTreeViewed(treeId, { force: true }).catch(() => undefined);
-    }
-  }, [markVisibleResearchTreeViewed, newDocumentOpen]);
   const selectResearchTree = useCallback(async (treeId: string) => {
     const requestSeq = researchDetailRequestSeqRef.current + 1;
     researchDetailRequestSeqRef.current = requestSeq;
-    dismissPristineNewDocumentComposer();
     showResearchSidebar();
     showResearchSurface();
     setJournalOpen(false);
@@ -6631,7 +6525,6 @@ function MainApp() {
     }
   }, [
     changeResearchFolderScope,
-    dismissPristineNewDocumentComposer,
     markVisibleResearchTreeViewed,
     setJournalOpen,
     showResearchSidebar,
@@ -6704,10 +6597,9 @@ function MainApp() {
     // Invalidate a tree request that may still be landing while Home is
     // selected; otherwise its detail can repaint behind the launcher.
     researchDetailRequestSeqRef.current += 1;
-    dismissPristineNewDocumentComposer();
     showResearchSidebar();
     showResearchSurface();
-    setJournalOpen(false);
+    setJournalOpen(true);
     setResearchMultiSelectIds([]);
     activeResearchPaneIdRef.current = null;
     setActiveResearchPaneId(null);
@@ -6717,7 +6609,7 @@ function MainApp() {
     setActiveResearchDetail(null);
     setActiveResearchDetailError(null);
     localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
-  }, [dismissPristineNewDocumentComposer, showResearchSurface, setJournalOpen, showResearchSidebar]);
+  }, [showResearchSurface, setJournalOpen, showResearchSidebar]);
   // Brings the Journal page forward on the research surface. Tree selection is
   // left standing (the journal outranks the document in the stage selector),
   // so closing the journal by picking a tree is a plain selection.
@@ -6726,7 +6618,6 @@ function MainApp() {
     // opening it drops the tree selection the way Home does, so the sidebar
     // never shows a selected row behind the tab that is actually forward.
     researchDetailRequestSeqRef.current += 1;
-    dismissPristineNewDocumentComposer();
     showResearchSidebar();
     showResearchSurface();
     setResearchMultiSelectIds([]);
@@ -6739,7 +6630,7 @@ function MainApp() {
     setActiveResearchDetailError(null);
     localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
     setJournalOpen(true);
-  }, [dismissPristineNewDocumentComposer, showResearchSurface, setJournalOpen, showResearchSidebar]);
+  }, [showResearchSurface, setJournalOpen, showResearchSidebar]);
   const openJournal = useCallback(() => {
     const treeId = activeResearchTreeIdRef.current;
     setResearchWorkspaceHistory((current) => {
@@ -6840,25 +6731,6 @@ function MainApp() {
       })();
     },
     [persistJournalMutation, upsertLoadedJournalEntry],
-  );
-  const addJournalEntry = useCallback(
-    (input: string) => {
-      const classified = classifyJournalInput(input);
-      if (!classified) {
-        return;
-      }
-      const entry = createJournalEntry(
-        classified,
-        newJournalEntryId(),
-        new Date().toISOString(),
-      );
-      upsertLoadedJournalEntry(entry);
-      persistJournalMutation(entry.id, "present", () => persistNewJournalEntry(entry));
-      if (entry.kind === "tweet") {
-        hydrateJournalTweet(entry.id, entry.tweetId);
-      }
-    },
-    [hydrateJournalTweet, persistJournalMutation, upsertLoadedJournalEntry],
   );
   // The last journal removal, restorable for a grace window. Single-slot: a
   // second removal replaces the first (the feed is a stream of small items,
@@ -7010,224 +6882,6 @@ function MainApp() {
       showResearchSidebar,
     ],
   );
-  const createResearchFromSidebar = useCallback(() => {
-    // Bring the research surface forward alongside the sidebar mode: opening
-    // this from a terminal and cancelling would otherwise strand sidebarMode
-    // "research" with activeSurface "pane" (a terminal pane on the research
-    // stage), the mismatch the boot-restore path treats as unrecoverable.
-    setNewAgentOpen(false);
-    setTerminalMapOpen(false);
-    showResearchSidebar();
-    showResearchSurface();
-    setNewResearchOpen(true);
-  }, [showResearchSurface, showResearchSidebar]);
-  const createDocumentFromSidebar = useCallback(() => {
-    // The composer is a research-surface page, not a modal: opening it also
-    // brings the research surface forward so it is actually visible.
-    showResearchSidebar();
-    showResearchSurface();
-    if (newDocumentOpenRef.current && newDocumentDirtyRef.current) {
-      // Re-invoking "new document" surfaces the existing draft. Resetting
-      // here would change the composer's resetKey and silently erase it.
-      return;
-    }
-    setNewDocumentWorkspaceId(researchScopeRef.current);
-    setNewDocumentInitialMarkdown("");
-    clearSessionDraft(SESSION_DRAFT_KEYS.newDocumentFields);
-    saveSessionDraftJson(SESSION_DRAFT_KEYS.newDocumentContext, {
-      workspaceId: researchScopeRef.current,
-    });
-    newDocumentOpenRef.current = true;
-    setNewDocumentOpen(true);
-  }, [showResearchSurface, showResearchSidebar]);
-
-  // Native drag events bypass DOM modal backdrops. Keep the always-on listener
-  // from stacking a document composer over an open modal. An open composer
-  // page is deliberately absent: a pristine one simply receives the import,
-  // and a draft-holding one is guarded at drop time via newDocumentDirtyRef —
-  // this render-time flag could not track keystrokes in the composer anyway.
-  const markdownDropBlocked =
-    settingsOpen ||
-    newResearchOpen ||
-    newAgentOpen ||
-    terminalMapOpen ||
-    Boolean(publicationTarget) ||
-    commandPaletteOpen ||
-    conversationHistoryOpen ||
-    Boolean(
-      closeDialog ||
-        repositoryBrowser ||
-        worktreeCreateDialog ||
-        exitDialog ||
-        exportResearchPane ||
-        exitPreflightRequest ||
-        renamePaneId ||
-        renameGroupId ||
-        settingsMenu ||
-        groupMenu ||
-        paneContextMenu ||
-        linkMenu,
-    );
-  markdownDropBlockedRef.current = markdownDropBlocked;
-
-  useEffect(() => {
-    if (!markdownDropBlocked && sidebarMode === "research") {
-      return;
-    }
-    // Cancel a read even if the intervening modal/mode switch closes before
-    // its backend work finishes; that stale completion must not reopen a
-    // composer after the user has moved on.
-    markdownImportRequestSeqRef.current += 1;
-    setMarkdownDropTargetActive(false);
-  }, [markdownDropBlocked, sidebarMode]);
-
-  useEffect(() => {
-    const appWindow = getCurrentWindow();
-    let disposed = false;
-    let unlistenDrop: (() => void) | null = null;
-    let unlistenScale: (() => void) | null = null;
-    let markdownDragEligible = false;
-    let scaleFactor = globalThis.devicePixelRatio || 1;
-    let scaleFactorRevision = 0;
-
-    const isOverSidebar = (position: { x: number; y: number }) => {
-      const bounds = sidebarRef.current?.getBoundingClientRect();
-      if (!bounds) {
-        return false;
-      }
-      const x = position.x / scaleFactor;
-      const y = position.y / scaleFactor;
-      return x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
-    };
-    // A pristine composer page accepts an import (the drop simply prefills
-    // it); one holding a draft refuses, so the drop cannot erase edits.
-    const composerRefusesImport = () =>
-      newDocumentOpenRef.current && newDocumentDirtyRef.current;
-    const showDropTarget = (position: { x: number; y: number }) => {
-      const active =
-        markdownDragEligible &&
-        !markdownDropBlockedRef.current &&
-        !composerRefusesImport() &&
-        sidebarModeRef.current === "research" &&
-        isOverSidebar(position);
-      setMarkdownDropTargetActive(active);
-      return active;
-    };
-
-    const initialScaleFactorRevision = scaleFactorRevision;
-    void appWindow
-      .scaleFactor()
-      .then((factor) => {
-        if (!disposed && factor > 0 && scaleFactorRevision === initialScaleFactorRevision) {
-          scaleFactor = factor;
-        }
-      })
-      .catch(() => undefined);
-    void appWindow
-      .onScaleChanged(({ payload }) => {
-        if (disposed) {
-          return;
-        }
-        scaleFactorRevision += 1;
-        scaleFactor = payload.scaleFactor;
-        // Wait for the next native `over` event to re-evaluate the physical
-        // pointer against the CSS bounds using the new display scale.
-        setMarkdownDropTargetActive(false);
-      })
-      .then((stopListening) => {
-        if (disposed) {
-          stopListening();
-        } else {
-          unlistenScale = stopListening;
-        }
-      })
-      .catch(() => undefined);
-    void appWindow
-      .onDragDropEvent(({ payload }) => {
-        if (disposed) {
-          return;
-        }
-        if (payload.type === "leave") {
-          markdownDragEligible = false;
-          setMarkdownDropTargetActive(false);
-          return;
-        }
-        if (payload.type === "enter") {
-          markdownDragEligible =
-            payload.paths.length === 1 && isMarkdownDocumentPath(payload.paths[0]);
-          showDropTarget(payload.position);
-          return;
-        }
-        if (payload.type === "over") {
-          showDropTarget(payload.position);
-          return;
-        }
-
-        const droppedPath = payload.paths.length === 1 ? payload.paths[0] : null;
-        const shouldImport =
-          Boolean(droppedPath && isMarkdownDocumentPath(droppedPath)) &&
-          !markdownDropBlockedRef.current &&
-          !composerRefusesImport() &&
-          sidebarModeRef.current === "research" &&
-          isOverSidebar(payload.position);
-        markdownDragEligible = false;
-        setMarkdownDropTargetActive(false);
-        if (!shouldImport || !droppedPath) {
-          return;
-        }
-        const requestSeq = ++markdownImportRequestSeqRef.current;
-        setError(null);
-        void readMarkdownDocumentFile(droppedPath)
-          .then((markdown) => {
-            if (
-              disposed ||
-              requestSeq !== markdownImportRequestSeqRef.current ||
-              markdownDropBlockedRef.current ||
-              // The draft check repeats here because typing can begin between
-              // the drop and this read completing.
-              composerRefusesImport() ||
-              sidebarModeRef.current !== "research"
-            ) {
-              return;
-            }
-            setNewDocumentWorkspaceId(researchScopeRef.current);
-            setNewDocumentInitialMarkdown(markdown);
-            saveSessionDraftJson(SESSION_DRAFT_KEYS.newDocumentFields, {
-              markdown,
-              title: "",
-            });
-            saveSessionDraftJson(SESSION_DRAFT_KEYS.newDocumentContext, {
-              workspaceId: researchScopeRef.current,
-            });
-            newDocumentOpenRef.current = true;
-            setNewDocumentOpen(true);
-            showResearchSurface();
-          })
-          .catch((err) => {
-            if (
-              !disposed &&
-              requestSeq === markdownImportRequestSeqRef.current &&
-              !markdownDropBlockedRef.current
-            ) {
-              setError(err instanceof Error ? err.message : String(err));
-            }
-          });
-      })
-      .then((stopListening) => {
-        if (disposed) {
-          stopListening();
-        } else {
-          unlistenDrop = stopListening;
-        }
-      })
-      .catch(() => undefined);
-
-    return () => {
-      disposed = true;
-      unlistenDrop?.();
-      unlistenScale?.();
-    };
-  }, []);
   const chooseResearchWorkspaceFolder = useCallback(async (): Promise<GroupInfo | null> => {
     setError(null);
     setFolderPickerStatus("Opening folder picker…");
@@ -7823,8 +7477,7 @@ function MainApp() {
       // must not leave the composer covering the tree it just created. A
       // document submit's own composer is dirty here, so it is unaffected and
       // closes itself right after this adopt.
-      dismissPristineNewDocumentComposer();
-      showResearchSidebar();
+        showResearchSidebar();
       showResearchSurface();
       activeResearchPaneIdRef.current = null;
       setActiveResearchPaneId(null);
@@ -7842,8 +7495,7 @@ function MainApp() {
     },
     [
       changeResearchFolderScope,
-      dismissPristineNewDocumentComposer,
-      showResearchSidebar,
+        showResearchSidebar,
     ],
   );
   const submitNewResearch = useCallback(
@@ -7876,8 +7528,7 @@ function MainApp() {
           workspaceId: group.id,
         });
       } catch (err) {
-        // The dialog displays the rethrown error itself — the global banner
-        // renders behind the modal backdrop where it reads as a dead button.
+        // The Home composer displays the rethrown error beside the retained fields.
         void refreshResearchNavigation().catch(() => undefined);
         void refreshAdapterReadiness({ force: true }).catch(() => undefined);
         throw err;
@@ -7896,33 +7547,6 @@ function MainApp() {
       refreshAdapterReadiness,
       resolveResearchComposerWorkspace,
     ],
-  );
-  const submitNewDocument = useCallback(
-    async (input: {
-      markdown: string;
-      title: string | null;
-      workspaceId: string | null;
-    }) => {
-      const group = await resolveResearchComposerWorkspace(input.workspaceId);
-      let detail: ResearchTreeDetail;
-      try {
-        detail = await createResearchDocument({
-          markdown: input.markdown,
-          title: input.title,
-          workspaceId: group.id,
-        });
-      } catch (err) {
-        // Same reconciliation as the research composer: resolving the
-        // workspace may have just created the default folder, so the sidebar
-        // needs a refresh even though the failed create committed nothing.
-        void refreshResearchNavigation().catch(() => undefined);
-        throw err;
-      }
-      // No generated-title pass: a document's title comes from its own content
-      // (or the composer's explicit field).
-      adoptCreatedResearchTree(detail);
-    },
-    [adoptCreatedResearchTree, refreshResearchNavigation, resolveResearchComposerWorkspace],
   );
   const editResearchDocument = useCallback(
     async (input: {
@@ -8655,7 +8279,6 @@ function MainApp() {
 
   function openNewAgentPopover() {
     setTerminalMapOpen(false);
-    setNewResearchOpen(false);
     setNewAgentOpen(true);
     if (sidebarModeRef.current !== "terminal") {
       showResearchSidebar();
@@ -8680,13 +8303,6 @@ function MainApp() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [newAgentOpen]);
-
-  useEffect(() => {
-    if (!newResearchOpen) {
-      return;
-    }
-    void refreshAdapterReadiness().catch(() => undefined);
-  }, [newResearchOpen, refreshAdapterReadiness]);
 
   useEffect(() => {
     if (!config || adapterProbeCompletedAtRef.current.has("local")) {
@@ -8854,18 +8470,11 @@ function MainApp() {
     }));
     commands.push(
       {
-        id: "action:new-research",
+        id: "action:home",
         section: "Actions",
-        title: "New research",
-        hint: "⌘T",
-        action: () => void createResearchFromSidebar(),
-      },
-      {
-        id: "action:new-document",
-        section: "Actions",
-        title: "New document",
-        hint: "⌘D",
-        action: () => void createDocumentFromSidebar(),
+        title: "Home",
+        hint: "⌘N",
+        action: focusResearchHome,
       },
       {
         id: "action:toggle-left-sidebar",
@@ -9862,16 +9471,14 @@ function MainApp() {
     return () => cancelAnimationFrame(frame);
   }, [paneIdsKey]);
 
-  // The same backstop for editables that unmount with a closing modal: the ⌘K
-  // palette, rename dialog, settings, and new-research dialogs all hold DOM
-  // focus in a text input, and dismissing them (Escape, submit, backdrop)
-  // removes that input with no focusout. Without a re-sample the active
-  // terminal stays keyboard-dead until the next real focus event.
+  // Backstop for editables that unmount with a closing modal: the ⌘K palette,
+  // rename dialog, settings, and agent launcher all hold DOM focus in an input.
+  // WebKit may remove that input without focusout, leaving the active terminal
+  // keyboard-dead until another real focus event.
   const modalEditorOpen =
     commandPaletteOpen ||
     conversationHistoryOpen ||
     settingsOpen ||
-    newResearchOpen ||
     newAgentOpen ||
     terminalMapOpen ||
     Boolean(publicationTarget) ||
@@ -9887,22 +9494,6 @@ function MainApp() {
     });
     return () => cancelAnimationFrame(frame);
   }, [modalEditorOpen]);
-  // The document composer gets its own re-sample rather than a slot in
-  // modalEditorOpen: it is a page whose draft can stay open (hidden)
-  // indefinitely, and folding it into the shared flag would hold that flag
-  // true for the life of a parked draft — suppressing the backstop above for
-  // every genuinely transient modal closed in the meantime.
-  useEffect(() => {
-    if (newDocumentOpen) {
-      return;
-    }
-    const frame = requestAnimationFrame(() => {
-      setWebEditableFocused(
-        document.hasFocus() && isEditableTarget(document.activeElement),
-      );
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [newDocumentOpen]);
 
   const mountedTurnPaneCellsKey = visibleRightBarSurfaces
     .map((surface) => surface.pane.id)
@@ -10505,8 +10096,13 @@ function MainApp() {
           }
           return;
         }
-        case "openNewResearch":
-          createResearchFromSidebar();
+        case "focusResearchHome":
+          focusResearchHome();
+          window.requestAnimationFrame(() => {
+            document
+              .querySelector<HTMLTextAreaElement>(".new-research-launcher textarea")
+              ?.focus();
+          });
           return;
         case "toggleLeftSidebar":
           setLeftSidebarCollapsedForActivePane(!leftSidebarCollapsedRef.current);
@@ -10523,9 +10119,6 @@ function MainApp() {
           return;
         case "openCommandPalette":
           setCommandPaletteOpen(true);
-          return;
-        case "newDocument":
-          createDocumentFromSidebar();
           return;
         case "focusFollowups":
           requestResearchFollowupsFocus();
@@ -10628,8 +10221,7 @@ function MainApp() {
     researchSurfaceActive,
     researchHomeActive,
     activeResearchTreeId,
-    createResearchFromSidebar,
-    createDocumentFromSidebar,
+    focusResearchHome,
     moveActiveResearchTree,
     selectResearchTree,
     sidebarMode,
@@ -10865,9 +10457,7 @@ function MainApp() {
     const maxX = Math.max(8, window.innerWidth - SETTINGS_CONTEXT_MENU_WIDTH - 8);
     const maxY = Math.max(8, window.innerHeight - menuHeight - 8);
     const x = clamp(rect.right - SETTINGS_CONTEXT_MENU_WIDTH, 8, maxX);
-    const upwardY = rect.top - menuHeight - 6;
-    const downwardY = rect.bottom + 6;
-    const y = clamp(upwardY >= 8 ? upwardY : downwardY, 8, maxY);
+    const y = clamp(rect.bottom + 6, 8, maxY);
     setPaneContextMenu(null);
     setGroupMenu(null);
     setSettingsMenu((current) => (current ? null : { x, y }));
@@ -10877,16 +10467,14 @@ function MainApp() {
       if (
         isResearchTreeSelectionChange(
           activeResearchTreeId,
-          // An open composer page covers the document, so re-clicking the
-          // active tree is a real navigation rather than a redundant select.
-          researchSurfaceActive && !newDocumentOpen,
+          researchSurfaceActive && researchStageView === "document",
           treeId,
         )
       ) {
         navigateToResearchDocument(treeId);
       }
     },
-    [activeResearchTreeId, navigateToResearchDocument, newDocumentOpen, researchSurfaceActive],
+    [activeResearchTreeId, navigateToResearchDocument, researchStageView, researchSurfaceActive],
   );
   const reorderResearchTreesFromSidebar = useCallback(
     (archived: boolean, orderedTreeIds: string[]) => {
@@ -10935,13 +10523,24 @@ function MainApp() {
         <div className="sidebar-collapsed-placeholder" aria-hidden="true" />
       ) : (
         <aside
-          ref={sidebarRef}
           className={`sidebar${sidebarWidth < LEFT_SIDEBAR_COMPACT_WIDTH ? " is-narrow" : ""}${
             settings.codeMode ? " is-code-mode" : ""
           }${sidebarMode === "research" ? " is-research-mode" : ""}`}
         >
           <div className="titlebar-drag" data-tauri-drag-region aria-hidden="true" />
           <div className="sidebar-header-controls is-grouped">
+            <button
+              type="button"
+              className={`icon-button sidebar-header-button${settingsMenu ? " is-active" : ""}`}
+              aria-label="Settings menu"
+              aria-haspopup="menu"
+              aria-expanded={settingsMenu ? true : undefined}
+              title="Settings menu (⌘,)"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={toggleSettingsMenuFromButton}
+            >
+              <Settings size={14} aria-hidden="true" />
+            </button>
             <button
               type="button"
               className="icon-button sidebar-header-button"
@@ -11018,9 +10617,8 @@ function MainApp() {
           className={`pane-list${draggingPaneId || draggingGroupId ? " is-dragging" : ""}`}
           aria-label="Research"
         >
-          {/* Recent Activity uses the same row/select/copy nesting every
-              research row uses. Its fixed-row inset mirrors the scrollable
-              research section below. */}
+          {/* Home uses the same row/select/copy nesting as each research row.
+              Its fixed-row inset mirrors the scrollable section below. */}
           {sidebarMode === "research" ? (
             <div
               className={`research-sidebar-row journal-sidebar-row${
@@ -11031,12 +10629,12 @@ function MainApp() {
                 type="button"
                 className="control-button research-sidebar-select"
                 aria-current={researchStageView === "journal" ? "page" : undefined}
-                title="Research Activity"
+                title="Home"
                 onClick={openJournal}
               >
                 <span className="research-sidebar-copy">
                   <span className="research-sidebar-title">
-                    <span className="research-sidebar-title-text">Research Activity</span>
+                    <span className="research-sidebar-title-text">Home</span>
                   </span>
                 </span>
               </button>
@@ -11075,13 +10673,10 @@ function MainApp() {
           ) : null}
         </nav>
 
-        <div
-          className={`sidebar-actions${
-            sidebarMode === "terminal" && !settings.codeMode ? " is-agent-only" : ""
-          }`}
-        >
-          {sidebarMode === "terminal" ? (
-            <>
+        {sidebarMode === "terminal" ? (
+          <div
+            className={`sidebar-actions${!settings.codeMode ? " is-agent-only" : ""}`}
+          >
               {settings.codeMode ? (
                 <div className="sidebar-action-with-hint">
                   <button className="control-button" type="button" onClick={addShellPane}>
@@ -11112,67 +10707,6 @@ function MainApp() {
                   </span>
                 ) : null}
               </div>
-            </>
-          ) : (
-            <>
-              <div className="sidebar-action-with-hint">
-                <button className="control-button" type="button" onClick={() => void createResearchFromSidebar()}>
-                  <Plus size={14} aria-hidden="true" />
-                  <span>New query</span>
-                </button>
-                {shortcutHintsShown ? (
-                  <span
-                    className="pane-tab-shortcut-hint sidebar-action-shortcut-hint"
-                    aria-hidden="true"
-                  >
-                    ⌘T
-                  </span>
-                ) : null}
-              </div>
-              <div className="sidebar-action-with-hint">
-                <button className="control-button" type="button" onClick={() => void createDocumentFromSidebar()}>
-                  <FileText size={14} aria-hidden="true" />
-                  <span>New doc</span>
-                </button>
-                {shortcutHintsShown ? (
-                  <span
-                    className="pane-tab-shortcut-hint sidebar-action-shortcut-hint"
-                    aria-hidden="true"
-                  >
-                    ⌘D
-                  </span>
-                ) : null}
-              </div>
-            </>
-          )}
-          <div className="sidebar-action-with-hint">
-            <button
-              type="button"
-              className="control-button sidebar-settings-button"
-              aria-label="Settings menu"
-              aria-haspopup="menu"
-              aria-expanded={settingsMenu ? true : undefined}
-              title="Settings menu"
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={toggleSettingsMenuFromButton}
-            >
-              <Settings size={14} aria-hidden="true" />
-            </button>
-            {shortcutHintsShown ? (
-              <span
-                className="pane-tab-shortcut-hint sidebar-settings-shortcut-hint"
-                aria-hidden="true"
-              >
-                ⌘,
-              </span>
-            ) : null}
-          </div>
-        </div>
-        {markdownDropTargetActive ? (
-          <div className="research-markdown-drop-overlay" role="status" aria-live="polite">
-            <FileUp size={34} strokeWidth={1.5} aria-hidden="true" />
-            <strong>Drop Markdown file</strong>
-            <span>Open it in a new document</span>
           </div>
         ) : null}
         </aside>
@@ -13261,24 +12795,6 @@ function MainApp() {
             !researchSurfaceActive && visibleTerminalPaneIds.length === 0 ? " is-empty" : ""
           }`}
         >
-          {newDocumentOpen ? (
-            // A research-surface page, not a modal: it replaces the document
-            // view while open and stays mounted (hidden) across surface
-            // switches so an in-progress draft survives a detour to a
-            // terminal tab.
-            <NewDocumentPane
-              hidden={researchStageView !== "composer"}
-              initialMarkdown={newDocumentInitialMarkdown}
-              workspaceId={newDocumentWorkspaceId}
-              onClose={closeNewDocumentComposer}
-              onCreate={submitNewDocument}
-              onDirtyChange={handleNewDocumentDirtyChange}
-              sessionDraftKey={SESSION_DRAFT_KEYS.newDocumentFields}
-              onShowSidebar={
-                researchSidebarRestoreInHeader ? showLeftSidebarInResearch : undefined
-              }
-            />
-          ) : null}
           {researchStageView === "multi-select" ? (
             <div className="research-multi-select-state" aria-live="polite">
               <Layers size={48} aria-hidden="true" />
@@ -13289,13 +12805,24 @@ function MainApp() {
           {researchStageView === "journal" && config ? (
             <ResearchActivityFeed
               {...activityFeedState}
+              composer={
+                <ResearchQueryComposer
+                  adapters={config.adapters}
+                  requireCmdEnterToSend={settings.requireCmdEnterToSend}
+                  workspaceId={researchScope}
+                  onOpenAgentSettings={() => {
+                    setSettingsTab("agents");
+                    setSettingsOpen(true);
+                  }}
+                  onCreate={submitNewResearch}
+                />
+              }
               items={recentActivityItems}
               researchTrees={[...researchTrees, ...archivedResearchTrees]}
               nextCursor={recentActivityCursor}
               loadingOlder={loadingOlderActivity}
               olderError={olderActivityError}
               pendingUndo={journalUndo ? { entry: journalUndo.entry } : null}
-              onAddEntry={addJournalEntry}
               onRemoveEntry={removeJournalEntry}
               onRetryTweet={retryJournalTweet}
               onUndoRemove={undoJournalRemove}
@@ -13356,12 +12883,6 @@ function MainApp() {
               onWorkspaceForward={goResearchWorkspaceForward}
             />
           ) : null}
-          <div className="research-empty-state" hidden={researchStageView !== "home"}>
-            <div className="research-empty-placeholder">
-              <MessageSquareText size={48} aria-hidden="true" />
-              <span>Select a research item or start a new query</span>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -13453,20 +12974,6 @@ function MainApp() {
           onClose={() => setLinkMenu(null)}
         />
       ) : null}
-
-      <NewResearchDialog
-        open={newResearchOpen}
-        adapters={config?.adapters ?? []}
-        requireCmdEnterToSend={settings.requireCmdEnterToSend}
-        workspaceId={researchScope}
-        onOpenAgentSettings={() => {
-          setNewResearchOpen(false);
-          setSettingsTab("agents");
-          setSettingsOpen(true);
-        }}
-        onClose={() => setNewResearchOpen(false)}
-        onCreate={submitNewResearch}
-      />
 
       <ResearchFolderDialog
         open={newResearchFolderRequest !== null}

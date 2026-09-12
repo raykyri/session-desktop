@@ -20,14 +20,12 @@ const shortcut = (
 
 test("Session resolves research navigation shortcuts", () => {
   assert.deepEqual(resolveAppShortcut(shortcut({ key: "t", metaKey: true })), {
-    type: "openNewResearch",
+    type: "focusResearchHome",
   });
   assert.deepEqual(resolveAppShortcut(shortcut({ key: "n", metaKey: true })), {
-    type: "openNewResearch",
+    type: "focusResearchHome",
   });
-  assert.deepEqual(resolveAppShortcut(shortcut({ key: "d", metaKey: true })), {
-    type: "newDocument",
-  });
+  assert.equal(resolveAppShortcut(shortcut({ key: "d", metaKey: true })), null);
   assert.deepEqual(resolveAppShortcut(shortcut({ key: "4", metaKey: true })), {
     type: "focusResearchTab",
     tabIndex: 3,
@@ -93,8 +91,8 @@ test("native shortcut parsing accepts only research actions", () => {
 
 test("shortcut repeat and show-hide conflicts use Session actions", () => {
   assert.equal(appShortcutAllowsRepeat({ type: "moveResearchItem", direction: 1 }), true);
-  assert.equal(appShortcutAllowsRepeat({ type: "openNewResearch" }), false);
-  assert.equal(showHideShortcutConflict("Command+T"), "start new research");
+  assert.equal(appShortcutAllowsRepeat({ type: "focusResearchHome" }), false);
+  assert.equal(showHideShortcutConflict("Command+T"), "open Home");
   assert.equal(showHideShortcutConflict("Command+K"), "open the command palette");
   assert.equal(showHideShortcutConflict("Option+Space"), null);
 });

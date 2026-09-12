@@ -1033,7 +1033,7 @@
 }
 
 .settings-context-menu {
-  width: min(240px, calc(100vw - 16px));
+  width: min(196px, calc(100vw - 16px));
 }
 
 .settings-context-menu-label {
@@ -1207,7 +1207,7 @@
 
 .sidebar-actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: stretch;
   gap: 6px;
   /* Offsets the reduced sidebar padding so the action row keeps its original width. */
@@ -1216,7 +1216,7 @@
 }
 
 .sidebar-actions.is-agent-only {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .sidebar-action-with-hint {
@@ -1232,19 +1232,6 @@
 
 .sidebar-action-shortcut-hint {
   right: 6px;
-}
-
-/* The Settings cog is a square icon button; center its held-⌘ badge over the
-   icon instead of hugging a right edge it barely has. */
-.sidebar-settings-shortcut-hint {
-  right: 50%;
-  transform: translate(50%, -50%);
-}
-
-/* The Settings cog sits inline to the right of New shell/New agent and shows
-   only its icon, so it stays square instead of stretching to a label width. */
-.sidebar-actions button.sidebar-settings-button {
-  padding: 0 6px;
 }
 
 /* The sidebar action buttons (New shell/New agent) and the composer
@@ -1293,13 +1280,6 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 .sidebar-actions button svg {
   flex: none;
   opacity: 0.8;
-}
-
-/* In a narrow sidebar there isn't room for both the icon and the label, so drop
-   the icons and let the labels have the space. The icon-only Settings cog is
-   exempt — hiding its icon would leave an empty button. */
-.sidebar.is-narrow .sidebar-actions button:not(.sidebar-settings-button) svg {
-  display: none;
 }
 
 /* Let the label ellipsize instead of wrapping under the icon when the sidebar is

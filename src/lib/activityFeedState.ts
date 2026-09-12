@@ -1,10 +1,8 @@
 export interface ActivityFeedState {
-  draft: string;
   scrollTop: number;
 }
 
-// Keep the existing session key so replacing the iframe does not discard the
-// note the user was writing or their position in the activity feed.
+// Keep the existing session key so the Home feed preserves its scroll position.
 const ACTIVITY_FEED_STATE_KEY = "session.research-browser.state.v1";
 type FeedStorage = Pick<Storage, "getItem" | "setItem">;
 
@@ -26,13 +24,12 @@ export function readActivityFeedState(storage?: Pick<Storage, "getItem">): Activ
   try {
     const values = record(readSnapshot(storage ?? globalThis.sessionStorage).values);
     return {
-      draft: typeof values.activityDraft === "string" ? values.activityDraft : "",
       scrollTop: typeof values.activityScroll === "number" && Number.isFinite(values.activityScroll)
         ? Math.max(0, values.activityScroll)
         : 0,
     };
   } catch {
-    return { draft: "", scrollTop: 0 };
+    return { scrollTop: 0 };
   }
 }
 
@@ -41,11 +38,11 @@ export function saveActivityFeedState(state: ActivityFeedState, storage?: FeedSt
     const target = storage ?? globalThis.sessionStorage;
     if (!target) return;
     const snapshot = readSnapshot(target);
+    const { activityDraft: _removedDraft, ...retainedValues } = record(snapshot.values);
     target.setItem(ACTIVITY_FEED_STATE_KEY, JSON.stringify({
       ...snapshot,
       values: {
-        ...record(snapshot.values),
-        activityDraft: state.draft,
+        ...retainedValues,
         activityScroll: state.scrollTop,
       },
     }));

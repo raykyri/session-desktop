@@ -6,16 +6,7 @@ import {
   ResearchDocumentWordLimitExceeded,
   countResearchDocumentWords,
   deriveResearchDocumentTitle,
-  isMarkdownDocumentPath,
 } from "../src/lib/researchDocuments";
-
-test("document imports accept conventional Markdown paths and cap content at 10 MB", () => {
-  assert.equal(RESEARCH_DOCUMENT_BYTE_LIMIT, 10 * 1024 * 1024);
-  assert.equal(isMarkdownDocumentPath("/tmp/notes.md"), true);
-  assert.equal(isMarkdownDocumentPath("/tmp/NOTES.MARKDOWN"), true);
-  assert.equal(isMarkdownDocumentPath("/tmp/notes.md.txt"), false);
-  assert.equal(isMarkdownDocumentPath("/tmp/notes"), false);
-});
 
 test("word counting matches whitespace-delimited tokens", () => {
   assert.equal(countResearchDocumentWords(""), 0);

@@ -6,8 +6,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   appendJournalEntry,
-  classifyJournalInput,
-  createJournalEntry,
   emptyJournalState,
   normalizeJournalState,
   removeJournalEntry,
@@ -54,6 +52,21 @@ function tweetEntry(tweet: TweetSnapshot): JournalTweetEntry {
   };
 }
 
+function linkEntry(id: string, url = `https://example.com/${id}`): JournalEntry {
+  return { kind: "link", id, createdAt: "2026-08-27T00:00:00.000Z", url };
+}
+
+function pendingTweetEntry(id = "a"): JournalTweetEntry {
+  return {
+    kind: "tweet",
+    id,
+    createdAt: "2026-08-27T00:00:00.000Z",
+    url: "https://x.com/jack/status/20",
+    tweetId: "20",
+    hydration: "pending",
+  };
+}
+
 test("tweet permalinks parse across hosts and trailing segments", () => {
   assert.equal(tweetIdFromUrl("https://x.com/jack/status/20"), "20");
   assert.equal(tweetIdFromUrl("https://twitter.com/jack/status/20?s=61&t=abc"), "20");
@@ -70,25 +83,6 @@ test("syndication token matches the widget derivation", () => {
   // ((20 / 1e15) * Math.PI).toString(36) with zeros and the radix point
   // removed — the value X's own embed code sends for this id.
   assert.equal(syndicationToken("20"), "6dq1a2xwd93");
-});
-
-test("composer input classifies into note, link, and tweet", () => {
-  assert.deepEqual(classifyJournalInput("  just a thought  "), {
-    kind: "note",
-    text: "just a thought",
-  });
-  assert.deepEqual(classifyJournalInput("https://example.com/a?b=c"), {
-    kind: "link",
-    url: "https://example.com/a?b=c",
-  });
-  assert.deepEqual(classifyJournalInput("https://x.com/jack/status/20"), {
-    kind: "tweet",
-    url: "https://x.com/jack/status/20",
-    tweetId: "20",
-  });
-  // A URL inside prose stays a note.
-  assert.equal(classifyJournalInput("see https://example.com for more")?.kind, "note");
-  assert.equal(classifyJournalInput("   "), null);
 });
 
 test("plain tweet hydrates author, text, and date", () => {
@@ -191,21 +185,11 @@ test("tombstoned and malformed payloads do not hydrate", () => {
   assert.equal(tweetSnapshotFromSyndication("1", { __typename: "Tweet" }), null);
 });
 
-test("journal state normalizes entry-by-entry and round-trips", () => {
-  const tweet = snapshot("20");
-  const note = createJournalEntry(
-    { kind: "note", text: "hello" },
-    "a",
-    "2026-08-27T00:00:00.000Z",
-  );
-  const link = createJournalEntry(
-    { kind: "link", url: "https://example.com" },
-    "b",
-    "2026-08-27T00:00:01.000Z",
-  );
-  let state = appendJournalEntry(emptyJournalState(), note);
-  state = appendJournalEntry(state, link);
-  state = appendJournalEntry(state, tweetEntry(tweet));
+test("journal state ignores legacy notes and normalizes retained entries", () => {
+  const state = {
+    version: 1,
+    entries: [linkEntry("a"), linkEntry("b"), tweetEntry(snapshot("20"))],
+  };
   const roundTripped = normalizeJournalState(JSON.parse(JSON.stringify(state)));
   assert.deepEqual(roundTripped, state);
 
@@ -213,9 +197,9 @@ test("journal state normalizes entry-by-entry and round-trips", () => {
     version: 99,
     entries: [
       ...state.entries,
-      { kind: "note" }, // no id
-      { kind: "mystery", id: "z", createdAt: "2026-01-01" }, // unknown kind
-      { ...note, id: "a" }, // duplicate id
+      { kind: "note", id: "legacy-note", createdAt: "2026-01-01", text: "ignore" },
+      { kind: "mystery", id: "z", createdAt: "2026-01-01" },
+      { ...state.entries[0] },
       "garbage",
     ],
   });
@@ -242,11 +226,7 @@ test("a stored ok-without-snapshot tweet re-enters hydration", () => {
 });
 
 test("hydration reducer records outcomes and tolerates deleted entries", () => {
-  const pending = createJournalEntry(
-    { kind: "tweet", url: "https://x.com/jack/status/20", tweetId: "20" },
-    "a",
-    "2026-08-27T00:00:00.000Z",
-  );
+  const pending = pendingTweetEntry();
   const state = appendJournalEntry(emptyJournalState(), pending);
   const failed = setJournalTweetHydration(state, "a", {
     hydration: "failed",
@@ -268,8 +248,7 @@ test("hydration reducer records outcomes and tolerates deleted entries", () => {
 });
 
 test("insert-at restores a removed entry at its original position", () => {
-  const at = (n: number) =>
-    createJournalEntry({ kind: "note", text: `n${n}` }, `id${n}`, "2026-08-27");
+  const at = (n: number) => linkEntry(`id${n}`);
   let state = emptyJournalState();
   for (const n of [0, 1, 2]) {
     state = appendJournalEntry(state, at(n));
@@ -281,36 +260,18 @@ test("insert-at restores a removed entry at its original position", () => {
   assert.equal(insertJournalEntryAt(restored, at(1), 1), restored);
   // Out-of-range indices clamp instead of throwing.
   assert.equal(insertJournalEntryAt(removed, at(1), 99).entries.length, 3);
-  assert.equal(insertJournalEntryAt(removed, at(1), -5).entries[0].text, "n1");
+  assert.equal(insertJournalEntryAt(removed, at(1), -5).entries[0].id, "id1");
 });
 
 test("context menu items and keycaps track entry kind and state", () => {
-  const note = createJournalEntry({ kind: "note", text: "hi" }, "a", "2026-08-27");
-  assert.deepEqual(
-    journalEntryMenuItems(note).map((item) => [item.action, item.key]),
-    [
-      ["copy", "C"],
-      ["delete", "D"],
-    ],
-  );
-  assert.equal(journalEntryUrl(note), null);
-
-  const link = createJournalEntry(
-    { kind: "link", url: "https://example.com" },
-    "b",
-    "2026-08-27",
-  );
+  const link = linkEntry("b", "https://example.com");
   assert.deepEqual(
     journalEntryMenuItems(link).map((item) => item.action),
     ["open", "copy", "delete"],
   );
   assert.equal(journalEntryUrl(link), "https://example.com");
 
-  const pendingTweet = createJournalEntry(
-    { kind: "tweet", url: "https://x.com/jack/status/20", tweetId: "20" },
-    "c",
-    "2026-08-27",
-  );
+  const pendingTweet = pendingTweetEntry("c");
   // No retry while a fetch is already owed.
   assert.deepEqual(
     journalEntryMenuItems(pendingTweet).map((item) => item.action),
@@ -342,13 +303,9 @@ test("context menu items and keycaps track entry kind and state", () => {
 });
 
 test("append dedupes by id", () => {
-  const note = createJournalEntry(
-    { kind: "note", text: "hello" },
-    "a",
-    "2026-08-27T00:00:00.000Z",
-  );
-  const state = appendJournalEntry(emptyJournalState(), note);
-  assert.equal(appendJournalEntry(state, note), state);
+  const link = linkEntry("a");
+  const state = appendJournalEntry(emptyJournalState(), link);
+  assert.equal(appendJournalEntry(state, link), state);
 });
 
 function renderCard(entry: JournalEntry) {

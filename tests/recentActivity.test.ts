@@ -112,8 +112,8 @@ test("saved metadata resolves type and source context", () => {
 
 test("mixed activity sorts deterministically and malformed saved dates last", () => {
   const entries: JournalEntry[] = [
-    { kind: "note", id: "bad", createdAt: "not-a-date", text: "old" },
-    { kind: "note", id: "new", createdAt: "1970-01-01T00:00:00.300Z", text: "new" },
+    { kind: "link", id: "bad", createdAt: "not-a-date", url: "https://example.com/old" },
+    { kind: "link", id: "new", createdAt: "1970-01-01T00:00:00.300Z", url: "https://example.com/new" },
   ];
   assert.deepEqual(
     buildRecentActivity(entries, [query], [tree]).map((event) => event.id),
@@ -150,11 +150,11 @@ test("day labels provide stable nearby buckets", () => {
 });
 
 test("mixed activity pages merge by one deterministic source-aware order", () => {
-  const note = recentActivityItemFromJournalEntry({
-    kind: "note",
-    id: "note",
+  const link = recentActivityItemFromJournalEntry({
+    kind: "link",
+    id: "link",
     createdAt: "1970-01-01T00:00:00.200Z",
-    text: "Saved at the same millisecond",
+    url: "https://example.com/same-time",
   });
   const research: RecentActivityItem = {
     kind: "research-query",
@@ -162,7 +162,7 @@ test("mixed activity pages merge by one deterministic source-aware order", () =>
     query,
   };
   assert.deepEqual(
-    mergeRecentActivityItems([note], [research]).map((item) => item.kind),
+    mergeRecentActivityItems([link], [research]).map((item) => item.kind),
     ["research-query", "journal"],
   );
 });
@@ -206,6 +206,11 @@ test("activity page normalization drops malformed opaque journal records", () =>
     items: [
       {
         kind: "journal",
+        occurredAt: 11,
+        entry: { kind: "note", id: "legacy", createdAt: "2026-01-01", text: "ignore" } as JournalEntry,
+      },
+      {
+        kind: "journal",
         occurredAt: 10,
         entry: { id: "broken" } as JournalEntry,
       },
@@ -232,7 +237,7 @@ test("variable-height virtualization returns a small overscanned window", () => 
 
 test("virtual feed rows retain day headers and feed positions", () => {
   const events = buildRecentActivity(
-    [{ kind: "note", id: "note", createdAt: "1970-01-01T00:00:00.300Z", text: "n" }],
+    [{ kind: "link", id: "link", createdAt: "1970-01-01T00:00:00.300Z", url: "https://example.com" }],
     [query],
     [tree],
   );
