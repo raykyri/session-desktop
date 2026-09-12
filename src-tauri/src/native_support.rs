@@ -111,70 +111,70 @@ mod imp {
     use std::ffi::{CString, c_char};
     use std::sync::Mutex;
     unsafe extern "C" {
-        fn qmux_native_application_is_active() -> i32;
-        fn qmux_native_completion_sound_play(system_name: *const c_char) -> i32;
-        fn qmux_native_completion_sound_play_file(system_path: *const c_char) -> i32;
-        fn qmux_native_completion_sound_play_data(
+        fn session_native_application_is_active() -> i32;
+        fn session_native_completion_sound_play(system_name: *const c_char) -> i32;
+        fn session_native_completion_sound_play_file(system_path: *const c_char) -> i32;
+        fn session_native_completion_sound_play_data(
             name: *const c_char,
             bytes: *const u8,
             bytes_len: usize,
         ) -> i32;
-        fn qmux_native_terminal_bridge_available() -> i32;
-        fn qmux_native_terminal_initialize(native_view: *mut c_void) -> i32;
-        fn qmux_native_terminal_shutdown();
-        fn qmux_native_terminal_set_iframe_shortcut_fallback(active: i32) -> i32;
-        fn qmux_native_terminal_set_browser_overlay_open(active: i32) -> i32;
-        fn qmux_native_terminal_set_human_browser_webview(
+        fn session_native_support_bridge_available() -> i32;
+        fn session_native_support_initialize(native_view: *mut c_void) -> i32;
+        fn session_native_support_shutdown();
+        fn session_native_support_set_iframe_shortcut_fallback(active: i32) -> i32;
+        fn session_native_support_set_browser_overlay_open(active: i32) -> i32;
+        fn session_native_support_set_human_browser_webview(
             native_view: *mut c_void,
             active: i32,
         ) -> i32;
-        fn qmux_native_terminal_set_human_browser_loading_background(
+        fn session_native_support_set_human_browser_loading_background(
             native_view: *mut c_void,
             active: i32,
         ) -> i32;
-        fn qmux_native_terminal_human_browser_history_state(native_view: *mut c_void) -> i32;
-        fn qmux_native_terminal_prepare_for_webview_reload() -> i32;
-        fn qmux_native_terminal_should_claim_web_app_shortcut(
+        fn session_native_support_human_browser_history_state(native_view: *mut c_void) -> i32;
+        fn session_native_support_prepare_for_webview_reload() -> i32;
+        fn session_native_support_should_claim_web_app_shortcut(
             has_terminal_keyboard_owner: i32,
             responder_state: i32,
             iframe_fallback_eligible: i32,
         ) -> i32;
-        fn qmux_native_terminal_should_claim_browser_escape(
+        fn session_native_support_should_claim_browser_escape(
             browser_overlay_open: i32,
             key: *const c_char,
             control: i32,
             option: i32,
             command: i32,
         ) -> i32;
-        fn qmux_native_terminal_human_browser_defers_editable_sensitive_shortcut(
+        fn session_native_support_human_browser_defers_editable_sensitive_shortcut(
             key: *const c_char,
             shift: i32,
             control: i32,
             option: i32,
             command: i32,
         ) -> i32;
-        fn qmux_native_support_set_browser_background(red: f64, green: f64, blue: f64) -> i32;
+        fn session_native_support_set_browser_background(red: f64, green: f64, blue: f64) -> i32;
     }
     fn cstring(value: &str, label: &str) -> Result<CString, String> {
         CString::new(value).map_err(|_| format!("{label} contains an interior NUL byte"))
     }
     pub fn available() -> bool {
         // SAFETY: the function has no arguments or borrowed state and is linked
-        // from the pinned QmuxNativeTerminal Swift package in build.rs.
-        unsafe { qmux_native_terminal_bridge_available() == 1 }
+        // from the pinned SessionNativeSupport Swift package in build.rs.
+        unsafe { session_native_support_bridge_available() == 1 }
     }
 
     pub fn application_is_active() -> bool {
         // SAFETY: the function has no borrowed state and synchronously reads
         // NSApplication.isActive on the main actor.
-        unsafe { qmux_native_application_is_active() == 1 }
+        unsafe { session_native_application_is_active() == 1 }
     }
 
     pub fn play_system_sound(system_name: &str) -> Result<(), String> {
         let system_name = cstring(system_name, "completion system sound name")?;
         // SAFETY: Swift copies the string synchronously and plays an allowlisted
         // NSSound name resolved by the Rust catalog on the main actor.
-        if unsafe { qmux_native_completion_sound_play(system_name.as_ptr()) } == 1 {
+        if unsafe { session_native_completion_sound_play(system_name.as_ptr()) } == 1 {
             Ok(())
         } else {
             Err("completion sound was not recognized or could not be played".to_string())
@@ -185,7 +185,7 @@ mod imp {
         let system_path = cstring(system_path, "completion system sound path")?;
         // SAFETY: Swift copies the allowlisted path synchronously and loads the
         // OS-provided audio file on the main actor.
-        if unsafe { qmux_native_completion_sound_play_file(system_path.as_ptr()) } == 1 {
+        if unsafe { session_native_completion_sound_play_file(system_path.as_ptr()) } == 1 {
             Ok(())
         } else {
             Err("completion system sound file could not be played".to_string())
@@ -197,7 +197,7 @@ mod imp {
         // SAFETY: Swift copies the name and audio data synchronously before this
         // call returns, then caches the resulting NSSound on the main actor.
         if unsafe {
-            qmux_native_completion_sound_play_data(name.as_ptr(), bytes.as_ptr(), bytes.len())
+            session_native_completion_sound_play_data(name.as_ptr(), bytes.as_ptr(), bytes.len())
         } == 1
         {
             Ok(())
@@ -215,7 +215,7 @@ mod imp {
             .lock()
             .map_err(|_| "native support state lock poisoned")? = Some(state);
         // SAFETY: Tauri owns the view throughout this synchronous main-thread call.
-        if unsafe { qmux_native_terminal_initialize(native_view) } == 1 {
+        if unsafe { session_native_support_initialize(native_view) } == 1 {
             Ok(())
         } else {
             *slot
@@ -227,7 +227,7 @@ mod imp {
 
     pub fn set_iframe_shortcut_fallback(active: bool) -> Result<(), String> {
         // SAFETY: the scalar is copied synchronously on the main actor.
-        if unsafe { qmux_native_terminal_set_iframe_shortcut_fallback(i32::from(active)) } == 1 {
+        if unsafe { session_native_support_set_iframe_shortcut_fallback(i32::from(active)) } == 1 {
             Ok(())
         } else {
             Err("native support host is not attached".to_string())
@@ -236,7 +236,7 @@ mod imp {
 
     pub fn set_browser_overlay_open(active: bool) -> Result<(), String> {
         // SAFETY: the scalar is copied synchronously on the main actor.
-        if unsafe { qmux_native_terminal_set_browser_overlay_open(i32::from(active)) } == 1 {
+        if unsafe { session_native_support_set_browser_overlay_open(i32::from(active)) } == 1 {
             Ok(())
         } else {
             Err("native support host is not attached".to_string())
@@ -249,8 +249,9 @@ mod imp {
         }
         // SAFETY: Tauri owns the WKWebView for the duration of this synchronous
         // call. Swift stores it weakly and never assumes ownership of it.
-        if unsafe { qmux_native_terminal_set_human_browser_webview(native_view, i32::from(active)) }
-            == 1
+        if unsafe {
+            session_native_support_set_human_browser_webview(native_view, i32::from(active))
+        } == 1
         {
             Ok(())
         } else {
@@ -268,7 +269,7 @@ mod imp {
         // SAFETY: Tauri owns the WKWebView for this synchronous call, and Swift
         // changes only its public underPageBackgroundColor property.
         if unsafe {
-            qmux_native_terminal_set_human_browser_loading_background(
+            session_native_support_set_human_browser_loading_background(
                 native_view,
                 i32::from(active),
             )
@@ -286,13 +287,13 @@ mod imp {
         }
         // SAFETY: Tauri owns the WKWebView for this synchronous query. Swift
         // reads only WebKit's navigation-list state on the main actor.
-        unsafe { qmux_native_terminal_human_browser_history_state(native_view) }.clamp(0, 3) as u8
+        unsafe { session_native_support_human_browser_history_state(native_view) }.clamp(0, 3) as u8
     }
 
     pub fn prepare_for_webview_reload() -> Result<(), String> {
         // SAFETY: the reset is synchronous main-actor state bookkeeping. It
         // clears document-owned routing and cancels stale probes.
-        if unsafe { qmux_native_terminal_prepare_for_webview_reload() } == 1 {
+        if unsafe { session_native_support_prepare_for_webview_reload() } == 1 {
             Ok(())
         } else {
             Err("native support host is not attached".to_string())
@@ -303,7 +304,7 @@ mod imp {
         super::set_events_listener_ready(false);
         // SAFETY: shutdown is idempotent and synchronously tears down Swift-owned
         // views on the main thread.
-        unsafe { qmux_native_terminal_shutdown() };
+        unsafe { session_native_support_shutdown() };
         if let Some(state) = APP_STATE.get()
             && let Ok(mut state) = state.lock()
         {
@@ -318,9 +319,9 @@ mod imp {
     ) -> bool {
         // SAFETY: all arguments are scalar values. Swift validates the
         // responder-state discriminant before exercising the pure routing
-        // helper linked from the same package as the terminal bridge.
+        // helper linked from the same package as the native support bridge.
         unsafe {
-            qmux_native_terminal_should_claim_web_app_shortcut(
+            session_native_support_should_claim_web_app_shortcut(
                 i32::from(has_terminal_keyboard_owner),
                 responder_state,
                 i32::from(iframe_fallback_eligible),
@@ -341,7 +342,7 @@ mod imp {
         // SAFETY: the key is a valid NUL-terminated string for the duration of
         // this pure routing probe and all remaining arguments are scalar.
         unsafe {
-            qmux_native_terminal_should_claim_browser_escape(
+            session_native_support_should_claim_browser_escape(
                 i32::from(browser_overlay_open),
                 key.as_ptr(),
                 i32::from(control),
@@ -364,7 +365,7 @@ mod imp {
         // SAFETY: the key is a valid NUL-terminated string for the duration of
         // the synchronous call and all remaining arguments are scalar values.
         unsafe {
-            qmux_native_terminal_human_browser_defers_editable_sensitive_shortcut(
+            session_native_support_human_browser_defers_editable_sensitive_shortcut(
                 key.as_ptr(),
                 i32::from(shift),
                 i32::from(control),
@@ -376,7 +377,7 @@ mod imp {
 
     pub fn set_browser_background(red: f64, green: f64, blue: f64) -> Result<(), String> {
         // SAFETY: scalar color components are validated by the Swift host.
-        if unsafe { qmux_native_support_set_browser_background(red, green, blue) } == 1 {
+        if unsafe { session_native_support_set_browser_background(red, green, blue) } == 1 {
             Ok(())
         } else {
             Err("invalid browser background".into())
@@ -478,7 +479,7 @@ fn callback_string(pointer: *const std::ffi::c_char) -> Option<String> {
 
 #[cfg(target_os = "macos")]
 #[unsafe(no_mangle)]
-pub extern "C" fn qmux_native_terminal_system_sleep_changed(sleeping: i32) {
+pub extern "C" fn session_native_support_system_sleep_changed(sleeping: i32) {
     with_app_state(|state| {
         crate::pty::remote_system_sleep_changed(state, sleeping != 0);
     });
@@ -486,7 +487,7 @@ pub extern "C" fn qmux_native_terminal_system_sleep_changed(sleeping: i32) {
 
 #[cfg(target_os = "macos")]
 #[unsafe(no_mangle)]
-pub extern "C" fn qmux_native_terminal_did_begin_interface_health_check() -> u64 {
+pub extern "C" fn session_native_support_did_begin_interface_health_check() -> u64 {
     if !events_listener_ready() {
         return 0;
     }
@@ -499,13 +500,13 @@ pub extern "C" fn qmux_native_terminal_did_begin_interface_health_check() -> u64
 
 #[cfg(target_os = "macos")]
 #[unsafe(no_mangle)]
-pub extern "C" fn qmux_native_terminal_did_cancel_interface_health_check() {
+pub extern "C" fn session_native_support_did_cancel_interface_health_check() {
     crate::cancel_interface_health_probe();
 }
 
 #[cfg(target_os = "macos")]
 #[unsafe(no_mangle)]
-pub extern "C" fn qmux_native_terminal_did_detect_unhealthy_webview(generation: u64) {
+pub extern "C" fn session_native_support_did_detect_unhealthy_webview(generation: u64) {
     if generation == 0 {
         return;
     }
@@ -520,7 +521,7 @@ pub extern "C" fn qmux_native_terminal_did_detect_unhealthy_webview(generation: 
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn qmux_native_terminal_did_request_browser_escape() -> i32 {
+pub extern "C" fn session_native_support_did_request_browser_escape() -> i32 {
     if !events_listener_ready() {
         return 0;
     }
@@ -538,7 +539,7 @@ pub extern "C" fn qmux_native_terminal_did_request_browser_escape() -> i32 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn qmux_native_terminal_did_receive_app_shortcut(
+pub extern "C" fn session_native_support_did_receive_app_shortcut(
     key: *const std::ffi::c_char,
     shift: i32,
     control: i32,

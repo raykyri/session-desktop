@@ -1,8 +1,8 @@
 @preconcurrency import AppKit
 import WebKit
 
-@_silgen_name("qmux_native_terminal_did_receive_app_shortcut")
-private func nativeTerminalDidReceiveAppShortcut(
+@_silgen_name("session_native_support_did_receive_app_shortcut")
+private func nativeSupportDidReceiveAppShortcut(
     _ key: UnsafePointer<CChar>,
     _ shift: Int32,
     _ control: Int32,
@@ -11,20 +11,20 @@ private func nativeTerminalDidReceiveAppShortcut(
     _ repeat: Int32
 ) -> Int32
 
-@_silgen_name("qmux_native_terminal_did_request_browser_escape")
-private func nativeTerminalDidRequestBrowserEscape() -> Int32
+@_silgen_name("session_native_support_did_request_browser_escape")
+private func nativeSupportDidRequestBrowserEscape() -> Int32
 
-@_silgen_name("qmux_native_terminal_did_begin_interface_health_check")
-private func nativeTerminalDidBeginInterfaceHealthCheck() -> UInt64
+@_silgen_name("session_native_support_did_begin_interface_health_check")
+private func nativeSupportDidBeginInterfaceHealthCheck() -> UInt64
 
-@_silgen_name("qmux_native_terminal_did_cancel_interface_health_check")
-private func nativeTerminalDidCancelInterfaceHealthCheck()
+@_silgen_name("session_native_support_did_cancel_interface_health_check")
+private func nativeSupportDidCancelInterfaceHealthCheck()
 
-@_silgen_name("qmux_native_terminal_did_detect_unhealthy_webview")
-private func nativeTerminalDidDetectUnhealthyWebView(_ generation: UInt64)
+@_silgen_name("session_native_support_did_detect_unhealthy_webview")
+private func nativeSupportDidDetectUnhealthyWebView(_ generation: UInt64)
 
-@_silgen_name("qmux_native_terminal_system_sleep_changed")
-private func nativeTerminalSystemSleepChanged(_ sleeping: Int32)
+@_silgen_name("session_native_support_system_sleep_changed")
+private func nativeSupportSystemSleepChanged(_ sleeping: Int32)
 
 @MainActor
 final class NativeSupportHost {
@@ -147,7 +147,7 @@ final class NativeSupportHost {
     func prepareForWebViewReload() -> Bool {
         guard appWebView != nil else { return false }
         webViewHealthProbeGeneration &+= 1
-        nativeTerminalDidCancelInterfaceHealthCheck()
+        nativeSupportDidCancelInterfaceHealthCheck()
         interfaceHealthCheckPending = false
         interfaceHealthCheckInFlight = false
         webViewHealthRustGeneration = nil
@@ -209,7 +209,7 @@ final class NativeSupportHost {
         inactiveSince = nil
         webViewHealthProbeGeneration &+= 1
         webViewHealthRustGeneration = nil
-        nativeTerminalDidCancelInterfaceHealthCheck()
+        nativeSupportDidCancelInterfaceHealthCheck()
         consumedAppShortcutKeyCodes.removeAll()
         iframeShortcutFallbackActive = false
         browserOverlayOpen = false
@@ -240,18 +240,18 @@ final class NativeSupportHost {
     }
 
     private func systemDidWake() {
-        nativeTerminalSystemSleepChanged(0)
+        nativeSupportSystemSleepChanged(0)
         requestInterfaceRecovery()
     }
 
     private func systemWillSleep() {
-        nativeTerminalSystemSleepChanged(1)
+        nativeSupportSystemSleepChanged(1)
         resetInterruptedInputState()
         interfaceHealthCheckPending = false
         interfaceHealthCheckInFlight = false
         webViewHealthProbeGeneration &+= 1
         webViewHealthRustGeneration = nil
-        nativeTerminalDidCancelInterfaceHealthCheck()
+        nativeSupportDidCancelInterfaceHealthCheck()
     }
 
     private func applicationDidResignActive() {
@@ -321,7 +321,7 @@ final class NativeSupportHost {
         interfaceHealthCheckInFlight = false
         webViewHealthProbeGeneration &+= 1
         webViewHealthRustGeneration = nil
-        nativeTerminalDidCancelInterfaceHealthCheck()
+        nativeSupportDidCancelInterfaceHealthCheck()
     }
 
     private func isEligibleForInterfaceHealthCheck(_ candidate: NSWindow) -> Bool {
@@ -370,7 +370,7 @@ final class NativeSupportHost {
         // This event requires an acknowledgement from the current document, so
         // it catches a dead JavaScript event loop even when WebKit did not report
         // a WebContent process termination.
-        let rustGeneration = nativeTerminalDidBeginInterfaceHealthCheck()
+        let rustGeneration = nativeSupportDidBeginInterfaceHealthCheck()
         webViewHealthRustGeneration = rustGeneration == 0 ? nil : rustGeneration
         webViewHealthSnapshotAttempt = 0
         takeInterfaceHealthSnapshot(
@@ -498,7 +498,7 @@ final class NativeSupportHost {
         interfaceHealthCheckInFlight = false
         webViewHealthProbeGeneration &+= 1
         if rustGeneration != 0 {
-            nativeTerminalDidDetectUnhealthyWebView(rustGeneration)
+            nativeSupportDidDetectUnhealthyWebView(rustGeneration)
             DispatchQueue.main.asyncAfter(deadline: .now() + 8.25) { [weak self] in
                 guard let self,
                       self.webViewHealthRustGeneration == rustGeneration
@@ -696,7 +696,7 @@ final class NativeSupportHost {
             return false
         }
         let handled = shortcutKey.withCString { key in
-            nativeTerminalDidReceiveAppShortcut(
+            nativeSupportDidReceiveAppShortcut(
                 key,
                 event.modifierFlags.contains(.shift) ? 1 : 0,
                 event.modifierFlags.contains(.control) ? 1 : 0,
@@ -779,7 +779,7 @@ final class NativeSupportHost {
             control: modifiers.contains(.control),
             option: modifiers.contains(.option),
             command: modifiers.contains(.command)
-        ), nativeTerminalDidRequestBrowserEscape() == 1 {
+        ), nativeSupportDidRequestBrowserEscape() == 1 {
             consumedAppShortcutKeyCodes.insert(event.keyCode)
             return nil
         }

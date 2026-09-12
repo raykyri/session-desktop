@@ -1,7 +1,7 @@
 import AppKit
 import WebKit
 import XCTest
-@testable import QmuxNativeTerminal
+@testable import SessionNativeSupport
 
 final class NativeSupportHostTests: XCTestCase {
     @MainActor

@@ -657,7 +657,7 @@ fn group_header_target() -> objc2::rc::Retained<GroupHeaderTarget> {
 #[cfg(target_os = "macos")]
 objc2::define_class!(
     #[unsafe(super(objc2::runtime::NSObject))]
-    #[name = "QmuxMenuBarGroupHeaderTarget"]
+    #[name = "SessionMenuBarGroupHeaderTarget"]
     #[ivars = ()]
     struct GroupHeaderTarget;
 

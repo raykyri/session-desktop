@@ -20,7 +20,7 @@ fn build_native_support_bridge() {
     }
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let package_dir = manifest_dir.join("swift-terminal");
+    let package_dir = manifest_dir.join("swift-native-support");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed={}", package_dir.display());
 
@@ -78,7 +78,7 @@ fn build_native_support_bridge() {
         match output {
             Ok(output) if output.status.success() => {
                 let products = scratch.join(format!("{arch}-apple-macosx/release"));
-                let bridge = products.join("libQmuxNativeTerminal.a");
+                let bridge = products.join("libSessionNativeSupport.a");
                 if !bridge.exists() {
                     failures.push(format!(
                         "SwiftPM succeeded with SDK {} but did not produce {}",
@@ -93,7 +93,7 @@ fn build_native_support_bridge() {
                 // changes, so without it a rebuilt archive with byte-identical
                 // link flags leaves a stale bridge inside the shipped binary.
                 let bridge_stamp = fs_metadata_stamp(&bridge);
-                println!("cargo:rustc-env=QMUX_NATIVE_BRIDGE_STAMP={bridge_stamp}");
+                println!("cargo:rustc-env=SESSION_NATIVE_BRIDGE_STAMP={bridge_stamp}");
                 println!("cargo:rustc-link-search=native={}", products.display());
                 // The AppKit/WebKit archive still needs the toolchain's Swift
                 // runtime libraries after removing the separate title bridge.
@@ -103,7 +103,7 @@ fn build_native_support_bridge() {
                         swift_library_path.display()
                     );
                 }
-                // Keep the established archive identity and load its Swift/ObjC
+                // Keep the Session archive identity and load its Swift/ObjC
                 // metadata alongside the exported C entry points.
                 println!("cargo:rustc-link-arg=-Wl,-force_load,{}", bridge.display());
                 for framework in ["AppKit", "CoreGraphics", "Foundation", "WebKit"] {

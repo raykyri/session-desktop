@@ -6,7 +6,7 @@ enum WebAppShortcutResponderState: Int32 {
 }
 
 /// The browser overlay owns bare Escape before AppKit chooses between the
-/// native terminal, the outer app webview, and either embedded browser
+/// native support host, the outer app webview, and either embedded browser
 /// document. Shift is deliberately ignored, matching the existing DOM and
 /// terminal Escape handlers; Command/Control/Option variants keep their native
 /// meaning and continue through the responder chain.
@@ -66,8 +66,8 @@ func humanBrowserDefersEditableSensitiveShortcut(
 /// C-ABI probe used by the Rust suite to exercise the production Swift routing
 /// decision without depending on XCTest, which is absent from Command Line
 /// Tools-only macOS installations.
-@_cdecl("qmux_native_terminal_should_claim_web_app_shortcut")
-public func qmuxNativeTerminalShouldClaimWebAppShortcut(
+@_cdecl("session_native_support_should_claim_web_app_shortcut")
+public func sessionNativeSupportShouldClaimWebAppShortcut(
     _ hasTerminalKeyboardOwner: Int32,
     _ responderStateValue: Int32,
     _ iframeFallbackEligible: Int32
@@ -86,8 +86,8 @@ public func qmuxNativeTerminalShouldClaimWebAppShortcut(
 
 /// C-ABI probe used by the Rust suite to exercise the browser-Escape routing
 /// decision in the production Swift package.
-@_cdecl("qmux_native_terminal_should_claim_browser_escape")
-public func qmuxNativeTerminalShouldClaimBrowserEscape(
+@_cdecl("session_native_support_should_claim_browser_escape")
+public func sessionNativeSupportShouldClaimBrowserEscape(
     _ browserOverlayOpen: Int32,
     _ key: UnsafePointer<CChar>?,
     _ control: Int32,
@@ -105,8 +105,8 @@ public func qmuxNativeTerminalShouldClaimBrowserEscape(
 
 /// C-ABI probe used by the Rust suite to keep this native-only exception in
 /// lockstep with the React classifier's editable-target exclusions.
-@_cdecl("qmux_native_terminal_human_browser_defers_editable_sensitive_shortcut")
-public func qmuxNativeTerminalHumanBrowserDefersEditableSensitiveShortcut(
+@_cdecl("session_native_support_human_browser_defers_editable_sensitive_shortcut")
+public func sessionNativeSupportHumanBrowserDefersEditableSensitiveShortcut(
     _ key: UnsafePointer<CChar>?,
     _ shift: Int32,
     _ control: Int32,
