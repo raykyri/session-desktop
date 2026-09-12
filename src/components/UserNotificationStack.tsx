@@ -1,6 +1,5 @@
 import { CheckCircle2, CircleAlert, Info, TriangleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNativeWebOverlayRegion } from "../hooks/useNativeWebOverlayRegion";
 
 export type UserNotificationTone = "info" | "success" | "warning" | "error";
 
@@ -162,10 +161,6 @@ export function UserNotificationStack({
   );
   const [now, setNow] = useState(() => Date.now());
   const visible = notifications.slice(0, MAX_VISIBLE);
-  const regionRef = useNativeWebOverlayRegion<HTMLDivElement>(
-    visible.length > 0,
-    visible.map((notification) => notification.id).join("\0"),
-  );
 
   useEffect(() => {
     if (visible.length === 0) return;
@@ -189,7 +184,7 @@ export function UserNotificationStack({
 
   if (visible.length === 0) return null;
   return (
-    <div ref={regionRef} className="user-notification-stack" aria-label="Notifications">
+    <div  className="user-notification-stack" aria-label="Notifications">
       {visible.map((notification) => (
         <NotificationCard
           key={notification.id}

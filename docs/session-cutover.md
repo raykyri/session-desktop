@@ -38,14 +38,14 @@ builds that omit those artifacts.
   `app.qmux.github-oauth` and account `github`, signing configuration, and updater
   public/private key identity.
 - Swift package/target names, Objective-C/native identifiers, `qmux_native_*` and
-  Foundation Models bridge symbols. Native build/debug inputs
-  `QMUX_GHOSTTY_PACKAGE_PATH`, `QMUX_NATIVE_BRIDGE_STAMP`, and `QMUX_NATIVE_DEBUG`
-  remain unchanged.
+  Foundation Models bridge symbols for surviving functions. The native archive
+  retains `QmuxNativeTerminal` and `QMUX_NATIVE_BRIDGE_STAMP`; renderer-only
+  symbols, `QMUX_GHOSTTY_PACKAGE_PATH`, and `QMUX_NATIVE_DEBUG` are retired.
 - `qmux.config.json`, `.qmux/` directories, the macOS
   `~/Library/Application Support/qmux` data root, Linux data/runtime roots,
   sockets, browser storage keys, and existing generated integration file paths.
   Existing data is read in place; no data directory is moved or deleted.
-- Stored theme IDs, workspace/participant identity fields, `qmuxToolActivity`,
+- Workspace/participant identity fields, `qmuxToolActivity`,
   `qmux_instruction`, publication proposal markers, and `qmux-file:` links.
   These names identify persisted content, not product branding.
 - Existing remote tmux identities and SSH control paths, which allow recovery and
@@ -58,3 +58,20 @@ The landing page's source link points to `raykyri/session`. The release script
 currently chooses its repository through `gh` while updater URLs still name
 `raykyri/qmux`; resolve that deployment mismatch before publishing a release.
 Moving domains or release delivery is not part of this source-code change.
+
+## Native support after terminal removal
+
+Session no longer builds or links Ghostty. `native_support.rs` and the Swift
+support files in `src-tauri/swift-terminal` retain browser, AppKit shortcut,
+completion-sound, and interface recovery behavior. The package directory and
+archive name remain for native compatibility; its dependency list is empty.
+Foundation Models compilation and Apple identifiers are unchanged.
+
+`pane.read --source viewport` now returns an explicit invalid-argument error.
+Use `--source terminal` for stored process output. Research SDK/JSONL execution,
+PTY input ordering, remote recovery, and process cleanup remain available.
+
+Settings retain the `qmux.settings.v1` key. The app reads legacy `fontSize` as
+`textSize` to preserve research typography; obsolete terminal themes, fonts,
+cursor and scroll settings no longer control the app. Browser loading appearance
+uses the application palette, including a native startup fallback.

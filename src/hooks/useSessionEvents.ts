@@ -44,7 +44,7 @@ import type {
 // caps handling at one render per window; the old leading-edge variant handled
 // the first event of every burst synchronously and committed roughly two
 // renders per window under exactly the load the coalescing was built for.
-// Interactive events (terminal shortcuts, paste requests) share the window and
+// Interactive events (app shortcuts, browser requests) share the window and
 // so run up to one frame late — kept deliberately, since reordering them ahead
 // of queued pane/agent events would let a shortcut act on state the queued
 // events are about to change, and one frame is imperceptible for those actions.
@@ -113,31 +113,14 @@ export interface UseSessionEventsHandlers {
   // collapsed groups. Supplied by App so the pane.removed path selects consistently with
   // the user-initiated close path (forgetClosedPane).
   selectPaneAfterClose: (panes: PaneInfo[], closedPaneId: string) => string | null;
-  // Fired once the single backend subscription is live, so panes can safely flush
-  // their pre-attach output backlog (attachPane) without dropping cold-start bytes.
+  // Fired once the single backend subscription is live.
   onEventsReady: () => void;
   onAgentSpawned?: (agent: AgentInfo, paneId: string | null, source: string | null) => void;
   onAgentPromptSubmitted?: (agentId: string, prompt: string) => void;
   onPaneFocusRequested?: (paneId: string) => void;
   onPaneSplitsChanged?: (splits: PaneSplitInfo[]) => void;
-  onTerminalSearchRequested?: (paneId: string) => void;
-  onTerminalPasteRequested?: (paneId: string, text: string | null) => void;
-  onTerminalUserInput?: (paneId: string) => void;
-  onTerminalActivated?: (paneId: string) => void;
-  onTerminalShortcut?: (
-    paneId: string,
-    command: AppShortcutCommand,
-    repeat: boolean,
-  ) => void;
   onAppShortcut?: (command: AppShortcutCommand, repeat: boolean) => void;
   onBrowserEscapeRequested?: () => void;
-  onTerminalCommandModifier?: (paneId: string, active: boolean) => void;
-  onTerminalOpenUrl?: (
-    paneId: string,
-    url: string,
-    kind: "unknown" | "text" | "html",
-  ) => void;
-  onTerminalTitleChanged?: (paneId: string, title: string) => void;
   onResearchChanged?: (event: SessionEvent) => void;
   onUserNotificationRequested?: (event: SessionEvent) => void;
   onNotificationOpenPane?: (paneId: string) => void;
@@ -183,16 +166,8 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
     onAgentPromptSubmitted,
     onPaneFocusRequested,
     onPaneSplitsChanged,
-    onTerminalSearchRequested,
-    onTerminalPasteRequested,
-    onTerminalUserInput,
-    onTerminalActivated,
-    onTerminalShortcut,
     onAppShortcut,
     onBrowserEscapeRequested,
-    onTerminalCommandModifier,
-    onTerminalOpenUrl,
-    onTerminalTitleChanged,
     onResearchChanged,
     onUserNotificationRequested,
     onNotificationOpenPane,
@@ -320,33 +295,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
           );
         }
       }
-      if (event.type === "terminal.title_changed" && event.paneId) {
-        const title = stringField(event.payload, "title");
-        if (title !== null) {
-          onTerminalTitleChanged?.(event.paneId, title);
-        }
-      }
-      if (event.type === "terminal.search_requested" && event.paneId) {
-        onTerminalSearchRequested?.(event.paneId);
-      }
-      if (event.type === "terminal.paste_requested" && event.paneId) {
-        onTerminalPasteRequested?.(event.paneId, stringField(event.payload, "text"));
-      }
-      if (event.type === "terminal.user_input" && event.paneId) {
-        onTerminalUserInput?.(event.paneId);
-      }
-      if (event.type === "terminal.activated" && event.paneId) {
-        onTerminalActivated?.(event.paneId);
-      }
-      if (event.type === "terminal.shortcut" && event.paneId) {
-        const command = parseAppShortcutCommand(
-          event.payload.command,
-          event.payload.tabIndex,
-        );
-        if (command !== null) {
-          onTerminalShortcut?.(event.paneId, command, event.payload.repeat === true);
-        }
-      }
       if (event.type === "app.shortcut") {
         const command = parseAppShortcutCommand(
           event.payload.command,
@@ -358,17 +306,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
       }
       if (event.type === "browser.escape_requested") {
         onBrowserEscapeRequested?.();
-      }
-      if (event.type === "terminal.command_modifier_changed" && event.paneId) {
-        onTerminalCommandModifier?.(event.paneId, event.payload.active === true);
-      }
-      if (event.type === "terminal.open_url" && event.paneId) {
-        const url = stringField(event.payload, "url");
-        if (url !== null) {
-          const rawKind = stringField(event.payload, "kind");
-          const kind = rawKind === "text" || rawKind === "html" ? rawKind : "unknown";
-          onTerminalOpenUrl?.(event.paneId, url, kind);
-        }
       }
       if (event.type === "app.exit_confirmation_requested") {
         const paneCount =

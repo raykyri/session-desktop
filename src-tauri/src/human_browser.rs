@@ -5,7 +5,8 @@
 //! intentionally match no Tauri capability, and every navigation is checked
 //! again here so the frontend is not the security boundary.
 
-use crate::native_terminal;
+#[cfg(target_os = "macos")]
+use crate::native_support;
 use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -248,7 +249,7 @@ fn validated_bounds(request: &HumanBrowserSyncRequest) -> Result<Rect, String> {
 fn set_native_browser_active(webview: &Webview, active: bool) -> Result<(), String> {
     webview
         .with_webview(move |platform| {
-            if let Err(error) = native_terminal::set_human_browser_webview(platform.inner(), active)
+            if let Err(error) = native_support::set_human_browser_webview(platform.inner(), active)
             {
                 eprintln!("session: failed to update human-browser shortcut routing: {error}");
             }
@@ -266,7 +267,7 @@ fn set_native_browser_loading_background(webview: &Webview, active: bool) -> Res
     webview
         .with_webview(move |platform| {
             if let Err(error) =
-                native_terminal::set_human_browser_loading_background(platform.inner(), active)
+                native_support::set_human_browser_loading_background(platform.inner(), active)
             {
                 eprintln!("session: failed to update human-browser loading background: {error}");
             }
@@ -286,7 +287,7 @@ fn set_native_browser_loading_background_from_state(
             // with the stale initial value.
             let active = active.load(Ordering::Acquire);
             if let Err(error) =
-                native_terminal::set_human_browser_loading_background(platform.inner(), active)
+                native_support::set_human_browser_loading_background(platform.inner(), active)
             {
                 eprintln!("session: failed to update human-browser loading background: {error}");
             }
@@ -311,7 +312,7 @@ fn set_native_browser_loading_background(_webview: &Webview, _active: bool) -> R
 fn refresh_human_browser_history_state(webview: &Webview, history_state: Arc<AtomicU8>) {
     let _ = webview.with_webview(move |platform| {
         history_state.store(
-            native_terminal::human_browser_history_state(platform.inner()),
+            native_support::human_browser_history_state(platform.inner()),
             Ordering::Release,
         );
     });

@@ -5,13 +5,12 @@ use crate::remote_terminal::{
     RemoteAttachment, RemoteAttachmentController, RemoteClientHandshake, RemoteHistoryCheckpoint,
 };
 use crate::scrollback::{
-    append_pane_scrollback, read_pane_scrollback, read_remote_history_checkpoint,
-    sanitize_scrollback_replay, write_remote_history_checkpoint,
+    append_pane_scrollback, read_remote_history_checkpoint, write_remote_history_checkpoint,
 };
 use crate::state::{
     AppState, HostPtyBackend, PaneBackend, PaneInfo, PaneKind, PaneRuntime, PaneStatus,
     RemoteConnectionInfo, RemoteConnectionState, RemoteHookHealth, RemoteSessionIdentity,
-    RemoteTmuxBackend, SharedBacklog, SharedChild, SharedWriter, ShellAgentResume,
+    RemoteTmuxBackend, SharedBacklog, SharedChild, ShellAgentResume,
 };
 use crate::turn_queue::{abort_fork_barrier_for_child, release_waiters_for_agent};
 use crate::workspace::{
@@ -77,48 +76,7 @@ static VALIDATED_TMUX_VERSIONS: LazyLock<Mutex<HashSet<String>>> =
 // It runs before the new process's buffered startup output, so an agent resumed
 // into the pane can still enable its desired live keyboard mode afterward.
 const RESTORED_SCROLLBACK_TERMINAL_RESET: &[u8] = b"\x18\x1b>\x1b[0m\x1b(B\x1b[4l\x1b[?1l\x1b[?7h\x1b[?9l\x1b[?25h\x1b[?45l\x1b[?66l\x1b[?47l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1015l\x1b[?1016l\x1b[?1047l\x1b[?2004l\x1b[?2026l\x1b[>4;0m\x1b[=0u";
-// The subset of the reset that is safe to send to a *live* pane's surface —
-// one an exited or suspended agent left behind for the surviving shell — as
-// opposed to a fresh surface being rebuilt from scrollback. It clears only
-// latched input
-// and reporting modes (keypad, cursor-key, mouse, focus, bracketed paste,
-// synchronized output, xterm modifyOtherKeys, and the Kitty keyboard flags)
-// plus cursor-position-neutral display state (SGR, ASCII charset, insert mode,
-// autowrap, reverse-wrap, cursor visibility). It deliberately omits every byte
-// in the full reset that can move the cursor or swap the screen buffer: the
-// leading CAN (`\x18`) and the alternate-screen exits (`\x1b[?47l`,
-// `\x1b[?1047l`). Those are correct when rebuilding a fresh surface — the
-// cursor is being reconstructed anyway and any historical alternate-screen
-// entry must be closed — but on a live surface the shell has already regained
-// control and is about to print its prompt at the current cursor; a screen
-// swap that does not restore the cursor (47/1047 never do) or a CAN landing
-// mid-sequence would strand that prompt at the wrong column. The durable log
-// still records the full reset (see `reset_pane_terminal_modes`) so a future
-// restore and any trim still close a mid-alternate-screen entry.
-const LIVE_PANE_TERMINAL_MODE_RESET: &[u8] = b"\x1b>\x1b[0m\x1b(B\x1b[4l\x1b[?1l\x1b[?7h\x1b[?9l\x1b[?25h\x1b[?45l\x1b[?66l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1015l\x1b[?1016l\x1b[?2004l\x1b[?2026l\x1b[>4;0m\x1b[=0u";
 const SUBMIT_KEY_DELAY: Duration = Duration::from_millis(15);
-/// Timing for the native paste/submit handshake. Ghostty's approved-paste action
-/// and synthesized key path both return before their in-memory-session callbacks
-/// necessarily reach the PTY writer, so delivery is observed through bounded polls.
-#[derive(Clone, Copy)]
-struct NativeSubmitTiming {
-    data_poll_interval: Duration,
-    data_max_rechecks: usize,
-    data_quiet_rechecks: usize,
-    submit_key_delay: Duration,
-    submit_poll_interval: Duration,
-    submit_max_rechecks: usize,
-}
-
-const NATIVE_SUBMIT_TIMING: NativeSubmitTiming = NativeSubmitTiming {
-    data_poll_interval: Duration::from_millis(25),
-    data_max_rechecks: 8,
-    data_quiet_rechecks: 2,
-    submit_key_delay: SUBMIT_KEY_DELAY,
-    submit_poll_interval: Duration::from_millis(50),
-    submit_max_rechecks: 2,
-};
-const NATIVE_INPUT_FLUSH_TIMEOUT: Duration = Duration::from_secs(2);
 const DEFAULT_PTY_COLS: u16 = 100;
 const DEFAULT_PTY_ROWS: u16 = 24;
 const MIN_INITIAL_COLS: u16 = 20;
@@ -150,34 +108,6 @@ const DESCENDANT_REFRESH_TICKS: u32 = 8;
 /// holding the PTY slave open (which blocks the reader's EOF cleanup and
 /// leaves a dead pane stuck "Running" forever).
 const KILL_ESCALATION_TICKS: u32 = 2;
-
-/// Panes whose attach was requested before their native surface had committed
-/// real geometry. Replaying durable scrollback into a surface that still has
-/// its zero-frame default grid renders history at the wrong width; the fit
-/// that follows the first real layout then reflows those rows and scatters
-/// restored lines mid-row (most visibly zsh's PROMPT_SP full-width padding,
-/// which turns every restored prompt into a diagonal staircase). Attaches are
-/// parked here and finished by `complete_pending_attach` once Swift reports
-/// the surface fitted to a real frame. This set's lock is only ever held for
-/// an insert/remove — never across FFI or another lock.
-static DEFERRED_ATTACHES: std::sync::LazyLock<Mutex<HashSet<String>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
-
-/// Per-native-pane input senders, feeding each pane's writer thread (see
-/// `start_native_input_writer`). Ghostty's input callback delivers every
-/// keystroke and paste chunk through `write_native_host_input`; resolving the
-/// sender here keeps that per-keystroke path off the global model lock, and
-/// queueing keeps it from blocking on a full PTY buffer — a TUI stopped with
-/// ^S/SIGSTOP would otherwise wedge the callback's thread until the child
-/// drained. The map lock is only ever held for a lookup/insert/remove.
-enum NativeInputMessage {
-    Data(Vec<u8>),
-    Flush(std::sync::mpsc::SyncSender<Result<u64, String>>),
-}
-
-static NATIVE_INPUT_SENDERS: std::sync::LazyLock<
-    Mutex<HashMap<String, std::sync::mpsc::Sender<NativeInputMessage>>>,
-> = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -600,13 +530,7 @@ pub fn spawn_shell_pane_at(
             },
         )?;
         let remote = spec.remote.take().ok_or("remote launch plan missing")?;
-        return spawn_remote_tmux_inner(
-            state,
-            spec,
-            remote,
-            cfg!(all(target_os = "macos", not(test))),
-            true,
-        );
+        return spawn_remote_tmux_inner(state, spec, remote, true);
     }
     spawn_pty(
         state,
@@ -896,7 +820,7 @@ pub fn reattach_remote_pane(state: &AppState, pane: &PaneInfo) -> Result<PaneInf
         &identity,
         &state.config().socket_path.display().to_string(),
     )?;
-    let native_surface = cfg!(all(target_os = "macos", not(test)));
+
     let controller = RemoteAttachmentController::new();
     let history = RemoteHistoryCheckpoint::new(read_remote_history_checkpoint(
         &state.config().workspace_root,
@@ -917,21 +841,12 @@ pub fn reattach_remote_pane(state: &AppState, pane: &PaneInfo) -> Result<PaneInf
         history.clone(),
         backlog.clone(),
         commands.clone(),
-        native_surface,
     );
-    let stable_writer = backend.writer.clone();
     state.insert_pane(PaneRuntime {
         info: recovered.clone(),
         backend: PaneBackend::RemoteTmux(backend),
         cwd_observation_seq: 0,
     })?;
-    if native_surface {
-        if let Err(err) = crate::native_terminal::create_host_managed(&pane.id, None) {
-            let _ = state.remove_pane(&pane.id);
-            return Err(err);
-        }
-        register_native_input_writer(&pane.id, stable_writer);
-    }
 
     schedule_remote_reconnect(
         state.clone(),
@@ -940,7 +855,6 @@ pub fn reattach_remote_pane(state: &AppState, pane: &PaneInfo) -> Result<PaneInf
         history,
         commands,
         backlog,
-        native_surface,
         "appRestart".to_string(),
     );
     Ok(recovered)
@@ -1555,13 +1469,9 @@ fn resolved_initial_size(initial_size: Option<InitialPaneSize>) -> InitialPaneSi
 }
 
 pub fn spawn_pty(state: &AppState, spec: PtySpawnSpec) -> Result<PaneInfo, String> {
-    spawn_portable_pty(state, spec, cfg!(all(target_os = "macos", not(test))))
+    spawn_portable_pty(state, spec)
 }
 
-/// The base environment shared by both renderers: the resolved child PATH,
-/// 24-bit color capability, and a UTF-8 locale backfill. TERM is added by the
-/// host-owned PTY spawn below; using the widely installed xterm-256color entry
-/// avoids depending on a separate Ghostty app installation for terminfo.
 fn base_child_envs(state: &AppState) -> Result<Vec<(String, String)>, String> {
     let mut envs = Vec::new();
     envs.push((
@@ -1872,13 +1782,9 @@ pub(crate) fn materialize_in_pane_support_files(
     Ok(())
 }
 
-fn spawn_portable_pty(
-    state: &AppState,
-    mut spec: PtySpawnSpec,
-    native_surface: bool,
-) -> Result<PaneInfo, String> {
+fn spawn_portable_pty(state: &AppState, mut spec: PtySpawnSpec) -> Result<PaneInfo, String> {
     if let Some(remote) = spec.remote.take() {
-        return spawn_remote_tmux(state, spec, remote, native_surface);
+        return spawn_remote_tmux(state, spec, remote);
     }
     let base_envs = base_child_envs(state)?;
     materialize_support_files_or_fallback(&mut spec)?;
@@ -1972,32 +1878,16 @@ fn spawn_portable_pty(
             master,
             writer: writer.clone(),
             backlog: backlog.clone(),
-            native_surface,
         }),
         cwd_observation_seq: 0,
     };
 
     state.insert_pane(runtime)?;
-    if native_surface {
-        if let Err(err) = crate::native_terminal::create_host_managed(&pane_id, Some(&pane.cwd)) {
-            let _ = kill_child(&pane_id, child.clone());
-            let _ = state.remove_pane(&pane_id);
-            return Err(err);
-        }
-        register_native_input_writer(&pane_id, writer);
-    }
     // Capture the direct child's pid for the watcher before handing the child to
     // the reader/watcher threads; the watcher uses it to reach descendants that
     // outlive a naturally-exiting shell.
     let root_pid = child.lock().ok().and_then(|guard| guard.process_id());
-    start_reader_thread(
-        state.clone(),
-        pane_id.clone(),
-        reader,
-        backlog,
-        native_surface,
-        None,
-    );
+    start_reader_thread(state.clone(), pane_id.clone(), reader, backlog, None);
     start_child_watcher(state.clone(), pane_id, child, root_pid);
 
     Ok(pane)
@@ -2125,16 +2015,14 @@ fn spawn_remote_tmux(
     state: &AppState,
     spec: PtySpawnSpec,
     remote: RemoteSpawnSpec,
-    native_surface: bool,
 ) -> Result<PaneInfo, String> {
-    spawn_remote_tmux_inner(state, spec, remote, native_surface, false)
+    spawn_remote_tmux_inner(state, spec, remote, false)
 }
 
 fn spawn_remote_tmux_inner(
     state: &AppState,
     mut spec: PtySpawnSpec,
     mut remote: RemoteSpawnSpec,
-    native_surface: bool,
     prepare_shell: bool,
 ) -> Result<PaneInfo, String> {
     let started = Instant::now();
@@ -2177,21 +2065,12 @@ fn spawn_remote_tmux_inner(
         history.clone(),
         backlog.clone(),
         commands,
-        native_surface,
     );
-    let writer = backend.writer.clone();
     state.insert_pane(PaneRuntime {
         info: pane.clone(),
         backend: PaneBackend::RemoteTmux(backend),
         cwd_observation_seq: 0,
     })?;
-    if native_surface {
-        if let Err(err) = crate::native_terminal::create_host_managed(&pane_id, None) {
-            let _ = state.remove_pane(&pane_id);
-            return Err(err);
-        }
-        register_native_input_writer(&pane_id, writer);
-    }
     record_remote_startup(state, &pane_id, "reserved", started.elapsed().as_millis());
     let state = state.clone();
     let result_pane = pane.clone();
@@ -2311,15 +2190,8 @@ fn spawn_remote_tmux_inner(
                     }
                     let initial_replay = terminalize_tmux_history(&history.delta(&initial_history));
                     {
-                        let mut pending = backlog.lock().map_err(|_| "backlog lock poisoned")?;
-                        if pending.ready {
-                            if native_surface {
-                                crate::native_terminal::receive(&pane_id, &initial_replay, false)?;
-                            }
-                            record_scrollback(&state, &pane_id, &initial_replay);
-                        } else {
-                            append_capped(&mut pending.buffer, &initial_replay);
-                        }
+                        let _output = backlog.lock().map_err(|_| "output lock poisoned")?;
+                        record_scrollback(&state, &pane_id, &initial_replay);
                     }
                     persist_remote_history_checkpoint(
                         &state,
@@ -2364,7 +2236,6 @@ fn spawn_remote_tmux_inner(
                         pane_id.clone(),
                         reader,
                         backlog.clone(),
-                        native_surface,
                         Some(RemoteReaderContext {
                             controller: controller.clone(),
                             history: history.clone(),
@@ -2413,7 +2284,6 @@ fn spawn_remote_tmux_inner(
                         history,
                         commands,
                         backlog,
-                        native_surface,
                         "initialConnection".into(),
                     );
                 }
@@ -2429,10 +2299,6 @@ fn spawn_remote_tmux_inner(
                 }
                 if !prepare_shell {
                     let _ = state.remove_pane(&pane_id);
-                    if native_surface {
-                        let _ = crate::native_terminal::remove(&pane_id);
-                        remove_native_input_writer(&pane_id);
-                    }
                 }
                 Err(err)
             }
@@ -2720,7 +2586,6 @@ fn synchronize_remote_history(
     capture_argv: &[String],
     capture_full_argv: &[String],
     backlog: &SharedBacklog,
-    native_surface: bool,
 ) -> Result<(), String> {
     let mut capture = capture_remote_history(capture_argv)?;
     if !history.has_trustworthy_overlap(&capture) {
@@ -2732,23 +2597,8 @@ fn synchronize_remote_history(
     let delta = history.delta(&capture);
     if !delta.is_empty() {
         let replay = terminalize_tmux_history(&delta);
-        let live = match backlog.lock() {
-            Ok(mut backlog) => {
-                if backlog.ready {
-                    true
-                } else {
-                    append_capped(&mut backlog.buffer, &replay);
-                    false
-                }
-            }
-            Err(_) => true,
-        };
-        if live {
-            if native_surface {
-                crate::native_terminal::receive(pane_id, &replay, true)?;
-            }
-            record_scrollback(state, pane_id, &replay);
-        }
+        let _output = backlog.lock().unwrap_or_else(|error| error.into_inner());
+        record_scrollback(state, pane_id, &replay);
     }
     // Advance only after the delta has been accepted by the surface/backlog.
     // A checkpoint write failure is a recovery-quality failure, not a reason to
@@ -2993,7 +2843,7 @@ pub fn check_remote_pane(state: &AppState, pane_id: &str, reason: &str) -> Resul
     let backlog = state
         .pane_backlog(pane_id)?
         .ok_or("remote pane has no backlog")?;
-    let native_surface = state.pane_is_native(pane_id)? == Some(true);
+
     schedule_remote_reconnect(
         state.clone(),
         pane_id.to_string(),
@@ -3001,7 +2851,6 @@ pub fn check_remote_pane(state: &AppState, pane_id: &str, reason: &str) -> Resul
         history,
         commands,
         backlog,
-        native_surface,
         reason.to_string(),
     );
     Ok(())
@@ -3035,7 +2884,6 @@ fn schedule_remote_reconnect(
     history: Arc<RemoteHistoryCheckpoint>,
     commands: crate::host::RemoteTmuxCommands,
     backlog: SharedBacklog,
-    native_surface: bool,
     reason: String,
 ) {
     if controller.initial_launch_in_progress() {
@@ -3120,7 +2968,6 @@ fn schedule_remote_reconnect(
                         history.clone(),
                         commands.clone(),
                         backlog.clone(),
-                        native_surface,
                         revision,
                     )?;
                 }
@@ -3325,7 +3172,6 @@ fn attach_remote_generation(
     history: Arc<RemoteHistoryCheckpoint>,
     commands: crate::host::RemoteTmuxCommands,
     backlog: SharedBacklog,
-    native_surface: bool,
     revision: u64,
 ) -> Result<(), String> {
     let pane = state
@@ -3385,7 +3231,6 @@ fn attach_remote_generation(
         &commands.capture_argv,
         &commands.capture_full_argv,
         &backlog,
-        native_surface,
     )?;
     if !report_remote_recovery(state, pane_id, &controller, revision, |connection| {
         connection.state = RemoteConnectionState::Reconnecting;
@@ -3434,7 +3279,6 @@ fn attach_remote_generation(
         pane_id.to_string(),
         reader,
         backlog,
-        native_surface,
         Some(RemoteReaderContext {
             controller,
             history,
@@ -3476,166 +3320,27 @@ fn scrub_inherited_session_context(command: &mut CommandBuilder) {
     }
 }
 
-/// Marks a pane's frontend listener as live and flushes any output buffered
-/// before it attached. Called once per pane, after the webview registers its
-/// `session-event` listener, so the cold-start prompt is never lost to a startup
-/// race. The buffered bytes are flushed before `ready` releases the reader to
-/// deliver live, preserving output order. For native surfaces the flush also
-/// waits for the surface's first real geometry fit (see `DEFERRED_ATTACHES`);
-/// a call that arrives earlier returns Ok and is finished later by
-/// `complete_pending_attach`.
+/// Compatibility attach flushes explicitly staged bytes; readers record output immediately.
 pub fn attach_pane(state: &AppState, pane_id: String) -> Result<(), String> {
-    let native_surface = state.pane_is_native(&pane_id)? == Some(true);
     let backlog = state
         .pane_backlog(&pane_id)?
         .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-    let mut backlog = backlog
-        .lock()
-        .map_err(|_| format!("pane {pane_id} backlog lock poisoned"))?;
+    let mut backlog = backlog.lock().map_err(|_| "pane output lock poisoned")?;
     if !backlog.ready {
-        if native_surface {
-            // Never replay into a surface that still has its pre-layout
-            // default grid: the fit after the first real layout would reflow
-            // the replayed rows at a different width and scramble restored
-            // history. Park the attach instead; the geometry-commit callback
-            // finishes it. Register the deferral before probing readiness so
-            // a commit landing between the probe and the return still finds
-            // this pane parked.
-            if let Ok(mut deferred) = DEFERRED_ATTACHES.lock() {
-                deferred.insert(pane_id.clone());
-            }
-            if !crate::native_terminal::is_ready_for_replay(&pane_id)? {
-                return Ok(());
-            }
-            if let Ok(mut deferred) = DEFERRED_ATTACHES.lock() {
-                deferred.remove(&pane_id);
-            }
-            // Replay durable scrollback exactly once. `ready` only flips after
-            // the backlog flush below succeeds, so a failed flush makes the
-            // frontend retry the whole attach; without the `replayed` guard the
-            // retry would hand this history to the surface again and double
-            // every restored line.
-            if !backlog.replayed {
-                let restored = read_pane_scrollback(&state.config().workspace_root, &pane_id)?;
-                if restored.is_empty() {
-                    backlog.replayed = true;
-                } else {
-                    let restored = sanitize_scrollback_replay(&restored);
-                    if !restored.is_empty() {
-                        crate::native_terminal::receive(&pane_id, &restored, true)?;
-                    }
-                    // History is on the surface now. Flip `replayed` before the
-                    // reset and backlog steps so their failure-triggered retries
-                    // never render it twice. `receive` is all-or-nothing, so a
-                    // failure above left the surface untouched with `replayed`
-                    // still false, leaving the retry a clean re-delivery.
-                    backlog.replayed = true;
-                    crate::native_terminal::receive(
-                        &pane_id,
-                        RESTORED_SCROLLBACK_TERMINAL_RESET,
-                        true,
-                    )?;
-                }
-            }
-        }
-        if !backlog.buffer.is_empty() {
-            let pending = std::mem::take(&mut backlog.buffer);
-            if native_surface
-                && let Err(err) = crate::native_terminal::receive(&pane_id, &pending, false)
-            {
-                // Keep startup output available for the attach retry. It
-                // has not been recorded yet, so a successful retry cannot
-                // duplicate these bytes in durable history.
-                backlog.buffer = pending;
-                return Err(err);
-            }
-            // Without a native surface (non-macOS) there is no renderer: the
-            // webview dropped the old per-chunk pty.data events unread, so the
-            // backlog goes straight to durable scrollback.
-            record_scrollback(state, &pane_id, &pending);
-        }
-        // Only release the reader after every startup byte was accepted. A
-        // failed native receive leaves this false so the frontend's attach
-        // retry cannot turn a transient surface-creation race into a blank pane.
+        let pending = std::mem::take(&mut backlog.buffer);
+        record_scrollback(state, &pane_id, &pending);
         backlog.ready = true;
     }
     Ok(())
 }
 
-/// Clears terminal modes a program may have left active in a pane that
-/// outlives it. A shell-launched agent (`session agent-exec codex ...`) that is
-/// killed or crashes never restores what its TUI pushed — kitty keyboard
-/// flags, mouse/focus reporting, bracketed paste, the alternate screen — and
-/// the surviving shell's surface keeps all of it: the replay reset in
-/// `attach_pane` only runs when a fresh surface restores scrollback, never
-/// for a live one. Stuck kitty flags in particular turn later unclaimed
-/// command chords into CSI-u garbage at the prompt instead of inert
-/// fall-through.
-///
-/// The live surface and the durable log get *different* bytes. The surface —
-/// where the surviving shell is already about to draw its prompt at the
-/// current cursor — receives only `LIVE_PANE_TERMINAL_MODE_RESET`, the
-/// cursor-position-neutral subset: sending the full reset's alternate-screen
-/// exits (`\x1b[?47l`/`\x1b[?1047l`) into a live surface strands the shell
-/// prompt, because those never restore the cursor and, when the agent already
-/// exited its alternate screen cleanly (the common Ctrl-C case), needlessly
-/// perturb a cursor that was already correct. The durable log still records
-/// the *full* `RESTORED_SCROLLBACK_TERMINAL_RESET`: a later restore replays it
-/// into a fresh surface (where the cursor is rebuilt regardless), and a trim's
-/// sanitizer needs the alternate-screen exit to stop discarding everything the
-/// shell prints after a TUI that died mid-alternate-screen. The bytes go to
-/// the renderer, never the pty child — they are emulator state, not program
-/// input.
+/// Close any interrupted alternate-screen state in the durable process log.
+/// These bytes describe output state; they are never written to the PTY child.
 pub fn reset_pane_terminal_modes(state: &AppState, pane_id: &str) -> Result<(), String> {
-    // A pane that is already gone has no surface or log left to reset.
-    let Some(native_surface) = state.pane_is_native(pane_id)? else {
-        return Ok(());
-    };
-    record_scrollback(state, pane_id, RESTORED_SCROLLBACK_TERMINAL_RESET);
-    if native_surface {
-        crate::native_terminal::receive(pane_id, LIVE_PANE_TERMINAL_MODE_RESET, false)?;
+    if state.pane_writer(pane_id)?.is_some() {
+        record_scrollback(state, pane_id, RESTORED_SCROLLBACK_TERMINAL_RESET);
     }
     Ok(())
-}
-
-/// Makes a live pane usable by its shell after a foreground TUI is stopped or
-/// moved into the background. Unlike `reset_pane_terminal_modes`, this does not
-/// write the full reset to durable scrollback: the agent is still alive and may
-/// resume its existing alternate-screen session with `fg`. Only the live,
-/// cursor-neutral input/reporting reset is sent to the renderer; a well-behaved
-/// TUI re-enables its preferred modes when it handles SIGCONT.
-pub fn reset_live_pane_terminal_modes(state: &AppState, pane_id: &str) -> Result<(), String> {
-    let Some(native_surface) = state.pane_is_native(pane_id)? else {
-        return Ok(());
-    };
-    if native_surface {
-        crate::native_terminal::receive(pane_id, LIVE_PANE_TERMINAL_MODE_RESET, false)?;
-    }
-    Ok(())
-}
-
-/// Finishes an attach that `attach_pane` parked while the native surface still
-/// had its pre-layout default grid. Called from native callbacks (geometry
-/// commit, grid resize) that fire on the main thread, so it only touches the
-/// deferral set inline; the flush itself runs on a worker because it reads
-/// scrollback from disk and hops back to the main thread to hand Ghostty the
-/// bytes. If the surface is still not ready, the re-run of `attach_pane`
-/// re-parks the pane, so a premature trigger loses nothing.
-pub fn complete_pending_attach(state: &AppState, pane_id: &str) {
-    let registered = DEFERRED_ATTACHES
-        .lock()
-        .map(|mut deferred| deferred.remove(pane_id))
-        .unwrap_or(false);
-    if !registered {
-        return;
-    }
-    let state = state.clone();
-    let pane_id = pane_id.to_string();
-    std::thread::spawn(move || {
-        if let Err(err) = attach_pane(&state, pane_id.clone()) {
-            eprintln!("session: failed to complete deferred attach for pane {pane_id}: {err}");
-        }
-    });
 }
 
 pub fn write_pane(state: &AppState, options: PaneWriteOptions) -> Result<(), String> {
@@ -3657,28 +3362,6 @@ pub fn write_pane_detailed(
         return Err(PaneWriteFailure::before_data(
             "research terminals are read-only; create a follow-up branch instead".to_string(),
         ));
-    }
-    if state
-        .pane_is_native(&options.pane_id)
-        .map_err(PaneWriteFailure::before_data)?
-        == Some(true)
-    {
-        // Runs on the calling (background) thread; each bridge call hops to
-        // the main thread internally (`DispatchQueue.main.sync`) for just the
-        // AppKit work. A submit holds the per-pane send lock across those
-        // hops plus the 15ms submit-key delay, so this sequence must never
-        // run while the main thread can contend for a send lock — a parked
-        // main thread would deadlock the holder's main-thread hop. That
-        // invariant holds because every path that reaches a send lock is off
-        // the main thread: pane_write and all agent turn-queue commands are
-        // `(async)` Tauri commands (see main.rs), control-socket and
-        // transcript-tail callers run on their own threads, and Ghostty's
-        // close delegate defers its queue-draining work to a spawned thread
-        // (see qmux_native_terminal_did_close). Keeping the sequence here —
-        // instead of the previous hop-to-main-and-block — means a composer
-        // send or queued-turn drain no longer stalls the main thread for the
-        // duration of the delay.
-        return dispatch_native_pane_input(state, &options);
     }
     let writer = state
         .pane_writer(&options.pane_id)
@@ -3709,192 +3392,6 @@ pub fn write_pane_detailed(
     )
 }
 
-/// Binds the shared native sequencing to the concrete bridge calls for
-/// `options.pane_id`.
-fn dispatch_native_pane_input(
-    state: &AppState,
-    options: &PaneWriteOptions,
-) -> Result<(), PaneWriteFailure> {
-    // Native input takes an extra asynchronous hop through the per-pane PTY writer.
-    // A successful Ghostty paste/keypress call therefore only means its bytes were
-    // queued, not that the child received them. Put acknowledged writer barriers on
-    // both sides of the submit delay: the paste must be written and flushed before the
-    // delay starts, and Return must be written and flushed before this turn is reported
-    // delivered. The barriers also stop the writer's ordinary keystroke coalescer from
-    // merging the paste and Return back into one PTY write.
-    if options.submit {
-        let send_lock = state.pane_send_lock(&options.pane_id);
-        let _send_guard = send_lock
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let data = strip_bracketed_paste_markers(&options.data);
-        return write_native_data_and_submit(
-            &data,
-            || {
-                if options.paste {
-                    crate::native_terminal::paste_approved_text(&options.pane_id, &data)
-                } else {
-                    crate::native_terminal::send_text(&options.pane_id, &data)
-                }
-            },
-            || crate::native_terminal::submit(&options.pane_id),
-            || write_acknowledged_native_host_input(&options.pane_id, SUBMIT_KEY),
-            || flush_native_host_input(&options.pane_id),
-            NATIVE_SUBMIT_TIMING,
-        );
-    }
-    write_native_pane_input(
-        state,
-        options,
-        |data| crate::native_terminal::send_text(&options.pane_id, data),
-        |data| crate::native_terminal::paste_approved_text(&options.pane_id, data),
-        || crate::native_terminal::submit(&options.pane_id),
-    )
-}
-
-fn write_native_data_and_submit(
-    data: &str,
-    emit_data: impl FnOnce() -> Result<(), String>,
-    submit: impl FnOnce() -> Result<(), String>,
-    submit_bytes: impl FnOnce() -> Result<(), String>,
-    mut flush_input: impl FnMut() -> Result<u64, String>,
-    timing: NativeSubmitTiming,
-) -> Result<(), PaneWriteFailure> {
-    let before_data = flush_input().map_err(PaneWriteFailure::before_data)?;
-    emit_data().map_err(PaneWriteFailure::before_data)?;
-    // The action being accepted does not mean Ghostty's deferred write callbacks have
-    // finished. Wait for input to arrive and then for the PTY position to stay still:
-    // the first advance may be only the opening paste marker or body, and treating a
-    // later paste chunk as Return would produce a false submit acknowledgement.
-    let mut after_data = flush_input().map_err(PaneWriteFailure::after_data)?;
-    if !data.is_empty() {
-        let mut observed_data = after_data > before_data;
-        let mut quiet_rechecks = 0;
-        for _ in 0..timing.data_max_rechecks {
-            if observed_data && quiet_rechecks >= timing.data_quiet_rechecks {
-                break;
-            }
-            if !timing.data_poll_interval.is_zero() {
-                thread::sleep(timing.data_poll_interval);
-            }
-            let position = flush_input().map_err(PaneWriteFailure::after_data)?;
-            if position > after_data {
-                observed_data = true;
-                quiet_rechecks = 0;
-                after_data = position;
-            } else if observed_data {
-                quiet_rechecks += 1;
-            }
-        }
-
-        if !observed_data {
-            return Err(PaneWriteFailure::before_data(
-                "native terminal accepted input action but emitted no PTY input".to_string(),
-            ));
-        }
-        if quiet_rechecks < timing.data_quiet_rechecks {
-            eprintln!(
-                "session: native paste input did not become quiescent after {} rechecks; \
-                 submitting from the latest observed PTY boundary",
-                timing.data_max_rechecks
-            );
-        }
-    }
-
-    if !timing.submit_key_delay.is_zero() {
-        thread::sleep(timing.submit_key_delay);
-    }
-    let synthetic_submit_error = match submit() {
-        Ok(()) => {
-            // Send the Ghostty-encoded key only once. Polling gives its deferred
-            // callback time to arrive without risking multiple late Returns.
-            for recheck in 0..=timing.submit_max_rechecks {
-                if flush_input().map_err(PaneWriteFailure::after_data)? > after_data {
-                    return Ok(());
-                }
-                if recheck < timing.submit_max_rechecks && !timing.submit_poll_interval.is_zero() {
-                    thread::sleep(timing.submit_poll_interval);
-                }
-            }
-            None
-        }
-        Err(err) => Some(err),
-    };
-
-    // The correctly encoded key either failed or produced no observable bytes.
-    // Queue a raw carriage return directly behind all prior native input and wait
-    // for the writer's barrier; success now acknowledges this exact fallback write,
-    // rather than inferring it from an unrelated cumulative-position increase.
-    match submit_bytes() {
-        Ok(()) => {
-            if let Some(err) = synthetic_submit_error {
-                eprintln!(
-                    "session: native synthetic submit failed ({err}); delivered the raw submit byte \
-                     through the pane writer instead"
-                );
-            } else {
-                eprintln!(
-                    "session: native synthetic submit emitted no acknowledged PTY input; delivered \
-                     the raw submit byte through the pane writer instead"
-                );
-            }
-            Ok(())
-        }
-        Err(raw_err) => {
-            let error = synthetic_submit_error.map_or_else(
-                || {
-                    format!(
-                        "native terminal emitted no PTY input for Return and the raw submit \
-                         fallback failed: {raw_err}"
-                    )
-                },
-                |synthetic_err| {
-                    format!(
-                        "native terminal submit failed: {synthetic_err}; raw submit fallback \
-                         failed: {raw_err}"
-                    )
-                },
-            );
-            Err(PaneWriteFailure::after_data(error))
-        }
-    }
-}
-
-fn write_native_pane_input(
-    state: &AppState,
-    options: &PaneWriteOptions,
-    send_text: impl FnOnce(&str) -> Result<(), String>,
-    paste_approved_text: impl FnOnce(&str) -> Result<(), String>,
-    submit: impl FnOnce() -> Result<(), String>,
-) -> Result<(), PaneWriteFailure> {
-    write_pane_sequenced(
-        state,
-        options,
-        |options| write_native_pane_data(options, send_text, paste_approved_text),
-        submit,
-    )
-}
-
-/// Routes native-pane payloads through Ghostty's matching input API. Paste
-/// framing is terminal state, not ordinary text: Ghostty must generate it via
-/// its approved clipboard action so TUIs interpret the boundary instead of
-/// receiving a literal `[200~... [201~` string.
-fn write_native_pane_data(
-    options: &PaneWriteOptions,
-    send_text: impl FnOnce(&str) -> Result<(), String>,
-    paste_approved_text: impl FnOnce(&str) -> Result<(), String>,
-) -> Result<(), String> {
-    if options.paste {
-        let data = strip_bracketed_paste_markers(&options.data);
-        paste_approved_text(&data)
-    } else {
-        send_text(&options.data)
-    }
-}
-
-/// The submit sequencing shared by both pane backends, parameterized over how
-/// bytes reach the terminal: emit the payload, then after a short delay the
-/// trailing Return, then arm the escape watch.
 fn write_pane_sequenced(
     state: &AppState,
     options: &PaneWriteOptions,
@@ -4014,13 +3511,6 @@ fn write_pane_input<W: Write + ?Sized>(
 }
 
 pub fn resize_pane(state: &AppState, pane_id: String, cols: u16, rows: u16) -> Result<(), String> {
-    // Some agent TUIs nested under agent-exec do not reliably wake from the
-    // SIGWINCH that TIOCSWINSZ is documented to generate. Resolve whether an
-    // agent owns this pane before taking the master lock so this path never
-    // inverts the model -> PTY lock order. Do not send a second WINCH to an
-    // ordinary interactive shell: zsh redraws its live prompt in response,
-    // and that output can race Ghostty's screen-height resize and displace the
-    // prompt/viewport when a split is created.
     #[cfg(target_os = "macos")]
     let explicitly_notify_resize = state
         .agent_by_pane(&pane_id)
@@ -4040,9 +3530,6 @@ pub fn resize_pane(state: &AppState, pane_id: String, cols: u16, rows: u16) -> R
     let master = master
         .lock()
         .map_err(|_| format!("pane {pane_id} master lock poisoned"))?;
-    // A no-op TIOCSWINSZ is not free: some kernels still SIGWINCH, and a
-    // duplicate report from Ghostty's session + surface callbacks would
-    // wake a TUI for a size it already has.
     let size_changed = master
         .get_size()
         .map(|size| size.cols != cols || size.rows != rows)
@@ -4091,216 +3578,6 @@ pub fn resize_pane(state: &AppState, pane_id: String, cols: u16, rows: u16) -> R
 #[cfg(target_os = "macos")]
 fn agent_needs_explicit_resize_signal(adapter_id: Option<&str>) -> bool {
     adapter_id.is_some()
-}
-
-pub fn resize_native_host_pane(
-    state: &AppState,
-    pane_id: &str,
-    cols: u16,
-    rows: u16,
-) -> Result<(), String> {
-    // Ghostty-driven callers (NativeTerminalPane) already delayed this until
-    // after the new IOSurface present. Keep the ioctl itself synchronous:
-    // `pane_resize` and other non-Ghostty callers must not wait on a frame.
-    resize_pane(state, pane_id.to_string(), cols, rows)
-}
-
-/// Claim Cmd-K only for a remote backend. Local panes keep Ghostty's
-/// clear_screen action; remote panes ask the running shell/TUI to redraw via
-/// Ctrl-L. This intentionally does not erase tmux history.
-pub(crate) fn clear_remote_native_screen(state: &AppState, pane_id: &str) -> bool {
-    match state.pane_remote_control(pane_id) {
-        Ok(Some(_)) => {
-            if let Err(err) = write_native_host_input(state, pane_id, vec![0x0c]) {
-                eprintln!("session: failed to clear remote terminal {pane_id}: {err}");
-            }
-            // Even a disconnected remote owns this chord. Falling through
-            // would clear only the local renderer and conceal the failure.
-            true
-        }
-        Ok(None) => false,
-        Err(err) => {
-            eprintln!("session: failed to resolve clear-screen target {pane_id}: {err}");
-            true
-        }
-    }
-}
-
-pub fn write_native_host_input(
-    state: &AppState,
-    pane_id: &str,
-    bytes: Vec<u8>,
-) -> Result<(), String> {
-    // Fast path: hand the bytes to the pane's writer thread. Write errors on
-    // this path surface asynchronously (logged by the writer thread) — the
-    // caller is Ghostty's synchronous input callback, which only logs them
-    // anyway.
-    let sender = NATIVE_INPUT_SENDERS
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .get(pane_id)
-        .cloned();
-    let bytes = match sender {
-        Some(sender) => match sender.send(NativeInputMessage::Data(bytes)) {
-            Ok(()) => return Ok(()),
-            // The writer thread exited (write failure, teardown race); fall
-            // through to the synchronous write so the error surfaces here.
-            Err(std::sync::mpsc::SendError(NativeInputMessage::Data(bytes))) => bytes,
-            Err(std::sync::mpsc::SendError(NativeInputMessage::Flush(_))) => unreachable!(),
-        },
-        None => bytes,
-    };
-    let writer = state
-        .pane_writer(pane_id)?
-        .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-    let mut writer = writer
-        .lock()
-        .map_err(|_| format!("pane {pane_id} writer lock poisoned"))?;
-    writer
-        .write_all(&bytes)
-        .and_then(|()| writer.flush())
-        .map_err(|err| format!("failed to write native pane {pane_id}: {err}"))
-}
-
-/// Writes bytes through a native pane's ordered input worker and waits until the
-/// worker has written and flushed that exact preceding message. Unlike comparing
-/// cumulative writer positions around a Ghostty action, the successful barrier
-/// cannot be satisfied by unrelated user input: FIFO ordering guarantees these
-/// bytes were processed before the acknowledgement was sent.
-fn write_acknowledged_native_host_input(pane_id: &str, bytes: &[u8]) -> Result<(), String> {
-    let sender = NATIVE_INPUT_SENDERS
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .get(pane_id)
-        .cloned()
-        .ok_or_else(|| format!("native input writer for pane {pane_id} is unavailable"))?;
-    let (acknowledge, result) = std::sync::mpsc::sync_channel(0);
-    sender
-        .send(NativeInputMessage::Data(bytes.to_vec()))
-        .map_err(|_| format!("native input writer for pane {pane_id} stopped before write"))?;
-    sender
-        .send(NativeInputMessage::Flush(acknowledge))
-        .map_err(|_| format!("native input writer for pane {pane_id} stopped before flush"))?;
-    result
-        .recv_timeout(NATIVE_INPUT_FLUSH_TIMEOUT)
-        .map_err(|_| format!("timed out flushing native input for pane {pane_id}"))??;
-    Ok(())
-}
-
-/// Waits until every native input message queued before this call has reached
-/// the PTY and returns the cumulative number of bytes written by this pane's
-/// input worker. The position lets programmatic paste/submit callers verify
-/// that Ghostty actually emitted bytes for each accepted action.
-fn flush_native_host_input(pane_id: &str) -> Result<u64, String> {
-    let sender = NATIVE_INPUT_SENDERS
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .get(pane_id)
-        .cloned()
-        .ok_or_else(|| format!("native input writer for pane {pane_id} is unavailable"))?;
-    let (acknowledge, result) = std::sync::mpsc::sync_channel(0);
-    sender
-        .send(NativeInputMessage::Flush(acknowledge))
-        .map_err(|_| format!("native input writer for pane {pane_id} stopped before flush"))?;
-    result
-        .recv_timeout(NATIVE_INPUT_FLUSH_TIMEOUT)
-        .map_err(|_| format!("timed out flushing native input for pane {pane_id}"))?
-}
-
-/// Registers a native pane's input writer thread, replacing (and thereby
-/// shutting down) any stale thread left by a reused pane id.
-fn register_native_input_writer(pane_id: &str, writer: SharedWriter) {
-    let sender = start_native_input_writer(pane_id.to_string(), writer);
-    NATIVE_INPUT_SENDERS
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .insert(pane_id.to_string(), sender);
-}
-
-/// Drops the pane's persistent sender so its writer thread drains what is
-/// already queued and exits.
-fn remove_native_input_writer(pane_id: &str) {
-    NATIVE_INPUT_SENDERS
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-        .remove(pane_id);
-}
-
-/// One writer thread per native pane, draining queued input into the PTY.
-/// Ghostty's input callback stays non-blocking regardless of PTY buffer state,
-/// and input ordering is preserved because every native write funnels through
-/// this single channel. Exits when the registry's sender is dropped or the
-/// PTY write fails (the fallback in `write_native_host_input` then reports
-/// subsequent failures synchronously).
-fn start_native_input_writer(
-    pane_id: String,
-    writer: SharedWriter,
-) -> std::sync::mpsc::Sender<NativeInputMessage> {
-    let (sender, receiver) = std::sync::mpsc::channel::<NativeInputMessage>();
-    thread::spawn(move || {
-        let mut written_bytes = 0_u64;
-        while let Ok(message) = receiver.recv() {
-            let (mut pending, mut acknowledge) = match message {
-                NativeInputMessage::Data(data) => (data, None),
-                NativeInputMessage::Flush(acknowledge) => {
-                    let result = writer
-                        .lock()
-                        .map_err(|_| format!("native pane {pane_id} writer lock poisoned"))
-                        .and_then(|mut writer| {
-                            writer.flush().map_err(|err| {
-                                format!("failed to flush native pane {pane_id}: {err}")
-                            })
-                        })
-                        .map(|()| written_bytes);
-                    let failed = result.is_err();
-                    let _ = acknowledge.send(result);
-                    if failed {
-                        return;
-                    }
-                    continue;
-                }
-            };
-            // Coalesce adjacent data messages, but never cross an acknowledged
-            // flush barrier. Programmatic paste/submit uses that barrier to retain
-            // its PTY-level separation; ordinary keystroke bursts stay amortized.
-            while let Ok(more) = receiver.try_recv() {
-                match more {
-                    NativeInputMessage::Data(data) => pending.extend_from_slice(&data),
-                    NativeInputMessage::Flush(flush) => {
-                        acknowledge = Some(flush);
-                        break;
-                    }
-                }
-            }
-            let result = writer
-                .lock()
-                .map_err(|_| format!("native pane {pane_id} writer lock poisoned"))
-                .and_then(|mut writer| {
-                    writer
-                        .write_all(&pending)
-                        .and_then(|()| writer.flush())
-                        .map_err(|err| {
-                            format!("failed to write input to native pane {pane_id}: {err}")
-                        })
-                });
-            match result {
-                Ok(()) => {
-                    written_bytes = written_bytes.saturating_add(pending.len() as u64);
-                    if let Some(acknowledge) = acknowledge {
-                        let _ = acknowledge.send(Ok(written_bytes));
-                    }
-                }
-                Err(err) => {
-                    if let Some(acknowledge) = acknowledge {
-                        let _ = acknowledge.send(Err(err.clone()));
-                    }
-                    eprintln!("session: {err}");
-                    return;
-                }
-            }
-        }
-    });
-    sender
 }
 
 pub fn pane_activity(state: &AppState, pane_id: String) -> Result<PaneActivity, String> {
@@ -4377,7 +3654,6 @@ pub fn pane_activity(state: &AppState, pane_id: String) -> Result<PaneActivity, 
 }
 
 pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
-    let native_surface = state.pane_is_native(&pane_id)? == Some(true);
     let pane_agent_id = state.agent_by_pane(&pane_id)?.map(|agent| agent.id);
     if let Err(err) = state.capture_last_closed_pane(&pane_id) {
         eprintln!("session: failed to capture closed pane {pane_id}: {err}");
@@ -4424,10 +3700,6 @@ pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
             eprintln!("session: failed to release fork barrier for closed agent {agent_id}: {err}");
         }
         state.remove_pane(&pane_id)?;
-        if native_surface {
-            let _ = crate::native_terminal::remove(&pane_id);
-            remove_native_input_writer(&pane_id);
-        }
         if let Some(agent_id) = pane_agent_id
             && let Err(err) = release_waiters_for_agent(state, &agent_id)
         {
@@ -4474,30 +3746,12 @@ pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
         eprintln!("session: failed to release fork barrier for closed agent {agent_id}: {err}");
     }
     state.remove_pane(&pane_id)?;
-    if native_surface {
-        let _ = crate::native_terminal::remove(&pane_id);
-        remove_native_input_writer(&pane_id);
-    }
     if let Some(agent_id) = pane_agent_id
         && let Err(err) = release_waiters_for_agent(state, &agent_id)
     {
         eprintln!("session: failed to release waiters for closed agent {agent_id}: {err}");
     }
     Ok(())
-}
-
-pub fn native_pane_did_close(state: &AppState, pane_id: &str, process_alive: bool) {
-    if process_alive && let Err(err) = state.settle_research_pane_cancelled(pane_id) {
-        eprintln!("session: failed to cancel user-closed research pane {pane_id}: {err}");
-    }
-    // A delegate delivery for a pane no longer in the model (a late or
-    // duplicate close) has nothing left to tear down.
-    if (state.pane_has_host_pty(pane_id).ok().flatten() == Some(true)
-        || state.pane_remote_control(pane_id).ok().flatten().is_some())
-        && let Err(err) = kill_pane(state, pane_id.to_string())
-    {
-        eprintln!("session: failed to close host-managed pane {pane_id}: {err}");
-    }
 }
 
 /// Best-effort teardown of every pane's process tree on app exit.
@@ -4588,72 +3842,23 @@ pub fn close_worktree_pane(
     Ok(())
 }
 
-/// Terminal probes buffered before attachment cannot be answered promptly. A
-/// late reply can become editor input after tmux has stopped waiting for it
-/// (ESC ] even opens an editor in some TUIs). Drop only those probes,
-/// preserving rendering and live queries. Keep partial matches across reads,
-/// including a probe straddling the attach boundary.
-#[derive(Default)]
-struct StartupTerminalQueries {
-    pending: Vec<u8>,
-}
-
-impl StartupTerminalQueries {
-    fn filter<'a>(&mut self, bytes: &'a [u8], buffering: bool) -> Cow<'a, [u8]> {
-        const QUERIES: &[&[u8]] = &[
-            // tmux asks for these while attaching a client. If the native
-            // surface is still waiting for its first layout, Ghostty cannot
-            // answer until after tmux's response window has closed. Replaying
-            // them then types Ghostty's DA2 and XTVERSION replies into the
-            // surviving agent instead (for example `1;10;0c>|ghostty 1.3.1`).
-            b"\x1b[>c",
-            b"\x1b[>0c",
-            b"\x1b[>q",
-            b"\x1b[>0q",
-            b"\x1b]10;?\x07",
-            b"\x1b]10;?\x1b\\",
-            b"\x1b]11;?\x07",
-            b"\x1b]11;?\x1b\\",
-            b"\x1b]12;?\x07",
-            b"\x1b]12;?\x1b\\",
-        ];
-        if !buffering && self.pending.is_empty() {
-            return Cow::Borrowed(bytes);
-        }
-        let mut output = Vec::with_capacity(bytes.len());
-        for &byte in bytes {
-            if self.pending.is_empty() && !buffering {
-                output.push(byte);
-                continue;
-            }
-            self.pending.push(byte);
-            loop {
-                if QUERIES.contains(&self.pending.as_slice()) {
-                    self.pending.clear();
-                    break;
-                }
-                if QUERIES.iter().any(|query| query.starts_with(&self.pending)) {
-                    break;
-                }
-                output.push(self.pending.remove(0));
-                if self.pending.is_empty() {
-                    break;
-                }
-            }
-        }
-        Cow::Owned(output)
-    }
-}
-
 #[cfg_attr(all(target_os = "macos", not(test)), allow(dead_code))]
 fn start_reader_thread(
     state: AppState,
     pane_id: String,
     mut reader: Box<dyn Read + Send>,
     backlog: SharedBacklog,
-    native_surface: bool,
     remote: Option<RemoteReaderContext>,
 ) {
+    // Backend owns readiness; flush any explicitly staged startup data before
+    // the reader starts. Frontend attachment cannot gate durable output.
+    if let Ok(mut output) = backlog.lock() {
+        let pending = std::mem::take(&mut output.buffer);
+        if !pending.is_empty() {
+            record_scrollback(&state, &pane_id, &pending);
+        }
+        output.ready = true;
+    }
     thread::spawn(move || {
         // 64KB per read: every chunk pays fixed costs beyond the syscall — the
         // durable scrollback append and, for native surfaces, the FFI handoff
@@ -4662,7 +3867,6 @@ fn start_reader_thread(
         // to keep the reader thread's stack frame small.
         let mut buffer = vec![0_u8; 64 * 1024];
         let mut handshake = RemoteClientHandshake::default();
-        let mut startup_terminal_queries = StartupTerminalQueries::default();
         let mut first_output = true;
         loop {
             match reader.read(&mut buffer) {
@@ -4689,43 +3893,9 @@ fn start_reader_thread(
                         first_output = false;
                         record_remote_startup_elapsed(&state, &pane_id, "firstOutput");
                     }
-                    // Hold the backlog lock only long enough to decide; emitting
-                    // live happens after releasing it. `attach_pane` flips `ready`
-                    // (and drains the buffer) under the same lock, so no chunk is
-                    // ever both buffered and emitted, and order is preserved.
-                    let (live, chunk) = match backlog.lock() {
-                        Ok(mut backlog) => {
-                            let chunk = startup_terminal_queries
-                                .filter(chunk, native_surface && !backlog.ready);
-                            if backlog.ready {
-                                (true, chunk)
-                            } else {
-                                append_capped(&mut backlog.buffer, &chunk);
-                                (false, chunk)
-                            }
-                        }
-                        Err(_) => (true, startup_terminal_queries.filter(chunk, false)),
-                    };
-                    let chunk = chunk.as_ref();
-                    if live {
-                        // Hand the surface its bytes before touching disk: the
-                        // durable append (and its occasional multi-MB trim) is
-                        // recovery bookkeeping, and running it first put disk
-                        // latency in front of every rendered chunk — including
-                        // keystroke echo. Without a native surface (non-macOS)
-                        // there is no renderer — the webview dropped the old
-                        // per-chunk pty.data events unread — so output is only
-                        // recorded.
-                        if native_surface
-                            && let Err(err) =
-                                crate::native_terminal::receive(&pane_id, chunk, false)
-                        {
-                            eprintln!(
-                                "session: failed to render output for native pane {pane_id}: {err}"
-                            );
-                        }
-                        record_scrollback(&state, &pane_id, chunk);
-                    }
+                    // Serialize durable output with remote history delivery.
+                    let _output = backlog.lock().unwrap_or_else(|error| error.into_inner());
+                    record_scrollback(&state, &pane_id, chunk);
                 }
                 Err(err) => {
                     state.emit(SessionEvent::new(
@@ -4756,7 +3926,6 @@ fn start_reader_thread(
                 remote.history,
                 remote.commands,
                 backlog.clone(),
-                native_surface,
                 "connectionLost".to_string(),
             );
             retire_remote_attachment(&pane_id, attachment);
@@ -4793,10 +3962,6 @@ fn start_reader_thread(
             // A failure here (e.g. a poisoned model lock) leaves a dead pane in
             // state; log it so the stale entry has a trace rather than vanishing.
             eprintln!("session: failed to remove exited pane {pane_id}: {err}");
-        }
-        if native_surface {
-            let _ = crate::native_terminal::remove(&pane_id);
-            remove_native_input_writer(&pane_id);
         }
         if let Some(agent_id) = pane_agent_id
             && let Err(err) = release_waiters_for_agent(&state, &agent_id)
@@ -5158,55 +4323,9 @@ mod tests {
     };
     use crate::scrollback::read_pane_scrollback;
     use crate::workspace::{AgentInfo, AgentStatus, GroupInfo, WorkspaceScope};
-    use std::cell::{Cell, RefCell};
     use std::io;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
-
-    #[test]
-    fn startup_terminal_queries_drop_probes_across_every_read_boundary() {
-        let input = b"\x1b[?1049h\x1b[>c\x1b[>0q\x1b]10;?\x07\x1b]11;?\x1b\\\x1b]12;?\x07\x1b[31mDevin\x1b[0m";
-        let expected = b"\x1b[?1049h\x1b[31mDevin\x1b[0m";
-        for split in 0..=input.len() {
-            let mut filter = StartupTerminalQueries::default();
-            let mut output = filter.filter(&input[..split], true).into_owned();
-            output.extend_from_slice(&filter.filter(&input[split..], true));
-            assert_eq!(output, expected, "split {split}");
-        }
-    }
-
-    #[test]
-    fn startup_terminal_queries_finish_pending_probe_after_attach_but_keep_live_queries() {
-        for query in [b"\x1b[>0c".as_slice(), b"\x1b[>q", b"\x1b]11;?\x1b\\"] {
-            for split in 1..query.len() {
-                let mut filter = StartupTerminalQueries::default();
-                assert!(filter.filter(&query[..split], true).is_empty());
-                let mut live = query[split..].to_vec();
-                live.extend_from_slice(query);
-                live.extend_from_slice(b"prompt");
-                let mut expected = query.to_vec();
-                expected.extend_from_slice(b"prompt");
-                assert_eq!(
-                    filter.filter(&live, false).as_ref(),
-                    expected,
-                    "query {query:?}, split {split}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn startup_terminal_queries_preserve_colors_titles_modes_and_non_queries() {
-        let input = b"\x1b]10;rgb:ffff/0000/0000\x07\x1b]2;Devin\x07\x1b[?2004h\x1b]110;?\x07text";
-        let mut filter = StartupTerminalQueries::default();
-        let mut output = Vec::new();
-        for byte in input {
-            output.extend_from_slice(&filter.filter(std::slice::from_ref(byte), true));
-        }
-        assert_eq!(output, input);
-        let live_query = b"\x1b]10;?\x07";
-        assert_eq!(filter.filter(live_query, false).as_ref(), live_query);
-    }
 
     fn windows_contains(haystack: &[u8], needle: &[u8]) -> bool {
         haystack
@@ -5249,83 +4368,6 @@ mod tests {
         assert!(RESTORED_SCROLLBACK_TERMINAL_RESET.starts_with(b"\x18\x1b>"));
     }
 
-    #[test]
-    fn live_pane_reset_clears_input_modes_without_moving_the_cursor() {
-        // The live-surface reset still latches off the key-encoding modes that
-        // otherwise garble a surviving shell's prompt (Kitty flags and xterm
-        // modifyOtherKeys), and still turns the cursor back on.
-        assert!(LIVE_PANE_TERMINAL_MODE_RESET.ends_with(b"\x1b[>4;0m\x1b[=0u"));
-        assert!(windows_contains(
-            LIVE_PANE_TERMINAL_MODE_RESET,
-            b"\x1b[?25h"
-        ));
-
-        // But it must never move the cursor or swap the screen buffer on a
-        // live surface the shell is about to draw its prompt into: no leading
-        // CAN and no alternate-screen exits. Those stay in the full reset,
-        // which only ever rebuilds a fresh surface or is recorded for trims.
-        assert!(!LIVE_PANE_TERMINAL_MODE_RESET.starts_with(b"\x18"));
-        assert!(!windows_contains(
-            LIVE_PANE_TERMINAL_MODE_RESET,
-            b"\x1b[?47l"
-        ));
-        assert!(!windows_contains(
-            LIVE_PANE_TERMINAL_MODE_RESET,
-            b"\x1b[?1047l"
-        ));
-        assert!(!windows_contains(
-            LIVE_PANE_TERMINAL_MODE_RESET,
-            b"\x1b[?1049l"
-        ));
-        // The full reset keeps them — the two are otherwise the same reset.
-        assert!(windows_contains(
-            RESTORED_SCROLLBACK_TERMINAL_RESET,
-            b"\x1b[?1047l"
-        ));
-    }
-
-    #[test]
-    fn reset_pane_terminal_modes_records_the_reset_for_live_panes_only() {
-        let workspace = temp_workspace();
-        let state = test_state_with_workspace(workspace.clone());
-        let pane = spawn_test_pty(
-            &state,
-            "pane-mode-reset",
-            vec!["-c".to_string(), "sleep 30".to_string()],
-        );
-
-        // A job-control handoff touches only the live renderer. The still-live
-        // TUI may resume its alternate screen, so its durable log must remain
-        // untouched.
-        reset_live_pane_terminal_modes(&state, &pane.id).unwrap();
-        assert!(
-            read_pane_scrollback(&workspace, &pane.id)
-                .unwrap()
-                .is_empty()
-        );
-
-        // The pane was never attached, so the reader thread is still buffering
-        // (pre-attach output is not recorded): the exit reset is the only
-        // scrollback writer here and the log contents are exact, not racy.
-        reset_pane_terminal_modes(&state, &pane.id).unwrap();
-        assert_eq!(
-            read_pane_scrollback(&workspace, &pane.id).unwrap(),
-            RESTORED_SCROLLBACK_TERMINAL_RESET
-        );
-
-        // A pane that no longer exists is a quiet no-op — the detach that
-        // triggers the reset can race pane teardown — and must not mint a
-        // scrollback log for the dead pane id.
-        reset_pane_terminal_modes(&state, "pane-gone").unwrap();
-        assert!(
-            read_pane_scrollback(&workspace, "pane-gone")
-                .unwrap()
-                .is_empty()
-        );
-
-        kill_pane(&state, pane.id).expect("cleanup test pane");
-    }
-
     #[derive(Default)]
     struct RecordingWriter {
         bytes: Vec<u8>,
@@ -5351,49 +4393,6 @@ mod tests {
             paste,
             submit,
         }
-    }
-
-    /// A `Write` sink whose bytes are observable from the test thread while the
-    /// pane's writer thread drains into it.
-    struct SharedSink(Arc<Mutex<Vec<u8>>>);
-
-    impl Write for SharedSink {
-        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.0.lock().unwrap().extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn native_input_writer_drains_in_order_off_the_calling_thread() {
-        let pane_id = "pane-native-input-order";
-        let sink = Arc::new(Mutex::new(Vec::new()));
-        let writer: SharedWriter = Arc::new(Mutex::new(Box::new(SharedSink(sink.clone()))));
-        register_native_input_writer(pane_id, writer);
-        let state = test_state();
-
-        // The registered fast path must accept both writes without consulting
-        // pane state (no pane exists in this test AppState).
-        write_native_host_input(&state, pane_id, b"hello ".to_vec()).unwrap();
-        assert_eq!(flush_native_host_input(pane_id).unwrap(), 6);
-        write_native_host_input(&state, pane_id, b"world".to_vec()).unwrap();
-        assert_eq!(flush_native_host_input(pane_id).unwrap(), 11);
-        write_acknowledged_native_host_input(pane_id, SUBMIT_KEY).unwrap();
-
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        while sink.lock().unwrap().len() < 12 && std::time::Instant::now() < deadline {
-            thread::sleep(Duration::from_millis(5));
-        }
-        assert_eq!(*sink.lock().unwrap(), b"hello world\r");
-
-        // Once the registration is gone, the fallback path reports the missing
-        // pane synchronously instead of silently dropping input.
-        remove_native_input_writer(pane_id);
-        assert!(write_native_host_input(&state, pane_id, b"late".to_vec()).is_err());
     }
 
     fn test_state() -> AppState {
@@ -6018,7 +5017,6 @@ mod tests {
                         RemoteHistoryCheckpoint::new(Vec::new()),
                         Arc::new(Mutex::new(Default::default())),
                         commands.clone(),
-                        false,
                     )),
                     cwd_observation_seq: 0,
                 })
@@ -7266,251 +6264,6 @@ mod tests {
         assert_eq!(writer.flush_offsets, vec![1, 2]);
     }
 
-    #[test]
-    fn native_paste_uses_ghostty_paste_action_without_manual_markers() {
-        let options = write_options("test", true, true);
-        let mut raw_text = None;
-        let mut approved_paste = None;
-
-        write_native_pane_data(
-            &options,
-            |data| {
-                raw_text = Some(data.to_string());
-                Ok(())
-            },
-            |data| {
-                approved_paste = Some(data.to_string());
-                Ok(())
-            },
-        )
-        .unwrap();
-
-        assert_eq!(raw_text, None);
-        assert_eq!(approved_paste.as_deref(), Some("test"));
-    }
-
-    const TEST_NATIVE_SUBMIT_TIMING: NativeSubmitTiming = NativeSubmitTiming {
-        data_poll_interval: Duration::ZERO,
-        data_max_rechecks: 8,
-        data_quiet_rechecks: 2,
-        submit_key_delay: Duration::ZERO,
-        submit_poll_interval: Duration::ZERO,
-        submit_max_rechecks: 2,
-    };
-
-    #[test]
-    fn native_submission_flushes_paste_and_submit_separately() {
-        let calls = RefCell::new(Vec::new());
-        let positions = RefCell::new(vec![0_u64, 12, 12, 12, 13].into_iter());
-
-        write_native_data_and_submit(
-            "test",
-            || {
-                calls.borrow_mut().push("paste".to_string());
-                Ok(())
-            },
-            || {
-                calls.borrow_mut().push("submit".to_string());
-                Ok(())
-            },
-            || panic!("an acknowledged synthetic Return must not use the raw fallback"),
-            || {
-                calls.borrow_mut().push("flush".to_string());
-                positions
-                    .borrow_mut()
-                    .next()
-                    .ok_or_else(|| "unexpected flush".to_string())
-            },
-            TEST_NATIVE_SUBMIT_TIMING,
-        )
-        .unwrap();
-
-        assert_eq!(
-            calls.into_inner(),
-            [
-                "flush", "paste", "flush", "flush", "flush", "submit", "flush"
-            ]
-        );
-    }
-
-    #[test]
-    fn native_submission_waits_for_the_payload_to_arrive_and_become_quiet() {
-        let data_calls = Cell::new(0);
-        let submit_calls = Cell::new(0);
-        // The first post-paste barrier overtakes Ghostty's deferred input callback.
-        // Ghostty then emits the paste in two chunks; submission must wait through
-        // two unchanged positions after the final chunk rather than treating that
-        // chunk as acknowledgement of Return.
-        let positions = RefCell::new(vec![0_u64, 0, 5, 12, 12, 12, 13].into_iter());
-
-        write_native_data_and_submit(
-            "test",
-            || {
-                data_calls.set(data_calls.get() + 1);
-                Ok(())
-            },
-            || {
-                submit_calls.set(submit_calls.get() + 1);
-                Ok(())
-            },
-            || panic!("an acknowledged synthetic Return must not use the raw fallback"),
-            || {
-                positions
-                    .borrow_mut()
-                    .next()
-                    .ok_or_else(|| "unexpected flush".to_string())
-            },
-            TEST_NATIVE_SUBMIT_TIMING,
-        )
-        .unwrap();
-
-        assert_eq!(data_calls.get(), 1);
-        assert_eq!(submit_calls.get(), 1);
-    }
-
-    #[test]
-    fn native_submission_accepts_a_late_submit_ack_without_retrying_return() {
-        let submit_calls = Cell::new(0);
-        let positions = RefCell::new(vec![0_u64, 12, 12, 12, 12, 13].into_iter());
-
-        write_native_data_and_submit(
-            "test",
-            || Ok(()),
-            || {
-                submit_calls.set(submit_calls.get() + 1);
-                Ok(())
-            },
-            || panic!("a late synthetic acknowledgement must not use the raw fallback"),
-            || {
-                positions
-                    .borrow_mut()
-                    .next()
-                    .ok_or_else(|| "unexpected flush".to_string())
-            },
-            TEST_NATIVE_SUBMIT_TIMING,
-        )
-        .unwrap();
-
-        assert_eq!(submit_calls.get(), 1);
-    }
-
-    #[test]
-    fn native_submission_falls_back_to_one_acknowledged_raw_return() {
-        let data_calls = Cell::new(0);
-        let submit_calls = Cell::new(0);
-        let raw_submit_calls = Cell::new(0);
-        let positions = RefCell::new(vec![0_u64, 12, 12, 12, 12, 12, 12].into_iter());
-
-        write_native_data_and_submit(
-            "test",
-            || {
-                data_calls.set(data_calls.get() + 1);
-                Ok(())
-            },
-            || {
-                submit_calls.set(submit_calls.get() + 1);
-                Ok(())
-            },
-            || {
-                raw_submit_calls.set(raw_submit_calls.get() + 1);
-                Ok(())
-            },
-            || {
-                positions
-                    .borrow_mut()
-                    .next()
-                    .ok_or_else(|| "unexpected flush".to_string())
-            },
-            TEST_NATIVE_SUBMIT_TIMING,
-        )
-        .unwrap();
-
-        assert_eq!(data_calls.get(), 1);
-        assert_eq!(submit_calls.get(), 1);
-        assert_eq!(raw_submit_calls.get(), 1);
-    }
-
-    #[test]
-    fn native_submission_uses_raw_return_when_the_synthetic_bridge_fails() {
-        let raw_submit_calls = Cell::new(0);
-        let positions = RefCell::new(vec![0_u64, 12, 12, 12].into_iter());
-
-        write_native_data_and_submit(
-            "test",
-            || Ok(()),
-            || Err("bridge lost".to_string()),
-            || {
-                raw_submit_calls.set(raw_submit_calls.get() + 1);
-                Ok(())
-            },
-            || {
-                positions
-                    .borrow_mut()
-                    .next()
-                    .ok_or_else(|| "unexpected flush".to_string())
-            },
-            TEST_NATIVE_SUBMIT_TIMING,
-        )
-        .unwrap();
-
-        assert_eq!(raw_submit_calls.get(), 1);
-    }
-
-    #[test]
-    fn native_submit_fallback_failure_reports_payload_delivered() {
-        let positions = RefCell::new(vec![0_u64, 12, 12, 12, 12, 12, 12].into_iter());
-
-        // The paste landed before both submit paths failed: the turn queue must
-        // learn that the text is already in the composer so its retry sends only
-        // Return instead of pasting a duplicate copy.
-        let failure = write_native_data_and_submit(
-            "test",
-            || Ok(()),
-            || Ok(()),
-            || Err("writer lost".to_string()),
-            || {
-                positions
-                    .borrow_mut()
-                    .next()
-                    .ok_or_else(|| "unexpected flush".to_string())
-            },
-            TEST_NATIVE_SUBMIT_TIMING,
-        )
-        .unwrap_err();
-
-        assert!(failure.data_delivered);
-        assert!(failure.error.contains("writer lost"));
-    }
-
-    #[test]
-    fn native_payload_failure_reports_payload_undelivered() {
-        // The paste action itself failed: nothing reached the composer, so the
-        // retry must re-paste the full text.
-        let failure = write_native_data_and_submit(
-            "test",
-            || Err("paste rejected".to_string()),
-            || Ok(()),
-            || panic!("an undelivered payload must not reach the raw submit fallback"),
-            || Ok(0),
-            TEST_NATIVE_SUBMIT_TIMING,
-        )
-        .unwrap_err();
-        assert!(!failure.data_delivered);
-
-        // The paste was accepted but verifiably never emitted PTY input: also
-        // undelivered.
-        let failure = write_native_data_and_submit(
-            "test",
-            || Ok(()),
-            || Ok(()),
-            || panic!("an undelivered payload must not reach the raw submit fallback"),
-            || Ok(0),
-            TEST_NATIVE_SUBMIT_TIMING,
-        )
-        .unwrap_err();
-        assert!(!failure.data_delivered);
-    }
-
     fn spawn_test_pty(state: &AppState, pane_id: &str, args: Vec<String>) -> PaneInfo {
         spawn_pty(
             state,
@@ -7749,44 +6502,13 @@ mod tests {
                     depth: 0,
                 },
                 backend: PaneBackend::RemoteTmux(RemoteTmuxBackend::new(
-                    controller, history, backlog, commands, false,
+                    controller, history, backlog, commands,
                 )),
                 cwd_observation_seq: 0,
             })
             .unwrap();
 
         state
-    }
-
-    #[test]
-    fn remote_clear_screen_declines_local_panes() {
-        let state = test_state_with_workspace(temp_workspace());
-        let pane = spawn_test_pty(
-            &state,
-            "pane-local-clear-screen",
-            vec!["-c".to_string(), "sleep 30".to_string()],
-        );
-        assert!(!clear_remote_native_screen(&state, &pane.id));
-        kill_pane(&state, pane.id).expect("cleanup test pane");
-    }
-
-    #[test]
-    fn remote_clear_screen_sends_ctrl_l_through_native_input_writer() {
-        let state = state_with_disconnected_remote();
-        let pane_id = "pane-offline-resize";
-        let sink = Arc::new(Mutex::new(Vec::new()));
-        let writer: SharedWriter = Arc::new(Mutex::new(Box::new(SharedSink(sink.clone()))));
-        register_native_input_writer(pane_id, writer);
-        write_native_host_input(&state, pane_id, b"before".to_vec()).unwrap();
-        assert!(clear_remote_native_screen(&state, pane_id));
-        assert_eq!(flush_native_host_input(pane_id).unwrap(), 7);
-        assert_eq!(*sink.lock().unwrap(), b"before\x0c");
-        remove_native_input_writer(pane_id);
-
-        // A disconnected transport still claims the chord instead of clearing
-        // only Ghostty. Missing panes decline it.
-        assert!(clear_remote_native_screen(&state, pane_id));
-        assert!(!clear_remote_native_screen(&state, "missing-pane"));
     }
 
     #[test]
@@ -7963,62 +6685,43 @@ mod tests {
     }
 
     #[test]
-    fn pre_attach_output_is_recorded_only_when_attach_flushes_it() {
+    fn process_output_is_durable_without_frontend_attachment() {
         let workspace = temp_workspace();
         let state = test_state_with_workspace(workspace.clone());
+        // Exceed the old 8 MiB pre-attach cap, then keep the process alive so
+        // ordinary pane-exit cleanup does not delete its log during assertions.
         let pane = spawn_test_pty(
             &state,
             "pane-scrollback",
             vec![
-                "-c".to_string(),
-                "printf 'restored\\n'; sleep 5".to_string(),
+                "-c".into(),
+                "head -c 9437184 /dev/zero; printf 'OUTPUT_COMPLETE'; sleep 30".into(),
             ],
         );
-
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        loop {
-            let backlog = state
-                .pane_backlog(&pane.id)
-                .unwrap()
-                .expect("pane has backlog");
-            let has_output = backlog
-                .lock()
-                .unwrap()
-                .buffer
-                .windows("restored".len())
-                .any(|window| window == b"restored");
-            if has_output {
-                break;
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        let output = loop {
+            let output = read_pane_scrollback(&workspace, &pane.id).unwrap();
+            if output.ends_with(b"OUTPUT_COMPLETE") {
+                break output;
             }
-            assert!(
-                std::time::Instant::now() < deadline,
-                "pane did not buffer pre-attach output"
-            );
+            if std::time::Instant::now() >= deadline {
+                let _ = kill_pane(&state, pane.id.clone());
+                panic!("process output must be durable before any frontend attachment");
+            }
             thread::sleep(Duration::from_millis(20));
-        }
-
+        };
+        attach_pane(&state, pane.id.clone()).unwrap();
+        attach_pane(&state, pane.id.clone()).unwrap();
+        assert_eq!(
+            read_pane_scrollback(&workspace, &pane.id).unwrap(),
+            output,
+            "repeated compatibility attaches must not duplicate output"
+        );
+        kill_pane(&state, pane.id.clone()).unwrap();
         assert!(
             read_pane_scrollback(&workspace, &pane.id)
                 .unwrap()
-                .is_empty(),
-            "pre-attach output must not be visible in the durable log before replay"
-        );
-
-        attach_pane(&state, pane.id.clone()).expect("attaching pane flushes backlog");
-        let restored = read_pane_scrollback(&workspace, &pane.id).unwrap();
-        assert!(
-            restored
-                .windows("restored".len())
-                .any(|window| window == b"restored"),
-            "attach should record the flushed backlog"
-        );
-
-        kill_pane(&state, pane.id.clone()).expect("cleanup test pane");
-        assert!(
-            read_pane_scrollback(&workspace, &pane.id)
-                .unwrap()
-                .is_empty(),
-            "closing a pane should remove its scrollback log"
+                .is_empty()
         );
     }
 

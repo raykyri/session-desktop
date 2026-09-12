@@ -10,3 +10,8 @@ paragraph or bullet-point list of details about what was committed.
 Use multiple -m arguments instead of \n to break lines in commits.
 Don't ask to re-run 'cargo test' if there is a test that fails because
 of your sandboxing permissions, unless your work involves that test.
+
+The Swift package in src-tauri/swift-terminal now contains only AppKit/WebKit
+support. Its QmuxNativeTerminal archive and surviving C ABI names are compatibility
+identifiers; do not reintroduce a terminal renderer dependency. Keep the separate
+Foundation Models bridge and research process infrastructure intact.

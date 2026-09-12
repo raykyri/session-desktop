@@ -18,7 +18,6 @@ import type {
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import type { BrowserOverlayMode, BrowserOverlaySize } from "../appTypes";
 import {
-  claimNativeTerminalPointerForWebDrag,
   getHumanBrowserSnapshot,
   getBrowserAutomationSnapshot,
   insertBrowserAutomationText,
@@ -30,7 +29,7 @@ import {
   reloadBrowserAutomation,
   sendBrowserAutomationKey,
   sendBrowserAutomationMouse,
-  setNativeTerminalIframeShortcutFallback,
+  setNativeIframeShortcutFallback,
   startBrowserScreencast,
   stopBrowserScreencast,
   syncHumanBrowser,
@@ -670,7 +669,7 @@ export default function BrowserOverlay({
         return;
       }
       reported = active;
-      void setNativeTerminalIframeShortcutFallback(active).catch(() => undefined);
+      void setNativeIframeShortcutFallback(active).catch(() => undefined);
     };
     const sample = () => {
       frame = null;
@@ -715,7 +714,6 @@ export default function BrowserOverlay({
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    const releaseNativePointer = claimNativeTerminalPointerForWebDrag();
 
     const overlayRect = overlay.getBoundingClientRect();
     const parentRect = parent.getBoundingClientRect();
@@ -753,7 +751,6 @@ export default function BrowserOverlay({
       if (handle.hasPointerCapture(event.pointerId)) {
         handle.releasePointerCapture(event.pointerId);
       }
-      releaseNativePointer();
       setResizing(false);
       cleanupResizeRef.current = null;
     };

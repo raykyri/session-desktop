@@ -13,38 +13,25 @@ fn main() {
     println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
     println!("cargo:rerun-if-env-changed=SESSION_REQUIRE_FOUNDATION_MODELS");
     println!("cargo:rerun-if-env-changed=SESSION_ALLOW_MISSING_FOUNDATION_MODELS");
-    build_native_terminal_bridge();
+    build_native_support_bridge();
     build_foundation_title_bridge();
     tauri_build::build();
 }
 
-fn build_native_terminal_bridge() {
+fn build_native_support_bridge() {
     if env::var("CARGO_CFG_TARGET_OS").ok().as_deref() != Some("macos") {
         return;
     }
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let package_dir = manifest_dir.join("swift-terminal");
-    let dependency_source_dir = manifest_dir.join("../vendor/libghostty-spm");
-    // Emitting any rerun-if-changed disables cargo's default build-script
-    // watch, so re-add build.rs itself, and watch the vendored Ghostty
-    // sources: this script copies and compiles them, and a source-only change
-    // would otherwise never rerun it, silently linking a stale bridge.
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed={}", package_dir.display());
-    println!(
-        "cargo:rerun-if-changed={}",
-        dependency_source_dir.join("Package.swift").display()
-    );
-    println!(
-        "cargo:rerun-if-changed={}",
-        dependency_source_dir.join("Sources").display()
-    );
 
     let target_dir = env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| manifest_dir.join("target"));
-    let native_build_root = target_dir.join("native-terminal");
+    let native_build_root = target_dir.join("native-support");
     let deployment_target = swift_deployment_target();
     let target = swift_target_triple(&deployment_target);
     let arch = target.split('-').next().unwrap_or("arm64");
@@ -56,31 +43,23 @@ fn build_native_terminal_bridge() {
     let module_cache = native_build_root.join("module-cache");
     let config = native_build_root.join("config");
     let security = native_build_root.join("security");
-    let dependency_patch = package_dir.join("Patches/libghostty-spm-qmux.patch");
-    println!("cargo:rerun-if-changed={}", dependency_patch.display());
     for dir in [&scratch, &cache, &module_cache, &config, &security] {
         std::fs::create_dir_all(dir).unwrap_or_else(|err| {
             panic!(
-                "failed to create native-terminal build directory {}: {err}",
+                "failed to create native-support build directory {}: {err}",
                 dir.display()
             )
         });
     }
-    let dependency_dir = prepare_patched_ghostty_dependency(
-        &dependency_source_dir,
-        &native_build_root.join("libghostty-spm"),
-        &dependency_patch,
-    );
 
     let swift = xcrun_path(&["--find", "swift"])
         .or_else(|| Some(PathBuf::from("swift")))
-        .expect("Swift is required to build the native terminal bridge");
+        .expect("Swift is required to build the native support bridge");
 
     let mut failures = Vec::new();
-    for sdk_path in native_terminal_sdk_candidates() {
+    for sdk_path in native_support_sdk_candidates() {
         let output = Command::new(&swift)
             .env("SDKROOT", &sdk_path)
-            .env("QMUX_GHOSTTY_PACKAGE_PATH", &dependency_dir)
             .env("CLANG_MODULE_CACHE_PATH", &module_cache)
             .env("SWIFTPM_MODULECACHE_OVERRIDE", &module_cache)
             .arg("build")
@@ -104,13 +83,11 @@ fn build_native_terminal_bridge() {
             Ok(output) if output.status.success() => {
                 let products = scratch.join(format!("{arch}-apple-macosx/release"));
                 let bridge = products.join("libQmuxNativeTerminal.a");
-                let ghostty = products.join("libghostty.a");
-                if !bridge.exists() || !ghostty.exists() {
+                if !bridge.exists() {
                     failures.push(format!(
-                        "SwiftPM succeeded with SDK {} but did not produce {} and {}",
+                        "SwiftPM succeeded with SDK {} but did not produce {}",
                         sdk_path.display(),
-                        bridge.display(),
-                        ghostty.display()
+                        bridge.display()
                     ));
                     continue;
                 }
@@ -122,29 +99,10 @@ fn build_native_terminal_bridge() {
                 let bridge_stamp = fs_metadata_stamp(&bridge);
                 println!("cargo:rustc-env=QMUX_NATIVE_BRIDGE_STAMP={bridge_stamp}");
                 println!("cargo:rustc-link-search=native={}", products.display());
-                // force_load, not -l: GhosttyTerminal implements NSView
-                // overrides (keyDown, performKeyEquivalent, mouse events) in
-                // Swift extensions, which compile to ObjC categories inside
-                // archive members no symbol references statically. A plain -l
-                // link drops those members and the runtime silently falls back
-                // to NSView's defaults — rendering works, keyboard input dies.
+                // Keep the established archive identity and load its Swift/ObjC
+                // metadata alongside the exported C entry points.
                 println!("cargo:rustc-link-arg=-Wl,-force_load,{}", bridge.display());
-                println!("cargo:rustc-link-lib=static=ghostty");
-                println!("cargo:rustc-link-lib=c++");
-                for framework in [
-                    "AppKit",
-                    "Carbon",
-                    "CoreFoundation",
-                    "CoreGraphics",
-                    "CoreText",
-                    "CoreVideo",
-                    "Foundation",
-                    "IOSurface",
-                    "Metal",
-                    "QuartzCore",
-                    "Security",
-                    "WebKit",
-                ] {
+                for framework in ["AppKit", "CoreGraphics", "Foundation", "WebKit"] {
                     println!("cargo:rustc-link-lib=framework={framework}");
                 }
                 println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift");
@@ -165,7 +123,7 @@ fn build_native_terminal_bridge() {
     }
 
     panic!(
-        "failed to build the native Ghostty terminal bridge: {}",
+        "failed to build the native support bridge: {}",
         failures.join("; ")
     );
 }
@@ -186,74 +144,7 @@ fn fs_metadata_stamp(path: &Path) -> String {
     }
 }
 
-fn prepare_patched_ghostty_dependency(source: &Path, destination: &Path, patch: &Path) -> PathBuf {
-    assert!(
-        source.join("Package.swift").is_file() && source.join("Sources").is_dir(),
-        "Ghostty submodule is missing or incomplete at {}. Run `git submodule update --init --recursive` from the repository root before building Session.",
-        source.display()
-    );
-    if destination.exists() {
-        std::fs::remove_dir_all(destination).unwrap_or_else(|err| {
-            panic!(
-                "failed to clear patched Ghostty package {}: {err}",
-                destination.display()
-            )
-        });
-    }
-    copy_package_tree(source, destination);
-    let output = Command::new("/usr/bin/patch")
-        .current_dir(destination)
-        .arg("-p1")
-        .arg("--forward")
-        .arg("--batch")
-        .arg("-V")
-        .arg("none")
-        .arg("--input")
-        .arg(patch)
-        .output()
-        .unwrap_or_else(|err| panic!("failed to start patch for {}: {err}", patch.display()));
-    if !output.status.success() {
-        panic!(
-            "failed to patch Ghostty package: {}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    destination.to_path_buf()
-}
-
-fn copy_package_tree(source: &Path, destination: &Path) {
-    std::fs::create_dir_all(destination).unwrap_or_else(|err| {
-        panic!(
-            "failed to create patched package directory {}: {err}",
-            destination.display()
-        )
-    });
-    for entry in std::fs::read_dir(source)
-        .unwrap_or_else(|err| panic!("failed to read {}: {err}", source.display()))
-    {
-        let entry = entry.unwrap_or_else(|err| panic!("failed to read package entry: {err}"));
-        let name = entry.file_name();
-        if matches!(name.to_str(), Some(".git" | ".build" | "Example")) {
-            continue;
-        }
-        let source_path = entry.path();
-        let destination_path = destination.join(name);
-        if source_path.is_dir() {
-            copy_package_tree(&source_path, &destination_path);
-        } else {
-            std::fs::copy(&source_path, &destination_path).unwrap_or_else(|err| {
-                panic!(
-                    "failed to copy {} to {}: {err}",
-                    source_path.display(),
-                    destination_path.display()
-                )
-            });
-        }
-    }
-}
-
-fn native_terminal_sdk_candidates() -> Vec<PathBuf> {
+fn native_support_sdk_candidates() -> Vec<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(sdk) = env::var_os("SDKROOT").map(PathBuf::from)
         && sdk.exists()

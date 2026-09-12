@@ -736,16 +736,10 @@ mod tests {
             remote_socket_path: "/tmp/qmux-test.sock".to_string(),
         };
         let history = RemoteHistoryCheckpoint::new(Vec::new());
-        let backend = crate::state::RemoteTmuxBackend::new(
-            controller,
-            history,
-            backlog.clone(),
-            commands,
-            true,
-        );
+        let backend =
+            crate::state::RemoteTmuxBackend::new(controller, history, backlog.clone(), commands);
 
         assert!(Arc::ptr_eq(&backend.backlog, &backlog));
-        assert!(backend.native_surface);
         assert!(matches!(
             crate::state::PaneBackend::RemoteTmux(backend),
             crate::state::PaneBackend::RemoteTmux(_)

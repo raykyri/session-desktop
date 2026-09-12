@@ -1,9 +1,4 @@
-import {
-  TERMINAL_FONT_FAMILY,
-  TERMINAL_FONT_SIZE,
-  TERMINAL_FONT_SIZE_MAX,
-  TERMINAL_FONT_SIZE_MIN,
-} from "./terminalFont";
+import { APP_TEXT_SIZE, APP_TEXT_SIZE_MIN, APP_TEXT_SIZE_MAX } from "./appearance";
 import {
   DEFAULT_CONFIRM_PASTE_OVER_CHARS,
   type PasteProtectionSettings,
@@ -13,21 +8,6 @@ import {
   isCompletionSoundId,
   type CompletionSoundId,
 } from "./completionSounds";
-
-export interface FontOption {
-  id: string;
-  label: string;
-  /** Full CSS font-family stack applied to the terminal. */
-  stack: string;
-  /** A single font family name understood by Ghostty's native font matcher. */
-  nativeFamily: string;
-  /**
-   * Extra inter-character spacing in px mapped to Ghostty's cell-width adjustment.
-   * Defaults to 0 when omitted. Monaco's glyphs sit a touch tight, so
-   * a hairline 0.01px nudge keeps the cells from looking cramped.
-   */
-  letterSpacing?: number;
-}
 
 export interface BodyFontOption {
   id: string;
@@ -111,85 +91,13 @@ export async function detectAvailableBodyFonts(): Promise<BodyFontOption[]> {
   return BODY_FONT_OPTIONS.filter((_option, index) => availability[index]);
 }
 
-// Shared fallback chain so a face that is missing on the host degrades to the
-// platform monospace rather than a proportional font.
-const MONO_FALLBACK =
-  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace';
-
-// The small, curated list shown in the settings dropdown. JetBrains Mono and
-// Ioskeley Mono are bundled; the rest are common system monospace fonts.
-export const FONT_OPTIONS: FontOption[] = [
-  {
-    id: "jetbrains-mono",
-    label: "JetBrains Mono",
-    stack: TERMINAL_FONT_FAMILY,
-    nativeFamily: "JetBrains Mono",
-  },
-  {
-    id: "ioskeley-mono",
-    label: "Ioskeley Mono",
-    stack: `"Ioskeley Mono", ${MONO_FALLBACK}`,
-    // Ghostty recommends the Term build for correctly constrained arrows,
-    // box-drawing glyphs, and ligatures. Its family name intentionally differs
-    // from the matching webfont used by CSS surfaces.
-    nativeFamily: "Ioskeley Mono Term",
-  },
-  {
-    id: "sf-mono",
-    label: "SF Mono",
-    stack: `"SF Mono", ${MONO_FALLBACK}`,
-    nativeFamily: "SF Mono",
-  },
-  {
-    id: "menlo",
-    label: "Menlo",
-    stack: `"Menlo", ${MONO_FALLBACK}`,
-    nativeFamily: "Menlo",
-  },
-  {
-    id: "monaco",
-    label: "Monaco",
-    stack: `"Monaco", ${MONO_FALLBACK}`,
-    nativeFamily: "Monaco",
-    letterSpacing: 0.01,
-  },
-];
-
-export const DEFAULT_FONT_ID = FONT_OPTIONS[0].id;
-
-/**
- * The built-in qmux terminal colors. Any other value names a Ghostty color
- * scheme from the catalog bundled with libghostty-spm; the native side falls
- * back to the qmux colors when a stored name no longer resolves.
- */
-export const DEFAULT_THEME_ID = "qmux";
-
 export type ColorTheme = "green-blob" | "orange-blob";
-export type CursorStyle = "block" | "underline" | "bar";
-export type MouseWheelSensitivity = "low" | "normal" | "high" | "veryHigh";
 export type TabTitleProvider = "appleFoundationModels" | "openRouter" | "disabled";
 export type WorktreeLocation = "global" | "localQmux" | "localClaude";
 
 export const COLOR_THEME_OPTIONS: { id: ColorTheme; label: string }[] = [
   { id: "green-blob", label: "Cool" },
   { id: "orange-blob", label: "Warm" },
-];
-
-export const CURSOR_STYLE_OPTIONS: { id: CursorStyle; label: string }[] = [
-  { id: "block", label: "Block" },
-  { id: "bar", label: "Bar" },
-  { id: "underline", label: "Underline" },
-];
-
-export const MOUSE_WHEEL_SENSITIVITY_OPTIONS: {
-  id: MouseWheelSensitivity;
-  label: string;
-  value: number;
-}[] = [
-  { id: "low", label: "Low", value: 1 },
-  { id: "normal", label: "Standard", value: 1.75 },
-  { id: "high", label: "High", value: 3 },
-  { id: "veryHigh", label: "Very high", value: 5 },
 ];
 
 export const TAB_TITLE_PROVIDER_OPTIONS: { id: TabTitleProvider; label: string }[] = [
@@ -204,17 +112,6 @@ export const WORKTREE_LOCATION_OPTIONS: { id: WorktreeLocation; label: string }[
   { id: "localClaude", label: "Local .claude/" },
 ];
 
-export const DEFAULT_SCROLLBACK_ROWS = 10000;
-export const SCROLLBACK_ROWS_MIN = 1000;
-// Ghostty's native limit is byte-backed (Session budgets roughly 1 KiB per
-// requested row), so 200k allowed a single pane to reserve about 200 MiB and
-// made a few noisy build panes capable of forcing system suspension. Fifty
-// thousand remains 5x the default while bounding that per-surface exposure.
-export const SCROLLBACK_ROWS_MAX = 50000;
-export const DEFAULT_LINE_HEIGHT = 1;
-export const LINE_HEIGHT_MIN = 0.7;
-export const LINE_HEIGHT_MAX = 1.3;
-export const LINE_HEIGHT_STEP = 0.1;
 export const CONFIRM_PASTE_OVER_CHARS_MIN = 1;
 export const CONFIRM_PASTE_OVER_CHARS_MAX = 5_000_000;
 /**
@@ -258,28 +155,8 @@ export interface AppSettings {
   colorTheme: ColorTheme;
   /** id into BODY_FONT_OPTIONS */
   bodyFontId: string;
-  /** id into FONT_OPTIONS */
-  fontId: string;
-  /** terminal color theme: DEFAULT_THEME_ID or a catalog scheme name */
-  themeId: string;
-  /** terminal font size in px */
-  fontSize: number;
-  /** whether the focused terminal cursor blinks */
-  cursorBlink: boolean;
-  /** focused terminal cursor shape */
-  cursorStyle: CursorStyle;
-  /** approximate terminal scrollback rows retained by each native surface */
-  scrollbackRows: number;
-  /** scroll to bottom when the user types into the terminal */
-  scrollOnUserInput: boolean;
-  /** mouse wheel scrolling speed preset */
-  mouseWheelSensitivity: MouseWheelSensitivity;
-  /** terminal line-height multiplier */
-  lineHeight: number;
-  /** copy terminal selections as soon as text is selected */
-  copyOnSelect: boolean;
-  /** clear terminal selection after a copy action */
-  selectionClearOnCopy: boolean;
+  /** App text zoom; legacy fontSize values are read on first load. */
+  textSize: number;
   /** confirm pasted text containing more than one line */
   confirmMultiLinePaste: boolean;
   /** confirm pasted text above this many characters */
@@ -353,17 +230,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   colorTheme: "green-blob",
   bodyFontId: DEFAULT_BODY_FONT_ID,
-  fontId: DEFAULT_FONT_ID,
-  themeId: DEFAULT_THEME_ID,
-  fontSize: TERMINAL_FONT_SIZE,
-  cursorBlink: false,
-  cursorStyle: "block",
-  scrollbackRows: DEFAULT_SCROLLBACK_ROWS,
-  scrollOnUserInput: true,
-  mouseWheelSensitivity: "normal",
-  lineHeight: DEFAULT_LINE_HEIGHT,
-  copyOnSelect: false,
-  selectionClearOnCopy: false,
+  textSize: APP_TEXT_SIZE,
   confirmMultiLinePaste: false,
   confirmPasteOverChars: DEFAULT_CONFIRM_PASTE_OVER_CHARS,
   showShortcutHints: true,
@@ -395,43 +262,11 @@ export function bodyFontStackFor(bodyFontId: string): string {
   ).stack;
 }
 
-/** Resolves a stored font id to its CSS stack, falling back to the default. */
-export function fontStackFor(fontId: string): string {
-  return (FONT_OPTIONS.find((option) => option.id === fontId) ?? FONT_OPTIONS[0]).stack;
-}
-
-/**
- * Resolves a stored font id to its terminal letter spacing (px), falling back
- * to the default. Fonts without an explicit value spell out 0 (no extra gap).
- */
-export function letterSpacingFor(fontId: string): number {
-  return (FONT_OPTIONS.find((option) => option.id === fontId) ?? FONT_OPTIONS[0]).letterSpacing ?? 0;
-}
-
-export function nativeFontFamilyFor(fontId: string): string {
-  return (FONT_OPTIONS.find((option) => option.id === fontId) ?? FONT_OPTIONS[0]).nativeFamily;
-}
-
-export function clampFontSize(size: number): number {
+export function clampTextSize(size: number): number {
   if (!Number.isFinite(size)) {
-    return TERMINAL_FONT_SIZE;
+    return APP_TEXT_SIZE;
   }
-  return Math.min(TERMINAL_FONT_SIZE_MAX, Math.max(TERMINAL_FONT_SIZE_MIN, Math.round(size)));
-}
-
-export function clampScrollbackRows(rows: number): number {
-  if (!Number.isFinite(rows)) {
-    return DEFAULT_SCROLLBACK_ROWS;
-  }
-  return Math.min(SCROLLBACK_ROWS_MAX, Math.max(SCROLLBACK_ROWS_MIN, Math.round(rows)));
-}
-
-export function clampLineHeight(lineHeight: number): number {
-  if (!Number.isFinite(lineHeight)) {
-    return DEFAULT_LINE_HEIGHT;
-  }
-  const clamped = Math.min(LINE_HEIGHT_MAX, Math.max(LINE_HEIGHT_MIN, lineHeight));
-  return Math.round(clamped * 10) / 10;
+  return Math.min(APP_TEXT_SIZE_MAX, Math.max(APP_TEXT_SIZE_MIN, Math.round(size)));
 }
 
 export function clampConfirmPasteOverChars(chars: number): number {
@@ -444,12 +279,6 @@ export function clampConfirmPasteOverChars(chars: number): number {
   );
 }
 
-export function scrollSensitivityFor(setting: MouseWheelSensitivity): number {
-  return (
-    MOUSE_WHEEL_SENSITIVITY_OPTIONS.find((option) => option.id === setting) ??
-    MOUSE_WHEEL_SENSITIVITY_OPTIONS[1]
-  ).value;
-}
 
 export function pasteProtectionFor(settings: AppSettings): PasteProtectionSettings {
   return {
@@ -475,6 +304,7 @@ export function loadSettings(): AppSettings {
     }
     const parsed = JSON.parse(raw) as Omit<Partial<AppSettings>, "colorTheme"> & {
       colorTheme?: unknown;
+      fontSize?: unknown;
       openRouterTitlesEnabled?: boolean;
     };
     const storedColorTheme = typeof parsed.colorTheme === "string" ? parsed.colorTheme : null;
@@ -486,52 +316,8 @@ export function loadSettings(): AppSettings {
       BODY_FONT_OPTIONS.some((option) => option.id === parsed.bodyFontId)
         ? parsed.bodyFontId
         : DEFAULT_BODY_FONT_ID;
-    const fontId =
-      typeof parsed.fontId === "string" && FONT_OPTIONS.some((option) => option.id === parsed.fontId)
-        ? parsed.fontId
-        : DEFAULT_FONT_ID;
-    // Any non-empty string is accepted: the catalog lives on the native side,
-    // which falls back to the default colors for names it cannot resolve.
-    const themeId =
-      typeof parsed.themeId === "string" && parsed.themeId.length > 0
-        ? parsed.themeId
-        : DEFAULT_THEME_ID;
-    const fontSize =
-      typeof parsed.fontSize === "number" ? clampFontSize(parsed.fontSize) : TERMINAL_FONT_SIZE;
-    const cursorBlink =
-      typeof parsed.cursorBlink === "boolean"
-        ? parsed.cursorBlink
-        : DEFAULT_SETTINGS.cursorBlink;
-    const cursorStyle =
-      typeof parsed.cursorStyle === "string" &&
-      CURSOR_STYLE_OPTIONS.some((option) => option.id === parsed.cursorStyle)
-        ? parsed.cursorStyle
-        : DEFAULT_SETTINGS.cursorStyle;
-    const scrollbackRows =
-      typeof parsed.scrollbackRows === "number"
-        ? clampScrollbackRows(parsed.scrollbackRows)
-        : DEFAULT_SETTINGS.scrollbackRows;
-    const scrollOnUserInput =
-      typeof parsed.scrollOnUserInput === "boolean"
-        ? parsed.scrollOnUserInput
-        : DEFAULT_SETTINGS.scrollOnUserInput;
-    const mouseWheelSensitivity =
-      typeof parsed.mouseWheelSensitivity === "string" &&
-      MOUSE_WHEEL_SENSITIVITY_OPTIONS.some((option) => option.id === parsed.mouseWheelSensitivity)
-        ? parsed.mouseWheelSensitivity
-        : DEFAULT_SETTINGS.mouseWheelSensitivity;
-    const lineHeight =
-      typeof parsed.lineHeight === "number"
-        ? clampLineHeight(parsed.lineHeight)
-        : DEFAULT_SETTINGS.lineHeight;
-    const copyOnSelect =
-      typeof parsed.copyOnSelect === "boolean"
-        ? parsed.copyOnSelect
-        : DEFAULT_SETTINGS.copyOnSelect;
-    const selectionClearOnCopy =
-      typeof parsed.selectionClearOnCopy === "boolean"
-        ? parsed.selectionClearOnCopy
-        : DEFAULT_SETTINGS.selectionClearOnCopy;
+    const storedTextSize = parsed.textSize ?? parsed.fontSize;
+    const textSize = typeof storedTextSize === "number" ? clampTextSize(storedTextSize) : APP_TEXT_SIZE;
     const confirmMultiLinePaste =
       typeof parsed.confirmMultiLinePaste === "boolean"
         ? parsed.confirmMultiLinePaste
@@ -620,17 +406,7 @@ export function loadSettings(): AppSettings {
     return {
       colorTheme,
       bodyFontId,
-      fontId,
-      themeId,
-      fontSize,
-      cursorBlink,
-      cursorStyle,
-      scrollbackRows,
-      scrollOnUserInput,
-      mouseWheelSensitivity,
-      lineHeight,
-      copyOnSelect,
-      selectionClearOnCopy,
+      textSize,
       confirmMultiLinePaste,
       confirmPasteOverChars,
       showShortcutHints,

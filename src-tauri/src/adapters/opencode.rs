@@ -1514,7 +1514,6 @@ mod tests {
                         bytes: bytes.clone(),
                     }))),
                     backlog: Default::default(),
-                    native_surface: false,
                 }),
                 cwd_observation_seq: 0,
             })
