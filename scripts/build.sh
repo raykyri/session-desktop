@@ -85,10 +85,6 @@ fi
 # when invoked directly (e.g. from release.sh) rather than through `npm run`.
 export PATH="$repo_root/node_modules/.bin:$PATH"
 
-# Shipped bundles must include the Foundation Models tab-title bridge; without
-# this the bridge is optional and a missing Swift toolchain only warns.
-export SESSION_REQUIRE_FOUNDATION_MODELS=1
-
 # createUpdaterArtifacts makes the bundler sign the updater .tar.gz, which fails
 # without the private half of the updater keypair. Pick up the local key when the
 # caller didn't provide one (CI should set TAURI_SIGNING_PRIVATE_KEY instead; the

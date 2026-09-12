@@ -37,8 +37,8 @@ builds that omit those artifacts.
 - Apple bundle ID `app.qmux.desktop`, GitHub Keychain service
   `app.qmux.github-oauth` and account `github`, signing configuration, and updater
   public/private key identity.
-- Swift package/target names, Objective-C/native identifiers, `qmux_native_*` and
-  Foundation Models bridge symbols for surviving functions. The native archive
+- Swift package/target names, Objective-C/native identifiers, `qmux_native_*`
+  symbols for surviving functions. The native archive
   retains `QmuxNativeTerminal` and `QMUX_NATIVE_BRIDGE_STAMP`; renderer-only
   symbols, `QMUX_GHOSTTY_PACKAGE_PATH`, and `QMUX_NATIVE_DEBUG` are retired.
 - `qmux.config.json`, `.qmux/` directories, the macOS
@@ -65,7 +65,7 @@ Session no longer builds or links Ghostty. `native_support.rs` and the Swift
 support files in `src-tauri/swift-terminal` retain browser, AppKit shortcut,
 completion-sound, and interface recovery behavior. The package directory and
 archive name remain for native compatibility; its dependency list is empty.
-Foundation Models compilation and Apple identifiers are unchanged.
+Apple bundle, signing, and Keychain identifiers are unchanged.
 
 `pane.read --source viewport` now returns an explicit invalid-argument error.
 Use `--source terminal` for stored process output. Research SDK/JSONL execution,
@@ -83,3 +83,12 @@ The checked-in development configuration uses `~/.qmux/run/session.sock`. Both
 app and CLI discovery use the new filename; explicit `socketPath` and
 `SESSION_SOCK` overrides remain supported. Restart Session and update any external
 configuration that explicitly points to the old socket when cutting over.
+
+## Title generation after Foundation Models removal
+
+The Apple Foundation Models provider, Swift title bridge, native title command,
+and release-build requirement have been removed. Swift is still required for the
+AppKit/WebKit support bridge. Research titles and recaps continue to use the
+research agent. Optional tab titles still support OpenRouter when explicitly
+selected; existing Foundation Models selections and new installations default
+to disabled. Stored OpenRouter selections, keys, and models are preserved.

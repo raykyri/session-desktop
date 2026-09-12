@@ -1,5 +1,4 @@
 use crate::adapters::{AdapterMetadata, adapter_registry};
-use crate::title_generation;
 use crate::workspace::{RemoteMultiplexer, RemoteRef};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -212,19 +211,12 @@ pub struct RuntimeConfig {
     // The user's home directory, so the UI can render home-relative paths as ~/…
     // instead of bare relative segments. Empty if HOME is unset.
     pub home_dir: String,
-    pub tab_title_generation: TabTitleGenerationRuntimeConfig,
     // Port of the loopback file server, so the frontend can recognize token-bearing
     // file-server URLs and force them to load sandboxed (never as a same-origin
     // document that could read the token back). Filled in by `get_runtime_config`
     // from live state after the server binds; `None` here since config alone can't
     // know the ephemeral port.
     pub file_server_port: Option<u16>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TabTitleGenerationRuntimeConfig {
-    pub apple_foundation_models_available: bool,
 }
 
 fn remote_choices_from(
@@ -414,9 +406,6 @@ impl SessionConfig {
             adapters: adapter_registry(self).metadata(),
             remotes: self.remote_choices_with(preference_remotes),
             home_dir: env::var("HOME").unwrap_or_default(),
-            tab_title_generation: TabTitleGenerationRuntimeConfig {
-                apple_foundation_models_available: title_generation::foundation_models_available(),
-            },
             file_server_port: None,
         }
     }

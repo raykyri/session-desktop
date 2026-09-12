@@ -1,5 +1,9 @@
 # Remove Ghostty from Session
 
+Historical record: the subsequent Foundation Models removal supersedes this
+plan’s instructions to retain the independent title bridge. See
+[the current title-generation behavior](session-cutover.md#title-generation-after-foundation-models-removal).
+
 Status: source implementation completed; macOS release/runtime validation pending.
 Baseline: `02b832a`. The staged plan below records the source review before
 implementation; paths to removed files refer to that baseline.

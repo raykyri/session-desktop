@@ -92,7 +92,7 @@ export async function detectAvailableBodyFonts(): Promise<BodyFontOption[]> {
 }
 
 export type ColorTheme = "green-blob" | "orange-blob";
-export type TabTitleProvider = "appleFoundationModels" | "openRouter" | "disabled";
+export type TabTitleProvider = "openRouter" | "disabled";
 export type WorktreeLocation = "global" | "localQmux" | "localClaude";
 
 export const COLOR_THEME_OPTIONS: { id: ColorTheme; label: string }[] = [
@@ -101,7 +101,6 @@ export const COLOR_THEME_OPTIONS: { id: ColorTheme; label: string }[] = [
 ];
 
 export const TAB_TITLE_PROVIDER_OPTIONS: { id: TabTitleProvider; label: string }[] = [
-  { id: "appleFoundationModels", label: "Apple Foundation Models" },
   { id: "openRouter", label: "OpenRouter" },
   { id: "disabled", label: "Disable" },
 ];
@@ -236,7 +235,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showShortcutHints: true,
   showMenuBarIcon: false,
   reduceMotion: false,
-  tabTitleProvider: "appleFoundationModels",
+  tabTitleProvider: "disabled",
   openRouterKey: "",
   openRouterModel: "",
   preventSleep: true,
@@ -359,11 +358,13 @@ export function loadSettings(): AppSettings {
       typeof parsed.reduceMotion === "boolean"
         ? parsed.reduceMotion
         : DEFAULT_SETTINGS.reduceMotion;
+    // A retired provider must not revive a stale OpenRouter opt-in. Only use the
+    // legacy flag when no provider selection has ever been saved.
     const tabTitleProvider =
       typeof parsed.tabTitleProvider === "string" &&
       TAB_TITLE_PROVIDER_OPTIONS.some((option) => option.id === parsed.tabTitleProvider)
         ? parsed.tabTitleProvider
-        : parsed.openRouterTitlesEnabled === true
+        : parsed.tabTitleProvider == null && parsed.openRouterTitlesEnabled === true
           ? "openRouter"
           : DEFAULT_SETTINGS.tabTitleProvider;
     const codeMode =

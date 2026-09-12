@@ -1367,10 +1367,6 @@ export function renamePane(paneId: string, title: string) {
   return invoke<PaneInfo>("pane_rename", { paneId, title });
 }
 
-export function generateFoundationTabTitle(message: string) {
-  return invoke<string>("generate_foundation_tab_title", { message });
-}
-
 /** Atomically sets the flat sidebar tab order in one call. */
 export function setPaneLayout(items: PaneLayoutItem[]) {
   return invoke<PaneInfo[]>("pane_set_layout", { items });

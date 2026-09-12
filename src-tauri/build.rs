@@ -8,13 +8,9 @@ use std::{
 const MIN_SWIFT_DEPLOYMENT_TARGET: &str = "11.3";
 
 fn main() {
-    println!("cargo:rustc-check-cfg=cfg(qmux_foundation_models)");
     println!("cargo:rerun-if-env-changed=DEVELOPER_DIR");
     println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
-    println!("cargo:rerun-if-env-changed=SESSION_REQUIRE_FOUNDATION_MODELS");
-    println!("cargo:rerun-if-env-changed=SESSION_ALLOW_MISSING_FOUNDATION_MODELS");
     build_native_support_bridge();
-    build_foundation_title_bridge();
     tauri_build::build();
 }
 
@@ -99,6 +95,14 @@ fn build_native_support_bridge() {
                 let bridge_stamp = fs_metadata_stamp(&bridge);
                 println!("cargo:rustc-env=QMUX_NATIVE_BRIDGE_STAMP={bridge_stamp}");
                 println!("cargo:rustc-link-search=native={}", products.display());
+                // The AppKit/WebKit archive still needs the toolchain's Swift
+                // runtime libraries after removing the separate title bridge.
+                if let Some(swift_library_path) = swift_platform_library_path(&swift) {
+                    println!(
+                        "cargo:rustc-link-search=native={}",
+                        swift_library_path.display()
+                    );
+                }
                 // Keep the established archive identity and load its Swift/ObjC
                 // metadata alongside the exported C entry points.
                 println!("cargo:rustc-link-arg=-Wl,-force_load,{}", bridge.display());
@@ -203,120 +207,6 @@ fn command_line_tools_sdks() -> Vec<PathBuf> {
     sdks.into_iter().map(|(_, path)| path).collect()
 }
 
-fn build_foundation_title_bridge() {
-    if env::var("CARGO_CFG_TARGET_OS").ok().as_deref() != Some("macos") {
-        return;
-    }
-
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let source = manifest_dir.join("swift/FoundationTitleGenerator.swift");
-    println!("cargo:rerun-if-changed={}", source.display());
-
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let module_cache = out_dir.join("swift-module-cache");
-    let _ = std::fs::create_dir_all(&module_cache);
-    let lib_path = out_dir.join("libqmux_foundation_title.a");
-    let deployment_target = swift_deployment_target();
-    let target = swift_target_triple(&deployment_target);
-
-    let mut failures = Vec::new();
-    for (swiftc, sdk_path) in swift_toolchain_candidates() {
-        if !sdk_path
-            .join("System/Library/Frameworks/FoundationModels.framework")
-            .exists()
-        {
-            failures.push(format!(
-                "{} has no FoundationModels.framework",
-                sdk_path.display()
-            ));
-            continue;
-        }
-
-        let output = Command::new(&swiftc)
-            .env("MACOSX_DEPLOYMENT_TARGET", &deployment_target)
-            .arg("-parse-as-library")
-            .arg("-O")
-            .arg("-emit-library")
-            .arg("-static")
-            .arg("-module-name")
-            .arg("QmuxFoundationTitle")
-            .arg("-sdk")
-            .arg(&sdk_path)
-            .arg("-target")
-            .arg(&target)
-            .arg("-module-cache-path")
-            .arg(&module_cache)
-            .arg("-o")
-            .arg(&lib_path)
-            .arg(&source)
-            .output();
-
-        match output {
-            Ok(output) if output.status.success() => {
-                println!("cargo:rustc-cfg=qmux_foundation_models");
-                println!("cargo:rustc-link-search=native={}", out_dir.display());
-                if let Some(swift_library_path) = swift_platform_library_path(&swiftc) {
-                    println!(
-                        "cargo:rustc-link-search=native={}",
-                        swift_library_path.display()
-                    );
-                }
-                println!("cargo:rustc-link-lib=static=qmux_foundation_title");
-                println!("cargo:rustc-link-lib=framework=Foundation");
-                println!("cargo:rustc-link-arg=-Wl,-weak_framework,FoundationModels");
-                println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift");
-                return;
-            }
-            Ok(output) => failures.push(format!(
-                "{} failed: {}",
-                swiftc.display(),
-                String::from_utf8_lossy(&output.stderr).trim()
-            )),
-            Err(err) => failures.push(format!("{} failed to start: {err}", swiftc.display())),
-        }
-    }
-
-    let details = if failures.is_empty() {
-        "no Swift toolchain candidates found".to_string()
-    } else {
-        failures.join("; ")
-    };
-    let message = format!("Apple Foundation Models tab-title bridge disabled: {details}");
-    if foundation_models_required() {
-        panic!("{message}");
-    }
-    println!("cargo:warning={message}");
-}
-
-/// Whether a missing Swift bridge should fail the build rather than just warn.
-///
-/// Fail-closed on release by default: any release build (not only `scripts/build.sh`)
-/// must ship the bridge, so a bundle produced by a plain `cargo tauri build` or a new
-/// CI job can't silently lose tab-title generation. Debug builds stay optional so a
-/// checkout without a Swift toolchain still compiles.
-///
-/// `SESSION_REQUIRE_FOUNDATION_MODELS=1` forces it on for any profile (belt-and-suspenders
-/// for the release script); `SESSION_ALLOW_MISSING_FOUNDATION_MODELS=1` is the opt-out for
-/// a contributor who needs a local release build without a Swift toolchain.
-fn foundation_models_required() -> bool {
-    if env_flag_enabled("SESSION_REQUIRE_FOUNDATION_MODELS") {
-        return true;
-    }
-    if env_flag_enabled("SESSION_ALLOW_MISSING_FOUNDATION_MODELS") {
-        return false;
-    }
-    is_release_build()
-}
-
-fn is_release_build() -> bool {
-    env::var("PROFILE").ok().as_deref() == Some("release")
-}
-
-/// True when an env var is set to a non-empty value other than `0`.
-fn env_flag_enabled(name: &str) -> bool {
-    env::var(name).is_ok_and(|value| !value.trim().is_empty() && value.trim() != "0")
-}
-
 fn swift_target_triple(deployment_target: &str) -> String {
     let arch = match env::var("CARGO_CFG_TARGET_ARCH")
         .unwrap_or_default()
@@ -369,53 +259,10 @@ fn parse_macos_version(version: &str) -> Option<Vec<u32>> {
     (!parts.is_empty()).then_some(parts)
 }
 
-fn swift_toolchain_candidates() -> Vec<(PathBuf, PathBuf)> {
-    let mut candidates = Vec::new();
-
-    if let Ok(developer_dir) = env::var("DEVELOPER_DIR") {
-        push_developer_dir_candidate(&mut candidates, Path::new(&developer_dir));
-    }
-
-    if let (Some(swiftc), Some(sdk_path)) = (
-        xcrun_path(&["--find", "swiftc"]),
-        xcrun_path(&["--sdk", "macosx", "--show-sdk-path"]),
-    ) {
-        push_unique_candidate(&mut candidates, swiftc, sdk_path);
-    }
-
-    push_developer_dir_candidate(
-        &mut candidates,
-        Path::new("/Applications/Xcode.app/Contents/Developer"),
-    );
-
-    candidates
-}
-
-fn swift_platform_library_path(swiftc: &Path) -> Option<PathBuf> {
-    let usr_dir = swiftc.parent()?.parent()?;
+fn swift_platform_library_path(swift: &Path) -> Option<PathBuf> {
+    let usr_dir = swift.parent()?.parent()?;
     let library_path = usr_dir.join("lib/swift/macosx");
     library_path.exists().then_some(library_path)
-}
-
-fn push_developer_dir_candidate(candidates: &mut Vec<(PathBuf, PathBuf)>, developer_dir: &Path) {
-    let swiftc = developer_dir.join("Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc");
-    let sdk_path = developer_dir.join("Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk");
-    if swiftc.exists() && sdk_path.exists() {
-        push_unique_candidate(candidates, swiftc, sdk_path);
-    }
-}
-
-fn push_unique_candidate(
-    candidates: &mut Vec<(PathBuf, PathBuf)>,
-    swiftc: PathBuf,
-    sdk_path: PathBuf,
-) {
-    if candidates.iter().any(|(existing_swiftc, existing_sdk)| {
-        existing_swiftc == &swiftc && existing_sdk == &sdk_path
-    }) {
-        return;
-    }
-    candidates.push((swiftc, sdk_path));
 }
 
 fn xcrun_path(args: &[&str]) -> Option<PathBuf> {
