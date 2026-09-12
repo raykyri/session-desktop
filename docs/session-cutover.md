@@ -26,19 +26,20 @@ and instructions together.
 
 Remote configuration exposes only `sessionCli`; the legacy field is ignored.
 Managed helpers live at `~/.session/bin/session-cli`. Custom CLI paths are never
-overwritten: their owners must install a matching helper. Remote provisioning still requires a bundled
-helper for the remote architecture; this change does not add remote support to
+overwritten: their owners must install a matching helper. Remote provisioning
+still requires a bundled helper for the remote architecture; this change does not add remote support to
 builds that omit those artifacts.
 
-## Preserved compatibility contracts
+## Current identity and compatibility contracts
 
-- Apple bundle ID `app.qmux.desktop`, GitHub Keychain service
-  `app.qmux.github-oauth` and account `github`, signing configuration, and updater
-  public/private key identity.
-- Swift package/target names, Objective-C/native identifiers, `qmux_native_*`
-  symbols for surviving functions. The native archive
-  retains `QmuxNativeTerminal` and `QMUX_NATIVE_BRIDGE_STAMP`; renderer-only
-  symbols, `QMUX_GHOSTTY_PACKAGE_PATH`, and `QMUX_NATIVE_DEBUG` are retired.
+- Apple identity uses bundle ID `dev.session.desktop` and GitHub Keychain service
+  `dev.session.github-oauth` with account `github`. Tokens stored under the old
+  service are not read, so users authenticate again. Signing continues to use the
+  configured Developer ID identity.
+- Native support uses the `SessionNativeSupport` Swift package, product, target,
+  and archive; `session_native_*` C ABI symbols; the
+  `SessionMenuBarGroupHeaderTarget` Objective-C class; and
+  `SESSION_NATIVE_BRIDGE_STAMP`. No old bridge exports are retained.
 - `session.config.json`, `.session/` directories, the macOS
   `~/Library/Application Support/session` data root, Linux data/runtime roots,
   and `session.*` browser storage keys are the only current storage locations.
@@ -47,7 +48,8 @@ builds that omit those artifacts.
   Session names. Generated hooks, profiles, plugin files, remote tmux identities,
   SSH control paths, and browser automation profiles also use Session prefixes.
   No legacy values or paths are read or migrated.
-- `qmux.app`, the Fly app name, updater endpoints,
+- The updater public/private key identity, `qmux.app`, the Fly app name, updater
+  endpoints,
   and release download URLs. Hosting and update delivery need a separate
   deployment cutover. Existing clients still request their embedded old endpoint.
 
@@ -59,10 +61,10 @@ Moving domains or release delivery is not part of this source-code change.
 ## Native support after terminal removal
 
 Session no longer builds or links Ghostty. `native_support.rs` and the Swift
-support files in `src-tauri/swift-terminal` retain browser, AppKit shortcut,
-completion-sound, and interface recovery behavior. The package directory and
-archive name remain for native compatibility; its dependency list is empty.
-Apple bundle, signing, and Keychain identifiers are unchanged.
+support files in `src-tauri/swift-native-support` retain browser, AppKit shortcut,
+completion-sound, and interface recovery behavior. The package is dependency-free
+and exports only the current Session native ABI.
+The Apple bundle and Keychain service use the new Session identities.
 
 `pane.read --source viewport` now returns an explicit invalid-argument error.
 Use `--source terminal` for stored process output. Research SDK/JSONL execution,

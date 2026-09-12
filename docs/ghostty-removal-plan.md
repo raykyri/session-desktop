@@ -11,8 +11,9 @@ implementation; paths to removed files refer to that baseline.
 ## Implementation record
 
 - Extracted `native_support.rs`, `NativeSupportHost.swift`, and
-  `NativeSupportBridge.swift`. Kept the existing Swift package/archive and
-  surviving C ABI identities; removed its Ghostty dependencies and renderer files.
+  `NativeSupportBridge.swift`. Kept the then-current Swift package/archive and
+  C ABI identities while removing Ghostty dependencies and renderer files. A later identity cutover renamed them
+  to SessionNativeSupport and session_native_* respectively.
 - Preserved native browser focus/history, serialized overlay state, sounds,
   lifecycle observers, and both interface recovery probes. The host binds to the
   app webview/window without a terminal container.
@@ -47,11 +48,10 @@ native behaviors currently housed in the terminal bridge. Keep Session buildable
 and usable after each stage. Land stages in order; dependency deletion follows
 runtime decoupling, not the other way around.
 
-Preserve `app.qmux.desktop`, Apple signing and Keychain identity, and the existing
-C ABI names for native functions that survive. A later hard cutover moved storage
-paths and persisted formats to Session names. The later Foundation Models removal
-also deleted `src-tauri/swift/FoundationTitleGenerator.swift` and its Rust entry
-points. Retired renderer functions do not
+This stage preserved the then-current Apple and native identities. A later hard
+cutover changed the bundle ID to `dev.session.desktop`, the Keychain service to
+`dev.session.github-oauth`, and the surviving native bridge to Session names. The storage and persisted formats also moved to Session names.
+The later Foundation Models removal also deleted `src-tauri/swift/FoundationTitleGenerator.swift` and its Rust entry points. Retired renderer functions do not
 need permanent dummy compatibility implementations once all callers are removed.
 
 Do not combine this work with a hosting migration, data reset, wholesale adapter
@@ -89,8 +89,8 @@ These are resolved code facts, not work deferred to a future inventory:
 | Native browser loading color comes from `QmuxTerminalTheme.backgroundColor(currentThemeName)`. | Same host: `setHumanBrowserLoadingBackground` | Removing frontend theme loading alone leaves a native Ghostty dependency. Pass a Session-owned browser background to native support, with a startup fallback, and clear `underPageBackgroundColor` when loading ends. |
 | Browser overlay-open changes are serialized; human-browser geometry, visibility and navigation have their own revision/occlusion logic. Pointer claims, by contrast, protect Ghostty hit testing. | [api.ts](../src/lib/api.ts): `setNativeTerminalBrowserOverlayOpen`, pointer-claim helpers; [BrowserOverlay.tsx](../src/components/BrowserOverlay.tsx); [human_browser.rs](../src-tauri/src/human_browser.rs) | Preserve overlay transition ordering and child-WebView occlusion. Remove renderer pointer routing without substituting it for native-browser visibility management. |
 | `--turn-font-delta`, derived from the terminal font size, affects research, shell and browser text; web WOFF2 assets are separate from native terminal TTFs. | [App.tsx](../src/App.tsx): `turnFontDelta`, `appStyle`; [research.css](../src/styles/features/research.css); [tokens.css](../src/styles/tokens.css) | Decouple app typography before deleting terminal settings. Preserve the current visible size behavior through an app-owned value/fallback; do not delete shared fonts or reset all settings. |
-| Native app shortcuts must not consume events before the frontend listener is ready. Web shortcuts have a separate Cmd-K rule and browser/iframe exclusions. | `src-tauri/src/native_terminal.rs`: `classify_web_app_shortcut`, `qmux_native_terminal_did_receive_app_shortcut`; [WebAppShortcutRouting.swift](../src-tauri/swift-terminal/Sources/QmuxNativeTerminal/WebAppShortcutRouting.swift) | Move the readiness gate and web classifier together. Keep iframe fallback limited to Command chords and keep editable-sensitive browser shortcuts with the page. |
-| XCTest is not available with every Command Line Tools-only setup. Existing macOS Rust tests deliberately call production Swift C-ABI probes. | `src-tauri/src/native_terminal.rs`: macOS `tests`; [RustCallbackStubs.swift](../src-tauri/swift-terminal/Tests/QmuxNativeTerminalTests/RustCallbackStubs.swift) | Retain the Rust-to-Swift test route and test-only Rust callback stubs. Do not replace all native coverage with a Swift-only test requirement. |
+| Native app shortcuts must not consume events before the frontend listener is ready. Web shortcuts have a separate Cmd-K rule and browser/iframe exclusions. | `src-tauri/src/native_terminal.rs`: `classify_web_app_shortcut`, `qmux_native_terminal_did_receive_app_shortcut`; [WebAppShortcutRouting.swift](../src-tauri/swift-native-support/Sources/SessionNativeSupport/WebAppShortcutRouting.swift) | Move the readiness gate and web classifier together. Keep iframe fallback limited to Command chords and keep editable-sensitive browser shortcuts with the page. |
+| XCTest is not available with every Command Line Tools-only setup. Existing macOS Rust tests deliberately call production Swift C-ABI probes. | `src-tauri/src/native_terminal.rs`: macOS `tests`; [RustCallbackStubs.swift](../src-tauri/swift-native-support/Tests/SessionNativeSupportTests/RustCallbackStubs.swift) | Retain the Rust-to-Swift test route and test-only Rust callback stubs. Do not replace all native coverage with a Swift-only test requirement. |
 | Foundation Models is independently compiled, weak-linked, and required for release by default. | [build.rs](../src-tauri/build.rs): `build_foundation_title_bridge`, `foundation_models_required` | A newer SDK/toolchain can still be required after Ghostty removal. Do not relax the release requirement or confuse that SDK need with a leftover Ghostty dependency. |
 
 ## Stage 1 — Establish the live boundary

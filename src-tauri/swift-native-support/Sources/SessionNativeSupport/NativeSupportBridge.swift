@@ -61,8 +61,8 @@ private enum CompletionSoundPlayer {
     }
 }
 
-@_cdecl("qmux_native_completion_sound_play")
-public func qmuxNativeCompletionSoundPlay(
+@_cdecl("session_native_completion_sound_play")
+public func sessionNativeCompletionSoundPlay(
     _ systemName: UnsafePointer<CChar>?
 ) -> Int32 {
     guard let systemName = supportString(systemName) else {
@@ -73,8 +73,8 @@ public func qmuxNativeCompletionSoundPlay(
     }
 }
 
-@_cdecl("qmux_native_completion_sound_play_file")
-public func qmuxNativeCompletionSoundPlayFile(
+@_cdecl("session_native_completion_sound_play_file")
+public func sessionNativeCompletionSoundPlayFile(
     _ systemPath: UnsafePointer<CChar>?
 ) -> Int32 {
     guard let systemPath = supportString(systemPath) else {
@@ -85,8 +85,8 @@ public func qmuxNativeCompletionSoundPlayFile(
     }
 }
 
-@_cdecl("qmux_native_completion_sound_play_data")
-public func qmuxNativeCompletionSoundPlayData(
+@_cdecl("session_native_completion_sound_play_data")
+public func sessionNativeCompletionSoundPlayData(
     _ name: UnsafePointer<CChar>?,
     _ bytes: UnsafePointer<UInt8>?,
     _ length: Int
@@ -100,15 +100,15 @@ public func qmuxNativeCompletionSoundPlayData(
     }
 }
 
-@_cdecl("qmux_native_application_is_active")
-public func qmuxNativeApplicationIsActive() -> Int32 {
+@_cdecl("session_native_application_is_active")
+public func sessionNativeApplicationIsActive() -> Int32 {
     onSupportMain {
         NSApp.isActive ? 1 : 0
     }
 }
 
-@_cdecl("qmux_native_terminal_initialize")
-public func qmuxNativeTerminalInitialize(
+@_cdecl("session_native_support_initialize")
+public func sessionNativeSupportInitialize(
     _ nativeView: UnsafeMutableRawPointer?
 ) -> Int32 {
     guard let nativeView else { return 0 }
@@ -124,22 +124,22 @@ public func qmuxNativeTerminalInitialize(
     }
 }
 
-@_cdecl("qmux_native_terminal_set_iframe_shortcut_fallback")
-public func qmuxNativeTerminalSetIframeShortcutFallback(_ active: Int32) -> Int32 {
+@_cdecl("session_native_support_set_iframe_shortcut_fallback")
+public func sessionNativeSupportSetIframeShortcutFallback(_ active: Int32) -> Int32 {
     onSupportMain {
         NativeSupportHost.shared.setIframeShortcutFallback(active == 1) ? 1 : 0
     }
 }
 
-@_cdecl("qmux_native_terminal_set_browser_overlay_open")
-public func qmuxNativeTerminalSetBrowserOverlayOpen(_ active: Int32) -> Int32 {
+@_cdecl("session_native_support_set_browser_overlay_open")
+public func sessionNativeSupportSetBrowserOverlayOpen(_ active: Int32) -> Int32 {
     onSupportMain {
         NativeSupportHost.shared.setBrowserOverlayOpen(active == 1) ? 1 : 0
     }
 }
 
-@_cdecl("qmux_native_terminal_set_human_browser_webview")
-public func qmuxNativeTerminalSetHumanBrowserWebView(
+@_cdecl("session_native_support_set_human_browser_webview")
+public func sessionNativeSupportSetHumanBrowserWebView(
     _ nativeView: UnsafeMutableRawPointer?,
     _ active: Int32
 ) -> Int32 {
@@ -157,8 +157,8 @@ public func qmuxNativeTerminalSetHumanBrowserWebView(
     }
 }
 
-@_cdecl("qmux_native_terminal_set_human_browser_loading_background")
-public func qmuxNativeTerminalSetHumanBrowserLoadingBackground(
+@_cdecl("session_native_support_set_human_browser_loading_background")
+public func sessionNativeSupportSetHumanBrowserLoadingBackground(
     _ nativeView: UnsafeMutableRawPointer?,
     _ active: Int32
 ) -> Int32 {
@@ -176,8 +176,8 @@ public func qmuxNativeTerminalSetHumanBrowserLoadingBackground(
     }
 }
 
-@_cdecl("qmux_native_terminal_human_browser_history_state")
-public func qmuxNativeTerminalHumanBrowserHistoryState(
+@_cdecl("session_native_support_human_browser_history_state")
+public func sessionNativeSupportHumanBrowserHistoryState(
     _ nativeView: UnsafeMutableRawPointer?
 ) -> Int32 {
     let nativeViewAddress = nativeView.map(UInt.init(bitPattern:))
@@ -193,25 +193,25 @@ public func qmuxNativeTerminalHumanBrowserHistoryState(
     }
 }
 
-@_cdecl("qmux_native_terminal_prepare_for_webview_reload")
-public func qmuxNativeTerminalPrepareForWebViewReload() -> Int32 {
+@_cdecl("session_native_support_prepare_for_webview_reload")
+public func sessionNativeSupportPrepareForWebViewReload() -> Int32 {
     onSupportMain {
         NativeSupportHost.shared.prepareForWebViewReload() ? 1 : 0
     }
 }
 
-@_cdecl("qmux_native_terminal_shutdown")
-public func qmuxNativeTerminalShutdown() {
+@_cdecl("session_native_support_shutdown")
+public func sessionNativeSupportShutdown() {
     onSupportMain {
         NativeSupportHost.shared.shutdown()
     }
 }
 
-@_cdecl("qmux_native_terminal_bridge_available")
-public func qmuxNativeTerminalBridgeAvailable() -> Int32 { 1 }
+@_cdecl("session_native_support_bridge_available")
+public func sessionNativeSupportBridgeAvailable() -> Int32 { 1 }
 
-@_cdecl("qmux_native_support_set_browser_background")
-public func qmuxNativeSupportSetBrowserBackground(_ red: Double, _ green: Double, _ blue: Double) -> Int32 {
+@_cdecl("session_native_support_set_browser_background")
+public func sessionNativeSupportSetBrowserBackground(_ red: Double, _ green: Double, _ blue: Double) -> Int32 {
     onSupportMain {
         NativeSupportHost.shared.setBrowserBackground(red: red, green: green, blue: blue) ? 1 : 0
     }

@@ -3,24 +3,24 @@
 import PackageDescription
 
 let package = Package(
-    name: "QmuxNativeTerminal",
+    name: "SessionNativeSupport",
     platforms: [.macOS(.v13)],
     products: [
         .library(
-            name: "QmuxNativeTerminal",
+            name: "SessionNativeSupport",
             type: .static,
-            targets: ["QmuxNativeTerminal"]
+            targets: ["SessionNativeSupport"]
         ),
     ],
     dependencies: [],
     targets: [
         .target(
-            name: "QmuxNativeTerminal",
+            name: "SessionNativeSupport",
             dependencies: []
         ),
         .testTarget(
-            name: "QmuxNativeTerminalTests",
-            dependencies: ["QmuxNativeTerminal"]
+            name: "SessionNativeSupportTests",
+            dependencies: ["SessionNativeSupport"]
         ),
     ]
 )
