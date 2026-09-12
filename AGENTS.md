@@ -13,5 +13,5 @@ of your sandboxing permissions, unless your work involves that test.
 
 The Swift package in src-tauri/swift-terminal now contains only AppKit/WebKit
 support. Its QmuxNativeTerminal archive and surviving C ABI names are compatibility
-identifiers; do not reintroduce a terminal renderer dependency. Keep the separate
-Foundation Models bridge and research process infrastructure intact.
+identifiers; do not reintroduce a terminal renderer dependency. Keep research
+process infrastructure intact.

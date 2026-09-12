@@ -3687,15 +3687,6 @@ fn app_set_prevent_sleep(guard: tauri::State<'_, SleepGuard>, active: bool) -> R
 }
 
 #[tauri::command(async)]
-async fn generate_foundation_tab_title(message: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        title_generation::generate_foundation_title(&message)
-    })
-    .await
-    .map_err(|err| format!("Apple Foundation Models task failed: {err}"))?
-}
-
-#[tauri::command(async)]
 async fn generate_research_agent_title(
     state: tauri::State<'_, AppState>,
     node_id: String,
@@ -4156,7 +4147,6 @@ fn main() {
             worktree_close_pane,
             app_confirm_exit,
             app_set_prevent_sleep,
-            generate_foundation_tab_title,
             generate_research_agent_title,
             menu_bar_set_visible,
             menu_bar_update,

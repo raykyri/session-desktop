@@ -428,7 +428,6 @@ import {
   getResearchLaunchInstruction,
   getResearchSdkHarness,
   getWorktreeLocation,
-  generateFoundationTabTitle,
   generateResearchAgentTitle,
   killPane,
   listenToMenuBarSelectPane,
@@ -833,10 +832,6 @@ interface OpenRouterTitleConfig {
   model: string;
 }
 
-type FirstMessageTitleConfig =
-  | { provider: "appleFoundationModels" }
-  | ({ provider: "openRouter" } & OpenRouterTitleConfig);
-
 type OpenRouterTitleReasoningEffort = "none" | "minimal";
 
 type TitleGenerationTestState =
@@ -881,10 +876,6 @@ function firstMessageTitleSource(rawMessage: string, skillCommand: string | null
   return normalizedMessagePreview(stripTaggedUserInstructionBlocks(withoutSkillCommand));
 }
 
-function appleFoundationModelsTitleAvailable(config: RuntimeConfig | null): boolean {
-  return config?.tabTitleGeneration.appleFoundationModelsAvailable === true;
-}
-
 function sanitizeGeneratedTitle(rawTitle: string): string | null {
   const normalized = sanitizeTerminalTitle(rawTitle);
   if (!normalized) {
@@ -905,28 +896,17 @@ function sanitizeGeneratedTitle(rawTitle: string): string | null {
 
 function firstMessageTitleConfig(
   settings: AppSettings,
-  config: RuntimeConfig | null,
-): FirstMessageTitleConfig | null {
-  if (settings.tabTitleProvider === "disabled") {
+): OpenRouterTitleConfig | null {
+  if (settings.tabTitleProvider !== "openRouter") {
     return null;
   }
-  if (settings.tabTitleProvider === "appleFoundationModels") {
-    return appleFoundationModelsTitleAvailable(config)
-      ? { provider: "appleFoundationModels" }
-      : null;
-  }
-
   // OpenRouter sends first-message text to a third-party service, so selecting the
   // provider is the consent boundary; a configured key and model are still required
   // to make a call. The key stays out of the returned config — the backend proxy
   // attaches it — but its presence still gates whether a request is attempted.
   const hasKey = settings.openRouterKey.trim().length > 0;
   const model = settings.openRouterModel.trim();
-  return hasKey && model ? { provider: "openRouter", model } : null;
-}
-
-function firstMessageTitleProviderLabel(config: FirstMessageTitleConfig): string {
-  return config.provider === "appleFoundationModels" ? "Apple Foundation Models" : "OpenRouter";
+  return hasKey && model ? { model } : null;
 }
 
 function tabTitleProviderLabel(provider: AppSettings["tabTitleProvider"]): string {
@@ -985,33 +965,6 @@ function scrollChildIntoViewVertically(container: HTMLElement, child: HTMLElemen
 
 function unknownErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
-}
-
-// Recognizes the errors Apple Foundation Models raise when the on-device model
-// can't be used at all: Apple Intelligence disabled, the model still
-// downloading, an ineligible device, or Session's own build/OS guards. These are
-// not transient — retrying on the next message just reproduces the same
-// failure — so the caller turns off title generation when one is seen. Returns a
-// short, user-facing reason clause, or null when the error is something else.
-function foundationModelsUnavailableReason(message: string): string | null {
-  const lower = message.toLowerCase();
-  if (lower.includes("appleintelligencenotenabled")) {
-    return "Apple Intelligence is turned off";
-  }
-  if (lower.includes("modelnotready")) {
-    return "the on-device model isn't ready yet";
-  }
-  if (lower.includes("devicenoteligible")) {
-    return "this Mac doesn't support Apple Intelligence";
-  }
-  if (
-    lower.includes("foundation models unavailable") ||
-    lower.includes("foundation models require macos") ||
-    lower.includes("foundation models are not available")
-  ) {
-    return "they're unavailable on this Mac";
-  }
-  return null;
 }
 
 function isShowHideShortcutCaptureTarget(target: EventTarget | null): boolean {
@@ -1355,17 +1308,6 @@ async function summarizeFirstMessageTitle(
     return title;
   }
   return null;
-}
-
-async function generateFirstMessageTitle(
-  sourceMessage: string,
-  config: FirstMessageTitleConfig,
-): Promise<string | null> {
-  if (config.provider === "openRouter") {
-    return summarizeFirstMessageTitle(sourceMessage, config);
-  }
-  const title = await generateFoundationTabTitle(sourceMessage);
-  return sanitizeGeneratedTitle(title);
 }
 
 function createPendingFirstMessageTitle(
@@ -3723,35 +3665,11 @@ function MainApp() {
     );
   }
 
-  // When Apple Foundation Models report they're unavailable (Apple Intelligence
-  // off, model not ready, ineligible device), turn off automatic tab titles so
-  // the failure doesn't recur on every message, and return a friendly notice for
-  // the caller to surface. Returns null for any other provider or error, leaving
-  // the caller to report it as usual.
-  function noteFoundationTitleUnavailable(
-    titleConfig: FirstMessageTitleConfig,
-    message: string,
-  ): string | null {
-    if (titleConfig.provider !== "appleFoundationModels") {
-      return null;
-    }
-    const reason = foundationModelsUnavailableReason(message);
-    if (!reason) {
-      return null;
-    }
-    setSettings((current) =>
-      current.tabTitleProvider === "appleFoundationModels"
-        ? { ...current, tabTitleProvider: "disabled" }
-        : current,
-    );
-    return `Apple Foundation Models can't generate tab titles — ${reason}. Automatic tab titles are now off; re-enable them in Settings.`;
-  }
-
   async function testFirstMessageTitleGeneration() {
     const settingsSnapshot = settingsRef.current;
-    const titleConfig = firstMessageTitleConfig(settingsSnapshot, configRef.current);
+    const titleConfig = firstMessageTitleConfig(settingsSnapshot);
     const providerLabel = titleConfig
-      ? firstMessageTitleProviderLabel(titleConfig)
+      ? "OpenRouter"
       : tabTitleProviderLabel(settingsSnapshot.tabTitleProvider);
     const requestSeq = titleGenerationTestSeqRef.current + 1;
     titleGenerationTestSeqRef.current = requestSeq;
@@ -3760,9 +3678,7 @@ function MainApp() {
       const message =
         settingsSnapshot.tabTitleProvider === "openRouter"
           ? "Add an OpenRouter key and model before testing."
-          : settingsSnapshot.tabTitleProvider === "appleFoundationModels"
-            ? "Apple Foundation Models are not available in this build."
-            : "Choose a title generation provider before testing.";
+          : "Choose a title generation provider before testing.";
       setTitleGenerationTest({ status: "error", providerLabel, message });
       return;
     }
@@ -3779,7 +3695,7 @@ function MainApp() {
 
     setTitleGenerationTest({ status: "running", providerLabel });
     try {
-      const title = await generateFirstMessageTitle(sourceMessage, titleConfig);
+      const title = await summarizeFirstMessageTitle(sourceMessage, titleConfig);
       if (!title) {
         throw new Error(`${providerLabel} returned no title.`);
       }
@@ -3793,14 +3709,13 @@ function MainApp() {
         return;
       }
       const message = unknownErrorMessage(err);
-      const friendly = noteFoundationTitleUnavailable(titleConfig, message);
       setTitleGenerationTest({
         status: "error",
         providerLabel,
-        message: friendly ?? message,
+        message,
       });
       showAppToast(
-        friendly ?? `${providerLabel} title test failed: ${message}`,
+        `${providerLabel} title test failed: ${message}`,
         "warning",
       );
     }
@@ -3809,7 +3724,7 @@ function MainApp() {
   async function applyFirstMessageTitle(
     paneId: string,
     sourceMessage: string,
-    titleConfig: FirstMessageTitleConfig,
+    titleConfig: OpenRouterTitleConfig,
     fallbackPane?: PaneInfo,
     expectedAgentId?: string,
   ) {
@@ -3831,12 +3746,11 @@ function MainApp() {
 
     let title: string | null;
     try {
-      title = await generateFirstMessageTitle(sourceMessage, titleConfig);
+      title = await summarizeFirstMessageTitle(sourceMessage, titleConfig);
     } catch (err) {
       const message = unknownErrorMessage(err);
-      const friendly = noteFoundationTitleUnavailable(titleConfig, message);
       showAppToast(
-        friendly ?? `${firstMessageTitleProviderLabel(titleConfig)} title error: ${message}`,
+        `OpenRouter title error: ${message}`,
         "warning",
       );
       return;
@@ -3906,7 +3820,7 @@ function MainApp() {
       }
       return;
     }
-    const titleConfig = firstMessageTitleConfig(settingsRef.current, configRef.current);
+    const titleConfig = firstMessageTitleConfig(settingsRef.current);
     if (titleConfig) {
       pendingFirstTitleByAgentRef.current.delete(agentId);
       void applyFirstMessageTitle(pending.paneId, sourceMessage, titleConfig, undefined, agentId);
@@ -5808,10 +5722,7 @@ function MainApp() {
         )
     : null;
   const groupMenuGroup = groupMenu ? groups.find((group) => group.id === groupMenu.groupId) : null;
-  const appleFoundationTitleAvailable = appleFoundationModelsTitleAvailable(config);
-  const titleGenerationTestVisible =
-    settings.tabTitleProvider === "openRouter" ||
-    settings.tabTitleProvider === "appleFoundationModels";
+  const titleGenerationTestVisible = settings.tabTitleProvider === "openRouter";
   const titleGenerationTestRunning = titleGenerationTest?.status === "running";
   const contextMenuPaneSplit = paneSplitForPane(paneSplits, contextMenuPane?.id);
   const contextMenuPaneHasSplit = Boolean(
@@ -10341,7 +10252,6 @@ function MainApp() {
     settings.tabTitleProvider,
     settings.openRouterKey,
     settings.openRouterModel,
-    config?.tabTitleGeneration.appleFoundationModelsAvailable,
   ]);
 
   useEffect(() => {
@@ -12336,25 +12246,12 @@ function MainApp() {
                 }}
               >
                 {TAB_TITLE_PROVIDER_OPTIONS.map((option) => (
-                  <option
-                    key={option.id}
-                    value={option.id}
-                    disabled={
-                      option.id === "appleFoundationModels" && !appleFoundationTitleAvailable
-                    }
-                  >
-                    {option.id === "appleFoundationModels" && !appleFoundationTitleAvailable
-                      ? `${option.label} (unavailable)`
-                      : option.label}
+                  <option key={option.id} value={option.id}>
+                    {option.label}
                   </option>
                 ))}
               </select>
             </div>
-            {!appleFoundationTitleAvailable ? (
-              <p className="settings-hint">
-                Apple Foundation Models are not available in this build.
-              </p>
-            ) : null}
             {settings.tabTitleProvider === "openRouter" ? (
               <>
                 <p className="settings-hint">

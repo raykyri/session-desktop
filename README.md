@@ -41,7 +41,7 @@ Session uses existing provider credentials and does not copy or manage them.
 Prerequisites:
 
 - macOS 13 or later
-- Swift 6 and a macOS SDK with Foundation Models for release builds
+- Swift 6 and a macOS SDK for the AppKit/WebKit support bridge
 - Rust toolchain
 - Node.js and npm
 - One or more supported agent CLIs
