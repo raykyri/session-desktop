@@ -2217,3 +2217,14 @@
     transform: none !important;
   }
 }
+
+/* Recaps are plain derived text, outside the answer's highlight projection. */
+.research-recap {
+  margin: 0 0 28px;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1.75;
+  white-space: normal;
+}

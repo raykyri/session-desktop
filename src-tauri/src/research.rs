@@ -374,6 +374,9 @@ pub struct ResearchNode {
     /// their signal to refetch content they may have read too early.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response_snapshot_at: Option<u128>,
+    /// Derived metadata bound to a durable answer revision.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recap: Option<ResearchRecap>,
     pub created_at: u128,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub started_at: Option<u128>,
@@ -606,6 +609,13 @@ pub struct ResearchNodeContent {
     pub source_error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub response_revision: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResearchRecap {
+    pub text: String,
+    pub response_revision: String,
 }
 
 const RESPONSE_SNAPSHOT_DIR: &str = "research-responses";
@@ -2855,6 +2865,7 @@ mod tests {
             status: ResearchNodeStatus::Complete,
             error: None,
             response_snapshot_at: Some(2),
+            recap: None,
             created_at: 1,
             started_at: Some(1),
             completed_at: Some(2),

@@ -176,6 +176,10 @@ function isResearchNode(value: unknown): value is ResearchNode {
     isOptionalFiniteNumber(value.startedAt) &&
     isOptionalFiniteNumber(value.completedAt) &&
     isOptionalFiniteNumber(value.responseSnapshotAt) &&
+    (value.recap == null ||
+      (isRecord(value.recap) &&
+        typeof value.recap.text === "string" &&
+        typeof value.recap.responseRevision === "string")) &&
     isOptionalString(value.parentNodeId) &&
     isOptionalString(value.title) &&
     isOptionalString(value.responsePreview) &&
