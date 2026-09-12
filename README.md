@@ -68,7 +68,7 @@ all unit, server integration, and Rust tests. For a faster frontend-only check, 
 Use `npm run test:node -- tests/example.test.ts` for focused TypeScript tests.
 This runner and `dev:site` share `tsconfig.runtime.json`, so JSX uses the same
 automatic React transform as the builds. The module reachability check recognizes
-both Vite entrypoints, the website server, and tests, including literal lazy imports
+the app entrypoint, the website server, and tests, including literal lazy imports
 and type-only imports; it does not audit Rust command registration or unused exports
 inside otherwise reachable modules.
 
@@ -105,15 +105,15 @@ Published links default to `https://qmux.app/p/<gist-id>`. Use
 
 ## Architecture
 
-The React frontend lives under `src/`. Research-specific views are in
-`src/components/research/`, the customizable Research Browser is in
-`src/research-browser/`, and durable research state and execution are implemented by
-`src-tauri/src/research.rs`, `research_runtime.rs`, and `state.rs`.
+The React frontend lives under `src/`. Research views, including the in-app
+Research Activity feed, are in `src/components/research/`. Durable research state
+and execution are implemented by `src-tauri/src/research.rs`,
+`research_runtime.rs`, and `state.rs`.
 
 Research data is stored under the configured qmux workspace root for compatibility.
 The development configuration in `qmux.config.json` uses `~/.qmux/workspaces` and
 `~/.qmux/run/qmux.sock`. Shipping builds use the existing platform application-data
 location associated with the unchanged bundle identifier.
 
-See [docs/research-browser.md](docs/research-browser.md) for the Research Browser SDK
-and local view-development workflow.
+See [docs/research-activity.md](docs/research-activity.md) for the activity feed and
+its navigation and journal actions.

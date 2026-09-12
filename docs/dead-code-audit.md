@@ -33,7 +33,7 @@ that a registered backend command or persisted field can safely be removed.
   script now calls it instead of a nonexistent pane-split test command. Unit and
   server test discovery include every `*.test.ts` file in their directories.
 - **Unused-code checks:** TypeScript's `noUnusedLocals` and `noUnusedParameters` are
-  enabled. `check:unused` walks the desktop, research browser, website, and test
+  enabled. `check:unused` walks the desktop, website, and test
   entrypoints, including static/type imports, re-exports, literal dynamic imports,
   and import types. Tests cover disconnected cycles and independent entrypoints.
   Tests are deliberate roots; a tested helper is not automatically retired because

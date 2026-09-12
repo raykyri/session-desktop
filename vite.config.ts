@@ -23,6 +23,5 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 2048,
-    rollupOptions: { input: { app: "index.html", researchBrowser: "research-browser.html" } },
   },
 });

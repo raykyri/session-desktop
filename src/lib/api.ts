@@ -1,5 +1,4 @@
 import { trackRemoteStartup, recordRemoteStartup, reconcileRemoteReservation, forgetRemoteStartup } from "./remoteStartup";
-import { browserServices } from "../research-browser/services";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { JournalEntry, RecentActivityPage } from "./journal";
@@ -948,7 +947,6 @@ export function setAgentTyping(agentId: string, typing: boolean) {
 
 /** Opens an http(s)/mailto URL in the user's default external browser/mail client. */
 export function openExternalUrl(url: string) {
-  if (browserServices) return browserServices.openExternalUrl(url);
   return invoke<void>("open_external_url", { url });
 }
 

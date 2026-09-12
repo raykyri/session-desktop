@@ -51,10 +51,10 @@ function main() {
   const sources = ["src", "web"].flatMap((directory) => sourceFilesIn(resolve(root, directory)));
   const tests = ["tests", "web"].flatMap((directory) => sourceFilesIn(resolve(root, directory)))
     .filter((file) => /\.test\.tsx?$/.test(file));
-  // Both Vite HTML inputs and the separately bundled website are runtime roots.
+  // The application and separately bundled website are runtime roots.
   // Tests are deliberate roots too: helpers supporting independent contracts
   // should not be deleted merely because the current UI does not import them.
-  const roots = ["src/main.tsx", "src/research-browser/main.tsx", "web/server.tsx"]
+  const roots = ["src/main.tsx", "web/server.tsx"]
     .map((file) => resolve(root, file));
   const configPath = resolve(root, "tsconfig.json");
   const config = ts.readConfigFile(configPath, ts.sys.readFile);
