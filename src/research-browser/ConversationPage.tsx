@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import ResearchRecap from "../components/research/ResearchRecap";
 import TranscriptMarkdown, {
   TranscriptLinkActionsProvider,
 } from "../components/TranscriptMarkdown";
@@ -446,6 +447,7 @@ function ConversationSegment({ content }: { content: ResearchNodeContent }) {
       {content.sourceError && (
         <p className="research-response-error">{content.sourceError}</p>
       )}
+      <ResearchRecap content={content} />
       {shown.length > 0 ? (
         <div className="research-response-content-root">
           {shown.map((item) => (

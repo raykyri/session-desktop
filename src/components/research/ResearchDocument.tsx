@@ -102,6 +102,7 @@ import {
   timelineContextStatusClass,
   timelineStatusClass,
 } from "../TranscriptActivity";
+import ResearchRecap from "./ResearchRecap";
 import TranscriptMarkdown, {
   TranscriptLinkActionsProvider,
   type LinkActions,
@@ -1139,6 +1140,7 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
               {retryButton}
             </div>
           ) : null}
+          <ResearchRecap content={view.content} />
           {view.displayedTimelineItems.length === 0 ? (
             <>
               <p className="research-response-empty">
@@ -1883,10 +1885,10 @@ function ResearchDocument({
   chainContentSettledRef.current =
     chainNodeIds.length > 0 &&
     chainNodeIds.every((id) => contentByNode[id] || contentErrorByNode[id]);
-  // A per-segment (status, snapshot) key: the loader and pollers restart on
-  // lifecycle transitions rather than on every detail replacement.
+  // Refetch when a run settles, its snapshot lands, or its recap arrives.
+  // Other detail updates do not need to restart the content loaders.
   const chainStatusKey = chainNodes
-    .map((node) => `${node.id}:${node.status}:${node.responseSnapshotAt ?? 0}`)
+    .map((node) => `${node.id}:${node.status}:${node.responseSnapshotAt ?? 0}:${node.recap?.responseRevision ?? ""}`)
     .join("\n");
 
   // Segment-scoped DOM lookups. Each ThreadSegment registers its wrapper
@@ -2808,7 +2810,7 @@ function ResearchDocument({
     const errorCounts = new Map<string, number>();
     const stampFor = (nodeId: string) => {
       const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
-      return node ? `${node.status}:${node.responseSnapshotAt ?? 0}` : "";
+      return node ? `${node.status}:${node.responseSnapshotAt ?? 0}:${node.recap?.responseRevision ?? ""}` : "";
     };
     const clearError = (nodeId: string) =>
       setContentErrorByNode((current) => withoutKeys(current, [nodeId]));

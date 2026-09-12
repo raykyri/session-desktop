@@ -4752,6 +4752,7 @@ impl AppState {
             status: ResearchNodeStatus::Queued,
             error: None,
             response_snapshot_at: None,
+            recap: None,
             created_at: now,
             started_at: None,
             completed_at: None,
@@ -4837,6 +4838,7 @@ impl AppState {
             status: ResearchNodeStatus::Complete,
             error: None,
             response_snapshot_at: Some(now),
+            recap: None,
             created_at: now,
             started_at: None,
             completed_at: Some(now),
@@ -5082,6 +5084,7 @@ impl AppState {
             status: ResearchNodeStatus::Complete,
             error: None,
             response_snapshot_at: Some(now),
+            recap: None,
             created_at: now,
             started_at: Some(prepared.agent_created_at.min(now)),
             completed_at: Some(now),
@@ -5514,6 +5517,7 @@ impl AppState {
                 status: ResearchNodeStatus::Queued,
                 error: None,
                 response_snapshot_at: None,
+                recap: None,
                 created_at: now,
                 started_at: None,
                 completed_at: None,
@@ -5883,6 +5887,7 @@ impl AppState {
             ));
         }
         if snapshot_error.is_none() {
+            crate::research_recap::schedule(self, node_id);
             self.prune_agent(agent_id);
             Ok(())
         } else {
@@ -6287,6 +6292,7 @@ impl AppState {
             node.prompt_native_id = None;
             node.response_preview = None;
             node.response_snapshot_at = None;
+            node.recap = None;
             node.runtime = ResearchRuntime::Pane;
             let node = node.clone();
             touch_research_tree_locked(&mut model, &node.tree_id, now);
@@ -7601,6 +7607,7 @@ impl AppState {
             // a snapshot stamp claiming a durable answer exists.
             if !responses.contains_key(&old_id) {
                 node.response_snapshot_at = None;
+                node.recap = None;
             }
         }
 
@@ -9303,6 +9310,50 @@ impl AppState {
                 json!({ "node": node }),
             ));
         }
+        crate::research_recap::schedule(self, node_id);
+        Ok(())
+    }
+
+    /// Commit only if the same run and durable response still exist. Retry,
+    /// deletion, and response edits can race the background model call.
+    pub(crate) fn save_research_recap(
+        &self,
+        source: &ResearchNode,
+        revision: &str,
+        text: String,
+    ) -> Result<(), String> {
+        let updated = {
+            let mut model = self.inner.model.lock().map_err(|_| "model lock poisoned")?;
+            let Some(node) = model.research_nodes.get_mut(&source.id) else {
+                return Ok(());
+            };
+            if node.status != ResearchNodeStatus::Complete
+                || node.agent_id != source.agent_id
+                || node.started_at != source.started_at
+                || node.response_snapshot_at != source.response_snapshot_at
+            {
+                return Ok(());
+            }
+            let snapshot = research::read_response_snapshot_with_revision(
+                &self.inner.config.workspace_root,
+                &node.id,
+            )?;
+            if !snapshot.is_some_and(|snapshot| snapshot.revision == revision) {
+                return Ok(());
+            }
+            node.recap = Some(research::ResearchRecap {
+                text,
+                response_revision: revision.to_string(),
+            });
+            node.clone()
+        };
+        self.persist();
+        self.emit(QmuxEvent::new(
+            "research.node.updated",
+            updated.pane_id.clone(),
+            updated.agent_id.clone(),
+            json!({ "node": updated }),
+        ));
         Ok(())
     }
 
@@ -15723,6 +15774,7 @@ mod tests {
             status: ResearchNodeStatus::Complete,
             error: None,
             response_snapshot_at: None,
+            recap: None,
             created_at: 1,
             started_at: Some(1),
             completed_at: Some(2),
@@ -15833,6 +15885,7 @@ mod tests {
             status: ResearchNodeStatus::Running,
             error: None,
             response_snapshot_at: None,
+            recap: None,
             created_at: 1,
             started_at: Some(2),
             completed_at: None,
@@ -15927,6 +15980,7 @@ mod tests {
             status: ResearchNodeStatus::Running,
             error: None,
             response_snapshot_at: None,
+            recap: None,
             created_at: 1,
             started_at: Some(1),
             completed_at: None,
@@ -16031,6 +16085,7 @@ mod tests {
             status: ResearchNodeStatus::Complete,
             error: None,
             response_snapshot_at: None,
+            recap: None,
             created_at: 1,
             started_at: Some(1),
             completed_at: Some(2),
@@ -16110,6 +16165,7 @@ mod tests {
             status: ResearchNodeStatus::Complete,
             error: None,
             response_snapshot_at: None,
+            recap: None,
             created_at: 1,
             started_at: Some(1),
             completed_at: Some(2),
@@ -16198,6 +16254,7 @@ mod tests {
                     status: ResearchNodeStatus::Complete,
                     error: None,
                     response_snapshot_at: None,
+                    recap: None,
                     created_at: 1,
                     started_at: Some(1),
                     completed_at: Some(2),
@@ -17125,6 +17182,78 @@ mod tests {
         assert_eq!(node.status, ResearchNodeStatus::Failed);
         assert!(node.pane_id.is_none());
         assert!(state.take_last_closed_pane().unwrap().is_none());
+    }
+
+    #[test]
+    fn research_recap_persists_and_rejects_stale_results() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let detail = state
+            .create_research_tree(CreateResearchTreeRequest {
+                prompt: "Question".into(),
+                title: None,
+                adapter: "claude".into(),
+                model: None,
+                effort: None,
+                group_id: "group-1".into(),
+            })
+            .unwrap();
+        let id = detail.tree.root_node_id;
+        {
+            let mut model = state.inner.model.lock().unwrap();
+            let node = model.research_nodes.get_mut(&id).unwrap();
+            node.status = ResearchNodeStatus::Complete;
+            node.response_snapshot_at = Some(10);
+        }
+        let mut answer = sample_user_turn("agent", "Original answer");
+        answer.role = "assistant".into();
+        research::write_response_snapshot(&state.config().workspace_root, &id, &[answer.clone()])
+            .unwrap();
+        let revision = research::response_revision(&[answer.clone()]).unwrap();
+        let source = state.research_node(&id).unwrap();
+        state
+            .save_research_recap(&source, &revision, "Original recap".into())
+            .unwrap();
+        let saved = state.research_node(&id).unwrap();
+        assert_eq!(saved.recap.as_ref().unwrap().text, "Original recap");
+        let round_trip: ResearchNode =
+            serde_json::from_value(serde_json::to_value(saved).unwrap()).unwrap();
+        assert_eq!(round_trip.recap.unwrap().response_revision, revision);
+
+        // A rewritten snapshot cannot receive metadata generated for its predecessor.
+        answer.blocks = vec![crate::transcript::TurnBlock::Text {
+            text: "Changed answer".into(),
+        }];
+        research::write_response_snapshot(&state.config().workspace_root, &id, &[answer]).unwrap();
+        state
+            .save_research_recap(&source, &revision, "Stale recap".into())
+            .unwrap();
+        assert_eq!(
+            state.research_node(&id).unwrap().recap.unwrap().text,
+            "Original recap"
+        );
+        // Neither can a completed retry, even if its answer happens to be identical.
+        let mut original = sample_user_turn("agent", "Original answer");
+        original.role = "assistant".into();
+        research::write_response_snapshot(&state.config().workspace_root, &id, &[original])
+            .unwrap();
+        {
+            let mut model = state.inner.model.lock().unwrap();
+            let node = model.research_nodes.get_mut(&id).unwrap();
+            node.status = ResearchNodeStatus::Complete;
+            node.started_at = Some(11);
+            node.recap = None;
+            node.response_snapshot_at = Some(12);
+        }
+        state
+            .save_research_recap(&source, &revision, "Stale recap".into())
+            .unwrap();
+        assert!(state.research_node(&id).unwrap().recap.is_none());
+        state.remove_research_tree(&detail.tree.id).unwrap();
+        state
+            .save_research_recap(&source, &revision, "Deleted recap".into())
+            .unwrap();
+        assert!(state.research_node(&id).is_err());
     }
 
     #[test]

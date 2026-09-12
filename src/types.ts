@@ -436,6 +436,7 @@ export interface ResearchNode {
   /** Set when the durable response snapshot lands — the viewer's signal to
    * refetch content it may have read before the adapter finished flushing. */
   responseSnapshotAt?: number | null;
+  recap?: { text: string; responseRevision: string };
   createdAt: number;
   startedAt?: number | null;
   completedAt?: number | null;
