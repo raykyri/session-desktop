@@ -299,7 +299,7 @@ function transcriptReadme(
   const body = messages
     .map((message) => `## ${markdownHeading(message.label)}\n\n${message.text.trim()}`)
     .join("\n\n");
-  return `# ${markdownHeading(title)}\n\n${body}\n\n---\n\nPublished with [qmux](https://qmux.app).\n`;
+  return `# ${markdownHeading(title)}\n\n${body}\n\n---\n\nPublished with [Session](https://qmux.app).\n`;
 }
 
 function markdownHeading(value: string) {
@@ -410,7 +410,7 @@ function researchReadme(
     }
   };
   append(rootNodeId, 0);
-  lines.push("", "---", "", "Published with [qmux](https://qmux.app).", "");
+  lines.push("", "---", "", "Published with [Session](https://qmux.app).", "");
   return lines.join("\n");
 }
 

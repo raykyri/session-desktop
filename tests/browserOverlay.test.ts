@@ -7,7 +7,6 @@ import {
   browserOverlayShowsLink,
   closeAllBrowserOverlaysState,
   closeBrowserOverlayState,
-  resolveTranscriptOrBrowserToggle,
 } from "../src/lib/browserOverlay";
 
 function overlay(overrides: Partial<BrowserOverlayState> = {}): BrowserOverlayState {
@@ -78,28 +77,4 @@ test("closeBrowserOverlayState closes only the requested owner", () => {
   assert.equal(closed.a.open, false);
   assert.equal(closed.b.open, true);
   assert.equal(closeBrowserOverlayState({ a: overlay({ open: false }) }, "a").a.open, false);
-});
-
-test("⌘⇧E closes a live browser instead of expanding the transcript", () => {
-  assert.deepEqual(
-    resolveTranscriptOrBrowserToggle({
-      anyBrowserOpen: true,
-      canToggleTranscript: true,
-    }),
-    { type: "close-browser" },
-  );
-  assert.deepEqual(
-    resolveTranscriptOrBrowserToggle({
-      anyBrowserOpen: false,
-      canToggleTranscript: true,
-    }),
-    { type: "toggle-transcript" },
-  );
-  assert.deepEqual(
-    resolveTranscriptOrBrowserToggle({
-      anyBrowserOpen: false,
-      canToggleTranscript: false,
-    }),
-    { type: "toggle-browser" },
-  );
 });

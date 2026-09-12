@@ -348,16 +348,7 @@ async function routeRequest(
     );
     return;
   }
-  if (url.pathname === "/mockup.js" || url.pathname === "/mockup-boot.js") {
-    await serveStaticFile(
-      response,
-      join(context.siteDir, url.pathname.slice(1)),
-      "text/javascript; charset=utf-8",
-      request.method,
-    );
-    return;
-  }
-  if (url.pathname === "/logo.png" || url.pathname === "/qmux.png") {
+  if (url.pathname === "/logo.png") {
     const name = normalize(url.pathname.slice(1));
     await serveStaticFile(response, join(context.siteDir, name), "image/png", request.method);
     return;
@@ -1307,7 +1298,7 @@ function transcriptPage(gist: GitHubGist, publication: TranscriptPublication) {
   const preview = followupPreviewText(
     publication.transcript.messages.map((message) => message.text).join(" "),
   ).slice(0, 180);
-  const description = preview || `A published qmux transcript by ${author}.`;
+  const description = preview || `A published Session conversation by ${author}.`;
   const wordCount = countWords(
     publication.transcript.messages.map((message) => message.text).join(" "),
   );
@@ -1399,8 +1390,8 @@ function researchPage(
   const description =
     followupPreviewText(answerBody).slice(0, 180) ||
     (publication.kind === "research-answer"
-      ? `A published qmux research answer by ${author}.`
-      : `Published qmux research by ${author}.`);
+      ? `A published Session research answer by ${author}.`
+      : `Published Session research by ${author}.`);
   const children = publication.research.nodes
     .filter((node) => node.parentId === selected.id)
     .sort((left, right) => left.createdAt - right.createdAt);
@@ -1636,8 +1627,8 @@ function DocumentChrome({
 }) {
   return (
     <header className="doc-header">
-      <a className="brand" href="/" aria-label="qmux home">
-        qmux
+      <a className="brand" href="/" aria-label="Session home">
+        Session
       </a>
       <nav className="doc-breadcrumb" aria-label="Path">
         {breadcrumb.map((entry, index) => (
@@ -1684,7 +1675,7 @@ function workspaceShell({
         >
           {children}
           <footer className="page-footer">
-            Published with <a href="/">qmux</a>
+            Published with <a href="/">Session</a>
           </footer>
           <script dangerouslySetInnerHTML={{ __html: PAGE_SCRIPT }} />
         </div>
@@ -2642,12 +2633,12 @@ function documentPage(input: { title: string; description: string; body: React.R
         <link rel="icon" type="image/png" href="/logo.png" />
         <meta name="description" content={input.description} />
         <meta property="og:type" content="article" />
-        <meta property="og:site_name" content="qmux" />
+        <meta property="og:site_name" content="Session" />
         <meta property="og:title" content={input.title} />
         <meta property="og:description" content={input.description} />
-        <meta property="og:image" content="/qmux.png" />
+        <meta property="og:image" content="/logo.png" />
         <meta name="twitter:card" content="summary" />
-        <title>{`${input.title} · qmux`}</title>
+        <title>{`${input.title} · Session`}</title>
         <style>{PAGE_CSS}</style>
       </head>
       <body>{input.body}</body>
@@ -2663,7 +2654,7 @@ function errorPage(title: string, message: string) {
     body: (
       <main className="error-page">
         <a className="brand" href="/">
-          qmux
+          Session
         </a>
         <h1>{title}</h1>
         <p>{message}</p>

@@ -13,7 +13,7 @@ interface ResearchBrowserSourceDialogProps {
 const EXAMPLE_URL = "http://127.0.0.1:1421/research-browser.html";
 
 /** Chooses where the Research Browser iframe loads its pages from: the view
- * bundled with qmux, or a local development server the user trusts. */
+ * bundled with Session, or a local development server the user trusts. */
 export default function ResearchBrowserSourceDialog({
   open,
   source,
@@ -63,9 +63,9 @@ export default function ResearchBrowserSourceDialog({
       >
         <h2 id="research-browser-source-title">Research Browser source</h2>
         <p>
-          Pages load from the view bundled with qmux, or from a local
+          Pages load from the view bundled with Session, or from a local
           development server so you can edit the view while the app runs. Loaded
-          code can read and modify your research through the qmux SDK, so only
+          code can read and modify your research through the Session SDK, so only
           point this at a server you trust.
         </p>
         <p className="research-browser-source-current">

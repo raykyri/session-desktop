@@ -11,7 +11,7 @@ target="${QMUX_BUILD_TARGET:-universal-apple-darwin}"
 bundle_dir="$repo_root/src-tauri/target/$target/release/bundle/macos"
 
 version="$(sed -n 's/.*"version": "\([^"]*\)".*/\1/p' "$repo_root/src-tauri/tauri.conf.json" | head -1)"
-archive="$bundle_dir/qmux.app.tar.gz"
+archive="$bundle_dir/Session.app.tar.gz"
 signature_file="$archive.sig"
 
 for file in "$archive" "$signature_file"; do
@@ -22,7 +22,7 @@ for file in "$archive" "$signature_file"; do
 done
 
 signature="$(cat "$signature_file")"
-url="https://github.com/raykyri/qmux/releases/download/v$version/qmux.app.tar.gz"
+url="https://github.com/raykyri/qmux/releases/download/v$version/Session.app.tar.gz"
 pub_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # Build the manifest with Python so signature bytes never re-enter the shell
@@ -53,5 +53,5 @@ PY
 
 echo "Wrote $bundle_dir/latest.json"
 echo "Upload these to the v$version GitHub release:"
-echo "  $archive (as qmux.app.tar.gz)"
+echo "  $archive (as Session.app.tar.gz)"
 echo "  $bundle_dir/latest.json"

@@ -94,7 +94,7 @@ pub fn bundled_cli_path(target: &str) -> Result<PathBuf, String> {
         .find(|dir| dir.join(target).join("qmux-cli").is_file())
     else {
         return Err(format!(
-            "this qmux build has no bundled qmux-cli for {target}; run scripts/build-remote-cli.sh"
+            "remote terminal support is not included in Session ({target})"
         ));
     };
     Ok(dir.join(target).join("qmux-cli"))

@@ -450,9 +450,9 @@ pub fn preflight_state(workspace_root: &Path) -> Result<Option<Vec<u8>>, String>
         }
         Err(err) => {
             return Err(format!(
-                "Could not read your saved qmux session at {path}:\n  {err}\n\n\
-                 Your panes and agents are still saved on disk, so qmux is refusing to start with an \
-                 empty session and overwrite them. This is almost always temporary — fix the cause \
+                "Could not read your saved Session data at {path}:\n  {err}\n\n\
+                 Your research is still saved on disk, so Session is refusing to start with an \
+                 empty workspace and overwrite it. This is almost always temporary — fix the cause \
                  below and relaunch to get your session back:\n\
                  \x20 • Permission denied: check the file's ownership and permissions.\n\
                  \x20 • Too many open files: quit other apps (or raise the open-file limit), then relaunch.\n\
@@ -494,10 +494,10 @@ pub fn preflight_state(workspace_root: &Path) -> Result<Option<Vec<u8>>, String>
     }
 
     Err(format!(
-        "Your saved qmux session at {path} was written by a newer version of qmux \
+        "Your saved Session data at {path} was written by a newer version of Session \
          (state version {version}; this build supports up to {STATE_VERSION}).\n\n\
-         Loading it here would discard that session, so this copy of qmux is refusing to \
-         start. Launch the newer qmux instead, or update this copy.\n\n\
+         Loading it here would discard that research, so this copy of Session is refusing to \
+         start. Launch the newer Session instead, or update this copy.\n\n\
          To start fresh on purpose — your current session file is moved aside to a .bak \
          first, so nothing is lost — relaunch with:\n\
          \x20 QMUX_RESET_STATE=1 open -a qmux",

@@ -15,7 +15,6 @@ export const SESSION_DRAFT_KEYS = {
   newResearchModal: "new-research-modal",
   newDocumentContext: "new-document-context",
   newDocumentFields: "new-document-fields",
-  globalTaskLauncher: "global-task-launcher",
 } as const;
 
 const pending = new Map<string, { raw: string; timer: number }>();

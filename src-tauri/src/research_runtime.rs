@@ -11,7 +11,6 @@ use crate::claude_sdk::{
 use crate::headless_process::{
     JsonlProcess, JsonlReceive, reconcile_session_id, validate_session_id,
 };
-use crate::persistence;
 use crate::research::ResearchNode;
 use crate::state::{AppState, now_millis};
 use crate::transcript::{Turn, TurnBlock};
@@ -34,10 +33,8 @@ fn sessions() -> &'static Mutex<HashMap<String, SessionSlot>> {
     SESSIONS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-pub fn should_use_research_sdk(state: &AppState, adapter: &str) -> bool {
-    matches!(adapter, "codex" | "grok")
-        || (adapter == "claude"
-            && persistence::research_sdk_harness_enabled(&state.config().workspace_root))
+pub fn should_use_research_sdk(_state: &AppState, adapter: &str) -> bool {
+    matches!(adapter, "claude" | "codex" | "grok")
 }
 
 pub fn session_registered(node_id: &str) -> bool {

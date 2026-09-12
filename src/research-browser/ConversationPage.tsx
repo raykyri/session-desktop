@@ -203,7 +203,7 @@ export default function ConversationPage({
       .catch((error) => setError(String(error)));
   };
   const followupHint = archived
-    ? "This research is archived. Restore it in qmux to add a follow-up."
+    ? "This research is archived. Restore it in Session to add a follow-up."
     : target && !canFollowUpFrom(target)
       ? isActiveResearchStatus(target.status)
         ? "Follow-ups become available once this response completes."
@@ -303,19 +303,6 @@ export default function ConversationPage({
                         }}
                       >
                         Retry run
-                      </button>
-                    )}
-                    {target.paneId && (
-                      <button
-                        type="button"
-                        className="control-button"
-                        onClick={() => {
-                          void run(() =>
-                            sdk.call("navigation.openTerminal", target.paneId!),
-                          );
-                        }}
-                      >
-                        Open terminal
                       </button>
                     )}
                     <button
