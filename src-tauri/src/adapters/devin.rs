@@ -1636,7 +1636,7 @@ mod tests {
         let workspace_root = unique_test_dir("qmux-devin-hooks");
         let config = SessionConfig {
             workspace_root: workspace_root.clone(),
-            socket_path: workspace_root.join("qmux.sock"),
+            socket_path: workspace_root.join("session.sock"),
             ..test_config()
         };
         let user = json!({

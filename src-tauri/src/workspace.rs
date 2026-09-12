@@ -3243,7 +3243,7 @@ mod tests {
         remotes: std::collections::BTreeMap<String, crate::config::SavedRemote>,
     ) -> AppState {
         std::fs::create_dir_all(&workspace_root).unwrap();
-        let socket_path = workspace_root.join("qmux.sock");
+        let socket_path = workspace_root.join("session.sock");
         AppState::new(SessionConfig {
             remotes,
             workspace_root,

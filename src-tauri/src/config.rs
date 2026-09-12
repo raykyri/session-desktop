@@ -281,7 +281,7 @@ impl SessionConfig {
         // or in a system directory from materializing a `.qmux` outside userspace.
         let home = env::var_os("HOME").map(PathBuf::from);
         let default_workspace_root = session_data_root().map(|root| root.join("workspaces"));
-        let default_socket_path = session_runtime_root().map(|root| root.join("qmux.sock"));
+        let default_socket_path = session_runtime_root().map(|root| root.join("session.sock"));
         config.workspace_root = resolve_root(
             &config_dir,
             home.as_deref(),
@@ -541,7 +541,7 @@ impl SessionConfig {
             .ok_or_else(|| "could not determine runtime directory".to_string())?;
         Ok(Self {
             workspace_root: data_root.join("workspaces"),
-            socket_path: runtime_root.join("qmux.sock"),
+            socket_path: runtime_root.join("session.sock"),
             adapters: AdapterConfigs {
                 claude: ClaudeAdapterConfig {
                     binary: Some("claude".to_string()),
@@ -933,7 +933,7 @@ mod remote_tests {
         let parsed: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "remotes": { "devbox": { "host": "user@devbox" } }
             }"#,
         )
@@ -954,7 +954,7 @@ mod tests {
         let config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "claudeBinary": "legacy-claude",
               "adapters": {
                 "claude": {
@@ -973,7 +973,7 @@ mod tests {
         let config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "claudeBinary": "legacy-claude"
             }"#,
         )
@@ -987,7 +987,7 @@ mod tests {
         let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock"
+              "socketPath": ".qmux/run/session.sock"
             }"#,
         )
         .unwrap();
@@ -996,7 +996,7 @@ mod tests {
         let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "adapters": {
                 "codex": {
                   "binary": "/opt/bin/codex"
@@ -1013,7 +1013,7 @@ mod tests {
         let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "adapters": { "claude": { "binary": "~/bin/claude" } }
             }"#,
         )
@@ -1030,7 +1030,7 @@ mod tests {
         let plain: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "adapters": { "codex": { "binary": "/opt/bin/codex" } }
             }"#,
         )
@@ -1044,7 +1044,7 @@ mod tests {
         let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock"
+              "socketPath": ".qmux/run/session.sock"
             }"#,
         )
         .unwrap();
@@ -1053,7 +1053,7 @@ mod tests {
         let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "adapters": {
                 "opencode": {
                   "binary": "/opt/bin/opencode"
@@ -1070,7 +1070,7 @@ mod tests {
         let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock"
+              "socketPath": ".qmux/run/session.sock"
             }"#,
         )
         .unwrap();
@@ -1079,7 +1079,7 @@ mod tests {
         let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "adapters": {
                 "grok": {
                   "binary": "/opt/bin/grok"
@@ -1096,7 +1096,7 @@ mod tests {
         let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock"
+              "socketPath": ".qmux/run/session.sock"
             }"#,
         )
         .unwrap();
@@ -1105,7 +1105,7 @@ mod tests {
         let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "adapters": {
                 "muse": {
                   "binary": "/opt/bin/muse"
@@ -1122,7 +1122,7 @@ mod tests {
         let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock"
+              "socketPath": ".qmux/run/session.sock"
             }"#,
         )
         .unwrap();
@@ -1131,7 +1131,7 @@ mod tests {
         let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "adapters": { "pi": { "binary": "/opt/bin/pi" } }
             }"#,
         )
@@ -1144,7 +1144,7 @@ mod tests {
         let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock"
+              "socketPath": ".qmux/run/session.sock"
             }"#,
         )
         .unwrap();
@@ -1153,7 +1153,7 @@ mod tests {
         let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "adapters": {
                 "cursor": {
                   "binary": "/opt/bin/cursor-agent"
@@ -1170,7 +1170,7 @@ mod tests {
         let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock"
+              "socketPath": ".qmux/run/session.sock"
             }"#,
         )
         .unwrap();
@@ -1179,7 +1179,7 @@ mod tests {
         let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "adapters": {
                 "devin": {
                   "binary": "/opt/bin/devin"
@@ -1196,7 +1196,7 @@ mod tests {
         let default_config: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock"
+              "socketPath": ".qmux/run/session.sock"
             }"#,
         )
         .unwrap();
@@ -1205,7 +1205,7 @@ mod tests {
         let configured: SessionConfig = serde_json::from_str(
             r#"{
               "workspaceRoot": ".qmux/workspaces",
-              "socketPath": ".qmux/run/qmux.sock",
+              "socketPath": ".qmux/run/session.sock",
               "adapters": {
                 "antigravity": {
                   "binary": "/opt/bin/agy"
@@ -1231,7 +1231,7 @@ mod tests {
         let expected_socket = dirs::runtime_dir()
             .map(|dir| dir.join("qmux"))
             .unwrap_or_else(|| data_root.join("run"))
-            .join("qmux.sock");
+            .join("session.sock");
         assert_eq!(config.socket_path, expected_socket);
         assert_ne!(config.socket_path.parent(), Some(env::temp_dir().as_path()));
     }

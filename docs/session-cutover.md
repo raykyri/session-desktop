@@ -43,7 +43,7 @@ builds that omit those artifacts.
   symbols, `QMUX_GHOSTTY_PACKAGE_PATH`, and `QMUX_NATIVE_DEBUG` are retired.
 - `qmux.config.json`, `.qmux/` directories, the macOS
   `~/Library/Application Support/qmux` data root, Linux data/runtime roots,
-  sockets, browser storage keys, and existing generated integration file paths.
+  browser storage keys, and existing generated integration file paths.
   Existing data is read in place; no data directory is moved or deleted.
 - Workspace/participant identity fields, `qmuxToolActivity`,
   `qmux_instruction`, publication proposal markers, and `qmux-file:` links.
@@ -75,3 +75,11 @@ Settings retain the `qmux.settings.v1` key. The app reads legacy `fontSize` as
 `textSize` to preserve research typography; obsolete terminal themes, fonts,
 cursor and scroll settings no longer control the app. Browser loading appearance
 uses the application palette, including a native startup fallback.
+
+## Control socket filename
+
+The default control socket is now `session.sock` in the existing runtime directory.
+The checked-in development configuration uses `~/.qmux/run/session.sock`. Both
+app and CLI discovery use the new filename; explicit `socketPath` and
+`SESSION_SOCK` overrides remain supported. Restart Session and update any external
+configuration that explicitly points to the old socket when cutting over.

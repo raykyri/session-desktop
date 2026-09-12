@@ -200,7 +200,7 @@ mod tests {
             "cwd": cwd,
             "canonicalCwd": cwd,
             "sessionId": session,
-            "sock": "/tmp/qmux.sock",
+            "sock": "/tmp/session.sock",
             "token": format!("token-{pane}"),
             "updatedAt": updated_at,
         })

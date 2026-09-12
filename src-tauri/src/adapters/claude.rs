@@ -3042,7 +3042,7 @@ mod tests {
         AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root: unique_test_dir("qmux-claude-workspace"),
-            socket_path: unique_test_dir("qmux-claude-socket").join("qmux.sock"),
+            socket_path: unique_test_dir("qmux-claude-socket").join("session.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
@@ -3111,7 +3111,7 @@ mod tests {
         let config = SessionConfig {
             remotes: Default::default(),
             workspace_root: workspace_root.clone(),
-            socket_path: unique_test_dir("qmux-claude-hooks-socket").join("qmux.sock"),
+            socket_path: unique_test_dir("qmux-claude-hooks-socket").join("session.sock"),
             adapters: AdapterConfigs {
                 pi: Default::default(),
                 claude: ClaudeAdapterConfig {
