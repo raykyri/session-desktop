@@ -54,8 +54,7 @@ import { writeClipboardText } from "../../lib/clipboard";
 import { ResearchDocumentFrame } from "./ResearchDocumentChrome";
 import ActivityMetadataLine from "../ActivityMetadataLine";
 
-export interface RecentActivityPaneProps {
-  embedded?: boolean;
+export interface ResearchActivityFeedProps {
   initialDraft?: string;
   initialScrollTop?: number;
   onScrollChange?: (top: number) => void;
@@ -74,6 +73,7 @@ export interface RecentActivityPaneProps {
   onDismissUndo: () => void;
   onOpenResearchQuery: (query: RecentResearchQuery) => void;
   onLoadOlder: () => void;
+  onRefresh?: () => void;
   canGoBack?: boolean;
   canGoForward?: boolean;
   onBack?: () => void;
@@ -761,8 +761,7 @@ function MeasuredActivityRow({
   );
 }
 
-function RecentActivityPane({
-  embedded = false,
+function ResearchActivityFeed({
   initialDraft = "",
   initialScrollTop = 0,
   onScrollChange,
@@ -780,13 +779,17 @@ function RecentActivityPane({
   onDismissUndo,
   onOpenResearchQuery,
   onLoadOlder,
+  onRefresh,
   canGoBack = false,
   canGoForward = false,
   onBack,
   onForward,
-}: RecentActivityPaneProps) {
+}: ResearchActivityFeedProps) {
   const [draft, setDraft] = useState(initialDraft);
-  useEffect(() => { onDraftChange?.(draft); }, [draft, onDraftChange]);
+  const changeDraft = (next: string) => {
+    setDraft(next);
+    onDraftChange?.(next);
+  };
   const [menu, setMenu] = useState<{ entryId: string; left: number; top: number } | null>(
     null,
   );
@@ -795,7 +798,11 @@ function RecentActivityPane({
   const onScrollChangeRef = useRef(onScrollChange);
   onScrollChangeRef.current = onScrollChange;
   useLayoutEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = initialScrollTop;
+    const scroller = scrollRef.current;
+    if (scroller) scroller.scrollTop = initialScrollTop;
+    return () => {
+      if (scroller) onScrollChangeRef.current?.(scroller.scrollTop);
+    };
   }, []);
   const virtualCanvasRef = useRef<HTMLDivElement | null>(null);
   const loadSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -804,9 +811,8 @@ function RecentActivityPane({
   onBackRef.current = onBack;
   onForwardRef.current = onForward;
   useEffect(() => {
-    if (embedded) return; // The SDK owns history input in the iframe.
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.defaultPrevented || isEditableTarget(event.target)) {
+      if (event.defaultPrevented || event.isComposing || isEditableTarget(event.target)) {
         return;
       }
       const primary = event.metaKey || event.ctrlKey;
@@ -1210,7 +1216,7 @@ function RecentActivityPane({
       return;
     }
     onAddEntry(text);
-    setDraft("");
+    changeDraft("");
   }
 
   function handleSubmit(event: FormEvent) {
@@ -1225,16 +1231,27 @@ function RecentActivityPane({
     }
   }
 
-  const Frame = embedded ? ActivityBody : ResearchDocumentFrame;
   return (
-    <Frame
-      title="Research Browser"
+    <ResearchDocumentFrame
+      title="Research Activity"
       canGoBack={canGoBack}
       canGoForward={canGoForward}
       backTitle={`Back (${IS_MAC ? "⌘[" : "Ctrl+["})`}
       forwardTitle={`Forward (${IS_MAC ? "⌘]" : "Ctrl+]"})`}
       onBack={onBack}
       onForward={onForward}
+      headerActions={onRefresh ? (
+        <button
+          type="button"
+          className="control-button"
+          onClick={onRefresh}
+          aria-label="Refresh activity"
+          title="Refresh activity"
+        >
+          <RotateCw size={14} aria-hidden="true" />
+          Refresh
+        </button>
+      ) : undefined}
     >
       <div ref={scrollRef} className="research-document-scroll journal-scroll">
         <div className="journal-column">
@@ -1245,7 +1262,7 @@ function RecentActivityPane({
               rows={2}
               placeholder="Add a note or paste a URL…"
               aria-label="New recent activity entry"
-              onChange={(event) => setDraft(event.currentTarget.value)}
+              onChange={(event) => changeDraft(event.currentTarget.value)}
               onKeyDown={handleKeyDown}
             />
           </form>
@@ -1426,12 +1443,8 @@ function RecentActivityPane({
             document.body,
           )
         : null}
-    </Frame>
+    </ResearchDocumentFrame>
   );
 }
 
-function ActivityBody({ children }: { children: ReactNode }) {
-  return <main className="research-browser-body">{children}</main>;
-}
-
-export default memo(RecentActivityPane);
+export default memo(ResearchActivityFeed);

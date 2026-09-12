@@ -117,7 +117,8 @@ import {
   workspaceIsInResearchScope,
 } from "./lib/researchScope";
 import ResearchDocument from "./components/research/ResearchDocument";
-import ResearchBrowserHost from "./components/research/ResearchBrowserHost";
+import ResearchActivityFeed from "./components/research/ResearchActivityFeed";
+import { useActivityFeedState } from "./hooks/useActivityFeedState";
 import {
   applyJournalTweetHydration,
   activityCursorIsBefore,
@@ -1749,6 +1750,7 @@ function MainApp() {
   activeResearchPaneIdRef.current = activeResearchPaneId;
   const [researchTrees, setResearchTrees] = useState<ResearchTreeSummary[]>([]);
   const [archivedResearchTrees, setArchivedResearchTrees] = useState<ResearchTreeSummary[]>([]);
+  const activityFeedState = useActivityFeedState();
   const [recentActivityItems, setRecentActivityItems] = useState<RecentActivityItem[]>([]);
   const recentActivityItemsRef = useRef(recentActivityItems);
   recentActivityItemsRef.current = recentActivityItems;
@@ -11664,12 +11666,12 @@ function MainApp() {
                 type="button"
                 className="control-button research-sidebar-select"
                 aria-current={researchStageView === "journal" ? "page" : undefined}
-                title="Research Browser"
+                title="Research Activity"
                 onClick={openJournal}
               >
                 <span className="research-sidebar-copy">
                   <span className="research-sidebar-title">
-                    <span className="research-sidebar-title-text">Research Browser</span>
+                    <span className="research-sidebar-title-text">Research Activity</span>
                   </span>
                 </span>
               </button>
@@ -14084,9 +14086,10 @@ function MainApp() {
               <span>{researchMultiSelection.length} research items selected</span>
             </div>
           ) : null}
-          {researchStageView === "journal" ? (
-            <ResearchBrowserHost
-              onAppShortcut={(command, repeat) => nativeAppShortcutHandlerRef.current(command, repeat)}
+          {/* Hydrate the feed before mounting so its saved scroll position can be restored. */}
+          {researchStageView === "journal" && config ? (
+            <ResearchActivityFeed
+              {...activityFeedState}
               items={recentActivityItems}
               researchTrees={[...researchTrees, ...archivedResearchTrees]}
               nextCursor={recentActivityCursor}
@@ -14100,6 +14103,7 @@ function MainApp() {
               onDismissUndo={dismissJournalUndo}
               onOpenResearchQuery={openRecentResearchQuery}
               onLoadOlder={loadOlderActivity}
+              onRefresh={() => void refreshResearchNavigation()}
               canGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
               canGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
               onBack={goResearchWorkspaceBack}

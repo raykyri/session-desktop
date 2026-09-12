@@ -1,11 +1,9 @@
-import { browserServices } from "../research-browser/services";
 import { writeText as writeTauriClipboardText } from "@tauri-apps/plugin-clipboard-manager";
 
 // Copy text to the clipboard. The native Tauri path comes first: WKWebView's
 // async Clipboard API is focus- and permission-sensitive, and the final
 // execCommand fallback steals focus to an off-screen textarea.
 export async function writeClipboardText(text: string) {
-  if (browserServices) return browserServices.writeClipboardText(text);
   if ("__TAURI_INTERNALS__" in window) {
     try {
       await writeTauriClipboardText(text);
