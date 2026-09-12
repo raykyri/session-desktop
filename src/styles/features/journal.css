@@ -1,5 +1,5 @@
-/* Recent Activity: a research-surface page holding a narrow, left-aligned feed
-   of saved items and research queries. Note/link cards borrow the research
+/* Home activity: a research-surface page holding a narrow, left-aligned feed
+   of saved items and research queries. Link cards borrow the research
    question card recipe (--content-card-bg on a 10px radius); tweet entries
    drop the padding so the tweet card IS the entry — a feed of tweets, not
    tweets framed inside content items. */
@@ -8,41 +8,11 @@
   padding: 28px clamp(20px, 4vw, 48px) 48px;
 }
 
-/* "300–400px" column, left aligned. */
 .journal-column {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  width: min(100%, 380px);
-}
-
-.journal-composer {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.journal-composer-input {
-  width: 100%;
-  padding: 9px 12px;
-  border: 1px solid var(--surface-border-default);
-  border-radius: 10px;
-  color: inherit;
-  font: inherit;
-  font-size: 13.5px;
-  line-height: 1.45;
-  background: var(--content-card-bg);
-  resize: none;
-  transition: border-color var(--transition-fast);
-}
-
-.journal-composer-input:focus {
-  outline: none;
-  border-color: var(--accent-color);
-}
-
-.journal-composer-input::placeholder {
-  color: var(--text-subtle);
+  width: min(100%, 640px);
 }
 
 .journal-feed {
@@ -72,9 +42,9 @@
 }
 
 .recent-activity-day-label {
-  margin: 0 0 1px;
+  margin: 4px 0 1px;
   color: var(--text-subtle);
-  font-size: 11px;
+  font-size: calc(var(--fs-input) - 2.5px);
   font-weight: 650;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -116,9 +86,13 @@
   gap: 8px;
   padding: 0 3px;
   color: var(--text-subtle);
-  font-size: 11.5px;
+  font-size: calc(var(--fs-input) - 2px);
   font-weight: 400;
   line-height: 1.35;
+}
+
+.activity-metadata.is-summary-hidden {
+  justify-content: flex-end;
 }
 
 .activity-metadata-summary {
@@ -136,7 +110,7 @@
 .journal-empty {
   margin: 6px 0 0;
   color: var(--text-subtle);
-  font-size: 13px;
+  font-size: calc(var(--fs-input) - 1px);
 }
 
 /* Same surface as .research-prompt (the question bubble). */
@@ -163,7 +137,7 @@
   background: var(--content-card-bg);
   color: inherit;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--fs-input);
   line-height: 1.5;
   text-align: left;
   white-space: pre-wrap;
@@ -326,17 +300,9 @@
   background: var(--surface-fill-hover);
 }
 
-.journal-note-text {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
 .journal-link-url {
   color: var(--accent-color);
-  font-size: 13.5px;
+  font-size: var(--fs-input);
   text-decoration: none;
   overflow-wrap: anywhere;
 }
@@ -450,7 +416,7 @@
      truncated handle stops identifying anyone. */
   flex: 0 8 auto;
   min-width: 3ch;
-  font-size: 14px;
+  font-size: var(--fs-input);
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -472,7 +438,7 @@
 .journal-tweet-handle {
   flex: 0 1 auto;
   color: var(--text-subtle);
-  font-size: 13.5px;
+  font-size: calc(var(--fs-input) - 0.5px);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -482,7 +448,7 @@
 .journal-tweet-age {
   flex: none;
   color: var(--text-subtle);
-  font-size: 13.5px;
+  font-size: calc(var(--fs-input) - 0.5px);
   text-decoration: none;
 }
 
@@ -493,7 +459,7 @@
 .journal-tweet-reply {
   margin: 0 0 3px;
   color: var(--text-subtle);
-  font-size: 13px;
+  font-size: calc(var(--fs-input) - 1px);
 }
 
 .journal-tweet-reply span {
@@ -502,14 +468,14 @@
 
 .journal-tweet-text {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--fs-input);
   line-height: 1.4;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .journal-tweet-text.is-quote {
-  font-size: 13.5px;
+  font-size: calc(var(--fs-input) - 0.5px);
 }
 
 .journal-tweet-text a {
@@ -526,7 +492,7 @@
   display: inline-block;
   margin-top: 2px;
   color: var(--accent-color);
-  font-size: 13.5px;
+  font-size: calc(var(--fs-input) - 0.5px);
   text-decoration: none;
 }
 
@@ -719,7 +685,7 @@ a.journal-tweet-more:hover {
 /* — Sidebar tab above the Research heading — */
 
 /* Match the scrollable research section's horizontal padding while keeping
-   Recent Activity fixed above it, then leave the gap before the Research heading. */
+   Home fixed above it, then leave the gap before the Research heading. */
 .journal-sidebar-row {
   width: calc(100% - 14px);
   margin-inline: 7px;

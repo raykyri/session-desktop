@@ -11,37 +11,37 @@ function storage(initial: string | null = null) {
   };
 }
 
-test("the regular feed restores the previous browser's draft and scroll position", () => {
+test("the Home feed restores the previous scroll position and ignores the removed note draft", () => {
   const saved = storage(JSON.stringify({
     routes: ["/activity", "/research/tree/node/branch"],
     index: 1,
     values: { activityDraft: "Unfinished note", activityScroll: 1372 },
   }));
-  assert.deepEqual(readActivityFeedState(saved), { draft: "Unfinished note", scrollTop: 1372 });
+  assert.deepEqual(readActivityFeedState(saved), { scrollTop: 1372 });
 });
 
-test("saving and clearing a feed draft does not resurrect it or discard other session values", () => {
+test("saving feed scroll preserves unrelated session values", () => {
   const saved = storage(JSON.stringify({ values: { activityDraft: "Old", "followup:tree:root": "Keep this" } }));
-  saveActivityFeedState({ draft: "Changed", scrollTop: 490 }, saved);
-  assert.deepEqual(readActivityFeedState(saved), { draft: "Changed", scrollTop: 490 });
-  saveActivityFeedState({ draft: "", scrollTop: 0 }, saved);
-  assert.deepEqual(readActivityFeedState(saved), { draft: "", scrollTop: 0 });
-  assert.equal(JSON.parse(saved.getItem(key)!).values["followup:tree:root"], "Keep this");
+  saveActivityFeedState({ scrollTop: 490 }, saved);
+  assert.deepEqual(readActivityFeedState(saved), { scrollTop: 490 });
+  const values = JSON.parse(saved.getItem(key)!).values;
+  assert.equal(values["followup:tree:root"], "Keep this");
+  assert.equal("activityDraft" in values, false);
 });
 
 test("malformed or unavailable session storage falls back safely and can be repaired", () => {
   for (const value of ["broken", "null", "[]", '{"values":null}', '{"values":{"activityDraft":42,"activityScroll":"far"}}']) {
     const saved = storage(value);
-    assert.deepEqual(readActivityFeedState(saved), { draft: "", scrollTop: 0 });
-    saveActivityFeedState({ draft: "Recovered", scrollTop: 20 }, saved);
-    assert.deepEqual(readActivityFeedState(saved), { draft: "Recovered", scrollTop: 20 });
+    assert.deepEqual(readActivityFeedState(saved), { scrollTop: 0 });
+    saveActivityFeedState({ scrollTop: 20 }, saved);
+    assert.deepEqual(readActivityFeedState(saved), { scrollTop: 20 });
   }
   const unavailable = {
     getItem: () => { throw new Error("storage unavailable"); },
     setItem: () => { throw new Error("storage unavailable"); },
   };
-  assert.deepEqual(readActivityFeedState(unavailable), { draft: "", scrollTop: 0 });
-  assert.doesNotThrow(() => saveActivityFeedState({ draft: "In memory", scrollTop: 12 }, unavailable));
+  assert.deepEqual(readActivityFeedState(unavailable), { scrollTop: 0 });
+  assert.doesNotThrow(() => saveActivityFeedState({ scrollTop: 12 }, unavailable));
 });
 
 test("invalid restored scroll offsets cannot corrupt the feed viewport", () => {

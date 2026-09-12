@@ -10,129 +10,43 @@ import {
   ComposerSubmitShortcutGlyph,
   isComposerSubmitShortcut,
 } from "../ComposerSubmitShortcut";
-import {
-  clearSessionDraft,
-  loadSessionDraftJson,
-  readSessionDraftJson,
-  saveSessionDraftJson,
-} from "../../lib/sessionDrafts";
-
 interface DocumentComposerProps {
-  mode: "create" | "edit";
-  /** "dialog" renders the modal card over a backdrop; "page" renders just the
-   * composer form, for embedding in the main research pane. */
-  variant?: "dialog" | "page";
-  /** False while the composer is mounted but display:none (a parked page
-   * draft behind another surface); measurement effects wait for it. */
-  visible?: boolean;
   initialMarkdown?: string;
   initialTitle?: string;
   highlightCount?: number;
   resetKey?: string;
   onClose: () => void;
   onSubmit: (input: { markdown: string; title: string | null }) => Promise<void>;
-  /** Reports edits so the app can tell a pristine composer (safe to dismiss on
-   * navigation) from one holding a draft. */
-  onDirtyChange?: (dirty: boolean) => void;
-  sessionDraftKey?: string;
 }
 
-/** Shared Markdown composer for new and existing research documents. The edit
- * variant is a modal dialog over the document (its backdrop and Escape only
- * dismiss while the fields are pristine); the create variant renders as a
- * main-pane page. Visibility is mount-controlled: render it to show it. */
+/** Modal editor retained for legacy research-document snapshots. Creation is
+ * no longer exposed, and legacy document trees are hidden by the app shell. */
 export default function DocumentComposer({
-  mode,
-  variant = "dialog",
-  visible = true,
   initialMarkdown = "",
   initialTitle = "",
   highlightCount = 0,
   resetKey = "",
   onClose,
   onSubmit,
-  onDirtyChange,
-  sessionDraftKey,
 }: DocumentComposerProps) {
-  const [initialSessionDraft] = useState(() =>
-    sessionDraftKey
-      ? readSessionDraftJson<{ markdown: string; title: string }>(sessionDraftKey)
-      : null,
-  );
-  const [markdown, setMarkdown] = useState(initialSessionDraft?.markdown ?? "");
-  const [title, setTitle] = useState(initialSessionDraft?.title ?? "");
+  const [markdown, setMarkdown] = useState(initialMarkdown);
+  const [title, setTitle] = useState(initialTitle);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionDraftReady, setSessionDraftReady] = useState(
-    !sessionDraftKey || initialSessionDraft !== null,
-  );
-  const sessionDraftTouchedRef = useRef(false);
-  const initialResetRef = useRef(true);
   const markdownRef = useRef<HTMLTextAreaElement | null>(null);
-  // Dirty reports go through a ref so the effects below (including the
-  // unmount cleanup, which captures its closure once) always reach the
-  // caller's current handler, not the first render's.
-  const onDirtyChangeRef = useRef(onDirtyChange);
-  onDirtyChangeRef.current = onDirtyChange;
 
   useEffect(() => {
-    if (initialResetRef.current) {
-      initialResetRef.current = false;
-      if (initialSessionDraft) {
-        return;
-      }
-    }
     setMarkdown(initialMarkdown);
     setTitle(initialTitle);
     setSubmitting(false);
     setError(null);
-  }, [resetKey]);
+  }, [initialMarkdown, initialTitle, resetKey]);
 
-  useEffect(() => {
-    if (!sessionDraftKey || initialSessionDraft) {
-      return;
-    }
-    let disposed = false;
-    void loadSessionDraftJson<{ markdown: string; title: string }>(sessionDraftKey)
-      .then((restored) => {
-        if (!disposed && restored && !sessionDraftTouchedRef.current) {
-          setMarkdown(restored.markdown);
-          setTitle(restored.title);
-        }
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (!disposed) {
-          setSessionDraftReady(true);
-        }
-      });
-    return () => {
-      disposed = true;
-    };
-  }, [initialSessionDraft, sessionDraftKey]);
-
-  useEffect(() => {
-    if (!sessionDraftKey || !sessionDraftReady) {
-      return;
-    }
-    if (!markdown && !title) {
-      clearSessionDraft(sessionDraftKey);
-    } else {
-      saveSessionDraftJson(sessionDraftKey, { markdown, title });
-    }
-  }, [markdown, sessionDraftKey, sessionDraftReady, title]);
-
-  // Autogrow: the textarea tracks its content height. In the dialog variant
-  // the card's max-height caps it — the flex layout shrinks the textarea back
-  // down and its own scrollbar takes over once the cap is hit; the page
-  // variant has no cap and extends the document scroller instead. Skipped
-  // while hidden (scrollHeight reads 0 under display:none) and re-run when
-  // the composer becomes visible again or the window resizes, so wrapping
-  // changes that land while a page draft is parked don't leave a stale
-  // height.
+  // Autogrow until the modal card's max-height makes the textarea take over
+  // scrolling.
   useLayoutEffect(() => {
     const textarea = markdownRef.current;
-    if (!visible || !textarea) {
+    if (!textarea) {
       return;
     }
     const measure = () => {
@@ -142,7 +56,7 @@ export default function DocumentComposer({
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [markdown, visible]);
+  }, [markdown]);
 
   // These scan up to the 10 MB document cap. Counting stops immediately after
   // the first word over the limit so a dense import cannot monopolize the UI.
@@ -166,15 +80,8 @@ export default function DocumentComposer({
     };
   }, [markdown]);
 
-  const editing = mode === "edit";
   const changed = markdown !== initialMarkdown || title !== initialTitle;
-  const pristine = editing ? !changed : !markdown.trim() && !title.trim();
-
-  useEffect(() => {
-    onDirtyChangeRef.current?.(!pristine);
-  }, [pristine]);
-  // A closing composer is no longer holding a draft.
-  useEffect(() => () => onDirtyChangeRef.current?.(false), []);
+  const pristine = !changed;
 
   const overByteLimit = byteCount > RESEARCH_DOCUMENT_BYTE_LIMIT;
   const canSubmit =
@@ -182,8 +89,8 @@ export default function DocumentComposer({
     !overWordLimit &&
     !overByteLimit &&
     !submitting &&
-    (!editing || changed);
-  const warningId = editing && highlightCount > 0 ? "edit-document-highlight-warning" : undefined;
+    changed;
+  const warningId = highlightCount > 0 ? "edit-document-highlight-warning" : undefined;
 
   async function submit() {
     if (!canSubmit) {
@@ -202,19 +109,15 @@ export default function DocumentComposer({
   }
 
   function close() {
-    if (sessionDraftKey) {
-      clearSessionDraft(sessionDraftKey);
-    }
     onClose();
   }
 
-  const dialog = variant === "dialog";
   const form = (
       <form
-        className={`new-document-composer${dialog ? "" : " is-page"}`}
-        role={dialog ? "dialog" : undefined}
-        aria-modal={dialog || undefined}
-        aria-label={editing ? "Edit document" : "New document"}
+        className="new-document-composer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit document"
         aria-describedby={warningId}
         onKeyDown={(event) => {
           if (event.key === "Escape" && pristine && !submitting) {
@@ -226,7 +129,7 @@ export default function DocumentComposer({
           void submit();
         }}
       >
-        {dialog ? <h2>{editing ? "Edit document" : "New document"}</h2> : null}
+        <h2>Edit document</h2>
         <input
           className="new-document-title"
           type="text"
@@ -234,7 +137,6 @@ export default function DocumentComposer({
           placeholder={derivedTitle || "Title (uses the first line if left blank)"}
           aria-label="Document title"
           onChange={(event) => {
-            sessionDraftTouchedRef.current = true;
             setTitle(event.currentTarget.value);
           }}
           onKeyDown={(event) => {
@@ -253,7 +155,6 @@ export default function DocumentComposer({
           placeholder="Paste or write Markdown…"
           aria-label="Document markdown"
           onChange={(event) => {
-            sessionDraftTouchedRef.current = true;
             setMarkdown(event.currentTarget.value);
           }}
           onKeyDown={(event) => {
@@ -294,15 +195,7 @@ export default function DocumentComposer({
                 Cancel
               </button>
               <button className="control-button" type="submit" disabled={!canSubmit}>
-                <span>
-                  {submitting
-                    ? editing
-                      ? "Saving…"
-                      : "Adding…"
-                    : editing
-                      ? "Save changes"
-                      : "Add document"}
-                </span>
+                <span>{submitting ? "Saving…" : "Save changes"}</span>
                 {!submitting ? (
                   <ComposerSubmitShortcutGlyph requireCmdEnter className="shortcut-hint" />
                 ) : null}
@@ -313,9 +206,6 @@ export default function DocumentComposer({
       </form>
   );
 
-  if (!dialog) {
-    return form;
-  }
   return (
     <div
       className="confirm-dialog-backdrop new-document-backdrop"

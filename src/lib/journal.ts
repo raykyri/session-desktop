@@ -18,7 +18,6 @@
 
 import type { RecentActivityCursor, RecentResearchQuery } from "../types";
 import type { TweetSnapshot } from "./journalTweets";
-import { tweetIdFromUrl } from "./journalTweets";
 
 export const JOURNAL_STATE_VERSION = 1;
 
@@ -26,12 +25,6 @@ interface JournalEntryBase {
   id: string;
   /** ISO timestamp of when the entry was added to the journal. */
   createdAt: string;
-}
-
-/** A free-form text note. */
-export interface JournalNoteEntry extends JournalEntryBase {
-  kind: "note";
-  text: string;
 }
 
 /** A saved URL that is not a tweet permalink. */
@@ -54,7 +47,7 @@ export interface JournalTweetEntry extends JournalEntryBase {
   error?: string;
 }
 
-export type JournalEntry = JournalNoteEntry | JournalLinkEntry | JournalTweetEntry;
+export type JournalEntry = JournalLinkEntry | JournalTweetEntry;
 
 export interface JournalState {
   version: number;
@@ -74,9 +67,6 @@ export function normalizeJournalEntry(value: unknown): JournalEntry | null {
   const { id, createdAt } = raw;
   if (typeof id !== "string" || !id || typeof createdAt !== "string") {
     return null;
-  }
-  if (raw.kind === "note" && typeof raw.text === "string") {
-    return { kind: "note", id, createdAt, text: raw.text };
   }
   if (raw.kind === "link" && typeof raw.url === "string") {
     return { kind: "link", id, createdAt, url: raw.url };
@@ -204,63 +194,6 @@ export function normalizeRecentActivityPage(page: RecentActivityPage): RecentAct
     items,
     nextCursor: page.nextCursor ?? null,
   };
-}
-
-/** What a submitted composer input becomes: a lone URL becomes a link (or a
- * tweet when it is a tweet permalink), anything else a note. */
-export type JournalInput =
-  | { kind: "note"; text: string }
-  | { kind: "link"; url: string }
-  | { kind: "tweet"; url: string; tweetId: string };
-
-export function classifyJournalInput(input: string): JournalInput | null {
-  const text = input.trim();
-  if (!text) {
-    return null;
-  }
-  // A URL pasted on its own line is an intent to save the URL; a URL inside
-  // prose is part of the note.
-  if (/^https?:\/\/\S+$/i.test(text)) {
-    const tweetId = tweetIdFromUrl(text);
-    if (tweetId) {
-      return { kind: "tweet", url: text, tweetId };
-    }
-    try {
-      new URL(text);
-      return { kind: "link", url: text };
-    } catch {
-      // Fall through to a note.
-    }
-  }
-  return { kind: "note", text };
-}
-
-export function newJournalEntryId(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `journal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-export function createJournalEntry(
-  input: JournalInput,
-  id: string,
-  createdAt: string,
-): JournalEntry {
-  switch (input.kind) {
-    case "note":
-      return { kind: "note", id, createdAt, text: input.text };
-    case "link":
-      return { kind: "link", id, createdAt, url: input.url };
-    case "tweet":
-      return {
-        kind: "tweet",
-        id,
-        createdAt,
-        url: input.url,
-        tweetId: input.tweetId,
-        hydration: "pending",
-      };
-  }
 }
 
 export function appendJournalEntry(

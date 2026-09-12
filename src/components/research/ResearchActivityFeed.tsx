@@ -7,13 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type {
-  FocusEvent,
-  FormEvent,
-  KeyboardEvent,
-  MouseEvent,
-  ReactNode,
-} from "react";
+import type { FocusEvent, MouseEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronDown,
@@ -28,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  normalizeJournalEntry,
   recentActivityItemId,
   type JournalEntry,
   type JournalTweetEntry,
@@ -55,10 +50,9 @@ import { ResearchDocumentFrame } from "./ResearchDocumentChrome";
 import ActivityMetadataLine from "../ActivityMetadataLine";
 
 export interface ResearchActivityFeedProps {
-  initialDraft?: string;
+  composer: ReactNode;
   initialScrollTop?: number;
   onScrollChange?: (top: number) => void;
-  onDraftChange?: (draft: string) => void;
   items: RecentActivityItem[];
   researchTrees: ResearchTreeSummary[];
   nextCursor: RecentActivityCursor | null;
@@ -66,7 +60,6 @@ export interface ResearchActivityFeedProps {
   olderError: string | null;
   /** The most recently removed entry, still restorable. */
   pendingUndo: { entry: JournalEntry } | null;
-  onAddEntry: (input: string) => void;
   onRemoveEntry: (id: string) => void;
   onRetryTweet: (id: string) => void;
   onUndoRemove: () => void;
@@ -94,16 +87,13 @@ export interface JournalMenuItem {
   danger?: boolean;
 }
 
-/** The URL an entry stands for, if any: the canonical tweet permalink once
- * hydrated, otherwise what the user entered. Notes have none. */
+/** The URL an entry stands for: the canonical tweet permalink once hydrated,
+ * otherwise what the user entered. */
 export function journalEntryUrl(entry: JournalEntry): string | null {
   if (entry.kind === "link") {
     return entry.url;
   }
-  if (entry.kind === "tweet") {
-    return entry.tweet?.url ?? entry.url;
-  }
-  return null;
+  return entry.tweet?.url ?? entry.url;
 }
 
 /** Context-menu items for an entry. Pure, so tests can pin the layout and
@@ -119,7 +109,7 @@ export function journalEntryMenuItems(entry: JournalEntry): JournalMenuItem[] {
   }
   items.push({
     action: "copy",
-    label: entry.kind === "note" ? "Copy text" : "Copy link",
+    label: "Copy link",
     key: "C",
   });
   if (entry.kind === "tweet" && entry.hydration !== "pending") {
@@ -535,10 +525,7 @@ function JournalEntryCard({
 }) {
   let body;
   let variant;
-  if (entry.kind === "note") {
-    variant = "is-note";
-    body = <p className="journal-note-text">{entry.text}</p>;
-  } else if (entry.kind === "link") {
+  if (entry.kind === "link") {
     variant = "is-link";
     body = (
       <a
@@ -680,11 +667,11 @@ export function buildRecentActivityVirtualRows(
 }
 
 function estimatedActivityRowHeight(row: VirtualActivityRow): number {
-  if (row.kind === "day") return 29;
+  if (row.kind === "day") return 33;
   if (row.event.source.kind === "research-query") return 84;
   const entry = row.event.source.entry;
   if (entry.kind === "tweet" && entry.hydration === "ok") return 320;
-  return entry.kind === "note" ? 105 : 92;
+  return 98;
 }
 
 export interface VirtualActivityRange {
@@ -762,17 +749,15 @@ function MeasuredActivityRow({
 }
 
 function ResearchActivityFeed({
-  initialDraft = "",
+  composer,
   initialScrollTop = 0,
   onScrollChange,
-  onDraftChange,
-  items,
+  items: rawItems,
   researchTrees,
   nextCursor,
   loadingOlder,
   olderError,
   pendingUndo,
-  onAddEntry,
   onRemoveEntry,
   onRetryTweet,
   onUndoRemove,
@@ -785,11 +770,6 @@ function ResearchActivityFeed({
   onBack,
   onForward,
 }: ResearchActivityFeedProps) {
-  const [draft, setDraft] = useState(initialDraft);
-  const changeDraft = (next: string) => {
-    setDraft(next);
-    onDraftChange?.(next);
-  };
   const [menu, setMenu] = useState<{ entryId: string; left: number; top: number } | null>(
     null,
   );
@@ -860,6 +840,14 @@ function ResearchActivityFeed({
       mouseTarget?.removeEventListener("mouseup", onMouseUp);
     };
   }, []);
+  const items = useMemo(
+    () => rawItems.flatMap((item): RecentActivityItem[] => {
+      if (item.kind === "research-query") return [item];
+      const entry = normalizeJournalEntry(item.entry);
+      return entry ? [{ ...item, entry }] : [];
+    }),
+    [rawItems],
+  );
   const feed = useMemo(
     () => buildRecentActivityFromItems(items, researchTrees),
     [items, researchTrees],
@@ -1074,7 +1062,7 @@ function ResearchActivityFeed({
     }
     if (action === "copy") {
       void writeClipboardText(
-        entry.kind === "note" ? entry.text : journalEntryUrl(entry) ?? "",
+        journalEntryUrl(entry) ?? "",
       );
       return;
     }
@@ -1209,31 +1197,9 @@ function ResearchActivityFeed({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onUndoRemove, pendingUndo]);
-
-  function submit() {
-    const text = draft.trim();
-    if (!text) {
-      return;
-    }
-    onAddEntry(text);
-    changeDraft("");
-  }
-
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    submit();
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-      event.preventDefault();
-      submit();
-    }
-  }
-
   return (
     <ResearchDocumentFrame
-      title="Research Activity"
+      title="Home"
       canGoBack={canGoBack}
       canGoForward={canGoForward}
       backTitle={`Back (${IS_MAC ? "⌘[" : "Ctrl+["})`}
@@ -1245,8 +1211,8 @@ function ResearchActivityFeed({
           type="button"
           className="control-button"
           onClick={onRefresh}
-          aria-label="Refresh activity"
-          title="Refresh activity"
+          aria-label="Refresh Home"
+          title="Refresh Home"
         >
           <RotateCw size={14} aria-hidden="true" />
           Refresh
@@ -1255,21 +1221,11 @@ function ResearchActivityFeed({
     >
       <div ref={scrollRef} className="research-document-scroll journal-scroll">
         <div className="journal-column">
-          <form className="journal-composer" onSubmit={handleSubmit}>
-            <textarea
-              className="journal-composer-input"
-              value={draft}
-              rows={2}
-              placeholder="Add a note or paste a URL…"
-              aria-label="New recent activity entry"
-              onChange={(event) => changeDraft(event.currentTarget.value)}
-              onKeyDown={handleKeyDown}
-            />
-          </form>
+          {composer}
           {pendingUndo ? (
             <div className="journal-undo" role="status">
               <span className="journal-undo-label">
-                {pendingUndo.entry.kind === "note" ? "Note" : "Entry"} removed
+                Entry removed
               </span>
               <button
                 className="control-button journal-undo-restore"
@@ -1345,7 +1301,13 @@ function ResearchActivityFeed({
                         aria-posinset={row.position}
                         aria-setsize={nextCursor ? -1 : feed.length}
                       >
-                        <ActivityMetadataLine event={row.event} />
+                        <ActivityMetadataLine
+                          event={row.event}
+                          hideSummary={
+                            row.event.object.kind === "research-query" &&
+                            row.event.relationship?.kind !== "follow-up"
+                          }
+                        />
                         {row.event.source.kind === "journal" ? (
                           <JournalEntryCard
                             entry={row.event.source.entry}
@@ -1372,7 +1334,7 @@ function ResearchActivityFeed({
             </div>
             {feed.length === 0 ? (
               <p className="journal-empty">
-                Notes, links, posts, and research queries appear here, newest first.
+                Research queries and saved sources appear here, newest first.
               </p>
             ) : null}
             <div

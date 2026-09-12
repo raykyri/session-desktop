@@ -4298,12 +4298,15 @@ impl AppState {
             .entries
             .iter()
             .filter_map(|entry| {
-                journal::entry_id(entry).map(|id| Candidate {
-                    occurred_at: journal::entry_occurred_at(entry),
-                    source_rank: JOURNAL_ACTIVITY_SOURCE_RANK,
-                    id,
-                    payload: ActivityPayload::Journal(entry),
-                })
+                (journal::entry_is_visible(entry))
+                    .then(|| journal::entry_id(entry))
+                    .flatten()
+                    .map(|id| Candidate {
+                        occurred_at: journal::entry_occurred_at(entry),
+                        source_rank: JOURNAL_ACTIVITY_SOURCE_RANK,
+                        id,
+                        payload: ActivityPayload::Journal(entry),
+                    })
             })
             .chain(model.research_nodes.values().filter_map(|node| {
                 (node.kind.is_run() && model.research_trees.contains_key(&node.tree_id)).then_some(
@@ -13417,9 +13420,10 @@ mod tests {
             .set_journal(journal::JournalState {
                 version: journal::JOURNAL_STATE_VERSION,
                 entries: vec![
-                    json!({"kind": "note", "id": "new-note", "createdAt": "1970-01-01T00:00:00.250Z", "text": "new"}),
-                    json!({"kind": "note", "id": "tied-note", "createdAt": "1970-01-01T00:00:00.200Z", "text": "tie"}),
-                    json!({"kind": "note", "id": "old-note", "createdAt": "1970-01-01T00:00:00.050Z", "text": "old"}),
+                    json!({"kind": "link", "id": "new-link", "createdAt": "1970-01-01T00:00:00.250Z", "url": "https://new.example"}),
+                    json!({"kind": "note", "id": "legacy-note", "createdAt": "1970-01-01T00:00:00.225Z", "text": "ignore"}),
+                    json!({"kind": "link", "id": "tied-link", "createdAt": "1970-01-01T00:00:00.200Z", "url": "https://tied.example"}),
+                    json!({"kind": "link", "id": "old-link", "createdAt": "1970-01-01T00:00:00.050Z", "url": "https://old.example"}),
                 ],
             })
             .unwrap();
@@ -13433,17 +13437,17 @@ mod tests {
         let first = state.list_recent_activity(2, None).unwrap();
         assert_eq!(
             first.items.iter().map(item_id).collect::<Vec<_>>(),
-            vec!["new-note".to_string(), root_id]
+            vec!["new-link".to_string(), root_id]
         );
         let second = state.list_recent_activity(2, first.next_cursor).unwrap();
         assert_eq!(
             second.items.iter().map(item_id).collect::<Vec<_>>(),
-            vec!["tied-note".to_string(), "older-query".to_string()]
+            vec!["tied-link".to_string(), "older-query".to_string()]
         );
         let third = state.list_recent_activity(2, second.next_cursor).unwrap();
         assert_eq!(
             third.items.iter().map(item_id).collect::<Vec<_>>(),
-            vec!["old-note".to_string()]
+            vec!["old-link".to_string()]
         );
         assert!(third.next_cursor.is_none());
     }

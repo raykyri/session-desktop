@@ -1,12 +1,11 @@
 export type AppShortcutCommand =
   | { type: "focusResearchTab"; tabIndex: number }
-  | { type: "openNewResearch" }
+  | { type: "focusResearchHome" }
   | { type: "cycleResearchTab"; direction: -1 | 1 }
   | { type: "moveResearchItem"; direction: -1 | 1 }
   | { type: "openSettings" }
   | { type: "openCommandPalette" }
   | { type: "toggleLeftSidebar" }
-  | { type: "newDocument" }
   | { type: "focusFollowups" }
   | { type: "openFolderMenu" }
   | { type: "toggleSourceBrowser" };
@@ -54,7 +53,7 @@ export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand 
     return { type: "focusResearchTab", tabIndex: Number(key) - 1 };
   }
   if (command && !control && !option && !shift && (key === "n" || key === "t")) {
-    return { type: "openNewResearch" };
+    return { type: "focusResearchHome" };
   }
   if (command && !control && !option && shift && key === "g") {
     return { type: "toggleLeftSidebar" };
@@ -72,9 +71,6 @@ export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand 
   if (command && !control && !option && !shift && key === "k") {
     return { type: "openCommandPalette" };
   }
-  if (command && !control && !option && !shift && key === "d") {
-    return { type: "newDocument" };
-  }
   if (command && !control && !option && !shift && key === "j") {
     return { type: "focusFollowups" };
   }
@@ -91,8 +87,8 @@ function appShortcutLabel(command: AppShortcutCommand): string {
   switch (command.type) {
     case "focusResearchTab":
       return `focus research item ${command.tabIndex + 1}`;
-    case "openNewResearch":
-      return "start new research";
+    case "focusResearchHome":
+      return "open Home";
     case "cycleResearchTab":
       return "cycle research items";
     case "moveResearchItem":
@@ -103,8 +99,6 @@ function appShortcutLabel(command: AppShortcutCommand): string {
       return "open the command palette";
     case "toggleLeftSidebar":
       return "toggle the sidebar";
-    case "newDocument":
-      return "create a document";
     case "focusFollowups":
       return "jump to the follow-ups";
     case "openFolderMenu":
@@ -160,11 +154,10 @@ export function parseAppShortcutCommand(
   tabIndex: unknown,
 ): AppShortcutCommand | null {
   switch (command) {
-    case "openNewResearch":
+    case "focusResearchHome":
     case "openSettings":
     case "openCommandPalette":
     case "toggleLeftSidebar":
-    case "newDocument":
     case "focusFollowups":
     case "openFolderMenu":
     case "toggleSourceBrowser":

@@ -7,13 +7,6 @@
 export const RESEARCH_DOCUMENT_WORD_LIMIT = 10_000;
 export const RESEARCH_DOCUMENT_BYTE_LIMIT = 10 * 1024 * 1024;
 
-/** Finder and the other native file managers provide absolute paths for file
- * drops. Keep this deliberately narrow: document imports accept the two
- * conventional Markdown extensions, while similarly named files remain inert. */
-export function isMarkdownDocumentPath(path: string): boolean {
-  return /\.(?:md|markdown)$/iu.test(path);
-}
-
 // Rust's split_whitespace uses the Unicode White_Space property. Spell the
 // small, stable set out so counting can scan UTF-16 code units without regex
 // match objects; all White_Space code points are in the BMP. Notably, NEL is
@@ -36,9 +29,7 @@ function isDocumentWhitespace(codeUnit: number): boolean {
 
 /** Trims leading whitespace using the same Unicode White_Space set as the
  * backend, rather than JavaScript's `\s`/`trimStart` — the two disagree on
- * U+FEFF (JS whitespace, White_Space is not) and U+0085 (the reverse), which
- * is exactly what makes the title preview drift from the persisted title on a
- * BOM-prefixed import. */
+ * U+FEFF (JS whitespace, White_Space is not) and U+0085 (the reverse). */
 function trimDocumentWhitespaceStart(value: string): string {
   let index = 0;
   while (index < value.length && isDocumentWhitespace(value.charCodeAt(index))) {
@@ -60,7 +51,7 @@ export class ResearchDocumentWordLimitExceeded extends Error {
 }
 
 /** Counts without retaining the matches. When a limit is supplied, stop at
- * the first word over it so a dense 10 MB import cannot monopolize or exhaust
+ * the first word over it so a dense 10 MB value cannot monopolize or exhaust
  * the renderer merely to establish that submission is disabled. */
 export function countResearchDocumentWords(
   markdown: string,

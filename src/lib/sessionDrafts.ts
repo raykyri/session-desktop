@@ -12,9 +12,6 @@ export const SESSION_DRAFT_KEYS = {
   homeLauncher: "home-launcher",
   homeComposers: "home-composers",
   newResearchInline: "new-research-inline",
-  newResearchModal: "new-research-modal",
-  newDocumentContext: "new-document-context",
-  newDocumentFields: "new-document-fields",
 } as const;
 
 const pending = new Map<string, { raw: string; timer: number }>();

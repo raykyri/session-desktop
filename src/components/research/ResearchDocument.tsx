@@ -17,6 +17,7 @@ import {
   resolvePublicationProposal,
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
+import { formatResearchAskedSummary } from "../ActivityMetadataLine";
 import { growComposerTextarea } from "../../lib/composerTextarea";
 import type {
   PublicationBinding,
@@ -1453,6 +1454,8 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   parentNodeId,
   queryQuote,
   prompt,
+  adapter,
+  model,
   onSelectNode,
 }: {
   visible: boolean;
@@ -1460,27 +1463,34 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   parentNodeId: string | null;
   queryQuote: string | null;
   prompt: string;
+  adapter: string;
+  model?: string | null;
   onSelectNode: (nodeId: string) => void;
 }) {
   if (!visible) {
     return null;
   }
   return (
-    <div className="research-prompt">
-      {index === 0 && parentNodeId ? (
-        <button
-          type="button"
-          className="control-button research-parent-link"
-          onClick={() => onSelectNode(parentNodeId)}
-        >
-          <ArrowLeft size={13} aria-hidden="true" />
-          Back
-        </button>
-      ) : null}
-      {queryQuote ? (
-        <blockquote className="research-prompt-quote">{quoteDisplayText(queryQuote)}</blockquote>
-      ) : null}
-      <TranscriptMarkdown text={prompt} imageBehavior="open" />
+    <div className="research-prompt-block">
+      <div className="research-prompt-metadata">
+        {formatResearchAskedSummary(adapter, model)}
+      </div>
+      <div className="research-prompt">
+        {index === 0 && parentNodeId ? (
+          <button
+            type="button"
+            className="control-button research-parent-link"
+            onClick={() => onSelectNode(parentNodeId)}
+          >
+            <ArrowLeft size={13} aria-hidden="true" />
+            Back
+          </button>
+        ) : null}
+        {queryQuote ? (
+          <blockquote className="research-prompt-quote">{quoteDisplayText(queryQuote)}</blockquote>
+        ) : null}
+        <TranscriptMarkdown text={prompt} imageBehavior="open" />
+      </div>
     </div>
   );
 });
@@ -1541,6 +1551,8 @@ const ThreadSegment = memo(function ThreadSegment({
         parentNodeId={node.parentNodeId ?? null}
         queryQuote={node.queryAnchor?.exact ?? null}
         prompt={node.prompt}
+        adapter={node.adapter}
+        model={node.model}
         onSelectNode={onSelectNode}
       />
       <div
@@ -5532,7 +5544,6 @@ function ResearchDocument({
         {documentEditSession
           ? createPortal(
               <DocumentComposer
-                mode="edit"
                 initialMarkdown={documentEditSession.markdown}
                 initialTitle={documentEditSession.title}
                 highlightCount={documentEditSession.highlightCount}

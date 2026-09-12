@@ -22,35 +22,49 @@ function humanReadableModelName(adapter: string, model?: string | null): string 
   return label;
 }
 
-/** One-line summary for Recent Activity. Research asks name the model when
- * it is a readable preset; follow-ups name the thread instead. */
+export function formatResearchAskedSummary(
+  adapter: string,
+  model?: string | null,
+): string {
+  const adapterLabel = adapterDisplayLabel(adapter);
+  const modelName = humanReadableModelName(adapter, model);
+  if (adapterLabel && modelName) return `You asked ${adapterLabel} ${modelName}`;
+  if (adapterLabel) return `You asked ${adapterLabel}`;
+  return "You asked";
+}
+
+/** One-line summary for activity contexts that choose to show it. */
 export function formatActivityMetadataSummary(event: ActivityEvent): string {
   if (event.object.kind === "research-query") {
     if (event.relationship?.kind === "follow-up") {
       return `Follow-up in '${event.context?.label ?? "Research"}'`;
     }
-    const adapterLabel = adapterDisplayLabel(event.execution?.adapter ?? "");
-    const modelName = humanReadableModelName(
+    return formatResearchAskedSummary(
       event.execution?.adapter ?? "",
       event.execution?.model,
     );
-    if (adapterLabel && modelName) return `You asked ${adapterLabel} ${modelName}`;
-    if (adapterLabel) return `You asked ${adapterLabel}`;
-    return "You asked";
   }
   return [event.actor.label, event.action.label, event.object.label].filter(Boolean).join(" ");
 }
 
 /** App-wide renderer for activity grammar slots. Metadata stays outside the
  * content surface because it describes the event, not the object payload. */
-export default function ActivityMetadataLine({ event }: { event: ActivityEvent }) {
+export default function ActivityMetadataLine({
+  event,
+  hideSummary = false,
+}: {
+  event: ActivityEvent;
+  hideSummary?: boolean;
+}) {
   const finiteTime = Number.isFinite(event.occurredAt);
   return (
     <div
-      className="activity-metadata"
+      className={`activity-metadata${hideSummary ? " is-summary-hidden" : ""}`}
       title={finiteTime ? new Date(event.occurredAt).toLocaleString() : undefined}
     >
-      <span className="activity-metadata-summary">{formatActivityMetadataSummary(event)}</span>
+      {!hideSummary ? (
+        <span className="activity-metadata-summary">{formatActivityMetadataSummary(event)}</span>
+      ) : null}
       {finiteTime ? (
         <time dateTime={new Date(event.occurredAt).toISOString()}>
           {formatRelativeTime(event.occurredAt)}
