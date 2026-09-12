@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
-const GITHUB_URL = "https://github.com/raykyri/qmux";
+const GITHUB_URL = "https://github.com/raykyri/session";
 const RELEASES_URL = `${GITHUB_URL}/releases/latest`;
 const SITE_TITLE = "Session — Agent research workspace";
 const SITE_DESCRIPTION =

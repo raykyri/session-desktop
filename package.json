@@ -9,7 +9,7 @@
     "dev:site": "TSX_TSCONFIG_PATH=tsconfig.runtime.json tsx watch web/server.tsx",
     "dev:tauri": "tauri dev",
     "build": "bash scripts/build.sh",
-    "build:aarch": "QMUX_BUILD_TARGET=aarch64-apple-darwin bash scripts/build.sh",
+    "build:aarch": "SESSION_BUILD_TARGET=aarch64-apple-darwin bash scripts/build.sh",
     "build:release": "bash scripts/release.sh",
     "build:site:frontend": "tsc && vite build",
     "build:site:server": "tsc -p web/tsconfig.json && esbuild web/server.tsx --bundle --packages=external --platform=node --format=esm --target=node20 --outfile=dist-site/server.mjs",

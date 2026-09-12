@@ -40,7 +40,7 @@ test("removes nested and consecutive tagged instruction blocks", () => {
   assert.equal(stripTaggedUserInstructionBlocks(message), "\nUser-authored message");
 });
 
-test("removes the attributed qmux agent-driver instruction block", () => {
+test("removes the attributed session agent-driver instruction block", () => {
   const message = [
     '<qmux_instruction source="agent_driver">',
     "Do not change the working tree or codebase unless explicitly instructed to.",

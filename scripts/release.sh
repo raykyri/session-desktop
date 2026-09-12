@@ -12,7 +12,7 @@ set -euo pipefail
 #   APPLE_API_ISSUER + APPLE_API_KEY_PATH, for notarization.
 #   TAURI_SIGNING_PRIVATE_KEY, or ~/.tauri/qmux-updater.key, for signing the
 #   updater archive.
-#   Set QMUX_ALLOW_UNNOTARIZED=1 to build a release without notarizing
+#   Set SESSION_ALLOW_UNNOTARIZED=1 to build a release without notarizing
 #   (downloads will hit Gatekeeper).
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
@@ -81,9 +81,9 @@ if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
   exit 1
 fi
 
-target="${QMUX_BUILD_TARGET:-universal-apple-darwin}"
+target="${SESSION_BUILD_TARGET:-universal-apple-darwin}"
 if [[ "$target" != "universal-apple-darwin" ]]; then
-  echo "Releases must use QMUX_BUILD_TARGET=universal-apple-darwin." >&2
+  echo "Releases must use SESSION_BUILD_TARGET=universal-apple-darwin." >&2
   exit 1
 fi
 
@@ -128,10 +128,10 @@ if [[ -n "${APPLE_ID:-}" && -n "${APPLE_PASSWORD:-}" && -z "${APPLE_TEAM_ID:-}" 
   exit 1
 fi
 
-if ! have_notary_creds && [[ "${QMUX_ALLOW_UNNOTARIZED:-}" != "1" ]]; then
+if ! have_notary_creds && [[ "${SESSION_ALLOW_UNNOTARIZED:-}" != "1" ]]; then
   echo "No notarization credentials (APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID or" >&2
   echo "APPLE_API_KEY/APPLE_API_ISSUER/APPLE_API_KEY_PATH). Set them, or" >&2
-  echo "QMUX_ALLOW_UNNOTARIZED=1" >&2
+  echo "SESSION_ALLOW_UNNOTARIZED=1" >&2
   echo "to knowingly ship a build Gatekeeper will block." >&2
   exit 1
 fi
@@ -143,12 +143,11 @@ fi
 
 npm run preflight
 
-export QMUX_REBUILD_REMOTE_CLI=1
 if have_notary_creds; then
   "$script_dir/build.sh" --notarize
 else
   # The credential check above permits this only when the caller explicitly
-  # accepted an unnotarized release with QMUX_ALLOW_UNNOTARIZED=1.
+  # accepted an unnotarized release with SESSION_ALLOW_UNNOTARIZED=1.
   "$script_dir/build.sh"
 fi
 "$script_dir/generate-latest-json.sh"

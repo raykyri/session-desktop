@@ -12,7 +12,7 @@ const BATTERY_PROBE_TTL: Duration = Duration::from_secs(60);
 /// Owns the `caffeinate(8)` helper that keeps macOS awake while agents are
 /// working. Shelling out to the bundled system tool keeps this dependency-free:
 /// `-i` blocks idle *system* sleep (the display may still sleep), and `-w <pid>`
-/// makes the helper exit on its own if qmux dies, so a crash can never leave the
+/// makes the helper exit on its own if Session dies, so a crash can never leave the
 /// machine pinned awake. The frontend drives `set_active` from a settings toggle
 /// combined with whether any agent is running.
 #[derive(Default)]

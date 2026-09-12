@@ -5,8 +5,8 @@ use super::{
     normalize_agent_model, prepared_shell_agent, record_shell_session_lineage,
     reusable_session_agent, shell_cli_model, shell_quote_arg, shell_quote_path,
 };
-use crate::config::QmuxConfig;
-use crate::events::QmuxEvent;
+use crate::config::SessionConfig;
+use crate::events::SessionEvent;
 use crate::pty::{
     CommandPlan, InitialPaneSize, PaneMeta, agent_pane_envs, plan_to_spec, recoverable_dir,
     spawn_pty,
@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-/// The Muse Code lifecycle hook events qmux installs. Muse's hook payloads are
+/// The Muse Code lifecycle hook events Session installs. Muse's hook payloads are
 /// Claude-shaped (event JSON on stdin), but the delivery mechanism is not: hooks
 /// are declared by a *plugin*, and the plugin's capabilities must be approved
 /// before they run. See [`ensure_muse_integration`].
@@ -59,16 +59,16 @@ const MUSE_EXPERIMENTAL_PLUGINS_ENV: &str = "MUSE_EXPERIMENTAL_PLUGINS";
 /// same way as Claude, Codex, and Grok. Two things make the wiring different:
 ///
 /// 1. **Hooks are plugin capabilities.** There is no settings file or hooks
-///    directory qmux can drop a file into — every probed alternative
+///    directory Session can drop a file into — every probed alternative
 ///    (`settings.json` hooks, `managed_hooks_path`, `TBH_MANAGED_HOOKS_PATH`, a
 ///    project `.musehooks.json`) is silently ignored. Only a native plugin
 ///    works, it needs `MUSE_EXPERIMENTAL_PLUGINS=1`, and its capabilities must
 ///    be approved once before they run.
 /// 2. **Muse sanitizes the hook environment.** Hooks are exec'd with a
-///    whitelist (`PATH`, `HOME`, `MUSE_PLUGIN_*`, …); every `QMUX_*` variable is
-///    stripped. The Claude/Grok shim pattern — "no-op unless the qmux env is
-///    set, otherwise `qmux notify`" — cannot work here, because the shim can
-///    never see the pane it belongs to. Instead qmux writes a *binding file* per
+///    whitelist (`PATH`, `HOME`, `MUSE_PLUGIN_*`, …); every `SESSION_*` variable is
+///    stripped. The Claude/Grok shim pattern — "no-op unless the Session env is
+///    set, otherwise `session notify`" — cannot work here, because the shim can
+///    never see the pane it belongs to. Instead Session writes a *binding file* per
 ///    pane before launch, and the shim resolves its pane from the `session_id`
 ///    and `cwd` that every hook payload carries. See [`write_muse_binding`] and
 ///    the CLI's `muse-notify` command.
@@ -78,7 +78,7 @@ pub struct MuseAdapter {
 }
 
 impl MuseAdapter {
-    pub fn new(config: &QmuxConfig) -> Self {
+    pub fn new(config: &SessionConfig) -> Self {
         Self {
             binary: config.muse_binary(),
         }
@@ -373,7 +373,7 @@ impl MuseAdapter {
             }
         }
 
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.recovered",
             Some(pane.id.clone()),
             Some(restored.id.clone()),
@@ -477,7 +477,7 @@ impl MuseAdapter {
         envs.push((MUSE_EXPERIMENTAL_PLUGINS_ENV.to_string(), "1".to_string()));
         let agent_id = agent.id.clone();
 
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.spawned",
             Some(request.pane_id.clone()),
             Some(agent_id),
@@ -536,7 +536,7 @@ impl MuseAdapter {
             });
 
         if is_subagent_event {
-            return Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+            return Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
                 "agent.subagent_activity",
                 pane_id,
                 agent.map(|agent| agent.id),
@@ -568,7 +568,7 @@ impl MuseAdapter {
                     // First SessionStart wins. A Muse session id never changes
                     // (there is no fork, and a resume keeps its id), so a second
                     // one for an already-bound pane is not this pane's session —
-                    // it is a `muse` the user started outside qmux in the same
+                    // it is a `muse` the user started outside Session in the same
                     // directory, which matched this pane's binding by cwd.
                     // Re-pointing the agent at it would silently strand the real
                     // session, whose every later hook would then look foreign.
@@ -649,7 +649,7 @@ impl MuseAdapter {
                 }
             }
             other => {
-                return Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+                return Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
                     format!("agent.hook.{other}"),
                     pane_id,
                     agent.map(|agent| agent.id),
@@ -688,7 +688,7 @@ impl MuseAdapter {
             );
         }
 
-        Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+        Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
             event_type,
             pane_id,
             agent.map(|agent| agent.id),
@@ -698,7 +698,7 @@ impl MuseAdapter {
 }
 
 /// Launcher options for a qmux-started Muse agent. Deliberately conservative:
-/// no `--yolo`, and no worktree flag (qmux owns worktrees, so Muse's own `-w`
+/// no `--yolo`, and no worktree flag (Session owns worktrees, so Muse's own `-w`
 /// would nest a second one inside the first).
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -712,7 +712,7 @@ struct MuseLaunchOptions {
 }
 
 /// Values `--reasoning-effort` accepts, per `muse --help`. Validated here so a
-/// stale UI choice fails in qmux with a readable error instead of making Muse
+/// stale UI choice fails in Session with a readable error instead of making Muse
 /// exit with a usage message the pane immediately discards.
 const MUSE_REASONING_EFFORTS: &[&str] =
     &["none", "minimal", "low", "medium", "high", "xhigh", "ultra"];
@@ -784,7 +784,7 @@ impl MuseLaunchOptions {
     }
 
     /// `muse resume <id>` when a session is recorded, else a fresh interactive
-    /// launch. Root options may appear on either side of the subcommand; qmux
+    /// launch. Root options may appear on either side of the subcommand; Session
     /// puts them first to match the documented usage.
     fn build_resume_args(&self, model: Option<&str>, session_id: Option<&str>) -> Vec<String> {
         let mut args = self.global_args(model);
@@ -860,7 +860,7 @@ fn finish_agent_after_stop(state: &AppState, agent: &AgentInfo) -> Result<bool, 
         Ok(IdleResolution::Drained) => Ok(true),
         Ok(IdleResolution::Paused | IdleResolution::Idle) => Ok(false),
         Err(err) => {
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "agent.queue_error",
                 agent.pane_id.clone(),
                 Some(agent.id.clone()),
@@ -899,17 +899,17 @@ fn adopt_muse_session_identity(
 // ---------------------------------------------------------------------------
 // Pane bindings
 //
-// Muse strips `QMUX_*` from the hook environment, so a hook cannot be told which
-// pane it belongs to. qmux instead writes one binding file per live Muse pane
-// and the `qmux muse-notify` shim matches the hook payload's `session_id` (or
+// Muse strips `SESSION_*` from the hook environment, so a hook cannot be told which
+// pane it belongs to. Session instead writes one binding file per live Muse pane
+// and the `session muse-notify` shim matches the hook payload's `session_id` (or
 // failing that, its `cwd`) against them.
 // ---------------------------------------------------------------------------
 
-/// Directory holding one JSON binding per live Muse pane. `QMUX_MUSE_HOME`
+/// Directory holding one JSON binding per live Muse pane. `SESSION_MUSE_HOME`
 /// overrides the location (used by tests and by the CLI, which must agree with
 /// the app on where to look).
 pub(crate) fn muse_integration_home() -> Result<PathBuf, String> {
-    if let Some(explicit) = env::var_os("QMUX_MUSE_HOME") {
+    if let Some(explicit) = env::var_os("SESSION_MUSE_HOME") {
         return Ok(PathBuf::from(explicit));
     }
     let data_home = env::var_os("XDG_DATA_HOME")
@@ -938,7 +938,7 @@ fn muse_bindings_dir() -> Result<PathBuf, String> {
 
 /// Writes (or refreshes) the binding that lets this pane's hooks find their way
 /// home. The file carries the pane's control-socket token, so the directory and
-/// the file are owner-only — the same posture qmux uses for its scrollback
+/// the file are owner-only — the same posture Session uses for its scrollback
 /// cache, which holds the same secret.
 fn write_muse_binding(
     state: &AppState,
@@ -953,7 +953,7 @@ fn write_muse_binding(
         .map_err(|err| format!("failed to chmod {}: {err}", dir.display()))?;
 
     // Muse reports the symlink-resolved cwd (`/private/tmp/...` on macOS) while
-    // qmux may hold the unresolved spelling. Record both so a cwd match works
+    // Session may hold the unresolved spelling. Record both so a cwd match works
     // whichever one the payload carries.
     let canonical_cwd = fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
     let document = json!({
@@ -989,7 +989,7 @@ fn claim_muse_binding(agent: &AgentInfo, session_id: &str) {
         return;
     };
     if let Err(err) = stamp_muse_binding_session(pane_id, session_id) {
-        eprintln!("qmux: failed to record Muse session binding for pane {pane_id}: {err}");
+        eprintln!("session: failed to record Muse session binding for pane {pane_id}: {err}");
     }
 }
 
@@ -1108,7 +1108,7 @@ const MUSE_TRANSCRIPT_DISCOVERY_INTERVAL: Duration = Duration::from_millis(250);
 /// to it, on a background thread.
 ///
 /// Muse always reports `transcript_path: null` in its hooks, and its logs are
-/// filed under a *date* directory qmux cannot compute (no timezone-aware date
+/// filed under a *date* directory Session cannot compute (no timezone-aware date
 /// crate in the tree, and the date is Muse's local one). So the path is
 /// discovered by scanning `sessions/<year>/<month>/<day>/<session-id>/` — and
 /// the scan retries, because SessionStart can beat the directory into existence.
@@ -1141,7 +1141,7 @@ fn bind_muse_transcript(state: &AppState, agent_id: &str, session_id: &str) {
                     }
                     Err(err) => {
                         eprintln!(
-                            "qmux: failed to bind Muse transcript for agent {agent_id}: {err}"
+                            "session: failed to bind Muse transcript for agent {agent_id}: {err}"
                         );
                         return;
                     }
@@ -1149,7 +1149,7 @@ fn bind_muse_transcript(state: &AppState, agent_id: &str, session_id: &str) {
             }
             if Instant::now() >= deadline {
                 eprintln!(
-                    "qmux: no Muse session log appeared for session {session_id}; the transcript pane will stay empty"
+                    "session: no Muse session log appeared for session {session_id}; the transcript pane will stay empty"
                 );
                 return;
             }
@@ -1169,7 +1169,7 @@ fn is_muse_session_id(session_id: &str) -> bool {
 
 /// `$XDG_DATA_HOME/muse/sessions/<year>/<month>/<day>/<session-id>/session.jsonl`.
 ///
-/// Scans newest date directories first and only a few of them. A session qmux is
+/// Scans newest date directories first and only a few of them. A session Session is
 /// binding was started seconds ago, so it lands in the newest day directory —
 /// the small margin covers a midnight rollover and the window before Muse has
 /// created today's directory at all. Walking the whole tree instead would cost
@@ -1226,8 +1226,8 @@ fn descending_subdirectories(dir: &Path) -> Vec<PathBuf> {
 // Plugin + shim installation
 // ---------------------------------------------------------------------------
 
-/// Ensures the qmux Muse plugin is installed and approved, and that the shim it
-/// executes points at the current qmux CLI.
+/// Ensures the Session Muse plugin is installed and approved, and that the shim it
+/// executes points at the current Session CLI.
 ///
 /// Installation runs `muse plugins install` + `muse plugins approve`, which are
 /// two subprocesses — so it is gated on a fingerprint stamp and skipped entirely
@@ -1263,26 +1263,26 @@ fn ensure_muse_integration(binary: &str, cli_path: &Path) -> Result<(), String> 
 }
 
 /// `ensure_muse_integration` plus binding cleanup. Split so the installation
-/// half stays exercisable without an `AppState`, and so the qmux CLI path is
+/// half stays exercisable without an `AppState`, and so the Session CLI path is
 /// injected at one seam rather than read from a global.
 fn ensure_muse_integration_for(state: &AppState, binary: &str) -> Result<(), String> {
-    ensure_muse_integration(binary, &crate::launch_path::qmux_cli_path()?)?;
+    ensure_muse_integration(binary, &crate::launch_path::session_cli_path()?)?;
     prune_muse_bindings(state);
     Ok(())
 }
 
 /// POSIX shim the plugin's hook scripts exec. It exists so the *plugin* — which
 /// Muse freezes into its cache at install time, and whose changes require
-/// re-approval — never has to name the qmux binary directly. Updating qmux
+/// re-approval — never has to name the Session binary directly. Updating Session
 /// rewrites this file; the frozen plugin keeps calling the same stable path.
 ///
-/// Unlike the Claude and Grok shims there is no `QMUX_*` env guard: Muse strips
+/// Unlike the Claude and Grok shims there is no `SESSION_*` env guard: Muse strips
 /// those variables, so there is nothing to test. A standalone `muse` run does
 /// still reach this shim, and `muse-notify` is what no-ops there — it exits
 /// quietly when the payload matches no live pane binding.
 ///
 /// The bindings directory is baked in as an argument for the same reason. Muse's
-/// env whitelist strips `QMUX_MUSE_HOME` and `XDG_DATA_HOME` along with
+/// env whitelist strips `SESSION_MUSE_HOME` and `XDG_DATA_HOME` along with
 /// everything else, so a hook cannot *derive* the directory either — verified
 /// the hard way, by watching every hook run, exit 0, and find nothing. Passing
 /// it explicitly is what makes the shim independent of the environment.
@@ -1702,8 +1702,8 @@ mod tests {
         MuseAdapterConfig, OpencodeAdapterConfig,
     };
 
-    fn test_config() -> QmuxConfig {
-        QmuxConfig {
+    fn test_config() -> SessionConfig {
+        SessionConfig {
             remotes: Default::default(),
             workspace_root: PathBuf::from("/tmp/qmux-muse-tests"),
             socket_path: PathBuf::from("/tmp/qmux-muse-tests.sock"),
@@ -1862,14 +1862,14 @@ mod tests {
             Path::new("/data/qmux/muse/bindings"),
         );
         assert!(shim.contains("'/Applications/qmux.app/qmux'"), "{shim}");
-        // Muse's env whitelist strips both the QMUX_* variables the other shims
+        // Muse's env whitelist strips both the SESSION_* variables the other shims
         // guard on and the XDG paths this one would otherwise derive, so the
         // bindings directory has to travel as an argument.
         assert!(
             shim.contains("muse-notify \"$event\" '/data/qmux/muse/bindings'"),
             "{shim}"
         );
-        assert!(!shim.contains("QMUX_"), "{shim}");
+        assert!(!shim.contains("SESSION_"), "{shim}");
         assert!(!shim.contains("XDG_"), "{shim}");
     }
 
@@ -2112,15 +2112,15 @@ mod tests {
     /// `XDG_DATA_HOME` are pointed elsewhere.
     ///
     /// ```sh
-    /// QMUX_MUSE_HOME=/tmp/probe/home QMUX_MUSE_TEST_CLI=/path/to/qmux-cli \
+    /// SESSION_MUSE_HOME=/tmp/probe/home SESSION_MUSE_TEST_CLI=/path/to/session-cli \
     ///   cargo test muse_integration_installs_against_the_real_cli -- --ignored
     /// ```
     #[test]
     #[ignore = "requires the muse CLI and mutates its plugin registry"]
     fn muse_integration_installs_against_the_real_cli() {
-        let cli = env::var("QMUX_MUSE_TEST_CLI")
-            .expect("set QMUX_MUSE_TEST_CLI to the qmux CLI the shim should call");
-        let binary = env::var("QMUX_MUSE_TEST_BINARY").unwrap_or_else(|_| "muse".to_string());
+        let cli = env::var("SESSION_MUSE_TEST_CLI")
+            .expect("set SESSION_MUSE_TEST_CLI to the Session CLI the shim should call");
+        let binary = env::var("SESSION_MUSE_TEST_BINARY").unwrap_or_else(|_| "muse".to_string());
         ensure_muse_integration(&binary, Path::new(&cli)).expect("integration installs");
 
         let home = muse_integration_home().expect("integration home");
@@ -2136,14 +2136,14 @@ mod tests {
     /// real run to point at.
     ///
     /// ```sh
-    /// XDG_DATA_HOME=/tmp/probe/data QMUX_MUSE_TEST_SESSION=<uuid> \
+    /// XDG_DATA_HOME=/tmp/probe/data SESSION_MUSE_TEST_SESSION=<uuid> \
     ///   cargo test parses_a_real_muse_session_log -- --ignored --nocapture
     /// ```
     #[test]
     #[ignore = "requires a session log from a real muse run"]
     fn parses_a_real_muse_session_log() {
-        let session_id =
-            env::var("QMUX_MUSE_TEST_SESSION").expect("set QMUX_MUSE_TEST_SESSION to a session id");
+        let session_id = env::var("SESSION_MUSE_TEST_SESSION")
+            .expect("set SESSION_MUSE_TEST_SESSION to a session id");
         let path = muse_session_transcript_path(&session_id)
             .expect("the session log is discoverable from its id alone");
         let contents = fs::read_to_string(&path).expect("session log is readable");
@@ -2249,13 +2249,13 @@ mod tests {
         )
         .unwrap();
 
-        let previous = env::var_os("QMUX_MUSE_HOME");
+        let previous = env::var_os("SESSION_MUSE_HOME");
         // SAFETY: single-threaded test process; the variable is restored below.
-        unsafe { env::set_var("QMUX_MUSE_HOME", &home) };
+        unsafe { env::set_var("SESSION_MUSE_HOME", &home) };
         let result = stamp_muse_binding_session("pane-1", "session-a");
         match previous {
-            Some(value) => unsafe { env::set_var("QMUX_MUSE_HOME", value) },
-            None => unsafe { env::remove_var("QMUX_MUSE_HOME") },
+            Some(value) => unsafe { env::set_var("SESSION_MUSE_HOME", value) },
+            None => unsafe { env::remove_var("SESSION_MUSE_HOME") },
         }
         result.expect("binding is claimed");
 

@@ -7,7 +7,7 @@ set -euo pipefail
 # .sig to the GitHub release alongside the DMG.
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null && pwd)"
-target="${QMUX_BUILD_TARGET:-universal-apple-darwin}"
+target="${SESSION_BUILD_TARGET:-universal-apple-darwin}"
 bundle_dir="$repo_root/src-tauri/target/$target/release/bundle/macos"
 
 version="$(sed -n 's/.*"version": "\([^"]*\)".*/\1/p' "$repo_root/src-tauri/tauri.conf.json" | head -1)"

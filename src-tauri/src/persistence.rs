@@ -52,7 +52,7 @@ const PREFERENCES_FILE: &str = "preferences.json";
 const V2_BACKUP_FILE: &str = "state.v2.bak";
 pub(crate) const STATE_DIR: &str = ".qmux";
 
-/// Snapshot of everything a qmux restart needs to recreate panes, agents,
+/// Snapshot of everything a Session restart needs to recreate panes, agents,
 /// groups and queued turns. Live PTY handles are intentionally absent: a
 /// restarted process cannot adopt the old PTY, so only metadata is persisted.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -76,7 +76,7 @@ pub struct PersistedState {
     #[serde(default)]
     pub recent_sessions: Vec<RecentSessionInfo>,
     /// Artifact-tray entries: files/loopback URLs opened from agent panes via
-    /// `qmux open`, oldest first. Entries outlive their pane (the tray is
+    /// `session open`, oldest first. Entries outlive their pane (the tray is
     /// workspace-scoped) and are pruned when their group is deleted.
     #[serde(default)]
     pub artifacts: Vec<ArtifactInfo>,
@@ -102,11 +102,11 @@ pub struct PersistedState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_tab_id: Option<String>,
     /// Per-thread routing and storage metadata. The thread snapshot itself lives in
-    /// `<workspaceRoot>/.qmux/threads/<thread-id>.json`; this tells qmux where to find
+    /// `<workspaceRoot>/.qmux/threads/<thread-id>.json`; this tells Session where to find
     /// it and what branch a default view should focus.
     #[serde(default)]
     pub threads: HashMap<String, ThreadRecord>,
-    /// Focused branch per qmux transcript thread. The full graph lives in the global
+    /// Focused branch per Session transcript thread. The full graph lives in the global
     /// thread store; state.json keeps only the routing metadata needed to recover
     /// pane/agent views.
     #[serde(default)]
@@ -129,7 +129,7 @@ pub struct PersistedState {
     /// dropped-if-empty so older state files round-trip byte-identically.
     #[serde(default, skip_serializing_if = "JournalState::is_empty")]
     pub journal: JournalState,
-    /// `qmux send` notification history. Optional and dropped-if-empty so
+    /// `session send` notification history. Optional and dropped-if-empty so
     /// older state files round-trip byte-identically.
     #[serde(default, skip_serializing_if = "NotificationLog::is_empty")]
     pub notification_log: NotificationLog,
@@ -192,10 +192,10 @@ pub struct AppPreferences {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub use_login_shell: Option<bool>,
     /// Root used for newly-created isolated worktrees. Absent preserves the
-    /// historical global qmux workspace location.
+    /// historical global session workspace location.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worktree_location: Option<WorktreeLocation>,
-    /// Global shortcut used to show or hide the qmux app. Absent means no
+    /// Global shortcut used to show or hide the Session app. Absent means no
     /// shortcut is registered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub show_hide_shortcut: Option<String>,
@@ -387,12 +387,12 @@ pub struct LoadOutcome {
 }
 
 /// True when the user asked to force startup past an *unreadable* state file,
-/// discarding it. Set via the `QMUX_RESET_STATE` env var (documented in the
+/// discarding it. Set via the `SESSION_RESET_STATE` env var (documented in the
 /// abort message from `preflight_state`) — the GUI equivalent of a "hold a
 /// modifier to reset" escape hatch, chosen over live modifier detection because
 /// a Finder launch has no reliable key state to read at startup.
 fn reset_state_requested() -> bool {
-    std::env::var_os("QMUX_RESET_STATE").is_some_and(|value| value == "1" || value == "true")
+    std::env::var_os("SESSION_RESET_STATE").is_some_and(|value| value == "1" || value == "true")
 }
 
 /// Checked once at startup, *before* recovery hydrates state and enables saving.
@@ -405,14 +405,14 @@ fn reset_state_requested() -> bool {
 /// user-facing message and the caller aborts startup, leaving the file untouched
 /// so a relaunch (after fixing the transient cause) restores the session.
 ///
-/// The same refusal applies to a state file written by a *newer* qmux: this
+/// The same refusal applies to a state file written by a *newer* session: this
 /// build cannot load it (there are no forward migrations), and moving it aside
 /// to start empty would destroy the newer install's session every time a stale
 /// copy of the app is launched. The fix is to run the newer app, so abort and
 /// say so rather than eat the session.
 ///
 /// A missing file (first run) or a readable, loadable file returns `Ok`. With
-/// `QMUX_RESET_STATE` set, an unreadable or newer-versioned file is renamed
+/// `SESSION_RESET_STATE` set, an unreadable or newer-versioned file is renamed
 /// aside to a `.bak` and `Ok` is returned so the user can deliberately start
 /// fresh without losing the original bytes.
 ///
@@ -436,7 +436,7 @@ pub fn preflight_state(workspace_root: &Path) -> Result<Option<Vec<u8>>, String>
             return match preserve_rejected_state(&path, "unreadable") {
                 Ok(backup_path) => {
                     eprintln!(
-                        "qmux: QMUX_RESET_STATE set; moved unreadable state {} aside to {} and starting fresh",
+                        "session: SESSION_RESET_STATE set; moved unreadable state {} aside to {} and starting fresh",
                         path.display(),
                         backup_path.display()
                     );
@@ -459,7 +459,7 @@ pub fn preflight_state(workspace_root: &Path) -> Result<Option<Vec<u8>>, String>
                  \x20 • File on iCloud/a network volume: wait for the volume to come back online.\n\n\
                  To start fresh on purpose instead — your current session file is moved aside to a \
                  .bak first, so nothing is lost — relaunch with:\n\
-                 \x20 QMUX_RESET_STATE=1 open -a qmux",
+                 \x20 SESSION_RESET_STATE=1 open -a qmux",
                 path = path.display()
             ));
         }
@@ -480,7 +480,7 @@ pub fn preflight_state(workspace_root: &Path) -> Result<Option<Vec<u8>>, String>
         return match preserve_rejected_state(&path, "newer-version") {
             Ok(backup_path) => {
                 eprintln!(
-                    "qmux: QMUX_RESET_STATE set; moved newer-versioned state {} aside to {} and starting fresh",
+                    "session: SESSION_RESET_STATE set; moved newer-versioned state {} aside to {} and starting fresh",
                     path.display(),
                     backup_path.display()
                 );
@@ -500,7 +500,7 @@ pub fn preflight_state(workspace_root: &Path) -> Result<Option<Vec<u8>>, String>
          start. Launch the newer Session instead, or update this copy.\n\n\
          To start fresh on purpose — your current session file is moved aside to a .bak \
          first, so nothing is lost — relaunch with:\n\
-         \x20 QMUX_RESET_STATE=1 open -a qmux",
+         \x20 SESSION_RESET_STATE=1 open -a qmux",
         path = path.display()
     ))
 }
@@ -1612,7 +1612,7 @@ mod tests {
 
     #[test]
     fn preflight_reset_leaves_nothing_for_the_loader_to_resurrect() {
-        // QMUX_RESET_STATE moves the file aside and preflight returns None; the
+        // SESSION_RESET_STATE moves the file aside and preflight returns None; the
         // loader's disk fallback must then find nothing (fresh session), not
         // re-read the moved-aside state.
         let root = temp_root();

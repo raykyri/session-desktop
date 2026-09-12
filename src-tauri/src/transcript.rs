@@ -1,5 +1,5 @@
 use crate::adapters::{TranscriptLifecycleEvent, adapter_registry, maybe_record_agent_model};
-use crate::events::QmuxEvent;
+use crate::events::SessionEvent;
 use crate::state::{AgentSendSource, AppState};
 use crate::turn_queue::{
     IdleResolution, advance_after_idle, advance_after_interruption, is_tui_command_turn,
@@ -120,7 +120,7 @@ pub enum TurnBlock {
 pub const MAX_APPEND_LINES: usize = 512;
 pub const MAX_APPEND_LINE_BYTES: usize = 4 * 1024 * 1024;
 
-/// Appends JSONL records produced by an agent running somewhere qmux cannot see
+/// Appends JSONL records produced by an agent running somewhere Session cannot see
 /// the filesystem.
 ///
 /// The local transcript file stays the single durable record and the single
@@ -226,7 +226,7 @@ fn start_transcript_tail_inner(
     historical_end: Option<Arc<AtomicU64>>,
 ) {
     if let Err(err) = adapter_registry(state.config()).get(&adapter_id) {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "transcript.error",
             None,
             Some(agent_id),
@@ -269,7 +269,7 @@ fn start_transcript_tail_inner(
         let adapter = match registry.get(&adapter_id) {
             Ok(adapter) => adapter,
             Err(err) => {
-                state.emit(QmuxEvent::new(
+                state.emit(SessionEvent::new(
                     "transcript.error",
                     None,
                     Some(agent_id),
@@ -418,7 +418,7 @@ fn start_transcript_tail_inner(
                                 ));
                             }
                             Ok(true) => {
-                                state.emit(QmuxEvent::new(
+                                state.emit(SessionEvent::new(
                                     "turn.updated",
                                     None,
                                     Some(agent_id.clone()),
@@ -487,7 +487,7 @@ fn start_transcript_tail_inner(
                                 ));
                             }
                             Ok(true) => {
-                                state.emit(QmuxEvent::new(
+                                state.emit(SessionEvent::new(
                                     "turn.updated",
                                     None,
                                     Some(agent_id.clone()),
@@ -520,7 +520,7 @@ fn start_transcript_tail_inner(
                                     ));
                                 }
                                 Ok(true) => {
-                                    state.emit(QmuxEvent::new(
+                                    state.emit(SessionEvent::new(
                                         "turn.appended",
                                         None,
                                         Some(agent_id.clone()),
@@ -646,7 +646,7 @@ pub fn refresh_transcript_turns(
         native_leaf_id.as_deref(),
     );
     if state.replace_turns_for_transcript(agent_id, transcript_path, turns.clone())? {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "turn.updated",
             None,
             Some(agent_id.to_string()),
@@ -692,7 +692,7 @@ fn transcript_lifecycle_agent_event(
     agent_id: &str,
     transcript_path: &str,
     lifecycle_event: TranscriptLifecycleEvent,
-) -> Result<Option<QmuxEvent>, String> {
+) -> Result<Option<SessionEvent>, String> {
     let Some(agent) = state.agent(agent_id)? else {
         return Ok(None);
     };
@@ -747,7 +747,7 @@ fn transcript_lifecycle_agent_event(
                     "agent.done",
                 )
             }
-            Err(err) => Ok(Some(QmuxEvent::new(
+            Err(err) => Ok(Some(SessionEvent::new(
                 "agent.queue_error",
                 agent.pane_id,
                 Some(agent_id.to_string()),
@@ -777,7 +777,7 @@ fn transcript_lifecycle_agent_event(
                 "agent.interrupted",
             )
         }
-        Err(err) => Ok(Some(QmuxEvent::new(
+        Err(err) => Ok(Some(SessionEvent::new(
             "agent.queue_error",
             agent.pane_id,
             Some(agent_id.to_string()),
@@ -796,11 +796,11 @@ fn transcript_lifecycle_updated_agent_event(
     transcript_path: &str,
     lifecycle_event: TranscriptLifecycleEvent,
     event_type: &str,
-) -> Result<Option<QmuxEvent>, String> {
+) -> Result<Option<SessionEvent>, String> {
     let Some(agent) = state.agent(agent_id)? else {
         return Ok(None);
     };
-    Ok(Some(QmuxEvent::new(
+    Ok(Some(SessionEvent::new(
         event_type,
         agent.pane_id.clone(),
         Some(agent.id.clone()),
@@ -866,7 +866,7 @@ fn recover_missing_transcript(
         // lock; leave whoever rebound it in charge.
         return Ok(None);
     }
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "agent.transcript_recovered",
         agent.pane_id.clone(),
         Some(agent.id.clone()),
@@ -1259,7 +1259,7 @@ pub fn set_agent_transcript(
     // arbitrary `.jsonl`: otherwise a caller (e.g. a compromised webview) could
     // `set_agent_transcript(id, null)` to clear the binding and then bind any
     // `.jsonl` on disk, turning this into an unconfined transcript-read
-    // primitive over sessions from unrelated projects. qmux discovers the
+    // primitive over sessions from unrelated projects. Session discovers the
     // initial transcript itself via the adapter's SessionStart hook.
     let Some(current) = agent.transcript_path.as_deref() else {
         return Err("cannot repoint a transcript before this agent has an active one".to_string());
@@ -1702,8 +1702,8 @@ pub(crate) fn session_id_from_transcript_path(path: &Path) -> Option<String> {
 
 /// Builds a `transcript.notice` event carrying a short, user-facing message about
 /// the tail's health. A `None` message clears any notice the UI is showing.
-fn transcript_notice(agent_id: &str, path: &str, message: Option<&str>) -> QmuxEvent {
-    QmuxEvent::new(
+fn transcript_notice(agent_id: &str, path: &str, message: Option<&str>) -> SessionEvent {
+    SessionEvent::new(
         "transcript.notice",
         None,
         Some(agent_id.to_string()),
@@ -1714,8 +1714,8 @@ fn transcript_notice(agent_id: &str, path: &str, message: Option<&str>) -> QmuxE
 /// Reports a failure to persist parsed turns (a poisoned state lock or full
 /// disk) so the UI can show the timeline is no longer authoritative instead of
 /// silently diverging from recovered state.
-fn transcript_persist_error(agent_id: &str, path: &str, error: &str) -> QmuxEvent {
-    QmuxEvent::new(
+fn transcript_persist_error(agent_id: &str, path: &str, error: &str) -> SessionEvent {
+    SessionEvent::new(
         "transcript.error",
         None,
         Some(agent_id.to_string()),
@@ -2212,7 +2212,7 @@ mod tests {
     use super::*;
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig, QmuxConfig,
+        MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
     };
     use std::sync::Arc;
     use std::time::UNIX_EPOCH;
@@ -2912,7 +2912,7 @@ mod tests {
             strip_leading_tagged_instruction_blocks("<config>\nkey = value"),
             Some("<config>\nkey = value")
         );
-        // The exact attributed qmux driver block is trusted and stripped.
+        // The exact attributed Session driver block is trusted and stripped.
         assert_eq!(
             strip_leading_tagged_instruction_blocks(
                 "<qmux_instruction source=\"agent_driver\">\nsafety\n</qmux_instruction>\nkept"
@@ -3321,7 +3321,7 @@ mod tests {
     }
 
     fn test_state() -> AppState {
-        AppState::new(QmuxConfig {
+        AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root: temp_dir(),
             socket_path: PathBuf::from("/tmp/qmux-transcript-test.sock"),

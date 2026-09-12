@@ -107,7 +107,7 @@ fn create_tray(
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(bento_icon())
         .icon_as_template(true)
-        .tooltip("qmux")
+        .tooltip("Session")
         .menu(menu)
         .show_menu_on_left_click(true)
         .on_menu_event(handle_menu_event)
@@ -323,12 +323,12 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
     match event.id().as_ref() {
         SHOW_WINDOW_ID => {
             if let Err(err) = crate::show_hide_shortcut::show_qmux_window(app) {
-                eprintln!("qmux: failed to show app from menu bar: {err}");
+                eprintln!("session: failed to show app from menu bar: {err}");
             }
         }
         HIDE_WINDOW_ID => {
             if let Err(err) = crate::show_hide_shortcut::hide_qmux_window(app) {
-                eprintln!("qmux: failed to hide app from menu bar: {err}");
+                eprintln!("session: failed to hide app from menu bar: {err}");
             }
         }
         id => {
@@ -341,7 +341,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
                 reopen_tray_menu();
             } else if let Some(pane_id) = id.strip_prefix(SELECT_PANE_PREFIX) {
                 if let Err(err) = crate::show_hide_shortcut::show_qmux_window(app) {
-                    eprintln!("qmux: failed to show app from menu bar tab selection: {err}");
+                    eprintln!("session: failed to show app from menu bar tab selection: {err}");
                 }
                 if let Err(err) = app.emit(
                     SELECT_PANE_EVENT,
@@ -349,7 +349,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
                         pane_id: pane_id.to_string(),
                     },
                 ) {
-                    eprintln!("qmux: failed to emit menu bar tab selection: {err}");
+                    eprintln!("session: failed to emit menu bar tab selection: {err}");
                 }
             }
         }

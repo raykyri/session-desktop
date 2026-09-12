@@ -8,7 +8,7 @@ import {
 
 const CACHE_MARKER =
   "[Image: source: /Users/raymond/.claude/image-cache/0da57d2c-6591-467c-8abf-6961554736e0/2.png]";
-// The qmux paste form: an absolute path with no "source:" prefix, delivered to
+// The Session paste form: an absolute path with no "source:" prefix, delivered to
 // the agent as text and rendered as a thumbnail in the queue.
 const PASTE_MARKER = "[Image: /Users/raymond/.claude/image-cache/qmux-paste-42-0.png]";
 const CODEX_IMAGE_BLOCK =

@@ -4,7 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct QmuxEvent {
+pub struct SessionEvent {
     #[serde(rename = "type")]
     pub event_type: String,
     pub pane_id: Option<String>,
@@ -13,7 +13,7 @@ pub struct QmuxEvent {
     pub timestamp: u128,
 }
 
-impl QmuxEvent {
+impl SessionEvent {
     pub fn new(
         event_type: impl Into<String>,
         pane_id: Option<String>,
@@ -57,7 +57,7 @@ mod tests {
 
     #[test]
     fn pane_removed_carries_the_authoritative_pane_id() {
-        let event = QmuxEvent::pane_removed("pane-1".to_string());
+        let event = SessionEvent::pane_removed("pane-1".to_string());
         assert_eq!(event.event_type, "pane.removed");
         assert_eq!(event.pane_id.as_deref(), Some("pane-1"));
         assert_eq!(event.payload, json!({ "paneId": "pane-1" }));

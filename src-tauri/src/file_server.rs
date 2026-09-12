@@ -37,7 +37,7 @@ const MAX_INLINE_BYTES: u64 = 64 * 1024 * 1024;
 /// here prevents a malformed directive from turning the wrapper render into an
 /// unbounded allocation.
 const MAX_CODEX_INLINE_VIS_BYTES: u64 = 2 * 1024 * 1024;
-const HTML_PREVIEW_SCROLL_SCRIPT: &str = r#"(()=>{let f=0;addEventListener('scroll',()=>{cancelAnimationFrame(f);f=requestAnimationFrame(()=>parent.postMessage({type:'qmux-preview-scroll',x:scrollX,y:scrollY},'*'))},{passive:true});addEventListener('message',e=>{const d=e.data;if(d?.type!=='qmux-preview-scroll-restore'||!Number.isFinite(d.x)||!Number.isFinite(d.y))return;requestAnimationFrame(()=>requestAnimationFrame(()=>scrollTo(d.x,d.y)))})})();"#;
+const HTML_PREVIEW_SCROLL_SCRIPT: &str = r#"(()=>{let f=0;addEventListener('scroll',()=>{cancelAnimationFrame(f);f=requestAnimationFrame(()=>parent.postMessage({type:'session-preview-scroll',x:scrollX,y:scrollY},'*'))},{passive:true});addEventListener('message',e=>{const d=e.data;if(d?.type!=='session-preview-scroll-restore'||!Number.isFinite(d.x)||!Number.isFinite(d.y))return;requestAnimationFrame(()=>requestAnimationFrame(()=>scrollTo(d.x,d.y)))})})();"#;
 /// Cap on concurrent connection-handler threads. Each connection serves one
 /// request then closes, so this bounds in-flight requests; 64 comfortably covers
 /// a browser overlay fetching a page full of assets in parallel while keeping a
@@ -125,7 +125,7 @@ pub fn resolve_under_roots(requested: &Path, roots: &[PathBuf]) -> Option<PathBu
 }
 
 /// Resolve one of the exact canonical files granted to a pane. This is kept
-/// separate from directory roots so a visualization under qmux's private
+/// separate from directory roots so a visualization under Session's private
 /// workspace metadata does not grant the preview token access to sibling
 /// sessions, state, or credentials.
 pub fn resolve_exact_file(requested: &Path, granted: &[PathBuf]) -> Option<PathBuf> {
@@ -146,10 +146,10 @@ pub fn resolve_tokenized_file_path(
 ) -> Result<PathBuf, String> {
     let after_root = encoded_url_path
         .strip_prefix('/')
-        .ok_or_else(|| "invalid qmux preview URL".to_string())?;
+        .ok_or_else(|| "invalid Session preview URL".to_string())?;
     let slash = after_root
         .find('/')
-        .ok_or_else(|| "invalid qmux preview URL".to_string())?;
+        .ok_or_else(|| "invalid Session preview URL".to_string())?;
     let (token, encoded_path) = after_root.split_at(slash);
     let decoded = percent_decode(encoded_path)
         .ok_or_else(|| "invalid path encoding in qmux preview URL".to_string())?;
@@ -266,7 +266,7 @@ pub fn resolve_codex_inline_visualization(
 
 /// Resolves an absolute path carried by the current Codex visualization
 /// content-reference contract. Ordinary pane roots cover the attached
-/// checkout and temporary output; qmux's durable designs directory is added
+/// checkout and temporary output; Session's durable designs directory is added
 /// explicitly because it sits inside private workspace metadata that must not
 /// become a general pane file root.
 pub fn resolve_codex_visualization_reference(
@@ -443,7 +443,7 @@ fn build_response(state: &AppState, head: &RequestHead) -> Response {
         q.split('&')
             .any(|p| p == "codex-inline-vis" || p == "codex-inline-vis=1")
     });
-    let body_font_id = query_parameter(query, "qmux-body-font");
+    let body_font_id = query_parameter(query, "session-body-font");
     // The path is "/<token>/<abs path>": the first segment is the preview capability,
     // and everything from the next '/' onward is the percent-encoded absolute path
     // (with its leading slash preserved). Tokens are hex, so they never contain a slash.
@@ -673,7 +673,7 @@ fn file_content_csp(port: u16) -> String {
 }
 
 /// CSP for *rendered Markdown* pages. Identical to [`file_content_csp`] except that
-/// only qmux's exact scroll-restoration script hash is allowed to execute. Raw HTML
+/// only Session's exact scroll-restoration script hash is allowed to execute. Raw HTML
 /// embedded in the source passes through the renderer verbatim, so excluding
 /// `unsafe-inline` keeps any embedded `<script>` inert as a second line of defense
 /// alongside the overlay's opaque-origin sandbox rather than the sole one.
@@ -774,12 +774,12 @@ fn is_markdown(path: &Path) -> bool {
 // External resources deliberately remain blocked by file_content_csp: unlike
 // Codex's standalone renderer, this page's URL carries a pane capability token.
 const CODEX_INLINE_VIS_CSS: &str = "\
-__QMUX_FONT_FACE__\
+__SESSION_FONT_FACE__\
 :root { color-scheme: light dark; --font-size-base: 14px; --background: #f7f8f7; --foreground: #1d2421; --card: #ffffff; --card-foreground: #1d2421; --popover: #ffffff; --popover-foreground: #1d2421; --primary: #26322d; --primary-foreground: #ffffff; --secondary: #e8eeeb; --secondary-foreground: #1d2421; --muted: #edf1ef; --muted-foreground: #5e6d66; --accent: #e1e9e5; --accent-foreground: #1d2421; --destructive: #a63d40; --border: #ccd6d1; --input: #aebcb5; --ring: #42554c; --viz-series-1: #187a54; --viz-series-2: #8a5d15; --viz-series-3: #496aa0; --viz-series-4: #8a4e86; --viz-series-5: #ad4e35; --viz-series-6: #4f7777; }\
 @media (prefers-color-scheme: dark) { :root { --background: #111514; --foreground: #e5e9e7; --card: #181d1b; --card-foreground: #e5e9e7; --popover: #202624; --popover-foreground: #e5e9e7; --primary: #d7dfdb; --primary-foreground: #111514; --secondary: #29302d; --secondary-foreground: #e5e9e7; --muted: #242b28; --muted-foreground: #99a49f; --accent: #303936; --accent-foreground: #eef2f0; --destructive: #d06b6b; --border: #36403c; --input: #46514c; --ring: #a9b8b1; --viz-series-1: #8fd5b6; --viz-series-2: #d8b77a; --viz-series-3: #8eacd8; --viz-series-4: #c595c2; --viz-series-5: #df927d; --viz-series-6: #8eb8b8; } }\
 * { box-sizing: border-box; }\
 html, body { min-height: 100%; }\
-body { margin: 0; padding: 16px; color: var(--foreground); background: var(--background); font-family: __QMUX_BODY_FONT__; font-size: var(--font-size-base); font-variant-ligatures: no-common-ligatures; }\
+body { margin: 0; padding: 16px; color: var(--foreground); background: var(--background); font-family: __SESSION_BODY_FONT__; font-size: var(--font-size-base); font-variant-ligatures: no-common-ligatures; }\
 button, input, select, textarea { font: inherit; }\
 svg, canvas, img { max-width: 100%; }\
 .card { border: 1px solid var(--border); border-radius: 10px; color: var(--card-foreground); background: var(--card); }\
@@ -850,8 +850,11 @@ fn render_codex_inline_visualization_page(
             .unwrap_or("Codex visualization"),
     );
     let css = CODEX_INLINE_VIS_CSS
-        .replace("__QMUX_FONT_FACE__", markdown_font_face_css(body_font_id))
-        .replace("__QMUX_BODY_FONT__", markdown_body_font(body_font_id));
+        .replace(
+            "__SESSION_FONT_FACE__",
+            markdown_font_face_css(body_font_id),
+        )
+        .replace("__SESSION_BODY_FONT__", markdown_body_font(body_font_id));
     let scroll_bridge = html_preview_scroll_bridge();
     format!(
         "<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n\
@@ -868,9 +871,9 @@ fn render_codex_inline_visualization_page(
 /// grays handle the accents in both themes, and the file CSP already allows inline
 /// styles.
 const MARKDOWN_PAGE_CSS: &str = "\
-__QMUX_FONT_FACE__\
+__SESSION_FONT_FACE__\
 :root { color-scheme: light dark; }\
-body { margin: 0; font-family: __QMUX_BODY_FONT__; font-variant-ligatures: no-common-ligatures; line-height: 1.6; background: #ffffff; color: #1f2328; }\
+body { margin: 0; font-family: __SESSION_BODY_FONT__; font-variant-ligatures: no-common-ligatures; line-height: 1.6; background: #ffffff; color: #1f2328; }\
 @media (prefers-color-scheme: dark) { body { background: #1e2227; color: #e2e6ea; } }\
 main { max-width: 48rem; margin: 0 auto; padding: 2rem 1.5rem 4rem; }\
 h1, h2 { border-bottom: 1px solid rgba(127, 127, 127, 0.3); padding-bottom: 0.3em; }\
@@ -941,8 +944,11 @@ fn render_markdown_page(path: &Path, source: &str, body_font_id: Option<&str>) -
             .unwrap_or("Markdown"),
     );
     let markdown_page_css = MARKDOWN_PAGE_CSS
-        .replace("__QMUX_FONT_FACE__", markdown_font_face_css(body_font_id))
-        .replace("__QMUX_BODY_FONT__", markdown_body_font(body_font_id));
+        .replace(
+            "__SESSION_FONT_FACE__",
+            markdown_font_face_css(body_font_id),
+        )
+        .replace("__SESSION_BODY_FONT__", markdown_body_font(body_font_id));
     let scroll_bridge = html_preview_scroll_bridge();
     format!(
         "<!doctype html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n\
@@ -1006,7 +1012,7 @@ fn mime_type(path: &Path) -> String {
 pub(crate) fn is_browser_previewable_path(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
-        .is_some_and(qmux_proto::is_browser_preview_extension)
+        .is_some_and(session_proto::is_browser_preview_extension)
 }
 
 pub(crate) fn is_executable_preview_path(path: &Path) -> bool {
@@ -1241,7 +1247,7 @@ mod tests {
         let path = Path::new("doc.md");
         let source = "# Hello";
         assert_eq!(
-            query_parameter(Some("raw=1&qmux-body-font=inter"), "qmux-body-font"),
+            query_parameter(Some("raw=1&session-body-font=inter"), "session-body-font"),
             Some("inter")
         );
 
@@ -1251,7 +1257,7 @@ mod tests {
 
         let selected_page = render_markdown_page(path, source, Some("anthropic-sans-text"));
         assert!(selected_page.contains("font-family: 'Anthropic Sans Text', ui-sans-serif"));
-        assert!(!selected_page.contains("__QMUX_BODY_FONT__"));
+        assert!(!selected_page.contains("__SESSION_BODY_FONT__"));
         assert!(!selected_page.contains("ValleySans-Variable.woff2"));
 
         let dm_sans_page = render_markdown_page(path, source, Some("dm-sans"));
@@ -1260,15 +1266,15 @@ mod tests {
         assert!(dm_sans_page.contains("DMSans-Variable-LatinExt.woff2"));
         assert!(dm_sans_page.contains("DMSans-VariableItalic-Latin.woff2"));
         assert!(dm_sans_page.contains("DMSans-VariableItalic-LatinExt.woff2"));
-        assert!(!dm_sans_page.contains("__QMUX_BODY_FONT__"));
-        assert!(!dm_sans_page.contains("__QMUX_FONT_FACE__"));
+        assert!(!dm_sans_page.contains("__SESSION_BODY_FONT__"));
+        assert!(!dm_sans_page.contains("__SESSION_FONT_FACE__"));
 
         let valley_page = render_markdown_page(path, source, Some("valley-sans"));
         assert!(valley_page.contains("font-family: 'Valley Sans', ui-sans-serif"));
         assert!(valley_page.contains("ValleySans-Variable.woff2"));
         assert!(valley_page.contains("ValleySans-VariableItalic.woff2"));
-        assert!(!valley_page.contains("__QMUX_BODY_FONT__"));
-        assert!(!valley_page.contains("__QMUX_FONT_FACE__"));
+        assert!(!valley_page.contains("__SESSION_BODY_FONT__"));
+        assert!(!valley_page.contains("__SESSION_FONT_FACE__"));
 
         let unknown_page = render_markdown_page(path, source, Some("body{};color:red"));
         assert!(unknown_page.contains("font-family: ui-sans-serif, system-ui"));
@@ -1327,9 +1333,9 @@ mod tests {
     fn test_state(root: &Path, base: &Path, pane_id: &str) -> AppState {
         use crate::config::{
             AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-            MuseAdapterConfig, OpencodeAdapterConfig, QmuxConfig,
+            MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
         };
-        let config = QmuxConfig {
+        let config = SessionConfig {
             remotes: Default::default(),
             workspace_root: base.join("state"),
             socket_path: base.join("x.sock"),
@@ -1492,7 +1498,7 @@ mod tests {
 
         assert!(head.starts_with("HTTP/1.1 200"), "head: {head}");
         assert!(body.contains("<p>hello</p>"));
-        assert!(body.contains("qmux-preview-scroll"));
+        assert!(body.contains("session-preview-scroll"));
 
         let _ = std::fs::remove_dir_all(&base);
     }
@@ -1519,7 +1525,7 @@ mod tests {
         assert!(body_text.contains("<h1>Hello</h1>"), "body: {body_text}");
         assert!(body_text.contains("<table>"), "body: {body_text}");
         assert!(
-            body_text.contains("qmux-preview-scroll"),
+            body_text.contains("session-preview-scroll"),
             "body: {body_text}"
         );
 

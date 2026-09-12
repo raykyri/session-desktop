@@ -263,7 +263,7 @@ fn prepare_scrollback_dir(path: &Path) -> Result<(), String> {
         )
     })?;
     // Scrollback captures raw terminal output — any secret echoed to a pane, plus
-    // the pane's own QMUX_TOKEN — so keep its directory owner-only, matching the
+    // the pane's own SESSION_TOKEN — so keep its directory owner-only, matching the
     // socket / shell-integration hardening. Best-effort on an existing dir.
     let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
     Ok(())
@@ -292,7 +292,7 @@ pub fn remove_pane_scrollback(workspace_root: &Path, pane_id: &str) -> Result<()
     )
 }
 
-/// The newest tmux history tail that qmux has already accepted into local
+/// The newest tmux history tail that Session has already accepted into local
 /// scrollback. It is separate from the terminal byte log because it is an
 /// overlap checkpoint, not content to render. Keeping it beside the log gives
 /// app-restart recovery a durable de-duplication cursor without expanding the

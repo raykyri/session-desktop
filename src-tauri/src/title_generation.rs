@@ -2,7 +2,7 @@ use crate::adapters::claude::ClaudeAdapter;
 use crate::adapters::codex::CodexAdapter;
 use crate::adapters::grok::GrokAdapter;
 use crate::adapters::new_uuid_v4;
-use crate::config::QmuxConfig;
+use crate::config::SessionConfig;
 use crate::headless_process::{JsonlProcess, JsonlReceive};
 use crate::research::ResearchNode;
 use crate::workspace::GroupInfo;
@@ -92,7 +92,7 @@ impl ResearchMetadataFlavor {
 /// model. It deliberately does not resume the research session: title metadata
 /// must never become context inherited by later research branches.
 pub fn generate_research_agent_title(
-    config: &QmuxConfig,
+    config: &SessionConfig,
     node: &ResearchNode,
     workspace: &GroupInfo,
 ) -> Result<String, String> {
@@ -109,7 +109,7 @@ pub fn generate_research_agent_title(
 }
 
 pub fn generate_research_recap(
-    config: &QmuxConfig,
+    config: &SessionConfig,
     node: &ResearchNode,
     workspace: &GroupInfo,
     answer: &str,
@@ -122,7 +122,7 @@ pub fn generate_research_recap(
 }
 
 fn generate_research_metadata(
-    config: &QmuxConfig,
+    config: &SessionConfig,
     node: &ResearchNode,
     workspace: &GroupInfo,
     prompt: &str,
@@ -430,7 +430,7 @@ struct MetadataSchemaFile {
 }
 
 impl MetadataSchemaFile {
-    fn create(config: &QmuxConfig, schema: &str) -> Result<Self, String> {
+    fn create(config: &SessionConfig, schema: &str) -> Result<Self, String> {
         let id = new_uuid_v4()?;
         let directory = config.workspace_root.join(".qmux").join("tmp");
         std::fs::create_dir_all(&directory).map_err(|err| {

@@ -1,15 +1,15 @@
 //! Shared public control surface for the human CLI and restricted agent CLI.
 //!
 //! The Unix-socket token is resolved before this module is entered. Callers
-//! receive an immutable context derived from live qmux state; no public payload
+//! receive an immutable context derived from live Session state; no public payload
 //! may claim a different principal, pane, agent, or workspace.
 
-use crate::events::QmuxEvent;
+use crate::events::SessionEvent;
 use crate::state::{AppState, PaneSplitAxis, PaneSplitInfo};
 use crate::workspace::{AgentInfo, CreateGroupRequest, create_group, rename_group};
-use qmux_proto::{PUBLIC_API_VERSION, PublicControlError, PublicControlResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use session_proto::{PUBLIC_API_VERSION, PublicControlError, PublicControlResponse};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
@@ -103,7 +103,7 @@ fn context_for(
     } else {
         return Err(ControlFailure::new(
             "user_credential_required",
-            "public control from a shell pane requires QMUX_USER_TOKEN",
+            "public control from a shell pane requires SESSION_USER_TOKEN",
         ));
     };
     Ok(ControlContext {
@@ -458,7 +458,7 @@ fn pane_create(state: &AppState, context: &ControlContext, arguments: Value) -> 
         args.cwd.as_deref(),
     )
     .map_err(internal)?;
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "pane.created",
         Some(pane.id.clone()),
         None,
@@ -550,7 +550,7 @@ fn pane_rename(state: &AppState, context: &ControlContext, arguments: Value) -> 
     let args: RenameArgs = parse(arguments, "pane.rename")?;
     ensure_pane_read(state, context, &args.id)?;
     let pane = state.rename_pane(&args.id, args.name).map_err(internal)?;
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "pane.renamed",
         Some(pane.id.clone()),
         pane.agent_id.clone(),
@@ -895,7 +895,7 @@ fn artifact_open(state: &AppState, context: &ControlContext, arguments: Value) -
     let resolved =
         crate::control_socket::resolve_browser_target(state, &artifact.pane_id, target, None)
             .map_err(internal)?;
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "browser.open",
         Some(artifact.pane_id.clone()),
         None,
@@ -1128,7 +1128,7 @@ fn split_resize(state: &AppState, context: &ControlContext, arguments: Value) ->
 
 fn request_pane_focus(state: &AppState, pane_id: &str) {
     state.touch_pane_active(pane_id);
-    state.emit(QmuxEvent::new(
+    state.emit(SessionEvent::new(
         "pane.focus_requested",
         Some(pane_id.to_string()),
         None,
@@ -1213,7 +1213,7 @@ impl PublicWaitSlot {
         } else {
             Err(ControlFailure::new(
                 "too_many_waits",
-                "too many qmux CLI waits are already active",
+                "too many Session CLI waits are already active",
             ))
         }
     }

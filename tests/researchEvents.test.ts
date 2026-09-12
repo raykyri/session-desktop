@@ -21,7 +21,7 @@ import {
   upsertResearchNode,
 } from "../src/lib/researchEvents";
 import type {
-  QmuxEvent,
+  SessionEvent,
   ResearchHighlight,
   ResearchNode,
   ResearchTree,
@@ -93,7 +93,7 @@ function detail(nodes: ResearchNode[], overrides: Partial<ResearchTree> = {}): R
   return { tree: tree(overrides), nodes };
 }
 
-function qmuxEvent(type: string, payload: Record<string, unknown>): QmuxEvent {
+function sessionEvent(type: string, payload: Record<string, unknown>): SessionEvent {
   return { type, payload, timestamp: 100 };
 }
 
@@ -128,7 +128,7 @@ test("parseResearchEvent recognizes the complete backend research taxonomy", () 
   ];
 
   for (const [type, payload] of cases) {
-    const parsed = parseResearchEvent(qmuxEvent(type, payload));
+    const parsed = parseResearchEvent(sessionEvent(type, payload));
     assert.equal(parsed.kind, "event", type);
     if (parsed.kind === "event") {
       assert.equal(parsed.event.type, type);
@@ -138,20 +138,20 @@ test("parseResearchEvent recognizes the complete backend research taxonomy", () 
 });
 
 test("parseResearchEvent separates unrelated, unsupported, and malformed events", () => {
-  assert.deepEqual(parseResearchEvent(qmuxEvent("pane.created", {})), {
+  assert.deepEqual(parseResearchEvent(sessionEvent("pane.created", {})), {
     kind: "notResearch",
   });
-  assert.deepEqual(parseResearchEvent(qmuxEvent("research.future.changed", {})), {
+  assert.deepEqual(parseResearchEvent(sessionEvent("research.future.changed", {})), {
     kind: "unsupported",
     type: "research.future.changed",
   });
-  assert.deepEqual(parseResearchEvent(qmuxEvent("research.node.updated", { node: {} })), {
+  assert.deepEqual(parseResearchEvent(sessionEvent("research.node.updated", { node: {} })), {
     kind: "malformed",
     type: "research.node.updated",
   });
   assert.deepEqual(
     parseResearchEvent(
-      qmuxEvent("research.highlights.removed", {
+      sessionEvent("research.highlights.removed", {
         nodeId: "node-root",
         highlightIds: ["valid", 3],
       }),

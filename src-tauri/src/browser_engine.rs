@@ -2,7 +2,7 @@
 //!
 //! Codex's Browser client speaks Chrome DevTools Protocol after discovering a
 //! small JSON-RPC backend. The standalone shell cannot inherit the user's normal
-//! browser session, and qmux gives each launch a separate, ephemeral profile.
+//! browser session, and Session gives each launch a separate, ephemeral profile.
 
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
@@ -36,7 +36,7 @@ static PROFILE_NONCE: AtomicU64 = AtomicU64::new(0);
 type RpcReply = Result<Value, String>;
 type ScreencastSink = Arc<Mutex<Option<mpsc::SyncSender<ScreencastFrame>>>>;
 
-/// One `Page.screencastFrame` payload on its way to the qmux mirror.
+/// One `Page.screencastFrame` payload on its way to the Session mirror.
 ///
 /// Frames carry a full base64 JPEG, so they bypass the Browser client's event
 /// broadcast entirely: copying a Retina-sized image into every connected
@@ -107,7 +107,7 @@ impl BrowserEngine {
         }
     }
 
-    /// Route `Page.screencastFrame` payloads to the qmux mirror instead of the
+    /// Route `Page.screencastFrame` payloads to the Session mirror instead of the
     /// Browser client event stream. A single sink is enough: the app installs
     /// one pump at startup and every mirrored pane reads from it.
     pub fn set_screencast_sink(&self, sink: Option<mpsc::SyncSender<ScreencastFrame>>) {
@@ -180,7 +180,7 @@ impl ChromiumRuntime {
     ) -> Result<Self, String> {
         cleanup_stale_profile_dirs();
         let executable = find_headless_shell_executable().ok_or_else(|| {
-            "chrome-headless-shell was not found; install it with Playwright or set QMUX_CHROME_HEADLESS_SHELL_PATH"
+            "chrome-headless-shell was not found; install it with Playwright or set SESSION_CHROME_HEADLESS_SHELL_PATH"
                 .to_string()
         })?;
         let profile_dir = unique_profile_dir();
@@ -645,7 +645,7 @@ impl ChromiumRuntime {
         let result = result?;
         // Remember which tabs stream so their frames are routed to the mirror
         // (and acknowledged here) instead of being broadcast as ordinary CDP
-        // events. qmux is the only screencast caller; a Browser client that
+        // events. Session is the only screencast caller; a Browser client that
         // started one would find its frames consumed by the mirror pump.
         match method.as_str() {
             "Page.stopScreencast" => {
@@ -743,7 +743,7 @@ impl ChromiumRuntime {
         let started_at = Instant::now();
         let session_label = session_id.unwrap_or("browser");
         eprintln!(
-            "qmux: CDP send id={id} method={method} session={session_label} timeout_ms={}",
+            "session: CDP send id={id} method={method} session={session_label} timeout_ms={}",
             timeout.as_millis()
         );
         self.waiting_cdp_ids.insert(id);
@@ -774,7 +774,7 @@ impl ChromiumRuntime {
             .socket
             .send(Message::text(Value::Object(command).to_string()))
         {
-            eprintln!("qmux: CDP send id={id} method={method} status=error detail={err}");
+            eprintln!("session: CDP send id={id} method={method} status=error detail={err}");
             return;
         }
         if self.unwaited_cdp_ids.len() >= MAX_UNWAITED_CDP_IDS {
@@ -833,7 +833,7 @@ impl ChromiumRuntime {
                             .and_then(Value::as_str)
                             .unwrap_or("unknown CDP error");
                         eprintln!(
-                            "qmux: CDP receive id={id} method={method} session={response_session} expected_session={session_label} status=error elapsed_ms={} detail={detail}",
+                            "session: CDP receive id={id} method={method} session={response_session} expected_session={session_label} status=error elapsed_ms={} detail={detail}",
                             started_at.elapsed().as_millis()
                         );
                         if detail.contains("Session with given id not found")
@@ -849,7 +849,7 @@ impl ChromiumRuntime {
                         return Err(format!("{method}: {detail}"));
                     }
                     eprintln!(
-                        "qmux: CDP receive id={id} method={method} session={response_session} expected_session={session_label} status=ok elapsed_ms={}",
+                        "session: CDP receive id={id} method={method} session={response_session} expected_session={session_label} status=ok elapsed_ms={}",
                         started_at.elapsed().as_millis()
                     );
                     return Ok(message.get("result").cloned().unwrap_or(Value::Null));
@@ -866,13 +866,13 @@ impl ChromiumRuntime {
                             .unwrap_or("browser");
                         if self.waiting_cdp_ids.contains(&unexpected_id) {
                             eprintln!(
-                                "qmux: CDP defer id={unexpected_id} session={response_session} while_waiting_for_id={id} method={method} session={session_label} elapsed_ms={}",
+                                "session: CDP defer id={unexpected_id} session={response_session} while_waiting_for_id={id} method={method} session={session_label} elapsed_ms={}",
                                 started_at.elapsed().as_millis()
                             );
                             defer_cdp_response(&mut self.deferred_responses, message);
                         } else {
                             eprintln!(
-                                "qmux: CDP discard late response id={unexpected_id} session={response_session} while_waiting_for_id={id} method={method} session={session_label} elapsed_ms={}",
+                                "session: CDP discard late response id={unexpected_id} session={response_session} while_waiting_for_id={id} method={method} session={session_label} elapsed_ms={}",
                                 started_at.elapsed().as_millis()
                             );
                         }
@@ -881,7 +881,7 @@ impl ChromiumRuntime {
                 Ok(None) => {}
                 Err(err) => {
                     eprintln!(
-                        "qmux: CDP read-error id={id} method={method} session={session_label} elapsed_ms={} detail={err}",
+                        "session: CDP read-error id={id} method={method} session={session_label} elapsed_ms={} detail={err}",
                         started_at.elapsed().as_millis()
                     );
                     return Err(err);
@@ -889,7 +889,7 @@ impl ChromiumRuntime {
             }
             if Instant::now() >= deadline {
                 eprintln!(
-                    "qmux: CDP timeout id={id} method={method} session={session_label} elapsed_ms={}",
+                    "session: CDP timeout id={id} method={method} session={session_label} elapsed_ms={}",
                     started_at.elapsed().as_millis()
                 );
                 return Err(format!("CDP method {method} timed out"));
@@ -1092,12 +1092,12 @@ fn run_engine(
                 if let Some(id) = message.get("id").and_then(Value::as_u64)
                     && !runtime.take_unwaited_cdp_id(id)
                 {
-                    eprintln!("qmux: CDP discard late response id={id} with no command waiting");
+                    eprintln!("session: CDP discard late response id={id} with no command waiting");
                 }
             }
             Ok(None) => {}
             Err(err) => {
-                eprintln!("qmux: chrome-headless-shell CDP controller stopped: {err}");
+                eprintln!("session: chrome-headless-shell CDP controller stopped: {err}");
                 return;
             }
         }
@@ -1165,18 +1165,18 @@ fn validate_cdp_command(method: &str, params: &Value) -> Result<(), String> {
 /// Locates the `chrome-headless-shell` binary for the automation backend.
 ///
 /// Trust model: every location searched implicitly must be one a process
-/// running as the same user as qmux cannot plant binaries in. A planted binary
-/// would be executed by qmux outside any agent sandbox, so implicit discovery
+/// running as the same user as Session cannot plant binaries in. A planted binary
+/// would be executed by Session outside any agent sandbox, so implicit discovery
 /// is limited to the app bundle and to PATH directories the effective user
 /// cannot write to — `$HOME` entries, `/opt/homebrew/bin`, and the default
 /// per-user Playwright cache are all same-user-writable and therefore excluded.
 /// Two explicit operator overrides bypass the restriction (both are read from
-/// qmux's own environment, which a terminal process cannot change after
-/// launch): `QMUX_CHROME_HEADLESS_SHELL_PATH` names the executable directly,
+/// Session's own environment, which a terminal process cannot change after
+/// launch): `SESSION_CHROME_HEADLESS_SHELL_PATH` names the executable directly,
 /// and `PLAYWRIGHT_BROWSERS_PATH` names a Playwright cache root. Best-effort:
 /// the writability probe runs at discovery time, not at exec.
 fn find_headless_shell_executable() -> Option<PathBuf> {
-    if let Some(path) = std::env::var_os("QMUX_CHROME_HEADLESS_SHELL_PATH") {
+    if let Some(path) = std::env::var_os("SESSION_CHROME_HEADLESS_SHELL_PATH") {
         let path = PathBuf::from(path);
         if is_executable_file(&path) {
             return Some(path);
@@ -1211,7 +1211,7 @@ fn find_headless_shell_executable() -> Option<PathBuf> {
 /// Scans a `PATH`-shaped value for a headless-shell executable, skipping
 /// directories the effective user can write to: a candidate found there could
 /// equally well have been planted by any same-user process (an agent), so
-/// executing it would hand that process a launch point inside qmux.
+/// executing it would hand that process a launch point inside Session.
 fn headless_shell_from_path(path_value: &std::ffi::OsStr) -> Option<PathBuf> {
     std::env::split_paths(path_value)
         .filter(|directory| !is_user_writable_directory(directory))
@@ -1224,7 +1224,7 @@ fn headless_shell_from_path(path_value: &std::ffi::OsStr) -> Option<PathBuf> {
         .find(|path| is_executable_file(path))
 }
 
-/// Playwright cache roots qmux may scan. Only explicitly configured roots are
+/// Playwright cache roots Session may scan. Only explicitly configured roots are
 /// searched; the default per-user cache (`~/Library/Caches/ms-playwright`) is
 /// deliberately absent because it exists precisely to be user-writable.
 fn playwright_cache_roots() -> Vec<PathBuf> {
@@ -1367,12 +1367,12 @@ fn cleanup_stale_profile_dirs() {
         if close_sent || browser_pid.is_none_or(|pid| !process_is_alive(pid)) {
             if let Err(err) = fs::remove_dir_all(&profile_dir) {
                 eprintln!(
-                    "qmux: failed to remove stale browser profile {}: {err}",
+                    "session: failed to remove stale browser profile {}: {err}",
                     profile_dir.display()
                 );
             } else {
                 eprintln!(
-                    "qmux: reclaimed stale chrome-headless-shell profile {}",
+                    "session: reclaimed stale chrome-headless-shell profile {}",
                     profile_dir.display()
                 );
             }
@@ -1631,7 +1631,7 @@ mod tests {
 
     #[test]
     fn playwright_discovery_uses_only_explicit_configuration() {
-        // With PLAYWRIGHT_BROWSERS_PATH unset, qmux must not fall back to
+        // With PLAYWRIGHT_BROWSERS_PATH unset, Session must not fall back to
         // scanning the default per-user Playwright cache: it is user-writable,
         // so a planted chrome-headless-shell there would be executed by qmux.
         if std::env::var_os("PLAYWRIGHT_BROWSERS_PATH").is_some() {

@@ -4,7 +4,7 @@
 // human browser at a non-existent host (or worse, load a custom-protocol path
 // that panics). Instead we keep the path as a qmux-file: URL that openLink
 // recognizes and routes through the token-scoped file server.
-export const QMUX_FILE_HREF_PREFIX = "qmux-file:";
+export const SESSION_FILE_HREF_PREFIX = "qmux-file:";
 
 // Transcript renderers and Ghostty commonly include display-only suffixes in a
 // detected path: source positions (`/path/to/file.ts:36`, `:36:8`, or a Devin
@@ -70,7 +70,7 @@ export function safeHref(href: unknown): string | undefined {
   }
   const localPath = absoluteLocalFilePath(href);
   if (localPath) {
-    return `${QMUX_FILE_HREF_PREFIX}${localPath}`;
+    return `${SESSION_FILE_HREF_PREFIX}${localPath}`;
   }
   let url: URL;
   try {
@@ -83,7 +83,7 @@ export function safeHref(href: unknown): string | undefined {
   // links, but reject every other relative destination as non-navigable.
   if (url.hostname === "qmux.invalid") {
     return absoluteLocalFilePath(url.pathname) !== undefined
-      ? `${QMUX_FILE_HREF_PREFIX}${url.pathname}`
+      ? `${SESSION_FILE_HREF_PREFIX}${url.pathname}`
       : undefined;
   }
   // Return the resolved absolute URL, not the raw href: a protocol-relative
@@ -150,8 +150,8 @@ export function absoluteLocalFilePath(href: string): string | undefined {
   if (!trimmed) {
     return undefined;
   }
-  if (trimmed.startsWith(QMUX_FILE_HREF_PREFIX)) {
-    const path = trimmed.slice(QMUX_FILE_HREF_PREFIX.length);
+  if (trimmed.startsWith(SESSION_FILE_HREF_PREFIX)) {
+    const path = trimmed.slice(SESSION_FILE_HREF_PREFIX.length);
     if (path.startsWith("/")) {
       return withoutTrailingPathDecoration(path);
     }
@@ -197,15 +197,15 @@ export function absoluteLocalFilePath(href: string): string | undefined {
   return undefined;
 }
 
-export function isQmuxFileHref(url: string): boolean {
-  return url.startsWith(QMUX_FILE_HREF_PREFIX);
+export function isSessionFileHref(url: string): boolean {
+  return url.startsWith(SESSION_FILE_HREF_PREFIX);
 }
 
-export function pathFromQmuxFileHref(url: string): string | undefined {
-  if (!isQmuxFileHref(url)) {
+export function pathFromSessionFileHref(url: string): string | undefined {
+  if (!isSessionFileHref(url)) {
     return undefined;
   }
-  const path = url.slice(QMUX_FILE_HREF_PREFIX.length);
+  const path = url.slice(SESSION_FILE_HREF_PREFIX.length);
   return path.length > 0 ? withoutTrailingPathDecoration(path) : undefined;
 }
 
@@ -293,7 +293,7 @@ export function loopbackHtmlUrl(value: unknown): string | undefined {
   return /\.html$/iu.test(parsed.pathname) ? parsed.href : undefined;
 }
 
-// Normal http(s) links render through qmux's isolated Chromium automation profile.
+// Normal http(s) links render through Session's isolated Chromium automation profile.
 // Token-bearing file previews are still detected separately and rendered in the
 // webview's sandboxed iframe. mailto and custom schemes remain OS-owned.
 export function canRenderInInternalBrowser(url: string): boolean {

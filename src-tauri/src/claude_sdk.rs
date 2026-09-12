@@ -449,13 +449,13 @@ impl ClaudeSdkSession {
             })?;
         let _ = writeln!(
             stderr_file,
-            "qmux: research SDK spawn binary={} cwd={}",
+            "session: research SDK spawn binary={} cwd={}",
             spec.binary,
             spec.cwd.display()
         );
         let _ = writeln!(
             stderr_file,
-            "qmux: research SDK argv=-p --output-format stream-json --verbose --input-format stream-json --include-partial-messages --permission-prompt-tool stdio --permission-mode dontAsk --safe-mode --setting-sources= --disable-slash-commands --tools {READ_ONLY_TOOLS} --allowedTools {READ_ONLY_TOOLS} --strict-mcp-config --no-chrome"
+            "session: research SDK argv=-p --output-format stream-json --verbose --input-format stream-json --include-partial-messages --permission-prompt-tool stdio --permission-mode dontAsk --safe-mode --setting-sources= --disable-slash-commands --tools {READ_ONLY_TOOLS} --allowedTools {READ_ONLY_TOOLS} --strict-mcp-config --no-chrome"
         );
         let mut command = Command::new(&spec.binary);
         command
@@ -502,14 +502,14 @@ impl ClaudeSdkSession {
             }
         }
         if std::env::var_os("ANTHROPIC_API_KEY").is_some() {
-            eprintln!("qmux: research auth: ANTHROPIC_API_KEY (subscription Keychain skipped)");
+            eprintln!("session: research auth: ANTHROPIC_API_KEY (subscription Keychain skipped)");
         } else {
-            eprintln!("qmux: research auth: Claude Code login");
+            eprintln!("session: research auth: Claude Code login");
         }
         let mut child = command
             .spawn()
             .map_err(|err| format!("failed to spawn Claude Code: {err}"))?;
-        eprintln!("qmux: research SDK pid={}", child.id());
+        eprintln!("session: research SDK pid={}", child.id());
         let Some(stdin) = child.stdin.take() else {
             terminate_child_after_spawn_failure(&mut child);
             return Err("Claude Code stdin was not piped".to_string());
@@ -810,11 +810,11 @@ fn copy_bounded_stderr(mut stderr: impl Read, mut log: impl Write) {
             let _ = log.write_all(&buf[..keep]);
             written += keep;
             if keep < read && !truncated {
-                let _ = log.write_all(b"\nqmux: stderr log truncated at 4 MB\n");
+                let _ = log.write_all(b"\nsession: stderr log truncated at 4 MB\n");
                 truncated = true;
             }
         } else if !truncated {
-            let _ = log.write_all(b"\nqmux: stderr log truncated at 4 MB\n");
+            let _ = log.write_all(b"\nsession: stderr log truncated at 4 MB\n");
             truncated = true;
         }
     }

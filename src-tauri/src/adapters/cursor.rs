@@ -7,8 +7,8 @@ use super::{
     reusable_session_agent, same_dir, shell_cli_model, shell_quote_arg, shell_quote_path,
     string_field, subagent_id,
 };
-use crate::config::QmuxConfig;
-use crate::events::QmuxEvent;
+use crate::config::SessionConfig;
+use crate::events::SessionEvent;
 use crate::pty::{
     CommandPlan, InitialPaneSize, PaneMeta, agent_pane_envs, plan_to_spec, recoverable_dir,
     spawn_pty,
@@ -30,7 +30,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Adapter for the Cursor Agent CLI (`cursor-agent`).
 ///
-/// Cursor's interactive TUI is launched in a qmux pane. Lifecycle comes from a
+/// Cursor's interactive TUI is launched in a session pane. Lifecycle comes from a
 /// generated observer plugin loaded with `--plugin-dir` (not from user/project
 /// `hooks.json`, which would be a shared writable target across panes). Native
 /// transcripts live under `~/.cursor/projects/<slug>/agent-transcripts/<id>/`
@@ -40,9 +40,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// `turn_ended` record is the idle signal.
 ///
 /// cursor-agent runs plugin hooks with a constructed environment that does not
-/// inherit `QMUX_*`, so the Claude-style env-gated shim cannot identify its
-/// pane. qmux writes a binding file per live Cursor pane and the generated
-/// plugin shim calls `qmux cursor-notify`, matching Muse. See
+/// inherit `SESSION_*`, so the Claude-style env-gated shim cannot identify its
+/// pane. Session writes a binding file per live Cursor pane and the generated
+/// plugin shim calls `session cursor-notify`, matching Muse. See
 /// [`write_cursor_binding`].
 ///
 /// There is no native fork command, and this adapter does not opt into remote
@@ -54,7 +54,7 @@ pub struct CursorAdapter {
 }
 
 impl CursorAdapter {
-    pub fn new(config: &QmuxConfig) -> Self {
+    pub fn new(config: &SessionConfig) -> Self {
         Self {
             binary: config.cursor_binary(),
             plugin_dir: config.cursor_plugin_dir.clone(),
@@ -271,7 +271,7 @@ impl CursorAdapter {
 
         let pane_id = state.next_id("pane");
         let mut envs = agent_pane_envs(state, &pane_id, &agent.id)?;
-        envs.push(("QMUX_ADAPTER_ID".to_string(), self.id().to_string()));
+        envs.push(("SESSION_ADAPTER_ID".to_string(), self.id().to_string()));
         attach_cursor_agent_pane(state, &agent.id, pane_id.clone(), has_initial_prompt)?;
         write_cursor_binding(state, &pane_id, &agent.id, &cwd, None)?;
         let spawn_result = plan_to_spec(
@@ -327,7 +327,7 @@ impl CursorAdapter {
             agent.session_id.as_deref(),
         )?;
         let mut envs = agent_pane_envs(state, &pane.id, &agent.id)?;
-        envs.push(("QMUX_ADAPTER_ID".to_string(), self.id().to_string()));
+        envs.push(("SESSION_ADAPTER_ID".to_string(), self.id().to_string()));
         write_cursor_binding(
             state,
             &pane.id,
@@ -372,7 +372,7 @@ impl CursorAdapter {
                 self.id().to_string(),
             );
         }
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.recovered",
             Some(pane.id.clone()),
             Some(restored.id.clone()),
@@ -483,11 +483,11 @@ impl CursorAdapter {
         )?;
         args.extend(request.args);
         let mut envs = agent_pane_envs(state, &request.pane_id, &agent.id)?;
-        envs.push(("QMUX_ADAPTER_ID".to_string(), self.id().to_string()));
+        envs.push(("SESSION_ADAPTER_ID".to_string(), self.id().to_string()));
         if let Some(session_id) = resume_session_id {
-            envs.push(("QMUX_ROOT_SESSION_ID".to_string(), session_id));
+            envs.push(("SESSION_ROOT_SESSION_ID".to_string(), session_id));
         }
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.spawned",
             Some(request.pane_id.clone()),
             Some(agent.id.clone()),
@@ -617,7 +617,7 @@ impl CursorAdapter {
                 "agent.session_end"
             }
             other => {
-                return Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+                return Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
                     format!("agent.hook.{other}"),
                     pane_id,
                     agent.map(|agent| agent.id),
@@ -652,7 +652,7 @@ impl CursorAdapter {
                     .map_err(|err| format!("failed to encode agent: {err}"))?,
             );
         }
-        Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+        Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
             event_type,
             pane_id,
             agent.map(|agent| agent.id),
@@ -982,7 +982,7 @@ fn finish_agent_after_stop(state: &AppState, agent: &AgentInfo) -> Result<bool, 
         Ok(IdleResolution::Drained) => Ok(true),
         Ok(IdleResolution::Paused | IdleResolution::Idle) => Ok(false),
         Err(err) => {
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "agent.queue_error",
                 agent.pane_id.clone(),
                 Some(agent.id.clone()),
@@ -1078,8 +1078,8 @@ fn cursor_session_id_acceptable(value: &str) -> bool {
 // Pane bindings and generated plugin
 //
 // cursor-agent runs plugin hooks with a constructed env that does not inherit
-// QMUX_*. The bundled env-gated shim therefore never notifies, so a restored
-// pane has no session id to `--resume`. qmux materializes a plugin overlay
+// SESSION_*. The bundled env-gated shim therefore never notifies, so a restored
+// pane has no session id to `--resume`. Session materializes a plugin overlay
 // whose shim calls `cursor-notify` with a baked CLI path and bindings dir,
 // and writes one binding file per live pane (the Muse pattern).
 // ---------------------------------------------------------------------------
@@ -1089,7 +1089,7 @@ fn ensure_source_cursor_plugin(source: &Path) -> Result<(), String> {
     let hooks = source.join("hooks").join("hooks.json");
     if !source.is_dir() || !manifest.is_file() || !hooks.is_file() {
         return Err(format!(
-            "Cursor integration plugin was not found at {}. Reinstall qmux or set QMUX_CURSOR_PLUGIN_DIR to the bundled qmux-cursor-plugin directory.",
+            "Cursor integration plugin was not found at {}. Reinstall qmux or set SESSION_CURSOR_PLUGIN_DIR to the bundled qmux-cursor-plugin directory.",
             source.display()
         ));
     }
@@ -1097,7 +1097,7 @@ fn ensure_source_cursor_plugin(source: &Path) -> Result<(), String> {
 }
 
 pub(crate) fn cursor_integration_home() -> Result<PathBuf, String> {
-    if let Some(explicit) = env::var_os("QMUX_CURSOR_HOME") {
+    if let Some(explicit) = env::var_os("SESSION_CURSOR_HOME") {
         return Ok(PathBuf::from(explicit));
     }
     let data_home = env::var_os("XDG_DATA_HOME")
@@ -1117,7 +1117,7 @@ fn cursor_bindings_dir() -> Result<PathBuf, String> {
 fn ensure_cursor_plugin_overlay(source: &Path) -> Result<PathBuf, String> {
     let home = cursor_integration_home()?;
     let plugin_dir = home.join("plugin");
-    let cli = crate::launch_path::qmux_cli_path()?;
+    let cli = crate::launch_path::session_cli_path()?;
     let bindings = cursor_bindings_dir()?;
     let shim = cursor_hook_shim(&cli, &bindings);
     let manifest = fs::read_to_string(source.join(".cursor-plugin").join("plugin.json"))
@@ -1163,7 +1163,7 @@ fn ensure_cursor_plugin_overlay(source: &Path) -> Result<PathBuf, String> {
 fn cursor_hook_shim(cli_path: &Path, bindings_dir: &Path) -> String {
     format!(
         r#"#!/bin/sh
-# Generated by qmux. Do not edit.
+# Generated by Session. Do not edit.
 event="${{1:-}}"
 payload=$(cat || true)
 if [ -n "$event" ]; then
@@ -1214,7 +1214,7 @@ fn claim_cursor_binding(agent: &AgentInfo, session_id: &str) {
         return;
     };
     if let Err(err) = stamp_cursor_binding_session(pane_id, session_id) {
-        eprintln!("qmux: failed to record Cursor session binding for pane {pane_id}: {err}");
+        eprintln!("session: failed to record Cursor session binding for pane {pane_id}: {err}");
     }
 }
 
@@ -1349,7 +1349,7 @@ fn parse_transcript_line(agent_id: &str, source_index: usize, line: &str) -> Opt
 }
 
 /// Cursor Agent persists prompts as `<timestamp>` + `<user_query>` harness.
-/// Leaving those tags in the turn makes qmux's injected-instruction detector
+/// Leaving those tags in the turn makes Session's injected-instruction detector
 /// collapse the user's words into a chip, so unwrap before the timeline sees them.
 fn normalize_cursor_user_turn(turn: &mut Turn) {
     for block in &mut turn.blocks {
@@ -1577,7 +1577,7 @@ mod tests {
         assert!(shim.contains("cursor-notify"));
         assert!(shim.contains("'/Applications/qmux.app/qmux'"));
         assert!(shim.contains("'/data/qmux/cursor/bindings'"));
-        assert!(!shim.contains("QMUX_SOCK"));
+        assert!(!shim.contains("SESSION_SOCK"));
         assert!(shim.contains("printf '%s\\n' '{}'"));
     }
 
@@ -1673,7 +1673,7 @@ mod tests {
     }
 
     fn test_state() -> AppState {
-        AppState::new(QmuxConfig {
+        AppState::new(SessionConfig {
             remotes: Default::default(),
             workspace_root: PathBuf::from("/tmp/qmux-cursor-test"),
             socket_path: PathBuf::from("/tmp/qmux-cursor-test.sock"),
@@ -1713,7 +1713,7 @@ mod tests {
         }
     }
 
-    fn ingest(state: &AppState, event: &str) -> QmuxEvent {
+    fn ingest(state: &AppState, event: &str) -> SessionEvent {
         match CursorAdapter::new(state.config()).ingest_notification(
             state,
             AdapterNotification {

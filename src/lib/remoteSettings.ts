@@ -5,7 +5,7 @@ export interface RemoteSettingsDraft {
   label: string;
   host: string;
   workspaceRoot: string;
-  qmuxCli: string;
+  sessionCli: string;
   multiplexer: RemoteChoice["multiplexer"];
 }
 
@@ -42,7 +42,7 @@ export function remoteDraftFromSshAlias(
     label: alias,
     host: alias,
     workspaceRoot: "",
-    qmuxCli: "",
+    sessionCli: "",
     multiplexer: "tmux",
   };
 }

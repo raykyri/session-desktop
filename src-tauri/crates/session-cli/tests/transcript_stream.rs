@@ -1,4 +1,4 @@
-use qmux_cli::transcript_stream::{Cursor, Frame};
+use session_cli::transcript_stream::{Cursor, Frame};
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -14,7 +14,7 @@ impl Drop for Stream {
     }
 }
 fn launch(adapter: &str, session: &str, path: &Path, home: &Path, cursor: &Cursor) -> Stream {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_qmux-cli"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_session-cli"))
         .args([
             "transcript-stream",
             adapter,
@@ -118,7 +118,7 @@ fn codex_discovers_rollout_by_session_and_rejects_wrong_hint() {
 
 #[test]
 fn large_image_record_resumes_mid_record_and_delivers_following_messages() {
-    use qmux_cli::transcript_stream::MAX_CHUNK;
+    use session_cli::transcript_stream::MAX_CHUNK;
     let dir = std::env::temp_dir().join(format!("qmux-large-stream-{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let path = dir.join("large-session.jsonl");

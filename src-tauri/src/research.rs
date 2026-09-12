@@ -784,7 +784,7 @@ fn validate_detached_archive(archive: &DetachedResearchArchive) -> Result<(), St
         }
         // The export path severs every pointer back to the source session and
         // settles the node Complete before it becomes durable. An archive
-        // node that claims otherwise was not written by qmux, and importing
+        // node that claims otherwise was not written by Session, and importing
         // it would hand the shared read/bind machinery a conversation with
         // live-looking bindings.
         if node.kind == ResearchNodeKind::Conversation
@@ -1064,7 +1064,7 @@ fn read_detached_research_from_path(
     // The version gate must run against the raw JSON before the typed parse:
     // a future archive version can carry node kinds this build's enums do not
     // know, and failing on those first would misreport "written by a newer
-    // qmux" as manifest corruption (with move-this-directory-aside guidance
+    // Session" as manifest corruption (with move-this-directory-aside guidance
     // that discards a valid archive).
     let raw_value: serde_json::Value = serde_json::from_slice(&raw)
         .map_err(|err| format!("failed to decode {}: {err}", manifest_path.display()))?;
@@ -1522,7 +1522,7 @@ pub fn prune_response_snapshots(
                 && err.kind() != std::io::ErrorKind::NotFound
             {
                 eprintln!(
-                    "qmux: failed to prune stale research response {}: {err}",
+                    "session: failed to prune stale research response {}: {err}",
                     path.display()
                 );
             }
@@ -1538,7 +1538,7 @@ fn prune_research_logs(workspace_root: &Path, valid_node_ids: &HashSet<String>) 
         Ok(entries) => entries,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return,
         Err(err) => {
-            eprintln!("qmux: failed to list {}: {err}", dir.display());
+            eprintln!("session: failed to list {}: {err}", dir.display());
             return;
         }
     };
@@ -1557,7 +1557,7 @@ fn prune_research_logs(workspace_root: &Path, valid_node_ids: &HashSet<String>) 
             && err.kind() != std::io::ErrorKind::NotFound
         {
             eprintln!(
-                "qmux: failed to prune research log {}: {err}",
+                "session: failed to prune research log {}: {err}",
                 path.display()
             );
         }
@@ -1593,7 +1593,7 @@ pub fn remove_response_snapshot(workspace_root: &Path, node_id: &str) -> Result<
 /// trims to the node's response) and terminal conversation export (which
 /// keeps the whole timeline).
 pub fn load_transcript_turns(
-    config: &crate::config::QmuxConfig,
+    config: &crate::config::SessionConfig,
     adapter_id: &str,
     agent_id: &str,
     path: &str,
@@ -1619,7 +1619,7 @@ pub fn load_transcript_turns(
 }
 
 pub fn load_transcript_response(
-    config: &crate::config::QmuxConfig,
+    config: &crate::config::SessionConfig,
     node: &ResearchNode,
     ancestor_prompts: &[String],
 ) -> Result<Vec<crate::transcript::Turn>, String> {

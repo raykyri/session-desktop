@@ -6,8 +6,8 @@ use super::{
     prepared_shell_agent, record_shell_session_lineage, reusable_session_agent, shell_cli_model,
     shell_quote_arg, shell_quote_path,
 };
-use crate::config::QmuxConfig;
-use crate::events::QmuxEvent;
+use crate::config::SessionConfig;
+use crate::events::SessionEvent;
 use crate::pty::{
     CommandPlan, InitialPaneSize, PaneMeta, agent_pane_envs, plan_to_spec, recoverable_dir,
     spawn_pty,
@@ -54,8 +54,8 @@ const GROK_HOOK_EVENTS: &[&str] = &[
 /// (shell commands run at lifecycle events, event JSON on stdin), so qMux integrates
 /// it like its Claude and Codex adapters rather than like OpenCode: a qMux-managed
 /// hook file is installed at `~/.grok/hooks/qmux.json` and a shim forwards each
-/// lifecycle event back to qMux via `qmux notify <event>`. The hook command no-ops
-/// outside qMux (it checks for the `QMUX_*` env vars only qMux-launched panes set),
+/// lifecycle event back to qMux via `session notify <event>`. The hook command no-ops
+/// outside qMux (it checks for the `SESSION_*` env vars only qMux-launched panes set),
 /// so standalone `grok` runs are unaffected. Agent status (running, idle, awaiting
 /// permission) is driven by these hooks; the transcript timeline binds to the
 /// transcript path the `SessionStart` hook reports when Grok provides one.
@@ -65,7 +65,7 @@ pub struct GrokAdapter {
 }
 
 impl GrokAdapter {
-    pub fn new(config: &QmuxConfig) -> Self {
+    pub fn new(config: &SessionConfig) -> Self {
         Self {
             binary: config.grok_binary(),
         }
@@ -131,7 +131,7 @@ impl AgentAdapter for GrokAdapter {
 
     fn shell_commands(&self) -> Vec<ShellCommandIntegration> {
         // Grok ships the same binary as both `grok` and `agent`. Wrap both so a
-        // typed `agent` in a qmux shell is supervised like `grok`. `qmux agent`
+        // typed `agent` in a Session shell is supervised like `grok`. `session agent`
         // stays the public CLI and is not this alias.
         vec![
             ShellCommandIntegration {
@@ -386,7 +386,7 @@ impl GrokAdapter {
             );
         }
 
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.recovered",
             Some(pane.id.clone()),
             Some(restored.id.clone()),
@@ -581,7 +581,7 @@ impl GrokAdapter {
         let agent_id = agent.id.clone();
         let launch_cwd = shell_cwd.display().to_string();
 
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.spawned",
             Some(request.pane_id),
             Some(agent_id),
@@ -877,7 +877,7 @@ impl GrokAdapter {
                 }
             }
             other => {
-                return Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+                return Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
                     format!("agent.hook.{other}"),
                     pane_id,
                     agent.map(|agent| agent.id),
@@ -919,7 +919,7 @@ impl GrokAdapter {
             );
         }
 
-        Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+        Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
             event_type,
             pane_id,
             agent.map(|agent| agent.id),
@@ -1288,20 +1288,20 @@ fn write_grok_integration_files(grok_home: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// POSIX shim that forwards a Grok lifecycle event to `qmux notify <event>`. No-ops
+/// POSIX shim that forwards a Grok lifecycle event to `session notify <event>`. No-ops
 /// (exit 0) unless launched inside a qMux pane, so a standalone `grok` run that
 /// inherits the globally-installed hook is unaffected. The event JSON Grok writes to
-/// the shim's stdin is passed through to qmux, which reads it as the hook payload.
+/// the shim's stdin is passed through to Session, which reads it as the hook payload.
 fn grok_hook_shim() -> &'static str {
     r#"#!/bin/sh
 event="${1:-}"
 if [ -z "$event" ]; then
   exit 0
 fi
-if [ -z "${QMUX_SOCK:-}" ] || [ -z "${QMUX_TOKEN:-}" ] || [ -z "${QMUX_PANE_ID:-}" ] || [ -z "${QMUX_AGENT_ID:-}" ] || [ -z "${QMUX_CLI:-}" ]; then
+if [ -z "${SESSION_SOCK:-}" ] || [ -z "${SESSION_TOKEN:-}" ] || [ -z "${SESSION_PANE_ID:-}" ] || [ -z "${SESSION_AGENT_ID:-}" ] || [ -z "${SESSION_CLI:-}" ]; then
   exit 0
 fi
-exec "$QMUX_CLI" notify "$event"
+exec "$SESSION_CLI" notify "$event"
 "#
 }
 
@@ -1644,7 +1644,7 @@ fn args_contain_directory(args: &[String]) -> bool {
 
 /// The project Grok will actually operate on for a shell invocation. Keep this
 /// separate from the process cwd: relative CLI paths retain normal shell semantics,
-/// while the qmux agent identity, resume matching, and native transcript grouping
+/// while the session agent identity, resume matching, and native transcript grouping
 /// follow Grok's explicit `--cwd` override.
 fn grok_effective_cwd(shell_cwd: &Path, args: &[String]) -> Result<PathBuf, String> {
     let mut requested = None;
@@ -1694,7 +1694,7 @@ fn finish_agent_after_stop(state: &AppState, agent: &AgentInfo) -> Result<bool, 
         Ok(IdleResolution::Drained) => Ok(true),
         Ok(IdleResolution::Paused | IdleResolution::Idle) => Ok(false),
         Err(err) => {
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "agent.queue_error",
                 agent.pane_id.clone(),
                 Some(agent.id.clone()),
@@ -1707,7 +1707,7 @@ fn finish_agent_after_stop(state: &AppState, agent: &AgentInfo) -> Result<bool, 
 
 fn finish_agent_after_failure(state: &AppState, agent: &AgentInfo) -> Result<bool, String> {
     if let Err(err) = advance_after_failure(state, &agent.id) {
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.queue_error",
             agent.pane_id.clone(),
             Some(agent.id.clone()),
@@ -1722,7 +1722,7 @@ fn finish_agent_after_failure(state: &AppState, agent: &AgentInfo) -> Result<boo
 /// Grok Build uses Claude-compatible rollout transcripts (the path it reports in
 /// the SessionStart hook under `transcript_path`). We therefore support the native
 /// Claude-style JSONL format first (same as the Claude adapter). We also support
-/// the synthetic "response_item" format (used by Codex/OpenCode and the qmux
+/// the synthetic "response_item" format (used by Codex/OpenCode and the Session
 /// opencode plugin) as a fallback for the qmux-managed transcript path or future
 /// Grok plugin writers.
 ///
@@ -2043,7 +2043,7 @@ fn parse_transcript_lifecycle_event(line: &str) -> Option<TranscriptLifecycleEve
         return Some(ev);
     }
 
-    // Support synthetic event_msg for the qmux fallback path.
+    // Support synthetic event_msg for the Session fallback path.
     if value.get("type").and_then(Value::as_str) != Some("event_msg") {
         return None;
     }
@@ -2115,8 +2115,8 @@ mod tests {
     use crate::state::AppState;
     use std::path::PathBuf;
 
-    fn test_config() -> QmuxConfig {
-        QmuxConfig {
+    fn test_config() -> SessionConfig {
+        SessionConfig {
             remotes: Default::default(),
             workspace_root: PathBuf::from("/tmp/qmux-grok-tests"),
             socket_path: PathBuf::from("/tmp/qmux-grok-tests.sock"),
@@ -2190,7 +2190,7 @@ mod tests {
         }
     }
 
-    fn ingest(state: &AppState, notification: AdapterNotification) -> QmuxEvent {
+    fn ingest(state: &AppState, notification: AdapterNotification) -> SessionEvent {
         let outcome = GrokAdapter::new(state.config())
             .ingest_notification(state, notification)
             .unwrap();
@@ -3337,13 +3337,13 @@ mod tests {
     fn grok_hook_shim_is_env_gated_and_forwards_notify() {
         let shim = grok_hook_shim();
         // No-ops outside qMux: every required env var is checked.
-        assert!(shim.contains("QMUX_SOCK"));
-        assert!(shim.contains("QMUX_TOKEN"));
-        assert!(shim.contains("QMUX_PANE_ID"));
-        assert!(shim.contains("QMUX_AGENT_ID"));
-        assert!(shim.contains("QMUX_CLI"));
-        // Inside qMux it forwards the event to `qmux notify`.
-        assert!(shim.contains(r#"exec "$QMUX_CLI" notify "$event""#));
+        assert!(shim.contains("SESSION_SOCK"));
+        assert!(shim.contains("SESSION_TOKEN"));
+        assert!(shim.contains("SESSION_PANE_ID"));
+        assert!(shim.contains("SESSION_AGENT_ID"));
+        assert!(shim.contains("SESSION_CLI"));
+        // Inside qMux it forwards the event to `session notify`.
+        assert!(shim.contains(r#"exec "$SESSION_CLI" notify "$event""#));
     }
 
     #[test]

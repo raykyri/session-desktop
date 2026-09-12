@@ -5,8 +5,8 @@ use super::{
     record_shell_session_lineage, reusable_session_agent, shell_cli_model, shell_quote_arg,
     shell_quote_path,
 };
-use crate::config::QmuxConfig;
-use crate::events::QmuxEvent;
+use crate::config::SessionConfig;
+use crate::events::SessionEvent;
 use crate::host::{Host, RemoteCommand};
 use crate::pty::{
     CommandPlan, InitialPaneSize, PaneMeta, SupportFile, agent_pane_envs,
@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 
 /// Permission modes the Devin CLI accepts on `--permission-mode`.
 /// `auto` is Devin's default; `normal` is documented as an alias of `auto`.
-/// `autonomous` requires `--sandbox` and is not offered in the qmux launcher.
+/// `autonomous` requires `--sandbox` and is not offered in the Session launcher.
 const DEVIN_PERMISSION_MODES: &[&str] = &[
     "auto",
     "normal",
@@ -40,7 +40,7 @@ const DEVIN_PERMISSION_MODES: &[&str] = &[
 ];
 
 /// Lifecycle events Devin documents and fires. `--config` replaces the user
-/// file rather than merging, so this list is the complete hook set qmux
+/// file rather than merging, so this list is the complete hook set Session
 /// installs. Unknown names are omitted: Devin may reject the whole config.
 const DEVIN_HOOK_EVENTS: &[&str] = &[
     "SessionStart",
@@ -57,8 +57,8 @@ const DEVIN_HOOK_EVENTS: &[&str] = &[
 ///
 /// Devin is a local interactive TUI with Claude-shaped lifecycle hooks, session
 /// resume (`--resume` / `-r`), and ATIF JSON transcripts. This adapter launches
-/// the TUI in a qmux pane and wraps `devin` in qmux shells. Each spawn copies
-/// the user's `~/.config/devin/config.json`, injects `qmux notify` hooks, and
+/// the TUI in a session pane and wraps `devin` in Session shells. Each spawn copies
+/// the user's `~/.config/devin/config.json`, injects `session notify` hooks, and
 /// passes that file as `--config` so the original user file is never written.
 /// Conversation history is `--export`ed to a qmux-owned ATIF JSON file and
 /// parsed as a whole document for the sidebar timeline.
@@ -71,7 +71,7 @@ pub struct DevinAdapter {
 }
 
 impl DevinAdapter {
-    pub fn new(config: &QmuxConfig) -> Self {
+    pub fn new(config: &SessionConfig) -> Self {
         Self {
             binary: config.devin_binary(),
         }
@@ -304,7 +304,7 @@ impl DevinAdapter {
         );
         let mut envs = devin_pane_envs(state, &pane_id, &agent.id)?;
         envs.push((
-            "QMUX_TRANSCRIPT_PATH".to_string(),
+            "SESSION_TRANSCRIPT_PATH".to_string(),
             export_path.display().to_string(),
         ));
         attach_devin_agent_pane(state, &agent.id, pane_id.clone(), has_initial_prompt)?;
@@ -368,7 +368,7 @@ impl DevinAdapter {
         let args = prepend_devin_managed_flags(&config_path, &export_path, args);
         let mut envs = devin_pane_envs(state, &pane.id, &agent.id)?;
         envs.push((
-            "QMUX_TRANSCRIPT_PATH".to_string(),
+            "SESSION_TRANSCRIPT_PATH".to_string(),
             export_path.display().to_string(),
         ));
         let spec = plan_to_spec(
@@ -401,7 +401,7 @@ impl DevinAdapter {
         restored.pane_id = Some(pane.id.clone());
         restored.status = AgentStatus::Idle;
         state.update_agent(restored.clone())?;
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.recovered",
             Some(pane.id.clone()),
             Some(restored.id.clone()),
@@ -490,7 +490,7 @@ impl DevinAdapter {
         let mut envs = devin_pane_envs(state, &request.pane_id, &agent.id)?;
         let export_path = prepare_devin_export(state, &host, &agent.id)?;
         envs.push((
-            "QMUX_TRANSCRIPT_PATH".to_string(),
+            "SESSION_TRANSCRIPT_PATH".to_string(),
             export_path.display().to_string(),
         ));
         let remote_identity = if host.is_local() {
@@ -563,7 +563,7 @@ impl DevinAdapter {
             args_contain_prompt(&request.args),
         )?;
         let agent_id = agent.id.clone();
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.spawned",
             Some(request.pane_id),
             Some(agent_id),
@@ -669,7 +669,7 @@ impl DevinAdapter {
                 }
             }
             other => {
-                return Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+                return Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
                     format!("agent.hook.{other}"),
                     pane_id,
                     agent.map(|agent| agent.id),
@@ -707,7 +707,7 @@ impl DevinAdapter {
             );
         }
 
-        Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+        Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
             event_type,
             pane_id,
             agent.map(|agent| agent.id),
@@ -722,7 +722,7 @@ fn devin_pane_envs(
     agent_id: &str,
 ) -> Result<Vec<(String, String)>, String> {
     let mut envs = agent_pane_envs(state, pane_id, agent_id)?;
-    envs.push(("QMUX_ADAPTER_ID".to_string(), "devin".to_string()));
+    envs.push(("SESSION_ADAPTER_ID".to_string(), "devin".to_string()));
     Ok(envs)
 }
 
@@ -755,7 +755,7 @@ fn prepend_devin_managed_flags(
     out
 }
 
-fn devin_export_path(config: &QmuxConfig, agent_id: &str) -> Result<PathBuf, String> {
+fn devin_export_path(config: &SessionConfig, agent_id: &str) -> Result<PathBuf, String> {
     if agent_id.is_empty()
         || !agent_id
             .bytes()
@@ -930,7 +930,7 @@ fn finish_agent_after_stop(state: &AppState, agent: &AgentInfo) -> Result<bool, 
         Ok(IdleResolution::Drained) => Ok(true),
         Ok(IdleResolution::Paused | IdleResolution::Idle) => Ok(false),
         Err(err) => {
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "agent.queue_error",
                 agent.pane_id.clone(),
                 Some(agent.id.clone()),
@@ -1022,7 +1022,7 @@ fn ensure_shell_setup_complete(document: &mut Value) {
     }
 }
 
-fn apply_devin_hooks(document: &mut Value, qmux_cli: &Path) {
+fn apply_devin_hooks(document: &mut Value, session_cli: &Path) {
     ensure_shell_setup_complete(document);
     let Some(obj) = document.as_object_mut() else {
         return;
@@ -1037,7 +1037,7 @@ fn apply_devin_hooks(document: &mut Value, qmux_cli: &Path) {
                     "hooks": [
                         {
                             "type": "command",
-                            "command": format!("{} notify {}", shell_quote_path(qmux_cli), event)
+                            "command": format!("{} notify {}", shell_quote_path(session_cli), event)
                         }
                     ]
                 }
@@ -1055,9 +1055,9 @@ fn hook_settings_nonce() -> Result<String, String> {
 }
 
 /// Plans the per-spawn Devin `--config` file: a copy of the user's config with
-/// qmux hooks injected. Declarative — nothing is written here.
+/// Session hooks injected. Declarative — nothing is written here.
 fn hook_config_support_file_for_host(
-    config: &QmuxConfig,
+    config: &SessionConfig,
     pane_id: &str,
     host: &Host,
 ) -> Result<(PathBuf, SupportFile), String> {
@@ -1065,7 +1065,7 @@ fn hook_config_support_file_for_host(
 }
 
 fn hook_config_support_file_from(
-    config: &QmuxConfig,
+    config: &SessionConfig,
     pane_id: &str,
     mut document: Value,
 ) -> Result<(PathBuf, SupportFile), String> {
@@ -1084,9 +1084,9 @@ fn hook_config_support_file_from(
 
     let support_root = config.workspace_root.join(".qmux");
     let hooks_dir = support_root.join("hooks");
-    let qmux_cli = crate::launch_path::qmux_cli_path()
-        .map_err(|err| format!("failed to resolve qmux executable for Devin hooks: {err}"))?;
-    apply_devin_hooks(&mut document, &qmux_cli);
+    let session_cli = crate::launch_path::session_cli_path()
+        .map_err(|err| format!("failed to resolve Session executable for Devin hooks: {err}"))?;
+    apply_devin_hooks(&mut document, &session_cli);
     let raw = serde_json::to_string_pretty(&document)
         .map_err(|err| format!("failed to encode Devin hook config: {err}"))?;
 
@@ -1405,8 +1405,8 @@ mod tests {
         dir
     }
 
-    fn test_config() -> QmuxConfig {
-        QmuxConfig {
+    fn test_config() -> SessionConfig {
+        SessionConfig {
             remotes: Default::default(),
             workspace_root: PathBuf::from("/tmp/qmux-devin-tests"),
             socket_path: PathBuf::from("/tmp/qmux-devin-tests.sock"),
@@ -1465,7 +1465,7 @@ mod tests {
         }
     }
 
-    fn ingest(state: &AppState, notification: AdapterNotification) -> QmuxEvent {
+    fn ingest(state: &AppState, notification: AdapterNotification) -> SessionEvent {
         let outcome = DevinAdapter::new(state.config())
             .ingest_notification(state, notification)
             .unwrap();
@@ -1634,7 +1634,7 @@ mod tests {
     #[test]
     fn hook_config_preserves_user_settings_and_injects_notify() {
         let workspace_root = unique_test_dir("qmux-devin-hooks");
-        let config = QmuxConfig {
+        let config = SessionConfig {
             workspace_root: workspace_root.clone(),
             socket_path: workspace_root.join("qmux.sock"),
             ..test_config()

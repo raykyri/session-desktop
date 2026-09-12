@@ -5,8 +5,8 @@ use super::{
     cli_flag_value, ensure_on_path, hook_transcript_path_acceptable, prepared_shell_agent,
     record_shell_session_lineage, reusable_session_agent, shell_cli_model, shell_quote_arg,
 };
-use crate::config::QmuxConfig;
-use crate::events::QmuxEvent;
+use crate::config::SessionConfig;
+use crate::events::SessionEvent;
 use crate::pty::{
     CommandPlan, InitialPaneSize, PaneMeta, agent_pane_envs, plan_to_spec, recoverable_dir,
     spawn_pty,
@@ -37,7 +37,7 @@ pub struct PiAdapter {
 }
 
 impl PiAdapter {
-    pub fn new(config: &QmuxConfig) -> Self {
+    pub fn new(config: &SessionConfig) -> Self {
         Self {
             binary: config.pi_binary(),
             extension_dir: config.pi_extension_dir.clone(),
@@ -89,7 +89,7 @@ impl PiAdapter {
         let entrypoint = self.extension_dir.join("index.js");
         if !self.extension_dir.is_dir() || !entrypoint.is_file() {
             return Err(format!(
-                "Pi integration extension was not found at {}. Reinstall qmux or set QMUX_PI_EXTENSION_DIR to the bundled qmux-pi-extension directory.",
+                "Pi integration extension was not found at {}. Reinstall qmux or set SESSION_PI_EXTENSION_DIR to the bundled qmux-pi-extension directory.",
                 entrypoint.display()
             ));
         }
@@ -100,7 +100,7 @@ impl PiAdapter {
         let entrypoint = self.extension_dir.join("session-helper.js");
         if !entrypoint.is_file() {
             return Err(format!(
-                "Pi SessionManager helper was not found at {}. Reinstall qmux or set QMUX_PI_EXTENSION_DIR to the bundled qmux-pi-extension directory.",
+                "Pi SessionManager helper was not found at {}. Reinstall qmux or set SESSION_PI_EXTENSION_DIR to the bundled qmux-pi-extension directory.",
                 entrypoint.display()
             ));
         }
@@ -235,7 +235,7 @@ impl PiAdapter {
         append_pi_initial_prompt(&mut args, prompt);
         let pane_id = state.next_id("pane");
         let mut envs = agent_pane_envs(state, &pane_id, &agent.id)?;
-        envs.push(("QMUX_ADAPTER_ID".to_string(), self.id().to_string()));
+        envs.push(("SESSION_ADAPTER_ID".to_string(), self.id().to_string()));
         let agent = attach_pi_agent_pane(
             state,
             &agent.id,
@@ -284,7 +284,7 @@ impl PiAdapter {
                 base_repo: request.base_repo,
                 base_ref: request.base_ref,
                 adapter: self.id().to_string(),
-                // Pi owns model selection; qmux only observes it after startup.
+                // Pi owns model selection; Session only observes it after startup.
                 model: None,
                 effort: None,
                 use_worktree: request.use_worktree.unwrap_or(false),
@@ -308,7 +308,7 @@ impl PiAdapter {
 
         let pane_id = state.next_id("pane");
         let mut envs = agent_pane_envs(state, &pane_id, &agent.id)?;
-        envs.push(("QMUX_ADAPTER_ID".to_string(), self.id().to_string()));
+        envs.push(("SESSION_ADAPTER_ID".to_string(), self.id().to_string()));
         attach_pi_agent_pane(state, &agent.id, pane_id.clone(), !prompt.is_empty())?;
 
         let spawn_result = plan_to_spec(
@@ -370,7 +370,7 @@ impl PiAdapter {
             false
         };
         let mut envs = agent_pane_envs(state, &pane.id, &agent.id)?;
-        envs.push(("QMUX_ADAPTER_ID".to_string(), self.id().to_string()));
+        envs.push(("SESSION_ADAPTER_ID".to_string(), self.id().to_string()));
 
         let spec = plan_to_spec(
             state,
@@ -410,7 +410,7 @@ impl PiAdapter {
                 self.id().to_string(),
             );
         }
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.recovered",
             Some(pane.id.clone()),
             Some(restored.id.clone()),
@@ -488,14 +488,14 @@ impl PiAdapter {
 
         args.extend(request.args);
         let mut envs = agent_pane_envs(state, &request.pane_id, &agent.id)?;
-        envs.push(("QMUX_ADAPTER_ID".to_string(), self.id().to_string()));
+        envs.push(("SESSION_ADAPTER_ID".to_string(), self.id().to_string()));
         if let Some(session_id) = resume_session_id {
-            envs.push(("QMUX_ROOT_SESSION_ID".to_string(), session_id));
+            envs.push(("SESSION_ROOT_SESSION_ID".to_string(), session_id));
         }
         if let Some(fork_point) = fork_point {
-            envs.push(("QMUX_FORK_POINT".to_string(), fork_point));
+            envs.push(("SESSION_FORK_POINT".to_string(), fork_point));
         }
-        state.emit(QmuxEvent::new(
+        state.emit(SessionEvent::new(
             "agent.spawned",
             Some(request.pane_id.clone()),
             Some(agent.id.clone()),
@@ -656,7 +656,7 @@ impl PiAdapter {
                     .map_err(|err| format!("failed to encode agent: {err}"))?,
             );
         }
-        Ok(AdapterNotificationOutcome::Event(QmuxEvent::new(
+        Ok(AdapterNotificationOutcome::Event(SessionEvent::new(
             event_type,
             pane_id,
             agent.map(|agent| agent.id),
@@ -1092,7 +1092,7 @@ fn finish_agent_after_settled(state: &AppState, agent: &AgentInfo) -> Result<boo
         Ok(IdleResolution::Drained) => Ok(true),
         Ok(IdleResolution::Paused | IdleResolution::Idle) => Ok(false),
         Err(err) => {
-            state.emit(QmuxEvent::new(
+            state.emit(SessionEvent::new(
                 "agent.queue_error",
                 agent.pane_id.clone(),
                 Some(agent.id.clone()),

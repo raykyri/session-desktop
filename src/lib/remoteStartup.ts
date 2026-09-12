@@ -13,7 +13,7 @@ export function recordRemoteStartup(paneId: string, stage: "reserved" | "visible
   if (!launch || launch.stages.has(stage)) return null;
   launch.stages.add(stage);
   const elapsed = Math.max(0, now - launch.started);
-  console.debug("qmux: remote startup", { paneId, stage, elapsedMs: elapsed });
+  console.debug("session: remote startup", { paneId, stage, elapsedMs: elapsed });
   if (launch.stages.has("visible") && launch.stages.has("ready")) launches.delete(paneId);
   return elapsed;
 }

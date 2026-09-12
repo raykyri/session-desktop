@@ -1,18 +1,18 @@
 [package]
-name = "qmux-cli"
+name = "session-cli"
 version = "0.3.3"
 description = "The qmux in-pane CLI: hook notifies, cwd reporting, forks, and agent supervision."
 license = "MIT"
 edition = "2024"
 
 [[bin]]
-name = "qmux-cli"
-path = "src/bin/qmux-cli.rs"
+name = "session-cli"
+path = "src/bin/session-cli.rs"
 
 [dependencies]
 dirs = "6"
 libc = "0.2"
-qmux-proto = { path = "../qmux-proto" }
+session-proto = { path = "../session-proto" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

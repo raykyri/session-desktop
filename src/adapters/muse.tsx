@@ -17,7 +17,7 @@ const MUSE_REASONING_OPTIONS: LauncherSelectOption[] = [
   { value: "ultra", label: "Ultra reasoning" },
 ];
 
-// Mirrors MUSE_APPROVAL_MODES. Muse's own default is "on-request"; qmux does not
+// Mirrors MUSE_APPROVAL_MODES. Muse's own default is "on-request"; Session does not
 // offer `--yolo`, which would disable approval *and* the sandbox for the run.
 const MUSE_APPROVAL_OPTIONS: LauncherSelectOption[] = [
   { value: "", label: "Default approvals" },

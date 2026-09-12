@@ -112,7 +112,10 @@ fn launch_claude(
         let _ = state.fail_research_node(&node.id, err.clone());
         err
     })?;
-    eprintln!("qmux: research SDK using Claude Code {}", version.display());
+    eprintln!(
+        "session: research SDK using Claude Code {}",
+        version.display()
+    );
 
     let agent = prepare_agent_workspace(
         state,
@@ -140,7 +143,7 @@ fn launch_claude(
         })?;
     if bound.status.is_terminal() {
         if let Err(err) = state.finish_research_sdk_run(&node.id, &agent.id, false, None) {
-            eprintln!("qmux: failed to preserve pre-launch research cancellation: {err}");
+            eprintln!("session: failed to preserve pre-launch research cancellation: {err}");
         }
         return Ok(bound);
     }
@@ -174,7 +177,7 @@ fn launch_claude(
     };
     if current.status.is_terminal() {
         if let Err(err) = state.finish_research_sdk_run(&node.id, &agent.id, false, None) {
-            eprintln!("qmux: failed to preserve pre-thread research cancellation: {err}");
+            eprintln!("session: failed to preserve pre-thread research cancellation: {err}");
         }
         unregister(&node.id);
         return Ok(current);
@@ -221,7 +224,9 @@ fn launch_claude(
             if let Err(snapshot_err) =
                 state.finish_research_sdk_run(&node.id, &agent.id, false, Some(err.clone()))
             {
-                eprintln!("qmux: failed to preserve research thread-start failure: {snapshot_err}");
+                eprintln!(
+                    "session: failed to preserve research thread-start failure: {snapshot_err}"
+                );
             }
             unregister(&node.id);
             err
@@ -643,7 +648,7 @@ fn run_jsonl_session(
     let error = error.map(|err| map_jsonl_error(flavor, err, &stderr_log));
     if let Err(err) = state.finish_research_sdk_run(&node_id, &agent_id, success, error) {
         eprintln!(
-            "qmux: failed to preserve {} research result: {err}",
+            "session: failed to preserve {} research result: {err}",
             flavor.label()
         );
     }
@@ -837,7 +842,7 @@ fn finish_jsonl_failed(
     let error = map_jsonl_error(flavor, err, stderr_log);
     if let Err(snapshot_err) = state.finish_research_sdk_run(node_id, agent_id, false, Some(error))
     {
-        eprintln!("qmux: failed to preserve partial JSONL research response: {snapshot_err}");
+        eprintln!("session: failed to preserve partial JSONL research response: {snapshot_err}");
     }
 }
 
@@ -940,9 +945,11 @@ fn run_session(
         if cancellation_requested && !cancelled {
             cancelled = true;
             if session.interrupt_receipt {
-                eprintln!("qmux: research SDK sending interrupt (receipt capability advertised)");
+                eprintln!(
+                    "session: research SDK sending interrupt (receipt capability advertised)"
+                );
             } else {
-                eprintln!("qmux: research SDK sending interrupt (no receipt capability)");
+                eprintln!("session: research SDK sending interrupt (no receipt capability)");
             }
             let _ = session.write_interrupt();
             interrupt_deadline = Some(std::time::Instant::now() + claude_sdk::INTERRUPT_GRACE);
@@ -1017,7 +1024,7 @@ fn run_session(
             && !matches!(&message, Some(SdkMessage::Result { .. }))
         {
             eprintln!(
-                "qmux: research SDK result watchdog expired after assistant end_turn; preserving the completed response"
+                "session: research SDK result watchdog expired after assistant end_turn; preserving the completed response"
             );
             session.kill();
             session.note_transcript_candidate(&workspace_dir);
@@ -1029,7 +1036,7 @@ fn run_session(
             );
             if let Err(err) = state.finish_research_sdk_run(&node_id, &agent_id, true, None) {
                 eprintln!(
-                    "qmux: failed to preserve watchdog-settled response for {node_id}: {err}"
+                    "session: failed to preserve watchdog-settled response for {node_id}: {err}"
                 );
             }
             unregister(&node_id);
@@ -1088,11 +1095,13 @@ fn run_session(
                     } else {
                         match research_can_use_tool(tool_name, &input) {
                             Ok(()) => {
-                                eprintln!("qmux: research canUseTool allow {tool_name}");
+                                eprintln!("session: research canUseTool allow {tool_name}");
                                 session.reply_can_use_tool(&request_id, true, &input, "")
                             }
                             Err(message) => {
-                                eprintln!("qmux: research canUseTool deny {tool_name}: {message}");
+                                eprintln!(
+                                    "session: research canUseTool deny {tool_name}: {message}"
+                                );
                                 session.reply_can_use_tool(&request_id, false, &input, &message)
                             }
                         }
@@ -1236,7 +1245,9 @@ fn run_session(
                     state.finish_research_sdk_run(&node_id, &agent_id, true, None)
                 };
                 if let Err(err) = outcome {
-                    eprintln!("qmux: failed to preserve research SDK result for {node_id}: {err}");
+                    eprintln!(
+                        "session: failed to preserve research SDK result for {node_id}: {err}"
+                    );
                 }
                 unregister(&node_id);
                 return;
@@ -1261,7 +1272,7 @@ fn finish_failed(
     let error = map_research_error(err, stderr_log);
     if let Err(snapshot_err) = state.finish_research_sdk_run(node_id, agent_id, false, Some(error))
     {
-        eprintln!("qmux: failed to preserve partial research SDK response: {snapshot_err}");
+        eprintln!("session: failed to preserve partial research SDK response: {snapshot_err}");
     }
 }
 
@@ -1449,7 +1460,7 @@ mod tests {
     use super::*;
     use crate::config::{
         AdapterConfigs, ClaudeAdapterConfig, CodexAdapterConfig, GrokAdapterConfig,
-        MuseAdapterConfig, OpencodeAdapterConfig, QmuxConfig,
+        MuseAdapterConfig, OpencodeAdapterConfig, SessionConfig,
     };
     use crate::research::{CreateResearchTreeRequest, ResearchNodeStatus, ResearchRuntime};
     use crate::workspace::{GroupInfo, WorkspaceScope};
@@ -1735,8 +1746,8 @@ time.sleep(2)
         claude: &Path,
         codex: &Path,
         grok: &Path,
-    ) -> QmuxConfig {
-        QmuxConfig {
+    ) -> SessionConfig {
+        SessionConfig {
             remotes: Default::default(),
             workspace_root,
             socket_path: PathBuf::from("/tmp/qmux-research-sdk-test.sock"),
@@ -1769,7 +1780,7 @@ time.sleep(2)
         }
     }
 
-    fn test_config(workspace_root: PathBuf, claude: &Path) -> QmuxConfig {
+    fn test_config(workspace_root: PathBuf, claude: &Path) -> SessionConfig {
         test_config_with_binaries(
             workspace_root,
             claude,

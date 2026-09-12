@@ -11,8 +11,8 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(qmux_foundation_models)");
     println!("cargo:rerun-if-env-changed=DEVELOPER_DIR");
     println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
-    println!("cargo:rerun-if-env-changed=QMUX_REQUIRE_FOUNDATION_MODELS");
-    println!("cargo:rerun-if-env-changed=QMUX_ALLOW_MISSING_FOUNDATION_MODELS");
+    println!("cargo:rerun-if-env-changed=SESSION_REQUIRE_FOUNDATION_MODELS");
+    println!("cargo:rerun-if-env-changed=SESSION_ALLOW_MISSING_FOUNDATION_MODELS");
     build_native_terminal_bridge();
     build_foundation_title_bridge();
     tauri_build::build();
@@ -404,14 +404,14 @@ fn build_foundation_title_bridge() {
 /// CI job can't silently lose tab-title generation. Debug builds stay optional so a
 /// checkout without a Swift toolchain still compiles.
 ///
-/// `QMUX_REQUIRE_FOUNDATION_MODELS=1` forces it on for any profile (belt-and-suspenders
-/// for the release script); `QMUX_ALLOW_MISSING_FOUNDATION_MODELS=1` is the opt-out for
+/// `SESSION_REQUIRE_FOUNDATION_MODELS=1` forces it on for any profile (belt-and-suspenders
+/// for the release script); `SESSION_ALLOW_MISSING_FOUNDATION_MODELS=1` is the opt-out for
 /// a contributor who needs a local release build without a Swift toolchain.
 fn foundation_models_required() -> bool {
-    if env_flag_enabled("QMUX_REQUIRE_FOUNDATION_MODELS") {
+    if env_flag_enabled("SESSION_REQUIRE_FOUNDATION_MODELS") {
         return true;
     }
-    if env_flag_enabled("QMUX_ALLOW_MISSING_FOUNDATION_MODELS") {
+    if env_flag_enabled("SESSION_ALLOW_MISSING_FOUNDATION_MODELS") {
         return false;
     }
     is_release_build()

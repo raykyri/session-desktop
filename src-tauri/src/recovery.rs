@@ -55,7 +55,7 @@ fn restore_closed_pane_snapshot(
         )
     {
         eprintln!(
-            "qmux: failed to restore scrollback for pane {}: {err}",
+            "session: failed to restore scrollback for pane {}: {err}",
             snapshot.pane.id
         );
     }

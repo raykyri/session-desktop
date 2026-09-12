@@ -5,7 +5,7 @@ use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::time::Duration;
 
 /// Maximum overlap retained locally for reconciling successive tmux history
-/// captures. The remote pane may keep substantially more history; qmux only
+/// captures. The remote pane may keep substantially more history; Session only
 /// needs a distinctive tail of the last accepted capture to find where new
 /// scrolled-off lines begin.
 const HISTORY_CHECKPOINT_CAP: usize = 256 * 1024;
@@ -482,7 +482,7 @@ pub struct RemoteClientHandshake {
 
 impl RemoteClientHandshake {
     pub fn feed(&mut self, bytes: &[u8]) -> (Vec<u8>, Option<u32>) {
-        const PREFIX: &[u8] = b"\x1b]777;qmux-client-pid=";
+        const PREFIX: &[u8] = b"\x1b]777;session-client-pid=";
         if self.complete {
             return (bytes.to_vec(), None);
         }
@@ -582,7 +582,7 @@ mod tests {
 
     #[test]
     fn handshake_handles_every_split_and_does_not_expose_control_metadata() {
-        let wire = b"banner\r\n\x1b]777;qmux-client-pid=12345\x07prompt> ";
+        let wire = b"banner\r\n\x1b]777;session-client-pid=12345\x07prompt> ";
         for split in 0..=wire.len() {
             let mut handshake = RemoteClientHandshake::default();
             let (mut first, pid1) = handshake.feed(&wire[..split]);
@@ -597,8 +597,8 @@ mod tests {
             (b"Permission denied\r\n".to_vec(), None)
         );
         assert_eq!(
-            handshake.feed(b"\x1b]777;qmux-client-pid=oops\x07"),
-            (b"\x1b]777;qmux-client-pid=oops\x07".to_vec(), None)
+            handshake.feed(b"\x1b]777;session-client-pid=oops\x07"),
+            (b"\x1b]777;session-client-pid=oops\x07".to_vec(), None)
         );
     }
 

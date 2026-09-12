@@ -131,7 +131,7 @@ interface GitHubGistComment {
   author_association?: string;
 }
 
-// A gist comment that carries qmux data: a follow-up proposal or an owner
+// A gist comment that carries Session data: a follow-up proposal or an owner
 // resolution. Plain human comments live on the Gist itself and are not
 // surfaced here — the page links to the Gist for discussion.
 interface PublicationComment {
@@ -183,11 +183,11 @@ interface ServerOptions extends GitHubWebAuthOptions {
   rateLimit?: { windowMs: number; maxRequests: number } | null;
 }
 
-export function createQmuxWebServer(options: ServerOptions = {}) {
-  return createServer(createQmuxRequestHandler(options));
+export function createSessionWebServer(options: ServerOptions = {}) {
+  return createServer(createSessionRequestHandler(options));
 }
 
-export function createQmuxRequestHandler(options: ServerOptions = {}) {
+export function createSessionRequestHandler(options: ServerOptions = {}) {
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? Date.now;
   const siteDir = options.siteDir ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "site");
@@ -196,7 +196,7 @@ export function createQmuxRequestHandler(options: ServerOptions = {}) {
   // Absolute URLs for the landing page's canonical/og tags. GitHub auth may be
   // unconfigured (webAuth null), so the origin is resolved independently.
   const publicOrigin = validatedPublicOrigin(
-    options.publicOrigin ?? process.env.QMUX_PUBLIC_ORIGIN ?? DEFAULT_PUBLIC_ORIGIN,
+    options.publicOrigin ?? process.env.SESSION_PUBLIC_ORIGIN ?? DEFAULT_PUBLIC_ORIGIN,
   );
   const cache: PublicationCache = {
     entries: new Map(),
@@ -573,7 +573,7 @@ async function handleCreateProposal(
         Accept: "application/vnd.github+json",
         Authorization: `Bearer ${session.accessToken}`,
         "Content-Type": "application/json",
-        "User-Agent": "qmux-publisher",
+        "User-Agent": "session-publisher",
         "X-GitHub-Api-Version": GITHUB_API_VERSION,
       },
       body: JSON.stringify({ body }),
@@ -685,7 +685,7 @@ async function fetchGitHubCommentsPage(
 ) {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "qmux-publisher",
+    "User-Agent": "session-publisher",
     "X-GitHub-Api-Version": GITHUB_API_VERSION,
   };
   if (context.githubToken) {
@@ -815,7 +815,7 @@ function normalizeGitHubComment(comment: GitHubGistComment): PublicationComment 
   }
   const proposal = parseResearchProposal(comment.body);
   const resolution = parseProposalResolution(comment.body);
-  // Only qmux payloads matter here; ordinary discussion stays on the Gist.
+  // Only Session payloads matter here; ordinary discussion stays on the Gist.
   if (!proposal && !resolution) {
     return null;
   }
@@ -932,7 +932,7 @@ async function fetchPublication(
   const endpoint = `https://api.github.com/gists/${encodeURIComponent(gistId)}`;
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "qmux-publisher",
+    "User-Agent": "session-publisher",
     "X-GitHub-Api-Version": GITHUB_API_VERSION,
   };
   if (context.githubToken) {
@@ -987,7 +987,7 @@ async function fetchPublication(
   const index = gist.files?.[PUBLICATION_INDEX_FILE];
   if (!index) {
     // Deterministic for this gist's current content — a stranger's gist that
-    // simply isn't a qmux publication. Cache it so probing such ids stays cheap.
+    // simply isn't a Session publication. Cache it so probing such ids stays cheap.
     throwNegativePublication(
       context,
       key,
@@ -1076,7 +1076,7 @@ async function loadGistFileContent(
   const rawUrl = validatedGitHubRawUrl(file.raw_url, label);
   const response = await context.fetchImpl(rawUrl, {
     headers: {
-      "User-Agent": "qmux-publisher",
+      "User-Agent": "session-publisher",
     },
     redirect: "follow",
     signal: AbortSignal.timeout(15_000),
@@ -1339,7 +1339,7 @@ function transcriptPage(gist: GitHubGist, publication: TranscriptPublication) {
               <button
                 type="button"
                 className="research-answer-copy"
-                data-qmux-copy="qmux-answer-markdown"
+                data-session-copy="session-answer-markdown"
                 title="Copy conversation as Markdown"
                 hidden
               >
@@ -1348,7 +1348,7 @@ function transcriptPage(gist: GitHubGist, publication: TranscriptPublication) {
             </footer>
             <script
               type="application/json"
-              id="qmux-answer-markdown"
+              id="session-answer-markdown"
               dangerouslySetInnerHTML={{
                 __html: JSON.stringify(
                   publication.transcript.messages
@@ -1502,7 +1502,7 @@ function researchPage(
                   </a>
                 </p>
               ) : null}
-              <div className="research-response-content-root" id="qmux-answer-root">
+              <div className="research-response-content-root" id="session-answer-root">
                 {isConversation && selected.conversation ? (
                   <div className="research-conversation">
                     {selected.conversation.map((turn, index) => (
@@ -1544,7 +1544,7 @@ function researchPage(
                   <button
                     type="button"
                     className="research-answer-copy"
-                    data-qmux-copy="qmux-answer-markdown"
+                    data-session-copy="session-answer-markdown"
                     title="Copy answer as Markdown"
                     hidden
                   >
@@ -1591,7 +1591,7 @@ function researchPage(
           {anchorData.length > 0 ? (
             <script
               type="application/json"
-              id="qmux-anchor-data"
+              id="session-anchor-data"
               dangerouslySetInnerHTML={{
                 __html: JSON.stringify(anchorData).replace(/</g, "\\u003c"),
               }}
@@ -1600,7 +1600,7 @@ function researchPage(
           {answerBody ? (
             <script
               type="application/json"
-              id="qmux-answer-markdown"
+              id="session-answer-markdown"
               dangerouslySetInnerHTML={{
                 __html: JSON.stringify(answerBody).replace(/</g, "\\u003c"),
               }}
@@ -1767,10 +1767,10 @@ const PAGE_SCRIPT = `(() => {
   // Copy-as-Markdown buttons: hidden in the static markup, revealed only when
   // a clipboard is actually available, sourcing the raw markdown from an
   // adjacent JSON data tag.
-  var copyButtons = document.querySelectorAll("[data-qmux-copy]");
+  var copyButtons = document.querySelectorAll("[data-session-copy]");
   for (var bIndex = 0; bIndex < copyButtons.length; bIndex += 1) {
     (function (button) {
-      var source = document.getElementById(button.getAttribute("data-qmux-copy"));
+      var source = document.getElementById(button.getAttribute("data-session-copy"));
       if (!source || !navigator.clipboard) return;
       var markdown;
       try { markdown = JSON.parse(source.textContent || '""'); } catch (err) { return; }
@@ -1790,7 +1790,7 @@ const PAGE_SCRIPT = `(() => {
     })(copyButtons[bIndex]);
   }
 
-  var root = document.getElementById("qmux-answer-root");
+  var root = document.getElementById("session-answer-root");
   if (!root) return;
   var rail = document.querySelector(".research-followups");
   var grid = document.querySelector(".research-response-grid");
@@ -1873,7 +1873,7 @@ const PAGE_SCRIPT = `(() => {
 
   // ------------------------------------------------------------------
   // Published query anchors: paint passages and anchor cards beside them.
-  var dataEl = document.getElementById("qmux-anchor-data");
+  var dataEl = document.getElementById("session-anchor-data");
   var anchors = [];
   if (dataEl) {
     try { anchors = JSON.parse(dataEl.textContent || "[]"); } catch (err) { anchors = []; }
@@ -1909,7 +1909,7 @@ const PAGE_SCRIPT = `(() => {
     for (var hIndex = 0; hIndex < resolved.length; hIndex += 1) {
       highlight.add(resolved[hIndex].range);
     }
-    CSS.highlights.set("qmux-research-query-anchors", highlight);
+    CSS.highlights.set("session-research-query-anchors", highlight);
 
     // Regions where two or more anchors stack, repainted near the text color
     // (all anchors share one wash, so stacked coverage
@@ -1941,7 +1941,7 @@ const PAGE_SCRIPT = `(() => {
       }
     }
     if (paintedOverlap) {
-      CSS.highlights.set("qmux-research-highlight-overlaps", overlaps);
+      CSS.highlights.set("session-research-highlight-overlaps", overlaps);
     }
   }
 
@@ -2253,7 +2253,7 @@ const PAGE_SCRIPT = `(() => {
     ? proposalForm.querySelector('input[name="anchor"]')
     : null;
   var quoteRow = proposalForm
-    ? proposalForm.querySelector("[data-qmux-proposal-quote]")
+    ? proposalForm.querySelector("[data-session-proposal-quote]")
     : null;
   if (!proposalForm || !anchorInput || !quoteRow) return;
   var quoteText = quoteRow.querySelector(".research-followup-quote");
@@ -2430,7 +2430,7 @@ function ProposalComposer({
     <form className="proposal-composer" method="post" action={`${returnTo}/proposals`}>
       <input type="hidden" name="csrfToken" value={viewer.csrfToken} />
       <input type="hidden" name="anchor" defaultValue="" />
-      <div className="research-followup-quote-row" data-qmux-proposal-quote hidden>
+      <div className="research-followup-quote-row" data-session-proposal-quote hidden>
         <span className="research-followup-quote" />
         <button
           type="button"
@@ -2825,8 +2825,8 @@ a { color:inherit; text-decoration:none; }
 
 /* Passages that published follow-ups were asked about keep one stable faint
    wash while hover links them to their associated card. */
-::highlight(qmux-research-query-anchors) { color:inherit; background:rgba(216,196,95,0.14); }
-::highlight(qmux-research-highlight-overlaps) { color:inherit; background:rgba(211,216,212,0.16); }
+::highlight(session-research-query-anchors) { color:inherit; background:rgba(216,196,95,0.14); }
+::highlight(session-research-highlight-overlaps) { color:inherit; background:rgba(211,216,212,0.16); }
 .research-response-content-root.is-highlight-hovered { cursor:pointer; }
 
 /* Markdown body, ported from the app's transcript styles. */
@@ -3026,8 +3026,8 @@ a:focus-visible, button:focus-visible, .textarea:focus-visible, summary:focus-vi
   .turn-markdown td { border-color:#dddddd; }
   .turn-markdown-table-wrap { border-color:#cccccc; }
   .research-answer-meta { color:#666666; }
-  ::highlight(qmux-research-query-anchors) { background:rgba(178,142,29,0.15); }
-  ::highlight(qmux-research-highlight-overlaps) { background:rgba(26,26,26,0.1); }
+  ::highlight(session-research-query-anchors) { background:rgba(178,142,29,0.15); }
+  ::highlight(session-research-highlight-overlaps) { background:rgba(26,26,26,0.1); }
 }
 `;
 
@@ -3038,7 +3038,7 @@ const isDirectRun =
 if (isDirectRun) {
   const host = process.env.HOST ?? DEFAULT_HOST;
   const port = Number.parseInt(process.env.PORT ?? String(DEFAULT_PORT), 10);
-  const server = createQmuxWebServer();
+  const server = createSessionWebServer();
   server.listen(port, host, () => {
     console.log(`qmux web listening on http://${host}:${port}`);
   });

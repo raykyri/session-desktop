@@ -51,14 +51,14 @@ pub(crate) fn warm_login_shell_path() {
     });
 }
 
-/// The qmux CLI path advertised to child processes — `QMUX_CLI`, hook
-/// commands, and shell wrapper functions all call back into qmux through this
+/// The Session CLI path advertised to child processes — `SESSION_CLI`, hook
+/// commands, and shell wrapper functions all call back into Session through this
 /// binary. Centralized so exactly one place decides which CLI a launch target
 /// gets: the local target reuses this process's executable (the app binary
 /// doubles as the CLI), while a remote target must instead resolve a
-/// standalone `qmux-cli` shipped to its host.
-pub(crate) fn qmux_cli_path() -> Result<PathBuf, String> {
-    env::current_exe().map_err(|err| format!("failed to resolve the qmux executable: {err}"))
+/// standalone `session-cli` shipped to its host.
+pub(crate) fn session_cli_path() -> Result<PathBuf, String> {
+    env::current_exe().map_err(|err| format!("failed to resolve the Session executable: {err}"))
 }
 
 pub(crate) fn resolve_binary(binary: &str) -> Option<PathBuf> {
@@ -81,8 +81,8 @@ pub(crate) fn resolve_binary(binary: &str) -> Option<PathBuf> {
 /// have already been serialized into their ssh command by then, so the local
 /// filesystem path never crosses the host boundary.
 pub(crate) fn pane_child_path(socket_path: &Path) -> Result<String, String> {
-    let qmux_cli = qmux_cli_path()?;
-    let shim_dir = ensure_qmux_cli_shim(socket_path, &qmux_cli)?;
+    let session_cli = session_cli_path()?;
+    let shim_dir = ensure_session_cli_shim(socket_path, &session_cli)?;
     let path = env::var_os("PATH");
     let home = env::var_os("HOME").map(PathBuf::from);
     child_path_from_with_prepend(
@@ -93,14 +93,14 @@ pub(crate) fn pane_child_path(socket_path: &Path) -> Result<String, String> {
     )
     .ok_or_else(|| {
         format!(
-            "failed to add qmux shim directory {} to child PATH",
+            "failed to add Session shim directory {} to child PATH",
             shim_dir.display()
         )
     })
 }
 
-/// PATH used when qmux itself execs adapter CLIs (version probes, plugin
-/// install). Same directories as pane children, minus the qmux shim.
+/// PATH used when Session itself execs adapter CLIs (version probes, plugin
+/// install). Same directories as pane children, minus the Session shim.
 pub(crate) fn process_child_path() -> Option<String> {
     let path = env::var_os("PATH");
     let home = env::var_os("HOME").map(PathBuf::from);
@@ -163,24 +163,27 @@ fn child_path_from_with_prepend(
 /// explicitly configured control socket lives below a shared parent. The socket
 /// filename adds an instance namespace for users who run production and
 /// development builds from the same parent.
-fn ensure_qmux_cli_shim(socket_path: &Path, qmux_cli: &Path) -> Result<PathBuf, String> {
+fn ensure_session_cli_shim(socket_path: &Path, session_cli: &Path) -> Result<PathBuf, String> {
     let runtime_dir = socket_path.parent().ok_or_else(|| {
         format!(
-            "qmux socket path {} has no parent directory",
+            "Session socket path {} has no parent directory",
             socket_path.display()
         )
     })?;
-    let socket_name = socket_path
-        .file_name()
-        .ok_or_else(|| format!("qmux socket path {} has no filename", socket_path.display()))?;
+    let socket_name = socket_path.file_name().ok_or_else(|| {
+        format!(
+            "Session socket path {} has no filename",
+            socket_path.display()
+        )
+    })?;
     let bin_root = runtime_dir.join("qmux-bin");
     let shim_dir = bin_root.join(socket_name);
     ensure_runtime_directory(runtime_dir)?;
     ensure_owner_only_directory(&bin_root)?;
     ensure_owner_only_directory(&shim_dir)?;
 
-    let shim_path = shim_dir.join("qmux");
-    if fs::read_link(&shim_path).is_ok_and(|target| target == qmux_cli) {
+    let shim_path = shim_dir.join("session");
+    if fs::read_link(&shim_path).is_ok_and(|target| target == session_cli) {
         return Ok(shim_dir);
     }
 
@@ -195,24 +198,24 @@ fn ensure_qmux_cli_shim(socket_path: &Path, qmux_cli: &Path) -> Result<PathBuf, 
         Err(err) if err.kind() == ErrorKind::NotFound => {}
         Err(err) => {
             return Err(format!(
-                "failed to remove stale qmux shim {}: {err}",
+                "failed to remove stale Session shim {}: {err}",
                 temporary.display()
             ));
         }
     }
-    symlink(qmux_cli, &temporary).map_err(|err| {
+    symlink(session_cli, &temporary).map_err(|err| {
         format!(
-            "failed to create qmux shim {} -> {}: {err}",
+            "failed to create Session shim {} -> {}: {err}",
             temporary.display(),
-            qmux_cli.display()
+            session_cli.display()
         )
     })?;
     if let Err(err) = fs::rename(&temporary, &shim_path) {
         let _ = fs::remove_file(&temporary);
         return Err(format!(
-            "failed to install qmux shim {} -> {}: {err}",
+            "failed to install Session shim {} -> {}: {err}",
             shim_path.display(),
-            qmux_cli.display()
+            session_cli.display()
         ));
     }
 
@@ -230,7 +233,7 @@ fn ensure_runtime_directory(path: &Path) -> Result<(), String> {
         Err(err) if err.kind() == ErrorKind::AlreadyExists => false,
         Err(err) => {
             return Err(format!(
-                "failed to create qmux runtime directory {}: {err}",
+                "failed to create Session runtime directory {}: {err}",
                 path.display()
             ));
         }
@@ -238,13 +241,13 @@ fn ensure_runtime_directory(path: &Path) -> Result<(), String> {
 
     let metadata = fs::metadata(path).map_err(|err| {
         format!(
-            "failed to inspect qmux runtime directory {}: {err}",
+            "failed to inspect Session runtime directory {}: {err}",
             path.display()
         )
     })?;
     if !metadata.is_dir() {
         return Err(format!(
-            "qmux runtime path {} is not a directory",
+            "Session runtime path {} is not a directory",
             path.display()
         ));
     }
@@ -252,7 +255,7 @@ fn ensure_runtime_directory(path: &Path) -> Result<(), String> {
     if created {
         fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|err| {
             format!(
-                "failed to restrict qmux runtime directory {}: {err}",
+                "failed to restrict Session runtime directory {}: {err}",
                 path.display()
             )
         })?;
@@ -267,7 +270,7 @@ fn ensure_owner_only_directory(path: &Path) -> Result<(), String> {
         Err(err) if err.kind() == ErrorKind::AlreadyExists => {}
         Err(err) => {
             return Err(format!(
-                "failed to create qmux shim directory {}: {err}",
+                "failed to create Session shim directory {}: {err}",
                 path.display()
             ));
         }
@@ -275,20 +278,20 @@ fn ensure_owner_only_directory(path: &Path) -> Result<(), String> {
 
     let metadata = fs::symlink_metadata(path).map_err(|err| {
         format!(
-            "failed to inspect qmux shim directory {}: {err}",
+            "failed to inspect Session shim directory {}: {err}",
             path.display()
         )
     })?;
     if !metadata.file_type().is_dir() {
         return Err(format!(
-            "qmux shim directory path {} is not a directory",
+            "Session shim directory path {} is not a directory",
             path.display()
         ));
     }
 
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|err| {
         format!(
-            "failed to restrict qmux shim directory {}: {err}",
+            "failed to restrict Session shim directory {}: {err}",
             path.display()
         )
     })
@@ -353,8 +356,8 @@ fn login_shell_path_dirs() -> &'static [PathBuf] {
 /// is discarded, stdin is /dev/null so an rc that reads input can't hang, and a
 /// timeout guards against a misbehaving profile stalling startup.
 fn login_shell_path(shell: &OsStr) -> Option<String> {
-    const MARKER_START: &str = "__QMUX_PATH_START__";
-    const MARKER_END: &str = "__QMUX_PATH_END__";
+    const MARKER_START: &str = "__SESSION_PATH_START__";
+    const MARKER_END: &str = "__SESSION_PATH_END__";
     let script = format!("printf '%s%s%s' '{MARKER_START}' \"$PATH\" '{MARKER_END}'");
 
     let mut child = Command::new(shell)
@@ -495,7 +498,7 @@ mod tests {
 
     #[test]
     fn pane_child_path_puts_the_shim_first_without_duplicates() {
-        let shim = PathBuf::from("/private/qmux runtime/bin/qmux.sock");
+        let shim = PathBuf::from("/private/Session runtime/bin/qmux.sock");
         let inherited = env::join_paths([
             PathBuf::from("/usr/bin"),
             shim.clone(),
@@ -524,11 +527,11 @@ mod tests {
 
         assert_eq!(dirs[0], root.join("run/qmux-bin/qmux.sock"));
         assert_eq!(
-            fs::read_link(dirs[0].join("qmux")).unwrap(),
-            qmux_cli_path().unwrap()
+            fs::read_link(dirs[0].join("session")).unwrap(),
+            session_cli_path().unwrap()
         );
         assert_ne!(
-            fs::metadata(dirs[0].join("qmux"))
+            fs::metadata(dirs[0].join("session"))
                 .unwrap()
                 .permissions()
                 .mode()
@@ -540,7 +543,7 @@ mod tests {
     }
 
     #[test]
-    fn qmux_cli_shim_is_private_socket_scoped_and_retargetable() {
+    fn session_cli_shim_is_private_socket_scoped_and_retargetable() {
         let root = temp_root("cli-shim");
         let runtime = root.join("run");
         let socket = runtime.join("qmux-dev.sock");
@@ -549,10 +552,10 @@ mod tests {
         touch(&first_cli);
         touch(&second_cli);
 
-        let shim_dir = ensure_qmux_cli_shim(&socket, &first_cli).unwrap();
+        let shim_dir = ensure_session_cli_shim(&socket, &first_cli).unwrap();
         let expected_dir = runtime.join("qmux-bin/qmux-dev.sock");
         assert_eq!(shim_dir, expected_dir);
-        assert_eq!(fs::read_link(shim_dir.join("qmux")).unwrap(), first_cli);
+        assert_eq!(fs::read_link(shim_dir.join("session")).unwrap(), first_cli);
         assert_eq!(
             fs::metadata(&runtime).unwrap().permissions().mode() & 0o777,
             0o700
@@ -570,9 +573,9 @@ mod tests {
             0o700
         );
 
-        let same_dir = ensure_qmux_cli_shim(&socket, &second_cli).unwrap();
+        let same_dir = ensure_session_cli_shim(&socket, &second_cli).unwrap();
         assert_eq!(same_dir, shim_dir);
-        assert_eq!(fs::read_link(shim_dir.join("qmux")).unwrap(), second_cli);
+        assert_eq!(fs::read_link(shim_dir.join("session")).unwrap(), second_cli);
         assert!(fs::read_dir(&shim_dir).unwrap().all(|entry| {
             !entry
                 .unwrap()
@@ -585,24 +588,24 @@ mod tests {
     }
 
     #[test]
-    fn qmux_cli_shim_refuses_to_replace_a_directory() {
+    fn session_cli_shim_refuses_to_replace_a_directory() {
         let root = temp_root("cli-shim-directory");
         let runtime = root.join("run");
         let socket = runtime.join("qmux.sock");
         let cli = root.join("app/qmux");
         touch(&cli);
-        let occupied = runtime.join("qmux-bin/qmux.sock/qmux");
+        let occupied = runtime.join("qmux-bin/qmux.sock/session");
         fs::create_dir_all(&occupied).unwrap();
 
-        let error = ensure_qmux_cli_shim(&socket, &cli).unwrap_err();
+        let error = ensure_session_cli_shim(&socket, &cli).unwrap_err();
 
-        assert!(error.contains("failed to install qmux shim"), "{error}");
+        assert!(error.contains("failed to install Session shim"), "{error}");
         assert!(occupied.is_dir());
         fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
-    fn qmux_cli_shim_does_not_chmod_an_existing_runtime_parent() {
+    fn session_cli_shim_does_not_chmod_an_existing_runtime_parent() {
         let root = temp_root("cli-shim-shared-parent");
         let runtime = root.join("shared");
         fs::create_dir(&runtime).unwrap();
@@ -611,7 +614,7 @@ mod tests {
         let cli = root.join("app/qmux");
         touch(&cli);
 
-        ensure_qmux_cli_shim(&socket, &cli).unwrap();
+        ensure_session_cli_shim(&socket, &cli).unwrap();
 
         assert_eq!(
             fs::metadata(&runtime).unwrap().permissions().mode() & 0o777,

@@ -1,5 +1,5 @@
 import type {
-  QmuxEvent,
+  SessionEvent,
   ResearchHighlight,
   ResearchNode,
   ResearchNodeStatus,
@@ -194,7 +194,7 @@ function isResearchNode(value: unknown): value is ResearchNode {
  * mutate live research state. A malformed or newly-added research event is
  * distinguishable from an unrelated event so the caller can recover with an
  * authoritative refetch instead of silently ignoring it. */
-export function parseResearchEvent(event: QmuxEvent): ResearchEventParseResult {
+export function parseResearchEvent(event: SessionEvent): ResearchEventParseResult {
   if (!event.type.startsWith("research.")) {
     return { kind: "notResearch" };
   }

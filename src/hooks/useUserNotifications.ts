@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import type { UserNotificationItem, UserNotificationTone } from "../components/UserNotificationStack";
 import { playCompletionSound } from "../lib/api";
 import type { AppSettings } from "../lib/settings";
-import type { QmuxEvent } from "../types";
+import type { SessionEvent } from "../types";
 
 interface UserNotificationOptions {
   settings: Pick<AppSettings, "showNotifications" | "completionSound">;
@@ -15,7 +15,7 @@ export function useUserNotifications(options: UserNotificationOptions) {
   optionsRef.current = options;
   const [userNotifications, setUserNotifications] = useState<UserNotificationItem[]>([]);
 
-  const handleUserNotificationRequested = useCallback((event: QmuxEvent) => {
+  const handleUserNotificationRequested = useCallback((event: SessionEvent) => {
     const { id, title, body, tone, timeoutMs, sound, createdAt } = event.payload;
     if (
       typeof id !== "string" ||

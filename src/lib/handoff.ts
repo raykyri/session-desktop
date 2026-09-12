@@ -194,7 +194,7 @@ export function buildHandoffDocument({
   const anchorEnd = assistantAnchor ? assistantRunEnd(items, anchorIndex) : anchorIndex;
 
   // Superseded branch work and records explicitly removed from active model
-  // context stay visible in qmux, but neither belongs in a handoff prompt.
+  // context stay visible in Session, but neither belongs in a handoff prompt.
   const history = items
     .slice(0, anchorIndex)
     .filter(
@@ -657,7 +657,7 @@ function handoffMessage(item: MessageItem, assistantLabel: string): HandoffMessa
   if (item.role !== "user" && item.role !== "assistant") {
     return null;
   }
-  // messageItemCopyText strips qmux's own tagged instruction blocks, so an
+  // messageItemCopyText strips Session's own tagged instruction blocks, so an
   // item that was nothing but plumbing sanitizes to null and drops out here.
   const text = messageItemCopyText(item);
   const activities = item.role === "assistant" ? item.activities : [];

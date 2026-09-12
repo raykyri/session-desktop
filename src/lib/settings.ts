@@ -45,7 +45,7 @@ export const BODY_FONT_OPTIONS: BodyFontOption[] = [
   {
     id: "dm-sans",
     label: "DM Sans",
-    // Latin and Latin Extended variable faces are bundled with qmux under the SIL OFL 1.1.
+    // Latin and Latin Extended variable faces are bundled with Session under the SIL OFL 1.1.
     stack: `"DM Sans", ${SYSTEM_BODY_FONT_STACK}`,
   },
   {
@@ -58,7 +58,7 @@ export const BODY_FONT_OPTIONS: BodyFontOption[] = [
   {
     id: "valley-sans",
     label: "Valley Sans",
-    // Roman and italic variable faces are bundled with qmux under the SIL OFL 1.1.
+    // Roman and italic variable faces are bundled with Session under the SIL OFL 1.1.
     stack: `"Valley Sans", ${SYSTEM_BODY_FONT_STACK}`,
   },
   {
@@ -84,7 +84,7 @@ function localFontSource(localName: string): string {
 
 async function localFontIsAvailable(localName: string): Promise<boolean> {
   try {
-    const probe = new FontFace("__qmux_local_font_probe__", localFontSource(localName));
+    const probe = new FontFace("__session_local_font_probe__", localFontSource(localName));
     await probe.load();
     return true;
   } catch {
@@ -206,7 +206,7 @@ export const WORKTREE_LOCATION_OPTIONS: { id: WorktreeLocation; label: string }[
 
 export const DEFAULT_SCROLLBACK_ROWS = 10000;
 export const SCROLLBACK_ROWS_MIN = 1000;
-// Ghostty's native limit is byte-backed (qmux budgets roughly 1 KiB per
+// Ghostty's native limit is byte-backed (Session budgets roughly 1 KiB per
 // requested row), so 200k allowed a single pane to reserve about 200 MiB and
 // made a few noisy build panes capable of forcing system suspension. Fifty
 // thousand remains 5x the default while bounding that per-surface exposure.
@@ -344,7 +344,7 @@ export interface AppSettings {
    * messages (before the next user/system message, or at the transcript tail).
    */
   showAssistantTimestamps: boolean;
-  /** Overlay toasts for `qmux send` notifications. The Journal still records them. */
+  /** Overlay toasts for `session send` notifications. The Journal still records them. */
   showNotifications: boolean;
   /** require Command+Enter instead of bare Enter for composer submit shortcuts */
   requireCmdEnterToSend: boolean;

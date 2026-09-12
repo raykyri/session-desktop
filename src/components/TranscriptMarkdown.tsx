@@ -27,7 +27,7 @@ import { rewriteDevinFileRefs } from "../lib/devinFileRefs";
 import {
   inlineCodeFilePath,
   loopbackHtmlUrl,
-  QMUX_FILE_HREF_PREFIX,
+  SESSION_FILE_HREF_PREFIX,
   safeHref,
 } from "../lib/links";
 import { normalizeLatexMathDelimiters } from "../lib/markdownMathDelimiters";
@@ -52,10 +52,10 @@ interface TranscriptHastNode {
   children?: TranscriptHastNode[];
 }
 
-const LOCAL_HTML_DATA_KEY = "qmuxLocalHtmlUrl";
-const LOCAL_FILE_PATH_DATA_KEY = "qmuxInlineFilePath";
-const CODEX_INLINE_VIS_DATA_KEY = "qmuxCodexInlineVisFile";
-const CODEX_VISUALIZATION_REFERENCE_DATA_KEY = "qmuxCodexVisualizationReference";
+const LOCAL_HTML_DATA_KEY = "sessionLocalHtmlUrl";
+const LOCAL_FILE_PATH_DATA_KEY = "sessionInlineFilePath";
+const CODEX_INLINE_VIS_DATA_KEY = "sessionCodexInlineVisFile";
+const CODEX_VISUALIZATION_REFERENCE_DATA_KEY = "sessionCodexVisualizationReference";
 const CODEX_INLINE_VIS_PATTERN =
   /^::codex-inline-vis\{file="([a-z0-9]+(?:-[a-z0-9]+)*\.html)"\}$/u;
 const CODEX_VISUALIZATION_REFERENCE_PREFIX = "visualize";
@@ -306,7 +306,7 @@ function MarkdownLink({
       }}
       onAuxClick={(event) => {
         // A middle (or other auxiliary) click would otherwise keep WebKit's
-        // native navigation and bypass openLink — where qmux routes loopback
+        // native navigation and bypass openLink — where Session routes loopback
         // file-server URLs into the sandboxed overlay and everything else
         // through the guarded external opener. Never let it navigate natively;
         // route a middle click through the same classifier as a primary click.
@@ -348,7 +348,7 @@ function MarkdownCode({
   // compact labels share this renderer but have no cwd to resolve against.
   if (artifactLinks && filePath) {
     return (
-      <MarkdownLink href={`${QMUX_FILE_HREF_PREFIX}${filePath}`}>{children}</MarkdownLink>
+      <MarkdownLink href={`${SESSION_FILE_HREF_PREFIX}${filePath}`}>{children}</MarkdownLink>
     );
   }
   const code = <code {...props}>{children}</code>;
@@ -398,7 +398,7 @@ function CodexVisualizationAttachment({
           await onOpen(reference);
           setOpenState("idle");
         } catch {
-          // The owning app action keeps the detailed failure in qmux's global
+          // The owning app action keeps the detailed failure in Session's global
           // error surface; this local state leaves an obvious retry affordance
           // exactly where the user clicked without exposing the absolute path.
           setOpenState("error");

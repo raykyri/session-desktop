@@ -2,7 +2,7 @@
 //!
 //! The Browser plugin currently discovers JSON-RPC peers by scanning Unix
 //! sockets in /tmp/codex-browser-use. This protocol is not a public OpenAI API,
-//! so keep this adapter small and capability-conservative. It identifies qmux
+//! so keep this adapter small and capability-conservative. It identifies Session
 //! to `agent.browsers.list()` and proxies the Browser client's tab/CDP requests
 //! to an isolated chrome-headless-shell runtime. Sandboxed file previews remain
 //! separate.
@@ -133,7 +133,7 @@ pub fn start_browser_discovery(
     let (engine, engine_error) = match BrowserEngine::start() {
         Ok(engine) => (Some(Arc::new(engine)), None),
         Err(err) => {
-            eprintln!("qmux: Codex browser automation unavailable: {err}");
+            eprintln!("session: Codex browser automation unavailable: {err}");
             (None, Some(err))
         }
     };
@@ -161,7 +161,7 @@ pub fn start_browser_discovery(
                     Ok((stream, _)) => {
                         if let Err(err) = stream.set_nonblocking(false) {
                             eprintln!(
-                                "qmux: failed to configure browser discovery client socket: {err}"
+                                "session: failed to configure browser discovery client socket: {err}"
                             );
                             continue;
                         }
@@ -170,7 +170,7 @@ pub fn start_browser_discovery(
                             .name("qmux-browser-discovery-client".to_string())
                             .spawn(move || {
                                 if let Err(err) = serve_connection(stream, backend) {
-                                    eprintln!("qmux: browser discovery client failed: {err}");
+                                    eprintln!("session: browser discovery client failed: {err}");
                                 }
                             });
                     }
@@ -179,7 +179,7 @@ pub fn start_browser_discovery(
                     }
                     Err(err) if err.kind() == ErrorKind::Interrupted => continue,
                     Err(err) => {
-                        eprintln!("qmux: browser discovery accept failed: {err}");
+                        eprintln!("session: browser discovery accept failed: {err}");
                         break;
                     }
                 }
@@ -323,8 +323,8 @@ fn handle_request(
                 .or_else(|| request.pointer("/params/sessionId"))
                 .and_then(Value::as_str)
                 .unwrap_or("");
-            let build_flavor =
-                std::env::var("QMUX_CODEX_APP_BUILD_FLAVOR").unwrap_or_else(|_| "prod".to_string());
+            let build_flavor = std::env::var("SESSION_CODEX_APP_BUILD_FLAVOR")
+                .unwrap_or_else(|_| "prod".to_string());
             let automation = if backend.engine.is_some() {
                 "chrome-headless-shell-cdp"
             } else {
@@ -337,7 +337,10 @@ fn handle_request(
             let mut metadata = serde_json::Map::new();
             metadata.insert("codexSessionId".to_string(), json!(session_id));
             metadata.insert("codexAppBuildFlavor".to_string(), json!(build_flavor));
-            metadata.insert("qmuxVersion".to_string(), json!(env!("CARGO_PKG_VERSION")));
+            metadata.insert(
+                "sessionVersion".to_string(),
+                json!(env!("CARGO_PKG_VERSION")),
+            );
             metadata.insert("automation".to_string(), json!(automation));
             if let Some(headless_shell_executable) = headless_shell_executable {
                 metadata.insert(
@@ -374,7 +377,7 @@ fn handle_request(
             "id": id,
             "error": {
                 "code": -32002,
-                "message": "browser tab belongs to a different qmux pane"
+                "message": "browser tab belongs to a different session pane"
             }
         }),
         _ => match backend.engine.as_ref() {
@@ -462,7 +465,7 @@ fn remember_tab_owner(
         if let Some(streaming) = streaming {
             if let Err(error) = stop_recorded_screencast(backend, pane_id, streaming) {
                 eprintln!(
-                    "qmux: failed to stop pane {pane_id} screencast after a device metrics override: {error}"
+                    "session: failed to stop pane {pane_id} screencast after a device metrics override: {error}"
                 );
             }
         }
@@ -565,7 +568,7 @@ fn scope_result_to_pane(
     };
     for (owner, viewport) in orphaned_screencasts {
         if let Err(error) = stop_recorded_screencast(backend, &owner, viewport) {
-            eprintln!("qmux: failed to stop orphaned pane {owner} screencast: {error}");
+            eprintln!("session: failed to stop orphaned pane {owner} screencast: {error}");
         }
     }
     lock_or_recover(&backend.pane_by_session).retain(|_, owner| pane_is_live(backend, owner));

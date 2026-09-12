@@ -1,8 +1,8 @@
-//! Wire types for qmux's control protocol: newline-delimited JSON requests and
-//! responses exchanged between in-pane processes (the `qmux` CLI, agent hooks)
+//! Wire types for Session's control protocol: newline-delimited JSON requests and
+//! responses exchanged between in-pane processes (the `session` CLI, agent hooks)
 //! and the app's control listener. `browser.open_file` alone carries an exact,
 //! size-declared byte body after its JSON header. Shared by the server
-//! (`control_socket`) and the client (`qmux-cli`) so the two sides can never
+//! (`control_socket`) and the client (`session-cli`) so the two sides can never
 //! drift. Transport-agnostic on purpose — today the frames travel over a local
 //! Unix socket, but nothing here may assume that: a forwarded socket or a
 //! network transport must be able to reuse these types unchanged.
@@ -33,7 +33,7 @@ pub struct ControlResponse {
     pub error: Option<String>,
 }
 
-/// Largest single file `qmux open` will carry from a remote pane to the desktop.
+/// Largest single file `session open` will carry from a remote pane to the desktop.
 /// The transport streams exactly this many bytes at most; neither endpoint should
 /// allocate a buffer proportional to the file size.
 pub const MAX_REMOTE_OPEN_FILE_BYTES: u64 = 10 * 1024 * 1024;

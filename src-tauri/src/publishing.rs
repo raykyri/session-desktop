@@ -16,7 +16,7 @@ const GITHUB_API_VERSION: &str = "2026-03-10";
 const GITHUB_API_BASE: &str = "https://api.github.com";
 const GITHUB_DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 const GITHUB_ACCESS_TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
-const GITHUB_USER_AGENT: &str = "qmux-publisher";
+const GITHUB_USER_AGENT: &str = "session-publisher";
 const KEYCHAIN_SERVICE: &str = "app.qmux.github-oauth";
 const KEYCHAIN_ACCOUNT: &str = "github";
 const PUBLICATIONS_FILE: &str = "publications.json";
@@ -354,7 +354,7 @@ pub async fn publishing_auth_status() -> Result<PublishingAuthStatus, String> {
 #[tauri::command]
 pub async fn publishing_auth_begin() -> Result<PublishingDeviceAuthorization, String> {
     let client_id = github_client_id().ok_or_else(|| {
-        "GitHub publishing is not configured. Set QMUX_GITHUB_CLIENT_ID when building qmux."
+        "GitHub publishing is not configured. Set SESSION_GITHUB_CLIENT_ID when building Session."
             .to_string()
     })?;
     let client = http_client()?;
@@ -391,7 +391,7 @@ pub async fn publishing_auth_begin() -> Result<PublishingDeviceAuthorization, St
 #[tauri::command]
 pub async fn publishing_auth_poll(device_code: String) -> Result<PublishingAuthPollResult, String> {
     let client_id = github_client_id().ok_or_else(|| {
-        "GitHub publishing is not configured. Set QMUX_GITHUB_CLIENT_ID when building qmux."
+        "GitHub publishing is not configured. Set SESSION_GITHUB_CLIENT_ID when building Session."
             .to_string()
     })?;
     if device_code.trim().is_empty() || device_code.len() > 512 {
@@ -505,7 +505,7 @@ pub async fn publishing_publish(
         })
         .collect();
     let payload = CreateGistRequest {
-        description: format!("{} — published with qmux", request.title.trim()),
+        description: format!("{} — published with Session", request.title.trim()),
         public: request.is_public,
         files,
     };
@@ -557,7 +557,7 @@ pub async fn publishing_publish(
     };
     if let Err(error) = upsert_publication_binding(&workspace_root, &binding) {
         binding.warning = Some(format!(
-            "The Gist was created, but qmux could not save its local publication binding: {error}"
+            "The Gist was created, but Session could not save its local publication binding: {error}"
         ));
     }
     Ok(binding)
@@ -609,7 +609,7 @@ pub async fn publishing_sync(
         .is_some_and(|(saved, current)| saved != current)
     {
         return Err(
-            "The Gist changed outside qmux after its last sync. Review the Gist before updating it."
+            "The Gist changed outside Session after its last sync. Review the Gist before updating it."
                 .to_string(),
         );
     }
@@ -624,7 +624,7 @@ pub async fn publishing_sync(
     validate_remote_publication_identity(&current_index, &request.publication_id, &request.source)?;
     preserve_remote_created_at(&mut request.files, &current_index)?;
     validate_sync_request(&request)?;
-    let desired_description = format!("{} — published with qmux", request.title.trim());
+    let desired_description = format!("{} — published with Session", request.title.trim());
     let files =
         build_gist_update_files(&client, &remote.gist, &current_index, &request.files).await?;
 
@@ -670,7 +670,7 @@ pub async fn publishing_sync(
             .map_err(|error| format!("failed to read GitHub Gist sync response: {error}"))?;
         if status == StatusCode::PRECONDITION_FAILED {
             return Err(
-                "The Gist changed while qmux was preparing the update. Review it and try again."
+                "The Gist changed while Session was preparing the update. Review it and try again."
                     .to_string(),
             );
         }
@@ -705,7 +705,7 @@ pub async fn publishing_sync(
     .err()
     .map(|error| {
         format!(
-            "The publication was updated, but qmux could not link every accepted proposal to its published result: {error}"
+            "The publication was updated, but Session could not link every accepted proposal to its published result: {error}"
         )
     });
 
@@ -747,7 +747,7 @@ pub async fn publishing_sync(
             append_warning(
                 &mut warning,
                 format!(
-                    "The Gist was updated, but qmux could not save its local publication binding: {error}"
+                    "The Gist was updated, but Session could not save its local publication binding: {error}"
                 ),
             );
             let mut binding = template;
@@ -842,8 +842,9 @@ pub async fn publishing_resolve_proposal(
         .iter()
         .find(|comment| comment.id == request.proposal_comment_id)
         .ok_or_else(|| "The proposal comment was not found on GitHub.".to_string())?;
-    let proposal = parse_research_proposal(&proposal_comment.body)
-        .ok_or_else(|| "The GitHub comment is not a valid qmux research proposal.".to_string())?;
+    let proposal = parse_research_proposal(&proposal_comment.body).ok_or_else(|| {
+        "The GitHub comment is not a valid Session research proposal.".to_string()
+    })?;
     if proposal.publication_id != request.publication_id {
         return Err("The proposal belongs to a different publication.".to_string());
     }
@@ -1000,7 +1001,7 @@ pub async fn publishing_resolve_proposal(
                 .insert(request.proposal_comment_id.to_string(), proposal_state);
             binding.updated_at = now;
             binding.warning = Some(format!(
-                "GitHub recorded the proposal resolution, but qmux could not finish saving its local mapping: {error}"
+                "GitHub recorded the proposal resolution, but Session could not finish saving its local mapping: {error}"
             ));
         }
     }
@@ -1019,15 +1020,15 @@ fn auth_status() -> Result<PublishingAuthStatus, String> {
 }
 
 fn github_client_id() -> Option<String> {
-    std::env::var("QMUX_GITHUB_CLIENT_ID")
+    std::env::var("SESSION_GITHUB_CLIENT_ID")
         .ok()
-        .or_else(|| option_env!("QMUX_GITHUB_CLIENT_ID").map(str::to_string))
+        .or_else(|| option_env!("SESSION_GITHUB_CLIENT_ID").map(str::to_string))
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
 }
 
 fn share_base_url() -> String {
-    std::env::var("QMUX_SHARE_BASE_URL")
+    std::env::var("SESSION_SHARE_BASE_URL")
         .ok()
         .map(|value| value.trim().trim_end_matches('/').to_string())
         .filter(|value| value.starts_with("http://") || value.starts_with("https://"))
@@ -1042,13 +1043,13 @@ fn github_access_token() -> Result<Option<StoredCredential>, String> {
 }
 
 fn environment_credential() -> Option<StoredCredential> {
-    std::env::var("QMUX_GITHUB_TOKEN")
+    std::env::var("SESSION_GITHUB_TOKEN")
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
         .map(|access_token| StoredCredential {
             access_token,
-            login: std::env::var("QMUX_GITHUB_LOGIN")
+            login: std::env::var("SESSION_GITHUB_LOGIN")
                 .ok()
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty()),
@@ -1627,7 +1628,7 @@ fn reconcile_proposal_node_states(
         // the ambiguity is resolved.
         if matching_nodes.len() > 1 {
             eprintln!(
-                "qmux: proposal {} is linked to multiple local research nodes; leaving its saved state unchanged",
+                "session: proposal {} is linked to multiple local research nodes; leaving its saved state unchanged",
                 comment.id
             );
             continue;
@@ -1650,7 +1651,7 @@ fn reconcile_proposal_node_states(
             .is_some_and(|(_, resolution)| resolution.status != "accepted")
         {
             eprintln!(
-                "qmux: proposal {} has a local result but an incompatible owner resolution; leaving its saved state unchanged",
+                "session: proposal {} has a local result but an incompatible owner resolution; leaving its saved state unchanged",
                 comment.id
             );
             continue;
@@ -1662,7 +1663,7 @@ fn reconcile_proposal_node_states(
                 || saved.status != "accepted"
             {
                 eprintln!(
-                    "qmux: proposal {} has an incompatible saved local mapping; leaving it unchanged",
+                    "session: proposal {} has an incompatible saved local mapping; leaving it unchanged",
                     comment.id
                 );
                 continue;
@@ -1673,7 +1674,7 @@ fn reconcile_proposal_node_states(
                 .is_some_and(|node_id| node_id != local_node.id)
             {
                 eprintln!(
-                    "qmux: proposal {} is already linked to a different local research node; leaving it unchanged",
+                    "session: proposal {} is already linked to a different local research node; leaving it unchanged",
                     comment.id
                 );
                 continue;
@@ -1849,7 +1850,7 @@ fn encode_proposal_resolution(payload: &ProposalResolutionPayload) -> Result<Str
         .map_err(|error| format!("failed to encode proposal resolution: {error}"))?;
     let encoded = URL_SAFE_NO_PAD.encode(raw);
     let message = if payload.status == "accepted" {
-        "Accepted this follow-up into the owner's qmux research tree."
+        "Accepted this follow-up into the owner's Session research tree."
     } else {
         "The owner declined this follow-up."
     };
@@ -2105,7 +2106,7 @@ fn validate_remote_publication_identity(
     if root.get("schemaVersion").and_then(Value::as_u64) != Some(1)
         || root.get("publicationId").and_then(Value::as_str) != Some(expected_publication_id)
     {
-        return Err("The linked Gist contains a different qmux publication.".to_string());
+        return Err("The linked Gist contains a different Session publication.".to_string());
     }
     let expected_kind = match source.kind.as_str() {
         "transcript" => "transcript",
@@ -2114,7 +2115,7 @@ fn validate_remote_publication_identity(
         _ => return Err("The saved publication source is unsupported.".to_string()),
     };
     if root.get("kind").and_then(Value::as_str) != Some(expected_kind) {
-        return Err("The linked Gist publication type no longer matches qmux.".to_string());
+        return Err("The linked Gist publication type no longer matches Session.".to_string());
     }
     Ok(())
 }
@@ -3127,7 +3128,7 @@ mod tests {
         let mut gist = GitHubGist {
             id: "gist12345".to_string(),
             html_url: "https://gist.github.com/gist12345".to_string(),
-            description: Some("Research — published with qmux".to_string()),
+            description: Some("Research — published with Session".to_string()),
             public: false,
             files: current
                 .files

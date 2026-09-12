@@ -1,10 +1,10 @@
-//! Local snapshots uploaded by `qmux open` from SSH-backed panes.
+//! Local snapshots uploaded by `session open` from SSH-backed panes.
 //!
 //! Each upload gets its own owner-only directory and only the completed file is
 //! granted to the pane's preview token. The directory is never a file-server
 //! root, so relative references from HTML cannot pull in sibling remote files.
 
-use qmux_proto::MAX_REMOTE_OPEN_FILE_BYTES;
+use session_proto::MAX_REMOTE_OPEN_FILE_BYTES;
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
@@ -25,7 +25,7 @@ fn store_root_is_directory(root: &Path) -> bool {
 }
 
 pub fn validate_name(name: &str) -> Result<(), String> {
-    if !qmux_proto::is_safe_browser_preview_name(name) {
+    if !session_proto::is_safe_browser_preview_name(name) {
         return Err(format!("'{name}' is not a browser-previewable file"));
     }
     Ok(())
@@ -101,7 +101,7 @@ pub fn stage<R: Read>(
     result
 }
 
-/// Returns the canonical path only when it is one complete file in qmux's
+/// Returns the canonical path only when it is one complete file in Session's
 /// managed remote-preview store.
 pub fn resolve_staged_file(workspace_root: &Path, path: &Path) -> Option<PathBuf> {
     let store = store_root(workspace_root);

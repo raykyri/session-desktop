@@ -1,6 +1,6 @@
 use crate::adapters::MessageAnchor;
-use crate::config::QmuxConfig;
-use crate::events::QmuxEvent;
+use crate::config::SessionConfig;
+use crate::events::SessionEvent;
 use crate::host::RemoteTmuxCommands;
 use crate::journal;
 use crate::journal::{
@@ -44,7 +44,7 @@ pub struct HostPtyBackend {
     pub master: SharedMaster,
     pub writer: SharedWriter,
     pub backlog: SharedBacklog,
-    /// The process/PTY is owned by qmux, but output is rendered by a native
+    /// The process/PTY is owned by Session, but output is rendered by a native
     /// Ghostty host-managed surface instead of the webview renderer.
     pub native_surface: bool,
 }
@@ -212,7 +212,7 @@ fn workspace_observation_matches(
 }
 
 /// Retarget a checkout-wide observation to one pane or agent without replacing
-/// adapter-specific provenance or qmux ownership metadata already attached to it.
+/// adapter-specific provenance or Session ownership metadata already attached to it.
 fn propagated_workspace(
     observed: &ActiveWorkspace,
     current: Option<&ActiveWorkspace>,
@@ -303,7 +303,7 @@ const RECENT_SESSION_TOUCH_COARSENESS_MS: u128 = 5_000;
 ///
 /// A pane's reader thread starts emitting the instant the process spawns, but on
 /// a cold start (and for panes recovered before the UI exists) that happens
-/// before the frontend has registered its `qmux-event` listener, so the very
+/// before the frontend has registered its `session-event` listener, so the very
 /// first prompt would be emitted into the void and lost. Until `ready` flips —
 /// the frontend signals this via `pane_attach` once its listener is live — the
 /// reader buffers here instead of emitting.
@@ -326,7 +326,7 @@ pub struct AppState {
 }
 
 struct AppStateInner {
-    config: QmuxConfig,
+    config: SessionConfig,
     pane_tokens: Mutex<HashMap<String, String>>,
     // Credentials exposed across an SSH reverse-forward. Kept distinct from local
     // pane tokens so the control socket can apply a remote-only command policy and
@@ -342,7 +342,7 @@ struct AppStateInner {
     exact_file_tokens: Mutex<HashMap<String, (String, std::path::PathBuf)>>,
     // Exact, canonical files outside a pane's normal project roots that the
     // trusted UI explicitly granted to its preview. Codex inline visualizations
-    // live under qmux's private workspace metadata, so granting the whole root
+    // live under Session's private workspace metadata, so granting the whole root
     // would expose unrelated panes and sessions to a leaked preview token.
     file_preview_grants: Mutex<HashMap<String, HashSet<std::path::PathBuf>>>,
     model: Mutex<Model>,
@@ -424,7 +424,7 @@ struct AppStateInner {
     /// state.json; recovered shells register their freshly resumed job again.
     shell_agent_jobs: Mutex<HashMap<String, ShellAgentJob>>,
     /// UI-only drafts that must survive a WebKit document/process reload but
-    /// not a full qmux restart. Kept outside Model so persistence snapshots
+    /// not a full Session restart. Kept outside Model so persistence snapshots
     /// never make them durable.
     interface_drafts: Mutex<HashMap<String, String>>,
 }
@@ -534,7 +534,7 @@ struct Model {
     /// are opaque records here — the format lives in the frontend (see
     /// journal.rs module docs).
     journal: journal::JournalState,
-    /// Persistent feed of `qmux send` notifications. Oldest first; capped by
+    /// Persistent feed of `session send` notifications. Oldest first; capped by
     /// the notifications module. Distinct from the research Journal.
     notification_log: crate::user_notifications::NotificationLog,
     /// Pane ids with a backend retirement worker in flight. Transient and deduplicated.
@@ -586,7 +586,7 @@ struct Model {
     agent_submit_watch: HashSet<(String, u64)>,
     agent_drafts: HashMap<String, String>,
     recent_sessions: HashMap<String, RecentSessionInfo>,
-    /// Files and loopback URLs surfaced from agent panes via `qmux open`, oldest
+    /// Files and loopback URLs surfaced from agent panes via `session open`, oldest
     /// first — the per-workspace artifact tray. Persisted; capped per group.
     artifacts: Vec<ArtifactInfo>,
     /// Agents whose currently-running (just-sent) queued turn requested a pause; when
@@ -664,7 +664,7 @@ pub struct ClosedPaneSnapshot {
 }
 
 /// One artifact-tray entry: a file or loopback URL a pane's agent (or its user,
-/// while the agent was backgrounded) opened via `qmux open`. File artifacts keep
+/// while the agent was backgrounded) opened via `session open`. File artifacts keep
 /// the canonical path — file-server URLs are minted per run and would go stale —
 /// while URL artifacts keep the loopback URL itself.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -1339,7 +1339,7 @@ fn ensure_agent_thread_metadata(state: &AppState, model: &mut Model, agent: &mut
                         // history stays readable and the startup migration
                         // retries (and warns) on the next launch.
                         eprintln!(
-                            "qmux: could not migrate legacy thread graph {}: {err}",
+                            "session: could not migrate legacy thread graph {}: {err}",
                             record.id
                         );
                     }
@@ -1477,7 +1477,7 @@ pub struct RemoteSessionIdentity {
     pub remote_id: String,
     /// A qmux-specific tmux server, isolated from the user's default server.
     pub tmux_server: String,
-    /// A collision-resistant session name persisted across qmux restarts.
+    /// A collision-resistant session name persisted across Session restarts.
     pub tmux_session: String,
     /// Owner-only remote directory containing generated files for this pane.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1951,7 +1951,7 @@ pub enum PaneStatus {
 }
 
 impl AppState {
-    pub fn new(config: QmuxConfig) -> Self {
+    pub fn new(config: SessionConfig) -> Self {
         Self {
             inner: Arc::new(AppStateInner {
                 config,
@@ -2159,7 +2159,7 @@ impl AppState {
     }
 
     /// The directory a newly-created group opens in when the caller doesn't give an
-    /// explicit path: the user's home directory, else the qmux process cwd. The home step
+    /// explicit path: the user's home directory, else the Session process cwd. The home step
     /// keeps a Finder/Dock launch — whose process cwd is the filesystem root — from
     /// opening shells at `/`.
     pub fn default_open_dir(&self) -> std::path::PathBuf {
@@ -2414,7 +2414,7 @@ impl AppState {
     }
 
     /// Roots a preview from a pane may read. This deliberately excludes other
-    /// qmux groups and any cwd at or above the private workspace root. Local
+    /// Session groups and any cwd at or above the private workspace root. Local
     /// temporary directories are explicit shared roots because agents commonly
     /// write disposable HTML artifacts there rather than beneath their cwd.
     pub fn pane_file_roots(&self, pane_id: &str) -> Vec<std::path::PathBuf> {
@@ -2475,7 +2475,7 @@ impl AppState {
         Vec::new()
     }
 
-    pub fn config(&self) -> &QmuxConfig {
+    pub fn config(&self) -> &SessionConfig {
         &self.inner.config
     }
 
@@ -2762,7 +2762,7 @@ impl AppState {
                 &self.inner.config.workspace_root,
                 &surviving_research_node_ids,
             ) {
-                eprintln!("qmux: {err}");
+                eprintln!("session: {err}");
             }
         }
         migration_warnings.extend(migrate_thread_records_to_global(
@@ -2778,7 +2778,7 @@ impl AppState {
             (None, true) => None,
         };
         if let Some(warning) = recovery_warning {
-            eprintln!("qmux: {warning}");
+            eprintln!("session: {warning}");
             if let Ok(mut slot) = self.inner.recovery_warning.lock() {
                 *slot = Some(warning);
             }
@@ -3080,7 +3080,7 @@ impl AppState {
         }
 
         if let Err(err) = self.persist_snapshot_locked() {
-            eprintln!("qmux: failed to persist session state: {err}");
+            eprintln!("session: failed to persist session state: {err}");
         }
     }
 
@@ -3198,7 +3198,7 @@ impl AppState {
             }
         }
         if let Err(err) = self.persist_snapshot_locked() {
-            eprintln!("qmux: failed to persist final session state: {err}");
+            eprintln!("session: failed to persist final session state: {err}");
         }
         self.inner.persist_enabled.store(false, Ordering::Relaxed);
         // Thread-graph writes are debounced the same way state.json is; commit
@@ -3373,7 +3373,7 @@ impl AppState {
         format!("{prefix}-{millis}-{seq}")
     }
 
-    pub fn emit(&self, event: QmuxEvent) {
+    pub fn emit(&self, event: SessionEvent) {
         let completion_sound_id = self
             .inner
             .completion_sound
@@ -3384,7 +3384,7 @@ impl AppState {
         if let Some(sound_id) = completion_sound_id
             && let Err(err) = crate::native_terminal::play_completion_sound(&sound_id)
         {
-            eprintln!("qmux: failed to play completion sound: {err}");
+            eprintln!("session: failed to play completion sound: {err}");
         }
         #[cfg(test)]
         let _ = completion_sound_id;
@@ -3396,7 +3396,7 @@ impl AppState {
         // contending with transcript tails mid-serialize.
         let app_handle = self.app_handle();
         if let Some(app_handle) = app_handle {
-            let _ = app_handle.emit("qmux-event", event);
+            let _ = app_handle.emit("session-event", event);
         }
     }
 
@@ -3425,7 +3425,7 @@ impl AppState {
         if pane_count == 0 && research_run_count == 0 {
             return;
         }
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "app.exit_confirmation_requested",
             None,
             None,
@@ -3529,7 +3529,7 @@ impl AppState {
             model.pane_splits.clone()
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "pane.splits_changed",
             None,
             None,
@@ -3668,7 +3668,7 @@ impl AppState {
             removed
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "artifact.added",
             Some(pane_id.to_string()),
             None,
@@ -3717,7 +3717,7 @@ impl AppState {
             model.artifacts.remove(index)
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "artifact.removed",
             Some(removed.pane_id.clone()),
             None,
@@ -3749,7 +3749,7 @@ impl AppState {
             model.artifacts.insert(index, artifact.clone());
         }
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "artifact.added",
             Some(artifact.pane_id.clone()),
             None,
@@ -4760,7 +4760,7 @@ impl AppState {
         };
         self.admit_research_root(&tree, &mut node)?;
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.tree.created",
             None,
             None,
@@ -4851,7 +4851,7 @@ impl AppState {
             return Err(err);
         }
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.tree.created",
             None,
             None,
@@ -5095,7 +5095,7 @@ impl AppState {
             return Err(err);
         }
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.tree.created",
             None,
             None,
@@ -5253,7 +5253,7 @@ impl AppState {
         // command returns instead of leaving a debounce-sized crash window in
         // which state.json still describes the previous document.
         self.persist_now();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.document.updated",
             None,
             None,
@@ -5528,7 +5528,7 @@ impl AppState {
             node
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.node.created",
             None,
             None,
@@ -5639,7 +5639,7 @@ impl AppState {
             completion_sound.mark_research_agent(&agent.id);
         }
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.node.updated",
             Some(pane_id.to_string()),
             Some(agent.id.clone()),
@@ -5705,13 +5705,13 @@ impl AppState {
             completion_sound.mark_research_agent(&agent.id);
         }
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.node.updated",
             None,
             Some(agent.id.clone()),
             json!({ "node": node }),
         ));
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "agent.updated",
             None,
             Some(agent.id.clone()),
@@ -5771,7 +5771,7 @@ impl AppState {
         };
         self.persist();
         if let Some(agent) = agent {
-            self.emit(QmuxEvent::new(
+            self.emit(SessionEvent::new(
                 "agent.updated",
                 None,
                 Some(agent.id.clone()),
@@ -5779,7 +5779,7 @@ impl AppState {
             ));
         }
         if let Ok(node) = self.research_node(node_id) {
-            self.emit(QmuxEvent::new(
+            self.emit(SessionEvent::new(
                 "research.node.updated",
                 None,
                 Some(agent_id.to_string()),
@@ -5867,7 +5867,7 @@ impl AppState {
         };
         self.persist();
         if let Some(agent) = agent {
-            self.emit(QmuxEvent::new(
+            self.emit(SessionEvent::new(
                 if effective_success {
                     "agent.done"
                 } else {
@@ -5879,7 +5879,7 @@ impl AppState {
             ));
         }
         if let Some(node) = node {
-            self.emit(QmuxEvent::new(
+            self.emit(SessionEvent::new(
                 "research.node.updated",
                 None,
                 Some(agent_id.to_string()),
@@ -5957,7 +5957,7 @@ impl AppState {
         // Payload-less agent.updated makes the frontend refetch listAgents()
         // so pane-less SDK agents leave the React array (and the wake lock)
         // after prune. Pane agents already leave via pane.removed.
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "agent.updated",
             None,
             Some(agent_id.to_string()),
@@ -5990,7 +5990,7 @@ impl AppState {
                 Ok(Some(agent)) => {
                     // Mirrors the hook pipeline's event shape (type + attached
                     // agent) so the frontend applies the status surgically.
-                    state.emit(QmuxEvent::new(
+                    state.emit(SessionEvent::new(
                         "agent.awaiting_input",
                         agent.pane_id.clone(),
                         Some(agent.id.clone()),
@@ -5999,7 +5999,7 @@ impl AppState {
                 }
                 Ok(None) => {}
                 Err(err) => {
-                    eprintln!("qmux: research startup watchdog for {agent_id} failed: {err}");
+                    eprintln!("session: research startup watchdog for {agent_id} failed: {err}");
                 }
             }
         });
@@ -6124,7 +6124,7 @@ impl AppState {
             node
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.node.updated",
             node.pane_id.clone(),
             node.agent_id.clone(),
@@ -6168,7 +6168,7 @@ impl AppState {
             (node, pane_id, runtime)
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.node.updated",
             node.pane_id.clone(),
             node.agent_id.clone(),
@@ -6196,7 +6196,7 @@ impl AppState {
                 // settled node keeps counting as an active run (blocking
                 // archive/remove and folder changes) until restart.
                 if let Err(err) = self.detach_research_pane(&pane_id) {
-                    eprintln!("qmux: failed to detach research pane {pane_id}: {err}");
+                    eprintln!("session: failed to detach research pane {pane_id}: {err}");
                 }
             }
         }
@@ -6299,7 +6299,7 @@ impl AppState {
             node
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.node.updated",
             None,
             None,
@@ -6362,7 +6362,7 @@ impl AppState {
             return Ok(false);
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.node.updated",
             node.pane_id.clone(),
             node.agent_id.clone(),
@@ -6443,7 +6443,7 @@ impl AppState {
         };
         if let Some(node) = &updated {
             self.persist();
-            self.emit(QmuxEvent::new(
+            self.emit(SessionEvent::new(
                 "research.node.updated",
                 None,
                 None,
@@ -6482,7 +6482,7 @@ impl AppState {
             tree.clone()
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.tree.updated",
             None,
             None,
@@ -6514,7 +6514,7 @@ impl AppState {
             node.clone()
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.node.updated",
             None,
             None,
@@ -6587,7 +6587,7 @@ impl AppState {
             node.highlights.push(highlight.clone());
         }
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.highlight.created",
             None,
             None,
@@ -6624,7 +6624,7 @@ impl AppState {
             node.highlights.remove(index)
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.highlight.removed",
             None,
             None,
@@ -6678,7 +6678,7 @@ impl AppState {
             return Ok(removed);
         }
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.highlights.removed",
             None,
             None,
@@ -6754,7 +6754,7 @@ impl AppState {
             tree.clone()
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.tree.archived",
             None,
             None,
@@ -6784,7 +6784,7 @@ impl AppState {
             tree.clone()
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.tree.restored",
             None,
             None,
@@ -6880,7 +6880,7 @@ impl AppState {
             return Err(format!("research tree {tree_id} was not found"));
         }
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.tree.removed",
             None,
             None,
@@ -6890,7 +6890,7 @@ impl AppState {
             if let Err(err) =
                 research::remove_response_snapshot(&self.inner.config.workspace_root, &node_id)
             {
-                eprintln!("qmux: failed to remove research response {node_id}: {err}");
+                eprintln!("session: failed to remove research response {node_id}: {err}");
             }
         }
         // Best-effort: the graph snapshots are unreachable once their records
@@ -6901,7 +6901,7 @@ impl AppState {
                 && err.kind() != std::io::ErrorKind::NotFound
             {
                 eprintln!(
-                    "qmux: failed to remove research thread graph {}: {err}",
+                    "session: failed to remove research thread graph {}: {err}",
                     record.snapshot_path
                 );
             }
@@ -7014,7 +7014,7 @@ impl AppState {
             )
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.node.removed",
             None,
             None,
@@ -7028,7 +7028,7 @@ impl AppState {
             if let Err(err) =
                 research::remove_response_snapshot(&self.inner.config.workspace_root, &node_id)
             {
-                eprintln!("qmux: failed to remove research response {node_id}: {err}");
+                eprintln!("session: failed to remove research response {node_id}: {err}");
             }
         }
         for record in reaped_thread_records {
@@ -7037,7 +7037,7 @@ impl AppState {
                 && err.kind() != std::io::ErrorKind::NotFound
             {
                 eprintln!(
-                    "qmux: failed to remove research thread graph {}: {err}",
+                    "session: failed to remove research thread graph {}: {err}",
                     record.snapshot_path
                 );
             }
@@ -7385,7 +7385,7 @@ impl AppState {
             return Err(format!("failed to commit global research detach: {err}"));
         }
         let node_ids = nodes.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "group.removed",
             None,
             None,
@@ -7402,7 +7402,7 @@ impl AppState {
                 && err.kind() != std::io::ErrorKind::NotFound
             {
                 eprintln!(
-                    "qmux: failed to remove detached research thread graph {}: {err}",
+                    "session: failed to remove detached research thread graph {}: {err}",
                     record.snapshot_path
                 );
             }
@@ -7713,7 +7713,7 @@ impl AppState {
             }
             return Err(format!("failed to commit imported research: {err}"));
         }
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "group.created",
             None,
             None,
@@ -7882,7 +7882,7 @@ impl AppState {
                 Ok(bytes) => bounded_undo_scrollback(&bytes, MAX_UNDO_SCROLLBACK_BYTES),
                 Err(err) => {
                     eprintln!(
-                        "qmux: failed to capture scrollback for closed pane {}: {err}",
+                        "session: failed to capture scrollback for closed pane {}: {err}",
                         snapshot.pane.id
                     );
                     Vec::new()
@@ -8229,17 +8229,17 @@ impl AppState {
                 .as_ref()
                 .map(|(agent_id, status, active)| (agent_id.as_str(), *status, *active)),
         ) {
-            eprintln!("qmux: failed to detach research pane {pane_id}: {err}");
+            eprintln!("session: failed to detach research pane {pane_id}: {err}");
         }
         if !self.inner.exit_teardown_started.load(Ordering::SeqCst)
             && let Err(err) = remove_pane_scrollback(&self.inner.config.workspace_root, pane_id)
         {
-            eprintln!("qmux: failed to remove scrollback for pane {pane_id}: {err}");
+            eprintln!("session: failed to remove scrollback for pane {pane_id}: {err}");
         }
         self.persist();
-        self.emit(QmuxEvent::pane_removed(pane_id.to_string()));
+        self.emit(SessionEvent::pane_removed(pane_id.to_string()));
         if let Some(group_id) = removed_group_id {
-            self.emit(QmuxEvent::new(
+            self.emit(SessionEvent::new(
                 "group.removed",
                 None,
                 None,
@@ -8391,7 +8391,7 @@ impl AppState {
         };
         self.persist();
         if let Some(group_id) = removed_source_group_id {
-            self.emit(QmuxEvent::new(
+            self.emit(SessionEvent::new(
                 "group.removed",
                 None,
                 None,
@@ -8580,7 +8580,7 @@ impl AppState {
         };
         if removed {
             self.persist();
-            self.emit(QmuxEvent::new(
+            self.emit(SessionEvent::new(
                 "group.removed",
                 None,
                 None,
@@ -9108,7 +9108,7 @@ impl AppState {
         let changed = updated.is_some();
         if let Some(node) = updated {
             self.maybe_schedule_research_retirement(&node);
-            self.emit(QmuxEvent::new(
+            self.emit(SessionEvent::new(
                 "research.node.updated",
                 node.pane_id.clone(),
                 node.agent_id.clone(),
@@ -9206,7 +9206,7 @@ impl AppState {
                             continue;
                         }
                         eprintln!(
-                            "qmux: retiring research pane {pane_id} without a response snapshot: {err}"
+                            "session: retiring research pane {pane_id} without a response snapshot: {err}"
                         );
                     }
                 }
@@ -9225,7 +9225,7 @@ impl AppState {
                 }
             }
             eprintln!(
-                "qmux: failed to retire settled research pane {pane_id} after retries: {}",
+                "session: failed to retire settled research pane {pane_id} after retries: {}",
                 last_error.unwrap_or_else(|| "unknown error".to_string())
             );
             if let Ok(mut model) = state.inner.model.lock() {
@@ -9303,7 +9303,7 @@ impl AppState {
         };
         if let Some(node) = updated {
             self.persist();
-            self.emit(QmuxEvent::new(
+            self.emit(SessionEvent::new(
                 "research.node.updated",
                 node.pane_id.clone(),
                 node.agent_id.clone(),
@@ -9348,7 +9348,7 @@ impl AppState {
             node.clone()
         };
         self.persist();
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "research.node.updated",
             updated.pane_id.clone(),
             updated.agent_id.clone(),
@@ -9456,7 +9456,7 @@ impl AppState {
             && let Err(err) = store.append_turn_node(&agent, &turn)
         {
             eprintln!(
-                "qmux: failed to append thread graph for agent {}: {err}",
+                "session: failed to append thread graph for agent {}: {err}",
                 agent.id
             );
         }
@@ -9560,7 +9560,7 @@ impl AppState {
             && let Err(err) = store.replace_agent_branch_turns(&agent, &turns_for_graph)
         {
             eprintln!(
-                "qmux: failed to write thread graph for agent {}: {err}",
+                "session: failed to write thread graph for agent {}: {err}",
                 agent.id
             );
         }
@@ -10242,7 +10242,7 @@ impl AppState {
             self.persist();
         } else {
             eprintln!(
-                "qmux: dropped queued turn for agent {agent_id} after failed re-queue (model lock poisoned)"
+                "session: dropped queued turn for agent {agent_id} after failed re-queue (model lock poisoned)"
             );
         }
     }
@@ -10457,7 +10457,7 @@ impl AppState {
     /// Stores the agent's composer draft and snapshots it to disk. A trimmed-empty
     /// draft drops the entry so recovery never restores stray whitespace and the
     /// map does not grow an entry per cleared composer.
-    /// The current millisecond wall clock, matching QmuxEvent timestamps.
+    /// The current millisecond wall clock, matching SessionEvent timestamps.
     fn now_millis() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -10477,7 +10477,7 @@ impl AppState {
     /// Emits the full drafts list — the store is small and global, so every
     /// mutation broadcasts the whole truth instead of deltas.
     fn emit_global_drafts(&self, drafts: &[GlobalDraft]) {
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "drafts.changed",
             None,
             None,
@@ -11262,7 +11262,7 @@ impl AppState {
             update(connection);
             connection.clone()
         };
-        self.emit(QmuxEvent::new(
+        self.emit(SessionEvent::new(
             "pane.remote_connection",
             Some(pane_id.to_string()),
             None,
@@ -11340,7 +11340,7 @@ impl AppState {
         self.update_pane_workspace_inner(pane_id, cwd, None)
     }
 
-    /// Applies workspace metadata resolved by qmux-cli on the pane's host.
+    /// Applies workspace metadata resolved by session-cli on the pane's host.
     /// Local panes continue to use the desktop's authoritative filesystem/Git
     /// probe; remote panes cannot be resolved against that filesystem and use
     /// this authenticated, display-only observation instead.
@@ -11558,7 +11558,7 @@ impl AppState {
         for pane in pane_updates {
             // Carry cwd and workspace together so the tab path, context-menu cwd,
             // branch, and worktree badge advance as one ordered observation.
-            self.emit(QmuxEvent::new(
+            self.emit(SessionEvent::new(
                 "pane.cwd_changed",
                 Some(pane.id.clone()),
                 None,
@@ -11570,7 +11570,7 @@ impl AppState {
             ));
         }
         for agent in agent_updates {
-            self.emit(QmuxEvent::new(
+            self.emit(SessionEvent::new(
                 "agent.workspace_changed",
                 agent.pane_id.clone(),
                 Some(agent.id.clone()),
@@ -12910,8 +12910,8 @@ mod tests {
         dir
     }
 
-    fn test_config(workspace_root: PathBuf) -> QmuxConfig {
-        QmuxConfig {
+    fn test_config(workspace_root: PathBuf) -> SessionConfig {
+        SessionConfig {
             remotes: Default::default(),
             workspace_root,
             socket_path: PathBuf::from("/tmp/qmux-test.sock"),
@@ -18935,7 +18935,7 @@ mod tests {
             label: "Dev box".to_string(),
             host: "devbox".to_string(),
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
-            qmux_cli: None,
+            session_cli: None,
             workspace_root: Some("/srv/qmux/workspaces".to_string()),
         });
         state.insert_group_after(group, None).unwrap();
@@ -18981,7 +18981,7 @@ mod tests {
             label: "Dev box".to_string(),
             host: "devbox".to_string(),
             multiplexer: crate::workspace::RemoteMultiplexer::Tmux,
-            qmux_cli: None,
+            session_cli: None,
             workspace_root: None,
         });
         state.insert_group_after(group, None).unwrap();
@@ -20362,7 +20362,7 @@ mod tests {
         let token = state.pane_token("pane-1").unwrap();
         assert_eq!(state.pane_for_token(&token).as_deref(), Some("pane-1"));
 
-        // The captured QMUX_TOKEN must not outlive its pane.
+        // The captured SESSION_TOKEN must not outlive its pane.
         state.remove_pane("pane-1").unwrap();
         assert!(state.pane_for_token(&token).is_none());
     }

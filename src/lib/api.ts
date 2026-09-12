@@ -34,7 +34,7 @@ import type {
   PaneActivity,
   PaneInfo,
   PaneSplitInfo,
-  QmuxEvent,
+  SessionEvent,
   PromptLibrary,
   PromptScope,
   QueuedTurn,
@@ -1022,7 +1022,7 @@ export function artifactRestore(artifact: ArtifactInfo) {
   return invoke<void>("artifact_restore", { artifact });
 }
 
-/** Opens an artifact outside qmux: URLs in the default browser, files with the
+/** Opens an artifact outside session: URLs in the default browser, files with the
  * OS default app for the file type. */
 export function artifactOpenExternal(artifactId: string) {
   return invoke<void>("artifact_open_external", { artifactId });
@@ -1597,12 +1597,12 @@ export function setPreventSleep(active: boolean) {
   return invoke<void>("app_set_prevent_sleep", { active });
 }
 
-export function listenToEvents(onEvent: (event: QmuxEvent) => void): Promise<UnlistenFn> {
-  return listen<QmuxEvent>("qmux-event", (event) => onEvent(event.payload));
+export function listenToEvents(onEvent: (event: SessionEvent) => void): Promise<UnlistenFn> {
+  return listen<SessionEvent>("session-event", (event) => onEvent(event.payload));
 }
 
 /**
- * Tells the backend the qmux-event subscription is live. Until then the native
+ * Tells the backend the session-event subscription is live. Until then the native
  * shortcut classifiers decline to consume chords, since the events they emit
  * would be dropped with nobody listening. The backend clears the flag itself
  * on every page navigation.

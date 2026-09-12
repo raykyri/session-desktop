@@ -8,7 +8,7 @@ import type {
   AgentInfo,
   PaneInfo,
   PaneSplitInfo,
-  QmuxEvent,
+  SessionEvent,
   QueuedTurn,
   RepositoryBranch,
   RuntimeConfig,
@@ -810,7 +810,7 @@ export function agentStatusTone(status: AgentInfo["status"]): AgentStatusTone {
   }
 }
 
-export function transcriptHookEvent(event: QmuxEvent): TranscriptHookEvent | null {
+export function transcriptHookEvent(event: SessionEvent): TranscriptHookEvent | null {
   const hookEvent = event.payload.hookEvent;
   if (!event.agentId || typeof hookEvent !== "string") {
     return null;

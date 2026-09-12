@@ -1,16 +1,14 @@
-//! Delivery of Muse Code lifecycle hooks.
+//! Delivery of Cursor Agent lifecycle hooks.
 //!
-//! Every other adapter's hook shim identifies its pane from the environment
-//! (`QMUX_PANE_ID` / `QMUX_SOCK` / `QMUX_TOKEN`). Muse runs hooks with a
-//! sanitized environment that strips every `QMUX_*` variable, so that route does
-//! not exist. Instead the app writes one *binding file* per live Muse pane
-//! before launching the process, and this module matches an arriving hook to a
-//! binding using the two identifiers Muse does put in every payload: the
-//! `session_id` and the `cwd`.
+//! cursor-agent runs plugin hooks with a constructed environment that does not
+//! inherit `SESSION_*`. The Claude-style "no-op unless the Session env is set" shim
+//! therefore never notifies, the session is never bound, and a restored pane
+//! cannot `--resume`. Instead the app writes one binding file per live Cursor
+//! pane and this module matches an arriving hook using `conversation_id` /
+//! `session_id` and, before that is known, `workspace_roots` / `cwd`.
 //!
-//! A hook that matches nothing exits quietly. That is the normal outcome for a
-//! `muse` the user started outside qmux, which still inherits the globally
-//! installed plugin.
+//! A hook that matches nothing exits quietly so a standalone `cursor-agent`
+//! that happens to load the Session plugin is unaffected.
 
 use serde_json::{Value, json};
 use std::env;
@@ -18,7 +16,6 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-/// One live Muse pane, as recorded by the app before launch.
 #[derive(Debug)]
 struct PaneBinding {
     pane_id: String,
@@ -45,9 +42,6 @@ pub fn notify(event: String, bindings_dir: Option<String>) -> Result<(), String>
         return Ok(());
     };
     let Some(binding) = resolve_binding(&dir, &payload) else {
-        // Not a qmux-launched Muse session (or its pane is gone). Say nothing:
-        // Muse surfaces hook stderr in the session log, and a standalone run
-        // must not be littered with qmux diagnostics.
         return Ok(());
     };
 
@@ -59,7 +53,7 @@ pub fn notify(event: String, bindings_dir: Option<String>) -> Result<(), String>
             "event": event,
             "paneId": binding.pane_id,
             "agentId": binding.agent_id,
-            "adapterId": "muse",
+            "adapterId": "cursor",
             "payload": payload,
         }),
     )
@@ -73,31 +67,21 @@ fn parse_payload(input: &str) -> Value {
     }
 }
 
-/// Picks the pane this hook belongs to.
-///
-/// Session id first: it is exact, and it is the only thing that tells two panes
-/// working in the same directory apart. The app records it at launch for a
-/// resume (`muse resume <id>` never fires SessionStart, so there is no later
-/// chance) and refreshes it from SessionStart for a fresh session.
-///
-/// Directory second, and then only for a binding that has not been claimed by a
-/// session yet. That restriction is what keeps a `muse` the user started outside
-/// qmux, in a directory a qmux pane is already working in, from posting its
-/// hooks to that pane: once the pane's own SessionStart has stamped its binding,
-/// the directory is no longer a way in. Among unclaimed bindings the most
-/// recently launched wins.
+/// Session id first (exact, distinguishes two panes in the same workspace),
+/// then directory — but only for a binding that has not been claimed yet, so a
+/// `cursor-agent` started outside Session in the same repo cannot post to a live
+/// pane. Among unclaimed bindings the most recently launched wins.
 fn resolve_binding(dir: &Path, payload: &Value) -> Option<PaneBinding> {
     let bindings = read_bindings(dir);
-    let session_id = string_field(payload, "session_id");
-    if let Some(session_id) = session_id.as_deref()
+    if let Some(session_id) = payload_session_id(payload)
         && let Some(binding) = bindings
             .iter()
-            .find(|binding| binding.session_id.as_deref() == Some(session_id))
+            .find(|binding| binding.session_id.as_deref() == Some(session_id.as_str()))
     {
         return Some(clone_binding(binding));
     }
 
-    let cwd = string_field(payload, "cwd")?;
+    let cwd = payload_cwd(payload)?;
     let canonical = fs::canonicalize(&cwd)
         .map(|path| path.display().to_string())
         .unwrap_or_else(|_| cwd.clone());
@@ -114,6 +98,25 @@ fn resolve_binding(dir: &Path, payload: &Value) -> Option<PaneBinding> {
         .map(clone_binding)
 }
 
+fn payload_session_id(payload: &Value) -> Option<String> {
+    string_field(payload, "conversation_id")
+        .or_else(|| string_field(payload, "session_id"))
+        .or_else(|| string_field(payload, "sessionId"))
+}
+
+fn payload_cwd(payload: &Value) -> Option<String> {
+    string_field(payload, "cwd").or_else(|| {
+        payload
+            .get("workspace_roots")
+            .and_then(Value::as_array)
+            .and_then(|roots| roots.first())
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|cwd| !cwd.is_empty())
+            .map(ToString::to_string)
+    })
+}
+
 fn clone_binding(binding: &PaneBinding) -> PaneBinding {
     PaneBinding {
         pane_id: binding.pane_id.clone(),
@@ -127,21 +130,14 @@ fn clone_binding(binding: &PaneBinding) -> PaneBinding {
     }
 }
 
-/// Fallback for a `muse-notify` invoked by hand, mirroring
-/// `muse_integration_home()` in the app's adapter.
-///
-/// The hook path never reaches this: Muse's env whitelist strips both
-/// `QMUX_MUSE_HOME` and `XDG_DATA_HOME`, so a shim that derived the directory
-/// here would silently find nothing. That is why the generated shim passes the
-/// directory as an argument instead.
 fn default_bindings_dir() -> Option<PathBuf> {
-    if let Some(explicit) = env::var_os("QMUX_MUSE_HOME") {
+    if let Some(explicit) = env::var_os("SESSION_CURSOR_HOME") {
         return Some(PathBuf::from(explicit).join("bindings"));
     }
     let data_home = env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))?;
-    Some(data_home.join("qmux").join("muse").join("bindings"))
+    Some(data_home.join("qmux").join("cursor").join("bindings"))
 }
 
 fn read_bindings(dir: &Path) -> Vec<PaneBinding> {
@@ -207,7 +203,7 @@ mod tests {
     }
 
     fn write_bindings(name: &str, documents: &[Value]) -> PathBuf {
-        let home = env::temp_dir().join(format!("qmux-muse-cli-{name}-{}", std::process::id()));
+        let home = env::temp_dir().join(format!("qmux-cursor-cli-{name}-{}", std::process::id()));
         let dir = home.join("bindings");
         let _ = fs::remove_dir_all(&home);
         fs::create_dir_all(&dir).unwrap();
@@ -223,23 +219,26 @@ mod tests {
     }
 
     #[test]
-    fn session_id_wins_over_a_shared_directory() {
+    fn conversation_id_wins_over_a_shared_directory() {
         let dir = write_bindings(
             "session-wins",
             &[
-                binding("pane-1", "/work", Some("session-a"), 10),
-                binding("pane-2", "/work", Some("session-b"), 20),
+                binding("pane-1", "/work", Some("chat-a"), 10),
+                binding("pane-2", "/work", Some("chat-b"), 20),
             ],
         );
 
-        let found = resolve(&dir, json!({ "session_id": "session-a", "cwd": "/work" }))
-            .expect("session match");
+        let found = resolve(
+            &dir,
+            json!({ "conversation_id": "chat-a", "workspace_roots": ["/work"] }),
+        )
+        .expect("session match");
         assert_eq!(found.pane_id, "pane-1");
         assert_eq!(found.token, "token-pane-1");
     }
 
     #[test]
-    fn directory_match_prefers_the_most_recent_launch() {
+    fn workspace_roots_match_the_most_recent_unclaimed_launch() {
         let dir = write_bindings(
             "cwd-recency",
             &[
@@ -248,28 +247,25 @@ mod tests {
             ],
         );
 
-        // Before SessionStart is seen there is nothing but the directory to go
-        // on, so the newest pane in it wins.
-        let found = resolve(&dir, json!({ "session_id": "unseen", "cwd": "/work" }))
-            .expect("directory match");
+        let found =
+            resolve(&dir, json!({ "workspace_roots": ["/work"] })).expect("directory match");
         assert_eq!(found.pane_id, "pane-2");
     }
 
     #[test]
     fn a_claimed_binding_is_no_longer_reachable_by_directory() {
-        let dir = write_bindings(
-            "claimed",
-            &[binding("pane-1", "/work", Some("session-a"), 10)],
-        );
+        let dir = write_bindings("claimed", &[binding("pane-1", "/work", Some("chat-a"), 10)]);
 
-        // A `muse` started outside qmux in the same directory reports a session
-        // this binding does not know. It must not fall through to the pane.
-        assert!(resolve(&dir, json!({ "session_id": "outsider", "cwd": "/work" })).is_none());
-        // Nor may a payload without a session id at all.
-        assert!(resolve(&dir, json!({ "cwd": "/work" })).is_none());
-        // The pane's own session still resolves.
+        assert!(
+            resolve(
+                &dir,
+                json!({ "conversation_id": "outsider", "workspace_roots": ["/work"] })
+            )
+            .is_none()
+        );
+        assert!(resolve(&dir, json!({ "workspace_roots": ["/work"] })).is_none());
         assert_eq!(
-            resolve(&dir, json!({ "session_id": "session-a", "cwd": "/work" }))
+            resolve(&dir, json!({ "conversation_id": "chat-a" }))
                 .expect("own session")
                 .pane_id,
             "pane-1"
@@ -279,31 +275,7 @@ mod tests {
     #[test]
     fn an_unmatched_payload_resolves_to_nothing() {
         let dir = write_bindings("unmatched", &[binding("pane-1", "/work", None, 10)]);
-        assert!(resolve(&dir, json!({ "cwd": "/elsewhere" })).is_none());
-        // A standalone `muse` run reaches the shim with no qmux pane at all.
+        assert!(resolve(&dir, json!({ "workspace_roots": ["/elsewhere"] })).is_none());
         assert!(resolve(&dir, json!({})).is_none());
-    }
-
-    #[test]
-    fn incomplete_bindings_are_ignored_rather_than_panicking() {
-        let dir = write_bindings("incomplete", &[binding("pane-1", "/work", None, 10)]);
-        // A half-written file (no token) must not be treated as usable.
-        fs::write(
-            dir.join("pane-2.json"),
-            json!({ "paneId": "pane-2", "agentId": "a", "cwd": "/work" }).to_string(),
-        )
-        .unwrap();
-        fs::write(dir.join("pane-3.json"), "{ not json").unwrap();
-
-        let found = resolve(&dir, json!({ "cwd": "/work" })).expect("usable binding");
-        assert_eq!(found.pane_id, "pane-1");
-    }
-
-    #[test]
-    fn payload_parsing_tolerates_non_json_stdin() {
-        assert_eq!(parse_payload(""), Value::Null);
-        assert_eq!(parse_payload("   "), Value::Null);
-        assert_eq!(parse_payload("oops"), Value::String("oops".to_string()));
-        assert_eq!(parse_payload(r#"{"a":1}"#), json!({ "a": 1 }));
     }
 }

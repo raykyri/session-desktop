@@ -1,19 +1,18 @@
 ---
-name: qmux
-description: "Use Session's compatibility CLI from a Session-managed research agent. Requires QMUX_ENV=1."
+name: session
+description: "Use Session's CLI from a Session-managed research agent. Requires SESSION_ENV=1."
 ---
 
-# Session compatibility CLI
+# Session CLI
 
-Session retains the `qmux` executable name, environment variables, socket protocol,
-and command identifiers for compatibility. These are internal identifiers; the
-desktop product is Session and its user interface is dedicated to research.
+Use `session` in an app-managed shell, or the binary named by `SESSION_CLI`.
+Remote hosts use `session-cli`. The command API uses a versioned socket protocol.
 
 Before issuing a control command, verify that the caller is running in a
 Session-managed agent process:
 
 ```bash
-test "${QMUX_ENV:-}" = 1
+test "${SESSION_ENV:-}" = 1
 ```
 
 If that fails, stop. Do not attempt to control another Session window or search the
@@ -22,10 +21,10 @@ environment for credentials.
 Use the installed binary as the authority for syntax:
 
 ```bash
-qmux --help
-qmux context
-qmux agent --help
-qmux artifact --help
+session --help
+session context
+session agent --help
+session artifact --help
 ```
 
 Responses use a versioned JSON envelope. Successful responses have `ok: true`,
@@ -36,17 +35,17 @@ Research agents may inspect their own context, coordinate explicitly related age
 runs, and open artifacts already recorded by Session:
 
 ```bash
-qmux context
-qmux agent get <agent-id>
-qmux agent wait <agent-id> --until settled --timeout 2m
-qmux agent read <agent-id> --source transcript --turns 6
-qmux agent prompt <agent-id> "Continue with the strongest source."
-qmux artifact list
-qmux artifact open <artifact-id>
+session context
+session agent get <agent-id>
+session agent wait <agent-id> --until settled --timeout 2m
+session agent read <agent-id> --source transcript --turns 6
+session agent prompt <agent-id> "Continue with the strongest source."
+session artifact list
+session artifact open <artifact-id>
 ```
 
 Agent credentials are intentionally narrower than interactive user credentials.
-Never expose `QMUX_TOKEN` or `QMUX_USER_TOKEN`, search for a stronger token, infer a
+Never expose `SESSION_TOKEN` or `SESSION_USER_TOKEN`, search for a stronger token, infer a
 target from UI position, or mutate an unrelated run. Inspect a record before
 prompting or releasing it. A timeout may leave work running, so read the latest
 state before retrying.

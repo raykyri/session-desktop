@@ -1,4 +1,4 @@
-//! Native child-webview backend for qmux's human browser mode.
+//! Native child-webview backend for Session's human browser mode.
 //!
 //! External pages are top-level documents in their own WKWebView/WebView2/etc.,
 //! never frames inside the privileged application document. The child labels
@@ -250,7 +250,7 @@ fn set_native_browser_active(webview: &Webview, active: bool) -> Result<(), Stri
         .with_webview(move |platform| {
             if let Err(error) = native_terminal::set_human_browser_webview(platform.inner(), active)
             {
-                eprintln!("qmux: failed to update human-browser shortcut routing: {error}");
+                eprintln!("session: failed to update human-browser shortcut routing: {error}");
             }
         })
         .map_err(|error| format!("failed to access the native human browser: {error}"))
@@ -268,7 +268,7 @@ fn set_native_browser_loading_background(webview: &Webview, active: bool) -> Res
             if let Err(error) =
                 native_terminal::set_human_browser_loading_background(platform.inner(), active)
             {
-                eprintln!("qmux: failed to update human-browser loading background: {error}");
+                eprintln!("session: failed to update human-browser loading background: {error}");
             }
         })
         .map_err(|error| format!("failed to access the native human browser: {error}"))
@@ -288,7 +288,7 @@ fn set_native_browser_loading_background_from_state(
             if let Err(error) =
                 native_terminal::set_human_browser_loading_background(platform.inner(), active)
             {
-                eprintln!("qmux: failed to update human-browser loading background: {error}");
+                eprintln!("session: failed to update human-browser loading background: {error}");
             }
         })
         .map_err(|error| format!("failed to access the native human browser: {error}"))
@@ -601,7 +601,7 @@ pub async fn human_browser_sync(
     Ok(Some(snapshot))
 }
 
-const HIDE_ALL_OWNER: &str = "__qmux_hide_all__";
+const HIDE_ALL_OWNER: &str = "__session_hide_all__";
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

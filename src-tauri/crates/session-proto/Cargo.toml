@@ -1,5 +1,5 @@
 [package]
-name = "qmux-proto"
+name = "session-proto"
 version = "0.3.3"
 description = "Wire types for the qmux control protocol."
 license = "MIT"
