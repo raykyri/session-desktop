@@ -198,9 +198,6 @@
 /* With native terminals the stage is a transparent hole in the webview, so the
    reserved gutter between splits must paint itself or the window vibrancy
    material shows through it. */
-.main-stage.is-native .terminal-split-resizer {
-  background: var(--terminal-bg, var(--terminal-pane-bg));
-}
 
 /* Hit slop: the painted box is the 8px gutter, but a press a few pixels inside
    a neighbouring terminal should still grab the divider. A pseudo-element grows

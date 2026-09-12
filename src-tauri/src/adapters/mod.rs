@@ -2495,7 +2495,6 @@ mod tests {
                         crate::remote_terminal::RemoteHistoryCheckpoint::new(Vec::new()),
                         std::sync::Arc::new(std::sync::Mutex::new(Default::default())),
                         commands,
-                        false,
                     ),
                 ),
                 cwd_observation_seq: 0,

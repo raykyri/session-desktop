@@ -1325,204 +1325,24 @@ export function attachPane(paneId: string) {
   return invoke<void>("pane_attach", { paneId });
 }
 
-// Seed from wall time so a webview/module reload cannot restart revisions below
-// the native host's last applied value. Multiplying by 1,000 leaves room for
-// bursts within one millisecond while remaining below Number.MAX_SAFE_INTEGER.
-let nativeTerminalKeyboardOwnerRevision = Date.now() * 1_000;
-
-/**
- * Publishes the frontend's complete desired native keyboard owner. Ownership
- * updates are revisioned independently from pane geometry so an older invoke
- * can never overtake a newer activation/release and reclaim the keyboard.
- */
-export function setNativeTerminalKeyboardOwner(paneId: string | null) {
-  nativeTerminalKeyboardOwnerRevision = Math.max(
-    nativeTerminalKeyboardOwnerRevision + 1,
-    Date.now() * 1_000,
-  );
-  return invoke<void>("native_terminal_set_keyboard_owner", {
-    update: {
-      paneId,
-      revision: nativeTerminalKeyboardOwnerRevision,
-    },
-  });
+/** Keep overlay transitions ordered across asynchronous native calls. */
+let nativeBrowserOverlayUpdate: Promise<void> = Promise.resolve();
+export function setNativeBrowserOverlayOpen(active: boolean) {
+  nativeBrowserOverlayUpdate = nativeBrowserOverlayUpdate.catch(() => undefined)
+    .then(() => invoke<void>("native_support_set_browser_overlay_open", { active }));
+  return nativeBrowserOverlayUpdate;
 }
 
-/**
- * Tells the native key monitor whether the currently rendered browser overlay
- * owns Escape. AppKit sees key events before either Ghostty or a child browser
- * document, so this closes the focus-routing gap between those surfaces and
- * the outer React document's Escape dispatcher. Serialize transitions so a
- * rapid open/close cannot leave the native claim stuck on if invokes complete
- * out of order; a failed update must not poison the next transition.
- */
-let nativeTerminalBrowserOverlayUpdate: Promise<void> = Promise.resolve();
-export function setNativeTerminalBrowserOverlayOpen(active: boolean) {
-  nativeTerminalBrowserOverlayUpdate = nativeTerminalBrowserOverlayUpdate
-    .catch(() => undefined)
-    .then(() => invoke<void>("native_terminal_set_browser_overlay_open", { active }));
-  return nativeTerminalBrowserOverlayUpdate;
+/** Cross-document iframe keys never reach the app document's handlers. */
+export function setNativeIframeShortcutFallback(active: boolean) {
+  return invoke<void>("native_support_set_iframe_shortcut_fallback", { active });
 }
 
-export interface NativeWebOverlayRegion {
-  regionId: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  visible: boolean;
-}
-
-/**
- * Registers a DOM rectangle whose pointer events stay with WKWebView even
- * though it overlaps a native terminal surface — for small controls that float
- * over the terminal. Unlike claimNativeTerminalPointerForWebDrag, the rest of
- * the terminal keeps receiving clicks. `visible: false` removes the region.
- */
-export function setNativeTerminalWebOverlayRegion(region: NativeWebOverlayRegion) {
-  return invoke<void>("native_terminal_set_web_overlay_region", { region });
-}
-
-/**
- * Reports whether DOM focus sits inside a cross-document iframe (the browser
- * overlay's page). Keys typed there are delivered to the framed document only,
- * so native routing must claim recognized app shortcuts while it is active.
- */
-export function setNativeTerminalIframeShortcutFallback(active: boolean) {
-  return invoke<void>("native_terminal_set_iframe_shortcut_fallback", { active });
-}
-
-let nativeTerminalWebPointerClaims = 0;
-let nativeTerminalWebPointerUpdate: Promise<void> = Promise.resolve();
-
-function queueNativeTerminalWebPointerClaim(claimed: boolean) {
-  // Preserve start/end order even when a very short drag releases before the
-  // first invoke has completed. The claim is global native state — a dropped
-  // update (a release especially) leaves every terminal mouse-dead until some
-  // later claim cycle happens to rewrite it — so transient bridge failures
-  // are retried. Retries run inside the serialized chain, so a newer update
-  // can never be overtaken by an older retry; errors are still absorbed at
-  // the end so a persistent failure cannot poison later ownership updates.
-  nativeTerminalWebPointerUpdate = nativeTerminalWebPointerUpdate
-    .catch(() => undefined)
-    .then(async () => {
-      for (let attempt = 0; ; attempt += 1) {
-        try {
-          await invoke<void>("native_terminal_set_web_pointer_claimed", { claimed });
-          return;
-        } catch (err) {
-          if (attempt >= 2) {
-            throw err;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
-        }
-      }
-    })
-    .catch(() => undefined);
-}
-
-/**
- * Temporarily gives WKWebView every pointer event, including events whose
- * coordinates overlap a native terminal surface. Used for mid-gesture drag
- * controls and for sticky overlays (sidebar menus) that open over the terminal.
- * Claims are reference-counted so independently mounted claimants cannot
- * release each other's capture. Call the returned function to release.
- */
-export function claimNativeTerminalPointerForWebDrag(): () => void {
-  nativeTerminalWebPointerClaims += 1;
-  if (nativeTerminalWebPointerClaims === 1) {
-    queueNativeTerminalWebPointerClaim(true);
-  }
-
-  let released = false;
-  return () => {
-    if (released) {
-      return;
-    }
-    released = true;
-    nativeTerminalWebPointerClaims = Math.max(0, nativeTerminalWebPointerClaims - 1);
-    if (nativeTerminalWebPointerClaims === 0) {
-      queueNativeTerminalWebPointerClaim(false);
-    }
-  };
-}
-
-/** Positions the opaque native backstop under the terminal stage, so transient
- * gaps while pane surfaces chase their DOM rects show terminal-colored pixels
- * instead of the window's vibrancy material. */
-export function setNativeTerminalStageBackstop(rect: {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}) {
-  return invoke<void>("native_terminal_set_stage_backstop", rect);
-}
-
-export interface NativeTerminalSettings {
-  paneId: string;
-  fontSize: number;
-  fontFamily: string;
-  letterSpacing: number;
-  lineHeight: number;
-  cursorBlink: boolean;
-  cursorStyle: "block" | "underline" | "bar";
-  scrollbackRows: number;
-  scrollOnUserInput: boolean;
-  scrollSensitivity: number;
-  copyOnSelect: boolean;
-  selectionClearOnCopy: boolean;
-  themeName: string;
-}
-
-// Seed from wall time so a webview/module reload cannot restart revisions below
-// the native host's last applied value. Theme previews can publish settings much
-// faster than their Tauri invokes complete, so every snapshot needs ordering at
-// the native boundary rather than relying on promise completion order.
-let nativeTerminalSettingsRevision = Date.now() * 1_000;
-
-function nextNativeTerminalSettingsRevision(): number {
-  nativeTerminalSettingsRevision = Math.max(
-    nativeTerminalSettingsRevision + 1,
-    Date.now() * 1_000,
-  );
-  return nativeTerminalSettingsRevision;
-}
-
-export interface NativeTerminalTheme {
-  name: string;
-  /** Bare RRGGBB hex, no leading '#'. */
-  background: string;
-  /** Bare RRGGBB hex, no leading '#'. */
-  foreground: string;
-  isDark: boolean;
-  /** The 16 ANSI palette colors; entries are empty when a scheme omits them. */
-  palette: string[];
-}
-
-/**
- * Hands the native host a pane-independent settings snapshot to cache, so a
- * pane created later builds its Ghostty surface at creation time instead of
- * waiting for its own mount-time settings round-trip. Called at startup and
- * whenever terminal settings change.
- */
-export function seedNativeTerminalSettings(settings: Omit<NativeTerminalSettings, "paneId">) {
-  return invoke<void>("native_terminal_seed_settings", {
-    settings: {
-      ...settings,
-      revision: nextNativeTerminalSettingsRevision(),
-    },
-  });
-}
-
-/**
- * The terminal theme catalog: the qmux default first, then every Ghostty
- * color scheme bundled with libghostty-spm. Empty on platforms without
- * native terminals.
- */
-export async function listNativeTerminalThemes(): Promise<NativeTerminalTheme[]> {
-  const catalog = await invoke<string>("native_terminal_theme_catalog");
-  return JSON.parse(catalog) as NativeTerminalTheme[];
+let nativeBrowserBackgroundUpdate: Promise<void> = Promise.resolve();
+export function setNativeBrowserBackground(red: number, green: number, blue: number) {
+  nativeBrowserBackgroundUpdate = nativeBrowserBackgroundUpdate.catch(() => undefined)
+    .then(() => invoke<void>("native_support_set_browser_background", { red, green, blue }));
+  return nativeBrowserBackgroundUpdate;
 }
 
 export function paneActivity(paneId: string) {

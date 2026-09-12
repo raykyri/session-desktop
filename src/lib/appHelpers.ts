@@ -1,8 +1,3 @@
-import {
-  isTerminalFontLoaded,
-  TERMINAL_FONT_SIZE,
-} from "./terminalFont";
-import { FONT_OPTIONS } from "./settings";
 import { findAgentUiAdapter } from "../adapters";
 import type {
   AgentInfo,
@@ -19,9 +14,6 @@ import type {
 } from "../types";
 
 const TRANSCRIPT_COPY_VERSION = 1;
-const DEFAULT_FONT_STACK = FONT_OPTIONS[0].stack;
-
-let measuredTerminalCellSize: { width: number; height: number } | null = null;
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -539,48 +531,10 @@ export function isEditableTarget(target: EventTarget | null) {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
-// Container class rendered by TerminalPane and matched by isTerminalTarget.
-// Shared so the renderer and the key-routing guards cannot drift apart the
-// way the old ".terminal-mount" selector did after the web terminal's DOM
-// was replaced by native panes.
 export const TERMINAL_PANE_CLASS = "terminal-pane";
 
-// True when a DOM event originated inside a terminal pane's container —
-// which for native panes means its web chrome (find bar, confirm dialog),
-// since the Ghostty surface itself is an NSView and never dispatches DOM
-// keydowns. Chords like ctrl-W and ⌘K stay with the terminal there.
 export function isTerminalTarget(target: EventTarget | null) {
   return target instanceof HTMLElement && target.closest(`.${TERMINAL_PANE_CLASS}`) !== null;
-}
-
-export function measureTerminalCellSize(fontFamily: string, fontSize: number) {
-  // Only the default font + size is cached (the common case); other choices
-  // measure fresh so a pane created with them gets a close initial grid pre-fit.
-  const isDefault = fontFamily === DEFAULT_FONT_STACK && fontSize === TERMINAL_FONT_SIZE;
-  if (isDefault && measuredTerminalCellSize && isTerminalFontLoaded()) {
-    return measuredTerminalCellSize;
-  }
-
-  const probe = document.createElement("span");
-  probe.textContent = "mmmmmmmmmm";
-  probe.style.position = "absolute";
-  probe.style.visibility = "hidden";
-  probe.style.whiteSpace = "pre";
-  probe.style.fontFamily = fontFamily;
-  probe.style.fontSize = `${fontSize}px`;
-  document.body.appendChild(probe);
-
-  const rect = probe.getBoundingClientRect();
-  probe.remove();
-
-  const cellSize = {
-    width: rect.width > 0 ? rect.width / 10 : 8,
-    height: rect.height > 0 ? rect.height : 16,
-  };
-  if (isDefault && isTerminalFontLoaded()) {
-    measuredTerminalCellSize = cellSize;
-  }
-  return cellSize;
 }
 
 export function statusLabel(status: PaneInfo["status"]) {

@@ -44,9 +44,6 @@ pub struct HostPtyBackend {
     pub master: SharedMaster,
     pub writer: SharedWriter,
     pub backlog: SharedBacklog,
-    /// The process/PTY is owned by Session, but output is rendered by a native
-    /// Ghostty host-managed surface instead of the webview renderer.
-    pub native_surface: bool,
 }
 
 pub struct RemoteTmuxBackend {
@@ -55,7 +52,6 @@ pub struct RemoteTmuxBackend {
     pub writer: SharedWriter,
     pub backlog: SharedBacklog,
     pub commands: RemoteTmuxCommands,
-    pub native_surface: bool,
 }
 
 impl RemoteTmuxBackend {
@@ -64,7 +60,6 @@ impl RemoteTmuxBackend {
         history: Arc<RemoteHistoryCheckpoint>,
         backlog: SharedBacklog,
         commands: RemoteTmuxCommands,
-        native_surface: bool,
     ) -> Self {
         let writer = controller.stable_writer();
         Self {
@@ -73,7 +68,6 @@ impl RemoteTmuxBackend {
             writer,
             backlog,
             commands,
-            native_surface,
         }
     }
 }
@@ -110,13 +104,6 @@ impl PaneBackend {
         match self {
             Self::HostPty(backend) => backend.backlog.clone(),
             Self::RemoteTmux(backend) => backend.backlog.clone(),
-        }
-    }
-
-    fn uses_native_surface(&self) -> bool {
-        match self {
-            Self::HostPty(backend) => backend.native_surface,
-            Self::RemoteTmux(backend) => backend.native_surface,
         }
     }
 
@@ -299,25 +286,20 @@ const RECENT_SESSION_PREVIEW_MAX_CHARS: usize = 90;
 /// changes nothing else re-stamps it (see upsert_recent_session_for_agent_locked).
 const RECENT_SESSION_TOUCH_COARSENESS_MS: u128 = 5_000;
 
-/// Holds PTY output produced before the webview's listener is attached.
-///
-/// A pane's reader thread starts emitting the instant the process spawns, but on
-/// a cold start (and for panes recovered before the UI exists) that happens
-/// before the frontend has registered its `session-event` listener, so the very
-/// first prompt would be emitted into the void and lost. Until `ready` flips —
-/// the frontend signals this via `pane_attach` once its listener is live — the
-/// reader buffers here instead of emitting.
-#[derive(Default)]
+/// Ordered process output, independent of any frontend listener or renderer.
+/// Buffering is only for explicit backend staging; fresh processes record live.
 pub struct PaneBacklog {
     pub ready: bool,
     pub buffer: Vec<u8>,
-    /// Whether durable scrollback has already been handed to this pane's native
-    /// surface. `attach_pane` only releases `ready` after the whole attach
-    /// succeeds, so a failed backlog flush makes the frontend retry the attach;
-    /// without this flag the retry would replay the durable history a second
-    /// time and double every restored line on screen. Set once the history is
-    /// delivered, so retries skip replay and resume at the failed step.
-    pub replayed: bool,
+}
+
+impl Default for PaneBacklog {
+    fn default() -> Self {
+        Self {
+            ready: true,
+            buffer: Vec::new(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -3382,7 +3364,7 @@ impl AppState {
             .and_then(|mut state| state.observe_event(&event));
         #[cfg(not(test))]
         if let Some(sound_id) = completion_sound_id
-            && let Err(err) = crate::native_terminal::play_completion_sound(&sound_id)
+            && let Err(err) = crate::native_support::play_completion_sound(&sound_id)
         {
             eprintln!("session: failed to play completion sound: {err}");
         }
@@ -11143,18 +11125,6 @@ impl AppState {
         Ok(model.panes.get(pane_id).map(|pane| pane.backend.backlog()))
     }
 
-    pub fn pane_is_native(&self, pane_id: &str) -> Result<Option<bool>, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model
-            .panes
-            .get(pane_id)
-            .map(|pane| pane.backend.uses_native_surface()))
-    }
-
     pub fn pane_has_host_pty(&self, pane_id: &str) -> Result<Option<bool>, String> {
         let model = self
             .inner
@@ -17390,7 +17360,6 @@ mod tests {
                 master: Arc::new(Mutex::new(pair.master)),
                 writer: Arc::new(Mutex::new(Box::new(io::sink()))),
                 backlog: Default::default(),
-                native_surface: false,
             }),
             cwd_observation_seq: 0,
         }

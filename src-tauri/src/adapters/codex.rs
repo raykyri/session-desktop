@@ -5400,7 +5400,6 @@ trusted_hash = "sha256:trusted"
                         bytes: bytes.clone(),
                     }))),
                     backlog: Default::default(),
-                    native_surface: false,
                 }),
                 cwd_observation_seq: 0,
             })
@@ -5453,7 +5452,6 @@ trusted_hash = "sha256:trusted"
                             support_cleanup_argv: Vec::new(),
                             remote_socket_path: "/tmp/qmux-pane-1.sock".to_string(),
                         },
-                        false,
                     ),
                 ),
                 cwd_observation_seq: 0,

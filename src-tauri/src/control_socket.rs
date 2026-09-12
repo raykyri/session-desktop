@@ -1823,7 +1823,6 @@ mod tests {
                     master: Arc::new(Mutex::new(pair.master)),
                     writer: Arc::new(Mutex::new(Box::new(io::sink()))),
                     backlog: Default::default(),
-                    native_surface: false,
                 }),
                 cwd_observation_seq: 0,
             })

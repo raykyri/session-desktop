@@ -41,6 +41,7 @@ Session uses existing provider credentials and does not copy or manage them.
 Prerequisites:
 
 - macOS 13 or later
+- Swift 6 and a macOS SDK with Foundation Models for release builds
 - Rust toolchain
 - Node.js and npm
 - One or more supported agent CLIs
@@ -48,7 +49,6 @@ Prerequisites:
 Install dependencies and run the application:
 
 ```sh
-git submodule update --init
 npm install
 npm run dev:tauri
 ```

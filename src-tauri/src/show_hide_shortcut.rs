@@ -471,7 +471,7 @@ pub fn toggle_qmux_visibility<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<(
     // macOS boundary: it still distinguishes Session from whichever external app
     // should be replaced when the global shortcut is pressed there.
     #[cfg(target_os = "macos")]
-    let app_is_active = crate::native_terminal::application_is_active();
+    let app_is_active = crate::native_support::application_is_active();
     #[cfg(not(target_os = "macos"))]
     let app_is_active = window.is_focused().unwrap_or(false);
 

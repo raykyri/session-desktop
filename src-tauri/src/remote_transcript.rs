@@ -540,7 +540,7 @@ mod tests {
             backend: crate::state::PaneBackend::RemoteTmux(crate::state::RemoteTmuxBackend::new(
                 crate::remote_terminal::RemoteAttachmentController::new(),
                 crate::remote_terminal::RemoteHistoryCheckpoint::new(Vec::new()),
-                std::sync::Arc::new(Mutex::new(Default::default())), commands, false)),
+                std::sync::Arc::new(Mutex::new(Default::default())), commands)),
             cwd_observation_seq:0
         }).unwrap();
         let key = directory(&state, "a");

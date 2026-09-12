@@ -18,7 +18,7 @@ mod journal;
 mod launch_path;
 mod mcp;
 mod menu_bar;
-mod native_terminal;
+mod native_support;
 mod persistence;
 mod prompt_library;
 mod pty;
@@ -52,16 +52,9 @@ use adapters::{
 use config::{RuntimeConfig, SessionConfig};
 use control_socket::start_control_socket;
 use menu_bar::{menu_bar_set_visible, menu_bar_update};
-use native_terminal::{
-    completion_sound_play, completion_sound_set, native_terminal_action,
-    native_terminal_annotation_selection_snapshot, native_terminal_focus,
-    native_terminal_paste_approved_text, native_terminal_read_viewport_text,
-    native_terminal_seed_settings, native_terminal_set_annotation_monitoring,
-    native_terminal_set_browser_overlay_open, native_terminal_set_iframe_shortcut_fallback,
-    native_terminal_set_keyboard_owner, native_terminal_set_layout,
-    native_terminal_set_stage_backstop, native_terminal_set_web_overlay_region,
-    native_terminal_set_web_pointer_claimed, native_terminal_theme_catalog,
-    native_terminal_update_settings,
+use native_support::{
+    completion_sound_play, completion_sound_set, native_support_set_browser_background,
+    native_support_set_browser_overlay_open, native_support_set_iframe_shortcut_fallback,
 };
 use pty::{
     InitialPaneSize, PaneActivity, PaneWriteOptions, attach_pane, close_worktree_pane, kill_pane,
@@ -621,7 +614,7 @@ fn probe_agent_adapters(
 // one freezes the entire UI — webview rendering, keyboard dispatch, and the
 // native terminal surfaces — for its duration. `(async)` moves the same body to
 // a worker thread; cheap in-memory getters/setters stay synchronous, and the
-// native_terminal_* commands stay synchronous because their work must run on
+// native_support_* commands stay synchronous because their work must run on
 // the main thread anyway (going async would only add a round-trip).
 #[tauri::command(async)]
 fn launcher_adapter_preference_get(
@@ -3070,7 +3063,7 @@ fn pane_attach(state: tauri::State<'_, AppState>, pane_id: String) -> Result<(),
 /// into nothing.
 #[tauri::command]
 fn mark_events_listener_ready() {
-    native_terminal::set_events_listener_ready(true);
+    native_support::set_events_listener_ready(true);
 }
 
 /// User-invoked escape hatch (pane context menu) for a terminal a crashed or
@@ -3583,7 +3576,7 @@ pub(crate) fn begin_interface_health_probe(state: AppState) -> u64 {
 }
 
 /// Called by the native WKWebView snapshot watchdog when the compositor fails
-/// or never completes. Reload only the webview; PTYs and Ghostty surfaces stay
+/// or never completes. Reload only the webview; research and PTY processes stay
 /// alive through the same reset path as the manual recovery command.
 #[cfg(desktop)]
 /// How long to wait before retrying a health-driven reload that was deferred
@@ -3667,11 +3660,11 @@ fn show_main_window(app: &tauri::AppHandle) {
 /// its ensuing PageLoadEvent::Started callback.
 fn prepare_main_webview_reload(app: Option<&tauri::AppHandle>) {
     cancel_interface_health_probe();
-    native_terminal::set_events_listener_ready(false);
+    native_support::set_events_listener_ready(false);
     if let Some(app) = app {
         human_browser::reset_all(app);
     }
-    let _ = native_terminal::prepare_for_webview_reload();
+    let _ = native_support::prepare_for_webview_reload();
 }
 
 #[cfg(desktop)]
@@ -3826,15 +3819,15 @@ fn main() {
                     .map_err(std::io::Error::other)?;
                 app.manage(human_browser::HumanBrowserManager::default());
                 #[cfg(target_os = "macos")]
-                if !native_terminal::available() {
+                if !native_support::available() {
                     return Err(std::io::Error::other(
-                        "the native Ghostty terminal bridge failed to initialize",
+                        "the native support bridge failed to initialize",
                     )
                     .into());
                 }
                 #[cfg(target_os = "macos")]
                 if let Some(window) = app.get_webview_window("main") {
-                    native_terminal::initialize(window.ns_view()?, state.clone())
+                    native_support::initialize(window.ns_view()?, state.clone())
                         .map_err(std::io::Error::other)?;
                 }
                 // Best-effort: if the menu tweak fails, ⌘W keeps its default
@@ -4124,22 +4117,9 @@ fn main() {
             pane_place_after,
             pane_splits_get,
             pane_splits_set,
-            native_terminal_set_keyboard_owner,
-            native_terminal_set_layout,
-            native_terminal_set_stage_backstop,
-            native_terminal_set_web_pointer_claimed,
-            native_terminal_set_web_overlay_region,
-            native_terminal_set_iframe_shortcut_fallback,
-            native_terminal_set_browser_overlay_open,
-            native_terminal_set_annotation_monitoring,
-            native_terminal_focus,
-            native_terminal_action,
-            native_terminal_paste_approved_text,
-            native_terminal_update_settings,
-            native_terminal_seed_settings,
-            native_terminal_theme_catalog,
-            native_terminal_read_viewport_text,
-            native_terminal_annotation_selection_snapshot,
+            native_support_set_browser_overlay_open,
+            native_support_set_iframe_shortcut_fallback,
+            native_support_set_browser_background,
             completion_sound_play,
             completion_sound_set,
             user_notifications::notification_permission_status,
@@ -4204,7 +4184,7 @@ fn main() {
                 exit_state.finalize_persistence_for_exit();
                 research_runtime::kill_all_sessions();
                 pty::kill_all_panes(&exit_state);
-                native_terminal::shutdown();
+                native_support::shutdown();
                 // Stop the supervisor before touching the pathname. If we unlink
                 // first, the watchdog can treat that as a missing socket and bind
                 // a replacement while the process is dying.

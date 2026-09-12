@@ -19,14 +19,6 @@
   );
 }
 
-/* Native Ghostty surfaces composite from *behind* the webview, so no ancestor
-   of the terminal panes may paint: any opaque pixel here would cover them.
-   Content chrome (turn panes, terminal empty state, split gutters) paints its
-   own opaque background instead. */
-.app-shell.is-native-terminals {
-  background: transparent;
-}
-
 .app-shell.has-turn-sidebar {
   grid-template-columns:
     var(--sidebar-width, 268px) minmax(380px, 1fr)
@@ -3095,10 +3087,6 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   height: 14px;
 }
 
-/* App.tsx sets --terminal-bg for named Ghostty themes. The built-in qmux theme
-   falls back to --terminal-pane-bg, allowing application themes to tint it.
-   Chrome that sits flush against terminal pixels uses the same resolved color
-   so pane gaps and empty states match the native surfaces. */
 .main-stage {
   position: relative;
   flex: 1;
@@ -3107,15 +3095,11 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   background: var(--terminal-bg, var(--terminal-pane-bg));
 }
 
-.main-stage.is-native {
-  background: transparent;
-}
 
 /* No Home page remains to paint the empty installation, so restore an opaque
    stage when nothing is showing — otherwise native vibrancy shows through. */
-.main-stage.is-empty,
-.main-stage.is-native.is-empty {
-  background: var(--terminal-bg, var(--terminal-pane-bg));
+.main-stage.is-empty {
+  background: var(--terminal-pane-bg);
 }
 
 /* Home board: the workspace tabs row and the rails below it share a width.

@@ -426,12 +426,10 @@ fn pane_read(state: &AppState, context: &ControlContext, arguments: Value) -> Co
                     .map_err(internal)?;
             crate::mcp::terminal_text_tail(&raw, lines)
         }
-        "viewport" => crate::native_terminal::native_terminal_read_viewport_text(args.id.clone())
-            .map_err(internal)?,
         _ => {
             return Err(ControlFailure::new(
                 "invalid_argument",
-                "pane.read source must be terminal or viewport",
+                "pane.read source must be terminal; viewport rendering is no longer supported",
             ));
         }
     };

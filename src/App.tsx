@@ -197,7 +197,7 @@ import {
   isEditableTarget,
   IS_MAC,
   isTerminalTarget,
-  measureTerminalCellSize,
+
   repositoryWorktreeName,
   selectPaneAfterClose,
   statusLabel,
@@ -216,9 +216,8 @@ import {
   queueWaitsOnOtherAgent,
 } from "./lib/composerActions";
 import {
-  desiredNativeTerminalKeyboardOwner,
   windowFocusKeyboardOwner,
-} from "./lib/nativeTerminalKeyboard";
+} from "./lib/windowFocus";
 import {
   applicableSpeculativeAcknowledgements,
   terminalAttentionProbeIsDue,
@@ -255,7 +254,6 @@ import {
   requestResearchFolderMenuToggle,
 } from "./lib/researchShortcuts";
 import type { PublicationBinding } from "./lib/publication";
-import { useNativeWebOverlayRegion } from "./hooks/useNativeWebOverlayRegion";
 import { useSessionEvents } from "./hooks/useSessionEvents";
 import type {
   BrowserOverlayMode,
@@ -297,15 +295,15 @@ import {
   type SidebarScrollRegion,
 } from "./lib/sidebarControls";
 import {
-  TERMINAL_FONT_SIZE,
-} from "./lib/terminalFont";
+  APP_TEXT_SIZE,
+} from "./lib/appearance";
 import {
   canPreviewLocalFilePath,
   canRenderInInternalBrowser,
   isFileServerUrl,
   pathFromSessionFileHref,
   resolveLocalLinkPath,
-  terminalLinkTarget,
+
 } from "./lib/links";
 import {
   canGoWorkspaceBack,
@@ -359,29 +357,22 @@ import {
 import {
   bodyFontStackFor,
   clampConfirmPasteOverChars,
-  clampLineHeight,
+
   clampResearchLaunchInstruction,
-  clampScrollbackRows,
+
   COLOR_THEME_OPTIONS,
   CONFIRM_PASTE_OVER_CHARS_MAX,
   CONFIRM_PASTE_OVER_CHARS_MIN,
-  CURSOR_STYLE_OPTIONS,
+
   DEFAULT_RESEARCH_LAUNCH_INSTRUCTION,
-  DEFAULT_THEME_ID,
+
   DEFAULT_BODY_FONT_ID,
   detectAvailableBodyFonts,
-  fontStackFor,
-  nativeFontFamilyFor,
-  LINE_HEIGHT_MAX,
-  LINE_HEIGHT_MIN,
-  LINE_HEIGHT_STEP,
-  letterSpacingFor,
+
   loadSettings,
-  MOUSE_WHEEL_SENSITIVITY_OPTIONS,
+
   saveSettings,
-  SCROLLBACK_ROWS_MAX,
-  SCROLLBACK_ROWS_MIN,
-  scrollSensitivityFor,
+
   SYSTEM_BODY_FONT_ID,
   TAB_TITLE_PROVIDER_OPTIONS,
   type AppSettings,
@@ -391,10 +382,9 @@ import {
   acknowledgeAgent,
   attachPane,
   browserOpenLocalPathExternal,
-  browserOpenTerminalPath,
+
   browserOpenPreviewExternal,
   browserRevealLocalPath,
-  claimNativeTerminalPointerForWebDrag,
   closeWorktreePane,
   confirmAppExit,
   createGroupWithShell,
@@ -446,7 +436,6 @@ import {
   listAgents,
   listSshConfigAliases,
   listClaudeSkills,
-  listNativeTerminalThemes,
   listAgentTranscripts,
   listAgentTurnQueue,
   listHomeTurnHistory,
@@ -483,13 +472,11 @@ import {
   renameGroup,
   renamePane,
   readMarkdownDocumentFile,
-  seedNativeTerminalSettings,
   setActiveTab,
   setGroupCollapsed,
   setCompletionSound,
-  setNativeTerminalBrowserOverlayOpen,
-  setNativeTerminalKeyboardOwner,
-  setNativeTerminalStageBackstop,
+  setNativeBrowserBackground,
+  setNativeBrowserOverlayOpen,
   setPaneLayout,
   setPaneSplits as persistPaneSplits,
   setAgentDraft as persistAgentDraft,
@@ -544,17 +531,10 @@ import type {
   Turn,
   WaitTarget,
 } from "./types";
-import type { NativeTerminalTheme, ShowHideShortcutSetting } from "./lib/api";
+import type { ShowHideShortcutSetting } from "./lib/api";
 import type { MenuBarSnapshot, MenuBarStatusTone } from "./lib/api";
 
 const LEFT_SIDEBAR_DEFAULT_WIDTH = 268;
-
-interface TerminalPaneHandle {
-  focus: () => void;
-  openSearch: () => void;
-  requestPaste: (text?: string | null) => void;
-  reportUserInput: () => void;
-}
 
 interface ConversationHistorySegment {
   snapshotId: string;
@@ -642,7 +622,7 @@ const RESEARCH_VISIBILITY_FILTER_OPTIONS: ReadonlyArray<{
 const ACTIVE_RESEARCH_PANE_KEY = "qmux.active-research-pane.v1";
 // Whether the Journal page is forward on the research surface. Selection-level
 // UI state, like the active tree id — the journal's contents live backend-side.
-const WARM_SESSION_TERMINAL_THEME_ID = "qmux-warm";
+
 // Browser-overlay / link-action owner for a research tree's document. Keyed
 // per tree so an overlay opened from one tree's links doesn't follow the user
 // into another tree (each tree keeps its own overlay, like panes do).
@@ -656,9 +636,6 @@ const INPUT_DEQUEUE_HOLD_MS = 1500;
 // Full graphs are cosmetic relative to the bounded live timeline. Collapse a
 // streaming burst into one per-thread read after activity goes quiet.
 const THREAD_GRAPH_REFRESH_DEBOUNCE_MS = 300;
-// Trailing debounce for committing native terminal title changes into React
-// state (see handleTerminalTitleChange).
-const TERMINAL_TITLE_COMMIT_DEBOUNCE_MS = 200;
 
 function partitionResearchTrees(trees: ResearchTreeSummary[]) {
   return {
@@ -737,7 +714,6 @@ function claimResizePointer(event: ReactPointerEvent<HTMLDivElement>): () => voi
   const handle = event.currentTarget;
   const pointerId = event.pointerId;
   handle.setPointerCapture(pointerId);
-  const releaseNativePointer = claimNativeTerminalPointerForWebDrag();
   let released = false;
   return () => {
     if (released) {
@@ -747,7 +723,6 @@ function claimResizePointer(event: ReactPointerEvent<HTMLDivElement>): () => voi
     if (handle.hasPointerCapture(pointerId)) {
       handle.releasePointerCapture(pointerId);
     }
-    releaseNativePointer();
   };
 }
 
@@ -764,8 +739,7 @@ const TERMINAL_MIN_WIDTH = 380;
 const TURN_PANE_MIN_WIDTH = 300;
 const TURN_PANE_DEFAULT_WIDTH = 420;
 const TURN_PANE_MAX_WIDTH = 720;
-const TERMINAL_HORIZONTAL_PADDING = 10;
-const TERMINAL_VERTICAL_PADDING = 20;
+
 const TERMINAL_SPLIT_MIN_HEIGHT = 140;
 const TERMINAL_SPLIT_MIN_WIDTH = 200;
 const TERMINAL_SPLIT_GUTTER_PX = 8;
@@ -773,8 +747,7 @@ const DEFAULT_INITIAL_COLS = 100;
 const DEFAULT_INITIAL_ROWS = 24;
 const MIN_INITIAL_COLS = 20;
 const MIN_INITIAL_ROWS = 5;
-const MAX_INITIAL_COLS = 500;
-const MAX_INITIAL_ROWS = 200;
+
 const SETTINGS_CONTEXT_MENU_WIDTH = 180;
 const SETTINGS_CONTEXT_MENU_TERMINAL_HEIGHT = 66;
 const SETTINGS_CONTEXT_MENU_RESEARCH_HEIGHT = 134;
@@ -981,12 +954,6 @@ function settingsAgentResearchSummary(adapter: AgentAdapterMetadata): string | n
 }
 
 /** Catalog colors are bare RRGGBB hex; CSS needs the leading '#'. */
-function themeCssColor(hex: string): string | null {
-  if (!/^#?[0-9a-fA-F]{6}$/.test(hex)) {
-    return null;
-  }
-  return hex.startsWith("#") ? hex : `#${hex}`;
-}
 
 function focusConfirmDialogButton(button: HTMLButtonElement | null, force = false) {
   if (!button) {
@@ -1474,7 +1441,7 @@ function MainApp() {
     [sidebarScrollElement],
   );
   const mainStageRef = useRef<HTMLDivElement | null>(null);
-  const terminalPaneRefs = useRef(new Map<string, TerminalPaneHandle>());
+
   // Opening/closing either side pane resizes native terminal surfaces. Keep the
   // final focus handoff after that layout commit scoped to the active pane,
   // especially in a split where a sibling surface is also visible.
@@ -1648,9 +1615,6 @@ function MainApp() {
   const [terminalTitleByPane, setTerminalTitleByPane] = useState<
     Record<string, string | null>
   >({});
-  const [terminalOverlayBlockedPaneIds] = useState<Set<string>>(
-    () => new Set(),
-  );
   const [manuallyTitledPaneIds, setManuallyTitledPaneIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -1991,14 +1955,6 @@ function MainApp() {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [themePickerOpen, setThemePickerOpen] = useState(false);
-  const [previewThemeId, setPreviewThemeId] = useState<string | null>(null);
-  const themePickerRef = useRef<HTMLDivElement | null>(null);
-  const themePickerTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const closeThemePicker = useCallback(() => {
-    setThemePickerOpen(false);
-    setPreviewThemeId(null);
-  }, []);
   const [newResearchOpen, setNewResearchOpen] = useState(
     () => readSessionDraftJson(SESSION_DRAFT_KEYS.newResearchModal) !== null,
   );
@@ -2112,20 +2068,6 @@ function MainApp() {
   const lastFocusedWebEditableRef = useRef<HTMLElement | null>(null);
   const appBlurWebEditableRef = useRef<HTMLElement | null>(null);
   const nativeWindowFocusedRef = useRef(true);
-  // True while a non-collapsed DOM selection exists. Folded into the
-  // keyboard-ownership signal handed to terminal panes so selected web text
-  // keeps WebKit as the key target (Cmd+C copies the selection instead of
-  // running Ghostty's copy on the terminal).
-  const [webSelectionActive, setWebSelectionActive] = useState(false);
-  const [webTranscriptFocused, setWebTranscriptFocused] = useState(false);
-  // Orders user-input events against page-focus gains so a focus event can be
-  // classified as user-driven (a click or key since the page last became
-  // focused) versus WebKit re-emitting focus on its remembered element after
-  // the webview regains first responder. Surface handoffs and right-pane
-  // layout transitions produce the latter constantly, and they must never be
-  // read as the user activating a pane. Sequence counters, not timestamps —
-  // the restoration focus can land in the same millisecond as the window
-  // focus event that caused it.
   const focusOrderSeqRef = useRef(0);
   // Pointer, wheel, and input events can arrive in dense bursts. One backend
   // Done probe per pane per short attention window closes event-order races
@@ -2218,19 +2160,6 @@ function MainApp() {
     showHideShortcutValue || null,
   );
   const bodyFontFamily = bodyFontStackFor(settings.bodyFontId);
-  const terminalFontSize = settings.fontSize;
-  const terminalFontFamily = fontStackFor(settings.fontId);
-  const terminalNativeFontFamily = nativeFontFamilyFor(settings.fontId);
-  const terminalLetterSpacing = letterSpacingFor(settings.fontId);
-  const terminalScrollSensitivity = scrollSensitivityFor(settings.mouseWheelSensitivity);
-  // The application color theme only adjusts Session's built-in terminal palette;
-  // explicitly selected Ghostty themes keep their authored backgrounds.
-  const effectiveThemeId = previewThemeId ?? settings.themeId;
-  const terminalThemeName =
-    effectiveThemeId === DEFAULT_THEME_ID && settings.colorTheme === "orange-blob"
-      ? WARM_SESSION_TERMINAL_THEME_ID
-      : effectiveThemeId;
-
   // Apply the app accent before paint so switching (and restoring) color themes
   // does not flash the default green palette.
   useLayoutEffect(() => {
@@ -2282,96 +2211,17 @@ function MainApp() {
     };
   }, []);
 
-
-  // Seed the native host with the current terminal settings so a pane created
-  // later can build its Ghostty surface at creation time instead of waiting
-  // for its own mount-time settings round-trip (which trails pane spawn by a
-  // render, a paint, and an IPC hop). Re-seeded on every settings change so
-  // the cached snapshot never goes stale; failures are ignored because every
-  // pane still applies its own settings on mount.
-  useEffect(() => {
-    void seedNativeTerminalSettings({
-      fontSize: terminalFontSize,
-      fontFamily: terminalNativeFontFamily,
-      letterSpacing: terminalLetterSpacing,
-      lineHeight: settings.lineHeight,
-      cursorBlink: settings.cursorBlink,
-      cursorStyle: settings.cursorStyle,
-      scrollbackRows: settings.scrollbackRows,
-      scrollOnUserInput: settings.scrollOnUserInput,
-      scrollSensitivity: terminalScrollSensitivity,
-      copyOnSelect: settings.copyOnSelect,
-      selectionClearOnCopy: settings.selectionClearOnCopy,
-      themeName: terminalThemeName,
-    }).catch(() => undefined);
-  }, [
-    settings.copyOnSelect,
-    settings.cursorBlink,
-    settings.cursorStyle,
-    settings.lineHeight,
-    settings.scrollOnUserInput,
-    settings.scrollbackRows,
-    settings.selectionClearOnCopy,
-    terminalThemeName,
-    terminalFontSize,
-    terminalLetterSpacing,
-    terminalNativeFontFamily,
-    terminalScrollSensitivity,
-  ]);
-  // The theme catalog (Session default first, then every bundled Ghostty scheme).
-  // Loaded once at startup: the theme select needs it when settings open, and
-  // --terminal-bg below needs the selected theme's background right away.
-  const [themeCatalog, setThemeCatalog] = useState<NativeTerminalTheme[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    void listNativeTerminalThemes()
-      .then((themes) => {
-        if (!cancelled) {
-          setThemeCatalog(themes);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setThemeCatalog([]);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  const effectiveTheme = useMemo(
-    () => themeCatalog?.find((theme) => theme.name === effectiveThemeId) ?? null,
-    [effectiveThemeId, themeCatalog],
-  );
-
-  useEffect(() => {
-    if (!themePickerOpen) {
-      return;
+  // Match the native loading canvas to the app's document surface.
+  useLayoutEffect(() => {
+    if (!IS_MAC) return;
+    const value = getComputedStyle(document.documentElement).getPropertyValue("--terminal-pane-bg").trim();
+    const color = /^#([0-9a-f]{6})$/i.exec(value)?.[1];
+    if (color) {
+      void setNativeBrowserBackground(...[0, 2, 4].map((offset) =>
+        parseInt(color.slice(offset, offset + 2), 16) / 255,
+      ) as [number, number, number]).catch(() => undefined);
     }
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!themePickerRef.current?.contains(event.target as Node)) {
-        closeThemePicker();
-      }
-    };
-    window.addEventListener("mousedown", handlePointerDown, true);
-    return () => window.removeEventListener("mousedown", handlePointerDown, true);
-  }, [closeThemePicker, themePickerOpen]);
-  // Chrome that sits flush against terminal pixels (the stage, split gutters,
-  // the empty state) follows a selected Ghostty theme. The built-in Session theme
-  // removes the inline override so the application surface token can tint it.
-  useEffect(() => {
-    const background =
-      effectiveThemeId === DEFAULT_THEME_ID
-        ? null
-        : effectiveTheme
-          ? themeCssColor(effectiveTheme.background)
-          : null;
-    if (background) {
-      document.documentElement.style.setProperty("--terminal-bg", background);
-    } else {
-      document.documentElement.style.removeProperty("--terminal-bg");
-    }
-  }, [effectiveTheme, effectiveThemeId]);
+  }, [settings.colorTheme]);
   const shortcutHintsShown = settings.showShortcutHints && shortcutHintsVisible;
   // The launcher prompt is deliberately NOT React state: as app-root state it
   // re-rendered the entire component tree on every keystroke (the composer had
@@ -2472,10 +2322,6 @@ function MainApp() {
   const [paneSplits, setPaneSplitsState] = useState<PaneSplitInfo[]>([]);
   paneSplitsRef.current = paneSplits;
   const [draggingPaneId] = useState<string | null>(null);
-  // Shared by every pointer drag that changes a terminal host rectangle. DOM
-  // layout keeps following the pointer while the native frames stay committed
-  // at their pre-drag size until pointerup/pointercancel.
-  const [terminalGeometryResizing, setTerminalGeometryResizing] = useState(false);
   const [draggingGroupId] = useState<string | null>(null);
   // Per-pane browser overlay state, so each tab keeps its own page and open/closed.
   const [browserOverlayByPane, setBrowserOverlayByPane] = useState<
@@ -2494,16 +2340,7 @@ function MainApp() {
     restoreDockedOnClose: boolean;
     splitMode: boolean;
   } | null>(null);
-  const assistantTurnReaderOpen = focusedAssistantTurn !== null;
-  useLayoutEffect(() => {
-    if (!assistantTurnReaderOpen) {
-      return;
-    }
-    // Reader mode covers the native terminal stage. Own pointer routing for
-    // its full lifetime so AppKit cannot send a press or release to Ghostty
-    // while the DOM overlay and native surface visibility settle.
-    return claimNativeTerminalPointerForWebDrag();
-  }, [assistantTurnReaderOpen]);
+
   // Tabs in a group share their right-pane visibility; switching groups restores
   // that group's choice. Groups without a choice start with the pane open.
   const [rightBarCollapsedByGroup, setRightBarCollapsedByGroup] = useState<
@@ -2749,10 +2586,7 @@ function MainApp() {
         .filter((pane): pane is PaneInfo => Boolean(pane)),
     [paneById, visibleTerminalPaneIds],
   );
-  const visibleTerminalPaneIdSet = useMemo(
-    () => new Set(visibleTerminalPaneIds),
-    [visibleTerminalPaneIds],
-  );
+
   const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
   const terminalGroups = useMemo(() => groupsForScope(groups, "terminal"), [groups]);
   const researchGroups = useMemo(() => groupsForScope(groups, "research"), [groups]);
@@ -3404,76 +3238,12 @@ function MainApp() {
     }
     void setActiveTab(nextActiveTabId).catch(() => undefined);
   }, [activePane, groupById]);
-  // Keep the native opaque backstop aligned with the terminal stage. The stage's
-  // webview pixels are transparent while panes are shown, and pane surfaces chase
-  // their DOM rects asynchronously, so the backstop (an AppKit view below every
-  // pane surface) is what shows through transient gaps — pane spawn, Home→pane
-  // switches, split-resize lag — instead of the window's vibrancy material.
-  useLayoutEffect(() => {
-    if (!IS_MAC) {
-      return;
-    }
-    const stage = mainStageRef.current;
-    if (!stage) {
-      return;
-    }
-    let frame: number | null = null;
-    const syncBackstop = () => {
-      frame = null;
-      const rect = stage.getBoundingClientRect();
-      void setNativeTerminalStageBackstop({
-        x: rect.left,
-        y: rect.top,
-        width: rect.width,
-        height: rect.height,
-      }).catch(() => undefined);
-    };
-    const scheduleBackstop = () => {
-      if (frame !== null) {
-        cancelAnimationFrame(frame);
-      }
-      frame = requestAnimationFrame(syncBackstop);
-    };
-    const observer = new ResizeObserver(scheduleBackstop);
-    observer.observe(stage);
-    scheduleBackstop();
-    return () => {
-      observer.disconnect();
-      if (frame !== null) {
-        cancelAnimationFrame(frame);
-      }
-    };
-  }, []);
   // Committed per pane on a trailing debounce rather than per event: programs
   // that stream progress into the terminal title (OSC 0/2 spinners, build
   // percentages) emit a distinct title many times a second, and committing each
   // one re-rendered the whole app and rebuilt the tray-menu snapshot per change
   // — a busy terminal made typing lag everywhere else. A tab label lagging its
   // terminal by a couple hundred milliseconds is imperceptible.
-  const terminalTitleTimersRef = useRef(new Map<string, number>());
-  const pendingTerminalTitlesRef = useRef(new Map<string, string | null>());
-  const handleTerminalTitleChange = useCallback((paneId: string, rawTitle: string) => {
-    const adapterId = agentsRef.current.find((agent) => agent.paneId === paneId)?.adapter;
-    pendingTerminalTitlesRef.current.set(paneId, sanitizeTerminalTitle(rawTitle, adapterId));
-    if (terminalTitleTimersRef.current.has(paneId)) {
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      terminalTitleTimersRef.current.delete(paneId);
-      const pending = pendingTerminalTitlesRef.current.get(paneId);
-      pendingTerminalTitlesRef.current.delete(paneId);
-      if (pending === undefined) {
-        return;
-      }
-      setTerminalTitleByPane((current) => {
-        if (current[paneId] === pending) {
-          return current;
-        }
-        return { ...current, [paneId]: pending };
-      });
-    }, TERMINAL_TITLE_COMMIT_DEBOUNCE_MS);
-    terminalTitleTimersRef.current.set(paneId, timer);
-  }, []);
 
   function paneUsesDefaultTitle(pane: PaneInfo, agent: AgentInfo | undefined): boolean {
     if (manuallyTitledPaneIdsRef.current.has(pane.id)) {
@@ -4560,38 +4330,6 @@ function MainApp() {
     [openBrowserOverlay],
   );
 
-  const openPaneLink = useCallback(
-    (paneId: string, rawTarget: string, _kind: "unknown" | "text" | "html") => {
-      const target = terminalLinkTarget(rawTarget);
-      if (!target) {
-        setError(`Cannot open terminal link: ${rawTarget}`);
-        return;
-      }
-      if (target.kind === "externalUrl") {
-        void openExternalUrl(target.url).catch((err) => {
-          setError(err instanceof Error ? err.message : String(err));
-        });
-        return;
-      }
-      const paneCwd = panesRef.current.find((pane) => pane.id === paneId)?.cwd;
-      const resolvedPath = resolveLocalLinkPath(target.path, paneCwd);
-      if (
-        browserOverlayShowsLink(
-          browserOverlayByPaneRef.current[paneId],
-          { path: resolvedPath },
-          configRef.current?.fileServerPort ?? null,
-        )
-      ) {
-        setBrowserOverlayByPane((current) => closeBrowserOverlayState(current, paneId));
-        return;
-      }
-      void browserOpenTerminalPath(paneId, target.path).catch((err) => {
-        setError(err instanceof Error ? err.message : String(err));
-      });
-    },
-    [],
-  );
-
   function toggleBrowserOverlay(paneId: string) {
     setBrowserOverlayByPane((current) => {
       const prev = current[paneId];
@@ -4796,9 +4534,7 @@ function MainApp() {
     paneChromeFocusFrameRef.current = requestAnimationFrame(() => {
       paneChromeFocusFrameRef.current = null;
       if (activePaneIdRef.current === paneId) {
-        // TerminalPane.focus() re-checks visibility and all web/native input
-        // blockers, so a composer or modal that still owns focus is preserved.
-        terminalPaneRefs.current.get(paneId)?.focus();
+
       }
     });
   }
@@ -5179,16 +4915,7 @@ function MainApp() {
   const visibleTurnPaneAgentIdsKey = visibleTurnPaneAgentIds.join("\0");
   const visibleTurnPaneAgentIdsRef = useRef(visibleTurnPaneAgentIds);
   visibleTurnPaneAgentIdsRef.current = visibleTurnPaneAgentIds;
-  const terminalPaneIsReadOnly = (pane: PaneInfo) =>
-    groupById.get(pane.groupId)?.scope === "research" &&
-    agentByPaneId.get(pane.id)?.status !== "awaitingPermission" &&
-    agentByPaneId.get(pane.id)?.status !== "awaitingInput";
-  const activePaneReadOnly = Boolean(activePane && terminalPaneIsReadOnly(activePane));
-  // The lightbox store is intentionally app-global rather than threaded
-  // through App state. Subscribe here too so opening it participates in the
-  // native input policy: AppKit must hand first responder from Ghostty to
-  // WebKit before the app-level Escape dispatcher can close the lightbox and
-  // consume the key.
+
   const imageLightbox = useSyncExternalStore(
     subscribeImageLightbox,
     getImageLightbox,
@@ -5213,9 +4940,6 @@ function MainApp() {
   // would let an off-screen pane keyboard-deaden the terminal actually on
   // screen. Intersecting with the visible set matches how the expanded
   // transcript and browser overlays are already visibility-derived.
-  const visiblePaneOverlayBlocking = [...terminalOverlayBlockedPaneIds].some(
-    (paneId) => visibleTerminalPaneIdSet.has(paneId),
-  );
   const nativeModalOccluded = Boolean(
     settingsOpen ||
       imageLightbox !== null ||
@@ -5248,45 +4972,14 @@ function MainApp() {
     : activePaneReservesTurnPaneWidth
       ? turnPaneWidth
       : 0;
-  const nativeTerminalInputBlocked = Boolean(
-    nativeModalOccluded ||
-      // The new-document composer is absent here on purpose: it lives in the
-      // research surface rather than stacking over the terminal stage, so an
-      // open (hidden) composer must not eat terminal input.
-      // The palette and expanded/browser overlays must own both the DOM
-      // gesture and keyboard while they cover the terminal stage.
-      assistantTurnReaderOpen ||
-      activeTranscriptVisibleExpanded ||
-      activeBrowserOverlay?.open ||
-      // Drag/layout gestures and terminal-local search/confirm overlays also
-      // revoke the desired owner until their web interaction completes.
-      draggingPaneId !== null ||
-      terminalGeometryResizing ||
-      visiblePaneOverlayBlocking,
-  );
-  const desiredNativeKeyboardOwner = desiredNativeTerminalKeyboardOwner({
-    activePaneId: activePane?.id ?? null,
-    paneSurfaceActive: activeSurface === "pane",
-    activePaneVisible: Boolean(activePane && visibleTerminalPaneIdSet.has(activePane.id)),
-    activePaneReadOnly,
-    inputBlocked: nativeTerminalInputBlocked,
-    webEditableFocused: webEditableFocused || webTranscriptFocused,
-    webSelectionActive,
-  });
   useLayoutEffect(() => {
     if (!IS_MAC) {
       return;
     }
-    void setNativeTerminalBrowserOverlayOpen(activeBrowserOverlay?.open === true).catch(
+    void setNativeBrowserOverlayOpen(activeBrowserOverlay?.open === true).catch(
       () => undefined,
     );
   }, [activeBrowserOverlay?.open]);
-  useLayoutEffect(() => {
-    if (!IS_MAC) {
-      return;
-    }
-    void setNativeTerminalKeyboardOwner(desiredNativeKeyboardOwner).catch(() => undefined);
-  }, [desiredNativeKeyboardOwner]);
 
   // Load session lists when a pane's right side is visible so transcript pickers are ready.
   useEffect(() => {
@@ -5814,7 +5507,7 @@ function MainApp() {
       if (pane.remoteSession) requestAnimationFrame(() => requestAnimationFrame(() => recordRemoteStartup(pane.id, "visible")));
       await refreshGroups();
       requestAnimationFrame(() => {
-        terminalPaneRefs.current.get(pane.id)?.focus();
+
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -6006,9 +5699,6 @@ function MainApp() {
   function acknowledgePaneIfDone(
     paneId: string | null,
     checkBackend = false,
-    // True for user-driven activation (tab click, keyboard cycle, menu-bar
-    // select, terminal pointer-down). Native Ghostty owns first responder then,
-    // so document.hasFocus() is false even though the user just chose this pane.
     intentional = false,
   ) {
     if (!paneId) {
@@ -6072,34 +5762,12 @@ function MainApp() {
     return Math.round(clamp(width, LEFT_SIDEBAR_MIN_WIDTH, maxSidebarWidth()));
   }
 
-  function estimateInitialPaneSize(willShowTurnPane: boolean): InitialPaneSize {
-    const stageRect = mainStageRef.current?.getBoundingClientRect();
-    const appWidth = appRef.current?.getBoundingClientRect().width;
-    const reservedTurnPaneWidth = willShowTurnPane ? clampTurnPaneWidth(turnPaneWidth) : 0;
-    const terminalWidth =
-      appWidth !== undefined
-        ? appWidth - effectiveSidebarWidth - reservedTurnPaneWidth
-        : (stageRect?.width ??
-          window.innerWidth - effectiveSidebarWidth - reservedTurnPaneWidth);
-    const terminalHeight = stageRect?.height ?? window.innerHeight;
-    const cell = measureTerminalCellSize(terminalFontFamily, terminalFontSize);
-    const cols = Math.floor((terminalWidth - TERMINAL_HORIZONTAL_PADDING) / cell.width);
-    const rows = Math.floor((terminalHeight - TERMINAL_VERTICAL_PADDING) / cell.height);
-
-    return {
-      cols: Number.isFinite(cols)
-        ? clamp(cols, MIN_INITIAL_COLS, MAX_INITIAL_COLS)
-        : DEFAULT_INITIAL_COLS,
-      rows: Number.isFinite(rows)
-        ? clamp(rows, MIN_INITIAL_ROWS, MAX_INITIAL_ROWS)
-        : DEFAULT_INITIAL_ROWS,
-    };
+  function estimateInitialPaneSize(_willShowTurnPane: boolean): InitialPaneSize {
+    return { cols: DEFAULT_INITIAL_COLS, rows: DEFAULT_INITIAL_ROWS };
   }
 
-  // Grow the right pane's text by 0.25px for every 1px the terminal font is above
-  // its base size, capped at +1px, so the transcript/composer track the terminal
-  // zoom without overpowering it. No change at or below the base size.
-  const turnFontDelta = Math.min(1, Math.max(0, (terminalFontSize - TERMINAL_FONT_SIZE) * 0.25));
+  // Preserve the existing bounded research/transcript text zoom.
+  const turnFontDelta = Math.min(1, Math.max(0, (settings.textSize - APP_TEXT_SIZE) * 0.25));
   const transcriptExpandedFontDelta = activeTranscriptVisibleExpanded ? 1 : 0;
   const transcriptExpandedLineHeightDelta = activeTranscriptVisibleExpanded ? 0.1 : 0;
 
@@ -6725,34 +6393,6 @@ function MainApp() {
       return normalized;
     });
   }, [panes]);
-
-  const openNativeTerminalSearch = useCallback((paneId: string) => {
-    terminalPaneRefs.current.get(paneId)?.openSearch();
-  }, []);
-  const requestNativeTerminalPaste = useCallback((paneId: string, text: string | null) => {
-    terminalPaneRefs.current.get(paneId)?.requestPaste(text);
-  }, []);
-  const reportNativeTerminalInput = useCallback((paneId: string) => {
-    terminalPaneRefs.current.get(paneId)?.reportUserInput();
-  }, []);
-  const activateTerminalPane = useCallback((paneId: string) => {
-    const treeId = researchNodeByPaneIdRef.current.get(paneId)?.treeId;
-    const researchExposureChanged = Boolean(
-      treeId &&
-        (sidebarModeRef.current !== "research" ||
-          activeSurfaceRef.current !== "pane" ||
-          activePaneIdRef.current !== paneId ||
-          activeResearchTreeIdRef.current !== treeId),
-    );
-    setActivePaneId(paneId);
-    acknowledgePaneIfDone(paneId, true, true);
-    if (treeId) {
-      void markVisibleResearchTreeViewedRef.current(treeId, {
-        force: researchExposureChanged,
-        exposureConfirmed: true,
-      }).catch(() => undefined);
-    }
-  }, []);
 
   const clearResearchUnseen = useCallback((treeId: string) => {
     // Both attention flags: viewing acknowledges failures exactly like
@@ -7406,8 +7046,6 @@ function MainApp() {
       }
     }
   }, [hydrateJournalTweet, journalOpen, recentActivityItems]);
-
-
 
   const changeSidebarMode = useCallback(
     (_mode: SidebarMode) => {
@@ -8748,32 +8386,12 @@ function MainApp() {
     },
     [],
   );
-  const nativeTerminalShortcutHandlerRef = useRef<
-    (paneId: string, command: AppShortcutCommand, repeat: boolean) => void
-  >(() => undefined);
   const nativeAppShortcutHandlerRef = useRef<
     (command: AppShortcutCommand, repeat: boolean) => void
   >(() => undefined);
-  const handleNativeTerminalShortcut = useCallback(
-    (paneId: string, command: AppShortcutCommand, repeat: boolean) => {
-      nativeTerminalShortcutHandlerRef.current(paneId, command, repeat);
-    },
-    [],
-  );
   const handleNativeAppShortcut = useCallback(
     (command: AppShortcutCommand, repeat: boolean) => {
       nativeAppShortcutHandlerRef.current(command, repeat);
-    },
-    [],
-  );
-  const handleNativeTerminalCommandModifier = useCallback(
-    (paneId: string, active: boolean) => {
-      if (
-        !active ||
-        (activeSurfaceRef.current === "pane" && activePaneRef.current?.id === paneId)
-      ) {
-        setShortcutHintsVisible(active);
-      }
     },
     [],
   );
@@ -8800,7 +8418,6 @@ function MainApp() {
       setNotificationPermissionBusy(false);
     }
   }, []);
-
 
   useSessionEvents({
     appendHookEvent,
@@ -8835,24 +8452,16 @@ function MainApp() {
         return;
       }
       setActivePaneId(paneId);
-      requestAnimationFrame(() => terminalPaneRefs.current.get(paneId)?.focus());
+
     },
     onPaneSplitsChanged: (splits: PaneSplitInfo[]) => {
       paneSplitsRef.current = splits;
       setPaneSplitsState(splits);
     },
-    onTerminalSearchRequested: openNativeTerminalSearch,
-    onTerminalPasteRequested: requestNativeTerminalPaste,
-    onTerminalUserInput: reportNativeTerminalInput,
-    onTerminalActivated: activateTerminalPane,
-    onTerminalShortcut: handleNativeTerminalShortcut,
     onAppShortcut: handleNativeAppShortcut,
     onBrowserEscapeRequested: () => {
       browserEscapeDispatcherRef.current();
     },
-    onTerminalCommandModifier: handleNativeTerminalCommandModifier,
-    onTerminalOpenUrl: openPaneLink,
-    onTerminalTitleChanged: handleTerminalTitleChange,
     onResearchChanged: handleResearchEvent,
     onUserNotificationRequested: handleUserNotificationRequested,
     onNotificationOpenPane: handleNotificationOpenPane,
@@ -9006,7 +8615,7 @@ function MainApp() {
       setError(err instanceof Error ? err.message : String(err));
     }
     requestAnimationFrame(() => {
-      terminalPaneRefs.current.get(created.id)?.focus();
+
     });
   }
 
@@ -9040,7 +8649,7 @@ function MainApp() {
     setRepositoryBrowser(null);
     setActivePaneId(existing.id);
     setLastActiveGroupId(existing.groupId);
-    requestAnimationFrame(() => terminalPaneRefs.current.get(existing.id)?.focus());
+
     return true;
   }
 
@@ -9055,7 +8664,7 @@ function MainApp() {
     } catch (err) {
       setError(unknownErrorMessage(err));
     }
-    requestAnimationFrame(() => terminalPaneRefs.current.get(created.id)?.focus());
+
   }
 
   async function openInventoryWorktree(path: string) {
@@ -9109,7 +8718,6 @@ function MainApp() {
     if (document.activeElement instanceof HTMLElement &&
         document.activeElement.closest(".turn-timeline")) {
       document.activeElement.blur();
-      setWebTranscriptFocused(false);
     }
     const treeId = researchNodeByPaneIdRef.current.get(paneId)?.treeId;
     const researchExposureChanged = Boolean(
@@ -9130,7 +8738,7 @@ function MainApp() {
       }).catch(() => undefined);
     }
     requestAnimationFrame(() => {
-      terminalPaneRefs.current.get(paneId)?.focus();
+
     });
   }
 
@@ -10092,7 +9700,7 @@ function MainApp() {
         setActivePaneId(fork.id);
         setLastActiveGroupId(fork.groupId);
         requestAnimationFrame(() => {
-          terminalPaneRefs.current.get(fork.id)?.focus();
+
         });
       } else {
         setPanesPreservingRecoveredDismissals(placePaneAfterOptimistically(fork, pane.id, false));
@@ -10118,12 +9726,6 @@ function MainApp() {
     }
   }
 
-  // Stable identity for the terminal input handler. The impl above is a plain
-  // function that closes over fresh state / unstable helpers, so passing it directly
-  // gives a new identity every render — defeating TerminalPane's React.memo (making
-  // every mounted pane reconcile on unrelated App re-renders) and re-subscribing
-  // event hooks. Routing through a latest-ref wrapper is behavior-neutral; it just
-  // lets the memo hold.
   const terminalHandlersRef = useRef({
     noteUserInput,
   });
@@ -10257,27 +9859,6 @@ function MainApp() {
       if (restoreWindowEditable(returningToApp)) {
         return;
       }
-      requestAnimationFrame(() => {
-        if (
-          isEditableTarget(document.activeElement) ||
-          (document.activeElement instanceof Element &&
-            document.activeElement.closest(".turn-timeline"))
-        ) {
-          return;
-        }
-        // A live DOM selection means the user is selecting (or has selected)
-        // web text; bouncing focus back to the terminal here would route the
-        // upcoming Cmd+C into Ghostty's copy instead of WebKit's.
-        const selection = document.getSelection();
-        if (selection && !selection.isCollapsed) {
-          return;
-        }
-        const pane = activePaneRef.current;
-        if (pane) {
-          // TerminalPane.focus() re-checks active/visible/inputBlocked itself.
-          terminalPaneRefs.current.get(pane.id)?.focus();
-        }
-      });
     };
     // Also stamps the input-vs-window-focus ordering used to tell user-driven
     // focus from WebKit's own restoration churn (see the refs' declaration).
@@ -10341,55 +9922,6 @@ function MainApp() {
     };
   }, []);
 
-  // Track whether a non-collapsed DOM selection exists, rAF-coalesced since
-  // selectionchange fires for every caret move during a drag-select. Clicking
-  // a native terminal collapses the DOM selection (the webview still sees the
-  // mousedown), so the flag drops and the terminal reclaims the keyboard.
-  useEffect(() => {
-    let frame: number | null = null;
-    const sample = () => {
-      frame = null;
-      const selection = document.getSelection();
-      setWebSelectionActive(Boolean(selection && !selection.isCollapsed));
-    };
-    const schedule = () => {
-      if (frame === null) {
-        frame = requestAnimationFrame(sample);
-      }
-    };
-    document.addEventListener("selectionchange", schedule);
-    return () => {
-      document.removeEventListener("selectionchange", schedule);
-      if (frame !== null) {
-        cancelAnimationFrame(frame);
-      }
-    };
-  }, []);
-
-  // A departing research surface can wedge two different web keyboard blockers
-  // true, and both deny the returning native terminal focus — the owner
-  // coordinator (desiredNativeTerminalKeyboardOwner) drops to null and
-  // TerminalPane.focus() bails. WebKit emits neither selectionchange nor
-  // focusout when the research document unmounts during the handoff, so
-  // whichever blocker it left set stays stuck until some later real event.
-  //
-  //   1. webSelectionActive — a selected research highlight is a real DOM
-  //      selection. The departed selection has no visible content to preserve,
-  //      so clear the range as the pane surface lands.
-  //   2. webEditableFocused — the document's follow-up composer holds DOM
-  //      focus. Once its subtree is gone, activeElement falls back to <body>,
-  //      so a re-sample reads the truth (false) and re-arms the coordinator.
-  //
-  // A terminal WITH a right pane is already rescued: a turn-pane cell mounts on
-  // the handoff, firing the mountedTurnPaneCellsKey backstop below, which
-  // re-samples webEditableFocused and re-focuses. A terminal WITHOUT a right
-  // pane has no such trigger, so it needs the re-sample here or it lands
-  // keyboard-dead. Keep BOTH blockers reset in lockstep here: dropping either
-  // one reopens this same regression the next time research owns that flag.
-  //
-  // This only runs when the surface changes; a selection or composer focus made
-  // in an already active terminal surface still retains WebKit keyboard
-  // ownership.
   useLayoutEffect(() => {
     if (activeSurface !== "pane") {
       return;
@@ -10398,7 +9930,6 @@ function MainApp() {
     if (selection && !selection.isCollapsed) {
       selection.removeAllRanges();
     }
-    setWebSelectionActive(false);
     const editable = document.hasFocus() && isEditableTarget(document.activeElement);
     webEditableFocusedRef.current = editable;
     setWebEditableFocused(editable);
@@ -10462,52 +9993,9 @@ function MainApp() {
     return () => cancelAnimationFrame(frame);
   }, [newDocumentOpen]);
 
-  // Backstop for the right-pane mount/unmount layout transition: an agent
-  // quitting unmounts its turn-pane cell, and starting a terminal over a split
-  // unmounts the whole strip, while every terminal tab stays open. That
-  // transition can strand keyboard state two ways. An editable unmounting
-  // with its cell leaves webEditableFocused wedged true (WebKit emits no
-  // focusout for removed subtrees — same hazard as the pane-membership
-  // backstop above). And the first-responder churn of the surfaces resizing
-  // can park focus on a remembered right-pane editable no one re-focused,
-  // silently moving the keyboard to a sibling pane's composer. Once layout
-  // settles: drop an intent-less editable restore inside the right pane,
-  // re-sample the editable flag, and re-assert the active pane's keyboard —
-  // TerminalPane.focus() re-checks every web/native input blocker itself.
   const mountedTurnPaneCellsKey = visibleRightBarSurfaces
     .map((surface) => surface.pane.id)
     .join("\n");
-  // A clicked transcript is a keyboard destination, just like the composer.
-  // Resample on removal/layout changes because WebKit may omit focusout.
-  useEffect(() => {
-    let frame: number | null = null;
-    const sample = () => {
-      if (frame !== null) cancelAnimationFrame(frame);
-      frame = null;
-      setWebTranscriptFocused(
-        document.hasFocus() &&
-          document.activeElement instanceof Element &&
-          Boolean(document.activeElement.closest(".turn-timeline")),
-      );
-    };
-    const schedule = () => {
-      if (frame === null) frame = requestAnimationFrame(sample);
-    };
-    window.addEventListener("focusin", sample);
-    window.addEventListener("focusout", schedule);
-    window.addEventListener("blur", sample);
-    window.addEventListener("focus", sample);
-    window.addEventListener("pointerdown", schedule, true);
-    sample();
-    return () => {
-      if (frame !== null) cancelAnimationFrame(frame);
-      window.removeEventListener("focusin", sample);
-      window.removeEventListener("focusout", schedule);
-      window.removeEventListener("blur", sample);
-      window.removeEventListener("focus", sample);
-      window.removeEventListener("pointerdown", schedule, true);
-    };
-  }, [mountedTurnPaneCellsKey, activeSurface]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       const restored = document.activeElement;
@@ -10524,7 +10012,7 @@ function MainApp() {
       );
       const paneId = activePaneIdRef.current;
       if (paneId) {
-        terminalPaneRefs.current.get(paneId)?.focus();
+
       }
     });
     return () => cancelAnimationFrame(frame);
@@ -10549,7 +10037,6 @@ function MainApp() {
     resolvingClose,
     quitting,
     settingsOpen,
-    themePickerOpen,
     error,
   });
   useEffect(() => {
@@ -10569,7 +10056,6 @@ function MainApp() {
       resolvingClose,
       quitting,
       settingsOpen,
-      themePickerOpen,
       error,
     };
   });
@@ -10588,11 +10074,6 @@ function MainApp() {
     if (getDiagramLightbox() !== null) {
       closeDiagramLightbox();
       return "exclusive";
-    }
-    if (themePickerOpen) {
-      closeThemePicker();
-      requestAnimationFrame(() => themePickerTriggerRef.current?.focus());
-      return "theme";
     }
     if (!activeBrowserOwnerId || !browserOverlayByPane[activeBrowserOwnerId]?.open) {
       return null;
@@ -10614,9 +10095,6 @@ function MainApp() {
       }
       const overlays = escapeOverlayStateRef.current;
 
-      // Lightboxes float above the browser and claim Escape exclusively. The
-      // theme picker is the one non-exclusive higher-priority child: dismiss
-      // it without swallowing sibling component listeners.
       const browserEscapeDisposition = browserEscapeDispatcherRef.current();
       if (browserEscapeDisposition !== null) {
         event.preventDefault();
@@ -10709,24 +10187,12 @@ function MainApp() {
 
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [closeThemePicker]);
-
-  // The error banner floats over the terminal stage. Register its rect as a
-  // web-owned pointer region so clicks on the banner (and its dismiss control)
-  // hit WKWebView instead of being forwarded to Ghostty under the transparent
-  // hole. A region, not a global pointer claim: claiming all routing made the
-  // entire terminal mouse-dead (no clicks, scrolling, or selection) for as long
-  // as any error banner stayed up.
-  const errorBannerRegionRef = useNativeWebOverlayRegion<HTMLDivElement>(Boolean(error));
+  }, []);
 
   useEffect(() => {
     if (!paneContextMenu && !groupMenu && !settingsMenu) {
       return;
     }
-    // Sidebar menus are position:fixed and can extend over the native terminal.
-    // Claim web pointer routing so clicks on the overlapping portion hit the
-    // menu instead of Ghostty.
-    const releaseNativePointer = claimNativeTerminalPointerForWebDrag();
     const handleDismiss = () => {
       setPaneContextMenu(null);
       setGroupMenu(null);
@@ -10770,7 +10236,6 @@ function MainApp() {
     window.addEventListener("resize", handleDismiss);
     window.addEventListener("keydown", handleKeyDown, true);
     return () => {
-      releaseNativePointer();
       window.removeEventListener("mousedown", handleDismiss);
       window.removeEventListener("resize", handleDismiss);
       window.removeEventListener("keydown", handleKeyDown, true);
@@ -11021,13 +10486,12 @@ function MainApp() {
   // section.
   useEffect(() => {
     if (!settingsOpen || settingsTab !== "theme") {
-      closeThemePicker();
     }
     if (!settingsOpen) {
       setOpenRouterKeyVisible(false);
       setShowHideShortcutCapturing(false);
     }
-  }, [closeThemePicker, settingsOpen, settingsTab]);
+  }, [settingsOpen, settingsTab]);
 
   // Focus and select the name when the rename dialog opens, so the user can type
   // a new name straight away.
@@ -11184,9 +10648,6 @@ function MainApp() {
       }
     };
 
-    nativeTerminalShortcutHandlerRef.current = (_paneId, command, repeat) => {
-      executeShortcut(command, repeat);
-    };
     nativeAppShortcutHandlerRef.current = executeShortcut;
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -11238,7 +10699,6 @@ function MainApp() {
     window.addEventListener("keydown", handleKeyDown, true);
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
-      nativeTerminalShortcutHandlerRef.current = () => undefined;
       nativeAppShortcutHandlerRef.current = () => undefined;
     };
   }, [
@@ -11264,7 +10724,6 @@ function MainApp() {
     selectResearchTree,
     sidebarMode,
   ]);
-
 
   useEffect(() => {
     if (!newAgentOpen) {
@@ -11454,7 +10913,6 @@ function MainApp() {
 
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
-    setTerminalGeometryResizing(true);
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       const nextWidth = startWidth + moveEvent.clientX - startX;
@@ -11467,7 +10925,6 @@ function MainApp() {
       window.removeEventListener("pointerup", stopResize);
       window.removeEventListener("pointercancel", stopResize);
       releasePointer();
-      setTerminalGeometryResizing(false);
     };
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -11547,9 +11004,7 @@ function MainApp() {
       ref={appRef}
       className={`app-shell ${hasGlobalTurnSidebar ? "has-turn-sidebar" : ""}${
         activeTranscriptVisibleExpanded ? " has-expanded-transcript" : ""
-      }${settings.reduceMotion ? " reduce-motion" : ""}${
-        IS_MAC ? " is-native-terminals" : ""
-      }`}
+      }${settings.reduceMotion ? " reduce-motion" : ""}`}
       style={appStyle}
     >
       {!leftSidebarCollapsed ? (
@@ -13195,159 +12650,6 @@ function MainApp() {
                 <div className="settings-divider" role="separator" />
 
                 <label className="settings-row settings-toggle">
-                  <span className="settings-label">Cursor blink</span>
-                  <input
-                    type="checkbox"
-                    className="settings-checkbox"
-                    checked={settings.cursorBlink}
-                    onChange={(event) => {
-                      const cursorBlink = event.currentTarget.checked;
-                      setSettings((current) => ({ ...current, cursorBlink }));
-                    }}
-                  />
-                </label>
-
-                <div className="settings-row">
-                  <label htmlFor="settings-cursor-style" className="settings-label">
-                    Cursor style
-                  </label>
-                  <select
-                    id="settings-cursor-style"
-                    className="settings-select"
-                    value={settings.cursorStyle}
-                    onChange={(event) => {
-                      const cursorStyle = event.currentTarget.value as AppSettings["cursorStyle"];
-                      setSettings((current) => ({ ...current, cursorStyle }));
-                    }}
-                  >
-                    {CURSOR_STYLE_OPTIONS.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="settings-row">
-                  <label htmlFor="settings-scrollback-rows" className="settings-label">
-                    Scrollback rows (new tabs)
-                  </label>
-                  <input
-                    id="settings-scrollback-rows"
-                    className="form-field settings-input settings-number-input"
-                    type="number"
-                    min={SCROLLBACK_ROWS_MIN}
-                    max={SCROLLBACK_ROWS_MAX}
-                    step={1000}
-                    value={settings.scrollbackRows}
-                    onChange={(event) => {
-                      const scrollbackRows = clampScrollbackRows(
-                        Number(event.currentTarget.value),
-                      );
-                      setSettings((current) => ({ ...current, scrollbackRows }));
-                    }}
-                  />
-                </div>
-
-                <label className="settings-row settings-toggle">
-                  <span className="settings-label">Scroll on user input</span>
-                  <input
-                    type="checkbox"
-                    className="settings-checkbox"
-                    checked={settings.scrollOnUserInput}
-                    onChange={(event) => {
-                      const scrollOnUserInput = event.currentTarget.checked;
-                      setSettings((current) => ({ ...current, scrollOnUserInput }));
-                    }}
-                  />
-                </label>
-
-                <div className="settings-row">
-                  <label htmlFor="settings-mouse-wheel-sensitivity" className="settings-label">
-                    Mouse wheel sensitivity
-                  </label>
-                  <select
-                    id="settings-mouse-wheel-sensitivity"
-                    className="settings-select"
-                    value={settings.mouseWheelSensitivity}
-                    onChange={(event) => {
-                      const mouseWheelSensitivity = event.currentTarget
-                        .value as AppSettings["mouseWheelSensitivity"];
-                      setSettings((current) => ({ ...current, mouseWheelSensitivity }));
-                    }}
-                  >
-                    {MOUSE_WHEEL_SENSITIVITY_OPTIONS.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="settings-row">
-                  <span className="settings-label">Line height</span>
-                  <div className="settings-stepper" role="group" aria-label="Line height">
-                    <button className="control-button"
-                      type="button"
-                      aria-label="Decrease line height"
-                      disabled={settings.lineHeight <= LINE_HEIGHT_MIN}
-                      onClick={() =>
-                        setSettings((current) => ({
-                          ...current,
-                          lineHeight: clampLineHeight(current.lineHeight - LINE_HEIGHT_STEP),
-                        }))
-                      }
-                    >
-                      <Minus size={14} aria-hidden="true" />
-                    </button>
-                    <span className="settings-stepper-value">
-                      {settings.lineHeight.toFixed(1)}x
-                    </span>
-                    <button className="control-button"
-                      type="button"
-                      aria-label="Increase line height"
-                      disabled={settings.lineHeight >= LINE_HEIGHT_MAX}
-                      onClick={() =>
-                        setSettings((current) => ({
-                          ...current,
-                          lineHeight: clampLineHeight(current.lineHeight + LINE_HEIGHT_STEP),
-                        }))
-                      }
-                    >
-                      <Plus size={14} aria-hidden="true" />
-                    </button>
-                  </div>
-                </div>
-
-                <label className="settings-row settings-toggle">
-                  <span className="settings-label">Copy on select</span>
-                  <input
-                    type="checkbox"
-                    className="settings-checkbox"
-                    checked={settings.copyOnSelect}
-                    onChange={(event) => {
-                      const copyOnSelect = event.currentTarget.checked;
-                      setSettings((current) => ({ ...current, copyOnSelect }));
-                    }}
-                  />
-                </label>
-
-                <label className="settings-row settings-toggle">
-                  <span className="settings-label">Selection clear on copy</span>
-                  <input
-                    type="checkbox"
-                    className="settings-checkbox"
-                    checked={settings.selectionClearOnCopy}
-                    onChange={(event) => {
-                      const selectionClearOnCopy = event.currentTarget.checked;
-                      setSettings((current) => ({ ...current, selectionClearOnCopy }));
-                    }}
-                  />
-                </label>
-
-                <div className="settings-divider" role="separator" />
-
-                <label className="settings-row settings-toggle">
                   <span className="settings-label">Confirm multi-line paste</span>
                   <input
                     type="checkbox"
@@ -14036,7 +13338,7 @@ function MainApp() {
       <section className="workspace">
         {error ? (
           <div
-            ref={errorBannerRegionRef}
+
             className="error-banner"
             role="alert"
             aria-live="assertive"
@@ -14056,7 +13358,7 @@ function MainApp() {
 
         <div
           ref={mainStageRef}
-          className={`main-stage${IS_MAC ? " is-native" : ""}${
+          className={`main-stage${
             researchSurfaceActive ? " is-research" : ""
           }${
             !researchSurfaceActive && visibleTerminalPaneIds.length === 0 ? " is-empty" : ""

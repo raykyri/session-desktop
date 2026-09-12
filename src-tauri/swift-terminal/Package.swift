@@ -1,10 +1,6 @@
 // swift-tools-version: 6.0
 
 import PackageDescription
-import Foundation
-
-let ghosttyPackagePath = ProcessInfo.processInfo.environment["QMUX_GHOSTTY_PACKAGE_PATH"]
-    ?? "../../vendor/libghostty-spm"
 
 let package = Package(
     name: "QmuxNativeTerminal",
@@ -16,16 +12,11 @@ let package = Package(
             targets: ["QmuxNativeTerminal"]
         ),
     ],
-    dependencies: [
-        .package(path: ghosttyPackagePath),
-    ],
+    dependencies: [],
     targets: [
         .target(
             name: "QmuxNativeTerminal",
-            dependencies: [
-                .product(name: "GhosttyTerminal", package: "libghostty-spm"),
-                .product(name: "GhosttyTheme", package: "libghostty-spm"),
-            ]
+            dependencies: []
         ),
         .testTarget(
             name: "QmuxNativeTerminalTests",

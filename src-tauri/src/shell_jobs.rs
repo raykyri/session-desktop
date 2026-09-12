@@ -49,7 +49,6 @@ pub fn start_shell_job_monitor(state: AppState) {
                                     &target.job_id,
                                     sample.job_state(),
                                 ) {
-                                    recover_shell_terminal_modes(&state, &info);
                                     emit_job_state(&state, &info);
                                 }
                             }
@@ -67,25 +66,6 @@ pub fn start_shell_job_monitor(state: AppState) {
             std::thread::sleep(SHELL_JOB_POLL_INTERVAL);
         }
     });
-}
-
-fn recover_shell_terminal_modes(state: &AppState, info: &ShellAgentJobInfo) {
-    if !job_state_returns_terminal_to_shell(info.state) {
-        return;
-    }
-    if let Err(err) = crate::pty::reset_live_pane_terminal_modes(state, &info.pane_id) {
-        eprintln!(
-            "session: failed to reset live terminal modes for shell job {}: {err}",
-            info.job_id
-        );
-    }
-}
-
-fn job_state_returns_terminal_to_shell(state: ShellAgentJobState) -> bool {
-    matches!(
-        state,
-        ShellAgentJobState::Stopped | ShellAgentJobState::Backgrounded
-    )
 }
 
 pub fn emit_job_state(state: &AppState, info: &ShellAgentJobInfo) {
@@ -212,18 +192,5 @@ mod tests {
         let samples = parse_process_job_samples("bad row\n  10  nope 20 S\n  11 21 20 S\n");
         assert_eq!(samples.len(), 1);
         assert!(samples.contains_key(&11));
-    }
-
-    #[test]
-    fn only_shell_owned_job_states_request_live_mode_recovery() {
-        assert!(!job_state_returns_terminal_to_shell(
-            ShellAgentJobState::Foreground
-        ));
-        assert!(job_state_returns_terminal_to_shell(
-            ShellAgentJobState::Stopped
-        ));
-        assert!(job_state_returns_terminal_to_shell(
-            ShellAgentJobState::Backgrounded
-        ));
     }
 }
