@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+  <title id="title">Session app icon</title>
+  <rect x="80" y="80" width="864" height="864" rx="177" fill="#161922"/>
+  <g transform="translate(512 512) scale(3.6) translate(-127.5 -129.5)">
+    <path fill="#fd594d" d="M60 95H83V163H105V95H128V163H150V95H173V186H60Z"/>
+    <path fill="#ffc75a" d="M83 73H195V163H173V95H150V163H128V95H105V163H83Z"/>
+  </g>
+</svg>
