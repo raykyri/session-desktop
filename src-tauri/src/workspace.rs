@@ -45,7 +45,6 @@ pub enum WorkspaceScope {
 pub enum LaunchOrigin {
     Terminal,
     Research,
-    Recovery,
 }
 
 pub fn validate_launch_workspace(
@@ -55,7 +54,7 @@ pub fn validate_launch_workspace(
 ) -> Result<Option<GroupInfo>, String> {
     let Some(group_id) = group_id else {
         return match origin {
-            LaunchOrigin::Terminal | LaunchOrigin::Recovery => Ok(None),
+            LaunchOrigin::Terminal => Ok(None),
             LaunchOrigin::Research => Err("research launch requires a workspace".to_string()),
         };
     };

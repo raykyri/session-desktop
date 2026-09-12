@@ -22,11 +22,9 @@ import type {
 } from "./publication";
 import type {
   AgentInfo,
-  AgentDeliveryDebugInfo,
   ArtifactInfo,
   ConversationHistorySnapshot,
   ClaudeSkill,
-  ConversationHistoryEntry,
   ConversationHistoryLaunchRequest,
   GlobalDraft,
   GroupInfo,
@@ -43,13 +41,10 @@ import type {
   QueuedTurn,
   QueuedTurnDelivery,
   SavedPrompt,
-  ShellAgentJobInfo,
   RemoveQueuedAgentTurnResult,
   ReorderQueuedAgentTurnResult,
   ResearchBranchRemoval,
   RecentActivityCursor,
-  RecentResearchQueryCursor,
-  RecentResearchQueryPage,
   ResearchHighlight,
   ResearchHighlightAnchor,
   ResearchTree,
@@ -121,14 +116,6 @@ export function getNotificationPermission() {
 
 export function requestNotificationPermission() {
   return invoke<NotificationPermissionInfo>("notification_request_permission");
-}
-
-export function listShellAgentJobs() {
-  return invoke<ShellAgentJobInfo[]>("list_shell_agent_jobs");
-}
-
-export function listConversationHistory() {
-  return invoke<ConversationHistoryEntry[]>("list_conversation_history");
 }
 
 export function launchConversationHistory(request: ConversationHistoryLaunchRequest) {
@@ -397,27 +384,6 @@ export function createGroupWithShell(
   });
 }
 
-/** Creates a workspace, optionally bound to a machine declared under `remotes`
- * in qmux.config.json. The group snapshots that remote, so later config edits
- * never move a workspace whose worktrees already live on it. */
-export function createGroup(options: {
-  dir?: string | null;
-  name?: string | null;
-  afterGroupId?: string | null;
-  remoteId?: string | null;
-}) {
-  return invoke<GroupInfo>("group_create", {
-    request: {
-      name: options.name ?? null,
-      dir: options.dir ?? null,
-      afterGroupId: options.afterGroupId ?? null,
-      baseRepo: null,
-      baseRef: null,
-      remoteId: options.remoteId ?? null,
-    },
-  });
-}
-
 export function removeGroup(groupId: string) {
   return invoke<void>("group_remove", { groupId });
 }
@@ -458,10 +424,6 @@ export function listHomeTurnHistory(
   });
 }
 
-export function listThreadGraphs() {
-  return invoke<ThreadGraph[]>("list_thread_graphs");
-}
-
 export function getThreadGraph(threadId: string) {
   return invoke<ThreadGraph | null>("get_thread_graph", { threadId });
 }
@@ -495,16 +457,6 @@ export function setResearchFolders(folders: ResearchFolderState) {
 
 export function listResearchActivity() {
   return invoke<ResearchNode[]>("list_research_activity");
-}
-
-export function listRecentResearchQueries(
-  limit = 50,
-  before?: RecentResearchQueryCursor | null,
-) {
-  return invoke<RecentResearchQueryPage>("list_recent_research_queries", {
-    limit,
-    before: before ?? null,
-  });
 }
 
 export function listRecentActivity(
@@ -718,16 +670,8 @@ export function listAgentTurnQueue(agentId: string) {
   return invoke<QueuedTurn[]>("list_agent_turn_queue", { agentId });
 }
 
-export function listGlobalDrafts() {
-  return invoke<GlobalDraft[]>("list_global_drafts");
-}
-
 export function createGlobalDraft(text: string) {
   return invoke<GlobalDraft>("create_global_draft", { text });
-}
-
-export function updateGlobalDraft(draftId: string, text: string) {
-  return invoke<GlobalDraft>("update_global_draft", { draftId, text });
 }
 
 export function deleteGlobalDraft(draftId: string) {
@@ -994,19 +938,6 @@ export function reorderQueuedAgentTurn(
 
 export function sendNextQueuedAgentTurn(agentId: string) {
   return invoke<SendNextQueuedAgentTurnResult>("agent_send_next_queued_turn", { agentId });
-}
-
-export type AgentDebugInputKind = "textOnly" | "returnOnly" | "textAndReturn";
-
-/** Exercises the same adapter-specific PTY payload/submit options used by a
- * queued turn, without touching lifecycle or prompt-correlation state. */
-export function sendAgentDebugInput(agentId: string, kind: AgentDebugInputKind) {
-  return invoke<void>("agent_debug_input", { agentId, kind });
-}
-
-/** Transient queue-to-PTY state for the opt-in delivery Debug panel. */
-export function getAgentDeliveryDebug(agentId: string) {
-  return invoke<AgentDeliveryDebugInfo>("agent_delivery_debug", { agentId });
 }
 
 /** Marks/clears that the user is actively typing for an agent, so the backend holds
@@ -1396,47 +1327,6 @@ export function attachPane(paneId: string) {
   return invoke<void>("pane_attach", { paneId });
 }
 
-export interface NativeTerminalLayout {
-  paneId: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  visible: boolean;
-  acceptsPointerInput: boolean;
-  /**
-   * Whether a pointer gesture may optimistically grant this pane the keyboard
-   * before React confirms the desired owner (native click-to-focus). False when the
-   * keyboard denial is hard policy — read-only research panes, blocked input —
-   * rather than a transient focus state like an active web editable.
-   */
-  acceptsKeyboardClaim: boolean;
-  deferGeometry: boolean;
-}
-
-// Seed from wall time so a webview/module reload cannot restart revisions below
-// the native host's last applied value. Multiplying by 1,000 leaves room for
-// bursts within one millisecond while remaining below Number.MAX_SAFE_INTEGER.
-let nativeTerminalLayoutRevision = Date.now() * 1_000;
-
-/**
- * Publishes a pane's native geometry. Layout updates are revisioned so an
- * older fire-and-forget invoke (common around split close / right-pane
- * toggles) can never overwrite a newer frame that already reached AppKit.
- */
-export function setNativeTerminalLayout(layout: NativeTerminalLayout) {
-  nativeTerminalLayoutRevision = Math.max(
-    nativeTerminalLayoutRevision + 1,
-    Date.now() * 1_000,
-  );
-  return invoke<void>("native_terminal_set_layout", {
-    layout: {
-      ...layout,
-      revision: nativeTerminalLayoutRevision,
-    },
-  });
-}
-
 // Seed from wall time so a webview/module reload cannot restart revisions below
 // the native host's last applied value. Multiplying by 1,000 leaves room for
 // bursts within one millisecond while remaining below Number.MAX_SAFE_INTEGER.
@@ -1474,11 +1364,6 @@ export function setNativeTerminalBrowserOverlayOpen(active: boolean) {
     .catch(() => undefined)
     .then(() => invoke<void>("native_terminal_set_browser_overlay_open", { active }));
   return nativeTerminalBrowserOverlayUpdate;
-}
-
-/** Enables viewport/content events only while a visible pane has annotations. */
-export function setNativeTerminalAnnotationMonitoring(paneId: string, enabled: boolean) {
-  return invoke<void>("native_terminal_set_annotation_monitoring", { paneId, enabled });
 }
 
 export interface NativeWebOverlayRegion {
@@ -1576,10 +1461,6 @@ export function setNativeTerminalStageBackstop(rect: {
   return invoke<void>("native_terminal_set_stage_backstop", rect);
 }
 
-export function focusNativeTerminal(paneId: string) {
-  return invoke<void>("native_terminal_focus", { paneId });
-}
-
 export interface NativeTerminalSettings {
   paneId: string;
   fontSize: number;
@@ -1621,23 +1502,6 @@ export interface NativeTerminalTheme {
   palette: string[];
 }
 
-export function performNativeTerminalAction(paneId: string, action: string) {
-  return invoke<void>("native_terminal_action", { paneId, action });
-}
-
-export function pasteApprovedNativeTerminalText(paneId: string, text: string) {
-  return invoke<void>("native_terminal_paste_approved_text", { paneId, text });
-}
-
-export function updateNativeTerminalSettings(settings: NativeTerminalSettings) {
-  return invoke<void>("native_terminal_update_settings", {
-    settings: {
-      ...settings,
-      revision: nextNativeTerminalSettingsRevision(),
-    },
-  });
-}
-
 /**
  * Hands the native host a pane-independent settings snapshot to cache, so a
  * pane created later builds its Ghostty surface at creation time instead of
@@ -1661,61 +1525,6 @@ export function seedNativeTerminalSettings(settings: Omit<NativeTerminalSettings
 export async function listNativeTerminalThemes(): Promise<NativeTerminalTheme[]> {
   const catalog = await invoke<string>("native_terminal_theme_catalog");
   return JSON.parse(catalog) as NativeTerminalTheme[];
-}
-
-/**
- * Plain-text snapshot of a native terminal's visible viewport (no scrollback,
- * no SGR colors). Used by the expanded-transcript PiP preview.
- */
-export function readNativeTerminalViewportText(paneId: string) {
-  return invoke<string>("native_terminal_read_viewport_text", { paneId });
-}
-
-export interface NativeTerminalAnnotationSelectionSnapshot {
-  selectedText: string;
-  viewportCellStart: number;
-  viewportCellLength: number;
-  selectionStartXPoints: number;
-  selectionBaselineYPoints: number;
-  scrollbar: {
-    totalRows: number;
-    offsetRows: number;
-    visibleRows: number;
-  };
-  scrollbarIsInitialized: boolean;
-  columns: number;
-  rows: number;
-  cellWidthPoints: number;
-  cellHeightPoints: number;
-  gridOriginXPoints: number;
-  gridOriginYPoints: number;
-  backingScaleFactor: number;
-  viewportRevision: number;
-  contentGeneration: number;
-  viewportFullyContained: boolean;
-}
-
-export type NativeTerminalAnnotationViewportSnapshot = Omit<
-  NativeTerminalAnnotationSelectionSnapshot,
-  | "selectedText"
-  | "viewportCellStart"
-  | "viewportCellLength"
-  | "selectionStartXPoints"
-  | "selectionBaselineYPoints"
-  | "viewportFullyContained"
->;
-
-/**
- * Current native selection and geometry. A false `viewportFullyContained`
- * allows quote capture but must never be used to paint a cell anchor.
- */
-export async function readNativeTerminalAnnotationSelection(
-  paneId: string,
-): Promise<NativeTerminalAnnotationSelectionSnapshot> {
-  const snapshot = await invoke<string>("native_terminal_annotation_selection_snapshot", {
-    paneId,
-  });
-  return JSON.parse(snapshot) as NativeTerminalAnnotationSelectionSnapshot;
 }
 
 export function paneActivity(paneId: string) {

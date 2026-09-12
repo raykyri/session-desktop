@@ -18,7 +18,7 @@ export function researchTreeIdFromTabId(tabId: string): string | null {
   return treeId || null;
 }
 
-export function parseSidebarMode(value: string | null): SidebarMode {
+export function parseSidebarMode(_value: string | null): SidebarMode {
   return "research";
 }
 

@@ -682,77 +682,6 @@ export function participantKey(participant: ThreadParticipant | null | undefined
   return `${participant.kind}:${participant.actorId}:${participant.label ?? ""}`;
 }
 
-// Structural equality for rebuilt timeline items. buildTimelineItems re-runs on
-// every turns change (every parsed line while an agent streams) and always
-// allocates fresh item wrappers, so an identity-based memo would miss for
-// every message on every turn event — re-running the markdown render over the
-// entire transcript per event. The block/value objects *inside* the wrappers
-// keep their identity for unchanged turns (turn reconciliation reuses turn
-// objects), so wrappers are compared structurally with reference equality at
-// the leaves: an append then re-renders only the items whose content actually
-// changed. Keys derive from the originating turn id and block position, so key
-// equality is a real content signal (and survives truncation/prepending).
-function sameMessageBlockList(a: MessageBlock[], b: MessageBlock[]) {
-  return a.length === b.length && a.every((block, index) => block === b[index]);
-}
-
-function sameActivityLeaf(a: ActivityLeafItem, b: ActivityLeafItem): boolean {
-  if (a.key !== b.key || a.status !== b.status) {
-    return false;
-  }
-  if (a.type === "tool" && b.type === "tool") {
-    return (
-      a.id === b.id &&
-      a.name === b.name &&
-      a.input === b.input &&
-      a.result === b.result &&
-      a.isError === b.isError
-    );
-  }
-  if (a.type === "thinking" && b.type === "thinking") {
-    return (
-      a.values.length === b.values.length &&
-      a.values.every((value, index) => value === b.values[index])
-    );
-  }
-  return false;
-}
-
-function sameActivityItem(a: ActivityItem, b: ActivityItem): boolean {
-  if (a.type === "activityGroup" || b.type === "activityGroup") {
-    return (
-      a.type === "activityGroup" &&
-      b.type === "activityGroup" &&
-      a.key === b.key &&
-      a.status === b.status &&
-      a.toolCallCount === b.toolCallCount &&
-      a.children.length === b.children.length &&
-      a.children.every((child, index) => sameActivityLeaf(child, b.children[index]))
-    );
-  }
-  return sameActivityLeaf(a, b);
-}
-
-export function sameMessageItem(a: MessageItem, b: MessageItem): boolean {
-  return (
-    a.key === b.key &&
-    a.role === b.role &&
-    a.status === b.status &&
-    a.contextStatus === b.contextStatus &&
-    a.timestamp === b.timestamp &&
-    a.sourceTurnIds.length === b.sourceTurnIds.length &&
-    a.sourceTurnIds.every((turnId, index) => turnId === b.sourceTurnIds[index]) &&
-    a.blockSourceTurnIds.length === b.blockSourceTurnIds.length &&
-    a.blockSourceTurnIds.every(
-      (turnId, index) => turnId === b.blockSourceTurnIds[index],
-    ) &&
-    participantKey(a.participant) === participantKey(b.participant) &&
-    sameMessageBlockList(a.blocks, b.blocks) &&
-    a.activities.length === b.activities.length &&
-    a.activities.every((activity, index) => sameActivityItem(activity, b.activities[index]))
-  );
-}
-
 /**
  * Latest timestamp across a trailing run of assistant items ending at
  * `endIndex` (inclusive). Returns null when none of the items carry a native
@@ -951,15 +880,4 @@ export function messageItemIsTaggedInstruction(item: MessageItem) {
   }
   const [block] = item.blocks;
   return block.type === "text" && taggedUserInstructionDetails(block.text) !== null;
-}
-
-// True when the item carries a tool call (a tool row, or a tool inside a grouped
-// activity) — used to spot a continued agent turn whose name should be dropped.
-export function hasToolCall(item: MessageItem): boolean {
-  return item.activities.some(
-    (activity) =>
-      activity.type === "tool" ||
-      (activity.type === "activityGroup" &&
-        activity.children.some((child) => child.type === "tool")),
-  );
 }

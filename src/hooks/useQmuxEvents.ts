@@ -13,7 +13,6 @@ import {
 import {
   agentEventAffectsThinkingState,
   isAgentInfo,
-  isGlobalDraft,
   isQueuedTurn,
   isTurn,
   reconcileReplacedTurns,
@@ -26,13 +25,11 @@ import type { ExitPreflightRequest, PaneContextMenuState } from "../appTypes";
 import type {
   ActiveWorkspace,
   AgentInfo,
-  GlobalDraft,
   GroupInfo,
   PaneInfo,
   PaneSplitInfo,
   QmuxEvent,
   QueuedTurn,
-  ShellAgentJobInfo,
   TranscriptHookEvent,
   Turn,
 } from "../types";
@@ -82,9 +79,7 @@ export interface UseQmuxEventsHandlers {
   setThinkingAgentIds: Dispatch<SetStateAction<Set<string>>>;
   setTurns: Dispatch<SetStateAction<Turn[]>>;
   setTranscriptNoticeByAgent: Dispatch<SetStateAction<Record<string, string | null>>>;
-  setShellJobByAgent: Dispatch<SetStateAction<Record<string, ShellAgentJobInfo>>>;
   setAgentQueuedTurns: (agentId: string, queuedTurns: QueuedTurn[]) => void;
-  setGlobalDrafts: Dispatch<SetStateAction<GlobalDraft[]>>;
   // Thread graphs are demand-loaded by App. Hidden or parked agents still emit
   // turn events, but those events must not populate an ever-growing graph cache.
   shouldRefreshAgentThreadGraph?: (agentId: string) => boolean;
@@ -123,8 +118,6 @@ export interface UseQmuxEventsHandlers {
   onEventsReady: () => void;
   onAgentSpawned?: (agent: AgentInfo, paneId: string | null, source: string | null) => void;
   onAgentPromptSubmitted?: (agentId: string, prompt: string) => void;
-  /** Artifact tray: `artifact.added` / `artifact.removed`. App owns the state. */
-  onArtifactEvent?: (event: QmuxEvent) => void;
   onPaneFocusRequested?: (paneId: string) => void;
   onPaneSplitsChanged?: (splits: PaneSplitInfo[]) => void;
   onTerminalSearchRequested?: (paneId: string) => void;
@@ -147,7 +140,6 @@ export interface UseQmuxEventsHandlers {
   onTerminalTitleChanged?: (paneId: string, title: string) => void;
   onResearchChanged?: (event: QmuxEvent) => void;
   onUserNotificationRequested?: (event: QmuxEvent) => void;
-  onNotificationLogChanged?: (event: QmuxEvent) => void;
   onNotificationOpenPane?: (paneId: string) => void;
 }
 
@@ -176,9 +168,7 @@ export function useQmuxEvents(handlers: UseQmuxEventsHandlers) {
     setThinkingAgentIds,
     setTurns,
     setTranscriptNoticeByAgent,
-    setShellJobByAgent,
     setAgentQueuedTurns,
-    setGlobalDrafts,
     shouldRefreshAgentThreadGraph,
     onAgentThreadGraphDirty,
     shouldRetainAgentTurns,
@@ -191,7 +181,6 @@ export function useQmuxEvents(handlers: UseQmuxEventsHandlers) {
     onEventsReady,
     onAgentSpawned,
     onAgentPromptSubmitted,
-    onArtifactEvent,
     onPaneFocusRequested,
     onPaneSplitsChanged,
     onTerminalSearchRequested,
@@ -206,7 +195,6 @@ export function useQmuxEvents(handlers: UseQmuxEventsHandlers) {
     onTerminalTitleChanged,
     onResearchChanged,
     onUserNotificationRequested,
-    onNotificationLogChanged,
     onNotificationOpenPane,
   } = handlers;
 
@@ -255,9 +243,6 @@ export function useQmuxEvents(handlers: UseQmuxEventsHandlers) {
       }
       if (event.type === "app.notification_requested") {
         onUserNotificationRequested?.(event);
-      }
-      if (event.type === "app.notification_log_changed") {
-        onNotificationLogChanged?.(event);
       }
       if (event.type === "app.notification_open_pane" && event.paneId) {
         onNotificationOpenPane?.(event.paneId);
@@ -340,38 +325,6 @@ export function useQmuxEvents(handlers: UseQmuxEventsHandlers) {
         if (title !== null) {
           onTerminalTitleChanged?.(event.paneId, title);
         }
-      }
-      if (event.agentId && event.type === "agent.shell_job_state_changed") {
-        const agentId = event.agentId;
-        const job = event.payload.job;
-        if (typeof job === "object" && job !== null) {
-          const candidate = job as Partial<ShellAgentJobInfo>;
-          if (
-            candidate.agentId === agentId &&
-            typeof candidate.jobId === "string" &&
-            typeof candidate.paneId === "string" &&
-            (candidate.state === "foreground" ||
-              candidate.state === "backgrounded" ||
-              candidate.state === "stopped")
-          ) {
-            setShellJobByAgent((current) => ({
-              ...current,
-              [agentId]: candidate as ShellAgentJobInfo,
-            }));
-          }
-        }
-      }
-      if (event.agentId && event.type === "agent.shell_job_removed") {
-        const agentId = event.agentId;
-        const jobId = stringField(event.payload, "jobId");
-        setShellJobByAgent((current) => {
-          if (!jobId || current[agentId]?.jobId !== jobId) {
-            return current;
-          }
-          const next = { ...current };
-          delete next[agentId];
-          return next;
-        });
       }
       if (event.type === "terminal.search_requested" && event.paneId) {
         onTerminalSearchRequested?.(event.paneId);
@@ -505,9 +458,6 @@ export function useQmuxEvents(handlers: UseQmuxEventsHandlers) {
           );
         }
       }
-      if (event.type === "artifact.added" || event.type === "artifact.removed") {
-        onArtifactEvent?.(event);
-      }
       if (
         event.type === "group.created" ||
         event.type === "group.updated" ||
@@ -556,12 +506,6 @@ export function useQmuxEvents(handlers: UseQmuxEventsHandlers) {
           setAgentQueuedTurns(event.agentId, queuedTurns);
         } else {
           void refreshAgentTurnQueue(event.agentId).catch(() => undefined);
-        }
-      }
-      if (event.type === "drafts.changed") {
-        const drafts = event.payload.drafts;
-        if (Array.isArray(drafts) && drafts.every(isGlobalDraft)) {
-          setGlobalDrafts(drafts);
         }
       }
       if (event.type === "turn.appended") {

@@ -205,7 +205,6 @@ impl AgentAdapter for CursorAdapter {
                 AgentStatus::AwaitingPermission,
             ],
             steer_statuses: vec![AgentStatus::Starting, AgentStatus::Running],
-            permission_actions: Vec::new(),
         }
     }
 }
@@ -1296,23 +1295,6 @@ fn prune_cursor_bindings(state: &AppState) {
             None => true,
         };
         if stale {
-            let _ = fs::remove_file(&path);
-        }
-    }
-}
-
-/// Tokens are minted per process, so every binding left by a previous run is
-/// already useless. Called once at startup before recovery writes fresh ones.
-pub fn clear_cursor_bindings() {
-    let Ok(dir) = cursor_bindings_dir() else {
-        return;
-    };
-    let Ok(entries) = fs::read_dir(&dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
             let _ = fs::remove_file(&path);
         }
     }

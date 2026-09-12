@@ -1,5 +1,5 @@
+import { CompletionSoundSetting } from "../src/components/settings/CompletionSoundSetting";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   COMPLETION_SOUND_OPTIONS,
@@ -8,7 +8,6 @@ import {
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "../src/lib/settings";
 
 const store = new Map<string, string>();
-const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 (globalThis as { localStorage?: unknown }).localStorage = {
   getItem: (key: string) => store.get(key) ?? null,
   setItem: (key: string, value: string) => store.set(key, value),
@@ -81,18 +80,27 @@ test("completion sound settings round-trip and reject unknown ids", () => {
   assert.equal(loadSettings().completionSound, "default");
 });
 
-test("Basic settings preview completion sounds above Worktree location", () => {
-  const basicSettingsStart = appSource.indexOf(
-    "Code mode (enables worktrees, extra shell UI, etc.)",
-  );
-  const completionSoundSelect = appSource.indexOf('id="settings-completion-sound"');
-  const worktreeLocationSelect = appSource.indexOf('id="settings-worktree-location"');
+test("changing the completion sound saves the selection before previewing it", () => {
+  const actions: string[] = [];
+  const setting = CompletionSoundSetting({
+    value: "default",
+    onChange: (sound) => actions.push(`save:${sound}`),
+    onPreview: (sound) => actions.push(`preview:${sound}`),
+  });
+  const [select] = setting.props.children[1].props.children;
+  assert.equal(select.props.value, "default");
+  select.props.onChange({ currentTarget: { value: "digital" } });
+  assert.deepEqual(actions, ["save:digital", "preview:digital"]);
+});
 
-  assert.notEqual(basicSettingsStart, -1);
-  assert.ok(completionSoundSelect > basicSettingsStart);
-  assert.ok(worktreeLocationSelect > completionSoundSelect);
-  assert.match(
-    appSource,
-    /setSettings\(\(current\) => \(\{ \.\.\.current, completionSound \}\)\);\s+void testCompletionSound\(completionSound\);/,
-  );
+test("the Test button previews the current sound without changing the setting", () => {
+  const actions: string[] = [];
+  const setting = CompletionSoundSetting({
+    value: "bell",
+    onChange: (sound) => actions.push(`save:${sound}`),
+    onPreview: (sound) => actions.push(`preview:${sound}`),
+  });
+  const [, button] = setting.props.children[1].props.children;
+  button.props.onClick();
+  assert.deepEqual(actions, ["preview:bell"]);
 });

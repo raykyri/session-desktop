@@ -178,7 +178,6 @@ impl AgentAdapter for MuseAdapter {
                 AgentStatus::AwaitingPermission,
             ],
             steer_statuses: vec![AgentStatus::Starting, AgentStatus::Running],
-            permission_actions: Vec::new(),
         }
     }
 }
@@ -1048,9 +1047,7 @@ const MUSE_BINDING_PRUNE_GRACE: u64 = 60_000;
 
 /// Drops bindings whose pane is gone.
 ///
-/// Runs on every launch rather than on pane close because a binding outlives the
-/// app (it is a file); [`clear_muse_bindings`] handles the restart case, where
-/// every binding is stale by definition.
+/// Runs on every launch rather than on pane close because a binding outlives the app.
 fn prune_muse_bindings(state: &AppState) {
     let Ok(dir) = muse_bindings_dir() else {
         return;
@@ -1087,24 +1084,6 @@ fn prune_muse_bindings(state: &AppState) {
             None => true,
         };
         if stale {
-            let _ = fs::remove_file(&path);
-        }
-    }
-}
-
-/// Removes every pane binding. Called once at startup: bindings carry a pane's
-/// control-socket token, tokens are minted per process and never persisted, so
-/// after a restart every binding on disk is both useless and a stale secret.
-pub fn clear_muse_bindings() {
-    let Ok(dir) = muse_bindings_dir() else {
-        return;
-    };
-    let Ok(entries) = fs::read_dir(&dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) == Some("json") {
             let _ = fs::remove_file(&path);
         }
     }

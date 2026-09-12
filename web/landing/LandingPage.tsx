@@ -1,4 +1,3 @@
-import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const GITHUB_URL = "https://github.com/raykyri/qmux";
