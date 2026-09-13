@@ -138,6 +138,10 @@
   padding: 0;
 }
 
+.recent-query-block > .recent-query-spinner {
+  align-self: flex-start;
+}
+
 .recent-activity-load-older {
   display: inline-flex;
   align-items: center;

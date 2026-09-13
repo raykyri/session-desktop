@@ -16,5 +16,7 @@ test("cycles model presets within the selected provider", () => {
   assert.equal(selectedModelPreset("codex", null), "gpt-5.6-sol");
   assert.equal(nextModelPreset("codex", "gpt-5.6-sol"), "gpt-5.6-terra");
   assert.equal(nextModelPreset("codex", "custom"), "gpt-5.6-sol");
-  assert.equal(nextModelPreset("claude", "opus"), "fable");
+  assert.equal(selectedModelPreset("claude", null), "fable");
+  assert.equal(nextModelPreset("claude", "fable"), "opus");
+  assert.equal(nextModelPreset("claude", "custom"), "fable");
 });

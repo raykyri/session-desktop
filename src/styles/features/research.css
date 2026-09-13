@@ -236,7 +236,8 @@
 /* Live runs read as activity, not a count. Rotate a fixed, even-sized wrapper
    so the glyph stays visually stable, and center it against one- or two-line
    titles. */
-.research-sidebar-spinner {
+.research-sidebar-spinner,
+.recent-query-spinner {
   display: inline-grid;
   width: 14px;
   height: 14px;
@@ -249,7 +250,8 @@
   will-change: transform;
 }
 
-.research-sidebar-spinner svg {
+.research-sidebar-spinner svg,
+.recent-query-spinner svg {
   display: block;
 }
 

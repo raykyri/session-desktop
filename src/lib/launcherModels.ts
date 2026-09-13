@@ -1,7 +1,7 @@
 const CUSTOM_MODEL = "custom";
 
 const MODEL_PRESETS_BY_ADAPTER: Record<string, string[]> = {
-  claude: ["opus", "fable", "sonnet", CUSTOM_MODEL],
+  claude: ["fable", "opus", "sonnet", CUSTOM_MODEL],
   codex: [
     "gpt-5.6-sol",
     "gpt-5.6-terra",
