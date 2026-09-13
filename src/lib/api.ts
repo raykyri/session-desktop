@@ -13,8 +13,6 @@ import type {
   AgentInfo,
   ArtifactInfo,
   ConversationHistorySnapshot,
-  ClaudeSkill,
-  ConversationHistoryLaunchRequest,
   GlobalDraft,
   GroupInfo,
   HomeTurnHistoryPage,
@@ -49,7 +47,6 @@ import type {
   RemoteProbeResult,
   RepositoryInventory,
   SavedRemote,
-  SpawnAgentRequest,
   SubmitAgentTurnMode,
   SubmitAgentTurnResult,
   TranscriptOption,
@@ -85,23 +82,11 @@ export function probeAgentAdapters(options?: { groupId?: string | null; force?: 
   });
 }
 
-export function launchConversationHistory(request: ConversationHistoryLaunchRequest) {
-  return invoke<PaneInfo>("launch_conversation_history", { request });
-}
-
 // Shows the main window. It starts hidden (visible: false in tauri.conf.json)
 // so launches never flash a blank translucent shell; App calls this once the
 // boot snapshot has been applied and the first real paint is imminent.
 export function markAppWindowReady() {
   return invoke<void>("app_window_ready");
-}
-
-export function getLauncherAdapterPreference() {
-  return invoke<string | null>("launcher_adapter_preference_get");
-}
-
-export function setLauncherAdapterPreference(adapterId: string) {
-  return invoke<void>("launcher_adapter_preference_set", { adapterId });
 }
 
 // The OpenRouter API key lives in the backend's owner-only preferences file, not in
@@ -198,11 +183,6 @@ export function setShowHideShortcut(accelerator: string | null) {
 
 export function setShowHideShortcutCaptureActive(active: boolean) {
   return invoke<ShowHideShortcutSetting>("show_hide_shortcut_capture_set", { active });
-}
-
-/** Skills the session-managed Claude plugin can inject into launched Claude agents. */
-export function listClaudeSkills() {
-  return invoke<ClaudeSkill[]>("list_claude_skills");
 }
 
 export function listPanes() {
@@ -692,18 +672,6 @@ export function getResearchLaunchInstruction() {
 
 export function setResearchLaunchInstruction(instruction: string) {
   return invoke<void>("research_launch_instruction_set", { instruction });
-}
-
-export function getResearchSdkHarness() {
-  return invoke<boolean>("research_sdk_harness_get");
-}
-
-export function setResearchSdkHarness(enabled: boolean) {
-  return invoke<void>("research_sdk_harness_set", { enabled });
-}
-
-export function spawnAgent(request: SpawnAgentRequest) {
-  return invoke<PaneInfo>("agent_spawn", { request });
 }
 
 // Forks the session in `paneId` into a new tab immediately after it and resumes

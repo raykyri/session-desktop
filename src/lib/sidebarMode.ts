@@ -1,9 +1,6 @@
 import type { GroupInfo, PaneInfo, ResearchTreeSummary } from "../types";
 import { type ResearchFolderScope, workspaceIsInResearchScope } from "./researchScope";
 
-export type SidebarMode = "terminal" | "research";
-
-export const SIDEBAR_MODE_STORAGE_KEY = "session.sidebar-mode.v1";
 export const RESEARCH_HOME_TAB_ID = "__research_home__";
 const RESEARCH_TREE_TAB_PREFIX = "__research_tree__:";
 
@@ -17,10 +14,6 @@ export function researchTreeIdFromTabId(tabId: string): string | null {
   }
   const treeId = tabId.slice(RESEARCH_TREE_TAB_PREFIX.length);
   return treeId || null;
-}
-
-export function parseSidebarMode(_value: string | null): SidebarMode {
-  return "research";
 }
 
 export function researchCycleTabIds(

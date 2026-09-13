@@ -5286,7 +5286,6 @@ trusted_hash = "sha256:trusted"
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: PathBuf::new(),

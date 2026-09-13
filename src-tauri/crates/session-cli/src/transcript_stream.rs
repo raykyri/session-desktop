@@ -57,12 +57,6 @@ fn matches_session(file: &mut File, path: &Path, adapter: &str, session: &str) -
     if adapter == "claude" {
         return path.file_stem().and_then(|s| s.to_str()) == Some(session);
     }
-    if adapter == "antigravity" {
-        let Ok(home) = antigravity_home() else {
-            return false;
-        };
-        return antigravity_path_matches(path, &home, session);
-    }
     let mut first = String::new();
     if BufReader::new(file)
         .take(MAX_SESSION_META as u64 + 1)
@@ -78,37 +72,6 @@ fn matches_session(file: &mut File, path: &Path, adapter: &str, session: &str) -
     value["type"] == "session_meta" && value["payload"]["id"].as_str() == Some(session)
 }
 
-fn antigravity_home() -> Result<PathBuf, String> {
-    std::env::var_os("ANTIGRAVITY_APP_DATA_DIR")
-        .or_else(|| std::env::var_os("ANTIGRAVITY_HOME"))
-        .map(PathBuf::from)
-        .or_else(|| dirs::home_dir().map(|home| home.join(".gemini").join("antigravity-cli")))
-        .ok_or_else(|| "home directory unavailable".to_string())
-}
-
-fn antigravity_transcript_path(session: &str) -> Result<PathBuf, String> {
-    Ok(antigravity_home()?
-        .join("brain")
-        .join(session)
-        .join(".system_generated")
-        .join("logs")
-        .join("transcript.jsonl"))
-}
-
-fn antigravity_path_matches(path: &Path, home: &Path, session: &str) -> bool {
-    let expected = home
-        .join("brain")
-        .join(session)
-        .join(".system_generated")
-        .join("logs")
-        .join("transcript.jsonl");
-    path.parent() == expected.parent()
-        && matches!(
-            path.file_name().and_then(|name| name.to_str()),
-            Some("transcript.jsonl" | "transcript_full.jsonl")
-        )
-}
-
 pub fn valid_session(session: &str) -> bool {
     !session.is_empty()
         && session.len() <= 128
@@ -118,24 +81,13 @@ pub fn valid_session(session: &str) -> bool {
 }
 
 pub fn discover(adapter: &str, session: &str, hint: Option<&Path>) -> Result<PathBuf, String> {
-    if !matches!(adapter, "claude" | "codex" | "antigravity") || !valid_session(session) {
+    if !matches!(adapter, "claude" | "codex") || !valid_session(session) {
         return Err("invalid transcript adapter or session".into());
     }
     if let Some(path) = hint
         && belongs(path, adapter, session)
     {
         return Ok(path.into());
-    }
-    if adapter == "antigravity" {
-        let path = antigravity_transcript_path(session)?;
-        if belongs(&path, adapter, session) {
-            return Ok(path);
-        }
-        let full = path.with_file_name("transcript_full.jsonl");
-        if belongs(&full, adapter, session) {
-            return Ok(full);
-        }
-        return Err("transcript is not available yet".into());
     }
     let home = dirs::home_dir().ok_or("home directory unavailable")?;
     let root = if adapter == "claude" {
@@ -343,23 +295,6 @@ mod tests {
         assert!(reset.reset);
         assert_eq!(reset.start, 0);
         fs::remove_file(path).unwrap();
-    }
-
-    #[test]
-    fn antigravity_paths_are_confined_to_the_conversation_log_directory() {
-        let home = Path::new("/home/test/.gemini/config");
-        let expected = home.join("brain/conversation-1/.system_generated/logs/transcript.jsonl");
-        assert!(antigravity_path_matches(&expected, home, "conversation-1"));
-        assert!(antigravity_path_matches(
-            &expected.with_file_name("transcript_full.jsonl"),
-            home,
-            "conversation-1"
-        ));
-        assert!(!antigravity_path_matches(
-            Path::new("/tmp/transcript.jsonl"),
-            home,
-            "conversation-1"
-        ));
     }
 
     #[test]

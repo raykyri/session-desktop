@@ -214,10 +214,6 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
             run_agent_exec("grok".to_string(), args.collect())?;
             Ok(true)
         }
-        "antigravity" | "agy" => {
-            run_agent_exec("antigravity".to_string(), args.collect())?;
-            Ok(true)
-        }
         "mcp" => {
             mcp::run()?;
             Ok(true)

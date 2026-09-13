@@ -42,8 +42,6 @@ pub struct AdapterConfigs {
     pub codex: CodexAdapterConfig,
     #[serde(default)]
     pub grok: GrokAdapterConfig,
-    #[serde(default)]
-    pub antigravity: AntigravityAdapterConfig,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -63,13 +61,6 @@ pub struct CodexAdapterConfig {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GrokAdapterConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub binary: Option<String>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AntigravityAdapterConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub binary: Option<String>,
 }
@@ -327,10 +318,6 @@ impl SessionConfig {
         Ok(remote.to_ref(id))
     }
 
-    pub fn runtime(&self) -> RuntimeConfig {
-        self.runtime_with(&BTreeMap::new())
-    }
-
     pub fn runtime_with(
         &self,
         preference_remotes: &BTreeMap<String, SavedRemote>,
@@ -376,16 +363,6 @@ impl SessionConfig {
         )
     }
 
-    pub fn antigravity_binary(&self) -> String {
-        expand_binary(
-            self.adapters
-                .antigravity
-                .binary
-                .clone()
-                .unwrap_or_else(|| "agy".to_string()),
-        )
-    }
-
     fn read_config_file(path: &Path) -> Result<Self, String> {
         let raw = fs::read_to_string(path)
             .map_err(|err| format!("failed to read {}: {err}", path.display()))?;
@@ -425,9 +402,6 @@ impl SessionConfig {
                 },
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
-                },
-                antigravity: AntigravityAdapterConfig {
-                    binary: Some("agy".to_string()),
                 },
             },
             remotes: BTreeMap::new(),
@@ -871,32 +845,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(configured.grok_binary(), "/opt/bin/grok");
-    }
-
-    #[test]
-    fn antigravity_binary_defaults_and_can_be_configured() {
-        let default_config: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock"
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(default_config.antigravity_binary(), "agy");
-
-        let configured: SessionConfig = serde_json::from_str(
-            r#"{
-              "workspaceRoot": ".session/workspaces",
-              "socketPath": ".session/run/session.sock",
-              "adapters": {
-                "antigravity": {
-                  "binary": "/opt/bin/agy"
-                }
-              }
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(configured.antigravity_binary(), "/opt/bin/agy");
     }
 
     #[test]

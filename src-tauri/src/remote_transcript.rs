@@ -112,7 +112,7 @@ pub fn observe(state: &AppState, pane: &str, payload: &Value) {
         let Some(agent) = state.agent_by_pane(pane)? else {
             return Ok(());
         };
-        if !matches!(agent.adapter.as_str(), "claude" | "codex" | "antigravity") {
+        if !matches!(agent.adapter.as_str(), "claude" | "codex") {
             return Ok(());
         }
         let Some(session) = agent.session_id.clone() else {
@@ -601,8 +601,6 @@ mod tests {
     fn message_line(adapter: &str, message: &str) -> String {
         let value = if adapter == "claude" {
             json!({"type":"user", "uuid":message, "sessionId":"session", "message":{"role":"user", "content":message}})
-        } else if adapter == "antigravity" {
-            json!({"step_index":0, "source":"USER_EXPLICIT", "type":"USER_INPUT", "status":"DONE", "content":message})
         } else {
             json!({"type":"response_item", "payload":{"type":"message", "role":"user", "content":[{"type":"input_text", "text":message}]}})
         };
@@ -616,11 +614,6 @@ mod tests {
     fn codex_mirror_reaches_turn_pipeline_and_resets_cleanly() {
         check_mirrored_pipeline("codex");
     }
-    #[test]
-    fn antigravity_mirror_reaches_turn_pipeline_and_resets_cleanly() {
-        check_mirrored_pipeline("antigravity");
-    }
-
     fn check_mirrored_pipeline(adapter: &str) {
         let root = std::env::temp_dir().join(format!(
             "session-mirror-pipeline-{adapter}-{}",

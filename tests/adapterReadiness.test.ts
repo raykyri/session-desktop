@@ -57,11 +57,10 @@ test("sorts ready adapters first without hiding setup choices", () => {
     adapter("claude", "missing", true),
     adapter("codex", "ready"),
     adapter("grok", "missing"),
-    adapter("antigravity", "ready"),
   ];
   assert.deepEqual(
     readyAdaptersFirst(adapters).map(({ id }) => id),
-    ["codex", "antigravity", "claude", "grok"],
+    ["codex", "claude", "grok"],
   );
   assert.equal(adapterReadinessLabel(adapters[0]), "Not installed");
 });

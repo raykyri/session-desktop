@@ -23,8 +23,8 @@ export function paneScope(
   pane: PaneInfo,
   groupById: ReadonlyMap<string, GroupInfo>,
 ): WorkspaceScope {
-  // A pane without a valid group is legacy/corrupt state. Keep it reachable in
-  // Terminal mode so recovery never hides the only route to the process.
+  // A pane without valid group metadata is treated as a terminal pane so it
+  // remains recoverable instead of being mistaken for Research infrastructure.
   return groupById.get(pane.groupId)?.scope ?? "terminal";
 }
 

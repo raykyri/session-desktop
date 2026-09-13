@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   activeSidebarScrollRegion,
   leftSidebarRestorePlacement,
-  sidebarScrollRegionsForMode,
+  sidebarScrollRegions,
 } from "../src/lib/sidebarControls";
 
 const placement = (
@@ -52,16 +52,14 @@ test("keeps the standalone and research placements for layouts without a right b
   assert.deepEqual(placement({ leftSidebarCollapsed: false }), { kind: "hidden" });
 });
 
-test("tracks every independent scroll region in each sidebar mode", () => {
-  assert.deepEqual(sidebarScrollRegionsForMode("terminal"), ["terminal"]);
-  assert.deepEqual(sidebarScrollRegionsForMode("research"), [
+test("tracks every independent research sidebar scroll region", () => {
+  assert.deepEqual(sidebarScrollRegions(), [
     "research",
     "researchTerminals",
   ]);
 });
 
 test("selects the scroll region containing the active sidebar row", () => {
-  assert.equal(activeSidebarScrollRegion("terminal", "pane"), "terminal");
-  assert.equal(activeSidebarScrollRegion("research", "research"), "research");
-  assert.equal(activeSidebarScrollRegion("research", "pane"), "researchTerminals");
+  assert.equal(activeSidebarScrollRegion("research"), "research");
+  assert.equal(activeSidebarScrollRegion("pane"), "researchTerminals");
 });

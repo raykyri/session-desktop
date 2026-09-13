@@ -180,8 +180,6 @@ export interface AppSettings {
    * mirror keeps the dialog in sync.
    */
   researchLaunchInstruction: string;
-  /** Use the headless Claude research harness instead of a hidden TUI pane. */
-  researchSdkHarness: boolean;
   /**
    * Show code-oriented context in tabs and the launcher: per-tab paths, git
    * worktree metadata, and the "New worktree" launcher option. When off, tabs
@@ -218,7 +216,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   useLoginShell: true,
   worktreeLocation: "global",
   researchLaunchInstruction: "",
-  researchSdkHarness: true,
   codeMode: true,
   showTabDirectories: true,
   showToolCalls: true,
@@ -290,10 +287,6 @@ export function loadSettings(): AppSettings {
       typeof parsed.researchLaunchInstruction === "string"
         ? clampResearchLaunchInstruction(parsed.researchLaunchInstruction)
         : DEFAULT_SETTINGS.researchLaunchInstruction;
-    const researchSdkHarness =
-      typeof parsed.researchSdkHarness === "boolean"
-        ? parsed.researchSdkHarness
-        : DEFAULT_SETTINGS.researchSdkHarness;
     const showShortcutHints =
       typeof parsed.showShortcutHints === "boolean"
         ? parsed.showShortcutHints
@@ -354,7 +347,6 @@ export function loadSettings(): AppSettings {
       useLoginShell,
       worktreeLocation,
       researchLaunchInstruction,
-      researchSdkHarness,
       codeMode,
       showTabDirectories,
       showToolCalls,

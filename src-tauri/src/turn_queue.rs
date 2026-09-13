@@ -1905,7 +1905,6 @@ mod tests {
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: std::path::PathBuf::new(),
@@ -2929,7 +2928,7 @@ mod tests {
     fn queue_delivery_new_session_queues_behind_a_busy_agent_for_any_adapter() {
         let state = test_state();
         let mut agent = sample_agent(AgentStatus::Running);
-        agent.adapter = "antigravity".to_string();
+        agent.adapter = "grok".to_string();
         state.insert_agent(agent).unwrap();
 
         let result = queue_delivery_agent_turn(

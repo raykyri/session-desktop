@@ -3396,6 +3396,7 @@ impl AppState {
         Ok(model.agents.values().cloned().collect())
     }
 
+    #[cfg(test)]
     pub fn list_recent_sessions(&self, limit: usize) -> Result<Vec<RecentSessionInfo>, String> {
         let mut sessions = {
             let model = self
@@ -5294,6 +5295,7 @@ impl AppState {
         Ok(node)
     }
 
+    #[cfg(test)]
     pub fn bind_research_node_run(
         &self,
         node_id: &str,
@@ -5726,6 +5728,7 @@ impl AppState {
     /// keyboard unlocks and the node stays live, and the first real hook
     /// moves the status on as usual. Deliberately adapter-agnostic — every
     /// harness wedges the same way here and gets the same recovery.
+    #[cfg(test)]
     pub fn schedule_research_startup_watchdog(&self, agent_id: String) {
         // Long enough that a healthy launch has bound its native session id
         // (SessionStart on a fresh spawn, the first turn's hook payload on a
@@ -5775,6 +5778,7 @@ impl AppState {
     /// The check and the status write share one model lock so a hook racing
     /// this flip cannot have its fresher status stomped back to
     /// `AwaitingInput`.
+    #[cfg(test)]
     pub(crate) fn flag_stalled_research_startup(
         &self,
         agent_id: &str,
@@ -11593,6 +11597,7 @@ fn clear_recent_session_binding_locked(
     }
 }
 
+#[cfg(test)]
 fn enrich_recent_session_locked(
     model: &Model,
     mut session: RecentSessionInfo,
@@ -11623,6 +11628,7 @@ fn enrich_recent_session_locked(
     session
 }
 
+#[cfg(test)]
 fn recent_session_matches_agent(session: &RecentSessionInfo, agent: &AgentInfo) -> bool {
     if session.adapter != agent.adapter {
         return false;
@@ -11640,6 +11646,7 @@ fn recent_session_matches_agent(session: &RecentSessionInfo, agent: &AgentInfo) 
     )
 }
 
+#[cfg(test)]
 fn recent_session_missing(session: &RecentSessionInfo) -> bool {
     if session.pane_id.is_some() {
         return false;
@@ -12562,7 +12569,6 @@ mod tests {
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: std::path::PathBuf::new(),
