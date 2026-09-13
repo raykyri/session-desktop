@@ -144,6 +144,9 @@
   --control-h-md: 30px;
   --control-h-lg: 34px;
 
+  /* Shared maximum for Home activity and tweet embeds on wider surfaces. */
+  --research-feed-max-width: 540px;
+
   /* Corner radii. */
   --radius-sm: 4px;
   --radius-md: 6px;
