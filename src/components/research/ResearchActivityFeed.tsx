@@ -49,6 +49,7 @@ import ResearchRecapDialog from "./ResearchRecapDialog";
 import { TweetEmbed } from "./TweetEmbed";
 import { ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
 import type { ResearchFolderState } from "../../lib/researchFolders";
+import { isActiveResearchStatus } from "../../lib/researchThreads";
 import {
   RESEARCH_TREE_MENU_WIDTH,
   ResearchTreeDeleteDialog,
@@ -315,6 +316,16 @@ export function ResearchQueryCard({
       <ResearchUserMessage as="article" className="recent-query-card research-prompt">
         <ResearchMessageBody prompt={query.prompt} attachments={query.attachments} />
       </ResearchUserMessage>
+      {isActiveResearchStatus(query.status) ? (
+        <span
+          className="recent-query-spinner"
+          role="status"
+          aria-label="Generating answer"
+          title="Generating answer"
+        >
+          <LoaderCircle size={14} aria-hidden="true" />
+        </span>
+      ) : null}
       {recap ? <ResearchRecapLine text={recap} className="recent-query-recap" /> : null}
     </div>
   );
