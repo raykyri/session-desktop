@@ -147,8 +147,6 @@ export interface AppSettings {
   textSize: number;
   /** show Cmd-held shortcut badges in the sidebar */
   showShortcutHints: boolean;
-  /** show session's native menu bar icon */
-  showMenuBarIcon: boolean;
   /** disable decorative/status pulse animations */
   reduceMotion: boolean;
   /** provider used to summarize first user messages into tab titles */
@@ -212,7 +210,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   bodyFontId: DEFAULT_BODY_FONT_ID,
   textSize: APP_TEXT_SIZE,
   showShortcutHints: true,
-  showMenuBarIcon: false,
   reduceMotion: false,
   tabTitleProvider: "disabled",
   openRouterKey: "",
@@ -301,10 +298,6 @@ export function loadSettings(): AppSettings {
       typeof parsed.showShortcutHints === "boolean"
         ? parsed.showShortcutHints
         : DEFAULT_SETTINGS.showShortcutHints;
-    const showMenuBarIcon =
-      typeof parsed.showMenuBarIcon === "boolean"
-        ? parsed.showMenuBarIcon
-        : DEFAULT_SETTINGS.showMenuBarIcon;
     const reduceMotion =
       typeof parsed.reduceMotion === "boolean"
         ? parsed.reduceMotion
@@ -353,7 +346,6 @@ export function loadSettings(): AppSettings {
       bodyFontId,
       textSize,
       showShortcutHints,
-      showMenuBarIcon,
       reduceMotion,
       tabTitleProvider,
       openRouterKey,

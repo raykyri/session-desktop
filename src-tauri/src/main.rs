@@ -16,7 +16,6 @@ mod image_files;
 mod journal;
 mod launch_path;
 mod mcp;
-mod menu_bar;
 mod native_support;
 mod persistence;
 mod prompt_library;
@@ -50,7 +49,6 @@ use adapters::{
 };
 use config::{RuntimeConfig, SessionConfig};
 use control_socket::start_control_socket;
-use menu_bar::{menu_bar_set_visible, menu_bar_update};
 use native_support::{
     native_support_set_browser_background, native_support_set_browser_overlay_open,
     native_support_set_iframe_shortcut_fallback,
@@ -4148,8 +4146,6 @@ fn main() {
             research_recap_default_instructions,
             generate_research_recap_candidate,
             apply_research_recap_candidate,
-            menu_bar_set_visible,
-            menu_bar_update,
             show_hide_shortcut_get,
             show_hide_shortcut_set,
             show_hide_shortcut_capture_set,

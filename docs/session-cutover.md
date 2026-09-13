@@ -34,9 +34,8 @@ builds that omit those artifacts.
 - Apple identity uses bundle ID `dev.session.desktop`. Signing continues to use
   the configured Developer ID identity.
 - Native support uses the `SessionNativeSupport` Swift package, product, target,
-  and archive; `session_native_*` C ABI symbols; the
-  `SessionMenuBarGroupHeaderTarget` Objective-C class; and
-  `SESSION_NATIVE_BRIDGE_STAMP`. No old bridge exports are retained.
+  and archive; `session_native_*` C ABI symbols; and `SESSION_NATIVE_BRIDGE_STAMP`.
+  No old bridge exports are retained.
 - `session.config.json`, `.session/` directories, the macOS
   `~/Library/Application Support/session` data root, Linux data/runtime roots,
   and `session.*` browser storage keys are the only current storage locations.
