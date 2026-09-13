@@ -86,6 +86,9 @@ export function adapterReadinessMessage(adapter: AgentAdapterMetadata) {
 }
 
 export function researchReadinessLabel(adapter: AgentAdapterMetadata) {
+  if (adapter.researchReadiness === "ready") {
+    return undefined;
+  }
   if (adapter.researchReadiness === "unsupportedVersion") {
     return "Needs update";
   }

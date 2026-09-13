@@ -6,6 +6,7 @@ import {
   adapterReadinessLabel,
   preferredResearchAdapter,
   preferredReadyAdapter,
+  researchReadinessLabel,
   researchReadyAdaptersFirst,
   readyAdaptersFirst,
 } from "../src/lib/adapterReadiness";
@@ -81,4 +82,17 @@ test("research preference uses its stricter readiness", () => {
     researchReadyAdaptersFirst([oldClaude, codex]).map(({ id }) => id),
     ["codex", "claude"],
   );
+  assert.equal(researchReadinessLabel(codex), undefined);
+  assert.equal(researchReadinessLabel(oldClaude), "Needs update");
+});
+
+test("research selector omits positive readiness and authentication labels", () => {
+  const signedIn = adapter("claude", "ready");
+  signedIn.auth = "authenticated";
+  assert.equal(adapterReadinessLabel(signedIn), "Signed in");
+  assert.equal(researchReadinessLabel(signedIn), undefined);
+
+  const ready = adapter("codex", "ready");
+  assert.equal(adapterReadinessLabel(ready), "Ready");
+  assert.equal(researchReadinessLabel(ready), undefined);
 });
