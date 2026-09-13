@@ -14,7 +14,7 @@ The application has completed its product, storage, and integration cutover to
 - Organize research trees into local workspaces and sidebar folders.
 - Browse recent research activity from Home.
 - Inspect source links and local artifacts in the built-in browser.
-- Save highlights, review full run activity, and publish answers or trees.
+- Save highlights and review full run activity.
 - Recover research history, drafts, active runs, and navigation state after restart.
 
 Session intentionally has no terminal surface, terminal tabs, transcript side pane,
@@ -75,18 +75,6 @@ The Tauri product name is `Session`; the executable is `session`, with standalon
 signing keys, native bridge symbols, and existing data paths remain unchanged.
 See [docs/session-cutover.md](docs/session-cutover.md) for environment changes and
 restart/deployment requirements.
-
-## Publishing configuration
-
-Research publishing uses a GitHub OAuth App with Device Flow and the `gist` scope.
-Configure publishing through these app-owned environment variables:
-
-```sh
-SESSION_GITHUB_CLIENT_ID=<oauth-client-id> npm run dev:tauri
-```
-
-Published links default to `https://qmux.app/p/<gist-id>`. Use
-`SESSION_SHARE_BASE_URL` to point development builds at another origin.
 
 ## Keyboard shortcuts
 

@@ -10,15 +10,6 @@ import {
   retryHumanBrowserLifecycle,
 } from "./humanBrowserLifecycleQueue";
 import type {
-  PublicationBinding,
-  PublicationProposal,
-  PublishPublicationRequest,
-  PublishingAuthPollResult,
-  PublishingAuthStatus,
-  PublishingDeviceAuthorization,
-  SyncPublicationRequest,
-} from "./publication";
-import type {
   AgentInfo,
   ArtifactInfo,
   ConversationHistorySnapshot,
@@ -130,49 +121,6 @@ export function setOpenRouterKey(key: string) {
 export function openRouterChatCompletion(payload: unknown) {
   return invoke<{ status: number; body: string }>("openrouter_chat_completion", {
     payload,
-  });
-}
-
-export function getPublishingAuthStatus() {
-  return invoke<PublishingAuthStatus>("publishing_auth_status");
-}
-
-export function beginPublishingAuth() {
-  return invoke<PublishingDeviceAuthorization>("publishing_auth_begin");
-}
-
-export function pollPublishingAuth(deviceCode: string) {
-  return invoke<PublishingAuthPollResult>("publishing_auth_poll", { deviceCode });
-}
-
-export function disconnectPublishingAuth() {
-  return invoke<PublishingAuthStatus>("publishing_auth_disconnect");
-}
-
-export function publishPublication(request: PublishPublicationRequest) {
-  return invoke<PublicationBinding>("publishing_publish", { request });
-}
-
-export function syncPublication(request: SyncPublicationRequest) {
-  return invoke<PublicationBinding>("publishing_sync", { request });
-}
-
-export function listPublications() {
-  return invoke<PublicationBinding[]>("publishing_list");
-}
-
-export function listPublicationProposals(publicationId: string) {
-  return invoke<PublicationProposal[]>("publishing_list_proposals", { publicationId });
-}
-
-export function resolvePublicationProposal(request: {
-  publicationId: string;
-  proposalCommentId: number;
-  status: "accepted" | "declined";
-  localNodeId?: string | null;
-}) {
-  return invoke<PublicationBinding>("publishing_resolve_proposal", {
-    request,
   });
 }
 
@@ -551,17 +499,12 @@ export function getResearchNodeContent(nodeId: string) {
 export function forkResearchNode(
   parentNodeId: string,
   prompt: string,
-  publicationProposal?: {
-    publicationId: string;
-    commentId: number;
-  } | null,
   queryAnchor?: ResearchHighlightAnchor | null,
   inline = false,
 ) {
   return invoke<ResearchNode>("fork_research_node", {
     parentNodeId,
     prompt,
-    publicationProposal: publicationProposal ?? null,
     queryAnchor: queryAnchor ?? null,
     inline,
   });

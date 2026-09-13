@@ -13,8 +13,7 @@ come from the same build. Old executable and environment aliases are not support
 
 Rename app-owned `QMUX_*` settings to `SESSION_*` in local build configuration,
 external scripts, and deployment secrets. Examples include `SESSION_CONFIG`,
-`SESSION_BUILD_TARGET`, `SESSION_GITHUB_CLIENT_ID`, `SESSION_SHARE_BASE_URL`,
-`SESSION_PUBLIC_ORIGIN`, and `SESSION_SESSION_SECRET`. The app supplies fresh
+`SESSION_BUILD_TARGET` and `SESSION_PUBLIC_ORIGIN`. The app supplies fresh
 `SESSION_SOCK`, `SESSION_TOKEN`, `SESSION_CLI`, and pane/agent variables to children;
 do not copy credentials from an old process. Inherited Session context is cleared
 before fresh pane credentials are installed.
@@ -32,10 +31,8 @@ builds that omit those artifacts.
 
 ## Current identity and compatibility contracts
 
-- Apple identity uses bundle ID `dev.session.desktop` and GitHub Keychain service
-  `dev.session.github-oauth` with account `github`. Tokens stored under the old
-  service are not read, so users authenticate again. Signing continues to use the
-  configured Developer ID identity.
+- Apple identity uses bundle ID `dev.session.desktop`. Signing continues to use
+  the configured Developer ID identity.
 - Native support uses the `SessionNativeSupport` Swift package, product, target,
   and archive; `session_native_*` C ABI symbols; the
   `SessionMenuBarGroupHeaderTarget` Objective-C class; and
@@ -44,7 +41,7 @@ builds that omit those artifacts.
   `~/Library/Application Support/session` data root, Linux data/runtime roots,
   and `session.*` browser storage keys are the only current storage locations.
 - Persisted workspace/participant fields, `sessionToolActivity`,
-  `session_instruction`, `session-proposal` markers, and `session-file:` links use
+  `session_instruction`, and `session-file:` links use
   Session names. Generated hooks, profiles, plugin files, remote tmux identities,
   SSH control paths, and browser automation profiles also use Session prefixes.
   No legacy values or paths are read or migrated.

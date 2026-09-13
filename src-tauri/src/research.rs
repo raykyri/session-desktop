@@ -294,7 +294,7 @@ fn is_false(value: &bool) -> bool {
 
 /// Where a node's content came from when it was not produced by a research
 /// launch or the document composer. Exported terminal conversations are
-/// marked so viewers, archives, and publication can surface their provenance:
+/// marked so viewers and archives can surface their provenance:
 /// that content was produced under a terminal agent's full permissions, not a
 /// research run.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -310,8 +310,6 @@ pub struct ResearchNode {
     pub tree_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_node_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub publication_proposal: Option<ResearchPublicationProposal>,
     /// The passage of the parent's response this follow-up was asked about.
     /// Anchors the node's card beside that passage in the parent's document
     /// view; the quoted text also rides along in the launch prompt.
@@ -450,13 +448,6 @@ pub struct RecentResearchQueryCursor {
 pub struct RecentResearchQueryPage {
     pub items: Vec<RecentResearchQuery>,
     pub next_cursor: Option<RecentResearchQueryCursor>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ResearchPublicationProposal {
-    pub publication_id: String,
-    pub comment_id: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -2434,7 +2425,7 @@ fn conversation_tool_activity_turn(
 
 /// User text a conversation export keeps: the message with any session-injected
 /// leading instruction blocks stripped away, mirroring the frontend's
-/// copy/publication sanitizers. `None` for text that is entirely injected
+/// copy/export sanitizers. `None` for text that is entirely injected
 /// machinery — instruction blocks, adapter interruption markers — or empty
 /// once stripped.
 fn exportable_user_text(text: &str) -> Option<String> {
@@ -2844,7 +2835,6 @@ mod tests {
             id: "research-node-1".to_string(),
             tree_id: tree.id.clone(),
             parent_node_id: None,
-            publication_proposal: None,
             query_anchor: None,
             inline: false,
             prompt: "Question".to_string(),

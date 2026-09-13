@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Check, ChevronDown, Copy, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, Reply, ScrollText, Share2, Terminal, Trash2, Wrench, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, Reply, ScrollText, Terminal, Trash2, Wrench, X } from "lucide-react";
 import {
   IS_MAC,
   isEditableTarget,
@@ -11,18 +11,11 @@ import type { PanePopoverPlacement } from "../../lib/appHelpers";
 import {
   createResearchHighlight,
   getResearchNodeContent,
-  getResearchTree,
-  listPublicationProposals,
   removeResearchHighlights,
-  resolvePublicationProposal,
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
 import { formatResearchAskedSummary } from "../ActivityMetadataLine";
 import { growComposerTextarea } from "../../lib/composerTextarea";
-import type {
-  PublicationBinding,
-  PublicationProposal,
-} from "../../lib/publication";
 import {
   EMPTY_RESEARCH_HISTORY,
   canGoBack as historyCanGoBack,
@@ -80,10 +73,6 @@ import {
   timelineItemsAfterLastToolCall,
   timelineItemsContainTranscriptActivity,
 } from "../../lib/turnTimeline";
-import {
-  createResearchPublicationDraft,
-  researchNodeSnapshotMatches,
-} from "../../lib/publicationDrafts";
 import type { MessageBlock, MessageItem } from "../../lib/turnTimeline";
 import type {
   ResearchBranchRemoval,
@@ -96,7 +85,6 @@ import type {
 } from "../../types";
 import { ComposerSubmitShortcutGlyph } from "../ComposerSubmitShortcut";
 import DomSearchBar from "../DomSearchBar";
-import type { PublishDialogTarget } from "../PublishDialog";
 import {
   RawTranscriptDisclosure,
   TranscriptActivityItem,
@@ -134,10 +122,6 @@ interface ResearchDocumentProps {
   onFork: (
     parentNodeId: string,
     prompt: string,
-    publicationProposal?: {
-      publicationId: string;
-      commentId: number;
-    } | null,
     queryAnchor?: ResearchHighlightAnchor | null,
     inline?: boolean,
   ) => Promise<ResearchNode>;
@@ -159,9 +143,6 @@ interface ResearchDocumentProps {
   linkActions: LinkActions;
   onError: (message: string) => void;
   onToast: (message: string, tone?: "normal" | "warning") => void;
-  onPublish: (target: PublishDialogTarget) => void;
-  publicationBinding?: PublicationBinding | null;
-  onPublicationBindingChange: (binding: PublicationBinding) => void;
   /** Reopens the application sidebar when research is using the full width. */
   onShowSidebar?: () => void;
   /** Show held-⌘ shortcut badges (the ⌘J follow-ups hint). */
@@ -943,8 +924,6 @@ interface ThreadSegmentProps {
    * Rendered by the parent (it owns the composer state); non-null values
    * intentionally defeat the memo so keystrokes reach the composer. */
   askComposer: React.ReactNode;
-  /** The community-proposals section, present only on the selected segment. */
-  proposalsSection: React.ReactNode;
   registerSegmentElement: (
     nodeId: string,
     kind: SegmentDomKind,
@@ -1337,7 +1316,6 @@ interface ResearchFollowupRailProps {
   anchoredCardTops: Record<string, number>;
   resolvedCardTops: Record<string, number>;
   askComposer: React.ReactNode;
-  proposalsSection: React.ReactNode;
   registerSegmentElement: ThreadSegmentProps["registerSegmentElement"];
   onSelectNode: ThreadSegmentProps["onSelectNode"];
   onOpenFollowupMenu: ThreadSegmentProps["onOpenFollowupMenu"];
@@ -1379,7 +1357,6 @@ const ResearchFollowupRail = memo(function ResearchFollowupRail({
   anchoredCardTops,
   resolvedCardTops,
   askComposer,
-  proposalsSection,
   registerSegmentElement,
   onSelectNode,
   onOpenFollowupMenu,
@@ -1462,7 +1439,6 @@ const ResearchFollowupRail = memo(function ResearchFollowupRail({
         {stackedChildren.map((child) => renderFollowupCard(child))}
       </div>
       {anchoredChildren.map(({ child, top }) => renderFollowupCard(child, top))}
-      {proposalsSection}
     </aside>
   );
 }, followupRailPropsEqual);
@@ -1579,7 +1555,6 @@ const ThreadSegment = memo(function ThreadSegment({
   resolvedCardTops,
   menuOpen,
   askComposer,
-  proposalsSection,
   registerSegmentElement,
   onSelectNode,
   onExpandTurns,
@@ -1674,7 +1649,6 @@ const ThreadSegment = memo(function ThreadSegment({
           anchoredCardTops={anchoredCardTops}
           resolvedCardTops={resolvedCardTops}
           askComposer={askComposer}
-          proposalsSection={proposalsSection}
           registerSegmentElement={registerSegmentElement}
           onSelectNode={onSelectNode}
           onOpenFollowupMenu={onOpenFollowupMenu}
@@ -1700,9 +1674,6 @@ function ResearchDocument({
   linkActions,
   onError,
   onToast,
-  onPublish,
-  publicationBinding,
-  onPublicationBindingChange,
   onShowSidebar,
   shortcutHintsShown,
   workspaceCanGoBack = false,
@@ -1796,10 +1767,6 @@ function ResearchDocument({
   const [anchorLayoutNonce, setAnchorLayoutNonce] = useState(0);
   const [pointerHighlightNodeId, setPointerHighlightNodeId] = useState<string | null>(null);
   const [metadataNow, setMetadataNow] = useState(() => Date.now());
-  const [publicationProposals, setPublicationProposals] = useState<PublicationProposal[]>([]);
-  const [proposalError, setProposalError] = useState<string | null>(null);
-  const [proposalActionId, setProposalActionId] = useState<number | null>(null);
-  const [proposalRetryNodeIds, setProposalRetryNodeIds] = useState<Record<number, string>>({});
   const treeId = detail?.tree.id ?? null;
   const documentScrollRef = useRef<HTMLElement | null>(null);
   const contentContainerRef = useRef<HTMLDivElement | null>(null);
@@ -2000,26 +1967,6 @@ function ResearchDocument({
     },
     [],
   );
-
-  const refreshPublicationProposals = useCallback(async () => {
-    const publicationId = publicationBinding?.publicationId;
-    if (!publicationId) {
-      setPublicationProposals([]);
-      setProposalError(null);
-      return;
-    }
-    try {
-      const proposals = await listPublicationProposals(publicationId);
-      setPublicationProposals(proposals);
-      setProposalError(null);
-    } catch (error) {
-      setProposalError(error instanceof Error ? error.message : String(error));
-    }
-  }, [publicationBinding?.publicationId]);
-
-  useEffect(() => {
-    void refreshPublicationProposals();
-  }, [refreshPublicationProposals, publicationBinding?.updatedAt]);
 
   // Content-derived keys the annotation machinery re-runs on: a segment's
   // durable revision landing, or a segment's transcript view toggling, both
@@ -2407,83 +2354,6 @@ function ResearchDocument({
     setFollowupMenu(null);
     setRecapDialogNodeId(nodeId);
   }, []);
-
-  function openResearchPublisher(mode: "answer" | "tree", node: ResearchNode) {
-    const detailSnapshot = detailRef.current;
-    if (!detailSnapshot) {
-      return;
-    }
-    const terminalNodes = detailSnapshot.nodes.filter((candidate) =>
-      isTerminalResearchStatus(candidate.status),
-    );
-    const nodes = mode === "answer" ? [node] : terminalNodes;
-    const publishView = segmentViews.find((candidate) => candidate.node.id === node.id);
-    const preview =
-      mode === "answer"
-        ? publishView?.content
-          ? publishView.rawAnswer
-          : node.responsePreview?.trim() || researchNodeDisplayTitle(node, detailSnapshot)
-        : researchTreePreview(detailSnapshot, terminalNodes);
-    const existingBinding =
-      mode === "tree" && publicationBinding?.source.kind === "researchTree"
-        ? publicationBinding
-        : null;
-    setFollowupMenu(null);
-    onPublish({
-      kindLabel: mode === "answer" ? "research answer" : "research tree",
-      initialTitle:
-        mode === "answer"
-          ? researchNodeDisplayTitle(node, detailSnapshot)
-          : detailSnapshot.tree.title,
-      previewText: preview,
-      binding: existingBinding,
-      buildDraft: async (title) => {
-        const contents = await mapWithConcurrency(nodes, 4, (candidate) =>
-          getResearchNodeContent(candidate.id),
-        );
-        const latestDetail = await getResearchTree(detailSnapshot.tree.id);
-        for (const expectedNode of nodes) {
-          const latestNode = latestDetail.nodes.find(
-            (candidate) => candidate.id === expectedNode.id,
-          );
-          if (!latestNode || !researchNodeSnapshotMatches(expectedNode, latestNode)) {
-            throw new Error(
-              "Research changed while preparing the publication. Review the latest results and publish again.",
-            );
-          }
-        }
-        return createResearchPublicationDraft({
-          title,
-          detail: detailSnapshot,
-          selectedNodeId: node.id,
-          mode,
-          contents,
-          publicationId: existingBinding?.publicationId,
-          createdAt:
-            existingBinding?.publicationCreatedAt ??
-            (existingBinding ? new Date(existingBinding.createdAt).toISOString() : undefined),
-          updatedAt: existingBinding ? new Date().toISOString() : undefined,
-          publicNodeIds: existingBinding?.publicNodeIds,
-          contributionsByNodeId: Object.fromEntries(
-            Object.values(existingBinding?.proposalStates ?? {})
-              .filter(
-                (state) =>
-                  state.status === "accepted" &&
-                  Boolean(state.localNodeId) &&
-                  Boolean(state.resolutionCommentId),
-              )
-              .map((state) => [
-                state.localNodeId!,
-                {
-                  githubLogin: state.authorLogin,
-                  proposalCommentId: state.proposalCommentId,
-                },
-              ]),
-          ),
-        });
-      },
-    });
-  }
 
   async function confirmBranchRemoval() {
     if (!deletingBranch?.node || !deletingBranch.info || deletingBranch.info.hasActiveRuns) {
@@ -4487,7 +4357,7 @@ function ResearchDocument({
     }
     setSubmitting(true);
     try {
-      const child = await onFork(target.id, prompt, null, askState?.anchor ?? null, inline);
+      const child = await onFork(target.id, prompt, askState?.anchor ?? null, inline);
       const navigation = navigationRef.current[detail.tree.id];
       if (navigation) {
         recordResearchFollowupDraft(navigation, "", followupMode);
@@ -4532,104 +4402,12 @@ function ResearchDocument({
     handleRetryNode(tail.id);
   }
 
-  async function resolveProposal(
-    proposal: PublicationProposal,
-    status: "accepted" | "declined",
-  ) {
-    const binding = publicationBinding;
-    if (!binding || proposalActionId !== null) {
-      return;
-    }
-    if (status === "accepted" && (!proposal.parentNodeId || archived)) {
-      setProposalError(
-        archived
-          ? "Restore this research before accepting contributed follow-ups."
-          : "This proposal targets a result that is no longer available locally.",
-      );
-      return;
-    }
-    setProposalActionId(proposal.commentId);
-    setProposalError(null);
-    try {
-      let localNodeId: string | null = null;
-      if (status === "accepted") {
-        localNodeId =
-          proposal.localNodeId ??
-          proposalRetryNodeIds[proposal.commentId] ??
-          null;
-        if (!localNodeId) {
-          // An anchored proposal carries the passage it was asked about;
-          // rebind it to the parent's current response revision so the new
-          // node's card sits beside that passage. Offsets came from the
-          // public page's rendered text, so the exact/prefix/suffix
-          // relocation does the real work here.
-          const parentRevision = proposal.parentNodeId
-            ? contentByNode[proposal.parentNodeId]?.responseRevision ?? null
-            : null;
-          const child = await onFork(
-            proposal.parentNodeId!,
-            proposal.prompt,
-            {
-              publicationId: binding.publicationId,
-              commentId: proposal.commentId,
-            },
-            proposal.anchor && parentRevision
-              ? {
-                  version: 1,
-                  projection: "answer-v1",
-                  responseRevision: parentRevision,
-                  start: proposal.anchor.start,
-                  end: proposal.anchor.end,
-                  exact: proposal.anchor.exact,
-                  prefix: proposal.anchor.prefix,
-                  suffix: proposal.anchor.suffix,
-                }
-              : null,
-          );
-          localNodeId = child.id;
-          setProposalRetryNodeIds((current) => ({
-            ...current,
-            [proposal.commentId]: child.id,
-          }));
-        }
-      }
-      const nextBinding = await resolvePublicationProposal({
-        publicationId: binding.publicationId,
-        proposalCommentId: proposal.commentId,
-        status,
-        localNodeId,
-      });
-      onPublicationBindingChange(nextBinding);
-      setProposalRetryNodeIds((current) => {
-        const next = { ...current };
-        delete next[proposal.commentId];
-        return next;
-      });
-      await refreshPublicationProposals();
-      onToast(status === "accepted" ? "Proposal accepted" : "Proposal declined");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setProposalError(message);
-      onError(message);
-    } finally {
-      setProposalActionId(null);
-    }
-  }
-
   // Prefer the event-driven node over the last content fetch for metadata:
   // detail updates arrive without reparsing the transcript. The chrome
-  // (breadcrumb, header actions, proposals) renders from this alone, so
+  // (breadcrumb and header actions) renders from this alone, so
   // switching pages no longer blanks the whole document while content loads —
   // only each segment's response section waits for its fetch.
   const displayNode = selectedDetailNode ?? null;
-  const displayPublicNodeId = displayNode
-    ? publicationBinding?.publicNodeIds[displayNode.id] ?? null
-    : null;
-  const visiblePublicationProposals = publicationProposals.filter(
-    (proposal) =>
-      proposal.parentNodeId === displayNode?.id ||
-      proposal.parentPublicNodeId === displayPublicNodeId,
-  );
 
   const anyChainRunActive = chainNodes.some((node) => isActiveResearchStatus(node.status));
   useEffect(() => {
@@ -5099,113 +4877,6 @@ function ResearchDocument({
     </div>
   );
 
-  const proposalsSection =
-    publicationBinding && (visiblePublicationProposals.length > 0 || proposalError) ? (
-      <section
-        className="research-publication-proposals"
-        aria-labelledby="research-publication-proposals-title"
-      >
-        <div className="research-publication-proposals-heading">
-          <h3 id="research-publication-proposals-title">
-            Community proposals
-          </h3>
-          <button
-            type="button"
-            className="control-button"
-            aria-label="Refresh community proposals"
-            title="Refresh"
-            disabled={proposalActionId !== null}
-            onClick={() => void refreshPublicationProposals()}
-          >
-            <RefreshCw size={13} aria-hidden="true" />
-          </button>
-        </div>
-        {proposalError ? (
-          <p className="research-publication-proposal-error" role="alert">
-            {proposalError}
-          </p>
-        ) : null}
-        {visiblePublicationProposals.map((proposal) => (
-          <article
-            className="research-publication-proposal"
-            key={proposal.commentId}
-          >
-            <header>
-              <strong>@{proposal.authorLogin}</strong>
-              <span className={`is-${proposal.status}`}>
-                {proposal.status}
-              </span>
-            </header>
-            {proposal.anchor ? (
-              <span className="research-followup-quote">
-                {quoteDisplayText(proposal.anchor.exact)}
-              </span>
-            ) : null}
-            <ResearchMarkdown
-              text={proposal.prompt}
-              variant="compact"
-              inline
-            />
-            {proposal.answerMarkdown ? (
-              <details>
-                <summary>Proposed answer</summary>
-                <ResearchMarkdown
-                  text={proposal.answerMarkdown}
-                  variant="compact"
-                />
-              </details>
-            ) : null}
-            {proposal.status === "pending" ? (
-              <div className="research-publication-proposal-actions">
-                <button
-                  type="button"
-                  className="control-button"
-                  disabled={
-                    proposalActionId !== null ||
-                    archived ||
-                    !proposal.parentNodeId
-                  }
-                  onClick={() => void resolveProposal(proposal, "accepted")}
-                >
-                  {proposalActionId === proposal.commentId ? (
-                    <LoaderCircle
-                      className="research-spinner"
-                      size={13}
-                      aria-hidden="true"
-                    />
-                  ) : (
-                    <Check size={13} aria-hidden="true" />
-                  )}
-                  {proposal.localNodeId ? "Finish acceptance" : "Accept"}
-                </button>
-                <button
-                  type="button"
-                  className="control-button"
-                  disabled={
-                    proposalActionId !== null ||
-                    Boolean(proposal.localNodeId)
-                  }
-                  onClick={() => void resolveProposal(proposal, "declined")}
-                >
-                  <X size={13} aria-hidden="true" />
-                  Decline
-                </button>
-              </div>
-            ) : proposal.localNodeId &&
-              detail.nodes.some((node) => node.id === proposal.localNodeId) ? (
-              <button
-                type="button"
-                className="control-button research-publication-proposal-result"
-                onClick={() => selectNode(proposal.localNodeId!)}
-              >
-                Open local result
-              </button>
-            ) : null}
-          </article>
-        ))}
-      </section>
-    ) : null;
-
   // Sorted, comma-joined unread card ids per segment. A stable string keeps
   // the segment memo intact while the unread set is unchanged, unlike a fresh
   // Set identity every render.
@@ -5283,7 +4954,6 @@ function ResearchDocument({
         resolvedCardTops={resolvedCardTops}
         menuOpen={followupMenu?.nodeId === node.id}
         askComposer={ask && ask.nodeId === node.id ? renderComposer(ask) : null}
-        proposalsSection={node.id === selectedNodeId ? proposalsSection : null}
         registerSegmentElement={registerSegmentElement}
         onSelectNode={handleSelectNode}
         onExpandTurns={expandAllTurns}
@@ -5354,7 +5024,7 @@ function ResearchDocument({
             {displayNode.origin === "terminalExport" ? (
               <span
                 className="research-provenance-badge"
-                title="This is a point-in-time copy of an imported conversation. Review it before publishing."
+                title="This is a point-in-time copy of an imported conversation."
               >
                 <Terminal size={12} aria-hidden="true" />
                 Imported conversation
@@ -5487,47 +5157,6 @@ function ResearchDocument({
                   onContextMenu={(event) => event.preventDefault()}
                 >
                   <div className="group-context-actions">
-                    {(() => {
-                      const rootReady = detail.nodes.some(
-                        (candidate) =>
-                          candidate.id === detail.tree.rootNodeId &&
-                          isTerminalResearchStatus(candidate.status),
-                      );
-                      return (
-                        <>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="control-button"
-                            disabled={!isTerminalResearchStatus(node.status)}
-                            title={
-                              isTerminalResearchStatus(node.status)
-                                ? undefined
-                                : "This result must finish before it can be published"
-                            }
-                            onClick={() => openResearchPublisher("answer", node)}
-                          >
-                            <Share2 size={13} aria-hidden="true" />
-                            <span>Publish answer</span>
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="control-button"
-                            disabled={!rootReady}
-                            title={
-                              rootReady
-                                ? undefined
-                                : "The root result must finish before publishing the tree"
-                            }
-                            onClick={() => openResearchPublisher("tree", node)}
-                          >
-                            <Share2 size={13} aria-hidden="true" />
-                            <span>Publish research</span>
-                          </button>
-                        </>
-                      );
-                    })()}
                     {chainNodeIds.includes(node.id) && chainNodes.length > 1
                       ? (() => {
                           const threadReady = segmentViews.every((view) => view.content);
@@ -5842,55 +5471,3 @@ function ResearchDocument({
 }
 
 export default memo(ResearchDocument);
-
-function isTerminalResearchStatus(status: ResearchNode["status"]) {
-  return status === "complete" || status === "failed" || status === "cancelled";
-}
-
-function researchNodeDisplayTitle(node: ResearchNode, detail: ResearchTreeDetail) {
-  if (node.id === detail.tree.rootNodeId) {
-    return node.title?.trim() || detail.tree.title;
-  }
-  return (
-    node.title?.trim() ||
-    node.prompt.split(/\r?\n/, 1)[0]?.replace(/\s+/g, " ").trim() ||
-    "Research follow-up"
-  );
-}
-
-function researchTreePreview(detail: ResearchTreeDetail, nodes: ResearchNode[]) {
-  const lines = [
-    detail.tree.title,
-    "",
-    `${nodes.length} published result${nodes.length === 1 ? "" : "s"}`,
-  ];
-  for (const node of nodes) {
-    lines.push(
-      `- ${researchNodeDisplayTitle(node, detail)}${
-        node.status === "complete" ? "" : ` (${node.status})`
-      }`,
-    );
-  }
-  return lines.join("\n");
-}
-
-async function mapWithConcurrency<T, R>(
-  values: T[],
-  concurrency: number,
-  mapper: (value: T) => Promise<R>,
-) {
-  const results = new Array<R>(values.length);
-  let nextIndex = 0;
-  const workers = Array.from(
-    { length: Math.min(Math.max(1, concurrency), values.length) },
-    async () => {
-      while (nextIndex < values.length) {
-        const index = nextIndex;
-        nextIndex += 1;
-        results[index] = await mapper(values[index]);
-      }
-    },
-  );
-  await Promise.all(workers);
-  return results;
-}

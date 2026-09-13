@@ -136,9 +136,9 @@ export function expandedResearchHighlightOffsets(
  * it was taken in. A run's messages are all one speaker, so a selection
  * crossing them costs only that clamp. A conversation turn is one message, so a
  * conversation selection with no enclosing message spans turns: separate
- * speakers, reading as one passage without being one, and the published viewer
- * injects a role label between them. That is not anchorable, so it is refused
- * rather than saved with context that resolves in the app and nowhere else. */
+ * speakers, reading as one passage without being one, while the conversation
+ * projection injects a role label between them. That is not anchorable, so it
+ * is refused rather than saved with ambiguous context. */
 export function researchAnchorContextBounds(input: {
   isConversation: boolean;
   messageBounds: ResearchHighlightOffsets | null;

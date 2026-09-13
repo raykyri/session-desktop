@@ -15,9 +15,8 @@ use crate::research::{
     self, CreateResearchTreeRequest, RecentResearchQuery, RecentResearchQueryCursor,
     RecentResearchQueryPage, ResearchBranchRemoval, ResearchHighlight, ResearchHighlightAnchor,
     ResearchNode, ResearchNodeCard, ResearchNodeContent, ResearchNodeKind, ResearchNodeOrigin,
-    ResearchNodeStatus, ResearchPublicationProposal, ResearchRuntime, ResearchTree,
-    ResearchTreeDetail, ResearchTreeSummary, UpdateResearchDocumentRequest,
-    UpdateResearchDocumentResult,
+    ResearchNodeStatus, ResearchRuntime, ResearchTree, ResearchTreeDetail, ResearchTreeSummary,
+    UpdateResearchDocumentRequest, UpdateResearchDocumentResult,
 };
 use crate::scrollback::{bounded_undo_scrollback, read_pane_scrollback, remove_pane_scrollback};
 use crate::thread_graph;
@@ -4478,7 +4477,6 @@ impl AppState {
             id: node_id.clone(),
             tree_id: tree_id.clone(),
             parent_node_id: None,
-            publication_proposal: None,
             query_anchor: None,
             inline: false,
             prompt,
@@ -4566,7 +4564,6 @@ impl AppState {
             id: node_id.clone(),
             tree_id: tree_id.clone(),
             parent_node_id: None,
-            publication_proposal: None,
             query_anchor: None,
             inline: false,
             prompt: String::new(),
@@ -4813,7 +4810,6 @@ impl AppState {
             id: prepared.node_id.clone(),
             tree_id: prepared.tree_id.clone(),
             parent_node_id: None,
-            publication_proposal: None,
             query_anchor: None,
             inline: false,
             prompt: prepared.prompt.clone(),
@@ -5128,7 +5124,6 @@ impl AppState {
         self.create_research_child_with_options(
             parent_node_id,
             prompt,
-            None,
             query_anchor,
             inline,
             Vec::new(),
@@ -5149,37 +5144,9 @@ impl AppState {
         self.create_research_child_with_options(
             parent_node_id,
             prompt,
-            None,
             query_anchor,
             inline,
             attachments,
-        )
-    }
-
-    pub fn create_research_child_for_proposal(
-        &self,
-        parent_node_id: &str,
-        prompt: String,
-        proposal: ResearchPublicationProposal,
-    ) -> Result<ResearchNode, String> {
-        if !(8..=128).contains(&proposal.publication_id.len())
-            || !proposal
-                .publication_id
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
-            || proposal.comment_id == 0
-        {
-            return Err("publication proposal reference is invalid".to_string());
-        }
-        // Accepted community proposals are always branches: an inline slot is
-        // the owner's conversation to continue, not a contribution target.
-        self.create_research_child_with_options(
-            parent_node_id,
-            prompt,
-            Some(proposal),
-            None,
-            false,
-            Vec::new(),
         )
     }
 
@@ -5187,7 +5154,6 @@ impl AppState {
         &self,
         parent_node_id: &str,
         prompt: String,
-        publication_proposal: Option<ResearchPublicationProposal>,
         query_anchor: Option<ResearchHighlightAnchor>,
         inline: bool,
         attachments: Vec<crate::tweets::ResearchMessageAttachment>,
@@ -5285,7 +5251,6 @@ impl AppState {
                 id: node_id.clone(),
                 tree_id: parent.tree_id.clone(),
                 parent_node_id: Some(parent.id),
-                publication_proposal,
                 query_anchor,
                 inline,
                 prompt,
@@ -13508,18 +13473,6 @@ mod tests {
             .unwrap();
         assert!(retry.inline);
 
-        // Accepted community proposals are always branches.
-        let proposal_child = state
-            .create_research_child_for_proposal(
-                &root_id,
-                "Contributed".to_string(),
-                ResearchPublicationProposal {
-                    publication_id: "publication-1".to_string(),
-                    comment_id: 7,
-                },
-            )
-            .unwrap();
-        assert!(!proposal_child.inline);
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
@@ -14152,15 +14105,12 @@ mod tests {
         state
             .set_agent_status("research-agent", AgentStatus::Done)
             .unwrap();
-        let proposal = ResearchPublicationProposal {
-            publication_id: "pub_research123".to_string(),
-            comment_id: 42,
-        };
         let child = state
-            .create_research_child_for_proposal(
+            .create_research_child(
                 &detail.tree.root_node_id,
                 "Follow up".to_string(),
-                proposal.clone(),
+                None,
+                false,
             )
             .unwrap();
         assert_eq!(
@@ -14169,7 +14119,6 @@ mod tests {
         );
         assert_eq!(child.adapter, "codex");
         assert_eq!(child.model.as_deref(), Some("gpt-5"));
-        assert_eq!(child.publication_proposal, Some(proposal));
         assert_eq!(state.research_tree(&detail.tree.id).unwrap().nodes.len(), 2);
     }
 
@@ -15429,7 +15378,6 @@ mod tests {
             id: id.to_string(),
             tree_id: tree_id.to_string(),
             parent_node_id: parent.map(str::to_string),
-            publication_proposal: None,
             query_anchor: None,
             inline: false,
             prompt: "Q".to_string(),
@@ -15541,7 +15489,6 @@ mod tests {
             id: "node-1".to_string(),
             tree_id: tree.id.clone(),
             parent_node_id: None,
-            publication_proposal: None,
             query_anchor: None,
             inline: false,
             prompt: "Question".to_string(),
@@ -15637,7 +15584,6 @@ mod tests {
             id: "node-1".to_string(),
             tree_id: tree.id.clone(),
             parent_node_id: None,
-            publication_proposal: None,
             query_anchor: None,
             inline: false,
             prompt: "Question".to_string(),
@@ -15743,7 +15689,6 @@ mod tests {
             id: tree.root_node_id.clone(),
             tree_id: tree.id.clone(),
             parent_node_id: None,
-            publication_proposal: None,
             query_anchor: None,
             inline: false,
             prompt: "Question".to_string(),
@@ -15824,7 +15769,6 @@ mod tests {
             id: "node-missing".to_string(),
             tree_id: tree.id.clone(),
             parent_node_id: None,
-            publication_proposal: None,
             query_anchor: None,
             inline: false,
             prompt: "Question".to_string(),
@@ -15914,7 +15858,6 @@ mod tests {
                     id: node_id,
                     tree_id,
                     parent_node_id: None,
-                    publication_proposal: None,
                     query_anchor: None,
                     inline: false,
                     prompt: "Question".to_string(),
