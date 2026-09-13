@@ -1,9 +1,8 @@
-import type { ComponentType, ReactNode } from "react";
-import { antigravityUiAdapter } from "./antigravity";
+import type { ReactNode } from "react";
 import { claudeUiAdapter } from "./claude";
 import { codexUiAdapter } from "./codex";
 import { grokUiAdapter } from "./grok";
-import type { AgentInfo, PaneInfo, RuntimeConfig, Turn, TurnBlock } from "../types";
+import type { AgentInfo, PaneInfo, Turn, TurnBlock } from "../types";
 
 export type AgentStatus = AgentInfo["status"];
 
@@ -20,17 +19,9 @@ export interface ComposerPolicy {
   permissionActions: PermissionAction[];
 }
 
-export interface LauncherOptionsProps {
-  value: Record<string, unknown>;
-  onChange: (next: Record<string, unknown>) => void;
-  /** Runtime configuration for adapter-specific launcher options. */
-  config: RuntimeConfig | null;
-}
-
 export interface AgentUiAdapter {
   id: string;
   label: string;
-  LauncherOptions?: ComponentType<LauncherOptionsProps>;
   normalizeTurns?: (turns: Turn[]) => Turn[];
   renderBlock?: (block: TurnBlock, role: string) => ReactNode | null;
   composerPolicy: (agent: AgentInfo) => ComposerPolicy;
@@ -44,7 +35,6 @@ export const agentUiAdapters = [
   claudeUiAdapter,
   codexUiAdapter,
   grokUiAdapter,
-  antigravityUiAdapter,
 ];
 
 export function findAgentUiAdapter(adapterId: string | null | undefined): AgentUiAdapter | null {

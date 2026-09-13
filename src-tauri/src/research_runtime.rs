@@ -33,10 +33,6 @@ fn sessions() -> &'static Mutex<HashMap<String, SessionSlot>> {
     SESSIONS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-pub fn should_use_research_sdk(_state: &AppState, adapter: &str) -> bool {
-    matches!(adapter, "claude" | "codex" | "grok")
-}
-
 pub fn session_registered(node_id: &str) -> bool {
     sessions()
         .lock()
@@ -1760,7 +1756,6 @@ time.sleep(2)
                 grok: GrokAdapterConfig {
                     binary: Some(grok.display().to_string()),
                 },
-                antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: PathBuf::new(),

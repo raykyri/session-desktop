@@ -11,7 +11,6 @@ import {
 } from "../src/lib/workspaceScope";
 import {
   RESEARCH_HOME_TAB_ID,
-  parseSidebarMode,
   researchCycleTabIds,
   researchTreeIdFromTabId,
   researchTreeTabId,
@@ -164,13 +163,6 @@ test("a stale, duplicate, or cross-scope reorder is ignored", () => {
     replaceScopedGroupOrder(groups, "terminal", [terminalA, research]),
     groups,
   );
-});
-
-test("sidebar mode parsing always selects Research", () => {
-  assert.equal(parseSidebarMode("research"), "research");
-  assert.equal(parseSidebarMode("terminal"), "research");
-  assert.equal(parseSidebarMode("other"), "research");
-  assert.equal(parseSidebarMode(null), "research");
 });
 
 test("research cycling includes Home when there is one document", () => {

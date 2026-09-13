@@ -115,93 +115,6 @@
   border-bottom-left-radius: 0;
 }
 
-.sidebar-mode-toggle {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 2px;
-  margin: 0 4px;
-  padding: 3px 3px 2.5px;
-  border: 1px solid var(--surface-border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--sidebar-switcher-bg);
-}
-
-.sidebar-mode-toggle button {
-  position: relative;
-  display: flex;
-  flex-wrap: nowrap;
-  min-width: 0;
-  min-height: 27px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 5px;
-  color: #818a85;
-  font-family: var(--font-ui);
-  /* Same size as the New shell/New agent buttons at the bottom of the sidebar. */
-  font-size: calc(13px + var(--turn-font-delta, 0px));
-  font-weight: 400;
-  background: transparent;
-  cursor: pointer;
-}
-
-.sidebar-mode-toggle button:hover {
-  color: #d6dbd6;
-  background: var(--sidebar-switcher-hover-bg);
-}
-
-.sidebar-mode-toggle button.is-selected {
-  color: var(--text-interactive);
-  background: var(--sidebar-switcher-active-bg);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-}
-
-.sidebar-mode-toggle button svg {
-  flex: none;
-}
-
-.sidebar-mode-toggle button > span:not(.sidebar-mode-attention) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidebar-mode-toggle .sidebar-mode-shortcut-hint {
-  min-width: 28px;
-  overflow: visible;
-}
-
-.sidebar-mode-attention {
-  display: inline-grid;
-  min-width: 16px;
-  height: 16px;
-  place-items: center;
-  padding: 0 4px;
-  border-radius: 999px;
-  color: #d8ddd9;
-  font-size: 9px;
-  font-variant-numeric: tabular-nums;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.sidebar-mode-attention.is-running {
-  color: var(--control-fg-muted);
-  background: var(--surface-fill-hover);
-}
-
-.sidebar-mode-attention.is-unseen {
-  color: #b8cfea;
-  background: rgba(90, 130, 178, 0.18);
-}
-
-.sidebar-mode-attention.is-failed {
-  color: var(--danger-fg, #ff7b72);
-  border-color: color-mix(in srgb, currentColor 55%, transparent);
-}
-
 .sidebar-resizer {
   position: absolute;
   top: 0;
@@ -1173,39 +1086,6 @@
   outline-offset: 3px;
 }
 
-.sidebar-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: stretch;
-  gap: 6px;
-  /* Offsets the reduced sidebar padding so the action row keeps its original width. */
-  margin: 0 4px;
-  --fs-base: calc(13.5px + var(--turn-font-delta, 0px));
-}
-
-.sidebar-actions.is-agent-only {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.sidebar-action-with-hint {
-  position: relative;
-  display: flex;
-  min-width: 0;
-}
-
-.sidebar-action-with-hint > button {
-  width: 100%;
-  min-width: 0;
-}
-
-.sidebar-action-shortcut-hint {
-  right: 6px;
-}
-
-/* The sidebar action buttons (New shell/New agent) and the composer
-   submit buttons (Send/Steer/Queue/Approve/Deny) share one skin so both panes read
-   as the same control set — same height, padding, gap, and UI-sans font. */
-.sidebar-actions button,
 .native-input-submit-actions button {
   flex-wrap: nowrap;
   gap: 6px;
@@ -1214,16 +1094,11 @@
   font-family: var(--font-ui);
 }
 
-/* DM Sans and Anthropic Sans Text sit slightly high in fixed-height control
-   boxes. Nudge label glyphs down on the shared New shell/agent/query/doc and
-   Send/Send Now/Queue control set (and the main composer field that shares
-   the same metric complaint). Other fields already look balanced. */
-html[data-body-font="dm-sans"] .sidebar-actions button > span,
+/* Nudge labels down in fixed-height composer controls for these fonts. */
 html[data-body-font="dm-sans"] .native-input-submit-actions button > span {
   transform: translateY(1px);
 }
 
-html[data-body-font="anthropic-sans-text"] .sidebar-actions button > span,
 html[data-body-font="anthropic-sans-text"] .native-input-submit-actions button > span {
   transform: translateY(0.5px);
 }
@@ -1238,25 +1113,10 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   padding-bottom: 7.5px;
 }
 
-.sidebar-actions button:hover,
 .native-input-submit-actions button:hover:not(:disabled) {
   border-color: var(--control-border-hover-accent);
   background: var(--control-bg-hover);
   color: var(--text-heading);
-}
-
-.sidebar-actions button svg {
-  flex: none;
-  opacity: 0.8;
-}
-
-/* Let the label ellipsize instead of wrapping under the icon when the sidebar is
-   dragged to its minimum width. */
-.sidebar-actions button span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .command-launcher {

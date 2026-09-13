@@ -1,18 +1,12 @@
-import type { SidebarMode } from "./sidebarMode";
+export type SidebarScrollRegion = "research" | "researchTerminals";
 
-export type SidebarScrollRegion = "terminal" | "research" | "researchTerminals";
-
-export function sidebarScrollRegionsForMode(mode: SidebarMode): SidebarScrollRegion[] {
-  return mode === "research" ? ["research", "researchTerminals"] : ["terminal"];
+export function sidebarScrollRegions(): SidebarScrollRegion[] {
+  return ["research", "researchTerminals"];
 }
 
 export function activeSidebarScrollRegion(
-  mode: SidebarMode,
   activeSurface: "pane" | "research",
 ): SidebarScrollRegion {
-  if (mode === "terminal") {
-    return "terminal";
-  }
   return activeSurface === "research" ? "research" : "researchTerminals";
 }
 

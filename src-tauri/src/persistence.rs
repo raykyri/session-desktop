@@ -187,8 +187,6 @@ pub struct AppPreferences {
     /// in `session.config.json` remain authoritative on an id collision.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub remotes: std::collections::BTreeMap<String, crate::config::SavedRemote>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub launcher_adapter_id: Option<String>,
     /// Whether new and recovered shells run as login shells (sourcing the user's
     /// login profile files in addition to the interactive rc). Absent means the
     /// default, on — matching how terminal emulators launch shells.
@@ -219,44 +217,20 @@ pub struct AppPreferences {
     /// user's prompt unchanged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub research_launch_instruction: Option<String>,
-    /// When true (the default), Claude research runs use the headless SDK
-    /// harness instead of a hidden TUI pane. False is always written so a
-    /// user who turns the harness off does not get the default-true on reload.
-    #[serde(
-        default = "default_research_sdk_harness",
-        skip_serializing_if = "is_true"
-    )]
-    pub research_sdk_harness: bool,
-}
-
-fn default_research_sdk_harness() -> bool {
-    true
-}
-
-fn is_true(value: &bool) -> bool {
-    *value
 }
 
 impl Default for AppPreferences {
     fn default() -> Self {
         Self {
             remotes: std::collections::BTreeMap::new(),
-            launcher_adapter_id: None,
             use_login_shell: None,
             worktree_location: None,
             show_hide_shortcut: None,
             global_launcher_hotkey: None,
             open_router_key: None,
             research_launch_instruction: None,
-            research_sdk_harness: true,
         }
     }
-}
-
-pub fn research_sdk_harness_enabled(workspace_root: &Path) -> bool {
-    load_preferences(workspace_root)
-        .map(|preferences| preferences.research_sdk_harness)
-        .unwrap_or(true)
 }
 
 pub fn preferences_path(workspace_root: &Path) -> PathBuf {
@@ -1197,36 +1171,6 @@ mod tests {
     }
 
     #[test]
-    fn preferences_round_trip_launcher_adapter() {
-        let root = temp_root();
-        assert_eq!(load_preferences(&root).unwrap().launcher_adapter_id, None);
-
-        save_preferences(
-            &root,
-            &AppPreferences {
-                launcher_adapter_id: Some("codex".to_string()),
-                ..Default::default()
-            },
-        )
-        .unwrap();
-
-        assert_eq!(
-            load_preferences(&root).unwrap().launcher_adapter_id,
-            Some("codex".to_string())
-        );
-        // Also read the disk directly: load_preferences serves repeats from the
-        // write-through cache, and a cache hit alone would not prove the saved
-        // file deserializes.
-        assert_eq!(
-            read_preferences_from_disk(&preferences_path(&root))
-                .unwrap()
-                .launcher_adapter_id,
-            Some("codex".to_string())
-        );
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
     fn preferences_round_trip_saved_remotes() {
         let root = temp_root();
         let remote = crate::config::SavedRemote {
@@ -1296,49 +1240,6 @@ mod tests {
     }
 
     #[test]
-    fn research_sdk_harness_defaults_true_and_persists_false() {
-        let root = temp_root();
-        assert!(load_preferences(&root).unwrap().research_sdk_harness);
-
-        let absent: AppPreferences = serde_json::from_str("{}").unwrap();
-        assert!(absent.research_sdk_harness);
-
-        save_preferences(
-            &root,
-            &AppPreferences {
-                research_sdk_harness: false,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        let on_disk = fs::read_to_string(preferences_path(&root)).unwrap();
-        assert!(
-            on_disk.contains("\"researchSdkHarness\": false"),
-            "{on_disk}"
-        );
-        assert!(
-            !read_preferences_from_disk(&preferences_path(&root))
-                .unwrap()
-                .research_sdk_harness
-        );
-
-        save_preferences(
-            &root,
-            &AppPreferences {
-                research_sdk_harness: true,
-                ..Default::default()
-            },
-        )
-        .unwrap();
-        let on_disk = fs::read_to_string(preferences_path(&root)).unwrap();
-        assert!(
-            !on_disk.contains("researchSdkHarness"),
-            "true must be omitted so absent keys keep defaulting on: {on_disk}"
-        );
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
     fn preferences_round_trip_use_login_shell() {
         let root = temp_root();
         // Absent in a fresh preferences file; the spawn path treats that as the
@@ -1393,13 +1294,13 @@ mod tests {
     #[test]
     fn concurrent_preference_updates_preserve_unrelated_fields() {
         let root = std::sync::Arc::new(temp_root());
-        let launcher_root = root.clone();
+        let instruction_root = root.clone();
         let key_root = root.clone();
 
-        let launcher = std::thread::spawn(move || {
+        let instruction = std::thread::spawn(move || {
             for _ in 0..32 {
-                update_preferences(&launcher_root, |preferences| {
-                    preferences.launcher_adapter_id = Some("codex".to_string());
+                update_preferences(&instruction_root, |preferences| {
+                    preferences.research_launch_instruction = Some("Be concise.".to_string());
                 })
                 .unwrap();
             }
@@ -1413,10 +1314,13 @@ mod tests {
             }
         });
 
-        launcher.join().unwrap();
+        instruction.join().unwrap();
         key.join().unwrap();
         let preferences = load_preferences(&root).unwrap();
-        assert_eq!(preferences.launcher_adapter_id.as_deref(), Some("codex"));
+        assert_eq!(
+            preferences.research_launch_instruction.as_deref(),
+            Some("Be concise.")
+        );
         assert_eq!(preferences.open_router_key.as_deref(), Some("sk-or-secret"));
         fs::remove_dir_all(root.as_ref()).unwrap();
     }

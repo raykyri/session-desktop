@@ -9,7 +9,6 @@ mod control_socket;
 mod events;
 mod file_server;
 mod headless_process;
-mod history;
 mod host;
 mod human_browser;
 mod image_files;
@@ -43,10 +42,7 @@ mod updater;
 mod user_notifications;
 mod workspace;
 
-use adapters::{
-    MessageAnchor, SpawnAgentRequest, SpawnClaudeRequest, agent_fork as fork_agent_pane,
-    agent_spawn as spawn_agent_pane, fork_agent_source,
-};
+use adapters::{MessageAnchor, agent_fork as fork_agent_pane};
 use config::{RuntimeConfig, SessionConfig};
 use control_socket::start_control_socket;
 use native_support::{
@@ -54,7 +50,7 @@ use native_support::{
     native_support_set_iframe_shortcut_fallback,
 };
 use pty::{
-    InitialPaneSize, PaneActivity, PaneWriteOptions, attach_pane, close_worktree_pane, kill_pane,
+    InitialPaneSize, PaneActivity, PaneWriteOptions, attach_pane, close_worktree_pane,
     pane_activity as inspect_pane_activity, resize_pane, spawn_shell_pane, spawn_shell_pane_at,
     spawn_ssh_shell_pane, write_pane,
 };
@@ -70,8 +66,7 @@ use show_hide_shortcut::{
 };
 use sleep::SleepGuard;
 use state::{
-    AppState, ArtifactInfo, PaneInfo, PaneLayoutEntry, PaneSplitInfo, QueuedTurn,
-    RecentSessionInfo, ShellAgentJobInfo,
+    AppState, ArtifactInfo, PaneInfo, PaneLayoutEntry, PaneSplitInfo, QueuedTurn, ShellAgentJobInfo,
 };
 use tauri::{Manager, Url};
 use transcript::{
@@ -613,13 +608,6 @@ fn probe_agent_adapters(
 // a worker thread; cheap in-memory getters/setters stay synchronous, and the
 // native_support_* commands stay synchronous because their work must run on
 // the main thread anyway (going async would only add a round-trip).
-#[tauri::command(async)]
-fn launcher_adapter_preference_get(
-    state: tauri::State<'_, AppState>,
-) -> Result<Option<String>, String> {
-    Ok(persistence::load_preferences(&state.config().workspace_root)?.launcher_adapter_id)
-}
-
 /// Returns the stored OpenRouter API key (empty string when none is set). Kept in the
 /// owner-only preferences file rather than webview localStorage — see AppPreferences.
 #[tauri::command(async)]
@@ -703,26 +691,6 @@ async fn openrouter_chat_completion(
         .await
         .map_err(|err| format!("failed to read OpenRouter response: {err}"))?;
     Ok(OpenRouterProxyResponse { status, body })
-}
-
-#[tauri::command(async)]
-fn launcher_adapter_preference_set(
-    state: tauri::State<'_, AppState>,
-    adapter_id: String,
-) -> Result<(), String> {
-    if !state
-        .config()
-        .runtime()
-        .adapters
-        .iter()
-        .any(|adapter| adapter.id == adapter_id)
-    {
-        return Err(format!("unknown agent adapter '{adapter_id}'"));
-    }
-
-    persistence::update_preferences(&state.config().workspace_root, move |preferences| {
-        preferences.launcher_adapter_id = Some(adapter_id);
-    })
 }
 
 /// The frontend passes the active pane's project directory (its group dir, or
@@ -1379,11 +1347,6 @@ fn open_in_os_browser(url: &str) -> Result<(), String> {
         .map_err(|err| format!("failed to open externally: {err}"))
 }
 
-#[tauri::command(async)]
-fn list_claude_skills(state: tauri::State<'_, AppState>) -> Vec<adapters::claude::ClaudeSkill> {
-    adapters::claude::list_skills(state.config())
-}
-
 // The list/refetch commands below are async on purpose, not because their
 // reads are slow (each is a short clone under the model lock) but because sync
 // commands run on the macOS main thread: the frontend calls them in bursts on
@@ -1509,32 +1472,6 @@ fn list_shell_agent_jobs(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<ShellAgentJobInfo>, String> {
     state.list_shell_agent_jobs()
-}
-
-#[tauri::command(async)]
-fn list_recent_sessions(
-    state: tauri::State<'_, AppState>,
-    limit: Option<usize>,
-) -> Result<Vec<RecentSessionInfo>, String> {
-    state.list_recent_sessions(limit.unwrap_or(12))
-}
-
-#[tauri::command(async)]
-fn list_conversation_history(
-    state: tauri::State<'_, AppState>,
-) -> Result<Vec<history::HistoryEntry>, String> {
-    history::list(&state)
-}
-
-#[tauri::command]
-async fn launch_conversation_history(
-    state: tauri::State<'_, AppState>,
-    request: history::HistoryLaunchRequest,
-) -> Result<PaneInfo, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || history::launch(&state, request))
-        .await
-        .map_err(|err| format!("history launch task failed: {err}"))?
 }
 
 #[tauri::command(async)]
@@ -1694,38 +1631,6 @@ async fn get_research_tree(
     state.research_tree(&tree_id)
 }
 
-fn fail_research_launch(state: &AppState, node_id: &str, pane_id: &str, error: String) -> String {
-    match kill_pane(state, pane_id.to_string()) {
-        Ok(()) => state.clear_last_closed_pane_for_pane(pane_id),
-        Err(cleanup_error) => {
-            eprintln!(
-                "session: failed to clean up unbound research pane {pane_id}: {cleanup_error}"
-            );
-        }
-    }
-    let _ = state.fail_research_node(node_id, error.clone());
-    error
-}
-
-/// A research run the user settled (cancelled) while its launch was still in
-/// flight keeps its outcome — binding never resurrects it — but the launch has
-/// produced a live pane nothing will ever retire: research panes are hidden
-/// from the tab strip and the Cancel control is gone once the node is settled.
-/// Reclaim it here, mirroring cancellation's own pane teardown.
-fn reclaim_settled_research_launch(state: &AppState, node: &research::ResearchNode, pane_id: &str) {
-    if !node.status.is_terminal() {
-        return;
-    }
-    match kill_pane(state, pane_id.to_string()) {
-        Ok(()) => state.clear_last_closed_pane_for_pane(pane_id),
-        Err(err) => {
-            if state.pane_exists(pane_id).unwrap_or(false) {
-                eprintln!("session: failed to reclaim settled research pane {pane_id}: {err}");
-            }
-        }
-    }
-}
-
 #[tauri::command]
 async fn create_research_tree(
     state: tauri::State<'_, AppState>,
@@ -1780,17 +1685,6 @@ async fn create_research_tree(
     .map_err(|err| format!("create_research_tree task failed: {err}"))?
 }
 
-/// Maps a research node's reasoning effort onto the launching adapter's own
-/// launch-option key. Adapters without a reasoning-effort option launch with
-/// their defaults.
-fn research_launch_options(adapter: &str, effort: Option<&str>) -> serde_json::Value {
-    match (adapter, effort) {
-        ("claude", Some(effort)) => serde_json::json!({ "effort": effort }),
-        ("codex", Some(effort)) => serde_json::json!({ "reasoningEffort": effort }),
-        _ => serde_json::Value::Null,
-    }
-}
-
 fn launch_research_execution(
     state: &AppState,
     node: &research::ResearchNode,
@@ -1808,26 +1702,8 @@ fn launch_research_execution(
             return Err(err);
         }
     };
-    if research_runtime::should_use_research_sdk(state, &node.adapter) {
-        let resume = fork_from.and_then(|agent| agent.session_id.clone());
-        return research_runtime::launch(
-            state,
-            node,
-            workspace,
-            prompt,
-            resume,
-            fork_from.is_some(),
-        );
-    }
-    launch_fresh_research_pane(
-        state,
-        &node.id,
-        workspace,
-        &node.adapter,
-        node.model.clone(),
-        node.effort.clone(),
-        prompt,
-    )
+    let resume = fork_from.and_then(|agent| agent.session_id.clone());
+    research_runtime::launch(state, node, workspace, prompt, resume, fork_from.is_some())
 }
 
 /// Launches a fresh (non-forked) agent run for an admitted research node and
@@ -1846,80 +1722,6 @@ fn launch_fresh_research_run(
     let _ = (adapter, model, effort);
     let node = state.research_node(node_id)?;
     launch_research_execution(state, &node, workspace, prompt, None)
-}
-
-fn launch_fresh_research_pane(
-    state: &AppState,
-    node_id: &str,
-    workspace: &workspace::GroupInfo,
-    adapter: &str,
-    model: Option<String>,
-    effort: Option<String>,
-    prompt: String,
-) -> Result<research::ResearchNode, String> {
-    let options = research_launch_options(adapter, effort.as_deref());
-    let spawn = SpawnAgentRequest {
-        adapter_id: adapter.to_string(),
-        prompt,
-        group_id: Some(workspace.id.clone()),
-        base_repo: Some(workspace.dir.clone()),
-        base_ref: Some("HEAD".to_string()),
-        cwd: None,
-        model,
-        initial_size: None,
-        use_worktree: Some(false),
-        options,
-        parent_id: None,
-        resume_session_id: None,
-        fork_session: false,
-    };
-    match spawn_agent_pane(state, spawn) {
-        Ok(pane) => {
-            let association = pane
-                .agent_id
-                .as_deref()
-                .and_then(|agent_id| state.agent(agent_id).ok().flatten())
-                .ok_or_else(|| "research agent was not recorded after launch".to_string())
-                .and_then(|agent| {
-                    state
-                        .bind_research_node_run(node_id, &agent, &pane.id)
-                        .map(|node| (agent, node))
-                });
-            match association {
-                Ok((agent, node)) => {
-                    if node.status.is_terminal() {
-                        // Cancelled while the spawn was in flight: the
-                        // outcome stands and the pane is reclaimed, so
-                        // there is nothing to announce.
-                        reclaim_settled_research_launch(state, &node, &pane.id);
-                    } else {
-                        // Fresh spawns go through launch(), which emits no event
-                        // (launcher spawns assume a frontend caller holds the
-                        // pane). Nothing holds this one, so announce it or the
-                        // pane never enters the frontend list: Background
-                        // activity cannot surface the associated run.
-                        state.emit(events::SessionEvent::new(
-                            "agent.spawned",
-                            Some(pane.id.clone()),
-                            Some(agent.id.clone()),
-                            serde_json::json!({
-                                "agent": agent,
-                                "pane": pane,
-                                "source": "research",
-                            }),
-                        ));
-                        state.schedule_research_startup_watchdog(agent.id.clone());
-                    }
-                    state.research_node(node_id)
-                }
-                Err(err) => Err(fail_research_launch(state, node_id, &pane.id, err)),
-            }
-        }
-        Err(err) => {
-            let _ = state.fail_research_node(node_id, err.clone());
-            Err(err)
-        }
-    }
 }
 
 #[tauri::command]
@@ -2246,53 +2048,7 @@ fn launch_research_child_run(
     // The follow-up runs at the child's (inherited) effort, applied by the
     // adapter's fork path the same way `model` is re-applied.
     source.effort = child.effort.clone();
-    if research_runtime::should_use_research_sdk(state, &child.adapter) {
-        return launch_research_execution(state, child, workspace, question, Some(&source));
-    }
-    let question = match persistence::load_preferences(&state.config().workspace_root) {
-        Ok(preferences) => research::prompt_with_research_launch_instruction(
-            question,
-            preferences.research_launch_instruction.as_deref(),
-        ),
-        Err(err) => {
-            let _ = state.fail_research_node(&child.id, err.clone());
-            return Err(err);
-        }
-    };
-    match fork_agent_source(state, &source, false, Some(&question)) {
-        Ok(pane) => {
-            let association = pane
-                .agent_id
-                .as_deref()
-                .and_then(|agent_id| state.agent(agent_id).ok().flatten())
-                .ok_or_else(|| "forked research agent was not recorded".to_string())
-                .and_then(|agent| state.bind_research_node_run(&child.id, &agent, &pane.id));
-            match association {
-                Ok(node) if node.status.is_terminal() => {
-                    // Cancelled while the fork was in flight: keep the
-                    // settled outcome, reclaim the fresh pane, and hand
-                    // back the node as it stands after the teardown.
-                    reclaim_settled_research_launch(state, &node, &pane.id);
-                    state.research_node(&child.id)
-                }
-                Ok(node) => {
-                    // Forks usually land in an already-trusted directory,
-                    // but login/update gates are just as hook-invisible as
-                    // the trust dialog — arm the same startup watchdog as
-                    // fresh runs.
-                    if let Some(agent_id) = node.agent_id.clone() {
-                        state.schedule_research_startup_watchdog(agent_id);
-                    }
-                    Ok(node)
-                }
-                Err(err) => Err(fail_research_launch(state, &child.id, &pane.id, err)),
-            }
-        }
-        Err(err) => {
-            let _ = state.fail_research_node(&child.id, err.clone());
-            Err(err)
-        }
-    }
+    launch_research_execution(state, child, workspace, question, Some(&source))
 }
 
 /// Retries a Failed (or Cancelled) research run in place: the node keeps its
@@ -2905,52 +2661,6 @@ fn research_launch_instruction_set(
     persistence::update_preferences(&state.config().workspace_root, move |preferences| {
         preferences.research_launch_instruction = instruction;
     })
-}
-
-#[tauri::command(async)]
-fn research_sdk_harness_get(state: tauri::State<'_, AppState>) -> Result<bool, String> {
-    Ok(persistence::research_sdk_harness_enabled(
-        &state.config().workspace_root,
-    ))
-}
-
-#[tauri::command(async)]
-fn research_sdk_harness_set(
-    state: tauri::State<'_, AppState>,
-    enabled: bool,
-) -> Result<(), String> {
-    persistence::update_preferences(&state.config().workspace_root, move |preferences| {
-        preferences.research_sdk_harness = enabled;
-    })
-}
-
-#[tauri::command]
-async fn agent_spawn(
-    state: tauri::State<'_, AppState>,
-    request: SpawnAgentRequest,
-) -> Result<PaneInfo, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        validate_launch_workspace(&state, request.group_id.as_deref(), LaunchOrigin::Terminal)?;
-        spawn_agent_pane(&state, request)
-    })
-    .await
-    .map_err(|err| format!("agent_spawn task failed: {err}"))?
-}
-
-#[tauri::command]
-async fn spawn_claude(
-    state: tauri::State<'_, AppState>,
-    request: SpawnClaudeRequest,
-) -> Result<PaneInfo, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let request = request.into_agent_request();
-        validate_launch_workspace(&state, request.group_id.as_deref(), LaunchOrigin::Terminal)?;
-        spawn_agent_pane(&state, request)
-    })
-    .await
-    .map_err(|err| format!("spawn_claude task failed: {err}"))?
 }
 
 /// Forks the session in `pane_id` into a new tab immediately after it and resumes it.
@@ -3976,8 +3686,6 @@ fn main() {
             delete_remote,
             probe_remote,
             probe_agent_adapters,
-            launcher_adapter_preference_get,
-            launcher_adapter_preference_set,
             openrouter_key_get,
             openrouter_key_set,
             openrouter_chat_completion,
@@ -4017,7 +3725,6 @@ fn main() {
             prompt_library_save,
             prompt_library_delete,
             prompt_library_reveal,
-            list_claude_skills,
             list_panes,
             list_groups,
             list_research_workspaces,
@@ -4029,10 +3736,7 @@ fn main() {
             research_workspace_reveal,
             list_agents,
             list_shell_agent_jobs,
-            list_recent_sessions,
             list_turns,
-            list_conversation_history,
-            launch_conversation_history,
             list_home_turn_history,
             list_thread_graphs,
             get_thread_graph,
@@ -4089,12 +3793,8 @@ fn main() {
             use_login_shell_set,
             research_launch_instruction_get,
             research_launch_instruction_set,
-            research_sdk_harness_get,
-            research_sdk_harness_set,
             worktree_location_get,
             worktree_location_set,
-            agent_spawn,
-            spawn_claude,
             agent_fork,
             pane_write,
             pane_attach,

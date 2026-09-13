@@ -58,12 +58,6 @@ export type AgentReadiness =
   | "unsupportedVersion"
   | "error";
 
-export interface ClaudeSkill {
-  id: string;
-  name: string;
-  command: string;
-}
-
 export interface PaneInfo {
   id: string;
   title: string;
@@ -812,48 +806,6 @@ export interface PromptLibrary {
   // False when the workspace root is the home directory, making the two scopes
   // one folder — the UI then collapses to a single Global section.
   hasProjectScope: boolean;
-}
-
-export interface SpawnAgentRequest {
-  adapterId: string;
-  prompt: string;
-  groupId?: string | null;
-  baseRepo?: string | null;
-  baseRef?: string | null;
-  cwd?: string | null;
-  model?: string | null;
-  initialSize?: InitialPaneSize | null;
-  useWorktree?: boolean | null;
-  options?: Record<string, unknown> | null;
-  resumeSessionId?: string | null;
-  forkSession?: boolean;
-}
-
-export interface ConversationHistoryEntry {
-  id: string;
-  adapter: "claude" | "codex";
-  sessionId: string;
-  cwd: string;
-  title: string;
-  preview?: string | null;
-  transcriptPath: string;
-  lastActiveAt: number;
-  createdAt?: number | null;
-  cwdExists: boolean;
-  active: boolean;
-  paneId?: string | null;
-  agentId?: string | null;
-  status?: AgentInfo["status"] | null;
-  model?: string | null;
-  effort?: string | null;
-}
-
-export type ConversationHistoryLaunchMode = "resume" | "fork" | "forkWorktree";
-
-export interface ConversationHistoryLaunchRequest {
-  historyId: string;
-  mode: ConversationHistoryLaunchMode;
-  prompt?: string | null;
 }
 
 export interface WorktreeStatus {

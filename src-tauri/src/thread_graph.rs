@@ -1585,7 +1585,6 @@ fn adapter_label(adapter: &str) -> &str {
         "claude" => "Claude",
         "codex" => "Codex",
         "grok" => "Grok",
-        "antigravity" => "Antigravity",
         _ => "Agent",
     }
 }

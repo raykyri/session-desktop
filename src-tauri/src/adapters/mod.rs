@@ -1,4 +1,3 @@
-pub mod antigravity;
 pub mod claude;
 pub mod codex;
 pub mod grok;
@@ -18,7 +17,6 @@ use crate::workspace::{
     mark_agent_spawn_failed, prepare_agent_workspace_with_parent,
     prepare_named_agent_workspace_with_parent,
 };
-use antigravity::AntigravityAdapter;
 use claude::ClaudeAdapter;
 use codex::CodexAdapter;
 use grok::GrokAdapter;
@@ -31,7 +29,7 @@ use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-pub use claude::{PrepareShellClaudeLaunchRequest, SpawnClaudeRequest};
+pub use claude::PrepareShellClaudeLaunchRequest;
 
 /// Single-quotes a path for safe interpolation into a POSIX shell command,
 /// escaping embedded single quotes. Shared by the Claude and Codex adapters,
@@ -1141,7 +1139,6 @@ fn adapter_install_url(adapter_id: &str) -> Option<&'static str> {
         "claude" => Some("https://docs.anthropic.com/en/docs/claude-code/setup"),
         "codex" => Some("https://developers.openai.com/codex/cli"),
         "grok" => Some("https://docs.x.ai/docs/grok-code-fast-1"),
-        "antigravity" => Some("https://antigravity.google/docs/cli/reference"),
         _ => None,
     }
 }
@@ -1590,7 +1587,6 @@ pub fn adapter_registry(config: &SessionConfig) -> AdapterRegistry {
         Box::new(ClaudeAdapter::new(config)),
         Box::new(CodexAdapter::new(config)),
         Box::new(GrokAdapter::new(config)),
-        Box::new(AntigravityAdapter::new(config)),
     ])
 }
 
@@ -1820,10 +1816,9 @@ pub struct MessageAnchor {
 }
 
 /// Refused when the chosen message has no history before it. Truncating there
-/// would leave a transcript with no turns, which is a new session rather than a
-/// fork — the caller should start a fresh agent instead.
+/// would leave a transcript with no turns rather than a valid fork.
 pub const FORK_AT_MESSAGE_EMPTY_ERROR: &str =
-    "Cannot fork from the first message; start a new agent instead";
+    "Cannot fork from the first message; select a later message instead";
 
 pub const FORK_AT_MESSAGE_UNSUPPORTED_ERROR: &str =
     "Forking from a message is not supported for this agent adapter";
@@ -2188,7 +2183,6 @@ mod tests {
                 grok: GrokAdapterConfig {
                     binary: Some("grok".to_string()),
                 },
-                antigravity: Default::default(),
             },
             legacy_claude_binary: None,
             claude_plugin_dir: PathBuf::new(),
@@ -2212,16 +2206,13 @@ mod tests {
         let registry = adapter_registry(&test_config());
 
         let metadata = registry.metadata();
-        assert_eq!(metadata.len(), 4);
+        assert_eq!(metadata.len(), 3);
         assert_eq!(metadata[0].id, "claude");
         assert!(metadata[0].default);
         assert_eq!(metadata[1].id, "codex");
         assert!(!metadata[1].default);
         assert_eq!(metadata[2].id, "grok");
         assert!(!metadata[2].default);
-        assert_eq!(metadata[3].id, "antigravity");
-        assert!(!metadata[3].default);
-        assert_eq!(metadata[3].login_command, None);
         assert!(
             metadata
                 .iter()
@@ -2231,16 +2222,13 @@ mod tests {
         assert!(
             metadata
                 .iter()
-                .filter(|adapter| !matches!(
-                    adapter.id.as_str(),
-                    "claude" | "codex" | "antigravity"
-                ))
+                .filter(|adapter| !matches!(adapter.id.as_str(), "claude" | "codex"))
                 .all(|adapter| !adapter.supports_remote)
         );
         assert!(
             metadata
                 .iter()
-                .filter(|adapter| matches!(adapter.id.as_str(), "claude" | "codex" | "antigravity"))
+                .filter(|adapter| matches!(adapter.id.as_str(), "claude" | "codex"))
                 .all(|adapter| adapter.supports_remote)
         );
         assert!(
@@ -2255,24 +2243,14 @@ mod tests {
         assert!(adapter_supports_research(&config, "claude"));
         assert!(adapter_supports_research(&config, "codex"));
         assert!(adapter_supports_research(&config, "grok"));
-        assert!(!adapter_supports_research(&config, "antigravity"));
         assert!(
             metadata
                 .iter()
                 .filter(|adapter| matches!(adapter.id.as_str(), "claude" | "codex" | "grok"))
                 .all(|adapter| adapter.supports_recap_generation)
         );
-        assert!(
-            !metadata
-                .iter()
-                .find(|adapter| adapter.id == "antigravity")
-                .unwrap()
-                .supports_recap_generation
-        );
         assert!(adapter_supports_fork_at_message(&config, "claude"));
         assert!(adapter_supports_fork_at_message(&config, "codex"));
-        assert!(!adapter_supports_fork(&config, "antigravity"));
-        assert!(!adapter_supports_fork_at_message(&config, "antigravity"));
     }
 
     #[test]
@@ -2366,14 +2344,14 @@ mod tests {
 
         let metadata = probe_adapter_metadata_for_config(&config, Some(&remote), true)
             .expect("remote metadata");
-        assert_eq!(metadata.len(), 4);
+        assert_eq!(metadata.len(), 3);
         assert!(metadata.iter().all(|adapter| {
             adapter.target.kind == "remote" && adapter.target.id.as_deref() == Some("build-host")
         }));
         assert!(
             metadata
                 .iter()
-                .filter(|adapter| matches!(adapter.id.as_str(), "claude" | "codex" | "antigravity"))
+                .filter(|adapter| matches!(adapter.id.as_str(), "claude" | "codex"))
                 .all(|adapter| adapter.readiness == AdapterReadiness::Error
                     && adapter
                         .message
@@ -2383,10 +2361,7 @@ mod tests {
         assert!(
             metadata
                 .iter()
-                .filter(|adapter| !matches!(
-                    adapter.id.as_str(),
-                    "claude" | "codex" | "antigravity"
-                ))
+                .filter(|adapter| !matches!(adapter.id.as_str(), "claude" | "codex"))
                 .all(|adapter| adapter.readiness == AdapterReadiness::Error
                     && adapter
                         .message

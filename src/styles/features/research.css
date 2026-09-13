@@ -1,5 +1,4 @@
-/* Research documents and their dedicated terminal workspaces live in the
-   Research sidebar mode; ordinary terminal groups never share this list. */
+/* Research documents and their dedicated terminal workspaces share this list. */
 .sidebar.is-research-mode {
   gap: 0;
 }
@@ -10,12 +9,6 @@
   width: 34px;
   min-width: 34px;
   padding-inline: 4px;
-}
-
-/* Keep the fixed controls in their existing positions while moving the space
-   around the research list into its scrollable area. */
-.sidebar.is-research-mode .sidebar-mode-toggle {
-  margin-bottom: var(--sidebar-stack-gap);
 }
 
 .sidebar.is-research-mode .pane-list {
@@ -1687,13 +1680,7 @@
   color: #c6cdc9;
 }
 
-/* The agent launcher remains centered on its modal backdrop. */
-.confirm-dialog-backdrop.new-agent-backdrop {
-  align-items: center;
-}
-
-.new-research-launcher,
-.new-agent-launcher {
+.new-research-launcher {
   /* Keep the launcher's top-lit inset and elevated surface. */
   box-shadow: inset 0 1px 0 var(--surface-highlight), var(--dialog-shadow);
 }
@@ -1702,12 +1689,7 @@
   --command-launcher-max-width: 640px;
 }
 
-.new-agent-launcher {
-  --command-launcher-max-width: 680px;
-}
-
-.new-research-launcher:focus-within,
-.new-agent-launcher:focus-within {
+.new-research-launcher:focus-within {
   border-color: var(--control-border-hover);
 }
 

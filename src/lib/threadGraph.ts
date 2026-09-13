@@ -282,8 +282,6 @@ export function adapterLabel(adapter: string) {
       return "Codex";
     case "grok":
       return "Grok";
-    case "antigravity":
-      return "Antigravity";
     default:
       return "Agent";
   }
