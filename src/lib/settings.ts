@@ -3,11 +3,6 @@ import {
   DEFAULT_CONFIRM_PASTE_OVER_CHARS,
   type PasteProtectionSettings,
 } from "./paste";
-import {
-  DEFAULT_COMPLETION_SOUND,
-  isCompletionSoundId,
-  type CompletionSoundId,
-} from "./completionSounds";
 
 export interface BodyFontOption {
   id: string;
@@ -209,8 +204,6 @@ export interface AppSettings {
   showTabDirectories: boolean;
   /** show tool calls and other activity detail in agent transcripts */
   showToolCalls: boolean;
-  /** sound played when a live chat agent finishes its queued work */
-  completionSound: CompletionSoundId;
   /** pin the latest user message to the top of the transcript while its reply scrolls */
   stickyUserMessages: boolean;
   /**
@@ -244,7 +237,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   codeMode: true,
   showTabDirectories: true,
   showToolCalls: true,
-  completionSound: DEFAULT_COMPLETION_SOUND,
   stickyUserMessages: true,
   showAssistantTimestamps: false,
   showNotifications: true,
@@ -370,9 +362,6 @@ export function loadSettings(): AppSettings {
       typeof parsed.showTabDirectories === "boolean" ? parsed.showTabDirectories : codeMode;
     const showToolCalls =
       typeof parsed.showToolCalls === "boolean" ? parsed.showToolCalls : codeMode;
-    const completionSound = isCompletionSoundId(parsed.completionSound)
-      ? parsed.completionSound
-      : DEFAULT_SETTINGS.completionSound;
     const stickyUserMessages =
       typeof parsed.stickyUserMessages === "boolean"
         ? parsed.stickyUserMessages
@@ -417,7 +406,6 @@ export function loadSettings(): AppSettings {
       codeMode,
       showTabDirectories,
       showToolCalls,
-      completionSound,
       stickyUserMessages,
       showAssistantTimestamps,
       showNotifications,

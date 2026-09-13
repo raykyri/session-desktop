@@ -436,6 +436,8 @@ export interface RecentResearchQuery {
   model?: string | null;
   status: ResearchNodeStatus;
   createdAt: number;
+  /** Current answer recap, when one has been generated. */
+  recap?: string | null;
 }
 
 export interface RecentResearchQueryCursor {

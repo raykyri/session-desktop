@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Check, ChevronDown, Copy, Highlighter, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, ScrollText, Share2, Terminal, Trash2, Wrench, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, Highlighter, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, Reply, ScrollText, Share2, Terminal, Trash2, Wrench, X } from "lucide-react";
 import {
   IS_MAC,
   isEditableTarget,
@@ -544,6 +544,33 @@ function quoteDisplayText(exact: string) {
   return exact.split(/\s+/).join(" ").trim();
 }
 
+const RESEARCH_REPLY_SNIPPET_WORDS = 8;
+
+/** First ~8 words of the previous answer for the follow-up reply line. Punctuation
+ * tokens (em dashes, heading markers) don't count, and a trailing ellipsis marks
+ * a cut; CSS still ellipsizes if those words would wrap. */
+export function formatResearchReplySnippet(
+  answer: string,
+  maxWords = RESEARCH_REPLY_SNIPPET_WORDS,
+): string {
+  const tokens = quoteDisplayText(answer.replace(/^#{1,6}\s+/gm, "")).split(" ").filter(Boolean);
+  if (tokens.length === 0) {
+    return "";
+  }
+  const kept: string[] = [];
+  let wordCount = 0;
+  for (const token of tokens) {
+    if (/[\p{L}\p{N}]/u.test(token)) {
+      if (wordCount >= maxWords) {
+        return `${kept.join(" ")}…`;
+      }
+      wordCount += 1;
+    }
+    kept.push(token);
+  }
+  return kept.join(" ");
+}
+
 /** Where the action bar sits for a selection: beside the final rendered line,
  * with a below-the-line fallback when the remaining viewport is too narrow. */
 function highlightActionPlacement(range: Range, reservedWidth = 260) {
@@ -865,6 +892,8 @@ interface ThreadSegmentProps {
    * segment renders bail out of reconciliation. */
   node: ResearchNode;
   index: number;
+  /** Previous segment's answer, for the follow-up "Reply to:" line. */
+  replyToAnswer: string | null;
   isSelected: boolean;
   contentError: string | null;
   segmentActive: boolean;
@@ -1456,6 +1485,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   prompt,
   adapter,
   model,
+  replyToAnswer,
   onSelectNode,
 }: {
   visible: boolean;
@@ -1465,16 +1495,25 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   prompt: string;
   adapter: string;
   model?: string | null;
+  replyToAnswer?: string | null;
   onSelectNode: (nodeId: string) => void;
 }) {
   if (!visible) {
     return null;
   }
+  const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
   return (
     <div className="research-prompt-block">
-      <div className="research-prompt-metadata">
-        {formatResearchAskedSummary(adapter, model)}
-      </div>
+      {index === 0 ? (
+        <div className="research-prompt-metadata">
+          {formatResearchAskedSummary(adapter, model)}
+        </div>
+      ) : replySnippet ? (
+        <div className="research-prompt-metadata research-prompt-reply">
+          <Reply size={12} aria-hidden="true" />
+          <span className="research-prompt-reply-text">{`Reply to: ${replySnippet}`}</span>
+        </div>
+      ) : null}
       <div className="research-prompt">
         {index === 0 && parentNodeId ? (
           <button
@@ -1502,6 +1541,7 @@ const ThreadSegment = memo(function ThreadSegment({
   view,
   node,
   index,
+  replyToAnswer,
   isSelected,
   contentError,
   segmentActive,
@@ -1553,6 +1593,7 @@ const ThreadSegment = memo(function ThreadSegment({
         prompt={node.prompt}
         adapter={node.adapter}
         model={node.model}
+        replyToAnswer={replyToAnswer}
         onSelectNode={onSelectNode}
       />
       <div
@@ -5177,6 +5218,13 @@ function ResearchDocument({
         view={view}
         node={node}
         index={index}
+        replyToAnswer={
+          index > 0
+            ? segmentViews[index - 1]?.rawAnswer.trim() ||
+              segmentViews[index - 1]?.node.responsePreview?.trim() ||
+              null
+            : null
+        }
         isSelected={node.id === selectedNodeId}
         contentError={contentErrorByNode[node.id] ?? null}
         segmentActive={segmentActive}

@@ -1,11 +1,10 @@
 import { useCallback, useRef, useState } from "react";
 import type { UserNotificationItem, UserNotificationTone } from "../components/UserNotificationStack";
-import { playCompletionSound } from "../lib/api";
 import type { AppSettings } from "../lib/settings";
 import type { SessionEvent } from "../types";
 
 interface UserNotificationOptions {
-  settings: Pick<AppSettings, "showNotifications" | "completionSound">;
+  settings: Pick<AppSettings, "showNotifications">;
   onOpenPane: (paneId: string) => void;
 }
 
@@ -16,7 +15,7 @@ export function useUserNotifications(options: UserNotificationOptions) {
   const [userNotifications, setUserNotifications] = useState<UserNotificationItem[]>([]);
 
   const handleUserNotificationRequested = useCallback((event: SessionEvent) => {
-    const { id, title, body, tone, timeoutMs, sound, createdAt } = event.payload;
+    const { id, title, body, tone, timeoutMs, createdAt } = event.payload;
     if (
       typeof id !== "string" ||
       typeof title !== "string" ||
@@ -48,9 +47,6 @@ export function useUserNotifications(options: UserNotificationOptions) {
         },
       ].slice(-20),
     );
-    if (sound === true) {
-      void playCompletionSound(optionsRef.current.settings.completionSound).catch(() => undefined);
-    }
   }, []);
 
   const handleNotificationOpenPane = useCallback(

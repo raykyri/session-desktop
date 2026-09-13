@@ -54,6 +54,7 @@ export function recentResearchQueryFromNode(
     model: node.model,
     status: node.status,
     createdAt: node.createdAt,
+    recap: node.recap?.text.trim() || undefined,
   };
 }
 

@@ -31,7 +31,7 @@
   top: 0;
   left: 0;
   width: 100%;
-  padding-bottom: 10px;
+  padding-bottom: 16px;
   will-change: transform;
 }
 
@@ -122,62 +122,33 @@
 }
 
 /* Research queries: the prompt itself is the card (same surface as
-   .research-prompt). No outer frame — metadata already sits above. */
-.recent-query-card {
-  position: relative;
-}
-
-.recent-query-open {
-  display: block;
-  width: 100%;
-  /* Extra right padding keeps the first line clear of the hover actions. */
-  padding: 10px 56px 10px 14px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--content-card-bg);
-  color: inherit;
-  font: inherit;
-  font-size: var(--fs-input);
-  line-height: 1.5;
-  text-align: left;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.recent-query-actions {
-  position: absolute;
-  top: 6px;
-  right: 6px;
+   .research-prompt), including the conversation markdown renderer so links
+   and emphasis match the document view. */
+.recent-query-block {
   display: flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 6px;
-  background: var(--content-card-bg);
-  opacity: 0;
-  transition: opacity var(--transition-fast);
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
 }
 
-.recent-query-card:hover .recent-query-actions,
-.recent-query-card:focus-within .recent-query-actions {
-  opacity: 1;
+.recent-query-block:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+  border-radius: 10px;
 }
 
-.recent-query-action {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  min-height: 0;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  color: var(--text-subtle);
-  background: transparent;
+.recent-query-card.research-prompt {
+  position: relative;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  cursor: pointer;
 }
 
-.recent-query-action:hover {
-  color: var(--text-interactive);
-  background: var(--surface-fill-hover);
+.recent-query-block .research-recap {
+  margin: 0;
+  padding: 0 3px;
+  line-height: calc(1.5 + var(--transcript-line-height-delta, 0.12));
 }
 
 .recent-activity-load-older {

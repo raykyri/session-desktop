@@ -2813,7 +2813,7 @@ a { color:inherit; text-decoration:none; }
 .research-response-content-root { min-width:0; line-height:1.62; overflow-wrap:anywhere; word-break:break-word; }
 
 /* The user's prompt, visually distinct from the answer below it. */
-.research-prompt { width:fit-content; max-width:min(100%,640px); margin:0 0 26px -14px; padding:10px 14px; border-radius:10px; background:var(--content-card-bg); }
+.research-prompt { width:fit-content; max-width:min(100%,640px); margin:0 0 26px; padding:10px 14px; border-radius:10px; background:var(--content-card-bg); }
 .research-prompt > * { max-width:100%; }
 .research-prompt .turn-markdown { color:#f0f2ef; font-size:14.5px; font-weight:400; line-height:1.5; }
 .research-prompt-quote { margin:0 0 8px; padding-left:10px; border-left:3px solid var(--accent-color); color:#a6aea9; font-size:13.5px; font-style:italic; line-height:1.45; }

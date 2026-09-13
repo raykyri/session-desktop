@@ -1,6 +1,5 @@
 import { RESEARCH_FOLDER_SCOPE_KEY, useResearchNavigationState } from "./hooks/useResearchNavigationState";
 import { useUserNotifications } from "./hooks/useUserNotifications";
-import { CompletionSoundSetting } from "./components/settings/CompletionSoundSetting";
 import { recordRemoteStartup, reconcileRemoteReservation } from "./lib/remoteStartup";
 import RemoteConnectionDetailsText from "./components/RemoteConnectionDetailsText";
 import {
@@ -345,9 +344,6 @@ import {
   SESSION_DRAFT_KEYS,
 } from "./lib/sessionDrafts";
 import {
-  type CompletionSoundId,
-} from "./lib/completionSounds";
-import {
   bodyFontStackFor,
   clampConfirmPasteOverChars,
 
@@ -452,7 +448,6 @@ import {
   browserOpenCodexVisualizationReference,
   browserOpenLocalPath,
   paneActivity,
-  playCompletionSound,
   pickGroupDirectory,
   placePaneAfter,
   removeGroup,
@@ -460,7 +455,6 @@ import {
   renamePane,
   setActiveTab,
   setGroupCollapsed,
-  setCompletionSound,
   setNativeBrowserBackground,
   setNativeBrowserOverlayOpen,
   setPaneLayout,
@@ -904,24 +898,6 @@ function tabTitleProviderLabel(provider: AppSettings["tabTitleProvider"]): strin
   return (
     TAB_TITLE_PROVIDER_OPTIONS.find((option) => option.id === provider)?.label ?? "Tab titles"
   );
-}
-
-function settingsAgentResearchSummary(adapter: AgentAdapterMetadata): string | null {
-  if (!adapter.supportsResearch) {
-    return null;
-  }
-  switch (adapter.researchReadiness) {
-    case "ready":
-      return "Research ready";
-    case "missing":
-      return "Research unavailable";
-    case "needsAuth":
-      return "Research sign-in needed";
-    case "unsupportedVersion":
-      return "Research needs update";
-    case "error":
-      return "Research needs attention";
-  }
 }
 
 /** Catalog colors are bare RRGGBB hex; CSS needs the leading '#'. */
@@ -7562,22 +7538,6 @@ function MainApp() {
     },
     [],
   );
-  const regenerateResearchTreeTitle = useCallback(
-    async (treeId: string) => {
-      try {
-        const detail = await getResearchTree(treeId);
-        const rootNode = detail.nodes.find((node) => node.id === detail.tree.rootNodeId);
-        if (!rootNode) {
-          throw new Error("The research's original query is unavailable.");
-        }
-        const title = await generateResearchAgentTitle(rootNode.id);
-        await renameResearchTree(treeId, title);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    },
-    [],
-  );
   const archiveResearchTreeFromSidebar = useCallback(
     async (treeId: string) => {
       try {
@@ -7900,15 +7860,6 @@ function MainApp() {
     },
     [],
   );
-
-  const testCompletionSound = useCallback(async (soundId: CompletionSoundId) => {
-    try {
-      await playCompletionSound(soundId);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      showAppToast(`Couldn't play completion sound: ${message}`, "warning");
-    }
-  }, []);
 
   useSessionEvents({
     appendHookEvent,
@@ -9774,13 +9725,6 @@ function MainApp() {
     saveSettings(settings);
   }, [settings]);
 
-  // Automatic completion playback is backend-owned so it survives WebKit
-  // process reloads. Synchronize the persisted settings choice on boot/change;
-  // the backend retains the last value while the document is temporarily gone.
-  useEffect(() => {
-    void setCompletionSound(settings.completionSound).catch(() => undefined);
-  }, [settings.completionSound]);
-
   // Persist the OpenRouter key to the backend (its durable, owner-only home) whenever it
   // changes — but only after it has been hydrated from the backend, so the initial
   // in-memory value doesn't clobber the stored key before boot loads it.
@@ -10618,7 +10562,6 @@ function MainApp() {
               onSelect={selectResearchTreeFromSidebar}
               onRename={renameResearchTreeTitle}
               onArchive={archiveResearchTreeFromSidebar}
-              onRegenerateTitle={regenerateResearchTreeTitle}
               onRestore={restoreResearchTreeFromSidebar}
               onRemove={removeResearchTreeFromSidebar}
               onReorder={reorderResearchTreesFromSidebar}
@@ -11287,10 +11230,21 @@ function MainApp() {
                 <div className="settings-agent-list">
                   {readyAdaptersFirst(config?.adapters ?? []).map((adapter) => {
                     const isExpanded = expandedSettingsAgentIds.has(adapter.instanceId);
-                    const researchSummary = settingsAgentResearchSummary(adapter);
+                    const binaryPath = adapter.resolvedBinary ?? adapter.configuredBinary;
                     const safeInstanceId = encodeURIComponent(adapter.instanceId);
                     const summaryId = `settings-agent-summary-${safeInstanceId}`;
                     const detailsId = `settings-agent-details-${safeInstanceId}`;
+                    const toggleExpanded = () => {
+                      setExpandedSettingsAgentIds((current) => {
+                        const next = new Set(current);
+                        if (next.has(adapter.instanceId)) {
+                          next.delete(adapter.instanceId);
+                        } else {
+                          next.add(adapter.instanceId);
+                        }
+                        return next;
+                      });
+                    };
                     return (
                       <section
                         className="settings-agent-card"
@@ -11303,17 +11257,7 @@ function MainApp() {
                           className="settings-agent-summary"
                           aria-expanded={isExpanded}
                           aria-controls={detailsId}
-                          onClick={() => {
-                            setExpandedSettingsAgentIds((current) => {
-                              const next = new Set(current);
-                              if (next.has(adapter.instanceId)) {
-                                next.delete(adapter.instanceId);
-                              } else {
-                                next.add(adapter.instanceId);
-                              }
-                              return next;
-                            });
-                          }}
+                          onClick={toggleExpanded}
                         >
                           <img
                             src={ADAPTER_ICON_BY_ID[adapter.id]}
@@ -11325,8 +11269,12 @@ function MainApp() {
                             <strong>{adapter.label}</strong>
                             <span className="settings-agent-summary-meta">
                               {adapter.version ?? (adapter.resolvedBinary ? "Checking…" : "—")}
-                              {researchSummary ? ` · ${researchSummary}` : null}
                             </span>
+                            {isExpanded && binaryPath ? (
+                              <span className="settings-agent-summary-meta" title={binaryPath}>
+                                {binaryPath}
+                              </span>
+                            ) : null}
                           </span>
                           <span className={`settings-agent-status is-${adapter.readiness}`}>
                             {adapterReadinessLabel(adapter)}
@@ -11343,30 +11291,15 @@ function MainApp() {
                             className="settings-agent-detail"
                             role="region"
                             aria-labelledby={summaryId}
+                            onClick={toggleExpanded}
                           >
-                            <dl className="settings-agent-details">
-                              <div>
-                                <dt>Binary</dt>
-                                <dd title={adapter.resolvedBinary ?? adapter.configuredBinary}>
-                                  {adapter.resolvedBinary ?? adapter.configuredBinary}
-                                </dd>
-                              </div>
-                              <div>
-                                <dt>Checked</dt>
-                                <dd>
-                                  {adapter.checkedAt
-                                    ? new Date(adapter.checkedAt).toLocaleTimeString([], {
-                                        hour: "numeric",
-                                        minute: "2-digit",
-                                      })
-                                    : "Not yet"}
-                                </dd>
-                              </div>
-                            </dl>
                             {adapter.message ? (
                               <p className="settings-agent-message">{adapter.message}</p>
                             ) : null}
-                            <div className="settings-agent-actions">
+                            <div
+                              className="settings-agent-actions"
+                              onClick={(event) => event.stopPropagation()}
+                            >
                               {adapter.updateCommand &&
                               (adapter.readiness === "unsupportedVersion" ||
                                 adapter.researchReadiness === "unsupportedVersion") ? (
@@ -11640,14 +11573,6 @@ function MainApp() {
                 }}
               />
             </label>
-
-            <CompletionSoundSetting
-              value={settings.completionSound}
-              onChange={(completionSound) => {
-                setSettings((current) => ({ ...current, completionSound }));
-              }}
-              onPreview={(sound) => void testCompletionSound(sound)}
-            />
 
             <div className="settings-row settings-research-instructions-row">
               <div className="settings-label-stack">
@@ -12711,6 +12636,14 @@ function MainApp() {
               onUndoRemove={undoJournalRemove}
               onDismissUndo={dismissJournalUndo}
               onOpenResearchQuery={openRecentResearchQuery}
+              folderState={researchFolderState}
+              onRenameResearch={renameResearchTreeTitle}
+              onArchiveResearch={archiveResearchTreeFromSidebar}
+              onRestoreResearch={restoreResearchTreeFromSidebar}
+              onRemoveResearch={removeResearchTreeFromSidebar}
+              onToggleResearchStar={toggleResearchStarFromSidebar}
+              onRequestCreateFolder={requestResearchFolderCreation}
+              onRemoveFromFolder={removeResearchTreesFromFolder}
               onLoadOlder={loadOlderActivity}
               onRefresh={() => void refreshResearchNavigation()}
               canGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
