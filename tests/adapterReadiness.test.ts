@@ -35,6 +35,7 @@ function adapter(
     auth: "unknown",
     checkedAt: null,
     loginCommand: null,
+    installCommand: null,
     installUrl: null,
     updateCommand: null,
     instanceId: `local:${id}`,
