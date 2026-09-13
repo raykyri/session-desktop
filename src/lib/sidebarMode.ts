@@ -4,6 +4,7 @@ import { type ResearchFolderScope, workspaceIsInResearchScope } from "./research
 export type SidebarMode = "terminal" | "research";
 
 export const SIDEBAR_MODE_STORAGE_KEY = "session.sidebar-mode.v1";
+export const RESEARCH_HOME_TAB_ID = "__research_home__";
 const RESEARCH_TREE_TAB_PREFIX = "__research_tree__:";
 
 export function researchTreeTabId(treeId: string): string {
@@ -28,7 +29,10 @@ export function researchCycleTabIds(
   trees: ResearchTreeSummary[],
   scope: ResearchFolderScope,
 ): string[] {
-  return trees
-    .filter((tree) => workspaceIsInResearchScope(tree.workspaceId, scope))
-    .map((tree) => researchTreeTabId(tree.id));
+  return [
+    RESEARCH_HOME_TAB_ID,
+    ...trees
+      .filter((tree) => workspaceIsInResearchScope(tree.workspaceId, scope))
+      .map((tree) => researchTreeTabId(tree.id)),
+  ];
 }
