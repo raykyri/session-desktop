@@ -52,5 +52,12 @@ test("research prose adapts transcript typography on the renderer, not layout ro
 test("shared tweet and attachment recipes do not depend on Home CSS", () => {
   assert.match(surfaceCss, /\.journal-tweet\s*\{/);
   assert.match(surfaceCss, /\.research-message-attachments\.has-prompt\s*\{/);
+  const attachment = ruleBody(surfaceCss, ".research-message-attachment");
+  assert.match(attachment, /border:\s*1px solid var\(--surface-border-default\)/);
+  assert.match(attachment, /border-radius:\s*12px/);
+  assert.doesNotMatch(
+    ruleBody(surfaceCss, ".research-message-attachments.has-prompt"),
+    /border-top/,
+  );
   assert.doesNotMatch(journalCss, /\.research-message-attachments\.has-prompt\s*\{/);
 });

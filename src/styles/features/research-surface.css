@@ -538,16 +538,19 @@ a.journal-tweet-more:hover {
   height: 13px;
 }
 
-/* Tweet attachments reuse the journal embed without inheriting the journal
-   entry wrapper. Text and embeds remain one authored research message. */
+/* Tweet attachments reuse the shared embed without inheriting the Home entry
+   wrapper. Each attachment gets its own inset outline so it reads as an embed,
+   rather than being separated from the authored prompt by a horizontal rule. */
 .research-message-attachments.has-prompt {
   margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--surface-border-subtle);
+}
+
+.research-message-attachment {
+  padding: 12px;
+  border: 1px solid var(--surface-border-default);
+  border-radius: 12px;
 }
 
 .research-message-attachment + .research-message-attachment {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--surface-border-subtle);
+  margin-top: 10px;
 }
