@@ -6,6 +6,7 @@ import {
   activityEventFromJournalEntry,
   activityEventFromResearchQuery,
   buildRecentActivity,
+  buildRecentActivityFromItems,
   mergeRecentActivityItems,
   recentActivityItemFromJournalEntry,
   reconcileRecentActivityHead,
@@ -117,6 +118,32 @@ test("mixed activity sorts deterministically and malformed saved dates last", ()
   assert.deepEqual(
     buildRecentActivity(entries, [query], [tree]).map((event) => event.id),
     ["journal:new", "research:child", "journal:bad"],
+  );
+});
+
+test("Home hides archived research and shows it again when restored", () => {
+  const items: RecentActivityItem[] = [
+    { kind: "research-query", occurredAt: query.createdAt, query },
+    {
+      kind: "research-query",
+      occurredAt: 150,
+      query: { ...query, nodeId: "active", treeId: "active-tree", createdAt: 150 },
+    },
+    recentActivityItemFromJournalEntry({
+      kind: "link", id: "saved", createdAt: "1970-01-01T00:00:00.100Z",
+      url: "https://example.com/paper",
+    }),
+  ];
+  const activeTree = { ...tree, id: "active-tree" };
+  assert.deepEqual(
+    buildRecentActivityFromItems(items, [{ ...tree, archivedAt: 300 }, activeTree])
+      .map((event) => event.id),
+    ["research:active", "journal:saved"],
+  );
+  assert.deepEqual(
+    buildRecentActivityFromItems(items, [{ ...tree, archivedAt: null }, activeTree])
+      .map((event) => event.id),
+    ["research:child", "research:active", "journal:saved"],
   );
 });
 

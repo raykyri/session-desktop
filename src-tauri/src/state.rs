@@ -4135,7 +4135,10 @@ impl AppState {
             .chain(model.research_nodes.values().filter_map(|node| {
                 (node.kind.is_run()
                     && node.parent_node_id.is_none()
-                    && model.research_trees.contains_key(&node.tree_id))
+                    && model
+                        .research_trees
+                        .get(&node.tree_id)
+                        .is_some_and(|tree| tree.archived_at.is_none()))
                 .then_some(Candidate {
                     occurred_at: node.created_at,
                     source_rank: RESEARCH_ACTIVITY_SOURCE_RANK,
@@ -13117,6 +13120,34 @@ mod tests {
             vec!["old-link".to_string()]
         );
         assert!(third.next_cursor.is_none());
+
+        {
+            let mut model = state.inner.model.lock().unwrap();
+            model
+                .research_trees
+                .get_mut(&detail.tree.id)
+                .unwrap()
+                .archived_at = Some(400);
+        }
+        let archived_page = state.list_recent_activity(2, None).unwrap();
+        assert_eq!(
+            archived_page.items.iter().map(item_id).collect::<Vec<_>>(),
+            vec!["new-link".to_string(), "tied-link".to_string()]
+        );
+        let archived_tail = state
+            .list_recent_activity(2, archived_page.next_cursor)
+            .unwrap();
+        assert_eq!(
+            archived_tail.items.iter().map(item_id).collect::<Vec<_>>(),
+            vec!["old-link".to_string()]
+        );
+        assert!(archived_tail.next_cursor.is_none());
+
+        state.restore_research_tree(&detail.tree.id).unwrap();
+        assert_eq!(
+            state.list_recent_activity(100, None).unwrap().items.len(),
+            5
+        );
     }
 
     #[test]
