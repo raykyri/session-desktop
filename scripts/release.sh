@@ -93,18 +93,18 @@ if ! command -v gh >/dev/null || ! gh auth status >/dev/null 2>&1; then
 fi
 
 default_updater_key="$HOME/.tauri/release-updater.key"
-if [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" && -f "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
-  export TAURI_SIGNING_PRIVATE_KEY_PATH="$TAURI_SIGNING_PRIVATE_KEY"
-  unset TAURI_SIGNING_PRIVATE_KEY
-fi
-if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" && -z "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" && ! -f "$default_updater_key" ]]; then
-  echo "Set TAURI_SIGNING_PRIVATE_KEY, set TAURI_SIGNING_PRIVATE_KEY_PATH, or install the updater key at:" >&2
-  echo "  $default_updater_key" >&2
-  exit 1
-fi
-if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" && ! -f "$TAURI_SIGNING_PRIVATE_KEY_PATH" ]]; then
-  echo "Updater signing key does not exist: $TAURI_SIGNING_PRIVATE_KEY_PATH" >&2
-  exit 1
+if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
+  updater_key_path="${TAURI_SIGNING_PRIVATE_KEY_PATH:-$default_updater_key}"
+  if [[ ! -f "$updater_key_path" ]]; then
+    echo "Updater signing failed: a public key is configured, but no private key was provided." >&2
+    if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" ]]; then
+      echo "Private key file does not exist: $updater_key_path" >&2
+    fi
+    echo "Set TAURI_SIGNING_PRIVATE_KEY, set TAURI_SIGNING_PRIVATE_KEY_PATH, or install the updater key at:" >&2
+    echo "  $default_updater_key" >&2
+    exit 1
+  fi
+  export TAURI_SIGNING_PRIVATE_KEY="$updater_key_path"
 fi
 
 if [[ -z "${APPLE_SIGNING_IDENTITY:-}" ]]; then
