@@ -1148,10 +1148,13 @@ function ResearchActivityFeed({
             </div>
             {feed.length === 0 ? (
               <div className="journal-empty-container">
-                <p className="journal-empty">
-                  Research queries and saved sources appear here, newest first.
-                </p>
-                {setupGuide ? <div className="journal-setup-guide">{setupGuide}</div> : null}
+                {setupGuide ? (
+                  <div className="journal-setup-guide">{setupGuide}</div>
+                ) : (
+                  <p className="journal-empty">
+                    Research queries and saved sources appear here, newest first.
+                  </p>
+                )}
               </div>
             ) : null}
             <div
