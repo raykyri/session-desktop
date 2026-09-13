@@ -48,7 +48,7 @@ Install dependencies and run the application:
 
 ```sh
 npm install
-npm run dev:tauri
+npm run dev
 ```
 
 Build and validate:

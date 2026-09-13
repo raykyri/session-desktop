@@ -18,7 +18,7 @@ first.
   use the same workspace history as research documents.
 
 The feed renders directly in the application. It has no iframe, template SDK,
-external source chooser, or separate development server. Use `npm run dev:tauri`
+external source chooser, or separate development server. Use `npm run dev`
 for application development and `npm run test:unit` for feed, pagination, and
 state-restoration coverage.
 
