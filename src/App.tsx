@@ -178,7 +178,6 @@ import {
   desiredPreventSleepState,
   agentCanFork,
   agentDisplayBranch,
-  agentDisplayDirectory,
   agentStatusTone,
   clamp,
   clampContextMenuToViewport,
@@ -191,7 +190,6 @@ import {
 
   repositoryWorktreeName,
   selectPaneAfterClose,
-  statusLabel,
   upsertThreadGraphs,
 } from "./lib/appHelpers";
 import { sanitizeTerminalTitle } from "./lib/terminalTitle";
@@ -202,10 +200,6 @@ import {
   unconfiguredSshAliases,
   type RemoteSettingsDraft,
 } from "./lib/remoteSettings";
-import {
-  agentTabStatusPill,
-  queueWaitsOnOtherAgent,
-} from "./lib/composerActions";
 import {
   windowFocusKeyboardOwner,
 } from "./lib/windowFocus";
@@ -408,7 +402,6 @@ import {
   getWorktreeLocation,
   generateResearchAgentTitle,
   killPane,
-  listenToMenuBarSelectPane,
   listGroups,
   listAgents,
   listSshConfigAliases,
@@ -450,7 +443,6 @@ import {
   setPaneSplits as persistPaneSplits,
   setAgentDraft as persistAgentDraft,
   setAgentTyping,
-  setMenuBarVisible,
   setShowHideShortcut,
   setShowHideShortcutCaptureActive,
   setPreventSleep,
@@ -465,7 +457,6 @@ import {
   paneRepositoryInventory,
   suggestPaneWorktreeName,
   upsertRemote,
-  updateMenuBar,
   worktreeStatus,
 } from "./lib/api";
 import type {
@@ -501,7 +492,6 @@ import type {
   WaitTarget,
 } from "./types";
 import type { ShowHideShortcutSetting } from "./lib/api";
-import type { MenuBarSnapshot, MenuBarStatusTone } from "./lib/api";
 
 const LEFT_SIDEBAR_DEFAULT_WIDTH = 268;
 
@@ -2379,7 +2369,6 @@ function MainApp() {
   );
 
   const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
-  const terminalGroups = useMemo(() => groupsForScope(groups, "terminal"), [groups]);
   const researchGroups = useMemo(() => groupsForScope(groups, "research"), [groups]);
   const researchScope = useMemo(
     () => resolveResearchScope(researchFolderScope, researchGroups),
@@ -3032,8 +3021,8 @@ function MainApp() {
   // Committed per pane on a trailing debounce rather than per event: programs
   // that stream progress into the terminal title (OSC 0/2 spinners, build
   // percentages) emit a distinct title many times a second, and committing each
-  // one re-rendered the whole app and rebuilt the tray-menu snapshot per change
-  // — a busy terminal made typing lag everywhere else. A tab label lagging its
+  // one re-rendered the whole app — a busy terminal made typing lag everywhere
+  // else. A tab label lagging its
   // terminal by a couple hundred milliseconds is imperceptible.
 
   function paneUsesDefaultTitle(pane: PaneInfo, agent: AgentInfo | undefined): boolean {
@@ -3070,38 +3059,6 @@ function MainApp() {
     return normalizedTerminalTitle && paneUsesDefaultTitle(pane, agent)
       ? normalizedTerminalTitle
       : pane.title;
-  }
-
-  function queuedTurnsForAgent(agent: AgentInfo | undefined): QueuedTurn[] {
-    return agent ? (queuedTurnsByAgent[agent.id] ?? []) : [];
-  }
-
-  function paneWaitsOnOtherPane(agent: AgentInfo | undefined): boolean {
-    return agent ? queueWaitsOnOtherAgent(agent.id, queuedTurnsForAgent(agent)) : false;
-  }
-
-  function paneTabStatusTone(agent: AgentInfo | undefined): MenuBarStatusTone {
-    return agent ? agentStatusTone(agent.status) : "idle";
-  }
-
-  function paneTabStatusLabel(pane: PaneInfo, agent: AgentInfo | undefined): string | null {
-    if (agent) {
-      return agentTabStatusPill(
-        agent.status,
-        queuedTurnsForAgent(agent).length,
-        paneWaitsOnOtherPane(agent),
-      );
-    }
-    const rawStatus = statusLabel(pane.status);
-    return rawStatus === "Running" ? null : rawStatus;
-  }
-
-  function paneTabStatusMetaLabel(pane: PaneInfo, agent: AgentInfo | undefined): string | null {
-    const tabStatus = paneTabStatusLabel(pane, agent);
-    if (pane.recovered && tabStatus) {
-      return `Restored, ${tabStatus}`;
-    }
-    return pane.recovered ? "Restored" : tabStatus;
   }
 
   function showAppToast(message: string, tone: "normal" | "warning" = "normal") {
@@ -4752,76 +4709,6 @@ function MainApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleTurnPaneAgentIdsKey]);
 
-  // Content-unchanged rebuilds are already rare here: the agents array keeps
-  // its identity across no-op hook events (upsertAgent bails out), terminal
-  // titles commit on a debounce, and the JSON comparison below gates the IPC
-  // and AppKit rebuild. What remains is a small O(panes) structure per real
-  // change, sharing the app-level agentByPaneId map instead of rebuilding one.
-  const menuBarSnapshot = useMemo<MenuBarSnapshot>(() => {
-    const groupedPaneIds = new Set<string>();
-    const tabForPane = (pane: PaneInfo) => {
-      const paneAgent = agentByPaneId.get(pane.id);
-      const paneDir = agentDisplayDirectory(paneAgent, pane.cwd);
-      groupedPaneIds.add(pane.id);
-      return {
-        paneId: pane.id,
-        title: displayPaneTitle(pane, paneAgent),
-        path: settings.codeMode && settings.showTabDirectories && paneDir
-          ? formatPaneDir(paneDir)
-          : null,
-        statusTone: paneTabStatusTone(paneAgent),
-        statusLabel: paneTabStatusMetaLabel(pane, paneAgent),
-        waitingOnPane: paneWaitsOnOtherPane(paneAgent),
-        selected: pane.id === activePane?.id,
-      };
-    };
-
-    const snapshotGroups = terminalGroups.map((group) => ({
-      id: group.id,
-      label: group.nameOverride?.trim() || middleTruncatePath(formatPaneDir(groupRootDir(group))),
-      tabs: sidebarPanes.filter((pane) => pane.groupId === group.id).map(tabForPane),
-    }));
-    const orphanTabs = sidebarPanes
-      .filter((pane) => !groupedPaneIds.has(pane.id))
-      .map(tabForPane);
-    if (orphanTabs.length > 0) {
-      snapshotGroups.push({
-        id: "__orphaned__",
-        label: "Other Tabs",
-        tabs: orphanTabs,
-      });
-    }
-    return { groups: snapshotGroups };
-  }, [
-    activePane?.id,
-    agentByPaneId,
-    config,
-    sidebarPanes,
-    manuallyTitledPaneIds,
-    terminalGroups,
-    queuedTurnsByAgent,
-    settings.codeMode,
-    settings.showTabDirectories,
-    terminalTitleByPane,
-  ]);
-
-  // The snapshot memo recomputes whenever any input's identity changes (agents
-  // churn on every status hook), but the tray only needs an IPC — and AppKit
-  // only needs a full menu rebuild — when the visible content actually changed.
-  const lastMenuBarSnapshotJsonRef = useRef<string | null>(null);
-  useEffect(() => {
-    const json = JSON.stringify(menuBarSnapshot);
-    if (json === lastMenuBarSnapshotJsonRef.current) {
-      return;
-    }
-    lastMenuBarSnapshotJsonRef.current = json;
-    void updateMenuBar(menuBarSnapshot).catch(() => undefined);
-  }, [menuBarSnapshot]);
-
-  useEffect(() => {
-    void setMenuBarVisible(settings.showMenuBarIcon).catch(() => undefined);
-  }, [settings.showMenuBarIcon]);
-
   useEffect(() => {
     agentsRef.current = agents;
   }, [agents]);
@@ -4896,25 +4783,6 @@ function MainApp() {
       return rawPath;
     }
     return `…/${segments.slice(-2).join("/")}`;
-  }
-
-  // Shorten a display path to fit the narrow sidebar button, preserving the final
-  // folder name (the most useful part) and the leading anchor while collapsing the
-  // middle to "…". CSS ellipsis is a last-resort safety net; this keeps the tail
-  // visible, which left-side CSS truncation would hide.
-  function middleTruncatePath(label: string, maxChars = 32): string {
-    if (label.length <= maxChars) {
-      return label;
-    }
-    const segments = label.split("/");
-    const tail = segments.pop() || segments.pop() || label;
-    const head = segments.shift() ?? "";
-    const candidate = head ? `${head}/…/${tail}` : `…/${tail}`;
-    if (candidate.length <= maxChars) {
-      return candidate;
-    }
-    // Even the final segment alone overflows: clip it from the left so its end shows.
-    return `…${tail.slice(-Math.max(4, maxChars - 1))}`;
   }
 
   // The directory a group's default title reflects: its root terminal (the first,
@@ -8396,31 +8264,6 @@ function MainApp() {
     return commands;
   }
 
-  useEffect(() => {
-    let disposed = false;
-    let cleanup: (() => void) | undefined;
-    void listenToMenuBarSelectPane(({ paneId }) => {
-      if (disposed || !panesRef.current.some((pane) => pane.id === paneId)) {
-        return;
-      }
-      focusPaneTab(paneId);
-    }).then((unlisten) => {
-      if (disposed) {
-        unlisten();
-      } else {
-        cleanup = unlisten;
-      }
-    });
-
-    return () => {
-      disposed = true;
-      cleanup?.();
-    };
-    // The listener reads live pane/agent state through refs and uses stable state
-    // setters, so it should be registered once for the app lifetime.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   function panesWithGroupOrder(
     groupId: string,
     nextGroupPanes: PaneInfo[],
@@ -11663,19 +11506,6 @@ function MainApp() {
                   // has been nulled out.
                   const preventSleep = event.currentTarget.checked;
                   setSettings((current) => ({ ...current, preventSleep }));
-                }}
-              />
-            </label>
-
-            <label className="settings-row settings-toggle">
-              <span className="settings-label">Show menu bar icon</span>
-              <input
-                type="checkbox"
-                className="settings-checkbox"
-                checked={settings.showMenuBarIcon}
-                onChange={(event) => {
-                  const showMenuBarIcon = event.currentTarget.checked;
-                  setSettings((current) => ({ ...current, showMenuBarIcon }));
                 }}
               />
             </label>

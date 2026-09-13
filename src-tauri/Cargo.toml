@@ -48,7 +48,7 @@ serde_json = "1"
 # on the 2.11 minor while Session also reaches the platform WKWebView handle for its
 # native shortcut bridge; that handle is explicitly allowed to change between
 # Tauri minor releases.
-tauri = { version = "~2.11.3", features = ["macos-private-api", "tray-icon", "unstable"] }
+tauri = { version = "~2.11.3", features = ["macos-private-api", "unstable"] }
 tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 url = "2"
 tauri-plugin-clipboard-manager = "2.3.2"
@@ -57,45 +57,6 @@ tauri-plugin-global-shortcut = "2.3.2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 window-vibrancy = "0.7.1"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6"
-objc2-app-kit = { version = "0.3", default-features = false, features = [
-    "std",
-    "objc2-core-foundation",
-    "NSButton",
-    "NSCell",
-    "NSColor",
-    "NSControl",
-    "NSEvent",
-    "NSFont",
-    "NSGraphics",
-    "NSImage",
-    "NSMenu",
-    "NSMenuItem",
-    "NSResponder",
-    "NSStatusBar",
-    "NSStatusBarButton",
-    "NSStatusItem",
-    "NSText",
-    "NSTextField",
-    "NSView",
-] }
-objc2-foundation = { version = "0.3", default-features = false, features = [
-    "std",
-    "NSArray",
-    "NSAttributedString",
-    "NSCoder",
-    "NSDictionary",
-    "NSGeometry",
-    "NSNotification",
-    "NSObject",
-    "NSRange",
-    "NSString",
-    "NSTextCheckingResult",
-    "NSThread",
-    "objc2-core-foundation",
-] }
 
 # Wry 0.55.1 lets a Rust panic escape its Objective-C WKURLSchemeHandler
 # callbacks, which turns a recoverable custom-protocol failure into SIGABRT.
