@@ -1,8 +1,6 @@
 use crate::journal::JournalState;
 use crate::research::{ResearchFolderState, ResearchNode, ResearchTree};
-use crate::state::{
-    ArtifactInfo, GlobalDraft, PaneInfo, PaneSplitInfo, QueuedTurn, RecentSessionInfo,
-};
+use crate::state::{ArtifactInfo, GlobalDraft, PaneInfo, PaneSplitInfo, QueuedTurn};
 use crate::thread_graph::ThreadRecord;
 use crate::user_notifications::NotificationLog;
 use crate::workspace::{AgentInfo, GroupInfo};
@@ -10,7 +8,6 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::ErrorKind;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -74,10 +71,6 @@ pub struct PersistedState {
     pub agents: Vec<AgentInfo>,
     #[serde(default)]
     pub queues: HashMap<String, Vec<QueuedTurn>>,
-    /// Durable, tab-independent history of resumable agent sessions. Unlike `agents`,
-    /// entries remain after their tab closes so Home can show recent work.
-    #[serde(default)]
-    pub recent_sessions: Vec<RecentSessionInfo>,
     /// Artifact-tray entries: files/loopback URLs opened from agent panes via
     /// `session open`, oldest first. Entries outlive their pane (the tray is
     /// workspace-scoped) and are pruned when their group is deleted.
@@ -148,7 +141,6 @@ impl Default for PersistedState {
             group_order: Vec::new(),
             agents: Vec::new(),
             queues: HashMap::new(),
-            recent_sessions: Vec::new(),
             artifacts: Vec::new(),
             drafts: HashMap::new(),
             global_drafts: Vec::new(),
@@ -649,56 +641,7 @@ fn migrate_v2_to_v3(value: &mut Value) {
         }
     }
 
-    // Research trees are their own durable history. Remove their native agent
-    // sessions from Home's recent-session pool instead of tagging/filtering them;
-    // otherwise they consume the global pruning cap and can evict terminal work.
-    let mut agent_ids = HashSet::new();
-    let mut pane_ids = HashSet::new();
-    let mut session_ids = HashSet::new();
-    let mut transcript_paths = HashSet::new();
-    for node in research_nodes.values().filter_map(Value::as_object) {
-        collect_nonempty_string(node, "agentId", &mut agent_ids);
-        collect_nonempty_string(node, "paneId", &mut pane_ids);
-        collect_nonempty_string(node, "nativeSessionId", &mut session_ids);
-        collect_nonempty_string(node, "transcriptPath", &mut transcript_paths);
-    }
-    if let Some(Value::Array(sessions)) = map.get_mut("recentSessions") {
-        sessions.retain(|session| {
-            let Some(session) = session.as_object() else {
-                return true;
-            };
-            !value_matches_set(session, "agentId", &agent_ids)
-                && !value_matches_set(session, "paneId", &pane_ids)
-                && !value_matches_set(session, "sessionId", &session_ids)
-                && !value_matches_set(session, "transcriptPath", &transcript_paths)
-        });
-    }
-
     map.insert("version".to_string(), Value::from(STATE_VERSION));
-}
-
-fn collect_nonempty_string(
-    map: &serde_json::Map<String, Value>,
-    key: &str,
-    values: &mut HashSet<String>,
-) {
-    if let Some(value) = map
-        .get(key)
-        .and_then(Value::as_str)
-        .filter(|value| !value.trim().is_empty())
-    {
-        values.insert(value.to_string());
-    }
-}
-
-fn value_matches_set(
-    map: &serde_json::Map<String, Value>,
-    key: &str,
-    values: &HashSet<String>,
-) -> bool {
-    map.get(key)
-        .and_then(Value::as_str)
-        .is_some_and(|value| values.contains(value))
 }
 
 /// Rebuilds a `PersistedState` from an already-validated JSON object, converting
@@ -722,7 +665,6 @@ fn deserialize_lenient(value: Value) -> (PersistedState, Vec<String>) {
     state.panes = take_vec(&mut map, "panes", "pane", &mut dropped);
     state.groups = take_vec(&mut map, "groups", "group", &mut dropped);
     state.agents = take_vec(&mut map, "agents", "agent", &mut dropped);
-    state.recent_sessions = take_vec(&mut map, "recentSessions", "recent session", &mut dropped);
     state.artifacts = take_vec(&mut map, "artifacts", "artifact", &mut dropped);
     state.pane_splits = take_vec(&mut map, "paneSplits", "pane split", &mut dropped);
     state.group_order = take_string_vec(&mut map, "groupOrder");
@@ -1412,7 +1354,7 @@ mod tests {
     }
 
     #[test]
-    fn version_two_shape_migration_backfills_workspace_and_drops_research_recents() {
+    fn version_two_shape_migration_backfills_workspace() {
         let mut value = serde_json::json!({
             "version": 2,
             "researchTrees": {
@@ -1426,29 +1368,13 @@ mod tests {
                     "nativeSessionId": "research-session",
                     "transcriptPath": "/tmp/research.jsonl"
                 }
-            },
-            "recentSessions": [
-                { "id": "by-agent", "agentId": "research-agent" },
-                { "id": "by-pane", "paneId": "research-pane" },
-                { "id": "by-session", "sessionId": "research-session" },
-                { "id": "by-transcript", "transcriptPath": "/tmp/research.jsonl" },
-                { "id": "terminal", "agentId": "terminal-agent" }
-            ]
+            }
         });
 
         migrate_v2_to_v3(&mut value);
 
         assert_eq!(value["version"], serde_json::json!(STATE_VERSION));
         assert_eq!(value["researchTrees"]["tree-1"]["workspaceId"], "group-1");
-        assert_eq!(
-            value["recentSessions"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .filter_map(|session| session["id"].as_str())
-                .collect::<Vec<_>>(),
-            vec!["terminal"]
-        );
     }
 
     #[test]

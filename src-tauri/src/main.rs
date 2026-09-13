@@ -88,8 +88,7 @@ use workspace::{
     checkout_repository_branch, clear_agent_working_status, create_group,
     create_research_workspace, create_shell_worktree, ensure_default_research_workspace,
     group_recoverable_dir, move_research_workspace, remove_agent_worktree,
-    remove_pristine_group_scaffold, remove_research_workspace, rename_group,
-    rename_research_workspace, repository_inventory, set_group_collapsed, set_group_dir,
+    remove_research_workspace, rename_group, rename_research_workspace, repository_inventory,
     suggested_shell_worktree_name, validate_launch_workspace,
 };
 
@@ -793,11 +792,6 @@ fn open_path_in_file_manager(path: &std::path::Path) -> Result<(), String> {
         .spawn()
         .map(|_| ())
         .map_err(|err| format!("failed to open {}: {err}", path.display()))
-}
-
-#[tauri::command]
-fn active_tab_get(state: tauri::State<'_, AppState>) -> Result<Option<String>, String> {
-    state.active_tab_id()
 }
 
 #[tauri::command]
@@ -1669,9 +1663,6 @@ async fn create_research_tree(
             &state,
             &root.id,
             &workspace,
-            &root.adapter,
-            root.model.clone(),
-            root.effort.clone(),
             tweets::prompt_with_research_attachments(root.prompt.clone(), &root.attachments),
         ) {
             Ok(_) => state.research_tree(&detail.tree.id),
@@ -1706,20 +1697,14 @@ fn launch_research_execution(
     research_runtime::launch(state, node, workspace, prompt, resume, fork_from.is_some())
 }
 
-/// Launches a fresh (non-forked) agent run for an admitted research node and
-/// binds the resulting pane. Shared by root-run creation and document
-/// follow-ups. On failure the node is failed and any spawned pane reclaimed;
-/// tree-level rollback stays with the caller.
+/// Launches a fresh (non-forked) agent run for a research node.
+/// Shared by root-run creation, retries, and document/conversation follow-ups.
 fn launch_fresh_research_run(
     state: &AppState,
     node_id: &str,
     workspace: &workspace::GroupInfo,
-    adapter: &str,
-    model: Option<String>,
-    effort: Option<String>,
     prompt: String,
 ) -> Result<research::ResearchNode, String> {
-    let _ = (adapter, model, effort);
     let node = state.research_node(node_id)?;
     launch_research_execution(state, &node, workspace, prompt, None)
 }
@@ -1949,15 +1934,7 @@ fn launch_research_child_run(
                     return Err(err);
                 }
             };
-            return launch_fresh_research_run(
-                state,
-                &child.id,
-                workspace,
-                &child.adapter,
-                child.model.clone(),
-                child.effort.clone(),
-                launch_prompt,
-            );
+            return launch_fresh_research_run(state, &child.id, workspace, launch_prompt);
         }
         research::ResearchNodeKind::Conversation => {
             // An exported conversation is severed from its source session
@@ -1984,15 +1961,7 @@ fn launch_research_child_run(
                     return Err(err);
                 }
             };
-            return launch_fresh_research_run(
-                state,
-                &child.id,
-                workspace,
-                &child.adapter,
-                child.model.clone(),
-                child.effort.clone(),
-                launch_prompt,
-            );
+            return launch_fresh_research_run(state, &child.id, workspace, launch_prompt);
         }
         research::ResearchNodeKind::Run => {}
     }
@@ -2090,9 +2059,6 @@ async fn retry_research_node(
                 &state,
                 &node.id,
                 &workspace,
-                &node.adapter,
-                node.model.clone(),
-                node.effort.clone(),
                 tweets::prompt_with_research_attachments(node.prompt.clone(), &node.attachments),
             ),
             Some(parent_id) => {
@@ -2270,19 +2236,6 @@ async fn group_create(
 }
 
 #[tauri::command]
-fn group_remove(state: tauri::State<'_, AppState>, group_id: String) -> Result<(), String> {
-    if state
-        .group(&group_id)?
-        .is_some_and(|group| group.scope != workspace::WorkspaceScope::Terminal)
-    {
-        return Err(
-            "use the research workspace removal command for Research workspaces".to_string(),
-        );
-    }
-    state.remove_group(&group_id)
-}
-
-#[tauri::command]
 fn group_rename(
     state: tauri::State<'_, AppState>,
     group_id: String,
@@ -2299,112 +2252,12 @@ fn group_reorder(
     state.reorder_groups(group_ids)
 }
 
-#[tauri::command]
-fn group_set_collapsed(
-    state: tauri::State<'_, AppState>,
-    group_id: String,
-    collapsed: bool,
-) -> Result<GroupInfo, String> {
-    set_group_collapsed(&state, &group_id, collapsed)
-}
-
 // Commands whose bodies can block for seconds or longer run on tokio's
 // dedicated blocking pool (spawn_blocking, which grows to hundreds of threads)
 // rather than as `(async)` sync bodies: the latter execute inline on the
 // runtime's core workers (one per CPU), so a handful of concurrent git
 // checkouts — or a folder picker parked open — could otherwise starve every
 // other command, including pane writes and turn submits.
-//
-// The group-creation folder picker is split from creation itself so the
-// frontend can compose directory sources — a picked local folder, or `~`
-// for a remote group's home directory — before committing to the atomic
-// create-with-shell command below.
-#[tauri::command]
-async fn group_pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        pick_folder_dialog(&app, "Select the group directory")
-    })
-    .await
-    .map_err(|err| format!("group_pick_folder task failed: {err}"))?
-}
-
-#[derive(Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct GroupWithInitialPane {
-    group: GroupInfo,
-    pane: PaneInfo,
-}
-
-/// Creates a group and its first shell pane as one operation. The two used to
-/// be separate frontend round trips, which left a dead, empty group behind
-/// whenever the first spawn failed; creation with a rollback keeps the pair
-/// atomic from the frontend's point of view. The same transaction now covers
-/// remote creation, where connection and tmux setup errors are common enough
-/// that an empty half-created group would be especially confusing.
-#[tauri::command]
-async fn group_create_with_shell(
-    state: tauri::State<'_, AppState>,
-    dir: String,
-    after_group_id: Option<String>,
-    initial_size: Option<InitialPaneSize>,
-    remote_id: Option<String>,
-) -> Result<GroupWithInitialPane, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let group = create_group(
-            &state,
-            prepare_remote_group_request(
-                &state,
-                CreateGroupRequest {
-                    remote_id,
-                    name: None,
-                    dir: Some(dir),
-                    after_group_id,
-                    base_repo: None,
-                    base_ref: None,
-                    remote: None,
-                },
-            )?,
-        )?;
-        match spawn_shell_pane(&state, initial_size, None, Some(&group.id)) {
-            Ok(pane) => Ok(GroupWithInitialPane { group, pane }),
-            Err(err) => {
-                // Best-effort rollback; the spawn error is the one worth
-                // surfacing even if the removal also fails.
-                match state.remove_group(&group.id) {
-                    Ok(()) => remove_pristine_group_scaffold(&group),
-                    Err(remove_err) => {
-                        eprintln!(
-                            "session: failed to roll back group {} after its first shell failed to spawn: {remove_err}",
-                            group.id
-                        );
-                    }
-                }
-                Err(err)
-            }
-        }
-    })
-    .await
-    .map_err(|err| format!("group_create_with_shell task failed: {err}"))?
-}
-
-#[tauri::command]
-async fn group_pick_dir(
-    app: tauri::AppHandle,
-    state: tauri::State<'_, AppState>,
-    group_id: String,
-) -> Result<Option<GroupInfo>, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        match pick_folder_dialog(&app, "Select the group directory")? {
-            Some(path) => set_group_dir(&state, &group_id, path).map(Some),
-            None => Ok(None),
-        }
-    })
-    .await
-    .map_err(|err| format!("group_pick_dir task failed: {err}"))?
-}
-
 #[tauri::command]
 async fn spawn_shell(
     state: tauri::State<'_, AppState>,
@@ -3689,7 +3542,6 @@ fn main() {
             openrouter_key_get,
             openrouter_key_set,
             openrouter_chat_completion,
-            active_tab_get,
             active_tab_set,
             browser_backend::browser_automation_snapshot,
             browser_backend::browser_automation_start_screencast,
@@ -3776,13 +3628,8 @@ fn main() {
             list_agent_transcripts,
             set_agent_transcript,
             group_create,
-            group_remove,
             group_rename,
             group_reorder,
-            group_set_collapsed,
-            group_pick_folder,
-            group_create_with_shell,
-            group_pick_dir,
             spawn_shell,
             suggest_pane_worktree_name,
             open_pane_worktree,
