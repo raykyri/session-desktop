@@ -104,6 +104,7 @@ import {
   timelineStatusClass,
 } from "../TranscriptActivity";
 import ResearchRecap from "./ResearchRecap";
+import { ResearchMessageBody } from "./ResearchMessage";
 import TranscriptMarkdown, {
   TranscriptLinkActionsProvider,
   type LinkActions,
@@ -1483,6 +1484,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   parentNodeId,
   queryQuote,
   prompt,
+  attachments = [],
   adapter,
   model,
   replyToAnswer,
@@ -1493,6 +1495,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   parentNodeId: string | null;
   queryQuote: string | null;
   prompt: string;
+  attachments?: ResearchNode["attachments"];
   adapter: string;
   model?: string | null;
   replyToAnswer?: string | null;
@@ -1528,7 +1531,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
         {queryQuote ? (
           <blockquote className="research-prompt-quote">{quoteDisplayText(queryQuote)}</blockquote>
         ) : null}
-        <TranscriptMarkdown text={prompt} imageBehavior="open" />
+        <ResearchMessageBody prompt={prompt} attachments={attachments} />
       </div>
     </div>
   );
@@ -1591,6 +1594,7 @@ const ThreadSegment = memo(function ThreadSegment({
         parentNodeId={node.parentNodeId ?? null}
         queryQuote={node.queryAnchor?.exact ?? null}
         prompt={node.prompt}
+        attachments={node.attachments}
         adapter={node.adapter}
         model={node.model}
         replyToAnswer={replyToAnswer}

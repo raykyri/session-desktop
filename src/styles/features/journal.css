@@ -560,9 +560,32 @@ a.journal-tweet-more:hover {
 }
 
 .journal-tweet-media {
+  position: relative;
   display: grid;
   gap: 4px;
   margin-top: 8px;
+}
+
+.journal-tweet-media.is-sensitive .journal-tweet-media-item {
+  filter: blur(18px);
+  pointer-events: none;
+}
+
+.journal-tweet-sensitive-reveal {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: 1;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.72);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
 }
 
 .journal-tweet-media.is-multi {
@@ -642,6 +665,20 @@ a.journal-tweet-more:hover {
 .journal-tweet-quote-head .journal-tweet-verified {
   width: 13px;
   height: 13px;
+}
+
+/* Tweet attachments reuse the journal embed without inheriting the journal
+   entry wrapper. Text and embeds remain one authored research message. */
+.research-message-attachments.has-prompt {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--surface-border-subtle);
+}
+
+.research-message-attachment + .research-message-attachment {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--surface-border-subtle);
 }
 
 /* — Sidebar tab above the Research heading — */

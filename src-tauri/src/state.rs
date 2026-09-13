@@ -7,7 +7,7 @@ use crate::journal::{
     JOURNAL_ACTIVITY_SOURCE_RANK, RESEARCH_ACTIVITY_SOURCE_RANK, RecentActivityCursor,
     RecentActivityItem, RecentActivityPage,
 };
-use crate::persistence::{self, PersistedState, STATE_VERSION};
+use crate::persistence::{self, PersistedState};
 use crate::remote_terminal::{RemoteAttachmentController, RemoteHistoryCheckpoint};
 #[cfg(test)]
 use crate::research::CreateResearchDocumentRequest;
@@ -2390,6 +2390,13 @@ impl AppState {
             .map(|(tree_id, tree)| (tree_id.clone(), tree.workspace_id.clone()))
             .collect::<HashMap<_, _>>();
         for node in persisted.research_nodes.values_mut() {
+            // Attachment snapshots are an external-data cache. A malformed or
+            // hand-edited cache must not make the underlying research prompt
+            // unrestorable; discard it so the original permalink stays visible.
+            if crate::tweets::validate_research_message_attachments(&node.attachments).is_err() {
+                node.attachments.clear();
+                research_reconciled = true;
+            }
             if let Some(workspace_id) = tree_workspaces
                 .get(&node.tree_id)
                 .filter(|workspace_id| !workspace_id.trim().is_empty())
@@ -2918,9 +2925,15 @@ impl AppState {
                 version: if model
                     .research_nodes
                     .values()
+                    .any(|node| !node.attachments.is_empty())
+                {
+                    persistence::STATE_VERSION
+                } else if model
+                    .research_nodes
+                    .values()
                     .any(|node| node.kind == ResearchNodeKind::Conversation)
                 {
-                    STATE_VERSION
+                    persistence::STATE_VERSION_PRE_ATTACHMENTS
                 } else {
                     persistence::STATE_VERSION_PRE_CONVERSATIONS
                 },
@@ -4415,9 +4428,18 @@ impl AppState {
         Ok(())
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn create_research_tree(
         &self,
         request: CreateResearchTreeRequest,
+    ) -> Result<ResearchTreeDetail, String> {
+        self.create_research_tree_with_attachments(request, Vec::new())
+    }
+
+    pub fn create_research_tree_with_attachments(
+        &self,
+        request: CreateResearchTreeRequest,
+        attachments: Vec<crate::tweets::ResearchMessageAttachment>,
     ) -> Result<ResearchTreeDetail, String> {
         let prompt = request.prompt.trim().to_string();
         if prompt.is_empty() {
@@ -4435,6 +4457,7 @@ impl AppState {
         if request.group_id.trim().is_empty() {
             return Err("research workspace cannot be empty".to_string());
         }
+        crate::tweets::validate_research_message_attachments(&attachments)?;
         let tree_id = self.next_id("research");
         let node_id = self.next_id("research-node");
         let now = now_millis();
@@ -4458,6 +4481,7 @@ impl AppState {
             query_anchor: None,
             inline: false,
             prompt,
+            attachments,
             title: None,
             response_preview: None,
             adapter: request.adapter,
@@ -4545,6 +4569,7 @@ impl AppState {
             query_anchor: None,
             inline: false,
             prompt: String::new(),
+            attachments: Vec::new(),
             title: None,
             response_preview: research::response_preview(&turns, None, "", &[]),
             adapter: String::new(),
@@ -4791,6 +4816,7 @@ impl AppState {
             query_anchor: None,
             inline: false,
             prompt: prepared.prompt.clone(),
+            attachments: Vec::new(),
             title: None,
             response_preview: prepared.response_preview.clone(),
             adapter: prepared.adapter.clone(),
@@ -5087,6 +5113,7 @@ impl AppState {
         research::conversation_followup_prompt(&title, &turns, &question)
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn create_research_child(
         &self,
         parent_node_id: &str,
@@ -5097,7 +5124,35 @@ impl AppState {
         if let Some(anchor) = &query_anchor {
             research::validate_highlight_anchor(anchor)?;
         }
-        self.create_research_child_with_options(parent_node_id, prompt, None, query_anchor, inline)
+        self.create_research_child_with_options(
+            parent_node_id,
+            prompt,
+            None,
+            query_anchor,
+            inline,
+            Vec::new(),
+        )
+    }
+
+    pub fn create_research_child_with_attachments(
+        &self,
+        parent_node_id: &str,
+        prompt: String,
+        query_anchor: Option<ResearchHighlightAnchor>,
+        inline: bool,
+        attachments: Vec<crate::tweets::ResearchMessageAttachment>,
+    ) -> Result<ResearchNode, String> {
+        if let Some(anchor) = &query_anchor {
+            research::validate_highlight_anchor(anchor)?;
+        }
+        self.create_research_child_with_options(
+            parent_node_id,
+            prompt,
+            None,
+            query_anchor,
+            inline,
+            attachments,
+        )
     }
 
     pub fn create_research_child_for_proposal(
@@ -5117,7 +5172,14 @@ impl AppState {
         }
         // Accepted community proposals are always branches: an inline slot is
         // the owner's conversation to continue, not a contribution target.
-        self.create_research_child_with_options(parent_node_id, prompt, Some(proposal), None, false)
+        self.create_research_child_with_options(
+            parent_node_id,
+            prompt,
+            Some(proposal),
+            None,
+            false,
+            Vec::new(),
+        )
     }
 
     fn create_research_child_with_options(
@@ -5127,11 +5189,13 @@ impl AppState {
         publication_proposal: Option<ResearchPublicationProposal>,
         query_anchor: Option<ResearchHighlightAnchor>,
         inline: bool,
+        attachments: Vec<crate::tweets::ResearchMessageAttachment>,
     ) -> Result<ResearchNode, String> {
         let prompt = prompt.trim().to_string();
         if prompt.is_empty() {
             return Err("research prompt cannot be empty".to_string());
         }
+        crate::tweets::validate_research_message_attachments(&attachments)?;
         let node_id = self.next_id("research-node");
         let now = now_millis();
         let node = {
@@ -5224,6 +5288,7 @@ impl AppState {
                 query_anchor,
                 inline,
                 prompt,
+                attachments,
                 title: None,
                 response_preview: None,
                 adapter,
@@ -15274,6 +15339,7 @@ mod tests {
             query_anchor: None,
             inline: false,
             prompt: "Q".to_string(),
+            attachments: Vec::new(),
             title: None,
             response_preview: None,
             adapter: "claude".to_string(),
@@ -15385,6 +15451,7 @@ mod tests {
             query_anchor: None,
             inline: false,
             prompt: "Question".to_string(),
+            attachments: Vec::new(),
             title: None,
             response_preview: None,
             adapter: "claude".to_string(),
@@ -15480,6 +15547,7 @@ mod tests {
             query_anchor: None,
             inline: false,
             prompt: "Question".to_string(),
+            attachments: Vec::new(),
             title: None,
             response_preview: None,
             adapter: "claude".to_string(),
@@ -15585,6 +15653,7 @@ mod tests {
             query_anchor: None,
             inline: false,
             prompt: "Question".to_string(),
+            attachments: Vec::new(),
             title: None,
             response_preview: None,
             adapter: "claude".to_string(),
@@ -15665,6 +15734,7 @@ mod tests {
             query_anchor: None,
             inline: false,
             prompt: "Question".to_string(),
+            attachments: Vec::new(),
             title: None,
             response_preview: Some("Answer".to_string()),
             adapter: "claude".to_string(),
@@ -15754,6 +15824,7 @@ mod tests {
                     query_anchor: None,
                     inline: false,
                     prompt: "Question".to_string(),
+                    attachments: Vec::new(),
                     title: None,
                     response_preview: None,
                     adapter: "claude".to_string(),
