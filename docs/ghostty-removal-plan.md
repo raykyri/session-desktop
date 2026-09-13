@@ -82,7 +82,7 @@ These are resolved code facts, not work deferred to a future inventory:
 
 | Finding | Source | Consequence |
 | --- | --- | --- |
-| All three supported research adapters take the pane-less path. `bind_research_node_harness` explicitly sets `pane_id = None` and `runtime = Sdk`; `main.rs` still has a separate pane fallback. | [research_runtime.rs](../src-tauri/src/research_runtime.rs): `should_use_research_sdk`, `launch`; [state.rs](../src-tauri/src/state.rs): `bind_research_node_harness`; [main.rs](../src-tauri/src/main.rs): `launch_research_execution` | Keep SDK/JSONL launch, interruption, and result persistence intact. Limit PTY changes to the process paths that actually use them. Do not accidentally delete the fallback while removing Ghostty. |
+| All three supported research adapters take the pane-less path. `bind_research_node_harness` explicitly sets `pane_id = None` and `runtime = Sdk`; the former pane fallback in `main.rs` has since been removed along with the terminal launcher. | [research_runtime.rs](../src-tauri/src/research_runtime.rs): `launch`; [state.rs](../src-tauri/src/state.rs): `bind_research_node_harness`; [main.rs](../src-tauri/src/main.rs): `launch_research_execution` | Keep SDK/JSONL launch, interruption, and result persistence intact. Limit PTY changes to the process paths that actually use them. |
 | Non-rendering PTYs still start with `PaneBacklog.ready = false`. The reader buffers output and only calls `record_scrollback` on the live path; `attach_pane` performs the initial flush. | [state.rs](../src-tauri/src/state.rs): `PaneBacklog`; [pty.rs](../src-tauri/src/pty.rs): `start_reader_thread`, `attach_pane` | Simply setting `native_surface = false` leaves output waiting on frontend attachment. Backend-owned readiness and exactly-once logging must precede renderer removal. |
 | Production macOS selects native rendering with `cfg!(all(target_os = "macos", not(test)))` in multiple launch/reattach paths. | [pty.rs](../src-tauri/src/pty.rs): shell launch, `spawn_pty`, `reattach_remote_pane` | Ordinary Rust tests do not exercise the production native branch, even on macOS. Validate the renderer-free production app as well as unit tests. |
 | The host's `window` is `container?.window`; browser registration and overlay flags guard on container existence. | `src-tauri/swift-terminal/Sources/QmuxNativeTerminal/NativeTerminalHost.swift`: `window`, `attach`, `setHumanBrowserWebView`, `setBrowserOverlayOpen` | Introduce an explicit app-webview/window binding before deleting `NativeTerminalContainerView`. Keeping only weak webview fields is insufficient unless every window lookup and guard is rewired. |
@@ -341,7 +341,7 @@ Add process regressions demonstrating that no renderer attach is required for
 startup, immediate durable output, ordered prompt submission, cancellation, and
 exit. Include more than 8 MiB of output before any attach, an exit-before-attach
 case, and remote reconnect/history deduplication. Verify supported research still
-binds with `pane_id = None`, and cover the retained legacy pane fallback separately.
+binds with `pane_id = None`; the legacy pane fallback no longer exists.
 Cover old settings with a Ghostty theme, non-default font size, and saved research.
 Keep security and input ordering assertions when simplifying the native input path.
 

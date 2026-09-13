@@ -60,9 +60,9 @@ that a registered backend command or persisted field can safely be removed.
 
 The remaining application controller still coordinates substantial research and
 native integration logic. Future extractions should isolate startup hydration and
-browser/native-surface ownership together with their lifecycle effects. Retiring
-legacy terminal mode branches and Home history loading needs an end-to-end audit
-of recovery, shortcuts, and native callbacks. Compiler warnings from Linux alone
+browser/native-surface ownership together with their lifecycle effects. The
+legacy terminal mode branches, the New Agent launcher, and Home conversation
+history loading have since been retired. Compiler warnings from Linux alone
 are not evidence that macOS code is unused; the interface-health tracker is one
 confirmed live example. No persisted-state or protocol migration is included here.
 

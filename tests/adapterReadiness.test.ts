@@ -2,13 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   adapterCanLaunchResearch,
-  adapterCanLaunchTerminal,
   adapterReadinessLabel,
   preferredResearchAdapter,
-  preferredReadyAdapter,
   researchReadinessLabel,
   researchReadyAdaptersFirst,
-  readyAdaptersFirst,
 } from "../src/lib/adapterReadiness";
 import type { AgentAdapterMetadata } from "../src/types";
 
@@ -43,32 +40,31 @@ function adapter(
   };
 }
 
-test("prefers a remembered ready adapter over the static default", () => {
+test("prefers a remembered research-ready adapter over the static default", () => {
   const adapters = [adapter("claude", "ready", true), adapter("codex", "ready")];
-  assert.equal(preferredReadyAdapter(adapters, "codex")?.id, "codex");
+  assert.equal(preferredResearchAdapter(adapters, "codex")?.id, "codex");
 });
 
 test("skips an unavailable remembered choice and unavailable default", () => {
   const adapters = [adapter("claude", "missing", true), adapter("codex", "ready")];
-  assert.equal(preferredReadyAdapter(adapters, "claude")?.id, "codex");
+  assert.equal(preferredResearchAdapter(adapters, "claude")?.id, "codex");
 });
 
-test("sorts ready adapters first without hiding setup choices", () => {
+test("sorts research-ready adapters first without hiding setup choices", () => {
   const adapters = [
     adapter("claude", "missing", true),
     adapter("codex", "ready"),
     adapter("grok", "missing"),
   ];
   assert.deepEqual(
-    readyAdaptersFirst(adapters).map(({ id }) => id),
+    researchReadyAdaptersFirst(adapters).map(({ id }) => id),
     ["codex", "claude", "grok"],
   );
   assert.equal(adapterReadinessLabel(adapters[0]), "Not installed");
 });
 
-test("allows interactive sign-in without admitting headless research", () => {
+test("a signed-out adapter cannot run headless research", () => {
   const needsAuth = adapter("claude", "needsAuth", true);
-  assert.equal(adapterCanLaunchTerminal(needsAuth), true);
   assert.equal(adapterCanLaunchResearch(needsAuth), false);
   assert.equal(adapterReadinessLabel(needsAuth), "Sign in");
 });

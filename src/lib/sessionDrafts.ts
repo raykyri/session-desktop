@@ -9,7 +9,6 @@ const SAVE_DEBOUNCE_MS = 120;
 const IMMEDIATE_BACKEND_FLUSH_MAX_CHARS = 4_096;
 
 export const SESSION_DRAFT_KEYS = {
-  homeLauncher: "home-launcher",
   homeComposers: "home-composers",
   newResearchInline: "new-research-inline",
 } as const;
