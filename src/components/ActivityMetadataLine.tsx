@@ -33,43 +33,47 @@ export function formatResearchAskedSummary(
   return "You asked";
 }
 
-/** One-line summary for activity contexts that choose to show it. */
+/** Concise action label for Home's chronological feed. The content card carries
+ * the provider/object details, so this line only orients the reader in time and
+ * names the containing thread when a reply belongs to one. */
 export function formatActivityMetadataSummary(event: ActivityEvent): string {
   if (event.object.kind === "research-query") {
     if (event.relationship?.kind === "follow-up") {
-      return `Follow-up in '${event.context?.label ?? "Research"}'`;
+      return `Replied in “${event.context?.label ?? "Research"}”`;
     }
-    return formatResearchAskedSummary(
-      event.execution?.adapter ?? "",
-      event.execution?.model,
-    );
+    return "Asked";
   }
-  return [event.actor.label, event.action.label, event.object.label].filter(Boolean).join(" ");
+  if (event.action.kind === "saved") {
+    return "Saved";
+  }
+  const label = event.action.label.trim();
+  return label ? `${label[0].toUpperCase()}${label.slice(1)}` : "Activity";
 }
 
-/** App-wide renderer for activity grammar slots. Metadata stays outside the
+/** Renderer for activity grammar slots. Metadata stays outside the
  * content surface because it describes the event, not the object payload. */
 export default function ActivityMetadataLine({
   event,
-  hideSummary = false,
 }: {
   event: ActivityEvent;
-  hideSummary?: boolean;
 }) {
   const finiteTime = Number.isFinite(event.occurredAt);
   return (
     <div
-      className={`activity-metadata${hideSummary ? " is-summary-hidden" : ""}`}
+      className="activity-metadata"
       title={finiteTime ? new Date(event.occurredAt).toLocaleString() : undefined}
     >
-      {!hideSummary ? (
-        <span className="activity-metadata-summary">{formatActivityMetadataSummary(event)}</span>
-      ) : null}
-      {finiteTime ? (
-        <time dateTime={new Date(event.occurredAt).toISOString()}>
-          {formatRelativeTime(event.occurredAt)}
-        </time>
-      ) : null}
+      <span className="activity-metadata-summary">
+        {formatActivityMetadataSummary(event)}
+        {finiteTime ? (
+          <>
+            {" "}
+            <time dateTime={new Date(event.occurredAt).toISOString()}>
+              {formatRelativeTime(event.occurredAt)}
+            </time>
+          </>
+        ) : null}
+      </span>
     </div>
   );
 }

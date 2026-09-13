@@ -1398,10 +1398,6 @@ function ResearchActivityFeed({
                       >
                         <ActivityMetadataLine
                           event={row.event}
-                          hideSummary={
-                            row.event.object.kind === "research-query" &&
-                            row.event.relationship?.kind !== "follow-up"
-                          }
                         />
                         {row.event.source.kind === "journal" ? (
                           <JournalEntryCard

@@ -38,6 +38,8 @@ test("Home renders the mixed feed and query composer directly in the app", () =>
   assert.match(html, /Query composer/);
   assert.match(html, /example.com\/finding/);
   assert.match(html, /Investigate this question/);
+  assert.match(html, />Saved <time/);
+  assert.match(html, />Asked <time/);
   assert.match(html, /Summary: The finding is X\./);
   assert.match(html, /aria-label="Refresh Home"/);
   assert.doesNotMatch(html, /You asked/);
