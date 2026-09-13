@@ -2070,3 +2070,142 @@
 .research-recap {
   margin: 0 0 28px;
 }
+
+.research-recap-with-action {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 28px;
+}
+
+.research-recap-with-action .research-recap {
+  flex: 1;
+  margin: 0;
+}
+
+.research-recap-regenerate {
+  flex: 0 0 auto;
+  width: var(--control-h-sm);
+  min-height: var(--control-h-sm);
+  padding: 0;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.research-recap-with-action:hover .research-recap-regenerate,
+.research-recap-regenerate:focus-visible {
+  opacity: 1;
+}
+
+.research-recap-dialog {
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100vh - 36px));
+  overflow: auto;
+}
+
+.research-recap-dialog-header,
+.research-recap-dialog-status {
+  display: flex;
+  align-items: center;
+}
+
+.research-recap-dialog-header {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.research-recap-dialog-header > div {
+  min-width: 0;
+}
+
+.research-recap-dialog-header > button {
+  flex: 0 0 auto;
+  width: var(--control-h-md);
+  min-height: var(--control-h-md);
+  padding: 0;
+}
+
+.research-recap-instructions {
+  width: 100%;
+  min-height: 118px;
+  resize: vertical;
+  padding: 9px 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--field-bg);
+  color: var(--text-strong);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.research-recap-dialog-controls,
+.research-recap-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.research-recap-dialog-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: var(--fs-base);
+}
+
+.research-recap-dialog-controls select,
+.research-recap-dialog-controls input {
+  width: 100%;
+  min-height: var(--control-h-lg);
+  padding: 0 9px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--field-bg);
+  color: var(--text-strong);
+  font: inherit;
+}
+
+.research-recap-dialog-status {
+  gap: 7px;
+}
+
+.research-recap-comparison section {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--field-bg);
+}
+
+.research-recap-comparison section.has-candidate {
+  border-color: var(--accent-strong);
+  background: var(--accent-subtle);
+}
+
+.research-recap-comparison section.is-empty p {
+  color: var(--text-secondary);
+  opacity: 0.75;
+}
+
+.research-recap-comparison h3 {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: var(--fs-base);
+}
+
+.research-recap-comparison p {
+  overflow-wrap: anywhere;
+}
+
+.research-recap-dialog .confirm-dialog-actions .primary {
+  border-color: var(--accent-strong);
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+
+@media (max-width: 620px) {
+  .research-recap-dialog-controls,
+  .research-recap-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -104,6 +104,7 @@ import {
   timelineStatusClass,
 } from "../TranscriptActivity";
 import ResearchRecap from "./ResearchRecap";
+import ResearchRecapDialog from "./ResearchRecapDialog";
 import {
   ResearchMarkdown,
   ResearchMessageBody,
@@ -204,8 +205,8 @@ const FOLLOWUP_MODE_OPTIONS: {
 ];
 
 const FOLLOWUP_MENU_WIDTH = 230;
-const FOLLOWUP_MENU_HEIGHT = 154;
-const DOCUMENT_MENU_HEIGHT = 196;
+const FOLLOWUP_MENU_HEIGHT = 188;
+const DOCUMENT_MENU_HEIGHT = 230;
 const FOLLOWUP_MENU_MARGIN = 8;
 
 interface FollowupMenu {
@@ -954,6 +955,8 @@ interface ThreadSegmentProps {
   onRetryContentLoad: () => void;
   onShowFullTrace: (nodeId: string) => void;
   onCopyAnswer: (view: SegmentView) => void;
+  canRegenerateRecap: boolean;
+  onRegenerateRecap: (nodeId: string) => void;
   onOpenAnswerMenu: (trigger: HTMLButtonElement, nodeId: string) => void;
   onOpenFollowupMenu: (nodeId: string, clientX: number, clientY: number) => void;
   onCancelNode: (nodeId: string) => void;
@@ -1070,6 +1073,8 @@ interface ResearchAnswerPaneProps {
   onRetryContentLoad: ThreadSegmentProps["onRetryContentLoad"];
   onShowFullTrace: ThreadSegmentProps["onShowFullTrace"];
   onCopyAnswer: ThreadSegmentProps["onCopyAnswer"];
+  canRegenerateRecap: ThreadSegmentProps["canRegenerateRecap"];
+  onRegenerateRecap: ThreadSegmentProps["onRegenerateRecap"];
   onOpenAnswerMenu: ThreadSegmentProps["onOpenAnswerMenu"];
   onCancelNode: ThreadSegmentProps["onCancelNode"];
   canRetryNode: ThreadSegmentProps["canRetryNode"];
@@ -1114,6 +1119,8 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
   onRetryContentLoad,
   onShowFullTrace,
   onCopyAnswer,
+  canRegenerateRecap,
+  onRegenerateRecap,
   onOpenAnswerMenu,
   onCancelNode,
   canRetryNode,
@@ -1182,7 +1189,12 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
               {retryButton}
             </div>
           ) : null}
-          <ResearchRecap content={view.content} />
+          <ResearchRecap
+            content={view.content}
+            onRegenerate={
+              canRegenerateRecap ? () => onRegenerateRecap(node.id) : undefined
+            }
+          />
           {view.displayedTimelineItems.length === 0 ? (
             <>
               <p className="research-response-empty">
@@ -1585,6 +1597,8 @@ const ThreadSegment = memo(function ThreadSegment({
   onRetryContentLoad,
   onShowFullTrace,
   onCopyAnswer,
+  canRegenerateRecap,
+  onRegenerateRecap,
   onOpenAnswerMenu,
   onOpenFollowupMenu,
   onCancelNode,
@@ -1642,6 +1656,8 @@ const ThreadSegment = memo(function ThreadSegment({
           onRetryContentLoad={onRetryContentLoad}
           onShowFullTrace={onShowFullTrace}
           onCopyAnswer={onCopyAnswer}
+          canRegenerateRecap={canRegenerateRecap}
+          onRegenerateRecap={onRegenerateRecap}
           onOpenAnswerMenu={onOpenAnswerMenu}
           onCancelNode={onCancelNode}
           canRetryNode={canRetryNode}
@@ -1727,6 +1743,7 @@ function ResearchDocument({
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
   const [removingBranch, setRemovingBranch] = useState(false);
   const [documentEditSession, setDocumentEditSession] = useState<DocumentEditSession | null>(null);
+  const [recapDialogNodeId, setRecapDialogNodeId] = useState<string | null>(null);
   const [branchRemovalError, setBranchRemovalError] = useState<string | null>(null);
   const [contentLoadNonce, setContentLoadNonce] = useState(0);
   // Per-node reading state for the rendered thread: which segments show their
@@ -1942,7 +1959,7 @@ function ResearchDocument({
   // Refetch when a run settles, its snapshot lands, or its recap arrives.
   // Other detail updates do not need to restart the content loaders.
   const chainStatusKey = chainNodes
-    .map((node) => `${node.id}:${node.status}:${node.responseSnapshotAt ?? 0}:${node.recap?.responseRevision ?? ""}`)
+    .map((node) => `${node.id}:${node.status}:${node.responseSnapshotAt ?? 0}:${node.recap?.id ?? node.recap?.responseRevision ?? ""}`)
     .join("\n");
 
   // Segment-scoped DOM lookups. Each ThreadSegment registers its wrapper
@@ -2389,6 +2406,11 @@ function ResearchDocument({
     },
     [openFollowupMenu],
   );
+
+  const openRecapDialog = useCallback((nodeId: string) => {
+    setFollowupMenu(null);
+    setRecapDialogNodeId(nodeId);
+  }, []);
 
   function openResearchPublisher(mode: "answer" | "tree", node: ResearchNode) {
     const detailSnapshot = detailRef.current;
@@ -2864,7 +2886,7 @@ function ResearchDocument({
     const errorCounts = new Map<string, number>();
     const stampFor = (nodeId: string) => {
       const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
-      return node ? `${node.status}:${node.responseSnapshotAt ?? 0}:${node.recap?.responseRevision ?? ""}` : "";
+      return node ? `${node.status}:${node.responseSnapshotAt ?? 0}:${node.recap?.id ?? node.recap?.responseRevision ?? ""}` : "";
     };
     const clearError = (nodeId: string) =>
       setContentErrorByNode((current) => withoutKeys(current, [nodeId]));
@@ -5272,6 +5294,11 @@ function ResearchDocument({
         onRetryContentLoad={retryContentLoad}
         onShowFullTrace={showFullTraceFor}
         onCopyAnswer={handleCopyAnswer}
+        canRegenerateRecap={
+          !archived &&
+          Boolean(view.content?.responseRevision && view.content.node.recap?.text.trim())
+        }
+        onRegenerateRecap={openRecapDialog}
         onOpenAnswerMenu={openAnswerMenu}
         onOpenFollowupMenu={openFollowupMenu}
         onCancelNode={handleCancelNode}
@@ -5453,6 +5480,11 @@ function ResearchDocument({
               const nodeName = (node.title ?? node.prompt) || detail.tree.title;
               const menuView = viewForNode(node.id);
               const menuContent = contentByNode[node.id] ?? null;
+              const canRegenerateMenuRecap = Boolean(
+                !archived &&
+                  menuContent?.responseRevision &&
+                  menuContent.node.recap?.text.trim(),
+              );
               return createPortal(
                 <div
                   ref={followupMenuRef}
@@ -5545,6 +5577,17 @@ function ResearchDocument({
                         <span>Retry run</span>
                       </button>
                     ) : null}
+                    {canRegenerateMenuRecap ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="control-button"
+                        onClick={() => openRecapDialog(node.id)}
+                      >
+                        <RefreshCw size={13} aria-hidden="true" />
+                        <span>Regenerate summary</span>
+                      </button>
+                    ) : null}
                     <div className="context-menu-divider" role="separator" />
                     {rootNode && node.kind === "document" ? (
                       <>
@@ -5622,6 +5665,24 @@ function ResearchDocument({
                 resetKey={`${documentEditSession.nodeId}:${documentEditSession.responseRevision}`}
                 onClose={() => setDocumentEditSession(null)}
                 onSubmit={saveDocumentEdit}
+              />,
+              document.body,
+            )
+          : null}
+        {recapDialogNodeId && contentByNode[recapDialogNodeId]?.node.recap
+          ? createPortal(
+              <ResearchRecapDialog
+                content={contentByNode[recapDialogNodeId]}
+                onClose={() => setRecapDialogNodeId(null)}
+                onApplied={(updatedNode) => {
+                  setContentByNode((current) => {
+                    const content = current[updatedNode.id];
+                    return content
+                      ? { ...current, [updatedNode.id]: { ...content, node: updatedNode } }
+                      : current;
+                  });
+                  onToast("Summary updated");
+                }}
               />,
               document.body,
             )

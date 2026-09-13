@@ -3978,6 +3978,7 @@ function MainApp() {
           default: false,
           supportsFork: true,
           supportsResearch: false,
+          supportsRecapGeneration: false,
           supportsForkAtMessage: false,
           supportsRemote: false,
           configuredBinary: adapter.id,

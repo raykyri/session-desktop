@@ -179,7 +179,12 @@ function isResearchNode(value: unknown): value is ResearchNode {
     (value.recap == null ||
       (isRecord(value.recap) &&
         typeof value.recap.text === "string" &&
-        typeof value.recap.responseRevision === "string")) &&
+        typeof value.recap.responseRevision === "string" &&
+        isOptionalString(value.recap.id) &&
+        isOptionalFiniteNumber(value.recap.generatedAt) &&
+        isOptionalString(value.recap.adapter) &&
+        isOptionalString(value.recap.model) &&
+        isOptionalString(value.recap.instructions))) &&
     isOptionalString(value.parentNodeId) &&
     isOptionalString(value.title) &&
     isOptionalString(value.responsePreview) &&

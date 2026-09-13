@@ -991,6 +991,7 @@ impl AdapterRegistry {
                     default: adapter.id() == "claude",
                     supports_fork: adapter.supports_fork(),
                     supports_research: adapter.supports_research(),
+                    supports_recap_generation: matches!(adapter.id(), "claude" | "codex" | "grok"),
                     supports_fork_at_message: adapter.supports_fork_at_message(),
                     supports_remote: adapter.supports_remote(),
                     configured_binary,
@@ -1057,6 +1058,9 @@ pub struct AdapterMetadata {
     pub supports_fork: bool,
     /// Whether the adapter can run and branch through the research harness.
     pub supports_research: bool,
+    /// Whether the adapter supports the isolated structured-output request used
+    /// for research recap generation.
+    pub supports_recap_generation: bool,
     /// Whether the adapter can fork from a chosen message rather than the
     /// session head. Gates the transcript's per-message fork action, which is
     /// hidden rather than disabled for adapters without it.
@@ -2252,6 +2256,19 @@ mod tests {
         assert!(adapter_supports_research(&config, "codex"));
         assert!(adapter_supports_research(&config, "grok"));
         assert!(!adapter_supports_research(&config, "antigravity"));
+        assert!(
+            metadata
+                .iter()
+                .filter(|adapter| matches!(adapter.id.as_str(), "claude" | "codex" | "grok"))
+                .all(|adapter| adapter.supports_recap_generation)
+        );
+        assert!(
+            !metadata
+                .iter()
+                .find(|adapter| adapter.id == "antigravity")
+                .unwrap()
+                .supports_recap_generation
+        );
         assert!(adapter_supports_fork_at_message(&config, "claude"));
         assert!(adapter_supports_fork_at_message(&config, "codex"));
         assert!(!adapter_supports_fork(&config, "antigravity"));

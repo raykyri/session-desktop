@@ -7,6 +7,8 @@ use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 
 pub const MIN_RECAP_CHARS: usize = 800;
+pub const MAX_RECAP_INSTRUCTIONS_CHARS: usize = 4_000;
+pub const DEFAULT_RECAP_INSTRUCTIONS: &str = "Write a compact recap that directly answers the user's question using only the supplied answer. Usually use 30-70 words. For recommendations, name the recommended items and people. For analysis, preserve the main conclusion, mechanism, and essential qualifications. Short sentences and semicolon-separated phrases are fine. Do not merely describe what the answer discusses.";
 // Bound command-line and model input size. Oversized answers are skipped rather
 // than summarized from a truncated excerpt that could omit their conclusion.
 const MAX_SOURCE_BYTES: usize = 80_000;
@@ -146,6 +148,19 @@ pub fn normalize_recap(raw: &str) -> Option<String> {
     (!text.is_empty() && text.chars().count() <= 1_200).then(|| text.to_string())
 }
 
+pub fn validate_instructions(value: &str) -> Result<&str, String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err("summary instructions cannot be empty".to_string());
+    }
+    if value.chars().count() > MAX_RECAP_INSTRUCTIONS_CHARS {
+        return Err(format!(
+            "summary instructions cannot exceed {MAX_RECAP_INSTRUCTIONS_CHARS} characters"
+        ));
+    }
+    Ok(value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,5 +236,15 @@ mod tests {
         );
         assert!(normalize_recap(" \n ").is_none());
         assert!(normalize_recap(&"x".repeat(1201)).is_none());
+    }
+
+    #[test]
+    fn custom_instructions_are_nonempty_and_bounded() {
+        assert_eq!(
+            validate_instructions("  Preserve caveats.  ").unwrap(),
+            "Preserve caveats."
+        );
+        assert!(validate_instructions(" \n ").is_err());
+        assert!(validate_instructions(&"x".repeat(MAX_RECAP_INSTRUCTIONS_CHARS + 1)).is_err());
     }
 }

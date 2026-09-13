@@ -1,4 +1,5 @@
 import type { ResearchNodeContent } from "../../types";
+import { RefreshCw } from "lucide-react";
 
 export function ResearchRecapLine({
   text,
@@ -25,7 +26,13 @@ export function ResearchRecapLine({
 }
 
 /** No placeholder or reserved space: mount only a completed, current recap. */
-export default function ResearchRecap({ content }: { content: ResearchNodeContent }) {
+export default function ResearchRecap({
+  content,
+  onRegenerate,
+}: {
+  content: ResearchNodeContent;
+  onRegenerate?: () => void;
+}) {
   const { node, responseRevision } = content;
   const recap = node.recap;
   if (
@@ -37,5 +44,28 @@ export default function ResearchRecap({ content }: { content: ResearchNodeConten
   ) {
     return null;
   }
-  return <ResearchRecapLine text={recap.text} />;
+  if (!onRegenerate) {
+    return <ResearchRecapLine text={recap.text} />;
+  }
+  return (
+    <div
+      className="research-recap-with-action"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onRegenerate();
+      }}
+    >
+      <ResearchRecapLine text={recap.text} />
+      <button
+        type="button"
+        className="control-button research-recap-regenerate"
+        title="Regenerate summary"
+        aria-label="Regenerate summary"
+        onClick={onRegenerate}
+      >
+        <RefreshCw size={13} aria-hidden="true" />
+      </button>
+    </div>
+  );
 }

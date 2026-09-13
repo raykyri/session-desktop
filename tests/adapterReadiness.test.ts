@@ -22,6 +22,7 @@ function adapter(
     default: isDefault,
     supportsFork: true,
     supportsResearch: true,
+    supportsRecapGeneration: true,
     supportsForkAtMessage: true,
     supportsRemote: false,
     configuredBinary: id,

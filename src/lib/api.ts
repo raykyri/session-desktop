@@ -50,6 +50,7 @@ import type {
   ResearchTreeSummary,
   ResearchNode,
   ResearchNodeContent,
+  ResearchRecapCandidate,
   UpdateResearchDocumentResult,
   SendNextQueuedAgentTurnResult,
   RuntimeConfig,
@@ -479,6 +480,29 @@ export function createResearchTree(request: {
 
 export function generateResearchAgentTitle(nodeId: string) {
   return invoke<string>("generate_research_agent_title", { nodeId });
+}
+
+export function getResearchRecapDefaultInstructions() {
+  return invoke<string>("research_recap_default_instructions");
+}
+
+export function generateResearchRecapCandidate(request: {
+  nodeId: string;
+  expectedResponseRevision: string;
+  adapter: string;
+  model?: string | null;
+  instructions: string;
+}) {
+  return invoke<ResearchRecapCandidate>("generate_research_recap_candidate", { request });
+}
+
+export function applyResearchRecapCandidate(request: {
+  nodeId: string;
+  expectedResponseRevision: string;
+  expectedCurrentRecapId?: string | null;
+  candidate: ResearchRecapCandidate;
+}) {
+  return invoke<ResearchNode>("apply_research_recap_candidate", { request });
 }
 
 export function updateResearchDocument(request: {
