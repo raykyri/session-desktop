@@ -4,6 +4,14 @@
   gap: 0;
 }
 
+/* Held-⌘ hints form one fixed-width column even when the final key has a
+   different glyph width (N/O versus 1–9). */
+.sidebar.is-research-mode .pane-tab-shortcut-hint {
+  width: 34px;
+  min-width: 34px;
+  padding-inline: 4px;
+}
+
 /* Keep the fixed controls in their existing positions while moving the space
    around the research list into its scrollable area. */
 .sidebar.is-research-mode .sidebar-mode-toggle {
@@ -450,7 +458,8 @@
 /* Held-⌘ badge for the folder menu chord, over the trigger's chevron edge.
    The switcher root is already position: relative for the dropdown. */
 .research-folder-shortcut-hint {
-  right: 8px;
+  /* The switcher has a 4px outer margin while Home/list rows are inset 7px. */
+  right: 11px;
 }
 
 /* Plain count like the terminal sidebar's group counts, not a pill. */

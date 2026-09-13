@@ -330,6 +330,7 @@ import {
   researchAttention,
 } from "./lib/workspaceScope";
 import {
+  RESEARCH_HOME_TAB_ID,
   researchCycleTabIds,
   researchTreeIdFromTabId,
   researchTreeTabId,
@@ -2961,13 +2962,17 @@ function MainApp() {
       researchScope,
     ],
   );
+  const cycleableResearchTreeTabIds = useMemo(
+    () => cycleableResearchTabIds.filter((tabId) => tabId !== RESEARCH_HOME_TAB_ID),
+    [cycleableResearchTabIds],
+  );
   // Shortcut number per research tree id, mirroring the terminal tabs' Cmd-1..9
-  // hints. A tree's number is its position among the cycleable research tabs
-  // (the exact target Cmd-N jumps to via focusResearchTab), so the badge always
-  // names the key that selects that row. Only the first nine get a number.
+  // hints. Home participates in Ctrl-Tab cycling but has its own Cmd-N shortcut,
+  // so tree numbers stay indexed over tree tabs only. The badge always names the
+  // key that selects that row; only the first nine get a number.
   const researchShortcutIndexByTreeId = useMemo(() => {
     const map = new Map<string, number>();
-    cycleableResearchTabIds.forEach((tabId, index) => {
+    cycleableResearchTreeTabIds.forEach((tabId, index) => {
       if (index >= 9) {
         return;
       }
@@ -2977,7 +2982,7 @@ function MainApp() {
       }
     });
     return map;
-  }, [cycleableResearchTabIds]);
+  }, [cycleableResearchTreeTabIds]);
   const researchAttentionState = useMemo(() => researchAttention(researchTrees), [researchTrees]);
   const runningResearchCount = researchAttentionState.runningCount;
   const cycleableSidebarPanes = useMemo(
@@ -9943,6 +9948,10 @@ function MainApp() {
   useEffect(() => {
 
     const focusResearchTabById = (tabId: string) => {
+      if (tabId === RESEARCH_HOME_TAB_ID) {
+        focusResearchHome();
+        return;
+      }
       const treeId = researchTreeIdFromTabId(tabId);
       if (treeId) {
         void selectResearchTree(treeId);
@@ -9967,7 +9976,9 @@ function MainApp() {
       const activeTabId =
         currentResearchSurfaceActive && currentResearchTreeId
           ? researchTreeTabId(currentResearchTreeId)
-          : activePaneIdRef.current;
+          : currentResearchSurfaceActive
+            ? RESEARCH_HOME_TAB_ID
+            : activePaneIdRef.current;
       const researchTabIds = cycleableResearchTabIds;
       const nextTabId = cycleTabId(
         researchTabIds,
@@ -9988,7 +9999,7 @@ function MainApp() {
       }
       switch (command.type) {
         case "focusResearchTab": {
-          const tabId = cycleableResearchTabIds[command.tabIndex];
+          const tabId = cycleableResearchTreeTabIds[command.tabIndex];
           if (tabId) {
             focusResearchTabById(tabId);
           }
@@ -10108,6 +10119,7 @@ function MainApp() {
     sidebarPanes,
     cycleableSidebarPanes,
     cycleableResearchTabIds,
+    cycleableResearchTreeTabIds,
     numberedTabPanes,
     activePane,
     lastActiveGroupId,
