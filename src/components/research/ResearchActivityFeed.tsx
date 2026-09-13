@@ -58,6 +58,7 @@ import {
 
 export interface ResearchActivityFeedProps {
   composer: ReactNode;
+  setupGuide?: ReactNode;
   initialScrollTop?: number;
   onScrollChange?: (top: number) => void;
   items: RecentActivityItem[];
@@ -429,6 +430,7 @@ function MeasuredActivityRow({
 
 function ResearchActivityFeed({
   composer,
+  setupGuide,
   initialScrollTop = 0,
   onScrollChange,
   items: rawItems,
@@ -1106,9 +1108,12 @@ function ResearchActivityFeed({
               })}
             </div>
             {feed.length === 0 ? (
-              <p className="journal-empty">
-                Research queries and saved sources appear here, newest first.
-              </p>
+              <>
+                <p className="journal-empty">
+                  Research queries and saved sources appear here, newest first.
+                </p>
+                {setupGuide ? <div className="journal-setup-guide">{setupGuide}</div> : null}
+              </>
             ) : null}
             <div
               ref={loadSentinelRef}

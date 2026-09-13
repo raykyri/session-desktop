@@ -27,6 +27,7 @@ import {
   Check,
   ChevronDown,
   Columns2,
+  Bot,
   Eye,
   EyeOff,
   FolderGit2,
@@ -48,15 +49,13 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getAgentUiAdapter } from "./adapters";
 import { CODEX_ADAPTER_ID } from "./adapters/codex";
-import { ADAPTER_ICON_BY_ID, adapterIconClassName } from "./lib/adapterIcons";
-import { writeClipboardText } from "./lib/clipboard";
 import {
   adapterCanLaunchResearch,
   adapterReadinessLabel,
   adapterReadinessMessage,
-  readyAdaptersFirst,
 } from "./lib/adapterReadiness";
 import CommandPalette, { type PaletteCommand } from "./components/CommandPalette";
+import AgentSetupGuide from "./components/AgentSetupGuide";
 import BrowserOverlay from "./components/BrowserOverlay";
 import ImageLightbox from "./components/ImageLightbox";
 import {
@@ -1773,6 +1772,7 @@ function MainApp() {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [agentsOpen, setAgentsOpen] = useState(false);
   const [terminalMapOpen, setTerminalMapOpen] = useState(false);
   const terminalMapOpenRef = useRef(terminalMapOpen);
   terminalMapOpenRef.current = terminalMapOpen;
@@ -1805,11 +1805,7 @@ function MainApp() {
     () => lastUserInputSeqRef.current > lastWindowFocusSeqRef.current,
     [],
   );
-  const [settingsTab, setSettingsTab] = useState<"basic" | "agents" | "remotes">("basic");
-  const [expandedSettingsAgentIds, setExpandedSettingsAgentIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const settingsAgentExpansionSeededRef = useRef(false);
+  const [settingsTab, setSettingsTab] = useState<"basic" | "remotes">("basic");
   const [expandedSettingsRemoteId, setExpandedSettingsRemoteId] = useState<string | null>(null);
   const [remoteAddMenuOpen, setRemoteAddMenuOpen] = useState(false);
   const remoteAddMenuRef = useRef<HTMLDivElement | null>(null);
@@ -4469,6 +4465,7 @@ function MainApp() {
   // transcript and browser overlays are already visibility-derived.
   const nativeModalOccluded = Boolean(
     settingsOpen ||
+      agentsOpen ||
       imageLightbox !== null ||
       diagramLightbox !== null ||
       terminalMapOpen ||
@@ -7543,11 +7540,11 @@ function MainApp() {
   }, [config, refreshAdapterReadiness]);
 
   useEffect(() => {
-    if (!settingsOpen || settingsTab !== "agents") {
+    if (!agentsOpen) {
       return;
     }
     void refreshAdapterReadiness().catch(() => undefined);
-  }, [refreshAdapterReadiness, settingsOpen, settingsTab]);
+  }, [refreshAdapterReadiness, agentsOpen]);
 
   useEffect(() => {
     if (!settingsOpen || settingsTab !== "remotes") {
@@ -7589,27 +7586,6 @@ function MainApp() {
     };
   }, [remoteAddMenuOpen]);
 
-  useEffect(() => {
-    if (!settingsOpen || settingsTab !== "agents") {
-      settingsAgentExpansionSeededRef.current = false;
-      return;
-    }
-    if (settingsAgentExpansionSeededRef.current) {
-      return;
-    }
-    const adapters = readyAdaptersFirst(config?.adapters ?? []);
-    const initialAdapter =
-      adapters.find(
-        (adapter) =>
-          adapter.readiness !== "ready" ||
-          (adapter.supportsResearch && adapter.researchReadiness !== "ready"),
-      ) ?? adapters[0];
-    if (!initialAdapter) {
-      return;
-    }
-    settingsAgentExpansionSeededRef.current = true;
-    setExpandedSettingsAgentIds(new Set([initialAdapter.instanceId]));
-  }, [config?.adapters, settingsOpen, settingsTab]);
 
   useEffect(() => {
     const refreshStaleTargets = () => {
@@ -7712,7 +7688,18 @@ function MainApp() {
         hint: "⌘,",
         action: () => {
           setSettingsMenu(null);
+          setAgentsOpen(false);
           setSettingsOpen(true);
+        },
+      },
+      {
+        id: "action:agents",
+        section: "Actions",
+        title: "Open Agents",
+        action: () => {
+          setSettingsMenu(null);
+          setSettingsOpen(false);
+          setAgentsOpen(true);
         },
       },
     );
@@ -8578,6 +8565,7 @@ function MainApp() {
   const modalEditorOpen =
     commandPaletteOpen ||
     settingsOpen ||
+    agentsOpen ||
     terminalMapOpen ||
     Boolean(renamePaneId || renameGroupId);
   useEffect(() => {
@@ -8635,6 +8623,7 @@ function MainApp() {
     resolvingClose,
     quitting,
     settingsOpen,
+    agentsOpen,
     error,
   });
   useEffect(() => {
@@ -8653,6 +8642,7 @@ function MainApp() {
       resolvingClose,
       quitting,
       settingsOpen,
+      agentsOpen,
       error,
     };
   });
@@ -8762,6 +8752,11 @@ function MainApp() {
         stopPropagation = true;
         event.preventDefault();
         setSettingsOpen(false);
+      }
+      if (overlays.agentsOpen) {
+        stopPropagation = true;
+        event.preventDefault();
+        setAgentsOpen(false);
       }
       // The workspace error banner is lowest priority: it only takes Escape
       // when nothing above it (menus, dialogs, a rename editor) wanted it.
@@ -9126,6 +9121,7 @@ function MainApp() {
           return;
         case "openSettings":
           setSettingsMenu(null);
+          setAgentsOpen(false);
           setSettingsOpen(true);
           return;
         case "openCommandPalette":
@@ -9459,6 +9455,20 @@ function MainApp() {
             </button>
             <button
               type="button"
+              className={`icon-button sidebar-header-button${agentsOpen ? " is-active" : ""}`}
+              aria-label="Agents"
+              title="Agents"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={() => {
+                setSettingsMenu(null);
+                setSettingsOpen(false);
+                setAgentsOpen(true);
+              }}
+            >
+              <Bot size={14} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
               className="icon-button sidebar-header-button"
               title={`Collapse left sidebar (${LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL})`}
               aria-label="Collapse left sidebar"
@@ -9622,6 +9632,7 @@ function MainApp() {
               role="menuitem"
               onClick={() => {
                 setSettingsMenu(null);
+                setAgentsOpen(false);
                 setSettingsOpen(true);
               }}
             >
@@ -9934,6 +9945,49 @@ function MainApp() {
         commands={commandPaletteOpen ? buildPaletteCommands() : []}
       />
 
+      {agentsOpen ? (
+        <div
+          className="settings-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setAgentsOpen(false);
+            }
+          }}
+        >
+          <div
+            className="settings-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="agents-title"
+          >
+            <div className="settings-header">
+              <h2 id="agents-title">Agents</h2>
+              <button
+                type="button"
+                className="control-button settings-close"
+                aria-label="Close agents"
+                onClick={() => setAgentsOpen(false)}
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="settings-content">
+              <AgentSetupGuide
+                adapters={config?.adapters ?? []}
+                loading={adapterProbeLoading}
+                error={adapterProbeError}
+                onRefresh={() =>
+                  void refreshAdapterReadiness({ force: true }).catch(() => undefined)
+                }
+                onCopied={showAppToast}
+                onError={setAdapterProbeError}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {settingsOpen ? (
         <div
           className="settings-backdrop"
@@ -9979,166 +10033,15 @@ function MainApp() {
               <button
                 type="button"
                 role="tab"
-                aria-selected={settingsTab === "agents"}
-                className={`control-button${settingsTab === "agents" ? " is-active" : ""}`}
-                onClick={() => setSettingsTab("agents")}
+                aria-selected={settingsTab === "remotes"}
+                className={`control-button${settingsTab === "remotes" ? " is-active" : ""}`}
+                onClick={() => setSettingsTab("remotes")}
               >
-                Agents
+                Remotes
               </button>
             </div>
 
-            {settingsTab === "agents" ? (
-              <div className="settings-content settings-agents" role="tabpanel">
-                <div className="settings-agents-heading">
-                  <div>
-                    <h3>Agent providers</h3>
-                    <p className="settings-hint">
-                      Session uses the agent tools already installed on your Mac.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="control-button settings-agent-refresh"
-                    disabled={adapterProbeLoading}
-                    aria-label={adapterProbeLoading ? "Checking agent providers" : "Check again"}
-                    title={adapterProbeLoading ? "Checking agent providers" : "Check again"}
-                    onClick={() =>
-                      void refreshAdapterReadiness({ force: true }).catch(() => undefined)
-                    }
-                  >
-                    <RefreshCw
-                      size={13}
-                      className={adapterProbeLoading ? "is-spinning" : undefined}
-                      aria-hidden="true"
-                    />
-                  </button>
-                </div>
-                {adapterProbeError ? (
-                  <p className="settings-agent-error" role="alert">
-                    {adapterProbeError}
-                  </p>
-                ) : null}
-                <div className="settings-agent-list">
-                  {readyAdaptersFirst(config?.adapters ?? []).map((adapter) => {
-                    const isExpanded = expandedSettingsAgentIds.has(adapter.instanceId);
-                    const binaryPath = adapter.resolvedBinary ?? adapter.configuredBinary;
-                    const safeInstanceId = encodeURIComponent(adapter.instanceId);
-                    const summaryId = `settings-agent-summary-${safeInstanceId}`;
-                    const detailsId = `settings-agent-details-${safeInstanceId}`;
-                    const toggleExpanded = () => {
-                      setExpandedSettingsAgentIds((current) => {
-                        const next = new Set(current);
-                        if (next.has(adapter.instanceId)) {
-                          next.delete(adapter.instanceId);
-                        } else {
-                          next.add(adapter.instanceId);
-                        }
-                        return next;
-                      });
-                    };
-                    return (
-                      <section
-                        className="settings-agent-card"
-                        key={adapter.instanceId}
-                        title={`${adapter.target.label} · ${adapter.instanceId}`}
-                      >
-                        <button
-                          id={summaryId}
-                          type="button"
-                          className="settings-agent-summary"
-                          aria-expanded={isExpanded}
-                          aria-controls={detailsId}
-                          onClick={toggleExpanded}
-                        >
-                          <img
-                            src={ADAPTER_ICON_BY_ID[adapter.id]}
-                            className={`settings-agent-icon ${adapterIconClassName(adapter.id)}`}
-                            alt=""
-                            aria-hidden="true"
-                          />
-                          <span className="settings-agent-identity">
-                            <strong>{adapter.label}</strong>
-                            <span className="settings-agent-summary-meta">
-                              {adapter.version ?? (adapter.resolvedBinary ? "Checking…" : "—")}
-                            </span>
-                            {isExpanded && binaryPath ? (
-                              <span className="settings-agent-summary-meta" title={binaryPath}>
-                                {binaryPath}
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className={`settings-agent-status is-${adapter.readiness}`}>
-                            {adapterReadinessLabel(adapter)}
-                          </span>
-                          <ChevronDown
-                            size={13}
-                            className={`settings-agent-chevron${isExpanded ? " is-open" : ""}`}
-                            aria-hidden="true"
-                          />
-                        </button>
-                        {isExpanded ? (
-                          <div
-                            id={detailsId}
-                            className="settings-agent-detail"
-                            role="region"
-                            aria-labelledby={summaryId}
-                            onClick={toggleExpanded}
-                          >
-                            {adapter.message ? (
-                              <p className="settings-agent-message">{adapter.message}</p>
-                            ) : null}
-                            <div
-                              className="settings-agent-actions"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              {adapter.updateCommand &&
-                              (adapter.readiness === "unsupportedVersion" ||
-                                adapter.researchReadiness === "unsupportedVersion") ? (
-                                <button
-                                  type="button"
-                                  className="control-button"
-                                  onClick={() => {
-                                    void writeClipboardText(adapter.updateCommand ?? "");
-                                    showAppToast("Update command copied");
-                                  }}
-                                >
-                                  Copy update command
-                                </button>
-                              ) : null}
-                              {adapter.loginCommand && adapter.readiness === "needsAuth" ? (
-                                <button
-                                  type="button"
-                                  className="control-button"
-                                  onClick={() => {
-                                    void writeClipboardText(adapter.loginCommand ?? "");
-                                    showAppToast("Sign-in command copied");
-                                  }}
-                                >
-                                  Copy sign-in command
-                                </button>
-                              ) : null}
-                              {adapter.installUrl ? (
-                                <button
-                                  type="button"
-                                  className="control-button"
-                                  onClick={() => {
-                                    void openExternalUrl(adapter.installUrl ?? "").catch((err) => {
-                                      setAdapterProbeError(unknownErrorMessage(err));
-                                    });
-                                  }}
-                                >
-                                  {adapter.readiness === "missing" ? "Install guide" : "Docs"}
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        ) : null}
-                      </section>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : settingsTab === "remotes" ? (
+            {settingsTab === "remotes" ? (
               <div className="settings-content settings-remotes" role="tabpanel">
                 <div className="settings-agents-heading">
                   <div>
@@ -11354,10 +11257,22 @@ function MainApp() {
                   requireCmdEnterToSend={settings.requireCmdEnterToSend}
                   workspaceId={researchScope}
                   onOpenAgentSettings={() => {
-                    setSettingsTab("agents");
-                    setSettingsOpen(true);
+                    setSettingsOpen(false);
+                    setAgentsOpen(true);
                   }}
                   onCreate={submitNewResearch}
+                />
+              }
+              setupGuide={
+                <AgentSetupGuide
+                  adapters={config.adapters}
+                  loading={adapterProbeLoading}
+                  error={adapterProbeError}
+                  onRefresh={() =>
+                    void refreshAdapterReadiness({ force: true }).catch(() => undefined)
+                  }
+                  onCopied={showAppToast}
+                  onError={setAdapterProbeError}
                 />
               }
               items={recentActivityItems}

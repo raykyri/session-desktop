@@ -41,6 +41,7 @@ export interface AgentAdapterMetadata {
   auth: "authenticated" | "unauthenticated" | "unknown";
   checkedAt: number | null;
   loginCommand: string | null;
+  installCommand: string | null;
   installUrl: string | null;
   updateCommand: string | null;
   instanceId: string;

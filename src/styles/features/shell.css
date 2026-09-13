@@ -1467,8 +1467,8 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   display: flex;
   flex-direction: column;
   width: min(500px, 100%);
-  min-height: min(800px, 95vh);
-  max-height: min(960px, 95vh);
+  min-height: min(600px, 95vh);
+  max-height: min(760px, 95vh);
   gap: 14px;
   border: 1px solid var(--dialog-border);
   border-radius: 10px;
@@ -1489,24 +1489,6 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   color: var(--text-heading);
 }
 
-.settings-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--control-h-md);
-  width: var(--control-h-md);
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--control-fg-muted);
-}
-
-.settings-close:hover {
-  background: var(--control-bg-hover);
-  color: var(--text-primary);
-}
-
 .settings-tabs {
   display: grid;
   flex: 0 0 auto;
@@ -1519,8 +1501,8 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 }
 
 .settings-tabs button {
-  min-height: var(--control-h-md);
   min-width: 0;
+  min-height: var(--control-h-md);
   padding: 0 10px;
   border: 0;
   border-radius: 0;
@@ -1543,6 +1525,24 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   color: var(--text-heading);
 }
 
+.settings-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-h-md);
+  width: var(--control-h-md);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--control-fg-muted);
+}
+
+.settings-close:hover {
+  background: var(--control-bg-hover);
+  color: var(--text-primary);
+}
+
 .settings-content {
   display: flex;
   flex: 1 1 auto;
@@ -1553,12 +1553,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   padding-right: 2px;
 }
 
-.settings-agents {
-  gap: 12px;
-}
-
-.settings-agents-heading,
-.settings-agent-actions {
+.settings-agents-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1569,30 +1564,6 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   margin: 0 0 4px;
   color: var(--text-heading);
   font-size: var(--fs-base);
-}
-
-.settings-agent-refresh,
-.settings-agent-actions .control-button {
-  display: inline-flex;
-  align-items: center;
-  min-height: 27px;
-  gap: 6px;
-  padding: 0 9px;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-md);
-  color: var(--control-fg-muted);
-  background: var(--control-bg);
-  font-size: var(--fs-sm);
-}
-
-.settings-agent-refresh .is-spinning {
-  animation: spin 0.9s linear infinite;
-}
-
-.settings-agent-refresh {
-  justify-content: center;
-  width: 27px;
-  padding: 0;
 }
 
 .settings-remotes {
@@ -1958,16 +1929,6 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   white-space: nowrap;
 }
 
-.settings-agent-icon {
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-}
-
-.settings-agent-icon.is-mono-light {
-  filter: brightness(0) invert(1);
-}
-
 .settings-agent-status {
   color: var(--status-success-fg);
   font-size: var(--fs-sm);
@@ -2024,21 +1985,11 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   white-space: nowrap;
 }
 
-.settings-agent-message,
 .settings-agent-error {
   margin: 9px 0 0;
   color: var(--status-attention-fg);
   font-size: var(--fs-sm);
   line-height: 1.4;
-}
-
-.settings-agent-actions {
-  justify-content: flex-end;
-  margin-top: 9px;
-}
-
-.settings-agent-actions:empty {
-  display: none;
 }
 
 .settings-row {

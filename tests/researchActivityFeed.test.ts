@@ -71,3 +71,27 @@ test("feed pagination errors and deletion undo remain visible with workspace his
   assert.match(html, /aria-label="Back"/);
   assert.match(html, /aria-label="Forward"/);
 });
+
+test("the agent setup guide appears only when the Home feed is empty", () => {
+  const setupGuide = createElement("div", null, "Agent setup guide");
+
+  assert.match(renderFeed({ setupGuide }), /Agent setup guide/);
+  assert.doesNotMatch(
+    renderFeed({
+      setupGuide,
+      items: [
+        {
+          kind: "journal",
+          occurredAt: 200,
+          entry: {
+            kind: "link",
+            id: "link",
+            createdAt: "1970-01-01T00:00:00.200Z",
+            url: "https://example.com/finding",
+          },
+        },
+      ],
+    }),
+    /Agent setup guide/,
+  );
+});

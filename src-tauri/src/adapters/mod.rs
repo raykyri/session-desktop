@@ -1014,6 +1014,7 @@ impl AdapterRegistry {
                     auth: AdapterAuthState::Unknown,
                     checked_at: None,
                     login_command,
+                    install_command: adapter_install_command(adapter.id()).map(str::to_string),
                     install_url: adapter_install_url(adapter.id()).map(str::to_string),
                     update_command: adapter_update_command(
                         adapter.id(),
@@ -1077,6 +1078,7 @@ pub struct AdapterMetadata {
     pub auth: AdapterAuthState,
     pub checked_at: Option<u64>,
     pub login_command: Option<String>,
+    pub install_command: Option<String>,
     pub install_url: Option<String>,
     pub update_command: Option<String>,
     /// Stable provider-instance identity. The first implementation has one
@@ -1134,11 +1136,20 @@ fn adapter_login_command(adapter_id: &str, binary: &str) -> Option<String> {
     }
 }
 
+fn adapter_install_command(adapter_id: &str) -> Option<&'static str> {
+    match adapter_id {
+        "claude" => Some("curl -fsSL https://claude.ai/install.sh | bash"),
+        "codex" => Some("curl -fsSL https://chatgpt.com/codex/install.sh | sh"),
+        "grok" => Some("curl -fsSL https://x.ai/cli/install.sh | bash"),
+        _ => None,
+    }
+}
+
 fn adapter_install_url(adapter_id: &str) -> Option<&'static str> {
     match adapter_id {
         "claude" => Some("https://docs.anthropic.com/en/docs/claude-code/setup"),
         "codex" => Some("https://developers.openai.com/codex/cli"),
-        "grok" => Some("https://docs.x.ai/docs/grok-code-fast-1"),
+        "grok" => Some("https://docs.x.ai/build/overview"),
         _ => None,
     }
 }
