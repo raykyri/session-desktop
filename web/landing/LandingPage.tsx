@@ -10,7 +10,7 @@ const FEATURES = [
   ["Branch any answer", "Follow a promising lead without losing the question, sources, or reasoning that brought you there."],
   ["Keep durable research", "Organize conversations, documents, highlights, notes, and sources in one navigable tree."],
   ["Work with your agents", "Run focused research with Claude Code, Codex, or Grok while Session preserves the structure around it."],
-  ["Read and publish", "Open sources beside your work, collect evidence, and share a clean published result when it is ready."],
+  ["Keep sources close", "Open sources beside your work and collect the evidence that supports each branch."],
 ] as const;
 
 const CSS = String.raw`

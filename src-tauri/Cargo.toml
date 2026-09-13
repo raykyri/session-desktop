@@ -30,11 +30,11 @@ libc = "0.2"
 # Backend HTTP for the OpenRouter title proxy so the API key never enters the
 # webview. `default-features = false` + `json` keeps this additive to the reqwest
 # (rustls) build already pulled in transitively by tauri-plugin-updater.
-reqwest = { version = "0.13", default-features = false, features = ["form", "json"] }
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
 regex = "1"
 # The updater intentionally enables reqwest's provider-neutral rustls feature.
 # Select one provider for every reqwest client in the process; otherwise client
-# construction panics before either publishing or title generation can connect.
+# construction panics before title generation or journal requests can connect.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 names = { version = "0.14", default-features = false }
 portable-pty = "0.9"
@@ -59,7 +59,6 @@ tauri-plugin-updater = "2"
 window-vibrancy = "0.7.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-keyring = { version = "3.6.3", default-features = false, features = ["apple-native"] }
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = [
     "std",

@@ -9,7 +9,7 @@ export function stripTaggedUserInstructionBlocks(text: string): string {
   // Protect fenced/indented code the same way the assistant path does: a
   // user message quoting XML-ish tags inside a code block (a pasted hook
   // file, a config sample) is content, not an injected instruction block,
-  // and it flows into clipboard copies and published transcripts.
+  // and it flows into clipboard copies and exported conversations.
   const stripped = stripInlineTaggedInstructionBlocks(
     leading.text,
     markdownCodeRanges(leading.text),

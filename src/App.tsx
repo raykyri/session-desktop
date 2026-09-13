@@ -94,7 +94,6 @@ import type {
   HomeRailPastTurn,
 } from "./lib/homeRailTypes";
 import LinkContextMenu from "./components/LinkContextMenu";
-import PublishDialog, { type PublishDialogTarget } from "./components/PublishDialog";
 import {
   UserNotificationStack,
 } from "./components/UserNotificationStack";
@@ -246,7 +245,6 @@ import {
   requestResearchFollowupsFocus,
   requestResearchFolderMenuToggle,
 } from "./lib/researchShortcuts";
-import type { PublicationBinding } from "./lib/publication";
 import { useSessionEvents } from "./hooks/useSessionEvents";
 import type {
   BrowserOverlayMode,
@@ -433,7 +431,6 @@ import {
   reloadHumanBrowser,
   listTurns,
   listPanes,
-  listPublications,
   listResearchActivity,
   listRecentActivity,
   listResearchFolders,
@@ -1875,14 +1872,6 @@ function MainApp() {
   const terminalMapDialogRef = useRef<HTMLDivElement | null>(null);
   const changeResearchMultiSelection = useCallback((ids: string[]) => {
     setResearchMultiSelectIds(ids);
-  }, []);
-  const [publicationTarget, setPublicationTarget] = useState<PublishDialogTarget | null>(null);
-  const [publicationBindings, setPublicationBindings] = useState<PublicationBinding[]>([]);
-  const handlePublicationBindingChange = useCallback((binding: PublicationBinding) => {
-    setPublicationBindings((current) => [
-      binding,
-      ...current.filter((candidate) => candidate.publicationId !== binding.publicationId),
-    ]);
   }, []);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [conversationHistoryOpen] = useState(false);
@@ -4732,7 +4721,6 @@ function MainApp() {
       newAgentOpen ||
       terminalMapOpen ||
       newResearchFolderRequest !== null ||
-      publicationTarget ||
       commandPaletteOpen ||
       conversationHistoryOpen ||
       repositoryBrowser ||
@@ -5751,7 +5739,6 @@ function MainApp() {
           existingResearchActivity,
           existingRecentActivity,
           existingResearchFolders,
-          existingPublications,
         ] = await Promise.all([
           getRuntimeConfig(),
           getLauncherAdapterPreference().catch(() => null),
@@ -5766,7 +5753,6 @@ function MainApp() {
             .then(normalizeRecentActivityPage)
             .catch(() => ({ items: [], nextCursor: null })),
           listResearchFolders().catch(emptyResearchFolderState),
-          listPublications().catch((): PublicationBinding[] => []),
         ]);
         if (cancelled) {
           return;
@@ -5816,7 +5802,6 @@ function MainApp() {
             localStorage.removeItem(RESEARCH_FOLDERS_STORAGE_KEY);
           }
         }
-        setPublicationBindings(existingPublications);
         void hydrateSecondaryFast(existingAgents);
         const savedResearchTreeId = localStorage.getItem(ACTIVE_RESEARCH_TREE_KEY);
         const restoredResearchScope = resolveResearchScope(
@@ -7817,17 +7802,12 @@ function MainApp() {
     async (
       parentNodeId: string,
       prompt: string,
-      publicationProposal?: {
-        publicationId: string;
-        commentId: number;
-      } | null,
       queryAnchor?: ResearchHighlightAnchor | null,
       inline?: boolean,
     ) => {
       const node = await forkResearchNode(
         parentNodeId,
         prompt,
-        publicationProposal,
         queryAnchor,
         inline ?? false,
       );
@@ -9410,7 +9390,6 @@ function MainApp() {
     settingsOpen ||
     newAgentOpen ||
     terminalMapOpen ||
-    Boolean(publicationTarget) ||
     Boolean(renamePaneId || renameGroupId);
   useEffect(() => {
     if (modalEditorOpen) {
@@ -12717,16 +12696,7 @@ function MainApp() {
               linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}
               onError={setError}
               onToast={handleResearchDocumentToast}
-              onPublish={setPublicationTarget}
               shortcutHintsShown={shortcutHintsShown}
-              publicationBinding={
-                publicationBindings.find(
-                  (binding) =>
-                    binding.source.kind === "researchTree" &&
-                    binding.source.treeId === activeResearchTreeId,
-                ) ?? null
-              }
-              onPublicationBindingChange={handlePublicationBindingChange}
               onShowSidebar={
                 researchSidebarRestoreInHeader ? showLeftSidebarInResearch : undefined
               }
@@ -12833,28 +12803,6 @@ function MainApp() {
         itemCount={newResearchFolderRequest?.treeIds.length ?? 0}
         onClose={() => setNewResearchFolderRequest(null)}
         onCreate={confirmResearchFolderCreation}
-      />
-
-      <PublishDialog
-        target={publicationTarget}
-        onClose={() => setPublicationTarget(null)}
-        onPublished={(binding) => {
-          setPublicationBindings((current) => [
-            binding,
-            ...current.filter(
-              (candidate) => candidate.publicationId !== binding.publicationId,
-            ),
-          ]);
-          if (binding.warning) {
-            showAppToast(binding.warning, "warning");
-          } else {
-            showAppToast(
-              publicationTarget?.binding
-                ? `Updated ${binding.shareUrl}`
-                : `Published to ${binding.shareUrl}`,
-            );
-          }
-        }}
       />
 
       <UserNotificationStack

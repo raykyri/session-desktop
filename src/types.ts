@@ -397,10 +397,6 @@ export interface ResearchNode {
   id: string;
   treeId: string;
   parentNodeId?: string | null;
-  publicationProposal?: {
-    publicationId: string;
-    commentId: number;
-  } | null;
   /** The passage of the parent's response this follow-up was asked about.
    * Anchors the node's card beside that passage in the parent's view. */
   queryAnchor?: ResearchHighlightAnchor | null;

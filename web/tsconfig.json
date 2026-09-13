@@ -7,10 +7,5 @@
     "allowJs": true,
     "checkJs": true
   },
-  "include": [
-    "./**/*.ts",
-    "./**/*.tsx",
-    "../src/lib/publication.ts",
-    "../src/lib/publicationComments.ts"
-  ]
+  "include": ["./**/*.ts", "./**/*.tsx"]
 }

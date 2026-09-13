@@ -21,7 +21,6 @@ mod native_support;
 mod persistence;
 mod prompt_library;
 mod pty;
-mod publishing;
 mod recovery;
 mod remote_cli;
 mod remote_files;
@@ -2079,21 +2078,13 @@ async fn fork_research_node(
     state: tauri::State<'_, AppState>,
     parent_node_id: String,
     prompt: String,
-    publication_proposal: Option<research::ResearchPublicationProposal>,
     query_anchor: Option<research::ResearchHighlightAnchor>,
     inline: Option<bool>,
 ) -> Result<ResearchNode, String> {
     let state = state.inner().clone();
     let inline = inline.unwrap_or(false);
-    let attachments = if publication_proposal.is_none() {
-        tweets::resolve_research_message_attachments(&prompt).await
-    } else {
-        Vec::new()
-    };
+    let attachments = tweets::resolve_research_message_attachments(&prompt).await;
     tauri::async_runtime::spawn_blocking(move || {
-        if inline && publication_proposal.is_some() {
-            return Err("community proposals become branches, not inline follow-ups".to_string());
-        }
         // Same admission guard as create_research_tree: the Queued child must
         // be admitted atomically with the workspace checks, or a concurrent
         // folder removal could invalidate its workspace before the fork.
@@ -2102,18 +2093,13 @@ async fn fork_research_node(
             let parent = state.research_node(&parent_node_id)?;
             let workspace = state.research_workspace_for_node(&parent_node_id)?;
             validate_launch_workspace(&state, Some(&workspace.id), LaunchOrigin::Research)?;
-            let child = match publication_proposal {
-                Some(proposal) => {
-                    state.create_research_child_for_proposal(&parent_node_id, prompt, proposal)?
-                }
-                None => state.create_research_child_with_attachments(
-                    &parent_node_id,
-                    prompt,
-                    query_anchor,
-                    inline,
-                    attachments,
-                )?,
-            };
+            let child = state.create_research_child_with_attachments(
+                &parent_node_id,
+                prompt,
+                query_anchor,
+                inline,
+                attachments,
+            )?;
             (parent, workspace, child)
         };
         launch_research_child_run(&state, &parent, &workspace, &child)
@@ -3997,15 +3983,6 @@ fn main() {
             openrouter_key_get,
             openrouter_key_set,
             openrouter_chat_completion,
-            publishing::publishing_auth_status,
-            publishing::publishing_auth_begin,
-            publishing::publishing_auth_poll,
-            publishing::publishing_auth_disconnect,
-            publishing::publishing_publish,
-            publishing::publishing_sync,
-            publishing::publishing_list,
-            publishing::publishing_list_proposals,
-            publishing::publishing_resolve_proposal,
             active_tab_get,
             active_tab_set,
             browser_backend::browser_automation_snapshot,

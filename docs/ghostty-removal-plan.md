@@ -49,8 +49,8 @@ and usable after each stage. Land stages in order; dependency deletion follows
 runtime decoupling, not the other way around.
 
 This stage preserved the then-current Apple and native identities. A later hard
-cutover changed the bundle ID to `dev.session.desktop`, the Keychain service to
-`dev.session.github-oauth`, and the surviving native bridge to Session names. The storage and persisted formats also moved to Session names.
+cutover changed the bundle ID to `dev.session.desktop` and the surviving native
+bridge to Session names. The storage and persisted formats also moved to Session names.
 The later Foundation Models removal also deleted `src-tauri/swift/FoundationTitleGenerator.swift` and its Rust entry points. Retired renderer functions do not
 need permanent dummy compatibility implementations once all callers are removed.
 
