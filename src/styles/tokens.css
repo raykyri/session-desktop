@@ -186,8 +186,7 @@
 
   --status-failed-fg: #d98787;
   --status-attention-fg: #e0796d;
-  /* Amber "agent is working / waiting on you" cues: the pane-tab activity
-     dot, the home cascade's active card border, and its pause gate. */
+  /* Amber "agent is working / waiting on you" cues. */
   --status-active-fg: #d7a84f;
   --status-active-border: rgba(215, 168, 79, 0.42);
   --status-active-border-strong: rgba(215, 168, 79, 0.62);
@@ -307,8 +306,6 @@
 
   /* Component surfaces with their own contrast relationships. */
   --settings-tab-active-bg: #273034;
-  --home-cascade-card-border: #2b3235;
-  --home-cascade-current-bg: #171d1b;
   --recovered-queue-divider: #2c3336;
   --research-highlight-action-bg: #303532;
   --research-highlight-action-bg-hover: #3a403c;
@@ -380,8 +377,6 @@
   --chrome-control-bg-disabled: rgba(31, 29, 26, 0.65);
 
   --settings-tab-active-bg: #322f2b;
-  --home-cascade-card-border: #34312d;
-  --home-cascade-current-bg: #201e1a;
   --recovered-queue-divider: #34312d;
   --research-highlight-action-bg: #363636;
   --research-highlight-action-bg-hover: #404040;

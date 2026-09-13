@@ -23,6 +23,7 @@ test("research prompts preserve Markdown blockquotes", () => {
   );
 
   assert.match(html, /You asked Claude Fable/);
+  assert.match(html, /research-prompt research-content-card/);
   assert.doesNotMatch(html, /Reply to:/);
   assert.ok(html.indexOf("You asked Claude Fable") < html.indexOf("<blockquote>"));
   assert.match(html, /<blockquote>/);

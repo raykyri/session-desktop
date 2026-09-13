@@ -86,9 +86,9 @@
   gap: 8px;
   padding: 0 3px;
   color: var(--text-subtle);
-  font-size: calc(var(--fs-input) - 2px);
+  font-size: var(--research-reading-meta-font-size);
   font-weight: 400;
-  line-height: 1.35;
+  line-height: var(--research-reading-meta-line-height);
 }
 
 .activity-metadata.is-summary-hidden {
@@ -116,9 +116,6 @@
 /* Same surface as .research-prompt (the question bubble). */
 .journal-entry {
   position: relative;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--content-card-bg);
 }
 
 /* Research queries: the prompt itself is the card (same surface as
@@ -273,7 +270,8 @@
 
 .journal-link-url {
   color: var(--accent-color);
-  font-size: var(--fs-input);
+  font-size: var(--research-reading-body-font-size);
+  line-height: var(--research-reading-body-line-height);
   text-decoration: none;
   overflow-wrap: anywhere;
 }
@@ -387,7 +385,7 @@
      truncated handle stops identifying anyone. */
   flex: 0 8 auto;
   min-width: 3ch;
-  font-size: var(--fs-input);
+  font-size: var(--research-reading-body-font-size);
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -439,14 +437,14 @@
 
 .journal-tweet-text {
   margin: 0;
-  font-size: var(--fs-input);
-  line-height: 1.4;
+  font-size: var(--research-reading-body-font-size);
+  line-height: var(--research-reading-body-line-height);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .journal-tweet-text.is-quote {
-  font-size: calc(var(--fs-input) - 0.5px);
+  font-size: var(--research-reading-body-font-size);
 }
 
 .journal-tweet-text a {

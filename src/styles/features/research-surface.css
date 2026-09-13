@@ -1,0 +1,156 @@
+/* Shared page chrome and reading recipes for Home and research threads.
+   Surface-specific layout belongs in research.css or journal.css; rules here
+   should apply to both destinations without depending on import order. */
+
+.research-workspace {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  color: #dfe3df;
+  background: var(--research-workspace-bg);
+  /* Shared size for the answer meta line, the parent-response link, and
+     follow-up card body text, so the document's secondary text stays uniform. */
+  --research-meta-font-size: calc(13px + var(--transcript-font-delta, 0px));
+}
+
+.research-document {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  /* The implicit column is an auto track, and auto tracks never shrink below
+     an item's min-content contribution — so a breadcrumb carrying a long
+     untitled prompt widened the track far past the viewport and shoved the
+     centered document column off screen (the page rendered blank). A
+     minmax(0, 1fr) column keeps the track at the container's width and lets
+     the breadcrumb's own overflow/ellipsis rules do their job. */
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.research-document-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--surface-border-subtle);
+  background: var(--chrome-header-bg);
+}
+
+/* Browser-style back/forward, left of the breadcrumbs. Link styling — no
+   button chrome — so they read as quiet affordances beside the path. */
+.research-history-nav {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.research-history-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 3px;
+  border: 0;
+  color: #aeb6b1;
+  background: transparent;
+  cursor: pointer;
+}
+
+.research-history-button:hover:not(:disabled) {
+  color: #f0f2ef;
+}
+
+.research-history-button:disabled {
+  color: #4b524e;
+  cursor: default;
+}
+
+.research-breadcrumb {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.research-breadcrumb > span {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.research-breadcrumb button {
+  display: block;
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 3px;
+  overflow: hidden;
+  border: 0;
+  color: #aeb6b1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+}
+
+.research-breadcrumb button:hover:not(:disabled) {
+  color: #f0f2ef;
+}
+
+.research-breadcrumb button:disabled {
+  cursor: default;
+}
+
+.research-breadcrumb-separator {
+  margin: 0 5px;
+  color: #59615d;
+}
+
+/* Stand-in for the collapsed middle of a deep path; its tooltip carries the
+   hidden step count. */
+.research-breadcrumb-ellipsis {
+  padding: 0 3px;
+  color: #78817c;
+  cursor: default;
+}
+
+.research-document-scroll {
+  width: 100%;
+  min-height: 0;
+  padding: 44px clamp(24px, 5vw, 72px) 40px;
+  /* Vertical only. Wide content (tables, code blocks) scrolls inside its own
+     inner scrollers, so this container never scrolls sideways legitimately.
+     With plain `auto`, transient horizontal overflow — the WebKit var()-drop
+     layouts documented on .research-document-content could momentarily let a
+     streaming answer overrun the right edge — made it horizontally
+     scrollable, and a trackpad deltaX then shifted scrollLeft. Nothing reset
+     it on navigation, so the left padding looked collapsed or erratic
+     between questions, follow-ups, and freshly posted replies. */
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+}
+
+/* Home and a thread use the same reading scale even though their layouts differ. */
+.research-reading-surface {
+  --research-answer-font-delta: 0.5px;
+  --research-reading-body-font-size: calc(14px + var(--research-answer-font-delta));
+  --research-reading-body-line-height: 1.5;
+  --research-reading-meta-font-size: calc(var(--fs-input) - 2px);
+  --research-reading-meta-line-height: 1.35;
+  --transcript-font-delta: 1px;
+  --transcript-line-height-delta: 0.12;
+}
+
+/* Shared question/saved-item surface. Width and placement remain local to the
+   thread or feed so this class is only the visual card recipe. */
+.research-content-card {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--content-card-bg);
+}
