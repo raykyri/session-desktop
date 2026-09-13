@@ -911,42 +911,6 @@ pub(crate) fn clone_group_record_for_scope(
     Ok(group)
 }
 
-pub fn set_group_dir(state: &AppState, group_id: &str, dir: String) -> Result<GroupInfo, String> {
-    let group = state
-        .group(group_id)?
-        .ok_or_else(|| format!("group {group_id} was not found"))?;
-    if group.scope != WorkspaceScope::Terminal {
-        return Err(
-            "use the research workspace folder command for Research workspaces".to_string(),
-        );
-    }
-    let dir = group_canonical_dir(group.remote.as_ref(), &dir)?;
-    set_group_dir_record(state, group_id, dir)
-}
-
-fn set_group_dir_record(
-    state: &AppState,
-    group_id: &str,
-    dir: PathBuf,
-) -> Result<GroupInfo, String> {
-    let mut group = state
-        .group(group_id)?
-        .ok_or_else(|| format!("group {group_id} was not found"))?;
-    group.dir = dir.display().to_string();
-    group.name = group_name_for_dir(&dir);
-    group.base_repo = None;
-    group.base_ref = None;
-    write_group_manifest(&group)?;
-    state.update_group(group.clone())?;
-    state.emit(crate::events::SessionEvent::new(
-        "group.updated",
-        None,
-        None,
-        serde_json::json!({ "group": group.clone() }),
-    ));
-    Ok(group)
-}
-
 pub fn rename_group(
     state: &AppState,
     group_id: &str,
@@ -971,26 +935,6 @@ fn rename_group_record(
     group.name_override = name
         .map(|name| name.trim().to_string())
         .filter(|name| !name.is_empty());
-    write_group_manifest(&group)?;
-    state.update_group(group.clone())?;
-    state.emit(crate::events::SessionEvent::new(
-        "group.updated",
-        None,
-        None,
-        serde_json::json!({ "group": group.clone() }),
-    ));
-    Ok(group)
-}
-
-pub fn set_group_collapsed(
-    state: &AppState,
-    group_id: &str,
-    collapsed: bool,
-) -> Result<GroupInfo, String> {
-    let mut group = state
-        .group(group_id)?
-        .ok_or_else(|| format!("group {group_id} was not found"))?;
-    group.collapsed = collapsed;
     write_group_manifest(&group)?;
     state.update_group(group.clone())?;
     state.emit(crate::events::SessionEvent::new(
@@ -2871,75 +2815,6 @@ pub(crate) fn write_group_manifest(group: &GroupInfo) -> Result<(), String> {
     Ok(())
 }
 
-/// Whether `dir` holds nothing besides an entry named `allowed`. A missing
-/// directory holds nothing and so cannot make a scaffold non-pristine; any
-/// other read failure reads as "unknown contents" rather than "empty", so an
-/// unreadable directory is never mistaken for a removable one.
-fn dir_holds_nothing_but(dir: &Path, allowed: &str) -> bool {
-    let entries = match fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(err) => return err.kind() == std::io::ErrorKind::NotFound,
-    };
-    for entry in entries {
-        let Ok(entry) = entry else {
-            return false;
-        };
-        if entry.file_name() != allowed {
-            return false;
-        }
-    }
-    true
-}
-
-/// Removes the manifest-only directory allocated for a group whose creation is
-/// being rolled back. All-or-nothing: the whole scaffold is confirmed pristine
-/// before any part of it is removed, so if another task raced in a worktree or
-/// any other content, the managed directory is left exactly as found — manifest
-/// included, so it stays self-describing — rather than half-dismantled just to
-/// complete best-effort cleanup.
-pub(crate) fn remove_pristine_group_scaffold(group: &GroupInfo) {
-    if group.managed_dir == group.dir {
-        return;
-    }
-    let managed_dir = PathBuf::from(&group.managed_dir);
-    let session_dir = managed_dir.join(".session");
-    if !dir_holds_nothing_but(&managed_dir, ".session")
-        || !dir_holds_nothing_but(&session_dir, "group.json")
-    {
-        return;
-    }
-    let manifest = session_dir.join("group.json");
-    if let Err(err) = fs::remove_file(&manifest)
-        && err.kind() != std::io::ErrorKind::NotFound
-    {
-        eprintln!(
-            "session: failed to remove rolled-back group manifest {}: {err}",
-            manifest.display()
-        );
-        return;
-    }
-    // Content racing in after the check above surfaces here as
-    // DirectoryNotEmpty. The directory is preserved either way; say so rather
-    // than swallowing it, since by this point the check claimed it was empty.
-    if let Err(err) = fs::remove_dir(&session_dir)
-        && err.kind() != std::io::ErrorKind::NotFound
-    {
-        eprintln!(
-            "session: failed to remove rolled-back group metadata directory {}: {err}",
-            session_dir.display()
-        );
-        return;
-    }
-    if let Err(err) = fs::remove_dir(&managed_dir)
-        && err.kind() != std::io::ErrorKind::NotFound
-    {
-        eprintln!(
-            "session: failed to remove rolled-back group directory {}: {err}",
-            managed_dir.display()
-        );
-    }
-}
-
 /// Removes manifest scratch files (`.group.json.tmp-<pid>-<seq>`) stranded by
 /// a writer that died between creating its temp and renaming it into place —
 /// nothing else ever revisits them. Runs on the next manifest write for the
@@ -3868,100 +3743,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn rolled_back_group_scaffold_is_removed_when_pristine() {
-        let workspace = temp_workspace("rollback-pristine");
-        let project = workspace.join("project");
-        std::fs::create_dir_all(&project).unwrap();
-        let state = test_state_with_workspace(workspace);
-        let group = create_group_record(
-            &state,
-            CreateGroupRequest {
-                remote_id: None,
-                name: None,
-                dir: Some(project.display().to_string()),
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: None,
-            },
-            WorkspaceScope::Terminal,
-        )
-        .unwrap();
-        let managed_dir = PathBuf::from(&group.managed_dir);
-        assert!(managed_dir.join(".session/group.json").is_file());
-
-        remove_pristine_group_scaffold(&group);
-
-        assert!(!managed_dir.exists());
-    }
-
-    #[test]
-    fn rolled_back_group_scaffold_preserves_raced_in_content() {
-        let workspace = temp_workspace("rollback-race");
-        let project = workspace.join("project");
-        std::fs::create_dir_all(&project).unwrap();
-        let state = test_state_with_workspace(workspace);
-        let group = create_group_record(
-            &state,
-            CreateGroupRequest {
-                remote_id: None,
-                name: None,
-                dir: Some(project.display().to_string()),
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: None,
-            },
-            WorkspaceScope::Terminal,
-        )
-        .unwrap();
-        let managed_dir = PathBuf::from(&group.managed_dir);
-        let marker = managed_dir.join("raced-worktree/keep");
-        std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
-        std::fs::write(&marker, "keep").unwrap();
-
-        remove_pristine_group_scaffold(&group);
-
-        assert_eq!(std::fs::read_to_string(marker).unwrap(), "keep");
-        assert!(managed_dir.is_dir());
-        // All-or-nothing: a directory that survives keeps the manifest that
-        // says what it is, rather than being left unidentifiable.
-        assert!(managed_dir.join(".session/group.json").is_file());
-    }
-
-    // The same guarantee one level down: scratch left in `.session` by a manifest
-    // writer that died mid-rename must not cost the group its manifest either.
-    #[test]
-    fn rolled_back_group_scaffold_preserves_stranded_manifest_scratch() {
-        let workspace = temp_workspace("rollback-scratch");
-        let project = workspace.join("project");
-        std::fs::create_dir_all(&project).unwrap();
-        let state = test_state_with_workspace(workspace);
-        let group = create_group_record(
-            &state,
-            CreateGroupRequest {
-                remote_id: None,
-                name: None,
-                dir: Some(project.display().to_string()),
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: None,
-            },
-            WorkspaceScope::Terminal,
-        )
-        .unwrap();
-        let managed_dir = PathBuf::from(&group.managed_dir);
-        let scratch = managed_dir.join(".session/.group.json.tmp-1234-0");
-        std::fs::write(&scratch, "partial").unwrap();
-
-        remove_pristine_group_scaffold(&group);
-
-        assert!(scratch.is_file());
-        assert!(managed_dir.join(".session/group.json").is_file());
-    }
-
     fn sample_agent(id: &str, pane_id: Option<&str>, status: AgentStatus) -> AgentInfo {
         AgentInfo {
             id: id.to_string(),
@@ -4269,39 +4050,6 @@ mod tests {
         let cleared = rename_group(&state, &group.id, Some(" ".to_string())).unwrap();
 
         assert_eq!(cleared.name_override, None);
-        std::fs::remove_dir_all(workspace).ok();
-    }
-
-    #[test]
-    fn set_group_dir_preserves_name_override() {
-        let workspace = temp_workspace("rename-dir");
-        let managed_root = workspace.join("managed");
-        let first_dir = workspace.join("dirs/first");
-        let second_dir = workspace.join("dirs/second");
-        std::fs::create_dir_all(&first_dir).unwrap();
-        std::fs::create_dir_all(&second_dir).unwrap();
-        std::fs::create_dir_all(&managed_root).unwrap();
-        let state = test_state_with_workspace(managed_root);
-        let group = create_group(
-            &state,
-            CreateGroupRequest {
-                remote_id: None,
-                name: None,
-                dir: Some(first_dir.to_string_lossy().to_string()),
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: None,
-            },
-        )
-        .unwrap();
-        rename_group(&state, &group.id, Some("Research".to_string())).unwrap();
-
-        let moved =
-            set_group_dir(&state, &group.id, second_dir.to_string_lossy().to_string()).unwrap();
-
-        assert_eq!(moved.name, "second");
-        assert_eq!(moved.name_override.as_deref(), Some("Research"));
         std::fs::remove_dir_all(workspace).ok();
     }
 
@@ -5060,38 +4808,6 @@ mod tests {
                 .contains("unavailable")
         );
         std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn set_group_collapsed_persists_to_manifest() {
-        let workspace = temp_workspace("collapse");
-        let managed_root = workspace.join("managed");
-        let source_dir = workspace.join("dirs/project");
-        std::fs::create_dir_all(&source_dir).unwrap();
-        std::fs::create_dir_all(&managed_root).unwrap();
-        let state = test_state_with_workspace(managed_root);
-        let group = create_group(
-            &state,
-            CreateGroupRequest {
-                remote_id: None,
-                name: None,
-                dir: Some(source_dir.to_string_lossy().to_string()),
-                after_group_id: None,
-                base_repo: None,
-                base_ref: None,
-                remote: None,
-            },
-        )
-        .unwrap();
-
-        let collapsed = set_group_collapsed(&state, &group.id, true).unwrap();
-
-        assert!(collapsed.collapsed);
-        let manifest_path = PathBuf::from(&collapsed.managed_dir).join(".session/group.json");
-        let manifest: GroupInfo =
-            serde_json::from_str(&std::fs::read_to_string(manifest_path).unwrap()).unwrap();
-        assert!(manifest.collapsed);
-        std::fs::remove_dir_all(workspace).ok();
     }
 
     #[test]

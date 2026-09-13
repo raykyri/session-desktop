@@ -238,10 +238,6 @@ const MAX_UNDO_SCROLLBACK_BYTES: usize = 1024 * 1024;
 /// UI surfaces rather than silently swallowing the turn.
 const MAX_QUEUED_TURNS_PER_AGENT: usize = 500;
 
-/// Upper bound on durable recent-session entries. This keeps the home list fast and
-/// prevents the persisted state from growing forever across months of work.
-const MAX_RECENT_SESSIONS: usize = 80;
-
 /// Upper bound on artifact-tray entries per workspace group; the oldest entries
 /// fall off first, so a long-running workspace can't grow state.json forever.
 const MAX_ARTIFACTS_PER_GROUP: usize = 50;
@@ -267,12 +263,6 @@ fn validate_interface_draft_key(key: &str) -> Result<(), String> {
     }
     Ok(())
 }
-
-const RECENT_SESSION_PREVIEW_MAX_CHARS: usize = 90;
-
-/// How far a recent session's `last_active_at` must drift before a touch that
-/// changes nothing else re-stamps it (see upsert_recent_session_for_agent_locked).
-const RECENT_SESSION_TOUCH_COARSENESS_MS: u128 = 5_000;
 
 /// Ordered process output, independent of any frontend listener or renderer.
 /// Buffering is only for explicit backend staging; fresh processes record live.
@@ -548,7 +538,6 @@ struct Model {
     /// deduped. Cleared when the watcher thread resolves. Transient (not persisted).
     agent_submit_watch: HashSet<(String, u64)>,
     agent_drafts: HashMap<String, String>,
-    recent_sessions: HashMap<String, RecentSessionInfo>,
     /// Files and loopback URLs surfaced from agent panes via `session open`, oldest
     /// first — the per-workspace artifact tray. Persisted; capped per group.
     artifacts: Vec<ArtifactInfo>,
@@ -705,37 +694,6 @@ fn normalize_artifact_target(artifact: &mut ArtifactInfo) -> Option<bool> {
         changed = true;
     }
     Some(changed)
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RecentSessionInfo {
-    pub id: String,
-    pub adapter: String,
-    pub group_id: Option<String>,
-    pub session_id: Option<String>,
-    pub transcript_path: Option<String>,
-    pub worktree_dir: String,
-    pub branch: Option<String>,
-    pub model: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub effort: Option<String>,
-    pub parent_id: Option<String>,
-    pub fork_point: Option<String>,
-    pub root_session_id: Option<String>,
-    pub preview: Option<String>,
-    #[serde(default)]
-    pub line_count: usize,
-    pub last_active_at: u128,
-    pub created_at: u128,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pane_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent_id: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub status: Option<AgentStatus>,
-    #[serde(default)]
-    pub missing: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -2634,7 +2592,6 @@ impl AppState {
             .chain(persisted.inflight.keys().cloned())
             .collect::<HashSet<_>>();
 
-        let mut hydrated_agents = Vec::new();
         let mut artifacts_reconciled = false;
         journal::normalize_journal_state(&mut persisted.journal);
         if let Ok(mut model) = self.inner.model.lock() {
@@ -2737,11 +2694,6 @@ impl AppState {
                 }
             }
             model.global_drafts = persisted.global_drafts;
-            for session in persisted.recent_sessions {
-                if !session.id.trim().is_empty() {
-                    model.recent_sessions.insert(session.id.clone(), session);
-                }
-            }
             // Drop artifacts whose group is gone or whose legacy URL is not a
             // complete loopback target. The removed workspace-intelligence
             // scanner could persist external and redraw-truncated URLs; none of
@@ -2772,17 +2724,6 @@ impl AppState {
                 .collect();
             model.active_tab_id = active_tab_id;
             model.pane_splits = persisted.pane_splits;
-            hydrated_agents = model.agents.values().cloned().collect::<Vec<_>>();
-        }
-
-        // Backfill recent-session entries for the hydrated agents after the
-        // hydrate lock is released: a cold entry's preview/line-count comes
-        // from reading (and parsing the head of) its transcript file, and with
-        // many recovered agents doing that under the model lock serialized
-        // startup — and every early command — behind the file reads.
-        let now = now_millis();
-        for agent in &hydrated_agents {
-            self.upsert_recent_session_for_agent(agent, now, false);
         }
 
         // Enable persistence only after hydration so loading does not rewrite the
@@ -2946,7 +2887,6 @@ impl AppState {
                     .iter()
                     .map(|(agent_id, queue)| (agent_id.clone(), queue.iter().cloned().collect()))
                     .collect(),
-                recent_sessions: recent_sessions_sorted(&model),
                 artifacts: model.artifacts.clone(),
                 drafts: model.agent_drafts.clone(),
                 global_drafts: model.global_drafts.clone(),
@@ -3279,15 +3219,6 @@ impl AppState {
         Ok(ordered_panes(&model))
     }
 
-    pub fn active_tab_id(&self) -> Result<Option<String>, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model.active_tab_id.clone())
-    }
-
     pub fn set_active_tab_id(&self, tab_id: Option<String>) -> Result<(), String> {
         let tab_id = sanitize_active_tab_id(tab_id);
         let changed = {
@@ -3394,27 +3325,6 @@ impl AppState {
             .lock()
             .map_err(|_| "model lock poisoned".to_string())?;
         Ok(model.agents.values().cloned().collect())
-    }
-
-    #[cfg(test)]
-    pub fn list_recent_sessions(&self, limit: usize) -> Result<Vec<RecentSessionInfo>, String> {
-        let mut sessions = {
-            let model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            recent_sessions_sorted(&model)
-                .into_iter()
-                .map(|session| enrich_recent_session_locked(&model, session))
-                .take(limit.min(MAX_RECENT_SESSIONS))
-                .collect::<Vec<_>>()
-        };
-
-        for session in &mut sessions {
-            session.missing = recent_session_missing(session);
-        }
-        Ok(sessions)
     }
 
     /// Records an artifact-tray entry for `pane_id`, deduplicating on the target
@@ -5746,115 +5656,6 @@ impl AppState {
         ));
     }
 
-    /// Arms the pre-session watchdog for a just-launched research run. Agent
-    /// status is entirely hook-driven, and a CLI blocked on startup UI that
-    /// predates its session — a workspace-trust dialog, a login prompt, an
-    /// update gate — fires no hooks at all, so the agent would sit `Starting`
-    /// forever while the research pane's read-only policy keeps the user from
-    /// answering the very prompt it is stuck on. If the agent is still
-    /// pre-session after the delay, flag it `AwaitingInput`: the pane's
-    /// keyboard unlocks and the node stays live, and the first real hook
-    /// moves the status on as usual. Deliberately adapter-agnostic — every
-    /// harness wedges the same way here and gets the same recovery.
-    #[cfg(test)]
-    pub fn schedule_research_startup_watchdog(&self, agent_id: String) {
-        // Long enough that a healthy launch has bound its native session id
-        // (SessionStart on a fresh spawn, the first turn's hook payload on a
-        // fork); a false flag only unlocks the pane early and heals on the
-        // next hook.
-        const RESEARCH_STARTUP_WATCHDOG_DELAY_MS: u64 = 10_000;
-        let state = self.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(
-                RESEARCH_STARTUP_WATCHDOG_DELAY_MS,
-            ));
-            match state.flag_stalled_research_startup(&agent_id) {
-                Ok(Some(agent)) => {
-                    // Mirrors the hook pipeline's event shape (type + attached
-                    // agent) so the frontend applies the status surgically.
-                    state.emit(SessionEvent::new(
-                        "agent.awaiting_input",
-                        agent.pane_id.clone(),
-                        Some(agent.id.clone()),
-                        json!({ "agent": agent, "source": "research-startup-watchdog" }),
-                    ));
-                }
-                Ok(None) => {}
-                Err(err) => {
-                    eprintln!("session: research startup watchdog for {agent_id} failed: {err}");
-                }
-            }
-        });
-    }
-
-    /// The watchdog's check-and-flip. Returns the updated agent when the run
-    /// was still pre-session and got flagged `AwaitingInput`; `None` when it
-    /// moved on, settled, or lost its pane (exit teardown owns that outcome).
-    ///
-    /// Pre-session has two observed signatures, so both flag:
-    /// - `Starting`: no lifecycle hook has landed at all.
-    /// - `Running` with no bound session: Claude fires `UserPromptSubmit`
-    ///   for a launch-argument prompt even while startup UI (the
-    ///   workspace-trust dialog) still blocks the session, so the status
-    ///   promotes while `SessionStart` never delivers a session id. Every
-    ///   adapter binds the session id within seconds on a healthy launch
-    ///   (forks heal theirs from the first turn's hook payload), so
-    ///   session-less `Running` this long after spawn means startup UI is
-    ///   blocking — and a rare false flag only unlocks the pane early and
-    ///   heals on the next hook.
-    ///
-    /// The check and the status write share one model lock so a hook racing
-    /// this flip cannot have its fresher status stomped back to
-    /// `AwaitingInput`.
-    #[cfg(test)]
-    pub(crate) fn flag_stalled_research_startup(
-        &self,
-        agent_id: &str,
-    ) -> Result<Option<AgentInfo>, String> {
-        let updated = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let node_live = model.research_nodes.values().any(|node| {
-                node.agent_id.as_deref() == Some(agent_id) && !node.status.is_terminal()
-            });
-            if !node_live {
-                return Ok(None);
-            }
-            let stalled = model.agents.get(agent_id).is_some_and(|agent| {
-                let presession = match agent.status {
-                    AgentStatus::Starting => true,
-                    AgentStatus::Running => agent.session_id.is_none(),
-                    _ => false,
-                };
-                presession
-                    && agent
-                        .pane_id
-                        .as_deref()
-                        .is_some_and(|pane_id| model.panes.contains_key(pane_id))
-            });
-            if !stalled {
-                return Ok(None);
-            }
-            let agent = model
-                .agents
-                .get_mut(agent_id)
-                .expect("agent was checked above");
-            agent.status = AgentStatus::AwaitingInput;
-            let updated = agent.clone();
-            bump_agent_activity_locked(&mut model, agent_id);
-            bump_agent_status_activity_locked(&mut model, agent_id);
-            updated
-        };
-        // No recent-session upsert on purpose: research sessions are excluded
-        // from the recents pool, and this is not real agent activity anyway.
-        self.sync_research_node_from_agent(&updated)?;
-        self.persist();
-        Ok(Some(updated))
-    }
-
     pub fn research_workspace_for_node(&self, node_id: &str) -> Result<GroupInfo, String> {
         let model = self
             .inner
@@ -6926,7 +6727,6 @@ impl AppState {
             group_order,
             research_tree_order,
             research_folders,
-            recent_sessions,
             reaped_thread_records,
         ) = {
             let mut model = self
@@ -7057,33 +6857,6 @@ impl AppState {
                     (thread_id, record, focus)
                 })
                 .collect::<Vec<_>>();
-            let agent_ids = nodes
-                .iter()
-                .filter_map(|(_, node)| node.agent_id.clone())
-                .collect::<HashSet<_>>();
-            let session_ids = nodes
-                .iter()
-                .filter_map(|(_, node)| node.native_session_id.clone())
-                .collect::<HashSet<_>>();
-            let transcript_paths = nodes
-                .iter()
-                .filter_map(|(_, node)| node.transcript_path.clone())
-                .collect::<HashSet<_>>();
-            let recent_sessions = model.recent_sessions.clone();
-            model.recent_sessions.retain(|_, session| {
-                !session
-                    .agent_id
-                    .as_ref()
-                    .is_some_and(|id| agent_ids.contains(id))
-                    && !session
-                        .session_id
-                        .as_ref()
-                        .is_some_and(|id| session_ids.contains(id))
-                    && !session
-                        .transcript_path
-                        .as_ref()
-                        .is_some_and(|path| transcript_paths.contains(path))
-            });
             let group_order = model.group_order.clone();
             model.groups.remove(workspace_id);
             model.group_order.retain(|id| id != workspace_id);
@@ -7094,7 +6867,6 @@ impl AppState {
                 group_order,
                 research_tree_order,
                 research_folders,
-                recent_sessions,
                 reaped_thread_records,
             )
         };
@@ -7124,7 +6896,6 @@ impl AppState {
                         model.thread_focus.insert(thread_id, focus);
                     }
                 }
-                model.recent_sessions = recent_sessions;
             }
             return Err(format!("failed to commit global research detach: {err}"));
         }
@@ -7853,15 +7624,7 @@ impl AppState {
                         .get(&agent.id)
                         .is_some_and(|active| !active.is_empty());
                     departing_agent = Some((agent.id.clone(), agent.status, has_active_subagents));
-                    upsert_recent_session_for_agent_locked(
-                        &mut model,
-                        &agent,
-                        now_millis(),
-                        true,
-                        RecentSessionMeta::CacheOnly,
-                    );
                 }
-                clear_recent_session_binding_locked(&mut model, Some(&agent_id), Some(pane_id));
                 model.agent_typing.remove(&agent_id);
                 model.agent_pending_pause.remove(&agent_id);
                 model.agent_draining.remove(&agent_id);
@@ -7933,9 +7696,8 @@ impl AppState {
             }
 
             normalize_pane_splits_locked(&mut model);
-            removed_group_id.filter(|group_id| {
-                remove_group_without_open_panes_locked(&mut model, group_id, true)
-            })
+            removed_group_id
+                .filter(|group_id| remove_group_without_open_panes_locked(&mut model, group_id))
         };
         // Pane credentials are captured by in-pane processes; once the pane is gone
         // for good they can never legitimately be used again. Revoke every namespace
@@ -8129,7 +7891,7 @@ impl AppState {
             // normalizer drops it from any split it belonged to.
             normalize_pane_splits_locked(&mut model);
             let removed_source_group_id =
-                remove_group_without_open_panes_locked(&mut model, &source_group_id, true)
+                remove_group_without_open_panes_locked(&mut model, &source_group_id)
                     .then_some(source_group_id);
             (ordered_panes(&model), removed_source_group_id)
         };
@@ -8210,63 +7972,16 @@ impl AppState {
         Ok(())
     }
 
-    /// Upserts an agent's recent-session entry, filling the preview/line-count
-    /// from the transcript file when the cache has neither — with the disk read
-    /// done *between* two short model-lock sections, never under one. Returns
-    /// whether the stored entry changed. Best-effort bookkeeping: a poisoned
-    /// model lock skips the upsert rather than propagating.
-    fn upsert_recent_session_for_agent(&self, agent: &AgentInfo, now: u128, touch: bool) -> bool {
-        let first = match self.inner.model.lock() {
-            Ok(mut model) => upsert_recent_session_for_agent_locked(
-                &mut model,
-                agent,
-                now,
-                touch,
-                RecentSessionMeta::CacheOnly,
-            ),
-            Err(_) => return false,
-        };
-        let mut changed = first.changed;
-        if let Some(path) = first.wants_disk_meta {
-            let (preview, line_count) =
-                crate::transcript::read_transcript_meta(std::path::Path::new(&path));
-            if (preview.is_some() || line_count > 0)
-                && let Ok(mut model) = self.inner.model.lock()
-            {
-                changed |= upsert_recent_session_for_agent_locked(
-                    &mut model,
-                    agent,
-                    now,
-                    touch,
-                    RecentSessionMeta::Loaded {
-                        preview,
-                        line_count,
-                    },
-                )
-                .changed;
-            }
-        }
-        if changed && let Ok(mut model) = self.inner.model.lock() {
-            // The prune only matters after an insert grew the map; unchanged
-            // upserts skip the sort-and-clone entirely.
-            prune_recent_sessions_locked(&mut model);
-        }
-        changed
-    }
-
     pub fn insert_agent(&self, mut agent: AgentInfo) -> Result<(), String> {
-        let agent_for_sessions = {
+        {
             let mut model = self
                 .inner
                 .model
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
             ensure_agent_thread_metadata(self, &mut model, &mut agent);
-            let agent_for_sessions = agent.clone();
             model.agents.insert(agent.id.clone(), agent);
-            agent_for_sessions
-        };
-        self.upsert_recent_session_for_agent(&agent_for_sessions, now_millis(), true);
+        }
         self.persist();
         Ok(())
     }
@@ -8287,41 +8002,6 @@ impl AppState {
         Ok(())
     }
 
-    pub fn remove_group(&self, group_id: &str) -> Result<(), String> {
-        let removed = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            if model
-                .panes
-                .values()
-                .any(|pane| pane.info.group_id == group_id)
-            {
-                return Err("group still has open panes".to_string());
-            }
-            if model
-                .research_trees
-                .values()
-                .any(|tree| tree.workspace_id == group_id)
-            {
-                return Err("group is retained by a research tree".to_string());
-            }
-            remove_group_without_open_panes_locked(&mut model, group_id, false)
-        };
-        if removed {
-            self.persist();
-            self.emit(SessionEvent::new(
-                "group.removed",
-                None,
-                None,
-                json!({ "groupId": group_id }),
-            ));
-        }
-        Ok(())
-    }
-
     pub fn update_agent(&self, mut agent: AgentInfo) -> Result<(), String> {
         let agent_for_sessions = {
             let mut model = self
@@ -8335,7 +8015,6 @@ impl AppState {
             model.agents.insert(agent.id.clone(), agent);
             agent_for_sessions
         };
-        self.upsert_recent_session_for_agent(&agent_for_sessions, now_millis(), true);
         self.sync_research_node_from_agent(&agent_for_sessions)?;
         self.persist();
         Ok(())
@@ -8369,7 +8048,6 @@ impl AppState {
             }
         };
         if let Some(agent) = updated.as_ref() {
-            self.upsert_recent_session_for_agent(agent, now_millis(), true);
             self.sync_research_node_from_agent(agent)?;
             self.persist();
         }
@@ -8589,8 +8267,7 @@ impl AppState {
                 Some(agent) => {
                     // Hooks re-assert the current status several times a second
                     // for a busy agent (PreToolUse/PostToolUse both map to
-                    // Running). Only a real transition — or a material
-                    // recent-session change — marks the state file dirty, so a
+                    // Running). Only a real transition marks the state file dirty, so a
                     // streaming agent no longer keeps the debounced persister
                     // rewriting state.json for its whole run. The in-memory
                     // activity bumps still happen on every call; they feed the
@@ -8605,16 +8282,11 @@ impl AppState {
                 None => (None, false),
             }
         };
-        let (research_changed, session_changed) = match updated.as_ref() {
-            Some(agent) => {
-                let research_changed = self.sync_research_node_from_agent(agent)?;
-                let session_changed =
-                    self.upsert_recent_session_for_agent(agent, now_millis(), true);
-                (research_changed, session_changed)
-            }
-            None => (false, false),
+        let research_changed = match updated.as_ref() {
+            Some(agent) => self.sync_research_node_from_agent(agent)?,
+            None => false,
         };
-        if status_changed || session_changed || research_changed {
+        if status_changed || research_changed {
             self.persist();
         }
         Ok(updated)
@@ -9215,7 +8887,6 @@ impl AppState {
                     return Ok(false);
                 }
             }
-            let is_user_turn = turn.role == "user";
             bump_agent_activity_locked(&mut model, &agent_id);
             let turns = model.turns.entry(agent_id.clone()).or_default();
             // Positional turn ids can be reused across a transcript rewrite or
@@ -9234,23 +8905,6 @@ impl AppState {
                     .get(&agent.group_id)
                     .is_some_and(|group| group.scope == WorkspaceScope::Research)
             });
-            let should_persist_recent = if is_user_turn && !agent_is_research {
-                agent_for_graph.clone().is_some_and(|agent| {
-                    // CacheOnly: the turn just appended supplies the in-memory
-                    // preview/line-count, so the disk fallback has nothing to add
-                    // — and this runs under the model lock.
-                    upsert_recent_session_for_agent_locked(
-                        &mut model,
-                        &agent,
-                        now_millis(),
-                        true,
-                        RecentSessionMeta::CacheOnly,
-                    )
-                    .changed
-                })
-            } else {
-                false
-            };
             let mut graph_store = None;
             let mut created_thread_record = false;
             if let Some(agent) = agent_for_graph.as_ref().filter(|_| !agent_is_research) {
@@ -9262,11 +8916,7 @@ impl AppState {
                 graph_store = Some(store);
                 created_thread_record = created;
             }
-            (
-                should_persist_recent || created_thread_record,
-                agent_for_graph,
-                graph_store,
-            )
+            (created_thread_record, agent_for_graph, graph_store)
         };
         if let (Some(agent), Some(store)) = (agent_for_graph, graph_store)
             && let Err(err) = store.append_turn_node(&agent, &turn)
@@ -9285,14 +8935,6 @@ impl AppState {
             self.persist();
         }
         Ok(true)
-    }
-
-    /// Unconditional replace, kept for tests: production tails go through
-    /// [`Self::replace_turns_for_transcript`] (see there for the race).
-    #[cfg(test)]
-    pub fn replace_turns(&self, agent_id: &str, turns: Vec<Turn>) -> Result<(), String> {
-        self.replace_turns_internal(agent_id, turns, None)
-            .map(|_| ())
     }
 
     /// Tail-scoped replace: applies only while `transcript_path` is still the
@@ -9344,17 +8986,6 @@ impl AppState {
                     .get(&agent.group_id)
                     .is_some_and(|group| group.scope == WorkspaceScope::Research)
             });
-            let should_persist_recent = !agent_is_research
-                && agent_for_graph.clone().is_some_and(|agent| {
-                    upsert_recent_session_for_agent_locked(
-                        &mut model,
-                        &agent,
-                        now_millis(),
-                        true,
-                        RecentSessionMeta::CacheOnly,
-                    )
-                    .changed
-                });
             let mut graph_store = None;
             let mut created_thread_record = false;
             if let Some(agent) = agent_for_graph.as_ref().filter(|_| !agent_is_research) {
@@ -9366,11 +8997,7 @@ impl AppState {
                 graph_store = Some(store);
                 created_thread_record = created;
             }
-            (
-                should_persist_recent || created_thread_record,
-                agent_for_graph,
-                graph_store,
-            )
+            (created_thread_record, agent_for_graph, graph_store)
         };
         if let (Some(agent), Some(store)) = (agent_for_graph, graph_store)
             && let Err(err) = store.replace_agent_branch_turns(&agent, &turns_for_graph)
@@ -11405,350 +11032,6 @@ pub(crate) fn now_millis() -> u128 {
         .unwrap_or_default()
 }
 
-pub(crate) fn recent_session_key(
-    adapter: &str,
-    session_id: Option<&str>,
-    transcript_path: Option<&str>,
-) -> Option<String> {
-    if let Some(session_id) = session_id.map(str::trim).filter(|id| !id.is_empty()) {
-        return Some(format!("{adapter}:session:{session_id}"));
-    }
-    transcript_path
-        .map(str::trim)
-        .filter(|path| !path.is_empty())
-        .map(|path| format!("{adapter}:transcript:{path}"))
-}
-
-fn agent_recent_session_key(agent: &AgentInfo) -> Option<String> {
-    recent_session_key(
-        &agent.adapter,
-        agent.session_id.as_deref(),
-        agent.transcript_path.as_deref(),
-    )
-}
-
-/// Where `upsert_recent_session_for_agent_locked` may take a preview/line-count
-/// fallback from when neither the in-memory turns nor the cached entry have one.
-enum RecentSessionMeta {
-    /// Never touch the disk. Callers inside long-lived lock scopes use this;
-    /// the returned `wants_disk_meta` tells them (via
-    /// `AppState::upsert_recent_session_for_agent`) that a read would help.
-    CacheOnly,
-    /// Transcript meta the caller read from disk *outside* the model lock.
-    Loaded {
-        preview: Option<String>,
-        line_count: usize,
-    },
-}
-
-struct RecentSessionUpsert {
-    changed: bool,
-    /// The transcript path worth reading for preview/line-count, set only in
-    /// `CacheOnly` mode when the cache had neither.
-    wants_disk_meta: Option<String>,
-}
-
-impl RecentSessionUpsert {
-    fn unchanged() -> Self {
-        Self {
-            changed: false,
-            wants_disk_meta: None,
-        }
-    }
-}
-
-fn upsert_recent_session_for_agent_locked(
-    model: &mut Model,
-    agent: &AgentInfo,
-    now: u128,
-    touch: bool,
-    meta: RecentSessionMeta,
-) -> RecentSessionUpsert {
-    if model
-        .groups
-        .get(&agent.group_id)
-        .is_some_and(|group| group.scope == WorkspaceScope::Research)
-    {
-        return RecentSessionUpsert::unchanged();
-    }
-    let Some(key) = agent_recent_session_key(agent) else {
-        return RecentSessionUpsert::unchanged();
-    };
-
-    if agent
-        .session_id
-        .as_deref()
-        .is_some_and(|id| !id.trim().is_empty())
-        && let Some(transcript_path) = agent.transcript_path.as_deref()
-        && let Some(transcript_key) =
-            recent_session_key(&agent.adapter, None, Some(transcript_path))
-        && transcript_key != key
-    {
-        model.recent_sessions.remove(&transcript_key);
-    }
-
-    let existing = model.recent_sessions.get(&key).cloned();
-    let turns = model.turns.get(&agent.id);
-    let has_live_turns = turns.is_some_and(|turns| !turns.is_empty());
-    let mut line_count = turns.map(Vec::len).unwrap_or(0);
-    let mut preview = if has_live_turns {
-        turns.and_then(|turns| first_user_turn_preview(turns))
-    } else {
-        existing
-            .as_ref()
-            .and_then(|session| session.preview.clone())
-    };
-
-    // Prefer the line count cached on the previous recent-session entry before
-    // considering the disk. An actively-growing session keeps its turns in
-    // memory (line_count above), so the on-disk fallback below only serves cold
-    // sessions whose files aren't changing — making the cached count a faithful
-    // substitute.
-    if line_count == 0 {
-        line_count = existing
-            .as_ref()
-            .map(|session| session.line_count)
-            .unwrap_or(0);
-    }
-
-    // This runs under the model lock, so the transcript file is never read
-    // here: reading and parsing a whole (possibly cold, possibly huge) JSONL
-    // would stall every other thread — including main-thread input handling —
-    // behind that I/O. Callers either supply meta they read outside the lock
-    // (`Loaded`) or get the path back and re-enter with the data
-    // (`AppState::upsert_recent_session_for_agent`).
-    let mut wants_disk_meta = None;
-    if (!has_live_turns && preview.is_none() || line_count == 0)
-        && let Some(transcript_path) = agent.transcript_path.as_deref()
-    {
-        match &meta {
-            RecentSessionMeta::CacheOnly => {
-                wants_disk_meta = Some(transcript_path.to_string());
-            }
-            RecentSessionMeta::Loaded {
-                preview: disk_preview,
-                line_count: disk_line_count,
-            } => {
-                if !has_live_turns && preview.is_none() {
-                    preview = disk_preview.clone();
-                }
-                if line_count == 0 {
-                    line_count = *disk_line_count;
-                }
-            }
-        }
-    }
-
-    let created_at = existing
-        .as_ref()
-        .map(|session| session.created_at)
-        .unwrap_or(agent.created_at);
-    let previous_active_at = existing
-        .as_ref()
-        .map(|session| session.last_active_at)
-        .unwrap_or(agent.created_at);
-    let last_active_at = if touch { now } else { previous_active_at };
-
-    let next = RecentSessionInfo {
-        id: key.clone(),
-        adapter: agent.adapter.clone(),
-        group_id: Some(agent.group_id.clone()),
-        session_id: agent.session_id.clone(),
-        transcript_path: agent.transcript_path.clone(),
-        worktree_dir: agent.worktree_dir.clone(),
-        branch: agent.branch.clone(),
-        model: agent.model.clone(),
-        effort: agent.effort.clone(),
-        parent_id: agent.parent_id.clone(),
-        fork_point: agent.fork_point.clone(),
-        root_session_id: agent.root_session_id.clone(),
-        preview,
-        line_count,
-        last_active_at,
-        created_at,
-        pane_id: agent.pane_id.clone(),
-        agent_id: Some(agent.id.clone()),
-        status: Some(agent.status),
-        missing: false,
-    };
-
-    if existing.as_ref() == Some(&next) {
-        return RecentSessionUpsert {
-            changed: false,
-            wants_disk_meta,
-        };
-    }
-    // Coarsen pure re-touches. A busy agent's hooks re-touch its session
-    // several times a second for the whole run; each fresh `last_active_at`
-    // made the entry differ, marked the state file dirty, and kept the
-    // debounced persister rewriting (and fsyncing) state.json every window
-    // for the duration. When nothing but the activity stamp moved, only
-    // re-stamp once it has drifted by the coarseness — recency ordering
-    // (Home, spawn-cwd inheritance) is unaffected by a few seconds of slack,
-    // and any real change (status, transcript, preview) still lands with a
-    // fresh stamp immediately via the comparison below.
-    if touch
-        && let Some(existing) = existing.as_ref()
-        && now.saturating_sub(previous_active_at) < RECENT_SESSION_TOUCH_COARSENESS_MS
-    {
-        let comparable = RecentSessionInfo {
-            last_active_at: previous_active_at,
-            ..next.clone()
-        };
-        if *existing == comparable {
-            return RecentSessionUpsert {
-                changed: false,
-                wants_disk_meta,
-            };
-        }
-    }
-    model.recent_sessions.insert(key, next);
-    RecentSessionUpsert {
-        changed: true,
-        wants_disk_meta,
-    }
-}
-
-fn clear_recent_session_binding_locked(
-    model: &mut Model,
-    agent_id: Option<&str>,
-    pane_id: Option<&str>,
-) {
-    for session in model.recent_sessions.values_mut() {
-        if agent_id.is_some_and(|agent_id| session.agent_id.as_deref() == Some(agent_id))
-            || pane_id.is_some_and(|pane_id| session.pane_id.as_deref() == Some(pane_id))
-        {
-            session.agent_id = None;
-            session.pane_id = None;
-            session.status = None;
-        }
-    }
-}
-
-#[cfg(test)]
-fn enrich_recent_session_locked(
-    model: &Model,
-    mut session: RecentSessionInfo,
-) -> RecentSessionInfo {
-    session.agent_id = None;
-    session.pane_id = None;
-    session.status = None;
-
-    if let Some(agent) = model
-        .agents
-        .values()
-        .find(|agent| recent_session_matches_agent(&session, agent) && agent.pane_id.is_some())
-        .or_else(|| {
-            model
-                .agents
-                .values()
-                .find(|agent| recent_session_matches_agent(&session, agent))
-        })
-    {
-        session.agent_id = Some(agent.id.clone());
-        session.pane_id = agent.pane_id.clone();
-        session.status = Some(agent.status);
-        session.worktree_dir = agent.worktree_dir.clone();
-        session.branch = agent.branch.clone();
-        session.model = agent.model.clone();
-    }
-
-    session
-}
-
-#[cfg(test)]
-fn recent_session_matches_agent(session: &RecentSessionInfo, agent: &AgentInfo) -> bool {
-    if session.adapter != agent.adapter {
-        return false;
-    }
-    match (session.session_id.as_deref(), agent.session_id.as_deref()) {
-        (Some(left), Some(right)) if !left.trim().is_empty() && left == right => return true,
-        _ => {}
-    }
-    matches!(
-        (
-        session.transcript_path.as_deref(),
-        agent.transcript_path.as_deref(),
-        ),
-        (Some(left), Some(right)) if !left.trim().is_empty() && left == right
-    )
-}
-
-#[cfg(test)]
-fn recent_session_missing(session: &RecentSessionInfo) -> bool {
-    if session.pane_id.is_some() {
-        return false;
-    }
-    if !std::path::Path::new(&session.worktree_dir).is_dir() {
-        return true;
-    }
-    session
-        .transcript_path
-        .as_deref()
-        .is_some_and(|path| !std::path::Path::new(path).is_file())
-}
-
-fn recent_sessions_sorted(model: &Model) -> Vec<RecentSessionInfo> {
-    let mut sessions = model.recent_sessions.values().cloned().collect::<Vec<_>>();
-    sessions.sort_by(|left, right| {
-        right
-            .last_active_at
-            .cmp(&left.last_active_at)
-            .then(right.created_at.cmp(&left.created_at))
-            .then(left.id.cmp(&right.id))
-    });
-    sessions
-}
-
-fn prune_recent_sessions_locked(model: &mut Model) {
-    let keep = recent_sessions_sorted(model)
-        .into_iter()
-        .take(MAX_RECENT_SESSIONS)
-        .map(|session| session.id)
-        .collect::<HashSet<_>>();
-    model
-        .recent_sessions
-        .retain(|session_id, _session| keep.contains(session_id));
-}
-
-fn first_user_turn_preview(turns: &[Turn]) -> Option<String> {
-    turns
-        .iter()
-        .filter(|turn| turn.role == "user" && research::turn_is_in_active_context(turn))
-        .find_map(|turn| {
-            turn.blocks.iter().find_map(|block| match block {
-                crate::transcript::TurnBlock::Text { text } => preview_text(text),
-                _ => None,
-            })
-        })
-}
-
-fn preview_text(raw: &str) -> Option<String> {
-    let normalized = raw
-        .chars()
-        .map(|ch| if ch.is_control() { ' ' } else { ch })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-    if normalized.is_empty() {
-        return None;
-    }
-    let chars = normalized.chars().collect::<Vec<_>>();
-    if chars.len() <= RECENT_SESSION_PREVIEW_MAX_CHARS {
-        return Some(normalized);
-    }
-    Some(
-        chars
-            .into_iter()
-            .take(RECENT_SESSION_PREVIEW_MAX_CHARS.saturating_sub(3))
-            .collect::<String>()
-            .trim_end()
-            .to_string()
-            + "...",
-    )
-}
-
 /// The effective sidebar order: every live pane id, `pane_order` first, then any
 /// panes missing from it (sorted by id for determinism).
 fn ordered_pane_ids(model: &Model) -> Vec<String> {
@@ -11886,15 +11169,6 @@ fn restore_closed_agent_snapshot_locked(
 }
 
 fn prune_agent_locked(model: &mut Model, agent_id: &str) {
-    if let Some(agent) = model.agents.get(agent_id).cloned() {
-        upsert_recent_session_for_agent_locked(
-            model,
-            &agent,
-            now_millis(),
-            true,
-            RecentSessionMeta::CacheOnly,
-        );
-    }
     model.agents.remove(agent_id);
     model.turns.remove(agent_id);
     model.agent_turn_queues.remove(agent_id);
@@ -11912,7 +11186,6 @@ fn prune_agent_locked(model: &mut Model, agent_id: &str) {
     model
         .agent_submit_watch
         .retain(|(watched_agent, _)| watched_agent != agent_id);
-    clear_recent_session_binding_locked(model, Some(agent_id), None);
 }
 
 /// Bumps the per-agent activity counter; see `Model::agent_activity`.
@@ -11950,7 +11223,7 @@ fn migrate_legacy_research_workspaces(
     state: &AppState,
     persisted: &mut PersistedState,
 ) -> (bool, Vec<String>) {
-    let mut changed = drop_research_recent_sessions(persisted);
+    let mut changed = false;
     let mut warnings = Vec::new();
 
     // Backfill tree ownership from its root node before deciding which groups
@@ -12206,49 +11479,6 @@ fn research_workspace_dir_key(dir: &str) -> std::path::PathBuf {
     std::fs::canonicalize(&path).unwrap_or(path)
 }
 
-fn drop_research_recent_sessions(persisted: &mut PersistedState) -> bool {
-    let agent_ids = persisted
-        .research_nodes
-        .values()
-        .filter_map(|node| node.agent_id.clone())
-        .collect::<HashSet<_>>();
-    let pane_ids = persisted
-        .research_nodes
-        .values()
-        .filter_map(|node| node.pane_id.clone())
-        .collect::<HashSet<_>>();
-    let session_ids = persisted
-        .research_nodes
-        .values()
-        .filter_map(|node| node.native_session_id.clone())
-        .collect::<HashSet<_>>();
-    let transcript_paths = persisted
-        .research_nodes
-        .values()
-        .filter_map(|node| node.transcript_path.clone())
-        .collect::<HashSet<_>>();
-    let before = persisted.recent_sessions.len();
-    persisted.recent_sessions.retain(|session| {
-        !session
-            .agent_id
-            .as_ref()
-            .is_some_and(|id| agent_ids.contains(id))
-            && !session
-                .pane_id
-                .as_ref()
-                .is_some_and(|id| pane_ids.contains(id))
-            && !session
-                .session_id
-                .as_ref()
-                .is_some_and(|id| session_ids.contains(id))
-            && !session
-                .transcript_path
-                .as_ref()
-                .is_some_and(|path| transcript_paths.contains(path))
-    });
-    before != persisted.recent_sessions.len()
-}
-
 /// Adapter contract this mapping (and research completion as a whole) depends
 /// on: a research-capable adapter must report `Done`/`Idle` at end-of-turn
 /// while its process stays alive, and must report subagent start/stop boundaries
@@ -12299,11 +11529,7 @@ fn validate_research_workspace_available(workspace: &GroupInfo) -> Result<(), St
     Ok(())
 }
 
-fn remove_group_without_open_panes_locked(
-    model: &mut Model,
-    group_id: &str,
-    preserve_research: bool,
-) -> bool {
+fn remove_group_without_open_panes_locked(model: &mut Model, group_id: &str) -> bool {
     if model
         .panes
         .values()
@@ -12312,11 +11538,10 @@ fn remove_group_without_open_panes_locked(
         return false;
     }
 
-    if preserve_research
-        && model
-            .groups
-            .get(group_id)
-            .is_some_and(|group| group.scope == WorkspaceScope::Research)
+    if model
+        .groups
+        .get(group_id)
+        .is_some_and(|group| group.scope == WorkspaceScope::Research)
     {
         return false;
     }
@@ -13716,8 +12941,6 @@ mod tests {
         state.remove_pane("pane-7").unwrap();
 
         assert!(state.group("group-1").unwrap().is_some());
-        state.remove_group("group-1").unwrap();
-        assert!(state.group("group-1").unwrap().is_none());
     }
 
     #[test]
@@ -13799,153 +13022,6 @@ mod tests {
         );
         assert_eq!(content.turns.len(), 1);
         assert_eq!(content.turns[0].role, "assistant");
-    }
-
-    #[test]
-    fn startup_watchdog_flags_presession_research_agent() {
-        let state = AppState::new(test_config(temp_workspace()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        let detail = state
-            .create_research_tree(CreateResearchTreeRequest {
-                prompt: "Question".to_string(),
-                title: None,
-                adapter: "claude".to_string(),
-                model: None,
-                effort: None,
-                group_id: "group-1".to_string(),
-            })
-            .unwrap();
-        let root_id = detail.tree.root_node_id;
-        let mut agent = sample_agent("research-agent");
-        agent.status = AgentStatus::Starting;
-        agent.session_id = None;
-        state.insert_agent(agent.clone()).unwrap();
-        state
-            .bind_research_node_run(&root_id, &agent, "pane-7")
-            .unwrap();
-
-        let flagged = state
-            .flag_stalled_research_startup("research-agent")
-            .unwrap()
-            .expect("pre-session agent should be flagged");
-        assert!(matches!(flagged.status, AgentStatus::AwaitingInput));
-        assert!(matches!(
-            state.agent("research-agent").unwrap().unwrap().status,
-            AgentStatus::AwaitingInput
-        ));
-        // The node must stay live: AwaitingInput maps to Running, so
-        // retirement never reaps the run while it waits on the user.
-        assert_eq!(
-            state.research_node(&root_id).unwrap().status,
-            ResearchNodeStatus::Running
-        );
-    }
-
-    #[test]
-    fn startup_watchdog_leaves_started_runs_alone() {
-        let state = AppState::new(test_config(temp_workspace()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        let detail = state
-            .create_research_tree(CreateResearchTreeRequest {
-                prompt: "Question".to_string(),
-                title: None,
-                adapter: "claude".to_string(),
-                model: None,
-                effort: None,
-                group_id: "group-1".to_string(),
-            })
-            .unwrap();
-        let root_id = detail.tree.root_node_id;
-        // sample_agent is Running with a bound session id: the launch is past
-        // startup UI and mid-turn, exactly what the watchdog must not touch.
-        let agent = sample_agent("research-agent");
-        state.insert_agent(agent.clone()).unwrap();
-        state
-            .bind_research_node_run(&root_id, &agent, "pane-7")
-            .unwrap();
-
-        assert!(
-            state
-                .flag_stalled_research_startup("research-agent")
-                .unwrap()
-                .is_none()
-        );
-        assert!(matches!(
-            state.agent("research-agent").unwrap().unwrap().status,
-            AgentStatus::Running
-        ));
-    }
-
-    #[test]
-    fn startup_watchdog_flags_sessionless_running_agent() {
-        // The trust-dialog wedge as observed live: Claude fires
-        // UserPromptSubmit for the launch-argument prompt (promoting the
-        // agent to Running) while startup UI still blocks the session, so no
-        // session id is ever bound. That shape must flag too.
-        let state = AppState::new(test_config(temp_workspace()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        let detail = state
-            .create_research_tree(CreateResearchTreeRequest {
-                prompt: "Question".to_string(),
-                title: None,
-                adapter: "claude".to_string(),
-                model: None,
-                effort: None,
-                group_id: "group-1".to_string(),
-            })
-            .unwrap();
-        let root_id = detail.tree.root_node_id;
-        let mut agent = sample_agent("research-agent");
-        agent.status = AgentStatus::Running;
-        agent.session_id = None;
-        state.insert_agent(agent.clone()).unwrap();
-        state
-            .bind_research_node_run(&root_id, &agent, "pane-7")
-            .unwrap();
-
-        let flagged = state
-            .flag_stalled_research_startup("research-agent")
-            .unwrap()
-            .expect("session-less running agent should be flagged");
-        assert!(matches!(flagged.status, AgentStatus::AwaitingInput));
-    }
-
-    #[test]
-    fn startup_watchdog_ignores_settled_runs() {
-        let state = AppState::new(test_config(temp_workspace()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        let detail = state
-            .create_research_tree(CreateResearchTreeRequest {
-                prompt: "Question".to_string(),
-                title: None,
-                adapter: "claude".to_string(),
-                model: None,
-                effort: None,
-                group_id: "group-1".to_string(),
-            })
-            .unwrap();
-        let root_id = detail.tree.root_node_id;
-        let mut agent = sample_agent("research-agent");
-        agent.status = AgentStatus::Starting;
-        agent.session_id = None;
-        state.insert_agent(agent.clone()).unwrap();
-        state
-            .bind_research_node_run(&root_id, &agent, "pane-7")
-            .unwrap();
-        state.cancel_research_node(&root_id).unwrap();
-
-        // A watchdog firing after the user already settled the run must not
-        // resurrect it by flipping its (possibly still-recorded) agent.
-        assert!(
-            state
-                .flag_stalled_research_startup("research-agent")
-                .unwrap()
-                .is_none()
-        );
     }
 
     #[test]
@@ -14277,12 +13353,6 @@ mod tests {
 
         state.remove_pane("pane-7").unwrap();
         assert!(state.group("group-1").unwrap().is_some());
-        assert!(
-            state
-                .remove_group("group-1")
-                .unwrap_err()
-                .contains("research tree")
-        );
         state
             .fail_research_node(&detail.tree.root_node_id, "Launch cancelled".to_string())
             .unwrap();
@@ -14291,8 +13361,6 @@ mod tests {
         // tree never owned it, so removing the tree must not delete it (or
         // prune agents retained in it) — it only lifts the retention guard.
         assert!(state.group("group-1").unwrap().is_some());
-        state.remove_group("group-1").unwrap();
-        assert!(state.group("group-1").unwrap().is_none());
     }
 
     #[test]
@@ -17495,140 +16563,6 @@ mod tests {
     }
 
     #[test]
-    fn recent_session_round_trips_through_persistence() {
-        let workspace = temp_workspace();
-        let transcript_path = workspace.join("session-abc.jsonl");
-        std::fs::write(
-            &transcript_path,
-            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Plan recent session history"}]}}"#,
-        )
-        .unwrap();
-        let config = test_config(workspace.clone());
-
-        {
-            let state = AppState::new(config.clone());
-            state.restore_session();
-            let mut agent = sample_agent("agent-1");
-            agent.worktree_dir = workspace.display().to_string();
-            agent.transcript_path = Some(transcript_path.display().to_string());
-            state.insert_agent(agent).unwrap();
-            state
-                .replace_turns(
-                    "agent-1",
-                    vec![sample_user_turn("agent-1", "Plan recent session history")],
-                )
-                .unwrap();
-
-            let sessions = state.list_recent_sessions(10).unwrap();
-            assert_eq!(sessions.len(), 1);
-            assert_eq!(sessions[0].session_id.as_deref(), Some("session-abc"));
-            assert_eq!(
-                sessions[0].preview.as_deref(),
-                Some("Plan recent session history")
-            );
-        }
-
-        let state = AppState::new(config);
-        state.restore_session();
-        let sessions = state.list_recent_sessions(10).unwrap();
-        assert_eq!(sessions.len(), 1);
-        assert_eq!(
-            sessions[0].preview.as_deref(),
-            Some("Plan recent session history")
-        );
-        std::fs::remove_dir_all(workspace).unwrap();
-    }
-
-    #[test]
-    fn recent_session_preview_skips_prompts_outside_active_context() {
-        let mut rolled_back = sample_user_turn("agent-1", "Discarded prompt");
-        rolled_back.context_status = Some(crate::transcript::TurnContextStatus::RolledBack);
-        let active = sample_user_turn("agent-1", "Current prompt");
-
-        assert_eq!(
-            first_user_turn_preview(&[rolled_back, active]).as_deref(),
-            Some("Current prompt")
-        );
-    }
-
-    #[test]
-    fn live_rolled_back_session_does_not_restore_a_stale_preview() {
-        let workspace = temp_workspace();
-        let transcript_path = workspace.join("session-rollback.jsonl");
-        std::fs::write(
-            &transcript_path,
-            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Discarded prompt"}]}}"#,
-        )
-        .unwrap();
-        let state = AppState::new(test_config(workspace.clone()));
-        state.restore_session();
-
-        let mut agent = sample_agent("agent-1");
-        agent.worktree_dir = workspace.display().to_string();
-        agent.transcript_path = Some(transcript_path.display().to_string());
-        state.insert_agent(agent).unwrap();
-        let mut rolled_back = sample_user_turn("agent-1", "Discarded prompt");
-        rolled_back.context_status = Some(crate::transcript::TurnContextStatus::RolledBack);
-        state.replace_turns("agent-1", vec![rolled_back]).unwrap();
-
-        let sessions = state.list_recent_sessions(10).unwrap();
-        assert_eq!(sessions.len(), 1);
-        assert_eq!(sessions[0].preview, None);
-
-        std::fs::remove_dir_all(workspace).unwrap();
-    }
-
-    #[test]
-    fn closing_agent_pane_keeps_recent_session_without_live_binding() {
-        let workspace = temp_workspace();
-        let transcript_path = workspace.join("session-abc.jsonl");
-        std::fs::write(&transcript_path, "{}\n").unwrap();
-        let state = AppState::new(test_config(workspace.clone()));
-        state.restore_session();
-
-        let mut agent = sample_agent("agent-1");
-        agent.worktree_dir = workspace.display().to_string();
-        agent.transcript_path = Some(transcript_path.display().to_string());
-        agent.pane_id = Some("pane-1".to_string());
-        state.insert_agent(agent).unwrap();
-        state
-            .replace_turns(
-                "agent-1",
-                vec![sample_user_turn("agent-1", "Keep me in Home")],
-            )
-            .unwrap();
-
-        let mut pane = sample_pane_runtime("pane-1");
-        pane.info.kind = PaneKind::Agent;
-        pane.info.agent_id = Some("agent-1".to_string());
-        pane.info.cwd = workspace.display().to_string();
-        state.insert_pane(pane).unwrap();
-
-        state.remove_pane("pane-1").unwrap();
-        assert!(state.agent("agent-1").unwrap().is_none());
-
-        let sessions = state.list_recent_sessions(10).unwrap();
-        assert_eq!(sessions.len(), 1);
-        assert_eq!(sessions[0].pane_id, None);
-        assert_eq!(sessions[0].agent_id, None);
-        assert_eq!(sessions[0].preview.as_deref(), Some("Keep me in Home"));
-        std::fs::remove_dir_all(workspace).unwrap();
-    }
-
-    #[test]
-    fn research_sessions_are_not_exposed_as_terminal_recents() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
-        state.restore_session();
-        state.insert_group_after(sample_group(), None).unwrap();
-        state.insert_agent(sample_agent("research-agent")).unwrap();
-
-        assert!(state.list_recent_sessions(10).unwrap().is_empty());
-        assert!(state.inner.model.lock().unwrap().recent_sessions.is_empty());
-        std::fs::remove_dir_all(workspace).unwrap();
-    }
-
-    #[test]
     fn queued_turn_pause_flag_and_pending_pause() {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace));
@@ -19924,19 +18858,6 @@ mod tests {
     }
 
     #[test]
-    fn remove_group_removes_empty_group() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state
-            .insert_group_after(sample_terminal_group(), None)
-            .unwrap();
-
-        state.remove_group("group-1").unwrap();
-
-        assert!(state.list_groups().unwrap().is_empty());
-    }
-
-    #[test]
     fn remove_pane_removes_group_when_last_pane_closes() {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace));
@@ -20067,50 +18988,6 @@ mod tests {
             state.list_agent_turn_queue("agent-1").unwrap(),
             vec!["queued restore".to_string()]
         );
-    }
-
-    #[test]
-    fn remove_group_refuses_open_panes_but_prunes_recoverable_agents() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        state
-            .insert_group_after(sample_terminal_group(), None)
-            .unwrap();
-        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-
-        assert_eq!(
-            state.remove_group("group-1").unwrap_err(),
-            "group still has open panes"
-        );
-        let state = AppState::new(test_config(temp_workspace()));
-        state
-            .insert_group_after(sample_terminal_group(), None)
-            .unwrap();
-        state.insert_agent(sample_agent("agent-1")).unwrap();
-        state.remove_group("group-1").unwrap();
-        assert!(state.list_groups().unwrap().is_empty());
-        assert!(state.agent("agent-1").unwrap().is_none());
-    }
-
-    #[test]
-    fn remove_group_prunes_agents_when_group_row_is_already_missing_and_persists() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        {
-            let state = AppState::new(config.clone());
-            state.restore_session();
-            state.insert_agent(sample_agent("agent-1")).unwrap();
-
-            state.remove_group("group-1").unwrap();
-
-            assert!(state.agent("agent-1").unwrap().is_none());
-        }
-
-        let state = AppState::new(config);
-        state.restore_session();
-        assert!(state.agent("agent-1").unwrap().is_none());
-        std::fs::remove_dir_all(workspace).unwrap();
     }
 
     #[test]
@@ -20320,62 +19197,6 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-    }
-
-    #[test]
-    fn same_status_hooks_only_restamp_recent_session_after_coarseness() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace));
-        let agent = AgentInfo {
-            id: "agent-1".to_string(),
-            group_id: "group-1".to_string(),
-            adapter: "claude".to_string(),
-            worktree_dir: "/tmp/x".to_string(),
-            branch: None,
-            active_workspace: None,
-            pane_id: Some("pane-1".to_string()),
-            orphaned_queue_pane_id: None,
-            session_id: Some("sess-1".to_string()),
-            transcript_path: None,
-            status: AgentStatus::Running,
-            model: None,
-            effort: None,
-            approval_mode: None,
-            parent_id: None,
-            fork_point: None,
-            root_session_id: None,
-            thread_id: None,
-            branch_id: None,
-            native_leaf_id: None,
-            paused: false,
-            created_at: 1,
-        };
-        state.insert_agent(agent).unwrap();
-
-        let stamp = |state: &AppState| {
-            state
-                .list_recent_sessions(10)
-                .unwrap()
-                .into_iter()
-                .find(|session| session.session_id.as_deref() == Some("sess-1"))
-                .expect("recent session exists")
-                .last_active_at
-        };
-        let initial = stamp(&state);
-
-        // A hook re-asserting the same status inside the coarseness window is
-        // bookkeeping-neutral: no fresh activity stamp (and so no dirty mark).
-        state
-            .set_agent_status("agent-1", AgentStatus::Running)
-            .unwrap();
-        assert_eq!(stamp(&state), initial);
-
-        // A real transition still lands immediately, with a fresh stamp.
-        std::thread::sleep(Duration::from_millis(5));
-        state
-            .set_agent_status("agent-1", AgentStatus::AwaitingInput)
-            .unwrap();
-        assert!(stamp(&state) > initial);
     }
 
     #[test]
@@ -20747,6 +19568,7 @@ mod tests {
     fn active_tab_round_trips_through_persistence() {
         let workspace = temp_workspace();
         let config = test_config(workspace.clone());
+        let active_tab = |state: &AppState| state.inner.model.lock().unwrap().active_tab_id.clone();
 
         {
             let state = AppState::new(config.clone());
@@ -20757,7 +19579,7 @@ mod tests {
             state
                 .set_active_tab_id(Some(" pane-2 ".to_string()))
                 .unwrap();
-            assert_eq!(state.active_tab_id().unwrap().as_deref(), Some("pane-2"));
+            assert_eq!(active_tab(&state).as_deref(), Some("pane-2"));
 
             let saved = crate::persistence::load_with_diagnostics(&workspace).state;
             assert_eq!(saved.active_tab_id.as_deref(), Some("pane-2"));
@@ -20765,10 +19587,10 @@ mod tests {
 
         let state = AppState::new(config);
         state.restore_session();
-        assert_eq!(state.active_tab_id().unwrap().as_deref(), Some("pane-2"));
+        assert_eq!(active_tab(&state).as_deref(), Some("pane-2"));
 
         state.set_active_tab_id(Some("   ".to_string())).unwrap();
-        assert_eq!(state.active_tab_id().unwrap(), None);
+        assert_eq!(active_tab(&state), None);
     }
 
     #[test]
