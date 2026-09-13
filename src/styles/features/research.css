@@ -2221,13 +2221,16 @@
   }
 }
 
-/* Recaps are plain derived text, outside the answer's highlight projection. */
+/* Recaps are plain derived text, outside the answer's highlight projection.
+   They sit outside .research-response-content-root, so they don't inherit the
+   answer's font delta; pin it here so size, line-height, and line box match. */
 .research-recap {
+  --transcript-font-delta: var(--research-answer-font-delta);
   margin: 0 0 28px;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: calc(14px + var(--transcript-font-delta, 0px));
   font-style: italic;
   font-weight: 400;
-  line-height: calc(1.5 + var(--transcript-line-height-delta));
+  line-height: 1.5;
   white-space: normal;
 }
