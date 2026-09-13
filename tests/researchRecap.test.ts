@@ -3,6 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ResearchRecap from "../src/components/research/ResearchRecap";
+import ResearchRecapDialog from "../src/components/research/ResearchRecapDialog";
 import type { ResearchNodeContent } from "../src/types";
 
 function content(): ResearchNodeContent {
@@ -39,4 +40,26 @@ test("recaps render as text, with no Markdown or HTML interpretation", () => {
   assert.ok(!html.includes("<strong>"));
   value.node.kind = "document";
   assert.equal(render(value), "");
+});
+
+test("current recaps expose regeneration without changing their text", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchRecap, { content: content(), onRegenerate: () => undefined }),
+  );
+  assert.match(html, /Summary: Read Cusk and Heti\./);
+  assert.match(html, /aria-label="Regenerate summary"/);
+});
+
+test("candidate dialog presents the current recap before generation", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchRecapDialog, {
+      content: content(),
+      onClose: () => undefined,
+      onApplied: () => undefined,
+    }),
+  );
+  assert.match(html, /Regenerate summary/);
+  assert.match(html, /The current summary stays unchanged until you apply a candidate/);
+  assert.match(html, /Read Cusk and Heti\./);
+  assert.match(html, /Generate candidate/);
 });

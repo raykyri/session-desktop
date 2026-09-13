@@ -53,8 +53,8 @@ use config::{RuntimeConfig, SessionConfig};
 use control_socket::start_control_socket;
 use menu_bar::{menu_bar_set_visible, menu_bar_update};
 use native_support::{
-    native_support_set_browser_background,
-    native_support_set_browser_overlay_open, native_support_set_iframe_shortcut_fallback,
+    native_support_set_browser_background, native_support_set_browser_overlay_open,
+    native_support_set_iframe_shortcut_fallback,
 };
 use pty::{
     InitialPaneSize, PaneActivity, PaneWriteOptions, attach_pane, close_worktree_pane, kill_pane,
@@ -62,9 +62,10 @@ use pty::{
     spawn_ssh_shell_pane, write_pane,
 };
 use research::{
-    CreateResearchTreeRequest, RecentResearchQueryCursor, RecentResearchQueryPage,
-    ResearchBranchRemoval, ResearchFolderState, ResearchHighlight, ResearchHighlightAnchor,
-    ResearchNode, ResearchNodeContent, ResearchTree, ResearchTreeDetail, ResearchTreeSummary,
+    ApplyResearchRecapCandidateRequest, CreateResearchTreeRequest, GenerateResearchRecapRequest,
+    RecentResearchQueryCursor, RecentResearchQueryPage, ResearchBranchRemoval, ResearchFolderState,
+    ResearchHighlight, ResearchHighlightAnchor, ResearchNode, ResearchNodeContent,
+    ResearchRecapCandidate, ResearchTree, ResearchTreeDetail, ResearchTreeSummary,
     UpdateResearchDocumentRequest, UpdateResearchDocumentResult,
 };
 use show_hide_shortcut::{
@@ -3659,6 +3660,83 @@ async fn generate_research_agent_title(
     .map_err(|err| format!("research title task failed: {err}"))?
 }
 
+#[tauri::command]
+fn research_recap_default_instructions() -> String {
+    research_recap::DEFAULT_RECAP_INSTRUCTIONS.to_string()
+}
+
+#[tauri::command(async)]
+async fn generate_research_recap_candidate(
+    state: tauri::State<'_, AppState>,
+    request: GenerateResearchRecapRequest,
+) -> Result<ResearchRecapCandidate, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let instructions = research_recap::validate_instructions(&request.instructions)?;
+        let model = request
+            .model
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        if model
+            .is_some_and(|value| value.chars().count() > 256 || value.chars().any(char::is_control))
+        {
+            return Err("summary model name is invalid".to_string());
+        }
+        let adapter =
+            adapters::ensure_adapter_ready_for_research(state.config(), request.adapter.trim())?;
+        if !adapter.supports_recap_generation {
+            return Err(format!(
+                "{} does not support summary generation",
+                adapter.label
+            ));
+        }
+        let node = state.research_node(&request.node_id)?;
+        if !node.kind.is_run() || node.status != research::ResearchNodeStatus::Complete {
+            return Err("only completed research runs can generate summaries".to_string());
+        }
+        let snapshot = research::read_response_snapshot_with_revision(
+            &state.config().workspace_root,
+            &node.id,
+        )?
+        .ok_or_else(|| "the completed research answer is unavailable".to_string())?;
+        if snapshot.revision != request.expected_response_revision {
+            return Err("the answer changed; reopen summary generation and try again".to_string());
+        }
+        let answer = research_recap::recap_source(&snapshot.turns)
+            .ok_or_else(|| "the answer is not eligible for summary generation".to_string())?;
+        let workspace = state.research_workspace_for_node(&node.id)?;
+        let text = title_generation::generate_research_recap_with(
+            state.config(),
+            &node,
+            &workspace,
+            &answer,
+            &adapter.id,
+            model,
+            instructions,
+        )?;
+        Ok(ResearchRecapCandidate {
+            id: adapters::new_uuid_v4()?,
+            text,
+            response_revision: snapshot.revision,
+            generated_at: state::now_millis(),
+            adapter: adapter.id,
+            model: model.map(str::to_string),
+            instructions: instructions.to_string(),
+        })
+    })
+    .await
+    .map_err(|err| format!("summary generation task failed: {err}"))?
+}
+
+#[tauri::command(async)]
+fn apply_research_recap_candidate(
+    state: tauri::State<'_, AppState>,
+    request: ApplyResearchRecapCandidateRequest,
+) -> Result<ResearchNode, String> {
+    state.apply_research_recap_candidate(request)
+}
+
 pub(crate) fn ensure_rustls_crypto_provider() -> Result<(), String> {
     if rustls::crypto::CryptoProvider::get_default().is_none() {
         let _ = rustls::crypto::ring::default_provider().install_default();
@@ -4090,6 +4168,9 @@ fn main() {
             app_confirm_exit,
             app_set_prevent_sleep,
             generate_research_agent_title,
+            research_recap_default_instructions,
+            generate_research_recap_candidate,
+            apply_research_recap_candidate,
             menu_bar_set_visible,
             menu_bar_update,
             show_hide_shortcut_get,

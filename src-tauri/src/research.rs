@@ -632,8 +632,54 @@ pub struct ResearchNodeContent {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResearchRecap {
+    /// Identity of this generation. Older persisted recaps have no id; the
+    /// first manual replacement gives them one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     pub text: String,
     pub response_revision: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generated_at: Option<u128>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adapter: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Absent means the built-in default instructions were used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instructions: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateResearchRecapRequest {
+    pub node_id: String,
+    pub expected_response_revision: String,
+    pub adapter: String,
+    #[serde(default)]
+    pub model: Option<String>,
+    pub instructions: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResearchRecapCandidate {
+    pub id: String,
+    pub text: String,
+    pub response_revision: String,
+    pub generated_at: u128,
+    pub adapter: String,
+    pub model: Option<String>,
+    pub instructions: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyResearchRecapCandidateRequest {
+    pub node_id: String,
+    pub expected_response_revision: String,
+    #[serde(default)]
+    pub expected_current_recap_id: Option<String>,
+    pub candidate: ResearchRecapCandidate,
 }
 
 const RESPONSE_SNAPSHOT_DIR: &str = "research-responses";
