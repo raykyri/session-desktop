@@ -37,6 +37,11 @@ export function researchSwipeDirection(
   return deltaX < 0 ? -1 : 1;
 }
 
+/** Returns true if the wheel event represents horizontal swipe momentum. */
+export function researchSwipeTailCapturesWheel(deltaX: number, deltaY: number): boolean {
+  return Math.abs(deltaX) > Math.abs(deltaY);
+}
+
 /** Starts a fresh history at the given entry node (e.g. on a tree switch). */
 export function initResearchHistory(nodeId: string | null): ResearchHistory {
   return nodeId ? { entries: [nodeId], index: 0 } : EMPTY_RESEARCH_HISTORY;
