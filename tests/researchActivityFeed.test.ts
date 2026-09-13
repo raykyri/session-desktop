@@ -48,6 +48,11 @@ test("Home renders the mixed feed and query composer directly in the app", () =>
   assert.doesNotMatch(html, />Asked <time/);
   assert.match(html, /Summary: The finding is X\./);
   assert.match(html, /aria-label="Refresh Home"/);
+  assert.match(
+    html,
+    /class="control-button research-history-button"[^>]*aria-label="Refresh Home"/,
+  );
+  assert.doesNotMatch(html, />Refresh<\/button>/);
   assert.doesNotMatch(html, /You asked/);
   assert.doesNotMatch(html, /<iframe|View source|Connecting to/);
 });
