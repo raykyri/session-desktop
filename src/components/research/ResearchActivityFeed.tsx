@@ -973,16 +973,15 @@ function ResearchActivityFeed({
       forwardTitle={`Forward (${IS_MAC ? "⌘]" : "Ctrl+]"})`}
       onBack={onBack}
       onForward={onForward}
-      headerActions={onRefresh ? (
+      navActions={onRefresh ? (
         <button
           type="button"
-          className="control-button"
+          className="control-button research-history-button"
           onClick={onRefresh}
           aria-label="Refresh Home"
           title="Refresh Home"
         >
-          <RotateCw size={14} aria-hidden="true" />
-          Refresh
+          <RotateCw size={16} aria-hidden="true" />
         </button>
       ) : undefined}
     >
