@@ -189,10 +189,6 @@ export default function ResearchQueryComposer({
     textarea.style.height = `${textarea.scrollHeight}px`;
   }, [prompt]);
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => promptRef.current?.focus());
-    return () => window.cancelAnimationFrame(frame);
-  }, []);
   // A stale choice (left over from another adapter) silently falls back to the
   // adapter's first preset, so the trigger always shows what will launch.
   const modelPresets = modelPresetsFor(adapter);
@@ -298,7 +294,6 @@ export default function ResearchQueryComposer({
       <div className="new-research-composer">
         <textarea
           ref={promptRef}
-          autoFocus
           className="command-launcher-input"
           rows={2}
           value={prompt}
