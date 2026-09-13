@@ -93,7 +93,10 @@ test("Home renders direct children as follow-up buttons within the root item", (
 test("the agent setup guide appears only when the Home feed is empty", () => {
   const setupGuide = createElement("div", null, "Agent setup guide");
 
-  assert.match(renderFeed({ setupGuide }), /Agent setup guide/);
+  const emptyWithGuide = renderFeed({ setupGuide });
+  assert.match(emptyWithGuide, /Agent setup guide/);
+  assert.doesNotMatch(emptyWithGuide, /appear here, newest first/);
+  assert.match(renderFeed({}), /appear here, newest first/);
   assert.doesNotMatch(
     renderFeed({
       setupGuide,

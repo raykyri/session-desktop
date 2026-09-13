@@ -126,7 +126,7 @@
 }
 
 .journal-setup-guide {
-  margin-top: 10px;
+  padding-block: 10px;
 }
 
 /* Saved feed entries opt into the shared content-card recipe in markup. */
