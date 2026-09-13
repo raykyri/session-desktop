@@ -106,6 +106,7 @@ mod imp {
     use crate::state::AppState;
     use std::ffi::c_void;
     use std::ffi::c_char;
+    use std::ffi::CString;
     use std::sync::Mutex;
     unsafe extern "C" {
         fn session_native_application_is_active() -> i32;
