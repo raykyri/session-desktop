@@ -246,6 +246,32 @@ test("head reconciliation preserves a loaded tail without retaining stale head r
   );
 });
 
+test("restoring a tree archived before load drops the tail so the next page refetches it", () => {
+  const asItem = (candidate: RecentResearchQuery): RecentActivityItem => ({
+    kind: "research-query",
+    occurredAt: candidate.createdAt,
+    query: candidate,
+  });
+  const head = asItem({ ...query, nodeId: "head", createdAt: 300 });
+  const tail = asItem({ ...query, nodeId: "tail", createdAt: 100 });
+  // Archived trees are omitted from activity pages, so the loaded tail did not include this item.
+  const restored = asItem({ ...query, nodeId: "restored", treeId: "restored-tree", createdAt: 200 });
+  const headCursor = { occurredAt: 250, sourceRank: 1, id: "boundary" };
+  const nodeIds = (items: RecentActivityItem[]) =>
+    items.map((item) => (item.kind === "research-query" ? item.query.nodeId : ""));
+
+  assert.deepEqual(
+    nodeIds(reconcileRecentActivityHead([head, tail], [head], headCursor)),
+    ["head", "tail"],
+  );
+  const reset = reconcileRecentActivityHead([head, tail], [head], null);
+  assert.deepEqual(nodeIds(reset), ["head"]);
+  assert.deepEqual(
+    nodeIds(mergeRecentActivityItems(reset, [restored, tail])),
+    ["head", "restored", "tail"],
+  );
+});
+
 test("activity page normalization drops malformed opaque journal records", () => {
   const page = normalizeRecentActivityPage({
     items: [
