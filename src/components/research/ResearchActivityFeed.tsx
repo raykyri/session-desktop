@@ -41,6 +41,7 @@ import type {
 import { IS_MAC, isEditableTarget } from "../../lib/appHelpers";
 import { getResearchNodeContent, openExternalUrl } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
+import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import { ResearchDocumentFrame } from "./ResearchDocumentChrome";
 import ActivityMetadataLine from "../ActivityMetadataLine";
 import { ResearchRecapLine } from "./ResearchRecap";
@@ -491,6 +492,7 @@ function ResearchActivityFeed({
   const onForwardRef = useRef(onForward);
   onBackRef.current = onBack;
   onForwardRef.current = onForward;
+  useResearchSwipeNavigation(scrollRef, onBack, onForward);
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing || isEditableTarget(event.target)) {
