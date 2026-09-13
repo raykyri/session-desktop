@@ -480,6 +480,7 @@ pub struct CreateResearchTreeRequest {
     pub group_id: String,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateResearchDocumentRequest {

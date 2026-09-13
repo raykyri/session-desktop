@@ -3700,7 +3700,7 @@ fn main() {
         )
         .on_window_event({
             let state = state.clone();
-            move |window, event| {
+            move |_window, event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     if state.should_confirm_exit() {
                         api.prevent_close();

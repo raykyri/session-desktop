@@ -9,12 +9,14 @@ use crate::journal::{
 };
 use crate::persistence::{self, PersistedState, STATE_VERSION};
 use crate::remote_terminal::{RemoteAttachmentController, RemoteHistoryCheckpoint};
+#[cfg(test)]
+use crate::research::CreateResearchDocumentRequest;
 use crate::research::{
-    self, CreateResearchDocumentRequest, CreateResearchTreeRequest, RecentResearchQuery,
-    RecentResearchQueryCursor, RecentResearchQueryPage, ResearchBranchRemoval, ResearchHighlight,
-    ResearchHighlightAnchor, ResearchNode, ResearchNodeCard, ResearchNodeContent, ResearchNodeKind,
-    ResearchNodeOrigin, ResearchNodeStatus, ResearchPublicationProposal, ResearchRuntime,
-    ResearchTree, ResearchTreeDetail, ResearchTreeSummary, UpdateResearchDocumentRequest,
+    self, CreateResearchTreeRequest, RecentResearchQuery, RecentResearchQueryCursor,
+    RecentResearchQueryPage, ResearchBranchRemoval, ResearchHighlight, ResearchHighlightAnchor,
+    ResearchNode, ResearchNodeCard, ResearchNodeContent, ResearchNodeKind, ResearchNodeOrigin,
+    ResearchNodeStatus, ResearchPublicationProposal, ResearchRuntime, ResearchTree,
+    ResearchTreeDetail, ResearchTreeSummary, UpdateResearchDocumentRequest,
     UpdateResearchDocumentResult,
 };
 use crate::scrollback::{bounded_undo_scrollback, read_pane_scrollback, remove_pane_scrollback};
@@ -105,10 +107,6 @@ impl PaneBackend {
             Self::HostPty(backend) => backend.backlog.clone(),
             Self::RemoteTmux(backend) => backend.backlog.clone(),
         }
-    }
-
-    fn has_host_pty(&self) -> bool {
-        matches!(self, Self::HostPty(_))
     }
 
     fn remote_control(
@@ -255,15 +253,6 @@ const MAX_ARTIFACTS_PER_GROUP: usize = 50;
 /// bookkeeping — pane content itself lives in the PTYs, not in state.json.
 const PERSIST_DEBOUNCE: Duration = Duration::from_millis(200);
 
-/// OSC titles can change continuously (progress counters, spinners, build
-/// percentages). Keep the newest value in memory immediately, but only make
-/// title-only activity dirty on this coarser cadence so a busy terminal does
-/// not force a full state.json rewrite every few hundred milliseconds.
-const LAST_OSC_TITLE_PERSIST_INTERVAL: Duration = Duration::from_secs(3);
-
-/// Matches the frontend's display cap. OSC titles are untrusted terminal
-/// output, so normalize and bound them before they enter persisted state.
-const MAX_LAST_OSC_TITLE_CHARS: usize = 160;
 const MAX_INTERFACE_DRAFT_KEY_BYTES: usize = 128;
 const MAX_INTERFACE_DRAFT_VALUE_BYTES: usize = 12 * 1024 * 1024;
 const MAX_INTERFACE_DRAFT_TOTAL_BYTES: usize = 32 * 1024 * 1024;
@@ -371,10 +360,6 @@ struct AppStateInner {
     persist_dirty: Mutex<bool>,
     persist_wake: Condvar,
     persister_spawned: AtomicBool,
-    // At most one coarse OSC-title persistence timer is live at a time. The
-    // normal state persister still performs the eventual atomic snapshot;
-    // this only delays the dirty mark for title-only activity.
-    last_osc_title_persist_scheduled: AtomicBool,
     // Why restore_session had to fall back or drop entries, held until startup
     // surfaces it in a GUI dialog — a Finder launch never shows stderr, and a
     // silently discarded session looks like the app ate the user's tabs.
@@ -1142,74 +1127,6 @@ fn sanitize_active_tab_id(tab_id: Option<String>) -> Option<String> {
     })
 }
 
-/// Grok's CLI brands OSC 0/2 titles with a trailing `" - grok"`. Strip it so
-/// tab labels show the meaningful title alone. Case-insensitive; only the
-/// suffix is removed.
-fn strip_grok_terminal_title_suffix(title: &str) -> &str {
-    const SUFFIX: &str = " - grok";
-    let title = title.trim_end();
-    if title.len() >= SUFFIX.len() {
-        let split = title.len() - SUFFIX.len();
-        if title.is_char_boundary(split) && title[split..].eq_ignore_ascii_case(SUFFIX) {
-            return title[..split].trim_end();
-        }
-    }
-    title
-}
-
-fn sanitize_last_osc_title(raw_title: &str) -> Option<String> {
-    let mut title = String::new();
-    let mut chars = 0_usize;
-    let mut pending_space = false;
-    let mut truncated = false;
-
-    for ch in raw_title.chars() {
-        if ch.is_control() || ch.is_whitespace() {
-            if !title.is_empty() {
-                pending_space = true;
-            }
-            continue;
-        }
-        if pending_space {
-            if chars >= MAX_LAST_OSC_TITLE_CHARS {
-                truncated = true;
-                break;
-            }
-            title.push(' ');
-            chars += 1;
-            pending_space = false;
-        }
-        if chars >= MAX_LAST_OSC_TITLE_CHARS {
-            truncated = true;
-            break;
-        }
-        title.push(ch);
-        chars += 1;
-    }
-
-    if truncated {
-        if title.ends_with(' ') {
-            title.pop();
-        }
-        chars = title.chars().count();
-        while chars >= MAX_LAST_OSC_TITLE_CHARS {
-            title.pop();
-            chars -= 1;
-        }
-        title.push('…');
-    } else {
-        // Strip after whitespace normalization so "Foo\t-\tgrok" still matches,
-        // and before the empty check so a title that is only the branding
-        // suffix becomes None.
-        let stripped = strip_grok_terminal_title_suffix(&title);
-        if stripped.len() != title.len() {
-            title = stripped.to_string();
-        }
-    }
-
-    (!title.is_empty()).then_some(title)
-}
-
 fn ensure_agent_thread_metadata(state: &AppState, model: &mut Model, agent: &mut AgentInfo) {
     let had_thread_id = agent
         .thread_id
@@ -1896,7 +1813,6 @@ impl AppState {
                 persist_dirty: Mutex::new(false),
                 persist_wake: Condvar::new(),
                 persister_spawned: AtomicBool::new(false),
-                last_osc_title_persist_scheduled: AtomicBool::new(false),
                 recovery_warning: Mutex::new(None),
                 preflighted_state: Mutex::new(None),
                 exit_confirmed: AtomicBool::new(false),
@@ -4088,7 +4004,8 @@ impl AppState {
         Ok(state)
     }
 
-    pub fn append_journal_entry(&self, entry: serde_json::Value) -> Result<bool, String> {
+    #[cfg(test)]
+    fn append_journal_entry(&self, entry: serde_json::Value) -> Result<bool, String> {
         let id = journal::entry_id(&entry)
             .ok_or_else(|| "journal entry must have a non-empty string id".to_string())?
             .to_string();
@@ -4625,7 +4542,8 @@ impl AppState {
     /// `Complete` with its snapshot already durable, so viewers, archives, and
     /// pruning treat it exactly like a settled run. The caller must hold the
     /// research workspace-mutation guard, matching `create_research_tree`.
-    pub fn create_research_document(
+    #[cfg(test)]
+    fn create_research_document(
         &self,
         request: CreateResearchDocumentRequest,
     ) -> Result<ResearchTreeDetail, String> {
@@ -6180,45 +6098,6 @@ impl AppState {
         } else {
             crate::pty::kill_pane(self, pane_id.to_string())
         }
-    }
-
-    /// Records a native-surface user close before its delegate removes the pane.
-    /// The delegate already owns teardown, so this settles only the node and lets
-    /// the ordinary remove path clear runtime bindings without rewriting it Failed.
-    pub fn settle_research_pane_cancelled(&self, pane_id: &str) -> Result<bool, String> {
-        let updated = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let node_id = model
-                .research_nodes
-                .values()
-                .find(|node| node.pane_id.as_deref() == Some(pane_id) && node.status.is_active())
-                .map(|node| node.id.clone());
-            node_id.and_then(|node_id| {
-                let now = now_millis();
-                let node = model.research_nodes.get_mut(&node_id)?;
-                node.status = ResearchNodeStatus::Cancelled;
-                node.error = None;
-                node.completed_at = Some(now);
-                let node = node.clone();
-                touch_research_tree_locked(&mut model, &node.tree_id, now);
-                Some(node)
-            })
-        };
-        let Some(node) = updated else {
-            return Ok(false);
-        };
-        self.persist();
-        self.emit(SessionEvent::new(
-            "research.node.updated",
-            node.pane_id.clone(),
-            node.agent_id.clone(),
-            json!({ "node": node }),
-        ));
-        Ok(true)
     }
 
     pub fn detach_research_pane(&self, pane_id: &str) -> Result<Option<ResearchNode>, String> {
@@ -8284,18 +8163,6 @@ impl AppState {
         };
         self.persist();
         Ok(panes)
-    }
-
-    /// Finalizes the pane layout after session restore/respawn. Legacy persisted
-    /// depths are intentionally discarded during hydration.
-    pub fn normalize_pane_layout(&self) {
-        {
-            let Ok(mut model) = self.inner.model.lock() else {
-                return;
-            };
-            normalize_pane_splits_locked(&mut model);
-        }
-        self.persist();
     }
 
     pub fn insert_group_after(
@@ -10941,18 +10808,6 @@ impl AppState {
         Ok(model.panes.get(pane_id).map(|pane| pane.backend.backlog()))
     }
 
-    pub fn pane_has_host_pty(&self, pane_id: &str) -> Result<Option<bool>, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        Ok(model
-            .panes
-            .get(pane_id)
-            .map(|pane| pane.backend.has_host_pty()))
-    }
-
     pub(crate) fn set_remote_launch_plan(
         &self,
         pane_id: &str,
@@ -11364,70 +11219,6 @@ impl AppState {
             ));
         }
         Ok(())
-    }
-
-    /// Records the newest OSC 0/2 title for a pane without changing its durable
-    /// user/generated `title`. Live callers receive the normalized value so the
-    /// event stream and the recovery snapshot use identical text.
-    pub fn update_last_osc_title(
-        &self,
-        pane_id: &str,
-        raw_title: &str,
-    ) -> Result<Option<String>, String> {
-        let (title, changed) = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let title = sanitize_last_osc_title(raw_title);
-            let Some(pane) = model.panes.get_mut(pane_id) else {
-                // Native title callbacks can arrive after pane teardown. Treat
-                // that as a harmless late delivery rather than surfacing an
-                // error from the AppKit main thread.
-                return Ok(title);
-            };
-            if pane.info.last_osc_title == title {
-                (title, false)
-            } else {
-                pane.info.last_osc_title = title.clone();
-                (title, true)
-            }
-        };
-        if changed {
-            self.schedule_last_osc_title_persist();
-        }
-        Ok(title)
-    }
-
-    fn schedule_last_osc_title_persist(&self) {
-        if !self.inner.persist_enabled.load(Ordering::Relaxed) {
-            return;
-        }
-        if cfg!(test) {
-            self.persist_now();
-            return;
-        }
-        if self
-            .inner
-            .last_osc_title_persist_scheduled
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_err()
-        {
-            return;
-        }
-        let state = self.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(LAST_OSC_TITLE_PERSIST_INTERVAL);
-            state
-                .inner
-                .last_osc_title_persist_scheduled
-                .store(false, Ordering::SeqCst);
-            // The ordinary persister adds its short coalescing window and owns
-            // snapshot ordering. A clean exit may already have committed and
-            // disabled persistence, in which case this is a no-op.
-            state.persist();
-        });
     }
 
     pub fn rename_pane(&self, pane_id: &str, title: String) -> Result<PaneInfo, String> {
@@ -20733,94 +20524,6 @@ mod tests {
             .enqueue_agent_turn("agent-1", "ghost".to_string())
             .unwrap();
         assert!(!crate::persistence::state_path(&workspace).exists());
-    }
-
-    #[test]
-    fn osc_title_sanitization_matches_the_frontend_contract() {
-        assert_eq!(
-            sanitize_last_osc_title("  Build\u{1b}\n  42%  ").as_deref(),
-            Some("Build 42%")
-        );
-        assert_eq!(sanitize_last_osc_title(" \n\t\u{7f} "), None);
-        let truncated = format!("{}…", "x".repeat(MAX_LAST_OSC_TITLE_CHARS - 1));
-        assert_eq!(
-            sanitize_last_osc_title(&"x".repeat(MAX_LAST_OSC_TITLE_CHARS + 20)).as_deref(),
-            Some(truncated.as_str())
-        );
-        assert_eq!(
-            sanitize_last_osc_title(&format!(
-                "{}   more",
-                "x".repeat(MAX_LAST_OSC_TITLE_CHARS - 1)
-            ))
-            .expect("non-empty title")
-            .chars()
-            .count(),
-            MAX_LAST_OSC_TITLE_CHARS
-        );
-    }
-
-    #[test]
-    fn osc_title_sanitization_strips_grok_branding_suffix() {
-        assert_eq!(
-            sanitize_last_osc_title("session - grok").as_deref(),
-            Some("session")
-        );
-        assert_eq!(
-            sanitize_last_osc_title("  Fix the build  - Grok  ").as_deref(),
-            Some("Fix the build")
-        );
-        assert_eq!(
-            sanitize_last_osc_title("src/App.tsx\t-\tGROK").as_deref(),
-            Some("src/App.tsx")
-        );
-        // A title that is only the branding suffix collapses to empty.
-        assert_eq!(sanitize_last_osc_title("x - grok").as_deref(), Some("x"));
-        // Only a trailing suffix is stripped.
-        assert_eq!(
-            sanitize_last_osc_title("grok - tools - grok").as_deref(),
-            Some("grok - tools")
-        );
-        assert_eq!(
-            sanitize_last_osc_title("keep - grok around").as_deref(),
-            Some("keep - grok around")
-        );
-    }
-
-    #[test]
-    fn last_osc_title_round_trips_without_replacing_the_base_title() {
-        let workspace = temp_workspace();
-        let config = test_config(workspace.clone());
-
-        {
-            let state = AppState::new(config.clone());
-            assert!(state.restore_session().is_empty());
-            let mut pane = sample_pane_runtime("pane-1");
-            pane.info.title = "Shell".to_string();
-            state.insert_pane(pane).unwrap();
-
-            assert_eq!(
-                state
-                    .update_last_osc_title("pane-1", "  Reviewing\u{1b}\nchanges  ")
-                    .unwrap()
-                    .as_deref(),
-                Some("Reviewing changes")
-            );
-            let current = state.list_panes().unwrap();
-            assert_eq!(current[0].title, "Shell");
-            assert_eq!(
-                current[0].last_osc_title.as_deref(),
-                Some("Reviewing changes")
-            );
-        }
-
-        let restored = AppState::new(config);
-        let panes = restored.restore_session();
-        assert_eq!(panes.len(), 1);
-        assert_eq!(panes[0].title, "Shell");
-        assert_eq!(
-            panes[0].last_osc_title.as_deref(),
-            Some("Reviewing changes")
-        );
     }
 
     #[test]

@@ -10,8 +10,8 @@ set -euo pipefail
 #                            from the keychain when exactly one is present)
 #   APPLE_ID + APPLE_PASSWORD + APPLE_TEAM_ID, or APPLE_API_KEY +
 #   APPLE_API_ISSUER + APPLE_API_KEY_PATH, for notarization.
-#   TAURI_SIGNING_PRIVATE_KEY, or ~/.tauri/qmux-updater.key, for signing the
-#   updater archive.
+#   TAURI_SIGNING_PRIVATE_KEY (contents), TAURI_SIGNING_PRIVATE_KEY_PATH, or
+#   ~/.tauri/release-updater.key, for signing the updater archive.
 #   Set SESSION_ALLOW_UNNOTARIZED=1 to build a release without notarizing
 #   (downloads will hit Gatekeeper).
 
@@ -92,10 +92,18 @@ if ! command -v gh >/dev/null || ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-default_updater_key="$HOME/.tauri/qmux-updater.key"
-if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" && ! -f "$default_updater_key" ]]; then
-  echo "Set TAURI_SIGNING_PRIVATE_KEY or install the updater key at:" >&2
+default_updater_key="$HOME/.tauri/release-updater.key"
+if [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" && -f "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
+  export TAURI_SIGNING_PRIVATE_KEY_PATH="$TAURI_SIGNING_PRIVATE_KEY"
+  unset TAURI_SIGNING_PRIVATE_KEY
+fi
+if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" && -z "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" && ! -f "$default_updater_key" ]]; then
+  echo "Set TAURI_SIGNING_PRIVATE_KEY, set TAURI_SIGNING_PRIVATE_KEY_PATH, or install the updater key at:" >&2
   echo "  $default_updater_key" >&2
+  exit 1
+fi
+if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" && ! -f "$TAURI_SIGNING_PRIVATE_KEY_PATH" ]]; then
+  echo "Updater signing key does not exist: $TAURI_SIGNING_PRIVATE_KEY_PATH" >&2
   exit 1
 fi
 
