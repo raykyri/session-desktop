@@ -47,6 +47,9 @@ export default function DomSearchBar({
 
   const close = () => {
     inputRef.current?.blur();
+    rangesRef.current = [];
+    setResults({ index: -1, count: 0 });
+    clearSearchHighlights(ownerRef.current);
     setOpen(false);
   };
 
@@ -108,6 +111,36 @@ export default function DomSearchBar({
       inputRef.current?.select();
     }
   }, [open]);
+
+  // Close find bar on Escape from anywhere in the host pane except editable targets.
+  useEffect(() => {
+    if (!open || !active) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== "Escape") {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        if (target === inputRef.current) {
+          // The bar's own input handles Escape itself.
+          return;
+        }
+        if (isTerminalTarget(target) || isEditableTarget(target)) {
+          return;
+        }
+        if (target !== document.body && !hotkeyScopeRef.current?.contains(target)) {
+          return;
+        }
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    };
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [active, hotkeyScopeRef, open]);
 
   // A new document/transcript should not inherit an open find bar from the
   // previous one. Preserve the term and options so reopening can repeat it.
