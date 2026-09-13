@@ -158,10 +158,6 @@ export function deleteSavedPrompt(
   });
 }
 
-export function getActiveTab() {
-  return invoke<string | null>("active_tab_get");
-}
-
 export function setActiveTab(tabId: string | null) {
   return invoke<void>("active_tab_set", { tabId });
 }
@@ -217,47 +213,12 @@ export function revealResearchWorkspace(workspaceId: string) {
   return invoke<void>("research_workspace_reveal", { workspaceId });
 }
 
-export function pickGroupFolder() {
-  return invoke<string | null>("group_pick_folder");
-}
-
-export interface GroupWithInitialPane {
-  group: GroupInfo;
-  pane: PaneInfo;
-}
-
-export function createGroupWithShell(
-  dir: string,
-  afterGroupId?: string | null,
-  initialSize?: InitialPaneSize | null,
-  remoteId?: string | null,
-) {
-  return invoke<GroupWithInitialPane>("group_create_with_shell", {
-    dir,
-    afterGroupId: afterGroupId ?? null,
-    initialSize: initialSize ?? null,
-    remoteId: remoteId ?? null,
-  });
-}
-
-export function removeGroup(groupId: string) {
-  return invoke<void>("group_remove", { groupId });
-}
-
 export function renameGroup(groupId: string, name: string | null) {
   return invoke<GroupInfo>("group_rename", { groupId, name });
 }
 
 export function reorderGroups(groupIds: string[]) {
   return invoke<GroupInfo[]>("group_reorder", { groupIds });
-}
-
-export function setGroupCollapsed(groupId: string, collapsed: boolean) {
-  return invoke<GroupInfo>("group_set_collapsed", { groupId, collapsed });
-}
-
-export function pickGroupDirectory(groupId: string) {
-  return invoke<GroupInfo | null>("group_pick_dir", { groupId });
 }
 
 export function listAgents() {

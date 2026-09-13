@@ -893,16 +893,11 @@
    than copyable details, so they tighten the padding and drop text selection.
    They tie with .pane-context-menu on specificity and must stay after it in
    this file to win the cascade. */
-.group-context-menu,
 .research-sidebar-menu,
 .research-followup-menu,
 .settings-context-menu {
   padding: 4px;
   user-select: none;
-}
-
-.group-context-menu {
-  width: min(220px, calc(100vw - 16px));
 }
 
 .research-sidebar-menu {
@@ -915,14 +910,6 @@
 
 .settings-context-menu {
   width: min(196px, calc(100vw - 16px));
-}
-
-.settings-context-menu-label {
-  padding: 5px 8px 3px;
-  color: var(--text-muted);
-  font-size: var(--fs-xs);
-  line-height: 1.3;
-  overflow-wrap: anywhere;
 }
 
 /* Unchecked research filters intentionally have no icon; keep their labels in
@@ -995,20 +982,6 @@
   line-height: 1;
   background: rgba(255, 255, 255, 0.035);
   box-shadow: inset 0 -1px 0 var(--surface-border-faint);
-}
-
-.context-menu-shortcut-options {
-  display: inline-flex;
-  align-items: center;
-  justify-self: end;
-  gap: 3px;
-  overflow: visible;
-}
-
-.context-menu-shortcut-options > span {
-  overflow: visible;
-  color: #68716d;
-  font-size: 9px;
 }
 
 /* The close affordance is a plain linkified glyph that sits directly over the
