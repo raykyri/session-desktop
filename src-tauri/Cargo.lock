@@ -3632,7 +3632,7 @@ dependencies = [
 
 [[package]]
 name = "session"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3664,7 +3664,7 @@ dependencies = [
 
 [[package]]
 name = "session-cli"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "dirs",
  "libc",
@@ -3675,7 +3675,7 @@ dependencies = [
 
 [[package]]
 name = "session-proto"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "serde",
  "serde_json",
