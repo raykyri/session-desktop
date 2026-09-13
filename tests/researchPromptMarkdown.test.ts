@@ -5,9 +5,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   formatResearchReplySnippet,
   ResearchSegmentPrompt,
+  ResearchTimelineItem,
 } from "../src/components/research/ResearchDocument";
 import {
   ResearchMessageBody,
+  ResearchUserMessage,
   visibleResearchPrompt,
 } from "../src/components/research/ResearchMessage";
 import type { ResearchMessageAttachment } from "../src/types";
@@ -57,11 +59,71 @@ test("research prompts preserve Markdown blockquotes", () => {
   );
 
   assert.match(html, /You asked Claude Fable/);
-  assert.match(html, /research-prompt research-content-card/);
+  assert.match(html, /research-user-message research-content-card research-prompt/);
   assert.doesNotMatch(html, /Reply to:/);
   assert.ok(html.indexOf("You asked Claude Fable") < html.indexOf("<blockquote>"));
   assert.match(html, /<blockquote>/);
   assert.match(html, /foo<br\/>[\n]?bar/);
+});
+
+test("the shared user-message primitive owns card composition", () => {
+  const html = renderToStaticMarkup(
+    createElement(
+      ResearchUserMessage,
+      { className: "research-conversation-prompt research-prompt" },
+      createElement(ResearchMessageBody, { prompt: "Conversation question" }),
+    ),
+  );
+
+  assert.match(
+    html,
+    /research-user-message research-content-card research-conversation-prompt research-prompt/,
+  );
+  assert.match(html, /turn-markdown research-prose research-prose--body/);
+});
+
+test("exported conversation prompts use the shared user-message surface", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchTimelineItem, {
+      conversation: true,
+      item: {
+        type: "message",
+        key: "conversation-user",
+        role: "user",
+        blocks: [{ type: "text", text: "Conversation question" }],
+        activities: [],
+        sourceTurnIds: ["turn-1"],
+        blockSourceTurnIds: ["turn-1"],
+      },
+    }),
+  );
+
+  assert.match(
+    html,
+    /research-user-message research-content-card research-response-message research-conversation-prompt research-prompt/,
+  );
+  assert.match(html, /turn-markdown research-prose research-prose--body/);
+});
+
+test("exported conversation assistant messages remain uncarded research prose", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchTimelineItem, {
+      conversation: true,
+      item: {
+        type: "message",
+        key: "conversation-assistant",
+        role: "assistant",
+        blocks: [{ type: "text", text: "Conversation answer" }],
+        activities: [],
+        sourceTurnIds: ["turn-2"],
+        blockSourceTurnIds: ["turn-2"],
+      },
+    }),
+  );
+
+  assert.match(html, /research-response-message/);
+  assert.match(html, /turn-markdown research-prose research-prose--body/);
+  assert.doesNotMatch(html, /research-user-message|research-content-card|research-prompt/);
 });
 
 test("follow-up research prompts omit the asked-model line", () => {

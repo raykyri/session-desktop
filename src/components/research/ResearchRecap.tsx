@@ -12,7 +12,13 @@ export function ResearchRecapLine({
     return null;
   }
   return (
-    <p className={className ? `research-recap ${className}` : "research-recap"}>
+    <p
+      className={
+        className
+          ? `research-summary-text research-recap ${className}`
+          : "research-summary-text research-recap"
+      }
+    >
       Summary: {trimmed}
     </p>
   );

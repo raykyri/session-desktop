@@ -44,7 +44,7 @@ import { ResearchDocumentFrame } from "./ResearchDocumentChrome";
 import ActivityMetadataLine from "../ActivityMetadataLine";
 import { ResearchRecapLine } from "./ResearchRecap";
 import { TweetEmbed } from "./TweetEmbed";
-import { ResearchMessageBody } from "./ResearchMessage";
+import { ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
 import type { ResearchFolderState } from "../../lib/researchFolders";
 import {
   RESEARCH_TREE_MENU_WIDTH,
@@ -306,9 +306,9 @@ export function ResearchQueryCard({
         onContextMenu(event.clientX, event.clientY);
       }}
     >
-      <article className="recent-query-card research-prompt research-content-card">
+      <ResearchUserMessage as="article" className="recent-query-card research-prompt">
         <ResearchMessageBody prompt={query.prompt} attachments={query.attachments} />
-      </article>
+      </ResearchUserMessage>
       {recap ? <ResearchRecapLine text={recap} className="recent-query-recap" /> : null}
     </div>
   );
