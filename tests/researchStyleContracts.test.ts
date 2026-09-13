@@ -52,7 +52,10 @@ test("research prose adapts transcript typography on the renderer, not layout ro
 test("shared tweet and attachment recipes do not depend on Home CSS", () => {
   assert.match(surfaceCss, /\.journal-tweet\s*\{/);
   assert.match(surfaceCss, /\.research-message-attachments\.has-prompt\s*\{/);
+  const tweet = ruleBody(surfaceCss, ".journal-tweet");
+  assert.match(tweet, /max-width:\s*var\(--research-feed-max-width\)/);
   const attachment = ruleBody(surfaceCss, ".research-message-attachment");
+  assert.match(attachment, /width:\s*min\(100%, var\(--research-feed-max-width\)\)/);
   assert.match(attachment, /border:\s*1px solid var\(--surface-border-default\)/);
   assert.match(attachment, /border-radius:\s*12px/);
   const tweetStats = ruleBody(surfaceCss, ".journal-tweet-stats");
@@ -63,4 +66,8 @@ test("shared tweet and attachment recipes do not depend on Home CSS", () => {
     /border-top/,
   );
   assert.doesNotMatch(journalCss, /\.research-message-attachments\.has-prompt\s*\{/);
+  assert.match(
+    ruleBody(journalCss, ".journal-column"),
+    /width:\s*min\(100%, var\(--research-feed-max-width\)\)/,
+  );
 });

@@ -196,7 +196,11 @@
 .journal-tweet {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  width: 100%;
+  max-width: var(--research-feed-max-width);
+  min-width: 0;
   column-gap: 10px;
+  cursor: pointer;
 }
 
 .journal-tweet-avatar-link {
@@ -549,6 +553,7 @@ a.journal-tweet-more:hover {
 }
 
 .research-message-attachment {
+  width: min(100%, var(--research-feed-max-width));
   padding: 12px 14px 11px;
   border: 1px solid var(--surface-border-default);
   border-radius: 12px;

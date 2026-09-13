@@ -278,7 +278,30 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
   const authorUrl = `https://x.com/${tweet.author.handle}`;
   const age = formatTweetAge(tweet.createdAt);
   return (
-    <article className="journal-tweet" aria-label={`Tweet by @${tweet.author.handle}`}>
+    <article
+      className="journal-tweet"
+      aria-label={`Open tweet by @${tweet.author.handle}`}
+      role="link"
+      tabIndex={0}
+      onClick={(event) => {
+        // Descendant links and controls prevent their handled click from
+        // reaching here. Everything else on the embed opens this tweet.
+        if (event.defaultPrevented) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        void openExternalUrl(tweet.url);
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget || event.key !== "Enter") {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        void openExternalUrl(tweet.url);
+      }}
+    >
       <a
         className="journal-tweet-avatar-link"
         href={authorUrl}
@@ -352,6 +375,8 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
+                event.preventDefault();
+                event.stopPropagation();
                 void openExternalUrl(quoted.url);
               }
             }}
