@@ -12,7 +12,11 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  width: min(100%, 640px);
+  width: min(100%, 540px);
+}
+
+.journal-column > .new-research-launcher {
+  margin-bottom: 12px;
 }
 
 .journal-feed {
@@ -33,21 +37,6 @@
   width: 100%;
   padding-bottom: 16px;
   will-change: transform;
-}
-
-.recent-activity-day {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.recent-activity-day-label {
-  margin: 4px 0 1px;
-  color: var(--text-subtle);
-  font-size: calc(var(--fs-input) - 2.5px);
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .recent-activity-unit {
@@ -82,7 +71,7 @@
   min-width: 0;
   align-items: baseline;
   gap: 8px;
-  padding: 0 3px;
+  padding: 0;
   color: var(--text-subtle);
   font-size: var(--research-meta-font-size);
   font-weight: 400;
@@ -106,7 +95,7 @@
   font-size: calc(var(--fs-input) - 1px);
 }
 
-/* Same surface as .research-prompt (the question bubble). */
+/* Saved feed entries opt into the shared content-card recipe in markup. */
 .journal-entry {
   position: relative;
 }
@@ -117,9 +106,8 @@
   padding-right: 22px;
 }
 
-/* Research queries: the prompt itself is the card (same surface as
-   .research-prompt), including the conversation markdown renderer so links
-   and emphasis match the document view. */
+/* Research queries use the same unboxed authored-message treatment and
+   Markdown renderer as an open thread. */
 .recent-query-block {
   display: flex;
   flex-direction: column;
@@ -137,13 +125,13 @@
   position: relative;
   width: 100%;
   max-width: none;
-  margin: 0;
+  margin: 0 0 8px;
   cursor: pointer;
 }
 
 .recent-query-recap {
   margin: 0;
-  padding: 0 3px;
+  padding: 0;
 }
 
 .recent-activity-load-older {

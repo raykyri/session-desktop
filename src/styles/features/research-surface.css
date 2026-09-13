@@ -149,8 +149,8 @@
   --research-markdown-line-height-delta: 0.12;
 }
 
-/* Shared question/saved-item surface. Width and placement remain local to the
-   thread or feed so this class is only the visual card recipe. */
+/* Shared saved-item surface. Authored user messages deliberately remain
+   unboxed; journal entries opt into this card recipe directly. */
 .research-content-card {
   padding: 10px 14px;
   border-radius: 10px;
@@ -412,11 +412,14 @@ a.journal-tweet-more:hover {
    here reaches X. */
 .journal-tweet-stats {
   display: flex;
+  min-height: 14px;
+  align-items: center;
   gap: 18px;
   margin-top: 8px;
   color: var(--text-subtle);
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .journal-tweet-stat {
@@ -546,7 +549,7 @@ a.journal-tweet-more:hover {
 }
 
 .research-message-attachment {
-  padding: 12px;
+  padding: 12px 14px 11px;
   border: 1px solid var(--surface-border-default);
   border-radius: 12px;
 }

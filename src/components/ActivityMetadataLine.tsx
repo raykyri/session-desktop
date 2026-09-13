@@ -41,7 +41,7 @@ export function formatActivityMetadataSummary(event: ActivityEvent): string {
     if (event.relationship?.kind === "follow-up") {
       return `Replied in “${event.context?.label ?? "Research"}”`;
     }
-    return "Asked";
+    return "";
   }
   if (event.action.kind === "saved") {
     return "Saved";
@@ -58,16 +58,17 @@ export default function ActivityMetadataLine({
   event: ActivityEvent;
 }) {
   const finiteTime = Number.isFinite(event.occurredAt);
+  const summary = formatActivityMetadataSummary(event);
   return (
     <div
       className="activity-metadata"
       title={finiteTime ? new Date(event.occurredAt).toLocaleString() : undefined}
     >
       <span className="activity-metadata-summary">
-        {formatActivityMetadataSummary(event)}
+        {summary}
         {finiteTime ? (
           <>
-            {" "}
+            {summary ? " " : null}
             <time dateTime={new Date(event.occurredAt).toISOString()}>
               {formatRelativeTime(event.occurredAt)}
             </time>

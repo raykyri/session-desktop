@@ -46,10 +46,10 @@ browser limitations, and should carry a comment when the reason is not obvious.
 
 Home and research threads are one reading surface. Their main content roots must include
 `.research-reading-surface`. Primary Markdown uses `.research-prose`, derived summaries use
-`.research-summary-text`, and authored user messages use the `ResearchUserMessage` card
+`.research-summary-text`, and authored user messages use the unboxed `ResearchUserMessage`
 primitive. Destination styles may position those components, but must not override their
-font metrics or card recipe. Compact previews and annotations must select an explicit prose
-variant so moving content does not change its type scale or rhythm.
+font metrics. Compact previews and annotations must select an explicit prose variant so
+moving content does not change its type scale or rhythm.
 
 ## Responsive and accessibility behavior
 

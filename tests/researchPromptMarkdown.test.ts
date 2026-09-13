@@ -59,14 +59,15 @@ test("research prompts preserve Markdown blockquotes", () => {
   );
 
   assert.match(html, /You asked Claude Fable/);
-  assert.match(html, /research-user-message research-content-card research-prompt/);
+  assert.match(html, /research-user-message research-prompt/);
+  assert.doesNotMatch(html, /research-content-card/);
   assert.doesNotMatch(html, /Reply to:/);
   assert.ok(html.indexOf("You asked Claude Fable") < html.indexOf("<blockquote>"));
   assert.match(html, /<blockquote>/);
   assert.match(html, /foo<br\/>[\n]?bar/);
 });
 
-test("the shared user-message primitive owns card composition", () => {
+test("the shared user-message primitive stays unboxed", () => {
   const html = renderToStaticMarkup(
     createElement(
       ResearchUserMessage,
@@ -77,8 +78,9 @@ test("the shared user-message primitive owns card composition", () => {
 
   assert.match(
     html,
-    /research-user-message research-content-card research-conversation-prompt research-prompt/,
+    /research-user-message research-conversation-prompt research-prompt/,
   );
+  assert.doesNotMatch(html, /research-content-card/);
   assert.match(html, /turn-markdown research-prose research-prose--body/);
 });
 
@@ -100,8 +102,9 @@ test("exported conversation prompts use the shared user-message surface", () => 
 
   assert.match(
     html,
-    /research-user-message research-content-card research-response-message research-conversation-prompt research-prompt/,
+    /research-user-message research-response-message research-conversation-prompt research-prompt/,
   );
+  assert.doesNotMatch(html, /research-content-card/);
   assert.match(html, /turn-markdown research-prose research-prose--body/);
 });
 
