@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Check, ChevronDown, Copy, Highlighter, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, Reply, ScrollText, Share2, Terminal, Trash2, Wrench, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, Reply, ScrollText, Share2, Terminal, Trash2, Wrench, X } from "lucide-react";
 import {
   IS_MAC,
   isEditableTarget,
@@ -5641,11 +5641,6 @@ function ResearchDocument({
                     className="control-button research-highlight-action"
                     disabled={savingHighlight}
                     aria-keyshortcuts="H"
-                    aria-label={
-                      !savingHighlight && highlightAction.highlightIds.length === 0
-                        ? "Highlight"
-                        : undefined
-                    }
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => void applyHighlightAction()}
                   >
@@ -5658,7 +5653,7 @@ function ResearchDocument({
                           : "Remove highlight"}
                       </span>
                     ) : (
-                      <Highlighter size={13} aria-hidden="true" />
+                      <span>Highlight</span>
                     )}
                     <kbd className="context-menu-shortcut is-keycap" aria-hidden="true">
                       H

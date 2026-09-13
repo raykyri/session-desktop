@@ -49,6 +49,13 @@
   padding: 32px 6px 12px;
   /* System font (not monospace) so the pane list reads as a native sidebar. */
   font-family: var(--font-ui);
+}
+
+/* The native WebKit view can otherwise begin a selection on nested row copy
+   even when the sidebar root declares only the unprefixed property. */
+.sidebar,
+.sidebar * {
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -990,7 +997,7 @@
 }
 
 .research-followup-menu {
-  width: min(230px, calc(100vw - 16px));
+  width: min(200px, calc(100vw - 16px));
 }
 
 .settings-context-menu {

@@ -38,8 +38,8 @@ export function ResearchMarkdown({
   );
 }
 
-/** Shared authored-user-message surface. Context-specific callers own only
- * placement; this primitive keeps card and typography composition identical. */
+/** Shared authored-user-message wrapper. Context-specific callers own only
+ * placement; this primitive keeps semantic and typography composition aligned. */
 export function ResearchUserMessage({
   children,
   className,
@@ -51,9 +51,7 @@ export function ResearchUserMessage({
 }) {
   return (
     <Element
-      className={`research-user-message research-content-card${
-        className ? ` ${className}` : ""
-      }`}
+      className={`research-user-message${className ? ` ${className}` : ""}`}
     >
       {children}
     </Element>

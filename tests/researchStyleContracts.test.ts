@@ -55,6 +55,9 @@ test("shared tweet and attachment recipes do not depend on Home CSS", () => {
   const attachment = ruleBody(surfaceCss, ".research-message-attachment");
   assert.match(attachment, /border:\s*1px solid var\(--surface-border-default\)/);
   assert.match(attachment, /border-radius:\s*12px/);
+  const tweetStats = ruleBody(surfaceCss, ".journal-tweet-stats");
+  assert.match(tweetStats, /align-items:\s*center/);
+  assert.match(tweetStats, /line-height:\s*1/);
   assert.doesNotMatch(
     ruleBody(surfaceCss, ".research-message-attachments.has-prompt"),
     /border-top/,

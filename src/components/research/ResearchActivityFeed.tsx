@@ -28,7 +28,6 @@ import {
   type RecentActivityItem,
 } from "../../lib/journal";
 import {
-  activityDayLabel,
   buildRecentActivityFromItems,
   type RecentActivityEvent,
 } from "../../lib/activity";
@@ -314,28 +313,25 @@ export function ResearchQueryCard({
   );
 }
 
-type VirtualActivityRow =
-  | { kind: "day"; key: string; label: string }
-  | { kind: "event"; key: string; event: RecentActivityEvent; position: number };
+type VirtualActivityRow = {
+  kind: "event";
+  key: string;
+  event: RecentActivityEvent;
+  position: number;
+};
 
 export function buildRecentActivityVirtualRows(
   feed: RecentActivityEvent[],
 ): VirtualActivityRow[] {
-  const rows: VirtualActivityRow[] = [];
-  let previousDay: string | null = null;
-  for (const [index, event] of feed.entries()) {
-    const label = activityDayLabel(event.occurredAt);
-    if (label !== previousDay) {
-      rows.push({ kind: "day", key: `day:${label}`, label });
-      previousDay = label;
-    }
-    rows.push({ kind: "event", key: event.id, event, position: index + 1 });
-  }
-  return rows;
+  return feed.map((event, index) => ({
+    kind: "event",
+    key: event.id,
+    event,
+    position: index + 1,
+  }));
 }
 
 function estimatedActivityRowHeight(row: VirtualActivityRow): number {
-  if (row.kind === "day") return 39;
   if (row.event.source.kind === "research-query") {
     if (
       row.event.source.query.attachments?.some(
@@ -1027,53 +1023,47 @@ function ResearchActivityFeed({
                       }
                     }}
                   >
-                    {row.kind === "day" ? (
-                      <h2 className="recent-activity-day-label">{row.label}</h2>
-                    ) : (
-                      <div
-                        className="recent-activity-unit"
-                        role="article"
-                        aria-posinset={row.position}
-                        aria-setsize={nextCursor ? -1 : feed.length}
-                      >
-                        <ActivityMetadataLine
-                          event={row.event}
+                    <div
+                      className="recent-activity-unit"
+                      role="article"
+                      aria-posinset={row.position}
+                      aria-setsize={nextCursor ? -1 : feed.length}
+                    >
+                      <ActivityMetadataLine event={row.event} />
+                      {row.event.source.kind === "journal" ? (
+                        <JournalEntryCard
+                          entry={row.event.source.entry}
+                          menuOpen={
+                            menu?.kind === "journal" &&
+                            menu.entryId === row.event.source.entry.id
+                          }
+                          onOpenMenu={openMenuFromTrigger}
+                          onOpenContextMenu={openContextMenu}
+                          onRetryTweet={onRetryTweet}
                         />
-                        {row.event.source.kind === "journal" ? (
-                          <JournalEntryCard
-                            entry={row.event.source.entry}
-                            menuOpen={
-                              menu?.kind === "journal" &&
-                              menu.entryId === row.event.source.entry.id
+                      ) : (
+                        <ResearchQueryCard
+                          query={row.event.source.query}
+                          onOpen={() => {
+                            const query = row.event.source;
+                            if (query.kind === "research-query") {
+                              onOpenResearchQuery(query.query);
                             }
-                            onOpenMenu={openMenuFromTrigger}
-                            onOpenContextMenu={openContextMenu}
-                            onRetryTweet={onRetryTweet}
-                          />
-                        ) : (
-                          <ResearchQueryCard
-                            query={row.event.source.query}
-                            onOpen={() => {
-                              const query = row.event.source;
-                              if (query.kind === "research-query") {
-                                onOpenResearchQuery(query.query);
-                              }
-                            }}
-                            onContextMenu={(clientX, clientY) => {
-                              const source = row.event.source;
-                              if (source.kind !== "research-query") {
-                                return;
-                              }
-                              const tree = treeById.get(source.query.treeId);
-                              if (!tree) {
-                                return;
-                              }
-                              openTreeContextMenu(tree, clientX, clientY);
-                            }}
-                          />
-                        )}
-                      </div>
-                    )}
+                          }}
+                          onContextMenu={(clientX, clientY) => {
+                            const source = row.event.source;
+                            if (source.kind !== "research-query") {
+                              return;
+                            }
+                            const tree = treeById.get(source.query.treeId);
+                            if (!tree) {
+                              return;
+                            }
+                            openTreeContextMenu(tree, clientX, clientY);
+                          }}
+                        />
+                      )}
+                    </div>
                   </MeasuredActivityRow>
                 );
               })}

@@ -36,14 +36,15 @@ test("Home renders the mixed feed and query composer directly in the app", () =>
   assert.match(html, /journal-entry research-content-card/);
   assert.match(
     html,
-    /research-user-message research-content-card recent-query-card research-prompt/,
+    /research-user-message recent-query-card research-prompt/,
   );
   assert.match(html, /research-summary-text research-recap recent-query-recap/);
   assert.match(html, /Query composer/);
   assert.match(html, /example.com\/finding/);
   assert.match(html, /Investigate this question/);
   assert.match(html, />Saved <time/);
-  assert.match(html, />Asked <time/);
+  assert.match(html, /activity-metadata-summary"><time/);
+  assert.doesNotMatch(html, />Asked <time/);
   assert.match(html, /Summary: The finding is X\./);
   assert.match(html, /aria-label="Refresh Home"/);
   assert.doesNotMatch(html, /You asked/);
