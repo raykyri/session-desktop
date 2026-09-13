@@ -86,12 +86,21 @@ fi
 export PATH="$repo_root/node_modules/.bin:$PATH"
 
 # createUpdaterArtifacts makes the bundler sign the updater .tar.gz, which fails
-# without the private half of the updater keypair. Pick up the local key when the
-# caller didn't provide one (CI should set TAURI_SIGNING_PRIVATE_KEY instead; the
-# variable accepts either the key contents or a path to the key file).
-default_updater_key="$HOME/.tauri/qmux-updater.key"
-if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" && -f "$default_updater_key" ]]; then
-  export TAURI_SIGNING_PRIVATE_KEY="$default_updater_key"
+# without the private half of the updater keypair. Tauri 2.10 split key contents
+# and key paths into separate variables. Normalize an older path-valued setting
+# before invoking the bundler, and pick up the local key when the caller supplied
+# neither form (CI normally provides the key contents directly).
+default_updater_key="$HOME/.tauri/session-updater.key"
+if [[ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" && -f "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
+  export TAURI_SIGNING_PRIVATE_KEY_PATH="$TAURI_SIGNING_PRIVATE_KEY"
+  unset TAURI_SIGNING_PRIVATE_KEY
+fi
+if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" && -z "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" ]]; then
+  export TAURI_SIGNING_PRIVATE_KEY_PATH="$default_updater_key"
+fi
+if [[ -n "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" && ! -f "$TAURI_SIGNING_PRIVATE_KEY_PATH" ]]; then
+  echo "Updater signing key does not exist: $TAURI_SIGNING_PRIVATE_KEY_PATH" >&2
+  exit 1
 fi
 
 # Tauri does not discover that a configured signing identity is inaccessible

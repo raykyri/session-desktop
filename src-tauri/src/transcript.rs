@@ -603,40 +603,6 @@ fn workspace_observation_belongs_to_agent(
             .is_some_and(|observed_at| observed_at >= agent.created_at)
 }
 
-/// Re-resolves the currently bound transcript without waiting for another file
-/// append. Tree-shaped agents use this after moving their in-memory active leaf:
-/// Pi can navigate to an existing entry without writing a new JSONL record, so
-/// the lifecycle notification itself is the only signal that the visible path
-/// changed.
-pub fn refresh_transcript_turns(
-    state: &AppState,
-    agent_id: &str,
-    transcript_path: &str,
-    adapter_id: &str,
-) -> Result<(), String> {
-    let snapshot = read_transcript_from(Path::new(transcript_path), 0)
-        .map_err(|err| format!("failed to read {transcript_path}: {err}"))?;
-    let lines = complete_lines(&snapshot.data);
-    let registry = adapter_registry(state.config());
-    let adapter = registry.get(adapter_id)?;
-    let native_leaf_id = agent_native_leaf_id(state, agent_id);
-    let turns = adapter.resolve_transcript_turns_at_leaf(
-        agent_id,
-        snapshot.start_line_index,
-        &lines,
-        native_leaf_id.as_deref(),
-    );
-    if state.replace_turns_for_transcript(agent_id, transcript_path, turns.clone())? {
-        state.emit(SessionEvent::new(
-            "turn.updated",
-            None,
-            Some(agent_id.to_string()),
-            json!({ "reset": true, "turns": turns }),
-        ));
-    }
-    Ok(())
-}
-
 fn agent_native_leaf_id(state: &AppState, agent_id: &str) -> Option<String> {
     state
         .agent(agent_id)

@@ -99,24 +99,6 @@ pub(crate) fn pane_child_path(socket_path: &Path) -> Result<String, String> {
     })
 }
 
-/// PATH used when Session itself execs adapter CLIs (version probes, plugin
-/// install). Same directories as pane children, minus the Session shim.
-pub(crate) fn process_child_path() -> Option<String> {
-    let path = env::var_os("PATH");
-    let home = env::var_os("HOME").map(PathBuf::from);
-    child_path_from(path.as_deref(), home.as_deref(), login_shell_path_dirs())
-}
-
-/// Give a subprocess the same PATH `resolve_binary` searched, so
-/// `#!/usr/bin/env node` shebangs (Homebrew `pi`, npm CLIs) can find their
-/// interpreter. GUI apps inherit launchd's bare PATH; without this, `node`
-/// is missing and the script exits 127.
-pub(crate) fn apply_launch_path(command: &mut Command) {
-    if let Some(path) = process_child_path() {
-        command.env("PATH", path);
-    }
-}
-
 fn resolve_binary_from(
     binary: &str,
     path: Option<&OsStr>,
@@ -134,6 +116,7 @@ fn resolve_binary_from(
         .find(|candidate| candidate.is_file())
 }
 
+#[cfg(test)]
 fn child_path_from(
     path: Option<&OsStr>,
     home: Option<&Path>,

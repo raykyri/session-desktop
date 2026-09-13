@@ -4,9 +4,9 @@ use crate::host::Host;
 use crate::remote_terminal::{
     RemoteAttachment, RemoteAttachmentController, RemoteClientHandshake, RemoteHistoryCheckpoint,
 };
-use crate::scrollback::{
-    append_pane_scrollback, read_remote_history_checkpoint, write_remote_history_checkpoint,
-};
+#[cfg(test)]
+use crate::scrollback::read_remote_history_checkpoint;
+use crate::scrollback::{append_pane_scrollback, write_remote_history_checkpoint};
 use crate::state::{
     AppState, HostPtyBackend, PaneBackend, PaneInfo, PaneKind, PaneRuntime, PaneStatus,
     RemoteConnectionInfo, RemoteConnectionState, RemoteHookHealth, RemoteSessionIdentity,
@@ -797,7 +797,8 @@ pub fn respawn_shell_pane(state: &AppState, pane: &PaneInfo) -> Result<PaneInfo,
 /// Rebuilds only the local attachment for a persisted remote pane. This path
 /// never has a create command: a missing tmux identity is a recovery failure,
 /// not permission to launch a replacement process.
-pub fn reattach_remote_pane(state: &AppState, pane: &PaneInfo) -> Result<PaneInfo, String> {
+#[cfg(test)]
+fn reattach_remote_pane(state: &AppState, pane: &PaneInfo) -> Result<PaneInfo, String> {
     let identity = pane
         .remote_session
         .clone()

@@ -297,6 +297,7 @@ pub fn remove_pane_scrollback(workspace_root: &Path, pane_id: &str) -> Result<()
 /// overlap checkpoint, not content to render. Keeping it beside the log gives
 /// app-restart recovery a durable de-duplication cursor without expanding the
 /// main session state or persisting large terminal text in JSON.
+#[cfg(test)]
 pub fn read_remote_history_checkpoint(
     workspace_root: &Path,
     pane_id: &str,
