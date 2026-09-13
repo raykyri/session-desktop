@@ -12,6 +12,7 @@ import {
   reconcileRecentActivityHead,
   recentResearchQueryFromNode,
   upsertRecentActivityItem,
+  upsertRecentActivityResearchNode,
   upsertRecentResearchQuery,
 } from "../src/lib/activity";
 import {
@@ -167,6 +168,30 @@ test("only top-level run nodes enter the Home feed", () => {
     upsertRecentResearchQuery([query], { ...query, status: "failed" }),
     [{ ...query, status: "failed" }],
   );
+});
+
+test("live follow-ups stay under their root and survive root updates", () => {
+  const root = {
+    id: "root", treeId: tree.id, parentNodeId: null, prompt: "Root",
+    adapter: "codex", groupId: "workspace", worktreeDir: "/tmp/workspace",
+    status: "complete", createdAt: 100, highlights: [],
+  } satisfies ResearchNode;
+  let items = upsertRecentActivityResearchNode([], root);
+  const child = { ...root, id: "child", parentNodeId: root.id, prompt: "Follow up", createdAt: 300 };
+  items = upsertRecentActivityResearchNode(items, child);
+  items = upsertRecentActivityResearchNode(items, { ...child, id: "earlier", createdAt: 200 });
+  items = upsertRecentActivityResearchNode(items, { ...child, prompt: "Updated follow up" });
+  items = upsertRecentActivityResearchNode(items, { ...child, id: "grandchild", parentNodeId: child.id });
+  items = upsertRecentActivityResearchNode(items, { ...root, prompt: "Updated root" });
+  assert.equal(items.length, 1);
+  const item = items[0];
+  assert.equal(item.kind, "research-query");
+  if (item.kind !== "research-query") return;
+  assert.equal(item.query.prompt, "Updated root");
+  assert.deepEqual(item.query.children?.map((entry) => entry.nodeId), ["earlier", "child"]);
+  assert.equal(item.query.children?.[1].prompt, "Updated follow up");
+  assert.equal(item.occurredAt, 100);
+  assert.deepEqual(upsertRecentActivityResearchNode([], child), []);
 });
 
 test("mixed activity pages merge by one deterministic source-aware order", () => {

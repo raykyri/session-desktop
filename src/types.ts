@@ -459,6 +459,8 @@ export interface ResearchRecapCandidate {
 
 /** Compact research-run history returned to Recent Activity. */
 export interface RecentResearchQuery {
+  /** Direct child questions, included with Home feed roots. */
+  children?: RecentResearchQuery[];
   nodeId: string;
   treeId: string;
   parentNodeId?: string | null;

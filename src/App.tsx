@@ -296,8 +296,7 @@ import {
   mergeRecentActivityItems,
   reconcileRecentActivityHead,
   recentActivityItemFromJournalEntry,
-  recentActivityItemFromResearchQuery,
-  recentResearchQueryFromNode,
+  upsertRecentActivityResearchNode,
   upsertRecentActivityItem,
 } from "./lib/activity";
 import { isActiveResearchStatus } from "./lib/researchThreads";
@@ -5907,15 +5906,8 @@ function MainApp() {
   const handleResearchRecapApplied = useCallback((node: ResearchNode) => {
     setActiveResearchDetail((current) => patchResearchDetailNode(current, node));
     setResearchActivity((current) => upsertResearchActivity(current, node));
-    const query = recentResearchQueryFromNode(node);
-    if (!query) {
-      return;
-    }
     setRecentActivityItems((current) => {
-      const next = upsertRecentActivityItem(
-        current,
-        recentActivityItemFromResearchQuery(query),
-      );
+      const next = upsertRecentActivityResearchNode(current, node);
       recentActivityItemsRef.current = next;
       return next;
     });
@@ -6475,17 +6467,11 @@ function MainApp() {
         invalidateVisibleDetailSnapshot(node.treeId);
         setActiveResearchDetail((current) => patchResearchDetailNode(current, node));
         setResearchActivity((current) => upsertResearchActivity(current, node));
-        const recentQuery = recentResearchQueryFromNode(node);
-        if (recentQuery) {
-          setRecentActivityItems((current) => {
-            const next = upsertRecentActivityItem(
-              current,
-              recentActivityItemFromResearchQuery(recentQuery),
-            );
-            recentActivityItemsRef.current = next;
-            return next;
-          });
-        }
+        setRecentActivityItems((current) => {
+          const next = upsertRecentActivityResearchNode(current, node);
+          recentActivityItemsRef.current = next;
+          return next;
+        });
         if (previous) {
           const patchSummary = (summary: ResearchTreeSummary) =>
             patchResearchSummaryForNode(summary, previous, node, timestamp);
@@ -6508,17 +6494,11 @@ function MainApp() {
             );
           }
           setResearchActivity((current) => upsertResearchActivity(current, event.node));
-          const recentQuery = recentResearchQueryFromNode(event.node);
-          if (recentQuery) {
-            setRecentActivityItems((current) => {
-              const next = upsertRecentActivityItem(
-                current,
-                recentActivityItemFromResearchQuery(recentQuery),
-              );
-              recentActivityItemsRef.current = next;
-              return next;
-            });
-          }
+          setRecentActivityItems((current) => {
+            const next = upsertRecentActivityResearchNode(current, event.node);
+            recentActivityItemsRef.current = next;
+            return next;
+          });
           break;
         }
         case "research.document.updated": {
@@ -6638,9 +6618,18 @@ function MainApp() {
           );
           setResearchActivity((current) => removeResearchNodes(current, removedIds));
           setRecentActivityItems((current) => {
-            const next = current.filter(
-              (item) => item.kind !== "research-query" || !removedIds.has(item.query.nodeId),
-            );
+            const next = current
+              .filter((item) => item.kind !== "research-query" || !removedIds.has(item.query.nodeId))
+              .map((item) => {
+                if (item.kind !== "research-query" || !item.query.children) return item;
+                return {
+                  ...item,
+                  query: {
+                    ...item.query,
+                    children: item.query.children.filter((child) => !removedIds.has(child.nodeId)),
+                  },
+                };
+              });
             recentActivityItemsRef.current = next;
             return next;
           });

@@ -397,6 +397,8 @@ pub struct ResearchNode {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecentResearchQuery {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub children: Vec<RecentResearchQuery>,
     pub node_id: String,
     pub tree_id: String,
     pub parent_node_id: Option<String>,
@@ -417,6 +419,7 @@ pub struct RecentResearchQuery {
 impl From<&ResearchNode> for RecentResearchQuery {
     fn from(node: &ResearchNode) -> Self {
         Self {
+            children: Vec::new(),
             node_id: node.id.clone(),
             tree_id: node.tree_id.clone(),
             parent_node_id: node.parent_node_id.clone(),

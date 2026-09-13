@@ -85,9 +85,11 @@ export function visibleResearchPrompt(
 export function ResearchMessageBody({
   prompt,
   attachments = [],
+  renderPrompt,
 }: {
   prompt: string;
   attachments?: ResearchMessageAttachment[];
+  renderPrompt?: (content: ReactNode) => ReactNode;
 }) {
   const visiblePrompt = visibleResearchPrompt(prompt, attachments);
   const tweets = attachments.flatMap((attachment) =>
@@ -96,7 +98,9 @@ export function ResearchMessageBody({
   return (
     <>
       {visiblePrompt ? (
-        <ResearchMarkdown text={visiblePrompt} />
+        renderPrompt
+          ? renderPrompt(<ResearchMarkdown text={visiblePrompt} />)
+          : <ResearchMarkdown text={visiblePrompt} />
       ) : null}
       {tweets.length > 0 ? (
         <div

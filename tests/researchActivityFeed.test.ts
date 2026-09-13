@@ -72,6 +72,24 @@ test("feed pagination errors and deletion undo remain visible with workspace his
   assert.match(html, /aria-label="Forward"/);
 });
 
+test("Home renders direct children as follow-up buttons within the root item", () => {
+  const root = {
+    nodeId: "root", treeId: "tree", parentNodeId: null, inline: false,
+    prompt: "Root question", adapter: "codex", status: "complete" as const, createdAt: 100,
+  };
+  const html = renderFeed({ items: [{
+    kind: "research-query", occurredAt: 100,
+    query: { ...root, children: [{
+      ...root, nodeId: "child", parentNodeId: "root", prompt: "Follow up question here",
+      children: [{ ...root, nodeId: "grandchild", parentNodeId: "child", prompt: "Nested descendant" }],
+    }] },
+  }] });
+  assert.match(html, /aria-label="Follow-up questions"/);
+  assert.match(html, /<button[^>]*recent-query-child-link[^>]*>Follow up question here<\/button>/);
+  assert.equal((html.match(/aria-posinset=/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /Nested descendant/);
+});
+
 test("the agent setup guide appears only when the Home feed is empty", () => {
   const setupGuide = createElement("div", null, "Agent setup guide");
 

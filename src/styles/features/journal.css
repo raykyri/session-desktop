@@ -6,13 +6,29 @@
 
 .journal-scroll {
   --journal-content-padding: clamp(20px, 4vw, 48px);
-  padding: 0 0 48px;
+  padding: 0;
 }
 
 .journal-column {
+  position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-height: 100%;
+  max-width: calc(var(--research-feed-max-width) + 2 * var(--journal-content-padding));
+  padding-bottom: 48px;
+  border-right: 1px solid var(--surface-border-default);
+}
+
+/* Keep the column edge continuous during top-edge rubberbanding. */
+.journal-column::before {
+  content: "";
+  position: absolute;
+  right: -1px;
+  bottom: 100%;
+  height: 100vh;
+  border-right: 1px solid var(--surface-border-default);
+  pointer-events: none;
 }
 
 .journal-composer-container,
@@ -20,12 +36,11 @@
 .journal-empty-container,
 .recent-activity-load-boundary {
   width: 100%;
-  max-width: calc(var(--research-feed-max-width) + 2 * var(--journal-content-padding));
   padding-inline: var(--journal-content-padding);
 }
 
 .journal-composer-container {
-  padding-block: 28px 26px;
+  padding-block: 26px;
 }
 
 .journal-feed {
@@ -53,7 +68,7 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
-  padding-block: 16px;
+  padding-block: 22px 24px;
 }
 
 .recent-activity-new-status {
@@ -131,10 +146,15 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.recent-query-question-link {
+  width: fit-content;
+  max-width: 100%;
   cursor: pointer;
 }
 
-.recent-query-block:focus-visible {
+.recent-query-question-link:focus-visible {
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
   border-radius: 10px;
@@ -145,7 +165,6 @@
   width: 100%;
   max-width: none;
   margin: 0 0 8px;
-  cursor: pointer;
 }
 
 .recent-query-recap {
@@ -153,8 +172,60 @@
   padding: 0;
 }
 
+.recent-query-card.research-prompt:has(+ .recent-query-children) {
+  margin-bottom: 0;
+}
+
 .recent-query-block > .recent-query-spinner {
   align-self: flex-start;
+}
+
+.recent-query-children {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0 0 0 10px;
+  list-style: none;
+  cursor: default;
+}
+
+.recent-query-child {
+  position: relative;
+  padding-left: 18px;
+}
+
+.recent-query-child::before {
+  content: "";
+  position: absolute;
+  top: calc(0.15em - 2px);
+  left: 2px;
+  width: 7px;
+  height: 0.5em;
+  border-left: 1px solid var(--text-subtle);
+  border-bottom: 1px solid var(--text-subtle);
+  border-bottom-left-radius: 2px;
+}
+
+.recent-query-child-link {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 0;
+  margin-top: -2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-interactive);
+  font-size: var(--research-body-font-size);
+  line-height: var(--research-body-line-height);
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.recent-query-child-link:hover {
+  text-decoration: underline;
 }
 
 .recent-activity-load-older {
@@ -238,7 +309,6 @@
   color: var(--text-subtle);
   font-size: 12.5px;
   width: calc(100% - 2 * var(--journal-content-padding));
-  max-width: var(--research-feed-max-width);
   margin: 0 var(--journal-content-padding) 14px;
 }
 
