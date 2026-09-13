@@ -20,6 +20,8 @@ export interface AppShortcutInput {
   editableTarget?: boolean;
 }
 
+export const RESEARCH_HOME_SHORTCUT_LABEL = "⌘N";
+
 function normalizedKey(key: string): string {
   switch (key.toLowerCase()) {
     case "{":

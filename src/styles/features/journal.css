@@ -76,23 +76,17 @@
   pointer-events: auto;
 }
 
-/* Event metadata sits outside the content surface: a summary on the left
-   and the relative timestamp on the right. */
+/* Event metadata sits outside the content surface as one left-aligned phrase. */
 .activity-metadata {
   display: flex;
   min-width: 0;
   align-items: baseline;
-  justify-content: space-between;
   gap: 8px;
   padding: 0 3px;
   color: var(--text-subtle);
   font-size: var(--research-reading-meta-font-size);
   font-weight: 400;
   line-height: var(--research-reading-meta-line-height);
-}
-
-.activity-metadata.is-summary-hidden {
-  justify-content: flex-end;
 }
 
 .activity-metadata-summary {
@@ -103,7 +97,6 @@
 }
 
 .activity-metadata time {
-  flex: none;
   white-space: nowrap;
 }
 

@@ -218,6 +218,7 @@ import {
 } from "./lib/terminalAttention";
 import {
   appShortcutAllowsRepeat,
+  RESEARCH_HOME_SHORTCUT_LABEL,
   resolveAppShortcut,
   showHideShortcutConflict,
   type AppShortcutCommand,
@@ -8379,7 +8380,7 @@ function MainApp() {
         id: "action:home",
         section: "Actions",
         title: "Home",
-        hint: "⌘N",
+        hint: RESEARCH_HOME_SHORTCUT_LABEL,
         action: focusResearchHome,
       },
       {
@@ -10526,7 +10527,7 @@ function MainApp() {
                 type="button"
                 className="control-button research-sidebar-select"
                 aria-current={researchStageView === "journal" ? "page" : undefined}
-                title="Home"
+                title={`Home (${RESEARCH_HOME_SHORTCUT_LABEL})`}
                 onClick={openJournal}
               >
                 <span className="research-sidebar-copy">
@@ -10535,6 +10536,11 @@ function MainApp() {
                   </span>
                 </span>
               </button>
+              {shortcutHintsShown ? (
+                <span className="pane-tab-shortcut-hint" aria-hidden="true">
+                  {RESEARCH_HOME_SHORTCUT_LABEL}
+                </span>
+              ) : null}
             </div>
           ) : null}
           {sidebarMode === "research" ? (

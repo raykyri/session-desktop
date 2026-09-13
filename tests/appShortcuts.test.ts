@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   appShortcutAllowsRepeat,
   parseAppShortcutCommand,
+  RESEARCH_HOME_SHORTCUT_LABEL,
   resolveAppShortcut,
   showHideShortcutConflict,
 } from "../src/lib/appShortcuts";
@@ -19,6 +20,7 @@ const shortcut = (
 });
 
 test("Session resolves research navigation shortcuts", () => {
+  assert.equal(RESEARCH_HOME_SHORTCUT_LABEL, "⌘N");
   assert.deepEqual(resolveAppShortcut(shortcut({ key: "t", metaKey: true })), {
     type: "focusResearchHome",
   });
