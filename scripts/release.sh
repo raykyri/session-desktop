@@ -11,13 +11,15 @@ set -euo pipefail
 #   APPLE_ID + APPLE_PASSWORD + APPLE_TEAM_ID, or APPLE_API_KEY +
 #   APPLE_API_ISSUER + APPLE_API_KEY_PATH, for notarization.
 #   TAURI_SIGNING_PRIVATE_KEY (contents), TAURI_SIGNING_PRIVATE_KEY_PATH, or
-#   ~/.tauri/release-updater.key, for signing the updater archive.
+#   ~/.tauri/session-updater.key, for signing the updater archive.
 #   Set SESSION_ALLOW_UNNOTARIZED=1 to build a release without notarizing
 #   (downloads will hit Gatekeeper).
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null && pwd)"
 repo_root="$(cd "$script_dir/.." >/dev/null && pwd)"
 cd "$repo_root"
+
+github_repository="aka-com/session"
 
 # Signing/notarization credentials live in .env (gitignored), as plain
 # KEY=VALUE lines. Variables already set in the environment win, so a one-off
@@ -40,19 +42,62 @@ read_version() {
   sed -n 's/.*"version": "\([^"]*\)".*/\1/p' "$1" | head -1
 }
 
+read_cargo_version() {
+  sed -n 's/^version = "\([^"]*\)"/\1/p' "$1" | head -1
+}
+
+read_cargo_lock_version() {
+  awk -v expected_name="$1" '
+    /^\[\[package\]\]$/ { package = "" }
+    /^name = "/ {
+      package = $0
+      sub(/^name = "/, "", package)
+      sub(/"$/, "", package)
+      next
+    }
+    package == expected_name && /^version = "/ {
+      version = $0
+      sub(/^version = "/, "", version)
+      sub(/"$/, "", version)
+      print version
+      exit
+    }
+  ' src-tauri/Cargo.lock
+}
+
 version="$(read_version src-tauri/tauri.conf.json)"
 npm_version="$(read_version package.json)"
-cargo_version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' src-tauri/Cargo.toml | head -1)"
+npm_lock_version="$(read_version package-lock.json)"
+cargo_version="$(read_cargo_version src-tauri/Cargo.toml)"
+cli_version="$(read_cargo_version src-tauri/crates/session-cli/Cargo.toml)"
+proto_version="$(read_cargo_version src-tauri/crates/session-proto/Cargo.toml)"
+cargo_lock_version="$(read_cargo_lock_version session)"
+cli_lock_version="$(read_cargo_lock_version session-cli)"
+proto_lock_version="$(read_cargo_lock_version session-proto)"
 
 # The updater manifest, DMG filename, and Info.plist each read a different one
 # of these files, so a release with drifted versions half-works at best.
-if [[ -z "$version" || -z "$npm_version" || -z "$cargo_version" ]]; then
+if [[ -z "$version" || -z "$npm_version" || -z "$npm_lock_version" ||
+  -z "$cargo_version" || -z "$cli_version" || -z "$proto_version" ||
+  -z "$cargo_lock_version" || -z "$cli_lock_version" || -z "$proto_lock_version" ]]; then
   echo "Could not read the release version from every package file." >&2
   exit 1
 fi
 
-if [[ "$version" != "$npm_version" || "$version" != "$cargo_version" ]]; then
-  echo "Version mismatch: tauri.conf.json=$version package.json=$npm_version Cargo.toml=$cargo_version" >&2
+if [[ "$version" != "$npm_version" ]] || [[ "$version" != "$npm_lock_version" ]] ||
+  [[ "$version" != "$cargo_version" ]] || [[ "$version" != "$cli_version" ]] ||
+  [[ "$version" != "$proto_version" ]] || [[ "$version" != "$cargo_lock_version" ]] ||
+  [[ "$version" != "$cli_lock_version" ]] || [[ "$version" != "$proto_lock_version" ]]; then
+  echo "Version mismatch:" >&2
+  echo "  src-tauri/tauri.conf.json=$version" >&2
+  echo "  package.json=$npm_version" >&2
+  echo "  package-lock.json=$npm_lock_version" >&2
+  echo "  src-tauri/Cargo.toml=$cargo_version" >&2
+  echo "  src-tauri/crates/session-cli/Cargo.toml=$cli_version" >&2
+  echo "  src-tauri/crates/session-proto/Cargo.toml=$proto_version" >&2
+  echo "  src-tauri/Cargo.lock session=$cargo_lock_version" >&2
+  echo "  src-tauri/Cargo.lock session-cli=$cli_lock_version" >&2
+  echo "  src-tauri/Cargo.lock session-proto=$proto_lock_version" >&2
   exit 1
 fi
 
@@ -92,7 +137,22 @@ if ! command -v gh >/dev/null || ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
-default_updater_key="$HOME/.tauri/release-updater.key"
+if ! release_branch="$(gh api "repos/$github_repository" --jq .default_branch)" ||
+  [[ -z "$release_branch" ]]; then
+  echo "Could not read the default branch for $github_repository." >&2
+  exit 1
+fi
+if ! release_head="$(gh api "repos/$github_repository/commits/$release_branch" --jq .sha)" ||
+  [[ -z "$release_head" ]]; then
+  echo "Could not read $github_repository's $release_branch commit." >&2
+  exit 1
+fi
+if [[ "$(git rev-parse HEAD)" != "$release_head" ]]; then
+  echo "HEAD does not match $github_repository's $release_branch — push it before releasing." >&2
+  exit 1
+fi
+
+default_updater_key="$HOME/.tauri/session-updater.key"
 if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
   updater_key_path="${TAURI_SIGNING_PRIVATE_KEY_PATH:-$default_updater_key}"
   if [[ ! -f "$updater_key_path" ]]; then
@@ -173,11 +233,18 @@ for file in "$dmg" "$archive" "$signature" "$manifest"; do
   fi
 done
 
+if have_notary_creds; then
+  "$script_dir/verify-release.sh" --require-notarized
+else
+  "$script_dir/verify-release.sh"
+fi
+
 checksums="$bundle_root/SHA256SUMS"
 (cd "$(dirname "$dmg")" && shasum -a 256 "$(basename "$dmg")") >"$checksums"
 (cd "$(dirname "$archive")" && shasum -a 256 "$(basename "$archive")") >>"$checksums"
 
 gh release create "$tag" \
+  --repo "$github_repository" \
   --draft \
   --title "Session $tag" \
   --generate-notes \
@@ -186,4 +253,4 @@ gh release create "$tag" \
 
 echo
 echo "Draft release $tag created. Install the DMG once to smoke-test, then publish:"
-echo "  gh release edit $tag --draft=false"
+echo "  gh release edit $tag --repo $github_repository --draft=false"

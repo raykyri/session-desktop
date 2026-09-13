@@ -44,15 +44,10 @@ builds that omit those artifacts.
   Session names. Generated hooks, profiles, plugin files, remote tmux identities,
   SSH control paths, and browser automation profiles also use Session prefixes.
   No legacy values or paths are read or migrated.
-- The updater public/private key identity, `qmux.app`, the Fly app name, updater
-  endpoints,
-  and release download URLs. Hosting and update delivery need a separate
-  deployment cutover. Existing clients still request their embedded old endpoint.
-
-The landing page's source link points to `raykyri/session`. The release script
-currently chooses its repository through `gh` while updater URLs still name
-`raykyri/qmux`; resolve that deployment mismatch before publishing a release.
-Moving domains or release delivery is not part of this source-code change.
+- The updater public/private key identity, `qmux.app`, and the Fly app name remain
+  separate deployment contracts. The updater endpoint, release download URLs,
+  landing-page source link, and release script now use `aka-com/session`.
+  Existing builds continue to request the endpoint embedded in those builds.
 
 ## Native support after terminal removal
 

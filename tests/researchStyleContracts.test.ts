@@ -66,8 +66,10 @@ test("shared tweet and attachment recipes do not depend on Home CSS", () => {
     /border-top/,
   );
   assert.doesNotMatch(journalCss, /\.research-message-attachments\.has-prompt\s*\{/);
+  const journalColumn = ruleBody(journalCss, ".journal-column");
+  assert.match(journalColumn, /width:\s*100%/);
   assert.match(
-    ruleBody(journalCss, ".journal-column"),
-    /width:\s*min\(100%, var\(--research-feed-max-width\)\)/,
+    journalColumn,
+    /max-width:\s*calc\(var\(--research-feed-max-width\) \+ 2 \* var\(--journal-content-padding\)\)/,
   );
 });

@@ -352,7 +352,7 @@ test("tweet card lays out avatar, inline header, and stats like a timeline", () 
   // name, badge, handle, then the age linking to the post.
   assert.match(html, /journal-tweet-avatar-link/);
   assert.match(html, /journal-tweet-main/);
-  assert.match(html, /journal-tweet-author">jack<\/span>/);
+  assert.match(html, /journal-tweet-author"[^>]*>jack<\/a>/);
   assert.match(html, /journal-tweet-verified/);
   assert.match(html, /journal-tweet-handle">@jack<\/span>/);
   assert.match(html, /journal-tweet-age"[^>]*>[^<]+<\/a>/);

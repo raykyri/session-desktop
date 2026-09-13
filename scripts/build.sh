@@ -45,7 +45,7 @@ load_dotenv() {
     # Use printf-based assignment so parentheses, spaces, and other
     # metacharacters in the value cannot be re-parsed as shell syntax.
     printf -v "$name" '%s' "$value"
-    export "$name"
+    export "${name?}"
   done <"$env_file"
 }
 

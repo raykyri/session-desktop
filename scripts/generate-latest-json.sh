@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Generates the latest.json update manifest the updater plugin polls at
-# https://github.com/raykyri/qmux/releases/latest/download/latest.json.
+# https://github.com/aka-com/session/releases/latest/download/latest.json.
 # Run after scripts/build.sh, then upload latest.json AND the .app.tar.gz +
 # .sig to the GitHub release alongside the DMG.
 
@@ -22,7 +22,7 @@ for file in "$archive" "$signature_file"; do
 done
 
 signature="$(cat "$signature_file")"
-url="https://github.com/raykyri/qmux/releases/download/v$version/Session.app.tar.gz"
+url="https://github.com/aka-com/session/releases/download/v$version/Session.app.tar.gz"
 pub_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 # Build the manifest with Python so signature bytes never re-enter the shell
