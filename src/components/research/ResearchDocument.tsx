@@ -1514,7 +1514,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
           <span className="research-prompt-reply-text">{`Reply to: ${replySnippet}`}</span>
         </div>
       ) : null}
-      <div className="research-prompt">
+      <div className="research-prompt research-content-card">
         {index === 0 && parentNodeId ? (
           <button
             type="button"
@@ -5398,7 +5398,10 @@ function ResearchDocument({
             className="research-document-scroll"
             onScroll={recordScroll}
           >
-            <div ref={contentContainerRef} className="research-document-content">
+            <div
+              ref={contentContainerRef}
+              className="research-document-content research-reading-surface"
+            >
               {renderedSegments}
               {!ask ? (
                 <div className="research-response-grid research-thread-composer-row">

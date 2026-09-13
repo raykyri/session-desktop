@@ -113,3 +113,5 @@ The development configuration in `session.config.json` uses `~/.session/workspac
 
 See [docs/home.md](docs/home.md) for the activity feed and
 its navigation and journal actions.
+Frontend styling conventions and stylesheet ownership are documented in
+[docs/css-conventions.md](docs/css-conventions.md).

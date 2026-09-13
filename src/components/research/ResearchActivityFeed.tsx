@@ -600,7 +600,9 @@ function JournalEntryCard({
   }
   return (
     <article
-      className={`journal-entry ${variant}${menuOpen ? " has-open-menu" : ""}`}
+      className={`journal-entry research-content-card ${variant}${
+        menuOpen ? " has-open-menu" : ""
+      }`}
       title={new Date(entry.createdAt).toLocaleString()}
       onContextMenu={(event) => {
         // Right-clicking a link or the quote card keeps the entry menu too —
@@ -671,7 +673,7 @@ export function ResearchQueryCard({
         onContextMenu(event.clientX, event.clientY);
       }}
     >
-      <article className="recent-query-card research-prompt">
+      <article className="recent-query-card research-prompt research-content-card">
         <TranscriptMarkdown text={query.prompt} imageBehavior="open" />
       </article>
       {recap ? <ResearchRecapLine text={recap} className="recent-query-recap" /> : null}
@@ -1313,7 +1315,7 @@ function ResearchActivityFeed({
       ) : undefined}
     >
       <div ref={scrollRef} className="research-document-scroll journal-scroll">
-        <div className="journal-column">
+        <div className="journal-column research-reading-surface">
           {composer}
           {pendingUndo ? (
             <div className="journal-undo" role="status">
