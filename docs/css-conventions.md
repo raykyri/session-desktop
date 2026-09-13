@@ -45,8 +45,11 @@ literal colors. Literal colors are appropriate for external brand colors or docu
 browser limitations, and should carry a comment when the reason is not obvious.
 
 Home and research threads are one reading surface. Their main content roots must include
-`.research-reading-surface`; primary content should use its body and metadata properties so
-opening a feed item does not change its type scale or rhythm.
+`.research-reading-surface`. Primary Markdown uses `.research-prose`, derived summaries use
+`.research-summary-text`, and authored user messages use the `ResearchUserMessage` card
+primitive. Destination styles may position those components, but must not override their
+font metrics or card recipe. Compact previews and annotations must select an explicit prose
+variant so moving content does not change its type scale or rhythm.
 
 ## Responsive and accessibility behavior
 

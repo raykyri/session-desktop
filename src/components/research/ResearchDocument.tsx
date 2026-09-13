@@ -104,8 +104,12 @@ import {
   timelineStatusClass,
 } from "../TranscriptActivity";
 import ResearchRecap from "./ResearchRecap";
-import { ResearchMessageBody } from "./ResearchMessage";
-import TranscriptMarkdown, {
+import {
+  ResearchMarkdown,
+  ResearchMessageBody,
+  ResearchUserMessage,
+} from "./ResearchMessage";
+import {
   TranscriptLinkActionsProvider,
   type LinkActions,
 } from "../TranscriptMarkdown";
@@ -744,9 +748,8 @@ function ResearchMessageBlock({
     // user turn signals leakage).
     if (role === "assistant" || conversation) {
       return (
-        <TranscriptMarkdown
+        <ResearchMarkdown
           text={block.text}
-          imageBehavior="open"
           oversizedContent={OVERSIZED_MARKDOWN_POLICY}
         />
       );
@@ -758,6 +761,7 @@ function ResearchMessageBlock({
       value={block.value}
       maxPayloadCharacters={ACTIVITY_PAYLOAD_CHAR_LIMIT}
       deferPayload
+      className="research-activity"
     />
   );
 }
@@ -767,7 +771,7 @@ function ResearchMessageBlock({
 // replacement re-rendered — and re-parsed the markdown of — every visible
 // item. Item identities are stable across detail replacements because they
 // derive from `content`, which only changes when this node's own fetch lands.
-const ResearchTimelineItem = memo(function ResearchTimelineItem({
+export const ResearchTimelineItem = memo(function ResearchTimelineItem({
   item,
   conversation = false,
 }: {
@@ -785,11 +789,22 @@ const ResearchTimelineItem = memo(function ResearchTimelineItem({
         {item.contextStatus === "rolledBack" ? (
           <div className="turn-context-status">Excluded from active context</div>
         ) : null}
-        {item.blocks.length > 0 ? (
+        {item.blocks.length > 0 && item.role === "user" ? (
+          <ResearchUserMessage
+            className={`research-response-message research-conversation-prompt research-prompt${timelineStatusClass(item.status)}`}
+          >
+            {item.blocks.map((block, index) => (
+              <ResearchMessageBlock
+                key={`${item.key}-${index}`}
+                block={block}
+                role={item.role}
+                conversation
+              />
+            ))}
+          </ResearchUserMessage>
+        ) : item.blocks.length > 0 ? (
           <div
-            className={`research-response-message${
-              item.role === "user" ? " research-conversation-prompt research-prompt" : ""
-            }${timelineStatusClass(item.status)}`}
+            className={`research-response-message${timelineStatusClass(item.status)}`}
           >
             {item.blocks.map((block, index) => (
               <ResearchMessageBlock
@@ -812,6 +827,7 @@ const ResearchTimelineItem = memo(function ResearchTimelineItem({
               <TranscriptActivityItem
                 key={activity.key}
                 item={activity}
+                className="research-activity"
                 isRootActivity
                 maxPayloadCharacters={ACTIVITY_PAYLOAD_CHAR_LIMIT}
                 deferPayloads
@@ -859,6 +875,7 @@ const ResearchTimelineItem = memo(function ResearchTimelineItem({
         <TranscriptActivityItem
           key={activity.key}
           item={activity}
+          className="research-activity"
           isRootActivity
           maxPayloadCharacters={ACTIVITY_PAYLOAD_CHAR_LIMIT}
           deferPayloads
@@ -1409,10 +1426,10 @@ const ResearchFollowupRail = memo(function ResearchFollowupRail({
         ) : null}
         <strong>{child.prompt}</strong>
         {child.responsePreview ? (
-          <TranscriptMarkdown
+          <ResearchMarkdown
             text={child.responsePreview}
             className="research-followup-preview"
-            imageBehavior="open"
+            variant="compact"
             inline
           />
         ) : null}
@@ -1517,7 +1534,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
           <span className="research-prompt-reply-text">{`Reply to: ${replySnippet}`}</span>
         </div>
       ) : null}
-      <div className="research-prompt research-content-card">
+      <ResearchUserMessage className="research-prompt">
         {index === 0 && parentNodeId ? (
           <button
             type="button"
@@ -1532,7 +1549,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
           <blockquote className="research-prompt-quote">{quoteDisplayText(queryQuote)}</blockquote>
         ) : null}
         <ResearchMessageBody prompt={prompt} attachments={attachments} />
-      </div>
+      </ResearchUserMessage>
     </div>
   );
 });
@@ -5106,17 +5123,17 @@ function ResearchDocument({
                 {quoteDisplayText(proposal.anchor.exact)}
               </span>
             ) : null}
-            <TranscriptMarkdown
+            <ResearchMarkdown
               text={proposal.prompt}
-              imageBehavior="open"
+              variant="compact"
               inline
             />
             {proposal.answerMarkdown ? (
               <details>
                 <summary>Proposed answer</summary>
-                <TranscriptMarkdown
+                <ResearchMarkdown
                   text={proposal.answerMarkdown}
-                  imageBehavior="open"
+                  variant="compact"
                 />
               </details>
             ) : null}

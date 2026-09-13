@@ -34,7 +34,11 @@ test("Home renders the mixed feed and query composer directly in the app", () =>
   assert.match(html, /role="feed"/);
   assert.match(html, /journal-column research-reading-surface/);
   assert.match(html, /journal-entry research-content-card/);
-  assert.match(html, /research-prompt research-content-card/);
+  assert.match(
+    html,
+    /research-user-message research-content-card recent-query-card research-prompt/,
+  );
+  assert.match(html, /research-summary-text research-recap recent-query-recap/);
   assert.match(html, /Query composer/);
   assert.match(html, /example.com\/finding/);
   assert.match(html, /Investigate this question/);

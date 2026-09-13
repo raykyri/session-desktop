@@ -1,6 +1,64 @@
+import type { ReactNode } from "react";
 import type { ResearchMessageAttachment } from "../../types";
-import TranscriptMarkdown from "../TranscriptMarkdown";
+import TranscriptMarkdown, {
+  type OversizedMarkdownPolicy,
+} from "../TranscriptMarkdown";
 import { TweetEmbed } from "./TweetEmbed";
+
+type ResearchProseVariant = "body" | "compact";
+
+/** Research-owned adapter around the generic transcript Markdown renderer.
+ * Typography is selected on the renderer itself instead of inherited from a
+ * page-layout ancestor, so the same semantic content cannot change scale when
+ * it moves between Home, a run, and an imported conversation. */
+export function ResearchMarkdown({
+  text,
+  className,
+  variant = "body",
+  inline = false,
+  oversizedContent,
+}: {
+  text: string;
+  className?: string;
+  variant?: ResearchProseVariant;
+  inline?: boolean;
+  oversizedContent?: OversizedMarkdownPolicy;
+}) {
+  const proseClassName = `research-prose research-prose--${variant}${
+    className ? ` ${className}` : ""
+  }`;
+  return (
+    <TranscriptMarkdown
+      text={text}
+      className={proseClassName}
+      imageBehavior="open"
+      inline={inline}
+      oversizedContent={oversizedContent}
+    />
+  );
+}
+
+/** Shared authored-user-message surface. Context-specific callers own only
+ * placement; this primitive keeps card and typography composition identical. */
+export function ResearchUserMessage({
+  children,
+  className,
+  as: Element = "div",
+}: {
+  children: ReactNode;
+  className?: string;
+  as?: "article" | "div";
+}) {
+  return (
+    <Element
+      className={`research-user-message research-content-card${
+        className ? ` ${className}` : ""
+      }`}
+    >
+      {children}
+    </Element>
+  );
+}
 
 /** Presentation-only removal of resolved tweet URLs occupying the message's
  * trailing URL block. The persisted prompt is never rewritten. */
@@ -40,7 +98,7 @@ export function ResearchMessageBody({
   return (
     <>
       {visiblePrompt ? (
-        <TranscriptMarkdown text={visiblePrompt} imageBehavior="open" />
+        <ResearchMarkdown text={visiblePrompt} />
       ) : null}
       {tweets.length > 0 ? (
         <div
