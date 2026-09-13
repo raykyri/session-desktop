@@ -252,7 +252,7 @@ test("home-feed research prompts render markdown links", () => {
 test("home-feed research prompts show a recap below the question", () => {
   const withRecap = renderToStaticMarkup(
     createElement(ResearchQueryCard, {
-      query: { ...query, recap: "Read Cusk and Heti." },
+      query: { ...query, recap: "The result is ready." },
       onOpen: () => {},
       onContextMenu: () => {},
     }),
@@ -265,7 +265,9 @@ test("home-feed research prompts show a recap below the question", () => {
     }),
   );
 
-  assert.ok(withRecap.indexOf("turn-markdown") < withRecap.indexOf("Summary: Read Cusk and Heti."));
+  assert.ok(
+    withRecap.indexOf("turn-markdown") < withRecap.indexOf("Summary: The result is ready."),
+  );
   assert.doesNotMatch(withoutRecap, /Summary:/);
 });
 

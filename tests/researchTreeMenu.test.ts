@@ -50,6 +50,26 @@ test("research tree menus omit regenerate title for every kind", () => {
   }
 });
 
+test("research tree menus can expose query summary regeneration", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchTreeMenuItems, {
+      tree,
+      archived: false,
+      folderState: emptyResearchFolderState(),
+      onClose: noop,
+      onToggleStar: noop,
+      onRename: noop,
+      onArchive: noop,
+      onRestore: noop,
+      onDelete: noop,
+      onRemoveFromFolder: noop,
+      onRequestCreateFolder: noop,
+      onRegenerateSummary: noop,
+    }),
+  );
+  assert.match(html, /Generate summary/);
+});
+
 test("the new-folder dialog names a single selected item", () => {
   const html = renderToStaticMarkup(
     createElement(ResearchFolderDialog, {

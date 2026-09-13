@@ -955,8 +955,6 @@ interface ThreadSegmentProps {
   onRetryContentLoad: () => void;
   onShowFullTrace: (nodeId: string) => void;
   onCopyAnswer: (view: SegmentView) => void;
-  canRegenerateRecap: boolean;
-  onRegenerateRecap: (nodeId: string) => void;
   onOpenAnswerMenu: (trigger: HTMLButtonElement, nodeId: string) => void;
   onOpenFollowupMenu: (nodeId: string, clientX: number, clientY: number) => void;
   onCancelNode: (nodeId: string) => void;
@@ -1073,8 +1071,6 @@ interface ResearchAnswerPaneProps {
   onRetryContentLoad: ThreadSegmentProps["onRetryContentLoad"];
   onShowFullTrace: ThreadSegmentProps["onShowFullTrace"];
   onCopyAnswer: ThreadSegmentProps["onCopyAnswer"];
-  canRegenerateRecap: ThreadSegmentProps["canRegenerateRecap"];
-  onRegenerateRecap: ThreadSegmentProps["onRegenerateRecap"];
   onOpenAnswerMenu: ThreadSegmentProps["onOpenAnswerMenu"];
   onCancelNode: ThreadSegmentProps["onCancelNode"];
   canRetryNode: ThreadSegmentProps["canRetryNode"];
@@ -1119,8 +1115,6 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
   onRetryContentLoad,
   onShowFullTrace,
   onCopyAnswer,
-  canRegenerateRecap,
-  onRegenerateRecap,
   onOpenAnswerMenu,
   onCancelNode,
   canRetryNode,
@@ -1189,12 +1183,7 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
               {retryButton}
             </div>
           ) : null}
-          <ResearchRecap
-            content={view.content}
-            onRegenerate={
-              canRegenerateRecap ? () => onRegenerateRecap(node.id) : undefined
-            }
-          />
+          <ResearchRecap content={view.content} />
           {view.displayedTimelineItems.length === 0 ? (
             <>
               <p className="research-response-empty">
@@ -1597,8 +1586,6 @@ const ThreadSegment = memo(function ThreadSegment({
   onRetryContentLoad,
   onShowFullTrace,
   onCopyAnswer,
-  canRegenerateRecap,
-  onRegenerateRecap,
   onOpenAnswerMenu,
   onOpenFollowupMenu,
   onCancelNode,
@@ -1618,6 +1605,17 @@ const ThreadSegment = memo(function ThreadSegment({
       ref={(element) => registerSegmentElement(node.id, "anchor", element)}
       className={`research-thread-segment${isSelected ? " is-selected" : ""}`}
       data-segment-anchor={node.id}
+      onContextMenu={(event) => {
+        // Links and other nested controls may own a more specific context
+        // menu. Everywhere else in the question-and-answer segment opens the
+        // research item menu.
+        if (event.defaultPrevented) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        onOpenFollowupMenu(node.id, event.clientX, event.clientY);
+      }}
     >
       <ResearchSegmentPrompt
         visible={!view.isDocument && !view.isConversation}
@@ -1656,8 +1654,6 @@ const ThreadSegment = memo(function ThreadSegment({
           onRetryContentLoad={onRetryContentLoad}
           onShowFullTrace={onShowFullTrace}
           onCopyAnswer={onCopyAnswer}
-          canRegenerateRecap={canRegenerateRecap}
-          onRegenerateRecap={onRegenerateRecap}
           onOpenAnswerMenu={onOpenAnswerMenu}
           onCancelNode={onCancelNode}
           canRetryNode={canRetryNode}
@@ -5294,11 +5290,6 @@ function ResearchDocument({
         onRetryContentLoad={retryContentLoad}
         onShowFullTrace={showFullTraceFor}
         onCopyAnswer={handleCopyAnswer}
-        canRegenerateRecap={
-          !archived &&
-          Boolean(view.content?.responseRevision && view.content.node.recap?.text.trim())
-        }
-        onRegenerateRecap={openRecapDialog}
         onOpenAnswerMenu={openAnswerMenu}
         onOpenFollowupMenu={openFollowupMenu}
         onCancelNode={handleCancelNode}
@@ -5585,7 +5576,7 @@ function ResearchDocument({
                         onClick={() => openRecapDialog(node.id)}
                       >
                         <RefreshCw size={13} aria-hidden="true" />
-                        <span>Regenerate summary</span>
+                        <span>Generate summary</span>
                       </button>
                     ) : null}
                     <div className="context-menu-divider" role="separator" />

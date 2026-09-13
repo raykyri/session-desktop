@@ -523,7 +523,7 @@ mod research_title_tests {
         std::fs::create_dir_all(&dir).unwrap();
         let event = serde_json::json!({
             "type": "item.completed",
-            "item": { "type": "agent_message", "text": "{\"recap\":\"Read **Cusk** and Heti.\"}" }
+            "item": { "type": "agent_message", "text": "{\"recap\":\"Choose **Option A** and Option B.\"}" }
         });
         let run = |event: &Value, exit_code: &str| {
             // Pass source data as positional arguments, never shell code.
@@ -542,7 +542,7 @@ mod research_title_tests {
                 "recap",
             )
         };
-        assert_eq!(run(&event, "0").unwrap(), "Read Cusk and Heti.");
+        assert_eq!(run(&event, "0").unwrap(), "Choose Option A and Option B.");
         assert!(run(&event, "1").is_err());
         assert!(
             run(

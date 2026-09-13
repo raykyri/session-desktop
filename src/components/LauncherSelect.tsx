@@ -18,6 +18,7 @@ interface LauncherSelectProps {
   options: LauncherSelectOption[];
   onChange: (value: string) => void;
   ariaLabel?: string;
+  disabled?: boolean;
 }
 
 const toneClass = (tone?: string) => (tone ? ` is-${tone}` : "");
@@ -28,7 +29,13 @@ const iconClass = (option?: LauncherSelectOption) =>
    like the launcher's controls. The popover is portaled to <body> because the launcher
    and its options row both clip overflow, then pinned below the trigger like the
    composer menu. */
-export function LauncherSelect({ value, options, onChange, ariaLabel }: LauncherSelectProps) {
+export function LauncherSelect({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+  disabled = false,
+}: LauncherSelectProps) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -45,6 +52,12 @@ export function LauncherSelect({ value, options, onChange, ariaLabel }: Launcher
       onChange(options[0].value);
     }
   }, [match, options, value, onChange]);
+
+  useEffect(() => {
+    if (disabled) {
+      setOpen(false);
+    }
+  }, [disabled]);
 
   const measure = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
@@ -88,6 +101,7 @@ export function LauncherSelect({ value, options, onChange, ariaLabel }: Launcher
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
+        disabled={disabled}
         onClick={() => {
           if (!open) {
             measure();

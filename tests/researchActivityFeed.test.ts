@@ -13,6 +13,7 @@ function renderFeed(overrides: Partial<ResearchActivityFeedProps> = {}) {
     items: [], researchTrees: [], nextCursor: null, loadingOlder: false, olderError: null,
     pendingUndo: null, onRemoveEntry: noop, onRetryTweet: noop,
     onUndoRemove: noop, onDismissUndo: noop, onOpenResearchQuery: noop,
+    onResearchRecapApplied: noop, onError: noop,
     folderState: emptyResearchFolderState(),
     onRenameResearch: asyncNoop, onArchiveResearch: asyncNoop,
     onRestoreResearch: asyncNoop, onRemoveResearch: asyncNoop,

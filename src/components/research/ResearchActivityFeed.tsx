@@ -34,14 +34,17 @@ import {
 import type {
   RecentActivityCursor,
   RecentResearchQuery,
+  ResearchNode,
+  ResearchNodeContent,
   ResearchTreeSummary,
 } from "../../types";
 import { IS_MAC, isEditableTarget } from "../../lib/appHelpers";
-import { openExternalUrl } from "../../lib/api";
+import { getResearchNodeContent, openExternalUrl } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
 import { ResearchDocumentFrame } from "./ResearchDocumentChrome";
 import ActivityMetadataLine from "../ActivityMetadataLine";
 import { ResearchRecapLine } from "./ResearchRecap";
+import ResearchRecapDialog from "./ResearchRecapDialog";
 import { TweetEmbed } from "./TweetEmbed";
 import { ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
 import type { ResearchFolderState } from "../../lib/researchFolders";
@@ -68,6 +71,8 @@ export interface ResearchActivityFeedProps {
   onUndoRemove: () => void;
   onDismissUndo: () => void;
   onOpenResearchQuery: (query: RecentResearchQuery) => void;
+  onResearchRecapApplied: (node: ResearchNode) => void;
+  onError: (message: string) => void;
   folderState: ResearchFolderState;
   onRenameResearch: (treeId: string, title: string) => Promise<void>;
   onArchiveResearch: (treeId: string) => Promise<void>;
@@ -297,7 +302,7 @@ export function ResearchQueryCard({
         onOpen();
       }}
       onContextMenu={(event) => {
-        if (isMarkdownInteractiveTarget(event.target)) {
+        if (event.defaultPrevented) {
           return;
         }
         event.preventDefault();
@@ -436,6 +441,8 @@ function ResearchActivityFeed({
   onUndoRemove,
   onDismissUndo,
   onOpenResearchQuery,
+  onResearchRecapApplied,
+  onError,
   folderState,
   onRenameResearch,
   onArchiveResearch,
@@ -453,11 +460,20 @@ function ResearchActivityFeed({
 }: ResearchActivityFeedProps) {
   const [menu, setMenu] = useState<
     | { kind: "journal"; entryId: string; left: number; top: number }
-    | { kind: "tree"; treeId: string; archived: boolean; left: number; top: number }
+    | {
+        kind: "tree";
+        treeId: string;
+        queryNodeId?: string;
+        archived: boolean;
+        left: number;
+        top: number;
+      }
     | null
   >(null);
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
+  const [recapDialogContent, setRecapDialogContent] =
+    useState<ResearchNodeContent | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const onScrollChangeRef = useRef(onScrollChange);
@@ -743,6 +759,14 @@ function ResearchActivityFeed({
   const menuItems = menuEntry ? journalEntryMenuItems(menuEntry) : [];
   const menuTree =
     menu?.kind === "tree" ? (treeById.get(menu.treeId) ?? null) : null;
+  const menuQueryItem =
+    menu?.kind === "tree" && menu.queryNodeId
+      ? items.find(
+          (item) =>
+            item.kind === "research-query" && item.query.nodeId === menu.queryNodeId,
+        ) ?? null
+      : null;
+  const menuQuery = menuQueryItem?.kind === "research-query" ? menuQueryItem.query : null;
 
   function runMenuAction(entry: JournalEntry, action: JournalMenuAction) {
     setMenu(null);
@@ -803,13 +827,25 @@ function ResearchActivityFeed({
     setMenu({ kind: "journal", entryId, ...clampedMenuPosition(clientX, clientY) });
   }
 
-  function openTreeContextMenu(tree: ResearchTreeSummary, clientX: number, clientY: number) {
+  function openTreeContextMenu(
+    tree: ResearchTreeSummary,
+    clientX: number,
+    clientY: number,
+    queryNodeId?: string,
+  ) {
     setMenu({
       kind: "tree",
       treeId: tree.id,
+      queryNodeId,
       archived: Boolean(tree.archivedAt),
       ...clampedMenuPosition(clientX, clientY, RESEARCH_TREE_MENU_WIDTH),
     });
+  }
+
+  function openRecapDialog(nodeId: string) {
+    void getResearchNodeContent(nodeId)
+      .then((content) => setRecapDialogContent(content))
+      .catch((err: unknown) => onError(err instanceof Error ? err.message : String(err)));
   }
 
   // Menu dismissal and its keycap shortcuts, mirroring the research sidebar
@@ -1059,7 +1095,7 @@ function ResearchActivityFeed({
                             if (!tree) {
                               return;
                             }
-                            openTreeContextMenu(tree, clientX, clientY);
+                            openTreeContextMenu(tree, clientX, clientY, source.query.nodeId);
                           }}
                         />
                       )}
@@ -1170,6 +1206,14 @@ function ResearchActivityFeed({
                 }}
                 onRemoveFromFolder={onRemoveFromFolder}
                 onRequestCreateFolder={onRequestCreateFolder}
+                onRegenerateSummary={
+                  menuQuery &&
+                  !menu.archived &&
+                  menuQuery.status === "complete" &&
+                  menuQuery.recap?.trim()
+                    ? () => openRecapDialog(menuQuery.nodeId)
+                    : undefined
+                }
               />
             </div>,
             document.body,
@@ -1189,6 +1233,21 @@ function ResearchActivityFeed({
           onRemove={onRemoveResearch}
         />
       ) : null}
+      {recapDialogContent
+        ? createPortal(
+            <ResearchRecapDialog
+              content={recapDialogContent}
+              onClose={() => setRecapDialogContent(null)}
+              onApplied={(node) => {
+                onResearchRecapApplied(node);
+                setRecapDialogContent((current) =>
+                  current?.node.id === node.id ? { ...current, node } : current,
+                );
+              }}
+            />,
+            document.body,
+          )
+        : null}
     </ResearchDocumentFrame>
   );
 }

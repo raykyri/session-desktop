@@ -6510,6 +6510,22 @@ function MainApp() {
     },
     [changeResearchVisibilityFilter, navigateToResearchDocument],
   );
+  const handleResearchRecapApplied = useCallback((node: ResearchNode) => {
+    setActiveResearchDetail((current) => patchResearchDetailNode(current, node));
+    setResearchActivity((current) => upsertResearchActivity(current, node));
+    const query = recentResearchQueryFromNode(node);
+    if (!query) {
+      return;
+    }
+    setRecentActivityItems((current) => {
+      const next = upsertRecentActivityItem(
+        current,
+        recentActivityItemFromResearchQuery(query),
+      );
+      recentActivityItemsRef.current = next;
+      return next;
+    });
+  }, []);
   const loadOlderActivity = useCallback(() => {
     if (!recentActivityCursor || loadingOlderActivityRef.current) return;
     const requestSeq = recentActivityPageRequestSeqRef.current + 1;
@@ -12655,6 +12671,8 @@ function MainApp() {
               onUndoRemove={undoJournalRemove}
               onDismissUndo={dismissJournalUndo}
               onOpenResearchQuery={openRecentResearchQuery}
+              onResearchRecapApplied={handleResearchRecapApplied}
+              onError={setError}
               folderState={researchFolderState}
               onRenameResearch={renameResearchTreeTitle}
               onArchiveResearch={archiveResearchTreeFromSidebar}

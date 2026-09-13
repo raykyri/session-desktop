@@ -231,8 +231,10 @@ mod tests {
     #[test]
     fn recap_is_plain_and_bounded() {
         assert_eq!(
-            normalize_recap("**Summary:** *Read Cusk.*\nThen [Heti](https://example.com)."),
-            Some("Read Cusk. Then Heti.".into())
+            normalize_recap(
+                "**Summary:** *Primary result.*\nThen [secondary result](https://example.com)."
+            ),
+            Some("Primary result. Then secondary result.".into())
         );
         assert!(normalize_recap(" \n ").is_none());
         assert!(normalize_recap(&"x".repeat(1201)).is_none());

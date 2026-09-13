@@ -11,7 +11,7 @@ function content(): ResearchNodeContent {
     node: {
       id: "node", treeId: "tree", prompt: "Question", adapter: "claude",
       groupId: "group", worktreeDir: "/tmp", status: "complete", createdAt: 1,
-      highlights: [], recap: { text: "Read Cusk and Heti.", responseRevision: "revision" },
+      highlights: [], recap: { text: "The result is ready.", responseRevision: "revision" },
     },
     turns: [], children: [], responseRevision: "revision",
   };
@@ -20,7 +20,7 @@ const render = (value: ResearchNodeContent) => renderToStaticMarkup(createElemen
 
 test("recaps reserve no space until generated and belonging to the displayed answer", () => {
   const value = content();
-  assert.match(render(value), /Summary: Read Cusk and Heti\./);
+  assert.match(render(value), /Summary: The result is ready\./);
   value.responseRevision = "different";
   assert.equal(render(value), "");
   value.responseRevision = "revision";
@@ -42,12 +42,11 @@ test("recaps render as text, with no Markdown or HTML interpretation", () => {
   assert.equal(render(value), "");
 });
 
-test("current recaps expose regeneration without changing their text", () => {
-  const html = renderToStaticMarkup(
-    createElement(ResearchRecap, { content: content(), onRegenerate: () => undefined }),
-  );
-  assert.match(html, /Summary: Read Cusk and Heti\./);
-  assert.match(html, /aria-label="Regenerate summary"/);
+test("current recaps render without an inline regeneration control", () => {
+  const html = render(content());
+  assert.match(html, /Summary: The result is ready\./);
+  assert.doesNotMatch(html, /Generate summary/);
+  assert.doesNotMatch(html, /<button/);
 });
 
 test("candidate dialog presents the current recap before generation", () => {
@@ -58,8 +57,16 @@ test("candidate dialog presents the current recap before generation", () => {
       onApplied: () => undefined,
     }),
   );
-  assert.match(html, /Regenerate summary/);
-  assert.match(html, /The current summary stays unchanged until you apply a candidate/);
-  assert.match(html, /Read Cusk and Heti\./);
+  assert.match(html, /Generate summary/);
+  assert.doesNotMatch(html, /The current summary stays unchanged until you apply a candidate/);
+  assert.match(html, /The result is ready\./);
   assert.match(html, /Generate candidate/);
+  assert.ok(html.indexOf(">Candidate<") < html.indexOf(">Current<"));
+  assert.match(html, /settings-input research-recap-instructions/);
+  assert.match(html, /launcher-select-trigger/);
+  assert.match(html, /settings-input research-recap-control/);
+  assert.doesNotMatch(html, /<datalist/);
+  assert.match(html, /<hr class="research-recap-comparison-divider"/);
+  assert.match(html, /Generate a new summary first\./);
+  assert.ok(html.indexOf("Generate candidate") < html.indexOf(">Candidate<"));
 });
