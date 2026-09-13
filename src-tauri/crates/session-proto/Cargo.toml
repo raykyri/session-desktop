@@ -1,6 +1,6 @@
 [package]
 name = "session-proto"
-version = "0.3.3"
+version = "0.4.0"
 description = "Wire types for the session control protocol."
 license = "MIT"
 edition = "2024"
