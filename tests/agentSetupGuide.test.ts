@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   adapterSetupIsComplete,
   agentSetupIntro,
+  agentSetupStatusLabel,
   agentSetupSteps,
 } from "../src/lib/agentSetup";
 import type { AgentAdapterMetadata } from "../src/types";
@@ -79,4 +80,24 @@ test("probe errors ask the user to resolve the reported issue", () => {
   assert.equal(steps[1].title, "Resolve the reported issue");
   assert.equal(steps[1].hint, "The version check failed.");
   assert.equal(steps.some(({ title }) => title === "Sign in"), false);
+});
+
+test("an installed agent is not signed in until a probe has checked it", () => {
+  const unchecked = adapter("claude", "ready");
+  const steps = agentSetupSteps(unchecked);
+
+  assert.equal(adapterSetupIsComplete(unchecked), false);
+  assert.equal(agentSetupIntro([unchecked]).heading, "Set up an agent");
+  assert.equal(agentSetupStatusLabel(unchecked), "Not checked");
+  assert.deepEqual(steps[0], { title: "Install the CLI", done: true, command: null, hint: null });
+  assert.equal(steps[1].title, "Sign in");
+  assert.equal(steps[1].done, false);
+  assert.equal(steps[1].command, null);
+  assert.match(steps[1].hint ?? "", /Refresh status/);
+
+  const checked = { ...unchecked, checkedAt: 1_700_000_000_000, auth: "authenticated" as const };
+  assert.equal(adapterSetupIsComplete(checked), true);
+  assert.equal(agentSetupStatusLabel(checked), "Signed in");
+  assert.equal(agentSetupSteps(checked)[1].done, true);
+  assert.equal(agentSetupIntro([checked]).heading, "1 of 1 agents ready");
 });

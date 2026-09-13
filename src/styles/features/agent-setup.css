@@ -132,6 +132,10 @@
   white-space: nowrap;
 }
 
+.agent-setup-status.is-unchecked {
+  color: var(--text-muted);
+}
+
 .agent-setup-status.is-missing,
 .agent-setup-status.is-needsAuth,
 .agent-setup-status.is-unsupportedVersion,

@@ -2,11 +2,12 @@ import { useId, useState } from "react";
 import { Check, Copy, ExternalLink, RefreshCw } from "lucide-react";
 import type { AgentAdapterMetadata } from "../types";
 import { ADAPTER_ICON_BY_ID, adapterIconClassName } from "../lib/adapterIcons";
-import { adapterReadinessLabel } from "../lib/adapterReadiness";
 import {
   adapterNeedsUpdate,
   adapterSetupIsComplete,
+  adapterStatusChecked,
   agentSetupIntro,
+  agentSetupStatusLabel,
   agentSetupSteps,
 } from "../lib/agentSetup";
 import { openExternalUrl } from "../lib/api";
@@ -150,12 +151,14 @@ export default function AgentSetupGuide({
               <h4>{selected.label}</h4>
               <span
                 className={`agent-setup-status is-${
-                  adapterNeedsUpdate(selected) ? "unsupportedVersion" : selected.readiness
+                  adapterNeedsUpdate(selected)
+                    ? "unsupportedVersion"
+                    : adapterStatusChecked(selected)
+                      ? selected.readiness
+                      : "unchecked"
                 }`}
               >
-                {adapterNeedsUpdate(selected)
-                  ? "Needs update"
-                  : adapterReadinessLabel(selected)}
+                {agentSetupStatusLabel(selected)}
               </span>
             </div>
             <ol className="agent-setup-steps">

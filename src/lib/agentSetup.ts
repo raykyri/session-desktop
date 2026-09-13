@@ -1,4 +1,4 @@
-import { adapterIsReady } from "./adapterReadiness";
+import { adapterIsReady, adapterReadinessLabel } from "./adapterReadiness";
 import type { AgentAdapterMetadata } from "../types";
 
 export interface AgentSetupStep {
@@ -15,14 +15,30 @@ export function adapterNeedsUpdate(adapter: AgentAdapterMetadata) {
   );
 }
 
+/** Returns true if the adapter has been verified by a status probe. */
+export function adapterStatusChecked(adapter: AgentAdapterMetadata) {
+  return adapter.checkedAt !== null;
+}
+
 export function adapterSetupIsComplete(adapter: AgentAdapterMetadata) {
-  return adapterIsReady(adapter) && !adapterNeedsUpdate(adapter);
+  return adapterStatusChecked(adapter) && adapterIsReady(adapter) && !adapterNeedsUpdate(adapter);
+}
+
+export function agentSetupStatusLabel(adapter: AgentAdapterMetadata) {
+  if (adapterNeedsUpdate(adapter)) {
+    return "Needs update";
+  }
+  if (adapterIsReady(adapter) && !adapterStatusChecked(adapter)) {
+    return "Not checked";
+  }
+  return adapterReadinessLabel(adapter);
 }
 
 export function agentSetupSteps(adapter: AgentAdapterMetadata): AgentSetupStep[] {
   const installed = adapter.readiness !== "missing";
   const needsUpdate = adapterNeedsUpdate(adapter);
   const ready = adapterSetupIsComplete(adapter);
+  const unchecked = installed && !needsUpdate && adapterIsReady(adapter) && !ready;
   const installStep: AgentSetupStep =
     installed && needsUpdate
       ? {
@@ -45,15 +61,22 @@ export function agentSetupSteps(adapter: AgentAdapterMetadata): AgentSetupStep[]
           command: null,
           hint: adapter.message,
         }
-      : {
-          title: "Sign in",
-          done: ready,
-          command: installed && !needsUpdate && !ready ? adapter.loginCommand : null,
-          hint:
-            installed && !needsUpdate && !ready && adapter.readiness !== "needsAuth"
-              ? adapter.message
-              : null,
-        };
+      : unchecked
+        ? {
+            title: "Sign in",
+            done: false,
+            command: null,
+            hint: "Sign-in has not been checked yet. Refresh status to verify it.",
+          }
+        : {
+            title: "Sign in",
+            done: ready,
+            command: installed && !needsUpdate && !ready ? adapter.loginCommand : null,
+            hint:
+              installed && !needsUpdate && !ready && adapter.readiness !== "needsAuth"
+                ? adapter.message
+                : null,
+          };
   const checkStep: AgentSetupStep = {
     title: "Refresh status",
     done: false,
