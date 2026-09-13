@@ -43,7 +43,7 @@ export type RecentActivityEvent = ActivityEvent<RecentActivitySource>;
 export function recentResearchQueryFromNode(
   node: import("../types").ResearchNode,
 ): RecentResearchQuery | null {
-  if (node.kind && node.kind !== "run") return null;
+  if ((node.kind && node.kind !== "run") || node.parentNodeId) return null;
   return {
     nodeId: node.id,
     treeId: node.treeId,

@@ -120,7 +120,7 @@ test("mixed activity sorts deterministically and malformed saved dates last", ()
   );
 });
 
-test("run nodes enter history at every depth while documents do not", () => {
+test("only top-level run nodes enter the Home feed", () => {
   const node = {
     id: "root",
     treeId: tree.id,
@@ -134,6 +134,7 @@ test("run nodes enter history at every depth while documents do not", () => {
     highlights: [],
   } satisfies ResearchNode;
   assert.equal(recentResearchQueryFromNode(node)?.nodeId, "root");
+  assert.equal(recentResearchQueryFromNode({ ...node, parentNodeId: "root" }), null);
   assert.equal(recentResearchQueryFromNode({ ...node, kind: "document" }), null);
   assert.deepEqual(
     upsertRecentResearchQuery([query], { ...query, status: "failed" }),

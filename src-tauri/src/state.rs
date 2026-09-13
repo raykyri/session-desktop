@@ -4133,14 +4133,15 @@ impl AppState {
                     })
             })
             .chain(model.research_nodes.values().filter_map(|node| {
-                (node.kind.is_run() && model.research_trees.contains_key(&node.tree_id)).then_some(
-                    Candidate {
-                        occurred_at: node.created_at,
-                        source_rank: RESEARCH_ACTIVITY_SOURCE_RANK,
-                        id: &node.id,
-                        payload: ActivityPayload::Research(node),
-                    },
-                )
+                (node.kind.is_run()
+                    && node.parent_node_id.is_none()
+                    && model.research_trees.contains_key(&node.tree_id))
+                .then_some(Candidate {
+                    occurred_at: node.created_at,
+                    source_rank: RESEARCH_ACTIVITY_SOURCE_RANK,
+                    id: &node.id,
+                    payload: ActivityPayload::Research(node),
+                })
             }))
             .filter(|candidate| {
                 before
@@ -13095,12 +13096,21 @@ mod tests {
         let root_id = detail.tree.root_node_id;
         {
             let mut model = state.inner.model.lock().unwrap();
-            let root = model.research_nodes.get_mut(&root_id).unwrap();
-            root.created_at = 200;
+            let root = {
+                let root = model.research_nodes.get_mut(&root_id).unwrap();
+                root.created_at = 200;
+                root.clone()
+            };
             let mut older = root.clone();
             older.id = "older-query".to_string();
             older.created_at = 100;
             model.research_nodes.insert(older.id.clone(), older);
+
+            let mut reply = root.clone();
+            reply.id = "reply-query".to_string();
+            reply.parent_node_id = Some(root_id.clone());
+            reply.created_at = 300;
+            model.research_nodes.insert(reply.id.clone(), reply);
         }
         state
             .set_journal(journal::JournalState {
