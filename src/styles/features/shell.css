@@ -2311,11 +2311,6 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   box-shadow: inset 0 0 0 1px var(--focus-ring);
 }
 
-.settings-number-input {
-  color-scheme: dark;
-  font-variant-numeric: tabular-nums;
-}
-
 /* The research-instructions row: multi-line text against a top-aligned label. */
 .settings-research-instructions-row {
   align-items: flex-start;
