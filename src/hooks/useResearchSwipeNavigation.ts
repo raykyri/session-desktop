@@ -1,7 +1,30 @@
 import { useEffect, useRef, type RefObject } from "react";
-import { researchSwipeDirection } from "../lib/researchHistory";
+import {
+  researchSwipeDirection,
+  researchSwipeTailCapturesWheel,
+} from "../lib/researchHistory";
 
 const RESEARCH_SWIPE_IDLE_MS = 180;
+
+// Prevent residual swipe momentum from triggering a second navigation when the
+// scroller element swaps mid-gesture.
+let gestureNavigated = false;
+let gestureIdleTimer: number | null = null;
+
+function extendNavigatedGesture() {
+  if (gestureIdleTimer !== null) {
+    window.clearTimeout(gestureIdleTimer);
+  }
+  gestureIdleTimer = window.setTimeout(() => {
+    gestureIdleTimer = null;
+    gestureNavigated = false;
+  }, RESEARCH_SWIPE_IDLE_MS);
+}
+
+function holdNavigatedGesture() {
+  gestureNavigated = true;
+  extendNavigatedGesture();
+}
 
 function horizontalScrollerConsumesWheel(
   target: EventTarget | null,
@@ -26,9 +49,7 @@ function horizontalScrollerConsumesWheel(
   return false;
 }
 
-/** Adds browser-style back/forward trackpad gestures to a research scroller.
- * One physical gesture navigates at most once, momentum stays captured until
- * idle, and nested horizontal scrollers retain gestures they can consume. */
+/** Adds trackpad back/forward navigation gestures to a research scroller. */
 export function useResearchSwipeNavigation(
   targetRef: RefObject<HTMLElement | null>,
   onBack: (() => void) | undefined,
@@ -47,7 +68,6 @@ export function useResearchSwipeNavigation(
     }
     let accumulatedX = 0;
     let accumulatedY = 0;
-    let navigated = false;
     let blockedByScroller = false;
     let resetTimer: number | null = null;
     const resetGesture = () => {
@@ -56,7 +76,6 @@ export function useResearchSwipeNavigation(
       }
       accumulatedX = 0;
       accumulatedY = 0;
-      navigated = false;
       blockedByScroller = false;
       resetTimer = null;
     };
@@ -92,22 +111,23 @@ export function useResearchSwipeNavigation(
         scheduleReset();
         return;
       }
-      scheduleReset();
-      accumulatedX += deltaX;
-      accumulatedY += deltaY;
-      const horizontalIntent = Math.abs(accumulatedX) > Math.abs(accumulatedY) * 1.25;
-      if (navigated) {
-        if (horizontalIntent) {
+      // Consume residual horizontal momentum from the completed swipe.
+      if (gestureNavigated) {
+        extendNavigatedGesture();
+        if (researchSwipeTailCapturesWheel(deltaX, deltaY)) {
           event.preventDefault();
         }
         return;
       }
+      scheduleReset();
+      accumulatedX += deltaX;
+      accumulatedY += deltaY;
       const direction = researchSwipeDirection(accumulatedX, accumulatedY);
       if (direction === 0) {
         return;
       }
       event.preventDefault();
-      navigated = true;
+      holdNavigatedGesture();
       if (direction < 0) {
         onBackRef.current?.();
       } else {
