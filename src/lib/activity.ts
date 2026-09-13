@@ -219,6 +219,9 @@ export function buildRecentActivityFromItems(
 ): RecentActivityEvent[] {
   const treeById = new Map(trees.map((tree) => [tree.id, tree]));
   return items
+    .filter((item) =>
+      item.kind === "journal" || treeById.get(item.query.treeId)?.archivedAt == null,
+    )
     .map((item) =>
       item.kind === "journal"
         ? activityEventFromJournalEntry(item.entry)
