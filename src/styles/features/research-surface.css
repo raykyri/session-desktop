@@ -249,6 +249,8 @@
 }
 
 .journal-tweet-author {
+  color: inherit;
+  text-decoration: none;
   /* The display name gives way first: a truncated name still reads, while a
      truncated handle stops identifying anyone. */
   flex: 0 8 auto;
@@ -260,7 +262,7 @@
   text-overflow: ellipsis;
 }
 
-.journal-tweet-who:hover .journal-tweet-author {
+a.journal-tweet-author:hover {
   text-decoration: underline;
 }
 
@@ -557,6 +559,12 @@ a.journal-tweet-more:hover {
   padding: 12px 14px 11px;
   border: 1px solid var(--surface-border-default);
   border-radius: 12px;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.research-message-attachment:hover {
+  border-color: var(--surface-border-overlay-strong);
+  background-color: color-mix(in srgb, var(--surface-fill-hover) 25%, transparent);
 }
 
 .research-message-attachment + .research-message-attachment {

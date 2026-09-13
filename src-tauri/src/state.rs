@@ -4169,6 +4169,16 @@ impl AppState {
                 id: last.id.to_string(),
             }
         });
+        let mut children_by_parent: HashMap<&str, Vec<&ResearchNode>> = HashMap::new();
+        for node in model
+            .research_nodes
+            .values()
+            .filter(|node| node.kind.is_run())
+        {
+            if let Some(parent_id) = node.parent_node_id.as_deref() {
+                children_by_parent.entry(parent_id).or_default().push(node);
+            }
+        }
         let items = candidates
             .into_iter()
             .map(|candidate| match candidate.payload {
@@ -4176,10 +4186,25 @@ impl AppState {
                     occurred_at: candidate.occurred_at,
                     entry: entry.clone(),
                 },
-                ActivityPayload::Research(node) => RecentActivityItem::ResearchQuery {
-                    occurred_at: candidate.occurred_at,
-                    query: RecentResearchQuery::from(node),
-                },
+                ActivityPayload::Research(node) => {
+                    let mut query = RecentResearchQuery::from(node);
+                    query.children = children_by_parent
+                        .remove(node.id.as_str())
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter(|child| child.tree_id == node.tree_id)
+                        .map(RecentResearchQuery::from)
+                        .collect();
+                    query.children.sort_by(|left, right| {
+                        left.created_at
+                            .cmp(&right.created_at)
+                            .then_with(|| left.node_id.cmp(&right.node_id))
+                    });
+                    RecentActivityItem::ResearchQuery {
+                        occurred_at: candidate.occurred_at,
+                        query,
+                    }
+                }
             })
             .collect();
         Ok(RecentActivityPage { items, next_cursor })
@@ -13084,6 +13109,12 @@ mod tests {
             reply.id = "reply-query".to_string();
             reply.parent_node_id = Some(root_id.clone());
             reply.created_at = 300;
+            let mut grandchild = reply.clone();
+            grandchild.id = "grandchild-query".to_string();
+            grandchild.parent_node_id = Some(reply.id.clone());
+            model
+                .research_nodes
+                .insert(grandchild.id.clone(), grandchild);
             model.research_nodes.insert(reply.id.clone(), reply);
         }
         state
@@ -13105,6 +13136,12 @@ mod tests {
             RecentActivityItem::ResearchQuery { query, .. } => query.node_id.clone(),
         };
         let first = state.list_recent_activity(2, None).unwrap();
+        let RecentActivityItem::ResearchQuery { query, .. } = &first.items[1] else {
+            panic!("expected root question");
+        };
+        assert_eq!(query.children.len(), 1);
+        assert_eq!(query.children[0].node_id, "reply-query");
+        assert!(query.children[0].children.is_empty());
         assert_eq!(
             first.items.iter().map(item_id).collect::<Vec<_>>(),
             vec!["new-link".to_string(), root_id]

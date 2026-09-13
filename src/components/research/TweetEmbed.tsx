@@ -318,15 +318,17 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
       </a>
       <div className="journal-tweet-main">
         <div className="journal-tweet-head">
-          <a
-            className="journal-tweet-who"
-            href={authorUrl}
-            onClick={externalLinkClick(authorUrl)}
-          >
-            <span className="journal-tweet-author">{tweet.author.name}</span>
+          <div className="journal-tweet-who">
+            <a
+              className="journal-tweet-author"
+              href={authorUrl}
+              onClick={externalLinkClick(authorUrl)}
+            >
+              {tweet.author.name}
+            </a>
             {tweet.author.verified ? <VerifiedBadge /> : null}
             <span className="journal-tweet-handle">@{tweet.author.handle}</span>
-          </a>
+          </div>
           {age ? (
             <>
               <span className="journal-tweet-dot" aria-hidden="true">
@@ -374,7 +376,7 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
               void openExternalUrl(quoted.url);
             }}
             onKeyDown={(event) => {
-              if (event.key === "Enter") {
+              if (event.target === event.currentTarget && event.key === "Enter") {
                 event.preventDefault();
                 event.stopPropagation();
                 void openExternalUrl(quoted.url);
@@ -388,7 +390,13 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
                 avatarUrl={quoted.author.avatarUrl}
                 size={18}
               />
-              <span className="journal-tweet-author">{quoted.author.name}</span>
+              <a
+                className="journal-tweet-author"
+                href={`https://x.com/${quoted.author.handle}`}
+                onClick={externalLinkClick(`https://x.com/${quoted.author.handle}`)}
+              >
+                {quoted.author.name}
+              </a>
               {quoted.author.verified ? <VerifiedBadge /> : null}
               <span className="journal-tweet-handle">@{quoted.author.handle}</span>
             </div>

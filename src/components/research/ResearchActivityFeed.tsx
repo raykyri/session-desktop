@@ -277,33 +277,17 @@ export function ResearchQueryCard({
   query,
   onOpen,
   onContextMenu,
+  onOpenChild,
 }: {
   query: RecentResearchQuery;
   onOpen: () => void;
   onContextMenu: (clientX: number, clientY: number) => void;
+  onOpenChild?: (query: RecentResearchQuery) => void;
 }) {
   const recap = query.recap?.trim() ?? "";
   return (
     <div
       className="recent-query-block"
-      role="button"
-      tabIndex={0}
-      onClick={(event) => {
-        if (isMarkdownInteractiveTarget(event.target)) {
-          return;
-        }
-        onOpen();
-      }}
-      onKeyDown={(event) => {
-        if (event.key !== "Enter" && event.key !== " ") {
-          return;
-        }
-        if (event.target !== event.currentTarget) {
-          return;
-        }
-        event.preventDefault();
-        onOpen();
-      }}
       onContextMenu={(event) => {
         if (event.defaultPrevented) {
           return;
@@ -314,8 +298,51 @@ export function ResearchQueryCard({
       }}
     >
       <ResearchUserMessage as="article" className="recent-query-card research-prompt">
-        <ResearchMessageBody prompt={query.prompt} attachments={query.attachments} />
+        <ResearchMessageBody
+          prompt={query.prompt}
+          attachments={query.attachments}
+          renderPrompt={(content) => (
+            <div
+              className="recent-query-question-link"
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
+                if (!isMarkdownInteractiveTarget(event.target)) onOpen();
+              }}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                onOpen();
+              }}
+            >
+              {content}
+            </div>
+          )}
+        />
       </ResearchUserMessage>
+      {query.children?.length && onOpenChild ? (
+        <ul
+          className="recent-query-children"
+          aria-label="Follow-up questions"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {query.children.map((child) => (
+            <li key={child.nodeId} className="recent-query-child">
+              <button
+                type="button"
+                className="control-button recent-query-child-link"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenChild(child);
+                }}
+              >
+                {child.prompt}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {isActiveResearchStatus(query.status) ? (
         <span
           className="recent-query-spinner"
@@ -1094,6 +1121,7 @@ function ResearchActivityFeed({
                       ) : (
                         <ResearchQueryCard
                           query={row.event.source.query}
+                          onOpenChild={onOpenResearchQuery}
                           onOpen={() => {
                             const query = row.event.source;
                             if (query.kind === "research-query") {
