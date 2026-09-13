@@ -156,6 +156,38 @@ export function researchWorkspaceHistoryForward(
   return { history: { entries: history.entries, index }, visit: history.entries[index] };
 }
 
+/** Removes document visits that match the filter predicate while preserving the current visit.
+ * Collapses adjacent duplicate entries and updates the active index. */
+export function pruneResearchWorkspaceHistory(
+  history: ResearchWorkspaceHistory,
+  keepTree: (treeId: string) => boolean,
+): ResearchWorkspaceHistory {
+  const entries: ResearchWorkspaceVisit[] = [];
+  let index = -1;
+  for (let visit = 0; visit < history.entries.length; visit += 1) {
+    const entry = history.entries[visit];
+    const current = visit === history.index;
+    if (entry.kind === "document" && !current && !keepTree(entry.treeId)) {
+      continue;
+    }
+    const previous = entries[entries.length - 1];
+    if (previous && sameResearchWorkspaceVisit(previous, entry)) {
+      if (current) {
+        index = entries.length - 1;
+      }
+      continue;
+    }
+    entries.push(entry);
+    if (visit <= history.index) {
+      index = entries.length - 1;
+    }
+  }
+  if (entries.length === history.entries.length && index === history.index) {
+    return history;
+  }
+  return { entries, index };
+}
+
 /** Removes visits to nodes that no longer exist while keeping the cursor on
  * the same surviving visit whenever possible. Visits that become adjacent
  * duplicates are collapsed: stepping between two entries for the same node

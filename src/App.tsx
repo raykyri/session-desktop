@@ -280,6 +280,7 @@ import {
 import {
   canGoWorkspaceBack,
   canGoWorkspaceForward,
+  pruneResearchWorkspaceHistory,
   pushResearchWorkspaceHistory,
   researchWorkspaceHistoryBack,
   researchWorkspaceHistoryForward,
@@ -5578,6 +5579,26 @@ function MainApp() {
     setResearchTrees((current) => clearResearchTreeAttention(current, treeId));
     setArchivedResearchTrees((current) => clearResearchTreeAttention(current, treeId));
   }, []);
+  // Records a Home visit in workspace history so Back navigation returns here.
+  const recordResearchJournalVisit = useCallback(() => {
+    const treeId = activeResearchTreeIdRef.current;
+    setResearchWorkspaceHistory((current) => {
+      const withDocument = treeId
+        ? pushResearchWorkspaceHistory(current, { kind: "document", treeId })
+        : current;
+      const next = pushResearchWorkspaceHistory(withDocument, { kind: "journal" });
+      researchWorkspaceHistoryRef.current = next;
+      return next;
+    });
+  }, []);
+  // Prunes unreachable document visits while preserving the current view.
+  const pruneResearchWorkspaceVisits = useCallback((keepTree: (treeId: string) => boolean) => {
+    setResearchWorkspaceHistory((current) => {
+      const next = pruneResearchWorkspaceHistory(current, keepTree);
+      researchWorkspaceHistoryRef.current = next;
+      return next;
+    });
+  }, []);
   const refreshResearchNavigation = useCallback(async (
     options: { resetLoadedTail?: boolean } = {},
   ): Promise<ResearchTreeSummary[] | null> => {
@@ -5665,6 +5686,9 @@ function MainApp() {
       // Navigation restoration state for trees that no longer exist would
       // otherwise accumulate in localStorage forever.
       pruneResearchNavigation(trees.map((tree) => tree.id));
+      // Prune deleted trees from history.
+      const knownTreeIds = new Set(trees.map((tree) => tree.id));
+      pruneResearchWorkspaceVisits((id) => knownTreeIds.has(id));
       // Folder membership is deliberately NOT pruned here. This list can be
       // transiently empty or partial (a racing refresh, or a backend that
       // recovered from a corrupt/partial state.json), and pruning against it —
@@ -5677,7 +5701,7 @@ function MainApp() {
     } finally {
       researchNavRefreshInFlightRef.current -= 1;
     }
-  }, []);
+  }, [pruneResearchWorkspaceVisits]);
   const applyResearchTreeOrder = useCallback(
     (archived: boolean, workspaceId: string, orderedTreeIds: string[]) => {
       const current = archived
@@ -5957,6 +5981,7 @@ function MainApp() {
     }
   }, [selectResearchTree]);
   const focusResearchHome = useCallback(() => {
+    recordResearchJournalVisit();
     // Invalidate a tree request that may still be landing while Home is
     // selected; otherwise its detail can repaint behind the launcher.
     researchDetailRequestSeqRef.current += 1;
@@ -5971,7 +5996,7 @@ function MainApp() {
     setActiveResearchDetail(null);
     setActiveResearchDetailError(null);
     localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
-  }, [showResearchSurface, setJournalOpen]);
+  }, [recordResearchJournalVisit, showResearchSurface, setJournalOpen]);
   // Brings the Journal page forward on the research surface. Tree selection is
   // left standing (the journal outranks the document in the stage selector),
   // so closing the journal by picking a tree is a plain selection.
@@ -5993,17 +6018,9 @@ function MainApp() {
     setJournalOpen(true);
   }, [showResearchSurface, setJournalOpen]);
   const openJournal = useCallback(() => {
-    const treeId = activeResearchTreeIdRef.current;
-    setResearchWorkspaceHistory((current) => {
-      const withDocument = treeId
-        ? pushResearchWorkspaceHistory(current, { kind: "document", treeId })
-        : current;
-      const next = pushResearchWorkspaceHistory(withDocument, { kind: "journal" });
-      researchWorkspaceHistoryRef.current = next;
-      return next;
-    });
+    recordResearchJournalVisit();
     showJournal();
-  }, [showJournal]);
+  }, [recordResearchJournalVisit, showJournal]);
   const applyResearchWorkspaceVisit = useCallback(
     (visit: ResearchWorkspaceVisit) => {
       if (visit.kind === "journal") {
@@ -6583,6 +6600,9 @@ function MainApp() {
           scheduleResearchRefresh({
             resetLoadedTail: event.type === "research.tree.restored",
           });
+          if (event.type === "research.tree.archived") {
+            pruneResearchWorkspaceVisits((id) => id !== event.tree.id);
+          }
           break;
         }
         case "research.highlight.created": {
@@ -6701,6 +6721,7 @@ function MainApp() {
           if (activeResearchTreeIdRef.current === event.treeId) {
             focusResearchHome();
           }
+          pruneResearchWorkspaceVisits((id) => id !== event.treeId);
           break;
         }
       }
@@ -6708,6 +6729,7 @@ function MainApp() {
     [
       commitResearchFolderState,
       focusResearchHome,
+      pruneResearchWorkspaceVisits,
       scheduleResearchRefresh,
       scheduleResearchNavigationRecovery,
       scheduleResearchTreeRecovery,
@@ -6913,16 +6935,17 @@ function MainApp() {
             treeId,
           );
           if (nextTree) {
-            await selectResearchTree(nextTree.id);
+            navigateToResearchDocument(nextTree.id);
           } else {
             focusResearchHome();
           }
         }
+        pruneResearchWorkspaceVisits((id) => id !== treeId);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
     },
-    [focusResearchHome, researchTrees, selectResearchTree],
+    [focusResearchHome, navigateToResearchDocument, pruneResearchWorkspaceVisits, researchTrees],
   );
   const restoreResearchTreeFromSidebar = useCallback(
     async (treeId: string) => {
@@ -6954,13 +6977,19 @@ function MainApp() {
           treeId,
         );
         if (nextTree) {
-          await selectResearchTree(nextTree.id);
+          navigateToResearchDocument(nextTree.id);
         } else {
           focusResearchHome();
         }
       }
+      pruneResearchWorkspaceVisits((id) => id !== treeId);
     },
-    [commitResearchFolderState, focusResearchHome, selectResearchTree],
+    [
+      commitResearchFolderState,
+      focusResearchHome,
+      navigateToResearchDocument,
+      pruneResearchWorkspaceVisits,
+    ],
   );
   const removeResearchTreeFromSidebar = useCallback(
     async (treeId: string) => {
@@ -7096,11 +7125,13 @@ function MainApp() {
         if (members.some((tree) => tree.id === activeResearchTreeIdRef.current)) {
           focusResearchHome();
         }
+        const archivedIds = new Set(members.map((tree) => tree.id));
+        pruneResearchWorkspaceVisits((id) => !archivedIds.has(id));
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
     },
-    [focusResearchHome, researchFolderLiveMembers],
+    [focusResearchHome, pruneResearchWorkspaceVisits, researchFolderLiveMembers],
   );
   const deleteResearchFolderFromSidebar = useCallback(
     async (folderId: string) => {
@@ -7119,11 +7150,12 @@ function MainApp() {
             researchScopeRef.current,
           ).find((tree) => !memberIds.has(tree.id)) ?? null;
         if (nextTree) {
-          await selectResearchTree(nextTree.id);
+          navigateToResearchDocument(nextTree.id);
         } else {
           focusResearchHome();
         }
       }
+      pruneResearchWorkspaceVisits((id) => !memberIds.has(id));
       const deleted: string[] = [];
       try {
         for (const tree of members) {
@@ -7150,8 +7182,9 @@ function MainApp() {
     [
       commitResearchFolderState,
       focusResearchHome,
+      navigateToResearchDocument,
+      pruneResearchWorkspaceVisits,
       researchFolderLiveMembers,
-      selectResearchTree,
     ],
   );
   const createResearchFollowup = useCallback(
@@ -7943,11 +7976,12 @@ function MainApp() {
         activeTreeWasRemoved ? null : activeTreeId,
       );
       if (nextTree) {
-        await selectResearchTree(nextTree.id);
+        navigateToResearchDocument(nextTree.id);
       } else {
         focusResearchHome();
       }
     }
+    pruneResearchWorkspaceVisits((id) => !detachedTreeIds.has(id));
     void refreshResearchNavigation().catch(() => undefined);
   }
 
