@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { LauncherSelect } from "../LauncherSelect";
 import {
   applyResearchRecapCandidate,
   generateResearchRecapCandidate,
@@ -15,6 +17,157 @@ import type {
 } from "../../types";
 
 const MAX_INSTRUCTIONS = 4_000;
+
+function SuggestedModelInput({
+  value,
+  suggestions,
+  disabled,
+  onChange,
+}: {
+  value: string;
+  suggestions: string[];
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
+  const matchingSuggestions = useMemo(() => {
+    const query = value.trim().toLowerCase();
+    return suggestions.filter((suggestion) => !query || suggestion.toLowerCase().includes(query));
+  }, [suggestions, value]);
+
+  const openSuggestions = () => {
+    if (disabled || suggestions.length === 0) {
+      return;
+    }
+    const rect = inputRef.current?.getBoundingClientRect();
+    if (rect) {
+      setAnchor({ left: rect.left, top: rect.bottom + 6, width: rect.width });
+    }
+    setActiveIndex(0);
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const close = (event: globalThis.MouseEvent) => {
+      const target = event.target as Node;
+      if (!inputRef.current?.contains(target) && !popoverRef.current?.contains(target)) {
+        setOpen(false);
+      }
+    };
+    const closeOnReflow = () => setOpen(false);
+    document.addEventListener("mousedown", close);
+    window.addEventListener("resize", closeOnReflow);
+    window.addEventListener("scroll", closeOnReflow, true);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      window.removeEventListener("resize", closeOnReflow);
+      window.removeEventListener("scroll", closeOnReflow, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (disabled) {
+      setOpen(false);
+    }
+  }, [disabled]);
+
+  const choose = (suggestion: string) => {
+    onChange(suggestion);
+    setOpen(false);
+    window.requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        className="settings-input research-recap-control"
+        value={value}
+        placeholder="Agent default"
+        maxLength={256}
+        disabled={disabled}
+        role="combobox"
+        aria-label="Model"
+        aria-expanded={open && matchingSuggestions.length > 0}
+        aria-controls="research-recap-model-options"
+        aria-autocomplete="list"
+        onFocus={openSuggestions}
+        onClick={openSuggestions}
+        onChange={(event) => {
+          onChange(event.currentTarget.value);
+          openSuggestions();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setOpen(false);
+            return;
+          }
+          if (event.key === "Tab") {
+            setOpen(false);
+            return;
+          }
+          if (matchingSuggestions.length === 0) {
+            return;
+          }
+          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+            event.preventDefault();
+            if (!open) {
+              openSuggestions();
+              return;
+            }
+            const delta = event.key === "ArrowDown" ? 1 : -1;
+            setActiveIndex(
+              (index) =>
+                (index + delta + matchingSuggestions.length) % matchingSuggestions.length,
+            );
+            return;
+          }
+          if (event.key === "Enter" && open) {
+            event.preventDefault();
+            choose(matchingSuggestions[activeIndex] ?? matchingSuggestions[0]);
+          }
+        }}
+      />
+      {open && anchor && matchingSuggestions.length > 0
+        ? createPortal(
+            <div
+              ref={popoverRef}
+              id="research-recap-model-options"
+              className="popover-surface launcher-select-popover research-recap-model-suggestions"
+              role="listbox"
+              aria-label="Suggested models"
+              style={{ left: anchor.left, top: anchor.top, width: anchor.width }}
+            >
+              {matchingSuggestions.map((suggestion, index) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  role="option"
+                  aria-selected={index === activeIndex}
+                  className={`menu-item launcher-select-item${
+                    index === activeIndex ? " is-selected" : ""
+                  }`}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onClick={() => choose(suggestion)}
+                >
+                  <span className="launcher-select-item-label">{suggestion}</span>
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
 
 interface ResearchRecapDialogProps {
   content: ResearchNodeContent;
@@ -187,73 +340,65 @@ export default function ResearchRecapDialog({
         aria-labelledby="research-recap-dialog-title"
       >
         <header className="research-recap-dialog-header">
-          <div>
-            <h2 id="research-recap-dialog-title">Regenerate summary</h2>
-            <p>The current summary stays unchanged until you apply a candidate.</p>
-          </div>
+          <h2 id="research-recap-dialog-title">Generate summary</h2>
           <button
             className="control-button"
             type="button"
             disabled={applying}
             onClick={onClose}
-            aria-label="Close summary regeneration"
+            aria-label="Close summary generation"
           >
             <X size={14} aria-hidden="true" />
           </button>
         </header>
 
-        <label className="confirm-dialog-field-label" htmlFor="research-recap-instructions">
-          Instructions
+        <label
+          className="confirm-dialog-field-label research-recap-instructions-field"
+          htmlFor="research-recap-instructions"
+        >
+          <span>Instructions</span>
+          <textarea
+            ref={textareaRef}
+            id="research-recap-instructions"
+            className="settings-input research-recap-instructions"
+            value={instructions}
+            maxLength={MAX_INSTRUCTIONS}
+            disabled={loadingOptions || generating || applying}
+            onChange={(event) => {
+              setInstructions(event.currentTarget.value);
+              clearCandidate();
+            }}
+          />
         </label>
-        <textarea
-          ref={textareaRef}
-          id="research-recap-instructions"
-          className="research-recap-instructions"
-          value={instructions}
-          maxLength={MAX_INSTRUCTIONS}
-          disabled={loadingOptions || generating || applying}
-          onChange={(event) => {
-            setInstructions(event.currentTarget.value);
-            clearCandidate();
-          }}
-        />
         <div className="research-recap-dialog-controls">
           <label>
             <span>Agent</span>
-            <select
+            <LauncherSelect
               value={adapter}
+              options={adapters.map((candidateAdapter) => ({
+                value: candidateAdapter.id,
+                label: candidateAdapter.label,
+              }))}
+              ariaLabel="Agent"
               disabled={loadingOptions || generating || applying || adapters.length === 0}
-              onChange={(event) => {
-                setAdapter(event.currentTarget.value);
+              onChange={(value) => {
+                setAdapter(value);
                 setModel("");
                 clearCandidate();
               }}
-            >
-              {adapters.map((candidateAdapter) => (
-                <option key={candidateAdapter.instanceId} value={candidateAdapter.id}>
-                  {candidateAdapter.label}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           <label>
             <span>Model</span>
-            <input
+            <SuggestedModelInput
               value={model}
-              list="research-recap-model-options"
-              placeholder="Agent default"
-              maxLength={256}
+              suggestions={modelPresets}
               disabled={loadingOptions || generating || applying || !adapter}
-              onChange={(event) => {
-                setModel(event.currentTarget.value);
+              onChange={(value) => {
+                setModel(value);
                 clearCandidate();
               }}
             />
-            <datalist id="research-recap-model-options">
-              {modelPresets.map((preset) => (
-                <option key={preset} value={preset} />
-              ))}
-            </datalist>
           </label>
         </div>
 
@@ -268,37 +413,7 @@ export default function ResearchRecapDialog({
           </p>
         ) : null}
 
-        <div className="research-recap-comparison">
-          <section>
-            <h3>Current</h3>
-            <p>{baseline.recap?.text}</p>
-          </section>
-          <section className={candidate ? "has-candidate" : "is-empty"}>
-            <h3>Candidate</h3>
-            {generating ? (
-              <p className="research-recap-dialog-status">
-                <LoaderCircle
-                  className="confirm-dialog-action-spinner"
-                  size={14}
-                  aria-hidden="true"
-                />
-                Generating with {selectedAdapter?.label ?? "agent"}…
-              </p>
-            ) : candidate ? (
-              <p>{candidate.text}</p>
-            ) : (
-              <p>Generate a candidate to compare it with the current summary.</p>
-            )}
-          </section>
-        </div>
-
-        {error ? (
-          <p className="confirm-dialog-error" role="alert">
-            {error}
-          </p>
-        ) : null}
-
-        <div className="confirm-dialog-actions">
+        <div className="confirm-dialog-actions research-recap-generation-actions">
           <button className="control-button" type="button" disabled={applying} onClick={onClose}>
             Cancel
           </button>
@@ -312,7 +427,41 @@ export default function ResearchRecapDialog({
           >
             {generating ? "Generating…" : candidate ? "Generate again" : "Generate candidate"}
           </button>
-          {candidate ? (
+        </div>
+
+        <div className="research-recap-comparison">
+          <hr className="research-recap-comparison-divider" />
+          <section className={candidate ? "research-recap-candidate" : "is-empty"}>
+            <h3>Candidate</h3>
+            {generating ? (
+              <p className="research-recap-dialog-status">
+                <LoaderCircle
+                  className="confirm-dialog-action-spinner"
+                  size={14}
+                  aria-hidden="true"
+                />
+                Generating with {selectedAdapter?.label ?? "agent"}…
+              </p>
+            ) : candidate ? (
+              <p>{candidate.text}</p>
+            ) : (
+              <p>Generate a new summary first.</p>
+            )}
+          </section>
+          <section>
+            <h3>Current</h3>
+            <p>{baseline.recap?.text}</p>
+          </section>
+        </div>
+
+        {error ? (
+          <p className="confirm-dialog-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        {candidate ? (
+          <div className="confirm-dialog-actions">
             <button
               className="control-button primary"
               type="button"
@@ -321,8 +470,8 @@ export default function ResearchRecapDialog({
             >
               {applying ? "Applying…" : "Use this summary"}
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

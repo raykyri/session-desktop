@@ -2071,32 +2071,6 @@
   margin: 0 0 28px;
 }
 
-.research-recap-with-action {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0 0 28px;
-}
-
-.research-recap-with-action .research-recap {
-  flex: 1;
-  margin: 0;
-}
-
-.research-recap-regenerate {
-  flex: 0 0 auto;
-  width: var(--control-h-sm);
-  min-height: var(--control-h-sm);
-  padding: 0;
-  color: var(--text-secondary);
-  opacity: 0.6;
-}
-
-.research-recap-with-action:hover .research-recap-regenerate,
-.research-recap-regenerate:focus-visible {
-  opacity: 1;
-}
-
 .research-recap-dialog {
   width: min(720px, 100%);
   max-height: min(760px, calc(100vh - 36px));
@@ -2114,10 +2088,6 @@
   gap: 16px;
 }
 
-.research-recap-dialog-header > div {
-  min-width: 0;
-}
-
 .research-recap-dialog-header > button {
   flex: 0 0 auto;
   width: var(--control-h-md);
@@ -2125,21 +2095,26 @@
   padding: 0;
 }
 
-.research-recap-instructions {
+.research-recap-instructions-field {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
   width: 100%;
+  gap: 5px;
+}
+
+.research-recap-instructions {
+  display: block;
+  flex: none;
+  width: 100%;
+  max-width: none;
   min-height: 118px;
   resize: vertical;
   padding: 9px 10px;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-md);
-  background: var(--field-bg);
-  color: var(--text-strong);
-  font: inherit;
   line-height: 1.45;
 }
 
-.research-recap-dialog-controls,
-.research-recap-comparison {
+.research-recap-dialog-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
@@ -2153,33 +2128,62 @@
   font-size: var(--fs-base);
 }
 
-.research-recap-dialog-controls select,
-.research-recap-dialog-controls input {
+.research-recap-dialog-controls .research-recap-control {
+  flex: none;
   width: 100%;
   min-height: var(--control-h-lg);
-  padding: 0 9px;
-  border: 1px solid var(--control-border);
+}
+
+.research-recap-dialog-controls .launcher-select,
+.research-recap-dialog-controls .launcher-select-trigger {
+  width: 100%;
+}
+
+.research-recap-dialog-controls .launcher-select-trigger {
+  justify-content: space-between;
+  max-width: none;
+  min-height: var(--control-h-lg);
   border-radius: var(--radius-md);
-  background: var(--field-bg);
-  color: var(--text-strong);
-  font: inherit;
+}
+
+.research-recap-dialog-controls .launcher-select-value {
+  text-align: left;
+}
+
+.research-recap-model-suggestions {
+  max-height: min(240px, calc(100vh - 24px));
+  overflow-y: auto;
 }
 
 .research-recap-dialog-status {
   gap: 7px;
 }
 
-.research-recap-comparison section {
-  min-width: 0;
-  padding: 10px;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-md);
-  background: var(--field-bg);
+.research-recap-comparison {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.research-recap-comparison section.has-candidate {
-  border-color: var(--accent-strong);
-  background: var(--accent-subtle);
+.research-recap-comparison-divider {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--surface-divider);
+}
+
+.research-recap-comparison section {
+  min-width: 0;
+  padding: 0;
+}
+
+.research-recap-comparison section + section {
+  padding-top: 14px;
+  border-top: 1px solid var(--surface-divider);
+}
+
+.research-recap-comparison .research-recap-candidate p {
+  color: var(--text-strong);
 }
 
 .research-recap-comparison section.is-empty p {
@@ -2204,8 +2208,7 @@
 }
 
 @media (max-width: 620px) {
-  .research-recap-dialog-controls,
-  .research-recap-comparison {
+  .research-recap-dialog-controls {
     grid-template-columns: minmax(0, 1fr);
   }
 }

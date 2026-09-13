@@ -6,6 +6,7 @@ import {
   FolderMinus,
   FolderPlus,
   Pencil,
+  RefreshCw,
   Star,
   StarOff,
   Trash2,
@@ -30,6 +31,7 @@ export function ResearchTreeMenuItems({
   onDelete,
   onRemoveFromFolder,
   onRequestCreateFolder,
+  onRegenerateSummary,
 }: {
   tree: ResearchTreeSummary;
   archived: boolean;
@@ -42,12 +44,31 @@ export function ResearchTreeMenuItems({
   onDelete: (tree: ResearchTreeSummary) => void;
   onRemoveFromFolder: (treeIds: string[]) => void;
   onRequestCreateFolder: (treeIds: string[]) => void;
+  /** Query-specific action used by Home's research activity menu. */
+  onRegenerateSummary?: () => void;
 }) {
   const starred = isResearchStarred(folderState, tree.id);
   const inFolder = Boolean(folderState.membership[tree.id]);
   const running = tree.runningCount > 0;
   return (
     <div className="group-context-actions">
+      {onRegenerateSummary ? (
+        <>
+          <button
+            className="control-button"
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onClose();
+              onRegenerateSummary();
+            }}
+          >
+            <RefreshCw size={13} aria-hidden="true" />
+            <span>Generate summary</span>
+          </button>
+          <div className="context-menu-divider" role="separator" />
+        </>
+      ) : null}
       {archived ? (
         <button
           className="control-button"
