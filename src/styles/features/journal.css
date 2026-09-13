@@ -5,24 +5,34 @@
    tweets framed inside content items. */
 
 .journal-scroll {
-  padding: 28px clamp(20px, 4vw, 48px) 48px;
+  --journal-content-padding: clamp(20px, 4vw, 48px);
+  padding: 0 0 48px;
 }
 
 .journal-column {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  width: min(100%, var(--research-feed-max-width));
+  width: 100%;
 }
 
-.journal-column > .new-research-launcher {
-  margin-bottom: 12px;
+.journal-composer-container,
+.recent-activity-unit,
+.journal-empty-container,
+.recent-activity-load-boundary {
+  width: 100%;
+  max-width: calc(var(--research-feed-max-width) + 2 * var(--journal-content-padding));
+  padding-inline: var(--journal-content-padding);
+}
+
+.journal-composer-container {
+  padding-block: 28px 26px;
 }
 
 .journal-feed {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  border-top: 1px solid var(--surface-border-default);
 }
 
 .recent-activity-virtual-canvas {
@@ -35,7 +45,7 @@
   top: 0;
   left: 0;
   width: 100%;
-  padding-bottom: 16px;
+  border-bottom: 1px solid var(--surface-border-default);
   will-change: transform;
 }
 
@@ -43,6 +53,7 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
+  padding-block: 16px;
 }
 
 .recent-activity-new-status {
@@ -93,6 +104,10 @@
   margin: 6px 0 0;
   color: var(--text-subtle);
   font-size: calc(var(--fs-input) - 1px);
+}
+
+.journal-empty-container {
+  padding-block: 16px;
 }
 
 .journal-setup-guide {
@@ -222,6 +237,9 @@
   border-radius: 10px;
   color: var(--text-subtle);
   font-size: 12.5px;
+  width: calc(100% - 2 * var(--journal-content-padding));
+  max-width: var(--research-feed-max-width);
+  margin: 0 var(--journal-content-padding) 14px;
 }
 
 .journal-undo-label {

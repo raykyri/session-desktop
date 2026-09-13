@@ -1002,7 +1002,7 @@ function ResearchActivityFeed({
     >
       <div ref={scrollRef} className="research-document-scroll journal-scroll">
         <div className="journal-column research-reading-surface">
-          {composer}
+          <div className="journal-composer-container">{composer}</div>
           {pendingUndo ? (
             <div className="journal-undo" role="status">
               <span className="journal-undo-label">
@@ -1119,12 +1119,12 @@ function ResearchActivityFeed({
               })}
             </div>
             {feed.length === 0 ? (
-              <>
+              <div className="journal-empty-container">
                 <p className="journal-empty">
                   Research queries and saved sources appear here, newest first.
                 </p>
                 {setupGuide ? <div className="journal-setup-guide">{setupGuide}</div> : null}
-              </>
+              </div>
             ) : null}
             <div
               ref={loadSentinelRef}
