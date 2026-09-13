@@ -345,23 +345,13 @@ import {
 } from "./lib/sessionDrafts";
 import {
   bodyFontStackFor,
-  clampConfirmPasteOverChars,
-
   clampResearchLaunchInstruction,
-
   COLOR_THEME_OPTIONS,
-  CONFIRM_PASTE_OVER_CHARS_MAX,
-  CONFIRM_PASTE_OVER_CHARS_MIN,
-
   DEFAULT_RESEARCH_LAUNCH_INSTRUCTION,
-
   DEFAULT_BODY_FONT_ID,
   detectAvailableBodyFonts,
-
   loadSettings,
-
   saveSettings,
-
   SYSTEM_BODY_FONT_ID,
   TAB_TITLE_PROVIDER_OPTIONS,
   type AppSettings,
@@ -11702,40 +11692,6 @@ function MainApp() {
                 }}
               />
             </label>
-
-            <label className="settings-row settings-toggle">
-              <span className="settings-label">Confirm multi-line paste</span>
-              <input
-                type="checkbox"
-                className="settings-checkbox"
-                checked={settings.confirmMultiLinePaste}
-                onChange={(event) => {
-                  const confirmMultiLinePaste = event.currentTarget.checked;
-                  setSettings((current) => ({ ...current, confirmMultiLinePaste }));
-                }}
-              />
-            </label>
-
-            <div className="settings-row">
-              <label htmlFor="settings-confirm-paste-over" className="settings-label">
-                Confirm paste over chars
-              </label>
-              <input
-                id="settings-confirm-paste-over"
-                className="form-field settings-input settings-number-input"
-                type="number"
-                min={CONFIRM_PASTE_OVER_CHARS_MIN}
-                max={CONFIRM_PASTE_OVER_CHARS_MAX}
-                step={1000}
-                value={settings.confirmPasteOverChars}
-                onChange={(event) => {
-                  const confirmPasteOverChars = clampConfirmPasteOverChars(
-                    Number(event.currentTarget.value),
-                  );
-                  setSettings((current) => ({ ...current, confirmPasteOverChars }));
-                }}
-              />
-            </div>
 
             <div className="settings-divider" role="separator" />
 

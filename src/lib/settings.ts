@@ -1,8 +1,4 @@
 import { APP_TEXT_SIZE, APP_TEXT_SIZE_MIN, APP_TEXT_SIZE_MAX } from "./appearance";
-import {
-  DEFAULT_CONFIRM_PASTE_OVER_CHARS,
-  type PasteProtectionSettings,
-} from "./paste";
 
 export interface BodyFontOption {
   id: string;
@@ -106,8 +102,6 @@ export const WORKTREE_LOCATION_OPTIONS: { id: WorktreeLocation; label: string }[
   { id: "localClaude", label: "Local .claude/" },
 ];
 
-export const CONFIRM_PASTE_OVER_CHARS_MIN = 1;
-export const CONFIRM_PASTE_OVER_CHARS_MAX = 5_000_000;
 /**
  * Byte cap on the research launch instruction, mirroring
  * MAX_RESEARCH_LAUNCH_INSTRUCTION_BYTES on the backend (which refuses larger
@@ -151,10 +145,6 @@ export interface AppSettings {
   bodyFontId: string;
   /** App text zoom; legacy fontSize values are read on first load. */
   textSize: number;
-  /** confirm pasted text containing more than one line */
-  confirmMultiLinePaste: boolean;
-  /** confirm pasted text above this many characters */
-  confirmPasteOverChars: number;
   /** show Cmd-held shortcut badges in the sidebar */
   showShortcutHints: boolean;
   /** show session's native menu bar icon */
@@ -221,8 +211,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   colorTheme: "green-blob",
   bodyFontId: DEFAULT_BODY_FONT_ID,
   textSize: APP_TEXT_SIZE,
-  confirmMultiLinePaste: false,
-  confirmPasteOverChars: DEFAULT_CONFIRM_PASTE_OVER_CHARS,
   showShortcutHints: true,
   showMenuBarIcon: false,
   reduceMotion: false,
@@ -257,24 +245,6 @@ export function clampTextSize(size: number): number {
   return Math.min(APP_TEXT_SIZE_MAX, Math.max(APP_TEXT_SIZE_MIN, Math.round(size)));
 }
 
-export function clampConfirmPasteOverChars(chars: number): number {
-  if (!Number.isFinite(chars)) {
-    return DEFAULT_CONFIRM_PASTE_OVER_CHARS;
-  }
-  return Math.min(
-    CONFIRM_PASTE_OVER_CHARS_MAX,
-    Math.max(CONFIRM_PASTE_OVER_CHARS_MIN, Math.round(chars)),
-  );
-}
-
-
-export function pasteProtectionFor(settings: AppSettings): PasteProtectionSettings {
-  return {
-    confirmMultiLinePaste: settings.confirmMultiLinePaste,
-    confirmPasteOverChars: settings.confirmPasteOverChars,
-  };
-}
-
 // Bumped if the stored shape ever changes incompatibly; an unknown blob simply
 // falls back to defaults.
 const STORAGE_KEY = "session.settings.v1";
@@ -306,14 +276,6 @@ export function loadSettings(): AppSettings {
         : DEFAULT_BODY_FONT_ID;
     const storedTextSize = parsed.textSize ?? parsed.fontSize;
     const textSize = typeof storedTextSize === "number" ? clampTextSize(storedTextSize) : APP_TEXT_SIZE;
-    const confirmMultiLinePaste =
-      typeof parsed.confirmMultiLinePaste === "boolean"
-        ? parsed.confirmMultiLinePaste
-        : DEFAULT_SETTINGS.confirmMultiLinePaste;
-    const confirmPasteOverChars =
-      typeof parsed.confirmPasteOverChars === "number"
-        ? clampConfirmPasteOverChars(parsed.confirmPasteOverChars)
-        : DEFAULT_SETTINGS.confirmPasteOverChars;
     const preventSleep =
       typeof parsed.preventSleep === "boolean"
         ? parsed.preventSleep
@@ -390,8 +352,6 @@ export function loadSettings(): AppSettings {
       colorTheme,
       bodyFontId,
       textSize,
-      confirmMultiLinePaste,
-      confirmPasteOverChars,
       showShortcutHints,
       showMenuBarIcon,
       reduceMotion,

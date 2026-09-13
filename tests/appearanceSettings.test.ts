@@ -11,13 +11,12 @@ const key = "session.settings.v1";
 
 test("legacy terminal preferences preserve visible text size and supported settings", () => {
   store.set(key, JSON.stringify({ fontSize: 18, themeId: "Dracula", cursorStyle: "bar",
-    colorTheme: "orange-blob", bodyFontId: "system", confirmMultiLinePaste: false,
+    colorTheme: "orange-blob", bodyFontId: "system",
     researchLaunchInstruction: "Check primary sources", preventSleep: false }));
   const settings = loadSettings();
   assert.equal(settings.textSize, 18);
   assert.equal(settings.colorTheme, "orange-blob");
   assert.equal(settings.bodyFontId, "system");
-  assert.equal(settings.confirmMultiLinePaste, false);
   assert.equal(settings.researchLaunchInstruction, "Check primary sources");
   assert.equal(settings.preventSleep, false);
   saveSettings(settings);
