@@ -2,7 +2,6 @@ mod adapters;
 mod browser_backend;
 mod browser_engine;
 mod claude_sdk;
-mod completion_sound;
 mod config;
 mod connection_limit;
 mod control;
@@ -53,7 +52,7 @@ use config::{RuntimeConfig, SessionConfig};
 use control_socket::start_control_socket;
 use menu_bar::{menu_bar_set_visible, menu_bar_update};
 use native_support::{
-    completion_sound_play, completion_sound_set, native_support_set_browser_background,
+    native_support_set_browser_background,
     native_support_set_browser_overlay_open, native_support_set_iframe_shortcut_fallback,
 };
 use pty::{
@@ -4052,8 +4051,6 @@ fn main() {
             native_support_set_browser_overlay_open,
             native_support_set_iframe_shortcut_fallback,
             native_support_set_browser_background,
-            completion_sound_play,
-            completion_sound_set,
             agent_submit_turn,
             agent_queue_wait_turn,
             agent_queue_delivery_turn,

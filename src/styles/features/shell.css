@@ -2105,8 +2105,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   cursor: pointer;
 }
 
-.settings-agent-summary:hover,
-.settings-agent-summary[aria-expanded="true"] {
+.settings-agent-summary:hover {
   background: var(--surface-fill-subtle);
 }
 
@@ -2166,7 +2165,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 
 .settings-agent-detail {
   padding: 0 10px 10px 34px;
-  background: var(--surface-fill-subtle);
+  cursor: pointer;
 }
 
 .settings-agent-details {
@@ -2276,21 +2275,6 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 .settings-title-test-message.is-error {
   color: var(--danger-fg-message);
   opacity: 1;
-}
-
-.settings-completion-sound-controls {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-}
-
-.settings-completion-sound-select {
-  width: 118px;
-}
-
-.settings-completion-sound-test {
-  min-width: 68px;
 }
 
 .settings-divider {

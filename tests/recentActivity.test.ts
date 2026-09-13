@@ -23,6 +23,7 @@ import ActivityMetadataLine, {
 } from "../src/components/ActivityMetadataLine";
 import {
   buildRecentActivityVirtualRows,
+  ResearchQueryCard,
   virtualActivityRange,
 } from "../src/components/research/ResearchActivityFeed";
 import type { JournalEntry } from "../src/lib/journal";
@@ -233,6 +234,47 @@ test("variable-height virtualization returns a small overscanned window", () => 
   assert.ok(range.start > 0);
   assert.ok(range.end < sizes.length);
   assert.ok(range.end - range.start < 50);
+});
+
+test("home-feed research prompts render markdown links", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchQueryCard, {
+      query: {
+        ...query,
+        prompt:
+          "what would solving the alignment problem this way look like?\nhttps://x.com/OrionJohnston/status/2097801834224312595",
+      },
+      onOpen: () => {},
+      onContextMenu: () => {},
+    }),
+  );
+
+  assert.match(html, /turn-markdown/);
+  assert.match(
+    html,
+    /href="https:\/\/x\.com\/OrionJohnston\/status\/2097801834224312595"/,
+  );
+  assert.doesNotMatch(html, /recent-query-open/);
+});
+
+test("home-feed research prompts show a recap below the question", () => {
+  const withRecap = renderToStaticMarkup(
+    createElement(ResearchQueryCard, {
+      query: { ...query, recap: "Read Cusk and Heti." },
+      onOpen: () => {},
+      onContextMenu: () => {},
+    }),
+  );
+  const withoutRecap = renderToStaticMarkup(
+    createElement(ResearchQueryCard, {
+      query,
+      onOpen: () => {},
+      onContextMenu: () => {},
+    }),
+  );
+
+  assert.ok(withRecap.indexOf("turn-markdown") < withRecap.indexOf("Summary: Read Cusk and Heti."));
+  assert.doesNotMatch(withoutRecap, /Summary:/);
 });
 
 test("virtual feed rows retain day headers and feed positions", () => {

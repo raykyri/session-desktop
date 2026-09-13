@@ -20,7 +20,6 @@
     "test:integration": "npm run test:node -- web/*.test.ts",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --workspace",
     "test:app-shortcuts": "npm run test:node -- tests/appShortcuts.test.ts",
-    "test:completion-sounds": "npm run test:node -- tests/completionSounds.test.ts",
     "test:active-workspace": "npm run test:node -- tests/activeWorkspace.test.ts",
     "test:composer-slash-commands": "npm run test:node -- tests/composerSlashCommands.test.ts",
     "test:claude-turns": "npm run test:node -- tests/claudeTurns.test.ts",

@@ -5,7 +5,6 @@ import type { JournalEntry, RecentActivityPage } from "./journal";
 import type { PaneLayoutItem } from "./paneTree";
 import type { ResearchFolderState } from "./researchFolders";
 import type { WorktreeLocation } from "./settings";
-import type { CompletionSoundId } from "./completionSounds";
 import {
   HumanBrowserLifecycleQueue,
   retryHumanBrowserLifecycle,
@@ -92,16 +91,6 @@ export function probeAgentAdapters(options?: { groupId?: string | null; force?: 
     groupId: options?.groupId ?? null,
     force: options?.force ?? false,
   });
-}
-
-/** Plays one catalogued completion sound through the native AppKit bridge. */
-export function playCompletionSound(soundId: CompletionSoundId) {
-  return invoke<void>("completion_sound_play", { soundId });
-}
-
-/** Keeps the reload-safe backend lifecycle player aligned with settings. */
-export function setCompletionSound(soundId: CompletionSoundId) {
-  return invoke<void>("completion_sound_set", { soundId });
 }
 
 export function launchConversationHistory(request: ConversationHistoryLaunchRequest) {

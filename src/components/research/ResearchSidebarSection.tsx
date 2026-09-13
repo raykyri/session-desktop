@@ -6,7 +6,6 @@ import type {
 import { createPortal } from "react-dom";
 import {
   Archive,
-  ArchiveRestore,
   ChevronRight,
   FileText,
   Folder,
@@ -15,13 +14,16 @@ import {
   LoaderCircle,
   MoreHorizontal,
   Pencil,
-  RefreshCw,
   Star,
   StarOff,
   Terminal,
   Trash2,
 } from "lucide-react";
 import type { ResearchTreeSummary } from "../../types";
+import {
+  ResearchTreeDeleteDialog,
+  ResearchTreeMenuItems,
+} from "./ResearchTreeMenu";
 import { moveResearchTreeIdToGap } from "../../lib/researchOrder";
 import {
   addTreesToResearchFolder,
@@ -62,7 +64,6 @@ interface ResearchSidebarSectionProps {
   onSelect: (treeId: string) => void;
   onRename: (treeId: string, title: string) => Promise<void>;
   onArchive: (treeId: string) => Promise<void>;
-  onRegenerateTitle: (treeId: string) => Promise<void>;
   onRestore: (treeId: string) => Promise<void>;
   onRemove: (treeId: string) => Promise<void>;
   onReorder: (archived: boolean, orderedTreeIds: string[]) => void;
@@ -136,7 +137,6 @@ function ResearchSidebarSection({
   onSelect,
   onRename,
   onArchive,
-  onRegenerateTitle,
   onRestore,
   onRemove,
   onReorder,
@@ -156,8 +156,6 @@ function ResearchSidebarSection({
   const [renamingFolder, setRenamingFolder] = useState<ResearchFolder | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
-  const [removingTreeId, setRemovingTreeId] = useState<string | null>(null);
-  const [treeRemovalError, setTreeRemovalError] = useState<string | null>(null);
   const [deletingFolder, setDeletingFolder] = useState<ResearchFolder | null>(null);
   const [folderRemovalBusy, setFolderRemovalBusy] = useState(false);
   const [folderRemovalError, setFolderRemovalError] = useState<string | null>(null);
@@ -419,7 +417,6 @@ function ResearchSidebarSection({
 
   function openDeleteDialog(tree: ResearchTreeSummary) {
     setMenu(null);
-    setTreeRemovalError(null);
     setDeletingTree(tree);
   }
 
@@ -441,25 +438,6 @@ function ResearchSidebarSection({
     return [...trees, ...archivedTrees].filter(
       (tree) => folderState.membership[tree.id] === folderId,
     );
-  }
-
-  async function confirmTreeRemoval() {
-    if (!deletingTree || removingTreeId) {
-      return;
-    }
-    const treeId = deletingTree.id;
-    setTreeRemovalError(null);
-    setRemovingTreeId(treeId);
-    try {
-      await onRemove(treeId);
-      setDeletingTree(null);
-    } catch (err) {
-      // The app shell surfaces the backend error. Keep the confirmation open so
-      // the user does not have to reopen the menu after a transient rejection.
-      setTreeRemovalError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setRemovingTreeId(null);
-    }
   }
 
   async function confirmFolderRemoval() {
@@ -1413,192 +1391,30 @@ function ResearchSidebarSection({
               onMouseDown={(event) => event.stopPropagation()}
               onContextMenu={(event) => event.preventDefault()}
             >
-              <div className="group-context-actions">
-                {menu.archived ? (
-                  <button className="control-button"
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setMenu(null);
-                      void onRestore(menuTree.id);
-                    }}
-                  >
-                    <ArchiveRestore size={13} aria-hidden="true" />
-                    <span>Unarchive research</span>
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      className="control-button"
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setMenu(null);
-                        onToggleStar(menuTree.id);
-                      }}
-                    >
-                      {isResearchStarred(folderState, menuTree.id) ? (
-                        <StarOff size={13} aria-hidden="true" />
-                      ) : (
-                        <Star size={13} aria-hidden="true" />
-                      )}
-                      <span>
-                        {isResearchStarred(folderState, menuTree.id) ? "Unstar" : "Star"}
-                      </span>
-                    </button>
-                    <button className="control-button"
-                      type="button"
-                      role="menuitem"
-                      onClick={() => openRenameDialog(menuTree)}
-                    >
-                      <Pencil size={13} aria-hidden="true" />
-                      <span>Rename</span>
-                    </button>
-                    {menuTree.kind === "run" ? (
-                      // Only run roots have a selected research model. Documents
-                      // and exported conversations keep their content-derived titles.
-                      <button className="control-button"
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setMenu(null);
-                          void onRegenerateTitle(menuTree.id);
-                        }}
-                      >
-                        <RefreshCw size={13} aria-hidden="true" />
-                        <span>Regenerate title</span>
-                      </button>
-                    ) : null}
-                    {folderState.membership[menuTree.id] ? (
-                      <button
-                        className="control-button"
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setMenu(null);
-                          onRemoveFromFolder([menuTree.id]);
-                        }}
-                      >
-                        <FolderMinus size={13} aria-hidden="true" />
-                        <span>Remove from folder</span>
-                      </button>
-                    ) : null}
-                    <button
-                      className="control-button"
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setMenu(null);
-                        onRequestCreateFolder([menuTree.id]);
-                      }}
-                    >
-                      <FolderPlus size={13} aria-hidden="true" />
-                      <span>New folder with item</span>
-                    </button>
-                  </>
-                )}
-                {!menu.archived ? (
-                  <>
-                    <div className="context-menu-divider" role="separator" />
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="control-button context-menu-has-shortcut"
-                      disabled={menuTree.runningCount > 0}
-                      title={
-                        menuTree.runningCount > 0
-                          ? "Research with active runs cannot be archived"
-                          : undefined
-                      }
-                      onClick={() => {
-                        setMenu(null);
-                        void onArchive(menuTree.id);
-                      }}
-                    >
-                      <Archive size={13} aria-hidden="true" />
-                      <span>Archive</span>
-                      <kbd className="context-menu-shortcut is-keycap">A</kbd>
-                    </button>
-                  </>
-                ) : null}
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="control-button context-menu-danger context-menu-has-shortcut"
-                  disabled={menuTree.runningCount > 0}
-                  title={
-                    menuTree.runningCount > 0
-                      ? "Research with active runs cannot be deleted"
-                      : undefined
-                  }
-                  onClick={() => openDeleteDialog(menuTree)}
-                >
-                  <Trash2 size={13} aria-hidden="true" />
-                  <span>Delete</span>
-                  <kbd className="context-menu-shortcut is-keycap">D</kbd>
-                </button>
-              </div>
+              <ResearchTreeMenuItems
+                tree={menuTree}
+                archived={menu.archived}
+                folderState={folderState}
+                onClose={() => setMenu(null)}
+                onToggleStar={onToggleStar}
+                onRename={openRenameDialog}
+                onArchive={(treeId) => void onArchive(treeId)}
+                onRestore={(treeId) => void onRestore(treeId)}
+                onDelete={openDeleteDialog}
+                onRemoveFromFolder={onRemoveFromFolder}
+                onRequestCreateFolder={onRequestCreateFolder}
+              />
             </div>,
             document.body,
           )
         : null}
-      {deletingTree
-        ? createPortal(
-            <div
-              className="confirm-dialog-backdrop"
-              role="presentation"
-              onMouseDown={(event) => {
-                if (event.target === event.currentTarget && !removingTreeId) {
-                  setDeletingTree(null);
-                }
-              }}
-            >
-              <div
-                className="confirm-dialog"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="delete-research-dialog-title"
-                aria-busy={removingTreeId === deletingTree.id}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape" && !removingTreeId) {
-                    event.preventDefault();
-                    setDeletingTree(null);
-                  }
-                }}
-              >
-                <h2 id="delete-research-dialog-title">Delete “{deletingTree.title}”?</h2>
-                <p>
-                  This permanently deletes this research and its completed work and follow-up
-                  history. This can’t be undone.
-                </p>
-                {treeRemovalError ? (
-                  <p className="confirm-dialog-error" role="alert">
-                    {treeRemovalError}
-                  </p>
-                ) : null}
-                <div className="confirm-dialog-actions">
-                  <button className="control-button"
-                    type="button"
-                    disabled={removingTreeId !== null}
-                    onClick={() => setDeletingTree(null)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="control-button danger"
-                    autoFocus
-                    disabled={removingTreeId !== null}
-                    onClick={() => void confirmTreeRemoval()}
-                  >
-                    {removingTreeId === deletingTree.id ? "Deleting…" : "Delete research"}
-                  </button>
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+      {deletingTree ? (
+        <ResearchTreeDeleteDialog
+          tree={deletingTree}
+          onClose={() => setDeletingTree(null)}
+          onRemove={onRemove}
+        />
+      ) : null}
       {deletingFolder
         ? createPortal(
             <div

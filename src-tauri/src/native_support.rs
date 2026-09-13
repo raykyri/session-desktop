@@ -105,17 +105,10 @@ mod imp {
     use super::APP_STATE;
     use crate::state::AppState;
     use std::ffi::c_void;
-    use std::ffi::{CString, c_char};
+    use std::ffi::c_char;
     use std::sync::Mutex;
     unsafe extern "C" {
         fn session_native_application_is_active() -> i32;
-        fn session_native_completion_sound_play(system_name: *const c_char) -> i32;
-        fn session_native_completion_sound_play_file(system_path: *const c_char) -> i32;
-        fn session_native_completion_sound_play_data(
-            name: *const c_char,
-            bytes: *const u8,
-            bytes_len: usize,
-        ) -> i32;
         fn session_native_support_bridge_available() -> i32;
         fn session_native_support_initialize(native_view: *mut c_void) -> i32;
         fn session_native_support_shutdown();
@@ -152,9 +145,6 @@ mod imp {
         ) -> i32;
         fn session_native_support_set_browser_background(red: f64, green: f64, blue: f64) -> i32;
     }
-    fn cstring(value: &str, label: &str) -> Result<CString, String> {
-        CString::new(value).map_err(|_| format!("{label} contains an interior NUL byte"))
-    }
     pub fn available() -> bool {
         // SAFETY: the function has no arguments or borrowed state and is linked
         // from the pinned SessionNativeSupport Swift package in build.rs.
@@ -165,42 +155,6 @@ mod imp {
         // SAFETY: the function has no borrowed state and synchronously reads
         // NSApplication.isActive on the main actor.
         unsafe { session_native_application_is_active() == 1 }
-    }
-
-    pub fn play_system_sound(system_name: &str) -> Result<(), String> {
-        let system_name = cstring(system_name, "completion system sound name")?;
-        // SAFETY: Swift copies the string synchronously and plays an allowlisted
-        // NSSound name resolved by the Rust catalog on the main actor.
-        if unsafe { session_native_completion_sound_play(system_name.as_ptr()) } == 1 {
-            Ok(())
-        } else {
-            Err("completion sound was not recognized or could not be played".to_string())
-        }
-    }
-
-    pub fn play_system_sound_file(system_path: &str) -> Result<(), String> {
-        let system_path = cstring(system_path, "completion system sound path")?;
-        // SAFETY: Swift copies the allowlisted path synchronously and loads the
-        // OS-provided audio file on the main actor.
-        if unsafe { session_native_completion_sound_play_file(system_path.as_ptr()) } == 1 {
-            Ok(())
-        } else {
-            Err("completion system sound file could not be played".to_string())
-        }
-    }
-
-    pub fn play_bundled_sound(name: &str, bytes: &[u8]) -> Result<(), String> {
-        let name = cstring(name, "bundled completion sound name")?;
-        // SAFETY: Swift copies the name and audio data synchronously before this
-        // call returns, then caches the resulting NSSound on the main actor.
-        if unsafe {
-            session_native_completion_sound_play_data(name.as_ptr(), bytes.as_ptr(), bytes.len())
-        } == 1
-        {
-            Ok(())
-        } else {
-            Err("bundled completion sound could not be played".to_string())
-        }
     }
 
     pub fn initialize(native_view: *mut c_void, state: AppState) -> Result<(), String> {
@@ -395,18 +349,6 @@ mod imp {
         false
     }
 
-    pub fn play_system_sound(_system_name: &str) -> Result<(), String> {
-        Err("completion sounds are only available on macOS".to_string())
-    }
-
-    pub fn play_system_sound_file(_system_path: &str) -> Result<(), String> {
-        Err("completion sounds are only available on macOS".to_string())
-    }
-
-    pub fn play_bundled_sound(_name: &str, _bytes: &[u8]) -> Result<(), String> {
-        Err("completion sounds are only available on macOS".to_string())
-    }
-
     pub fn initialize(_native_view: *mut c_void, _state: AppState) -> Result<(), String> {
         Err("native support are only available on macOS".to_string())
     }
@@ -583,30 +525,6 @@ pub fn native_support_set_iframe_shortcut_fallback(active: bool) -> Result<(), S
 #[tauri::command]
 pub fn native_support_set_browser_overlay_open(active: bool) -> Result<(), String> {
     set_browser_overlay_open(active)
-}
-
-pub fn play_completion_sound(sound_id: &str) -> Result<(), String> {
-    use crate::completion_sound::CompletionSound;
-
-    match crate::completion_sound::sound_for_id(sound_id)? {
-        Some(CompletionSound::System(name)) => imp::play_system_sound(name),
-        Some(CompletionSound::SystemFile(path)) => imp::play_system_sound_file(path),
-        Some(CompletionSound::Bundled { name, bytes }) => imp::play_bundled_sound(name, bytes),
-        None => Ok(()),
-    }
-}
-
-#[tauri::command]
-pub fn completion_sound_play(sound_id: String) -> Result<(), String> {
-    play_completion_sound(&sound_id)
-}
-
-#[tauri::command]
-pub fn completion_sound_set(
-    state: tauri::State<'_, AppState>,
-    sound_id: String,
-) -> Result<(), String> {
-    state.set_completion_sound(&sound_id)
 }
 
 #[tauri::command]

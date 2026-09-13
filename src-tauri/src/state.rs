@@ -331,9 +331,6 @@ struct AppStateInner {
     next_transcript_binding_candidate: AtomicU64,
     next_id: AtomicU64,
     app_handle: Mutex<Option<AppHandle>>,
-    /// Reload-safe agent-completion lifecycle and the current sound preference.
-    /// Kept outside Model: it is process-local UI behavior, not workspace data.
-    completion_sound: Mutex<crate::completion_sound::CompletionSoundState>,
     // Persistence stays off until restore_session() runs so constructing a state
     // (notably in tests) never touches disk. Once enabled, model mutations mark
     // the state dirty and the persister thread snapshots it to
@@ -1804,9 +1801,6 @@ impl AppState {
                 next_transcript_binding_candidate: AtomicU64::new(1),
                 next_id: AtomicU64::new(1),
                 app_handle: Mutex::new(None),
-                completion_sound: Mutex::new(
-                    crate::completion_sound::CompletionSoundState::default(),
-                ),
                 persist_enabled: AtomicBool::new(false),
                 persist_lock: Mutex::new(()),
                 research_document_lock: Mutex::new(()),
@@ -2635,7 +2629,6 @@ impl AppState {
             .collect::<HashSet<_>>();
 
         let mut hydrated_agents = Vec::new();
-        let mut hydrated_research_group_ids = Vec::new();
         let mut artifacts_reconciled = false;
         journal::normalize_journal_state(&mut persisted.journal);
         if let Ok(mut model) = self.inner.model.lock() {
@@ -2774,18 +2767,6 @@ impl AppState {
             model.active_tab_id = active_tab_id;
             model.pane_splits = persisted.pane_splits;
             hydrated_agents = model.agents.values().cloned().collect::<Vec<_>>();
-            hydrated_research_group_ids = model
-                .groups
-                .values()
-                .filter(|group| group.scope == WorkspaceScope::Research)
-                .map(|group| group.id.clone())
-                .collect();
-        }
-
-        if let Ok(mut completion_sound) = self.inner.completion_sound.lock() {
-            for group_id in hydrated_research_group_ids {
-                completion_sound.mark_research_group(&group_id);
-            }
         }
 
         // Backfill recent-session entries for the hydrated agents after the
@@ -3208,21 +3189,6 @@ impl AppState {
     }
 
     pub fn emit(&self, event: SessionEvent) {
-        let completion_sound_id = self
-            .inner
-            .completion_sound
-            .lock()
-            .ok()
-            .and_then(|mut state| state.observe_event(&event));
-        #[cfg(not(test))]
-        if let Some(sound_id) = completion_sound_id
-            && let Err(err) = crate::native_support::play_completion_sound(&sound_id)
-        {
-            eprintln!("session: failed to play completion sound: {err}");
-        }
-        #[cfg(test)]
-        let _ = completion_sound_id;
-
         // Clone the handle under the lock but emit outside it. emit() serializes
         // the payload (turn.updated events carry whole turn arrays) and enqueues
         // the IPC; holding the mutex across that serialized every event in the
@@ -3232,14 +3198,6 @@ impl AppState {
         if let Some(app_handle) = app_handle {
             let _ = app_handle.emit("session-event", event);
         }
-    }
-
-    pub fn set_completion_sound(&self, sound_id: &str) -> Result<(), String> {
-        self.inner
-            .completion_sound
-            .lock()
-            .map_err(|_| "completion sound lock poisoned".to_string())?
-            .set_selected_id(sound_id)
     }
 
     pub fn mark_exit_confirmed(&self) {
@@ -5403,9 +5361,6 @@ impl AppState {
             touch_research_tree_locked(&mut model, &node.tree_id, now);
             node
         };
-        if let Ok(mut completion_sound) = self.inner.completion_sound.lock() {
-            completion_sound.mark_research_agent(&agent.id);
-        }
         self.persist();
         self.emit(SessionEvent::new(
             "research.node.updated",
@@ -5469,9 +5424,6 @@ impl AppState {
             touch_research_tree_locked(&mut model, &node.tree_id, now);
             node
         };
-        if let Ok(mut completion_sound) = self.inner.completion_sound.lock() {
-            completion_sound.mark_research_agent(&agent.id);
-        }
         self.persist();
         self.emit(SessionEvent::new(
             "research.node.updated",

@@ -262,7 +262,7 @@
    the menu trigger, which shares this corner. */
 .research-sidebar-unseen {
   position: absolute;
-  top: 4px;
+  top: 5px;
   right: 4px;
   padding: 1px 5px;
   border-radius: 999px;
@@ -887,19 +887,43 @@
 }
 
 .research-prompt-metadata {
-  padding: 0 3px;
+  max-width: min(100%, 640px);
   color: var(--text-subtle);
   font-size: calc(var(--fs-input) - 2px);
   line-height: 1.35;
 }
 
+.research-prompt-reply {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.research-prompt-reply svg {
+  flex: none;
+}
+
+.research-prompt-reply-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .research-prompt {
   width: fit-content;
   max-width: min(100%, 640px);
-  margin: 0 0 26px -14px;
+  margin: 0 0 26px;
   padding: 10px 14px;
   border-radius: 10px;
   background: var(--content-card-bg);
+}
+
+/* Inline follow-ups share the answer column; keep a clear gap above the next
+   user turn so it doesn't sit on the previous answer's stats line. */
+.research-thread-segment + .research-thread-segment {
+  margin-top: 44px;
 }
 
 .research-prompt > * {
@@ -1120,7 +1144,7 @@
    message card so exchanges read as the same question/answer language. */
 .research-response-item.is-conversation .research-conversation-prompt {
   min-width: 0;
-  margin: 18px 0 9px -14px;
+  margin: 32px 0 9px;
 }
 
 .research-response-item.is-conversation:first-child .research-conversation-prompt {
@@ -2204,6 +2228,6 @@
   font-size: 14px;
   font-style: italic;
   font-weight: 400;
-  line-height: 1.75;
+  line-height: calc(1.5 + var(--transcript-line-height-delta));
   white-space: normal;
 }

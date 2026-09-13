@@ -47,8 +47,7 @@
     "resources": {
       "../src/assets/fonts/DMSans-OFL.txt": "licenses/DMSans-OFL.txt",
       "../src/assets/fonts/IoskeleyMono-OFL.txt": "licenses/IoskeleyMono-OFL.txt",
-      "../src/assets/fonts/ValleySans-OFL.txt": "licenses/ValleySans-OFL.txt",
-      "../src/assets/sounds/completion/LICENSES-AND-SOURCES.txt": "licenses/CompletionSounds-CC0.txt"
+      "../src/assets/fonts/ValleySans-OFL.txt": "licenses/ValleySans-OFL.txt"
     },
     "icon": [
       "icons/32x32.png",
