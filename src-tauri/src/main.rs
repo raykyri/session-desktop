@@ -8,6 +8,7 @@ mod control;
 mod control_socket;
 mod events;
 mod file_server;
+mod github_auth;
 mod headless_process;
 mod host;
 mod human_browser;
@@ -3568,6 +3569,11 @@ fn main() {
             openrouter_key_get,
             openrouter_key_set,
             openrouter_chat_completion,
+            github_auth::github_account_get,
+            github_auth::github_login_start,
+            github_auth::github_login_poll,
+            github_auth::github_login_cancel,
+            github_auth::github_logout,
             active_tab_set,
             browser_backend::browser_automation_snapshot,
             browser_backend::browser_automation_start_screencast,

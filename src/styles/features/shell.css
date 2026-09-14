@@ -1315,6 +1315,75 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   outline-color: var(--danger-focus-ring);
 }
 
+/* GitHub device-flow dialog: the user code is the one thing to read, so it is
+   set large in the mono font with a copy action beside it. */
+.github-login-dialog {
+  width: min(400px, 100%);
+}
+
+.github-login-link {
+  padding: 0;
+  border: 0;
+  color: var(--text-interactive);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.github-login-code-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--surface-border-subtle);
+  border-radius: 8px;
+  background: var(--surface-fill-faint);
+}
+
+.github-login-code {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-heading);
+  font-family: var(--font-mono);
+  font-size: calc(22px + var(--font-ui-size-offset));
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.github-login-copy {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  min-height: var(--control-h-md);
+  padding: 0 10px;
+  font-size: var(--fs-base);
+}
+
+.github-login-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.github-login-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--surface-border-default);
+  border-top-color: var(--text-secondary);
+  border-radius: 50%;
+  animation: spinner-spin 0.9s linear infinite;
+}
+
+.confirm-dialog-actions .control-button svg {
+  margin-right: 5px;
+  vertical-align: -2px;
+}
+
 /* Settings panel — a small modal reusing the confirm-dialog surface. */
 /* ⌘K command palette: same scrim as settings, but top-anchored so the list can
    grow and shrink under the input without the panel jumping vertically. */

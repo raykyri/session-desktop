@@ -485,6 +485,9 @@
 }
 
 .research-folder-trigger > svg:first-child {
+  /* Centered in the 22px column the account control's avatar occupies, so
+     the folder name and the account name start at the same x. */
+  margin-inline: 4px 5px;
   color: var(--text-subtle);
 }
 
@@ -605,6 +608,43 @@
 .research-folder-item.is-remove:hover,
 .research-folder-item.is-remove:hover svg {
   color: var(--status-failed-fg);
+}
+
+/* GitHub account control: sits beneath the folder switcher and shares its
+   trigger geometry. Signed out it is one centered action; signed in it shows
+   the avatar with the display name over the login, and opens the same
+   upward menu style for the profile/log-out actions. */
+.sidebar-account {
+  position: relative;
+  flex: none;
+  margin: 6px 7px 0;
+}
+
+.sidebar-account-trigger.is-signed-out {
+  justify-content: center;
+  color: var(--text-interactive);
+}
+
+.sidebar-account-trigger.is-signed-out > svg:first-child {
+  color: currentColor;
+}
+
+.sidebar-account-trigger:disabled {
+  opacity: 0.6;
+}
+
+/* Name and login sit 1px tighter than the folder name/path pair. */
+.sidebar-account-trigger .research-folder-trigger-copy {
+  gap: 0;
+}
+
+.sidebar-account-avatar {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-fill-subtle);
+  object-fit: cover;
 }
 
 .research-placeholder {

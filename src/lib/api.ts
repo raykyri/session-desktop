@@ -13,6 +13,9 @@ import type {
   AgentInfo,
   ArtifactInfo,
   ConversationHistorySnapshot,
+  GithubAccount,
+  GithubDeviceLogin,
+  GithubLoginPoll,
   GlobalDraft,
   GroupInfo,
   HomeTurnHistoryPage,
@@ -104,6 +107,26 @@ export function setOpenRouterKey(key: string) {
 // attaches the API key from the owner-only preferences file. The key is never sent
 // from (or held for the request in) the renderer. Returns the upstream HTTP status
 // and raw response body so the caller keeps its own parsing/retry logic.
+export function getGithubAccount() {
+  return invoke<GithubAccount | null>("github_account_get");
+}
+
+export function startGithubLogin() {
+  return invoke<GithubDeviceLogin>("github_login_start");
+}
+
+export function pollGithubLogin() {
+  return invoke<GithubLoginPoll>("github_login_poll");
+}
+
+export function cancelGithubLogin() {
+  return invoke<void>("github_login_cancel");
+}
+
+export function logoutGithub() {
+  return invoke<void>("github_logout");
+}
+
 export function openRouterChatCompletion(payload: unknown) {
   return invoke<{ status: number; body: string }>("openrouter_chat_completion", {
     payload,
