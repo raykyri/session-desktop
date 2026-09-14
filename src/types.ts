@@ -63,6 +63,9 @@ export interface EncyclopediaPage {
   error?: string | null;
   adapter: string;
   model?: string | null;
+  /** What wrote the current body, e.g. `openrouter:google/gemini-3.8-flash`
+   * or `claude:fable`; absent until the first generation lands. */
+  generatedBy?: string | null;
   workspaceId: string;
   createdAt: number;
   updatedAt: number;

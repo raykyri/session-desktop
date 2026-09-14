@@ -7,6 +7,12 @@
 //! meant. Pages are written by the same tool-less, structured-output path as
 //! titles and recaps, so generation never touches the research session.
 //!
+//! Generation has two transports. With an OpenRouter key configured in
+//! Settings, pages are written by [`DEFAULT_OPENROUTER_MODEL`] over HTTP,
+//! which benchmarked at a 6s median against 14s for the CLI path at nearly
+//! the same judged quality. Without a key, the answering agent's CLI writes
+//! the page through the same tool-less path titles and recaps use.
+//!
 //! Storage is per research workspace: `<folder>/.session/encyclopedia-v1/`
 //! holds one `<slug>.json` per page. The slug is derived from the canonical
 //! term, so a term maps to one page per workspace; the model may still give
@@ -18,12 +24,13 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::events::SessionEvent;
+use crate::persistence::AppPreferences;
 use crate::state::AppState;
 use crate::wikilinks::{self, MAX_WIKILINK_CHARS};
 use crate::workspace::{GroupInfo, WorkspaceScope};
@@ -39,6 +46,11 @@ const MAX_SIBLING_TERMS: usize = 24;
 const MAX_SOURCES_IN_PROMPT: usize = 5;
 const MAX_STORED_SOURCES: usize = 50;
 const MAX_EXISTING_PAGES_IN_PROMPT: usize = 120;
+
+/// The OpenRouter model that writes pages when a key is configured.
+pub const DEFAULT_OPENROUTER_MODEL: &str = "google/gemini-3.8-flash";
+const OPENROUTER_CHAT_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
+const OPENROUTER_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Linking rules for pages. Research answers use the broader
 /// `RESEARCH_LINKING_INSTRUCTION`, which asks for every proper noun; a page
@@ -92,9 +104,16 @@ pub struct EncyclopediaPage {
     pub status: EncyclopediaPageStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The answering agent of the source that requested the page; the CLI
+    /// transport generates with it.
     pub adapter: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    /// What actually wrote the current body, for example
+    /// `openrouter:google/gemini-3.8-flash` or `claude:fable`. Absent until
+    /// the first generation lands.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generated_by: Option<String>,
     pub workspace_id: String,
     pub created_at: u64,
     pub updated_at: u64,
@@ -450,6 +469,158 @@ fn build_prompt(page: &EncyclopediaPage, existing_pages: &[String]) -> String {
     )
 }
 
+/// How a page body gets written.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Transport {
+    OpenRouter {
+        key: String,
+        model: String,
+    },
+    Cli {
+        adapter: String,
+        model: Option<String>,
+    },
+}
+
+impl Transport {
+    fn label(&self) -> String {
+        match self {
+            Self::OpenRouter { model, .. } => format!("openrouter:{model}"),
+            Self::Cli { adapter, model } => match model {
+                Some(model) => format!("{adapter}:{model}"),
+                None => adapter.clone(),
+            },
+        }
+    }
+}
+
+/// OpenRouter when a key is configured, else the page's requesting agent.
+fn choose_transport(preferences: &AppPreferences, page: &EncyclopediaPage) -> Transport {
+    match preferences
+        .open_router_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+    {
+        Some(key) => Transport::OpenRouter {
+            key: key.to_string(),
+            model: DEFAULT_OPENROUTER_MODEL.to_string(),
+        },
+        None => Transport::Cli {
+            adapter: page.adapter.clone(),
+            model: page.model.clone(),
+        },
+    }
+}
+
+/// The page Markdown out of an OpenRouter chat completion, or the API's
+/// error. Structured output puts a `{"page": …}` JSON string in the message
+/// content; `normalize_page` unwraps it.
+fn openrouter_page_from_response(body: &Value) -> Result<String, String> {
+    if let Some(error) = body.get("error") {
+        let message = error
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown error");
+        return Err(format!("OpenRouter request failed: {message}"));
+    }
+    let content = body
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|choices| choices.first())
+        .and_then(|choice| choice.get("message"))
+        .and_then(|message| message.get("content"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| "OpenRouter response had no message content".to_string())?;
+    normalize_page(content).ok_or_else(|| "OpenRouter returned an empty page".to_string())
+}
+
+fn openrouter_request_body(model: &str, prompt: &str) -> Value {
+    let schema: Value = serde_json::from_str(crate::title_generation::PAGE_SCHEMA)
+        .expect("PAGE_SCHEMA is valid JSON");
+    json!({
+        "model": model,
+        "messages": [{ "role": "user", "content": prompt }],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": { "name": "page", "strict": true, "schema": schema }
+        },
+        "reasoning": { "effort": "low" },
+    })
+}
+
+async fn generate_page_openrouter(key: &str, model: &str, prompt: &str) -> Result<String, String> {
+    // reqwest's rustls build panics without a process-level crypto provider;
+    // the app installs one at startup, the test binary does not.
+    crate::ensure_rustls_crypto_provider()?;
+    let client = reqwest::Client::builder()
+        .timeout(OPENROUTER_TIMEOUT)
+        .build()
+        .map_err(|err| format!("failed to build HTTP client: {err}"))?;
+    let response = client
+        .post(OPENROUTER_CHAT_URL)
+        .header("Authorization", format!("Bearer {key}"))
+        .header("Content-Type", "application/json")
+        .header("HTTP-Referer", "https://qmux.app")
+        .header("X-Title", "Session")
+        .json(&openrouter_request_body(model, prompt))
+        .send()
+        .await
+        .map_err(|err| {
+            if err.is_timeout() {
+                "OpenRouter request timed out.".to_string()
+            } else {
+                format!("OpenRouter request failed: {err}")
+            }
+        })?;
+    let status = response.status();
+    let body: Value = response
+        .json()
+        .await
+        .map_err(|err| format!("failed to read OpenRouter response: {err}"))?;
+    if !status.is_success() && body.get("error").is_none() {
+        return Err(format!(
+            "OpenRouter request failed with status {}.",
+            status.as_u16()
+        ));
+    }
+    openrouter_page_from_response(&body)
+}
+
+fn generate_page(
+    transport: &Transport,
+    config: &crate::config::SessionConfig,
+    workspace: &GroupInfo,
+    slug: &str,
+    prompt: &str,
+) -> Result<String, String> {
+    match transport {
+        Transport::OpenRouter { key, model } => {
+            // Providers behind OpenRouter occasionally abort a request; one
+            // retry covers that without masking a bad key.
+            let first =
+                tauri::async_runtime::block_on(generate_page_openrouter(key, model, prompt));
+            match first {
+                Err(err) if !err.contains("API key") && !err.contains("401") => {
+                    tauri::async_runtime::block_on(generate_page_openrouter(key, model, prompt))
+                        .map_err(|retry_err| {
+                            format!("{retry_err} (after a retry; first attempt: {err})")
+                        })
+                }
+                other => other,
+            }
+        }
+        Transport::Cli { adapter, model } => crate::title_generation::generate_encyclopedia_page(
+            config,
+            &format!("encyclopedia-{slug}"),
+            adapter,
+            model.as_deref(),
+            workspace,
+            prompt,
+        ),
+    }
+}
+
 static JOBS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 struct Job(String);
@@ -512,14 +683,19 @@ fn schedule(state: AppState, workspace: GroupInfo, slug: String) {
                 return;
             }
         };
-        let generated = crate::title_generation::generate_encyclopedia_page(
-            state.config(),
-            &format!("encyclopedia-{slug}"),
-            &page.adapter,
-            page.model.as_deref(),
-            &workspace,
-            &prompt,
-        );
+        let transport = match crate::persistence::load_preferences(&state.config().workspace_root) {
+            Ok(preferences) => choose_transport(&preferences, &page),
+            Err(err) => {
+                eprintln!(
+                    "session: encyclopedia page {slug}: preferences unavailable ({err}); using the CLI"
+                );
+                Transport::Cli {
+                    adapter: page.adapter.clone(),
+                    model: page.model.clone(),
+                }
+            }
+        };
+        let generated = generate_page(&transport, state.config(), &workspace, &slug, &prompt);
         let stored = (|| -> Result<Option<EncyclopediaPage>, String> {
             let _guard = store_guard();
             // Re-read: sources may have been added, or the page deleted.
@@ -538,6 +714,7 @@ fn schedule(state: AppState, workspace: GroupInfo, slug: String) {
                     page.body = body;
                     page.status = EncyclopediaPageStatus::Ready;
                     page.error = None;
+                    page.generated_by = Some(transport.label());
                 }
                 Err(err) => {
                     page.status = EncyclopediaPageStatus::Failed;
@@ -641,6 +818,7 @@ pub fn encyclopedia_request_page(
                         .map(str::trim)
                         .filter(|model| !model.is_empty())
                         .map(str::to_string),
+                    generated_by: None,
                     workspace_id: workspace.id.clone(),
                     created_at: now,
                     updated_at: now,
@@ -733,6 +911,7 @@ mod tests {
             error: None,
             adapter: "claude".to_string(),
             model: None,
+            generated_by: None,
             workspace_id: "ws".to_string(),
             created_at: 1,
             updated_at: 1,
@@ -780,6 +959,78 @@ mod tests {
         assert!(validate_slug("Daemon").is_err());
         assert!(validate_slug("../etc").is_err());
         assert!(validate_slug("a b").is_err());
+    }
+
+    #[test]
+    fn transport_prefers_openrouter_when_a_key_is_configured() {
+        let page = page("daemon", "Daemon");
+        let none = AppPreferences::default();
+        assert_eq!(
+            choose_transport(&none, &page),
+            Transport::Cli {
+                adapter: "claude".to_string(),
+                model: None
+            }
+        );
+        let blank = AppPreferences {
+            open_router_key: Some("   ".to_string()),
+            ..Default::default()
+        };
+        assert!(matches!(
+            choose_transport(&blank, &page),
+            Transport::Cli { .. }
+        ));
+        let keyed = AppPreferences {
+            open_router_key: Some(" sk-or-x ".to_string()),
+            ..Default::default()
+        };
+        let transport = choose_transport(&keyed, &page);
+        assert_eq!(
+            transport,
+            Transport::OpenRouter {
+                key: "sk-or-x".to_string(),
+                model: DEFAULT_OPENROUTER_MODEL.to_string()
+            }
+        );
+        assert_eq!(transport.label(), "openrouter:google/gemini-3.8-flash");
+        let mut cli_page = page.clone();
+        cli_page.model = Some("fable".to_string());
+        assert_eq!(choose_transport(&none, &cli_page).label(), "claude:fable");
+    }
+
+    #[test]
+    fn openrouter_response_yields_the_page_or_the_error() {
+        let ok = json!({
+            "choices": [{ "message": { "content": "{\"page\":\"# T\\n\\nbody\"}" } }]
+        });
+        assert_eq!(openrouter_page_from_response(&ok).unwrap(), "# T\n\nbody");
+        let plain = json!({ "choices": [{ "message": { "content": "# T\n\nplain" } }] });
+        assert_eq!(
+            openrouter_page_from_response(&plain).unwrap(),
+            "# T\n\nplain"
+        );
+        let error = json!({ "error": { "message": "Invalid API key", "code": 401 } });
+        assert_eq!(
+            openrouter_page_from_response(&error).unwrap_err(),
+            "OpenRouter request failed: Invalid API key"
+        );
+        assert!(openrouter_page_from_response(&json!({ "choices": [] })).is_err());
+        let empty = json!({ "choices": [{ "message": { "content": "{\"page\":\"\"}" } }] });
+        assert!(openrouter_page_from_response(&empty).is_err());
+    }
+
+    #[test]
+    fn openrouter_request_uses_structured_output_and_low_effort() {
+        let body = openrouter_request_body("google/gemini-3.8-flash", "hello");
+        assert_eq!(body["model"], "google/gemini-3.8-flash");
+        assert_eq!(body["messages"][0]["content"], "hello");
+        assert_eq!(body["response_format"]["type"], "json_schema");
+        assert_eq!(body["response_format"]["json_schema"]["strict"], true);
+        assert_eq!(
+            body["response_format"]["json_schema"]["schema"]["required"][0],
+            "page"
+        );
+        assert_eq!(body["reasoning"]["effort"], "low");
     }
 
     #[test]
@@ -1049,15 +1300,19 @@ mod tests {
                 fs::write(out_dir.join(format!("{}.prompt.txt", case.name)), &prompt).unwrap();
                 continue;
             }
+            let transport = match std::env::var("SESSION_ENCYCLOPEDIA_OPENROUTER_KEY") {
+                Ok(key) if !key.trim().is_empty() => Transport::OpenRouter {
+                    key: key.trim().to_string(),
+                    model: std::env::var("SESSION_ENCYCLOPEDIA_OPENROUTER_MODEL")
+                        .unwrap_or_else(|_| DEFAULT_OPENROUTER_MODEL.to_string()),
+                },
+                _ => Transport::Cli {
+                    adapter: case.adapter.clone(),
+                    model: case.model.clone(),
+                },
+            };
             let started = std::time::Instant::now();
-            let generated = crate::title_generation::generate_encyclopedia_page(
-                &config,
-                &format!("live-{}", case.name),
-                &case.adapter,
-                case.model.as_deref(),
-                &workspace,
-                &prompt,
-            );
+            let generated = generate_page(&transport, &config, &workspace, &slug, &prompt);
             let elapsed = started.elapsed().as_secs();
             let mut report = String::new();
             match &generated {
@@ -1071,12 +1326,13 @@ mod tests {
                         markdown.chars().take(24).collect::<String>(), title, body
                     ));
                     println!(
-                        "OK   {:<26} {:>3}s {:>4}w links={:<2} title={:?}",
+                        "OK   {:<26} {:>3}s {:>4}w links={:<2} title={:?} via {}",
                         case.name,
                         elapsed,
                         words,
                         links.len(),
-                        title
+                        title,
+                        transport.label()
                     );
                 }
                 Err(err) => {
