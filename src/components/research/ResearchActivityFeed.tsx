@@ -348,8 +348,11 @@ export function ResearchQueryCard({
   onOpenChild?: (query: RecentResearchQuery) => void;
 }) {
   const recap = query.recap?.trim() ?? "";
+  const running = isActiveResearchStatus(query.status);
+  // A running question shows its spinner and nothing else below the prompt;
+  // the thread actions and metadata row appear once the answer settles.
   const actions =
-    onToggleFollow && onToggleBookmark ? (
+    !running && onToggleFollow && onToggleBookmark ? (
       <ResearchThreadActions
         followed={followed}
         bookmarked={bookmarked}
@@ -393,7 +396,7 @@ export function ResearchQueryCard({
           )}
         />
       </ResearchUserMessage>
-      {isActiveResearchStatus(query.status) ? (
+      {running ? (
         <span
           className="recent-query-spinner"
           role="status"
@@ -446,7 +449,7 @@ export function ResearchQueryCard({
           })}
         </ul>
       ) : null}
-      {actions || metadata ? (
+      {!running && (actions || metadata) ? (
         <div className="recent-query-footer">
           {actions}
           {metadata ? <div className="recent-query-metadata">{metadata}</div> : null}
