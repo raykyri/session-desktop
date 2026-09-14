@@ -36,12 +36,20 @@ import {
 // reject a level the model does not support.
 const GPT_5_4_REASONING_LEVELS = ["", "low", "medium", "high", "xhigh"];
 
+const CLAUDE_RESEARCH_EFFORT_OPTIONS = CLAUDE_EFFORT_OPTIONS.map((option) => ({
+  ...option,
+  label: option.label.replace(/ effort$/i, ""),
+}));
+
 // The reasoning/effort levels the selected model supports, or null for
 // adapters without a reasoning-effort launch option. Every Claude model
 // (Fable, Opus, Sonnet) shares one range; Codex ranges vary by model.
-function effortOptionsFor(adapter: string, model: string): LauncherSelectOption[] | null {
+export function researchEffortOptionsFor(
+  adapter: string,
+  model: string,
+): LauncherSelectOption[] | null {
   if (adapter === CLAUDE_ADAPTER_ID) {
-    return CLAUDE_EFFORT_OPTIONS;
+    return CLAUDE_RESEARCH_EFFORT_OPTIONS;
   }
   if (adapter === CODEX_ADAPTER_ID) {
     if (model === "gpt-5.4") {
@@ -57,13 +65,13 @@ function effortOptionsFor(adapter: string, model: string): LauncherSelectOption[
 /** Who a question goes to. "network" is scaffolding: the toggle selects it and
  * the composer accepts it, but nothing is sent anywhere yet. */
 const ASK_MODES = [
-  { value: "ai", label: "Ask AI" },
   { value: "network", label: "Ask network" },
+  { value: "ai", label: "Ask AI" },
 ] as const;
 
 type AskMode = (typeof ASK_MODES)[number]["value"];
 
-export function askModeShowsModelControls(askMode: AskMode) {
+export function askModeShowsAiControls(askMode: AskMode) {
   return askMode === "ai";
 }
 
@@ -89,9 +97,9 @@ export default function ResearchQueryComposer({
   onCreate,
 }: ResearchQueryComposerProps) {
   const [prompt, setPrompt] = useState("");
-  // Not persisted with the rest of the draft: an unimplemented mode should not
-  // be what a returning composer opens in.
-  const [askMode, setAskMode] = useState<AskMode>("ai");
+  // Recipient choice is not persisted with the rest of the draft; every new
+  // composer opens on the product-default network mode.
+  const [askMode, setAskMode] = useState<AskMode>("network");
   const [adapter, setAdapter] = useState("");
   const [modelChoice, setModelChoice] = useState<string | null>(null);
   const [customModel, setCustomModel] = useState("");
@@ -214,7 +222,7 @@ export default function ResearchQueryComposer({
   // Same stale-choice contract as the model picker: a level left over from
   // another adapter or model silently falls back to the default, so the
   // trigger always shows what will launch.
-  const effortOptions = effortOptionsFor(adapter, selectedModel);
+  const effortOptions = researchEffortOptionsFor(adapter, selectedModel);
   const selectedEffort =
     effortOptions && effortOptions.some((option) => option.value === effortChoice)
       ? effortChoice
@@ -296,7 +304,12 @@ export default function ResearchQueryComposer({
       className="command-launcher new-research-launcher"
       aria-label="New research"
       onKeyDown={(event) => {
-        const tabAction = launcherTabAction(event, askModeShowsModelControls(askMode));
+        const aiControlsVisible = askModeShowsAiControls(askMode);
+        const requestedTabAction = launcherTabAction(event, aiControlsVisible);
+        const tabAction =
+          !aiControlsVisible && requestedTabAction === "cycle-provider"
+            ? "capture"
+            : requestedTabAction;
         if (tabAction) {
           event.preventDefault();
           event.stopPropagation();
@@ -351,7 +364,7 @@ export default function ResearchQueryComposer({
                 </button>
               ))}
             </div>
-            {askModeShowsModelControls(askMode) ? (
+            {askModeShowsAiControls(askMode) ? (
               <div className="command-launcher-options new-research-model-controls">
                 <LauncherSelect
                   value={selectedModel}
@@ -381,7 +394,7 @@ export default function ResearchQueryComposer({
                   <LauncherSelect
                     value={selectedEffort}
                     options={effortOptions}
-                    ariaLabel="Reasoning effort"
+                    ariaLabel="Reasoning"
                     onChange={setEffortChoice}
                   />
                 ) : null}
@@ -389,18 +402,20 @@ export default function ResearchQueryComposer({
             ) : null}
           </div>
           <div className="command-launcher-controls">
-            <div className="command-launcher-adapter-select">
-              <LauncherSelect
-                value={adapter}
-                options={adapterOptions}
-                ariaLabel="Agent"
-                onChange={(nextAdapter) => {
-                  sessionDraftTouchedRef.current = true;
-                  setError(null);
-                  setAdapter(nextAdapter);
-                }}
-              />
-            </div>
+            {askModeShowsAiControls(askMode) ? (
+              <div className="command-launcher-adapter-select">
+                <LauncherSelect
+                  value={adapter}
+                  options={adapterOptions}
+                  ariaLabel="Agent"
+                  onChange={(nextAdapter) => {
+                    sessionDraftTouchedRef.current = true;
+                    setError(null);
+                    setAdapter(nextAdapter);
+                  }}
+                />
+              </div>
+            ) : null}
             <button
               type="submit"
               className="control-button command-launcher-send new-research-send"

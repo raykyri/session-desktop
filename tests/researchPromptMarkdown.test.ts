@@ -62,7 +62,7 @@ test("research prompts preserve Markdown blockquotes", () => {
   assert.match(html, /research-user-message research-prompt/);
   assert.doesNotMatch(html, /research-content-card/);
   assert.doesNotMatch(html, /Reply to:/);
-  assert.ok(html.indexOf("You asked Claude Fable") < html.indexOf("<blockquote>"));
+  assert.ok(html.indexOf("<blockquote>") < html.indexOf("You asked Claude Fable"));
   assert.match(html, /<blockquote>/);
   assert.match(html, /foo<br\/>[\n]?bar/);
 });
@@ -136,6 +136,22 @@ test("follow-up research prompts omit the asked-model line", () => {
 
   assert.doesNotMatch(html, /You asked/);
   assert.match(html, /<blockquote>/);
+});
+
+test("branch prompts place Back above the asked-model line", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchSegmentPrompt, {
+      ...promptProps,
+      index: 0,
+      parentNodeId: "parent",
+      queryQuote: "Selected answer passage",
+    }),
+  );
+
+  assert.match(html, /research-parent-link/);
+  assert.ok(html.indexOf("Back") < html.indexOf("Selected answer passage"));
+  assert.ok(html.indexOf("Selected answer passage") < html.indexOf("research-user-message"));
+  assert.ok(html.indexOf("Selected answer passage") < html.indexOf("You asked Claude Fable"));
 });
 
 test("follow-up research prompts quote a truncated previous answer", () => {

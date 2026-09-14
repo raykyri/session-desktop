@@ -125,7 +125,10 @@ test("Home prefixes targeted follow-ups with a muted target excerpt", () => {
     /recent-query-child-question">How does this change the result\?<\/span>/,
   );
   assert.ok(html.indexOf("recent-query-child-target") < html.indexOf("recent-query-child-question"));
-  assert.match(html, /recent-query-child-target"[^>]*>[^<]+<\/span><button/);
+  assert.match(
+    html,
+    /recent-query-child-target"[^>]*>[^<]+<\/span> <span class="recent-query-child-link" role="button"/,
+  );
 });
 
 test("Home places follow-up questions below the research summary", () => {

@@ -7,9 +7,11 @@ import type { AgentAdapterMetadata } from "../src/types";
 
 // Registered before the composer is pulled in, since it reaches adapter icons.
 register("./svgStubLoader.mjs", import.meta.url);
-const { default: ResearchQueryComposer, askModeShowsModelControls } = await import(
-  "../src/components/research/ResearchQueryComposer"
-);
+const {
+  default: ResearchQueryComposer,
+  askModeShowsAiControls,
+  researchEffortOptionsFor,
+} = await import("../src/components/research/ResearchQueryComposer");
 
 function adapter(id: string): AgentAdapterMetadata {
   return {
@@ -50,27 +52,31 @@ function renderComposer() {
   );
 }
 
-test("the composer offers both recipients and opens on Ask AI", () => {
+test("the composer offers both recipients and opens on Ask network", () => {
   const html = renderComposer();
 
   assert.match(html, /aria-label="Ask"/);
-  assert.match(html, /<button[^>]*aria-pressed="true"[^>]*>Ask AI<\/button>/);
-  assert.match(html, /<button[^>]*aria-pressed="false"[^>]*>Ask network<\/button>/);
+  assert.match(html, /<button[^>]*aria-pressed="true"[^>]*>Ask network<\/button>/);
+  assert.match(html, /<button[^>]*aria-pressed="false"[^>]*>Ask AI<\/button>/);
+  assert.ok(html.indexOf("Ask network") < html.indexOf("Ask AI"));
+  assert.doesNotMatch(html, /new-research-model-controls/);
+  assert.doesNotMatch(html, /command-launcher-adapter-select/);
 });
 
-test("network mode hides model controls", () => {
-  assert.equal(askModeShowsModelControls("ai"), true);
-  assert.equal(askModeShowsModelControls("network"), false);
+test("Claude reasoning options omit the word effort", () => {
+  const options = researchEffortOptionsFor("claude", "fable");
+  assert.deepEqual(options?.map((option) => option.label), [
+    "Default",
+    "Low",
+    "Medium",
+    "High",
+    "Extra",
+    "Max",
+    "Ultracode",
+  ]);
 });
 
-test("the ask toggle sits left of the model selector", () => {
-  const html = renderComposer();
-
-  const toggle = html.indexOf("new-research-ask-mode");
-  const modelControls = html.indexOf("new-research-model-controls");
-  assert.ok(toggle >= 0 && modelControls >= 0, "both controls render");
-  assert.ok(
-    toggle < modelControls,
-    "the recipient toggle precedes the model controls in the overlay row",
-  );
+test("network mode hides AI controls", () => {
+  assert.equal(askModeShowsAiControls("ai"), true);
+  assert.equal(askModeShowsAiControls("network"), false);
 });

@@ -1477,32 +1477,35 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
   return (
     <div className="research-prompt-block">
-      {index === 0 ? (
-        <div className="research-prompt-metadata">
-          {formatResearchAskedSummary(adapter, model)}
-        </div>
-      ) : replySnippet ? (
+      {index === 0 && parentNodeId ? (
+        <button
+          type="button"
+          className="control-button research-parent-link"
+          onClick={() => onSelectNode(parentNodeId)}
+        >
+          <ArrowLeft size={13} aria-hidden="true" />
+          Back
+        </button>
+      ) : null}
+      {index > 0 && replySnippet ? (
         <div className="research-prompt-metadata research-prompt-reply">
           <Reply size={12} aria-hidden="true" />
           <span className="research-prompt-reply-text">{`Reply to: ${replySnippet}`}</span>
         </div>
       ) : null}
-      <ResearchUserMessage className="research-prompt">
-        {index === 0 && parentNodeId ? (
-          <button
-            type="button"
-            className="control-button research-parent-link"
-            onClick={() => onSelectNode(parentNodeId)}
-          >
-            <ArrowLeft size={13} aria-hidden="true" />
-            Back
-          </button>
-        ) : null}
-        {queryQuote ? (
-          <blockquote className="research-prompt-quote">{quoteDisplayText(queryQuote)}</blockquote>
-        ) : null}
+      {queryQuote ? (
+        <blockquote className="research-prompt-quote">{quoteDisplayText(queryQuote)}</blockquote>
+      ) : null}
+      <ResearchUserMessage
+        className={`research-prompt${index === 0 ? " has-trailing-metadata" : ""}`}
+      >
         <ResearchMessageBody prompt={prompt} attachments={attachments} />
       </ResearchUserMessage>
+      {index === 0 ? (
+        <div className="research-prompt-metadata is-after-prompt">
+          {formatResearchAskedSummary(adapter, model)}
+        </div>
+      ) : null}
     </div>
   );
 });
