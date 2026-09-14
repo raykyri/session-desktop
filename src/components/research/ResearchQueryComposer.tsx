@@ -54,6 +54,15 @@ function effortOptionsFor(adapter: string, model: string): LauncherSelectOption[
   return null;
 }
 
+/** Who a question goes to. "network" is scaffolding: the toggle selects it and
+ * the composer accepts it, but nothing is sent anywhere yet. */
+const ASK_MODES = [
+  { value: "ai", label: "Ask AI" },
+  { value: "network", label: "Ask your network" },
+] as const;
+
+type AskMode = (typeof ASK_MODES)[number]["value"];
+
 interface ResearchQueryComposerProps {
   adapters: AgentAdapterMetadata[];
   requireCmdEnterToSend: boolean;
@@ -76,6 +85,9 @@ export default function ResearchQueryComposer({
   onCreate,
 }: ResearchQueryComposerProps) {
   const [prompt, setPrompt] = useState("");
+  // Not persisted with the rest of the draft: an unimplemented mode should not
+  // be what a returning composer opens in.
+  const [askMode, setAskMode] = useState<AskMode>("ai");
   const [adapter, setAdapter] = useState("");
   const [modelChoice, setModelChoice] = useState<string | null>(null);
   const [customModel, setCustomModel] = useState("");
@@ -209,6 +221,12 @@ export default function ResearchQueryComposer({
     if (!prompt.trim() || !adapter || !adapterReady || submitting) {
       return;
     }
+    if (askMode === "network") {
+      // Asking your network is not built yet. Send nothing rather than
+      // routing the question to an agent the user did not choose; this is
+      // where that path starts once there is somewhere for it to go.
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -311,6 +329,24 @@ export default function ResearchQueryComposer({
         />
         <div className="command-launcher-overlay">
           <div className="command-launcher-overlay-group">
+            {/* A peer of the options row rather than a chip inside it: that row
+                scrolls horizontally when the controls outgrow the composer, and
+                the recipient of the question should not scroll out of view. */}
+            <div className="new-research-ask-mode" role="group" aria-label="Ask">
+              {ASK_MODES.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`new-research-ask-mode-button${
+                    askMode === option.value ? " is-active" : ""
+                  }`}
+                  aria-pressed={askMode === option.value}
+                  onClick={() => setAskMode(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             <div className="command-launcher-options new-research-model-controls">
               <LauncherSelect
                 value={selectedModel}
