@@ -1742,6 +1742,42 @@
   font-size: var(--fs-sm);
 }
 
+/* Segmented pair choosing who the question goes to. Sits at the head of the
+   composer's overlay row, so it borrows the option chips' borderless treatment
+   and re-enables the pointer events the group turns off. */
+.new-research-ask-mode {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-fill-subtle);
+  pointer-events: auto;
+}
+
+.new-research-ask-mode-button {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.new-research-ask-mode-button:hover {
+  color: var(--text-primary);
+}
+
+.new-research-ask-mode-button.is-active {
+  background: var(--control-bg);
+  color: var(--text-strong);
+}
+
 .new-research-model-controls {
   flex-wrap: nowrap;
 }
