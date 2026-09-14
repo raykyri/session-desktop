@@ -5,7 +5,7 @@
   "identifier": "dev.session.desktop",
   "build": {
     "beforeDevCommand": "npm run dev:frontend",
-    "devUrl": "http://127.0.0.1:1420",
+    "devUrl": "http://127.0.0.1:1480",
     "beforeBuildCommand": "npm run build:frontend",
     "frontendDist": "../dist"
   },
