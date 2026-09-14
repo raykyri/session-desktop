@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, ChevronRight } from "lucide-react";
 
 export interface LauncherSelectOption {
   value: string;
@@ -13,13 +13,26 @@ export interface LauncherSelectOption {
   disabled?: boolean;
 }
 
+/** A secondary choice shown as one row at the bottom of the popover, below a
+ * separator, that opens its own option list beside the row. */
+export interface LauncherSelectSubmenu {
+  label: string;
+  value: string;
+  options: LauncherSelectOption[];
+  onChange: (value: string) => void;
+  ariaLabel?: string;
+}
+
 interface LauncherSelectProps {
   value: string;
   options: LauncherSelectOption[];
   onChange: (value: string) => void;
   ariaLabel?: string;
   disabled?: boolean;
+  submenu?: LauncherSelectSubmenu;
 }
+
+const SUBMENU_GAP = 4;
 
 const toneClass = (tone?: string) => (tone ? ` is-${tone}` : "");
 const iconClass = (option?: LauncherSelectOption) =>
@@ -35,11 +48,48 @@ export function LauncherSelect({
   onChange,
   ariaLabel,
   disabled = false,
+  submenu,
 }: LauncherSelectProps) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
+  const [submenuAnchor, setSubmenuAnchor] = useState<{ left: number; top: number } | null>(
+    null,
+  );
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
+  const submenuTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const submenuRef = useRef<HTMLDivElement | null>(null);
+  const submenuOpen = open && submenuAnchor !== null;
+  const submenuSelected =
+    submenu?.options.find((option) => option.value === submenu.value) ?? submenu?.options[0];
+
+  const closeAll = () => {
+    setOpen(false);
+    setSubmenuAnchor(null);
+  };
+
+  const openSubmenu = () => {
+    const rect = submenuTriggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      // Beside the row, top edges aligned; the layout effect below flips it
+      // to the left when the right edge would leave the viewport.
+      setSubmenuAnchor({ left: rect.right + SUBMENU_GAP, top: rect.top - 4 });
+    }
+  };
+
+  useLayoutEffect(() => {
+    if (!submenuOpen) {
+      return;
+    }
+    const panel = submenuRef.current?.getBoundingClientRect();
+    const row = submenuTriggerRef.current?.getBoundingClientRect();
+    if (!panel || !row || panel.right <= window.innerWidth - 8) {
+      return;
+    }
+    setSubmenuAnchor((current) =>
+      current ? { ...current, left: Math.max(8, row.left - panel.width - SUBMENU_GAP) } : current,
+    );
+  }, [submenuOpen]);
   const match = options.find((option) => option.value === value);
   const selected = match ?? options[0];
 
@@ -56,6 +106,7 @@ export function LauncherSelect({
   useEffect(() => {
     if (disabled) {
       setOpen(false);
+      setSubmenuAnchor(null);
     }
   }, [disabled]);
 
@@ -73,13 +124,19 @@ export function LauncherSelect({
     }
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (!triggerRef.current?.contains(target) && !popoverRef.current?.contains(target)) {
+      if (
+        !triggerRef.current?.contains(target) &&
+        !popoverRef.current?.contains(target) &&
+        !submenuRef.current?.contains(target)
+      ) {
         setOpen(false);
+        setSubmenuAnchor(null);
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" || event.key === "Tab") {
         setOpen(false);
+        setSubmenuAnchor(null);
       }
     };
     document.addEventListener("mousedown", handlePointerDown);
@@ -106,6 +163,7 @@ export function LauncherSelect({
           if (!open) {
             measure();
           }
+          setSubmenuAnchor(null);
           setOpen((prev) => !prev);
         }}
       >
@@ -149,8 +207,9 @@ export function LauncherSelect({
                       className={`menu-item launcher-select-item${toneClass(option.tone)}${
                         active ? " is-active" : ""
                       }`}
+                      onMouseEnter={() => setSubmenuAnchor(null)}
                       onClick={() => {
-                        setOpen(false);
+                        closeAll();
                         if (option.value !== value) {
                           onChange(option.value);
                         }
@@ -164,6 +223,87 @@ export function LauncherSelect({
                           aria-hidden="true"
                         />
                       ) : null}
+                      <span className="launcher-select-item-label">{option.label}</span>
+                      {option.detail ? (
+                        <span className="launcher-select-item-detail">{option.detail}</span>
+                      ) : null}
+                      {active ? (
+                        <Check size={14} className="launcher-select-check" aria-hidden="true" />
+                      ) : null}
+                    </button>
+                  </Fragment>
+                );
+              })}
+              {submenu ? (
+                <>
+                  <div className="launcher-select-separator" role="separator" aria-hidden="true" />
+                  <button
+                    ref={submenuTriggerRef}
+                    type="button"
+                    className={`menu-item launcher-select-item launcher-select-submenu-trigger${
+                      submenuOpen ? " is-open" : ""
+                    }`}
+                    aria-haspopup="listbox"
+                    aria-expanded={submenuOpen}
+                    onMouseEnter={openSubmenu}
+                    onClick={() => (submenuOpen ? setSubmenuAnchor(null) : openSubmenu())}
+                    onKeyDown={(event) => {
+                      if (event.key === "ArrowRight") {
+                        event.preventDefault();
+                        openSubmenu();
+                      }
+                    }}
+                  >
+                    <span className="launcher-select-item-label">{submenu.label}</span>
+                    <span className="launcher-select-item-detail">{submenuSelected?.label}</span>
+                    <ChevronRight
+                      size={13}
+                      className="launcher-select-submenu-chevron"
+                      aria-hidden="true"
+                    />
+                  </button>
+                </>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
+      {submenu && submenuOpen && submenuAnchor
+        ? createPortal(
+            <div
+              ref={submenuRef}
+              className="popover-surface launcher-select-popover launcher-select-submenu"
+              role="listbox"
+              aria-label={submenu.ariaLabel ?? submenu.label}
+              style={{ left: submenuAnchor.left, top: submenuAnchor.top }}
+            >
+              {submenu.options.map((option) => {
+                const active = option.value === submenu.value;
+                return (
+                  <Fragment key={option.value}>
+                    {option.dividerBefore ? (
+                      <div
+                        className="launcher-select-separator"
+                        role="separator"
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={active}
+                      aria-disabled={option.disabled || undefined}
+                      disabled={option.disabled}
+                      className={`menu-item launcher-select-item${toneClass(option.tone)}${
+                        active ? " is-active" : ""
+                      }`}
+                      onClick={() => {
+                        closeAll();
+                        if (option.value !== submenu.value) {
+                          submenu.onChange(option.value);
+                        }
+                      }}
+                    >
                       <span className="launcher-select-item-label">{option.label}</span>
                       {option.detail ? (
                         <span className="launcher-select-item-detail">{option.detail}</span>

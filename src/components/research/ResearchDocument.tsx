@@ -1474,6 +1474,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   adapter,
   model,
   createdAt,
+  running = false,
   followed = false,
   bookmarked = false,
   replyToAnswer,
@@ -1491,6 +1492,9 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   model?: string | null;
   /** When the root prompt was asked; shown as relative time on its footer. */
   createdAt?: number;
+  /** The question is still being answered: the footer row (thread actions,
+   * model, time) stays hidden until the answer settles. */
+  running?: boolean;
   followed?: boolean;
   bookmarked?: boolean;
   replyToAnswer?: string | null;
@@ -1504,6 +1508,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
   const modelSummary = index === 0 ? formatResearchModelSummary(adapter, model) : "";
   const askedAt = index === 0 && createdAt != null && Number.isFinite(createdAt) ? createdAt : null;
+  const showFooter = index === 0 && !running;
   return (
     <div className="research-prompt-block">
       {index === 0 && parentNodeId ? (
@@ -1526,11 +1531,11 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
         <blockquote className="research-prompt-quote">{quoteDisplayText(queryQuote)}</blockquote>
       ) : null}
       <ResearchUserMessage
-        className={`research-prompt${index === 0 ? " has-trailing-metadata" : ""}`}
+        className={`research-prompt${showFooter ? " has-trailing-metadata" : ""}`}
       >
         <ResearchMessageBody prompt={prompt} attachments={attachments} />
       </ResearchUserMessage>
-      {index === 0 ? (
+      {showFooter ? (
         <div className="research-prompt-metadata is-after-prompt research-prompt-footer">
           {onToggleFollow && onToggleBookmark ? (
             <ResearchThreadActions
@@ -1637,6 +1642,7 @@ const ThreadSegment = memo(function ThreadSegment({
         adapter={node.adapter}
         model={node.model}
         createdAt={node.createdAt}
+        running={isActiveResearchStatus(node.status)}
         followed={followed}
         bookmarked={bookmarked}
         replyToAnswer={replyToAnswer}

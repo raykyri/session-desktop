@@ -101,6 +101,23 @@ test("the root prompt footer pairs thread actions with the model and relative ti
   assert.doesNotMatch(followUp, /research-thread-actions/);
 });
 
+test("a running root prompt hides the footer row until the answer settles", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchSegmentPrompt, {
+      ...promptProps,
+      index: 0,
+      running: true,
+      createdAt: Date.now(),
+      onToggleFollow: () => {},
+      onToggleBookmark: () => {},
+    }),
+  );
+  assert.doesNotMatch(html, /research-prompt-footer/);
+  assert.doesNotMatch(html, /research-thread-actions/);
+  assert.doesNotMatch(html, /Claude Fable/);
+  assert.doesNotMatch(html, /has-trailing-metadata/);
+});
+
 test("the shared user-message primitive stays unboxed", () => {
   const html = renderToStaticMarkup(
     createElement(

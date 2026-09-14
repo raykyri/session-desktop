@@ -377,6 +377,17 @@ export default function ResearchQueryComposer({
                     sessionDraftTouchedRef.current = true;
                     setModelChoice(choice);
                   }}
+                  submenu={
+                    effortOptions
+                      ? {
+                          label: "Effort",
+                          ariaLabel: "Effort",
+                          value: selectedEffort,
+                          options: effortOptions,
+                          onChange: setEffortChoice,
+                        }
+                      : undefined
+                  }
                 />
                 {selectedModel === CUSTOM_MODEL ? (
                   <input
@@ -388,14 +399,6 @@ export default function ResearchQueryComposer({
                       sessionDraftTouchedRef.current = true;
                       setCustomModel(event.currentTarget.value);
                     }}
-                  />
-                ) : null}
-                {effortOptions ? (
-                  <LauncherSelect
-                    value={selectedEffort}
-                    options={effortOptions}
-                    ariaLabel="Reasoning"
-                    onChange={setEffortChoice}
                   />
                 ) : null}
               </div>

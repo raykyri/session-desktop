@@ -2611,6 +2611,15 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   color: var(--status-attention-fg);
 }
 
+.launcher-select-submenu-trigger.is-open {
+  background: var(--popover-item-hover-bg);
+}
+
+.launcher-select-submenu-chevron {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+}
+
 .workspace {
   position: relative;
   display: flex;
