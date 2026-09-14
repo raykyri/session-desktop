@@ -333,7 +333,7 @@ fn run_research_metadata_process(
     let raw = candidate.as_deref().unwrap_or("");
     let result = match field {
         "recap" => crate::research_recap::normalize_recap(raw),
-        "page" => Some(raw.trim().to_string()).filter(|page| !page.is_empty()),
+        "page" => crate::encyclopedia::normalize_page(raw),
         _ => sanitize_research_title(raw),
     };
     result.ok_or_else(|| format!("{} returned no research {field}", flavor.label()))
