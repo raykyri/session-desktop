@@ -2103,7 +2103,8 @@
   gap: 5px;
 }
 
-.research-recap-instructions {
+/* Scoped so it outranks the fixed 190px width from .settings-input in shell.css. */
+.research-recap-instructions-field .research-recap-instructions {
   display: block;
   flex: none;
   width: 100%;
