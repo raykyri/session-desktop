@@ -954,7 +954,9 @@ mod tests {
     ///  cargo test --bin session live_encyclopedia_pages -- --ignored --nocapture`.
     /// Each case is `{name, term, adapter, model?, question?, excerpt,
     /// siblingTerms?, existingPages?, pageSlug?}`; one Markdown file per case
-    /// lands in the output directory alongside a summary line per case.
+    /// lands in the output directory alongside a summary line per case. With
+    /// `SESSION_ENCYCLOPEDIA_PROMPTS_ONLY=1` it writes `<name>.prompt.txt`
+    /// files instead of generating.
     #[test]
     #[ignore]
     fn live_encyclopedia_pages() {
@@ -1041,6 +1043,12 @@ mod tests {
             page.model = case.model.clone();
             page.sources.push(source);
             let prompt = build_prompt(&page, &case.existing_pages);
+            // Prompt-only mode: write the exact prompts for out-of-process
+            // benchmarks (other models, other transports) without generating.
+            if std::env::var("SESSION_ENCYCLOPEDIA_PROMPTS_ONLY").is_ok() {
+                fs::write(out_dir.join(format!("{}.prompt.txt", case.name)), &prompt).unwrap();
+                continue;
+            }
             let started = std::time::Instant::now();
             let generated = crate::title_generation::generate_encyclopedia_page(
                 &config,
