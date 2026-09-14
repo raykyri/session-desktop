@@ -24,6 +24,14 @@ first.
   Load older/Retry control when needed. Refresh reloads the current feed head.
 - Back/Forward buttons, Cmd/Ctrl-[ and ], Alt-Left/Right, and mouse history buttons
   use the same workspace history as research documents.
+- The Encyclopedia section between the journal rows and the research list holds
+  pages grown from wikilinks. Clicking a `[[Term]]` in an answer opens the term's
+  page, creating it on first click: the surrounding block, the other linked terms
+  in that block, and the thread's question are sent to the answering model so it
+  writes about the sense the answer meant. Pages are stored per research folder
+  under `.session/encyclopedia-v1/`, list the passages that mention them, and
+  link onward to other pages through their own wikilinks. The page header offers
+  Rewrite and Delete.
 
 The feed renders directly in the application. It has no iframe, template SDK,
 external source chooser, or separate development server. Use `npm run dev`

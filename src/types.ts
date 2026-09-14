@@ -39,6 +39,64 @@ export type GithubLoginPoll =
   | { status: "expired" }
   | { status: "denied" };
 
+export type EncyclopediaPageStatus = "generating" | "ready" | "failed";
+
+/** Where an encyclopedia page was requested from: a research answer (node)
+ * or another page. Backlinks render from this list. */
+export interface EncyclopediaSource {
+  nodeId?: string | null;
+  treeId?: string | null;
+  pageSlug?: string | null;
+  question?: string | null;
+  excerpt: string;
+  siblingTerms?: string[];
+  createdAt: number;
+}
+
+export interface EncyclopediaPage {
+  slug: string;
+  term: string;
+  title: string;
+  /** Markdown body without the title heading; empty while generating. */
+  body: string;
+  status: EncyclopediaPageStatus;
+  error?: string | null;
+  adapter: string;
+  model?: string | null;
+  workspaceId: string;
+  createdAt: number;
+  updatedAt: number;
+  sources: EncyclopediaSource[];
+  /** Slugs of the wikilinks in `body`. */
+  links: string[];
+}
+
+export interface EncyclopediaPageSummary {
+  slug: string;
+  term: string;
+  title: string;
+  status: EncyclopediaPageStatus;
+  workspaceId: string;
+  createdAt: number;
+  updatedAt: number;
+  sourceCount: number;
+}
+
+export interface EncyclopediaPageRequest {
+  workspaceId: string;
+  term: string;
+  adapter: string;
+  model?: string | null;
+  source: {
+    nodeId?: string | null;
+    treeId?: string | null;
+    pageSlug?: string | null;
+    question?: string | null;
+    excerpt: string;
+    siblingTerms: string[];
+  };
+}
+
 export interface AgentAdapterMetadata {
   id: string;
   label: string;
