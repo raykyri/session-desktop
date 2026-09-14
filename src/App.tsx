@@ -315,7 +315,10 @@ import {
 } from "./lib/workspaceScope";
 import {
   RESEARCH_HOME_TAB_ID,
+  type ResearchJournalView,
   researchCycleTabIds,
+  researchJournalTabId,
+  researchJournalViewFromTabId,
   researchTreeIdFromTabId,
   researchTreeTabId,
 } from "./lib/sidebarMode";
@@ -2339,6 +2342,8 @@ function MainApp() {
       : journalOpen || !activeResearchTreeId
         ? ("journal" as const)
         : ("document" as const);
+  const researchStageViewRef = useRef(researchStageView);
+  researchStageViewRef.current = researchStageView;
   // Menu badges and the folder-replace dialog both count every tree that keeps
   // a folder alive, so archived trees are included (removal is blocked on them).
   const researchFolderTreeCounts = useMemo(() => {
@@ -2862,11 +2867,12 @@ function MainApp() {
     ],
   );
   const cycleableResearchTreeTabIds = useMemo(
-    () => cycleableResearchTabIds.filter((tabId) => tabId !== RESEARCH_HOME_TAB_ID),
+    () => cycleableResearchTabIds.filter((tabId) => researchTreeIdFromTabId(tabId) !== null),
     [cycleableResearchTabIds],
   );
   // Shortcut number per research tree id, mirroring the terminal tabs' Cmd-1..9
-  // hints. Home participates in Ctrl-Tab cycling but has its own Cmd-N shortcut,
+  // hints. The journal pages (Home, Bookmarks, Highlights) participate in
+  // Ctrl-Tab cycling but are not numbered (Home has its own Cmd-N shortcut),
   // so tree numbers stay indexed over tree tabs only. The badge always names the
   // key that selects that row; only the first nine get a number.
   const researchShortcutIndexByTreeId = useMemo(() => {
@@ -6065,7 +6071,9 @@ function MainApp() {
   }, [showResearchSurface, setJournalOpen]);
   // Which list the journal surface shows: Home (everything), Bookmarks, or
   // Highlights.
-  const [journalView, setJournalView] = useState<"home" | "bookmarks" | "highlights">("home");
+  const [journalView, setJournalView] = useState<ResearchJournalView>("home");
+  const journalViewRef = useRef(journalView);
+  journalViewRef.current = journalView;
   const openJournal = useCallback(() => {
     setJournalView("home");
     recordResearchJournalVisit();
@@ -9204,9 +9212,18 @@ function MainApp() {
   useEffect(() => {
 
     const focusResearchTabById = (tabId: string) => {
-      if (tabId === RESEARCH_HOME_TAB_ID) {
-        focusResearchHome();
-        return;
+      switch (researchJournalViewFromTabId(tabId)) {
+        case "home":
+          openJournal();
+          return;
+        case "bookmarks":
+          openBookmarks();
+          return;
+        case "highlights":
+          openHighlights();
+          return;
+        default:
+          break;
       }
       const treeId = researchTreeIdFromTabId(tabId);
       if (treeId) {
@@ -9229,12 +9246,16 @@ function MainApp() {
     const cycleResearchTab = (direction: -1 | 1) => {
       const currentResearchTreeId = activeResearchTreeIdRef.current;
       const currentResearchSurfaceActive = activeSurfaceRef.current === "research";
-      const activeTabId =
-        currentResearchSurfaceActive && currentResearchTreeId
-          ? researchTreeTabId(currentResearchTreeId)
-          : currentResearchSurfaceActive
-            ? RESEARCH_HOME_TAB_ID
-            : activePaneIdRef.current;
+      // A forward journal page (Home, Bookmarks, Highlights) is the current
+      // tab even while a tree stays selected behind it, so the cycle steps
+      // from the page the user sees rather than from the hidden document.
+      const activeTabId = !currentResearchSurfaceActive
+        ? activePaneIdRef.current
+        : researchStageViewRef.current === "journal"
+          ? researchJournalTabId(journalViewRef.current)
+          : currentResearchTreeId
+            ? researchTreeTabId(currentResearchTreeId)
+            : RESEARCH_HOME_TAB_ID;
       const researchTabIds = cycleableResearchTabIds;
       const nextTabId = cycleTabId(
         researchTabIds,
@@ -9386,6 +9407,9 @@ function MainApp() {
     researchHomeActive,
     activeResearchTreeId,
     focusResearchHome,
+    openJournal,
+    openBookmarks,
+    openHighlights,
     moveActiveResearchTree,
     selectResearchTree,
   ]);
