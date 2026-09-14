@@ -58,13 +58,47 @@ test("research prompts preserve Markdown blockquotes", () => {
     createElement(ResearchSegmentPrompt, { ...promptProps, index: 0 }),
   );
 
-  assert.match(html, /You asked Claude Fable/);
+  assert.match(html, /Claude Fable/);
+  assert.doesNotMatch(html, /You asked/);
   assert.match(html, /research-user-message research-prompt/);
   assert.doesNotMatch(html, /research-content-card/);
   assert.doesNotMatch(html, /Reply to:/);
-  assert.ok(html.indexOf("<blockquote>") < html.indexOf("You asked Claude Fable"));
+  assert.ok(html.indexOf("<blockquote>") < html.indexOf("Claude Fable"));
   assert.match(html, /<blockquote>/);
   assert.match(html, /foo<br\/>[\n]?bar/);
+});
+
+test("the root prompt footer pairs thread actions with the model and relative time", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchSegmentPrompt, {
+      ...promptProps,
+      index: 0,
+      createdAt: Date.now() - 3 * 60 * 60 * 1000,
+      followed: true,
+      bookmarked: false,
+      onToggleFollow: () => {},
+      onToggleBookmark: () => {},
+    }),
+  );
+
+  assert.match(html, /research-prompt-metadata is-after-prompt research-prompt-footer/);
+  assert.match(html, /research-thread-follow is-active"[^>]*aria-pressed="true"/);
+  assert.match(html, />Following<\/button>/);
+  assert.match(html, /aria-label="Bookmark"/);
+  assert.match(html, /research-prompt-footer-meta"[^>]*>Claude Fable<span[^>]*> · <\/span><time[^>]*>3 hr ago<\/time>/);
+  // Follow-ups keep their reply line and never render the thread footer.
+  const followUp = renderToStaticMarkup(
+    createElement(ResearchSegmentPrompt, {
+      ...promptProps,
+      index: 1,
+      createdAt: Date.now(),
+      replyToAnswer: "Earlier answer",
+      onToggleFollow: () => {},
+      onToggleBookmark: () => {},
+    }),
+  );
+  assert.doesNotMatch(followUp, /research-prompt-footer/);
+  assert.doesNotMatch(followUp, /research-thread-actions/);
 });
 
 test("the shared user-message primitive stays unboxed", () => {
@@ -151,7 +185,7 @@ test("branch prompts place Back above the asked-model line", () => {
   assert.match(html, /research-parent-link/);
   assert.ok(html.indexOf("Back") < html.indexOf("Selected answer passage"));
   assert.ok(html.indexOf("Selected answer passage") < html.indexOf("research-user-message"));
-  assert.ok(html.indexOf("Selected answer passage") < html.indexOf("You asked Claude Fable"));
+  assert.ok(html.indexOf("Selected answer passage") < html.indexOf("Claude Fable"));
 });
 
 test("follow-up research prompts quote a truncated previous answer", () => {

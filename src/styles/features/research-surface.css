@@ -580,3 +580,40 @@ a.journal-tweet-more:hover {
 .research-message-attachment + .research-message-attachment {
   margin-top: 10px;
 }
+
+/* Follow / Bookmark pair shared by Home cards and an open thread's root
+   prompt: inline link-style text and icon, sharing the footer row with the
+   timestamp. */
+.research-thread-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+}
+
+.research-thread-action {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: var(--text-activity);
+  font-size: var(--research-meta-font-size);
+  line-height: var(--research-meta-line-height);
+  background: transparent;
+  transition: color var(--transition-fast);
+}
+
+.research-thread-action:hover {
+  color: var(--text-secondary);
+}
+
+.research-thread-action.is-active {
+  color: var(--text-interactive);
+}
+
+.research-thread-bookmark svg {
+  flex: none;
+  /* Optical centering against the text baseline. */
+  position: relative;
+  top: -1px;
+}

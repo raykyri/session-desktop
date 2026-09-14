@@ -44,6 +44,7 @@ import { writeClipboardText } from "../../lib/clipboard";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import { ResearchDocumentFrame } from "./ResearchDocumentChrome";
 import ActivityMetadataLine from "../ActivityMetadataLine";
+import ResearchThreadActions from "./ResearchThreadActions";
 import { ResearchRecapLine } from "./ResearchRecap";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import { TweetEmbed } from "./TweetEmbed";
@@ -82,8 +83,13 @@ export function recentActivityAnchorScrollTop(
   return Math.max(0, canvasTop + rowOffset - anchorOffset);
 }
 
+export type ResearchActivityFeedView = "home" | "bookmarks";
+
 export interface ResearchActivityFeedProps {
   composer: ReactNode;
+  /** Home lists every item; Bookmarks lists only queries whose thread is
+   * bookmarked, without the composer or setup guide. */
+  view?: ResearchActivityFeedView;
   setupGuide?: ReactNode;
   /** Read once, when the feed mounts. */
   initialScrollAnchor?: RecentActivityScrollAnchor | null;
@@ -108,6 +114,9 @@ export interface ResearchActivityFeedProps {
   onRestoreResearch: (treeId: string) => Promise<void>;
   onRemoveResearch: (treeId: string) => Promise<void>;
   onToggleResearchStar: (id: string) => void;
+  /** Home's per-thread Follow and Bookmark controls; both persist on the tree. */
+  onSetResearchFollowed: (treeId: string, followed: boolean) => void;
+  onSetResearchBookmarked: (treeId: string, bookmarked: boolean) => void;
   onRequestCreateFolder: (treeIds: string[]) => void;
   onRemoveFromFolder: (treeIds: string[]) => void;
   onLoadOlder: () => void;
@@ -318,17 +327,36 @@ function recentQueryTargetExcerpt(target: string, maxWords = 5, maxChars = 40) {
 export function ResearchQueryCard({
   query,
   metadata,
+  followed = false,
+  bookmarked = false,
+  onToggleFollow,
+  onToggleBookmark,
   onOpen,
   onContextMenu,
   onOpenChild,
 }: {
   query: RecentResearchQuery;
+  /** Event metadata (context phrase and relative time), shown on the card's
+   * footer row beside the thread actions. */
   metadata?: ReactNode;
+  followed?: boolean;
+  bookmarked?: boolean;
+  onToggleFollow?: () => void;
+  onToggleBookmark?: () => void;
   onOpen: () => void;
   onContextMenu: (clientX: number, clientY: number) => void;
   onOpenChild?: (query: RecentResearchQuery) => void;
 }) {
   const recap = query.recap?.trim() ?? "";
+  const actions =
+    onToggleFollow && onToggleBookmark ? (
+      <ResearchThreadActions
+        followed={followed}
+        bookmarked={bookmarked}
+        onToggleFollow={onToggleFollow}
+        onToggleBookmark={onToggleBookmark}
+      />
+    ) : null;
   return (
     <div
       className="recent-query-block"
@@ -365,7 +393,6 @@ export function ResearchQueryCard({
           )}
         />
       </ResearchUserMessage>
-      {metadata ? <div className="recent-query-metadata">{metadata}</div> : null}
       {isActiveResearchStatus(query.status) ? (
         <span
           className="recent-query-spinner"
@@ -418,6 +445,12 @@ export function ResearchQueryCard({
             );
           })}
         </ul>
+      ) : null}
+      {actions || metadata ? (
+        <div className="recent-query-footer">
+          {actions}
+          {metadata ? <div className="recent-query-metadata">{metadata}</div> : null}
+        </div>
       ) : null}
     </div>
   );
@@ -533,6 +566,7 @@ function MeasuredActivityRow({
 
 function ResearchActivityFeed({
   composer,
+  view = "home",
   setupGuide,
   initialScrollAnchor = null,
   onScrollAnchorChange,
@@ -555,6 +589,8 @@ function ResearchActivityFeed({
   onRestoreResearch,
   onRemoveResearch,
   onToggleResearchStar,
+  onSetResearchFollowed,
+  onSetResearchBookmarked,
   onRequestCreateFolder,
   onRemoveFromFolder,
   onLoadOlder,
@@ -650,10 +686,20 @@ function ResearchActivityFeed({
     }),
     [rawItems],
   );
+  const visibleItems = useMemo(() => {
+    if (view !== "bookmarks") return items;
+    const bookmarked = new Set(
+      researchTrees.filter((tree) => tree.bookmarked).map((tree) => tree.id),
+    );
+    return items.filter(
+      (item) => item.kind === "research-query" && bookmarked.has(item.query.treeId),
+    );
+  }, [items, researchTrees, view]);
   const feed = useMemo(
-    () => buildRecentActivityFromItems(items, researchTrees),
-    [items, researchTrees],
+    () => buildRecentActivityFromItems(visibleItems, researchTrees),
+    [visibleItems, researchTrees],
   );
+  const viewTitle = view === "bookmarks" ? "Bookmarks" : "Home";
   const treeById = useMemo(() => {
     const map = new Map<string, ResearchTreeSummary>();
     for (const tree of researchTrees) {
@@ -1093,7 +1139,7 @@ function ResearchActivityFeed({
   }, [onUndoRemove, pendingUndo]);
   return (
     <ResearchDocumentFrame
-      title="Home"
+      title={viewTitle}
       canGoBack={canGoBack}
       canGoForward={canGoForward}
       backTitle={`Back (${IS_MAC ? "⌘[" : "Ctrl+["})`}
@@ -1105,8 +1151,8 @@ function ResearchActivityFeed({
           type="button"
           className="control-button research-history-button"
           onClick={onRefresh}
-          aria-label="Refresh Home"
-          title="Refresh Home"
+          aria-label={`Refresh ${viewTitle}`}
+          title={`Refresh ${viewTitle}`}
         >
           <RotateCw size={16} aria-hidden="true" />
         </button>
@@ -1114,7 +1160,9 @@ function ResearchActivityFeed({
     >
       <div ref={scrollRef} className="research-document-scroll journal-scroll">
         <div className="journal-column research-reading-surface">
-          <div className="journal-composer-container">{composer}</div>
+          {view === "home" ? (
+            <div className="journal-composer-container">{composer}</div>
+          ) : null}
           {pendingUndo ? (
             <div className="journal-undo" role="status">
               <span className="journal-undo-label">
@@ -1172,6 +1220,11 @@ function ResearchActivityFeed({
               style={{ height: metrics.totalSize }}
             >
               {visibleRowEntries.map(({ row, index }) => {
+                const researchTreeId =
+                  row.event.source.kind === "research-query"
+                    ? row.event.source.query.treeId
+                    : null;
+                const researchTree = researchTreeId ? treeById.get(researchTreeId) : undefined;
                 return (
                   <MeasuredActivityRow
                     key={row.key}
@@ -1209,6 +1262,18 @@ function ResearchActivityFeed({
                         <ResearchQueryCard
                           query={row.event.source.query}
                           metadata={<ActivityMetadataLine event={row.event} />}
+                          followed={Boolean(researchTree?.followed)}
+                          bookmarked={Boolean(researchTree?.bookmarked)}
+                          onToggleFollow={() => {
+                            if (researchTreeId) {
+                              onSetResearchFollowed(researchTreeId, !researchTree?.followed);
+                            }
+                          }}
+                          onToggleBookmark={() => {
+                            if (researchTreeId) {
+                              onSetResearchBookmarked(researchTreeId, !researchTree?.bookmarked);
+                            }
+                          }}
                           onOpenChild={onOpenResearchQuery}
                           onOpen={() => {
                             const query = row.event.source;
@@ -1236,7 +1301,9 @@ function ResearchActivityFeed({
             </div>
             {feed.length === 0 ? (
               <div className="journal-empty-container">
-                {setupGuide ? (
+                {view === "bookmarks" ? (
+                  <p className="journal-empty">Bookmarked research appears here, newest first.</p>
+                ) : setupGuide ? (
                   <div className="journal-setup-guide">{setupGuide}</div>
                 ) : (
                   <p className="journal-empty">

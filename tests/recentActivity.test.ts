@@ -21,7 +21,7 @@ import {
 } from "../src/lib/journal";
 import ActivityMetadataLine, {
   formatActivityMetadataSummary,
-  formatResearchAskedSummary,
+  formatResearchModelSummary,
 } from "../src/components/ActivityMetadataLine";
 import {
   buildRecentActivityVirtualRows,
@@ -79,15 +79,10 @@ test("research metadata names thread prompts and left-aligned Home activity", ()
     tree,
   );
   assert.equal(formatActivityMetadataSummary(topLevel), "");
-  assert.equal(formatResearchAskedSummary("claude", "fable"), "You asked Claude Fable");
-  assert.equal(
-    formatResearchAskedSummary("claude", null),
-    "You asked Claude",
-  );
-  assert.equal(
-    formatResearchAskedSummary("claude", "claude-opus-4-6"),
-    "You asked Claude",
-  );
+  assert.equal(formatResearchModelSummary("claude", "fable"), "Claude Fable");
+  assert.equal(formatResearchModelSummary("claude", null), "Claude");
+  assert.equal(formatResearchModelSummary("claude", "claude-opus-4-6"), "Claude");
+  assert.equal(formatResearchModelSummary("", null), "");
 
   const html = renderToStaticMarkup(createElement(ActivityMetadataLine, {
     event: { ...topLevel, occurredAt: Date.now() - 2 * 60 * 60 * 1000 },

@@ -22,15 +22,16 @@ function humanReadableModelName(adapter: string, model?: string | null): string 
   return label;
 }
 
-export function formatResearchAskedSummary(
+/** The model that answered a thread's root prompt, as "Claude Fable" or just
+ * "Claude" when the model id has no preset name. Empty for unknown adapters. */
+export function formatResearchModelSummary(
   adapter: string,
   model?: string | null,
 ): string {
   const adapterLabel = adapterDisplayLabel(adapter);
   const modelName = humanReadableModelName(adapter, model);
-  if (adapterLabel && modelName) return `You asked ${adapterLabel} ${modelName}`;
-  if (adapterLabel) return `You asked ${adapterLabel}`;
-  return "You asked";
+  if (adapterLabel && modelName) return `${adapterLabel} ${modelName}`;
+  return adapterLabel;
 }
 
 /** Concise action label for Home's chronological feed. The content card carries

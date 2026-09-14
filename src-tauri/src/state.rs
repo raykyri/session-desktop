@@ -3766,6 +3766,8 @@ impl AppState {
                     cancelled_count,
                     updated_at: tree.updated_at,
                     archived_at: tree.archived_at,
+                    followed: tree.followed,
+                    bookmarked: tree.bookmarked,
                     has_unseen_update: unseen(latest_settlement),
                     // Viewing the tree acknowledges the failure; the lifetime
                     // failed_count stays for detail displays but must not brand
@@ -4410,6 +4412,8 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
+            followed: false,
+            bookmarked: false,
             last_viewed_at: Some(now),
         };
         let mut node = ResearchNode {
@@ -4497,6 +4501,8 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
+            followed: false,
+            bookmarked: false,
             last_viewed_at: Some(now),
         };
         let mut node = ResearchNode {
@@ -4743,6 +4749,8 @@ impl AppState {
             created_at: now,
             updated_at: now,
             archived_at: None,
+            followed: false,
+            bookmarked: false,
             last_viewed_at: Some(now),
         };
         let mut node = ResearchNode {
@@ -6033,6 +6041,73 @@ impl AppState {
             None,
             json!({ "tree": tree }),
         ));
+        Ok(tree)
+    }
+
+    /// Toggles Home's Follow control for a thread. The flag is persisted on
+    /// the tree and broadcast as a tree update so open feeds and documents
+    /// converge without a refetch.
+    pub fn set_research_tree_followed(
+        &self,
+        tree_id: &str,
+        followed: bool,
+    ) -> Result<ResearchTree, String> {
+        self.update_research_tree_flag(tree_id, |tree| {
+            let changed = tree.followed != followed;
+            tree.followed = followed;
+            changed
+        })
+    }
+
+    /// Toggles Home's Bookmark control for a thread; see
+    /// [`Self::set_research_tree_followed`].
+    pub fn set_research_tree_bookmarked(
+        &self,
+        tree_id: &str,
+        bookmarked: bool,
+    ) -> Result<ResearchTree, String> {
+        self.update_research_tree_flag(tree_id, |tree| {
+            let changed = tree.bookmarked != bookmarked;
+            tree.bookmarked = bookmarked;
+            changed
+        })
+    }
+
+    /// Applies a per-thread preference flag. Flags do not touch `updated_at`,
+    /// so sidebar recency ordering is unaffected; a no-op change still
+    /// returns the tree but persists and emits nothing.
+    fn update_research_tree_flag(
+        &self,
+        tree_id: &str,
+        apply: impl FnOnce(&mut ResearchTree) -> bool,
+    ) -> Result<ResearchTree, String> {
+        let _document_guard = self
+            .inner
+            .research_document_lock
+            .lock()
+            .map_err(|_| "research document lock poisoned".to_string())?;
+        let (tree, changed) = {
+            let mut model = self
+                .inner
+                .model
+                .lock()
+                .map_err(|_| "model lock poisoned".to_string())?;
+            let tree = model
+                .research_trees
+                .get_mut(tree_id)
+                .ok_or_else(|| format!("research tree {tree_id} was not found"))?;
+            let changed = apply(tree);
+            (tree.clone(), changed)
+        };
+        if changed {
+            self.persist();
+            self.emit(SessionEvent::new(
+                "research.tree.updated",
+                None,
+                None,
+                json!({ "tree": tree }),
+            ));
+        }
         Ok(tree)
     }
 
@@ -14054,6 +14129,62 @@ mod tests {
     }
 
     #[test]
+    fn follow_and_bookmark_flags_persist_on_the_tree_and_its_summary() {
+        let workspace = temp_workspace();
+        let config = test_config(workspace.clone());
+        let state = AppState::new(config.clone());
+        state.restore_session();
+        state.insert_group_after(sample_group(), None).unwrap();
+        let detail = state
+            .create_research_tree(CreateResearchTreeRequest {
+                prompt: "Root".to_string(),
+                title: None,
+                adapter: "claude".to_string(),
+                model: None,
+                effort: None,
+                group_id: "group-1".to_string(),
+            })
+            .unwrap();
+        assert!(!detail.tree.followed);
+        assert!(!detail.tree.bookmarked);
+        let updated_at = detail.tree.updated_at;
+
+        let followed = state
+            .set_research_tree_followed(&detail.tree.id, true)
+            .unwrap();
+        assert!(followed.followed);
+        assert!(!followed.bookmarked);
+        let bookmarked = state
+            .set_research_tree_bookmarked(&detail.tree.id, true)
+            .unwrap();
+        assert!(bookmarked.followed);
+        assert!(bookmarked.bookmarked);
+        // Preference flags must not reorder the sidebar by recency.
+        assert_eq!(bookmarked.updated_at, updated_at);
+        let summary = &state.list_research_trees().unwrap()[0];
+        assert!(summary.followed);
+        assert!(summary.bookmarked);
+        assert!(
+            state
+                .set_research_tree_followed("missing", true)
+                .unwrap_err()
+                .contains("not found")
+        );
+
+        let restored_state = AppState::new(config);
+        restored_state.restore_session();
+        let restored = restored_state.research_tree(&detail.tree.id).unwrap().tree;
+        assert!(restored.followed);
+        assert!(restored.bookmarked);
+        let cleared = restored_state
+            .set_research_tree_followed(&detail.tree.id, false)
+            .unwrap();
+        assert!(!cleared.followed);
+        assert!(cleared.bookmarked);
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
     fn retry_reset_refuses_unsettled_nodes_live_panes_and_archived_trees() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
@@ -14571,6 +14702,8 @@ mod tests {
             created_at: 1,
             updated_at: 1,
             archived_at: None,
+            followed: false,
+            bookmarked: false,
             last_viewed_at: None,
         };
 
@@ -14639,6 +14772,8 @@ mod tests {
             created_at: 1,
             updated_at: 1,
             archived_at: None,
+            followed: false,
+            bookmarked: false,
             last_viewed_at: None,
         };
         let node = ResearchNode {
@@ -14734,6 +14869,8 @@ mod tests {
             created_at: 1,
             updated_at: 1,
             archived_at: None,
+            followed: false,
+            bookmarked: false,
             last_viewed_at: None,
         };
         let node = ResearchNode {
@@ -14839,6 +14976,8 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             archived_at: None,
+            followed: false,
+            bookmarked: false,
             last_viewed_at: None,
         };
         let node = ResearchNode {
@@ -14919,6 +15058,8 @@ mod tests {
             created_at: 1,
             updated_at: 2,
             archived_at: None,
+            followed: false,
+            bookmarked: false,
             last_viewed_at: None,
         };
         let node = ResearchNode {
@@ -15005,6 +15146,8 @@ mod tests {
                     created_at: 1,
                     updated_at: 2,
                     archived_at: None,
+                    followed: false,
+                    bookmarked: false,
                     last_viewed_at: None,
                 },
             );
