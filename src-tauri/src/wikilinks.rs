@@ -41,6 +41,26 @@ pub fn strip_wikilinks(text: &str) -> Cow<'_, str> {
     Cow::Owned(out)
 }
 
+/// Canonical terms of every wikilink in `text`, in order of first appearance
+/// and without duplicates. Malformed links contribute nothing.
+pub fn wikilink_terms(text: &str) -> Vec<String> {
+    let mut terms: Vec<String> = Vec::new();
+    let mut rest = text;
+    while let Some(open) = rest.find("[[") {
+        let after = &rest[open + 2..];
+        match wikilink_parts(after) {
+            Some((body_len, term, _)) => {
+                if !terms.iter().any(|known| known == term) {
+                    terms.push(term.to_string());
+                }
+                rest = &after[body_len + 2..];
+            }
+            None => rest = &rest[open + 1..],
+        }
+    }
+    terms
+}
+
 fn part_is_valid(part: &str) -> bool {
     !part.is_empty()
         && !part.contains(['[', ']', '|', '\n'])
@@ -50,6 +70,12 @@ fn part_is_valid(part: &str) -> bool {
 /// For text following a `[[` opener: the body length and display label of the
 /// link it starts, or `None` when the opener is literal.
 fn wikilink_label(after: &str) -> Option<(usize, &str)> {
+    wikilink_parts(after).map(|(body_len, _, label)| (body_len, label))
+}
+
+/// For text following a `[[` opener: the body length, canonical term, and
+/// display label of the link it starts, or `None` when the opener is literal.
+fn wikilink_parts(after: &str) -> Option<(usize, &str, &str)> {
     let close = after.find("]]")?;
     let body = &after[..close];
     let (term, alias) = match body.split_once('|') {
@@ -67,7 +93,7 @@ fn wikilink_label(after: &str) -> Option<(usize, &str)> {
         .map(str::trim)
         .filter(|alias| !alias.is_empty())
         .unwrap_or(term);
-    Some((close, label))
+    Some((close, term, label))
 }
 
 #[cfg(test)]
@@ -109,6 +135,15 @@ mod tests {
     fn extra_opening_brackets_are_literal_prefixes() {
         assert_eq!(strip_wikilinks("[[[Term]]"), "[Term");
         assert_eq!(strip_wikilinks("[[[[Term]]"), "[[Term");
+    }
+
+    #[test]
+    fn terms_are_collected_once_in_order() {
+        assert_eq!(
+            wikilink_terms("[[Rust]] and [[Tokio|tokio's]] then [[Rust]] again, [[bad|x|y]]"),
+            vec!["Rust".to_string(), "Tokio".to_string()]
+        );
+        assert!(wikilink_terms("no links").is_empty());
     }
 
     #[test]

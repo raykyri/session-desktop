@@ -89,7 +89,7 @@ import {
 } from "./components/UserNotificationStack";
 import { formatTurnsTranscript } from "./lib/transcriptFormat";
 import type { TranscriptScrollPosition } from "./lib/transcriptScroll";
-import type { LinkActions } from "./components/TranscriptMarkdown";
+import type { LinkActions, WikilinkActions } from "./components/TranscriptMarkdown";
 import ResearchSidebarSection, {
   type ResearchVisibilityFilter,
 } from "./components/research/ResearchSidebarSection";
@@ -108,6 +108,17 @@ import {
 import ResearchDocument from "./components/research/ResearchDocument";
 import ResearchActivityFeed from "./components/research/ResearchActivityFeed";
 import ResearchHighlightsFeed from "./components/research/ResearchHighlightsFeed";
+import EncyclopediaSidebarSection from "./components/research/EncyclopediaSidebarSection";
+import EncyclopediaPageView from "./components/research/EncyclopediaPageView";
+import {
+  encyclopediaPageStatusBySlug,
+  encyclopediaSlug,
+  encyclopediaSummaryOfPage,
+  parseEncyclopediaEvent,
+  removeEncyclopediaSummary,
+  upsertEncyclopediaSummary,
+  wikilinkClickContext,
+} from "./lib/encyclopedia";
 import { useActivityFeedState } from "./hooks/useActivityFeedState";
 import {
   applyJournalTweetHydration,
@@ -318,6 +329,8 @@ import {
   RESEARCH_HOME_TAB_ID,
   type ResearchJournalView,
   researchCycleTabIds,
+  researchEncyclopediaTabId,
+  researchEncyclopediaSlugFromTabId,
   researchJournalTabId,
   researchJournalViewFromTabId,
   researchTreeIdFromTabId,
@@ -370,6 +383,11 @@ import {
   markResearchTreeViewed,
   renameResearchNode,
   listResearchHighlights,
+  listEncyclopediaPages,
+  getEncyclopediaPage,
+  requestEncyclopediaPage,
+  regenerateEncyclopediaPage,
+  deleteEncyclopediaPage,
   renameResearchTree,
   setResearchTreeBookmarked,
   setResearchTreeFollowed,
@@ -463,6 +481,9 @@ import type {
   RecentResearchQuery,
   ResearchHighlightAnchor,
   ResearchHighlightFeedItem,
+  EncyclopediaPage,
+  EncyclopediaPageSummary,
+  EncyclopediaSource,
   ResearchNode,
   ResearchTreeDetail,
   ResearchTreeSummary,
@@ -2858,10 +2879,16 @@ function MainApp() {
     researchTrees,
     researchVisibilityFilter,
   ]);
+  // Declared here, ahead of the tab cycle, because open encyclopedia pages
+  // are cycle stops; the list is loaded and maintained with the rest of the
+  // encyclopedia state further down.
+  const [encyclopediaPages, setEncyclopediaPages] = useState<EncyclopediaPageSummary[]>([]);
   const cycleableResearchTabIds = useMemo(
-    () => researchCycleTabIds(panes, groups, cycleableResearchTrees, researchScope),
+    () =>
+      researchCycleTabIds(panes, groups, cycleableResearchTrees, researchScope, encyclopediaPages),
     [
       cycleableResearchTrees,
+      encyclopediaPages,
       groups,
       panes,
       researchScope,
@@ -6090,6 +6117,211 @@ function MainApp() {
     recordResearchJournalVisit();
     showJournal();
   }, [recordResearchJournalVisit, showJournal]);
+  // Encyclopedia: pages grown from wikilinks, scoped to the research folder.
+  // The list drives link resolution (a term with a page renders as resolved)
+  // and the sidebar section; the active page is the journal's "encyclopedia"
+  // view. Page bodies arrive through backend events once generation lands.
+  const [activeEncyclopediaSlug, setActiveEncyclopediaSlug] = useState<string | null>(null);
+  const activeEncyclopediaSlugRef = useRef(activeEncyclopediaSlug);
+  activeEncyclopediaSlugRef.current = activeEncyclopediaSlug;
+  const [activeEncyclopediaPage, setActiveEncyclopediaPage] = useState<EncyclopediaPage | null>(null);
+  const activeEncyclopediaPageRef = useRef(activeEncyclopediaPage);
+  activeEncyclopediaPageRef.current = activeEncyclopediaPage;
+  const [activeEncyclopediaError, setActiveEncyclopediaError] = useState<string | null>(null);
+  const encyclopediaRequestSeqRef = useRef(0);
+  useEffect(() => {
+    if (!researchScope) {
+      setEncyclopediaPages([]);
+      return;
+    }
+    let cancelled = false;
+    void listEncyclopediaPages(researchScope)
+      .then((pages) => {
+        if (!cancelled) setEncyclopediaPages(pages);
+      })
+      .catch(() => {
+        if (!cancelled) setEncyclopediaPages([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [researchScope]);
+  const recordResearchEncyclopediaVisit = useCallback((slug: string) => {
+    const treeId = activeResearchTreeIdRef.current;
+    setResearchWorkspaceHistory((current) => {
+      const withDocument = treeId
+        ? pushResearchWorkspaceHistory(current, { kind: "document", treeId })
+        : current;
+      const next = pushResearchWorkspaceHistory(withDocument, { kind: "encyclopedia", slug });
+      researchWorkspaceHistoryRef.current = next;
+      return next;
+    });
+  }, []);
+  /** Shows a page on the stage. `fetch: false` skips the read for a page the
+   * caller is about to create, so a not-found result never races the request. */
+  const openEncyclopediaPage = useCallback(
+    (slug: string, options?: { recordVisit?: boolean; fetch?: boolean }) => {
+      const requestSeq = encyclopediaRequestSeqRef.current + 1;
+      encyclopediaRequestSeqRef.current = requestSeq;
+      if (options?.recordVisit !== false) {
+        recordResearchEncyclopediaVisit(slug);
+      }
+      activeEncyclopediaSlugRef.current = slug;
+      setActiveEncyclopediaSlug(slug);
+      setActiveEncyclopediaError(null);
+      setActiveEncyclopediaPage((current) => (current?.slug === slug ? current : null));
+      setJournalView("encyclopedia");
+      showJournal();
+      const workspaceId = researchScopeRef.current;
+      if (options?.fetch === false || !workspaceId) {
+        return;
+      }
+      void getEncyclopediaPage(workspaceId, slug)
+        .then((page) => {
+          if (encyclopediaRequestSeqRef.current !== requestSeq) return;
+          if (page) {
+            setActiveEncyclopediaPage(page);
+          } else {
+            setActiveEncyclopediaError("This encyclopedia page no longer exists.");
+          }
+        })
+        .catch((err) => {
+          if (encyclopediaRequestSeqRef.current !== requestSeq) return;
+          setActiveEncyclopediaError(err instanceof Error ? err.message : String(err));
+        });
+    },
+    [recordResearchEncyclopediaVisit, showJournal],
+  );
+  const activateWikilink = useCallback(
+    (term: string, anchor: HTMLElement) => {
+      const slug = encyclopediaSlug(term);
+      if (!slug) return;
+      const context = wikilinkClickContext(anchor, term);
+      const nodeId = anchor.closest("[data-node-id]")?.getAttribute("data-node-id") ?? null;
+      const detail = activeResearchDetailRef.current;
+      const node = nodeId ? (detail?.nodes.find((entry) => entry.id === nodeId) ?? null) : null;
+      const referringSlug =
+        anchor.closest("[data-encyclopedia-slug]")?.getAttribute("data-encyclopedia-slug") ?? null;
+      const referringPage =
+        referringSlug && activeEncyclopediaPageRef.current?.slug === referringSlug
+          ? activeEncyclopediaPageRef.current
+          : null;
+      const workspaceId =
+        (node ? detail?.tree.workspaceId : referringPage?.workspaceId) ?? researchScopeRef.current;
+      if (!workspaceId) return;
+      const adapter = node?.adapter ?? referringPage?.adapter ?? "claude";
+      const model = node ? (node.model ?? null) : (referringPage?.model ?? null);
+      const question = node ? node.prompt : (referringPage?.title ?? null);
+      openEncyclopediaPage(slug, { fetch: false });
+      void requestEncyclopediaPage({
+        workspaceId,
+        term,
+        adapter,
+        model,
+        source: {
+          nodeId: node?.id ?? null,
+          treeId: node?.treeId ?? null,
+          pageSlug: referringPage?.slug ?? null,
+          question,
+          excerpt: context.excerpt,
+          siblingTerms: context.siblingTerms,
+        },
+      })
+        .then((page) => {
+          if (page.workspaceId === researchScopeRef.current) {
+            setEncyclopediaPages((current) =>
+              upsertEncyclopediaSummary(current, encyclopediaSummaryOfPage(page)),
+            );
+          }
+          if (activeEncyclopediaSlugRef.current === page.slug) {
+            setActiveEncyclopediaPage(page);
+            setActiveEncyclopediaError(null);
+          }
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          if (activeEncyclopediaSlugRef.current === slug) {
+            setActiveEncyclopediaError(message);
+          } else {
+            setError(message);
+          }
+        });
+    },
+    [openEncyclopediaPage],
+  );
+  const encyclopediaStatusBySlug = useMemo(
+    () => encyclopediaPageStatusBySlug(encyclopediaPages),
+    [encyclopediaPages],
+  );
+  const wikilinkActions = useMemo<WikilinkActions>(
+    () => ({
+      resolve: (term) => encyclopediaStatusBySlug.get(encyclopediaSlug(term)) ?? null,
+      activate: activateWikilink,
+    }),
+    [encyclopediaStatusBySlug, activateWikilink],
+  );
+  const handleEncyclopediaEvent = useCallback((rawEvent: SessionEvent) => {
+    const event = parseEncyclopediaEvent(rawEvent);
+    if (!event) return;
+    if (event.type === "encyclopedia.page.updated") {
+      const page = event.page;
+      if (page.workspaceId === researchScopeRef.current) {
+        setEncyclopediaPages((current) =>
+          upsertEncyclopediaSummary(current, encyclopediaSummaryOfPage(page)),
+        );
+      }
+      if (activeEncyclopediaSlugRef.current === page.slug) {
+        setActiveEncyclopediaPage(page);
+        setActiveEncyclopediaError(null);
+      }
+      return;
+    }
+    if (event.workspaceId === researchScopeRef.current) {
+      setEncyclopediaPages((current) => removeEncyclopediaSummary(current, event.slug));
+    }
+    if (activeEncyclopediaSlugRef.current === event.slug) {
+      setActiveEncyclopediaPage(null);
+      setActiveEncyclopediaError("This encyclopedia page was deleted.");
+    }
+  }, []);
+  const regenerateActiveEncyclopediaPage = useCallback(() => {
+    const slug = activeEncyclopediaSlugRef.current;
+    const workspaceId = activeEncyclopediaPageRef.current?.workspaceId ?? researchScopeRef.current;
+    if (!slug || !workspaceId) return;
+    void regenerateEncyclopediaPage(workspaceId, slug)
+      .then((page) => {
+        if (activeEncyclopediaSlugRef.current === page.slug) {
+          setActiveEncyclopediaPage(page);
+        }
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, []);
+  const deleteActiveEncyclopediaPage = useCallback(() => {
+    const slug = activeEncyclopediaSlugRef.current;
+    const workspaceId = activeEncyclopediaPageRef.current?.workspaceId ?? researchScopeRef.current;
+    if (!slug || !workspaceId) return;
+    // Leave the page before the removal event lands so it cannot flag the
+    // view the user is no longer looking at.
+    activeEncyclopediaSlugRef.current = null;
+    setActiveEncyclopediaSlug(null);
+    setActiveEncyclopediaPage(null);
+    openJournal();
+    void deleteEncyclopediaPage(workspaceId, slug)
+      .then(() => {
+        setEncyclopediaPages((current) => removeEncyclopediaSummary(current, slug));
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, [openJournal]);
+  const openEncyclopediaSource = useCallback(
+    (source: EncyclopediaSource) => {
+      if (source.nodeId && source.treeId) {
+        openResearchNode(source.treeId, source.nodeId);
+      } else if (source.pageSlug) {
+        openEncyclopediaPage(source.pageSlug);
+      }
+    },
+    [openEncyclopediaPage, openResearchNode],
+  );
   // The Highlights feed is fetched whole (highlights are few and unpaged).
   // Highlight, node, and tree events bump the version so an open feed refetches.
   const [researchHighlightItems, setResearchHighlightItems] = useState<ResearchHighlightFeedItem[]>([]);
@@ -6129,9 +6361,13 @@ function MainApp() {
         showJournal();
         return;
       }
+      if (visit.kind === "encyclopedia") {
+        openEncyclopediaPage(visit.slug, { recordVisit: false });
+        return;
+      }
       void selectResearchTree(visit.treeId);
     },
-    [selectResearchTree, showJournal],
+    [openEncyclopediaPage, selectResearchTree, showJournal],
   );
   const goResearchWorkspaceBack = useCallback(() => {
     const step = researchWorkspaceHistoryBack(researchWorkspaceHistoryRef.current);
@@ -7426,6 +7662,7 @@ function MainApp() {
       browserEscapeDispatcherRef.current();
     },
     onResearchChanged: handleResearchEvent,
+    onEncyclopediaChanged: handleEncyclopediaEvent,
     onUserNotificationRequested: handleUserNotificationRequested,
   });
 
@@ -9213,6 +9450,11 @@ function MainApp() {
   useEffect(() => {
 
     const focusResearchTabById = (tabId: string) => {
+      const encyclopediaSlug = researchEncyclopediaSlugFromTabId(tabId);
+      if (encyclopediaSlug) {
+        openEncyclopediaPage(encyclopediaSlug);
+        return;
+      }
       switch (researchJournalViewFromTabId(tabId)) {
         case "home":
           openJournal();
@@ -9253,7 +9495,9 @@ function MainApp() {
       const activeTabId = !currentResearchSurfaceActive
         ? activePaneIdRef.current
         : researchStageViewRef.current === "journal"
-          ? researchJournalTabId(journalViewRef.current)
+          ? journalViewRef.current === "encyclopedia" && activeEncyclopediaSlugRef.current
+            ? researchEncyclopediaTabId(activeEncyclopediaSlugRef.current)
+            : researchJournalTabId(journalViewRef.current)
           : currentResearchTreeId
             ? researchTreeTabId(currentResearchTreeId)
             : RESEARCH_HOME_TAB_ID;
@@ -9770,6 +10014,15 @@ function MainApp() {
                 </button>
               </div>
             </div>
+            <EncyclopediaSidebarSection
+              pages={encyclopediaPages}
+              activeSlug={
+                researchStageView === "journal" && journalView === "encyclopedia"
+                  ? activeEncyclopediaSlug
+                  : null
+              }
+              onOpen={openEncyclopediaPage}
+            />
             <ResearchSidebarSection
               trees={scopedResearchTrees}
               archivedTrees={scopedArchivedResearchTrees}
@@ -11531,6 +11784,24 @@ function MainApp() {
               <span>{researchMultiSelection.length} research items selected</span>
             </div>
           ) : null}
+          {researchStageView === "journal" &&
+          journalView === "encyclopedia" &&
+          activeEncyclopediaSlug ? (
+            <EncyclopediaPageView
+              key={activeEncyclopediaSlug}
+              slug={activeEncyclopediaSlug}
+              page={activeEncyclopediaPage}
+              error={activeEncyclopediaError}
+              wikilinkActions={wikilinkActions}
+              onRegenerate={regenerateActiveEncyclopediaPage}
+              onDelete={deleteActiveEncyclopediaPage}
+              onOpenSource={openEncyclopediaSource}
+              canGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
+              canGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
+              onBack={goResearchWorkspaceBack}
+              onForward={goResearchWorkspaceForward}
+            />
+          ) : null}
           {/* Hydrate the feed before mounting so its saved scroll position can be restored. */}
           {researchStageView === "journal" && config && journalView === "highlights" ? (
             <ResearchHighlightsFeed
@@ -11545,7 +11816,9 @@ function MainApp() {
               onForward={goResearchWorkspaceForward}
             />
           ) : null}
-          {researchStageView === "journal" && config && journalView !== "highlights" ? (
+          {researchStageView === "journal" &&
+          config &&
+          (journalView === "home" || journalView === "bookmarks") ? (
             <ResearchActivityFeed
               {...activityFeedState}
               view={journalView}
@@ -11635,6 +11908,7 @@ function MainApp() {
               onCancel={cancelResearchRun}
               onRetryNode={retryResearchRun}
               linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}
+              wikilinkActions={wikilinkActions}
               onError={setError}
               onToast={handleResearchDocumentToast}
               shortcutHintsShown={shortcutHintsShown}
