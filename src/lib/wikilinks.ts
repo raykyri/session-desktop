@@ -14,6 +14,8 @@
 // Dependency-free on purpose: `turnTimeline.ts` imports the strip helper and
 // must stay loadable by the node test runner without the markdown packages.
 
+import { closesFence, markerRunAtLineStart, type MarkdownFence } from "./markdownMathDelimiters";
+
 export const MAX_WIKILINK_CHARS = 160;
 
 const BODY_PART = `[^\\[\\]|\\n]{1,${MAX_WIKILINK_CHARS}}`;
@@ -47,6 +49,60 @@ export function stripWikilinks(text: string): string {
     const link = parseWikilinkBody(term, alias);
     return link ? link.label : match;
   });
+}
+
+// An alias wikilink whose `|` is not already escaped. Used to escape the pipe
+// on table rows; a term ending in `\` means the agent escaped it already, and
+// doubling the backslash would turn it back into a cell separator.
+const UNESCAPED_ALIAS_PATTERN = new RegExp(
+  `\\[\\[(${BODY_PART})(?<!\\\\)\\|(${BODY_PART})\\]\\]`,
+  "gu",
+);
+
+/** Escape the alias pipe of every wikilink on a Markdown table row, so the
+ * GFM parser does not split `[[Term|shown]]` into two cells (which also drops
+ * the row's overflow cell). GFM reads `\|` in a cell as a literal `|`, so the
+ * remark transform still sees `[[Term|shown]]` after parsing. Runs on the
+ * source before parsing, since the split happens during parsing.
+ *
+ * A line counts as a table row when it has a `|` outside its wikilinks; that
+ * covers rows with or without leading pipes, and leaves prose alone. Lines in
+ * fenced or indented code are skipped. Code spans on a row are rewritten
+ * too: GFM splits cells on a pipe inside a code span as well, and `\|` is
+ * the spec's way to keep one literal there. */
+export function escapeWikilinkTablePipes(source: string): string {
+  if (!source.includes("[[") || !source.includes("|")) {
+    return source;
+  }
+  const lines = source.split("\n");
+  let fence: MarkdownFence | null = null;
+  let changed = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (fence) {
+      if (closesFence(line, fence)) {
+        fence = null;
+      }
+      continue;
+    }
+    const openingFence = markerRunAtLineStart(line);
+    if (openingFence) {
+      fence = openingFence;
+      continue;
+    }
+    if (line.startsWith("    ") || line.startsWith("\t")) {
+      continue;
+    }
+    if (!line.includes("[[") || !line.replace(WIKILINK_PATTERN, "").includes("|")) {
+      continue;
+    }
+    const escaped = line.replace(UNESCAPED_ALIAS_PATTERN, "[[$1\\|$2]]");
+    if (escaped !== line) {
+      lines[i] = escaped;
+      changed = true;
+    }
+  }
+  return changed ? lines.join("\n") : source;
 }
 
 interface MdastNode {
