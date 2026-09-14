@@ -164,16 +164,18 @@
   position: relative;
   width: 100%;
   max-width: none;
-  margin: 0 0 8px;
+  margin: 0;
+}
+
+.recent-query-metadata {
+  min-width: 0;
+  margin-top: 0;
+  margin-bottom: 8px;
 }
 
 .recent-query-recap {
   margin: 0;
   padding: 0;
-}
-
-.recent-query-card.research-prompt:has(+ .recent-query-children) {
-  margin-bottom: 0;
 }
 
 .recent-query-block > .recent-query-spinner {
@@ -192,6 +194,9 @@
 
 .recent-query-child {
   position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
   padding-left: 18px;
 }
 
@@ -212,6 +217,7 @@
   width: fit-content;
   max-width: 100%;
   min-height: 0;
+  min-width: 0;
   margin-top: -2px;
   padding: 0;
   border: 0;
@@ -225,7 +231,16 @@
 }
 
 .recent-query-child-link:hover {
+  text-decoration: none;
+}
+
+.recent-query-child-link:hover .recent-query-child-question {
   text-decoration: underline;
+}
+
+.recent-query-child-target {
+  flex: none;
+  color: var(--text-subtle);
 }
 
 .recent-activity-load-older {

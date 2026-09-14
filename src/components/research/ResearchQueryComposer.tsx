@@ -58,10 +58,14 @@ function effortOptionsFor(adapter: string, model: string): LauncherSelectOption[
  * the composer accepts it, but nothing is sent anywhere yet. */
 const ASK_MODES = [
   { value: "ai", label: "Ask AI" },
-  { value: "network", label: "Ask your network" },
+  { value: "network", label: "Ask network" },
 ] as const;
 
 type AskMode = (typeof ASK_MODES)[number]["value"];
+
+export function askModeShowsModelControls(askMode: AskMode) {
+  return askMode === "ai";
+}
 
 interface ResearchQueryComposerProps {
   adapters: AgentAdapterMetadata[];
@@ -292,7 +296,7 @@ export default function ResearchQueryComposer({
       className="command-launcher new-research-launcher"
       aria-label="New research"
       onKeyDown={(event) => {
-        const tabAction = launcherTabAction(event, true);
+        const tabAction = launcherTabAction(event, askModeShowsModelControls(askMode));
         if (tabAction) {
           event.preventDefault();
           event.stopPropagation();
@@ -347,40 +351,42 @@ export default function ResearchQueryComposer({
                 </button>
               ))}
             </div>
-            <div className="command-launcher-options new-research-model-controls">
-              <LauncherSelect
-                value={selectedModel}
-                options={modelPresets.map((preset) => ({
-                  value: preset,
-                  label: formatLauncherModelLabel(adapter, preset),
-                }))}
-                ariaLabel="Model"
-                onChange={(choice) => {
-                  sessionDraftTouchedRef.current = true;
-                  setModelChoice(choice);
-                }}
-              />
-              {selectedModel === CUSTOM_MODEL ? (
-                <input
-                  type="text"
-                  value={customModel}
-                  placeholder="Model name"
-                  aria-label="Custom model"
-                  onChange={(event) => {
+            {askModeShowsModelControls(askMode) ? (
+              <div className="command-launcher-options new-research-model-controls">
+                <LauncherSelect
+                  value={selectedModel}
+                  options={modelPresets.map((preset) => ({
+                    value: preset,
+                    label: formatLauncherModelLabel(adapter, preset),
+                  }))}
+                  ariaLabel="Model"
+                  onChange={(choice) => {
                     sessionDraftTouchedRef.current = true;
-                    setCustomModel(event.currentTarget.value);
+                    setModelChoice(choice);
                   }}
                 />
-              ) : null}
-              {effortOptions ? (
-                <LauncherSelect
-                  value={selectedEffort}
-                  options={effortOptions}
-                  ariaLabel="Reasoning effort"
-                  onChange={setEffortChoice}
-                />
-              ) : null}
-            </div>
+                {selectedModel === CUSTOM_MODEL ? (
+                  <input
+                    type="text"
+                    value={customModel}
+                    placeholder="Model name"
+                    aria-label="Custom model"
+                    onChange={(event) => {
+                      sessionDraftTouchedRef.current = true;
+                      setCustomModel(event.currentTarget.value);
+                    }}
+                  />
+                ) : null}
+                {effortOptions ? (
+                  <LauncherSelect
+                    value={selectedEffort}
+                    options={effortOptions}
+                    ariaLabel="Reasoning effort"
+                    onChange={setEffortChoice}
+                  />
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="command-launcher-controls">
             <div className="command-launcher-adapter-select">

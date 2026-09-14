@@ -466,6 +466,8 @@ export interface RecentResearchQuery {
   parentNodeId?: string | null;
   inline: boolean;
   prompt: string;
+  /** Selected parent-answer text this follow-up replies to. */
+  queryTarget?: string | null;
   attachments?: ResearchMessageAttachment[];
   title?: string | null;
   adapter: string;
