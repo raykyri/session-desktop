@@ -46,7 +46,7 @@ test("Highlights shows passages in context under day headers with their thread a
   // Node label is appended only when it differs from the thread title.
   assert.match(html, /research-highlight-source">Collective memory › Why do rituals persist\?<\/button>/);
   assert.match(html, /research-highlight-source">Original title<\/button>/);
-  assert.match(html, /> · <\/span><time[^>]*>2 hr ago<\/time>/);
+  assert.match(html, /<\/button><time[^>]*>2 hr ago<\/time>/);
   assert.ok(html.indexOf("Rituals encode") < html.indexOf(">Body<"));
 });
 

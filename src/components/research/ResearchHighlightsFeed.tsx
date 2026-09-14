@@ -162,14 +162,9 @@ export default function ResearchHighlightsFeed({
                         {label}
                       </button>
                       {finiteTime ? (
-                        <>
-                          <span className="research-highlight-separator" aria-hidden="true">
-                            {" · "}
-                          </span>
-                          <time dateTime={new Date(item.createdAt).toISOString()}>
-                            {formatRelativeTime(item.createdAt)}
-                          </time>
-                        </>
+                        <time dateTime={new Date(item.createdAt).toISOString()}>
+                          {formatRelativeTime(item.createdAt)}
+                        </time>
                       ) : null}
                     </div>
                   </article>

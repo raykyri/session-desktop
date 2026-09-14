@@ -508,7 +508,9 @@
 /* Same gold wash as the in-answer highlight pseudo, so the passage reads as
    the object it was in the thread. */
 .research-highlight-mark {
-  padding: 1px 0;
+  /* No vertical padding, unlike the in-answer wash: at the feed's line-height
+     the 2px spread alone already reaches the adjacent line's wash. */
+  padding: 0;
   border-radius: 2px;
   color: var(--text-body-soft);
   background: var(--research-highlight-bg);
@@ -532,11 +534,10 @@
 .research-highlight-footer {
   display: flex;
   align-items: center;
-  gap: 0;
+  /* Keeps a truncated label clear of the right-aligned timestamp. */
+  gap: 16px;
   min-width: 0;
   max-width: 640px;
-  /* Breathing room so a truncated label never runs to the column edge. */
-  padding-right: 32px;
   color: var(--text-subtle);
   font-size: var(--research-meta-font-size);
   line-height: var(--research-meta-line-height);
@@ -567,7 +568,7 @@
   color: var(--text-secondary);
 }
 
-.research-highlight-separator,
 .research-highlight-footer time {
   flex: none;
+  margin-left: auto;
 }
