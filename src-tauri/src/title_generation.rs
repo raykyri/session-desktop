@@ -17,7 +17,7 @@ const RESEARCH_METADATA_TIMEOUT: Duration = Duration::from_secs(60);
 const ENCYCLOPEDIA_PAGE_TIMEOUT: Duration = Duration::from_secs(180);
 const RECAP_SCHEMA: &str = r#"{"type":"object","properties":{"recap":{"type":"string"}},"required":["recap"],"additionalProperties":false}"#;
 const TITLE_SCHEMA: &str = r#"{"type":"object","properties":{"title":{"type":"string"}},"required":["title"],"additionalProperties":false}"#;
-const PAGE_SCHEMA: &str = r#"{"type":"object","properties":{"page":{"type":"string"}},"required":["page"],"additionalProperties":false}"#;
+pub(crate) const PAGE_SCHEMA: &str = r#"{"type":"object","properties":{"page":{"type":"string"}},"required":["page"],"additionalProperties":false}"#;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ResearchMetadataFlavor {

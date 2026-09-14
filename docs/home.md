@@ -29,7 +29,9 @@ first.
   page, creating it on first click: the surrounding block and the other linked
   terms in that block are sent to the answering model so it writes about the
   sense the answer meant, as a neutral reference page rather than an answer to
-  the thread's question. Pages are stored per research folder
+  the thread's question. With an OpenRouter key set in Settings, pages are
+  written by Gemini 3.8 Flash over OpenRouter (about 6 seconds); otherwise the
+  answering agent's CLI writes them. Pages are stored per research folder
   under `.session/encyclopedia-v1/`, list the passages that mention them, and
   link onward to other pages through their own wikilinks. The page header offers
   Rewrite and Delete.

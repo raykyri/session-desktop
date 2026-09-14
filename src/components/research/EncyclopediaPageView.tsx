@@ -40,16 +40,24 @@ function sourceLabel(source: EncyclopediaSource): string {
   return "Research thread";
 }
 
-function adapterLabel(page: EncyclopediaPage): string {
-  const adapter =
-    page.adapter === "claude"
-      ? "Claude"
-      : page.adapter === "codex"
-        ? "Codex"
-        : page.adapter === "grok"
-          ? "Grok"
-          : page.adapter;
-  return page.model ? `${adapter} · ${page.model}` : adapter;
+const ADAPTER_NAMES: Record<string, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  grok: "Grok",
+  openrouter: "OpenRouter",
+};
+
+/** "OpenRouter · google/gemini-3.8-flash" from `generatedBy`, or the requesting
+ * agent while the first generation is pending. */
+function generatorLabel(page: EncyclopediaPage): string {
+  if (page.generatedBy) {
+    const [adapter, ...rest] = page.generatedBy.split(":");
+    const name = ADAPTER_NAMES[adapter] ?? adapter;
+    const model = rest.join(":");
+    return model ? `${name} · ${model}` : name;
+  }
+  const name = ADAPTER_NAMES[page.adapter] ?? page.adapter;
+  return page.model ? `${name} · ${page.model}` : name;
 }
 
 /** One encyclopedia page on the research stage: the generated body with live
@@ -159,7 +167,7 @@ export default function EncyclopediaPageView({
                 <h1 className="encyclopedia-page-title">{page.title}</h1>
                 <p className="encyclopedia-page-meta">
                   {page.title !== page.term ? <span>Term: {page.term}</span> : null}
-                  <span>{adapterLabel(page)}</span>
+                  <span>{generatorLabel(page)}</span>
                   <span>
                     {generating
                       ? "Writing"
