@@ -145,7 +145,11 @@
   --research-compact-line-height: 1.45;
   --research-quote-font-size: calc(var(--research-meta-font-size) + 0.5px);
   --research-quote-line-height: 1.45;
-  --research-markdown-font-delta: calc(var(--research-body-font-size) - 14px);
+  /* Transcript children add the face offset at their own declarations. Remove
+     it from this baseline delta so research prose receives it exactly once. */
+  --research-markdown-font-delta: calc(
+    var(--research-body-font-size) - 14px - var(--font-ui-size-offset)
+  );
   --research-markdown-line-height-delta: 0.12;
 }
 
@@ -168,7 +172,9 @@
 }
 
 .turn-markdown.research-prose--compact {
-  --transcript-font-delta: calc(var(--research-compact-font-size) - 14px);
+  --transcript-font-delta: calc(
+    var(--research-compact-font-size) - 14px - var(--font-ui-size-offset)
+  );
   color: var(--text-interactive);
   font-size: var(--research-compact-font-size);
   line-height: var(--research-compact-line-height);
@@ -240,12 +246,12 @@
   display: grid;
   place-items: center;
   color: #fff;
-  font-size: 15px;
+  font-size: calc(15px + var(--font-ui-size-offset));
   font-weight: 700;
 }
 
 .journal-tweet-quote-head .journal-tweet-avatar-fallback {
-  font-size: 9px;
+  font-size: calc(9px + var(--font-ui-size-offset));
 }
 
 .journal-tweet-author {
@@ -393,7 +399,7 @@ a.journal-tweet-more:hover {
 
 .journal-tweet-card-domain {
   color: var(--text-subtle);
-  font-size: 12.5px;
+  font-size: calc(12.5px + var(--font-ui-size-offset));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -403,7 +409,7 @@ a.journal-tweet-more:hover {
 .journal-tweet-card-desc {
   display: -webkit-box;
   overflow: hidden;
-  font-size: 13.5px;
+  font-size: calc(13.5px + var(--font-ui-size-offset));
   line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -411,7 +417,7 @@ a.journal-tweet-more:hover {
 
 .journal-tweet-card-desc {
   color: var(--text-subtle);
-  font-size: 13px;
+  font-size: calc(13px + var(--font-ui-size-offset));
 }
 
 /* Captured engagement, rendered as metadata: no hover, no target, nothing
@@ -423,7 +429,7 @@ a.journal-tweet-more:hover {
   gap: 18px;
   margin-top: 8px;
   color: var(--text-subtle);
-  font-size: 12.5px;
+  font-size: calc(12.5px + var(--font-ui-size-offset));
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -535,11 +541,11 @@ a.journal-tweet-more:hover {
 }
 
 .journal-tweet-quote-head .journal-tweet-author {
-  font-size: 13px;
+  font-size: calc(13px + var(--font-ui-size-offset));
 }
 
 .journal-tweet-quote-head .journal-tweet-handle {
-  font-size: 12.5px;
+  font-size: calc(12.5px + var(--font-ui-size-offset));
 }
 
 .journal-tweet-quote-head .journal-tweet-verified {

@@ -4,9 +4,12 @@ import { join } from "node:path";
 import test from "node:test";
 
 const stylesDirectory = join(import.meta.dirname, "..", "src", "styles", "features");
+const tokensCss = readFileSync(join(stylesDirectory, "..", "tokens.css"), "utf8");
 const surfaceCss = readFileSync(join(stylesDirectory, "research-surface.css"), "utf8");
 const researchCss = readFileSync(join(stylesDirectory, "research.css"), "utf8");
 const journalCss = readFileSync(join(stylesDirectory, "journal.css"), "utf8");
+const transcriptCss = readFileSync(join(stylesDirectory, "transcript.css"), "utf8");
+const turnPaneCss = readFileSync(join(stylesDirectory, "turn-pane.css"), "utf8");
 
 function ruleBody(css: string, selector: string) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -14,6 +17,34 @@ function ruleBody(css: string, selector: string) {
   assert.ok(match, `missing CSS rule for ${selector}`);
   return match[1];
 }
+
+test("DM Sans adds one optical half-pixel to UI type but not monospace text", () => {
+  const root = ruleBody(tokensCss, ":root");
+  for (const token of ["xs", "sm", "base", "input"]) {
+    assert.match(
+      root,
+      new RegExp(`--fs-${token}:\\s*calc\\([^;]+var\\(--font-ui-size-offset\\)\\)`),
+    );
+  }
+  assert.match(
+    ruleBody(tokensCss, ':root[data-body-font="dm-sans"]'),
+    /--font-ui-size-offset:\s*0\.5px/,
+  );
+
+  const turnPane = ruleBody(turnPaneCss, ".turn-pane");
+  assert.match(turnPane, /--fs-base:[^;]+var\(--font-ui-size-offset\)/s);
+
+  const researchScale = ruleBody(surfaceCss, ".research-reading-surface");
+  assert.match(
+    researchScale,
+    /--research-markdown-font-delta:[^;]+- var\(--font-ui-size-offset\)/s,
+  );
+
+  const heading = ruleBody(transcriptCss, ".turn-markdown h1");
+  assert.match(heading, /font-size:[^;]+\+ var\(--font-ui-size-offset\)/);
+  const code = ruleBody(transcriptCss, ".turn-markdown code");
+  assert.doesNotMatch(code, /font-ui-size-offset/);
+});
 
 test("research summaries get typography only from the shared surface recipe", () => {
   const summary = ruleBody(surfaceCss, ".research-summary-text");
