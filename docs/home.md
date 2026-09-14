@@ -9,6 +9,11 @@ first.
 - Open a research query to read it in Session's document view. That view provides
   follow-ups, branching, retry/cancel, highlights, and the normal research controls.
   Back returns to Home, restoring its composer draft and scroll position.
+- Each research query ends with Follow and Bookmark controls beside its
+  timestamp. Both are stored on the thread, and the open thread shows the same
+  pair beneath its root prompt next to the answering model and time.
+- The Bookmarks tab below Home in the sidebar shows the same feed limited to
+  bookmarked threads, without the composer.
 - Use a saved link or X post's menu to copy or open its link, refresh or retry a
   post, or delete the entry. Undo restores the most recent deletion.
 - New activity appears live. When scrolled down, the new-activity button returns to

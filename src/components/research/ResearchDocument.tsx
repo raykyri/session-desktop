@@ -14,7 +14,9 @@ import {
   removeResearchHighlights,
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
-import { formatResearchAskedSummary } from "../ActivityMetadataLine";
+import { formatResearchModelSummary } from "../ActivityMetadataLine";
+import { formatRelativeTime } from "../../lib/transcriptSessions";
+import ResearchThreadActions from "./ResearchThreadActions";
 import { growComposerTextarea } from "../../lib/composerTextarea";
 import {
   EMPTY_RESEARCH_HISTORY,
@@ -128,6 +130,10 @@ interface ResearchDocumentProps {
   ) => Promise<ResearchNode>;
   onRemoveBranch: (nodeId: string) => Promise<ResearchBranchRemoval>;
   onRemoveTree: (treeId: string) => Promise<void>;
+  /** Persist the thread's Follow / Bookmark flags; the tree update event
+   * flows back through `detail`. */
+  onSetFollowed: (treeId: string, followed: boolean) => Promise<void>;
+  onSetBookmarked: (treeId: string, bookmarked: boolean) => Promise<void>;
   onUpdateDocument: (input: {
     nodeId: string;
     markdown: string;
@@ -874,6 +880,12 @@ interface ThreadSegmentProps {
   index: number;
   /** Previous segment's answer, for the follow-up "Reply to:" line. */
   replyToAnswer: string | null;
+  /** Thread-level Follow / Bookmark state, rendered on the root prompt's
+   * footer row. */
+  followed: boolean;
+  bookmarked: boolean;
+  onToggleFollow: () => void;
+  onToggleBookmark: () => void;
   isSelected: boolean;
   contentError: string | null;
   segmentActive: boolean;
@@ -1461,8 +1473,13 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   attachments = [],
   adapter,
   model,
+  createdAt,
+  followed = false,
+  bookmarked = false,
   replyToAnswer,
   onSelectNode,
+  onToggleFollow,
+  onToggleBookmark,
 }: {
   visible: boolean;
   index: number;
@@ -1472,13 +1489,21 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   attachments?: ResearchNode["attachments"];
   adapter: string;
   model?: string | null;
+  /** When the root prompt was asked; shown as relative time on its footer. */
+  createdAt?: number;
+  followed?: boolean;
+  bookmarked?: boolean;
   replyToAnswer?: string | null;
   onSelectNode: (nodeId: string) => void;
+  onToggleFollow?: () => void;
+  onToggleBookmark?: () => void;
 }) {
   if (!visible) {
     return null;
   }
   const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
+  const modelSummary = index === 0 ? formatResearchModelSummary(adapter, model) : "";
+  const askedAt = index === 0 && createdAt != null && Number.isFinite(createdAt) ? createdAt : null;
   return (
     <div className="research-prompt-block">
       {index === 0 && parentNodeId ? (
@@ -1506,8 +1531,31 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
         <ResearchMessageBody prompt={prompt} attachments={attachments} />
       </ResearchUserMessage>
       {index === 0 ? (
-        <div className="research-prompt-metadata is-after-prompt">
-          {formatResearchAskedSummary(adapter, model)}
+        <div className="research-prompt-metadata is-after-prompt research-prompt-footer">
+          {onToggleFollow && onToggleBookmark ? (
+            <ResearchThreadActions
+              followed={followed}
+              bookmarked={bookmarked}
+              onToggleFollow={onToggleFollow}
+              onToggleBookmark={onToggleBookmark}
+            />
+          ) : null}
+          <span
+            className="research-prompt-footer-meta"
+            title={askedAt !== null ? new Date(askedAt).toLocaleString() : undefined}
+          >
+            {modelSummary}
+            {modelSummary && askedAt !== null ? (
+              <span className="research-prompt-footer-separator" aria-hidden="true">
+                {" · "}
+              </span>
+            ) : null}
+            {askedAt !== null ? (
+              <time dateTime={new Date(askedAt).toISOString()}>
+                {formatRelativeTime(askedAt)}
+              </time>
+            ) : null}
+          </span>
         </div>
       ) : null}
     </div>
@@ -1522,6 +1570,10 @@ const ThreadSegment = memo(function ThreadSegment({
   node,
   index,
   replyToAnswer,
+  followed,
+  bookmarked,
+  onToggleFollow,
+  onToggleBookmark,
   isSelected,
   contentError,
   segmentActive,
@@ -1584,8 +1636,13 @@ const ThreadSegment = memo(function ThreadSegment({
         attachments={node.attachments}
         adapter={node.adapter}
         model={node.model}
+        createdAt={node.createdAt}
+        followed={followed}
+        bookmarked={bookmarked}
         replyToAnswer={replyToAnswer}
         onSelectNode={onSelectNode}
+        onToggleFollow={onToggleFollow}
+        onToggleBookmark={onToggleBookmark}
       />
       <div
         ref={(element) => registerSegmentElement(node.id, "grid", element)}
@@ -1651,6 +1708,8 @@ function ResearchDocument({
   onFork,
   onRemoveBranch,
   onRemoveTree,
+  onSetFollowed,
+  onSetBookmarked,
   onUpdateDocument,
   onCancel,
   onRetryNode,
@@ -4344,6 +4403,14 @@ function ResearchDocument({
   onToastRef.current = onToast;
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+  const treeFollowed = Boolean(detail?.tree.followed);
+  const treeBookmarked = Boolean(detail?.tree.bookmarked);
+  const handleToggleFollow = useCallback(() => {
+    if (treeId) void onSetFollowed(treeId, !treeFollowed);
+  }, [onSetFollowed, treeFollowed, treeId]);
+  const handleToggleBookmark = useCallback(() => {
+    if (treeId) void onSetBookmarked(treeId, !treeBookmarked);
+  }, [onSetBookmarked, treeBookmarked, treeId]);
   const handleSelectNode = useCallback((nodeId: string) => {
     setOpenedFollowupIds((prev) =>
       prev.has(nodeId) ? prev : new Set(prev).add(nodeId),
@@ -4849,6 +4916,10 @@ function ResearchDocument({
               null
             : null
         }
+        followed={treeFollowed}
+        bookmarked={treeBookmarked}
+        onToggleFollow={handleToggleFollow}
+        onToggleBookmark={handleToggleBookmark}
         isSelected={node.id === selectedNodeId}
         contentError={contentErrorByNode[node.id] ?? null}
         segmentActive={segmentActive}

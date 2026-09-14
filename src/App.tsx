@@ -365,6 +365,8 @@ import {
   markResearchTreeViewed,
   renameResearchNode,
   renameResearchTree,
+  setResearchTreeBookmarked,
+  setResearchTreeFollowed,
   reorderResearchTrees,
   removeResearchTree,
   removeResearchBranch,
@@ -6043,7 +6045,15 @@ function MainApp() {
     localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
     setJournalOpen(true);
   }, [showResearchSurface, setJournalOpen]);
+  // Which list the journal surface shows: Home (everything) or Bookmarks.
+  const [journalView, setJournalView] = useState<"home" | "bookmarks">("home");
   const openJournal = useCallback(() => {
+    setJournalView("home");
+    recordResearchJournalVisit();
+    showJournal();
+  }, [recordResearchJournalVisit, showJournal]);
+  const openBookmarks = useCallback(() => {
+    setJournalView("bookmarks");
     recordResearchJournalVisit();
     showJournal();
   }, [recordResearchJournalVisit, showJournal]);
@@ -6944,6 +6954,28 @@ function MainApp() {
     async (treeId: string, title: string) => {
       try {
         await renameResearchTree(treeId, title);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [],
+  );
+  // Follow / Bookmark persist on the tree; the resulting tree update event
+  // patches the open document and sidebar summaries, so nothing is set here.
+  const setResearchTreeFollowedFlag = useCallback(
+    async (treeId: string, followed: boolean) => {
+      try {
+        await setResearchTreeFollowed(treeId, followed);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [],
+  );
+  const setResearchTreeBookmarkedFlag = useCallback(
+    async (treeId: string, bookmarked: boolean) => {
+      try {
+        await setResearchTreeBookmarked(treeId, bookmarked);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
@@ -9571,31 +9603,60 @@ function MainApp() {
           className={`pane-list${draggingPaneId || draggingGroupId ? " is-dragging" : ""}`}
           aria-label="Research"
         >
-          {/* Home uses the same row/select/copy nesting as each research row.
-              Its fixed-row inset mirrors the scrollable section below. */}
-            <div
-              className={`research-sidebar-row journal-sidebar-row${
-                researchStageView === "journal" ? " is-selected" : ""
-              }`}
-            >
-              <button
-                type="button"
-                className="control-button research-sidebar-select"
-                aria-current={researchStageView === "journal" ? "page" : undefined}
-                title={`Home (${RESEARCH_HOME_SHORTCUT_LABEL})`}
-                onClick={openJournal}
+          {/* Home and Bookmarks use the same row/select/copy nesting as each
+              research row. Their fixed inset mirrors the scrollable section below. */}
+            <div className="journal-sidebar-rows">
+              <div
+                className={`research-sidebar-row journal-sidebar-row${
+                  researchStageView === "journal" && journalView === "home" ? " is-selected" : ""
+                }`}
               >
-                <span className="research-sidebar-copy">
-                  <span className="research-sidebar-title">
-                    <span className="research-sidebar-title-text">Home</span>
+                <button
+                  type="button"
+                  className="control-button research-sidebar-select"
+                  aria-current={
+                    researchStageView === "journal" && journalView === "home" ? "page" : undefined
+                  }
+                  title={`Home (${RESEARCH_HOME_SHORTCUT_LABEL})`}
+                  onClick={openJournal}
+                >
+                  <span className="research-sidebar-copy">
+                    <span className="research-sidebar-title">
+                      <span className="research-sidebar-title-text">Home</span>
+                    </span>
                   </span>
-                </span>
-              </button>
-              {shortcutHintsShown ? (
-                <span className="pane-tab-shortcut-hint" aria-hidden="true">
-                  {RESEARCH_HOME_SHORTCUT_LABEL}
-                </span>
-              ) : null}
+                </button>
+                {shortcutHintsShown ? (
+                  <span className="pane-tab-shortcut-hint" aria-hidden="true">
+                    {RESEARCH_HOME_SHORTCUT_LABEL}
+                  </span>
+                ) : null}
+              </div>
+              <div
+                className={`research-sidebar-row journal-sidebar-row${
+                  researchStageView === "journal" && journalView === "bookmarks"
+                    ? " is-selected"
+                    : ""
+                }`}
+              >
+                <button
+                  type="button"
+                  className="control-button research-sidebar-select"
+                  aria-current={
+                    researchStageView === "journal" && journalView === "bookmarks"
+                      ? "page"
+                      : undefined
+                  }
+                  title="Bookmarks"
+                  onClick={openBookmarks}
+                >
+                  <span className="research-sidebar-copy">
+                    <span className="research-sidebar-title">
+                      <span className="research-sidebar-title-text">Bookmarks</span>
+                    </span>
+                  </span>
+                </button>
+              </div>
             </div>
             <ResearchSidebarSection
               trees={scopedResearchTrees}
@@ -11362,6 +11423,7 @@ function MainApp() {
           {researchStageView === "journal" && config ? (
             <ResearchActivityFeed
               {...activityFeedState}
+              view={journalView}
               composer={
                 <ResearchQueryComposer
                   adapters={config.adapters}
@@ -11408,6 +11470,8 @@ function MainApp() {
               onRestoreResearch={restoreResearchTreeFromSidebar}
               onRemoveResearch={removeResearchTreeFromSidebar}
               onToggleResearchStar={toggleResearchStarFromSidebar}
+              onSetResearchFollowed={setResearchTreeFollowedFlag}
+              onSetResearchBookmarked={setResearchTreeBookmarkedFlag}
               onRequestCreateFolder={requestResearchFolderCreation}
               onRemoveFromFolder={removeResearchTreesFromFolder}
               onLoadOlder={loadOlderActivity}
@@ -11440,6 +11504,8 @@ function MainApp() {
               onFork={createResearchFollowup}
               onRemoveBranch={removeResearchBranchFromDocument}
               onRemoveTree={removeResearchTreeAndSelectFallback}
+              onSetFollowed={setResearchTreeFollowedFlag}
+              onSetBookmarked={setResearchTreeBookmarkedFlag}
               onUpdateDocument={editResearchDocument}
               onCancel={cancelResearchRun}
               onRetryNode={retryResearchRun}

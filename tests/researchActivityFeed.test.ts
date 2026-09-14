@@ -22,6 +22,7 @@ function renderFeed(overrides: Partial<ResearchActivityFeedProps> = {}) {
     onRenameResearch: asyncNoop, onArchiveResearch: asyncNoop,
     onRestoreResearch: asyncNoop, onRemoveResearch: asyncNoop,
     onToggleResearchStar: noop, onRequestCreateFolder: noop, onRemoveFromFolder: noop,
+    onSetResearchFollowed: noop, onSetResearchBookmarked: noop,
     onLoadOlder: noop,
     onRefresh: noop, onBack: noop, onForward: noop,
     ...overrides,
@@ -61,6 +62,77 @@ test("Home renders the mixed feed and query composer directly in the app", () =>
   assert.doesNotMatch(html, /<iframe|View source|Connecting to/);
 });
 
+test("research cards end with Follow and Bookmark beside the time", () => {
+  const query = { nodeId: "node", treeId: "tree", parentNodeId: null, inline: false, prompt: "Investigate this question", adapter: "codex", status: "complete" as const, createdAt: 100, recap: "The finding is X." };
+  const tree = {
+    id: "tree", title: "Investigate", rootNodeId: "node", kind: "run" as const, workspaceId: "ws",
+    runningCount: 0, failedCount: 0, completedCount: 1, cancelledCount: 0, updatedAt: 100,
+    archivedAt: null, hasUnseenUpdate: false, hasUnseenFailure: false,
+  };
+  const html = renderFeed({
+    items: [{ kind: "research-query", occurredAt: 100, query }],
+    researchTrees: [{ ...tree, followed: true, bookmarked: true }],
+  });
+  const footer = html.indexOf('class="recent-query-footer"');
+  assert.ok(footer > 0);
+  // The footer is the card's last block: after the recap, with actions before the metadata.
+  assert.ok(html.indexOf("Summary: The finding is X.") < footer);
+  assert.ok(footer < html.indexOf("research-thread-actions"));
+  assert.ok(html.indexOf("research-thread-actions") < html.indexOf('class="recent-query-metadata"'));
+  assert.match(html, /research-thread-follow is-active"[^>]*aria-pressed="true"[^>]*>Following<\/button>/);
+  assert.match(html, /research-thread-bookmark is-active"[^>]*aria-pressed="true"[^>]*aria-label="Remove bookmark"/);
+  assert.match(html, /recent-query-metadata"><div class="activity-metadata"[^>]*><span class="activity-metadata-summary"><time/);
+
+  const unflagged = renderFeed({
+    items: [{ kind: "research-query", occurredAt: 100, query }],
+    researchTrees: [tree],
+  });
+  assert.match(unflagged, /research-thread-follow"[^>]*aria-pressed="false"[^>]*>Follow<\/button>/);
+  assert.match(unflagged, /aria-label="Bookmark"/);
+  // Saved links keep their metadata line above the card and no thread actions.
+  const saved = renderFeed({
+    items: [{ kind: "journal", occurredAt: 200, entry: { kind: "link", id: "link", createdAt: "1970-01-01T00:00:00.200Z", url: "https://example.com/finding" } }],
+  });
+  assert.doesNotMatch(saved, /research-thread-actions/);
+  assert.ok(saved.indexOf("activity-metadata") < saved.indexOf("journal-entry research-content-card"));
+});
+
+test("the Bookmarks view lists only bookmarked threads without the composer", () => {
+  const query = { nodeId: "node", treeId: "tree", parentNodeId: null, inline: false, prompt: "Bookmarked question", adapter: "codex", status: "complete" as const, createdAt: 100 };
+  const other = { ...query, nodeId: "other-node", treeId: "other", prompt: "Unbookmarked question" };
+  const tree = {
+    id: "tree", title: "Investigate", rootNodeId: "node", kind: "run" as const, workspaceId: "ws",
+    runningCount: 0, failedCount: 0, completedCount: 1, cancelledCount: 0, updatedAt: 100,
+    archivedAt: null, hasUnseenUpdate: false, hasUnseenFailure: false, bookmarked: true,
+  };
+  const items = [
+    { kind: "journal" as const, occurredAt: 300, entry: { kind: "link" as const, id: "link", createdAt: "1970-01-01T00:00:00.300Z", url: "https://example.com/saved" } },
+    { kind: "research-query" as const, occurredAt: 200, query: other },
+    { kind: "research-query" as const, occurredAt: 100, query },
+  ];
+  const html = renderFeed({
+    view: "bookmarks",
+    items,
+    researchTrees: [tree, { ...tree, id: "other", rootNodeId: "other-node", bookmarked: false }],
+    setupGuide: createElement("div", null, "Setup guide"),
+  });
+  assert.match(html, /Bookmarks/);
+  assert.match(html, /aria-label="Refresh Bookmarks"/);
+  assert.match(html, /Bookmarked question/);
+  assert.doesNotMatch(html, /Unbookmarked question/);
+  assert.doesNotMatch(html, /example.com\/saved/);
+  assert.doesNotMatch(html, /Query composer/);
+  assert.doesNotMatch(html, /Setup guide/);
+
+  const empty = renderFeed({ view: "bookmarks", items, researchTrees: [{ ...tree, bookmarked: false }] });
+  assert.match(empty, /Bookmarked research appears here/);
+  assert.doesNotMatch(empty, /Bookmarked question/);
+
+  const home = renderFeed({ items, researchTrees: [tree] });
+  assert.match(home, /Unbookmarked question/);
+  assert.match(home, /Query composer/);
+});
+
 test("feed pagination errors and deletion undo remain visible with workspace history controls", () => {
   const html = renderFeed({
     nextCursor: { occurredAt: 100, sourceRank: 0, id: "link" },
@@ -90,8 +162,9 @@ test("Home renders direct children as follow-up buttons within the root item", (
   }] });
   assert.match(html, /aria-label="Follow-up questions"/);
   assert.match(html, /recent-query-child-question">Follow up question here<\/span>/);
-  assert.ok(html.indexOf("Root question") < html.indexOf("activity-metadata"));
-  assert.ok(html.indexOf("activity-metadata") < html.indexOf("Follow up question here"));
+  assert.ok(html.indexOf("Root question") < html.indexOf("Follow up question here"));
+  // The footer (actions + time) closes the item, after the follow-up list.
+  assert.ok(html.indexOf("Follow up question here") < html.indexOf("activity-metadata"));
   assert.equal((html.match(/aria-posinset=/g) ?? []).length, 1);
   assert.doesNotMatch(html, /Nested descendant/);
 });
@@ -145,9 +218,9 @@ test("Home places follow-up questions below the research summary", () => {
     },
   }] });
 
-  assert.ok(html.indexOf("Root question") < html.indexOf("activity-metadata"));
-  assert.ok(html.indexOf("activity-metadata") < html.indexOf("Summary: The root answer."));
+  assert.ok(html.indexOf("Root question") < html.indexOf("Summary: The root answer."));
   assert.ok(html.indexOf("Summary: The root answer.") < html.indexOf("Follow up question"));
+  assert.ok(html.indexOf("Follow up question") < html.indexOf("activity-metadata"));
 });
 
 test("the agent setup guide appears only when the Home feed is empty", () => {

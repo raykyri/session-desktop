@@ -206,6 +206,35 @@
   box-shadow: none;
 }
 
+/* Starred rows keep an outline star in the trigger's slot. Hover, focus, or
+   an open menu swaps it for the ⋯ trigger, which paints over the same box. */
+.research-sidebar-star {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  margin-block: auto;
+  place-items: center;
+  color: var(--text-subtle);
+  pointer-events: none;
+}
+
+.research-sidebar-row:hover > .research-sidebar-star,
+.research-sidebar-row:focus-within > .research-sidebar-star,
+.research-sidebar-row.has-open-menu > .research-sidebar-star {
+  visibility: hidden;
+}
+
+/* Reserve the star's slot so the running spinner and New badge sit beside it
+   rather than underneath. */
+.research-sidebar-row.is-starred > .research-sidebar-select {
+  padding-right: 30px;
+}
+
 /* Titles are raw prompts (often with URLs); two clamped lines keep the list
    scannable, and the row's tooltip carries the full text. */
 .research-sidebar-title {
@@ -792,6 +821,25 @@
 
 .research-prompt-metadata.is-after-prompt {
   margin-bottom: 26px;
+}
+
+/* The root prompt's footer: Follow / Bookmark first, then the answering model
+   and relative time left-aligned beside them, vertically centered on the row. */
+.research-prompt-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+  /* Adds to the prompt stack's 5px gap above the controls. */
+  margin-top: 6px;
+}
+
+.research-prompt-footer-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Inline follow-ups share the answer column; keep a clear gap above the next
