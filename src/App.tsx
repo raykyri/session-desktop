@@ -37,6 +37,7 @@ import {
   LoaderCircle,
   MessageSquareText,
   Minus,
+  Moon,
   PanelBottomClose,
   PanelBottomOpen,
   PanelLeftClose,
@@ -44,6 +45,7 @@ import {
   RefreshCw,
   Rows2,
   Settings,
+  Sun,
   X,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -93,6 +95,7 @@ import ResearchSidebarSection, {
 } from "./components/research/ResearchSidebarSection";
 import ResearchFolderSwitcher from "./components/research/ResearchFolderSwitcher";
 import memMonochromeLogoUrl from "./assets/mem-monochrome.svg";
+import memMonochromeLightLogoUrl from "./assets/mem-monochrome-light.svg";
 import ResearchFolderDialog from "./components/research/ResearchFolderDialog";
 import {
   nextTreeInResearchScope,
@@ -324,6 +327,7 @@ import {
   SESSION_DRAFT_KEYS,
 } from "./lib/sessionDrafts";
 import {
+  APPEARANCE_OPTIONS,
   bodyFontStackFor,
   clampResearchLaunchInstruction,
   COLOR_THEME_OPTIONS,
@@ -1891,6 +1895,27 @@ function MainApp() {
     };
   }, [settings.colorTheme]);
 
+  // Light/dark is independent of the system appearance. The root attribute
+  // drives every token override; the window theme keeps the native pieces the
+  // CSS cannot reach in step (sidebar vibrancy material, prefers-color-scheme
+  // inside sandboxed preview iframes, native form controls and scrollbars).
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.dataset.appearance = settings.appearance;
+    if ("__TAURI_INTERNALS__" in window) {
+      void getCurrentWindow().setTheme(settings.appearance).catch(() => undefined);
+    }
+    return () => {
+      delete root.dataset.appearance;
+    };
+  }, [settings.appearance]);
+  const toggleAppearance = useCallback(() => {
+    setSettings((current) => ({
+      ...current,
+      appearance: current.appearance === "light" ? "dark" : "light",
+    }));
+  }, []);
+
   // The selected body font must live at the document root, not only on
   // .app-shell: menus and dialogs are portaled to document.body to escape pane
   // clipping, and CSS inheritance follows their DOM parent rather than their
@@ -1942,7 +1967,7 @@ function MainApp() {
         parseInt(color.slice(offset, offset + 2), 16) / 255,
       ) as [number, number, number]).catch(() => undefined);
     }
-  }, [settings.colorTheme]);
+  }, [settings.colorTheme, settings.appearance]);
   const shortcutHintsShown = settings.showShortcutHints && shortcutHintsVisible;
   const [error, setError] = useState<string | null>(null);
   const [appToast, setAppToast] = useState<{
@@ -9510,6 +9535,23 @@ function MainApp() {
             <button
               type="button"
               className="icon-button sidebar-header-button"
+              aria-label={
+                settings.appearance === "light" ? "Switch to dark mode" : "Switch to light mode"
+              }
+              aria-pressed={settings.appearance === "light"}
+              title={settings.appearance === "light" ? "Dark mode" : "Light mode"}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={toggleAppearance}
+            >
+              {settings.appearance === "light" ? (
+                <Moon size={14} aria-hidden="true" />
+              ) : (
+                <Sun size={14} aria-hidden="true" />
+              )}
+            </button>
+            <button
+              type="button"
+              className="icon-button sidebar-header-button"
               title={`Collapse left sidebar (${LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL})`}
               aria-label="Collapse left sidebar"
               onClick={() => setLeftSidebarCollapsedForActivePane(true)}
@@ -9518,7 +9560,11 @@ function MainApp() {
             </button>
           </div>
           <div className="research-sidebar-brand" aria-label="Mem">
-            <img src={memMonochromeLogoUrl} alt="" aria-hidden="true" />
+            <img
+              src={settings.appearance === "light" ? memMonochromeLightLogoUrl : memMonochromeLogoUrl}
+              alt=""
+              aria-hidden="true"
+            />
           </div>
         <nav
           ref={paneListRef}
@@ -10415,6 +10461,27 @@ function MainApp() {
             </label>
 
             <div className="settings-divider" role="separator" />
+
+            <div className="settings-row">
+              <label htmlFor="settings-appearance" className="settings-label">
+                Appearance
+              </label>
+              <select
+                id="settings-appearance"
+                className="settings-select"
+                value={settings.appearance}
+                onChange={(event) => {
+                  const appearance = event.currentTarget.value as AppSettings["appearance"];
+                  setSettings((current) => ({ ...current, appearance }));
+                }}
+              >
+                {APPEARANCE_OPTIONS.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className="settings-row">
               <label htmlFor="settings-color-theme" className="settings-label">

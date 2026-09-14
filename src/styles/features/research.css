@@ -140,14 +140,14 @@
 }
 
 .research-sidebar-row.is-selected {
-  color: #ffffff;
+  color: var(--text-max);
   background: var(--control-bg-hover);
 }
 
 /* Shift/meta multi-selection uses the same fill as an ordinary selection so
    every selected research item carries the same visual weight. */
 .research-sidebar-row.is-multi-selected {
-  color: #ffffff;
+  color: var(--text-max);
   background: var(--control-bg-hover);
 }
 
@@ -202,7 +202,7 @@
 .research-sidebar-menu-trigger:hover,
 .research-sidebar-menu-trigger:focus-visible {
   color: var(--text-interactive);
-  background: #303639;
+  background: var(--control-bg-hover);
   box-shadow: none;
 }
 
@@ -230,7 +230,7 @@
   flex: none;
   margin-top: 2px;
   margin-right: 5px;
-  color: #8f9893;
+  color: var(--text-activity);
   transform: translateY(1px);
 }
 
@@ -251,7 +251,7 @@
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   text-align: center;
-  background: rgba(217, 135, 135, 0.13);
+  background: var(--status-failed-bg);
 }
 
 /* Live runs read as activity, not a count. Rotate a fixed, even-sized wrapper
@@ -285,16 +285,16 @@
   right: 4px;
   padding: 1px 5px;
   border-radius: 999px;
-  color: #b8cfea;
+  color: var(--status-info-fg-soft);
   font-size: calc(9px + var(--font-ui-size-offset));
   font-weight: 700;
   text-align: center;
   text-transform: uppercase;
-  background: rgba(90, 130, 178, 0.16);
+  background: var(--status-info-bg-strong);
 }
 
 .research-sidebar-row.is-archived {
-  color: #89918d;
+  color: var(--text-muted);
 }
 
 /* Client-side folders group their member rows directly beneath the header,
@@ -344,14 +344,14 @@
   flex: none;
   margin-top: 2px;
   margin-right: 5px;
-  color: #8f9893;
+  color: var(--text-activity);
   transform: translateY(1px);
 }
 
 .research-sidebar-folder-count {
   flex: none;
   margin-left: 0.5em;
-  color: #747d79;
+  color: var(--text-faint);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -398,7 +398,7 @@
   min-width: 18px;
   padding: 1px 5px;
   border-radius: 999px;
-  color: #747d79;
+  color: var(--text-faint);
   font-size: calc(10px + var(--font-ui-size-offset));
   font-weight: 600;
   letter-spacing: 0;
@@ -427,7 +427,7 @@
   color: var(--control-fg-muted);
   font-size: calc(13px + var(--turn-font-delta, 0px) + var(--font-ui-size-offset));
   text-align: left;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--surface-fill-faint);
 }
 
 .research-folder-trigger:hover,
@@ -472,7 +472,7 @@
 /* Plain count like the terminal sidebar's group counts, not a pill. */
 .research-folder-count {
   flex: none;
-  color: #747d79;
+  color: var(--text-faint);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -490,11 +490,8 @@
   padding: 4px;
   border: 1px solid var(--surface-border-default);
   border-radius: 9px;
-  background: #1c1f21;
-  box-shadow:
-    0 0 0 0.5px rgba(0, 0, 0, 0.55),
-    0 10px 28px rgba(0, 0, 0, 0.5),
-    0 2px 8px rgba(0, 0, 0, 0.35);
+  background: var(--popover-bg);
+  box-shadow: var(--context-menu-shadow);
 }
 
 .research-folder-menu-separator {
@@ -524,7 +521,7 @@
 }
 
 .research-folder-item:disabled {
-  color: #555c59;
+  color: var(--text-dim);
 }
 
 .research-folder-item svg {
@@ -560,7 +557,7 @@
 .research-folder-path {
   min-width: 0;
   overflow: hidden;
-  color: #6b736f;
+  color: var(--placeholder-color);
   font-size: calc(12px + var(--turn-font-delta, 0px) + var(--font-ui-size-offset));
   font-weight: 400;
   line-height: 1;
@@ -573,7 +570,7 @@
 .research-folder-item.is-selected .research-folder-path,
 .research-folder-trigger:hover .research-folder-path,
 .research-folder-trigger[aria-expanded="true"] .research-folder-path {
-  color: #818a85;
+  color: var(--text-subtle);
 }
 
 .research-folder-item.is-remove:hover,
@@ -597,7 +594,7 @@
 .research-placeholder h1 {
   max-width: 680px;
   margin: 0 0 4px;
-  color: #dfe3df;
+  color: var(--text-body-soft);
   font-size: calc(14px + var(--font-ui-size-offset));
   font-weight: 600;
 }
@@ -645,7 +642,7 @@
 
 .research-document-followup-count {
   flex: 0 0 auto;
-  color: #78817c;
+  color: var(--text-subtle);
   font-size: var(--fs-base);
   line-height: 1.3;
   white-space: nowrap;
@@ -718,7 +715,7 @@
   border-color: var(--accent-color);
   background: var(--accent-shadow);
   color: var(--text-strong);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-inset);
 }
 
 .research-trace-toggle.is-active:hover {
@@ -735,7 +732,7 @@
 }
 
 .research-cancel-run:hover:not(:disabled) {
-  color: #e8a1a1;
+  color: var(--status-failed-fg);
 }
 
 .research-document-content {
@@ -860,10 +857,15 @@
 }
 
 /* Saved highlights use a faint gold wash. Colors are literal because
-   highlight pseudos resolve custom properties unreliably. */
+   highlight pseudos resolve custom properties unreliably; each pair mirrors
+   --research-highlight-bg in the dark and light token blocks. */
 ::highlight(session-research-highlights) {
   color: inherit;
-  background: rgba(216, 196, 95, 0.14);
+  background: rgba(216, 196, 95, 0.14); /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"] *::highlight(session-research-highlights) {
+  background: rgba(214, 178, 30, 0.22); /* highlight-pseudo-literal */
 }
 
 /* Passages that targeted follow-ups were asked about (and the passage an ask
@@ -872,7 +874,11 @@
    an ordinary highlight, while staying the same gold family. */
 ::highlight(session-research-query-anchors) {
   color: inherit;
-  background: rgba(216, 196, 95, 0.17);
+  background: rgba(216, 196, 95, 0.17); /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"] *::highlight(session-research-query-anchors) {
+  background: rgba(214, 178, 30, 0.3); /* highlight-pseudo-literal */
 }
 
 /* Regions where annotations stack (highlight over highlight, or a follow-up
@@ -880,7 +886,11 @@
    visible without deepening the gold. Above the base layers via priority. */
 ::highlight(session-research-highlight-overlaps) {
   color: inherit;
-  background: rgba(211, 216, 212, 0.16);
+  background: rgba(211, 216, 212, 0.16); /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"] *::highlight(session-research-highlight-overlaps) {
+  background: rgba(60, 70, 66, 0.12); /* highlight-pseudo-literal */
 }
 
 /* Saved highlights the current selection landed on. Painted above the saved
@@ -890,7 +900,11 @@
    custom properties unreliably. */
 ::highlight(session-research-selected-highlights) {
   color: inherit;
-  background: #6da7ec;
+  background: #6da7ec; /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"] *::highlight(session-research-selected-highlights) {
+  background: #2a6fc0; /* highlight-pseudo-literal */
 }
 
 .research-highlight-actions {
@@ -913,7 +927,7 @@
   font-weight: 400;
   line-height: 1;
   background: var(--research-highlight-action-bg);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.38);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
 }
 
@@ -922,7 +936,7 @@
 }
 
 .research-highlight-action:disabled {
-  color: #929994;
+  color: var(--text-activity);
   cursor: default;
 }
 
@@ -973,7 +987,7 @@
 
 .research-response-message.is-status-superseded > .turn-markdown {
   text-decoration-line: line-through;
-  text-decoration-color: rgba(241, 240, 232, 0.8);
+  text-decoration-color: var(--link-underline);
   text-decoration-thickness: 1px;
 }
 
@@ -982,7 +996,7 @@
   padding: 8px 10px;
   border-left: 2px solid var(--markdown-blockquote-border);
   color: var(--text-activity);
-  background: rgba(255, 255, 255, 0.018);
+  background: var(--surface-fill-faint);
 }
 
 .research-unexpected-content > span {
@@ -1006,7 +1020,7 @@
   border: 0;
   padding: 0;
   background: transparent;
-  color: #79a7c8;
+  color: var(--status-info-fg-link);
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
@@ -1180,7 +1194,7 @@
   align-items: center;
   gap: 6px 12px;
   margin-top: 20px;
-  color: #69716d;
+  color: var(--placeholder-color);
   font-size: var(--research-meta-font-size);
   line-height: 1.3;
 }
@@ -1189,7 +1203,7 @@
   display: inline;
   padding: 0;
   border: 0;
-  color: #7d8782;
+  color: var(--text-subtle);
   font: inherit;
   text-decoration: underline;
   background: transparent;
@@ -1201,14 +1215,14 @@
   align-items: center;
   padding: 2px 0;
   border: 0;
-  color: #7d8782;
+  color: var(--text-subtle);
   font: inherit;
   background: transparent;
   cursor: pointer;
 }
 
 .research-answer-copy:hover {
-  color: #c2cac5;
+  color: var(--text-secondary);
 }
 
 .research-answer-menu-trigger {
@@ -1220,14 +1234,14 @@
   padding: 0;
   border: 0;
   border-radius: 5px;
-  color: #7d8782;
+  color: var(--text-subtle);
   background: transparent;
 }
 
 .research-answer-menu-trigger:hover,
 .research-answer-menu-trigger:focus-visible {
-  color: #c2cac5;
-  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-secondary);
+  background: var(--surface-fill-hover);
   box-shadow: none;
 }
 
@@ -1236,7 +1250,7 @@
   overflow: auto;
   border: 1px solid var(--surface-border-subtle);
   border-radius: 7px;
-  background: #101214;
+  background: var(--transcript-code-bg);
   white-space: pre-wrap;
   font-family: var(--font-mono);
   font-size: calc(0.9em - var(--font-ui-size-offset));
@@ -1248,13 +1262,13 @@
   padding: 7px 12px;
   border: 1px solid var(--surface-border-default);
   border-radius: var(--radius-md);
-  color: #aab3ae;
-  background: #1a1d1f;
+  color: var(--text-tertiary);
+  background: var(--pane-hover-bg);
   cursor: pointer;
 }
 
 .research-show-earlier:hover {
-  background: #24282b;
+  background: var(--control-bg);
 }
 
 /* Follow-up controls remain in the document flow beside the response. The
@@ -1300,7 +1314,7 @@
   border: 1px solid var(--surface-border-default);
   border-radius: 10px;
   background: var(--research-followup-composer-bg);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-md);
 }
 
 .research-followup-composer.is-anchored.is-docked {
@@ -1365,7 +1379,7 @@
   overflow: hidden;
   padding-left: 8px;
   border-left: 2px solid var(--accent-color);
-  color: #9aa39e;
+  color: var(--text-activity);
   font-size: calc(var(--research-meta-font-size) - 1px);
   font-style: italic;
   line-height: 1.4;
@@ -1464,7 +1478,7 @@
 }
 
 .research-followup-composer small {
-  color: #737c77;
+  color: var(--text-faint);
   line-height: 1.35;
 }
 
@@ -1598,30 +1612,30 @@
 .research-followup-card.is-anchored:hover,
 .research-followup-card.is-anchored:focus-visible {
   z-index: 4;
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--surface-border-default);
 }
 
 .research-followup-card.is-anchored.is-anchor-linked {
   z-index: 4;
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--surface-border-default);
 }
 
 /* Passage-side hover linking mirrors the card's own hover treatment so the
    pair reads as one unit from either end. */
 .research-followup-card.is-anchor-linked > strong {
-  color: #f2f4f1;
+  color: var(--text-heading);
 }
 
 .research-followup-card.is-anchor-linked .research-followup-preview {
-  color: #7d8580;
+  color: var(--text-subtle);
 }
 
 .research-followup-card:hover > strong {
-  color: #f2f4f1;
+  color: var(--text-heading);
 }
 
 .research-followup-card:hover .research-followup-preview {
-  color: #7d8580;
+  color: var(--text-subtle);
 }
 
 .research-followup-card > strong,
@@ -1640,7 +1654,7 @@
 .research-followup-card > strong {
   display: -webkit-box;
   overflow: hidden;
-  color: #e6e9e5;
+  color: var(--text-primary);
   font-size: var(--research-meta-font-size);
   font-weight: 400;
   line-height: 1.42;
@@ -1655,7 +1669,7 @@
   display: -webkit-box;
   margin-top: 4px;
   overflow: hidden;
-  color: #767e79;
+  color: var(--text-faint);
   font-size: var(--research-compact-font-size);
   line-height: 1.42;
   -webkit-box-orient: vertical;
@@ -1667,7 +1681,7 @@
 
 .research-followup-card small {
   margin-top: 8px;
-  color: #707975;
+  color: var(--text-faint);
 }
 
 .research-followup-card small.is-starting,
@@ -1681,7 +1695,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #767e79;
+  color: var(--text-faint);
 }
 
 .research-followup-status-spinner {
@@ -1693,7 +1707,7 @@
 }
 
 .research-followup-card small.is-cancelled {
-  color: #9a938b;
+  color: var(--text-muted);
 }
 
 .research-parent-link {
@@ -1703,13 +1717,13 @@
   margin: 0 0 5px;
   padding: 0;
   border: 0;
-  color: #8f9893;
+  color: var(--text-activity);
   font-size: var(--research-meta-font-size);
   background: transparent;
 }
 
 .research-parent-link:hover {
-  color: #c6cdc9;
+  color: var(--text-secondary);
 }
 
 .new-research-launcher {
@@ -1744,7 +1758,7 @@
 }
 
 .new-research-send:disabled {
-  color: #77807b;
+  color: var(--text-disabled);
   cursor: default;
 }
 
@@ -1940,7 +1954,7 @@
 }
 
 .new-document-wordcount {
-  color: #8f9893;
+  color: var(--text-activity);
   font-size: var(--fs-sm);
   white-space: nowrap;
 }
