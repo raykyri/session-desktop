@@ -7,7 +7,7 @@ import type { AgentAdapterMetadata } from "../src/types";
 
 // Registered before the composer is pulled in, since it reaches adapter icons.
 register("./svgStubLoader.mjs", import.meta.url);
-const { default: ResearchQueryComposer } = await import(
+const { default: ResearchQueryComposer, askModeShowsModelControls } = await import(
   "../src/components/research/ResearchQueryComposer"
 );
 
@@ -55,7 +55,12 @@ test("the composer offers both recipients and opens on Ask AI", () => {
 
   assert.match(html, /aria-label="Ask"/);
   assert.match(html, /<button[^>]*aria-pressed="true"[^>]*>Ask AI<\/button>/);
-  assert.match(html, /<button[^>]*aria-pressed="false"[^>]*>Ask your network<\/button>/);
+  assert.match(html, /<button[^>]*aria-pressed="false"[^>]*>Ask network<\/button>/);
+});
+
+test("network mode hides model controls", () => {
+  assert.equal(askModeShowsModelControls("ai"), true);
+  assert.equal(askModeShowsModelControls("network"), false);
 });
 
 test("the ask toggle sits left of the model selector", () => {

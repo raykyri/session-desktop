@@ -12333,6 +12333,16 @@ mod tests {
             let mut reply = root.clone();
             reply.id = "reply-query".to_string();
             reply.parent_node_id = Some(root_id.clone());
+            reply.query_anchor = Some(ResearchHighlightAnchor {
+                version: 1,
+                projection: "answer-v1".to_string(),
+                response_revision: "a".repeat(64),
+                start: 0,
+                end: 15,
+                exact: "Selected answer".to_string(),
+                prefix: String::new(),
+                suffix: String::new(),
+            });
             reply.created_at = 300;
             let mut grandchild = reply.clone();
             grandchild.id = "grandchild-query".to_string();
@@ -12366,6 +12376,10 @@ mod tests {
         };
         assert_eq!(query.children.len(), 1);
         assert_eq!(query.children[0].node_id, "reply-query");
+        assert_eq!(
+            query.children[0].query_target.as_deref(),
+            Some("Selected answer")
+        );
         assert!(query.children[0].children.is_empty());
         assert_eq!(
             first.items.iter().map(item_id).collect::<Vec<_>>(),

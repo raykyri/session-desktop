@@ -550,8 +550,12 @@ a.journal-tweet-more:hover {
 /* Tweet attachments reuse the shared embed without inheriting the Home entry
    wrapper. Each attachment gets its own inset outline so it reads as an embed,
    rather than being separated from the authored prompt by a horizontal rule. */
+.research-message-attachments {
+  margin-bottom: 2px;
+}
+
 .research-message-attachments.has-prompt {
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .research-message-attachment {

@@ -89,9 +89,62 @@ test("Home renders direct children as follow-up buttons within the root item", (
     }] },
   }] });
   assert.match(html, /aria-label="Follow-up questions"/);
-  assert.match(html, /<button[^>]*recent-query-child-link[^>]*>Follow up question here<\/button>/);
+  assert.match(html, /recent-query-child-question">Follow up question here<\/span>/);
+  assert.ok(html.indexOf("Root question") < html.indexOf("activity-metadata"));
+  assert.ok(html.indexOf("activity-metadata") < html.indexOf("Follow up question here"));
   assert.equal((html.match(/aria-posinset=/g) ?? []).length, 1);
   assert.doesNotMatch(html, /Nested descendant/);
+});
+
+test("Home prefixes targeted follow-ups with a muted target excerpt", () => {
+  const root = {
+    nodeId: "root", treeId: "tree", parentNodeId: null, inline: false,
+    prompt: "Root question", adapter: "codex", status: "complete" as const, createdAt: 100,
+  };
+  const target = "The selected answer passage has enough words to require a short excerpt here";
+  const html = renderFeed({ items: [{
+    kind: "research-query", occurredAt: 100,
+    query: {
+      ...root,
+      children: [{
+        ...root,
+        nodeId: "child",
+        parentNodeId: "root",
+        prompt: "How does this change the result?",
+        queryTarget: target,
+      }],
+    },
+  }] });
+
+  assert.match(
+    html,
+    /recent-query-child-target" title="[^"]+">@The selected answer passage has…<\/span>/,
+  );
+  assert.match(
+    html,
+    /recent-query-child-question">How does this change the result\?<\/span>/,
+  );
+  assert.ok(html.indexOf("recent-query-child-target") < html.indexOf("recent-query-child-question"));
+  assert.match(html, /recent-query-child-target"[^>]*>[^<]+<\/span><button/);
+});
+
+test("Home places follow-up questions below the research summary", () => {
+  const root = {
+    nodeId: "root", treeId: "tree", parentNodeId: null, inline: false,
+    prompt: "Root question", adapter: "codex", status: "complete" as const, createdAt: 100,
+  };
+  const html = renderFeed({ items: [{
+    kind: "research-query", occurredAt: 100,
+    query: {
+      ...root,
+      recap: "The root answer.",
+      children: [{ ...root, nodeId: "child", parentNodeId: "root", prompt: "Follow up question" }],
+    },
+  }] });
+
+  assert.ok(html.indexOf("Root question") < html.indexOf("activity-metadata"));
+  assert.ok(html.indexOf("activity-metadata") < html.indexOf("Summary: The root answer."));
+  assert.ok(html.indexOf("Summary: The root answer.") < html.indexOf("Follow up question"));
 });
 
 test("the agent setup guide appears only when the Home feed is empty", () => {

@@ -299,13 +299,31 @@ function isMarkdownInteractiveTarget(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest("a, button"));
 }
 
+function recentQueryTargetExcerpt(target: string, maxWords = 5, maxChars = 40) {
+  const normalized = target.split(/\s+/).filter(Boolean).join(" ");
+  const words = normalized.split(" ").filter(Boolean);
+  if (words.length === 0) return "";
+  const wordExcerpt = words.slice(0, maxWords).join(" ");
+  const truncated = words.length > maxWords || Array.from(normalized).length > maxChars;
+  if (!truncated) return wordExcerpt;
+
+  const characterLimit = Math.max(1, maxChars - 1);
+  let excerpt = Array.from(wordExcerpt).slice(0, characterLimit).join("").trimEnd();
+  if (Array.from(wordExcerpt).length > characterLimit) {
+    excerpt = excerpt.replace(/\s+\S*$/u, "").trimEnd() || excerpt;
+  }
+  return `${excerpt}…`;
+}
+
 export function ResearchQueryCard({
   query,
+  metadata,
   onOpen,
   onContextMenu,
   onOpenChild,
 }: {
   query: RecentResearchQuery;
+  metadata?: ReactNode;
   onOpen: () => void;
   onContextMenu: (clientX: number, clientY: number) => void;
   onOpenChild?: (query: RecentResearchQuery) => void;
@@ -347,28 +365,7 @@ export function ResearchQueryCard({
           )}
         />
       </ResearchUserMessage>
-      {query.children?.length && onOpenChild ? (
-        <ul
-          className="recent-query-children"
-          aria-label="Follow-up questions"
-          onClick={(event) => event.stopPropagation()}
-        >
-          {query.children.map((child) => (
-            <li key={child.nodeId} className="recent-query-child">
-              <button
-                type="button"
-                className="control-button recent-query-child-link"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onOpenChild(child);
-                }}
-              >
-                {child.prompt}
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {metadata ? <div className="recent-query-metadata">{metadata}</div> : null}
       {isActiveResearchStatus(query.status) ? (
         <span
           className="recent-query-spinner"
@@ -380,6 +377,39 @@ export function ResearchQueryCard({
         </span>
       ) : null}
       {recap ? <ResearchRecapLine text={recap} className="recent-query-recap" /> : null}
+      {query.children?.length && onOpenChild ? (
+        <ul
+          className="recent-query-children"
+          aria-label="Follow-up questions"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {query.children.map((child) => {
+            const targetExcerpt = recentQueryTargetExcerpt(child.queryTarget ?? "");
+            return (
+              <li key={child.nodeId} className="recent-query-child">
+                {targetExcerpt ? (
+                  <span
+                    className="recent-query-child-target"
+                    title={child.queryTarget ?? undefined}
+                  >
+                    @{targetExcerpt}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  className="control-button recent-query-child-link"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenChild(child);
+                  }}
+                >
+                  <span className="recent-query-child-question">{child.prompt}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -1152,21 +1182,24 @@ function ResearchActivityFeed({
                       aria-posinset={row.position}
                       aria-setsize={nextCursor ? -1 : feed.length}
                     >
-                      <ActivityMetadataLine event={row.event} />
                       {row.event.source.kind === "journal" ? (
-                        <JournalEntryCard
-                          entry={row.event.source.entry}
-                          menuOpen={
-                            menu?.kind === "journal" &&
-                            menu.entryId === row.event.source.entry.id
-                          }
-                          onOpenMenu={openMenuFromTrigger}
-                          onOpenContextMenu={openContextMenu}
-                          onRetryTweet={onRetryTweet}
-                        />
+                        <>
+                          <ActivityMetadataLine event={row.event} />
+                          <JournalEntryCard
+                            entry={row.event.source.entry}
+                            menuOpen={
+                              menu?.kind === "journal" &&
+                              menu.entryId === row.event.source.entry.id
+                            }
+                            onOpenMenu={openMenuFromTrigger}
+                            onOpenContextMenu={openContextMenu}
+                            onRetryTweet={onRetryTweet}
+                          />
+                        </>
                       ) : (
                         <ResearchQueryCard
                           query={row.event.source.query}
+                          metadata={<ActivityMetadataLine event={row.event} />}
                           onOpenChild={onOpenResearchQuery}
                           onOpen={() => {
                             const query = row.event.source;

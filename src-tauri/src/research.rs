@@ -404,6 +404,10 @@ pub struct RecentResearchQuery {
     pub parent_node_id: Option<String>,
     pub inline: bool,
     pub prompt: String,
+    /// Selected parent-answer text this follow-up replies to. The remaining
+    /// anchor geometry is deliberately omitted from the compact feed payload.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_target: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<crate::tweets::ResearchMessageAttachment>,
     pub title: Option<String>,
@@ -425,6 +429,10 @@ impl From<&ResearchNode> for RecentResearchQuery {
             parent_node_id: node.parent_node_id.clone(),
             inline: node.inline,
             prompt: node.prompt.clone(),
+            query_target: node
+                .query_anchor
+                .as_ref()
+                .map(|anchor| anchor.exact.clone()),
             attachments: node.attachments.clone(),
             title: node.title.clone(),
             adapter: node.adapter.clone(),
