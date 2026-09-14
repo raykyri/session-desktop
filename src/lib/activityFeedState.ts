@@ -1,5 +1,11 @@
+/** Row-based scroll anchor for the virtualized Home activity feed. */
+export interface ActivityFeedScrollAnchor {
+  key: string;
+  offset: number;
+}
+
 export interface ActivityFeedState {
-  scrollTop: number;
+  scroll: ActivityFeedScrollAnchor | null;
 }
 
 // Keep the existing session key so the Home feed preserves its scroll position.
@@ -23,13 +29,19 @@ function readSnapshot(storage: Pick<Storage, "getItem"> | undefined) {
 export function readActivityFeedState(storage?: Pick<Storage, "getItem">): ActivityFeedState {
   try {
     const values = record(readSnapshot(storage ?? globalThis.sessionStorage).values);
+    // Ignore legacy numeric scroll offsets.
+    const anchor = record(values.activityScroll);
     return {
-      scrollTop: typeof values.activityScroll === "number" && Number.isFinite(values.activityScroll)
-        ? Math.max(0, values.activityScroll)
-        : 0,
+      scroll:
+        typeof anchor.key === "string" &&
+        anchor.key !== "" &&
+        typeof anchor.offset === "number" &&
+        Number.isFinite(anchor.offset)
+          ? { key: anchor.key, offset: anchor.offset }
+          : null,
     };
   } catch {
-    return { scrollTop: 0 };
+    return { scroll: null };
   }
 }
 
@@ -43,7 +55,7 @@ export function saveActivityFeedState(state: ActivityFeedState, storage?: FeedSt
       ...snapshot,
       values: {
         ...retainedValues,
-        activityScroll: state.scrollTop,
+        activityScroll: state.scroll,
       },
     }));
   } catch {
