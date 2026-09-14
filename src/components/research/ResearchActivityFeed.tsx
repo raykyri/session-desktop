@@ -388,23 +388,32 @@ export function ResearchQueryCard({
             return (
               <li key={child.nodeId} className="recent-query-child">
                 {targetExcerpt ? (
-                  <span
-                    className="recent-query-child-target"
-                    title={child.queryTarget ?? undefined}
-                  >
-                    @{targetExcerpt}
-                  </span>
+                  <>
+                    <span
+                      className="recent-query-child-target"
+                      title={child.queryTarget ?? undefined}
+                    >
+                      @{targetExcerpt}
+                    </span>{" "}
+                  </>
                 ) : null}
-                <button
-                  type="button"
-                  className="control-button recent-query-child-link"
+                <span
+                  className="recent-query-child-link"
+                  role="button"
+                  tabIndex={0}
                   onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenChild(child);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
                     event.stopPropagation();
                     onOpenChild(child);
                   }}
                 >
                   <span className="recent-query-child-question">{child.prompt}</span>
-                </button>
+                </span>
               </li>
             );
           })}

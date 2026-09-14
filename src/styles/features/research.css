@@ -770,6 +770,14 @@
   margin: 0 0 26px;
 }
 
+.research-prompt.has-trailing-metadata {
+  margin-bottom: 0;
+}
+
+.research-prompt-metadata.is-after-prompt {
+  margin-bottom: 26px;
+}
+
 /* Inline follow-ups share the answer column; keep a clear gap above the next
    user turn so it doesn't sit on the previous answer's stats line. */
 .research-thread-segment + .research-thread-segment {
@@ -783,9 +791,11 @@
 /* The quoted passage a targeted follow-up was asked about, shown above the
    question on the follow-up's own page. */
 .research-prompt-quote {
-  margin: 0 0 8px;
+  width: fit-content;
+  max-width: min(100%, 640px);
+  margin: 6px 0;
   padding-left: 10px;
-  border-left: 3px solid var(--accent-color);
+  border-left: 1.5px solid var(--accent-color);
 }
 
 .research-response-grid {
@@ -1668,9 +1678,10 @@
 }
 
 .research-parent-link {
-  justify-self: start;
+  align-self: flex-start;
   min-height: 0;
-  margin: 0 0 8px;
+  /* Adds to the prompt stack's 5px gap for 10px beneath Back. */
+  margin: 0 0 5px;
   padding: 0;
   border: 0;
   color: #8f9893;
