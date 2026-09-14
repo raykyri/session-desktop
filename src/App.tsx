@@ -92,6 +92,7 @@ import ResearchSidebarSection, {
   type ResearchVisibilityFilter,
 } from "./components/research/ResearchSidebarSection";
 import ResearchFolderSwitcher from "./components/research/ResearchFolderSwitcher";
+import memMonochromeLogoUrl from "./assets/mem-monochrome.svg";
 import ResearchFolderDialog from "./components/research/ResearchFolderDialog";
 import {
   nextTreeInResearchScope,
@@ -9516,62 +9517,9 @@ function MainApp() {
               <PanelLeftClose size={14} aria-hidden="true" />
             </button>
           </div>
-          <ResearchFolderSwitcher
-            folders={researchGroups}
-            scope={researchScope}
-            treeCounts={researchFolderTreeCounts}
-            folderPickerBusy={folderPickerStatus !== null}
-            shortcutHintsShown={shortcutHintsShown}
-            onSelectScope={(scope) => {
-              changeResearchFolderScope(scope);
-              setResearchMultiSelectIds([]);
-              // Keep the selection inside the new scope: an active document
-              // from another folder would otherwise sit with no sidebar row.
-              const allTrees = [...researchTrees, ...archivedResearchTrees];
-              const scopedTrees = treesForResearchScope(allTrees, scope);
-              const activeInScope = scopedTrees.some(
-                (tree) => tree.id === activeResearchTreeId,
-              );
-              const activeResearchPane = panesRef.current.find(
-                (pane) => pane.id === activeResearchPaneIdRef.current,
-              );
-              const activePaneInScope =
-                !activeResearchPane ||
-                workspaceIsInResearchScope(activeResearchPane.groupId, scope);
-              if (!activePaneInScope) {
-                activeResearchPaneIdRef.current = null;
-                setActiveResearchPaneId(null);
-                localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
-              }
-              if (researchHomeActive) {
-                return;
-              }
-              if (!activeInScope || !activePaneInScope) {
-                const tree = treeForResearchScope(allTrees, scope, activeResearchTreeId);
-                if (tree) {
-                  void selectResearchTree(tree.id);
-                } else {
-                  activeResearchTreeIdRef.current = null;
-                  setActiveResearchTreeId(null);
-                  setActiveResearchDetail(null);
-                  setActiveResearchDetailError(null);
-                  localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
-                  // Keep the current in-scope research pane selected while
-                  // valid in-scope research pane may still be selected here, so
-                  // this can't defer to focusResearchHome, which would clear it.
-                  showResearchSurface();
-                }
-              }
-            }}
-            onNewFolder={chooseResearchWorkspaceFolder}
-            onOpenFolder={openResearchWorkspaceFolder}
-            onRenameFolder={openGroupRenameDialog}
-            onMoveFolder={moveResearchWorkspaceFolder}
-            onRemoveFolder={(workspace) => {
-              setResearchFolderRemovalError(null);
-              setCloseDialog({ kind: "researchFolderRemove", workspace });
-            }}
-          />
+          <div className="research-sidebar-brand" aria-label="Mem">
+            <img src={memMonochromeLogoUrl} alt="" aria-hidden="true" />
+          </div>
         <nav
           ref={paneListRef}
           className={`pane-list${draggingPaneId || draggingGroupId ? " is-dragging" : ""}`}
@@ -9632,6 +9580,63 @@ function MainApp() {
               onReorder={reorderResearchTreesFromSidebar}
             />
         </nav>
+
+          <ResearchFolderSwitcher
+            folders={researchGroups}
+            scope={researchScope}
+            treeCounts={researchFolderTreeCounts}
+            folderPickerBusy={folderPickerStatus !== null}
+            shortcutHintsShown={shortcutHintsShown}
+            onSelectScope={(scope) => {
+              changeResearchFolderScope(scope);
+              setResearchMultiSelectIds([]);
+              // Keep the selection inside the new scope: an active document
+              // from another folder would otherwise sit with no sidebar row.
+              const allTrees = [...researchTrees, ...archivedResearchTrees];
+              const scopedTrees = treesForResearchScope(allTrees, scope);
+              const activeInScope = scopedTrees.some(
+                (tree) => tree.id === activeResearchTreeId,
+              );
+              const activeResearchPane = panesRef.current.find(
+                (pane) => pane.id === activeResearchPaneIdRef.current,
+              );
+              const activePaneInScope =
+                !activeResearchPane ||
+                workspaceIsInResearchScope(activeResearchPane.groupId, scope);
+              if (!activePaneInScope) {
+                activeResearchPaneIdRef.current = null;
+                setActiveResearchPaneId(null);
+                localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
+              }
+              if (researchHomeActive) {
+                return;
+              }
+              if (!activeInScope || !activePaneInScope) {
+                const tree = treeForResearchScope(allTrees, scope, activeResearchTreeId);
+                if (tree) {
+                  void selectResearchTree(tree.id);
+                } else {
+                  activeResearchTreeIdRef.current = null;
+                  setActiveResearchTreeId(null);
+                  setActiveResearchDetail(null);
+                  setActiveResearchDetailError(null);
+                  localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
+                  // Keep the current in-scope research pane selected while
+                  // valid in-scope research pane may still be selected here, so
+                  // this can't defer to focusResearchHome, which would clear it.
+                  showResearchSurface();
+                }
+              }
+            }}
+            onNewFolder={chooseResearchWorkspaceFolder}
+            onOpenFolder={openResearchWorkspaceFolder}
+            onRenameFolder={openGroupRenameDialog}
+            onMoveFolder={moveResearchWorkspaceFolder}
+            onRemoveFolder={(workspace) => {
+              setResearchFolderRemovalError(null);
+              setCloseDialog({ kind: "researchFolderRemove", workspace });
+            }}
+          />
 
         </aside>
       )}
@@ -10001,11 +10006,11 @@ function MainApp() {
             aria-labelledby="agents-title"
           >
             <div className="settings-header">
-              <h2 id="agents-title">Agents</h2>
+              <h2 id="agents-title">Agent Setup</h2>
               <button
                 type="button"
                 className="control-button settings-close"
-                aria-label="Close agents"
+                aria-label="Close agent setup"
                 onClick={() => setAgentsOpen(false)}
               >
                 <X size={16} aria-hidden="true" />
