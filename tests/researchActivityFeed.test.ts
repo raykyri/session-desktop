@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import ResearchActivityFeed, { type ResearchActivityFeedProps } from "../src/components/research/ResearchActivityFeed";
+import ResearchActivityFeed, {
+  recentActivityAnchorOffset,
+  recentActivityAnchorScrollTop,
+  type ResearchActivityFeedProps,
+} from "../src/components/research/ResearchActivityFeed";
 import { emptyResearchFolderState } from "../src/lib/researchFolders";
 
 const noop = () => {};
@@ -115,4 +119,22 @@ test("the agent setup guide appears only when the Home feed is empty", () => {
     }),
     /Agent setup guide/,
   );
+});
+
+test("the feed scroll anchor round-trips correctly", () => {
+  // Canvas top accounts for elements above the virtualized list.
+  const canvasTop = 212;
+  for (const [rowOffset, scrollTop] of [[0, 0], [1840, 1900], [4096, 300], [640, 640]]) {
+    const offset = recentActivityAnchorOffset(canvasTop, rowOffset, scrollTop);
+    assert.equal(
+      recentActivityAnchorScrollTop(canvasTop, rowOffset, offset),
+      scrollTop,
+      `round trip for a row at ${rowOffset} viewed from ${scrollTop}`,
+    );
+  }
+  // Negative offset across top edge round-trips correctly.
+  assert.equal(recentActivityAnchorOffset(0, 500, 560), -60);
+  assert.equal(recentActivityAnchorScrollTop(0, 500, -60), 560);
+  // Scroll position clamps to zero if calculated offset is negative.
+  assert.equal(recentActivityAnchorScrollTop(0, 40, 400), 0);
 });

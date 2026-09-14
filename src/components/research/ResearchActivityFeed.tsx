@@ -57,11 +57,37 @@ import {
   ResearchTreeRenameDialog,
 } from "./ResearchTreeMenu";
 
+/** Scroll anchor tracking the row key under the top edge of the viewport
+ * and its pixel offset. */
+export interface RecentActivityScrollAnchor {
+  key: string;
+  offset: number;
+}
+
+/** Where an anchored row sits relative to the viewport's top edge. */
+export function recentActivityAnchorOffset(
+  canvasTop: number,
+  rowOffset: number,
+  scrollTop: number,
+): number {
+  return canvasTop + rowOffset - scrollTop;
+}
+
+/** Computes the scrollTop required to restore an anchored row to its saved offset. */
+export function recentActivityAnchorScrollTop(
+  canvasTop: number,
+  rowOffset: number,
+  anchorOffset: number,
+): number {
+  return Math.max(0, canvasTop + rowOffset - anchorOffset);
+}
+
 export interface ResearchActivityFeedProps {
   composer: ReactNode;
   setupGuide?: ReactNode;
-  initialScrollTop?: number;
-  onScrollChange?: (top: number) => void;
+  /** Read once, when the feed mounts. */
+  initialScrollAnchor?: RecentActivityScrollAnchor | null;
+  onScrollAnchorChange?: (anchor: RecentActivityScrollAnchor | null) => void;
   items: RecentActivityItem[];
   researchTrees: ResearchTreeSummary[];
   nextCursor: RecentActivityCursor | null;
@@ -469,8 +495,8 @@ function MeasuredActivityRow({
 function ResearchActivityFeed({
   composer,
   setupGuide,
-  initialScrollTop = 0,
-  onScrollChange,
+  initialScrollAnchor = null,
+  onScrollAnchorChange,
   items: rawItems,
   researchTrees,
   nextCursor,
@@ -517,15 +543,9 @@ function ResearchActivityFeed({
     useState<ResearchNodeContent | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const onScrollChangeRef = useRef(onScrollChange);
-  onScrollChangeRef.current = onScrollChange;
-  useLayoutEffect(() => {
-    const scroller = scrollRef.current;
-    if (scroller) scroller.scrollTop = initialScrollTop;
-    return () => {
-      if (scroller) onScrollChangeRef.current?.(scroller.scrollTop);
-    };
-  }, []);
+  const initialScrollAnchorRef = useRef(initialScrollAnchor);
+  const onScrollAnchorChangeRef = useRef(onScrollAnchorChange);
+  onScrollAnchorChangeRef.current = onScrollAnchorChange;
   const virtualCanvasRef = useRef<HTMLDivElement | null>(null);
   const loadSentinelRef = useRef<HTMLDivElement | null>(null);
   const onBackRef = useRef(onBack);
@@ -680,10 +700,17 @@ function ResearchActivityFeed({
     ).start;
     const row = currentRows[visible];
     anchorRef.current = row
-      ? { key: row.key, offset: canvasTop + geometry.offsets[visible] - scroller.scrollTop }
+      ? {
+          key: row.key,
+          offset: recentActivityAnchorOffset(
+            canvasTop,
+            geometry.offsets[visible],
+            scroller.scrollTop,
+          ),
+        }
       : null;
     setViewport({ scrollTop: feedScrollTop, height: scroller.clientHeight });
-    onScrollChangeRef.current?.(scroller.scrollTop);
+    onScrollAnchorChangeRef.current?.(anchorRef.current);
     if (scroller.scrollTop <= 60) setNewActivityCount(0);
   }, []);
 
@@ -716,7 +743,11 @@ function ResearchActivityFeed({
     if (!scroller || !anchor || scroller.scrollTop <= Math.max(60, canvasTop)) return;
     const index = metrics.indexByKey.get(anchor.key);
     if (index === undefined) return;
-    const desired = canvasTop + metrics.offsets[index] - anchor.offset;
+    const desired = recentActivityAnchorScrollTop(
+      canvasTop,
+      metrics.offsets[index],
+      anchor.offset,
+    );
     if (Math.abs(scroller.scrollTop - desired) > 0.5) {
       scroller.scrollTop = desired;
       setViewport({
@@ -726,6 +757,21 @@ function ResearchActivityFeed({
     }
     captureScrollState();
   }, [captureScrollState, metrics, rows]);
+
+  // Restore initial scroll position from saved anchor.
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    const anchor = initialScrollAnchorRef.current;
+    const index = anchor ? metricsRef.current.indexByKey.get(anchor.key) : undefined;
+    if (scroller && anchor && index !== undefined) {
+      anchorRef.current = anchor;
+      scroller.scrollTop = recentActivityAnchorScrollTop(
+        virtualCanvasRef.current?.offsetTop ?? 0,
+        metricsRef.current.offsets[index],
+        anchor.offset,
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const previousTopId = previousTopItemIdRef.current;

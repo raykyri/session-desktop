@@ -1810,6 +1810,13 @@ function ResearchDocument({
   // scroll to segments instead of re-restoring, and a chain growing a new
   // tail must not yank the viewport back to a saved offset.
   const restoredChainRef = useRef<string | null>(null);
+  // Resets scroll position to top and clears restored state for a new page visit.
+  const beginPageVisit = useCallback(() => {
+    restoredChainRef.current = null;
+    if (documentScrollRef.current) {
+      documentScrollRef.current.scrollTop = 0;
+    }
+  }, []);
   // Scroll to a segment once it appears in the chain — the just-submitted
   // inline follow-up, delivered by the next detail refresh.
   const pendingScrollNodeIdRef = useRef<string | null>(null);
@@ -2184,14 +2191,14 @@ function ResearchDocument({
         // same per-page state, or the new page never restores its saved
         // scroll offset (restoredChainRef would still hold the deleted
         // page's latch).
-        restoredChainRef.current = null;
+        beginPageVisit();
         setFullTraceNodes({});
         setFollowupMode("thread");
         setSelectedNodeId(fallbackNodeId);
       }
       previousDetailNodesRef.current = detail.nodes;
     }
-  }, [detail, selectedNodeId, treeId]);
+  }, [beginPageVisit, detail, selectedNodeId, treeId]);
 
   useEffect(() => {
     if (!followupMenu) {
@@ -2392,7 +2399,7 @@ function ResearchDocument({
     setContentByNode({});
     setContentErrorByNode({});
     fetchStampByNodeRef.current.clear();
-    restoredChainRef.current = null;
+    beginPageVisit();
     // Restore every node's expanded window with the tree: saved scroll
     // offsets were captured against this state, and restoring one without
     // the other lands the viewport in the wrong place.
@@ -2409,7 +2416,7 @@ function ResearchDocument({
     setFollowup("");
     setFollowupMode("thread");
     setModeMenuOpen(false);
-  }, [treeId, detail?.tree.rootNodeId]);
+  }, [beginPageVisit, treeId, detail?.tree.rootNodeId]);
 
   // Restore the ordinary composer independently of the targeted-ask restore
   // below. The document unmounts when a terminal tab comes forward, so its
@@ -2467,14 +2474,14 @@ function ResearchDocument({
         // state, so they carry over.
         setFullTraceNodes({});
         setFollowupMode("thread");
-        restoredChainRef.current = null;
+        beginPageVisit();
       }
       setSelectedNodeId(nodeId);
       if (sameChain) {
         window.requestAnimationFrame(() => scrollToSegment(nodeId));
       }
     },
-    [scrollToSegment, selectedNodeId, treeId],
+    [beginPageVisit, scrollToSegment, selectedNodeId, treeId],
   );
 
   const selectNode = useCallback(
@@ -2812,6 +2819,10 @@ function ResearchDocument({
     // comment) — without this, navigating to a node wipes its saved offset,
     // and a partially loaded chain's clamp event overwrites it.
     if (!chainContentSettledRef.current) {
+      return;
+    }
+    // Ignore scroll events during page transitions before scroll state is restored.
+    if (restoredChainRef.current === null) {
       return;
     }
     const navigation = (navigationRef.current[treeId] ??= { scrollByNode: {} });
