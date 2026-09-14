@@ -126,6 +126,12 @@
     border-color var(--transition-fast);
 }
 
+/* Thread titles use the same base reading size as questions and answers in
+   Home. Keep the shared row size on Home, folders, and surrounding chrome. */
+.research-sidebar-row[data-research-tree-id] {
+  font-size: calc(var(--fs-input) - 0.5px);
+}
+
 /* Hover/selected mirror the terminal sidebar's pane tabs so the two modes read
    as one control set. */
 .research-sidebar-row:hover {
