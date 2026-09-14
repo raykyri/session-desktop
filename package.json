@@ -25,6 +25,7 @@
     "test:claude-turns": "npm run test:node -- tests/claudeTurns.test.ts",
     "test:context-menu-placement": "npm run test:node -- tests/contextMenuPlacement.test.ts",
     "test:research-highlights": "npm run test:node -- tests/researchHighlights.test.ts",
+    "test:research-highlights-feed": "npm run test:node -- tests/researchHighlightsFeed.test.ts",
     "test:research-navigation": "npm run test:node -- tests/researchNavigation.test.ts",
     "test:research-events": "npm run test:node -- tests/researchEvents.test.ts",
     "test:research-history": "npm run test:node -- tests/researchHistory.test.ts",

@@ -14,6 +14,9 @@ first.
   pair beneath its root prompt next to the answering model and time.
 - The Bookmarks tab below Home in the sidebar shows the same feed limited to
   bookmarked threads, without the composer.
+- The Highlights tab below Bookmarks lists every highlight saved in open
+  threads, newest first under day headers, each shown inside its surrounding
+  context. Opening one selects its thread and scrolls to the passage.
 - Use a saved link or X post's menu to copy or open its link, refresh or retry a
   post, or delete the entry. Undo restores the most recent deletion.
 - New activity appears live. When scrolled down, the new-activity button returns to
