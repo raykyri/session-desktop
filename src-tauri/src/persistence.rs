@@ -209,6 +209,15 @@ pub struct AppPreferences {
     /// user's prompt unchanged.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub research_launch_instruction: Option<String>,
+    /// GitHub OAuth access token from the device-flow sign-in. Kept in this
+    /// owner-only file for the same reason as `open_router_key`. Absent means
+    /// the user is signed out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_token: Option<String>,
+    /// Profile resolved from `/user` at sign-in, so the sidebar can render the
+    /// account without a network request on launch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub github_account: Option<crate::github_auth::GithubAccount>,
 }
 
 impl Default for AppPreferences {
@@ -221,6 +230,8 @@ impl Default for AppPreferences {
             global_launcher_hotkey: None,
             open_router_key: None,
             research_launch_instruction: None,
+            github_token: None,
+            github_account: None,
         }
     }
 }
@@ -1137,6 +1148,34 @@ mod tests {
                 .get("devbox"),
             Some(&remote)
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn preferences_round_trip_github_account() {
+        let root = temp_root();
+        assert_eq!(load_preferences(&root).unwrap().github_account, None);
+        assert_eq!(load_preferences(&root).unwrap().github_token, None);
+
+        let account = crate::github_auth::GithubAccount {
+            id: 42,
+            login: "octocat".to_string(),
+            name: Some("The Octocat".to_string()),
+            avatar_url: "https://avatars.githubusercontent.com/u/42?v=4".to_string(),
+        };
+        save_preferences(
+            &root,
+            &AppPreferences {
+                github_token: Some("gho_secret".to_string()),
+                github_account: Some(account.clone()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let loaded = read_preferences_from_disk(&preferences_path(&root)).unwrap();
+        assert_eq!(loaded.github_token, Some("gho_secret".to_string()));
+        assert_eq!(loaded.github_account, Some(account));
         fs::remove_dir_all(root).unwrap();
     }
 

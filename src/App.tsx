@@ -94,6 +94,7 @@ import ResearchSidebarSection, {
   type ResearchVisibilityFilter,
 } from "./components/research/ResearchSidebarSection";
 import ResearchFolderSwitcher from "./components/research/ResearchFolderSwitcher";
+import GithubAccountControl from "./components/GithubAccountControl";
 import memMonochromeLogoUrl from "./assets/mem-monochrome.svg";
 import memMonochromeLightLogoUrl from "./assets/mem-monochrome-light.svg";
 import ResearchFolderDialog from "./components/research/ResearchFolderDialog";
@@ -9855,7 +9856,7 @@ function MainApp() {
               setCloseDialog({ kind: "researchFolderRemove", workspace });
             }}
           />
-
+          <GithubAccountControl />
         </aside>
       )}
 

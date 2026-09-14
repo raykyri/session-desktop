@@ -17,6 +17,28 @@ export interface RuntimeConfig {
   fileServerPort: number | null;
 }
 
+/** GitHub profile persisted after device-flow sign-in. `id` is the stable
+ * identity; `login` can be renamed. */
+export interface GithubAccount {
+  id: number;
+  login: string;
+  name?: string;
+  avatarUrl: string;
+}
+
+export interface GithubDeviceLogin {
+  userCode: string;
+  verificationUri: string;
+  expiresInSecs: number;
+  intervalSecs: number;
+}
+
+export type GithubLoginPoll =
+  | { status: "pending"; intervalSecs: number }
+  | { status: "complete"; account: GithubAccount }
+  | { status: "expired" }
+  | { status: "denied" };
+
 export interface AgentAdapterMetadata {
   id: string;
   label: string;
