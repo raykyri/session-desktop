@@ -118,8 +118,10 @@ pub fn recap_source(turns: &[Turn]) -> Option<String> {
 }
 
 fn plain_text(markdown: &str) -> String {
+    // `[[Term]]` markers are renderer machinery; the summarizer sees words.
+    let markdown = crate::wikilinks::strip_wikilinks(markdown);
     let mut plain = String::new();
-    for event in Parser::new(markdown) {
+    for event in Parser::new(&markdown) {
         match event {
             Event::Text(text) | Event::Code(text) => plain.push_str(&text),
             Event::SoftBreak
@@ -174,6 +176,20 @@ mod tests {
     }
     fn text(value: &str) -> TurnBlock {
         TurnBlock::Text { text: value.into() }
+    }
+
+    #[test]
+    fn recap_source_and_output_keep_only_wikilink_display_text() {
+        let body = format!(
+            "[[Rust]] and [[Tokio|tokio's]] runtime. {}",
+            "x".repeat(800)
+        );
+        let source = recap_source(&[turn("assistant", vec![text(&body)])]).unwrap();
+        assert!(source.starts_with("Rust and tokio's runtime."), "{source}");
+        assert_eq!(
+            normalize_recap("Summary: [[Rust]] wins.").as_deref(),
+            Some("Rust wins.")
+        );
     }
 
     #[test]

@@ -40,6 +40,7 @@ mod turn_queue;
 mod tweets;
 mod updater;
 mod user_notifications;
+mod wikilinks;
 mod workspace;
 
 use adapters::{MessageAnchor, agent_fork as fork_agent_pane};
