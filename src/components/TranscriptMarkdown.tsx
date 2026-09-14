@@ -30,7 +30,7 @@ import {
   safeHref,
 } from "../lib/links";
 import { normalizeLatexMathDelimiters } from "../lib/markdownMathDelimiters";
-import { remarkWikilinks } from "../lib/wikilinks";
+import { escapeWikilinkTablePipes, remarkWikilinks } from "../lib/wikilinks";
 import DiagramBlock, { diagramLangFromClassName, nodeText } from "./DiagramBlock";
 
 // The TeX pipeline (remark-math + rehype-mathjax) weighs a couple of
@@ -820,7 +820,9 @@ export default memo(function TranscriptMarkdown({
   artifactLinks = false,
 }: TranscriptMarkdownProps) {
   const math = useSyncExternalStore(subscribeToMathPlugins, readMathPlugins, readMathPlugins);
-  const source = text;
+  // Alias wikilinks on table rows must have their pipe escaped before
+  // parsing, or GFM splits the cell; see `escapeWikilinkTablePipes`.
+  const source = escapeWikilinkTablePipes(text);
   if (oversizedContent && source.length > oversizedContent.maxCharacters) {
     const displayLimit = oversizedContent.maxDisplayCharacters;
     const shown =
