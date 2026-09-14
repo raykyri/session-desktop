@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  researchAnchorConnectorEndpoints,
   researchSelectionActionPlacement,
   shouldDismissEmptyResearchAskOnClick,
   snapResearchDragSelection,
@@ -16,6 +17,26 @@ function rect(left: number, top: number, width: number, height: number) {
     height,
   };
 }
+
+test("uses a horizontal connector when the passage midpoint is inside the card", () => {
+  assert.deepEqual(
+    researchAnchorConnectorEndpoints({
+      selectionRect: rect(100, 140, 900, 160),
+      cardRect: rect(1100, 120, 320, 240),
+    }),
+    { sx: 1008, sy: 220, ex: 1094, ey: 220 },
+  );
+});
+
+test("uses a direct diagonal to the card's safe inset when the midpoint is outside", () => {
+  assert.deepEqual(
+    researchAnchorConnectorEndpoints({
+      selectionRect: rect(100, 40, 600, 40),
+      cardRect: rect(800, 120, 320, 160),
+    }),
+    { sx: 708, sy: 60, ex: 794, ey: 144 },
+  );
+});
 
 test("places selection actions beside the final line of a multi-line selection", () => {
   assert.deepEqual(

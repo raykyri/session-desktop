@@ -18,6 +18,33 @@ export interface ResearchSelectionRect {
   height: number;
 }
 
+/** Connects an anchored passage to its card with the quietest available
+ * geometry. The passage midpoint is also the card endpoint whenever it falls
+ * inside the card's safe vertical range, producing a horizontal leader. When
+ * it falls outside, clamping to the nearest safe point produces one direct
+ * diagonal instead. */
+export function researchAnchorConnectorEndpoints(input: {
+  selectionRect: ResearchSelectionRect;
+  cardRect: ResearchSelectionRect;
+  selectionGap?: number;
+  cardGap?: number;
+  cardInset?: number;
+}) {
+  const selectionGap = input.selectionGap ?? 8;
+  const cardGap = input.cardGap ?? 6;
+  const cardInset = Math.min(input.cardInset ?? 24, input.cardRect.height / 2);
+  const sy = input.selectionRect.top + input.selectionRect.height / 2;
+  const minimumCardY = input.cardRect.top + cardInset;
+  const maximumCardY = input.cardRect.bottom - cardInset;
+
+  return {
+    sx: input.selectionRect.right + selectionGap,
+    sy,
+    ex: input.cardRect.left - cardGap,
+    ey: Math.max(minimumCardY, Math.min(sy, maximumCardY)),
+  };
+}
+
 /** Positions the selection actions beside the end of the selected passage.
  * A Range bounding box starts at the first line of a multi-line selection,
  * which made the bar appear below and far to the left of the selected text.
