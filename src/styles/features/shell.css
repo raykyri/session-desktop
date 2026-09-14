@@ -178,7 +178,7 @@
   min-width: 0;
   min-height: 0;
   width: 100%;
-  color: #aab1ad;
+  color: var(--text-tertiary);
   font-size: calc(14px + var(--font-ui-size-offset));
   line-height: 1.4;
   text-align: center;
@@ -192,7 +192,7 @@
 }
 
 .pane-tab {
-  --pane-tab-status-bg: rgba(14, 16, 17, 0.7);
+  --pane-tab-status-bg: color-mix(in srgb, var(--field-bg) 70%, transparent);
   position: relative;
   display: grid;
   grid-template-columns: 8px minmax(0, 1fr);
@@ -221,7 +221,7 @@
 .pane-tab:hover {
   /* A touch lighter than the sidebar rather than darker, so hover lifts off the
      panel — but kept below the selected fill so the two stay distinct. */
-  --pane-tab-status-bg: rgba(27, 31, 33, 0.7);
+  --pane-tab-status-bg: color-mix(in srgb, var(--pane-hover-bg) 70%, transparent);
   background: var(--pane-tab-hover-bg);
 }
 
@@ -229,20 +229,20 @@
    selected fill and ring it with the same blue dotted border used on a queued
    turn that waits on another tab, so the correspondence reads at a glance. */
 .pane-tab-row.is-wait-target-preview .pane-tab {
-  --pane-tab-status-bg: rgba(44, 49, 52, 0.7);
+  --pane-tab-status-bg: color-mix(in srgb, var(--control-bg-hover) 70%, transparent);
   background: var(--control-bg-hover);
   outline: 1px dotted var(--wait-target-preview-border);
   outline-offset: -1px;
 }
 
 .pane-tab-row.is-selected .pane-tab {
-  --pane-tab-status-bg: rgba(44, 49, 52, 0.7);
+  --pane-tab-status-bg: color-mix(in srgb, var(--control-bg-hover) 70%, transparent);
   /* A moderate selected state instead of the bright system accent fill: a slightly
      lighter shade of the button gray with a soft, slightly lighter border. */
   border-color: var(--control-border);
   border-left-color: var(--split-border-active);
   background: var(--control-bg-hover);
-  color: #ffffff;
+  color: var(--text-max);
   box-shadow: none;
 }
 
@@ -287,12 +287,12 @@
   border-color: transparent;
   border-left-color: transparent;
   border-radius: 0;
-  color: #f1f3ef;
+  color: var(--text-heading);
 }
 
 .pane-tab-row.is-split-active.is-selected .pane-tab {
   border-left-color: transparent;
-  color: #ffffff;
+  color: var(--text-max);
 }
 
 .pane-tab-row.is-split-active.is-split-first .pane-tab {
@@ -308,7 +308,7 @@
 .pane-tab-row.is-split-active .pane-tab-gitmeta,
 .pane-tab-row.is-split-active .pane-tab-path,
 .pane-tab-row.is-split-active .pane-tab small {
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-secondary);
 }
 
 .pane-tab-shortcut-hint {
@@ -323,11 +323,11 @@
   min-height: 18px;
   padding: 1px 6px;
   transform: translateY(-50%);
-  border: 1px solid #3a4245;
+  border: 1px solid var(--dialog-border);
   border-radius: var(--radius-md);
   background: var(--transcript-code-bg);
   color: var(--text-secondary);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-sm);
   font-size: var(--fs-xs);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -340,7 +340,7 @@
 
 .pane-tab-row.is-selected .pane-tab-shortcut-hint,
 .research-sidebar-row.is-selected .pane-tab-shortcut-hint {
-  border-color: #566165;
+  border-color: var(--control-border-hover);
   color: var(--text-primary);
 }
 
@@ -414,7 +414,7 @@
 .pane-group-name {
   min-width: 0;
   overflow: hidden;
-  color: #d6dbd6;
+  color: var(--text-body-soft);
   font-weight: 600;
   letter-spacing: 0.01em;
   text-overflow: ellipsis;
@@ -423,7 +423,7 @@
 
 .pane-group-count {
   flex: none;
-  color: #747d79;
+  color: var(--text-faint);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -476,7 +476,7 @@
 .pane-group-menu-button:focus-visible {
   border-color: var(--control-border);
   background: var(--control-bg-hover);
-  color: #ffffff;
+  color: var(--text-max);
   outline: none;
 }
 
@@ -615,7 +615,7 @@
 }
 
 .pane-tab-clear-status:focus-visible {
-  outline: 1px solid #566165;
+  outline: 1px solid var(--control-border-hover);
   outline-offset: 2px;
 }
 
@@ -712,7 +712,7 @@
 
 .pane-tab-path,
 .pane-tab-gitmeta {
-  color: #6b736f;
+  color: var(--placeholder-color);
   font-size: calc(12px + var(--turn-font-delta, 0px) + var(--font-ui-size-offset));
 }
 
@@ -730,12 +730,12 @@
 .pane-tab-row.is-selected .pane-tab-path,
 .pane-tab-row.is-selected .pane-tab-gitmeta,
 .pane-tab-row.is-selected .pane-tab small {
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--text-secondary);
 }
 
 .pane-tab-row.is-selected .pane-tab-status-clickable:hover {
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
+  background: var(--surface-fill-strong);
+  color: var(--text-max);
 }
 
 .pane-tab-meta {
@@ -796,7 +796,7 @@
 }
 
 .pane-context-status-row.status-attention dd::before {
-  background: #e0a96d;
+  background: var(--attention-marker-bg);
 }
 
 .pane-context-status-row.status-done dd::before {
@@ -877,8 +877,8 @@
 .pane-context-actions button:focus-visible:not(:disabled),
 .group-context-actions button:hover:not(:disabled),
 .group-context-actions button:focus-visible:not(:disabled) {
-  background: rgba(255, 255, 255, 0.09);
-  color: #ffffff;
+  background: var(--surface-fill-medium);
+  color: var(--text-max);
   outline: none;
   box-shadow: none;
 }
@@ -933,7 +933,7 @@
 .pane-context-actions .context-menu-danger:focus-visible:not(:disabled),
 .group-context-actions .context-menu-danger:hover:not(:disabled),
 .group-context-actions .context-menu-danger:focus-visible:not(:disabled) {
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--surface-fill-medium);
 }
 
 .pane-context-actions .context-menu-danger:hover:not(:disabled) span,
@@ -974,13 +974,13 @@
   place-items: center;
   justify-self: end;
   padding: 0 4px;
-  border: 1px solid rgba(170, 180, 174, 0.4);
+  border: 1px solid var(--control-border-hover);
   border-radius: var(--radius-sm);
-  color: #aeb7b2;
+  color: var(--text-tertiary);
   font-size: calc(10px + var(--font-ui-size-offset));
   font-weight: 600;
   line-height: 1;
-  background: rgba(255, 255, 255, 0.035);
+  background: var(--surface-fill-faint);
   box-shadow: inset 0 -1px 0 var(--surface-border-faint);
 }
 
@@ -1017,7 +1017,7 @@
 
 /* On a selected tab the × is white, matching the selected label. */
 .pane-tab-row.is-selected .pane-tab-close {
-  color: #ffffff;
+  color: var(--text-max);
 }
 
 .pane-tab-row.is-selected .pane-tab-close:hover {
@@ -1109,7 +1109,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   align-items: center;
   justify-content: center;
   padding: 18px;
-  background: rgba(8, 10, 12, 0.58);
+  background: var(--scrim-bg);
 }
 
 .confirm-dialog {
@@ -1138,12 +1138,12 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 }
 
 .confirm-dialog .confirm-dialog-error {
-  color: #e69a91;
+  color: var(--status-failed-fg);
 }
 
 .confirm-dialog-changes {
   /* Amber to flag uncommitted work that deletion would discard. */
-  color: #e6b673;
+  color: var(--status-warning-fg);
 }
 
 .confirm-dialog-field-label {
@@ -1163,7 +1163,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 }
 
 .confirm-dialog .rename-dialog-hint {
-  color: #777f7b;
+  color: var(--text-faint);
   font-size: calc(12px + var(--turn-font-delta, 0px) + var(--font-ui-size-offset));
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -1326,7 +1326,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   align-items: flex-start;
   justify-content: center;
   padding: 96px 18px 18px;
-  background: rgba(8, 10, 12, 0.58);
+  background: var(--scrim-bg);
 }
 
 .command-palette {
@@ -1339,7 +1339,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   border: 1px solid var(--surface-divider);
   border-radius: 10px;
   background: var(--popover-bg);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-lg);
 }
 
 .command-palette-input {
@@ -2020,7 +2020,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 }
 
 .settings-title-test-message.is-success {
-  color: #b9f0d6;
+  color: var(--status-success-fg-soft);
   opacity: 1;
 }
 
@@ -2055,7 +2055,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   border: 1px solid var(--control-border);
   border-radius: var(--radius-md);
   background-color: var(--field-bg);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 3.5L5 6.5L8 3.5' fill='none' stroke='%239ca6a1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-image: var(--select-chevron);
   background-repeat: no-repeat;
   background-position: right 9px center;
   background-size: 10px;
@@ -2251,7 +2251,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 }
 
 .settings-stepper button:disabled {
-  color: #5b615e;
+  color: var(--text-dim);
 }
 
 .settings-stepper-value {
@@ -2369,7 +2369,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 .settings-checkbox:checked {
   border-color: var(--accent-strong);
   background-color: var(--accent-strong);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'><path d='M3.5 7.3 5.9 9.7 10.5 4.6' fill='none' stroke='%2310211c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-image: var(--checkbox-check);
   background-repeat: no-repeat;
   background-position: center;
   background-size: 11px;
@@ -2418,12 +2418,12 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 
 .command-launcher-option select[data-lead="folder"] {
   background-image: var(--select-chevron),
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca6a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>");
+    var(--select-lead-folder);
 }
 
 .command-launcher-option select[data-lead="shield"] {
   background-image: var(--select-chevron),
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca6a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z'/></svg>");
+    var(--select-lead-shield);
 }
 
 .command-launcher-controls {
@@ -2464,7 +2464,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 
 .command-launcher-send:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(231, 231, 226, 0.45);
+  box-shadow: 0 0 0 2px var(--surface-border-strong-alpha);
 }
 
 /* Custom launcher dropdown (LauncherSelect), used by every agent's launcher options.
@@ -2594,7 +2594,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 .launcher-select-separator {
   height: 1px;
   margin: 3px 4px;
-  background: #32383a;
+  background: var(--surface-border-strong);
 }
 
 .launcher-select-item-label {
@@ -2637,7 +2637,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   color: var(--danger-fg);
   padding: 10px 10px 10px 12px;
   font-size: var(--fs-base);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.38);
+  box-shadow: var(--shadow-md);
   pointer-events: auto;
 }
 
@@ -2665,7 +2665,7 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 
 .error-banner-dismiss:hover {
   border-color: var(--danger-border-banner-hover);
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--surface-fill-subtle);
   color: var(--danger-fg-hover);
 }
 

@@ -6,7 +6,7 @@
   width: 100%;
   height: 100%;
   min-height: 0;
-  color: #dfe3df;
+  color: var(--text-body-soft);
   background: var(--research-workspace-bg);
 }
 
@@ -54,17 +54,17 @@
   min-height: 24px;
   padding: 0 3px;
   border: 0;
-  color: #aeb6b1;
+  color: var(--text-tertiary);
   background: transparent;
   cursor: pointer;
 }
 
 .research-history-button:hover:not(:disabled) {
-  color: #f0f2ef;
+  color: var(--text-interactive);
 }
 
 .research-history-button:disabled {
-  color: #4b524e;
+  color: var(--text-ghost);
   cursor: default;
 }
 
@@ -90,14 +90,14 @@
   padding: 0 3px;
   overflow: hidden;
   border: 0;
-  color: #aeb6b1;
+  color: var(--text-tertiary);
   text-overflow: ellipsis;
   white-space: nowrap;
   background: transparent;
 }
 
 .research-breadcrumb button:hover:not(:disabled) {
-  color: #f0f2ef;
+  color: var(--text-interactive);
 }
 
 .research-breadcrumb button:disabled {
@@ -106,14 +106,14 @@
 
 .research-breadcrumb-separator {
   margin: 0 5px;
-  color: #59615d;
+  color: var(--text-dim);
 }
 
 /* Stand-in for the collapsed middle of a deep path; its tooltip carries the
    hidden step count. */
 .research-breadcrumb-ellipsis {
   padding: 0 3px;
-  color: #78817c;
+  color: var(--text-subtle);
   cursor: default;
 }
 
@@ -190,7 +190,7 @@
 }
 
 .research-prompt-quote {
-  color: #a6aea9;
+  color: var(--text-tertiary);
   font-size: var(--research-quote-font-size);
   font-style: italic;
   line-height: var(--research-quote-line-height);
@@ -245,7 +245,7 @@
 .journal-tweet-avatar-fallback {
   display: grid;
   place-items: center;
-  color: #fff;
+  color: var(--lightbox-caption-fg);
   font-size: calc(15px + var(--font-ui-size-offset));
   font-weight: 700;
 }
@@ -277,7 +277,7 @@ a.journal-tweet-author:hover {
   width: 15px;
   height: 15px;
   align-self: center;
-  color: #1d9bf0;
+  color: var(--link-external-fg);
 }
 
 .journal-tweet-handle {
@@ -462,10 +462,10 @@ a.journal-tweet-more:hover {
   inset: 50% auto auto 50%;
   z-index: 1;
   padding: 7px 11px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.55); /* appearance-invariant */
   border-radius: 999px;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.72);
+  color: var(--lightbox-caption-fg);
+  background: var(--lightbox-scrim-bg);
   font: inherit;
   font-size: var(--fs-xs);
   font-weight: 600;
@@ -513,8 +513,8 @@ a.journal-tweet-more:hover {
   height: 40px;
   place-items: center;
   border-radius: 50%;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.6);
+  color: var(--lightbox-caption-fg);
+  background: var(--lightbox-caption-bg);
   transform: translate(-50%, -50%);
   pointer-events: none;
 }

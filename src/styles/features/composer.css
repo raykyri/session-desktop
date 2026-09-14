@@ -147,8 +147,8 @@
 
 /* A queued turn delivered elsewhere (fork / new session). */
 .queued-turn-delivery-label {
-  border-color: rgba(129, 199, 132, 0.25);
-  background: rgba(129, 199, 132, 0.08);
+  border-color: var(--status-success-border);
+  background: var(--status-success-bg);
   color: var(--status-success-fg);
 }
 
@@ -409,7 +409,7 @@
   background: var(--popover-bg);
   color: var(--text-primary);
   font-size: var(--fs-sm);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-md);
   pointer-events: none;
 }
 
@@ -421,9 +421,9 @@
 }
 
 .app-toast.is-warning {
-  border-color: #5b4630;
-  background: #241f18;
-  color: #ffdca8;
+  border-color: var(--warning-callout-border);
+  background: var(--warning-callout-bg);
+  color: var(--warning-callout-fg);
 }
 
 .folder-picker-status {
@@ -442,7 +442,7 @@
   color: var(--text-primary);
   font-size: var(--fs-sm);
   line-height: 1;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-md);
   pointer-events: none;
 }
 

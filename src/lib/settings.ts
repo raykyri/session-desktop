@@ -83,12 +83,18 @@ export async function detectAvailableBodyFonts(): Promise<BodyFontOption[]> {
 }
 
 export type ColorTheme = "green-blob" | "orange-blob";
+export type Appearance = "dark" | "light";
 export type TabTitleProvider = "openRouter" | "disabled";
 export type WorktreeLocation = "global" | "localSession" | "localClaude";
 
 export const COLOR_THEME_OPTIONS: { id: ColorTheme; label: string }[] = [
   { id: "green-blob", label: "Cool" },
   { id: "orange-blob", label: "Warm" },
+];
+
+export const APPEARANCE_OPTIONS: { id: Appearance; label: string }[] = [
+  { id: "dark", label: "Dark" },
+  { id: "light", label: "Light" },
 ];
 
 export const TAB_TITLE_PROVIDER_OPTIONS: { id: TabTitleProvider; label: string }[] = [
@@ -141,6 +147,8 @@ export function clampResearchLaunchInstruction(value: string): string {
 export interface AppSettings {
   /** color theme for application chrome and active states */
   colorTheme: ColorTheme;
+  /** dark or light surfaces; independent of the color theme's accent */
+  appearance: Appearance;
   /** id into BODY_FONT_OPTIONS */
   bodyFontId: string;
   /** App text zoom; legacy fontSize values are read on first load. */
@@ -205,6 +213,7 @@ export interface AppSettings {
 
 export const DEFAULT_SETTINGS: AppSettings = {
   colorTheme: "green-blob",
+  appearance: "dark",
   bodyFontId: DEFAULT_BODY_FONT_ID,
   textSize: APP_TEXT_SIZE,
   showShortcutHints: true,
@@ -254,8 +263,9 @@ export function loadSettings(): AppSettings {
     if (!raw) {
       return { ...DEFAULT_SETTINGS };
     }
-    const parsed = JSON.parse(raw) as Omit<Partial<AppSettings>, "colorTheme"> & {
+    const parsed = JSON.parse(raw) as Omit<Partial<AppSettings>, "colorTheme" | "appearance"> & {
       colorTheme?: unknown;
+      appearance?: unknown;
       fontSize?: unknown;
       openRouterTitlesEnabled?: boolean;
     };
@@ -263,6 +273,9 @@ export function loadSettings(): AppSettings {
     const colorTheme =
       COLOR_THEME_OPTIONS.find((option) => option.id === storedColorTheme)?.id ??
       DEFAULT_SETTINGS.colorTheme;
+    const appearance =
+      APPEARANCE_OPTIONS.find((option) => option.id === parsed.appearance)?.id ??
+      DEFAULT_SETTINGS.appearance;
     const bodyFontId =
       typeof parsed.bodyFontId === "string" &&
       BODY_FONT_OPTIONS.some((option) => option.id === parsed.bodyFontId)
@@ -336,6 +349,7 @@ export function loadSettings(): AppSettings {
         : DEFAULT_SETTINGS.openRouterModel;
     return {
       colorTheme,
+      appearance,
       bodyFontId,
       textSize,
       showShortcutHints,

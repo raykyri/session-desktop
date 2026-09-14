@@ -32,3 +32,16 @@ test("app text size takes precedence and invalid legacy values fall back safely"
   store.set(key, JSON.stringify({ fontSize: 100 }));
   assert.equal(loadSettings().textSize, 32);
 });
+
+test("appearance persists and unknown values fall back to dark", () => {
+  store.set(key, JSON.stringify({ appearance: "light" }));
+  assert.equal(loadSettings().appearance, "light");
+  store.set(key, JSON.stringify({ appearance: "sepia" }));
+  assert.equal(loadSettings().appearance, "dark");
+  store.set(key, JSON.stringify({ colorTheme: "orange-blob" }));
+  const settings = loadSettings();
+  assert.equal(settings.appearance, "dark");
+  saveSettings({ ...settings, appearance: "light" });
+  assert.equal(JSON.parse(store.get(key)!).appearance, "light");
+  assert.equal(loadSettings().colorTheme, "orange-blob");
+});
