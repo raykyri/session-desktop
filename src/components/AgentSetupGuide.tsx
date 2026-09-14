@@ -97,16 +97,6 @@ export default function AgentSetupGuide({
           <h3>{intro.heading}</h3>
           <p>{intro.body}</p>
         </div>
-        <button
-          type="button"
-          className="control-button agent-setup-refresh"
-          disabled={loading}
-          aria-label={loading ? "Checking agent status" : "Refresh agent status"}
-          title={loading ? "Checking agent status" : "Refresh agent status"}
-          onClick={onRefresh}
-        >
-          <RefreshCw size={13} className={loading ? "is-spinning" : undefined} aria-hidden="true" />
-        </button>
       </div>
       {error ? (
         <p className="agent-setup-error" role="alert">
@@ -115,25 +105,41 @@ export default function AgentSetupGuide({
       ) : null}
       {selected ? (
         <>
-          <div className="agent-setup-tabs" role="tablist" aria-label="Agents">
-            {adapters.map((adapter, index) => (
-              <button
-                key={adapter.instanceId}
-                id={`${tabsId}-tab-${index}`}
-                type="button"
-                role="tab"
-                className="agent-setup-tab"
-                aria-selected={adapter.instanceId === selected.instanceId}
-                aria-controls={panelId}
-                onClick={() => setSelectedInstanceId(adapter.instanceId)}
-              >
-                <span
-                  className={`agent-setup-dot${adapterSetupIsComplete(adapter) ? " is-ready" : ""}`}
-                  aria-hidden="true"
-                />
-                {adapter.label}
-              </button>
-            ))}
+          <div className="agent-setup-tabs-row">
+            <div className="agent-setup-tabs" role="tablist" aria-label="Agents">
+              {adapters.map((adapter, index) => (
+                <button
+                  key={adapter.instanceId}
+                  id={`${tabsId}-tab-${index}`}
+                  type="button"
+                  role="tab"
+                  className="agent-setup-tab"
+                  aria-selected={adapter.instanceId === selected.instanceId}
+                  aria-controls={panelId}
+                  onClick={() => setSelectedInstanceId(adapter.instanceId)}
+                >
+                  <span
+                    className={`agent-setup-dot${adapterSetupIsComplete(adapter) ? " is-ready" : ""}`}
+                    aria-hidden="true"
+                  />
+                  {adapter.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="control-button agent-setup-refresh"
+              disabled={loading}
+              aria-label={loading ? "Checking all agent statuses" : "Refresh all agent statuses"}
+              title={loading ? "Checking all agent statuses" : "Refresh all agent statuses"}
+              onClick={onRefresh}
+            >
+              <RefreshCw
+                size={13}
+                className={loading ? "is-spinning" : undefined}
+                aria-hidden="true"
+              />
+            </button>
           </div>
           <div
             id={panelId}
@@ -211,8 +217,10 @@ export default function AgentSetupGuide({
                 ) : null}
                 <button
                   type="button"
-                  className="control-button is-primary"
+                  className="control-button is-primary agent-setup-refresh-current"
                   disabled={loading}
+                  aria-label={loading ? "Checking agent status" : "Refresh agent status"}
+                  title={loading ? "Checking agent status" : "Refresh agent status"}
                   onClick={onRefresh}
                 >
                   <RefreshCw
@@ -220,7 +228,6 @@ export default function AgentSetupGuide({
                     className={loading ? "is-spinning" : undefined}
                     aria-hidden="true"
                   />
-                  <span>Refresh status</span>
                 </button>
               </div>
             </div>

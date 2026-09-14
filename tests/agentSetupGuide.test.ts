@@ -99,5 +99,10 @@ test("an installed agent is not signed in until a probe has checked it", () => {
   assert.equal(adapterSetupIsComplete(checked), true);
   assert.equal(agentSetupStatusLabel(checked), "Signed in");
   assert.equal(agentSetupSteps(checked)[1].done, true);
+  assert.equal(agentSetupSteps(checked)[2].done, true);
   assert.equal(agentSetupIntro([checked]).heading, "1 of 1 agents ready");
+  assert.equal(
+    agentSetupIntro([checked]).body,
+    "Set up agents to make them available for research.",
+  );
 });

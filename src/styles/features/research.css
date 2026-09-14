@@ -16,6 +16,21 @@
   overflow-y: hidden;
 }
 
+.research-sidebar-brand {
+  display: flex;
+  flex: none;
+  height: 34px;
+  align-items: center;
+  margin-inline: 7px;
+  padding-inline: 8px;
+}
+
+.research-sidebar-brand img {
+  display: block;
+  width: 20px;
+  height: auto;
+}
+
 .research-sidebar-section {
   min-height: 0;
   overflow-x: hidden;
@@ -385,15 +400,13 @@
   background: var(--surface-fill-subtle);
 }
 
-/* Folder scope switcher: sits between the mode toggle and the research list,
-   scoping the sidebar to one Research workspace (or all of them). Folder
-   management actions live at the bottom of its menu and always apply to the
-   currently scoped folder. */
+/* Folder scope switcher: pinned beneath the research list, scoping the sidebar
+   to one Research workspace. Folder management actions live at the bottom of
+   its upward-opening menu and always apply to the currently scoped folder. */
 .research-folder-switcher {
   position: relative;
-  /* Research mode removes the parent gap so the list can own its surrounding
-     space. Re-create the Terminal Home-to-first-group 6px rhythm here. */
-  margin: 6px 7px 0;
+  flex: none;
+  margin: 0 7px;
 }
 
 .research-folder-trigger {
@@ -460,7 +473,7 @@
 
 .research-folder-menu {
   position: absolute;
-  top: calc(100% + 5px);
+  bottom: calc(100% + 5px);
   left: 0;
   right: 0;
   z-index: 40;

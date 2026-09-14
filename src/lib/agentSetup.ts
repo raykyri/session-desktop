@@ -79,7 +79,7 @@ export function agentSetupSteps(adapter: AgentAdapterMetadata): AgentSetupStep[]
           };
   const checkStep: AgentSetupStep = {
     title: "Refresh status",
-    done: false,
+    done: ready,
     command: null,
     hint: ready
       ? `${adapter.label} is ready for research. Select it from the agent menu on Home.`
@@ -99,6 +99,6 @@ export function agentSetupIntro(adapters: readonly AgentAdapterMetadata[]) {
     body:
       readyCount === 0
         ? "Research requires at least one supported agent CLI installed and signed in on this Mac. Complete the steps for an agent, then refresh its status."
-        : "Set up another agent to make it available in the Home composer.",
+        : "Set up agents to make them available for research.",
   };
 }
