@@ -355,3 +355,23 @@ test("virtual feed rows omit day dividers and retain feed positions", () => {
   assert.deepEqual(rows.map((row) => row.position), [1, 2]);
   assert.deepEqual(rows.map((row) => row.key), events.map((event) => event.id));
 });
+
+
+test("live summary events retain imported report provenance", () => {
+  const node: ResearchNode = {
+    id: "imported", treeId: "imported-tree", prompt: "Original prompt", adapter: "codex",
+    groupId: "workspace", worktreeDir: "/workspace", status: "complete", createdAt: 100,
+    kind: "run", origin: "imported", model: null,
+  };
+  const query = recentResearchQueryFromNode(node)!;
+  assert.equal(query.origin, "imported");
+  const items = upsertRecentActivityResearchNode([], node);
+  const updated = upsertRecentActivityResearchNode(items, {
+    ...node, recap: { text: "Summary", responseRevision: "revision" },
+  });
+  assert.equal(updated[0].kind, "research-query");
+  if (updated[0].kind === "research-query") {
+    assert.equal(formatActivityMetadataSummary(activityEventFromResearchQuery(updated[0].query)), "Imported");
+    assert.equal(updated[0].query.model, null);
+  }
+});

@@ -378,6 +378,7 @@ import {
   archiveResearchTree,
   cancelResearchNode,
   createResearchTree,
+  importResearchReport,
   updateResearchDocument,
   forkResearchNode,
   markResearchTreeViewed,
@@ -7223,6 +7224,21 @@ function MainApp() {
       resolveResearchComposerWorkspace,
     ],
   );
+  const importReport = useCallback(async (markdown: string, prompt: string) => {
+    const group = await resolveResearchComposerWorkspace(researchScope);
+    const available = config?.adapters.filter(
+      (candidate) => candidate.supportsRecapGeneration && adapterCanLaunchResearch(candidate),
+    ) ?? [];
+    const adapter = available.find((candidate) => candidate.default) ?? available[0];
+    const detail = await importResearchReport({
+      markdown,
+      prompt,
+      workspaceId: group.id,
+      adapter: adapter?.id ?? "",
+    });
+    adoptCreatedResearchTree(detail);
+  }, [config, researchScope, resolveResearchComposerWorkspace, adoptCreatedResearchTree]);
+
   const editResearchDocument = useCallback(
     async (input: {
       nodeId: string;
@@ -9085,6 +9101,8 @@ function MainApp() {
       if (event.key !== "Escape") {
         return;
       }
+      // Native modal dialogs own Escape and focus while they are open.
+      if (document.querySelector("dialog[open]")) return;
       const overlays = escapeOverlayStateRef.current;
 
       const browserEscapeDisposition = browserEscapeDispatcherRef.current();
@@ -9515,6 +9533,7 @@ function MainApp() {
     };
 
     const executeShortcut = (rawCommand: AppShortcutCommand, repeat: boolean) => {
+      if (document.querySelector("dialog[open]")) return;
       const command = rawCommand;
       if (repeat && !appShortcutAllowsRepeat(command)) {
         return;
@@ -11822,6 +11841,7 @@ function MainApp() {
             <ResearchActivityFeed
               {...activityFeedState}
               view={journalView}
+              onImportReport={importReport}
               composer={
                 <ResearchQueryComposer
                   adapters={config.adapters}

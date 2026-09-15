@@ -1286,3 +1286,16 @@ export function acknowledgeInterfaceHealthProbe(generation: number) {
 export function reconnectPane(paneId: string) {
   return invoke<void>("pane_reconnect", { paneId });
 }
+
+export function readResearchReport(path: string): Promise<string> {
+  return invoke<string>("read_research_report", { path });
+}
+
+export function importResearchReport(request: {
+  markdown: string;
+  prompt: string;
+  adapter: string;
+  workspaceId: string;
+}): Promise<ResearchTreeDetail> {
+  return invoke<ResearchTreeDetail>("import_research_report", { request });
+}

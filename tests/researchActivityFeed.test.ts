@@ -267,3 +267,17 @@ test("the feed scroll anchor round-trips correctly", () => {
   // Scroll position clamps to zero if calculated offset is negative.
   assert.equal(recentActivityAnchorScrollTop(0, 40, 400), 0);
 });
+
+
+test("Home offers report import and imported cards identify provenance", () => {
+  const html = renderFeed({ onImportReport: asyncNoop, items: [{
+    kind: "research-query", occurredAt: 100, query: {
+      nodeId: "import", treeId: "import-tree", inline: false, prompt: "Original prompt",
+      adapter: "codex", model: null, origin: "imported", status: "complete", createdAt: 100,
+    },
+  }] });
+  assert.match(html, /Import report/);
+  assert.match(html, /accept=".md,text\/markdown"/);
+  assert.match(html, /Imported <time/);
+  assert.doesNotMatch(renderFeed({ view: "bookmarks", onImportReport: asyncNoop }), /Import report/);
+});

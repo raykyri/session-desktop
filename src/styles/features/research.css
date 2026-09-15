@@ -2280,3 +2280,48 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.research-import-button {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.confirm-dialog.research-import-dialog {
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  margin: auto;
+  color: var(--text-primary);
+}
+
+.research-import-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.research-import-dialog textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  resize: vertical;
+}
+
+.research-import-filename {
+  overflow-wrap: anywhere;
+}
+
+.research-import-dialog:not([open]) {
+  display: none;
+}
+
+.research-import-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.research-import-dialog textarea {
+  padding: 10px;
+}
