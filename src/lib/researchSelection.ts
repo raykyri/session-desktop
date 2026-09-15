@@ -240,6 +240,49 @@ function trailingUnit(units: SelectionUnit[], offset: number) {
   return next?.start === offset ? next : previous ?? null;
 }
 
+/** Includes punctuation attached to the outside of a snapped passage without
+ * swallowing punctuation that joins it to another word. Whitespace and hard
+ * projection boundaries define attachment: selecting `“quoted.”` keeps both
+ * quotation marks, while selecting `state-of-the` does not pull in the hyphen
+ * before `art`. */
+function expandAttachedPunctuation(
+  text: string,
+  start: number,
+  end: number,
+  boundaries: number[],
+) {
+  let lowerBound = 0;
+  let upperBound = text.length;
+  for (const boundary of boundaries) {
+    if (boundary <= start) {
+      lowerBound = Math.max(lowerBound, boundary);
+    }
+    if (boundary >= end) {
+      upperBound = Math.min(upperBound, boundary);
+    }
+  }
+
+  const leading = text.slice(lowerBound, start).match(/\p{P}+$/u)?.[0] ?? "";
+  const leadingStart = start - leading.length;
+  if (
+    leading &&
+    (leadingStart === lowerBound || /\s$/u.test(text.slice(lowerBound, leadingStart)))
+  ) {
+    start = leadingStart;
+  }
+
+  const trailing = text.slice(end, upperBound).match(/^\p{P}+/u)?.[0] ?? "";
+  const trailingEnd = end + trailing.length;
+  if (
+    trailing &&
+    (trailingEnd === upperBound || /^\s/u.test(text.slice(trailingEnd, upperBound)))
+  ) {
+    end = trailingEnd;
+  }
+
+  return { start, end };
+}
+
 /** Expands a drag's flat rendered-text offsets to linguistic word boundaries.
  * The returned offsets are normalized, while `direction` preserves which end
  * owns the live focus. Equal offsets deliberately select one whole unit once
@@ -277,11 +320,18 @@ export function createResearchSelectionSnapper(
     if (!first || !last || first.start > last.start) {
       const anchor =
         leadingUnit(units, anchorOffset) ?? trailingUnit(units, anchorOffset);
-      return anchor
-        ? { start: anchor.start, end: anchor.end, direction }
-        : null;
+      if (!anchor) {
+        return null;
+      }
+      return {
+        ...expandAttachedPunctuation(text, anchor.start, anchor.end, boundaries),
+        direction,
+      };
     }
-    return { start: first.start, end: last.end, direction };
+    return {
+      ...expandAttachedPunctuation(text, first.start, last.end, boundaries),
+      direction,
+    };
   };
 }
 

@@ -371,6 +371,32 @@ function applyDirectionalSelectionRange(
   if (!selection) {
     return;
   }
+  if (selection.rangeCount > 0 && !selection.isCollapsed) {
+    const current = selection.getRangeAt(0);
+    const sameRange =
+      current.startContainer === range.startContainer &&
+      current.startOffset === range.startOffset &&
+      current.endContainer === range.endContainer &&
+      current.endOffset === range.endOffset;
+    const expectedAnchor =
+      direction === "forward" ? range.startContainer : range.endContainer;
+    const expectedAnchorOffset =
+      direction === "forward" ? range.startOffset : range.endOffset;
+    const expectedFocus =
+      direction === "forward" ? range.endContainer : range.startContainer;
+    const expectedFocusOffset =
+      direction === "forward" ? range.endOffset : range.startOffset;
+    if (
+      sameRange &&
+      (typeof selection.setBaseAndExtent !== "function" ||
+        (selection.anchorNode === expectedAnchor &&
+          selection.anchorOffset === expectedAnchorOffset &&
+          selection.focusNode === expectedFocus &&
+          selection.focusOffset === expectedFocusOffset))
+    ) {
+      return;
+    }
+  }
   if (typeof selection.setBaseAndExtent === "function") {
     if (direction === "forward") {
       selection.setBaseAndExtent(
@@ -3896,9 +3922,9 @@ function ResearchDocument({
       if (!drag.active || !drag.snapEligible || drag.frame !== null) {
         return;
       }
-      // Run after WebKit's native selection update for this mousemove. We do
-      // not prevent the default, so dragging beyond the viewport keeps native
-      // selection autoscroll.
+      // Keep a frame fallback for engines that coalesce selectionchange while
+      // dragging. The selectionchange listener below normally corrects the
+      // native character-level range before this callback is needed.
       drag.frame = window.requestAnimationFrame(() => {
         drag.frame = null;
         if (selectionDragRef.current === drag) {
@@ -3906,12 +3932,30 @@ function ResearchDocument({
         }
       });
     };
+    const resnapNativeSelection = () => {
+      const drag = selectionDragRef.current;
+      if (!drag?.active || !drag.snapEligible) {
+        return;
+      }
+      // WebKit updates its native character-level range after mousemove. Fix
+      // that range in the ensuing selectionchange task, before the next paint,
+      // so a slow drag never exposes partial endpoint words. Programmatic
+      // selection changes can fire this event again; the range equality check
+      // in applyDirectionalSelectionRange makes that second pass a no-op.
+      if (drag.frame !== null) {
+        window.cancelAnimationFrame(drag.frame);
+        drag.frame = null;
+      }
+      applySnappedResearchSelection(drag, drag.lastX, drag.lastY);
+    };
     document.addEventListener("mousemove", updateDrag);
     document.addEventListener("mouseup", finishHighlightSelectionDrag);
+    document.addEventListener("selectionchange", resnapNativeSelection);
     window.addEventListener("blur", cancelDrag);
     return () => {
       document.removeEventListener("mousemove", updateDrag);
       document.removeEventListener("mouseup", finishHighlightSelectionDrag);
+      document.removeEventListener("selectionchange", resnapNativeSelection);
       window.removeEventListener("blur", cancelDrag);
       cancelDrag();
     };

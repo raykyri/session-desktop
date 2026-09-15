@@ -124,18 +124,40 @@ test("keeps the anchor word selected while a drag reverses inside it", () => {
   });
 });
 
-test("excludes outer whitespace and punctuation but retains them internally", () => {
+test("excludes outer whitespace and includes attached punctuation", () => {
   const text = "The quick, brown fox.";
   assert.deepEqual(snapResearchDragSelection(text, 5, 10), {
     start: 4,
-    end: 9,
+    end: 10,
     direction: "forward",
   });
   assert.deepEqual(snapResearchDragSelection(text, 5, 20), {
     start: 4,
-    end: 20,
+    end: 21,
     direction: "forward",
   });
+});
+
+test("includes quotation marks and punctuation surrounding a dragged passage", () => {
+  const quoted = "She called it “surprisingly robust.” Then left.";
+  const quoteStart = quoted.indexOf("“");
+  const quoteEnd = quoted.indexOf("”") + 1;
+  assert.deepEqual(
+    snapResearchDragSelection(quoted, quoteStart + 2, quoteEnd - 2),
+    { start: quoteStart, end: quoteEnd, direction: "forward" },
+  );
+  assert.deepEqual(
+    snapResearchDragSelection(quoted, quoteEnd - 2, quoteStart + 2),
+    { start: quoteStart, end: quoteEnd, direction: "backward" },
+  );
+
+  const parenthesized = "Choose (alpha + beta), then stop.";
+  const passageStart = parenthesized.indexOf("(");
+  const passageEnd = parenthesized.indexOf(",") + 1;
+  assert.deepEqual(
+    snapResearchDragSelection(parenthesized, passageStart + 2, passageEnd - 3),
+    { start: passageStart, end: passageEnd, direction: "forward" },
+  );
 });
 
 test("follows locale-aware boundaries for contractions, hyphens, and CJK", () => {
