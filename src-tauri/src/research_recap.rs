@@ -1,8 +1,10 @@
 //! Optional derived metadata; generation never delays research completion.
+use crate::events::SessionEvent;
 use crate::research::{self, ResearchNodeStatus};
 use crate::state::AppState;
 use crate::transcript::{Turn, TurnBlock};
 use pulldown_cmark::{Event, Parser, TagEnd};
+use serde_json::json;
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 
@@ -55,6 +57,9 @@ pub fn schedule(state: &AppState, node_id: &str) {
     }
     drop(jobs);
     let state = state.clone();
+    // The viewer reserves space for the summary while the job runs; the paired
+    // `false` emit below fires on every exit path, including skipped sources.
+    emit_pending(&state, &node.id, true);
     std::thread::spawn(move || {
         let _job = Job(key);
         let result = (|| -> Result<(), String> {
@@ -85,7 +90,17 @@ pub fn schedule(state: &AppState, node_id: &str) {
         if let Err(err) = result {
             eprintln!("session: recap generation failed for {}: {err}", node.id);
         }
+        emit_pending(&state, &node.id, false);
     });
+}
+
+fn emit_pending(state: &AppState, node_id: &str, pending: bool) {
+    state.emit(SessionEvent::new(
+        "research.recap.pending",
+        None,
+        None,
+        json!({ "nodeId": node_id, "pending": pending }),
+    ));
 }
 
 /// Select assistant prose after the last tool activity. Keep the most recent

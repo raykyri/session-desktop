@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { Upload } from "lucide-react";
 import { readResearchReport } from "../../lib/api";
+import { estimateTokenCount } from "../../lib/tokenEstimate";
 
 export default function ResearchReportImport({ dropTarget, onImport, onError }: {
   dropTarget: RefObject<HTMLDivElement | null>;
@@ -13,6 +14,7 @@ export default function ResearchReportImport({ dropTarget, onImport, onError }: 
   const inputRef = useRef<HTMLInputElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
   const occupied = useRef(false);
   const mounted = useRef(true);
   const [report, setReport] = useState<{ name: string; markdown: string } | null>(null);
@@ -90,6 +92,16 @@ export default function ResearchReportImport({ dropTarget, onImport, onError }: 
     if (report) dialogRef.current?.showModal();
   }, [report]);
 
+  // Grow the prompt field to fit its committed value. Measuring in onChange can
+  // catch WebKit between its native edit and React restoring the controlled
+  // value; useLayoutEffect keeps value and height in one pre-paint commit.
+  useLayoutEffect(() => {
+    const textarea = promptRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [prompt, report]);
+
   function close() {
     if (busy) return;
     dialogRef.current?.close();
@@ -128,12 +140,18 @@ export default function ResearchReportImport({ dropTarget, onImport, onError }: 
           finally { if (mounted.current) setBusy(false); }
         }}>
           <h2 id="research-import-title">Import report</h2>
-          <p className="research-import-filename">{report.name}</p>
-          <label htmlFor="research-import-prompt">Prompt that generated this report</label>
-          <textarea id="research-import-prompt" className="rename-dialog-input" autoFocus required
-            rows={7} value={prompt} disabled={busy} onChange={(event) => setPrompt(event.currentTarget.value)}
-            placeholder="Paste the original research prompt…" />
-          <p>The report will be marked as Imported. An available agent will generate its summary.</p>
+          <label className="confirm-dialog-field-label research-import-field" htmlFor="research-import-prompt">
+            <span>Prompt that generated this report</span>
+            <textarea ref={promptRef} id="research-import-prompt" className="rename-dialog-input" autoFocus required
+              rows={3} value={prompt} disabled={busy} onChange={(event) => setPrompt(event.currentTarget.value)}
+              placeholder="Paste the original research prompt…" />
+          </label>
+          <p className="research-import-file">
+            <span className="research-import-filename">{report.name}</span>
+            <span className="research-import-tokens">
+              {estimateTokenCount(report.markdown).toLocaleString()} tokens (estimated)
+            </span>
+          </p>
           {error && <p className="confirm-dialog-error" role="alert">{error}</p>}
           <div className="confirm-dialog-actions">
             <button type="button" className="control-button" disabled={busy} onClick={close}>Cancel</button>

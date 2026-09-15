@@ -31,6 +31,24 @@ test("recaps reserve no space until generated and belonging to the displayed ans
   assert.equal(render(value), "");
 });
 
+test("a pending summary job holds the recap slot with a spinner", () => {
+  const value = content();
+  const pending = (input: ResearchNodeContent) =>
+    renderToStaticMarkup(createElement(ResearchRecap, { content: input, pending: true }));
+  // A current recap always wins over the placeholder.
+  assert.match(pending(value), /Summary: The result is ready\./);
+  delete value.node.recap;
+  assert.match(pending(value), /Generating summary/);
+  assert.equal(render(value), "");
+  // A stale recap generates again, so its slot shows the spinner, not the text.
+  value.node.recap = { text: "Stale.", responseRevision: "older" };
+  assert.match(pending(value), /Generating summary/);
+  assert.doesNotMatch(pending(value), /Stale\./);
+  // Nothing to summarize yet on a run that has not settled.
+  value.node.status = "running";
+  assert.equal(pending(value), "");
+});
+
 test("recaps render as text, with no Markdown or HTML interpretation", () => {
   const value = content();
   value.node.recap!.text = "<script>alert(1)</script> **text**";

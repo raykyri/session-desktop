@@ -61,6 +61,15 @@ type HighlightsRemovedEvent = {
   timestamp: number;
 };
 
+/** Background summary generation started or settled for a run. Purely a
+ * viewer hint: the recap itself arrives as a node update. */
+type RecapPendingEvent = {
+  type: "research.recap.pending";
+  nodeId: string;
+  pending: boolean;
+  timestamp: number;
+};
+
 type TreeRemovedEvent = {
   type: "research.tree.removed";
   treeId: string;
@@ -86,6 +95,7 @@ export type ParsedResearchEvent =
   | HighlightCreatedEvent
   | HighlightRemovedEvent
   | HighlightsRemovedEvent
+  | RecapPendingEvent
   | TreeRemovedEvent
   | NodeRemovedEvent;
 
@@ -298,6 +308,18 @@ export function parseResearchEvent(event: SessionEvent): ResearchEventParseResul
               type: event.type,
               nodeId: payload.nodeId,
               highlightIds: payload.highlightIds,
+              timestamp: event.timestamp,
+            },
+          }
+        : malformed();
+    case "research.recap.pending":
+      return typeof payload.nodeId === "string" && typeof payload.pending === "boolean"
+        ? {
+            kind: "event",
+            event: {
+              type: event.type,
+              nodeId: payload.nodeId,
+              pending: payload.pending,
               timestamp: event.timestamp,
             },
           }
