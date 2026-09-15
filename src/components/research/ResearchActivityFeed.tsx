@@ -46,7 +46,7 @@ import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigati
 import { ResearchDocumentFrame } from "./ResearchDocumentChrome";
 import ActivityMetadataLine from "../ActivityMetadataLine";
 import ResearchThreadActions from "./ResearchThreadActions";
-import { ResearchRecapLine } from "./ResearchRecap";
+import { ResearchRecapLine, ResearchRecapPendingLine } from "./ResearchRecap";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import { TweetEmbed } from "./TweetEmbed";
 import { ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
@@ -86,6 +86,8 @@ export function recentActivityAnchorScrollTop(
 
 export type ResearchActivityFeedView = "home" | "bookmarks";
 
+const EMPTY_RECAP_PENDING_NODE_IDS: ReadonlySet<string> = new Set<string>();
+
 export interface ResearchActivityFeedProps {
   composer: ReactNode;
   onImportReport?: (markdown: string, prompt: string) => Promise<void>;
@@ -97,6 +99,9 @@ export interface ResearchActivityFeedProps {
   initialScrollAnchor?: RecentActivityScrollAnchor | null;
   onScrollAnchorChange?: (anchor: RecentActivityScrollAnchor | null) => void;
   items: RecentActivityItem[];
+  /** Runs whose background summary job is in flight; each card holds a spinner
+   * in its summary slot until the summary arrives. */
+  recapPendingNodeIds?: ReadonlySet<string>;
   researchTrees: ResearchTreeSummary[];
   nextCursor: RecentActivityCursor | null;
   loadingOlder: boolean;
@@ -329,6 +334,7 @@ function recentQueryTargetExcerpt(target: string, maxWords = 5, maxChars = 40) {
 export function ResearchQueryCard({
   query,
   metadata,
+  recapPending = false,
   followed = false,
   bookmarked = false,
   onToggleFollow,
@@ -341,6 +347,8 @@ export function ResearchQueryCard({
   /** Event metadata (context phrase and relative time), shown on the card's
    * footer row beside the thread actions. */
   metadata?: ReactNode;
+  /** A background summary job is in flight for this run. */
+  recapPending?: boolean;
   followed?: boolean;
   bookmarked?: boolean;
   onToggleFollow?: () => void;
@@ -408,7 +416,11 @@ export function ResearchQueryCard({
           <LoaderCircle size={14} aria-hidden="true" />
         </span>
       ) : null}
-      {recap ? <ResearchRecapLine text={recap} className="recent-query-recap" /> : null}
+      {recap ? (
+        <ResearchRecapLine text={recap} className="recent-query-recap" />
+      ) : recapPending && !running ? (
+        <ResearchRecapPendingLine className="recent-query-recap" />
+      ) : null}
       {query.children?.length && onOpenChild ? (
         <ul
           className="recent-query-children"
@@ -577,6 +589,7 @@ function ResearchActivityFeed({
   initialScrollAnchor = null,
   onScrollAnchorChange,
   items: rawItems,
+  recapPendingNodeIds = EMPTY_RECAP_PENDING_NODE_IDS,
   researchTrees,
   nextCursor,
   loadingOlder,
@@ -1271,6 +1284,9 @@ function ResearchActivityFeed({
                         <ResearchQueryCard
                           query={row.event.source.query}
                           metadata={<ActivityMetadataLine event={row.event} />}
+                          recapPending={recapPendingNodeIds.has(
+                            row.event.source.query.nodeId,
+                          )}
                           followed={Boolean(researchTree?.followed)}
                           bookmarked={Boolean(researchTree?.bookmarked)}
                           onToggleFollow={() => {

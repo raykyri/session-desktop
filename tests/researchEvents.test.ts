@@ -120,6 +120,7 @@ test("parseResearchEvent recognizes the complete backend research taxonomy", () 
     ["research.highlight.created", { nodeId: root.id, highlight: highlightA }],
     ["research.highlight.removed", { nodeId: root.id, highlightId: highlightA.id }],
     ["research.highlights.removed", { nodeId: root.id, highlightIds: [highlightA.id] }],
+    ["research.recap.pending", { nodeId: root.id, pending: true }],
     ["research.tree.removed", { treeId: researchTree.id }],
     [
       "research.node.removed",
@@ -149,6 +150,10 @@ test("parseResearchEvent separates unrelated, unsupported, and malformed events"
     kind: "malformed",
     type: "research.node.updated",
   });
+  assert.deepEqual(
+    parseResearchEvent(sessionEvent("research.recap.pending", { nodeId: "node-root" })),
+    { kind: "malformed", type: "research.recap.pending" },
+  );
   assert.deepEqual(
     parseResearchEvent(
       sessionEvent("research.highlights.removed", {

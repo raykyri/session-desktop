@@ -2138,6 +2138,21 @@
   margin: 0 0 28px;
 }
 
+/* Holds the recap's slot while the summary generates, so the text lands in
+   place instead of pushing the answer down when it arrives. */
+.research-recap-pending {
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--research-summary-font-size) * var(--research-summary-line-height));
+  color: var(--accent-color);
+}
+
+.research-recap-pending .research-spinner {
+  display: block;
+  transform-origin: center;
+  will-change: transform;
+}
+
 .research-recap-dialog {
   width: min(720px, 100%);
   max-height: min(760px, calc(100vh - 36px));
@@ -2297,19 +2312,7 @@
 }
 
 .research-import-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.45);
-}
-
-.research-import-dialog textarea {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  margin-top: 8px;
-  resize: vertical;
-}
-
-.research-import-filename {
-  overflow-wrap: anywhere;
+  background: var(--scrim-bg);
 }
 
 .research-import-dialog:not([open]) {
@@ -2322,6 +2325,47 @@
   gap: 12px;
 }
 
-.research-import-dialog textarea {
-  padding: 10px;
+.research-import-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Three rows to start; the layout effect grows the field from there, capped so
+   a long prompt scrolls instead of pushing the actions off screen. */
+.research-import-field textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: calc(3 * 1.45em + 20px);
+  max-height: 240px;
+  padding: 9px 10px;
+  line-height: 1.45;
+  resize: none;
+  overflow-y: auto;
+}
+
+.research-import-dialog .research-import-file {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--control-h-lg);
+  padding: 8px 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  background: var(--field-bg);
+  color: var(--text-strong);
+  font-size: var(--fs-input);
+  text-align: center;
+}
+
+.research-import-filename {
+  overflow-wrap: anywhere;
+}
+
+.research-import-tokens {
+  color: var(--text-faint);
+  font-size: var(--fs-base);
+  white-space: nowrap;
 }

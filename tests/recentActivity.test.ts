@@ -344,6 +344,28 @@ test("home-feed research prompts show a recap below the question", () => {
   assert.doesNotMatch(withoutRecap, /Summary:/);
 });
 
+test("home-feed cards hold the recap slot while a summary generates", () => {
+  const answered: RecentResearchQuery = { ...query, status: "complete" };
+  const card = (overrides: Record<string, unknown>) =>
+    renderToStaticMarkup(
+      createElement(ResearchQueryCard, {
+        query: answered,
+        onOpen: () => {},
+        onContextMenu: () => {},
+        ...overrides,
+      }),
+    );
+
+  assert.match(card({ recapPending: true }), /Generating summary/);
+  assert.doesNotMatch(card({}), /Generating summary/);
+  // The generated summary replaces the placeholder rather than joining it.
+  const generated = card({ query: { ...answered, recap: "Ready." }, recapPending: true });
+  assert.match(generated, /Summary: Ready\./);
+  assert.doesNotMatch(generated, /Generating summary/);
+  // A run still answering already shows its own spinner below the prompt.
+  assert.doesNotMatch(card({ query, recapPending: true }), /Generating summary/);
+});
+
 test("virtual feed rows omit day dividers and retain feed positions", () => {
   const events = buildRecentActivity(
     [{ kind: "link", id: "link", createdAt: "1970-01-01T00:00:00.300Z", url: "https://example.com" }],
