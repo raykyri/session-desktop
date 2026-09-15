@@ -1720,6 +1720,41 @@ fn launch_fresh_research_run(
 }
 
 #[tauri::command]
+async fn read_research_report(path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = std::path::Path::new(&path);
+        if !path
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+        {
+            return Err("Choose a Markdown (.md) report".to_string());
+        }
+        std::fs::read_to_string(path).map_err(|err| format!("Could not read report: {err}"))
+    })
+    .await
+    .map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+async fn import_research_report(
+    state: tauri::State<'_, AppState>,
+    request: research::ImportResearchReportRequest,
+) -> Result<ResearchTreeDetail, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let detail = {
+            let _guard = workspace::lock_research_workspace_mutations()?;
+            validate_launch_workspace(&state, Some(&request.workspace_id), LaunchOrigin::Research)?;
+            state.import_research_report(request)?
+        };
+        research_recap::schedule(&state, &detail.tree.root_node_id);
+        Ok(detail)
+    })
+    .await
+    .map_err(|err| format!("report import failed: {err}"))?
+}
+
+#[tauri::command]
 async fn export_pane_to_research(
     state: tauri::State<'_, AppState>,
     request: research::ExportPaneToResearchRequest,
@@ -3278,7 +3313,7 @@ async fn generate_research_recap_candidate(
         if snapshot.revision != request.expected_response_revision {
             return Err("the answer changed; reopen summary generation and try again".to_string());
         }
-        let answer = research_recap::recap_source(&snapshot.turns)
+        let answer = research_recap::recap_source_for_node(&node, &snapshot.turns)
             .ok_or_else(|| "the answer is not eligible for summary generation".to_string())?;
         let workspace = state.research_workspace_for_node(&node.id)?;
         let text = title_generation::generate_research_recap_with(
@@ -3646,6 +3681,8 @@ fn main() {
             get_research_tree,
             create_research_tree,
             export_pane_to_research,
+            read_research_report,
+            import_research_report,
             update_research_document,
             read_transcript_image,
             save_pasted_image,

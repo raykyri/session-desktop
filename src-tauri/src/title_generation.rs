@@ -153,12 +153,12 @@ fn generate_research_metadata(
     }?;
     let cwd = PathBuf::from(&workspace.dir);
     let schema_file = (flavor == ResearchMetadataFlavor::Codex)
-        .then(|| MetadataSchemaFile::create(config, schema))
+        .then(|| MetadataFile::create_schema(config, schema))
         .transpose()?;
     let grok_session_id = (flavor == ResearchMetadataFlavor::Grok)
         .then(new_uuid_v4)
         .transpose()?;
-    let args = build_research_metadata_args(
+    let mut args = build_research_metadata_args(
         flavor,
         &cwd,
         prompt,
@@ -167,12 +167,28 @@ fn generate_research_metadata(
         grok_session_id.as_deref(),
         schema,
     );
+    // Transport the complete prompt via a file, never a potentially oversized
+    // argv entry. The same metadata process and output validation still apply.
+    let input_file = MetadataFile::create_input(config, prompt)?;
+    args.pop(); // The prompt is the final argument for every metadata adapter.
+    match flavor {
+        ResearchMetadataFlavor::Codex => args.push("-".into()),
+        ResearchMetadataFlavor::Claude => {}
+        ResearchMetadataFlavor::Grok => {
+            args.pop(); // -p
+            args.extend([
+                "--prompt-file".into(),
+                input_file.path.display().to_string(),
+            ]);
+        }
+    }
+    let stdin = (flavor != ResearchMetadataFlavor::Grok).then_some(input_file.path.as_path());
     let stderr_log = config
         .workspace_root
         .join(".session")
         .join("research-logs")
         .join(format!("{node_id}-{field}.log"));
-    run_research_metadata_process(&binary, &args, &cwd, &stderr_log, flavor, field)
+    run_research_metadata_process(&binary, &args, &cwd, &stderr_log, flavor, field, stdin)
 }
 
 fn research_title_prompt(source: &str) -> String {
@@ -291,8 +307,10 @@ fn run_research_metadata_process(
     stderr_log: &Path,
     flavor: ResearchMetadataFlavor,
     field: &str,
+    stdin: Option<&Path>,
 ) -> Result<String, String> {
-    let mut process = JsonlProcess::spawn(binary, args, cwd, stderr_log, flavor.label())?;
+    let mut process =
+        JsonlProcess::spawn_with_stdin(binary, args, cwd, stderr_log, flavor.label(), stdin)?;
     let timeout = if field == "page" {
         ENCYCLOPEDIA_PAGE_TIMEOUT
     } else {
@@ -441,12 +459,30 @@ fn sanitize_research_title(raw: &str) -> Option<String> {
     ))
 }
 
-struct MetadataSchemaFile {
+struct MetadataFile {
     path: PathBuf,
 }
 
-impl MetadataSchemaFile {
-    fn create(config: &SessionConfig, schema: &str) -> Result<Self, String> {
+impl MetadataFile {
+    fn create_input(config: &SessionConfig, prompt: &str) -> Result<Self, String> {
+        use std::io::Write;
+        use std::os::unix::fs::OpenOptionsExt;
+        let directory = config.workspace_root.join(".session").join("tmp");
+        std::fs::create_dir_all(&directory).map_err(|err| err.to_string())?;
+        let file = Self {
+            path: directory.join(format!("research-metadata-{}.prompt.txt", new_uuid_v4()?)),
+        };
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&file.path)
+            .and_then(|mut output| output.write_all(prompt.as_bytes()))
+            .map_err(|err| format!("failed to write research metadata input: {err}"))?;
+        Ok(file)
+    }
+
+    fn create_schema(config: &SessionConfig, schema: &str) -> Result<Self, String> {
         let id = new_uuid_v4()?;
         let directory = config.workspace_root.join(".session").join("tmp");
         std::fs::create_dir_all(&directory).map_err(|err| {
@@ -462,7 +498,7 @@ impl MetadataSchemaFile {
     }
 }
 
-impl Drop for MetadataSchemaFile {
+impl Drop for MetadataFile {
     fn drop(&mut self) {
         let _ = std::fs::remove_file(&self.path);
     }
@@ -548,6 +584,39 @@ mod research_title_tests {
     }
 
     #[test]
+    fn research_recap_process_reads_large_input_without_argv_limits() {
+        let dir =
+            std::env::temp_dir().join(format!("session-recap-input-{}", new_uuid_v4().unwrap()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("prompt.txt");
+        let prompt = "Report finding é. ".repeat(100_000);
+        std::fs::write(&path, &prompt).unwrap();
+        let event = serde_json::json!({
+            "type": "item.completed",
+            "item": { "type": "agent_message", "text": "{\"recap\":\"Complete report received.\"}" }
+        });
+        let result = run_research_metadata_process(
+            "/bin/sh",
+            &[
+                "-c".into(),
+                "count=$(wc -c); test \"$count\" -eq \"$1\" || exit 1; printf '%s\\n' \"$2\""
+                    .into(),
+                "recap-input-test".into(),
+                prompt.len().to_string(),
+                event.to_string(),
+            ],
+            &dir,
+            &dir.join("stderr.log"),
+            ResearchMetadataFlavor::Codex,
+            "recap",
+            Some(&path),
+        )
+        .unwrap();
+        assert_eq!(result, "Complete report received.");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn research_recap_process_accepts_structured_output_and_rejects_failures() {
         let dir =
             std::env::temp_dir().join(format!("session-recap-test-{}", new_uuid_v4().unwrap()));
@@ -571,6 +640,7 @@ mod research_title_tests {
                 &dir.join("stderr.log"),
                 ResearchMetadataFlavor::Codex,
                 "recap",
+                None,
             )
         };
         assert_eq!(run(&event, "0").unwrap(), "Choose Option A and Option B.");

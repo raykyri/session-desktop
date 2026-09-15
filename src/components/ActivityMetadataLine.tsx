@@ -27,7 +27,9 @@ function humanReadableModelName(adapter: string, model?: string | null): string 
 export function formatResearchModelSummary(
   adapter: string,
   model?: string | null,
+  origin?: string | null,
 ): string {
+  if (origin === "imported") return "Imported";
   const adapterLabel = adapterDisplayLabel(adapter);
   const modelName = humanReadableModelName(adapter, model);
   if (adapterLabel && modelName) return `${adapterLabel} ${modelName}`;
@@ -39,6 +41,7 @@ export function formatResearchModelSummary(
  * names the containing thread when a reply belongs to one. */
 export function formatActivityMetadataSummary(event: ActivityEvent): string {
   if (event.object.kind === "research-query") {
+    if (event.execution?.origin === "imported") return "Imported";
     if (event.relationship?.kind === "follow-up") {
       return `Replied in “${event.context?.label ?? "Research"}”`;
     }

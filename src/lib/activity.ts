@@ -28,7 +28,7 @@ export interface ActivityEvent<TSource = unknown> {
   };
   context?: { kind: "research" | "source" | "workspace"; label: string };
   relationship?: { kind: "top-level" | "follow-up"; label: string };
-  execution?: { adapter: string; model?: string | null };
+  execution?: { adapter: string; model?: string | null; origin?: string | null };
   state?: { kind: ResearchNodeStatus | "ready"; label: string };
   occurredAt: number;
   source: TSource;
@@ -56,6 +56,7 @@ export function recentResearchQueryFromNode(
     title: node.title,
     adapter: node.adapter,
     model: node.model,
+    ...(node.origin ? { origin: node.origin } : {}),
     status: node.status,
     createdAt: node.createdAt,
     recap: node.recap?.text.trim() || undefined,
@@ -167,7 +168,11 @@ export function activityEventFromResearchQuery(
       kind: followUp ? "follow-up" : "top-level",
       label: followUp ? "Follow-up" : "Top-level",
     },
-    execution: { adapter: query.adapter, model: query.model },
+    execution: {
+      adapter: query.adapter,
+      model: query.model,
+      ...(query.origin ? { origin: query.origin } : {}),
+    },
     state: visibleResearchState(query.status),
     occurredAt: query.createdAt,
     source: { kind: "research-query", query },

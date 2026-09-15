@@ -9,8 +9,8 @@ use std::sync::{Mutex, OnceLock};
 pub const MIN_RECAP_CHARS: usize = 800;
 pub const MAX_RECAP_INSTRUCTIONS_CHARS: usize = 4_000;
 pub const DEFAULT_RECAP_INSTRUCTIONS: &str = "Write a compact recap that directly answers the user's question using only the supplied answer. Usually use 30-70 words. For recommendations, name the recommended items and people. For analysis, preserve the main conclusion, mechanism, and essential qualifications. Short sentences and semicolon-separated phrases are fine. Do not merely describe what the answer discusses.";
-// Bound command-line and model input size. Oversized answers are skipped rather
-// than summarized from a truncated excerpt that could omit their conclusion.
+// Bound automatic summary input for generated runs. Imported reports bypass
+// this cutoff so their complete text reaches the summarizer.
 const MAX_SOURCE_BYTES: usize = 80_000;
 
 static JOBS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
@@ -65,10 +65,12 @@ pub fn schedule(state: &AppState, node_id: &str) {
             else {
                 return Ok(());
             };
-            let Some(answer) = recap_source(&snapshot.turns) else {
+            let Some(answer) = recap_source_for_node(&node, &snapshot.turns) else {
                 return Ok(());
             };
-            if answer.len() + node.prompt.len() > MAX_SOURCE_BYTES {
+            if node.origin != Some(research::ResearchNodeOrigin::Imported)
+                && answer.len() + node.prompt.len() > MAX_SOURCE_BYTES
+            {
                 return Ok(());
             }
             let workspace = state.research_workspace_for_node(&node.id)?;
@@ -89,7 +91,19 @@ pub fn schedule(state: &AppState, node_id: &str) {
 /// Select assistant prose after the last tool activity. Keep the most recent
 /// text group as a fallback for a trailing housekeeping tool, like the UI fold.
 /// Raw reasoning blocks and user/tool payloads never enter the summarizer.
+pub fn recap_source_for_node(node: &research::ResearchNode, turns: &[Turn]) -> Option<String> {
+    extract_recap_source(
+        turns,
+        node.origin == Some(research::ResearchNodeOrigin::Imported),
+    )
+}
+
+#[cfg(test)]
 pub fn recap_source(turns: &[Turn]) -> Option<String> {
+    extract_recap_source(turns, false)
+}
+
+fn extract_recap_source(turns: &[Turn], imported: bool) -> Option<String> {
     let mut text = Vec::new();
     let mut fallback = Vec::new();
     for turn in turns
@@ -114,7 +128,12 @@ pub fn recap_source(turns: &[Turn]) -> Option<String> {
     }
     let markdown = if text.is_empty() { fallback } else { text }.join("\n\n");
     let plain = plain_text(&markdown);
-    (plain.chars().count() >= MIN_RECAP_CHARS && plain.len() <= MAX_SOURCE_BYTES).then_some(plain)
+    (if imported {
+        !plain.is_empty()
+    } else {
+        plain.chars().count() >= MIN_RECAP_CHARS && plain.len() <= MAX_SOURCE_BYTES
+    })
+    .then_some(plain)
 }
 
 fn plain_text(markdown: &str) -> String {

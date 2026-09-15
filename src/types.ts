@@ -442,7 +442,7 @@ export type ResearchNodeStatus =
 export type ResearchNodeKind = "run" | "document" | "conversation";
 
 /** Provenance for content that did not come from a research launch. */
-export type ResearchNodeOrigin = "terminalExport";
+export type ResearchNodeOrigin = "terminalExport" | "imported";
 
 export interface ResearchTweetAttachment {
   kind: "tweet";
@@ -559,6 +559,7 @@ export interface RecentResearchQuery {
   title?: string | null;
   adapter: string;
   model?: string | null;
+  origin?: ResearchNodeOrigin | null;
   status: ResearchNodeStatus;
   createdAt: number;
   /** Current answer recap, when one has been generated. */

@@ -708,10 +708,12 @@ function ResearchMessageBlock({
   block,
   role,
   conversation = false,
+  imported = false,
 }: {
   block: MessageBlock;
   role: string;
   conversation?: boolean;
+  imported?: boolean;
 }) {
   if (block.type === "text") {
     // In a conversation node every turn is first-class content: user
@@ -722,7 +724,7 @@ function ResearchMessageBlock({
       return (
         <ResearchMarkdown
           text={block.text}
-          oversizedContent={OVERSIZED_MARKDOWN_POLICY}
+          oversizedContent={imported ? undefined : OVERSIZED_MARKDOWN_POLICY}
         />
       );
     }
@@ -746,9 +748,11 @@ function ResearchMessageBlock({
 export const ResearchTimelineItem = memo(function ResearchTimelineItem({
   item,
   conversation = false,
+  imported = false,
 }: {
   item: MessageItem;
   conversation?: boolean;
+  imported?: boolean;
 }) {
   if (conversation) {
     return (
@@ -839,7 +843,7 @@ export const ResearchTimelineItem = memo(function ResearchTimelineItem({
         >
           {hasUnexpectedContent ? <span>{unexpectedRoleLabel(item.role)}</span> : null}
           {item.blocks.map((block, index) => (
-            <ResearchMessageBlock key={`${item.key}-${index}`} block={block} role={item.role} />
+            <ResearchMessageBlock key={`${item.key}-${index}`} block={block} role={item.role} imported={imported} />
           ))}
         </div>
       ) : null}
@@ -1208,6 +1212,7 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
                     key={item.key}
                     item={item}
                     conversation={view.isConversation}
+                    imported={node.origin === "imported"}
                   />
                 ))}
               </div>
@@ -1477,6 +1482,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   attachments = [],
   adapter,
   model,
+  origin,
   createdAt,
   running = false,
   followed = false,
@@ -1494,6 +1500,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   attachments?: ResearchNode["attachments"];
   adapter: string;
   model?: string | null;
+  origin?: ResearchNode["origin"];
   /** When the root prompt was asked; shown as relative time on its footer. */
   createdAt?: number;
   /** The question is still being answered: the footer row (thread actions,
@@ -1510,7 +1517,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
     return null;
   }
   const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
-  const modelSummary = index === 0 ? formatResearchModelSummary(adapter, model) : "";
+  const modelSummary = index === 0 ? formatResearchModelSummary(adapter, model, origin) : "";
   const askedAt = index === 0 && createdAt != null && Number.isFinite(createdAt) ? createdAt : null;
   const showFooter = index === 0 && !running;
   return (
@@ -1645,6 +1652,7 @@ const ThreadSegment = memo(function ThreadSegment({
         attachments={node.attachments}
         adapter={node.adapter}
         model={node.model}
+        origin={node.origin}
         createdAt={node.createdAt}
         running={isActiveResearchStatus(node.status)}
         followed={followed}

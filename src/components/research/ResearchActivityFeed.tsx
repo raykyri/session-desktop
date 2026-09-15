@@ -1,3 +1,4 @@
+import ResearchReportImport from "./ResearchReportImport";
 import {
   memo,
   useCallback,
@@ -87,6 +88,7 @@ export type ResearchActivityFeedView = "home" | "bookmarks";
 
 export interface ResearchActivityFeedProps {
   composer: ReactNode;
+  onImportReport?: (markdown: string, prompt: string) => Promise<void>;
   /** Home lists every item; Bookmarks lists only queries whose thread is
    * bookmarked, without the composer or setup guide. */
   view?: ResearchActivityFeedView;
@@ -569,6 +571,7 @@ function MeasuredActivityRow({
 
 function ResearchActivityFeed({
   composer,
+  onImportReport,
   view = "home",
   setupGuide,
   initialScrollAnchor = null,
@@ -1143,6 +1146,9 @@ function ResearchActivityFeed({
   return (
     <ResearchDocumentFrame
       title={viewTitle}
+      headerActions={view === "home" && onImportReport ? (
+        <ResearchReportImport dropTarget={scrollRef} onImport={onImportReport} onError={onError} />
+      ) : undefined}
       canGoBack={canGoBack}
       canGoForward={canGoForward}
       backTitle={`Back (${IS_MAC ? "⌘[" : "Ctrl+["})`}

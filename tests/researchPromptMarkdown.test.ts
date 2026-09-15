@@ -257,3 +257,26 @@ test("inline or unavailable tweet URLs remain visible", () => {
   assert.equal(visibleResearchPrompt(prompt, [inline]), prompt);
   assert.equal(visibleResearchPrompt(prompt, [unavailable]), prompt);
 });
+
+
+test("imported report metadata hides its summary agent and model", () => {
+  const html = renderToStaticMarkup(createElement(ResearchSegmentPrompt, {
+    ...promptProps, index: 0, origin: "imported", createdAt: 100,
+  }));
+  assert.match(html, />Imported<span/);
+  assert.doesNotMatch(html, /Claude|Fable/);
+});
+
+test("long imported reports retain Markdown and their final conclusion", () => {
+  const html = renderToStaticMarkup(createElement(ResearchTimelineItem, {
+    imported: true,
+    item: {
+      type: "message", key: "imported-report", role: "assistant",
+      blocks: [{ type: "text", text: "# Long report\n\n" + "Evidence. ".repeat(35_000) + "\n\n**Final conclusion.**" }],
+      activities: [], sourceTurnIds: ["imported"], blockSourceTurnIds: ["imported"],
+    },
+  }));
+  assert.match(html, /<h1>Long report<\/h1>/);
+  assert.match(html, /<strong>Final conclusion\.<\/strong>/);
+  assert.doesNotMatch(html, /research-plaintext/);
+});
