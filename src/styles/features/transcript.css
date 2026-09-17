@@ -5,15 +5,14 @@
   --transcript-line-height-delta: var(--transcript-expanded-line-height-delta, 0);
   position: absolute;
   inset: 0;
-  /* A single flex column (not a grid): items stretch to the pane width without
+  /* Use a single flex column so items stretch to the pane width without
      growing sideways for long unbreakable lines, and the sticky last user
-     message can travel the whole scroll length — a grid row would trap it
-     inside its own track. */
+     message can travel the whole scroll length. */
   display: flex;
   flex-direction: column;
   gap: 5px;
-  /* The transcript fills the whole pane and is the only scroll surface; the
-     bottom padding keeps the latest turn clear of the floating composer. */
+  /* The transcript fills the whole pane and is the only scroll surface.
+     Bottom padding keeps the latest turn clear of the floating composer. */
   padding: 10px 11px 132px 10px;
   overflow: auto;
   overscroll-behavior: contain;
@@ -243,8 +242,7 @@
 
 .turn-empty-notice {
   max-width: 260px;
-  /* Same muted gray as the placeholder above it (.empty-state); a missing
-     transcript is an ordinary state, not a warning. */
+  /* Same muted gray as the placeholder above it (.empty-state). */
   color: var(--text-tertiary);
   font-size: calc(12.5px + var(--transcript-font-delta, 0px) + var(--font-ui-size-offset));
   line-height: calc(1.4 + var(--transcript-line-height-delta, 0));
@@ -280,8 +278,7 @@
   font-style: italic;
 }
 
-/* "No transcript loaded" picker: a quiet link (matching .turn-empty-notice's
-   color and size) with a chevron, opening a portaled dropdown of past sessions. */
+/* "No transcript loaded" picker which opens a portaled dropdown of past sessions. */
 .turn-empty-picker {
   display: inline-flex;
 }
@@ -549,11 +546,8 @@
   margin: 7px 0;
 }
 
-/* In the compact pane, the last user message pins to the top while the turn
-   beneath it plays out, and releases as the view scrolls back up to its original slot.
-   Expanded transcripts keep every message in the normal document flow.
-   TurnOverlay arms this (has-sticky-user) only while the bubble is short
-   relative to the pane, so a tall message never blankets the transcript. */
+/* In the compact pane, the last user message pins to the top over the turn.
+   This releases as the view scrolls back up to its original slot. */
 .turn-pane:not(.is-expanded)
   .turn-timeline.has-sticky-user
   .turn-card.is-sticky-user-message {
@@ -561,16 +555,10 @@
   top: 0;
 }
 
-/* Only while actually pinned: raise the bubble over later transcript content
-   (only then can anything overlap it — in normal flow a z-index would also
-   lift it above the floating queue/composer), lift it off the content sliding
-   beneath with a shadow, and backfill the gap above it with the pane
-   background so scrolled text cannot peek over the card. It stays below the
-   pane header (3), find bar (4), and floating controls (5). It would paint
-   over the queue/composer on overlap (z-index 1 beats their auto), but
-   TurnOverlay's STICKY_USER_MAX_HEIGHT_RATIO cap keeps a pinned card short
-   enough that they can never meet.
-   Nothing here applies while the message sits in its normal flow position. */
+/* While pinned, raise the bubble over later transcript content. Stays below the
+   pane header (3), find bar (4), and floating controls (5). TurnOverlay's
+   STICKY_USER_MAX_HEIGHT_RATIO cap keeps a pinned card short enough that they
+   don't collide. */
 .turn-pane:not(.is-expanded)
   .turn-timeline.has-sticky-user
   .turn-card.is-sticky-user-message.is-stuck {
@@ -1639,8 +1627,7 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
   white-space: pre;
 }
 
-/* Header row: a surface a step lighter than the pane (the old content-inset-bg
-   value was indistinguishable from it) plus a stronger divider, so it reads as a header. */
+/* Header row rendered one step lighter than the pane, with a stronger divider. */
 .turn-markdown th {
   background: var(--markdown-table-header-bg);
   color: var(--text-heading);
@@ -1655,13 +1642,32 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
   background: var(--surface-border-strong);
 }
 
+/* GFM task-list checkboxes always rendered disabled. */
 .turn-markdown input[type="checkbox"] {
-  margin-right: 6px;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  margin: 0 6px 0 0;
+  vertical-align: -2px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  cursor: default;
 }
 
-/* Only .turn-card (user/assistant messages) is a bordered "module". Everything
-   else in the timeline — individual tool entries and thinking — renders as a quiet
-   borderless disclosure row. */
+.turn-markdown input[type="checkbox"]:checked {
+  border-color: var(--accent-strong);
+  background-color: var(--accent-strong);
+  background-image: var(--checkbox-check);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 10px;
+}
+
+/* Only .turn-card (user/assistant messages) is a bordered "module".
+   Everything else in the timeline including individual tool entries
+   and thinking blocks render a quiet/borderless disclosure row. */
 .tool-block,
 .thinking-block,
 .activity-group-block {
@@ -1737,7 +1743,7 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
   transform: rotate(90deg);
 }
 
-/* Borderless rows still need a click affordance, so highlight on hover. */
+/* Borderless rows still need a click affordance. Highlight on hover. */
 .tool-block > summary:hover,
 .thinking-block > summary:hover {
   background: var(--content-inset-bg);
