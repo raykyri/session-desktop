@@ -25,13 +25,24 @@ export const NAVIGATION_STORAGE_KEY = "session.navigation.v2";
 
 export type ResearchVisibilityFilter = "active" | "archived" | "all";
 
-export const SIDEBAR_MIN_WIDTH = 200;
-export const SIDEBAR_MAX_WIDTH = 480;
+export const SIDEBAR_MIN_WIDTH = 208;
+export const SIDEBAR_MAX_WIDTH = 420;
 export const SIDEBAR_DEFAULT_WIDTH = 268;
+
+/** Below this the sidebar stops being a column and becomes a drawer (08 §7). */
+export const NARROW_LAYOUT_WIDTH = 900;
 
 export interface SavedScrollOffset {
   top: number;
   updatedAt: number;
+}
+
+/** Where a feed was left: the id of the row under the viewport's top edge and
+ * its pixel offset from it (`10` §2). Keyed by feed — Home and Bookmarks
+ * scroll independently. */
+export interface FeedScrollAnchor {
+  key: string;
+  offset: number;
 }
 
 export interface NavigationState {
@@ -39,6 +50,7 @@ export interface NavigationState {
   historyByTree: Record<string, ResearchHistory>;
   scrollByNode: Record<string, SavedScrollOffset>;
   expandedByNode: Record<string, boolean>;
+  feedAnchorByView: Record<string, FeedScrollAnchor>;
   visibilityFilter: ResearchVisibilityFilter;
   sidebarCollapsed: boolean;
   sidebarWidth: number;
@@ -54,6 +66,9 @@ export interface NavigationState {
   recordScroll: (nodeId: string, top: number, now?: number) => void;
   restoreScroll: (nodeId: string, now?: number) => number | null;
   setExpanded: (nodeId: string, expanded: boolean) => void;
+
+  recordFeedAnchor: (view: string, anchor: FeedScrollAnchor | null) => void;
+  feedAnchorFor: (view: string) => FeedScrollAnchor | null;
 
   setVisibilityFilter: (filter: ResearchVisibilityFilter) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -71,6 +86,7 @@ export const useNavigationStore = create<NavigationState>()(
       historyByTree: {},
       scrollByNode: {},
       expandedByNode: {},
+      feedAnchorByView: {},
       visibilityFilter: "active",
       sidebarCollapsed: false,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
@@ -121,6 +137,24 @@ export const useNavigationStore = create<NavigationState>()(
       setExpanded: (nodeId, expanded) =>
         set((state) => ({ expandedByNode: { ...state.expandedByNode, [nodeId]: expanded } })),
 
+      // A feed anchor is written on a debounce from the scroll handler, so the
+      // store is reached at most every 200 ms rather than every frame.
+      recordFeedAnchor: (view, anchor) =>
+        set((state) => {
+          const current = state.feedAnchorByView[view];
+          if (anchor === null) {
+            if (!current) return state;
+            const next = { ...state.feedAnchorByView };
+            delete next[view];
+            return { feedAnchorByView: next };
+          }
+          if (current && current.key === anchor.key && current.offset === anchor.offset) {
+            return state;
+          }
+          return { feedAnchorByView: { ...state.feedAnchorByView, [view]: anchor } };
+        }),
+      feedAnchorFor: (view) => get().feedAnchorByView[view] ?? null,
+
       setVisibilityFilter: (visibilityFilter) => set({ visibilityFilter }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
@@ -133,6 +167,7 @@ export const useNavigationStore = create<NavigationState>()(
       partialize: (state) => ({
         scrollByNode: state.scrollByNode,
         expandedByNode: state.expandedByNode,
+        feedAnchorByView: state.feedAnchorByView,
         visibilityFilter: state.visibilityFilter,
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarWidth: state.sidebarWidth,

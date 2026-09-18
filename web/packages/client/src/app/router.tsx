@@ -21,14 +21,12 @@ import {
   workspacesQueryOptions,
 } from "../api/queries.js";
 import { AdminPage } from "../routes/admin.js";
+import { BookmarksPage } from "../routes/bookmarks.js";
+import { EncyclopediaPage } from "../routes/encyclopedia.$slug.js";
+import { HighlightsPage } from "../routes/highlights.js";
+import { HomePage } from "../routes/home.js";
 import { LoginPage } from "../routes/login.js";
-import {
-  BookmarksPage,
-  EncyclopediaPage,
-  HighlightsPage,
-  HomePage,
-  ResearchPage,
-} from "../routes/placeholders.js";
+import { ResearchPage } from "../routes/research.$treeId.js";
 import { SettingsPage } from "../routes/settings.js";
 
 import { AppShell } from "./layout/AppShell.js";
@@ -41,9 +39,15 @@ import { appQueryClient } from "./queryClient.js";
 const workspaceScopeSearchSchema = z.object({
   /** Workspace scope. Absent means the account's default workspace. */
   ws: z.string().optional(),
+  /** The sidebar's visibility filter, which is chrome rather than page state
+   * but belongs in the URL for the same reason `ws` does (ADR-7, `10` §7). */
+  filter: z.enum(["active", "archived", "all"]).optional(),
 });
 
 const researchSearchSchema = z.object({
+  /** Workspace scope, carried across every route so the sidebar keeps showing
+   * the workspace the thread was opened from. */
+  ws: z.string().optional(),
   /** The node the document view is showing. */
   node: z.string().optional(),
   /** A highlight to scroll to and focus once the document lands. */

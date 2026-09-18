@@ -3,6 +3,9 @@ import type { AppShortcutCommand } from "@session/shared";
 import { Outlet, useNavigate, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 
+import { useTreeSummaries } from "../../api/queries.js";
+import { buildPaletteCommands } from "../../features/palette/commands.js";
+import { useWorkspaceScope } from "../../features/sidebar/scope.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 import { useOverlaysStore } from "../../stores/overlays.js";
 import { CommandPalette, type PaletteCommand } from "../../ui/CommandPalette.js";
@@ -49,6 +52,8 @@ export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const toggleSidebar = useNavigationStore((state) => state.toggleSidebar);
   const { notifications, dismiss } = useUserNotifications();
+  const { workspaceId } = useWorkspaceScope();
+  const trees = useTreeSummaries({ workspaceId });
 
   const runCommand = useCallback(
     (command: AppShortcutCommand) => {
@@ -150,23 +155,12 @@ export function AppShell() {
   // Built only while the palette is open (`App.tsx:8098`): a list rebuilt on
   // every render of a closed dialog is work nobody sees.
   const commands: PaletteCommand[] = paletteOpen
-    ? [
-        { id: "home", section: "Actions", title: "Home", action: () => void navigate({ to: "/" }) },
-        {
-          id: "toggle-sidebar",
-          section: "Actions",
-          title: "Toggle sidebar",
-          hint: "⇧⌘G",
-          action: toggleSidebar,
-        },
-        {
-          id: "settings",
-          section: "Actions",
-          title: "Settings",
-          hint: "⌘,",
-          action: () => void navigate({ to: "/settings" }),
-        },
-      ]
+    ? buildPaletteCommands(trees.data ?? [], {
+        openTree: (treeId) => void navigate({ to: "/r/$treeId", params: { treeId }, search: {} }),
+        openHome: () => void navigate({ to: "/" }),
+        toggleSidebar,
+        openSettings: () => void navigate({ to: "/settings" }),
+      })
     : [];
 
   return (

@@ -49,6 +49,10 @@
 .journal-tweet-avatar-fallback {
   display: grid;
   place-items: center;
+  /* The hue is derived from the author's handle and set inline by
+     `TweetEmbed`; the saturation and lightness are fixed here so no color
+     literal is written into a `style` prop (08 §2). */
+  background: hsl(var(--tweet-avatar-hue, 0) 55% 45%);
   color: var(--lightbox-caption-fg);
   font-size: calc(15px + var(--font-ui-size-offset));
   font-weight: 700;
