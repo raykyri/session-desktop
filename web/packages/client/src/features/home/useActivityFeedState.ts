@@ -10,7 +10,7 @@
 // The new-activity counter is the other half: items that arrived above the
 // row the reader was on, while they were not at the top to see them.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { FeedScrollAnchor } from "../../stores/navigation.js";
 import { useNavigationStore } from "../../stores/navigation.js";
@@ -20,6 +20,20 @@ export const FEED_ANCHOR_DEBOUNCE_MS = 200;
 /** Within this many pixels of the top, the feed counts as "at the top": new
  * items are visible, so they are not announced (`ResearchActivityFeed.tsx:818`). */
 export const FEED_TOP_THRESHOLD = 60;
+
+/**
+ * How the feed's two "return to the head" controls should travel.
+ *
+ * The OS preference is the one consulted, not the app's `reduceMotion`
+ * setting: that setting is worded for decorative transitions, while a several-
+ * screen animated jump is the kind of motion `prefers-reduced-motion` exists
+ * to suppress. `matchMedia` is optional here because jsdom does not implement
+ * it, and a missing implementation reads as "no preference stated".
+ */
+export function feedScrollBehavior(): ScrollBehavior {
+  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  return reduced ? "auto" : "smooth";
+}
 
 export interface FeedAnchorControl {
   /** Records the current anchor, debounced. */
@@ -70,7 +84,10 @@ export function useFeedScrollAnchor(view: string): FeedAnchorControl {
     };
   }, [flush]);
 
-  return { record, initial };
+  // Memoized: the feed hangs a native `scroll` listener off this control, and
+  // a fresh object every render would detach and re-attach that listener on
+  // every commit.
+  return useMemo(() => ({ record, initial }), [record, initial]);
 }
 
 /**

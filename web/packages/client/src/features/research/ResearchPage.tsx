@@ -1190,7 +1190,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
           ? { busy: retryingNodeId === tailNode.id, onRetry: () => handleRetry(tailNode.id) }
           : null
       }
-      shortcutHintsShown={settings?.showShortcutHints ?? false}
       textareaRef={textareaRef}
       composerRef={composerRef}
       onSubmit={submit}

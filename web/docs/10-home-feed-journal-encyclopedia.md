@@ -58,12 +58,14 @@ Cards:
   rename and delete dialogs rendered inline in the feed
   (`ResearchActivityFeed.tsx:1408-1441`). Click → `/r/$treeId?node=<nodeId>`.
 - `JournalEntryCard` (link): favicon-less title/URL row, `ActivityMetadataLine`,
-  menu (`journalEntryMenuItems`, `ResearchActivityFeed.tsx:162-185`, with
-  keycaps): Open link (O), Copy link (C), separator, Delete (D).
+  menu (`journalEntryMenuItems`, `ResearchActivityFeed.tsx:162-185`): Open
+  link, Copy link, separator, Delete. The desktop's single-letter keycaps are
+  dropped: a Base UI menu binds no letter but typeahead, so the badge named a
+  key that moved the highlight instead of acting.
 - `JournalTweetCard`: the tweet card *is* the entry (`journal.css:1-5`);
   `TweetEmbed` ported unchanged; placeholder while `hydration === "pending"`,
-  failure state with Retry (`journal.hydrateTweet`); menu: Open on X (O),
-  Copy link (C), Refresh tweet or Retry tweet (R), separator, Delete (D).
+  failure state with Retry (`journal.hydrateTweet`); menu: Open on X, Copy
+  link, Refresh tweet or Retry tweet, separator, Delete.
 - Delete → `journal.remove` with the removed entry kept in the undo bar; Undo
   → `journal.restore(entry)`.
 
@@ -141,8 +143,9 @@ recorded. The desktop's OpenRouter path and adapter choice are dropped.
 Port of `ResearchSidebarSection.tsx` (1,605 lines), `ResearchFolderSwitcher.tsx`,
 and the sidebar parts of `App.tsx`:
 
-- Rows: Home, Bookmarks, Highlights (with Cmd-hint badges when the
-  modifier is held and `showShortcutHints` is on).
+- Rows: Home, Bookmarks, Highlights. Their Cmd-digit chords resolve
+  (`shared/app/shortcuts.ts`) but the rows print no badge: the
+  `showShortcutHints` setting and the held-modifier badges it gated are gone.
 - Encyclopedia section.
 - Research list: folders (collapsible, starred first), trees with status dot,
   unseen-update and unseen-failure badges, running count, star, multi-select

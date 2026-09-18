@@ -43,6 +43,28 @@ test.serial("hydration flips `hydrated` even when nothing was stored", async (t)
   t.deepEqual(useSettingsStore.getState().settings, DEFAULT_USER_SETTINGS);
 });
 
+test.serial("a stored record still carrying `showShortcutHints` loads intact", async (t) => {
+  // The setting was removed with the sidebar's Cmd-held badges, but every
+  // browser that ran an earlier build still has it in `session.settings.v2`.
+  // The whole record must survive; only the dead key goes.
+  localStorage.setItem(
+    SETTINGS_STORAGE_KEY,
+    JSON.stringify({
+      version: 2,
+      state: {
+        settings: { ...DEFAULT_USER_SETTINGS, showShortcutHints: false, appearance: "light" },
+      },
+    }),
+  );
+
+  await useSettingsStore.persist.rehydrate();
+
+  const settings = useSettingsStore.getState().settings;
+  t.is(settings.appearance, "light", "the rest of the record is not discarded");
+  t.false("showShortcutHints" in settings, "and the removed key is not carried forward");
+  t.deepEqual(settings, { ...DEFAULT_USER_SETTINGS, appearance: "light" });
+});
+
 test.serial("a partially readable record keeps the fields it got right", (t) => {
   const settings = normalizeSettings({
     appearance: "light",

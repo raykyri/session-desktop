@@ -22,9 +22,7 @@ import {
 import { queryKeys, useSettings, useTreeSummaries, useWorkspaces } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { pushErrorToast, pushToast } from "../../lib/toast.js";
-import { useSettingsStore } from "../../stores/settings.js";
 import { ControlButton } from "../../ui/Button.js";
-import { ShortcutHint } from "../../ui/Field.js";
 import { Menu, MenuItem, MenuSeparator } from "../../ui/Menu.js";
 
 import { AsyncConfirmDialog, NameDialog } from "./dialogs.js";
@@ -52,7 +50,6 @@ export function WorkspaceSwitcher({
   const client = useQueryClient();
   const workspaces = useWorkspaces();
   const settings = useSettings();
-  const showShortcutHints = useSettingsStore((state) => state.settings.showShortcutHints);
   const scopedTrees = useTreeSummaries({ workspaceId, includeArchived: true });
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -174,7 +171,6 @@ export function WorkspaceSwitcher({
           </>
         ) : null}
       </Menu>
-      {showShortcutHints ? <ShortcutHint>⌘O</ShortcutHint> : null}
 
       <NameDialog
         open={creating}

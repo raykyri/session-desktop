@@ -27,7 +27,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, RotateCw, Undo2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, RotateCw, Undo2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -59,7 +59,12 @@ import { DeleteTreeDialog, RenameTreeDialog, ResearchTreeMenuItems } from "../re
 import { applyFolderState } from "../sidebar/mutations.js";
 
 import { ResearchQueryCard } from "./ResearchQueryCard.js";
-import { countNewAbove, FEED_TOP_THRESHOLD, useFeedScrollAnchor } from "./useActivityFeedState.js";
+import {
+  countNewAbove,
+  feedScrollBehavior,
+  FEED_TOP_THRESHOLD,
+  useFeedScrollAnchor,
+} from "./useActivityFeedState.js";
 
 /** First guess at a row's height, refined by measurement on mount. The two
  * shapes differ by an order of magnitude, so one average would make every
@@ -123,6 +128,10 @@ export function ActivityFeed({
 
   const [undoEntry, setUndoEntry] = useState<JournalEntry | null>(null);
   const [newCount, setNewCount] = useState(0);
+  // Whether the reader is off the head of the list. Tracked rather than read
+  // on demand because it decides whether a control renders, and a scroll
+  // position is not something React re-reads on its own.
+  const [awayFromTop, setAwayFromTop] = useState(false);
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
   // The recap dialog needs the node's content, which the feed row does not
@@ -198,7 +207,9 @@ export function ActivityFeed({
   const onScroll = useCallback(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
-    if (scroller.scrollTop <= FEED_TOP_THRESHOLD) setNewCount(0);
+    const atTop = scroller.scrollTop <= FEED_TOP_THRESHOLD;
+    if (atTop) setNewCount(0);
+    setAwayFromTop(!atTop);
     const top = virtualizer.getVirtualItems()[0];
     anchor.record(top ? { key: String(top.key), offset: top.start - scroller.scrollTop } : null);
   }, [anchor, scrollRef, virtualizer]);
@@ -226,10 +237,10 @@ export function ActivityFeed({
    * Actions
    * ------------------------------------------------------------------ */
 
-  const refreshHead = () => {
-    // "Refresh" is the head, not the whole feed: older pages are keyset
-    // results that cannot have changed shape, so they are dropped and the
-    // first page is refetched (`10` §2).
+  // Older pages are keyset results that cannot have changed shape, so both
+  // "back to the head" paths simply discard them rather than reconciling them
+  // (`10` §2).
+  const dropOlderPages = () => {
     client.setQueryData<InfiniteData<RecentActivityPage>>(
       queryKeys.activity({ workspaceId, bookmarkedOnly }),
       (data) =>
@@ -237,8 +248,26 @@ export function ActivityFeed({
           ? { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) }
           : data,
     );
+  };
+
+  const refreshHead = () => {
+    // "Refresh" is the head, not the whole feed.
+    dropOlderPages();
     void feed.refetch();
     setNewCount(0);
+  };
+
+  const scrollToTop = () => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: feedScrollBehavior() });
+  };
+
+  /** The mirror of "Load older activity": back to page one, at the top. No
+   * refetch — the reader asked to return to what they already had, not for
+   * fresher rows; the header's Refresh is the control that asks for those. */
+  const backToLatest = () => {
+    dropOlderPages();
+    setNewCount(0);
+    scrollToTop();
   };
 
   const openQuery = (query: RecentResearchQuery) => {
@@ -316,6 +345,20 @@ export function ActivityFeed({
 
   const nothingYet = feed.isSuccess && events.length === 0;
 
+  // "Back to latest" is offered only when it would move something: either
+  // older pages are loaded (so there are pages to drop) or the reader is off
+  // the top (so there is somewhere to scroll back to).
+  //
+  // The new-activity counter wins whenever it is showing. It is sticky, so it
+  // is already pinned in the viewport, and it lands in the same place — two
+  // controls with one destination, one of them below the fold, reads as a
+  // mistake rather than as a choice. The counter also clears the arrivals it
+  // announces, which "Back to latest" has no business doing silently. Once the
+  // reader takes the counter (or scrolls to the top, which clears it), the
+  // pair-with-"Load older activity" control comes back if the conditions above
+  // still hold.
+  const showBackToLatest = newCount === 0 && ((feed.data?.pages.length ?? 0) > 1 || awayFromTop);
+
   return (
     <div ref={scrollRef} className="research-reading-surface h-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-[calc(var(--spacing-feed)+2*clamp(20px,4vw,48px))] flex-col px-[clamp(20px,4vw,48px)] pb-12">
@@ -368,7 +411,7 @@ export function ActivityFeed({
               className="rounded-full"
               onClick={() => {
                 setNewCount(0);
-                scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                scrollToTop();
               }}
             >
               {newCount} new {newCount === 1 ? "activity" : "activities"}
@@ -456,6 +499,12 @@ export function ActivityFeed({
                       ? "Retry older activity"
                       : "Load older activity"}
                 </span>
+              </ControlButton>
+            ) : null}
+            {showBackToLatest ? (
+              <ControlButton size="sm" className="gap-1.5" onClick={backToLatest}>
+                <ChevronUp size={13} aria-hidden="true" />
+                <span>Back to latest</span>
               </ControlButton>
             ) : null}
             {feed.isFetchNextPageError ? (

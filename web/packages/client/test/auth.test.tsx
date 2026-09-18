@@ -43,7 +43,7 @@ test.serial("a signed-in visit renders the shell and the account row", async (t)
   t.truthy(screen.getByRole("button", { name: "raymond" }));
 });
 
-test.serial("the boot loader warms the six queries the shell renders from", async (t) => {
+test.serial("the boot loader warms the seven queries the shell renders from", async (t) => {
   const { trpc } = await renderApp("/", {
     responses: {
       "settings.get": {
@@ -51,7 +51,6 @@ test.serial("the boot loader warms the six queries the shell renders from", asyn
         appearance: "dark",
         bodyFontId: "dm-sans",
         textSize: 14,
-        showShortcutHints: true,
         reduceMotion: false,
         showToolCalls: true,
         showAssistantTimestamps: false,
@@ -73,6 +72,10 @@ test.serial("the boot loader warms the six queries the shell renders from", asyn
     "research.listTrees",
     "folders.get",
     "encyclopedia.listPages",
+    // Not rendered anywhere: it is the cache `cachedNode` reads, and an empty
+    // one makes every node update for an unopened thread invalidate the
+    // sidebar instead of patching it.
+    "research.listActivity",
   ]) {
     t.true(paths.has(path), `${path} was warmed`);
   }

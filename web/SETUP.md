@@ -1,19 +1,26 @@
-# Setting up Session Web
+# Session Web
 
-Two paths. **Local** needs no accounts and no network — skip to it if you only
-want to see the product run. **Deployment** provisions the real thing on
-Fly.io.
+A shared agentic knowledge graph.
 
-Reference material this runbook points at, rather than repeats:
-`docs/13-deployment-fly.md` (what each Fly setting does and why),
-`docs/runbooks/restore.md` (bringing the data back), `.env.example` (every
-variable, annotated).
+## Quickstart
 
----
+Prerequisites: Node 22.20+.
 
-## Local
+First, fill in any of these credentials in .env, based on .env.example.
+Models and search providers are reported as "unavailable" if credentials
+are missing:
 
-Node 22.20 or newer is the only prerequisite.
+- `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` for sign-in.
+- `GOOGLE_APPLICATION_CREDENTIALS_JSON`, `GOOGLE_VERTEX_PROJECT` for
+  default model, titles, recaps, encyclopedia pages (all Gemini Flash)
+- `PARALLEL_API_KEY` or `TAVILY_API_KEY` for web search
+- `OPENROUTER_API_KEY` for DeepSeek and GPT-5.6 Luna
+- `ANTHROPIC_API_KEY` for Claude Fable (admin-only)
+
+For GitHub locally, register the callback as
+`http://localhost:1480/auth/github/callback`.
+
+Then run:
 
 ```sh
 cd web
@@ -22,63 +29,19 @@ npm install
 npm run dev
 ```
 
-Then open `http://localhost:1480`. The API runs on `127.0.0.1:8787` and Vite
-proxies to it, so the browser sees one origin and cookies, CSRF and the event
-stream behave as they do in production.
+Open `http://localhost:1480`. The API runs on `127.0.0.1:8787` and
+Vite proxies to it.
 
-### Running with no credentials
-
-Set these two in `.env`:
-
-```sh
-SESSION_FIXTURE_PROVIDERS=1   # every model replays a recorded stream
-SESSION_TEST_AUTH=1           # enables POST /auth/test-login
-```
-
-Sign in without GitHub:
-
-```sh
-curl -c jar -X POST http://localhost:1480/auth/test-login \
-  -H 'content-type: application/json' -H 'x-requested-with: session' \
-  -d '{"login":"you","isAdmin":true}'
-```
-
-Choose a recorded scenario by prefixing a question with `fixture:<name>` — for
-example `fixture:success-with-tools how do bloom filters work?`. The scenarios
-live in `packages/server/src/runs/fixtures/`; `paced-answer` is the one to use
-when you want to watch text stream in slowly, and `refusal`, `rate-limit` and
-`timeout` exercise the failure paths.
-
-### Running against real models
-
-Leave `SESSION_FIXTURE_PROVIDERS=0` and fill in whichever credentials you
-have. Each is independent: a model whose credential is missing is reported
-unavailable and hidden rather than breaking the app. `.env.example` carries a
-link to the page that issues each one. In rough order of what it costs to
-skip:
-
-| Variable                                                       | Without it                                                                                   |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `GOOGLE_APPLICATION_CREDENTIALS_JSON`, `GOOGLE_VERTEX_PROJECT` | No default model, and no titles, recaps or encyclopedia pages — they all run on Gemini Flash |
-| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`                     | No sign-in; `/auth/github` answers 503. Use `SESSION_TEST_AUTH=1` locally instead            |
-| `PARALLEL_API_KEY` or `TAVILY_API_KEY`                         | No web search; the agent can only read URLs it was already handed                            |
-| `OPENROUTER_API_KEY`                                           | No DeepSeek and no GPT-5.6 Luna                                                              |
-| `ANTHROPIC_API_KEY`                                            | No Claude Fable, which is admin-only anyway                                                  |
-
-For GitHub locally, register the callback as
-`http://localhost:1480/auth/github/callback`.
-
-### Getting the Vertex service-account key
+### Getting a Vertex service-account key
 
 Gemini is reached through Vertex AI, which authenticates with a Google Cloud
 service account rather than an API key. Four steps, once.
 
-**1. Pick or create a project**, and note its id — the id, not the display
-name. It becomes `GOOGLE_VERTEX_PROJECT`.
+**1. Pick or create a project**, and note its id. Save it as `GOOGLE_VERTEX_PROJECT`.
 
 ```sh
-gcloud projects create session-web --name="Session Web"   # or use an existing one
-gcloud config set project session-web
+gcloud projects create session-dev-web --name="Session Web"   # or use an existing one
+gcloud config set project session-dev-web
 ```
 
 Billing must be enabled on it; Vertex refuses requests otherwise, and the
@@ -98,9 +61,9 @@ Console equivalent:
 Administrator`, which can also manage infrastructure.
 
 ```sh
-gcloud iam service-accounts create session-web   --display-name="Session Web"
+gcloud iam service-accounts create session-dev-web   --display-name="Session Web"
 
-gcloud projects add-iam-policy-binding session-web   --member="serviceAccount:session-web@session-web.iam.gserviceaccount.com"   --role="roles/aiplatform.user"
+gcloud projects add-iam-policy-binding session-dev-web   --member="serviceAccount:session-dev-web@session-dev-web.iam.gserviceaccount.com"   --role="roles/aiplatform.user"
 ```
 
 Console equivalent:
@@ -110,7 +73,7 @@ account → grant `Vertex AI User`.
 **4. Download a JSON key.**
 
 ```sh
-gcloud iam service-accounts keys create vertex-key.json   --iam-account=session-web@session-web.iam.gserviceaccount.com
+gcloud iam service-accounts keys create vertex-key.json   --iam-account=session-dev-web@session-dev-web.iam.gserviceaccount.com
 ```
 
 Console equivalent: open the service account → Keys → Add key → Create new key
@@ -123,7 +86,7 @@ repository, and delete the local copy once it is in `.env` or Fly secrets.
 
 ```sh
 echo "GOOGLE_APPLICATION_CREDENTIALS_JSON=$(jq -c . vertex-key.json | sed "s/'/'\\''/g")" >> .env
-echo "GOOGLE_VERTEX_PROJECT=session-web" >> .env
+echo "GOOGLE_VERTEX_PROJECT=session-dev-web" >> .env
 ```
 
 In production it is a Fly secret (§3 below). At boot the server writes it to
@@ -165,6 +128,29 @@ expire on their own.
 
 State lives in `web/.data` — the database, uploaded documents, temp files.
 Delete the directory to start clean.
+
+### Running with no credentials (for testing, etc.)
+
+Set these two in `.env`:
+
+```sh
+SESSION_FIXTURE_PROVIDERS=1   # every model replays a recorded stream
+SESSION_TEST_AUTH=1           # enables POST /auth/test-login
+```
+
+Sign in without GitHub:
+
+```sh
+curl -c jar -X POST http://localhost:1480/auth/test-login \
+  -H 'content-type: application/json' -H 'x-requested-with: session' \
+  -d '{"login":"you","isAdmin":true}'
+```
+
+Choose a recorded scenario by prefixing a question with `fixture:<name>` — for
+example `fixture:success-with-tools how do bloom filters work?`. The scenarios
+live in `packages/server/src/runs/fixtures/`; `paced-answer` is the one to use
+when you want to watch text stream in slowly, and `refusal`, `rate-limit` and
+`timeout` exercise the failure paths.
 
 ---
 
@@ -283,19 +269,16 @@ curl -fsS -H "Authorization: Bearer $SESSION_METRICS_TOKEN" \
 curl -sS -o /dev/null -w '%{http_code}\n' https://artifacts.session.dev/   # 404
 ```
 
-That last one should be 404, not the app's HTML: the artifact host serves
-document previews and nothing else.
+That last one should be 404, not the app's HTML. The artifact host
+only serves document previews.
 
-Then sign in, ask a question, and watch it stream.
+### 7. Remaining setup
 
-### 7. Set up what deployment does not
-
-- **Document backups.** The server archives `/data/documents` daily on its own
+- **Add document backups.** The server archives `/data/documents` daily on its own
   once `LITESTREAM_REPLICA_URL` or `SESSION_DOCUMENTS_REPLICA_URL` is set.
   Confirm an archive appears in the bucket after the first day.
-- **A restore drill.** `docs/runbooks/restore.md`, once a quarter. A backup
-  nobody has restored is a hypothesis.
-- **Alerting.** Nothing scrapes `/metrics`. At minimum alert on
+- **Run a restore drill.** See `docs/runbooks/restore.md`.
+- **Alerting.** Scrape `/metrics`. At minimum alert on
   `session_daily_cost_usd` and `session_volume_free_bytes`.
 
 ---

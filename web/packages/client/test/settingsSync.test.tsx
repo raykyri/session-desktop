@@ -133,3 +133,45 @@ test.serial("a push that fails does not stop the next one", async (t) => {
   act(() => useSettingsStore.getState().setTextSize(18));
   await waitUntil(t, () => calls === 2, "and a later change is still pushed");
 });
+
+test.serial("two tabs inside one debounce window do not overwrite each other", async (t) => {
+  // A stand-in for the account's stored copy, merged field by field the way
+  // `settings.update` does on the server.
+  let stored = serverSettings({ appearance: "dark", textSize: 15 });
+  const stub = createTrpcStub({
+    ...defaultResponses(testUser()),
+    "settings.get": () => stored,
+    "settings.update": (input: unknown) => {
+      const patch = (input as { settings?: Record<string, unknown> }).settings ?? {};
+      stored = { ...stored, ...patch };
+      return stored;
+    },
+  });
+  mount(stub);
+  await waitUntil(
+    t,
+    () => useSettingsStore.getState().settings.textSize === 15,
+    "the server's copy landed",
+  );
+
+  // The other tab writes first. This tab has not seen the `settings.updated`
+  // echo yet, so its idea of the account's copy is stale in exactly the field
+  // the other tab changed.
+  stored = { ...stored, appearance: "light" };
+
+  act(() => useSettingsStore.getState().setTextSize(18));
+  await waitUntil(
+    t,
+    () => stub.calls.some((call) => call.path === "settings.update"),
+    "this tab pushes its own change",
+  );
+
+  const sent = (
+    stub.calls.find((call) => call.path === "settings.update")?.input as {
+      settings: Record<string, unknown>;
+    }
+  ).settings;
+  t.deepEqual(sent, { textSize: 18 }, "only the field this tab moved is sent");
+  t.is(stored.appearance, "light", "so the other tab's change survives");
+  t.is(stored.textSize, 18, "and this tab's lands");
+});

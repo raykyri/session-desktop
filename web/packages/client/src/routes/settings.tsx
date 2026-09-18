@@ -253,13 +253,6 @@ export function SettingsPage() {
               </Field>
 
               <Switch
-                label="Shortcut hints"
-                description="Show chord badges beside sidebar rows."
-                checked={settings.showShortcutHints}
-                onCheckedChange={(checked) => set("showShortcutHints", checked)}
-              />
-
-              <Switch
                 label="Reduce motion"
                 description="Settle decorative transitions immediately. Progress indicators keep moving."
                 checked={settings.reduceMotion}

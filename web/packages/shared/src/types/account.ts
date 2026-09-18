@@ -52,8 +52,6 @@ export const userSettingsSchema = z.object({
   /** Id into the client's body font options. */
   bodyFontId: z.string(),
   textSize: z.number().int().min(APP_TEXT_SIZE_MIN).max(APP_TEXT_SIZE_MAX),
-  /** Show Cmd-held shortcut badges in the sidebar. */
-  showShortcutHints: z.boolean(),
   /** Disable decorative and status pulse animations. */
   reduceMotion: z.boolean(),
   /** Show tool calls and other activity detail in research answers. */
@@ -85,7 +83,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
    * from here, so the value is repeated rather than referenced. */
   bodyFontId: "dm-sans",
   textSize: APP_TEXT_SIZE,
-  showShortcutHints: true,
   reduceMotion: false,
   showToolCalls: true,
   showAssistantTimestamps: false,

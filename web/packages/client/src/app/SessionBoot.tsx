@@ -5,6 +5,7 @@
 // and the settings mirror's agreement with the server. `AppShell` mounts this
 // once, behind the auth guard, so none of it runs on `/login`.
 
+import { userSettingsSchema } from "@session/shared";
 import type { UserSettings } from "@session/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
@@ -12,7 +13,7 @@ import { useEffect, useRef } from "react";
 import { ensureDefaultResearchWorkspace, setDraft, updateSettings } from "../api/api.js";
 import { queryKeys } from "../api/cache.js";
 import { connectEventBridge } from "../api/events.js";
-import { useSettings, useWorkspaces } from "../api/queries.js";
+import { useActiveNodes, useSettings, useWorkspaces } from "../api/queries.js";
 import { setDraftSyncTarget, type ComposerDraft, type DraftKey } from "../stores/drafts.js";
 import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
 
@@ -20,27 +21,32 @@ import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
  * pushed: dragging the text-size slider is one write, not thirty (07 §4.3). */
 export const SESSION_SETTINGS_SYNC_DEBOUNCE_MS = 300;
 
-/** Every field of `UserSettings`, as a record rather than a list: a key
- * missing from the comparison below is a preference that silently stops
- * syncing, and a `Record<keyof UserSettings, true>` cannot be missing one. */
-const SETTINGS_FIELDS: Record<keyof UserSettings, true> = {
-  colorTheme: true,
-  appearance: true,
-  bodyFontId: true,
-  textSize: true,
-  showShortcutHints: true,
-  reduceMotion: true,
-  showToolCalls: true,
-  showAssistantTimestamps: true,
-  showNotifications: true,
-  requireCmdEnterToSend: true,
-  defaultModel: true,
-};
-
-const SETTINGS_KEYS = Object.keys(SETTINGS_FIELDS) as (keyof UserSettings)[];
+/** Every field of `UserSettings`, taken from the schema rather than listed
+ * here. A key missing from the comparison below is a preference that silently
+ * stops syncing, and a second copy of the field list is a copy that drifts the
+ * moment a field is added or removed. */
+const SETTINGS_KEYS = Object.keys(userSettingsSchema.shape) as (keyof UserSettings)[];
 
 export function sameSettings(left: UserSettings, right: UserSettings): boolean {
   return SETTINGS_KEYS.every((key) => left[key] === right[key]);
+}
+
+/**
+ * The fields of `next` that differ from `base`.
+ *
+ * The push is a patch, not the whole record, because two tabs can be inside
+ * the same debounce window: `settings.update` merges field by field, so a tab
+ * that sends its entire mirror also sends its stale copy of whatever the other
+ * tab just changed, and reverts it — then the `settings.updated` echo flips
+ * the first tab's UI back. A patch of the keys this tab actually moved leaves
+ * every other field at whatever the server has (`06-auth-and-users.md` §6).
+ */
+export function changedSettings(next: UserSettings, base: UserSettings): Partial<UserSettings> {
+  const patch: Partial<UserSettings> = {};
+  for (const key of SETTINGS_KEYS) {
+    if (next[key] !== base[key]) (patch as Record<string, unknown>)[key] = next[key];
+  }
+  return patch;
 }
 
 /** The subscription, opened once for the app's lifetime. */
@@ -132,12 +138,19 @@ function useSettingsSync(): void {
         timer.current = null;
         const pending = useSettingsStore.getState().settings;
         const sent = server.current;
+        if (sent === null) return;
+        const patch = changedSettings(pending, sent);
+        // Another write may have landed while the debounce ran, leaving
+        // nothing of this tab's own to send.
+        if (Object.keys(patch).length === 0) return;
         // Optimistic, so the echo of this write is not pushed back at the
-        // server; restored on failure rather than cleared, because `null`
-        // means "the account's copy has not landed yet" and would stop every
-        // later change from being pushed at all.
-        server.current = pending;
-        void updateSettings({ settings: pending })
+        // server; and only the patched keys move, because the rest of `sent`
+        // is still the last thing the server actually said. Restored on
+        // failure rather than cleared, because `null` means "the account's
+        // copy has not landed yet" and would stop every later change from
+        // being pushed at all.
+        server.current = { ...sent, ...patch };
+        void updateSettings({ settings: patch })
           .then((saved) => {
             server.current = normalizeSettings(saved);
             queryClient.setQueryData(queryKeys.settings(), saved);
@@ -157,8 +170,31 @@ function useSettingsSync(): void {
   }, [queryClient]);
 }
 
+/**
+ * The account's running and queued nodes, held for the whole session.
+ *
+ * This is a cache the event reducers write rather than a list any view
+ * renders, which is why it is mounted here: `cachedNode` is what tells a node
+ * update whether its predecessor is known, and without this query the answer
+ * is "no" for every node outside the thread the reader has open. A "no" sends
+ * `research.node.updated` down the `invalidate(["trees"])` branch, and the run
+ * loop publishes that event every 500 ms per running node — so a reader
+ * sitting on Home with one run streaming would refetch the whole sidebar twice
+ * a second. Populated, the same event patches the summary instead.
+ *
+ * It cannot feed back into itself: the reducers write it with `setQueryData`,
+ * and the only things that invalidate it are a bridge reconnect and an event
+ * the parser could not vouch for (`api/cache.ts`, `api/events.ts`), neither of
+ * which a refetch produces. `staleTime` is infinite and focus refetching is
+ * off, so mounting it costs one request per session.
+ */
+function useActiveNodeCache(): void {
+  useActiveNodes();
+}
+
 export function SessionBoot() {
   useEventBridge();
+  useActiveNodeCache();
   useDraftSync();
   useSettingsSync();
   useDefaultWorkspace();

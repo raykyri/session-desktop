@@ -9,29 +9,25 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Bookmark, Highlighter, Home } from "lucide-react";
 
 import { cn } from "../../lib/cn.js";
-import { useSettingsStore } from "../../stores/settings.js";
-import { ShortcutHint } from "../../ui/Field.js";
 import { EncyclopediaSection } from "../encyclopedia/EncyclopediaSection.js";
 
 import { ResearchSidebarSection, routeParam } from "./ResearchSidebarSection.js";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher.js";
 import { SIDEBAR_ROW, SIDEBAR_ROW_SELECTED } from "./rows.js";
 import { useWorkspaceScope } from "./scope.js";
-import { useModifierHeld } from "./useModifierHeld.js";
 
-/** The digit chords accept Cmd or Ctrl as their primary modifier
- * (`shared/app/shortcuts.ts`); the badge advertises the Cmd spelling because
- * that is the one the user is holding when it appears. */
+/** The three top-level rows. Their Cmd-digit chords still resolve
+ * (`shared/app/shortcuts.ts`); the rows no longer print a badge for them, so
+ * the chord table in the command palette is the one place that advertises a
+ * chord. */
 const NAV_ITEMS = [
-  { to: "/", label: "Home", shortcut: "⌘1", icon: Home },
-  { to: "/bookmarks", label: "Bookmarks", shortcut: "⌘2", icon: Bookmark },
-  { to: "/highlights", label: "Highlights", shortcut: "⌘3", icon: Highlighter },
+  { to: "/", label: "Home", icon: Home },
+  { to: "/bookmarks", label: "Bookmarks", icon: Bookmark },
+  { to: "/highlights", label: "Highlights", icon: Highlighter },
 ] as const;
 
 export function SidebarBody() {
   const { workspaceId, setScope } = useWorkspaceScope();
-  const showShortcutHints = useSettingsStore((state) => state.settings.showShortcutHints);
-  const hintsVisible = useModifierHeld(showShortcutHints);
   const activeSlug = useRouterState({
     select: (state) => routeParam(state.matches.at(-1)?.params, "slug"),
   });
@@ -53,7 +49,6 @@ export function SidebarBody() {
           >
             <item.icon size={14} aria-hidden="true" className="shrink-0" />
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
-            {hintsVisible ? <ShortcutHint>{item.shortcut}</ShortcutHint> : null}
           </Link>
         ))}
       </nav>

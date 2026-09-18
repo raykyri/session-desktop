@@ -252,8 +252,8 @@ specs under `e2e/`.
       `research.dialogs.test.tsx` covers the Generate summary row;
       `library.spec.ts` drives Bookmark and its two feeds.
 - [x] **Verified** — Journal link and X post cards with hydration, menu
-      keycaps, undo delete; adding a link or X URL from the composer (web
-      addition).
+      rows (no keycaps: a Base UI menu binds no letter), undo delete; adding a
+      link or X URL from the composer (web addition).
       `features/journal/JournalEntryCard.tsx`, `entryMenu.ts`,
       `server/trpc/routers/journal.ts`; `feed.test.tsx` "the journal menu
       offers what the entry can actually do", "a hydrated post's canonical
