@@ -1,0 +1,548 @@
+/* Markdown output cannot carry utility classes without a custom renderer for
+   every element, so the reading typography stays plain CSS (ADR-8,
+   08 §3). Ported from the desktop `features/transcript.css`
+   (`.turn-markdown`) and `features/research-surface.css` (`.research-prose`,
+   `.research-summary-text`); the web has one prose renderer, so the two
+   desktop classes collapse into `.research-prose`.
+
+   Ownership rule (08 §6 item 4): the scale variables live on
+   `.research-reading-surface`, the deltas and font metrics on
+   `.research-prose`, and nothing that merely *places* prose on a page
+   (a recap slot, a feed card) declares type of its own. */
+
+/* Home and a research thread read at the same scale even though their layouts
+   differ, so both mount this surface. */
+.research-reading-surface {
+  /* `--app-text-zoom` is the bounded text-size setting, written on <html> by
+     ThemeEffects (the desktop's `--turn-font-delta`). Adding it here rather
+     than at each declaration means every size derived from the body size —
+     the summary, the markdown delta, tweet copy — tracks the setting once. */
+  --research-body-font-size: calc(var(--fs-input) - 0.5px + var(--app-text-zoom, 0px));
+  --research-body-line-height: 1.5;
+  --research-summary-font-size: var(--research-body-font-size);
+  --research-summary-line-height: var(--research-body-line-height);
+  --research-meta-font-size: calc(var(--fs-input) - 2px);
+  --research-meta-line-height: 1.35;
+  --research-compact-font-size: var(--research-meta-font-size);
+  --research-compact-line-height: 1.45;
+  --research-quote-font-size: calc(var(--research-meta-font-size) + 0.5px);
+  --research-quote-line-height: 1.45;
+  /* Prose children add the face offset at their own declarations. Remove it
+     from this baseline delta so prose receives it exactly once. */
+  --research-markdown-font-delta: calc(
+    var(--research-body-font-size) - 14px - var(--font-ui-size-offset)
+  );
+  --research-markdown-line-height-delta: 0.12;
+}
+
+.research-prose {
+  --transcript-font-delta: var(--research-markdown-font-delta);
+  --transcript-line-height-delta: var(--research-markdown-line-height-delta);
+  font-size: var(--research-body-font-size);
+  line-height: var(--research-body-line-height);
+  overflow-wrap: anywhere;
+}
+
+.research-prose--compact {
+  --transcript-font-delta: calc(
+    var(--research-compact-font-size) - 14px - var(--font-ui-size-offset)
+  );
+  color: var(--text-interactive);
+  font-size: var(--research-compact-font-size);
+  line-height: var(--research-compact-line-height);
+}
+
+/* Recap and preview copy. Size and leading come from the surface variables so
+   the same text reads identically in Home and inside a thread. */
+.research-summary-text {
+  color: var(--text-muted);
+  font-size: var(--research-summary-font-size);
+  font-style: italic;
+  font-weight: 400;
+  line-height: var(--research-summary-line-height);
+  white-space: normal;
+}
+
+.research-prompt-quote {
+  color: var(--text-tertiary);
+  font-size: var(--research-quote-font-size);
+  font-style: italic;
+  line-height: var(--research-quote-line-height);
+}
+
+.research-prose > :first-child {
+  margin-top: 0;
+}
+
+.research-prose > :last-child {
+  margin-bottom: 0;
+}
+
+.research-prose strong,
+.research-prose b {
+  font-weight: 600;
+}
+
+/* Block rhythm is keyed to the type, not a fixed pixel gap: at 14px/1.5 a line
+   box is 21px, so a flat 8px is a third of a line and consecutive paragraphs
+   run together. 0.72em reads as a paragraph break and tracks the text-size
+   setting instead of shrinking against it. */
+.research-prose p,
+.research-prose ul,
+.research-prose ol,
+.research-prose blockquote,
+.research-prose pre,
+.research-prose table {
+  margin: 0 0 0.72em;
+}
+
+/* Heading scale. Without an explicit size per level react-markdown's h1–h6 all
+   inherit one flat size (smaller than body) and a report's section structure
+   is invisible. Top margin exceeds bottom so a heading binds to the content
+   beneath it and separates from the block above. */
+.research-prose h1,
+.research-prose h2,
+.research-prose h3,
+.research-prose h4,
+.research-prose h5,
+.research-prose h6 {
+  margin: 22px 0 7px;
+  color: var(--text-heading);
+  font-weight: 600;
+  line-height: calc(1.3 + var(--transcript-line-height-delta, 0));
+  letter-spacing: -0.007em;
+}
+
+.research-prose h1 {
+  font-size: calc(21px + var(--transcript-font-delta, 0px) + var(--font-ui-size-offset));
+  line-height: 1.25;
+}
+
+.research-prose h2 {
+  font-size: calc(17.5px + var(--transcript-font-delta, 0px) + var(--font-ui-size-offset));
+}
+
+.research-prose h3 {
+  font-size: calc(15.5px + var(--transcript-font-delta, 0px) + var(--font-ui-size-offset));
+}
+
+.research-prose h4 {
+  font-size: calc(14px + var(--transcript-font-delta, 0px) + var(--font-ui-size-offset));
+}
+
+/* Below h4 the size floor is body text; separation comes from weight, a muted
+   tone, and (at the deepest level) uppercase rather than an ever-smaller size. */
+.research-prose h5 {
+  font-size: calc(13px + var(--transcript-font-delta, 0px) + var(--font-ui-size-offset));
+  color: var(--text-body-soft);
+}
+
+.research-prose h6 {
+  margin-bottom: 5px;
+  font-size: calc(12px + var(--transcript-font-delta, 0px) + var(--font-ui-size-offset));
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.research-prose ul,
+.research-prose ol {
+  padding-left: 18px;
+}
+
+.research-prose ol {
+  padding-left: 20px;
+}
+
+.research-prose li {
+  margin: 3px 0;
+}
+
+.research-prose li > p {
+  margin: 0;
+}
+
+.research-prose a {
+  color: var(--accent-color);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+.research-prose a:hover {
+  text-decoration: underline;
+}
+
+/* Wikilinks: key terms the agent marked as [[Term]]. A term without an
+   encyclopedia page uses a muted tint of the base text color with a dotted
+   underline, separating it from navigable URLs; once a page exists the
+   underline turns solid, and a page still being written pulses. */
+.research-prose a.research-wikilink {
+  cursor: pointer;
+  color: color-mix(in srgb, var(--text-strong) 90%, transparent);
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, var(--text-strong) 40%, transparent);
+  text-underline-offset: 2px;
+}
+
+.research-prose a.research-wikilink:hover,
+.research-prose a.research-wikilink:focus-visible {
+  color: var(--text-strong);
+  text-decoration-style: solid;
+  text-decoration-color: color-mix(in srgb, var(--text-strong) 60%, transparent);
+}
+
+.research-prose a.research-wikilink.is-ready {
+  text-decoration-style: solid;
+  text-decoration-color: color-mix(in srgb, var(--text-strong) 55%, transparent);
+}
+
+.research-prose a.research-wikilink.is-generating {
+  animation: research-wikilink-pulse 1.6s ease-in-out infinite;
+}
+
+.research-prose a.research-wikilink.is-failed {
+  text-decoration-color: var(--status-failed-fg);
+}
+
+.research-prose blockquote {
+  border-left: 2px solid var(--markdown-blockquote-border);
+  padding-left: 9px;
+  color: var(--text-secondary);
+}
+
+/* No outline on either inline or fenced code: a hairline box around every
+   inline token speckles the line it sits in, and the darker fill already
+   separates code from prose on its own. Monospace text takes no
+   `--font-ui-size-offset`: that half-pixel compensates for a UI face
+   (08 §6 item 5). */
+.research-prose code {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--transcript-code-bg);
+  padding: 1px 4px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: calc(12.5px + var(--transcript-font-delta, 0px));
+}
+
+.research-prose pre {
+  overflow: auto;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--transcript-code-bg);
+  padding: 8px;
+}
+
+.research-prose pre code {
+  display: block;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  white-space: pre;
+}
+
+/* Fenced-code wrapper: anchors its actions menu to the block's top-right corner
+   so it stays put while the <pre> underneath scrolls. Block margin moves here
+   from the <pre> so :last-child margin trimming still works. */
+.research-prose-code-block {
+  position: relative;
+  margin: 0 0 8px;
+}
+
+.research-prose-code-block pre {
+  margin: 0;
+}
+
+/* Global preference (html.wrap-code-blocks), toggled from any code-block menu.
+   Applied at the root so every fenced block updates in one layout pass. */
+html.wrap-code-blocks .research-prose-code-block pre code {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* Framed, rounded container. overflow-x stays a fallback for content that
+   genuinely cannot wrap; the table itself fits the column and wraps its cells
+   rather than forcing every wide table to scroll. */
+.research-prose-table-wrap {
+  max-width: 100%;
+  margin: 0 0 12px;
+  border: 1px solid var(--markdown-table-frame-border);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+.research-prose-table-wrap table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: calc(13.5px + var(--transcript-font-delta, 0px) + var(--font-ui-size-offset));
+}
+
+.research-prose th,
+.research-prose td {
+  padding: 8px 12px;
+  border-right: 1px solid var(--markdown-table-border);
+  border-bottom: 1px solid var(--markdown-table-border);
+  text-align: left;
+  vertical-align: top;
+  /* Override the ambient `anywhere` so columns size to words and only long
+     unbreakable tokens break. */
+  overflow-wrap: break-word;
+}
+
+/* Drop the frame-adjacent edges so cell separators never double up against the
+   wrapper's rounded border. */
+.research-prose th:last-child,
+.research-prose td:last-child {
+  border-right: 0;
+}
+
+.research-prose tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Header row rendered one step lighter than the surface, with a stronger
+   divider. */
+.research-prose th {
+  background: var(--markdown-table-header-bg);
+  color: var(--text-heading);
+  font-weight: 600;
+  border-bottom-color: var(--markdown-table-header-border);
+}
+
+.research-prose hr {
+  height: 1px;
+  margin: 10px 0;
+  border: 0;
+  background: var(--surface-border-strong);
+}
+
+/* GFM task-list checkboxes, always rendered disabled. */
+.research-prose input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  margin: 0 6px 0 0;
+  vertical-align: -2px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  cursor: default;
+}
+
+.research-prose input[type="checkbox"]:checked {
+  border-color: var(--accent-strong);
+  background-color: var(--accent-strong);
+  background-image: var(--checkbox-check);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 10px;
+}
+
+/* TeX math (remark-math + rehype-mathjax SVG). MathJax injects its own
+   container styles; these only keep wide display equations scrolling inside
+   the column instead of widening it. */
+.research-prose mjx-container[jax="SVG"][display="true"] {
+  margin: 0 0 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 0;
+}
+
+/* Rendered diagrams (mermaid / graphviz), sanitized before they reach here. */
+.research-diagram {
+  margin: 0 0 8px;
+  border: 1px solid var(--surface-border-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--transcript-code-bg);
+}
+
+.research-diagram-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--surface-divider);
+  background: var(--transcript-code-header-bg);
+}
+
+.research-diagram-lang {
+  font-family: var(--font-mono);
+  font-size: calc(10.5px + var(--transcript-font-delta, 0px));
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-subtle);
+}
+
+.research-diagram-svg {
+  overflow: auto;
+  padding: 10px;
+  text-align: center;
+  /* The rendered diagram expands into the full-page diagram lightbox. */
+  cursor: zoom-in;
+}
+
+.research-diagram-svg svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Graphviz emits a Times presentation attribute and Mermaid its own label
+   styles; override both so generated labels follow the selected body font. */
+.research-diagram-svg svg text,
+.research-diagram-svg svg tspan {
+  font-family: var(--font-ui) !important;
+}
+
+/* Graphviz draws black-on-transparent, unreadable on a dark surface, so give
+   it a light canvas and let wide graphs scroll at their natural size. */
+.research-diagram-svg[data-lang="dot"] {
+  background: #f6f6f2; /* appearance-invariant */
+  border-radius: var(--radius-sm);
+  margin: 6px;
+  padding: 12px;
+}
+
+.research-diagram-svg[data-lang="dot"] svg {
+  max-width: none;
+}
+
+/* DOM search matches, painted through the CSS Custom Highlight API. The
+   registry names are declared in `lib/transcriptSearch.ts`. */
+::highlight(session-search) {
+  background-color: var(--attention-badge-bg);
+  color: var(--attention-badge-fg);
+}
+
+::highlight(session-search-active) {
+  background-color: var(--attention-badge-bg-strong);
+  color: var(--attention-badge-fg-strong);
+}
+
+/* Saved passage highlights. The colors are literal because highlight pseudos
+   resolve custom properties unreliably; each pair mirrors
+   --research-highlight-bg in the dark and light token blocks. */
+::highlight(session-research-highlights) {
+  color: inherit;
+  background: rgba(216, 196, 95, 0.14); /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"] *::highlight(session-research-highlights) {
+  background: rgba(214, 178, 30, 0.22); /* highlight-pseudo-literal */
+}
+
+/* Passages a targeted follow-up was asked about, ~20% stronger than a plain
+   saved highlight so a passage that owns a margin card reads as distinct. */
+::highlight(session-research-query-anchors) {
+  color: inherit;
+  background: rgba(216, 196, 95, 0.17); /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"] *::highlight(session-research-query-anchors) {
+  background: rgba(214, 178, 30, 0.3); /* highlight-pseudo-literal */
+}
+
+/* Regions where annotations stack: repainted near the text color so depth is
+   visible without deepening the gold. */
+::highlight(session-research-highlight-overlaps) {
+  color: inherit;
+  background: rgba(211, 216, 212, 0.16); /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"] *::highlight(session-research-highlight-overlaps) {
+  background: rgba(60, 70, 66, 0.12); /* highlight-pseudo-literal */
+}
+
+/* Saved highlights the current selection landed on, painted above the gold
+   wash in the same tone as ::selection (matches --status-info-fg). */
+::highlight(session-research-selected-highlights) {
+  color: inherit;
+  background: #6da7ec; /* highlight-pseudo-literal */
+}
+
+:root[data-appearance="light"] *::highlight(session-research-selected-highlights) {
+  background: #2a6fc0; /* highlight-pseudo-literal */
+}
+
+@keyframes research-wikilink-pulse {
+  0%,
+  100% {
+    text-decoration-color: color-mix(in srgb, var(--text-strong) 40%, transparent);
+  }
+  50% {
+    text-decoration-color: var(--accent-color);
+  }
+}
+
+/* Progress spinners keep moving under reduced motion: they report ongoing
+   work rather than decorating a state change. */
+@keyframes session-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes session-status-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
+.session-spin {
+  animation: session-spin 1s linear infinite;
+}
+
+.session-thinking-dot {
+  animation: session-status-dot-pulse 1.3s ease-in-out infinite;
+}
+
+/* Accessibility overrides outrank component transitions. Ported from the
+   desktop `reduced-motion.css`; the explicit `reduce-motion` class (the
+   setting) and the media query (the OS preference) apply the same rules. */
+.reduce-motion,
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  scroll-behavior: auto !important;
+  transition-delay: 0s !important;
+  transition-duration: 0.01ms !important;
+}
+
+.reduce-motion .session-thinking-dot {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+
+.reduce-motion .session-notification {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .session-thinking-dot {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .session-notification {
+    transform: none;
+  }
+}

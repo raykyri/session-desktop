@@ -1,0 +1,642 @@
+/* Copied verbatim from the desktop `src/styles/tokens.css` (08 §1). Two
+   deliberate departures, both noted inline below:
+   - the `@font-face` blocks moved to `fonts.css`, which imports the woff2
+     files as Vite assets so the bundler fingerprints them;
+   - `:root { background: transparent }` (macOS window vibrancy, which the web
+     has no equivalent of) becomes `var(--workspace-bg)`.
+   Everything else must stay byte-identical so the light-override and
+   half-pixel contracts in `test/tokenContracts.test.ts` keep meaning what
+   they meant on the desktop. */
+
+:root {
+  /* Optical compensation for the selected UI face. DM Sans reads slightly
+     smaller than the other body-font options at the same nominal size. */
+  --font-ui-size-offset: 0px;
+
+  /* Type scale. Controls and body share --fs-base; the two main typing surfaces
+     (composer + launcher) use --fs-input; xs/sm are for hints, badges, meta. */
+  --fs-xs: calc(11px + var(--font-ui-size-offset));
+  --fs-sm: calc(12px + var(--font-ui-size-offset));
+  --fs-base: calc(13px + var(--font-ui-size-offset));
+  --fs-input: calc(15px + var(--font-ui-size-offset));
+
+  /* Control heights. sm = inline/table actions, md = default, lg = composer + launcher. */
+  --control-h-sm: 26px;
+  --control-h-md: 30px;
+  --control-h-lg: 34px;
+
+  /* Shared maximum for Home activity and tweet embeds on wider surfaces. */
+  --research-feed-max-width: 540px;
+
+  /* Corner radii. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --font-ui:
+    "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    monospace;
+
+  /* Shared stacking levels for portaled chrome. Local component layers continue
+     to use small integers inside their own stacking contexts. */
+  --z-popover: 15;
+  --z-select-popover: 50;
+  --z-dialog: 20;
+  --z-toast: 30;
+  --z-context-menu: 1000;
+
+  /* Hover/press feedback on controls, tabs, and menu rows. */
+  --transition-fast: 120ms ease;
+
+  /* ------------------------------------------------------------------ */
+  /* Theme-invariant tokens. Every application color theme shares these; a
+     theme block below only overrides the surface, control, and accent roles
+     that actually differ. Text and status roles are shared by controls,
+     transcript content, and research surfaces. */
+
+  --text-primary: #e7e7e2;
+  --text-strong: #f1f0e8;
+  --text-secondary: #c4cbc6;
+  --text-body-soft: #d9ddd9;
+  --text-muted: #8a938e;
+  --text-activity: #8f9994;
+  --text-interactive: #edf0ec;
+  --text-heading: #f4f3ec;
+  --text-subtle: #7f8884;
+  --text-faint: #6f7773;
+  --text-disabled: #797d80;
+  --placeholder-color: #6b726d;
+  /* Extended text ramp. --text-max is the maximum-contrast state text used by
+     selected rows and hovered actions; tertiary sits between secondary and
+     muted; dim/ghost are for hints that should barely register. */
+  --text-max: #ffffff;
+  --text-tertiary: #aab1ad;
+  --text-dim: #5a615e;
+  --text-ghost: #4b524e;
+  --text-on-accent: #0f1413;
+
+  /* Per-adapter identity colors in history and activity rows. */
+  --agent-claude-fg: #d9a07d;
+  --agent-codex-fg: #8fc7a6;
+  /* Brand-blue link color for external embeds (tweets). */
+  --link-external-fg: #1d9bf0;
+
+  --status-failed-fg: #d98787;
+  --status-attention-fg: #e0796d;
+  /* Amber "agent is working / waiting on you" cues. */
+  --status-active-fg: #d7a84f;
+  --status-active-border: rgba(215, 168, 79, 0.42);
+  --status-active-border-strong: rgba(215, 168, 79, 0.62);
+  --status-warning-fg: #d8b878;
+  --status-info-fg: #6da7ec;
+  --status-info-bg: rgba(109, 167, 236, 0.08);
+  --status-info-bg-hover: rgba(109, 167, 236, 0.14);
+  --status-info-border: rgba(109, 167, 236, 0.25);
+  --status-info-border-strong: rgba(109, 167, 236, 0.5);
+  --wait-target-preview-border: rgba(109, 167, 236, 0.7);
+  --status-success-fg: #81c784;
+  --status-success-fg-soft: #b9f0d6;
+  --status-success-bg: rgba(129, 199, 132, 0.08);
+  --status-success-border: rgba(129, 199, 132, 0.25);
+  --status-error-fg: #e08a5f;
+  --status-pending-fg: #7f8884;
+  --status-failed-bg: rgba(217, 135, 135, 0.13);
+  --status-info-fg-soft: #b8cfea;
+  --status-info-fg-link: #79a7c8;
+  --status-info-bg-strong: rgba(90, 130, 178, 0.16);
+  /* Toast tone borders and icons. */
+  --toast-success-fg: #71d4a9;
+  --toast-success-border: #56c596;
+  --toast-warning-fg: #f1c16e;
+  --toast-warning-border: #e9b65d;
+  --toast-error-fg: #ed8a8a;
+  --toast-error-border: #e07979;
+  /* Amber attention badges on terminal tabs (needs-input / bell). */
+  --attention-badge-bg: #665a2b;
+  --attention-badge-fg: #f4f4ef;
+  --attention-badge-bg-strong: #a8842f;
+  --attention-badge-fg-strong: #111315;
+  --attention-marker-bg: #e0a96d;
+  /* Warm warning callout (composer capacity / stale-session notices). */
+  --warning-callout-fg: #ffdca8;
+  --warning-callout-bg: #241f18;
+  --warning-callout-border: #5b4630;
+  /* Research passage highlights (yellow = selected passage, neutral = hover). */
+  --research-highlight-bg: rgba(216, 196, 95, 0.14);
+  --research-highlight-bg-hover: rgba(216, 196, 95, 0.17);
+  --research-highlight-neutral-bg: rgba(211, 216, 212, 0.16);
+
+  --danger-bg: #2c1a17;
+  --danger-bg-hover: #3a221d;
+  --danger-bg-strong: #3a2022;
+  --danger-bg-banner: #2a211f;
+  --danger-border: #7a3b34;
+  --danger-border-strong: #7a3030;
+  --danger-border-banner: #755149;
+  --danger-border-banner-hover: #8a5f55;
+  --danger-focus-ring: #a55349;
+  --danger-focus-shadow: rgba(224, 138, 95, 0.55);
+  --danger-outline: rgba(224, 138, 95, 0.55);
+  --danger-fg: #ffd3c7;
+  --danger-fg-strong: #ffb4a3;
+  --danger-fg-muted: #e08a8a;
+  --danger-fg-message: #ffb4a8;
+  --danger-fg-hover: #ffe8e0;
+
+  /* White-alpha fills and hairlines composite the same over any dark theme. */
+  --surface-fill-subtle: rgba(255, 255, 255, 0.05);
+  --surface-fill-hover: rgba(255, 255, 255, 0.06);
+  --surface-highlight: rgba(255, 255, 255, 0.06);
+  --surface-border-faint: rgba(255, 255, 255, 0.06);
+  --surface-border-subtle: rgba(255, 255, 255, 0.075);
+  --surface-border-default: rgba(255, 255, 255, 0.12);
+  --surface-border-overlay-strong: rgba(255, 255, 255, 0.14);
+  --sidebar-switcher-bg: rgba(0, 0, 0, 0.18);
+  --sidebar-switcher-hover-bg: rgba(255, 255, 255, 0.045);
+  --sidebar-switcher-active-bg: rgba(255, 255, 255, 0.105);
+  --sidebar-group-bg: rgba(255, 255, 255, 0.013);
+  --surface-fill-faint: rgba(255, 255, 255, 0.03);
+  --surface-fill-medium: rgba(255, 255, 255, 0.09);
+  --surface-fill-strong: rgba(255, 255, 255, 0.18);
+  --surface-border-strong-alpha: rgba(255, 255, 255, 0.55);
+  /* Text-colored underline for links inside body copy. */
+  --link-underline: rgba(241, 240, 232, 0.8);
+  /* Backdrop behind modal dialogs and the history overlay. */
+  --scrim-bg: rgba(8, 10, 12, 0.58);
+  /* Lightbox scrims sit over images and stay dark in every appearance. */
+  --lightbox-scrim-bg: rgba(0, 0, 0, 0.72);
+  --lightbox-caption-bg: rgba(0, 0, 0, 0.6);
+  --lightbox-caption-fg: #ffffff;
+
+  --control-fg: var(--text-strong);
+  --control-fg-muted: #b9c0bc;
+
+  /* Amber split-focus indicators are deliberately theme-independent so the
+     active-pane cue reads the same across themes. */
+  --split-border-hover: rgba(215, 168, 79, 0.65);
+  --split-border-active: rgba(255, 220, 143, 0.78);
+  --split-border-active-muted: rgba(255, 220, 143, 0.28);
+  --split-active-indicator: rgba(215, 168, 79, 0.32);
+  --split-drop-border: rgba(215, 168, 79, 0.74);
+  --split-drop-bg: rgba(215, 168, 79, 0.12);
+
+  --popover-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  --dialog-shadow: 0 22px 70px rgba(0, 0, 0, 0.5);
+  --context-menu-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.45), 0 12px 32px rgba(0, 0, 0, 0.3);
+  /* Generic elevation steps for floating chrome that is not a popover/dialog. */
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 24px 70px rgba(0, 0, 0, 0.48);
+  --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-ring: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  --shadow-glow-warm: inset 0 0 0 1px rgba(255, 239, 197, 0.12);
+
+  /* Inline SVG glyphs for native form controls (select chevron, launcher lead
+     icons, checkbox check). Stroke colors are baked into the data URI, so each
+     appearance declares its own set. */
+  --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 3.5L5 6.5L8 3.5' fill='none' stroke='%239ca6a1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  --select-lead-folder: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca6a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>");
+  --select-lead-shield: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca6a1' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z'/></svg>");
+  --checkbox-check: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'><path d='M3.5 7.3 5.9 9.7 10.5 4.6' fill='none' stroke='%2310211c' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+
+  color-scheme: dark;
+
+  color: var(--text-primary);
+  /* The desktop left this transparent so macOS window vibrancy
+     (NSVisualEffectView) composited through the webview; the browser has no
+     such layer, so the root paints the workspace surface itself. */
+  background: var(--workspace-bg);
+  font-family: var(--font-ui);
+  font-synthesis: none;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+}
+
+:root[data-body-font="dm-sans"] {
+  --font-ui-size-offset: 0.5px;
+}
+
+:root,
+:root[data-color-theme="green-blob"] {
+  /* Primary pane surfaces. Keep these separate from control backgrounds so
+     application color themes can tint the workspace without flattening the
+     contrast hierarchy inside inputs, menus, and buttons. */
+  --left-pane-bg: rgba(14, 16, 17, 0.72);
+  --terminal-pane-bg: #111315;
+  --right-pane-bg: #171b1d;
+  --right-pane-bg-transparent: rgba(23, 27, 29, 0);
+  --right-pane-active-bg: #181d1f;
+
+  /* Secondary surfaces. Equal values remain separate when their visual roles
+     may diverge in a future theme. */
+  --workspace-bg: #17191b;
+  --research-workspace-bg: #151719;
+  --field-bg: #111315;
+  --field-bg-hover: #16191b;
+  --panel-bg: #1b2022;
+  --popover-bg: #1d2224;
+  --content-card-bg: #1d2224;
+  --content-inset-bg: #15191b;
+  --context-menu-bg: var(--pane-hover-bg);
+  --popover-item-hover-bg: var(--pane-tab-hover-bg);
+  --chrome-header-bg: #14171a;
+  --pane-hover-bg: #1b1f21;
+  --pane-tab-hover-bg: var(--pane-hover-bg);
+  --research-sidebar-hover-bg: var(--pane-hover-bg);
+  --markdown-table-header-bg: color-mix(
+    in srgb,
+    var(--pane-hover-bg) 75%,
+    var(--right-pane-bg) 25%
+  );
+  --markdown-table-border: #262d2f;
+  --markdown-table-frame-border: #2f3639;
+  --markdown-table-header-border: #38403f;
+  --markdown-blockquote-border: #3d4a4d;
+  --transcript-code-bg: #111416;
+  --transcript-code-header-bg: #0d1012;
+  --surface-divider: #2a2d2f;
+  --surface-border-strong: #30383b;
+  --dialog-border: #3b4447;
+  --chrome-control-bg: rgba(20, 24, 26, 0.9);
+  --chrome-control-bg-hover: rgba(32, 38, 40, 0.95);
+  --chrome-control-bg-disabled: rgba(20, 24, 26, 0.65);
+
+  /* Component surfaces with their own contrast relationships. */
+  --settings-tab-active-bg: #273034;
+  --recovered-queue-divider: #2c3336;
+  --research-highlight-action-bg: #303532;
+  --research-highlight-action-bg-hover: #3a403c;
+  --research-followup-composer-bg: #303233;
+  /* Hover connector between a passage and its follow-up card: a near-neutral
+     gray with each theme's temperature (cool here, warm in orange-blob). */
+  --research-anchor-connector: #78827f;
+  --research-drop-overlay-border: rgba(111, 211, 190, 0.82);
+  --research-drop-overlay-bg: rgba(15, 25, 25, 0.92);
+  --research-drop-overlay-glow: rgba(215, 255, 246, 0.06);
+  --research-drop-overlay-fg: #dff8f1;
+  --research-drop-overlay-icon: #80d9c6;
+  --pane-status-active-dot: #5fb89f;
+  --folder-picker-status-border: #364245;
+  --queued-turn-border: #384246;
+
+  --accent-color: #8fd6c7;
+  --accent-shadow: rgba(143, 214, 199, 0.35);
+  --accent-soft: rgba(143, 214, 199, 0.13);
+  --accent-subtle: rgba(143, 214, 199, 0.08);
+  --accent-active-bg: #243430;
+  --accent-strong: #6cae9d;
+
+  --control-bg: #24282b;
+  --control-bg-hover: #2c3134;
+  --control-border: #3a3d3f;
+  --control-border-hover: #474b4e;
+  --control-border-hover-accent: #4a5d56;
+  --focus-ring: #6cae9d;
+}
+
+:root[data-color-theme="orange-blob"] {
+  --left-pane-bg: #171716;
+  --terminal-pane-bg: #161514;
+  --right-pane-bg: #1c1b1a;
+  --right-pane-bg-transparent: rgba(28, 27, 26, 0);
+  --right-pane-active-bg: #1b1a19;
+
+  --workspace-bg: #1c1b1a;
+  --research-workspace-bg: var(--right-pane-bg);
+  --field-bg: #171615;
+  --field-bg-hover: #1e1d1a;
+  --panel-bg: var(--field-bg);
+  --popover-bg: var(--field-bg);
+  --content-card-bg: #222120;
+  --content-inset-bg: #1d1c19;
+  --context-menu-bg: #23221f;
+  --popover-item-hover-bg: var(--pane-tab-hover-bg);
+  --chrome-header-bg: #171716;
+  --pane-hover-bg: #23211f;
+  --pane-tab-hover-bg: var(--right-pane-bg);
+  --research-sidebar-hover-bg: #222221;
+  --markdown-table-header-bg: color-mix(
+    in srgb,
+    var(--pane-hover-bg) 75%,
+    var(--right-pane-bg) 25%
+  );
+  --markdown-table-border: #302d2a;
+  --markdown-table-frame-border: #36332f;
+  --markdown-table-header-border: #403a35;
+  --markdown-blockquote-border: #45484a;
+  --transcript-code-bg: #171512;
+  --transcript-code-header-bg: #12110f;
+  --surface-divider: #2d2d2c;
+  --surface-border-strong: #373634;
+  --dialog-border: #3f3c37;
+  --chrome-control-bg: rgba(31, 29, 27, 0.9);
+  --chrome-control-bg-hover: rgba(44, 41, 37, 0.95);
+  --chrome-control-bg-disabled: rgba(31, 29, 26, 0.65);
+
+  --settings-tab-active-bg: #322f2b;
+  --recovered-queue-divider: #34312d;
+  --research-highlight-action-bg: #363636;
+  --research-highlight-action-bg-hover: #404040;
+  --research-followup-composer-bg: #343434;
+  --research-anchor-connector: #867f75;
+  --research-drop-overlay-border: rgba(210, 204, 194, 0.72);
+  --research-drop-overlay-bg: rgba(22, 21, 19, 0.92);
+  --research-drop-overlay-glow: rgba(255, 249, 240, 0.06);
+  --research-drop-overlay-fg: #eeece7;
+  --research-drop-overlay-icon: #c7c1b7;
+  --pane-status-active-dot: #b3ada3;
+  --folder-picker-status-border: #49423a;
+  --queued-turn-border: #48413a;
+
+  --accent-color: #33adff;
+  --accent-shadow: rgba(51, 173, 255, 0.35);
+  --accent-soft: rgba(51, 173, 255, 0.13);
+  --accent-subtle: rgba(51, 173, 255, 0.08);
+  --accent-active-bg: #263a49;
+  --accent-strong: #268fd6;
+
+  --control-bg: #282827;
+  --control-bg-hover: #313130;
+  --control-border: #3d3d3c;
+  --control-border-hover: #4a4946;
+  --control-border-hover-accent: #57544f;
+  --focus-ring: #33adff;
+}
+
+/* ------------------------------------------------------------------ */
+/* Light appearance. Toggled from the sidebar header (and Settings) via
+   data-appearance on <html>; the color theme keeps choosing the accent and
+   neutral temperature, so each theme has a light variant below. These blocks
+   come after the dark theme blocks so equal-specificity roles resolve light. */
+
+:root[data-appearance="light"] {
+  color-scheme: light;
+
+  /* Inline SVG glyphs for native form controls (select chevron, launcher lead
+     icons, checkbox check). Stroke colors are baked into the data URI, so each
+     appearance declares its own set. */
+  --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 3.5L5 6.5L8 3.5' fill='none' stroke='%236b746f' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  --select-lead-folder: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b746f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z'/></svg>");
+  --select-lead-shield: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b746f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z'/></svg>");
+  --checkbox-check: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'><path d='M3.5 7.3 5.9 9.7 10.5 4.6' fill='none' stroke='%23ffffff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+
+  --text-primary: #23282a;
+  --text-strong: #15191a;
+  --text-secondary: #4a5350;
+  --text-body-soft: #33393b;
+  --text-muted: #6b746f;
+  --text-activity: #6a736e;
+  --text-interactive: #1c2123;
+  --text-heading: #121617;
+  --text-subtle: #6e7772;
+  --text-faint: #7d8581;
+  --text-disabled: #8f9693;
+  --placeholder-color: #8e958f;
+  --text-max: #000000;
+  --text-tertiary: #5c655f;
+  --text-dim: #9aa19d;
+  --text-ghost: #adb3af;
+  --text-on-accent: #ffffff;
+
+  --agent-claude-fg: #a85f2f;
+  --agent-codex-fg: #2f7f4f;
+  --link-external-fg: #1a7fc9;
+
+  --status-failed-fg: #b5484a;
+  --status-attention-fg: #c0563f;
+  --status-active-fg: #9a6b12;
+  --status-active-border: rgba(154, 107, 18, 0.42);
+  --status-active-border-strong: rgba(154, 107, 18, 0.62);
+  --status-warning-fg: #9a6f16;
+  --status-info-fg: #2a6fc0;
+  --status-info-bg: rgba(42, 111, 192, 0.08);
+  --status-info-bg-hover: rgba(42, 111, 192, 0.14);
+  --status-info-border: rgba(42, 111, 192, 0.25);
+  --status-info-border-strong: rgba(42, 111, 192, 0.5);
+  --wait-target-preview-border: rgba(42, 111, 192, 0.7);
+  --status-success-fg: #2f8a4d;
+  --status-success-fg-soft: #1f6d3f;
+  --status-success-bg: rgba(47, 138, 77, 0.08);
+  --status-success-border: rgba(47, 138, 77, 0.3);
+  --status-error-fg: #b8582a;
+  --status-pending-fg: #767f7a;
+  --status-failed-bg: rgba(181, 72, 74, 0.1);
+  --status-info-fg-soft: #245d9c;
+  --status-info-fg-link: #2a6fc0;
+  --status-info-bg-strong: rgba(42, 111, 192, 0.12);
+  --toast-success-fg: #24804f;
+  --toast-success-border: #3fa36f;
+  --toast-warning-fg: #9a6f16;
+  --toast-warning-border: #d3a23a;
+  --toast-error-fg: #b5484a;
+  --toast-error-border: #d46a6a;
+  --attention-badge-bg: #f1dfa4;
+  --attention-badge-fg: #4a3a05;
+  --attention-badge-bg-strong: #c9962c;
+  --attention-badge-fg-strong: #ffffff;
+  --attention-marker-bg: #c98a3a;
+  --warning-callout-fg: #6b4a12;
+  --warning-callout-bg: #fdf4e3;
+  --warning-callout-border: #e6cf9c;
+  --research-highlight-bg: rgba(214, 178, 30, 0.22);
+  --research-highlight-bg-hover: rgba(214, 178, 30, 0.3);
+  --research-highlight-neutral-bg: rgba(60, 70, 66, 0.12);
+
+  --danger-bg: #fdeae6;
+  --danger-bg-hover: #fbdcd5;
+  --danger-bg-strong: #f9d3cc;
+  --danger-bg-banner: #f8e9e5;
+  --danger-border: #e3a79b;
+  --danger-border-strong: #d9958a;
+  --danger-border-banner: #dfb0a6;
+  --danger-border-banner-hover: #d09a8d;
+  --danger-focus-ring: #c8574a;
+  --danger-focus-shadow: rgba(184, 88, 42, 0.35);
+  --danger-outline: rgba(184, 88, 42, 0.45);
+  --danger-fg: #8a2f22;
+  --danger-fg-strong: #7a2418;
+  --danger-fg-muted: #a94b4b;
+  --danger-fg-message: #7c2a1f;
+  --danger-fg-hover: #601a10;
+
+  /* Black-alpha fills and hairlines composite the same over any light theme. */
+  --surface-fill-subtle: rgba(0, 0, 0, 0.04);
+  --surface-fill-hover: rgba(0, 0, 0, 0.05);
+  --surface-highlight: rgba(0, 0, 0, 0.05);
+  --surface-border-faint: rgba(0, 0, 0, 0.06);
+  --surface-border-subtle: rgba(0, 0, 0, 0.08);
+  --surface-border-default: rgba(0, 0, 0, 0.12);
+  --surface-border-overlay-strong: rgba(0, 0, 0, 0.14);
+  --sidebar-switcher-bg: rgba(0, 0, 0, 0.05);
+  --sidebar-switcher-hover-bg: rgba(0, 0, 0, 0.045);
+  --sidebar-switcher-active-bg: rgba(0, 0, 0, 0.09);
+  --sidebar-group-bg: rgba(0, 0, 0, 0.015);
+  --surface-fill-faint: rgba(0, 0, 0, 0.025);
+  --surface-fill-medium: rgba(0, 0, 0, 0.08);
+  --surface-fill-strong: rgba(0, 0, 0, 0.14);
+  --surface-border-strong-alpha: rgba(0, 0, 0, 0.45);
+  --link-underline: rgba(21, 25, 26, 0.6);
+  --scrim-bg: rgba(40, 44, 46, 0.42);
+
+  --control-fg-muted: #4e5754;
+
+  --split-border-hover: rgba(154, 107, 18, 0.65);
+  --split-border-active: rgba(154, 107, 18, 0.85);
+  --split-border-active-muted: rgba(154, 107, 18, 0.3);
+  --split-active-indicator: rgba(154, 107, 18, 0.32);
+  --split-drop-border: rgba(154, 107, 18, 0.74);
+  --split-drop-bg: rgba(154, 107, 18, 0.1);
+
+  --popover-shadow: 0 10px 28px rgba(20, 24, 26, 0.16);
+  --dialog-shadow: 0 22px 70px rgba(20, 24, 26, 0.22);
+  --context-menu-shadow: 0 0 0 0.5px rgba(20, 24, 26, 0.14), 0 12px 32px rgba(20, 24, 26, 0.14);
+  --shadow-sm: 0 4px 12px rgba(20, 24, 26, 0.12);
+  --shadow-md: 0 8px 24px rgba(20, 24, 26, 0.16);
+  --shadow-lg: 0 18px 48px rgba(20, 24, 26, 0.18);
+  --shadow-xl: 0 24px 70px rgba(20, 24, 26, 0.2);
+  --shadow-inset: inset 0 1px 3px rgba(20, 24, 26, 0.1);
+  --shadow-ring: 0 0 0 1px rgba(20, 24, 26, 0.1);
+  --shadow-glow-warm: inset 0 0 0 1px rgba(154, 107, 18, 0.16);
+}
+
+:root[data-appearance="light"],
+:root[data-appearance="light"][data-color-theme="green-blob"] {
+  --left-pane-bg: rgba(240, 242, 241, 0.72);
+  --terminal-pane-bg: #f7f8f7;
+  --right-pane-bg: #fbfcfb;
+  --right-pane-bg-transparent: rgba(251, 252, 251, 0);
+  --right-pane-active-bg: #fafbfa;
+
+  --workspace-bg: #f4f6f5;
+  --research-workspace-bg: #f6f7f6;
+  --field-bg: #ffffff;
+  --field-bg-hover: #f7f9f8;
+  --panel-bg: #f0f2f1;
+  --popover-bg: #ffffff;
+  --content-card-bg: #ffffff;
+  --content-inset-bg: #f1f3f2;
+  --context-menu-bg: var(--popover-bg);
+  --popover-item-hover-bg: var(--pane-tab-hover-bg);
+  --chrome-header-bg: #f1f3f2;
+  --pane-hover-bg: #eaedec;
+  --pane-tab-hover-bg: var(--pane-hover-bg);
+  --research-sidebar-hover-bg: var(--pane-hover-bg);
+  --markdown-table-header-bg: color-mix(
+    in srgb,
+    var(--pane-hover-bg) 75%,
+    var(--right-pane-bg) 25%
+  );
+  --markdown-table-border: #dfe4e2;
+  --markdown-table-frame-border: #d4dad7;
+  --markdown-table-header-border: #c9d0cd;
+  --markdown-blockquote-border: #c3ccc9;
+  --transcript-code-bg: #f3f5f4;
+  --transcript-code-header-bg: #e9edeb;
+  --surface-divider: #dde2df;
+  --surface-border-strong: #cfd6d3;
+  --dialog-border: #c6cdca;
+  --chrome-control-bg: rgba(241, 243, 242, 0.9);
+  --chrome-control-bg-hover: rgba(228, 232, 230, 0.95);
+  --chrome-control-bg-disabled: rgba(241, 243, 242, 0.65);
+
+  --settings-tab-active-bg: #dfe5e2;
+  --recovered-queue-divider: #d5dbd8;
+  --research-highlight-action-bg: #e2e6e3;
+  --research-highlight-action-bg-hover: #d8ddda;
+  --research-followup-composer-bg: #e6e9e7;
+  --research-anchor-connector: #8c9692;
+  --research-drop-overlay-border: rgba(43, 134, 112, 0.82);
+  --research-drop-overlay-bg: rgba(240, 248, 246, 0.92);
+  --research-drop-overlay-glow: rgba(43, 134, 112, 0.06);
+  --research-drop-overlay-fg: #123e33;
+  --research-drop-overlay-icon: #2b8670;
+  --pane-status-active-dot: #2f9c7d;
+  --folder-picker-status-border: #b9c6c2;
+  --queued-turn-border: #c2ccc8;
+
+  --accent-color: #1f8a6f;
+  --accent-shadow: rgba(31, 138, 111, 0.3);
+  --accent-soft: rgba(31, 138, 111, 0.12);
+  --accent-subtle: rgba(31, 138, 111, 0.07);
+  --accent-active-bg: #dcefe9;
+  --accent-strong: #176e58;
+
+  --control-bg: #eef1f0;
+  --control-bg-hover: #e4e8e6;
+  --control-border: #cfd5d2;
+  --control-border-hover: #bcc4c0;
+  --control-border-hover-accent: #9fc2b6;
+  --focus-ring: #1f8a6f;
+}
+
+:root[data-appearance="light"][data-color-theme="orange-blob"] {
+  --left-pane-bg: rgba(244, 242, 239, 0.72);
+  --terminal-pane-bg: #f8f6f3;
+  --right-pane-bg: #fcfbf9;
+  --right-pane-bg-transparent: rgba(252, 251, 249, 0);
+  --right-pane-active-bg: #fbf9f7;
+
+  --workspace-bg: #f5f3f0;
+  --research-workspace-bg: var(--right-pane-bg);
+  --field-bg: #fbfaf8;
+  --field-bg-hover: #f5f2ee;
+  --panel-bg: var(--field-bg);
+  --popover-bg: var(--field-bg);
+  --content-card-bg: #ffffff;
+  --content-inset-bg: #f2efeb;
+  --context-menu-bg: #f1ede8;
+  --popover-item-hover-bg: var(--pane-tab-hover-bg);
+  --chrome-header-bg: #f4f2ef;
+  --pane-hover-bg: #ece8e3;
+  --pane-tab-hover-bg: var(--right-pane-bg);
+  --research-sidebar-hover-bg: #eeebe6;
+  --markdown-table-header-bg: color-mix(
+    in srgb,
+    var(--pane-hover-bg) 75%,
+    var(--right-pane-bg) 25%
+  );
+  --markdown-table-border: #e2ddd7;
+  --markdown-table-frame-border: #d8d2cb;
+  --markdown-table-header-border: #cbc4bc;
+  --markdown-blockquote-border: #c9c3bb;
+  --transcript-code-bg: #f4f1ed;
+  --transcript-code-header-bg: #ebe6e0;
+  --surface-divider: #e0dbd5;
+  --surface-border-strong: #d2ccc5;
+  --dialog-border: #c8c1b9;
+  --chrome-control-bg: rgba(244, 242, 239, 0.9);
+  --chrome-control-bg-hover: rgba(232, 228, 222, 0.95);
+  --chrome-control-bg-disabled: rgba(244, 242, 239, 0.65);
+
+  --settings-tab-active-bg: #e6e1da;
+  --recovered-queue-divider: #d8d2ca;
+  --research-highlight-action-bg: #e5e2dd;
+  --research-highlight-action-bg-hover: #dbd7d1;
+  --research-followup-composer-bg: #e8e5e0;
+  --research-anchor-connector: #948c82;
+  --research-drop-overlay-border: rgba(120, 110, 95, 0.72);
+  --research-drop-overlay-bg: rgba(248, 246, 243, 0.92);
+  --research-drop-overlay-glow: rgba(60, 50, 40, 0.06);
+  --research-drop-overlay-fg: #2c2823;
+  --research-drop-overlay-icon: #6e655a;
+  --pane-status-active-dot: #7d746a;
+  --folder-picker-status-border: #cdc3b7;
+  --queued-turn-border: #cdc4ba;
+
+  --accent-color: #0b7fd1;
+  --accent-shadow: rgba(11, 127, 209, 0.3);
+  --accent-soft: rgba(11, 127, 209, 0.12);
+  --accent-subtle: rgba(11, 127, 209, 0.07);
+  --accent-active-bg: #dcebf7;
+  --accent-strong: #0a68ab;
+
+  --control-bg: #efece8;
+  --control-bg-hover: #e6e2dc;
+  --control-border: #d3cdc5;
+  --control-border-hover: #c1bab0;
+  --control-border-hover-accent: #a9c6dc;
+  --focus-ring: #0b7fd1;
+}

@@ -83,6 +83,35 @@ export default tseslint.config(
   {
     files: ["packages/client/**/*.{ts,tsx}"],
     extends: [reactHooks.configs.flat.recommended, jsxA11y.flatConfigs.recommended],
+    rules: {
+      // 08 §2: every themeable value is a token consumed through `var()`, so a
+      // hex or `rgb()` written into a class name or a `style` prop is a color
+      // that stops tracking `data-appearance` / `data-color-theme`. The two
+      // sanctioned exceptions (appearance-invariant scrims, `::highlight()`
+      // pseudos) live in `styles/prose.css` and `styles/tweet.css`, which this
+      // rule does not see. Matching on the literal's text rather than on the
+      // enclosing line is the point: a color inside a multi-line `cn(…)` call
+      // is exactly what a line-based grep misses.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "JSXAttribute[name.name=/^(className|style)$/] " +
+            "Literal[value=/#[0-9a-fA-F]{3,8}\\b|(rgba?|hsla?|oklch|lab|lch)\\(/]",
+          message:
+            "No color literals in className or style (08 §2): use a token utility " +
+            "(bg-surface-*, text-fg-*, …) or a var(--token) reference.",
+        },
+        {
+          selector:
+            "JSXAttribute[name.name=/^(className|style)$/] " +
+            "TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b|(rgba?|hsla?|oklch|lab|lch)\\(/]",
+          message:
+            "No color literals in className or style (08 §2): use a token utility " +
+            "(bg-surface-*, text-fg-*, …) or a var(--token) reference.",
+        },
+      ],
+    },
   },
   ...boundaries,
   {

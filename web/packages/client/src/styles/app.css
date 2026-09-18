@@ -1,0 +1,222 @@
+@import "tailwindcss";
+@import "./fonts.css" layer(base);
+@import "./tokens.css" layer(base);
+@import "./prose.css" layer(components);
+@import "./tweet.css" layer(components);
+
+/* Tailwind v4 reads the design system out of `@theme` (08 §2, ADR-8). Every
+   value below is `var(--token)` under `@theme inline`, so a utility compiles to
+   the token reference rather than its resolved value and re-resolves the moment
+   `data-color-theme` / `data-appearance` changes on <html>. `tokens.css` stays
+   the single source of color.
+
+   Two namespaces collide and are renamed here: Tailwind's `--text-*` is a font
+   size, while the app's `--text-*` ramp is a color. The color ramp is exposed
+   as `--color-fg-*` (`text-fg-primary`) and the type scale as
+   `--text-xs|sm|base|input` pointing at `--fs-*`. */
+@theme inline {
+  /* Type scale. */
+  --text-xs: var(--fs-xs);
+  --text-sm: var(--fs-sm);
+  --text-base: var(--fs-base);
+  --text-input: var(--fs-input);
+
+  --font-ui: var(--font-ui);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+
+  /* Control heights, reachable as `h-control-md`, `min-h-control-lg`, … */
+  --spacing-control-sm: var(--control-h-sm);
+  --spacing-control-md: var(--control-h-md);
+  --spacing-control-lg: var(--control-h-lg);
+  --spacing-feed: var(--research-feed-max-width);
+
+  /* ---- Foreground ramp (the app's --text-* color tokens). ---- */
+  --color-fg-primary: var(--text-primary);
+  --color-fg-strong: var(--text-strong);
+  --color-fg-secondary: var(--text-secondary);
+  --color-fg-body-soft: var(--text-body-soft);
+  --color-fg-muted: var(--text-muted);
+  --color-fg-activity: var(--text-activity);
+  --color-fg-interactive: var(--text-interactive);
+  --color-fg-heading: var(--text-heading);
+  --color-fg-subtle: var(--text-subtle);
+  --color-fg-faint: var(--text-faint);
+  --color-fg-disabled: var(--text-disabled);
+  --color-fg-max: var(--text-max);
+  --color-fg-tertiary: var(--text-tertiary);
+  --color-fg-dim: var(--text-dim);
+  --color-fg-ghost: var(--text-ghost);
+  --color-fg-on-accent: var(--text-on-accent);
+  --color-fg-placeholder: var(--placeholder-color);
+  --color-fg-control: var(--control-fg);
+  --color-fg-control-muted: var(--control-fg-muted);
+  --color-fg-link-external: var(--link-external-fg);
+
+  /* ---- Surfaces. ---- */
+  --color-surface-workspace: var(--workspace-bg);
+  --color-surface-research: var(--research-workspace-bg);
+  --color-surface-pane: var(--right-pane-bg);
+  --color-surface-pane-active: var(--right-pane-active-bg);
+  --color-surface-sidebar: var(--left-pane-bg);
+  --color-surface-panel: var(--panel-bg);
+  --color-surface-popover: var(--popover-bg);
+  --color-surface-context-menu: var(--context-menu-bg);
+  --color-surface-popover-item-hover: var(--popover-item-hover-bg);
+  --color-surface-field: var(--field-bg);
+  --color-surface-field-hover: var(--field-bg-hover);
+  --color-surface-card: var(--content-card-bg);
+  --color-surface-inset: var(--content-inset-bg);
+  --color-surface-header: var(--chrome-header-bg);
+  --color-surface-hover: var(--pane-hover-bg);
+  --color-surface-sidebar-hover: var(--research-sidebar-hover-bg);
+  --color-surface-code: var(--transcript-code-bg);
+  --color-surface-code-header: var(--transcript-code-header-bg);
+  --color-surface-tab-active: var(--settings-tab-active-bg);
+  --color-surface-fill-faint: var(--surface-fill-faint);
+  --color-surface-fill-subtle: var(--surface-fill-subtle);
+  --color-surface-fill-hover: var(--surface-fill-hover);
+  --color-surface-fill-medium: var(--surface-fill-medium);
+  --color-surface-fill-strong: var(--surface-fill-strong);
+  --color-surface-highlight: var(--surface-highlight);
+  --color-surface-scrim: var(--scrim-bg);
+  --color-surface-lightbox-scrim: var(--lightbox-scrim-bg);
+  --color-surface-lightbox-caption: var(--lightbox-caption-bg);
+
+  /* ---- Borders. ---- */
+  --color-border-faint: var(--surface-border-faint);
+  --color-border-subtle: var(--surface-border-subtle);
+  --color-border-default: var(--surface-border-default);
+  --color-border-overlay-strong: var(--surface-border-overlay-strong);
+  --color-border-strong: var(--surface-border-strong);
+  --color-border-divider: var(--surface-divider);
+  --color-border-dialog: var(--dialog-border);
+  --color-border-control: var(--control-border);
+  --color-border-control-hover: var(--control-border-hover);
+  --color-border-control-accent: var(--control-border-hover-accent);
+  --color-border-table: var(--markdown-table-border);
+  --color-border-table-frame: var(--markdown-table-frame-border);
+  --color-border-table-header: var(--markdown-table-header-border);
+  --color-border-blockquote: var(--markdown-blockquote-border);
+
+  /* ---- Accent and controls. ---- */
+  --color-accent: var(--accent-color);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-active: var(--accent-active-bg);
+  --color-accent-shadow: var(--accent-shadow);
+  --color-control: var(--control-bg);
+  --color-control-hover: var(--control-bg-hover);
+  --color-focus-ring: var(--focus-ring);
+
+  /* ---- Status. ---- */
+  --color-status-failed: var(--status-failed-fg);
+  --color-status-failed-bg: var(--status-failed-bg);
+  --color-status-attention: var(--status-attention-fg);
+  --color-status-active: var(--status-active-fg);
+  --color-status-active-border: var(--status-active-border);
+  --color-status-warning: var(--status-warning-fg);
+  --color-status-info: var(--status-info-fg);
+  --color-status-info-bg: var(--status-info-bg);
+  --color-status-info-border: var(--status-info-border);
+  --color-status-success: var(--status-success-fg);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-success-border: var(--status-success-border);
+  --color-status-error: var(--status-error-fg);
+  --color-status-pending: var(--status-pending-fg);
+  --color-toast-success: var(--toast-success-fg);
+  --color-toast-success-border: var(--toast-success-border);
+  --color-toast-warning: var(--toast-warning-fg);
+  --color-toast-warning-border: var(--toast-warning-border);
+  --color-toast-error: var(--toast-error-fg);
+  --color-toast-error-border: var(--toast-error-border);
+
+  /* ---- Danger. ---- */
+  --color-danger: var(--danger-fg);
+  --color-danger-strong: var(--danger-fg-strong);
+  --color-danger-muted: var(--danger-fg-muted);
+  --color-danger-hover: var(--danger-fg-hover);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-bg-hover: var(--danger-bg-hover);
+  --color-danger-bg-strong: var(--danger-bg-strong);
+  --color-danger-border: var(--danger-border);
+  --color-danger-border-strong: var(--danger-border-strong);
+  --color-danger-ring: var(--danger-focus-ring);
+
+  /* ---- Passage highlights. ---- */
+  --color-highlight: var(--research-highlight-bg);
+  --color-highlight-hover: var(--research-highlight-bg-hover);
+  --color-highlight-neutral: var(--research-highlight-neutral-bg);
+  --color-highlight-action: var(--research-highlight-action-bg);
+  --color-highlight-action-hover: var(--research-highlight-action-bg-hover);
+
+  /* ---- Elevation, stacking, motion. ---- */
+  --shadow-popover: var(--popover-shadow);
+  --shadow-dialog: var(--dialog-shadow);
+  --shadow-context-menu: var(--context-menu-shadow);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+
+  --z-popover: var(--z-popover);
+  --z-select-popover: var(--z-select-popover);
+  --z-dialog: var(--z-dialog);
+  --z-toast: var(--z-toast);
+  --z-context-menu: var(--z-context-menu);
+
+  --transition-fast: var(--transition-fast);
+}
+
+/* The few rules that differ structurally rather than by token value reach for
+   these; everything else re-resolves through `var()` on its own. */
+@custom-variant light (&:where([data-appearance="light"], [data-appearance="light"] *));
+@custom-variant warm (&:where([data-color-theme="orange-blob"], [data-color-theme="orange-blob"] *));
+@custom-variant reduce-motion (&:where(.reduce-motion, .reduce-motion *));
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    /* Kill the elastic rubber-band overscroll of the whole document. */
+    overscroll-behavior: none;
+  }
+
+  body {
+    font-family: var(--font-ui);
+    font-synthesis: none;
+    line-height: 1.5;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--status-info-fg);
+  }
+
+  /* lucide-react sets width/height attributes, but as a flex item an SVG can
+     still collapse to a sliver instead of honoring that intrinsic size. */
+  .lucide {
+    flex: none;
+  }
+
+  button,
+  textarea,
+  input,
+  select {
+    font: inherit;
+    font-size: var(--fs-base);
+  }
+
+  textarea::placeholder,
+  input::placeholder {
+    color: var(--placeholder-color);
+    opacity: 1;
+  }
+}

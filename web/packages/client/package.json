@@ -10,9 +10,15 @@
     "test": "ava"
   },
   "dependencies": {
+    "@base-ui/react": "^1.8.0",
     "@session/shared": "*",
+    "@tanstack/react-query": "^5.103.1",
+    "@tanstack/react-router": "^1.170.38",
+    "lucide-react": "^1.47.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
