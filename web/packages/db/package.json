@@ -12,9 +12,21 @@
     }
   },
   "scripts": {
-    "test": "ava"
+    "test": "ava",
+    "db:check": "drizzle-kit check",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx bin/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:admin": "tsx bin/admin.ts"
   },
   "dependencies": {
-    "@session/shared": "*"
+    "@session/shared": "*",
+    "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "^0.45.2",
+    "ulid": "^3.0.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "drizzle-kit": "^0.31.10"
   }
 }

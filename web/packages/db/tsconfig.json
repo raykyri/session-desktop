@@ -6,6 +6,10 @@
     "exactOptionalPropertyTypes": true,
     "types": ["node"]
   },
-  "include": ["src", "test"],
-  "references": [{ "path": "../shared" }]
+  "include": ["src", "test", "bin", "drizzle.config.ts"],
+  "references": [
+    {
+      "path": "../shared"
+    }
+  ]
 }
