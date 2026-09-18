@@ -1,10 +1,8 @@
 This is Session, a research workspace for long-running agent investigations.
 Product copy, Rust packages, CLI commands, storage paths, configuration files,
 persisted formats, generated integrations, and internal event names use
-Session/session/SESSION_*. This branch has made hard storage, integration, Apple identity, and
-native bridge cutovers; do not add compatibility reads for legacy qmux data or
-native identifiers. The updater keypair and hosted-service identifiers remain separate
-deployment contracts; see docs/session-cutover.md.
+Session/session/SESSION_*.
+
 For commit messages, include a short description followed by a
 paragraph or bullet-point list of details about what was committed.
 Use multiple -m arguments instead of \n to break lines in commits.
