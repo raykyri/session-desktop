@@ -137,6 +137,39 @@ test.serial("a node update patches the summary counts from the cached previous n
   );
 });
 
+test.serial(
+  "a node update for a thread the reader has not opened patches from the activity cache",
+  (t) => {
+    // The shell holds `activeNodes` for the whole session (`SessionBoot`), so
+    // a node the reader has never opened still has a cached predecessor. That
+    // is what keeps the run loop's twice-a-second node updates off the
+    // sidebar-refetch path.
+    const queryClient = client();
+    const running = node({ status: "running" });
+    queryClient.setQueryData(queryKeys.trees(TREES_SCOPE), [summary()]);
+    queryClient.setQueryData(queryKeys.activeNodes(), [running]);
+    // No `queryKeys.tree("t1")`: the thread was never opened.
+
+    const completed = node({ status: "complete", completedAt: 1_700_000_100_000 });
+    applyEventBatch([event("research.node.updated", { node: completed })], queryClient);
+
+    t.false(
+      queryClient.getQueryState(queryKeys.trees(TREES_SCOPE))?.isInvalidated,
+      "the sidebar is patched, not refetched",
+    );
+    const [patched] = queryClient.getQueryData<ResearchTreeSummary[]>(
+      queryKeys.trees(TREES_SCOPE),
+    ) as ResearchTreeSummary[];
+    t.is(patched?.runningCount, 0);
+    t.is(patched?.completedCount, 1);
+    t.deepEqual(
+      queryClient.getQueryData<ResearchNode[]>(queryKeys.activeNodes()),
+      [],
+      "and the settled node leaves the activity list",
+    );
+  },
+);
+
 test.serial("a node update with no cached predecessor refetches rather than guesses", (t) => {
   const queryClient = client();
   queryClient.setQueryData(queryKeys.trees(TREES_SCOPE), [summary()]);

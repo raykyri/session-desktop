@@ -1,3 +1,6 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import test from "ava";
 import { useState } from "react";
@@ -200,6 +203,36 @@ test.serial("a menu opens and is navigable from the keyboard", async (t) => {
 
   key(document.activeElement ?? menu, "Enter");
   await waitUntil(t, () => chosen.join() === "bookmark", "Enter runs the highlighted item");
+});
+
+function clientSources(directory: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...clientSources(path));
+    else if (/\.tsx?$/.test(entry.name)) files.push(path);
+  }
+  return files;
+}
+
+test("no menu row advertises a key the menu does not bind", (t) => {
+  // A `MenuItem` sits on a Base UI menu, whose only key behaviour is
+  // typeahead: a row labelled "D" would move the highlight to "Delete"
+  // rather than delete. So a `hint` may carry a chord the shell's table
+  // resolves (`⌘,`), a value (a count, a checkmark) or a word — never a bare
+  // letter, and never a keycap element.
+  const offenders: string[] = [];
+  for (const file of clientSources(join(import.meta.dirname, "..", "src"))) {
+    const source = readFileSync(file, "utf8");
+    if (source.includes("MenuKeycap")) offenders.push(`${file}: MenuKeycap`);
+    for (const match of source.matchAll(/\bhint=(?:"([A-Za-z])"|\{"([A-Za-z])"\})/g)) {
+      offenders.push(`${file}: hint=${match[1] ?? match[2]}`);
+    }
+    for (const match of source.matchAll(/\bhint=\{<[^>]*[Kk]eycap/g)) {
+      offenders.push(`${file}: ${match[0]}`);
+    }
+  }
+  t.deepEqual(offenders, [], "every single-letter menu keycap is gone");
 });
 
 test.serial("a context menu opens on right-click", async (t) => {

@@ -213,6 +213,8 @@ test.serial("Cmd-click builds a selection and its menu acts on the whole of it",
   );
   const menu = screen.getAllByRole("menu").at(-1) as HTMLElement;
   t.truthy(within(menu).getByText("New folder with 2 items"));
+  // Archive and Delete carried "A" and "D" keycaps that nothing bound.
+  t.is(menu.querySelectorAll("kbd").length, 0, "no row advertises a key it does not bind");
   useSelectionStore.getState().clear();
   app.unmount();
 });

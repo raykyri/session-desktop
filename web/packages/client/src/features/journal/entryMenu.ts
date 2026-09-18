@@ -1,10 +1,10 @@
 // The journal card's menu, as data (ported from
 // `ResearchActivityFeed.tsx:153-185`).
 //
-// Pure, so the layout and the keycaps per entry kind are testable without
-// driving a popup: which items exist depends on the entry, and getting that
-// wrong — a Retry on a tweet still being hydrated, an "Open on X" on a plain
-// link — is the failure worth pinning.
+// Pure, so the layout per entry kind is testable without driving a popup:
+// which items exist depends on the entry, and getting that wrong — a Retry on
+// a tweet still being hydrated, an "Open on X" on a plain link — is the
+// failure worth pinning.
 
 import { safeHref } from "@session/shared";
 import type { JournalEntry } from "@session/shared";
@@ -14,8 +14,6 @@ export type JournalMenuAction = "open" | "copy" | "retry" | "delete";
 export interface JournalMenuItem {
   action: JournalMenuAction;
   label: string;
-  /** Single-letter keycap shown on the row. */
-  key: string;
   danger?: boolean;
 }
 
@@ -38,17 +36,15 @@ export function journalEntryMenuItems(entry: JournalEntry): JournalMenuItem[] {
     items.push({
       action: "open",
       label: entry.kind === "tweet" ? "Open on X" : "Open link",
-      key: "O",
     });
   }
-  items.push({ action: "copy", label: "Copy link", key: "C" });
+  items.push({ action: "copy", label: "Copy link" });
   if (entry.kind === "tweet" && entry.hydration !== "pending") {
     items.push({
       action: "retry",
       label: entry.hydration === "failed" ? "Retry tweet" : "Refresh tweet",
-      key: "R",
     });
   }
-  items.push({ action: "delete", label: "Delete", key: "D", danger: true });
+  items.push({ action: "delete", label: "Delete", danger: true });
   return items;
 }

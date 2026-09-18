@@ -14,7 +14,7 @@ import { cn } from "../../lib/cn.js";
 import { IconButton } from "../../ui/Button.js";
 import { ContextMenu } from "../../ui/ContextMenu.js";
 import { Menu, MenuSeparator } from "../../ui/Menu.js";
-import { IconMenuItem, MenuKeycap } from "../sidebar/menuRows.js";
+import { IconMenuItem } from "../sidebar/menuRows.js";
 
 import { TweetEmbed } from "./TweetEmbed.js";
 import { journalEntryMenuItems, journalEntryUrl, type JournalMenuAction } from "./entryMenu.js";
@@ -50,7 +50,6 @@ export function JournalEntryMenuItems({
           <IconMenuItem
             icon={actionIcon(item.action)}
             label={item.label}
-            hint={<MenuKeycap>{item.key}</MenuKeycap>}
             {...(item.danger ? { tone: "danger" as const } : {})}
             onClick={() => onAction(item.action)}
           />

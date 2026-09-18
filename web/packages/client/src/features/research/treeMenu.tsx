@@ -86,12 +86,12 @@ export function ResearchTreeMenuItems({
             </MenuItem>
           ) : null}
           <MenuSeparator />
-          <MenuItem disabled={running} hint="A" onClick={() => onArchive(tree.id)}>
+          <MenuItem disabled={running} onClick={() => onArchive(tree.id)}>
             Archive
           </MenuItem>
         </>
       )}
-      <MenuItem tone="danger" disabled={running} hint="D" onClick={() => onDelete(tree)}>
+      <MenuItem tone="danger" disabled={running} onClick={() => onDelete(tree)}>
         Delete
       </MenuItem>
     </>

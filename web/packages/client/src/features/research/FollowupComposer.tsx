@@ -71,8 +71,6 @@ export interface FollowupComposerProps {
   hint: string | null;
   /** A settled inline tail the reader can relaunch in place. */
   retry?: { busy: boolean; onRetry: () => void } | null;
-  /** Show the held-⌘ ⌘J badge. */
-  shortcutHintsShown: boolean;
 
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   composerRef: RefObject<HTMLDivElement | null>;
@@ -98,7 +96,6 @@ export function FollowupComposer({
   submitting,
   hint,
   retry = null,
-  shortcutHintsShown,
   textareaRef,
   composerRef,
   onSubmit,
@@ -158,14 +155,6 @@ export function FollowupComposer({
             <X size={12} aria-hidden="true" />
           </IconButton>
         </div>
-      ) : null}
-      {!docked && shortcutHintsShown ? (
-        <span
-          className="text-fg-disabled pointer-events-none absolute top-5 right-5 text-xs"
-          aria-hidden="true"
-        >
-          ⌘J
-        </span>
       ) : null}
       <textarea
         ref={textareaRef}

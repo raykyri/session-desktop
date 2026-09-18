@@ -1,11 +1,14 @@
 // The Home feed (`10-home-feed-journal-encyclopedia.md` §2, §3).
 
-import { fireEvent, screen, within } from "@testing-library/react";
+import type { RecentActivityPage } from "@session/shared";
+import type { InfiniteData } from "@tanstack/react-query";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import test from "ava";
 
+import { queryKeys } from "../src/api/queries.js";
 import { estimateRowHeight } from "../src/features/home/ActivityFeed.js";
 import { promptPreview, queryTargetExcerpt } from "../src/features/home/ResearchQueryCard.js";
-import { countNewAbove } from "../src/features/home/useActivityFeedState.js";
+import { countNewAbove, feedScrollBehavior } from "../src/features/home/useActivityFeedState.js";
 import { journalEntryMenuItems, journalEntryUrl } from "../src/features/journal/entryMenu.js";
 import { useNavigationStore } from "../src/stores/navigation.js";
 
@@ -28,6 +31,13 @@ import {
 // rendered rows depend on a viewport height, so this file gives it one.
 const realOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
 
+/** jsdom does not implement `Element.scrollTo`, so the feed's two "back to the
+ * head" controls are observed through a recorder rather than through a
+ * scroll position that never moves. */
+const scrolls: ScrollToOptions[] = [];
+// eslint-disable-next-line @typescript-eslint/unbound-method -- stashed to be reinstalled, not called.
+const realScrollTo = HTMLElement.prototype.scrollTo as unknown;
+
 test.before(() => {
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
     configurable: true,
@@ -35,13 +45,37 @@ test.before(() => {
       return this.dataset["index"] === undefined ? 800 : 120;
     },
   });
+  HTMLElement.prototype.scrollTo = ((options: ScrollToOptions) => {
+    scrolls.push(options);
+  }) as typeof HTMLElement.prototype.scrollTo;
 });
 
 test.after.always(() => {
   if (realOffsetHeight) {
     Object.defineProperty(HTMLElement.prototype, "offsetHeight", realOffsetHeight);
   }
+  HTMLElement.prototype.scrollTo = realScrollTo as typeof HTMLElement.prototype.scrollTo;
 });
+
+/** The feed's scroll container, which is also what `scrollRef` points at. */
+function feedScroller(): HTMLElement {
+  const scroller = screen.getByRole("feed").closest(".research-reading-surface");
+  if (!scroller) throw new Error("the feed has no scroll container");
+  return scroller as HTMLElement;
+}
+
+/** jsdom never gives an element a scroll offset of its own, so the reader's
+ * position is stated rather than produced. The event is dispatched on the
+ * element rather than through `fireEvent.scroll`, which only reaches React's
+ * synthetic handlers; the feed subscribes natively. */
+async function scrollFeedTo(top: number): Promise<void> {
+  const scroller = feedScroller();
+  Object.defineProperty(scroller, "scrollTop", { value: top, configurable: true });
+  await act(() => {
+    scroller.dispatchEvent(new Event("scroll"));
+    return Promise.resolve();
+  });
+}
 
 test("a row's first height guess follows what the row will contain", (t) => {
   const plain = estimateRowHeight(queryItem(researchQuery()));
@@ -75,11 +109,11 @@ test("an anchored follow-up quotes the passage it replies to, cut at a word", (t
 test("the journal menu offers what the entry can actually do", (t) => {
   const link = journalEntryMenuItems(linkEntry());
   t.deepEqual(
-    link.map((item) => [item.action, item.label, item.key]),
+    link.map((item) => [item.action, item.label]),
     [
-      ["open", "Open link", "O"],
-      ["copy", "Copy link", "C"],
-      ["delete", "Delete", "D"],
+      ["open", "Open link"],
+      ["copy", "Copy link"],
+      ["delete", "Delete"],
     ],
   );
 
@@ -107,12 +141,12 @@ test("the journal menu offers what the entry can actually do", (t) => {
     createdAt: new Date().toISOString(),
   });
   t.deepEqual(
-    failed.map((item) => [item.action, item.label, item.key]),
+    failed.map((item) => [item.action, item.label]),
     [
-      ["open", "Open on X", "O"],
-      ["copy", "Copy link", "C"],
-      ["retry", "Retry tweet", "R"],
-      ["delete", "Delete", "D"],
+      ["open", "Open on X"],
+      ["copy", "Copy link"],
+      ["retry", "Retry tweet"],
+      ["delete", "Delete"],
     ],
   );
 });
@@ -217,6 +251,9 @@ test.serial("removing a journal entry offers an undo that restores the same row"
   fireEvent.click(screen.getAllByLabelText("Entry actions")[0] as HTMLElement);
   await waitUntil(t, () => screen.queryAllByRole("menu").length > 0, "its menu opens");
   const menu = screen.getAllByRole("menu").at(-1) as HTMLElement;
+  // No single-letter keycaps: a Base UI menu binds no letter but typeahead,
+  // so "D" would move the highlight rather than delete.
+  t.is(menu.querySelectorAll("kbd").length, 0, "no row advertises a key it does not bind");
   fireEvent.click(within(menu).getByText("Delete"));
 
   await waitUntil(
@@ -325,5 +362,195 @@ test.serial("a query card renders its recap and its follow-up questions", async 
   // The child quotes the passage it was asked about, which is what tells a
   // reader it is anchored rather than a plain continuation.
   t.regex(followUps.textContent ?? "", /@a shared store of meaning/);
+  app.unmount();
+});
+
+/* -------------------------------------------------------------------------
+ * "Back to latest": the mirror of "Load older activity"
+ * ---------------------------------------------------------------------- */
+
+test("an animated jump stands down when the platform asks for less motion", (t) => {
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- stashed to be reinstalled, not called.
+  const real = window.matchMedia;
+  const stub = (matches: boolean) =>
+    ((query: string) =>
+      ({
+        matches: matches && query.includes("prefers-reduced-motion"),
+      }) as MediaQueryList) as typeof window.matchMedia;
+  try {
+    window.matchMedia = stub(true);
+    t.is(feedScrollBehavior(), "auto");
+    window.matchMedia = stub(false);
+    t.is(feedScrollBehavior(), "smooth");
+  } finally {
+    window.matchMedia = real;
+  }
+});
+
+const HEAD_CURSOR = { occurredAt: 1_700_000_000_000, sourceRank: 1, id: "n1" };
+
+/** A head page that offers an older one, and an older page behind it. */
+function pagedFeedResponses() {
+  const head = activityPage([queryItem(researchQuery())], HEAD_CURSOR);
+  const older = activityPage([
+    queryItem(
+      researchQuery({
+        nodeId: "n0",
+        prompt: "An older question?",
+        createdAt: 1_600_000_000_000,
+      }),
+    ),
+  ]);
+  return {
+    ...feedResponses(head),
+    "feed.recentActivity": (input: unknown) =>
+      (input as { before?: unknown }).before ? older : head,
+  };
+}
+
+test.serial("“Back to latest” stays away until there is something to go back from", async (t) => {
+  useNavigationStore.setState({ feedAnchorByView: {} });
+  const app = await renderApp("/bookmarks", {
+    queryClient: testQueryClient(),
+    responses: feedResponses(activityPage([queryItem(researchQuery())])),
+  });
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByText("What is collective memory?").length > 0,
+    "the feed is on page one",
+  );
+  t.is(
+    screen.queryByText("Back to latest"),
+    null,
+    "page one at the top has neither pages to drop nor distance to close",
+  );
+
+  await scrollFeedTo(900);
+  await waitUntil(
+    t,
+    () => screen.queryAllByText("Back to latest").length > 0,
+    "scrolling away from the top is enough on its own",
+  );
+
+  scrolls.length = 0;
+  fireEvent.click(screen.getByText("Back to latest"));
+  t.deepEqual(scrolls.at(-1), { top: 0, behavior: "smooth" }, "and it returns to the top");
+  app.unmount();
+});
+
+test.serial(
+  "“Back to latest” drops the older pages and returns the feed to page one",
+  async (t) => {
+    useNavigationStore.setState({ feedAnchorByView: {} });
+    const app = await renderApp("/bookmarks", {
+      queryClient: testQueryClient(),
+      responses: pagedFeedResponses(),
+    });
+
+    await waitUntil(
+      t,
+      () => screen.queryAllByText("Load older activity").length > 0,
+      "the head page offers an older one",
+    );
+    t.is(
+      screen.queryByText("Back to latest"),
+      null,
+      "with nothing loaded there is no way back yet",
+    );
+
+    fireEvent.click(screen.getByText("Load older activity"));
+    await waitUntil(
+      t,
+      () => screen.queryAllByText("An older question?").length > 0,
+      "the older page lands",
+    );
+    await waitUntil(
+      t,
+      () => screen.queryAllByText("Back to latest").length > 0,
+      "and the way back appears beside the way forward",
+    );
+
+    scrolls.length = 0;
+    fireEvent.click(screen.getByText("Back to latest"));
+    await waitUntil(
+      t,
+      () => screen.queryAllByText("An older question?").length === 0,
+      "the accumulated pages are dropped",
+    );
+    const cached = app.queryClient.getQueryData<{ pages: unknown[] }>(
+      queryKeys.activity({ workspaceId: WORKSPACE_ID, bookmarkedOnly: true }),
+    );
+    t.is(cached?.pages.length, 1, "the feed is showing page one again");
+    t.deepEqual(scrolls.at(-1), { top: 0, behavior: "smooth" }, "at the top");
+    // No refetch: the reader asked to return to what they had, not for fresher
+    // rows — the header's Refresh is the control that asks for those.
+    t.is(
+      app.trpc.calls.filter((call) => call.path === "feed.recentActivity").length,
+      2,
+      "and asking to go back is not a third request",
+    );
+    app.unmount();
+  },
+);
+
+test.serial("the new-activity counter wins while it is showing", async (t) => {
+  useNavigationStore.setState({ feedAnchorByView: {} });
+  const app = await renderApp("/bookmarks", {
+    queryClient: testQueryClient(),
+    responses: pagedFeedResponses(),
+  });
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByText("Load older activity").length > 0,
+    "the head page offers an older one",
+  );
+  fireEvent.click(screen.getByText("Load older activity"));
+  await waitUntil(
+    t,
+    () => screen.queryAllByText("Back to latest").length > 0,
+    "older pages put the way back on screen",
+  );
+  await scrollFeedTo(900);
+
+  // An arrival above the reader, the way the event bridge patches page 0.
+  app.queryClient.setQueryData<InfiniteData<RecentActivityPage>>(
+    queryKeys.activity({ workspaceId: WORKSPACE_ID, bookmarkedOnly: true }),
+    (data) =>
+      data
+        ? {
+            ...data,
+            pages: data.pages.map((page, index) =>
+              index === 0
+                ? {
+                    ...page,
+                    items: [
+                      queryItem(
+                        researchQuery({
+                          nodeId: "n2",
+                          prompt: "A brand-new question?",
+                          createdAt: 1_700_000_100_000,
+                        }),
+                      ),
+                      ...page.items,
+                    ],
+                  }
+                : page,
+            ),
+          }
+        : data,
+  );
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByText("1 new activity").length > 0,
+    "the counter announces what arrived above the reader",
+  );
+  t.is(
+    screen.queryByText("Back to latest"),
+    null,
+    "and the pinned counter is the only offer to return to the head",
+  );
   app.unmount();
 });

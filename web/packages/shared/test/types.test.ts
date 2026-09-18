@@ -1,5 +1,6 @@
 import test from "ava";
 
+import { DEFAULT_USER_SETTINGS, userSettingsSchema } from "../src/types/account.js";
 import { sessionEventSchema } from "../src/types/events.js";
 import { journalEntrySchema } from "../src/types/journal.js";
 import {
@@ -208,4 +209,17 @@ test("the event envelope has no paneId or agentId", (t) => {
   t.false("paneId" in event);
   t.false("agentId" in event);
   t.is(event.payload.seq, 4);
+});
+
+test("a stored settings blob carrying a removed key still parses", (t) => {
+  // `showShortcutHints` was dropped with the sidebar's Cmd-held badges. Rows
+  // written before that are still in `user_preferences.settings_json` and in
+  // every browser's `session.settings.v2`, and the loader reads them through
+  // this schema — so a key the shape no longer knows has to be ignored, not
+  // rejected.
+  const stored = { ...DEFAULT_USER_SETTINGS, showShortcutHints: true };
+  const parsed = userSettingsSchema.safeParse(stored);
+  t.true(parsed.success, "an unknown key does not fail the whole object");
+  t.deepEqual(parsed.data, DEFAULT_USER_SETTINGS, "and is dropped rather than carried");
+  t.false("showShortcutHints" in DEFAULT_USER_SETTINGS);
 });

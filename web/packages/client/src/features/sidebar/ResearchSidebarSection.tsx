@@ -75,7 +75,7 @@ import { DeleteTreeDialog, RenameTreeDialog, ResearchTreeMenuItems } from "../re
 
 import { AsyncConfirmDialog, NameDialog } from "./dialogs.js";
 import { useVisibilityFilter } from "./filter.js";
-import { IconMenuItem, MenuKeycap } from "./menuRows.js";
+import { IconMenuItem } from "./menuRows.js";
 import { applyFolderState, applyTreeOrder } from "./mutations.js";
 import {
   SIDEBAR_ROW,
@@ -670,7 +670,6 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
       <IconMenuItem
         icon={<Archive size={ICON} aria-hidden="true" />}
         label="Archive"
-        hint={<MenuKeycap>A</MenuKeycap>}
         onClick={() => {
           const ids = [...selectedIds];
           clearSelection();
@@ -681,7 +680,6 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
         icon={<Trash2 size={ICON} aria-hidden="true" />}
         label="Delete"
         tone="danger"
-        hint={<MenuKeycap>D</MenuKeycap>}
         onClick={() => {
           const ids = [...selectedIds];
           clearSelection();
@@ -1222,7 +1220,6 @@ function FolderMenuItems({
       <IconMenuItem
         icon={<Archive size={ICON} aria-hidden="true" />}
         label="Archive"
-        hint={<MenuKeycap>A</MenuKeycap>}
         disabled={hasRunning}
         title={hasRunning ? "Folders with active runs cannot be archived" : undefined}
         onClick={onArchive}
@@ -1231,7 +1228,6 @@ function FolderMenuItems({
         icon={<Trash2 size={ICON} aria-hidden="true" />}
         label="Delete"
         tone="danger"
-        hint={<MenuKeycap>D</MenuKeycap>}
         disabled={hasRunning}
         title={hasRunning ? "Folders with active runs cannot be deleted" : undefined}
         onClick={() => onDelete(folder)}
