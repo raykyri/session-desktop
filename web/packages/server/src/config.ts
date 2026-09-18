@@ -7,7 +7,7 @@
 // something else.
 
 import { existsSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
 import { z } from "zod";
 
@@ -311,11 +311,32 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
  * (`13-deployment-fly.md` §8). Production reads `fly.toml [env]` and Fly
  * secrets, so a stray `.env` in the image is ignored rather than trusted.
  */
+/**
+ * The nearest `.env` at or above `from`, or null. npm runs a workspace script
+ * with the cwd set to that package, so a server started through
+ * `npm run dev` sits two directories below the `.env` beside the workspace
+ * root; searching upward finds it from either place.
+ */
+export function findDotenvFile(from: string = process.cwd()): string | null {
+  let directory = resolve(from);
+  for (;;) {
+    const candidate = join(directory, ".env");
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = dirname(directory);
+    if (parent === directory) {
+      return null;
+    }
+    directory = parent;
+  }
+}
+
 export function loadDotenvForDevelopment(
-  path = resolve(process.cwd(), ".env"),
+  path: string | null = findDotenvFile(),
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  if (env["NODE_ENV"] === "production" || !existsSync(path)) {
+  if (env["NODE_ENV"] === "production" || path === null || !existsSync(path)) {
     return false;
   }
   process.loadEnvFile(path);

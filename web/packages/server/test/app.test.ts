@@ -1,10 +1,14 @@
 // The HTTP surface: health, headers, CSRF, origin validation, rate limits
 // (`03-api-and-events.md` §5, `06-auth-and-users.md` §5, §8).
 
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { auth } from "@session/db";
 import test from "ava";
 
-import { ConfigError, loadConfig, validatedOrigin } from "../src/config.js";
+import { ConfigError, findDotenvFile, loadConfig, validatedOrigin } from "../src/config.js";
 import { createLogger } from "../src/logger.js";
 import { sweepExpired } from "../src/main.js";
 import { RATE_LIMITS, RateLimiter } from "../src/middleware/rateLimit.js";
@@ -200,4 +204,20 @@ test("expired state is swept rather than kept until it is read again", (t) => {
     (harness.db.$client.prepare("SELECT count(*) AS n FROM oauth_states").get() as { n: number }).n,
     0,
   );
+});
+
+test("the workspace .env is found from a package directory", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "session-dotenv-"));
+  t.teardown(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+  // The layout `npm run dev --workspace` produces: the file sits beside the
+  // workspace root, the process starts two directories below it.
+  writeFileSync(join(root, ".env"), "SESSION_PROBE=found\n");
+  const packageDirectory = join(root, "packages", "server");
+  mkdirSync(packageDirectory, { recursive: true });
+
+  t.is(findDotenvFile(packageDirectory), join(root, ".env"));
+  t.is(findDotenvFile(root), join(root, ".env"));
+  t.is(findDotenvFile(tmpdir()), null);
 });
