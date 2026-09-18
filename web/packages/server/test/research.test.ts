@@ -291,7 +291,7 @@ test("an imported report becomes a complete document thread", async (t) => {
   t.deepEqual(harness.runs.started, []);
 });
 
-test("recap generation is deferred to Phase 4 and applying one is not", async (t) => {
+test("recap generation needs the agent loop; applying a candidate does not", async (t) => {
   const harness = createHarness(t);
   const user = harness.addUser("summarizer");
   const caller = harness.caller(user);
@@ -315,7 +315,7 @@ test("recap generation is deferred to Phase 4 and applying one is not", async (t
       expectedResponseRevision: commit.revision,
       instructions: "Summarize in one sentence.",
     }),
-    { message: /Phase 4/ },
+    { message: /not available on this server/ },
   );
   t.is(harness.runs.metadata.at(-1)?.kind, "recap");
 
@@ -333,7 +333,7 @@ test("recap generation is deferred to Phase 4 and applying one is not", async (t
   });
   t.is(node.recap?.text, "A summary.");
 
-  // The title stub reports the title the node already has.
+  // Without a metadata runner the title falls back to the one the node has.
   const title = await caller.research.generateTitle({ nodeId });
   t.is(typeof title, "string");
   t.is(harness.runs.metadata.at(-1)?.kind, "title");

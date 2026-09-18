@@ -18,7 +18,7 @@ import type { ServerDeps } from "./deps.js";
 import { EventBus } from "./events/bus.js";
 import { defaultLogger, type Logger } from "./logger.js";
 import { RateLimiter } from "./middleware/rateLimit.js";
-import { createNoopRunsService } from "./runs/service.js";
+import { createRunsService } from "./runs/service.js";
 
 /**
  * Writes `GOOGLE_APPLICATION_CREDENTIALS_JSON` to a file and points
@@ -93,13 +93,12 @@ export function main(): RunningServer {
   writeVertexCredentials(config);
 
   const db = openDatabase(config.databasePath);
-  const deps: ServerDeps = {
-    config,
-    db,
-    eventBus: new EventBus(),
-    runs: createNoopRunsService(),
-    logger,
-  };
+  const eventBus = new EventBus();
+  // The agent loop is constructed before reconciliation so the nodes the last
+  // process left behind are picked up by the claim loop as soon as they are
+  // back in the queue (`05-run-lifecycle-and-streaming.md` §7).
+  const runs = createRunsService({ config, db, eventBus, logger });
+  const deps: ServerDeps = { config, db, eventBus, runs, logger };
   reconcileRuns(deps, logger);
 
   const limiter = new RateLimiter();

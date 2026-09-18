@@ -1,0 +1,14 @@
+{
+  "scenario": "rate-limit",
+  "description": "A 429 before the first chunk: the attempt re-queues with backoff rather than failing.",
+  "steps": [
+    {
+      "error": {
+        "kind": "api",
+        "statusCode": 429,
+        "message": "rate limit exceeded",
+        "isRetryable": true
+      }
+    }
+  ]
+}

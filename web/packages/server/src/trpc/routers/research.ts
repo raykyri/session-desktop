@@ -306,20 +306,25 @@ export const researchRouter = router({
     }),
 
   /**
-   * Phase 4 replaces this with a `gemini-flash` metadata run
-   * (`04-agent-runtime.md` §9). Until then it reports the title the node
-   * already has, which is `defaultTitle(prompt)` for a node nothing renamed —
-   * the same string the client would display anyway.
+   * A `gemini-flash` metadata run, awaited (`04-agent-runtime.md` §9). A run
+   * that fails or times out is not an error the caller can act on: the node
+   * keeps the title it has, which is `defaultTitle(prompt)` for one nothing
+   * renamed — the same string the client would display anyway.
    */
   generateTitle: protectedProcedure
     .input(z.object({ nodeId: z.string() }))
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       const node = required(
         repo(() => nodes.get(ctx.db, ctx.user.id, input.nodeId)),
         `research node ${input.nodeId} was not found`,
       );
-      ctx.runs.enqueueMetadata({ kind: "title", userId: ctx.user.id, nodeId: node.id });
-      return node.title ?? defaultTitle(node.prompt);
+      const generated = await ctx.runs
+        .requestTitle(ctx.user.id, node.id)
+        .catch((error: unknown) => {
+          ctx.logger.warn({ nodeId: node.id, error }, "title generation failed");
+          return null;
+        });
+      return generated ?? node.title ?? defaultTitle(node.prompt);
     }),
 
   listActivity: protectedProcedure.query(({ ctx }) =>

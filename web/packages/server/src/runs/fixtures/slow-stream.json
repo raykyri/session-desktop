@@ -1,0 +1,31 @@
+{
+  "scenario": "slow-stream",
+  "description": "Many small deltas, paced, so delta coalescing and checkpointing are exercised.",
+  "steps": [
+    {
+      "delayMs": 20,
+      "parts": [
+        { "type": "stream-start", "warnings": [] },
+        { "type": "text-start", "id": "t0" },
+        { "type": "text-delta", "id": "t0", "delta": "Consistent " },
+        { "type": "text-delta", "id": "t0", "delta": "hashing " },
+        { "type": "text-delta", "id": "t0", "delta": "maps " },
+        { "type": "text-delta", "id": "t0", "delta": "keys " },
+        { "type": "text-delta", "id": "t0", "delta": "and " },
+        { "type": "text-delta", "id": "t0", "delta": "nodes " },
+        { "type": "text-delta", "id": "t0", "delta": "onto " },
+        { "type": "text-delta", "id": "t0", "delta": "one " },
+        { "type": "text-delta", "id": "t0", "delta": "ring." },
+        { "type": "text-end", "id": "t0" },
+        {
+          "type": "finish",
+          "finishReason": { "unified": "stop", "raw": "end_turn" },
+          "usage": {
+            "inputTokens": { "total": 400, "noCache": 400, "cacheRead": 0, "cacheWrite": 0 },
+            "outputTokens": { "total": 30, "text": 30, "reasoning": 0 }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "scenario": "success-with-tools",
+  "description": "Two tool steps and a cited answer: the shape every provider produces on a healthy run.",
+  "steps": [
+    {
+      "parts": [
+        { "type": "stream-start", "warnings": [] },
+        { "type": "response-metadata", "id": "fixture-1", "modelId": "fixture" },
+        { "type": "reasoning-start", "id": "r0" },
+        { "type": "reasoning-delta", "id": "r0", "delta": "The question needs a source." },
+        { "type": "reasoning-end", "id": "r0" },
+        { "type": "text-start", "id": "t0" },
+        { "type": "text-delta", "id": "t0", "delta": "Looking this up." },
+        { "type": "text-end", "id": "t0" },
+        {
+          "type": "tool-call",
+          "toolCallId": "call-search-1",
+          "toolName": "web_search",
+          "input": "{\"query\":\"bloom filter false positive rate\"}"
+        },
+        {
+          "type": "finish",
+          "finishReason": { "unified": "tool-calls", "raw": "tool_use" },
+          "usage": {
+            "inputTokens": { "total": 900, "noCache": 900, "cacheRead": 0, "cacheWrite": 0 },
+            "outputTokens": { "total": 40, "text": 30, "reasoning": 10 }
+          }
+        }
+      ]
+    },
+    {
+      "parts": [
+        { "type": "stream-start", "warnings": [] },
+        {
+          "type": "tool-call",
+          "toolCallId": "call-fetch-1",
+          "toolName": "web_fetch",
+          "input": "{\"url\":\"https://example.com/bloom-filters\"}"
+        },
+        {
+          "type": "finish",
+          "finishReason": { "unified": "tool-calls", "raw": "tool_use" },
+          "usage": {
+            "inputTokens": { "total": 1400, "noCache": 1400, "cacheRead": 0, "cacheWrite": 0 },
+            "outputTokens": { "total": 20, "text": 20, "reasoning": 0 }
+          }
+        }
+      ]
+    },
+    {
+      "parts": [
+        { "type": "stream-start", "warnings": [] },
+        { "type": "text-start", "id": "t1" },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "A [[Bloom filter]] is a probabilistic set-membership structure. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "It answers \"possibly present\" or \"definitely absent\", trading a tunable false-positive rate for constant space per element ([source](https://example.com/bloom-filters))."
+        },
+        { "type": "text-end", "id": "t1" },
+        {
+          "type": "finish",
+          "finishReason": { "unified": "stop", "raw": "end_turn" },
+          "usage": {
+            "inputTokens": { "total": 2100, "noCache": 2000, "cacheRead": 100, "cacheWrite": 0 },
+            "outputTokens": { "total": 120, "text": 100, "reasoning": 20 }
+          }
+        }
+      ]
+    }
+  ]
+}

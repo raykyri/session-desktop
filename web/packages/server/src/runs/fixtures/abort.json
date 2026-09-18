@@ -1,0 +1,143 @@
+{
+  "scenario": "abort",
+  "description": "A stream that keeps going until something aborts it: cancel and drain both land here.",
+  "steps": [
+    {
+      "delayMs": 10,
+      "parts": [
+        {
+          "type": "stream-start",
+          "warnings": []
+        },
+        {
+          "type": "text-start",
+          "id": "t0"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Partial text before the abort. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Still going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "And going. "
+        },
+        {
+          "type": "text-end",
+          "id": "t0"
+        },
+        {
+          "type": "finish",
+          "finishReason": {
+            "unified": "stop",
+            "raw": "end_turn"
+          },
+          "usage": {
+            "inputTokens": {
+              "total": 100,
+              "noCache": 100,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "outputTokens": {
+              "total": 80,
+              "text": 80,
+              "reasoning": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

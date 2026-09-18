@@ -269,3 +269,32 @@ export function listAttempts(
     .orderBy(asc(runAttempts.attempt))
     .all();
 }
+
+/**
+ * Raises `nodes.run_seq` to at least `toAtLeast` and returns the value it
+ * settled on.
+ *
+ * The runtime emits more run events than it writes rows: text deltas are
+ * forwarded, not persisted, and every one of them consumes a sequence number
+ * the client orders by (`docs/03-api-and-events.md` §3). The counter therefore
+ * lives in the loop's memory between writes, and this call carries it back
+ * into the row before the next write bumps it again — without which a
+ * `getNodeContent` taken after a burst of deltas would report a sequence lower
+ * than the client has already applied, and every further delta would look like
+ * a replay.
+ *
+ * Monotonic: a value at or below the stored one leaves the row alone.
+ */
+export function advanceSeq(
+  db: SessionDatabase,
+  userId: string,
+  nodeId: string,
+  toAtLeast: number,
+): number {
+  const node = requireNode(db, userId, nodeId);
+  if (node.runSeq >= toAtLeast) {
+    return node.runSeq;
+  }
+  db.update(nodes).set({ runSeq: toAtLeast }).where(eq(nodes.id, nodeId)).run();
+  return toAtLeast;
+}
