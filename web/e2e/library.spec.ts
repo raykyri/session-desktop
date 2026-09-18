@@ -40,15 +40,15 @@ test("a bookmarked thread shows in Home and Bookmarks, and archiving hides it", 
   await rows.first().click();
   const archive = page.getByRole("menuitem", { name: /^Archive/ });
   await expect(archive).toBeVisible();
-  // KNOWN DEFECT: a mouse click on a row-menu item in the sidebar does nothing
-  // — no mutation is issued and the popup stays open with its inert backdrop
-  // over the page, so every later click is swallowed too. Keyboard activation
-  // on the highlighted row works, and is what this drives until the click path
-  // is fixed. (The answer menu and the model menus do not have the problem.)
-  await archive.hover();
-  await page.keyboard.press("Enter");
+  // A plain mouse click, which is the path that used to break: the row's drag
+  // handler took pointer capture on React's replayed `pointerdown` from the
+  // portalled item and the browser then dispatched the click on `<body>`
+  // (`ResearchSidebarSection.tsx`, `isOwnRowEvent`).
+  await archive.click();
 
   await expect(rows).toHaveCount(0);
+  // The thread behind the menu is not opened by the same click.
+  await expect(page).toHaveURL(/\/bookmarks$/);
   await expect(page.locator("[data-base-ui-inert]")).toHaveCount(0);
 
   // It is hidden by the filter rather than gone: switching to archived brings
@@ -98,6 +98,23 @@ test("a wikilink in an answer opens an encyclopedia page for the term", async ({
   await expect(page.locator(".research-prose")).toContainText("probabilistic set", {
     timeout: 60_000,
   });
+});
+
+test("a half-written question survives a reload", async ({ page }) => {
+  await signInAndOpenHome(page, { login: "e2e-draft" });
+
+  const composer = page.getByRole("textbox", { name: "What would you like to investigate?" });
+  await composer.click();
+  await composer.fill("What is a rope data structure?");
+  // The mirror to `sessionStorage` is what a reload in the same tab reads back
+  // (`stores/drafts.ts`); the server copy is a debounce behind it.
+  await page.waitForTimeout(500);
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "What would you like to investigate?" }),
+  ).toHaveValue("What is a rope data structure?");
 });
 
 test("the appearance settings survive a reload", async ({ page }) => {

@@ -42,7 +42,7 @@ kill_timeout = "30s"
   SESSION_DAILY_RUNS = "10"
   SESSION_REQUIRE_INVITE = "0"
   SESSION_SEARCH_VENDOR = "parallel"
-  GOOGLE_VERTEX_PROJECT = "<project>"
+  GOOGLE_VERTEX_PROJECT = "session-dev"
   GOOGLE_VERTEX_LOCATION = "global"
 
 [[mounts]]
@@ -78,6 +78,48 @@ kill_timeout = "30s"
 Runs are HTTPS streams, so memory is dominated by the Node process, SQLite
 page cache, and document text extraction; 2 GB is comfortable. Raise the
 machine size before raising the per-provider run caps.
+
+Deploying:
+
+```sh
+fly deploy web -c web/fly.toml            # — or --remote-only, which CI uses
+```
+
+The positional `web` is the build context. Without it flyctl hands Docker the
+repository root, where `package.json` is the desktop's and the build fails on a
+missing `web/` prefix. CI runs the same command in the `production`
+environment after `check`, `test`, `e2e`, and `docker` pass
+(`12-testing-linting-ci.md` §4).
+
+First-time setup, in order:
+
+```sh
+fly apps create session-dev
+fly volumes create session_data -a session-dev -r sjc -s 20
+fly certs add session.dev -a session-dev
+fly certs add artifacts.session.dev -a session-dev   # then the DNS records fly prints
+fly secrets set -a session-dev ...                   # §4
+fly deploy web -c web/fly.toml
+```
+
+`fly volumes create` before the first deploy, because `strategy = "immediate"`
+stops the old machine before the new one claims the volume and a deploy with no
+volume to claim fails.
+
+Granting admin — which is what unlocks `claude-fable` and `/admin`
+(`06-auth-and-users.md` §3) — happens after the account's first sign-in, and
+differs by environment. Locally it is `npm run db:admin -- <github login>`. On
+the machine it is not: the runtime image carries the server bundle and
+production `node_modules` only, so neither `packages/db/bin/admin.ts` nor `tsx`
+is there to run. Use the driver that is:
+
+```sh
+fly ssh console -a session-dev -C "node -e \"
+  const db = require('better-sqlite3')('/data/session.db');
+  const r = db.prepare('update users set is_admin = 1 where login = ?').run('<github login>');
+  if (r.changes === 0) throw new Error('no account with that login');
+\""
+```
 
 ## 3. Dockerfile (`web/Dockerfile`)
 

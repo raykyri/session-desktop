@@ -78,18 +78,51 @@ restart/deployment requirements.
 
 ## Web application
 
-`web/` holds the Session web application: an npm workspaces root with
-`packages/shared`, `packages/db`, `packages/server`, and `packages/client`. It
-is developed and checked independently of the desktop app:
+`web/` holds the Session web application at `https://session.dev`: an npm
+workspaces root with `packages/shared` (domain types and pure logic),
+`packages/db` (Drizzle over SQLite), `packages/server` (Hono, tRPC, SSE, the
+agent loop), and `packages/client` (React, Vite, Tailwind). It is developed,
+tested, and deployed independently of the desktop app, and shares no build with
+it.
+
+Run it locally:
 
 ```sh
 cd web
+cp .env.example .env
 npm install
-npm run check && npm test
+npm run dev
 ```
 
+That serves the API on `http://localhost:8787` and the client on
+`http://localhost:1480`. `.env.example` documents every variable. No provider
+credentials are needed for UI work: set `SESSION_FIXTURE_PROVIDERS=1` and every
+model, and `web_fetch` with it, is answered from the recorded fixtures in
+`packages/server/src/runs/fixtures/` instead of the network. A prompt
+containing `fixture:<scenario>` picks which one.
+
+Check and test:
+
+```sh
+npm run check     # tsc -b, ESLint, Prettier, drizzle-kit check
+npm test          # AVA in every package
+npm run test:e2e  # Playwright (Chromium); builds the client and starts a server
+```
+
+Deploy (one Fly app, `session-dev`, one machine with a volume):
+
+```sh
+fly deploy web -c web/fly.toml
+```
+
+The positional `web` is the build context; without it flyctl would hand Docker
+the repository root, where `package.json` is the desktop's. CI runs the same
+command behind a manual approval environment.
+
 Plans and specifications are in [web/docs](web/docs), starting with
-[web/docs/00-plan.md](web/docs/00-plan.md).
+[web/docs/00-plan.md](web/docs/00-plan.md); the operational documents are
+[web/docs/12-testing-linting-ci.md](web/docs/12-testing-linting-ci.md) and
+[web/docs/13-deployment-fly.md](web/docs/13-deployment-fly.md).
 
 ## Keyboard shortcuts
 

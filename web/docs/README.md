@@ -10,7 +10,12 @@ This is a hard cutover. The web app does not import desktop data, does not
 run agent CLIs, and does not preserve desktop file formats, identifiers, or
 wire names except where doing so makes the port cheaper.
 
-Read them in order. `00-plan.md` is the master document.
+Read them in order. `00-plan.md` is the master document; its §8 is the
+parity checklist, walked and marked at the end of Phase 9.
+
+For running, testing, and deploying the app, start from the repository's
+[README](../../README.md#web-application), then
+`12-testing-linting-ci.md` and `13-deployment-fly.md`.
 
 | Doc | Scope |
 | --- | --- |
@@ -29,6 +34,7 @@ Read them in order. `00-plan.md` is the master document.
 | [12-testing-linting-ci.md](12-testing-linting-ci.md) | AVA, Playwright, fixture providers, ESLint, Prettier, CI |
 | [13-deployment-fly.md](13-deployment-fly.md) | Fly app, Dockerfile, volume, secrets, backups, operations |
 | [14-legacy-inventory.md](14-legacy-inventory.md) | What is dropped and every reference to the old `web/` landing site |
+| [runbooks/](runbooks) | Operator procedures; `restore.md` is the backup-restore rehearsal |
 
 Conventions:
 

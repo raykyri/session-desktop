@@ -44,5 +44,29 @@ test.serial("the token column counts what the limit counts, not thinking twice",
   );
   // `reasoningTokens` is a breakdown of `outputTokens`, so the sum is 1,500 —
   // the same number `db/repos/usage.ts:admissionCheck` spends.
-  t.is(cells[2], "1.5k");
+  t.is(cells[3], "1.5k");
+});
+
+test.serial("the model access column names the gated model only where it applies", async (t) => {
+  await renderApp("/admin", {
+    user: testUser({ isAdmin: true }),
+    responses: {
+      "admin.listUsers": [
+        adminUser({}),
+        { ...adminUser({}), id: "u3", login: "boss", isAdmin: true },
+      ],
+    },
+  });
+
+  const accessOf = async (login: string) => {
+    const row = (await screen.findByText(login, { exact: false })).closest("tr");
+    return row?.querySelectorAll("td")[1]?.textContent ?? "";
+  };
+
+  const plain = await accessOf("someone");
+  t.true(plain.includes("Gemini 3.8 Flash"), "every account has the open models");
+  t.false(plain.includes("Claude Fable 5.1"), "and a non-admin does not have the gated one");
+
+  const admin = await accessOf("boss");
+  t.true(admin.includes("Claude Fable 5.1"), "which is exactly what the admin flag buys");
 });

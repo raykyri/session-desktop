@@ -324,3 +324,54 @@ export class FixtureLanguageModel implements LanguageModelV4 {
     return Promise.resolve({ stream });
   }
 }
+
+/* -------------------------------------------------------------------------
+ * The network the fixture tools see
+ *
+ * `success-with-tools` has the model call `web_fetch`, and everything the tool
+ * does around the request — the per-run budget, the page cache, the address
+ * policy, Readability, the usage record — is worth exercising under
+ * `SESSION_FIXTURE_PROVIDERS`. Reaching the host named in the fixture is not:
+ * it makes an end-to-end run depend on a network CI may not have and on a page
+ * nobody here controls, and it was an outbound request per run. So the fixture
+ * answers the request in process. The URL the model asked for still goes
+ * through `tools/ssrf.ts` in full; only the DNS record and the response body
+ * come from here.
+ * ---------------------------------------------------------------------- */
+
+/** The page `success-with-tools` fetches. */
+export const FIXTURE_PAGE_URL = "https://example.com/bloom-filters";
+
+export const FIXTURE_PAGE_HTML =
+  "<html><head><title>Bloom filters explained</title></head><body><article>" +
+  "<p>A Bloom filter answers set membership with a tunable false-positive rate.</p>" +
+  "<p>It never reports a false negative, which is what makes it useful as a pre-filter.</p>" +
+  "</article></body></html>";
+
+export function fixturePageResponse(): Response {
+  return new Response(FIXTURE_PAGE_HTML, {
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
+}
+
+/**
+ * Every name resolves to one public address, so the guard in `tools/ssrf.ts`
+ * runs its whole policy without a DNS query leaving the machine.
+ */
+export const fixtureLookup = (): Promise<{ address: string; family: number }[]> =>
+  Promise.resolve([{ address: "93.184.216.34", family: 4 }]);
+
+/**
+ * What `RunToolContext.fetch` is under fixture providers: the fixture page for
+ * the URL the fixtures name, and a 404 for anything else — a scenario that
+ * reaches for a page nobody recorded should read as a dead link rather than
+ * silently succeed.
+ */
+export const fixturePageFetch: typeof globalThis.fetch = (input) => {
+  const url =
+    typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  if (url.startsWith(FIXTURE_PAGE_URL)) {
+    return Promise.resolve(fixturePageResponse());
+  }
+  return Promise.resolve(new Response("not found", { status: 404 }));
+};

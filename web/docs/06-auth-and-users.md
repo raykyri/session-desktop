@@ -49,9 +49,10 @@ and `invites` with `users.invites_remaining` defaulting to 0 so codes are
 distributed manually when `SESSION_REQUIRE_INVITE=1` is switched on. The
 optional `SESSION_ALLOWED_GITHUB_LOGINS` allowlist remains available.
 
-Admins are set manually: `npm run db:admin -- <github login>` flips
-`users.is_admin` (or a direct SQL update on the volume). Admin unlocks the
-`claude-fable` model (`04-agent-runtime.md` §1) and
+Admins are set manually: locally, `npm run db:admin -- <github login>` flips
+`users.is_admin`; on the deployed machine the script is not in the image, so it
+is a SQL update against the volume instead (`13-deployment-fly.md` §2). Admin
+unlocks the `claude-fable` model (`04-agent-runtime.md` §1) and
 `admin.listUsers`. The server checks `is_admin` on every gated launch; the
 client only hides UI.
 
@@ -98,8 +99,12 @@ few values in a Rust preferences file. On the web:
 
 ## 7. Account deletion
 
-- `account.delete` cancels active runs, removes the user row (FKs cascade),
-  and deletes the user's documents from the volume.
+Not implemented. There is no `account.delete` procedure: the router has no
+`account` namespace, and nothing in the client offers deletion. The shape it
+would take is unchanged — cancel the user's active runs, delete the user row
+and let the foreign keys cascade, then remove the user's documents from the
+volume — but until it exists, removing an account is an operator job against
+the database and `/data/documents/<userId>`.
 
 ## 8. Rate limits
 

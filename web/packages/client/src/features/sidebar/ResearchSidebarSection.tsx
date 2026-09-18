@@ -51,7 +51,11 @@ import {
   Trash2,
 } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from "react";
+import type {
+  PointerEvent as ReactPointerEvent,
+  MouseEvent as ReactMouseEvent,
+  SyntheticEvent as ReactSyntheticEvent,
+} from "react";
 
 import {
   useArchiveResearchTree,
@@ -83,6 +87,34 @@ import {
 /** Escape priority for the multi-selection: below the DOM search bar, which is
  * the layer a reader is most likely to be inside when both are open. */
 export const MULTI_SELECT_OVERLAY_PRIORITY = 100;
+
+/**
+ * Whether an event on a row came from the row itself rather than from a popup
+ * the row renders.
+ *
+ * A row's `⋯` menu is a React child of the row but a DOM child of Base UI's
+ * portal, and React dispatches synthetic events along the component tree rather
+ * than the DOM tree. Without this test a press on a menu item reaches the row's
+ * `onPointerDown`, which takes pointer capture on the row; the capture then
+ * retargets the release to the row, so the browser dispatches `click` on the
+ * nearest common ancestor of the item and the row — `<body>` — and the item's
+ * own handler never runs. The menu stays open over its inert backdrop and
+ * swallows every later click. The same crossing would let a menu item's click,
+ * Enter, or double click open, select, or rename the thread behind the menu.
+ *
+ * `contains` is a DOM test, which is exactly the distinction wanted: the portal
+ * is outside the row's subtree, everything the row renders inline is inside it.
+ */
+function isOwnRowEvent(event: ReactSyntheticEvent<HTMLElement>): boolean {
+  return event.currentTarget.contains(event.target instanceof Node ? event.target : null);
+}
+
+/** Whether the event landed on a control the row draws inside itself — the ⋯
+ * menu trigger, a folder's disclosure arrow. Those act for themselves; opening
+ * the row's menu is not also a request to open the row. */
+function inRowButton(event: ReactSyntheticEvent<HTMLElement>): boolean {
+  return event.target instanceof Element && event.target.closest("button") !== null;
+}
 
 /** How far a pointer travels before a press becomes a drag. */
 const DRAG_START_THRESHOLD = 4;
@@ -446,11 +478,12 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
 
   function onPointerDown(event: ReactPointerEvent<HTMLElement>, id: string, scope: DragScope) {
     if (
+      !isOwnRowEvent(event) ||
       event.button !== 0 ||
       event.shiftKey ||
       event.metaKey ||
       event.ctrlKey ||
-      (event.target instanceof Element && event.target.closest("button"))
+      inRowButton(event)
     ) {
       return;
     }
@@ -720,13 +753,26 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerCancel}
-          onClick={(event) => selectFromClick(event, tree.id, archived)}
+          onClick={(event) => {
+            if (!isOwnRowEvent(event) || inRowButton(event)) return;
+            selectFromClick(event, tree.id, archived);
+          }}
           onKeyDown={(event) => {
+            // The row and its ⋯ button are separate stops for the keyboard, so
+            // Enter on the button must open the menu and nothing else.
+            if (event.target !== event.currentTarget) return;
             if (event.key !== "Enter" && event.key !== " ") return;
             event.preventDefault();
             openTree(tree.id);
           }}
-          onDoubleClick={archived ? undefined : () => setRenamingTree(tree)}
+          onDoubleClick={
+            archived
+              ? undefined
+              : (event) => {
+                  if (!isOwnRowEvent(event) || inRowButton(event)) return;
+                  setRenamingTree(tree);
+                }
+          }
         >
           <StatusDot tree={tree} archived={archived} />
           {tree.kind === "document" ? (
@@ -842,10 +888,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerCancel}
             onClick={(event) => {
-              if (
-                suppressClickRef.current ||
-                (event.target instanceof Element && event.target.closest("button"))
-              ) {
+              if (!isOwnRowEvent(event) || suppressClickRef.current || inRowButton(event)) {
                 return;
               }
               setCollapsed(folder.id, !collapsed);

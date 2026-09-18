@@ -286,3 +286,44 @@ test.serial("a card's menu writes the star it offers, and offers no folder row",
   );
   app.unmount();
 });
+
+test.serial("a query card renders its recap and its follow-up questions", async (t) => {
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: feedResponses(
+      activityPage([
+        queryItem(
+          researchQuery({
+            recap: "A shared store of meaning, maintained by retelling.",
+            children: [
+              researchQuery({
+                nodeId: "n2",
+                parentNodeId: "n1",
+                prompt: "How does it differ from collective identity?",
+                queryTarget: "a shared store of meaning",
+                createdAt: 1_700_000_001_000,
+              }),
+            ],
+          }),
+        ),
+      ]),
+    ),
+  });
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByText(/shared store of meaning, maintained/).length > 0,
+    "the recap is the card's body once the run has settled",
+  );
+  await waitUntil(
+    t,
+    () => screen.queryAllByLabelText("Follow-up questions").length > 0,
+    "and the children hang under it",
+  );
+  const followUps = screen.getByLabelText("Follow-up questions");
+  t.regex(followUps.textContent ?? "", /How does it differ from collective identity\?/);
+  // The child quotes the passage it was asked about, which is what tells a
+  // reader it is anchored rather than a plain continuation.
+  t.regex(followUps.textContent ?? "", /@a shared store of meaning/);
+  app.unmount();
+});
