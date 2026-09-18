@@ -263,8 +263,9 @@ Users attach files to a question (`10-home-feed-journal-encyclopedia.md`
 §1). Server side (`documents.ts`):
 
 - Accepted: PDF, Markdown, plain text, CSV, JSON, DOCX (converted to text),
-  PNG/JPEG/WebP images. 20 MiB per file, 10 files per question, 200 MiB per
-  user (raise later).
+  PNG/JPEG/WebP images. 20 MiB per file, 10 files per question, 20 MiB per
+  user, so one largest-allowed file fills the quota and the next upload is
+  refused until something is deleted.
 - Storage: `/data/documents/<userId>/<sha256>` on the volume; metadata in
   `documents`; extracted text in `document_text` (per page for PDFs).
   Documents are kept indefinitely; there is no expiry job.

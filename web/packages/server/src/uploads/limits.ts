@@ -2,8 +2,11 @@
 
 export const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 export const MAX_DOCUMENTS_PER_QUESTION = 10;
-/** Raised later; documents are kept indefinitely, so this is the only bound. */
-export const MAX_DOCUMENT_BYTES_PER_USER = 200 * 1024 * 1024;
+/** Documents are kept indefinitely, so this is the only bound on what one
+ * account can put on the volume. It equals `MAX_DOCUMENT_BYTES`, so a single
+ * largest-allowed file fills the quota and the next upload is refused until
+ * something is deleted. */
+export const MAX_DOCUMENT_BYTES_PER_USER = 20 * 1024 * 1024;
 
 export type ExtractionKind = "text" | "pdf" | "docx" | "image";
 
