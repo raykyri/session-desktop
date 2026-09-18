@@ -95,7 +95,7 @@ test("t.co link entities expand into labeled link runs", (t) => {
   t.true(quoted?.runs.every((run) => !run.text.includes("https://t.co")));
 });
 
-test("a link card is lifted out of the text it stands for", (t) => {
+test("extracts link card data and removes trailing link url from body text", (t) => {
   const tweet = snapshot("1628832338187636740");
   const card = tweet.card;
   t.truthy(card);

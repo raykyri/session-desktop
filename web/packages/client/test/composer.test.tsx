@@ -41,7 +41,7 @@ function model(overrides: Partial<ModelInfo> = {}): ModelInfo {
   };
 }
 
-test("a prompt that is one web URL is a link, and anything else is a question", (t) => {
+test("classifies single URLs as web links and all other inputs as research prompts", (t) => {
   t.is(bareUrl("https://example.com/a"), "https://example.com/a");
   t.is(bareUrl("  https://example.com/a  "), "https://example.com/a");
   t.is(bareUrl("https://example.com/a what is this"), null);
@@ -62,7 +62,7 @@ test("the model list hides admin-only models from everyone else", (t) => {
   );
 });
 
-test("the model list falls back to the registry when the deployment says nothing", (t) => {
+test("falls back to default model registry when server runtime config is empty", (t) => {
   t.true(composerModels(undefined, false).length > 0);
   t.true(composerModels([], false).every((entry) => entry.available));
 });
@@ -71,18 +71,22 @@ test("Tab steps to the next launchable model and wraps", (t) => {
   const models = [model({ id: "a" }), model({ id: "b", available: false }), model({ id: "c" })];
   t.is(nextComposerModel(models, "a"), "c", "an unavailable model is stepped over");
   t.is(nextComposerModel(models, "c"), "a", "and the list wraps");
-  t.is(nextComposerModel([], "a"), "a", "with nothing to step to, nothing moves");
+  t.is(
+    nextComposerModel([], "a"),
+    "a",
+    "model selection remains unchanged when no models are available",
+  );
 });
 
-test("a question over the ceiling is refused in the words the import uses", (t) => {
+test("prompts exceeding word or byte limits return standardized validation errors", (t) => {
   t.is(oversizeRefusal("a short question", "question"), null);
   t.is(
     oversizeRefusal(`${"word ".repeat(10_001)}`, "question"),
-    "That question is 10,001 words; the limit is 10,000.",
+    "The question is 10,001 words, which exceeds the 10,000-word limit.",
   );
   t.is(
     oversizeRefusal("x", "report", 11 * 1024 * 1024),
-    "That report is larger than 10 MiB.",
+    "The report exceeds the 10 MiB size limit.",
     "the byte ceiling is checked against the size the caller already knows",
   );
   // Same numbers on both surfaces: the import dialog documents them as "the
@@ -91,7 +95,7 @@ test("a question over the ceiling is refused in the words the import uses", (t) 
   t.is(MAX_PROMPT_BYTES, 10 * 1024 * 1024);
 });
 
-test("attachment sizes read in the unit that fits", (t) => {
+test("attachment file sizes are formatted in appropriate binary units", (t) => {
   t.is(formatByteSize(512), "512 B");
   t.is(formatByteSize(2048), "2 KB");
   t.is(formatByteSize(5 * 1024 * 1024), "5.0 MB");
@@ -109,7 +113,7 @@ const homeResponses = {
 
 const PROMPT_LABEL = "What would you like to investigate?";
 
-test.serial("the send control is off until there is something to send", async (t) => {
+test.serial("disables the submit button when the composer is empty", async (t) => {
   useDraftsStore.setState({ byKey: {} });
   const app = await renderApp("/", { responses: homeResponses });
   await waitUntil(

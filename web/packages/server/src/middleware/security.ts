@@ -47,9 +47,8 @@ export function securityHeaders(config: Config): MiddlewareHandler<AppEnv> {
     }
     c.res.headers.set("Referrer-Policy", "no-referrer");
     c.res.headers.set("X-Content-Type-Options", "nosniff");
-    // The preview panel frames the artifact origin, so that host must stay
-    // framable; its own response allows exactly one ancestor through
-    // `frame-ancestors`. The app itself is framed by nothing.
+    // Artifact host permits framing solely by the application origin via CSP frame-ancestors.
+    // The main application disallows all framing via X-Frame-Options: DENY.
     if (c.req.header("host") !== config.artifactHost) {
       c.res.headers.set("X-Frame-Options", "DENY");
     }

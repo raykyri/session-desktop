@@ -12,8 +12,8 @@ logging:
   level: info
   type: json
 
-# A full snapshot every 6 hours, 30 days of history (`13` §6). Retention covers
-# snapshots and the LTX files that hang off them, so it is the restore window.
+# A full snapshot every 6 hours with 30 days of history. Retention defines the
+# recovery window for snapshots and corresponding transaction logs (`13` §6).
 snapshot:
   interval: 6h
   retention: 720h

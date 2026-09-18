@@ -1,11 +1,8 @@
 // The ⌘K palette's contents (`07-client-architecture.md` §5, ported from
 // `App.tsx:8098`).
 //
-// Two sections: every thread in the scoped workspace, and the handful of
-// actions that are not a thread. The list is built only while the palette is
-// open — a list rebuilt on every render of a closed dialog is work nobody sees
-// — which is why this is a plain function the shell calls behind that flag
-// rather than a hook that runs regardless.
+// The list contains workspace threads and global actions. It is built only
+// while the palette is open to avoid unnecessary recalculation.
 
 import type { ResearchTreeSummary } from "@session/shared";
 
@@ -18,8 +15,7 @@ export interface PaletteActions {
   openSettings: () => void;
 }
 
-/** A thread's hint is what is happening in it, not what it is: a count of
- * admitted runs, or nothing. */
+/** The thread hint shows the number of active runs in progress, or nothing if idle. */
 export function runningHint(tree: ResearchTreeSummary): string | undefined {
   return tree.runningCount > 0 ? `${tree.runningCount} running` : undefined;
 }

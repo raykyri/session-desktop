@@ -5,11 +5,7 @@
 // which is the deployment's arrangement rather than Vite's. Building the
 // client is part of the server command so `npm run test:e2e` is a single step.
 //
-// Chromium carries the visual baselines. WebKit runs the same behavioral specs
-// but takes no screenshots: the two engines disagree about font rasterization
-// and scrollbar metrics, and a second set of baselines would be a second set of
-// files to regenerate for every design change without catching anything the
-// first does not.
+// Visual regression screenshots run on Chromium only to avoid baseline churn from cross-engine font rasterization differences.
 
 import { defineConfig, devices } from "@playwright/test";
 
@@ -27,9 +23,7 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: CI,
   retries: CI ? 1 : 0,
-  // One worker: the specs share one server, one account and one workspace, and
-  // the run queue is per user (`SESSION_RUNS_PER_USER`), so parallel workers
-  // would queue behind each other and time out rather than go faster.
+  // Concurrency is restricted to a single worker because shared test user accounts and queue admission limits would cause resource contention and timeouts.
   workers: 1,
   timeout: 90_000,
   expect: { timeout: 15_000 },
@@ -66,7 +60,7 @@ export default defineConfig({
     url: `${APP_ORIGIN}/healthz`,
     reuseExistingServer: !CI,
     timeout: 180_000,
-    // The server logs one line per request; piping it would bury the reporter.
+    // Request logging is disabled in e2e test mode to avoid obscuring test runner output.
     stdout: "ignore",
     stderr: "pipe",
     env: {

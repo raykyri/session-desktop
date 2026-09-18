@@ -20,8 +20,7 @@ const REPORT = [
 test("an attached document opens in the preview panel and reloads in place", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-artifact" });
 
-  // The file input is hidden and clicked by the paperclip; a test sets it
-  // directly rather than driving the OS file chooser.
+  // Set input files programmatically on the hidden file input element.
   await page.locator('form[aria-label="New research"] input[type="file"]').setInputFiles({
     name: "ring-buffers.md",
     mimeType: "text/markdown",
@@ -47,13 +46,12 @@ test("an attached document opens in the preview panel and reloads in place", asy
   expect(src ?? "").toContain(`${ARTIFACT_ORIGIN}/a/`);
   expect(await frame.getAttribute("sandbox")).toBe("allow-scripts allow-same-origin");
 
-  // The Markdown is rendered server-side on the artifact origin and framed
-  // here, which is the whole point of the second hostname.
+  // Artifact markdown is rendered on the dedicated artifact origin and embedded in an iframe for cross-origin security isolation.
   const preview = page.frameLocator('[data-testid="artifact-frame"]');
   await expect(preview.getByRole("heading", { name: "Ring buffers" })).toBeVisible();
   await expect(preview.getByRole("heading", { name: "When it is wrong" })).toBeVisible();
 
-  // "Open in new tab" survives the move into the panel.
+  // Verify the 'Open in new tab' button remains functional inside the artifact panel.
   const openInTab = panel.getByRole("link", { name: "Open in new tab" });
   await expect(openInTab).toHaveAttribute("href", src ?? "");
   await expect(openInTab).toHaveAttribute("rel", "noopener noreferrer");
@@ -65,13 +63,13 @@ test("an attached document opens in the preview panel and reloads in place", asy
       .getByRole("heading", { name: "Ring buffers" }),
   ).toBeVisible();
 
-  // Shift-Cmd-E closes it and brings it back with the same document.
+  // Shift-Cmd-E toggles the panel closed and open while preserving the active document.
   await page.keyboard.press("Meta+Shift+E");
   await expect(panel).toBeHidden();
   await page.keyboard.press("Meta+Shift+E");
   await expect(page.getByTestId("artifact-panel")).toBeVisible();
 
-  // Escape is the panel's too.
+  // Verify the Escape key closes the artifact panel.
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("artifact-panel")).toBeHidden();
 });

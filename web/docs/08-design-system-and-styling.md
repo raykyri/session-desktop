@@ -146,7 +146,7 @@ Port of `TranscriptMarkdown.tsx`, `DiagramBlock.tsx`, `TranscriptActivity.tsx`:
   remarkTranscriptMathTweaks]` + `[rehypeMathjax]` lazy-loaded and swapped in
   via `useSyncExternalStore` as today (`TranscriptMarkdown.tsx:207`, `:871`).
   The two plugin lists are unified into one module in `shared/markdown`
-  (the desktop kept two, which had to be kept in step by hand).
+  (unlike the desktop codebase, which required manually synchronizing two separate plugin lists).
 - `normalizeLatexMathDelimiters`, `escapeWikilinkTablePipes` on source.
 - `MarkdownLink` reads `WikilinkActionsContext` for resolve/activate.
 - Code blocks → `DiagramBlock` for mermaid/dot/graphviz, lazy, DOMPurify SVG
@@ -154,7 +154,7 @@ Port of `TranscriptMarkdown.tsx`, `DiagramBlock.tsx`, `TranscriptActivity.tsx`:
 - `BlockedMarkdownImage`; the pasted-image markers a desktop transcript can
   carry are collapsed out of the source by `shared/markdown/imageMarkers`
   before parsing, because the files they name do not exist on the web.
-  Attached documents are the web's image path (`04-agent-runtime.md` §8).
+  In the web application, attached document uploads replace local file paths for including images (`04-agent-runtime.md` §8).
 - `rehypeTranscriptArtifacts` keeps inline-code file links producing
   artifact buttons; the Codex inline-visualization directives and content
   references are dropped with their native backend.
@@ -192,9 +192,9 @@ intents:
   element (`focus-visible:ring-2 ring-focus-ring`).
 - `aria-current="page"` on sidebar rows, `role="listbox"` semantics from Base
   UI, labelled icon buttons.
-- Page scrolling vertical only; tables and code own horizontal scroll.
+- Page layout is restricted to vertical scrolling, while tables and code blocks manage their own horizontal overflow.
 - Narrow layout (< 900 px): sidebar becomes a drawer (Base UI `Dialog` with
   a side transition); the research document's rail cards stack below the
   answer (the desktop's breakpoint behavior in `research.css`).
-- `prefers-reduced-motion` and the explicit setting both zero transitions
-  except progress indicators.
+- Both `prefers-reduced-motion` and the explicit setting disable transitions
+  except for progress indicators.

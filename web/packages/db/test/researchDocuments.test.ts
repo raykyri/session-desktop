@@ -101,7 +101,7 @@ test("each of the four guards refuses with its own message", (t) => {
         expectedResponseRevision: document.revision,
         expectedHighlightIds: [highlight.id],
       }),
-    { message: /title changed while you were editing/ },
+    { message: /Document title conflict/ },
   );
   t.throws(
     () =>
@@ -112,7 +112,7 @@ test("each of the four guards refuses with its own message", (t) => {
         expectedResponseRevision: "0".repeat(64),
         expectedHighlightIds: [highlight.id],
       }),
-    { message: /document changed while you were editing/ },
+    { message: /Document content conflict/ },
   );
   t.throws(
     () =>
@@ -123,7 +123,7 @@ test("each of the four guards refuses with its own message", (t) => {
         expectedResponseRevision: document.revision,
         expectedHighlightIds: [],
       }),
-    { message: /highlights changed while you were editing/ },
+    { message: /Highlight conflict/ },
   );
 
   trees.archive(fixture.db, fixture.userId, document.treeId);
@@ -136,7 +136,7 @@ test("each of the four guards refuses with its own message", (t) => {
         expectedResponseRevision: document.revision,
         expectedHighlightIds: [highlight.id],
       }),
-    { message: /restore archived research/ },
+    { message: /Cannot edit document in archived research/ },
   );
 });
 
@@ -156,7 +156,7 @@ test("only a root document node is editable", (t) => {
         expectedTitle: detail.tree.title,
         expectedResponseRevision: "0".repeat(64),
       }),
-    { message: /only root research documents can be edited/ },
+    { message: /Cannot edit non-root node: only root research documents can be edited./ },
   );
 });
 
@@ -171,7 +171,7 @@ test("the document limits are enforced before anything is read", (t) => {
         expectedTitle: "Quarterly report",
         expectedResponseRevision: document.revision,
       }),
-    { message: /limited to 10000 words/ },
+    { message: /exceeds maximum limit of 10000 words/ },
   );
 });
 

@@ -10,8 +10,7 @@
 // list queries thirty times a second), everything else is a targeted
 // `setQueryData` through the reducers in `@session/shared`, and anything the
 // parser calls `malformed` or `unsupported` becomes a scoped invalidation —
-// the recovery path exists precisely so a new server event degrades to a
-// refetch instead of to stale state nobody notices.
+// Unrecognized or malformed server events trigger cache invalidation and refetching to prevent silent stale state.
 
 import type {
   EncyclopediaPage,
@@ -486,8 +485,8 @@ export function applyEventBatch(events: readonly SessionEvent[], client: QueryCl
       }
       case "malformed":
       case "unsupported":
-        // The parser could not vouch for it, so nothing is patched from it;
-        // the scope it belongs to refetches instead (07 §4.2).
+        // Discard events that fail parsing and refetch the affected scope
+        // instead (`07` §4.2).
         invalidate(client, ...scopeFor(parsed.type));
         break;
       case "notResearch":
@@ -574,9 +573,7 @@ export interface EventBridgeOptions {
  *
  * `TRPCClientError` carries the formatter's `data.code`; the raw shape is read
  * too, because an error that crossed the SSE framing keeps `shape` and not
- * always `data`. Nothing else is treated as a sign-out: a dropped connection
- * is the ordinary case, and reloading the app on one would turn a subway
- * tunnel into a sign-in page.
+ * always `data`. Only explicit unauthorized status codes trigger sign-out; transient connection drops attempt reconnection without clearing the user session.
  */
 export function isUnauthorizedError(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
@@ -587,10 +584,7 @@ export function isUnauthorizedError(error: unknown): boolean {
   return candidate.data?.code === "UNAUTHORIZED" || candidate.shape?.data?.code === "UNAUTHORIZED";
 }
 
-/** The default `onUnauthorized`: a real navigation, not a router push. The
- * session is gone, so every cache in this document is worthless and the
- * cheapest way to be sure of that is to load the page again
- * (`06-auth-and-users.md` §2). The path being left is handed to `/login` the
+/** The default `onUnauthorized`: a real navigation, not a router push. When the session expires, performing a full page redirect to /login ensures all memory and query caches are cleanly reinitialized.). The path being left is handed to `/login` the
  * way the route guard hands it over. */
 function redirectToLogin(): void {
   const here = `${window.location.pathname}${window.location.search}`;
@@ -643,8 +637,7 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
   const publisher = (nodeIds: string[]): void => {
     if (connectionId === null) return;
     void publish(connectionId, nodeIds).catch(() => {
-      // A connection the server has already forgotten; the next subscribe
-      // publishes the set again.
+      // If the connection has terminated on the server, interest subscriptions will be re-sent on reconnection.
     });
   };
   publishInterest = publisher;
@@ -720,8 +713,8 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
     onError: (error) => {
       if (closed) return;
       useConnectionStore.getState().setStatus("connecting");
-      // The link would otherwise reconnect against a session that no longer
-      // exists, forever, while the views wait for deltas that cannot come.
+      // Stop reconnecting after session expiry to avoid a loop while the user
+      // is signed out.
       if (isUnauthorizedError(error)) signOut();
       else verifySession();
     },
@@ -744,9 +737,7 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
       if (flushTimer !== null) clearTimeout(flushTimer);
       flushTimer = null;
       queue = [];
-      // Only if this bridge is still the one publishing: a remount installs
-      // its successor before React runs the predecessor's cleanup in some
-      // orders, and clearing it then would leave the successor mute.
+      // Avoid clearing publish callbacks if a newly mounted bridge instance has already registered its own publisher.
       if (publishInterest === publisher) publishInterest = null;
       subscription.unsubscribe();
       useConnectionStore.getState().setStatus("closed");

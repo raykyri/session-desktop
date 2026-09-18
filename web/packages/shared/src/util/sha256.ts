@@ -1,10 +1,7 @@
 // SHA-256 for `shared`, which must run unchanged in the server process and in
 // the browser.
 //
-// The choice: WebCrypto (`globalThis.crypto.subtle`) rather than
-// `node:crypto`. It is a standard global in Node 22 and in every browser the
-// client targets, so no bundler shim, conditional export, or `node:` import is
-// needed and `shared` keeps its "no Node-only APIs" rule. The cost is that
+// Implemented using standard WebCrypto (`globalThis.crypto.subtle`) to support both browser and server runtime environments without Node-specific imports. The cost is that
 // digesting is asynchronous; every caller in `shared` is therefore async too.
 
 const HEX = "0123456789abcdef";

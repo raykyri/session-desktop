@@ -13,7 +13,9 @@ import {
   waitForAnswer,
 } from "./helpers.js";
 
-test("a research run streams, cites its sources, and survives a reload", async ({ page }) => {
+test("streams run output, renders source citations, and restores state after reload", async ({
+  page,
+}) => {
   await signInAndOpenHome(page, { login: "e2e-stream" });
   await startResearch(page, "How does a bloom filter bound its false positive rate?");
 
@@ -23,19 +25,18 @@ test("a research run streams, cites its sources, and survives a reload", async (
   await expect(page.getByRole("region", { name: "Sources" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Sources" })).toBeVisible();
 
-  // The durable read after a reload is the same text the stream painted.
+  // Persisted text loaded after reload matches streamed output.
   const streamed = (await responseRoot(page).textContent()) ?? "";
   await page.reload();
   await expect(responseRoot(page)).toHaveText(streamed);
 });
 
-test("a reload mid-stream resumes the same answer, and a second tab watches it", async ({
+test("resumes in-flight answer streaming after reload and synchronizes with concurrent tabs", async ({
   page,
   context,
 }) => {
   await signInAndOpenHome(page, { login: "e2e-resume" });
-  // `fixture:paced-answer` paces the deltas over several seconds, which is what
-  // makes "mid-stream" a state a browser can be in.
+  // `fixture:paced-answer` introduces intentional delays between deltas to simulate in-flight streaming.
   const treeId = await startResearch(page, "fixture:paced-answer consistent hashing on a ring");
 
   const answer = responseRoot(page);
@@ -62,7 +63,9 @@ test("a reload mid-stream resumes the same answer, and a second tab watches it",
   await second.close();
 });
 
-test("a highlight anchors an ask, and the follow-up runs on another model", async ({ page }) => {
+test("attaches highlight anchor to follow-up prompt and executes on selected model", async ({
+  page,
+}) => {
   await signInAndOpenHome(page, { login: "e2e-highlight" });
   await startResearch(page, "What is a bloom filter?");
   await waitForAnswer(page);
@@ -123,8 +126,7 @@ test("a highlight anchors an ask, and the follow-up runs on another model", asyn
 
 test("the recap dialog generates a candidate and applies it", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-recap" });
-  // `long-answer` is past `MIN_RECAP_CHARS`, which is what makes the run
-  // schedule a summary at all (`shared/src/research/recap.ts`).
+  // Response length exceeds `MIN_RECAP_CHARS`, triggering automated summary generation.
   await startResearch(page, "fixture:long-answer explain skip lists");
   await waitForAnswer(page);
   // "Generate summary" appears only once there is a summary to regenerate: the
@@ -139,7 +141,7 @@ test("the recap dialog generates a candidate and applies it", async ({ page }) =
 
   const dialog = page.getByRole("dialog", { name: "Generate summary" });
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", { name: "Generate candidate" }).click();
+  await dialog.getByRole("button", { name: "Generate summary" }).click();
 
   const apply = dialog.getByRole("button", { name: "Use this summary" });
   await expect(apply).toBeVisible({ timeout: 60_000 });
@@ -151,7 +153,7 @@ test("the recap dialog generates a candidate and applies it", async ({ page }) =
   );
 });
 
-test("signing in is what the app requires before anything else", async ({ page }) => {
+test("requires authentication before accessing application routes", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/login/);
   await signIn(page, { login: "e2e-guard" });

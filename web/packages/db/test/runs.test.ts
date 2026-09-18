@@ -100,7 +100,7 @@ test("the attempt record opens and closes", (t) => {
   t.not(attempt?.endedAt, null);
 });
 
-test("the snapshot commit settles the node and clears the live turns", (t) => {
+test("final snapshot commit marks node status as terminal and removes live turns", (t) => {
   const fixture = createFixture(t);
   const nodeId = startedRoot(fixture);
   runs.commitTurn(fixture.db, fixture.userId, {
@@ -145,11 +145,11 @@ test("a snapshot without assistant text is refused", (t) => {
         ],
         outcome: { status: "complete" },
       }),
-    { message: /must contain assistant text/ },
+    { message: /must contain assistant output text/ },
   );
 });
 
-test("a settled node does not commit a second snapshot", (t) => {
+test("prevents committing duplicate snapshots for nodes in a terminal state", (t) => {
   const fixture = createFixture(t);
   const nodeId = startedRoot(fixture);
   snapshots.commit(fixture.db, fixture.userId, {
@@ -176,7 +176,7 @@ test("messages are appended only for a completed node", (t) => {
       messages.appendMessages(fixture.db, fixture.userId, nodeId, [
         { message: { role: "assistant" } },
       ]),
-    { message: /only a completed run/ },
+    { message: /only completed runs/ },
   );
   snapshots.commit(fixture.db, fixture.userId, {
     nodeId,
@@ -275,7 +275,7 @@ test("a checkpoint replaces the previous one rather than accumulating", (t) => {
   t.is(runs.liveWindow(fixture.db, fixture.userId, nodeId).inFlightText, "second draft");
 });
 
-test("a committed turn does not disturb an open checkpoint", (t) => {
+test("committing a turn preserves the active in-flight checkpoint", (t) => {
   const fixture = createFixture(t);
   const nodeId = startedRoot(fixture);
   runs.checkpointInFlight(fixture.db, fixture.userId, {

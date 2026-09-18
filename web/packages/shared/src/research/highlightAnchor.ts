@@ -59,27 +59,27 @@ export function validateHighlightAnchor(anchor: ResearchHighlightAnchor): void {
     throw new Error("unsupported research highlight anchor");
   }
   if (anchor.start >= anchor.end || anchor.exact.trim() === "") {
-    throw new Error("research highlight selection cannot be empty");
+    throw new Error("Invalid highlight anchor: selection cannot be empty.");
   }
   // `exact.length` is a UTF-16 code-unit count, the same unit as the offsets.
   if (
     anchor.end > MAX_RESPONSE_SNAPSHOT_BYTES ||
     anchor.end - anchor.start !== anchor.exact.length
   ) {
-    throw new Error("research highlight has invalid selection offsets");
+    throw new Error("Invalid highlight anchor: selection offsets do not match text length.");
   }
   if (
     utf8ByteLength(anchor.exact) > MAX_HIGHLIGHT_EXACT_BYTES ||
     utf8ByteLength(anchor.prefix) > MAX_HIGHLIGHT_CONTEXT_BYTES ||
     utf8ByteLength(anchor.suffix) > MAX_HIGHLIGHT_CONTEXT_BYTES
   ) {
-    throw new Error("research highlight selection is too large");
+    throw new Error("Highlight selection exceeds maximum allowed byte limit.");
   }
   // The desktop accepted either case here because it only ever compared the
   // revision against one it had written; the web takes anchors from clients,
   // so the check is the exact form `responseRevision` emits.
   if (!isResponseRevision(anchor.responseRevision)) {
-    throw new Error("research highlight has an invalid response revision");
+    throw new Error("Invalid highlight anchor: response revision format is invalid.");
   }
 }
 
@@ -114,19 +114,19 @@ export function highlightCollectionStorageBytes(highlights: readonly ResearchHig
 export function validateHighlightCollection(highlights: readonly ResearchHighlight[]): void {
   if (highlights.length > MAX_RESEARCH_HIGHLIGHTS_PER_NODE) {
     throw new Error(
-      `a research answer can have at most ${MAX_RESEARCH_HIGHLIGHTS_PER_NODE} highlights`,
+      `Maximum highlight limit reached: at most ${MAX_RESEARCH_HIGHLIGHTS_PER_NODE} highlights allowed per answer.`,
     );
   }
   const ids = new Set<string>();
   for (const highlight of highlights) {
     if (highlight.id === "" || ids.has(highlight.id)) {
-      throw new Error("research highlights must have unique non-empty ids");
+      throw new Error("Highlight validation failed: IDs must be unique and non-empty.");
     }
     ids.add(highlight.id);
     validateHighlightAnchor(highlight.anchor);
   }
   if (highlightCollectionStorageBytes(highlights) > MAX_RESEARCH_HIGHLIGHT_BYTES_PER_NODE) {
-    throw new Error("a research answer contains too much highlight data");
+    throw new Error("Highlight byte size exceeds maximum allowed per answer.");
   }
 }
 
@@ -138,6 +138,6 @@ export function validateHighlightCollection(highlights: readonly ResearchHighlig
  */
 export function validateHighlightBudget(existingBytes: number, added: ResearchHighlight): void {
   if (existingBytes + highlightStorageBytes(added) > MAX_RESEARCH_HIGHLIGHT_BYTES_TOTAL) {
-    throw new Error("your account contains too much saved research highlight data");
+    throw new Error("Total account highlight storage limit exceeded.");
   }
 }

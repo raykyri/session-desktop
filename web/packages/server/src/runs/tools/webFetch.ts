@@ -205,7 +205,7 @@ export async function fetchReadablePage(
   const { response, url } = await fetchFollowingRedirects(ctx, start, timeout);
   if (!response.ok) {
     await response.body?.cancel();
-    throw new Error(`the server answered ${response.status}`);
+    throw new Error(`Remote server returned HTTP ${response.status}`);
   }
   const contentType = (response.headers.get("content-type") ?? "").split(";")[0]?.trim() ?? "";
   const bytes = await readCapped(response);

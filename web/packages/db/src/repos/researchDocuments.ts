@@ -2,9 +2,7 @@
 // authored as markdown rather than asked for
 // (`docs/02-domain-model-and-database.md` §5.6).
 //
-// `repos/documents.ts` is the attached-file table; this module is the §5.6
-// invariant, which the layout in §1 calls `documents.ts` as well. Two
-// different things share the word, so they get two files.
+// Manages root markdown research documents, distinct from attached reference documents in `repos/documents.ts`.
 
 import type { Turn, UpdateResearchDocumentResult } from "@session/shared";
 import {
@@ -50,7 +48,9 @@ export function markdownFromTurns(turns: readonly Turn[]): string | null {
 
 export function validateDocumentMarkdown(markdown: string): void {
   if (Buffer.byteLength(markdown, "utf8") > RESEARCH_DOCUMENT_BYTE_LIMIT) {
-    throw new Error(`Documents are limited to ${RESEARCH_DOCUMENT_BYTE_LIMIT} bytes for now`);
+    throw new Error(
+      `Document exceeds the maximum allowed size of ${RESEARCH_DOCUMENT_BYTE_LIMIT} bytes.`,
+    );
   }
   // Throws `ResearchDocumentWordLimitExceeded` past the limit, without
   // scanning the rest of the document.
@@ -99,14 +99,16 @@ export function update(
       throw new Error(`research tree ${node.treeId} was not found`);
     }
     if (node.kind !== "document" || node.parentNodeId !== null || tree.rootNodeId !== node.id) {
-      throw new Error("only root research documents can be edited");
+      throw new Error("Cannot edit non-root node: only root research documents can be edited.");
     }
     if (tree.archivedAt !== null) {
-      throw new Error("restore archived research before editing its document");
+      throw new Error(
+        "Cannot edit document in archived research: restore the research thread first.",
+      );
     }
     if (tree.title !== input.expectedTitle) {
       throw new Error(
-        "the document title changed while you were editing; reopen the editor and try again",
+        "Document title conflict: the title was modified concurrently. Reopen the editor and try again.",
       );
     }
     const snapshot = readSnapshot(tx, userId, node.id);
@@ -115,7 +117,7 @@ export function update(
     }
     if (snapshot.revision !== input.expectedResponseRevision) {
       throw new Error(
-        "the document changed while you were editing; reopen the editor and try again",
+        "Document content conflict: the document was updated concurrently. Reopen the editor and try again.",
       );
     }
     const currentMarkdown = markdownFromTurns(snapshot.turns);
@@ -130,7 +132,7 @@ export function update(
         current.length === expected.size && current.every((value) => expected.has(value));
       if (!same) {
         throw new Error(
-          "the document's highlights changed while you were editing; reopen the editor and try again",
+          "Highlight conflict: highlights were modified concurrently while editing. Reopen the editor and try again.",
         );
       }
     }

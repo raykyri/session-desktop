@@ -51,7 +51,7 @@ test("grouping keeps the server's order and starts a section per day", (t) => {
   );
 });
 
-test("context is trimmed at word boundaries on the side it is read from", (t) => {
+test("context excerpts are trimmed at word boundaries depending on prefix or suffix position", (t) => {
   t.is(excerptContext("short prefix", "prefix"), "short prefix");
   t.is(excerptContext("alpha beta gamma", "suffix", 11), "alpha beta");
   t.is(excerptContext("alpha beta gamma", "prefix", 10), "gamma");

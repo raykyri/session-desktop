@@ -24,7 +24,7 @@ test("the excerpt keeps the clicked block and splits the rest between neighbors"
   );
 });
 
-test("the clicked block always survives and neighbors take only what is left", (t) => {
+test("prioritizes clicked block content and allocates remaining excerpt budget to adjacent blocks", (t) => {
   const long = "word ".repeat(400).trim();
   const excerpt = buildWikilinkExcerpt("prev prev", long, "next next", 100);
   t.true(excerpt.length <= 100);

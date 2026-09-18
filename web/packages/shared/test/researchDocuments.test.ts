@@ -28,7 +28,7 @@ test("limited word counting stops at the first word over the limit", (t) => {
     () => countResearchDocumentWords(markdown, RESEARCH_DOCUMENT_WORD_LIMIT),
     {
       instanceOf: ResearchDocumentWordLimitExceeded,
-      message: `Documents are limited to ${RESEARCH_DOCUMENT_WORD_LIMIT} words for now`,
+      message: `Document exceeds maximum limit of ${RESEARCH_DOCUMENT_WORD_LIMIT} words.`,
     },
   );
   t.is(error?.limit, RESEARCH_DOCUMENT_WORD_LIMIT);

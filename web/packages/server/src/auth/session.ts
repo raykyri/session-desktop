@@ -66,8 +66,7 @@ export function userForToken(deps: ServerDeps, token: string | null): User | nul
   return users.findById(deps.db, session.userId);
 }
 
-/** Loads the signed-in user onto the request. Never rejects: the tRPC
- * `protectedProcedure` and each route decide what an anonymous request means. */
+/** Attaches the authenticated user to the request context. Unauthenticated requests are permitted and handled by downstream procedure guards. */
 export function sessionLoader(deps: ServerDeps): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const token = sessionCookieFrom(c);

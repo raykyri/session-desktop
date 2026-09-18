@@ -182,7 +182,7 @@ export const researchRouter = router({
       if (nodes.isTerminalStatus(existing.status)) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: `this research already finished as ${existing.status}`,
+          message: `Research node is already in terminal status: ${existing.status}`,
         });
       }
       const node = repo(() => nodes.setStatus(ctx.db, ctx.user.id, input.nodeId, "cancelled"));
@@ -311,10 +311,7 @@ export const researchRouter = router({
     }),
 
   /**
-   * A `gemini-flash` metadata run, awaited (`04-agent-runtime.md` §9). A run
-   * that fails or times out is not an error the caller can act on: the node
-   * keeps the title it has, which is `defaultTitle(prompt)` for one nothing
-   * renamed — the same string the client would display anyway.
+   * Executes metadata generation with a timeout. If title generation fails, retains the existing node title or falls back to defaultTitle(prompt).
    */
   generateTitle: protectedProcedure
     .input(z.object({ nodeId: z.string() }))
@@ -394,9 +391,7 @@ export const documentsRouter = router({
         repo(() => documentsRepo.get(ctx.db, ctx.user.id, input.documentId)),
         `document ${input.documentId} was not found`,
       );
-      // The row is half of a delete; the bytes on the volume are the other
-      // half, and the quota is summed from rows, so leaving them behind lets
-      // delete-and-reupload fill the mount (`13-deployment-fly.md` §6).
+      // Deleting a document requires removing both the database row and the file on disk to prevent orphaned files from exhausting storage.
       const removal = repo(() => documentsRepo.remove(ctx.db, ctx.user.id, input.documentId));
       await unlinkOrphans(ctx.config.documentsDir, removal.orphanedPaths, ctx.logger);
       return { ok: true };

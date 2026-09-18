@@ -198,7 +198,7 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
       <AsyncConfirmDialog
         open={deleting}
         title={page ? `Delete “${page.title}”?` : "Delete page?"}
-        description="The page and its backlinks are removed. Clicking the term again writes a new one."
+        description="This page and its backlinks will be deleted. Click the term again to recreate the page."
         confirmLabel="Delete page"
         pendingLabel="Deleting…"
         onOpenChange={setDeleting}

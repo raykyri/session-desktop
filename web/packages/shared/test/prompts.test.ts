@@ -142,7 +142,7 @@ test("the instruction byte cap is validated at save time and re-enforced when se
   const oversized = "é".repeat(RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES);
   t.regex(
     t.throws(() => sanitizedResearchLaunchInstruction(oversized))?.message ?? "",
-    /limited to 4096 bytes; this one has 8192/,
+    /exceed limit \(8192 bytes; maximum allowed is 4096 bytes\)/,
   );
   t.is(sanitizedResearchLaunchInstruction("  \n "), undefined);
   t.is(sanitizedResearchLaunchInstruction(" Keep it short. "), "Keep it short.");
@@ -202,7 +202,7 @@ test("an oversized document is refused as follow-up context", (t) => {
   const oversized = new Array(10_001).fill("word").join(" ");
   t.regex(
     t.throws(() => documentFollowupPrompt("Doc", oversized, "Q"))?.message ?? "",
-    /too large to include in a follow-up prompt \(10001 words; the limit is 10000\)/,
+    /exceeds maximum word count for follow-up prompts \(10001 words; limit is 10000 words\)/,
   );
   t.notThrows(() => documentFollowupPrompt("Doc", new Array(10_000).fill("word").join(" "), "Q"));
 });

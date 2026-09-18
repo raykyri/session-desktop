@@ -22,8 +22,7 @@ import { useOverlay } from "../../ui/useOverlay.js";
 
 import { isEditableEventTarget } from "./selection/dom.js";
 
-/** Above the find bar (200) would be wrong — a search opened over a selection
- * should take Escape first — so the popover sits below it. */
+/** Placed at priority 150 (below the find bar at 200) so Escape closes the search bar before dismissing this selection. */
 export const SELECTION_POPOVER_OVERLAY_PRIORITY = 150;
 
 const ACTION =
@@ -41,7 +40,7 @@ export interface SelectionPopoverProps {
   /** The selection has scrolled out of the viewport: keep the action alive but
    * stop drawing a bar over unrelated content. */
   offscreen: boolean;
-  /** How many stored highlights the selection covers; non-zero turns the first
+  /** Number of stored highlights the selection covers; non-zero turns the first
    * action into Remove. */
   removeCount: number;
   canExpand: boolean;
@@ -140,7 +139,7 @@ export function SelectionPopover({
           onMouseDown={(event) => event.preventDefault()}
           onClick={onExpand}
         >
-          <span>{removeCount > 1 ? "Merge highlights" : "Expand highlight"}</span>
+          <span>{removeCount > 1 ? "Merge highlights" : "Extend highlight"}</span>
           <kbd className={KEYCAP} aria-hidden="true">
             E
           </kbd>

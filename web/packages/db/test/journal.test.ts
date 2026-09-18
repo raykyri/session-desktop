@@ -65,7 +65,7 @@ test("hydration replaces the entry in place", (t) => {
   t.deepEqual(row, { text: "A post about birdsong." });
   t.deepEqual(journal.pendingTweets(fixture.db, fixture.userId), []);
   t.throws(() => journal.update(fixture.db, fixture.userId, "j2", { ...hydrated, id: "other" }), {
-    message: /cannot change its id/,
+    message: /Cannot update journal entry ID/,
   });
 });
 

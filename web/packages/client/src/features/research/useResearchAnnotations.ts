@@ -3,12 +3,7 @@
 // passage it was asked about, how the leader between them is routed, and what
 // the pointer is over.
 //
-// It is one hook rather than a dozen effects inside the page because the passes
-// are ordered and share refs: the saved-highlight pass fills the resolved-range
-// map that the overlap pass, the click-to-select hit test and the hover linker
-// all read, and the card-top pass feeds the collision pass, which feeds the
-// connector pass. Splitting them would mean publishing four intermediate
-// results as state and re-rendering between each.
+// Coordinates sequential layout measurement passes (highlights, anchored cards, collision detection, connector lines) in a single hook to avoid intermediate renders.
 //
 // Everything runs in layout effects, so a measurement never paints one frame at
 // the wrong offset.
@@ -258,10 +253,7 @@ export function useResearchAnnotations(input: ResearchAnnotationsInput): Researc
   const revisionsKey = chainNodeIds.map((id) => revisionByNode[id] ?? "").join("\n");
   const anchoredKey = anchoredEntries.map((entry) => `${entry.segmentId}:${entry.id}`).join("\n");
 
-  // Pass 1 — saved highlights. Anchors carry their quote and its context, so a
-  // passage is re-located rather than trusted at its stored offset; one that
-  // cannot be located anywhere is reported in the segment footer instead of
-  // disappearing silently (09 §5 items 8 and 4).
+  // Re-identifies highlight ranges dynamically using quoted text and context; unresolvable ranges increment hidden counters.).
   useLayoutEffect(() => {
     const resolvedByNode = new Map<string, ResolvedResearchHighlightRange[]>();
     const ranges: Range[] = [];

@@ -1,8 +1,6 @@
 // Mutations and the events they cause write the same caches (07 §4.1).
 //
-// The counts on a tree summary are deltas, not fields, so "the mutation wrote
-// it and then the event wrote it again" is not a harmless repeat — it is a
-// number that drifts every time the user cancels or forks. These tests apply
+// Summary counts are delta-based; optimistic updates must coordinate with server event handlers to prevent duplicate counter increments. These tests apply
 // both halves in the order the browser sees them: the mutation's own reply
 // first, then the event the server published for the same change, which this
 // tab receives like any other (`03-api-and-events.md` §3).
@@ -76,29 +74,36 @@ test.afterEach.always(() => {
   resetDocumentRoot();
 });
 
-test.serial("cancelling moves the counts once, not once per writer", async (t) => {
-  const running = node({ status: "running" });
-  const cancelled = node({ status: "cancelled", completedAt: 1_700_000_100_000 });
-  install({ "research.cancelNode": cancelled });
-  const queryClient = seeded([running]);
+test.serial(
+  "cancelling a node updates summary counts once without duplicate event increments",
+  async (t) => {
+    const running = node({ status: "running" });
+    const cancelled = node({ status: "cancelled", completedAt: 1_700_000_100_000 });
+    install({ "research.cancelNode": cancelled });
+    const queryClient = seeded([running]);
 
-  const { result } = renderHook(() => useCancelResearchNode(), { wrapper: wrapper(queryClient) });
-  await act(async () => {
-    await result.current.mutateAsync("n1");
-  });
+    const { result } = renderHook(() => useCancelResearchNode(), { wrapper: wrapper(queryClient) });
+    await act(async () => {
+      await result.current.mutateAsync("n1");
+    });
 
-  t.is(counts(queryClient)?.runningCount, 0, "the delta is applied from the node it replaced");
-  t.is(counts(queryClient)?.cancelledCount, 1);
+    t.is(counts(queryClient)?.runningCount, 0, "the delta is applied from the node it replaced");
+    t.is(counts(queryClient)?.cancelledCount, 1);
 
-  // The `research.node.updated` the same call published.
-  act(() => {
-    applyEventBatch([event("research.node.updated", { node: cancelled })], queryClient);
-  });
+    // The `research.node.updated` the same call published.
+    act(() => {
+      applyEventBatch([event("research.node.updated", { node: cancelled })], queryClient);
+    });
 
-  t.is(counts(queryClient)?.runningCount, 0, "the event finds its own work done");
-  t.is(counts(queryClient)?.cancelledCount, 1);
-  t.deepEqual(queryClient.getQueryData(queryKeys.activeNodes()), [], "and the node left activity");
-});
+    t.is(counts(queryClient)?.runningCount, 0, "the event finds its own work done");
+    t.is(counts(queryClient)?.cancelledCount, 1);
+    t.deepEqual(
+      queryClient.getQueryData(queryKeys.activeNodes()),
+      [],
+      "and the node left activity",
+    );
+  },
+);
 
 test.serial("forking counts the new question once", async (t) => {
   const forked = node({ id: "n2", parentNodeId: "n1", status: "queued" });

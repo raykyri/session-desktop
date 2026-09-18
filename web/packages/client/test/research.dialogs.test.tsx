@@ -78,7 +78,7 @@ test.serial("the recap dialog generates a candidate and applies it", async (t) =
     "the default instructions load",
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Generate candidate" }));
+  fireEvent.click(screen.getByRole("button", { name: "Generate summary" }));
   await waitUntil(
     t,
     () => screen.queryByText("A fresher summary.") !== null,
@@ -103,7 +103,7 @@ test.serial("the recap dialog generates a candidate and applies it", async (t) =
   });
 });
 
-test.serial("editing the instructions retracts the candidate", async (t) => {
+test.serial("editing recap instructions clears the generated candidate", async (t) => {
   const stub = createTrpcStub({
     "recaps.defaultInstructions": "Write a compact recap.",
     "recaps.generateCandidate": () => ({
@@ -127,10 +127,10 @@ test.serial("editing the instructions retracts the candidate", async (t) => {
 
   await waitUntil(
     t,
-    () => !screen.getByRole("button", { name: "Generate candidate" }).hasAttribute("disabled"),
+    () => !screen.getByRole("button", { name: "Generate summary" }).hasAttribute("disabled"),
     "the default instructions load",
   );
-  fireEvent.click(screen.getByRole("button", { name: "Generate candidate" }));
+  fireEvent.click(screen.getByRole("button", { name: "Generate summary" }));
   await waitUntil(
     t,
     () => screen.queryByText("A fresher summary.") !== null,
@@ -139,14 +139,14 @@ test.serial("editing the instructions retracts the candidate", async (t) => {
   fireEvent.change(screen.getByLabelText("Instructions"), { target: { value: "Be terse." } });
   // A candidate produced from different instructions cannot be applied.
   t.is(screen.queryByRole("button", { name: "Use this summary" }), null);
-  t.truthy(screen.getByText("Generate a new summary first."));
+  t.truthy(screen.getByText("No summary generated yet. Select Generate summary to create one."));
 });
 
 test.serial("the recap dialog surfaces a refusal", async (t) => {
   const stub = createTrpcStub({
     "recaps.defaultInstructions": "Write a compact recap.",
     "recaps.generateCandidate": () => {
-      throw new Error("the research response changed; select the text again");
+      throw new Error("The research response has been updated; please reselect the text.");
     },
   });
   setTrpcClient(stub.client);
@@ -160,17 +160,17 @@ test.serial("the recap dialog surfaces a refusal", async (t) => {
   );
   await waitUntil(
     t,
-    () => !screen.getByRole("button", { name: "Generate candidate" }).hasAttribute("disabled"),
+    () => !screen.getByRole("button", { name: "Generate summary" }).hasAttribute("disabled"),
     "the default instructions load",
   );
-  fireEvent.click(screen.getByRole("button", { name: "Generate candidate" }));
+  fireEvent.click(screen.getByRole("button", { name: "Generate summary" }));
   await waitUntil(t, () => screen.queryByRole("alert") !== null, "the server's message is shown");
-  t.truthy(screen.getByText("the research response changed; select the text again"));
+  t.truthy(screen.getByText("The research response has been updated; please reselect the text."));
 });
 
 /* ---------------------------------------------------------- branch deletion */
 
-test.serial("deleting a branch names what goes with it", (t) => {
+test.serial("branch deletion confirmation lists descendants that will be removed", (t) => {
   const root = node({ id: "n1", status: "complete" });
   const branch = node({ id: "n2", parentNodeId: "n1", status: "complete", inline: false });
   const child = node({ id: "n3", parentNodeId: "n2", status: "complete", inline: false });
@@ -249,7 +249,7 @@ function menuFor(overrides: Partial<Parameters<typeof ResearchTreeMenuItems>[0]>
 
 test.serial("the tree menu offers the active-thread actions", (t) => {
   const calls = menuFor();
-  for (const label of ["Star", "Rename", "New folder with item", "Archive", "Delete"]) {
+  for (const label of ["Star", "Rename", "Move to new folder", "Archive", "Delete"]) {
     t.truthy(screen.getByRole("menuitem", { name: new RegExp(label) }), label);
   }
   fireEvent.click(screen.getByRole("menuitem", { name: /Rename/ }));
@@ -258,7 +258,7 @@ test.serial("the tree menu offers the active-thread actions", (t) => {
 
 test.serial("an archived thread offers only Unarchive and Delete", (t) => {
   menuFor({ archived: true });
-  t.truthy(screen.getByRole("menuitem", { name: /Unarchive research/ }));
+  t.truthy(screen.getByRole("menuitem", { name: /Unarchive/ }));
   t.is(screen.queryByRole("menuitem", { name: /^Archive/ }), null);
   t.is(screen.queryByRole("menuitem", { name: /Rename/ }), null);
   t.truthy(screen.getByRole("menuitem", { name: /Delete/ }));
@@ -289,7 +289,7 @@ test.serial("renaming commits the trimmed title", (t) => {
       onRename={(treeId, title) => renamed.push([treeId, title])}
     />,
   );
-  const input = screen.getByLabelText("Research title");
+  const input = screen.getByLabelText("Thread title");
   fireEvent.change(input, { target: { value: "  Shared recall  " } });
   fireEvent.click(screen.getByRole("button", { name: "Rename" }));
   t.deepEqual(renamed, [["t1", "Shared recall"]]);

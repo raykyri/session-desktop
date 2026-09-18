@@ -90,9 +90,7 @@ import { addNodeInterest } from "./events.js";
 
 export { queryKeys, eventPatchedListKeys } from "./cache.js";
 
-/** Defaults for the app's `QueryClient`. Event-patched lists never go stale on
- * their own: the subscription is what keeps them current, and a background
- * refetch would race the patches. */
+/** Query client defaults: lists updated via server events do not auto-expire to prevent background refetches from colliding with event updates. */
 export const queryClientDefaults = {
   queries: {
     staleTime: Number.POSITIVE_INFINITY,
@@ -219,10 +217,7 @@ export function useDocuments(workspaceId: string) {
   });
 }
 
-/** No event announces a token count, so the two usage reads are the ones the
- * app's `staleTime: Infinity` default does not fit: it belongs to the lists the
- * subscription keeps fresh, and applied here it would freeze the figures at
- * whatever the first visit of the session fetched. */
+/** Usage queries use a 30-second stale time because token counts are not broadcast over SSE events and must be periodically refetched. */
 export const USAGE_STALE_MS = 30_000;
 
 export function useUsage(days?: number) {
@@ -308,8 +303,7 @@ function useSnapshotPollFallback(): boolean {
  * §4, §9).
  *
  * The snapshot seeds the live buffer with the sequence number it was taken at,
- * the bridge applies only `seq === lastSeq + 1`, and a gap refetches instead of
- * rendering text with a hole in it. When the run settles the buffer is dropped
+ * The event bridge strictly applies sequential turn updates; missing sequence numbers trigger a snapshot refetch to prevent missing content. When the run settles the buffer is dropped
  * in the same pass that installs the durable snapshot, so the timeline does not
  * flash: both paths produce the same `Turn[]`.
  */
@@ -389,13 +383,9 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
     void refetch();
   }, [gap, id, refetch]);
 
-  // `run.finished` lands before the terminal `node.updated`, and the durable
-  // snapshot only exists once that update has been stamped: refetching on
-  // `run.finished` alone would race the snapshot transaction and settle the
-  // document on a read taken before it. So the single refetch waits for
-  // `durableReady`, and the buffer is dropped only after its replacement is in
-  // the cache — a failed refetch keeps the streamed text on screen and leaves
-  // the door open for the next attempt.
+  // `run.finished` precedes the terminal `node.updated`, so wait for
+  // `durableReady` before fetching the committed snapshot. Retain buffered
+  // stream content when the refetch fails and retry on the next update.
   const finished = live?.status === "finished";
   const refetchedForSnapshot = useRef(false);
   useEffect(() => {
@@ -485,10 +475,8 @@ export function useForkResearchNode() {
   return useMutation({
     mutationFn: forkResearchNode,
     onSuccess: (node) => {
-      // The same three writes `research.node.created` makes, so the event this
-      // call causes finds its own work already done and adds nothing: the
-      // count on a summary is a delta, and invalidating the lists instead
-      // would leave the refetch racing the event for the same +1 (07 §4.1).
+      // Apply optimistic tree and node summary updates so the subsequent server
+      // event does not duplicate the count change.
       patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
       mapSummaries(client, (summary) =>
         patchResearchSummaryForCreatedNode(summary, node, Date.now()),
@@ -621,9 +609,7 @@ export function useRemoveResearchBranch() {
       // The counts a removal subtracts are read off the cached rows, so they
       // are read before the detail loses them, and the detail is patched here
       // rather than invalidated: the `research.node.removed` that follows then
-      // finds no removed rows left and subtracts nothing a second time. A
-      // detail that was never cached leaves the counts alone, which is the
-      // conservative half of the same reducer.
+      // finds no removed rows left and subtracts nothing a second time. If the tree detail is not in cache, counts remain unmodified as a fallback.
       const detail = client.getQueryData<ResearchTreeDetail>(queryKeys.tree(removal.treeId));
       const removedNodes = (detail?.nodes ?? []).filter((node) => removed.has(node.id));
       patchDetail(client, removal.treeId, (current) =>
@@ -675,7 +661,7 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => logout(),
     onSuccess: () => {
-      // Nothing in the cache belongs to a signed-out tab.
+      // Clear the React Query cache on logout to purge user data from memory.
       client.clear();
     },
   });

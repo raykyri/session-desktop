@@ -125,7 +125,8 @@ function reload(db: SessionDatabase, userId: string, nodeId: string): ResearchNo
 /** The message the desktop showed when the inline slot was taken. Mapped from
  * the partial unique index so the check is atomic rather than a read followed
  * by a write two requests can interleave. */
-export const INLINE_SLOT_TAKEN = "this answer already has an inline follow-up";
+export const INLINE_SLOT_TAKEN =
+  "Cannot create inline follow-up: an inline follow-up already exists for this answer.";
 
 function isInlineSlotConflict(error: unknown): boolean {
   // SQLite names the indexed column rather than the index in the message, and
@@ -161,10 +162,12 @@ export function admitChild(
   return transact(db, (tx) => {
     const { node: parent, tree } = loadNode(tx, userId, input.parentNodeId);
     if (tree.archivedAt !== null) {
-      throw new Error("restore archived research before creating a follow-up");
+      throw new Error(
+        "Cannot create follow-up on archived research: restore the research thread first.",
+      );
     }
     if (parent.status !== "complete") {
-      throw new Error("research follow-ups require a completed parent response");
+      throw new Error("Cannot create follow-up: the parent research run has not completed.");
     }
     const nodeId = input.nodeId ?? newId();
     const at = now();
@@ -243,7 +246,7 @@ export function setStatus(
     const { node } = loadNode(tx, userId, nodeId);
     if (isTerminalStatus(node.status) && node.status !== status) {
       throw new Error(
-        `research node ${nodeId} already finished as ${node.status} and cannot become ${status}`,
+        `Research node ${nodeId} already has terminal status '${node.status}' and cannot transition to '${status}'.`,
       );
     }
     const at = now();
@@ -311,7 +314,9 @@ export function resetForRetry(
   return transact(db, (tx) => {
     const { node } = loadNode(tx, userId, nodeId);
     if (node.status !== "failed" && node.status !== "cancelled" && node.status !== "interrupted") {
-      throw new Error("only a failed, cancelled, or interrupted run can be retried");
+      throw new Error(
+        "Cannot retry run: only runs with status 'failed', 'cancelled', or 'interrupted' can be retried.",
+      );
     }
     tx.delete(runTurns).where(eq(runTurns.nodeId, nodeId)).run();
     tx.delete(nodeMessages).where(eq(nodeMessages.nodeId, nodeId)).run();
@@ -345,14 +350,14 @@ export function resetForRetry(
  * still shows them — while the in-flight checkpoint, which the model never
  * finished, is dropped.
  *
- * The node goes back to the head of the queue: it was already running once, and
- * making a deploy cost it its place would punish the user for the restart.
+ * The node returns to the front of the queue so a server restart does not
+ * penalize an active run.
  */
 export function resumeAttempt(db: SessionDatabase, userId: string, nodeId: string): ResearchNode {
   return transact(db, (tx) => {
     const { node } = loadNode(tx, userId, nodeId);
     if (node.status !== "interrupted") {
-      throw new Error("only an interrupted run can be resumed");
+      throw new Error("Cannot resume run: only runs with status 'interrupted' can be resumed.");
     }
     const attempt = node.attempt + 1;
     tx.delete(runTurns)
@@ -546,10 +551,7 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
         result.interruptedNodeIds.push(node.id);
       }
     }
-    // A `queued` node with no `run_queue` row is nothing's work: the claim
-    // loop reads the queue, so it waits forever, and Retry is offered only on
-    // `failed`, `cancelled` and `interrupted` — the user has no way out of it
-    // at all. The node row and its queue row are separate transactions under
+    // Handle orphaned queued nodes missing a corresponding `run_queue` record due to crash between transactions; re-enqueue them to allow processing. The node row and its queue row are separate transactions under
     // `synchronous = NORMAL` (`routers/research.ts`, `createTree` then
     // `enqueueRun`), so a crash between them produces exactly this. Re-queued
     // at the back rather than the head: the node is new work, not a resume.
@@ -575,12 +577,8 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
       result.reenqueuedNodeIds.push(node.id);
     }
 
-    // An imported document whose row landed `complete` but whose markdown did
-    // not (`routers/research.ts:importReport` writes them in two
-    // transactions). `getNodeContent` reports "this research produced no
-    // readable response", and both `updateDocument` and `retryNode` refuse it,
-    // so the thread is unreadable and undeletable-by-retry forever. Failing it
-    // is the smallest repair that gives the user something to act on.
+    // If document metadata is committed without Markdown content across the two
+    // import transactions, mark the node as failed to enable recovery actions.
     const emptyDocuments = tx
       .select({ id: nodes.id })
       .from(nodes)
@@ -618,7 +616,7 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
       enqueueForRun(tx, node.userId, node.id, node.model, 0);
       result.requeuedNodeIds.push(node.id);
     }
-    // Every claim belongs to the process that just died; nothing is running.
+    // Reset claims previously acquired by terminated server instances.
     tx.update(runQueue).set({ claimedAt: null }).run();
     return result;
   });
@@ -632,7 +630,7 @@ export function rename(
 ): ResearchNode {
   const clean = sanitizeResearchTitle(title);
   if (clean === undefined) {
-    throw new Error("a research node needs a title");
+    throw new Error("Research node title is required.");
   }
   return transact(db, (tx) => {
     const { node } = loadNode(tx, userId, nodeId);
@@ -668,7 +666,9 @@ export function removeBranch(
   return transact(db, (tx) => {
     const { node, tree } = loadNode(tx, userId, nodeId);
     if (node.parentNodeId === null) {
-      throw new Error("remove the whole thread instead of its root question");
+      throw new Error(
+        "Cannot delete root node individually: delete the entire research thread instead.",
+      );
     }
     const ordered = subtreeIdsDepthFirst(tx, nodeId);
     const active = tx
@@ -677,7 +677,7 @@ export function removeBranch(
       .where(and(inArray(nodes.id, ordered), inArray(nodes.status, ["queued", "running"])))
       .get();
     if (active) {
-      throw new Error("cancel this research before removing it");
+      throw new Error("Cannot delete research node with an active run: cancel the run first.");
     }
     deleteNodesInOrder(tx, ordered);
     touchTree(tx, tree.id);

@@ -24,7 +24,8 @@ const turnListSchema = z.array(turnSchema);
 
 /** The desktop's copy for a response that could not be persisted, kept
  * verbatim because users have seen it. */
-export const SNAPSHOT_TOO_LARGE = "research finished, but its response could not be preserved";
+export const SNAPSHOT_TOO_LARGE =
+  "Research run completed, but the response exceeded the maximum snapshot storage limit and could not be saved.";
 
 export interface CommitInput {
   nodeId: string;
@@ -80,7 +81,7 @@ function assistantTextExists(turns: readonly Turn[]): boolean {
 export function commit(db: SessionDatabase, userId: string, input: CommitInput): CommitResult {
   const turns = [...input.turns];
   if (!assistantTextExists(turns)) {
-    throw new Error("a research response must contain assistant text");
+    throw new Error("Invalid snapshot: research response must contain assistant output text.");
   }
   const byteSize = snapshotByteSize(turns);
   if (byteSize > MAX_RESPONSE_SNAPSHOT_BYTES) {

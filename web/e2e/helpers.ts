@@ -9,8 +9,7 @@ import { expect, type Page } from "@playwright/test";
 
 import { APP_ORIGIN } from "./constants.js";
 
-/** The header the CSRF guard demands of every mutation
- * (`06-auth-and-users.md` §5). */
+/** Required CSRF header for mutation requests (`06-auth-and-users.md` §5). */
 const MUTATION_HEADERS = { "x-requested-with": "session", "content-type": "application/json" };
 
 export interface SignInOptions {

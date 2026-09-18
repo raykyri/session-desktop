@@ -28,7 +28,7 @@ import { searchFeatures } from "../src/trpc/routers/system.js";
 
 import { ARTIFACT_ORIGIN, answerTurn, createHarness, testConfig } from "./helpers.js";
 
-test("system.health and runtimeConfig answer without a session", async (t) => {
+test("returns health status and runtime config for unauthenticated requests", async (t) => {
   const harness = createHarness(t);
   const anonymous = harness.caller(null);
   t.deepEqual(await anonymous.system.health(), { ok: true, version: "0.0.0" });
@@ -47,7 +47,7 @@ test("system.health and runtimeConfig answer without a session", async (t) => {
   await t.throwsAsync(harness.caller(null).settings.get(), { message: /sign in/ });
 });
 
-test("the search vendor falls back to whichever key exists", (t) => {
+test("selects available search vendor based on configured API keys", (t) => {
   const withTavilyOnly = testConfig("/tmp/session-config", {
     PARALLEL_API_KEY: "",
     TAVILY_API_KEY: "tavily-key",
@@ -144,7 +144,7 @@ test("workspaces and folders behave as the sidebar expects", async (t) => {
   t.is((await caller.workspaces.list()).length, 1);
 });
 
-test("the feed and the encyclopedia answer over the same workspace", async (t) => {
+test("scopes feed activity and encyclopedia pages to the workspace", async (t) => {
   const harness = createHarness(t);
   const user = harness.addUser("browser");
   const caller = harness.caller(user);
@@ -254,7 +254,7 @@ test("a queued backlog is capped per account", async (t) => {
   await launch(3);
   const refused = await t.throwsAsync<TRPCError>(launch(4));
   t.is(refused?.code, "TOO_MANY_REQUESTS");
-  t.regex(refused?.message ?? "", /3 questions waiting/);
+  t.regex(refused?.message ?? "", /3 questions queued/);
 
   // The cap is on what is waiting, not on what has ever been launched: a node
   // that leaves the queue makes room.
@@ -276,7 +276,7 @@ test("a queued backlog is capped per account", async (t) => {
   t.pass();
 });
 
-test("an unclassified failure is INTERNAL_SERVER_ERROR and keeps its message off the wire", (t) => {
+test("maps unexpected internal errors to INTERNAL_SERVER_ERROR and masks details from client responses", (t) => {
   // A driver failure — a full volume, a busy timeout, a corrupt page — has a
   // message written for a DBA and matches none of the copy patterns. Answering
   // `BAD_REQUEST` with that message blames the caller for the server's failure
@@ -301,8 +301,8 @@ test("an unclassified failure is INTERNAL_SERVER_ERROR and keeps its message off
 
   // Deliberate, user-facing refusals are unchanged.
   t.is(trpcCodeForRepoError("research node abc was not found"), "NOT_FOUND");
-  t.is(trpcCodeForRepoError("a research node needs a title"), "BAD_REQUEST");
-  t.is(trpcCodeForError(new Error("a research node needs a title")), "BAD_REQUEST");
+  t.is(trpcCodeForRepoError("Research node title is required."), "BAD_REQUEST");
+  t.is(trpcCodeForError(new Error("Research node title is required.")), "BAD_REQUEST");
   // The reorder's foreign-id message: the same answer as an absent one.
   t.is(
     trpcCodeForRepoError("research tree t1 is not in the requested sidebar section"),
@@ -310,7 +310,7 @@ test("an unclassified failure is INTERNAL_SERVER_ERROR and keeps its message off
   );
 });
 
-test("the drain is raced against a deadline so the WAL checkpoint always runs", async (t) => {
+test("enforces shutdown deadline during drain to ensure WAL checkpoint execution", async (t) => {
   // Fly sends SIGKILL `kill_timeout` (30s) after SIGTERM. A provider that has
   // stopped sending without closing its stream holds the drain open past that,
   // the checkpoint never runs, and the next boot opens a database with an

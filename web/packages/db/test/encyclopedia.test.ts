@@ -42,12 +42,12 @@ test("requesting an unknown term creates a generating page with one source", (t)
   t.deepEqual(result.page.links, []);
 });
 
-test("a term with no letters or digits has no page", (t) => {
+test("rejects encyclopedia page creation for terms without alphanumeric characters", (t) => {
   const fixture = createFixture(t);
   t.throws(
     () => encyclopedia.requestPage(fixture.db, fixture.userId, request(fixture.workspaceId, "!!!")),
     {
-      message: /has no letters or digits/,
+      message: /must contain at least one alphanumeric character/,
     },
   );
   t.throws(
@@ -57,7 +57,7 @@ test("a term with no letters or digits has no page", (t) => {
         fixture.userId,
         request(fixture.workspaceId, "x".repeat(200)),
       ),
-    { message: /at most 160 characters/ },
+    { message: /must not exceed 160 characters/ },
   );
 });
 
@@ -79,7 +79,7 @@ test("sources dedupe by node, then by page, then by excerpt", (t) => {
   t.is(make({ excerpt: "loose excerpt" }).sources.length, 4);
 });
 
-test("the oldest sources are evicted past fifty", (t) => {
+test("caps page sources at 50 by evicting the oldest entries", (t) => {
   const fixture = createFixture(t);
   for (let index = 0; index < 55; index += 1) {
     encyclopedia.requestPage(
@@ -93,7 +93,7 @@ test("the oldest sources are evicted past fifty", (t) => {
   t.is(page?.sources[0]?.nodeId, "node-5", "the first five were evicted");
 });
 
-test("a failed page is retried, a ready page is left alone", (t) => {
+test("retries generation for failed pages while preserving ready pages", (t) => {
   const fixture = createFixture(t);
   encyclopedia.requestPage(fixture.db, fixture.userId, request(fixture.workspaceId, "Term"));
   encyclopedia.savePage(fixture.db, fixture.userId, {
@@ -179,7 +179,7 @@ test("regenerate and delete move a page through its states", (t) => {
   t.is(encyclopedia.getPage(fixture.db, fixture.userId, fixture.workspaceId, "term"), null);
 });
 
-test("source fields are capped and deduped on the way in", (t) => {
+test("truncates and deduplicates source fields on insertion", (t) => {
   const fixture = createFixture(t);
   const page = encyclopedia.requestPage(
     fixture.db,
@@ -207,7 +207,7 @@ test("a page cannot be created in another account's workspace", (t) => {
     () => encyclopedia.requestPage(fixture.db, fixture.userId, request(other.workspaceId, "Kelp")),
     { message: /workspace .* was not found/ },
   );
-  // The slug is still the owner's to take.
+  // Verify the slug remains available to the owning account.
   const page = encyclopedia.requestPage(
     fixture.db,
     other.userId,

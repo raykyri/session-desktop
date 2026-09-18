@@ -29,7 +29,8 @@ import { toResearchHighlight } from "./mappers.js";
 
 /** Shown when an anchor was captured against an answer that has since been
  * replaced. Kept verbatim from the desktop. */
-export const REVISION_MISMATCH = "the research response changed; select the text again";
+export const REVISION_MISMATCH =
+  "The research response has been updated; please reselect the text.";
 
 export function listForNode(
   db: SessionDatabase,
@@ -82,7 +83,7 @@ export function create(
     const existing = listForNode(tx, userId, nodeId);
     if (existing.length >= MAX_RESEARCH_HIGHLIGHTS_PER_NODE) {
       throw new Error(
-        `a research answer can have at most ${MAX_RESEARCH_HIGHLIGHTS_PER_NODE} highlights`,
+        `Maximum highlight limit reached: each response allows up to ${MAX_RESEARCH_HIGHLIGHTS_PER_NODE} highlights.`,
       );
     }
     const candidate: ResearchHighlight = { id, anchor, createdAt: now() };
@@ -92,13 +93,13 @@ export function create(
       0,
     );
     if (nodeBytes + added > MAX_RESEARCH_HIGHLIGHT_BYTES_PER_NODE) {
-      throw new Error("a research answer contains too much highlight data");
+      throw new Error("Highlight data exceeds the maximum allowed byte limit for this answer.");
     }
     if (userStorageBytes(tx, userId) + added > MAX_RESEARCH_HIGHLIGHT_BYTES_TOTAL) {
-      throw new Error("your account contains too much saved research highlight data");
+      throw new Error("Account highlight storage quota exceeded.");
     }
     if (tx.select({ id: highlights.id }).from(highlights).where(eq(highlights.id, id)).get()) {
-      throw new Error("research highlights must have unique non-empty ids");
+      throw new Error("Highlight IDs must be non-empty and unique.");
     }
     tx.insert(highlights)
       .values({
@@ -237,7 +238,7 @@ export function feed(
     });
 }
 
-/** How many highlights one node carries, for the caps shown in the UI. */
+/** Number of highlights associated with a node for UI limit reporting. */
 export function countForNode(db: SessionDatabase, userId: string, nodeId: string): number {
   const row = db
     .select({ value: sql<number>`count(*)` })

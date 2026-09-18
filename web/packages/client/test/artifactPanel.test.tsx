@@ -74,7 +74,7 @@ test.serial("opening, closing and toggling move one slot", (t) => {
   t.is(useArtifactPanelStore.getState().current, null);
 });
 
-test.serial("a toggle with nothing ever opened stays closed", (t) => {
+test.serial("toggle command does nothing when no artifact has been opened", (t) => {
   t.false(useArtifactPanelStore.getState().toggle());
   t.is(useArtifactPanelStore.getState().current, null);
 });
@@ -182,25 +182,28 @@ function postFromFrame(data: unknown, origin: string): void {
   });
 }
 
-test.serial("an open panel takes Escape and gives it back when it closes", async (t) => {
-  mount();
-  act(() => useArtifactPanelStore.getState().open(panelDocument()));
+test.serial(
+  "registers an Escape handler while the panel is open and removes it on close",
+  async (t) => {
+    mount();
+    act(() => useArtifactPanelStore.getState().open(panelDocument()));
 
-  await waitFor(() => {
-    if (!useOverlaysStore.getState().top()) throw new Error("not registered yet");
-  });
-  t.is(useOverlaysStore.getState().top()?.priority, OVERLAY_PRIORITY.artifactPanel);
+    await waitFor(() => {
+      if (!useOverlaysStore.getState().top()) throw new Error("not registered yet");
+    });
+    t.is(useOverlaysStore.getState().top()?.priority, OVERLAY_PRIORITY.artifactPanel);
 
-  act(() => {
-    useOverlaysStore.getState().dismissTop();
-  });
-  t.is(useArtifactPanelStore.getState().current, null);
+    act(() => {
+      useOverlaysStore.getState().dismissTop();
+    });
+    t.is(useArtifactPanelStore.getState().current, null);
 
-  await waitFor(() => {
-    if (useOverlaysStore.getState().top()) throw new Error("still registered");
-  });
-  t.is(useOverlaysStore.getState().top(), null);
-});
+    await waitFor(() => {
+      if (useOverlaysStore.getState().top()) throw new Error("still registered");
+    });
+    t.is(useOverlaysStore.getState().top(), null);
+  },
+);
 
 test.serial("the panel frames the minted URL in a sandboxed iframe", (t) => {
   mount();
@@ -349,21 +352,24 @@ test.serial("a chip opens the panel on the minted URL instead of a new tab", asy
   t.is(frame().getAttribute("src"), url("minted"));
 });
 
-test.serial("a mint that fails says so on the chip and leaves the panel closed", async (t) => {
-  mount({
-    chips: true,
-    responses: {
-      "artifacts.mintToken": () => {
-        throw new Error("gone");
+test.serial(
+  "shows an error on the document chip and keeps the panel closed when token minting fails",
+  async (t) => {
+    mount({
+      chips: true,
+      responses: {
+        "artifacts.mintToken": () => {
+          throw new Error("gone");
+        },
       },
-    },
-  });
+    });
 
-  fireEvent.click(await screen.findByRole("button", { name: /notes\.md/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /notes\.md/ }));
 
-  await waitFor(() => {
-    if (!screen.queryByRole("alert")) throw new Error("no notice yet");
-  });
-  t.regex(screen.getByRole("alert").textContent ?? "", /could not be opened/);
-  t.is(useArtifactPanelStore.getState().current, null);
-});
+    await waitFor(() => {
+      if (!screen.queryByRole("alert")) throw new Error("no notice yet");
+    });
+    t.regex(screen.getByRole("alert").textContent ?? "", /Failed to open document/);
+    t.is(useArtifactPanelStore.getState().current, null);
+  },
+);

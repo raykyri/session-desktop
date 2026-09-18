@@ -34,7 +34,7 @@ function toolContext(harness: ReturnType<typeof createHarness>, userId: string):
   };
 }
 
-test("every address a fetch must not reach is refused", (t) => {
+test("blocks private, loopback, and reserved IP addresses in web_fetch", (t) => {
   for (const address of [
     "127.0.0.1",
     "0.0.0.0",
@@ -72,7 +72,7 @@ test("every address a fetch must not reach is refused", (t) => {
 test("the guard refuses non-http schemes, credentials, and private names", async (t) => {
   await t.throwsAsync(assertFetchableUrl("file:///etc/passwd"), {
     instanceOf: BlockedUrlError,
-    message: /file URLs cannot be fetched/,
+    message: /Protocol 'file:' is unsupported/,
   });
   await t.throwsAsync(assertFetchableUrl("https://user:pass@example.com/"), {
     instanceOf: BlockedUrlError,
@@ -233,7 +233,7 @@ test("document_read chunks at 30k characters and stays inside the account", asyn
     { documentId: document.id, chunk: 99 },
     EXECUTION_OPTIONS,
   )) as { error?: string };
-  t.regex(past.error ?? "", /is past the end/);
+  t.regex(past.error ?? "", /requested chunk 99 is out of bounds/);
 
   // A document that is not attached, and one belonging to someone else, are
   // both simply not there.
@@ -241,7 +241,7 @@ test("document_read chunks at 30k characters and stays inside the account", asyn
   const refused = (await unattached.execute?.({ documentId: document.id }, EXECUTION_OPTIONS)) as {
     error?: string;
   };
-  t.regex(refused.error ?? "", /no document .* is attached/);
+  t.regex(refused.error ?? "", /No document with ID .* is attached/);
 
   const foreign = createDocumentReadTool(toolContext(harness, other.id), [document.id]);
   const notFound = (await foreign.execute?.({ documentId: document.id }, EXECUTION_OPTIONS)) as {

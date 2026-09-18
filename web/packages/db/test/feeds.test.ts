@@ -97,7 +97,7 @@ test("the limit is clamped to 1..100", (t) => {
   t.is(feeds.recentActivity(fixture.db, fixture.userId, { limit: 1000 }).items.length, 3);
 });
 
-test("archived threads and follow-ups stay out of the feed, children come along", (t) => {
+test("excludes archived threads and follow-ups from the feed while including thread children", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
@@ -182,7 +182,7 @@ test("bookmarkedOnly shows bookmarked threads and no journal entries", (t) => {
   t.deepEqual(page.items.map(itemId), ["kept"]);
 });
 
-test("recentQueries pages roots alone", (t) => {
+test("paginates only root research questions in recentQueries", (t) => {
   const fixture = createFixture(t);
   const at = 1_700_000_000_000;
   for (let index = 0; index < 3; index += 1) {

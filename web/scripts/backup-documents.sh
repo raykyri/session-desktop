@@ -3,10 +3,8 @@
 #
 # Litestream replicates session.db continuously; `/data/documents` is files on
 # a volume and nothing replicates it, so it is tarred and shipped to the same
-# bucket. Only files newer than the last run are included, by mtime — the store
-# is content-addressed (`documents/<userId>/<sha256>`), so a file is written
-# once and never modified, and "new since the marker" is exactly "not yet
-# archived".
+# bucket. Content-addressed files are immutable; filtering by modification time
+# relative to the stamp file captures newly added documents.
 #
 # Run it from inside the machine:
 #
@@ -14,8 +12,8 @@
 #
 # or nightly from a scheduler that can reach the app (a Fly scheduled machine
 # running the same image with this as its command, or a cron host with
-# `flyctl ssh console -C`). There is no in-container cron: one process per
-# machine is the deployment's shape.
+# `flyctl ssh console -C`). Backups are scheduled externally so the container
+# can retain a single application process.
 
 set -eu
 
@@ -59,7 +57,7 @@ fi
 count="$(wc -l < "$list" | tr -d ' ')"
 if [ "$count" = "0" ]; then
   echo "backup-documents: no new documents since $(date -u -r "$MARKER" 2>/dev/null || echo 'the last run')"
-  # The marker still moves: an empty night is a successful night.
+  # Advance the timestamp marker even when no new documents were found.
   touch -d "@$started_epoch" "$MARKER"
   exit 0
 fi

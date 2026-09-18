@@ -68,8 +68,7 @@ export interface ByteRange {
   end: number;
 }
 
-/** A single `bytes=` range, which is all a `<iframe>` or a PDF viewer asks
- * for. Multipart ranges are declined by ignoring the header. */
+/** Parses single byte ranges for PDF viewers and iframe media streams; multipart byte ranges are not supported. */
 export function parseRange(header: string | undefined, size: number): ByteRange | null {
   if (!header) {
     return null;
@@ -84,8 +83,7 @@ export function parseRange(header: string | undefined, size: number): ByteRange 
   }
   if (rawStart === "") {
     const length = Number(rawEnd);
-    // An empty file has no satisfiable suffix range, and a zero-length one is
-    // not a range at all; both are answered with the whole (empty) body.
+    // Empty files and zero-length ranges return the full empty response body.
     if (length <= 0 || size === 0) {
       return null;
     }
@@ -174,9 +172,7 @@ export function artifactRoutes(deps: ServerDeps): Hono<AppEnv> {
         kind === "markdown"
           ? renderMarkdownPage(resolved.name, source, font)
           : renderTextPage(resolved.name, source, font);
-      // The rendered page is a different entity from the stored bytes, so a
-      // byte range into the source would be meaningless: `Range` is ignored
-      // and `Accept-Ranges: none` says so.
+      // Rendered HTML output differs from raw stored bytes, so Range requests are ignored and Accept-Ranges: none is set.
       return c.body(html, 200, {
         "Content-Type": "text/html; charset=utf-8",
         "Content-Security-Policy": renderedPageContentSecurityPolicy(deps.config.publicOrigin),

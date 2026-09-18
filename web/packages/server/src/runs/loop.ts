@@ -6,11 +6,10 @@
 // and settle the node. The module is provider-neutral: everything a particular
 // provider needs is already in the `ResolvedModel` it is handed.
 //
-// Two rules shape the persistence. Committed turns and the node's sequence
-// counter move in one transaction, so a client that has seen sequence *n* has
-// seen exactly the turns written up to it. And the in-flight text is
-// checkpointed at most once a second or every 4 KiB, which is the promise that
-// a deploy costs a run at most a second of text.
+// Two rules shape persistence. Committed turns and the node sequence counter
+// update in one transaction, so sequence *n* identifies the turns persisted
+// through that event. In-flight text is checkpointed at most once per second or
+// every 4 KiB to limit data loss during server restarts.
 
 import type { SessionDatabase } from "@session/db";
 import {
@@ -171,8 +170,8 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     return seq;
   };
   /**
-   * The number a terminal event spends, persisted as well as emitted. Every
-   * other number lives only in this variable until a write carries it into the
+   * The sequence number assigned to a terminal event, persisted and emitted.
+   * Every other number lives only in this variable until a write carries it into the
    * row; the last one has no write after it, so a resume or a second attempt
    * would read the node back one short and hand the same number out twice.
    */
@@ -545,7 +544,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   if (!commit.committed) {
     const classified: ClassifiedError = {
       errorClass: "unknown",
-      message: commit.reason ?? "this research produced no readable response",
+      message: commit.reason ?? "Research completed without generating response content",
       detail: commit.reason ?? "no answer",
     };
     finishAttempt("failed", classified);
@@ -556,9 +555,9 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
 
   // The conversation is appended only now: `node_messages` is append-only and
   // only a completed node's exchanges belong in the thread's history. The
-  // question leads, because a descendant replays this node as one exchange and
-  // a history of answers without their questions is not a conversation — and,
-  // on Anthropic, not even a valid request.
+  // question must come first because descendants replay this node as one
+  // exchange, and providers such as Anthropic require alternating user and
+  // assistant turns.
   const askedMessage: ModelMessage = { role: "user", content: userText };
   messagesRepo.appendMessages(
     db,

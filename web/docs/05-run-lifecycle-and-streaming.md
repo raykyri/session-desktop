@@ -9,12 +9,12 @@ after failures, and how clients observe it.
 | --- | --- |
 | Submit a question | The node appears immediately as `queued`, then `running`, then text streams in |
 | Navigate away and come back | The document shows everything produced so far and continues streaming |
-| Close the tab, sleep the laptop, open the app on a phone | The run kept going on the server |
+| Close the tab, sleep the laptop, open the app on a phone | The run continues executing on the server |
 | Two tabs open on the same thread | Both show the same content and progress |
 | The server is deployed while a run is in progress | The run resumes automatically; the user sees at most a pause |
 | The network drops for a while | On reconnect the document catches up without duplicated or missing text |
 | Cancel | The stream stops within a second; the partial answer remains readable |
-| Many users at once | Nobody's run is starved silently; queued runs show their position |
+| Many users at once | No run is silently starved; queued runs display their position |
 
 Two properties follow: run state is server-authoritative and reconstructable
 from one request, and a run is resumable from persisted state because the
@@ -35,7 +35,7 @@ app owns the conversation (`04-agent-runtime.md` §4).
 | Which node is open, scroll offsets, drafts | client: URL, stores, `interface_drafts` | per user |
 | Live turn buffer for visible nodes and `lastSeq` | client memory | while mounted |
 
-The client persists nothing about runs.
+The client does not persist run state locally.
 
 ## 3. Run state machine
 
@@ -64,8 +64,8 @@ the server persists or forwards.
 1. Snapshot. `research.getNodeContent(nodeId)` returns
    `{ node, turns, inFlightText, seq, children, responseRevision?,
    sourceError?, queuePosition? }` — the same shape `03-api-and-events.md` §2
-   gives; `sourceError` is what the document view's empty-state cascade reads
-   when a settled node has no turns to show.
+   gives; the document view displays `sourceError` in its empty state
+   when a settled node has no turns to render.
    For an active node, `turns` are committed turns from `run_turns` and
    `inFlightText` the latest checkpoint.
 2. Deltas over the SSE subscription: `research.run.started`,
@@ -77,7 +77,7 @@ the server persists or forwards.
 4. Completion: after `research.run.finished` and a terminal `node.updated`
    with `responseSnapshotAt`, fetch the durable snapshot once and drop the
    live buffer. Live and durable paths produce the same `Turn[]`, so the
-   timeline reconciles without a flash.
+   timeline transitions without visual flicker.
 5. Non-run events are not replayed; on reconnect the client invalidates list
    queries.
 
@@ -137,12 +137,7 @@ rather than failing.
 - `liveTurns` store: `Map<nodeId, { turns, inFlightText, inFlightTurnId,
   lastSeq, status }>`.
 - `useNodeContent(nodeId)` seeds from the snapshot, applies ordered deltas,
-  refetches on gaps; exposes `{ turns, inFlightText, source, error }`. The
-  buffer exists only for a node a view has seeded, so the run events that reach
-  every connection do not accumulate buffers for nodes nobody is watching. The
-  durable read waits for the terminal `research.node.updated` rather than
-  firing on `research.run.finished`, which precedes the snapshot transaction,
-  and the buffer is dropped only once that read has landed.
+  refetches on gaps; exposes `{ turns, inFlightText, source, error }`. Buffers are allocated only for nodes currently mounted in a view, preventing broadcast run events from accumulating state for unwatched nodes. The client waits for the terminal `research.node.updated` event before fetching the durable snapshot (since `research.run.finished` precedes the database transaction), clearing the live buffer only after the snapshot is successfully retrieved.
 - The event bridge applies run events to `liveTurns` and everything else to
   the query cache in one 16 ms batch, and publishes the interest set.
 - If SSE cannot connect for 10 s, a 2 s snapshot poll runs for displayed
@@ -168,4 +163,4 @@ rather than failing.
 - Output is durable at one-second granularity while streaming and exact at
   completion; conversation history is owned by the app.
 - Deploys interrupt and auto-resume; `interrupted` is a first-class status.
-- No event replay buffer; reconnect means refetch.
+- The server does not maintain an event replay buffer; clients refetch state from the database upon reconnection.

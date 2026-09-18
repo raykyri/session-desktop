@@ -18,15 +18,15 @@ Options
 Choice: option 2. `web/package.json` is a workspaces root with
 `packages/shared`, `packages/db`, `packages/server`, `packages/client`.
 
-Why: dependency isolation is real here. `better-sqlite3` is a native module
+Why: Strict dependency isolation is required here. `better-sqlite3` is a native module
 that must never be resolved by the client bundle; React must never be a server
 dependency; the database package must have no HTTP or React imports so it can
 be reused by the migration CLI. Workspaces enforce this through
 `package.json` boundaries and per-package `tsconfig` with project references.
-Option 3 was rejected because the port needs to read the desktop's
-`src/lib/*` and `tests/*` during migration, and the root `package.json`
-already documents the desktop; the two apps share one repository until the
-desktop is retired.
+Option 3 was rejected because the migration requires access to the desktop's
+`src/lib/*` and `tests/*`, and the root `package.json` already defines the
+desktop workspace. Both applications share one repository until the desktop
+is retired.
 
 Consequences: `web/` is self-contained. The repo root keeps the desktop's
 `package.json`; `cd web && npm install` is the web entry point. The root
@@ -54,10 +54,7 @@ Choice: Hono with `@hono/node-server`.
 Why: Hono's `app.request()` lets integration tests call handlers without
 binding a port (the landing server's tests had to listen on a port). Its
 streaming helpers (`streamSSE`) fit the event channel. It has first-class
-tRPC and static-file adapters and a small surface. Fastify is a fine
-alternative and would be the pick if a plugin ecosystem (rate limiting,
-multipart) mattered more; Hono covers what this app needs with middleware
-that is a few lines each.
+tRPC and static-file adapters and a small surface. Fastify is a viable alternative if an extensive plugin ecosystem were required, but lightweight custom middleware in Hono adequately addresses this application's needs.
 
 Consequences: middleware for security headers, request ids, session lookup,
 CSRF origin checks, and logging is written in-house (~200 lines total).
@@ -82,8 +79,7 @@ per-node sequence numbers and clients resynchronize from a snapshot
 (`05-run-lifecycle-and-streaming.md` §4), so no server-side event buffer
 exists.
 
-Why: the desktop API is procedure-shaped, not resource-shaped; mapping it to
-REST verbs would invent a second vocabulary. tRPC gives end-to-end types from
+Why: The desktop API is organized around remote procedure calls rather than RESTful resources; mapping it to REST endpoints would require introducing an unnecessary abstraction layer. tRPC gives end-to-end types from
 the router, integrates with TanStack Query (mutations invalidate or patch
 queries), and its SSE subscriptions replace the Tauri event listener with the
 same "one connection, many event types" shape. Hono RPC was close but lacks
@@ -94,7 +90,7 @@ Consequences: `packages/client/src/api/api.ts` re-exports functions with the
 desktop's names (`createResearchTree`, `forkResearchNode`, …) implemented over
 the tRPC client, so ported components keep their imports. Streaming of run
 output is a set of event types, not a separate socket (`03-api-and-events.md`
-§4). WebSockets are not used; nothing streams client → server.
+§4). WebSockets are unnecessary because the client does not stream data to the server.
 
 ## ADR-4 Database: SQLite via better-sqlite3 with Drizzle ORM
 
@@ -113,10 +109,7 @@ binding; synchronous calls are correct for SQLite (one writer, sub-millisecond
 statements) and make transactions trivial. Drizzle's schema-as-TypeScript
 gives typed rows without codegen, its migration generator produces reviewable
 SQL, and its SQLite dialect exposes `pragma`s and raw SQL where needed. Prisma's
-engine adds a binary and its SQLite transaction model is weaker. `node:sqlite`
-is attractive for zero native deps; revisit when it is marked stable in the
-Node LTS the Dockerfile pins (the driver is behind one module in
-`packages/db/src/connection.ts`).
+engine adds a binary and its SQLite transaction model is weaker. The built-in `node:sqlite` module is a promising option because it requires no native dependencies; this should be revisited once it becomes stable in the pinned Node LTS release.
 
 Settings applied on open: `journal_mode=WAL`, `synchronous=NORMAL` by default
 and `FULL` inside the snapshot-commit transaction, `foreign_keys=ON`,
@@ -143,8 +136,9 @@ manually set database flag that gates the expensive models
 
 Why: the desktop uses the device flow so that no client secret ships with
 the app (`github_auth.rs:1-7`); a web server can hold a secret, so the
-standard code flow with PKCE applies. The requirement set (one provider, sessions, allowlist) is ~300
-lines; frameworks bring schema opinions that fight the Drizzle layout.
+standard code flow with PKCE applies. The required functionality (one provider,
+sessions, and an allowlist) requires about 300 lines. Existing authentication
+frameworks impose schemas that conflict with the Drizzle database design.
 `better-auth` is the fallback if a second provider or passkeys are added.
 
 Consequences: `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` become Fly
@@ -223,9 +217,7 @@ Options
 
 Choice: option 3.
 
-Why: the token file is the design; it already works as CSS variables switched
-by `data-color-theme` and `data-appearance` on `<html>`, which Tailwind v4
-consumes natively. Markdown output cannot receive utility classes without
+Why: `tokens.css` defines the entire design system via CSS variables toggled by `data-color-theme` and `data-appearance` on `<html>`, which Tailwind v4 consumes natively. Markdown output cannot receive utility classes without
 custom renderers for every element, so `.research-prose` and the code/table
 rules stay as plain CSS in `@layer components`. Everything else (sidebar rows,
 cards, dialogs, menus) becomes utilities on components, which is where the
@@ -254,8 +246,7 @@ Choice: Base UI, wrapped once per primitive in `packages/client/src/ui/`.
 Why: unstyled, composable, Tailwind-friendly, portal and focus management,
 nested dismissal handled by the library, `render` prop for custom elements
 (the `LauncherSelect` submenu row), and active maintenance by the MUI team.
-Radix is equivalent in capability and is the fallback if Base UI lacks a
-primitive at implementation time; the wrappers make a swap local. shadcn/ui
+Radix is equivalent in capability and serves as a fallback if Base UI lacks a required primitive; the abstraction wrappers ensure any future replacement is isolated to a single module. shadcn/ui
 was rejected because its copied components carry their own token scheme.
 Native `<dialog>` is kept for the report-import and confirm dialogs where it
 already works, wrapped in the same `Dialog` API.
@@ -285,10 +276,7 @@ with `@anthropic-ai/sdk` as a per-provider escape hatch if a Fable
 Why: the CLIs brought tuned tools but also child processes, per-user HOME
 directories, CLI version drift, argv limits, opaque session files, and a
 provider set (Claude, Codex, Grok) that no longer matches the product's
-model roster. Owning the loop makes conversation history a database object,
-so forking, cross-model follow-ups, resume after deploy, and cost accounting
-are ordinary data operations, and every model gets the same tools and the
-same activity rendering. Option 3 does not cover Gemini or DeepSeek and
+model roster. Managing the agent loop directly allows conversation history to be persisted in SQLite, simplifying forking, multi-model threads, post-deployment resumption, and usage tracking into standard database queries. Option 3 does not cover Gemini or DeepSeek and
 would fragment the loop. The cost is building and tuning `web_search` and
 `web_fetch` ourselves.
 
@@ -351,9 +339,7 @@ and deploys are handled by resume rather than by a second app
 
 Ids are ULIDs (`[0-9A-HJKMNP-TV-Z]{26}`) for every row. Timestamps are integer
 milliseconds since the Unix epoch. Node statuses are `queued | running |
-complete | failed | cancelled | interrupted`; `interrupted` is new and the
-desktop's `starting` is gone, because nothing is spawned
-(`05-run-lifecycle-and-streaming.md` §3). No desktop identifier or file
+complete | failed | cancelled | interrupted`; The `interrupted` status was added, and the legacy `starting` status was removed because processes are no longer spawned. No desktop identifier or file
 format is accepted.
 
 ## ADR-15 What "workspace" means in the web app
@@ -362,10 +348,11 @@ The desktop's `GroupInfo` with `scope: research` is a workspace bound to a
 user-chosen folder on disk; research folders are a client-authored grouping
 over trees within a workspace. On the web, a workspace is a purely
 server-side container owned by a user: a scope for trees, folders,
-encyclopedia pages, and the feed filter. It has no directory; agents have no
-filesystem. Native folder pickers, "reveal in Finder", moving a workspace to
-another folder, and detached on-disk archives are replaced by create, rename,
-remove, reorder, and set-default.
+encyclopedia pages, and the feed filter. It has no associated directory, and
+agents have no filesystem access. Native folder pickers, "reveal in Finder",
+moving a workspace to another folder, and detached on-disk archives are
+replaced by workspace creation, renaming, removal, reordering, and default
+selection.
 
 ## ADR-16 Models, effort, and access
 
@@ -381,9 +368,7 @@ Reasoning effort is fixed at medium and not exposed. Users may pick a
 different model on a follow-up; reasoning blocks are dropped on cross-model
 forks. GPT-6 Astra is deferred.
 
-Why: Gemini tokens are plentiful for the team and DeepSeek Flash and Luna
-are cheap ($0.15/$0.60 and $0.20/$1.20 per MTok); Fable is expensive and
-gated until per-account limits exist. OpenRouter gives one integration and
+Why: Gemini quota is readily available, and DeepSeek Flash and GPT-5.6 Luna have low inference costs; Claude Fable is expensive and restricted to admins until per-account usage limits are active. OpenRouter gives one integration and
 one privacy control for both third-party models. One effort level removes a
 per-model options matrix from the UI and the eval.
 
@@ -410,7 +395,5 @@ parts where supported and as text otherwise (`04-agent-runtime.md` §8).
 Documents attached to a node are in context for its descendants and are
 also served through the artifact preview.
 
-Why: the desktop's filesystem tools (Read, Grep) have no equivalent on a
-hosted service; attached documents are the web-native replacement for
-"research over my files".
+Why: Local filesystem tools like Read and Grep cannot be used in a hosted web environment; user-uploaded documents provide the web equivalent for referencing local files.
 

@@ -5,8 +5,7 @@
 // and a second tab all agree (ADR-7). `?ws=` absent means the account's
 // default workspace, which is what `settings.defaultWorkspaceId` holds; an
 // account with no default falls back to the first workspace in sidebar order.
-// A scope naming a workspace that no longer exists resolves the same way, so a
-// stale bookmark lands somewhere real instead of on an empty list.
+// Fall back to a valid workspace if a bookmarked workspace ID no longer exists.
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useCallback } from "react";
@@ -17,9 +16,9 @@ export interface WorkspaceScope {
   /** The resolved workspace, or `""` before the lists have loaded. Queries
    * that take a workspace are disabled on the empty string. */
   workspaceId: string;
-  /** What `?ws=` says, which is not the same as what it resolves to. */
+  /** Raw workspace ID from the `?ws=` query parameter before resolution. */
   requested: string | null;
-  /** True once `workspaces.list` has answered, whatever it answered with. */
+  /** True once the `workspaces.list` query has settled. */
   ready: boolean;
   setScope: (workspaceId: string) => void;
 }

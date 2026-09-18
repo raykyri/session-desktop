@@ -1,6 +1,4 @@
-// Chain math for inline follow-ups: the linear "thread spine" a research
-// document renders when follow-ups continue an answer in place instead of
-// branching into rail cards. A node has at most one existing inline child
+// Utilities for traversing and ordering inline follow-up chains within research threads. A node has at most one existing inline child
 // (enforced by the server's partial unique index,
 // `02-domain-model-and-database.md` §5.4); these helpers only read whatever
 // node list they are given, so a malformed graph degrades to shorter chains

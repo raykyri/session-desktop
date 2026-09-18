@@ -46,9 +46,8 @@ export function DocumentEditor({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // These scan up to the 10 MB cap. Counting stops at the first word over the
-  // limit so a dense import cannot monopolize the tab merely to establish that
-  // the button is disabled.
+  // These scans stop at the first word over the limit to avoid unnecessary
+  // main-thread work when determining the disabled state.
   const { wordCount, byteCount, derivedTitle, overWordLimit } = useMemo(() => {
     let count: number;
     let over = false;
@@ -116,8 +115,7 @@ export function DocumentEditor({
           onChange={(event) => setTitle(event.currentTarget.value)}
         />
         <Textarea
-          // The editor exists to be typed in, and it is the dialog's only
-          // multi-line field; focusing it is what the reader asked for.
+          // Focus the primary textarea when the dialog opens.
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
           value={markdown}
@@ -137,8 +135,8 @@ export function DocumentEditor({
           <p className="text-fg-muted m-0 text-xs">
             This document has {highlightCount.toLocaleString()} highlight
             {highlightCount === 1 ? "" : "s"}. Changing its content will erase{" "}
-            {highlightCount === 1 ? "it" : "them"}. Title-only changes keep{" "}
-            {highlightCount === 1 ? "it" : "them"}.
+            {highlightCount === 1 ? "it" : "them"}. Existing highlights are preserved when editing
+            only the title.
           </p>
         ) : null}
         <p

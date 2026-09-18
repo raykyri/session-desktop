@@ -1,11 +1,7 @@
 // Visual baselines (`12-testing-linting-ci.md` §3.6): Home and a finished
 // research document in every theme × appearance combination.
 //
-// Chromium only. The `@visual` tag is what the WebKit project filters out
-// (`playwright.config.ts`): the two engines rasterize text differently and
-// scroll differently, so a second set of baselines would have to be
-// regenerated for every design change without ever catching something the
-// first set does not.
+// Visual regression tests run only on Chromium to avoid redundant cross-engine font rendering differences.
 //
 // The four combinations are set through `settings.update` rather than through
 // the Appearance tab. The pickers are already covered by `library.spec.ts`;
@@ -60,8 +56,7 @@ test.describe("@visual", () => {
       await expect(page.locator("html")).toHaveAttribute("data-appearance", appearance);
       await expect(page.locator("html")).toHaveAttribute("data-color-theme", colorTheme);
       await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
-      // The feed carries a relative timestamp that ticks; it is masked rather
-      // than frozen, because freezing the clock would also stop the stream.
+      // Mask relative timestamp elements to prevent false visual regression diffs from dynamic time updates.
       await expect(page).toHaveScreenshot(`home-${name}.png`, {
         mask: [page.locator("time")],
         animations: "disabled",

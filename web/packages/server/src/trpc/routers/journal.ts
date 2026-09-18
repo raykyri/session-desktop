@@ -25,7 +25,7 @@ import { repo, required } from "../errors.js";
 function webUrl(value: string): string {
   const url = URL.parse(value.trim());
   if (!url || (url.protocol !== "https:" && url.protocol !== "http:") || url.hostname === "") {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "that does not look like a link" });
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid URL format" });
   }
   return url.toString();
 }
@@ -89,9 +89,8 @@ export const journalRouter = router({
       const entry = storableEntry(input.entry);
       const restored = repo(() => journal.restore(ctx.db, ctx.user.id, entry));
       if (!restored) {
-        // The only way an insert-or-update of one's own entry fails is that
-        // the id already belongs to another account. Answered as absence, and
-        // published to nobody (`06-auth-and-users.md` §4).
+        // Restoring a user's entry fails only when another account owns its ID.
+        // Return NOT_FOUND without publishing an event (`06-auth-and-users.md` §4).
         throw new TRPCError({
           code: "NOT_FOUND",
           message: `journal entry ${entry.id} was not found`,
@@ -138,7 +137,10 @@ export const journalRouter = router({
     .mutation(async ({ ctx, input }) => {
       const budget = ctx.limiter.take(`fetchTweet:${ctx.user.id}`, RATE_LIMITS.fetchTweet);
       if (!budget.allowed) {
-        throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "too many tweet lookups" });
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Too many post lookups. Try again shortly.",
+        });
       }
       try {
         return await fetchTweetJson(ctx.fetch, input.id, input.token);
@@ -155,7 +157,10 @@ export const journalRouter = router({
         `journal entry ${input.entryId} was not found`,
       );
       if (!isTweetEntry(entry)) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "this entry is not a post" });
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "The specified journal entry is not a social post.",
+        });
       }
       const hydrated = await hydrate(ctx, entry);
       publish(ctx, "journal.entry.updated", { entry: hydrated });
@@ -170,7 +175,7 @@ function asTrpcError(error: unknown): TRPCError {
     return error;
   }
   const message = error instanceof Error ? error.message : String(error);
-  if (error instanceof TweetFetchError && message.startsWith("invalid tweet")) {
+  if (error instanceof TweetFetchError && message.startsWith("Invalid tweet")) {
     return new TRPCError({ code: "BAD_REQUEST", message });
   }
   return new TRPCError({ code: "BAD_GATEWAY", message });
@@ -190,7 +195,7 @@ async function hydrate(ctx: JournalContext, entry: JournalTweetEntry): Promise<J
       entry,
       result.snapshot
         ? { hydration: "ok", tweet: result.snapshot }
-        : { hydration: "failed", error: "this post is unavailable" },
+        : { hydration: "failed", error: "This post is unavailable." },
     );
   } catch (error) {
     next = applyJournalTweetHydration(entry, {

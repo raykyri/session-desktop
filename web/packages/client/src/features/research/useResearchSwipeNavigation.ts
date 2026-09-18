@@ -4,9 +4,8 @@
 // is non-passive because a recognized swipe has to `preventDefault` before the
 // browser starts its own back gesture; deltas are scaled out of their
 // `deltaMode` so a line- or page-mode wheel is measured in the same pixels as a
-// trackpad's; and a nested horizontal scroller (a wide table, a code block)
-// that can still scroll keeps the gesture, because that is what the reader
-// meant by it.
+// trackpad's. Nested horizontal scrollers, such as code blocks and tables,
+// take precedence over page swipe navigation.
 //
 // The momentum latch is module-level rather than per-hook: a completed swipe
 // swaps the page, which unmounts this scroller and mounts another, and the

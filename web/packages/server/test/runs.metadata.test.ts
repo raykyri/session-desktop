@@ -112,7 +112,7 @@ async function completedNode(harness: ReturnType<typeof createAgentHarness>, log
   return { user, caller, workspace, nodeId, revision: commit.revision };
 }
 
-test.serial("a title is generated, sanitized, and given to the thread", async (t) => {
+test.serial("generates and persists a sanitized thread title", async (t) => {
   const harness = createAgentHarness(t);
   const { user, caller, nodeId } = await completedNode(harness, "titler");
 
@@ -166,7 +166,7 @@ test.serial("a recap candidate is generated, previewed, and applied", async (t) 
       expectedCurrentRecapId: node.recap?.id ?? null,
       candidate,
     }),
-    { message: /different answer|answer changed/ },
+    { message: /candidate response revision does not match the current answer revision/ },
   );
 });
 
@@ -304,7 +304,7 @@ test.serial("a rename during title generation is not overwritten", async (t) => 
   // The model takes seconds and the rename is a deliberate act; a generated
   // title is a default, and a default must not replace a decision. The rename
   // lands while `generateTitle` is awaiting the model, which is exactly the
-  // window a user hits by naming a thread as soon as its answer appears.
+  // handles concurrent thread renaming while initial response generation completes.
   const harness = createAgentHarness(t);
   const { user, caller, nodeId } = await completedNode(harness, "renamer");
 
@@ -449,7 +449,7 @@ test.serial("a failed page carries the reason it failed", async (t) => {
   // generated" tells the reader nothing they can act on.
   t.is(
     page?.error,
-    "this deployment's credential for the model was rejected; an operator has to fix it",
+    "Provider authentication failed for this model. Please contact an administrator.",
   );
   t.true(
     events.some(

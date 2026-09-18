@@ -1,9 +1,6 @@
 // Answer summaries (`docs/02-domain-model-and-database.md` §5.8).
 //
-// Both entry points are guards around a background result. A recap is
-// generated from an answer, asynchronously, and by the time it comes back the
-// answer may have been retried, edited, or deleted; applying it then would
-// attach a summary of something the user can no longer see.
+// Entry points validate revision consistency before applying asynchronously generated summaries to prevent applying stale summaries to updated responses.
 
 import type { ResearchNode, ResearchRecap, ResearchRecapCandidate } from "@session/shared";
 import { normalizeRecap, validateRecapInstructions } from "@session/shared";
@@ -126,19 +123,21 @@ export function applyCandidate(
     }
     const tree = tx.select().from(trees).where(eq(trees.id, node.treeId)).get();
     if (tree?.archivedAt != null) {
-      throw new Error("restore archived research before replacing its summary");
+      throw new Error("Cannot update summary of archived research: restore the thread first.");
     }
     if (node.kind !== "run" || node.status !== "complete") {
-      throw new Error("only completed research runs can replace a summary");
+      throw new Error("Cannot update summary: the research run has not completed.");
     }
     const currentRecapId = node.recapJson?.id ?? null;
     if (currentRecapId !== (input.expectedCurrentRecapId ?? null)) {
       throw new Error(
-        "the summary changed while the preview was open; review the latest summary and try again",
+        "Summary conflict: the summary was modified while the preview was open. Review the updated summary and retry.",
       );
     }
     if (input.candidate.responseRevision !== input.expectedResponseRevision) {
-      throw new Error("the summary candidate belongs to a different answer");
+      throw new Error(
+        "Invalid summary candidate: candidate response revision does not match the current answer revision.",
+      );
     }
     const snapshot = tx
       .select({ revision: responseSnapshots.revision })
@@ -146,7 +145,9 @@ export function applyCandidate(
       .where(eq(responseSnapshots.nodeId, node.id))
       .get();
     if (!snapshot || snapshot.revision !== input.expectedResponseRevision) {
-      throw new Error("the answer changed while the preview was open; generate a new summary");
+      throw new Error(
+        "Response revision conflict: the underlying answer was updated while generating the summary. Please regenerate.",
+      );
     }
     const text = normalizeRecap(input.candidate.text);
     if (text === undefined) {

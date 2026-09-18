@@ -7,10 +7,9 @@
 // folders that are not in the state, dedupe stars. It deliberately does not
 // prune by tree existence.
 //
-// One departure follows from the schema rather than the rule: membership and
-// stars are stored as rows keyed to `trees` and `folders`, so an entry naming
-// a tree or folder that does not exist has nowhere to live and is dropped on
-// the way in. `02` §3.2 already relies on that foreign key for tree deletion.
+// Membership and star rows reference `trees` and `folders`. Entries naming
+// nonexistent records are omitted during normalization because they cannot
+// satisfy the foreign key constraints used for tree deletion (`02` §3.2).
 //
 // `starred` is a rank, not a flag: `ResearchFolderState.starred` is one
 // ordered sequence interleaving tree ids and folder ids, and two booleans
@@ -127,9 +126,7 @@ export function setState(
     const candidateFolders = normalized.folders.filter(
       (folder) => folder.workspaceId === workspaceId || folder.workspaceId === "",
     );
-    // A folder id that already names a row somewhere else — another account or
-    // another workspace — is not this caller's to claim: the upsert below would
-    // move that row here rather than create one.
+    // Validate that folder IDs do not conflict with existing folders belonging to another account or workspace.
     const claimedElsewhere = new Set(
       candidateFolders.length === 0
         ? []
@@ -156,7 +153,7 @@ export function setState(
       }
     });
     const at = now();
-    // Membership first: a folder about to be deleted must not still hold rows.
+    // Delete folder membership associations prior to deleting the folder record.
     for (const treeId of knownTreeIds) {
       tx.delete(treeFolderMembership).where(eq(treeFolderMembership.treeId, treeId)).run();
     }

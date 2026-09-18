@@ -43,7 +43,7 @@ test("resolves research navigation shortcuts", (t) => {
 
 // Browsers keep Cmd-N and Cmd-T for their own windows and tabs, so Home needs
 // a chord that reaches the page. It is the label the hint renders.
-test("Shift-Cmd-H opens Home where the browser swallows Cmd-N and Cmd-T", (t) => {
+test("maps Shift-Cmd-H to Home to avoid browser shortcut interception", (t) => {
   t.is(RESEARCH_HOME_SHORTCUT_LABEL, "⇧⌘H");
   t.deepEqual(resolveAppShortcut(shortcut({ key: "h", metaKey: true, shiftKey: true })), {
     type: "focusResearchHome",
@@ -51,7 +51,7 @@ test("Shift-Cmd-H opens Home where the browser swallows Cmd-N and Cmd-T", (t) =>
   t.is(resolveAppShortcut(shortcut({ key: "h", metaKey: true })), null);
 });
 
-test("Ctrl stands in as the primary modifier for the digit and comma chords", (t) => {
+test("uses Ctrl as primary modifier for digit and comma shortcuts on non-macOS platforms", (t) => {
   t.deepEqual(resolveAppShortcut(shortcut({ key: "1", ctrlKey: true })), {
     type: "focusResearchTab",
     tabIndex: 0,
@@ -92,10 +92,8 @@ test("Shift-Cmd-[ and Shift-Cmd-] cycle, with curly variants normalized", (t) =>
   });
 });
 
-// The table, not the dispatcher, decides what an editable target blocks: the
-// app is used from a composer most of the time, and a chord that dies there is
-// a chord nobody can rely on.
-test("an editable target blocks only the chords that compete with text editing", (t) => {
+// Shortcut definition specifies editable target suppression per chord rather than globally in the event handler.
+test("suppresses only shortcuts that conflict with standard text editing when inside an input", (t) => {
   const inField = (overrides: Partial<Parameters<typeof resolveAppShortcut>[0]>) =>
     resolveAppShortcut(shortcut({ ...overrides, editableTarget: true }));
 

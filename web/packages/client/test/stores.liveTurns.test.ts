@@ -53,14 +53,14 @@ test.serial("a replayed delta is dropped rather than appended twice", (t) => {
   t.false(state().gap);
 });
 
-test.serial("a hole in the sequence flags a gap and freezes the buffer", (t) => {
+test.serial("missing sequence numbers set the gap flag and halt buffer updates", (t) => {
   apply(
     { type: "turn.delta", nodeId: NODE, seq: 1, text: "a" },
     { type: "turn.delta", nodeId: NODE, seq: 3, text: "c" },
   );
 
   t.true(state().gap, "seq 2 never arrived");
-  t.is(state().inFlightText, "a", "the delta after the hole is not applied");
+  t.is(state().inFlightText, "a", "ignores subsequent deltas after detecting a sequence gap");
   t.is(state().lastSeq, 1);
 });
 

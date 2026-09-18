@@ -34,7 +34,7 @@ export function truncateEncyclopediaText(value: string, limit: number): string {
   return characters.length <= limit ? collapsed : `${characters.slice(0, limit).join("")}…`;
 }
 
-/** How many JSON wrappers to peel off a generated page. */
+/** Maximum JSON wrapper layers removed from a generated page. */
 const MAX_PAGE_JSON_LAYERS = 3;
 
 function unwrapPageJson(text: string): string | null {

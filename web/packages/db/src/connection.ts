@@ -44,8 +44,8 @@ export class UnknownMigrationError extends Error {
 
   constructor(unknownHashes: readonly string[]) {
     super(
-      `the database has ${unknownHashes.length} migration(s) this build does not know; ` +
-        "deploy a build that includes them before starting",
+      `Database schema incompatibility: database contains ${unknownHashes.length} unrecognized migration(s). ` +
+        "Update the application to a compatible version.",
     );
     this.name = "UnknownMigrationError";
     this.unknownHashes = unknownHashes;
@@ -55,7 +55,7 @@ export class UnknownMigrationError extends Error {
 function applyPragmas(client: SqliteDatabase.Database, fileBacked: boolean): void {
   if (fileBacked) {
     // WAL needs a file; an in-memory database rejects it and stays in
-    // `memory` journal mode, which is what an in-memory database wants.
+    // Use `memory` journal mode for in-memory databases.
     client.pragma("journal_mode = WAL");
   }
   client.pragma("synchronous = NORMAL");

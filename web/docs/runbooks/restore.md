@@ -1,11 +1,10 @@
 # Restore
 
 How to bring `session-dev` back from its backups: `session.db` from Litestream,
-`/data/documents` from the nightly archives, then the checks that say the
-restore is real. Source of truth for what is backed up: `13-deployment-fly.md`
+`/data/documents` from the nightly archives, followed by the verification steps required to validate database integrity and application health. Source of truth for what is backed up: `13-deployment-fly.md`
 §6.
 
-What exists to restore from:
+Available backup sources:
 
 | Data | Mechanism | Retention |
 | --- | --- | --- |
@@ -15,17 +14,17 @@ What exists to restore from:
 
 Everything else (the client bundle, migrations, fonts) is in the image.
 
-## 1. Decide what you are doing
+## 1. Determine the recovery scenario
 
 - **The volume is gone or corrupt.** Full restore, below.
-- **A bad write went in and you want yesterday.** Point-in-time restore to a
-  timestamp, then swap the file in.
+- **Recover from an incorrect write or data corruption.** Restore to a point
+  in time, then replace the active database file.
 - **One document is missing.** Pull the archive that contains it and copy that
   one file; skip the database entirely.
 
-In every case the app is stopped first. Two processes must never hold the same
-SQLite file, and a Litestream restore into a live database directory will be
-overwritten by the running server.
+Stop the application before performing any restore. Two processes must never
+hold the same SQLite file, and a Litestream restore into a live database
+directory will be overwritten by the running server.
 
 ```sh
 fly scale count 0 -a session-dev      # or: fly machine stop <id>
@@ -51,8 +50,7 @@ litestream restore -config /etc/litestream.yml \
   -o /data/session.db.restored "$LITESTREAM_REPLICA_URL"
 ```
 
-Inspect before swapping — `litestream ltx` lists what the replica holds, and
-the restored file answers questions on its own:
+Inspect the database before replacing the active file: run `litestream ltx` to review available snapshots, and query the restored database directly with `sqlite3` to confirm row counts and table integrity:
 
 ```sh
 sqlite3 /data/session.db.restored "PRAGMA integrity_check;"
@@ -68,11 +66,11 @@ mv /data/session.db.restored /data/session.db
 chown session:session /data/session.db
 ```
 
-A restored database must not be older than the image's migrations: the server
+A restored database must not be newer than the image's migrations: the server
 applies migrations forward and refuses to start against a database carrying a
-migration it does not know (`UnknownMigrationError`). Restoring a 30-day-old
-snapshot under today's image is fine; restoring today's database under a
-month-old image is not — deploy the matching image instead.
+migration it does not know (`UnknownMigrationError`). A current image can use
+an older database snapshot and apply pending migrations. An older image cannot
+use a newer database; deploy an image that supports the restored schema.
 
 ## 3. Restore `/data/documents`
 
@@ -89,10 +87,7 @@ done
 chown -R session:session /data/documents
 ```
 
-Missing documents are survivable: a row in `documents` whose file is gone makes
-the preview 404 and the `document_read` tool report the document as
-unavailable. A missing *database* with intact files is not — the files are
-content-addressed blobs with no names of their own.
+The application can tolerate missing document files: if a document record lacks an underlying file, document previews return 404 and the `document_read` tool reports an error. Conversely, document files cannot be recovered without the database, because files on disk are content-addressed hashes that rely on database metadata for context.
 
 ## 4. Start and verify
 
@@ -101,9 +96,10 @@ fly scale count 1 -a session-dev
 fly logs -a session-dev
 ```
 
-The boot sequence to watch for (`13-deployment-fly.md` §5): env validated,
-credential written, migrations applied, `reconciled runs from the previous
-process`, `session-server listening`. `/healthz` is 503 until that finishes.
+Monitor the startup logs for the expected boot sequence
+(`13-deployment-fly.md` §5): environment validation, credential generation,
+migration application, `reconciled runs from the previous process`, and
+`session-server listening`. `/healthz` returns 503 until startup completes.
 
 ```sh
 curl -sS -o /dev/null -w '%{http_code}\n' https://session.dev/healthz     # 200
@@ -123,9 +119,9 @@ Then in the app: sign in, open a tree, open a document preview (that exercises
 the artifact origin and the restored file), and start one short run (that
 exercises the queue, a provider credential, and a write).
 
-Interrupted runs resume on their own: nodes left `running` by the crash are
-marked `interrupted` with `resume_pending` and re-queued at boot
-(`05-run-lifecycle-and-streaming.md` §7). Expect a burst of activity in the
+Interrupted runs resume automatically: nodes left `running` by the crash are
+marked `interrupted` with `resume_pending` and re-queued during startup
+(`05-run-lifecycle-and-streaming.md` §7). This can increase activity during the
 first minute.
 
 ## 5. After
@@ -133,12 +129,12 @@ first minute.
 - Delete `/data/session.db.broken` once the verification passes, not before.
 - Litestream begins replicating the restored file immediately; confirm with
   `fly logs` (a `sync` line within a second or two of the first write).
-- Force a documents archive so the next incremental has a marker it can trust:
+- Force a documents archive to establish a reliable baseline marker for subsequent incremental backups:
   `fly ssh console -a session-dev -C "/app/scripts/backup-documents.sh"`.
 
 ## 6. Rehearsal (quarterly)
 
-The restore is only real if it has been done recently. Once a quarter, against
+Backup and recovery procedures must be tested on a regular schedule to ensure disaster readiness. Once a quarter, against
 a scratch app rather than production:
 
 ```sh
@@ -148,6 +144,4 @@ fly volumes destroy session_data_drill -a session-dev-drill
 ```
 
 Record the date, the restored timestamp, and the row counts in the drill log.
-What this catches, and nothing else does: an expired bucket credential, a
-retention window shorter than believed, and an image that can no longer open
-the database it backed up.
+Rehearsals identify failure modes that automated checks miss, such as expired object storage credentials, misconfigured retention policies, or migration incompatibilities between the backup snapshot and current container image.

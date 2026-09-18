@@ -32,10 +32,8 @@ function readSettings(
 export const authRouter = router({
   me: publicProcedure.query(({ ctx }): User | null => ctx.user),
   logout: publicProcedure.mutation(({ ctx }) => {
-    // The cookie is cleared by the Hono layer, which owns `Set-Cookie`; here
-    // the row goes so a stolen cookie stops working immediately. Only this
-    // session's row: signing out of one browser is not signing out of the
-    // account's others (`06-auth-and-users.md` §2).
+    // Deletes the active session database row to immediately invalidate the token.
+    // Other active sessions for the account remain valid.
     if (ctx.sessionToken !== null) {
       auth.deleteSession(ctx.db, ctx.sessionToken);
     }
@@ -174,12 +172,7 @@ export const adminRouter = router({
       }
       return repo(() => auth.setUserLimits(ctx.db, input.userId, patch));
     }),
-  /**
-   * Codes an administrator hands out. `createdBy` is null rather than the
-   * admin's id because `invites.created_by` is spent against that account's
-   * `invites_remaining` allotment, which exists for the user-invites-user path
-   * (`06-auth-and-users.md` §3) and would cap an administrator at zero.
-   */
+  /** Generates administrative invite codes. Leaves createdBy null so admin codes do not decrement personal invite allowances. */
   createInvites: adminProcedure
     .input(z.object({ count: z.number().int().min(1).max(100) }))
     .mutation(({ ctx, input }) => {

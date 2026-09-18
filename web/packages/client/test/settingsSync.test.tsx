@@ -1,7 +1,4 @@
-// The settings mirror against the server (`06-auth-and-users.md` §6): the
-// account's copy wins when it lands, a local change is pushed once the typing
-// or dragging stops, and an echo of what the server just sent is not pushed
-// back at it.
+// Server settings take precedence on initial load; local modifications sync after debouncing, and server echo events are discarded.
 
 import { DEFAULT_USER_SETTINGS } from "@session/shared";
 import { QueryClient } from "@tanstack/react-query";
@@ -51,7 +48,7 @@ test.afterEach(() => {
   resetDocumentRoot();
 });
 
-test.serial("the server's copy replaces the local mirror on load", async (t) => {
+test.serial("server settings override local cached settings on startup", async (t) => {
   useSettingsStore.getState().set("appearance", "dark");
   useSettingsStore.getState().set("textSize", 14);
   const stub = createTrpcStub({
@@ -64,7 +61,7 @@ test.serial("the server's copy replaces the local mirror on load", async (t) => 
   await waitUntil(
     t,
     () => useSettingsStore.getState().settings.appearance === "light",
-    "the account's appearance won",
+    "the account's appearance setting was applied",
   );
   t.is(useSettingsStore.getState().settings.textSize, 20);
   t.false(
@@ -108,8 +105,7 @@ test.serial("a local change is pushed once, after the debounce", async (t) => {
 });
 
 test.serial("a push that fails does not stop the next one", async (t) => {
-  // The first write is refused; the mirror has to stay able to push, or one
-  // dropped request would silence every later preference change in the tab.
+  // If the initial update request fails, synchronization must continue so subsequent preference changes can retry.
   let calls = 0;
   const stub = createTrpcStub({
     ...defaultResponses(testUser()),
@@ -171,7 +167,7 @@ test.serial("two tabs inside one debounce window do not overwrite each other", a
       settings: Record<string, unknown>;
     }
   ).settings;
-  t.deepEqual(sent, { textSize: 18 }, "only the field this tab moved is sent");
-  t.is(stored.appearance, "light", "so the other tab's change survives");
-  t.is(stored.textSize, 18, "and this tab's lands");
+  t.deepEqual(sent, { textSize: 18 }, "the mutation includes only the field changed in this tab");
+  t.is(stored.appearance, "light", "preserves the concurrent change from another tab");
+  t.is(stored.textSize, 18, "applies the update from the current tab");
 });

@@ -25,9 +25,8 @@ let plugins: MathPlugins | null = null;
 const listeners = new Set<() => void>();
 
 /** Requests the math chunk, or resolves at once if it is already in. Called by
- * a renderer whose source looks like it contains TeX; a failure is swallowed,
- * because the fallback — TeX as literal source — is the state the document is
- * already in. */
+ * a renderer whose source contains TeX. If KaTeX rendering fails, display the
+ * raw TeX source instead. */
 export function ensureMathPlugins(): Promise<void> {
   if (plugins) return Promise.resolve();
   return loadMathPlugins()

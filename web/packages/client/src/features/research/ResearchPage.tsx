@@ -772,8 +772,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     restoredRef.current = `${treeId}:${chainKey}`;
     const saved = restoreScroll(selectedNodeId) ?? 0;
     if (saved === 0 && chainNodeIds[0] !== selectedNodeId) {
-      // Arriving at a mid-chain segment with nothing to restore — Back from a
-      // branch, say — shows that answer rather than the root five screens up.
+      // When an intermediate segment has no saved scroll position, scroll to
+      // that answer instead of defaulting to the root.
       scrollToSegment(selectedNodeId, "auto");
       return;
     }
@@ -789,8 +789,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   ]);
 
   const onScroll = useCallback(() => {
-    // A loading window is not this page's scroll state, and a page mid-visit has
-    // not restored yet; recording either would overwrite the saved offset.
+    // Do not record scroll position during loading or before restoration;
+    // either value would overwrite the saved offset.
     if (!settledRef.current || restoredRef.current === null) return;
     if (scrollTimerRef.current !== null) clearTimeout(scrollTimerRef.current);
     scrollTimerRef.current = setTimeout(() => {
@@ -895,8 +895,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         .then((child) => {
           setFollowup("");
           setAsk(null);
-          // The reader stays put — the thread is one page — and the new segment
-          // is brought into view when the refreshed detail delivers it.
+          // Preserve the current scroll position until refreshed detail includes
+          // the new segment.
           if (inline) pendingScrollNodeIdRef.current = child.id;
         })
         .catch((error: unknown) => toast(errorMessage(error), "warning"))
@@ -951,8 +951,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       const text = latestRef.current.segments[nodeId]?.rawAnswer ?? "";
       if (!text) return;
       writeClipboardText(text)
-        .then(() => toast("Copied research answer"))
-        .catch(() => toast("Couldn’t copy the research answer", "warning"));
+        .then(() => toast("Answer copied to clipboard"))
+        .catch(() => toast("Failed to copy answer", "warning"));
     },
     [toast],
   );
@@ -972,8 +972,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     }
     if (parts.length === 0) return;
     writeClipboardText(parts.join("\n\n---\n\n"))
-      .then(() => toast("Copied thread"))
-      .catch(() => toast("Couldn’t copy the thread", "warning"));
+      .then(() => toast("Thread copied to clipboard"))
+      .catch(() => toast("Failed to copy thread", "warning"));
   }, [toast]);
 
   const confirmDelete = useCallback(() => {
@@ -1000,8 +1000,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
 
   /* --------------------------------------------------------------- lifecycle */
 
-  // Mark viewed on arrival and whenever the thread gains a completion while the
-  // reader is here, so the sidebar's attention flag never survives being read.
+  // Clear unread status on arrival and whenever a run completes while the
+  // thread is open.
   const completedCount = nodes.filter((node) => node.status === "complete").length;
   const detailLoaded = detail !== undefined;
   const viewedMutate = markViewed.mutate;
@@ -1012,7 +1012,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
 
   const anyActive = chainNodes.some((node) => isActiveResearchStatus(node.status));
   useEffect(() => {
-    // The tick is the clock; entering a segment restarts it from now.
+    // Update elapsed run durations periodically; entering a segment restarts its
+    // timer from the current time.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setNow(Date.now());
     if (!anyActive) return;
@@ -1124,9 +1125,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     .filter((row) => row !== "")
     .join("\n");
 
-  // The answer panes' menus. The dependency list is honest — the rows really
-  // are a pure function of the signature and the (stable) renderer — which is
-  // what lets a memoized pane keep its menu across a streamed delta (09 §4).
+  // Answer pane menu rows depend only on the signature and stable renderer, so
+  // a memoized pane retains its menu across streamed deltas (`09` §4).
   const answerMenuByNode = useMemo(() => {
     const map = new Map<string, ReactNode>();
     for (const row of answerMenuSignature.split("\n")) {

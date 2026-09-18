@@ -118,7 +118,7 @@ test("a turn round-trips fields this build does not know", (t) => {
   });
 });
 
-test("isTurn is the schema, not a second opinion about it", (t) => {
+test("validates Turn objects directly against the canonical schema definition", (t) => {
   const turn = {
     id: "turn-1",
     agentId: "n1",

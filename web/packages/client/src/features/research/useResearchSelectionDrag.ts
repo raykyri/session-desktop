@@ -93,9 +93,7 @@ export function useResearchSelectionDrag(
       range.commonAncestorContainer instanceof Element
         ? range.commonAncestorContainer
         : range.commonAncestorContainer.parentElement;
-    // A selection that spans two segments — or that leaves the answer for the
-    // rail beside it — anchors nowhere: the projection is one response root's
-    // text and nothing else's.
+    // Reject selections spanning multiple segments or extending into the rail.
     const root = container?.closest<HTMLElement>(RESPONSE_ROOT_SELECTOR) ?? null;
     const nodeId = responseRootNodeId(root);
     const revision = nodeId ? revisionByNode[nodeId] : undefined;
@@ -258,8 +256,7 @@ export function useResearchSelectionDrag(
       const nodeId = responseRootNodeId(root);
       const selection = window.getSelection();
       if (!nodeId || !selection || !selection.isCollapsed) return;
-      // Links keep their own behavior; popping the bar under a navigation would
-      // be noise.
+      // Preserve standard link navigation and avoid showing the selection popover when clicking hyperlinks.
       if (event.target instanceof Element && event.target.closest("a")) return;
       const hit = inputRef.current.annotationAtPoint(root, nodeId, event.clientX, event.clientY);
       if (!hit) return;

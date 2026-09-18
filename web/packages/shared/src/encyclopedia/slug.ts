@@ -44,7 +44,9 @@ export function encyclopediaSlug(term: string): string {
  * Returns the slug so it can be used inline; throws otherwise. */
 export function validateEncyclopediaSlug(slug: string): string {
   if (!slug || encyclopediaSlug(slug) !== slug) {
-    throw new Error(`'${slug}' is not a valid encyclopedia page slug`);
+    throw new Error(
+      `Invalid slug '${slug}': must contain only lowercase alphanumeric characters and hyphens.`,
+    );
   }
   return slug;
 }

@@ -78,11 +78,11 @@ export function uploadRoutes(options: UploadRoutesOptions): Hono<AppEnv> {
   app.post("/uploads", async (c) => {
     const user = c.get("user");
     if (!user) {
-      return c.json({ error: "sign in to continue" }, 401);
+      return c.json({ error: "Authentication required. Sign in to continue." }, 401);
     }
     const budget = limiter.take(`uploads:${user.id}`, RATE_LIMITS.uploads);
     if (!budget.allowed) {
-      return c.json({ error: "too many uploads" }, 429, {
+      return c.json({ error: "Upload rate limit exceeded. Try again later." }, 429, {
         "Retry-After": String(budget.retryAfter),
       });
     }
@@ -90,12 +90,12 @@ export function uploadRoutes(options: UploadRoutesOptions): Hono<AppEnv> {
     // read, so an oversized POST costs one header parse.
     const declared = Number(c.req.header("content-length") ?? "0");
     if (declared > MAX_UPLOAD_BODY_BYTES) {
-      return c.json({ error: "that upload is too large" }, 413);
+      return c.json({ error: "Upload exceeds maximum allowed size" }, 413);
     }
 
     const body = c.req.raw.body;
     if (body === null) {
-      return c.json({ error: "expected a multipart upload" }, 400);
+      return c.json({ error: "Invalid request: multipart/form-data is required." }, 400);
     }
     const capped = cappedBody(body, MAX_UPLOAD_BODY_BYTES);
     let form: FormData;
@@ -105,7 +105,7 @@ export function uploadRoutes(options: UploadRoutesOptions): Hono<AppEnv> {
       }).formData();
     } catch {
       return capped.state.exceeded
-        ? c.json({ error: "that upload is too large" }, 413)
+        ? c.json({ error: "Upload exceeds maximum allowed size" }, 413)
         : c.json({ error: "expected a multipart upload" }, 400);
     }
     const workspaceId = form.get("workspaceId");
@@ -114,10 +114,13 @@ export function uploadRoutes(options: UploadRoutesOptions): Hono<AppEnv> {
     }
     const files = form.getAll("files").filter((value): value is File => value instanceof File);
     if (files.length === 0) {
-      return c.json({ error: "no files were uploaded" }, 400);
+      return c.json({ error: "No files were uploaded." }, 400);
     }
     if (files.length > MAX_DOCUMENTS_PER_QUESTION) {
-      return c.json({ error: `at most ${MAX_DOCUMENTS_PER_QUESTION} files per question` }, 400);
+      return c.json(
+        { error: `A maximum of ${MAX_DOCUMENTS_PER_QUESTION} files may be attached per question.` },
+        400,
+      );
     }
 
     let stored = documents.totalBytes(deps.db, user.id);
@@ -144,7 +147,7 @@ export function uploadRoutes(options: UploadRoutesOptions): Hono<AppEnv> {
         continue;
       }
       if (stored + bytes.byteLength > MAX_DOCUMENT_BYTES_PER_USER) {
-        return c.json({ error: "your attached documents are using too much space" }, 413);
+        return c.json({ error: "Storage quota exceeded for attached documents." }, 413);
       }
       const storagePath = documentStoragePath(deps.config.documentsDir, user.id, sha256);
       await mkdir(dirname(storagePath), { recursive: true });

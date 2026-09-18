@@ -31,10 +31,10 @@ export function oversizeRefusal(
   subject: "question" | "report",
   byteSize = promptByteLength(text),
 ): string | null {
-  if (byteSize > MAX_PROMPT_BYTES) return `That ${subject} is larger than 10 MiB.`;
+  if (byteSize > MAX_PROMPT_BYTES) return `The ${subject} exceeds the 10 MiB size limit.`;
   const words = countPromptWords(text);
   if (words > MAX_PROMPT_WORDS) {
-    return `That ${subject} is ${words.toLocaleString()} words; the limit is 10,000.`;
+    return `The ${subject} is ${words.toLocaleString()} words, which exceeds the 10,000-word limit.`;
   }
   return null;
 }

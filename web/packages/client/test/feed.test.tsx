@@ -77,7 +77,7 @@ async function scrollFeedTo(top: number): Promise<void> {
   });
 }
 
-test("a row's first height guess follows what the row will contain", (t) => {
+test("estimated row height corresponds to the row item type", (t) => {
   const plain = estimateRowHeight(queryItem(researchQuery()));
   const withRecap = estimateRowHeight(queryItem(researchQuery({ recap: "A summary." })));
   t.true(withRecap > plain, "a recap adds a line");
@@ -85,15 +85,23 @@ test("a row's first height guess follows what the row will contain", (t) => {
   t.true(link < withRecap + 300, "and a link card is the short one");
 });
 
-test("only items that arrived above the reader's row are counted as new", (t) => {
+test("only items added above the current scroll position count as unread", (t) => {
   const known = new Set(["b", "c"]);
   t.is(countNewAbove("b", ["a", "b", "c"], known), 1, "one arrival above the previous top");
-  t.is(countNewAbove("b", ["b", "c"], known), 0, "nothing above it is nothing new");
-  t.is(countNewAbove(null, ["a"], known), 0, "a first load announces nothing");
+  t.is(
+    countNewAbove("b", ["b", "c"], known),
+    0,
+    "returns zero when no new items precede the current anchor",
+  );
+  t.is(
+    countNewAbove(null, ["a"], known),
+    0,
+    "returns zero when the initial feed load has no anchor",
+  );
   t.is(countNewAbove("b", ["c", "b"], known), 0, "a row that moved is not an arrival");
 });
 
-test("a card shows the question, not the scaffolding around it", (t) => {
+test("feed cards display prompt text without system instructions or XML tags", (t) => {
   t.is(
     promptPreview("<session_instruction>\nbe brief\n</session_instruction>\nWhat is [[memory]]?"),
     "What is memory?",
@@ -106,7 +114,7 @@ test("an anchored follow-up quotes the passage it replies to, cut at a word", (t
   t.is(queryTargetExcerpt("   "), "");
 });
 
-test("the journal menu offers what the entry can actually do", (t) => {
+test("journal entry context menus provide actions appropriate to entry status", (t) => {
   const link = journalEntryMenuItems(linkEntry());
   t.deepEqual(
     link.map((item) => [item.action, item.label]),
@@ -128,9 +136,9 @@ test("the journal menu offers what the entry can actually do", (t) => {
   t.deepEqual(
     pending.map((item) => item.action),
     ["open", "copy", "delete"],
-    "there is nothing to retry while the first attempt is in flight",
+    "the retry action is omitted while the initial request is pending",
   );
-  t.is(pending[0]?.label, "Open on X", "and an X permalink says so");
+  t.is(pending[0]?.label, "Open on X", "an X permalink uses the X-specific label");
 
   const failed = journalEntryMenuItems({
     id: "j3",
@@ -151,7 +159,7 @@ test("the journal menu offers what the entry can actually do", (t) => {
   );
 });
 
-test("a hydrated post's canonical permalink is what the menu acts on", (t) => {
+test("journal menu actions target the canonical permalink of hydrated social posts", (t) => {
   t.is(journalEntryUrl(linkEntry()), "https://example.com/a");
   t.is(
     journalEntryUrl({
@@ -171,11 +179,11 @@ test("a hydrated post's canonical permalink is what the menu acts on", (t) => {
       },
     }),
     "https://x.com/a/status/3",
-    "the normalized permalink wins over what was typed",
+    "the canonical URL takes precedence over the entered URL",
   );
 });
 
-test("an entry whose stored URL is not navigable has nothing to open", (t) => {
+test("entries with non-navigable URLs disable link-opening actions", (t) => {
   // `journal.add` only stores web URLs, but `journal.restore` takes a whole
   // entry from the client, so the renderer gates the stored URL itself.
   const hostile = { ...linkEntry(), url: "javascript:alert(1)" };
@@ -198,7 +206,7 @@ const feedResponses = (page: unknown) => ({
   "documents.list": [],
 });
 
-test.serial("a page with a cursor offers older activity, and fetches it once asked", async (t) => {
+test.serial("renders pagination for a cursor and fetches the next page on click", async (t) => {
   const app = await renderApp("/bookmarks", {
     queryClient: testQueryClient(),
     responses: feedResponses(
@@ -253,7 +261,11 @@ test.serial("removing a journal entry offers an undo that restores the same row"
   const menu = screen.getAllByRole("menu").at(-1) as HTMLElement;
   // No single-letter keycaps: a Base UI menu binds no letter but typeahead,
   // so "D" would move the highlight rather than delete.
-  t.is(menu.querySelectorAll("kbd").length, 0, "no row advertises a key it does not bind");
+  t.is(
+    menu.querySelectorAll("kbd").length,
+    0,
+    "menu items omit keyboard shortcuts without handlers",
+  );
   fireEvent.click(within(menu).getByText("Delete"));
 
   await waitUntil(
@@ -284,7 +296,7 @@ test.serial("removing a journal entry offers an undo that restores the same row"
   app.unmount();
 });
 
-test.serial("a card's menu writes the star it offers, and offers no folder row", async (t) => {
+test.serial("feed card menu includes Star and omits folder actions", async (t) => {
   useNavigationStore.setState({ feedAnchorByView: {} });
   const app = await renderApp("/bookmarks", {
     queryClient: testQueryClient(),
@@ -304,7 +316,7 @@ test.serial("a card's menu writes the star it offers, and offers no folder row",
   const menu = screen.getAllByRole("menu").at(-1) as HTMLElement;
   // The feed has no folder dialog, so the two rows that would need one are not
   // offered here rather than offered and inert.
-  t.is(within(menu).queryByText("New folder with item"), null);
+  t.is(within(menu).queryByText("New folder with selection"), null);
   t.is(within(menu).queryByText("Remove from folder"), null);
 
   fireEvent.click(within(menu).getByText("Star"));
@@ -408,7 +420,7 @@ function pagedFeedResponses() {
   };
 }
 
-test.serial("“Back to latest” stays away until there is something to go back from", async (t) => {
+test.serial("hides Back to latest until the user leaves the top of the feed", async (t) => {
   useNavigationStore.setState({ feedAnchorByView: {} });
   const app = await renderApp("/bookmarks", {
     queryClient: testQueryClient(),
@@ -423,7 +435,7 @@ test.serial("“Back to latest” stays away until there is something to go back
   t.is(
     screen.queryByText("Back to latest"),
     null,
-    "page one at the top has neither pages to drop nor distance to close",
+    "the first page retains the complete virtual list window",
   );
 
   await scrollFeedTo(900);
@@ -456,7 +468,7 @@ test.serial(
     t.is(
       screen.queryByText("Back to latest"),
       null,
-      "with nothing loaded there is no way back yet",
+      "the back button is absent before the initial page loads",
     );
 
     fireEvent.click(screen.getByText("Load older activity"));
@@ -468,7 +480,7 @@ test.serial(
     await waitUntil(
       t,
       () => screen.queryAllByText("Back to latest").length > 0,
-      "and the way back appears beside the way forward",
+      "Back to latest appears beside pagination",
     );
 
     scrolls.length = 0;
@@ -483,8 +495,8 @@ test.serial(
     );
     t.is(cached?.pages.length, 1, "the feed is showing page one again");
     t.deepEqual(scrolls.at(-1), { top: 0, behavior: "smooth" }, "at the top");
-    // No refetch: the reader asked to return to what they had, not for fresher
-    // rows — the header's Refresh is the control that asks for those.
+    // Returning to the latest loaded page does not refetch; the header Refresh
+    // action requests newer rows.
     t.is(
       app.trpc.calls.filter((call) => call.path === "feed.recentActivity").length,
       2,
@@ -494,7 +506,7 @@ test.serial(
   },
 );
 
-test.serial("the new-activity counter wins while it is showing", async (t) => {
+test.serial("the new-activity counter takes precedence while visible", async (t) => {
   useNavigationStore.setState({ feedAnchorByView: {} });
   const app = await renderApp("/bookmarks", {
     queryClient: testQueryClient(),
@@ -544,7 +556,7 @@ test.serial("the new-activity counter wins while it is showing", async (t) => {
 
   await waitUntil(
     t,
-    () => screen.queryAllByText("1 new activity").length > 0,
+    () => screen.queryAllByText("1 new update").length > 0,
     "the counter announces what arrived above the reader",
   );
   t.is(

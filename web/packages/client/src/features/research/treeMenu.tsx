@@ -1,12 +1,9 @@
 // The per-thread menu rows and the two dialogs behind them
 // (`09-research-document-view.md` §8, `08-design-system-and-styling.md` §4).
 //
-// Shared surface, deliberately: the same rows appear on a sidebar row's
-// context menu, on a Home card's `⋯`, and in the document's own node menu, and
-// three copies of "Archive is refused while a run is in flight" is three places
-// for that rule to rot. The component renders rows only — `MenuItem` and
-// `MenuSeparator` — so a caller can drop them into `Menu` or `ContextMenu`
-// without either owning the other's surface.
+// Shared menu rows used by sidebar, Home, and document menus. The component
+// renders only `MenuItem` and `MenuSeparator` entries so callers can place them
+// in either `Menu` or `ContextMenu`.
 //
 // Every action is a callback rather than a mutation call: what "delete" means
 // differs by caller (the sidebar removes a row, the document navigates away),
@@ -72,7 +69,7 @@ export function ResearchTreeMenuItems({
         </>
       ) : null}
       {archived ? (
-        <MenuItem onClick={() => onRestore(tree.id)}>Unarchive research</MenuItem>
+        <MenuItem onClick={() => onRestore(tree.id)}>Unarchive</MenuItem>
       ) : (
         <>
           <MenuItem onClick={() => onToggleStar(tree.id)}>{starred ? "Unstar" : "Star"}</MenuItem>
@@ -81,9 +78,7 @@ export function ResearchTreeMenuItems({
             <MenuItem onClick={() => onRemoveFromFolder([tree.id])}>Remove from folder</MenuItem>
           ) : null}
           {onRequestCreateFolder ? (
-            <MenuItem onClick={() => onRequestCreateFolder([tree.id])}>
-              New folder with item
-            </MenuItem>
+            <MenuItem onClick={() => onRequestCreateFolder([tree.id])}>Move to new folder</MenuItem>
           ) : null}
           <MenuSeparator />
           <MenuItem disabled={running} onClick={() => onArchive(tree.id)}>
@@ -121,7 +116,7 @@ export function RenameTreeDialog({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title="Rename research"
+      title="Rename thread"
       footer={
         <>
           <ControlButton onClick={onClose}>Cancel</ControlButton>
@@ -130,11 +125,11 @@ export function RenameTreeDialog({
       }
     >
       <Input
-        // A rename dialog with one field: the field is the dialog.
+        // Focus the text field immediately upon dialog display.
         // eslint-disable-next-line jsx-a11y/no-autofocus
         autoFocus
         value={draft}
-        aria-label="Research title"
+        aria-label="Thread title"
         onChange={(event) => setDraft(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter") {

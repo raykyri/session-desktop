@@ -59,10 +59,8 @@ Cards:
   (`ResearchActivityFeed.tsx:1408-1441`). Click → `/r/$treeId?node=<nodeId>`.
 - `JournalEntryCard` (link): favicon-less title/URL row, `ActivityMetadataLine`,
   menu (`journalEntryMenuItems`, `ResearchActivityFeed.tsx:162-185`): Open
-  link, Copy link, separator, Delete. The desktop's single-letter keycaps are
-  dropped: a Base UI menu binds no letter but typeahead, so the badge named a
-  key that moved the highlight instead of acting.
-- `JournalTweetCard`: the tweet card *is* the entry (`journal.css:1-5`);
+  link, Copy link, separator, Delete. Single-letter shortcut badges from the desktop UI were removed because Base UI menus reserve typed letters for typeahead list navigation rather than shortcut execution.
+- `JournalTweetCard`: tweet entries render directly via the tweet card component without an outer container (`journal.css:1-5`);
   `TweetEmbed` ported unchanged; placeholder while `hydration === "pending"`,
   failure state with Retry (`journal.hydrateTweet`); menu: Open on X, Copy
   link, Refresh tweet or Retry tweet, separator, Delete.
@@ -73,8 +71,9 @@ Adding to the journal (new on the web): the desktop currently has no UI
 that creates journal entries; `App.tsx` only restores, updates, and deletes
 them (`App.tsx:433-435`, `:6451`, `:6513`), and entries exist only from
 legacy data and imports. The web app adds `journal.add`: the Home composer
-accepts a bare URL; if `tweetIdFromUrl` matches it becomes a tweet entry,
-else a link entry; the server hydrates tweets and caches the snapshot. This
+accepts a bare URL. If `tweetIdFromUrl` matches, it creates a tweet entry;
+otherwise, it creates a link entry. The server hydrates tweets and caches the
+snapshot. This
 is an addition beyond desktop parity and is marked as such in the checklist.
 
 ## 3. Bookmarks (`/bookmarks`)
@@ -144,15 +143,14 @@ Port of `ResearchSidebarSection.tsx` (1,605 lines), `ResearchFolderSwitcher.tsx`
 and the sidebar parts of `App.tsx`:
 
 - Rows: Home, Bookmarks, Highlights. Their Cmd-digit chords resolve
-  (`shared/app/shortcuts.ts`) but the rows print no badge: the
-  `showShortcutHints` setting and the held-modifier badges it gated are gone.
+  (`shared/app/shortcuts.ts`) however, navigation rows no longer display shortcut badges, as the `showShortcutHints` preference and its associated modifier badges have been removed.
 - Encyclopedia section.
 - Research list: folders (collapsible, starred first), trees with status dot,
   unseen-update and unseen-failure badges, running count, star, multi-select
   (Shift/Cmd-click), drag reorder with pointer gaps (`researchFolders.ts` drag
   math), row context menu (`ResearchTreeMenuItems`,
   `ResearchTreeMenu.tsx:60-180`: Generate summary, Unarchive, Star/Unstar,
-  Rename, Remove from folder, New folder with item, Archive, Delete; Follow
+  Rename, Remove from folder, New folder with selection, Archive, Delete; Follow
   and Bookmark live in the document footer and feed cards, not here), a
   multi-selection menu when right-clicking inside an active selection
   (`ResearchSidebarSection.tsx:381-384`: New folder from selection, Remove
@@ -163,7 +161,7 @@ and the sidebar parts of `App.tsx`:
   with rollback on error.
 - Folder switcher (`ResearchFolderSwitcher`, Cmd-O): list of workspaces with
   tree counts, create (name prompt instead of the native picker), rename,
-  remove (refuses while runs are active; confirms deletion of its trees),
+  delete (blocked while runs are active; confirms deletion of its trees),
   reorder, set as default.
 - Sidebar resize 208–420 px and collapse (Shift-Cmd-G), persisted in
   `navigation`.

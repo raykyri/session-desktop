@@ -97,7 +97,7 @@ export const recapsRouter = router({
         if (candidate.responseRevision !== input.expectedResponseRevision) {
           throw new TRPCError({
             code: "CONFLICT",
-            message: "the answer changed while the summary was generated; try again",
+            message: "The answer changed while the summary was generated. Please try again.",
           });
         }
         return candidate;
@@ -125,9 +125,8 @@ export const recapsRouter = router({
       }),
     )
     .mutation(({ ctx, input }) => {
-      // The server's own copy of the candidate wins when it still has one: the
-      // text that was generated is what gets stored, whatever came back over
-      // the wire.
+      // Use the cached server candidate when available so clients cannot alter
+      // generated recap content before it is stored.
       const issued = ctx.runs.recallRecapCandidate(ctx.user.id, input.candidate.id);
       const node = repo(() =>
         recaps.applyCandidate(ctx.db, ctx.user.id, {

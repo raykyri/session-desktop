@@ -30,8 +30,7 @@ export function ThemeEffects() {
   useLayoutEffect(() => {
     const root = document.documentElement;
     root.dataset["appearance"] = settings.appearance;
-    // Keeps the pieces CSS cannot reach in step: native form controls,
-    // scrollbars, and `prefers-color-scheme` inside sandboxed preview iframes.
+    // Synchronizes color-scheme meta tags for native controls, scrollbars, and embedded iframe contexts.
     let meta = document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]');
     if (!meta) {
       meta = document.createElement("meta");
@@ -53,18 +52,14 @@ export function ThemeEffects() {
     document.documentElement.classList.toggle("reduce-motion", settings.reduceMotion);
   }, [settings.reduceMotion]);
 
-  // The text-size setting is a bounded reading zoom, not a root font size:
-  // the token scale is in px, so raising `html { font-size }` would move
-  // nothing. It becomes `--app-text-zoom`, which `prose.css` folds into the
+  // App text size adjusts reading surface zoom via CSS variables rather than root font size, as layout tokens are pixel-based. It becomes `--app-text-zoom`, which `prose.css` folds into the
   // reading surface's body size (the desktop's `--turn-font-delta`).
   useLayoutEffect(() => {
     const zoom = clamp((settings.textSize - APP_TEXT_SIZE) * 0.25, 0, 1);
     document.documentElement.style.setProperty("--app-text-zoom", `${zoom}px`);
   }, [settings.textSize]);
 
-  // Anthropic Sans Text and Inter are not bundled (08 §1). If the stored choice
-  // is a face this machine does not have, fall back rather than render the
-  // generic system stack under a label claiming otherwise.
+  // Anthropic Sans Text and Inter are optional local fonts; if unavailable on the client system, fall back to default system fonts.
   useEffect(() => {
     let disposed = false;
     void detectAvailableBodyFonts().then((available) => {

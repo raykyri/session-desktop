@@ -1,6 +1,5 @@
-// Everything about an attempt in flight: its committed turns, its per-attempt
-// record, its canonical messages, its context summary, and its place in the
-// admission queue (`docs/02-domain-model-and-database.md` §3.3,
+// Schema for active execution attempts, including turns, records, messages,
+// summaries, and queue positions (`docs/02-domain-model-and-database.md` §3.3;
 // `docs/05-run-lifecycle-and-streaming.md` §2, §5, §8).
 
 import type { Turn } from "@session/shared";
@@ -11,8 +10,7 @@ import type { AttemptUsage, NodeMessage } from "../json.js";
 import { nodes } from "./nodes.js";
 import { users } from "./users.js";
 
-/** Live output of an active attempt. Deleted when the final snapshot commits,
- * so the table holds only what is streaming at this moment. */
+/** Transient streaming output for active attempts. Rows are purged once the final snapshot is committed. */
 export const runTurns = sqliteTable(
   "run_turns",
   {

@@ -119,7 +119,7 @@ export const METADATA_TIMEOUT_MS = 60_000;
 /** Concurrent metadata runs (`04-agent-runtime.md` §10). */
 export const METADATA_POOL_SIZE = 4;
 
-/** How many times a node is auto-resumed after an interruption before it is
+/** Maximum automatic resume attempts after an interruption before the node is
  * left `interrupted` for the user to retry (`05-run-lifecycle-and-streaming.md`
  * §3). */
 export const MAX_AUTO_RESUMES = 2;
@@ -192,7 +192,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
     deps.eventBus.emit(userId, sessionEvent(type, payload));
   };
 
-  /** Everyone still waiting learns where they now stand (`05` §8). */
+  /** Broadcasts updated queue positions to waiting clients. */
   const publishQueuePositions = (userId: string): void => {
     for (const [nodeId, position] of queueRepo.positions(deps.db, userId)) {
       const node = nodesRepo.get(deps.db, userId, nodeId);
@@ -202,9 +202,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
     }
   };
 
-  /** How many 429s this node has already served a backoff for. Counted from
-   * `run_attempts` rather than from memory so a deploy in the middle of a
-   * backoff does not hand the node a fresh three (`04-agent-runtime.md` §13). */
+  /** Counts prior rate-limit attempts from run_attempts to persist retry state across server restarts. */
   const rateLimitedSoFar = (nodeId: string): number =>
     runsRepo.listAttempts(deps.db, nodeId).filter((attempt) => attempt.outcome === "rate_limited")
       .length;
@@ -217,7 +215,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
     if (backoff === null) {
       queueRepo.release(deps.db, nodeId);
       const node = nodesRepo.setStatus(deps.db, userId, nodeId, "failed", {
-        error: "the model provider kept rate limiting this run; try again later",
+        error: "Model provider rate limit exceeded repeatedly; please try again later",
       });
       emit(userId, "research.node.updated", { node });
       return;
@@ -237,7 +235,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
         return;
       }
       const failed = nodesRepo.setStatus(deps.db, userId, nodeId, "failed", {
-        error: "this research stopped unexpectedly; try it again",
+        error: "Research execution terminated unexpectedly; please retry",
       });
       emit(userId, "research.node.updated", { node: failed });
     } catch (error) {
@@ -364,19 +362,16 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
     },
 
     requestTitle(userId, nodeId) {
-      return withTimeout(
-        metadata.generateTitle(userId, nodeId),
-        "generating a title took too long",
-      );
+      return withTimeout(metadata.generateTitle(userId, nodeId), "Title generation timed out");
     },
 
     async requestRecapCandidate(userId, nodeId, instructions) {
       const candidate = await withTimeout(
         metadata.generateRecapCandidate(userId, nodeId, instructions),
-        "generating the summary took too long; try again",
+        "Recap generation timed out; please retry",
       );
       if (candidate === null) {
-        throw new Error("this answer is too short to summarize");
+        throw new Error("Response content is too short to summarize");
       }
       return candidate;
     },
@@ -426,7 +421,10 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
               .listAttempts(deps.db, node.id)
               .filter((attempt) => attempt.kind === "resume").length;
             if (resumesSoFar >= MAX_AUTO_RESUMES) {
-              logger.warn({ nodeId: node.id }, "auto-resume gave up; leaving it interrupted");
+              logger.warn(
+                { nodeId: node.id },
+                "maximum automatic resume attempts reached; node remains interrupted",
+              );
               // The flag goes with the queue row: left set, every later boot
               // would re-queue a node the runtime has already given up on.
               nodesRepo.clearResumePending(deps.db, run.userId, node.id);
@@ -449,8 +447,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
         await Promise.resolve();
       })()
         .catch((error: unknown) => {
-          // A claim round that throws must not take the process with it: the
-          // most likely cause is the database closing under a test's feet.
+          // Catches queue claim errors to prevent process termination if the database closes during teardown.
           logger.error({ error }, "claim round failed");
         })
         .finally(() => {

@@ -93,9 +93,7 @@ export interface ConnectorGeometry {
  * Greedy interval coloring over the connectors' vertical spans, top to bottom.
  *
  * A direct leader normally stays in lane 0. When two runs would sit on top of
- * one another the later one takes the lowest lane that is free, and only that
- * route becomes an elbow — so a rail with no crowding draws nothing but
- * straight lines.
+ * one another the later one takes the lowest lane that is free, and Route connector lines with elbow curves only when cards overlap to avoid collisions.
  *
  * Returns the lane per connector, in the input's order.
  */

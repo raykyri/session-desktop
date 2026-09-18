@@ -45,7 +45,7 @@ test("the CSP allows the twimg hosts and no eval", (t) => {
   t.true(policy.includes("form-action 'self' https://github.com"));
 });
 
-test("a mutation without the custom header is refused", async (t) => {
+test("rejects mutation requests missing the custom header", async (t) => {
   const harness = createHarness(t);
   const response = await harness.app.request("/api/trpc/workspaces.ensureDefault", {
     method: "POST",
@@ -55,7 +55,7 @@ test("a mutation without the custom header is refused", async (t) => {
   t.is(response.status, 403);
 });
 
-test("a cross-origin request is refused however it is labelled", async (t) => {
+test("rejects cross-origin requests regardless of request headers", async (t) => {
   const harness = createHarness(t);
   const foreignOrigin = await harness.app.request("/api/trpc/workspaces.ensureDefault", {
     method: "POST",
@@ -97,7 +97,7 @@ test("SESSION_PUBLIC_ORIGIN must be an origin without a path", (t) => {
   }
 });
 
-test("a malformed environment refuses to boot, listing every problem", (t) => {
+test("fails configuration loading with invalid environment variables and reports all errors", (t) => {
   const error = t.throws(() =>
     loadConfig({
       NODE_ENV: "staging",

@@ -11,8 +11,8 @@
 // still slip through (the classic DNS rebinding race). Closing that needs
 // connecting by address with the hostname carried in SNI and `Host`, which
 // `fetch` does not expose; the remaining exposure is one request whose
-// response the model reads, with no credentials attached, which is the trade
-// this tool is worth.
+// response the model reads, with no credentials attached. This residual risk
+// is accepted because `fetch` does not expose the controls needed to prevent it.
 
 import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
@@ -125,9 +125,8 @@ function expandV6(address: string): number[] | null {
   return words.length === 8 ? words : null;
 }
 
-/** Whether `address` is anything other than a public unicast address. An
- * address this cannot parse is private: refusing an unparsable address is a
- * missed fetch, allowing one is the bug this module exists to prevent. */
+/** Returns true for non-public unicast addresses. Unparseable addresses are
+ * treated as private and rejected. */
 export function isPrivateAddress(address: string): boolean {
   const version = isIP(address);
   if (version === 4) {
@@ -200,13 +199,15 @@ export async function assertFetchableUrl(raw: string, options: UrlGuardOptions =
   try {
     url = new URL(raw);
   } catch {
-    throw new BlockedUrlError(`${raw} is not a URL`);
+    throw new BlockedUrlError(`Invalid URL: '${raw}'.`);
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new BlockedUrlError(`${url.protocol.replace(":", "")} URLs cannot be fetched`);
+    throw new BlockedUrlError(
+      `Protocol '${url.protocol}' is unsupported. Only HTTP and HTTPS are permitted.`,
+    );
   }
   if (url.username !== "" || url.password !== "") {
-    throw new BlockedUrlError("URLs with embedded credentials cannot be fetched");
+    throw new BlockedUrlError("URLs with embedded credentials are not permitted.");
   }
   const hostname = url.hostname.replace(/^\[|\]$/g, "");
   if (options.allowHosts?.includes(url.host) === true) {

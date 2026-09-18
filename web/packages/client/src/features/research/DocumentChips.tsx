@@ -41,20 +41,20 @@ export function DocumentChips({
             key={documentId}
             type="button"
             className="border-border-control bg-control text-fg-secondary hover:bg-control-hover focus-visible:ring-focus-ring inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs outline-none focus-visible:ring-2"
-            title={`${name} · open in the preview panel`}
+            title={`${name} · Open in preview panel`}
             onClick={() => open(documentId, name)}
           >
             <FileText size={12} aria-hidden="true" />
             <span className="min-w-0 truncate">{name}</span>
             {info?.extractionStatus === "failed" ? (
-              <span className="text-status-failed">text unavailable</span>
+              <span className="text-status-failed">Content unavailable</span>
             ) : null}
           </button>
         );
       })}
       {failed ? (
         <span className="text-status-failed text-xs" role="alert">
-          That document could not be opened.
+          Failed to open document.
         </span>
       ) : null}
     </div>

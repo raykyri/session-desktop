@@ -32,8 +32,8 @@ packages/db/
 
 Rules
 
-- `repos/*` are plain functions taking `(db, userId, ...)`. No HTTP, no
-  events. The server layer wraps them and emits events.
+- Functions in `repos/*` accept `(db, userId, ...)`. They do not handle HTTP
+  or emit events; the server layer wraps repository calls and emits events.
 - Multi-step invariants run inside `db.transaction()`. better-sqlite3
   transactions are synchronous, so a repository function is synchronous too;
   the server calls them from tRPC resolvers directly (SQLite work is
@@ -341,8 +341,8 @@ Each item names the desktop source and the enforcing function.
 
 ### 5.3 Status
 - `queued → running → complete | failed | cancelled | interrupted`.
-  Terminal statuses are monotonic: `nodes.setStatus` refuses to move from a
-  terminal status except via `nodes.resetForRetry` (requires `failed`,
+  Terminal statuses are monotonic: `nodes.setStatus` prevents transitions from
+  a terminal status except via `nodes.resetForRetry` (requires `failed`,
   `cancelled`, or `interrupted`; increments `attempt`; puts the node back to
   `queued`; clears `error`, `started_at`, `completed_at`, `run_seq`; deletes
   `run_turns`, partial `node_messages`, and the snapshot row) and
@@ -367,36 +367,34 @@ Each item names the desktop source and the enforcing function.
 
 ### 5.5 Highlights
 - Anchor validation follows `research.rs:1522-1546`, which groups the checks
-  so one message covers each class of malformed anchor. The grouping is the
-  contract; the order within a group is not observable:
+  so one message covers each class of malformed anchor. The grouping defines
+  the validation rules; callers cannot observe the order within a group:
   1. `version !== 1` or `projection !== "answer-v1"` → "unsupported research
      highlight anchor".
-  2. `start >= end` or `exact.trim()` empty → "research highlight selection
-     cannot be empty".
+  2. `start >= end` or `exact.trim()` empty → "Invalid highlight anchor:
+     selection cannot be empty."
   3. `end > 64 MiB` or `end - start !== exact.length` in UTF-16 code units →
-     "research highlight has invalid selection offsets".
-  4. `exact > 64 KiB` or `prefix > 512 B` or `suffix > 512 B` → "research
-     highlight selection is too large".
-  5. `responseRevision` is not 64 hex digits → "research highlight has an
-     invalid response revision".
+     "Invalid highlight anchor: selection offsets do not match text length."
+  4. `exact > 64 KiB` or `prefix > 512 B` or `suffix > 512 B` → "Highlight
+     selection exceeds maximum allowed byte limit."
+  5. `responseRevision` is not 64 lowercase hex digits → "Invalid highlight
+     anchor: response revision format is invalid."
 
-  So an anchor that is both empty and over-long reports "cannot be empty".
-  One deliberate divergence from the Rust: it accepted either case for the
-  revision because it only ever compared one it had written itself, while the
-  web takes anchors from clients and requires the lowercase form
-  `responseRevision` emits. The zod schema additionally requires integer,
+  Consequently, an anchor that is both empty and exceeds the length limit fails
+  with the selection-empty error. Unlike the desktop Rust implementation, which
+  accepted case-insensitive revisions because it evaluated only server-generated
+  hashes, the web server requires lowercase hexadecimal revisions from clients.
+  The Zod schema additionally requires integer,
   non-negative offsets at the tRPC boundary, and the shared
   `validateHighlightAnchor` is the single implementation.
 - The node must have a snapshot whose `revision` equals
-  `anchor.responseRevision`; otherwise error "the research response changed;
-  select the text again".
+  `anchor.responseRevision`; otherwise it returns "The research response has
+  been updated; please reselect the text."
 - Caps: 500 per node, 512 KiB per node, 4 MiB per user (desktop: per
   state file), estimated per highlight as `160 + id.length +
   projection.length + revision.length + 6 × (exact + prefix + suffix)`
-  (`research.rs:1548-1561`); the flat 160-byte overhead makes the per-node
-  byte cap bind before the count cap.
-- Highlight ids are unique across the user's highlights (the desktop loops on
-  collision; ULIDs make this moot but the uniqueness check stays).
+  (`research.rs:1548-1561`); the 160-byte base overhead causes the per-node byte limit to be reached before the count limit.
+- Highlight IDs must be unique per user; while ULID generation makes collisions virtually impossible, the database constraint remains enforced.
 
 ### 5.6 Documents
 - `documents.update` performs the 4-way optimistic check: node is the tree's
@@ -411,8 +409,7 @@ Each item names the desktop source and the enforcing function.
 ### 5.7 Runs and admission
 - Insert node as `queued` and a `run_queue` row in one transaction. The
   server claims rows FIFO by user then time under per-user and global limits
-  (`05-run-lifecycle-and-streaming.md` §8). Desktop had unbounded
-  parallelism; the web adds limits because the machine is shared.
+  (`05-run-lifecycle-and-streaming.md` §8). The desktop application allowed unbounded concurrency, but the web application enforces concurrency limits because server resources are shared among multiple users.
 - On boot: `queued` rows stay queued; `running` nodes (a crash without
   shutdown) become `interrupted` with `resume_pending = 1`; every
   `resume_pending` node is re-queued at the head of the queue
@@ -440,8 +437,7 @@ Each item names the desktop source and the enforcing function.
   trees with `nodeLabel` = node title or prompt, or the tree title for
   documents (`research.rs:485`).
 - `trees.summaries` computes `runningCount` (`queued | running`),
-  `failedCount`, `completedCount`, `cancelledCount` (`interrupted` counts in
-  no bucket and sets no attention flag; it is shown in the activity rail), `hasUnseenUpdate` (latest `completed_at` > `last_viewed_at`),
+  `failedCount`, `completedCount`, `cancelledCount` (`interrupted` is not included in summary count totals and does not trigger attention indicators; it is displayed directly in the activity rail), `hasUnseenUpdate` (latest `completed_at` > `last_viewed_at`),
   `hasUnseenFailure` (latest failed `completed_at` > `last_viewed_at`)
   (`state.rs:3770-3776`) via grouped subqueries.
 
@@ -465,9 +461,7 @@ Each item names the desktop source and the enforcing function.
   `remove_trees_from_research_folders`.
 
 ### 5.12 Journal
-- Entries are stored whole in `entry_json`; the indexed columns are
-  projections and the zod schema is strict (the desktop's opaque-blob
-  tolerance is unnecessary without imports).
+- Entries are stored intact in `entry_json`; indexed columns are extracted projections validated with a strict Zod schema, eliminating the need to tolerate unvalidated blobs.
 
 ## 6. Data volumes and performance notes
 

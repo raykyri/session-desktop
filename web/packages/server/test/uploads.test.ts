@@ -258,7 +258,7 @@ test("a body with no declared length is still bounded", async (t) => {
   t.true(produced <= MAX_UPLOAD_BODY_BYTES + chunk.byteLength);
 });
 
-test("deleting a document takes its bytes off the volume", async (t) => {
+test("removes underlying disk file when a document record is deleted", async (t) => {
   // The row is half of a delete. The per-user quota is summed from rows, so
   // leaving the file behind lets delete-and-reupload fill the volume without
   // bound — and when a 20 GB mount fills, every SQLite write fails at once.
@@ -284,7 +284,7 @@ test("deleting a document takes its bytes off the volume", async (t) => {
   t.is(documents.totalBytes(harness.db, user.id), 0);
 });
 
-test("the volume sweep removes bytes a cascade left behind", async (t) => {
+test("sweeps orphaned document files after database cascade deletions", async (t) => {
   // Removing a workspace or a thread cascades `documents` rows away inside
   // SQLite; nothing can hand the server a path for those, so the sweep is what
   // reconciles the volume with the table.

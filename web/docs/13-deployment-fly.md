@@ -73,29 +73,25 @@ kill_timeout = "30s"
   memory = "2gb"
 
 [deploy]
-  strategy = "immediate"      # one machine with a volume cannot roll
+  strategy = "immediate"      # a single machine with a persistent volume cannot use rolling deployments
 ```
 
 Runs are HTTPS streams, so memory is dominated by the Node process, SQLite
 page cache, and document text extraction; 2 GB is comfortable. Raise the
 machine size before raising the per-provider run caps.
 
-The cost ceiling and the sign-up gate are **on**. This origin pays a provider
-per token, so both are deployment settings rather than code defaults, and both
-are deliberately visible in the file:
+Rate limits and invite restrictions are enabled in production. Because the hosted service incurs direct provider token costs, these settings are defined explicitly in `fly.toml` rather than falling back to permissive local development defaults:
 
-- `SESSION_ENFORCE_LIMITS = "1"` makes `SESSION_DAILY_TOKENS` and
-  `SESSION_DAILY_RUNS` refuse rather than merely record. With it at `0` the
-  usage rows are still written and nothing is ever refused, which is the right
-  default for local development and the wrong one for a public origin.
+- `SESSION_ENFORCE_LIMITS = "1"` enforces `SESSION_DAILY_TOKENS` and
+  `SESSION_DAILY_RUNS` by rejecting requests that exceed those quotas. At `0`,
+  usage is recorded without blocking requests. This is suitable for local
+  development but not for a public deployment.
 - `SESSION_REQUIRE_INVITE = "1"` means an account is created only against a
   code an admin minted (`06-auth-and-users.md` §3). `SESSION_ALLOWED_GITHUB_LOGINS`
   is the narrower alternative; with neither, sign-up is open to anyone who can
   reach the host.
 - `SESSION_QUEUED_PER_USER = "20"` caps what one account may have *waiting*.
-  `SESSION_RUNS_PER_USER` bounds only what is running at once, so without this
-  a script can admit a thousand questions and the deployment is committed to
-  paying for all of them, two at a time. Refused at launch with
+  Because `SESSION_RUNS_PER_USER` limits only concurrently active runs, an unconstrained queue could allow an automated script to enqueue hundreds of requests, committing the server to costly serial execution. Refused at launch with
   `TOO_MANY_REQUESTS`; admins are exempt; enforced whatever
   `SESSION_ENFORCE_LIMITS` says, because it bounds the queue itself rather
   than the day's spend.
@@ -110,9 +106,9 @@ Deploying:
 fly deploy web -c web/fly.toml            # — or --remote-only, which CI uses
 ```
 
-The positional `web` is the build context. Without it flyctl hands Docker the
-repository root, where `package.json` is the desktop's and the build fails on a
-missing `web/` prefix. CI runs the same command in the `production`
+The positional `web` is the build context. Without it, flyctl uses the
+repository root, whose `package.json` defines the desktop application, and the
+build fails because paths lack the `web/` prefix. CI runs the same command in the `production`
 environment after `check`, `test`, `e2e`, and `docker` pass
 (`12-testing-linting-ci.md` §4).
 
@@ -127,16 +123,12 @@ fly secrets set -a session-dev ...                   # §4
 fly deploy web -c web/fly.toml
 ```
 
-`fly volumes create` before the first deploy, because `strategy = "immediate"`
-stops the old machine before the new one claims the volume and a deploy with no
-volume to claim fails.
+Create the storage volume prior to running the initial deployment: with `strategy = "immediate"`, the deployment will fail if the required volume does not already exist when the machine starts.
 
-Granting admin — which is what unlocks `claude-fable` and `/admin`
-(`06-auth-and-users.md` §3) — happens after the account's first sign-in, and
-differs by environment. Locally it is `npm run db:admin -- <github login>`. On
+Granting administrative privileges (which provides access to `claude-fable` and the `/admin` dashboard) is performed after the user's initial sign-in and requires different commands depending on the environment. Locally it is `npm run db:admin -- <github login>`. On
 the machine it is not: the runtime image carries the server bundle and
 production `node_modules` only, so neither `packages/db/bin/admin.ts` nor `tsx`
-is there to run. Use the driver that is:
+is there to run. Instead, update the database directly using `better-sqlite3`:
 
 ```sh
 fly ssh console -a session-dev -C "node -e \"
@@ -217,14 +209,12 @@ The drain is raced against a 20-second deadline (`main.ts:SHUTDOWN_DEADLINE_MS`)
 rather than awaited outright, leaving ten seconds of `kill_timeout = 30s` for
 the close and the WAL checkpoint. A provider that has stopped sending without
 closing its stream would otherwise hold the drain past the timeout, and the
-SIGKILL that follows would land before the checkpoint — leaving an unclean WAL
-for the next boot to open. What the deadline cuts short is recovered on boot
+subsequent SIGKILL would terminate the process before the checkpoint, leaving
+an uncheckpointed WAL file for the next startup. What the deadline cuts short is recovered on boot
 anyway: `reconcileOnBoot` marks anything still `running` as `interrupted` with
-`resume_pending` and re-queues it. A drain that runs long costs a resume; a
-SIGKILL costs the checkpoint.
+`resume_pending` and re-queues it. If draining takes too long, the interrupted run must be resumed on the next boot; if SIGKILL terminates the process, the WAL checkpoint cannot be completed.
 
-Boot also repairs the two states a crash between two transactions can leave and
-that no client can act on afterwards: a `queued` node with no `run_queue` row
+Startup reconciliation also resolves inconsistent states that can occur if the server crashes between database transactions: a `queued` node with no `run_queue` row
 (re-queued at the back), and a `complete` `document` node with no snapshot
 (failed, so it can be deleted or re-imported).
 
@@ -240,15 +230,11 @@ that no client can act on afterwards: a `queued` node with no `run_queue` row
   (`main.ts:DAILY_INTERVAL_MS`), skipping it when neither URL is set. In
   process rather than from an external scheduler because the deployment is one
   machine holding one volume: a Fly scheduled machine would need the volume
-  this one has, and an operator-run cron is a step that gets documented and
-  then not done. A failed run is logged and the next day tries again; the
-  marker moves only on success, so nothing is skipped.
+  this one has, and relying on manual operator cron jobs risks skipped or inconsistent backups. A failed backup is logged and retried on the next scheduled run. The marker
+  advances only after success, so no backup interval is skipped.
 - The volume is reconciled with the `documents` table on the maintenance
   interval (`main.ts:MAINTENANCE_INTERVAL_MS`, 15 min): files under
-  `/data/documents` that no row points at are unlinked. Deleting a document or
-  an account unlinks its bytes directly; removing a workspace or a thread
-  cascades the rows away inside SQLite with no path to hand over, and the sweep
-  is what stops those from filling the mount. `session_volume_free_bytes` (§7)
+  `/data/documents` that no row points at are unlinked. Deleting a document or user account deletes the underlying files immediately. When workspaces or threads are deleted, SQLite foreign key cascades remove database records without deleting disk files; the periodic sweep detects and removes these orphaned files to prevent the volume from filling up. `session_volume_free_bytes` (§7)
   is the gauge to alert on — a full volume fails every SQLite write at once.
 - Restore, including the quarterly rehearsal:
   `web/docs/runbooks/restore.md`.

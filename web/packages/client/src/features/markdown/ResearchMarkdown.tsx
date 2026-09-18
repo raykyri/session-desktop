@@ -1,4 +1,4 @@
-// The one Markdown renderer (`08-design-system-and-styling.md` §5).
+// Main Markdown renderer (`08-design-system-and-styling.md` §5).
 //
 // Everything that renders model-authored prose — a research answer, a recap, a
 // feed preview, an encyclopedia page — goes through this component, so the
@@ -11,7 +11,7 @@
 // `escapeWikilinkTablePipes` (GFM would otherwise split an aliased wikilink
 // into two cells) and, once math is available, `normalizeLatexMathDelimiters`.
 //
-// Security: `safeHref` is the only gate on a destination, remote images are
+// Security: `safeHref` validates all link destinations before rendering. Remote images are
 // never fetched (`BlockedMarkdownImage`), and the image markers pasted into
 // transcripts collapse to an inert `[Image]` chip rather than anything
 // navigable. Inline-code file links are recognized but not promoted: the
@@ -96,7 +96,7 @@ function markedValue(node: TranscriptHastNode | undefined, key: string): string 
  * it does comes from `WikilinkActionsContext`. Everything else is a
  * destination a model wrote, so it renders as a link only if `safeHref`
  * accepts it and always opens in a new tab (07 §9); a rejected destination
- * renders as plain text rather than a link that goes nowhere.
+ * Render as plain text when the link URL is invalid or empty.
  */
 export function MarkdownLink({
   href,
@@ -148,8 +148,7 @@ export function MarkdownLink({
 }
 
 /**
- * Remote images are never fetched (07 §9): a model-authored `src` would
- * otherwise beacon every reader's address to whoever wrote it. The alt text
+ * Remote images are never fetched (07 §9): a model-authored `src` Block external images to protect privacy and prevent user IP tracking. The alt text
  * stays, and a safe destination becomes a button that opens the image in a new
  * tab on a deliberate click.
  */
@@ -285,12 +284,10 @@ export const ResearchMarkdown = memo(function ResearchMarkdown({
   oversized,
 }: ResearchMarkdownProps) {
   const math = useSyncExternalStore(subscribeToMathPlugins, readMathPlugins, readMathPlugins);
-  // Pasted-image markers are text, not content: they collapse to an inert
-  // `[Image]` chip here rather than reaching the parser as prose
+  // Collapse pasted-image markers to an inert `[Image]` chip before parsing
   // (`shared/markdown/imageMarkers`).
   const source = escapeWikilinkTablePipes(collapseImageMarkers(markdown));
-  // Requesting the chunk is a side effect, and only a source that looks like it
-  // has TeX in it is worth one.
+  // Initialize the math plugin chunk only when the source contains LaTeX delimiters.
   const needsMath = sourceMayContainMath(source);
   useEffect(() => {
     if (needsMath) void ensureMathPlugins();

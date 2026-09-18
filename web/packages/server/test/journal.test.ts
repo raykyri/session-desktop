@@ -68,7 +68,7 @@ test("a plain URL becomes a link entry, and a bad URL is refused", async (t) => 
   const entry = await caller.journal.add({ url: "https://example.com/post" });
   t.is(entry.kind, "link");
   await t.throwsAsync(caller.journal.add({ url: "javascript:alert(1)" }), {
-    message: /does not look like a link/,
+    message: /Invalid URL format/,
   });
   const removed = await caller.journal.remove({ id: entry.id });
   t.true(removed);
@@ -88,12 +88,12 @@ test("restore and update re-validate the URL they are handed", async (t) => {
   // caller, so the one check `add` makes has to be made here too.
   await t.throwsAsync(
     caller.journal.restore({ entry: { ...entry, url: "javascript:alert(1)" } }),
-    { message: /does not look like a link/ },
+    { message: /Invalid URL format/ },
     "a restored row cannot smuggle a script URL back in",
   );
   await t.throwsAsync(
     caller.journal.update({ id: entry.id, entry: { ...entry, url: "file:///etc/passwd" } }),
-    { message: /does not look like a link/ },
+    { message: /Invalid URL format/ },
     "and neither can an update",
   );
 
@@ -121,7 +121,7 @@ test("a restored post's permalink is checked too", async (t) => {
     caller.journal.restore({
       entry: { ...entry, tweet: { ...entry.tweet, url: "javascript:alert(1)" } },
     }),
-    { message: /does not look like a link/ },
+    { message: /Invalid URL format/ },
     "the snapshot's own permalink reaches an href in the card",
   );
 });
@@ -153,7 +153,7 @@ test("fetchTweet validates its arguments and builds the URL itself", async (t) =
   ]) {
     await t.throwsAsync(
       caller.journal.fetchTweet(bad),
-      { message: /invalid tweet/ },
+      { message: /Invalid tweet/ },
       JSON.stringify(bad),
     );
   }
@@ -167,14 +167,16 @@ test("fetchTweet is rate limited per account", async (t) => {
     await caller.journal.fetchTweet({ id: TWEET_ID, token: "abc" });
   }
   await t.throwsAsync(caller.journal.fetchTweet({ id: TWEET_ID, token: "abc" }), {
-    message: /too many tweet lookups/,
+    message: /Too many post lookups/,
   });
 });
 
 test("the argument shapes match the desktop's", (t) => {
   t.notThrows(() => validateTweetFetchArgs(TWEET_ID, "abc123"));
-  t.throws(() => validateTweetFetchArgs("12a", "abc"), { message: "invalid tweet id" });
+  t.throws(() => validateTweetFetchArgs("12a", "abc"), {
+    message: "Invalid tweet ID: expected a numeric string of at most 25 characters.",
+  });
   t.throws(() => validateTweetFetchArgs(TWEET_ID, "a".repeat(33)), {
-    message: "invalid tweet token",
+    message: "Invalid tweet token: expected an alphanumeric string of at most 32 characters.",
   });
 });

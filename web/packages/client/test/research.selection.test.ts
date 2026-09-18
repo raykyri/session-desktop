@@ -64,7 +64,7 @@ test("message seams are reported where the enclosing message changes", (t) => {
   t.deepEqual(boundaries, [17, 27]);
 });
 
-test("word snapping never fuses a word across a seam", (t) => {
+test("prevents word expansion across message boundaries", (t) => {
   const root = fixture();
   const projection = root.textContent ?? "";
   const snapper = createResearchSelectionSnapper(projection, "en", messageFlatBoundaries(root));
@@ -106,7 +106,7 @@ test("a capture anchors the passage and clamps context to its message", (t) => {
   t.is(captured?.expandAnchor, null);
 });
 
-test("a selection touching a tool row is refused", (t) => {
+test("rejects selections that intersect tool rows", (t) => {
   const root = fixture();
   const range = rangeForTextOffsets(root, 12, 30) as Range;
   t.true(selectionTouchesNonTextRow(root, range));
@@ -192,7 +192,7 @@ test("the reply snippet keeps eight words and marks the cut", (t) => {
   t.is(formatResearchReplySnippet(""), "");
 });
 
-test("only the response content root claims to be one", (t) => {
+test("matches the response-root selector only on response content elements", (t) => {
   // `data-node-id` is on the segment grid, on the rail and on every branch
   // card, so a `closest()` walk from a selection that strayed out of the answer
   // used to find one of those and measure an anchor against text no anchor can

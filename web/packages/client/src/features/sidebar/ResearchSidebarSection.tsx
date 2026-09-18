@@ -109,9 +109,8 @@ function isOwnRowEvent(event: ReactSyntheticEvent<HTMLElement>): boolean {
   return event.currentTarget.contains(event.target instanceof Node ? event.target : null);
 }
 
-/** Whether the event landed on a control the row draws inside itself — the ⋯
- * menu trigger, a folder's disclosure arrow. Those act for themselves; opening
- * the row's menu is not also a request to open the row. */
+/** Whether the event originated from an internal row control, such as the menu
+ * trigger or folder disclosure arrow. These controls must not also open the row. */
 function inRowButton(event: ReactSyntheticEvent<HTMLElement>): boolean {
   return event.target instanceof Element && event.target.closest("button") !== null;
 }
@@ -349,11 +348,11 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
   const reportBatch = (verb: "archived" | "deleted", failed: number, total: number) => {
     if (failed === 0) return;
     pushErrorToast(
-      `${failed} of ${total} could not be ${verb}`,
+      `Failed to ${verb === "archived" ? "archive" : "delete"} ${failed} of ${total} items`,
       new Error(
         failed === total
-          ? `None of the ${total} could be ${verb}.`
-          : `${total - failed} of ${total} were ${verb}; the rest were refused.`,
+          ? `None of the ${total} items could be ${verb}.`
+          : `Successfully ${verb} ${total - failed} of ${total} items; remaining items failed.`,
       ),
     );
   };
@@ -460,8 +459,8 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
 
     if (hitRow && !memberFolderId) {
       const list = hitRow.dataset["researchStarIndex"] !== undefined ? "starred" : "units";
-      // A tree only joins the starred list by being starred, never by landing
-      // in it, so a cross-list drop is refused rather than silently reordered.
+      // Prevent cross-list drops into the starred section. Items enter it only
+      // through the star action.
       if (draggedTree && list === "starred" && drag.scope.kind !== "starred") return null;
       const index = Number(
         list === "starred"
@@ -591,8 +590,8 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
     if (target.kind !== "gap") return;
 
     if (drag.scope.kind === "starred" && target.scope.kind === "starred") {
-      // The starred list orders itself; its order is folder state, not the
-      // server's list order.
+      // Starred item order is stored in client folder state rather than the
+      // server list order.
       const current = lists.starred.map(researchSidebarUnitId);
       const next = moveResearchTreeIdToGap(current, drag.id, target.index);
       if (next !== current) {
@@ -1048,7 +1047,9 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
       ) : null}
 
       {summaries.isSuccess && all.length === 0 ? (
-        <p className="text-fg-muted m-0 px-2.5 py-2 text-sm">Research you start appears here.</p>
+        <p className="text-fg-muted m-0 px-2.5 py-2 text-sm">
+          No research yet. Start an investigation to see it here.
+        </p>
       ) : null}
 
       <NameDialog
@@ -1126,8 +1127,8 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             // dissolved; the dialog stays open with this as its error.
             throw new Error(
               failed === ids.length
-                ? `None of the ${ids.length} could be deleted.`
-                : `${ids.length - failed} of ${ids.length} were deleted; the rest were refused.`,
+                ? `Could not delete any of the ${ids.length} items.`
+                : `Deleted ${ids.length - failed} of ${ids.length} items; remaining items failed.`,
             );
           }
           writeFolders(dissolveResearchFolder(folderState, deletingFolder.id));
@@ -1136,13 +1137,9 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
 
       <AsyncConfirmDialog
         open={dissolving !== null}
-        title={
-          dissolving
-            ? `Remove ${memberTrees(dissolving.id).length} ${memberTrees(dissolving.id).length === 1 ? "item" : "items"} from “${dissolving.name}”?`
-            : "Remove items?"
-        }
-        description="The items return to the research list and the folder is removed. No research is deleted."
-        confirmLabel="Remove items"
+        title={dissolving ? `Ungroup “${dissolving.name}”?` : "Ungroup folder?"}
+        description="Research in this folder will move back to the main list, and the folder will be deleted. No research will be lost."
+        confirmLabel="Ungroup folder"
         tone="default"
         onOpenChange={(open) => {
           if (!open) setDissolving(null);

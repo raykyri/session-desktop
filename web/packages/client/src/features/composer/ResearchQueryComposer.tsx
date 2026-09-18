@@ -42,9 +42,8 @@ import { FORM_FIELD } from "../../ui/surfaces.js";
 import { oversizeRefusal } from "./limits.js";
 import { ModelIcon } from "./modelIcon.js";
 
-/** A prompt that is nothing but one web URL is a link to keep, not a question
- * to ask (`10` §2). Anything with a second token is a question that happens to
- * contain a link. */
+/** A prompt containing only one web URL is saved as a Journal bookmark
+ * (`10` §2). Additional text causes the prompt to run as a research query. */
 export function bareUrl(text: string): string | null {
   const trimmed = text.trim();
   if (trimmed === "" || /\s/.test(trimmed)) return null;
@@ -102,8 +101,8 @@ interface Attachment {
   error?: string;
 }
 
-/** A restored draft knows only the ids; the names arrive with the chips the
- * next upload produces, and until then the chip carries the id's own weight. */
+/** Restored drafts contain only document IDs until upload metadata becomes
+ * available. */
 function attachmentsFromDraft(documentIds: readonly string[] | undefined): Attachment[] {
   return (documentIds ?? []).map((id) => ({
     key: id,
@@ -412,7 +411,9 @@ export function ResearchQueryComposer({ workspaceId }: { workspaceId: string }) 
               {attachment.document?.extractionStatus === "pending" ? (
                 <span>extracting…</span>
               ) : null}
-              {attachment.document?.extractionStatus === "failed" ? <span>no text</span> : null}
+              {attachment.document?.extractionStatus === "failed" ? (
+                <span>No text extracted</span>
+              ) : null}
               <IconButton
                 label={`Remove ${attachment.name}`}
                 className="size-3.5"

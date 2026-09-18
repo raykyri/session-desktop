@@ -14,7 +14,7 @@ Rust (`src-tauri/src`): `pty.rs`, `scrollback.rs`, `control.rs`,
 OAuth), the `session-cli` and `session-proto` crates, the Swift
 `SessionNativeSupport` package, and the entire CLI execution layer:
 `research_runtime.rs`, `claude_sdk.rs`, `headless_process.rs`,
-`title_generation.rs` (its schemas and prompts survive), `adapters/*`,
+`title_generation.rs` (its schema definitions and prompt templates are retained), `adapters/*`,
 `launch_path.rs`, `sleep.rs`, the OpenRouter proxy, and the adapter
 readiness probes. Within kept logic: `PaneInfo`, splits,
 artifacts tray, queued turns, remotes, `WorkspaceScope::Terminal`,

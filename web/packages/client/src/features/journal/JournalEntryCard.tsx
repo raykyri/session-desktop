@@ -1,9 +1,8 @@
 // The feed's journal cards (`10-home-feed-journal-encyclopedia.md` §2, ported
 // from `ResearchActivityFeed.tsx:208-312`).
 //
-// A link entry is a card with the URL in it; a tweet entry *is* the tweet card,
-// with no wrapper chrome of its own, so a feed of posts reads as posts rather
-// than as posts framed inside content items (`journal.css:1-5`).
+// Link entries render in URL cards. Social posts render directly as tweet cards
+// without generic content wrappers (`journal.css:1-5`).
 
 import { safeHref } from "@session/shared";
 import type { JournalEntry } from "@session/shared";

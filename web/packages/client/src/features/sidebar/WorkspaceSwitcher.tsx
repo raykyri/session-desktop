@@ -30,9 +30,7 @@ import { IconMenuItem } from "./menuRows.js";
 
 type WorkspaceRow = Workspace & { treeCount?: number };
 
-/** The refusal the desktop made from the same facts: a workspace whose threads
- * still have admitted runs cannot be removed, because removing it would delete
- * the threads those runs are writing into. */
+/** Prevent workspace deletion while any research runs are active. */
 export function workspaceRemovalRefusal(runningTrees: number): string | null {
   if (runningTrees === 0) return null;
   return runningTrees === 1
@@ -88,7 +86,7 @@ export function WorkspaceSwitcher({
     next[to] = ids[from] as string;
     void reorderResearchWorkspaces(next)
       .then(refreshWorkspaces)
-      .catch((error: unknown) => pushErrorToast("The workspaces could not be reordered", error));
+      .catch((error: unknown) => pushErrorToast("Failed to reorder workspaces", error));
   };
 
   return (
@@ -142,7 +140,7 @@ export function WorkspaceSwitcher({
             />
             <IconMenuItem
               icon={<Star size={13} aria-hidden="true" />}
-              label={isDefault ? "Already the default" : "Set as default"}
+              label={isDefault ? "Default workspace" : "Set as default"}
               disabled={isDefault}
               onClick={() => {
                 void setDefaultResearchWorkspace(current.id)
@@ -151,7 +149,7 @@ export function WorkspaceSwitcher({
                     pushToast({ title: `“${current.name}” is now the default workspace` });
                   })
                   .catch((error: unknown) =>
-                    pushErrorToast("The default workspace could not be set", error),
+                    pushErrorToast("Failed to set default workspace", error),
                   );
               }}
             />
@@ -164,7 +162,7 @@ export function WorkspaceSwitcher({
             <MenuSeparator />
             <IconMenuItem
               icon={<Trash2 size={13} aria-hidden="true" />}
-              label={`Remove “${current.name}”`}
+              label={`Delete “${current.name}”`}
               tone="danger"
               onClick={() => setRemoving(true)}
             />
@@ -175,7 +173,7 @@ export function WorkspaceSwitcher({
       <NameDialog
         open={creating}
         title="New workspace"
-        description="Research, folders and encyclopedia pages are scoped to a workspace."
+        description="Each workspace has separate research threads, folders, and encyclopedia pages."
         label="Workspace name"
         confirmLabel="Create"
         onOpenChange={setCreating}
@@ -185,7 +183,7 @@ export function WorkspaceSwitcher({
               refreshWorkspaces();
               onSelect(workspace.id);
             })
-            .catch((error: unknown) => pushErrorToast("The workspace could not be created", error));
+            .catch((error: unknown) => pushErrorToast("Failed to create workspace", error));
         }}
       />
 
@@ -200,25 +198,24 @@ export function WorkspaceSwitcher({
           if (!current || name === current.name) return;
           void renameResearchWorkspace(current.id, name)
             .then(refreshWorkspaces)
-            .catch((error: unknown) => pushErrorToast("The workspace could not be renamed", error));
+            .catch((error: unknown) => pushErrorToast("Failed to rename workspace", error));
         }}
       />
 
       <AsyncConfirmDialog
         open={removing}
-        title={current ? `Remove “${current.name}”?` : "Remove workspace?"}
+        title={current ? `Delete “${current.name}”?` : "Delete workspace?"}
         description={
           workspaceRemovalRefusal(runningTrees) ??
           "This deletes the workspace and every research thread inside it. This can’t be undone."
         }
-        confirmLabel="Remove workspace"
-        pendingLabel="Removing…"
+        confirmLabel="Delete workspace"
+        pendingLabel="Deleting…"
         onOpenChange={setRemoving}
         onConfirm={async () => {
           if (!current) return;
           const refusal = workspaceRemovalRefusal(runningTrees);
-          // Refused here rather than sent and refused there: the client already
-          // knows the answer, and a round trip would only delay it.
+          // Validate locally to avoid an unnecessary round trip when active runs prevent workspace deletion.
           if (refusal) throw new Error(refusal);
           await removeResearchWorkspace(current.id);
           refreshWorkspaces();

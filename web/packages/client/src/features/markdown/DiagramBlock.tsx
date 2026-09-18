@@ -259,8 +259,7 @@ export function DiagramBlock({ lang, code }: { lang: DiagramLang; code: string }
   useEffect(() => {
     if (!inView) return;
     let cancelled = false;
-    // Entering the loading state is the effect's own announcement that the
-    // previous SVG no longer describes this source.
+    // Switching to loading state indicates that the previous SVG is being replaced for updated source code.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setState({ status: "loading" });
     renderDiagram(lang, source, appearance)
@@ -304,11 +303,9 @@ export function DiagramBlock({ lang, code }: { lang: DiagramLang; code: string }
           </pre>
         </div>
       ) : state.status === "done" ? (
-        // A diagram is one control: it expands. The anchors inside it are
-        // sanitized into inert `#` hrefs and handled by the click below, so the
-        // enlarge action is what the element itself announces and what the
-        // keyboard gets — a pointer-only expander would leave the diagram's
-        // detail unreachable without a mouse (08 §7).
+        // Expose diagram expansion as one labeled keyboard control. Sanitized
+        // internal anchors use inert `#` destinations and delegate to this
+        // handler (08 §7).
         <div
           className="research-diagram-svg focus-visible:ring-focus-ring outline-none focus-visible:ring-2"
           data-lang={lang}

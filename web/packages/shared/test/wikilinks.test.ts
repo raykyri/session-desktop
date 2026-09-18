@@ -102,7 +102,7 @@ test("every item in a list links independently", (t) => {
   t.true(html.includes("<li>plain</li>"), html);
 });
 
-test("wikilinks survive inside emphasis and table cells", (t) => {
+test("preserves wikilink syntax within formatted text and Markdown table cells", (t) => {
   const html = render("**[[Bold term]]** and _[[Italic term]]_");
   t.true(html.includes(`<strong>${LINK("Bold term")}</strong>`), html);
   t.true(html.includes(`<em>${LINK("Italic term")}</em>`), html);

@@ -1,11 +1,8 @@
 // The query key factory (07 §4.1) and the cache writers built on it.
 //
-// Keys are built here and nowhere else, so a cache patch in the event bridge
-// and a read in a component cannot disagree about the shape of a key. The
-// writers below are shared by the bridge and by the mutations: a tree summary
-// patched from an event and the same summary patched from the mutation that
-// caused the event must land identically, or a list flickers between two
-// truths on every round trip.
+// Centralized query keys keep component reads and event-bridge cache patches
+// consistent. Optimistic mutations and server-event reducers share these
+// writers so they produce identical summary objects.
 //
 // `queries.ts` re-exports `queryKeys`, which is the import path the rest of
 // the client uses; the factory lives here so the writers can use it without a
@@ -86,9 +83,7 @@ export function mapSummaries(
   });
 }
 
-/** Applies a reducer to a cached tree detail, if one is cached. A detail that
- * was never read is not created here: the reducers patch what the user is
- * looking at, they do not prefetch. */
+/** Applies updates to an existing cached tree detail without populating new cache entries. */
 export function patchDetail(
   client: QueryClient,
   treeId: string,
@@ -101,9 +96,7 @@ export function patchDetail(
   if (next && next !== current) client.setQueryData(key, next);
 }
 
-/** The node as the caches last saw it. Count deltas on a tree summary are
- * ambiguous without it, so its absence is what makes a caller fall back to an
- * authoritative refetch rather than guess. */
+/** The node as the caches last saw it. If the prior node state is missing from cache, callers fall back to a full refetch to recalculate summary counts accurately. */
 export function cachedNode(
   client: QueryClient,
   treeId: string,

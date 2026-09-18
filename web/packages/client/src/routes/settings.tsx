@@ -46,8 +46,8 @@ function ResearchSection() {
   const setLocal = useSettingsStore((state) => state.set);
   const defaultModel = useSettingsStore((state) => state.settings.defaultModel);
   // The edit in progress, or `null` while the field shows the stored value.
-  // Deriving rather than mirroring in an effect is what makes the server's
-  // copy win the moment it lands (`06` §6) without clobbering typing.
+  // Derive the displayed value directly so server updates take effect without
+  // synchronization lag while preserving active edits.
   const [edit, setEdit] = useState<string | null>(null);
   const stored = settings.data?.researchLaunchInstruction ?? "";
   const instruction = edit ?? stored;
@@ -64,7 +64,7 @@ function ResearchSection() {
     <div className="flex flex-col gap-5">
       <Field
         label="Research instructions"
-        hint={`Prepended to every question. Up to ${RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES / 1024} KiB.`}
+        hint={`Added to the beginning of every research question. Up to ${RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES / 1024} KiB.`}
       >
         {({ id, describedBy }) => (
           <div className="flex flex-col items-start gap-2">
@@ -94,7 +94,7 @@ function ResearchSection() {
         )}
       </Field>
 
-      <Field label="Default model" hint="What the composer preselects.">
+      <Field label="Default model" hint="Default model selected in the composer.">
         {() => (
           <Select
             label="Default model"
@@ -209,7 +209,7 @@ export function SettingsPage() {
                 )}
               </Field>
 
-              <Field label="Theme" hint="Chooses the accent and the neutral temperature.">
+              <Field label="Theme" hint="Selects the accent color and background tone.">
                 {() => (
                   <Select
                     label="Theme"
@@ -224,7 +224,7 @@ export function SettingsPage() {
 
               <Field
                 label="Body font"
-                hint="Anthropic Sans Text and Inter are offered only when installed on this machine."
+                hint="Anthropic Sans Text and Inter are available only if installed locally."
               >
                 {() => (
                   <Select
@@ -254,7 +254,7 @@ export function SettingsPage() {
 
               <Switch
                 label="Reduce motion"
-                description="Settle decorative transitions immediately. Progress indicators keep moving."
+                description="Disable non-essential animations and transitions. Progress indicators remain active."
                 checked={settings.reduceMotion}
                 onCheckedChange={(checked) => set("reduceMotion", checked)}
               />
@@ -271,19 +271,19 @@ export function SettingsPage() {
               />
               <Switch
                 label="Show timestamps"
-                description="A wall-clock time after each run of assistant messages."
+                description="Display timestamps on assistant responses."
                 checked={settings.showAssistantTimestamps}
                 onCheckedChange={(checked) => set("showAssistantTimestamps", checked)}
               />
               <Switch
                 label="Notifications"
-                description="Overlay toasts for server-originated notices."
+                description="Show popup notifications for background server events."
                 checked={settings.showNotifications}
                 onCheckedChange={(checked) => set("showNotifications", checked)}
               />
               <Switch
                 label="Require ⌘↵ to send"
-                description="Otherwise Enter sends and Shift-Enter inserts a newline."
+                description="When enabled, press ⌘↵ to send. When disabled, press Enter to send and Shift-Enter for a new line."
                 checked={settings.requireCmdEnterToSend}
                 onCheckedChange={(checked) => set("requireCmdEnterToSend", checked)}
               />

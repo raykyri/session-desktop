@@ -17,7 +17,7 @@ import { deleteNodesOfTrees } from "./subtrees.js";
 
 export const DEFAULT_WORKSPACE_NAME = "Research";
 
-/** Statuses that mean a run is still the server's responsibility. */
+/** Active and pending run statuses that indicate in-flight execution. */
 const ACTIVE_STATUSES = ["queued", "running"] as const;
 
 function toWorkspace(row: typeof workspaces.$inferSelect): Workspace {
@@ -33,7 +33,7 @@ function toWorkspace(row: typeof workspaces.$inferSelect): Workspace {
 function normalizeName(name: string): string {
   const trimmed = name.trim();
   if (trimmed === "") {
-    throw new Error("a workspace needs a name");
+    throw new Error("Workspace name is required.");
   }
   return trimmed;
 }
@@ -105,10 +105,9 @@ export function rename(
 /**
  * Deletes a workspace and every tree in it.
  *
- * Refused while a run in the workspace is `queued` or `running`: the run loop
- * holds an open provider stream and a node id it would write back to, and
- * cascading the rows out from under it turns a recoverable cancel into a
- * write to a row that no longer exists. Cancel first, then remove.
+ * Rejects deletion while a run is queued or active, preventing orphaned
+ * provider streams and writes to deleted node records. Cancel active runs
+ * before deleting the workspace.
  */
 export function remove(
   db: SessionDatabase,
@@ -137,7 +136,7 @@ export function remove(
       )
       .get();
     if (active) {
-      throw new Error("cancel the workspace's active research before removing it");
+      throw new Error("Cannot delete workspace: all active research runs must be cancelled first.");
     }
     const removedTreeIds = tx
       .select({ id: trees.id })
@@ -171,13 +170,13 @@ export function reorder(db: SessionDatabase, userId: string, workspaceIds: strin
       .all()
       .map((row) => row.id);
     if (existing.length !== workspaceIds.length) {
-      throw new Error("workspace order is stale; refresh before reordering");
+      throw new Error("Reorder conflict: workspace list is stale. Refresh and retry.");
     }
     const seen = new Set<string>();
     const known = new Set(existing);
     for (const workspaceId of workspaceIds) {
       if (seen.has(workspaceId)) {
-        throw new Error("workspace order contains a duplicate workspace");
+        throw new Error("Invalid workspace order: list contains duplicate workspace IDs.");
       }
       if (!known.has(workspaceId)) {
         throw new Error(`workspace ${workspaceId} is not in this account`);
@@ -195,8 +194,7 @@ export function reorder(db: SessionDatabase, userId: string, workspaceIds: strin
   });
 }
 
-/** The workspace new research lands in: the stored default when it still
- * exists, otherwise the first by order, creating one if the account has none. */
+/** Resolves the default workspace for new research, falling back to the first ordered workspace or creating a initial default workspace if none exists. */
 export function ensureDefault(db: SessionDatabase, userId: string): Workspace {
   return transact(db, (tx) => {
     const preferences = ensurePreferences(tx, userId);
@@ -228,7 +226,7 @@ export function setDefault(db: SessionDatabase, userId: string, workspaceId: str
   });
 }
 
-/** Trees in the workspace, for the list's count badge. */
+/** Returns the total count of research trees per workspace for sidebar display badges. */
 export function treeCounts(db: SessionDatabase, userId: string): Map<string, number> {
   const rows = db
     .select({ workspaceId: trees.workspaceId, value: sql<number>`count(*)` })

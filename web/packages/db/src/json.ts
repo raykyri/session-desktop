@@ -63,7 +63,7 @@ export function parseJsonColumn<TSchema extends z.ZodType>(
 ): z.infer<TSchema> {
   const result = schema.safeParse(value);
   if (!result.success) {
-    throw new Error(`${column} holds a value this build cannot read: ${result.error.message}`);
+    throw new Error(`Failed to parse ${column}: invalid data schema (${result.error.message})`);
   }
   return result.data;
 }

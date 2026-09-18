@@ -63,10 +63,7 @@ export const encyclopediaRouter = router({
   deletePage: protectedProcedure
     .input(z.object({ workspaceId: z.string(), slug: z.string() }))
     .mutation(({ ctx, input }) => {
-      // The workspace is checked first so a foreign id is `NOT_FOUND` rather
-      // than `{ removed: false }`, which reads as "already gone" and is a
-      // different answer from "not yours" (`06-auth-and-users.md` §4). An
-      // absent slug inside one's own workspace stays idempotent.
+      // Verifies workspace ownership first so cross-tenant deletion attempts return NOT_FOUND instead of reporting deletion failure.
       required(
         repo(() => workspaces.get(ctx.db, ctx.user.id, input.workspaceId)),
         `research workspace ${input.workspaceId} was not found`,

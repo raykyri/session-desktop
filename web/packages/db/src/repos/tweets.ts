@@ -57,13 +57,13 @@ export function put(db: SessionDatabase, input: PutTweetInput): CachedTweet {
     input.payload !== undefined &&
     Buffer.byteLength(JSON.stringify(input.payload ?? null), "utf8") > MAX_TWEET_PAYLOAD_BYTES
   ) {
-    throw new Error("the tweet payload is too large to cache");
+    throw new Error("Tweet syndication payload exceeds maximum cacheable size.");
   }
   if (
     input.snapshot &&
     Buffer.byteLength(JSON.stringify(input.snapshot), "utf8") > MAX_TWEET_SNAPSHOT_BYTES
   ) {
-    throw new Error("the tweet snapshot is too large to cache");
+    throw new Error("Tweet snapshot exceeds maximum cacheable size.");
   }
   const at = now();
   const values = {

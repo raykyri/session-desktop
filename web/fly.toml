@@ -5,8 +5,7 @@
 # The positional `web` is the build context; without it flyctl hands Docker
 # the repository root, where `package.json` is the desktop's.
 #
-# The cost ceiling and the sign-up gate are on: this deployment pays a provider
-# per token and anyone who can reach the origin can spend it (`13` §2, §4).
+# Enables token quota limits and invitation-only registration to restrict access and control LLM provider costs.
 # `SESSION_ENFORCE_LIMITS = "1"` makes the daily token and run limits refuse
 # rather than merely record; `SESSION_REQUIRE_INVITE = "1"` means an account is
 # created only against a code an admin minted. Turning either off is a
@@ -21,8 +20,7 @@
 app = "session-dev"
 primary_region = "sjc"
 
-# One machine holds the volume and the open provider streams, so a deploy stops
-# it before the next one starts and the drain has to finish first.
+# Enforces sequential deploys with graceful shutdown to release persistent volume mounts and complete active streaming responses.
 kill_signal = "SIGTERM"
 kill_timeout = "30s"
 
@@ -83,6 +81,5 @@ kill_timeout = "30s"
   memory = "2gb"
 
 [deploy]
-  # One machine with a volume cannot roll: the old one has to release the
-  # volume before the new one can claim it.
+  # Rolling deployments are not supported with dedicated single-mount volumes; the active instance must terminate before a replacement instance can mount the volume.
   strategy = "immediate"

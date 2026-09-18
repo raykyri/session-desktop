@@ -4,8 +4,8 @@
 // states, the recap, the collapsed-fold empty-state cascade, the "show earlier"
 // window, the selection root the highlight machinery measures against, the
 // sources, and the footer (word count, duration, hidden-highlight notice, copy,
-// the answer menu, and a Cancel for a run streaming in a segment the header's
-// Cancel does not follow).
+// the answer menu, and a local cancel button for branch runs not targeted by
+// the header cancel button).
 //
 // It is memoized apart from its segment's rail: a follow-up card streaming a
 // preview in the margin must not rebuild the answer's element tree or re-run
@@ -172,7 +172,7 @@ export const AnswerPane = memo(function AnswerPane({
         <>
           {contentError ? (
             <div className="text-fg-muted mb-3 flex items-center gap-2 text-sm" role="alert">
-              <p className="m-0">Refreshing this response failed: {contentError}</p>
+              <p className="m-0">Failed to refresh response: {contentError}</p>
               <ControlButton size="sm" onClick={onRetryContentLoad}>
                 Retry
               </ControlButton>
@@ -213,7 +213,7 @@ export const AnswerPane = memo(function AnswerPane({
             <>
               {view.hiddenTimelineItemCount > 0 ? (
                 <ControlButton size="sm" className="mb-3" onClick={() => onExpandTurns(node.id)}>
-                  Show {view.hiddenTimelineItemCount} earlier response item
+                  Show {view.hiddenTimelineItemCount} earlier message
                   {view.hiddenTimelineItemCount === 1 ? "" : "s"}
                 </ControlButton>
               ) : null}
@@ -259,9 +259,9 @@ export const AnswerPane = memo(function AnswerPane({
             </span>
             {durationText ? <span>{durationText}</span> : null}
             {hiddenHighlightCount > 0 ? (
-              <span title="These saved highlights couldn’t be located in the current view. Their passages may sit in content that isn’t rendered right now.">
-                {hiddenHighlightCount} {hiddenHighlightCount === 1 ? "highlight" : "highlights"} not
-                visible in this view
+              <span title="These highlights are in collapsed or hidden sections.">
+                {hiddenHighlightCount} hidden{" "}
+                {hiddenHighlightCount === 1 ? "highlight" : "highlights"}
                 {view.hasTranscriptActivity && !view.showFullTrace ? (
                   <>
                     {" · "}

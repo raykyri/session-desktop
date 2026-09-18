@@ -111,7 +111,7 @@ test("another account's attempts are not counted", (t) => {
   t.is(usage.dailyTotals(fixture.db, "someone-else", NOON).runs, 0);
 });
 
-test("the per-account override wins over the deployment default", (t) => {
+test("prioritizes account-specific limits over deployment defaults", (t) => {
   const fixture = createFixture(t);
   t.deepEqual(usage.effectiveLimits(fixture.db, fixture.userId), {
     dailyTokens: usage.DEFAULT_DAILY_TOKENS,
@@ -125,7 +125,7 @@ test("the per-account override wins over the deployment default", (t) => {
   t.is(usage.effectiveLimits(fixture.db, fixture.userId, { dailyRuns: 3 }).dailyRuns, 50);
 });
 
-test("admission reports what is left and why it stopped", (t) => {
+test("returns remaining quota metrics and rejection reason when limit is reached", (t) => {
   const fixture = createFixture(t);
   const defaults = { dailyTokens: 1000, dailyRuns: 2 };
   t.deepEqual(usage.admissionCheck(fixture.db, fixture.userId, { defaults, at: NOON }), {
@@ -158,11 +158,11 @@ test("admission reports what is left and why it stopped", (t) => {
   t.false(blocked.allowed);
   t.is(blocked.reason, "runs");
 
-  // A new UTC day starts clean.
+  // Quotas reset at 00:00 UTC.
   t.true(usage.admissionCheck(fixture.db, fixture.userId, { defaults, at: NOON + DAY }).allowed);
 });
 
-test("a token exhaustion is reported as such", (t) => {
+test("reports token exhaustion with a specific quota exceeded error", (t) => {
   const fixture = createFixture(t);
   usage.record(fixture.db, fixture.userId, {
     kind: "metadata",

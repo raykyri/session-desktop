@@ -30,7 +30,7 @@ function render(html: string): HTMLElement {
   return host;
 }
 
-test("a term resolves to the status of its page, or to nothing", (t) => {
+test("returns the page status for existing encyclopedia terms, or null if not found", (t) => {
   const pages = [pageSummary(), pageSummary({ slug: "amnesia", status: "generating" })];
   t.is(statusForSlug(pages, "collective-memory"), "ready");
   t.is(statusForSlug(pages, "amnesia"), "generating");

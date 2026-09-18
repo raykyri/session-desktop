@@ -1,5 +1,4 @@
-// Row shapes to wire shapes. One place, so a column added to `nodes` reaches
-// `ResearchNode` (or is deliberately kept out of it) exactly once.
+// Centralized transformation functions converting database row entities into API response models.
 
 import type {
   ResearchHighlight,

@@ -1,8 +1,6 @@
 // The canonical conversation the app owns (`docs/04-agent-runtime.md` §4).
 //
-// Append-only: a node's messages are written once, when the node completes,
-// and never edited. Fable 5.1 invalidates thinking blocks on edited history;
-// other providers do not care, but one rule is simpler than two.
+// Append-only design: conversation messages are recorded upon node completion and remain immutable across all providers.
 
 import { and, asc, eq } from "drizzle-orm";
 
@@ -65,7 +63,9 @@ export function appendMessages(
   return transact(db, (tx) => {
     const node = requireNode(tx, userId, nodeId);
     if (node.status !== "complete") {
-      throw new Error("only a completed run's messages become part of the conversation");
+      throw new Error(
+        "Cannot persist messages: only completed runs may be appended to the conversation history.",
+      );
     }
     const last = tx
       .select({ position: nodeMessages.position })
@@ -116,7 +116,9 @@ export function ancestorPath(db: SessionDatabase, userId: string, nodeId: string
   const seen = new Set<string>();
   while (current !== null) {
     if (seen.has(current)) {
-      throw new Error(`research node ${current} is its own ancestor`);
+      throw new Error(
+        `Cycle detected in node lineage: research node ${current} references itself in its ancestor chain.`,
+      );
     }
     seen.add(current);
     const node: typeof nodes.$inferSelect = requireNode(db, userId, current);

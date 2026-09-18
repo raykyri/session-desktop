@@ -298,7 +298,7 @@ test("research highlights relocate only with matching quote context", (t) => {
   );
 });
 
-test("research highlights survive edits by relocating across revisions", (t) => {
+test("preserves highlight anchors across revisions using contextual relocation", (t) => {
   // A document edit bumps the revision; the highlight follows its quote as
   // long as the surrounding context still agrees.
   t.deepEqual(
@@ -309,7 +309,7 @@ test("research highlights survive edits by relocating across revisions", (t) => 
     ),
     { start: 23, end: 29 },
   );
-  // The quote is gone from the new revision: orphan it rather than guess.
+  // If the exact quote is absent in the new revision, detach the anchor instead of approximating position.
   t.is(resolveResearchHighlightOffset("nothing to match here", "b".repeat(64), highlight()), null);
 });
 

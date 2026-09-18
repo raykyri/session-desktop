@@ -27,7 +27,7 @@ test("a follow-up requires a completed parent and a live thread", (t) => {
         parentNodeId: detail.tree.rootNodeId,
         prompt: "Too early",
       }),
-    { message: /require a completed parent response/ },
+    { message: /parent research run has not completed/ },
   );
   nodes.setStatus(fixture.db, fixture.userId, detail.tree.rootNodeId, "complete");
   trees.archive(fixture.db, fixture.userId, detail.tree.id);
@@ -37,7 +37,7 @@ test("a follow-up requires a completed parent and a live thread", (t) => {
         parentNodeId: detail.tree.rootNodeId,
         prompt: "Archived",
       }),
-    { message: /restore archived research/ },
+    { message: /Cannot create follow-up on archived research/ },
   );
 });
 
@@ -117,7 +117,7 @@ test("terminal statuses are monotonic", (t) => {
   t.not(complete.completedAt, null);
   for (const status of ["running", "failed", "cancelled", "queued"] as const) {
     t.throws(() => nodes.setStatus(fixture.db, fixture.userId, rootId, status), {
-      message: /already finished as complete/,
+      message: /already has terminal status 'complete'/,
     });
   }
 });
@@ -145,7 +145,7 @@ test("retry needs a terminal-but-retryable status and clears the attempt", (t) =
   });
   const rootId = detail.tree.rootNodeId;
   t.throws(() => nodes.resetForRetry(fixture.db, fixture.userId, rootId), {
-    message: /failed, cancelled, or interrupted/,
+    message: /only runs with status 'failed', 'cancelled', or 'interrupted'/,
   });
   nodes.setStatus(fixture.db, fixture.userId, rootId, "running");
   runs.commitTurn(fixture.db, fixture.userId, { nodeId: rootId, turn: answerTurn(rootId, "hi") });
@@ -208,11 +208,11 @@ test("resume keeps the committed turns and drops the checkpoint", (t) => {
   t.is(queued.enqueued_at, 0, "a resume goes back to the head of the queue");
   t.is(queued.provider, "vertex");
   t.throws(() => nodes.resumeAttempt(fixture.db, fixture.userId, rootId), {
-    message: /only an interrupted run/,
+    message: /only runs with status 'interrupted'/,
   });
 });
 
-test("boot turns orphaned runs into interrupted resumes and re-queues them", (t) => {
+test("reconciles in-flight runs at startup by marking them interrupted and re-enqueuing", (t) => {
   const fixture = createFixture(t);
   const running = trees.admitRoot(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
@@ -242,7 +242,7 @@ test("boot turns orphaned runs into interrupted resumes and re-queues them", (t)
   t.is(queue.position(fixture.db, fixture.userId, queuedId), 2);
 });
 
-test("boot adopts a terminal outcome the snapshot already recorded", (t) => {
+test("synchronizes node status with existing terminal snapshot outcome at startup", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
@@ -267,7 +267,7 @@ test("boot adopts a terminal outcome the snapshot already recorded", (t) => {
   t.is(adopted?.completedAt, 1_700_000_000_000);
 });
 
-test("removeBranch takes the subtree and refuses the root", (t) => {
+test("deletes child subtree while disallowing root node deletion", (t) => {
   const fixture = createFixture(t);
   const detail = completedRoot(fixture);
   const child = nodes.admitChild(fixture.db, fixture.userId, {
@@ -281,7 +281,7 @@ test("removeBranch takes the subtree and refuses the root", (t) => {
   });
   nodes.setStatus(fixture.db, fixture.userId, grandchild.id, "cancelled");
   t.throws(() => nodes.removeBranch(fixture.db, fixture.userId, detail.tree.rootNodeId), {
-    message: /remove the whole thread/,
+    message: /delete the entire research thread/,
   });
   const removal = nodes.removeBranch(fixture.db, fixture.userId, child.id);
   t.is(removal.parentNodeId, detail.tree.rootNodeId);
@@ -316,7 +316,7 @@ test("a boot re-queue with no queue row records the model's provider", (t) => {
   t.is(row.enqueued_at, 0, "a resume goes to the head of the queue");
 });
 
-test("giving up on auto-resume stops the node being re-queued on every boot", (t) => {
+test("halts automatic re-enqueuing once retry attempt limit is reached", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
@@ -342,7 +342,7 @@ test("giving up on auto-resume stops the node being re-queued on every boot", (t
   t.deepEqual(nodes.reconcileOnBoot(fixture.db).requeuedNodeIds, [], "no later boot re-queues it");
 });
 
-test("a rate-limited re-queue opens a new attempt so the old row survives", (t) => {
+test("creates a new attempt record on rate-limited re-enqueue to preserve prior attempt history", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
@@ -396,7 +396,7 @@ test("a rate-limited re-queue opens a new attempt so the old row survives", (t) 
   });
 });
 
-test("boot re-queues a queued node whose run_queue row never landed", (t) => {
+test("re-enqueues queued nodes missing queue table records during startup reconciliation", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
@@ -422,7 +422,7 @@ test("boot re-queues a queued node whose run_queue row never landed", (t) => {
   t.deepEqual(nodes.reconcileOnBoot(fixture.db).reenqueuedNodeIds, []);
 });
 
-test("boot fails an imported document whose markdown never landed", (t) => {
+test("marks imported document as failed if markdown content was not saved", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,

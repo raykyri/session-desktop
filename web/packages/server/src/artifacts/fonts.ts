@@ -42,8 +42,7 @@ export function assetsDirectory(env: NodeJS.ProcessEnv = process.env): string {
 
 const cache = new Map<string, Uint8Array<ArrayBuffer>>();
 
-/** The bytes of an allowlisted face, or null. Read once and kept: the six
- * files are 250 KB together and every rendered page asks for two of them. */
+/** Caches allowlisted font assets in memory to optimize rendered page delivery. */
 export function readFont(
   file: string,
   directory = assetsDirectory(),

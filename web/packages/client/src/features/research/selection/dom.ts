@@ -11,10 +11,7 @@
 
 import { isEditableTarget } from "@session/shared";
 
-/** Rows whose text is transcript machinery rather than the model's prose: tool
- * calls and their payloads, the "Raw" disclosure (also a `.tool-block`, and it
- * nests inside a message), collapsed thinking, and grouped activity. A
- * selection touching any of them carries nothing worth anchoring. */
+/** Excludes non-content UI elements (tool inputs/outputs, thinking disclosures) from text selection anchors. */
 export const NON_TEXT_ROW_SELECTOR = ".tool-block, .thinking-block, .activity-group-block";
 
 /** The class the message wrapper carries, used both to clamp anchor context to
@@ -74,11 +71,9 @@ export function rangeForTextOffsets(root: HTMLElement, start: number, end: numbe
 }
 
 /**
- * Applies a range to the live selection while keeping the focus on the side the
- * pointer owns, so a reversal feels native and a later keyboard extension
- * continues from the end the reader last moved. Re-applying an identical
- * selection is a no-op, which is what makes the `selectionchange` re-snap pass
- * below safe to run repeatedly.
+ * Applies a range while preserving selection direction so keyboard adjustments
+ * continue from the active focus boundary. Reapplying an identical selection is
+ * a no-op, allowing repeated `selectionchange` normalization.
  */
 export function applyDirectionalSelectionRange(
   range: Range,

@@ -16,8 +16,7 @@ import { ControlButton, IconButton } from "../../ui/Button.js";
 import { Menu, MenuItem, MenuSeparator } from "../../ui/Menu.js";
 import { DIALOG_BACKDROP } from "../../ui/surfaces.js";
 
-/** The account row in the sidebar footer: who is signed in, and the way out
- * (07 §3). `auth.logout` deletes the session rows; the Hono layer clears the
+/** The sidebar account footer displaying the current user profile and sign-out controls.). `auth.logout` deletes the session rows; the Hono layer clears the
  * cookie on the same response, so the navigation that follows lands on
  * `/login` with no session to find. */
 function AccountMenu() {
@@ -52,7 +51,7 @@ function AccountMenu() {
         <MenuItem
           onClick={() => {
             logout.mutate(undefined, {
-              // Whatever the server said, this tab is done with the session.
+              // Clear local session state and redirect to login regardless of server logout response.
               onSettled: () => void navigate({ to: "/login" }),
             });
           }}
