@@ -11,6 +11,13 @@ import { join } from "node:path";
 
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createVertex } from "@ai-sdk/google-vertex";
+import { APICallError } from "@ai-sdk/provider";
+import type {
+  LanguageModelV4,
+  LanguageModelV4CallOptions,
+  LanguageModelV4GenerateResult,
+  LanguageModelV4StreamResult,
+} from "@ai-sdk/provider";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { ModelEntry } from "@session/shared";
@@ -81,6 +88,64 @@ export function providerOptionsFor(entry: ModelEntry): ProviderOptions {
   return effortProviderOptions(entry) as ProviderOptions;
 }
 
+/** What OpenRouter answers when a slug — an alias like `~openai/gpt-luna-latest`
+ * among them — is not a model it serves. Distinct from "no endpoint matches
+ * your data policy", which is a 400 and must stay `provider_unavailable`
+ * rather than silently routing somewhere else. */
+export function isMissingRouteError(error: unknown): boolean {
+  if (!APICallError.isInstance(error)) {
+    return false;
+  }
+  return (
+    error.statusCode === 404 ||
+    /is not a valid model|no such model|model .{0,80}not found/i.test(error.message)
+  );
+}
+
+/**
+ * The registry's `fallbackRoute` (`04-agent-runtime.md` §1).
+ *
+ * OpenRouter's `~vendor/model-latest` aliases come and go; a deployment that
+ * asks for one and is told it does not exist should run the pinned slug rather
+ * than fail the user's question. The swap happens before any chunk has been
+ * produced — a missing route is rejected at the call, not mid-stream — and it
+ * sticks for the process, so the 404 is paid once rather than per request.
+ */
+export function withRouteFallback(
+  primary: LanguageModelV4,
+  fallback: () => LanguageModelV4,
+): LanguageModelV4 {
+  let resolved: LanguageModelV4 | null = null;
+  const attempt = async <T>(call: (model: LanguageModelV4) => PromiseLike<T>): Promise<T> => {
+    if (resolved) {
+      return call(resolved);
+    }
+    try {
+      const result = await call(primary);
+      resolved = primary;
+      return result;
+    } catch (error) {
+      if (!isMissingRouteError(error)) {
+        throw error;
+      }
+      const next = fallback();
+      const result = await call(next);
+      resolved = next;
+      return result;
+    }
+  };
+  return {
+    specificationVersion: primary.specificationVersion,
+    provider: primary.provider,
+    modelId: primary.modelId,
+    supportedUrls: primary.supportedUrls,
+    doGenerate: (options: LanguageModelV4CallOptions): Promise<LanguageModelV4GenerateResult> =>
+      attempt((model) => model.doGenerate(options)),
+    doStream: (options: LanguageModelV4CallOptions): Promise<LanguageModelV4StreamResult> =>
+      attempt((model) => model.doStream(options)),
+  };
+}
+
 function vertexKeyFile(config: Config): string | null {
   return config.vertex.credentialsJson === null
     ? null
@@ -130,6 +195,10 @@ export function createProviders(config: Config, options: CreateProvidersOptions 
     return openrouter;
   };
 
+  // One wrapper per registry entry, so the route a 404 settled on is not
+  // re-discovered for every attempt.
+  const routeFallbacks = new Map<string, LanguageModelV4>();
+
   let anthropic: ReturnType<typeof createAnthropic> | null = null;
   const anthropicProvider = (): ReturnType<typeof createAnthropic> => {
     if (!anthropic) {
@@ -175,9 +244,22 @@ export function createProviders(config: Config, options: CreateProvidersOptions 
         case "openrouter": {
           const provider = openRouterProvider();
           const effort = (providerOptions["openrouter"] ?? {}) as Record<string, unknown>;
+          const settings = openRouterSettings(effort);
+          const primary = provider.chat(entry.route, settings);
+          const fallbackRoute = entry.fallbackRoute;
           return {
             entry,
-            model: provider.chat(entry.route, openRouterSettings(effort)),
+            model:
+              fallbackRoute === undefined
+                ? primary
+                : (routeFallbacks.get(entry.id) ??
+                  (() => {
+                    const wrapped = withRouteFallback(primary, () =>
+                      provider.chat(fallbackRoute, settings),
+                    );
+                    routeFallbacks.set(entry.id, wrapped);
+                    return wrapped;
+                  })()),
             providerOptions,
             providerTools: {},
           };

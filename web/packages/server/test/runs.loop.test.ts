@@ -1,7 +1,14 @@
 // The agent loop against recorded provider streams
 // (`12-testing-linting-ci.md` §3.3, `05-run-lifecycle-and-streaming.md`).
 
-import { messages as messagesRepo, nodes as nodesRepo, runs as runsRepo, usage } from "@session/db";
+import {
+  messages as messagesRepo,
+  nodes as nodesRepo,
+  queue as queueRepo,
+  runs as runsRepo,
+  trees as treesRepo,
+  usage,
+} from "@session/db";
 import type { SessionEvent, Turn } from "@session/shared";
 import test from "ava";
 
@@ -403,5 +410,162 @@ test.serial(
       }),
       { message: /not configured on this deployment/ },
     );
+  },
+);
+
+test.serial("a follow-up replays the questions as well as the answers", async (t) => {
+  setFixtureScenario("success");
+  const harness = createAgentHarness(t);
+  const { user, caller, nodeId } = await launch(harness, "continuer", "What is a skip list?");
+  await harness.settle();
+  t.is(nodesRepo.get(harness.db, user.id, nodeId)?.status, "complete");
+
+  // The node's own messages open with the question it was asked: a thread of
+  // answers without their questions is not a conversation, and Anthropic
+  // rejects a request whose first message is an assistant turn.
+  const own = messagesRepo.listMessages(harness.db, user.id, nodeId);
+  t.is(own[0]?.message.role, "user");
+  t.is(own[0]?.message.content, "What is a skip list?");
+  t.is(own[0]?.model, null, "a question has no producing model");
+  t.is(own.at(-1)?.message.role, "assistant");
+
+  // What the provider is sent for the follow-up: the parent exchange, then the
+  // new question, alternating from a user turn.
+  const prompts: { role: string }[][] = [];
+  setFixtureScenario((options) => {
+    prompts.push(
+      options.prompt
+        .filter((message) => message.role !== "system")
+        .map((message) => ({ role: message.role })),
+    );
+    return "success";
+  });
+  const child = await caller.research.forkNode({
+    parentNodeId: nodeId,
+    prompt: "How does it compare to a balanced tree?",
+  });
+  await harness.settle();
+  t.is(nodesRepo.get(harness.db, user.id, child.id)?.status, "complete");
+
+  const sent = prompts[0] ?? [];
+  t.is(sent[0]?.role, "user", "the conversation opens with the parent's question");
+  t.is(sent.at(-1)?.role, "user", "and ends with the new one");
+  t.true(sent.length >= 3, "the parent's answer is between them");
+
+  const ancestors = messagesRepo
+    .ancestorMessages(harness.db, user.id, child.id)
+    .map((entry) => entry.message.role);
+  t.deepEqual(ancestors, ["user", "assistant"]);
+});
+
+test.serial("streamed tool input and provider-executed tools reach the transcript", async (t) => {
+  setFixtureScenario("provider-tools");
+  const harness = createAgentHarness(t);
+  const { user, caller, nodeId } = await launch(harness, "providertools");
+  await harness.settle();
+  t.is(nodesRepo.get(harness.db, user.id, nodeId)?.status, "complete");
+
+  const content = await caller.research.getNodeContent({ nodeId });
+  const blocks = content.turns.flatMap((turn) => turn.blocks);
+  const uses = blocks.filter((block) => block.type === "toolUse");
+  const results = blocks.filter((block) => block.type === "toolResult");
+
+  // A tool call whose input arrived as `tool-input-delta` parts is
+  // indistinguishable downstream from one that arrived whole.
+  const search = uses.find((use) => use.id === "call-search-1");
+  t.is(search?.name, "web_search");
+  t.deepEqual(search?.input, { query: "bloom filter false positive rate" });
+  t.truthy(
+    results.find((result) => result.toolUseId === "call-search-1"),
+    "the owned tool still ran and returned",
+  );
+
+  // The provider ran the other two itself; they are rendered like any other.
+  t.deepEqual(
+    uses.filter((use) => use.name === "google_search").map((use) => use.id),
+    ["provider-1", "provider-2"],
+  );
+  const ok = results.find((result) => result.toolUseId === "provider-1");
+  t.false(ok?.isError);
+  const failed = results.find((result) => result.toolUseId === "provider-2");
+  t.true(failed?.isError, "a failure inside the provider is a failed tool result");
+  t.deepEqual(
+    failed?.type === "toolResult" ? failed.content : null,
+    { error: '{"code":"UNAVAILABLE","detail":"grounding quota exhausted"}' },
+    "and its payload is readable rather than [object Object]",
+  );
+});
+
+test.serial("a wake-up during a claim round is not lost", async (t) => {
+  setFixtureScenario("success");
+  // `autoStart` is what makes `start()` a real wake-up. The claim interval is
+  // 250 ms and everything below settles within microtasks, so what this
+  // asserts is the wake-up rather than the timer.
+  const harness = createAgentHarness(t, { autoStart: true });
+  const user = harness.addUser("waker");
+  const caller = harness.caller(user);
+  const workspace = await caller.workspaces.ensureDefault();
+  // Admitted through the repository rather than the router: `createTree` wakes
+  // the loop itself, which would claim the node before the race can be set up.
+  const detail = treesRepo.admitRoot(harness.db, user.id, {
+    workspaceId: workspace.id,
+    prompt: "admitted mid-round",
+    model: "gemini-flash",
+  });
+  const nodeId = detail.tree.rootNodeId;
+
+  // `tick()` returns to its caller only once the round has read the queue, so
+  // enqueueing on the next line is deterministically "after the claim, while
+  // the round is still in flight" — the wake-up that used to be dropped.
+  const round = harness.agent.tick();
+  queueRepo.enqueue(harness.db, user.id, { nodeId, provider: "vertex" });
+  harness.agent.start(nodeId);
+  await round;
+  await harness.agent.idle();
+
+  t.is(
+    nodesRepo.get(harness.db, user.id, nodeId)?.status,
+    "complete",
+    "the node admitted mid-round ran without waiting for the interval",
+  );
+});
+
+test.serial(
+  "the 429 budget is counted from the attempts, so a restart cannot reset it",
+  async (t) => {
+    setFixtureScenario("rate-limit");
+    const harness = createAgentHarness(t);
+    const { user, nodeId } = await launch(harness, "persistent");
+
+    // Three backoffs, each served by a different service — a deploy between
+    // every one of them — and the fourth 429 gives up.
+    const backoffs: number[] = [];
+    for (let round = 0; round < 3; round += 1) {
+      const process = round === 0 ? harness : nextProcessAgent(harness);
+      await process.settle();
+      const node = nodesRepo.get(harness.db, user.id, nodeId);
+      t.is(node?.status, "queued", `429 number ${round + 1} re-queues`);
+      t.is(node?.attempt, round + 2, "and opens a new attempt so its row survives");
+      const row = harness.db.$client
+        .prepare("SELECT not_before FROM run_queue WHERE node_id = ?")
+        .get(nodeId) as { not_before: number };
+      backoffs.push(row.not_before - Date.now());
+      harness.db.$client
+        .prepare("UPDATE run_queue SET not_before = 0 WHERE node_id = ?")
+        .run(nodeId);
+    }
+    t.deepEqual(
+      backoffs.map((backoff) => Math.round(backoff / 1000)),
+      [5, 20, 60],
+      "the backoff grows across processes rather than restarting at five seconds",
+    );
+
+    const spent = runsRepo.listAttempts(harness.db, nodeId);
+    t.is(spent.filter((attempt) => attempt.outcome === "rate_limited").length, 3);
+
+    await nextProcessAgent(harness).settle();
+    const node = nodesRepo.get(harness.db, user.id, nodeId);
+    t.is(node?.status, "failed");
+    t.regex(node?.error ?? "", /kept rate limiting/);
   },
 );

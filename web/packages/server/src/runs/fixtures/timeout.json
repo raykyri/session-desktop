@@ -1,0 +1,93 @@
+{
+  "scenario": "timeout",
+  "description": "A stream paced slower than the deployment's wall-clock cap: the run is stopped part-way and classified `timeout`.",
+  "steps": [
+    {
+      "delayMs": 300,
+      "parts": [
+        {
+          "type": "stream-start",
+          "warnings": []
+        },
+        {
+          "type": "text-start",
+          "id": "t0"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Sentence 0 of an answer that never ends. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Sentence 1 of an answer that never ends. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Sentence 2 of an answer that never ends. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Sentence 3 of an answer that never ends. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Sentence 4 of an answer that never ends. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Sentence 5 of an answer that never ends. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Sentence 6 of an answer that never ends. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Sentence 7 of an answer that never ends. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Sentence 8 of an answer that never ends. "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "Sentence 9 of an answer that never ends. "
+        },
+        {
+          "type": "text-end",
+          "id": "t0"
+        },
+        {
+          "type": "finish",
+          "finishReason": {
+            "unified": "stop",
+            "raw": "end_turn"
+          },
+          "usage": {
+            "inputTokens": {
+              "total": 400,
+              "noCache": 400,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "outputTokens": {
+              "total": 80,
+              "text": 80,
+              "reasoning": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

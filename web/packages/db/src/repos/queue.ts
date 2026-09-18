@@ -14,6 +14,17 @@ import { nodes } from "../schema/nodes.js";
 import { runQueue } from "../schema/runs.js";
 import { now } from "../time.js";
 
+/**
+ * Which cap a queued row is admitted under.
+ *
+ * Only `research` is ever written today: the metadata pool of four
+ * (`docs/04-agent-runtime.md` §10) is an in-memory queue in
+ * `RunsService`, because a title or a recap that a restart loses is
+ * regenerated from the answer it summarizes and never worth a durable row.
+ * The arm stays because `run_queue.pool` is declared with both values and
+ * dropping one is a migration; it is the seam a metadata run would use if it
+ * ever had to survive a deploy.
+ */
 export type RunPool = "research" | "metadata";
 
 export interface EnqueueInput {

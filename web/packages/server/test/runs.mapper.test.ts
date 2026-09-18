@@ -185,3 +185,51 @@ test("the in-flight turn is what a checkpoint writes", (t) => {
   t.deepEqual(mapper.inFlightTurn()?.blocks, [{ type: "text", text: "partial" }]);
   t.is(mapper.inFlightTurn()?.id, "n-assistant-0");
 });
+
+test("provider source parts land in the same google_search result", (t) => {
+  const { committed } = collect([
+    { type: "text-delta", id: "t0", text: "A grounded answer." },
+    {
+      type: "source",
+      sourceType: "url",
+      id: "s0",
+      url: "https://redirect.example/abc",
+      title: "nasa.gov",
+    },
+    { type: "source", sourceType: "url", id: "s1", url: "https://esa.example/debris" },
+    finishStepWith({
+      google: { groundingMetadata: { webSearchQueries: ["kessler syndrome"] } },
+    }),
+  ]);
+  const result = committed[1]?.blocks[0];
+  t.deepEqual(result?.type === "toolResult" ? result.content : null, {
+    results: [
+      { url: "https://redirect.example/abc", title: "nasa.gov" },
+      { url: "https://esa.example/debris", title: "https://esa.example/debris" },
+    ],
+  });
+});
+
+test("sources are not double-counted when grounding metadata names them too", (t) => {
+  const { committed } = collect([
+    { type: "text-delta", id: "t0", text: "Grounded." },
+    {
+      type: "source",
+      sourceType: "url",
+      id: "s0",
+      url: "https://redirect.example/abc",
+      title: "nasa.gov",
+    },
+    finishStepWith({
+      google: {
+        groundingMetadata: {
+          groundingChunks: [{ web: { uri: "https://redirect.example/abc", title: "nasa.gov" } }],
+        },
+      },
+    }),
+  ]);
+  const result = committed[1]?.blocks[0];
+  t.deepEqual(result?.type === "toolResult" ? result.content : null, {
+    results: [{ url: "https://redirect.example/abc", title: "nasa.gov" }],
+  });
+});

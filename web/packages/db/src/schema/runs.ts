@@ -96,6 +96,8 @@ export const runQueue = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    // Only `research` is written; see `repos/queue.ts` on why the second value
+    // is declared and unused.
     pool: text("pool", { enum: ["research", "metadata"] }).notNull(),
     provider: text("provider").notNull(),
     enqueuedAt: integer("enqueued_at").notNull(),

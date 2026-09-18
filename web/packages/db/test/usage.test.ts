@@ -146,7 +146,11 @@ test("admission reports what is left and why it stopped", (t) => {
   });
   const partial = usage.admissionCheck(fixture.db, fixture.userId, { defaults, at: NOON });
   t.true(partial.allowed);
-  t.is(partial.remainingTokens, 100, "cached tokens are reported but not charged");
+  t.is(
+    partial.remainingTokens,
+    200,
+    "cached tokens are reported but not charged, and reasoning is already inside the output count",
+  );
   t.is(partial.remainingRuns, 1);
 
   attemptAt(fixture, NOON);

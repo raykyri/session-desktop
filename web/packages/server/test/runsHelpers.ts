@@ -6,6 +6,7 @@ import type { ExecutionContext } from "ava";
 
 import type { ServerDeps } from "../src/deps.js";
 import { setFixtureScenario } from "../src/runs/fixtureProvider.js";
+import type { Providers } from "../src/runs/providers.js";
 import type { AgentRunsService } from "../src/runs/service.js";
 import { createRunsService } from "../src/runs/service.js";
 
@@ -76,6 +77,13 @@ export interface AgentHarnessOptions extends HarnessOptions {
   network?: FakeNetwork;
   /** Hosts the SSRF guard lets through without a resolver. */
   allowHosts?: string[];
+  /** Replaces the registry-backed providers, for the tests that need a model
+   * to be unresolvable. */
+  providers?: Providers;
+  /** Leaves the claim interval running and makes `start()` a real wake-up.
+   * Off by default: the tests call `settle()`, and a background interval would
+   * race them. */
+  autoStart?: boolean;
 }
 
 /** Every public name resolves to one public address; no DNS in tests. */
@@ -98,12 +106,13 @@ export function createAgentHarness(
         eventBus: deps.eventBus,
         ...(deps.logger ? { logger: deps.logger } : {}),
         fetch: network.fetch,
+        ...(options.providers ? { providers: options.providers } : {}),
         toolOverrides: {
           lookup: publicLookup,
           ...(options.allowHosts ? { allowHosts: options.allowHosts } : {}),
         },
         // The tests call `settle()`; a background interval would race them.
-        autoStart: false,
+        autoStart: options.autoStart === true,
       });
       return agent;
     },

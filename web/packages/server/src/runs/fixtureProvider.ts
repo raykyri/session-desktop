@@ -31,12 +31,14 @@ import type {
 export type FixtureScenario =
   | "success"
   | "success-with-tools"
+  | "provider-tools"
   | "grounded"
   | "refusal"
   | "rate-limit"
   | "context-too-long"
   | "mid-stream-error"
   | "abort"
+  | "timeout"
   | "slow-stream";
 
 export const DEFAULT_FIXTURE_SCENARIO: FixtureScenario = "success-with-tools";

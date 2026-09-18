@@ -104,8 +104,9 @@ export interface MetadataRunner {
     userId: string;
     signal?: AbortSignal | undefined;
   }): Promise<string | null>;
-  /** A candidate this server issued, for `recaps.applyCandidate`. */
-  recallRecapCandidate(id: string): ResearchRecapCandidate | null;
+  /** A candidate this server issued to this account, for
+   * `recaps.applyCandidate`. */
+  recallRecapCandidate(userId: string, id: string): ResearchRecapCandidate | null;
   /** True when an automatic recap for this exact answer is already running. */
   isRecapPending(key: string): boolean;
 }
@@ -121,7 +122,10 @@ interface GenerateOptions<T> {
 }
 
 export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
-  const candidates = new Map<string, { candidate: ResearchRecapCandidate; expiresAt: number }>();
+  const candidates = new Map<
+    string,
+    { candidate: ResearchRecapCandidate; userId: string; expiresAt: number }
+  >();
   const pendingRecaps = new Set<string>();
 
   const emit = (userId: string, type: string, payload: Record<string, unknown>): void => {
@@ -243,7 +247,7 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
           candidates.delete(id);
         }
       }
-      candidates.set(candidate.id, { candidate, expiresAt: now + RECAP_CANDIDATE_TTL_MS });
+      candidates.set(candidate.id, { candidate, userId, expiresAt: now + RECAP_CANDIDATE_TTL_MS });
       return candidate;
     },
 
@@ -362,7 +366,7 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
       return result?.recap.trim() ?? null;
     },
 
-    recallRecapCandidate(id) {
+    recallRecapCandidate(userId, id) {
       const entry = candidates.get(id);
       if (!entry) {
         return null;
@@ -371,7 +375,10 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
         candidates.delete(id);
         return null;
       }
-      return entry.candidate;
+      // Ids are ULIDs and unguessable, and `applyCandidate` re-checks the
+      // answer revision anyway; the account check is here so neither of those
+      // is what the isolation rests on.
+      return entry.userId === userId ? entry.candidate : null;
     },
 
     isRecapPending(key) {

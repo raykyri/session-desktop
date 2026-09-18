@@ -232,6 +232,20 @@ export async function fetchReadablePage(
   };
 }
 
+/** The cache key for a URL. Case in the scheme and host and a trailing `#`
+ * fragment do not change what the server sends, and a model that writes the
+ * same page two ways in one run should pay for it once. An unparsable string is
+ * its own key; `fetchReadablePage` is what rejects it. */
+export function fetchCacheKey(raw: string): string {
+  try {
+    const url = new URL(raw);
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return raw;
+  }
+}
+
 export function createWebFetchTool(ctx: RunToolContext, signal: AbortSignal) {
   return tool({
     description: WEB_FETCH_DESCRIPTION,
@@ -240,13 +254,14 @@ export function createWebFetchTool(ctx: RunToolContext, signal: AbortSignal) {
       if (!ctx.budget.spendFetch()) {
         return { url, text: "", truncated: false, error: FETCH_BUDGET_SPENT };
       }
-      const cached = ctx.caches.fetch.get(url) as WebFetchOutput | undefined;
+      const key = fetchCacheKey(url);
+      const cached = ctx.caches.fetch.get(key) as WebFetchOutput | undefined;
       if (cached) {
         return cached;
       }
       try {
         const page = await fetchReadablePage(ctx, url, signal);
-        ctx.caches.fetch.set(url, page);
+        ctx.caches.fetch.set(key, page);
         ctx.recordUsage("fetch", 1);
         return page;
       } catch (error) {

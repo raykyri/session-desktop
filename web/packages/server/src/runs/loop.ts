@@ -216,13 +216,19 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   const priorTurns: Turn[] = input.kind === "resume" ? [...live.turns] : [];
   const priorMessages: ModelMessage[] = messagesFromCommittedTurns(priorTurns);
 
+  // The question this attempt asks, kept so it can be stored as the node's own
+  // first message. Only the text is stored: the document parts are rebuilt from
+  // `documentsInContext` on every attempt, so persisting them here would put
+  // file bytes into `node_messages` and send each attachment twice.
+  const userText = researchUserText({ node, parentDocument });
+
   let messages: ModelMessage[];
   try {
     const built = await buildMessages({
       ctx: toolContext,
       node,
       entry: resolved.entry,
-      userText: researchUserText({ node, parentDocument }),
+      userText,
       documents,
       priorMessages,
       summarize: ({ text, signal }) => deps.metadata.summarize({ text, userId, signal }),
@@ -240,7 +246,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     );
   } catch (error) {
     const classified = classifyRunError(error);
-    settleFailure(deps, userId, nodeId, node.attempt, classified);
+    settleFailure(deps, userId, nodeId, node.attempt, classified, seq);
     return { outcome: "failed", error: classified };
   }
 
@@ -294,6 +300,9 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       },
       onThinking: (active) => {
         emit("research.run.thinking", { nodeId, seq: nextSeq(), active });
+      },
+      onGroundedSearch: (queries) => {
+        toolUsage.search += queries;
       },
       onTurnCommitted: (turn) => {
         flushDelta(true);
@@ -526,12 +535,16 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   }
 
   // The conversation is appended only now: `node_messages` is append-only and
-  // only a completed node's exchanges belong in the thread's history.
+  // only a completed node's exchanges belong in the thread's history. The
+  // question leads, because a descendant replays this node as one exchange and
+  // a history of answers without their questions is not a conversation — and,
+  // on Anthropic, not even a valid request.
+  const askedMessage: ModelMessage = { role: "user", content: userText };
   messagesRepo.appendMessages(
     db,
     userId,
     nodeId,
-    [...priorMessages, ...responseMessages].map((message) => ({
+    [askedMessage, ...priorMessages, ...responseMessages].map((message) => ({
       message,
       model: message.role === "assistant" ? node.model : null,
     })),

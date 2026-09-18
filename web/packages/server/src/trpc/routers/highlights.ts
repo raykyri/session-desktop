@@ -120,7 +120,7 @@ export const recapsRouter = router({
       // The server's own copy of the candidate wins when it still has one: the
       // text that was generated is what gets stored, whatever came back over
       // the wire.
-      const issued = ctx.runs.recallRecapCandidate(input.candidate.id);
+      const issued = ctx.runs.recallRecapCandidate(ctx.user.id, input.candidate.id);
       const node = repo(() =>
         recaps.applyCandidate(ctx.db, ctx.user.id, {
           nodeId: input.nodeId,
