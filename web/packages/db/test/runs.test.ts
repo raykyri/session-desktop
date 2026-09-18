@@ -286,3 +286,24 @@ test("a committed turn does not disturb an open checkpoint", (t) => {
   t.is(window.turns.length, 1);
   t.is(window.inFlightText, "streaming");
 });
+
+test("advanceSeq carries the loop's in-memory sequence back into the row", (t) => {
+  const fixture = createFixture(t);
+  const nodeId = startedRoot(fixture);
+  const start = runs.liveWindow(fixture.db, fixture.userId, nodeId).seq;
+
+  // The loop forwarded ten deltas without writing a row.
+  t.is(runs.advanceSeq(fixture.db, fixture.userId, nodeId, start + 10), start + 10);
+  t.is(runs.liveWindow(fixture.db, fixture.userId, nodeId).seq, start + 10);
+
+  // The next write continues from there rather than from the last row.
+  const committed = runs.commitTurn(fixture.db, fixture.userId, {
+    nodeId,
+    turn: answerTurn(nodeId, "one", "t1"),
+  });
+  t.is(committed.seq, start + 11);
+
+  // Monotonic: a stale value never moves the counter backwards.
+  t.is(runs.advanceSeq(fixture.db, fixture.userId, nodeId, start + 2), start + 11);
+  t.is(runs.liveWindow(fixture.db, fixture.userId, nodeId).seq, start + 11);
+});

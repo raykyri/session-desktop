@@ -1,0 +1,22 @@
+{
+  "scenario": "refusal",
+  "description": "The model declines: a Fable 5.1 refusal stop reason with no usable answer.",
+  "steps": [
+    {
+      "parts": [
+        { "type": "stream-start", "warnings": [] },
+        { "type": "text-start", "id": "t0" },
+        { "type": "text-delta", "id": "t0", "delta": "I can't help with that." },
+        { "type": "text-end", "id": "t0" },
+        {
+          "type": "finish",
+          "finishReason": { "unified": "content-filter", "raw": "refusal" },
+          "usage": {
+            "inputTokens": { "total": 300, "noCache": 300, "cacheRead": 0, "cacheWrite": 0 },
+            "outputTokens": { "total": 12, "text": 12, "reasoning": 0 }
+          }
+        }
+      ]
+    }
+  ]
+}

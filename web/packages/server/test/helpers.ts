@@ -17,9 +17,10 @@ import type { Config } from "../src/config.js";
 import { loadConfig } from "../src/config.js";
 import type { AppEnv, ServerDeps } from "../src/deps.js";
 import { EventBus } from "../src/events/bus.js";
+import type { Logger } from "../src/logger.js";
 import { createLogger } from "../src/logger.js";
 import { RateLimiter } from "../src/middleware/rateLimit.js";
-import type { NoopRunsService } from "../src/runs/service.js";
+import type { NoopRunsService, RunsService } from "../src/runs/service.js";
 import { createNoopRunsService } from "../src/runs/service.js";
 import { createAppContext } from "../src/trpc/base.js";
 import { appRouter, createCallerFactory } from "../src/trpc/router.js";
@@ -36,6 +37,8 @@ export interface Harness {
   db: SessionDatabase;
   deps: ServerDeps;
   eventBus: EventBus;
+  logger: Logger;
+  /** The recording stand-in, unless `createRuns` replaced it. */
   runs: NoopRunsService;
   limiter: RateLimiter;
   app: Hono<AppEnv>;
@@ -54,6 +57,9 @@ export interface HarnessOptions {
   env?: Record<string, string>;
   fetch?: typeof globalThis.fetch;
   createOAuthClient?: (deps: ServerDeps) => OAuthClient;
+  /** Swaps the recording stand-in for the real agent loop
+   * (`12-testing-linting-ci.md` §3.3). */
+  createRuns?: (deps: Omit<ServerDeps, "runs">) => RunsService;
 }
 
 let githubIdCounter = 5000;
@@ -91,14 +97,14 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
   const eventBus = new EventBus();
   const runs = createNoopRunsService();
   const limiter = new RateLimiter();
-  const deps: ServerDeps = {
+  const base = {
     config,
     db,
     eventBus,
-    runs,
     logger,
     ...(options.fetch ? { fetch: options.fetch } : {}),
   };
+  const deps: ServerDeps = { ...base, runs: options.createRuns?.(base) ?? runs };
   const app = createApp({
     ...deps,
     limiter,
@@ -111,6 +117,7 @@ export function createHarness(t: ExecutionContext, options: HarnessOptions = {})
     db,
     deps,
     eventBus,
+    logger,
     runs,
     limiter,
     app,

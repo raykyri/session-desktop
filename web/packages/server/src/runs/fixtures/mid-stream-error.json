@@ -1,0 +1,14 @@
+{
+  "scenario": "mid-stream-error",
+  "description": "The provider drops the connection after partial text; the partial stays readable.",
+  "steps": [
+    {
+      "parts": [
+        { "type": "stream-start", "warnings": [] },
+        { "type": "text-start", "id": "t0" },
+        { "type": "text-delta", "id": "t0", "delta": "A partial answer that stops " },
+        { "type": "error", "error": { "name": "Error", "message": "terminated: socket hang up" } }
+      ]
+    }
+  ]
+}

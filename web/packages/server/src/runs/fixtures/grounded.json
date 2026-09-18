@@ -1,0 +1,44 @@
+{
+  "scenario": "grounded",
+  "description": "Gemini with Google Search grounding: no tool calls, grounding metadata on the step.",
+  "steps": [
+    {
+      "parts": [
+        { "type": "stream-start", "warnings": [] },
+        { "type": "text-start", "id": "t0" },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "The [[Kessler syndrome]] is a cascade of orbital collisions."
+        },
+        { "type": "text-end", "id": "t0" },
+        {
+          "type": "finish",
+          "finishReason": { "unified": "stop", "raw": "STOP" },
+          "usage": {
+            "inputTokens": { "total": 700, "noCache": 700, "cacheRead": 0, "cacheWrite": 0 },
+            "outputTokens": { "total": 45, "text": 45, "reasoning": 0 }
+          },
+          "providerMetadata": {
+            "google": {
+              "groundingMetadata": {
+                "webSearchQueries": ["kessler syndrome", "orbital debris cascade"],
+                "groundingChunks": [
+                  {
+                    "web": {
+                      "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc",
+                      "title": "nasa.gov"
+                    }
+                  }
+                ],
+                "searchEntryPoint": {
+                  "renderedContent": "<div class=\"search-suggestions\">Kessler syndrome</div>"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

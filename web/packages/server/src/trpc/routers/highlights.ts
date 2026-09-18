@@ -62,9 +62,12 @@ export const recapsRouter = router({
   defaultInstructions: protectedProcedure.query(() => DEFAULT_RECAP_INSTRUCTIONS),
 
   /**
-   * Generation is a `gemini-flash` metadata run and arrives with the agent
-   * loop (`04-agent-runtime.md` §9). The input is still validated here so the
-   * dialog's copy is settled before Phase 4 fills in the model call.
+   * A `gemini-flash` metadata run the dialog waits on
+   * (`04-agent-runtime.md` §9).
+   *
+   * The candidate is returned rather than saved: the user previews it and
+   * `applyCandidate` is what commits it. Unlike the automatic recap, a refusal
+   * here is reported — someone asked for this one and is waiting.
    */
   generateCandidate: protectedProcedure
     .input(
@@ -74,18 +77,34 @@ export const recapsRouter = router({
         instructions: z.string(),
       }),
     )
-    .mutation(({ ctx, input }) => {
-      repo(() => validateRecapInstructions(input.instructions));
-      ctx.runs.enqueueMetadata({
-        kind: "recap",
-        userId: ctx.user.id,
-        nodeId: input.nodeId,
-        instructions: input.instructions,
-      });
-      throw new TRPCError({
-        code: "PRECONDITION_FAILED",
-        message: "metadata runs arrive in Phase 4",
-      });
+    .mutation(async ({ ctx, input }) => {
+      const instructions = repo(() => validateRecapInstructions(input.instructions));
+      publish(ctx, "research.recap.pending", { nodeId: input.nodeId, pending: true });
+      try {
+        const candidate = await ctx.runs.requestRecapCandidate(
+          ctx.user.id,
+          input.nodeId,
+          instructions,
+        );
+        if (candidate.responseRevision !== input.expectedResponseRevision) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "the answer changed while the summary was generated; try again",
+          });
+        }
+        return candidate;
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      } finally {
+        // Every exit path settles the flag (`04-agent-runtime.md` §9).
+        publish(ctx, "research.recap.pending", { nodeId: input.nodeId, pending: false });
+      }
     }),
 
   applyCandidate: protectedProcedure
@@ -98,6 +117,10 @@ export const recapsRouter = router({
       }),
     )
     .mutation(({ ctx, input }) => {
+      // The server's own copy of the candidate wins when it still has one: the
+      // text that was generated is what gets stored, whatever came back over
+      // the wire.
+      const issued = ctx.runs.recallRecapCandidate(input.candidate.id);
       const node = repo(() =>
         recaps.applyCandidate(ctx.db, ctx.user.id, {
           nodeId: input.nodeId,
@@ -105,7 +128,7 @@ export const recapsRouter = router({
           ...(input.expectedCurrentRecapId === undefined
             ? {}
             : { expectedCurrentRecapId: input.expectedCurrentRecapId }),
-          candidate: input.candidate,
+          candidate: issued ?? input.candidate,
         }),
       );
       publish(ctx, "research.node.updated", { node });
