@@ -30,6 +30,7 @@ import type {
   ResearchTree,
   ResearchTreeDetail,
   ResearchTreeSummary,
+  Turn,
   UpdateResearchDocumentResult,
   User,
   UserSettings,
@@ -223,12 +224,15 @@ export function renameResearchNode(nodeId: string, title: string): Promise<Resea
   return trpc().research.renameNode.mutate({ nodeId, title });
 }
 
-export function getResearchNodeContent(nodeId: string): Promise<ResearchNodeContent> {
+export async function getResearchNodeContent(nodeId: string): Promise<ResearchNodeContent> {
+  const content = await trpc().research.getNodeContent.query({ nodeId });
   // tRPC infers a procedure's output through its JSON-serialization type,
-  // which widens the passthrough block union inside `Turn` into something
-  // structurally unlike the shared type the server's repositories produced.
-  // The wire shape is the shared one; the annotation states it.
-  return trpc().research.getNodeContent.query({ nodeId }) as Promise<ResearchNodeContent>;
+  // which drops the `unknown`-typed members of the passthrough blocks inside
+  // `Turn` (`toolUse.input`, `toolResult.content`). The wire shape is the
+  // shared one, so `turns` is restated — and only `turns`: every other field
+  // stays checked against `ResearchNodeContent`, so one renamed or dropped on
+  // the server is a compile error here rather than `undefined` at runtime.
+  return { ...content, turns: content.turns as unknown as Turn[] };
 }
 
 export function updateResearchDocument(request: {

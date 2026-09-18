@@ -20,19 +20,24 @@ import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
  * pushed: dragging the text-size slider is one write, not thirty (07 §4.3). */
 export const SESSION_SETTINGS_SYNC_DEBOUNCE_MS = 300;
 
-const SETTINGS_KEYS = [
-  "colorTheme",
-  "appearance",
-  "bodyFontId",
-  "textSize",
-  "showShortcutHints",
-  "reduceMotion",
-  "showToolCalls",
-  "showAssistantTimestamps",
-  "showNotifications",
-  "requireCmdEnterToSend",
-  "defaultModel",
-] as const satisfies readonly (keyof UserSettings)[];
+/** Every field of `UserSettings`, as a record rather than a list: a key
+ * missing from the comparison below is a preference that silently stops
+ * syncing, and a `Record<keyof UserSettings, true>` cannot be missing one. */
+const SETTINGS_FIELDS: Record<keyof UserSettings, true> = {
+  colorTheme: true,
+  appearance: true,
+  bodyFontId: true,
+  textSize: true,
+  showShortcutHints: true,
+  reduceMotion: true,
+  showToolCalls: true,
+  showAssistantTimestamps: true,
+  showNotifications: true,
+  requireCmdEnterToSend: true,
+  defaultModel: true,
+};
+
+const SETTINGS_KEYS = Object.keys(SETTINGS_FIELDS) as (keyof UserSettings)[];
 
 export function sameSettings(left: UserSettings, right: UserSettings): boolean {
   return SETTINGS_KEYS.every((key) => left[key] === right[key]);
@@ -97,6 +102,11 @@ function useSettingsSync(): void {
       timer.current = setTimeout(() => {
         timer.current = null;
         const pending = useSettingsStore.getState().settings;
+        const sent = server.current;
+        // Optimistic, so the echo of this write is not pushed back at the
+        // server; restored on failure rather than cleared, because `null`
+        // means "the account's copy has not landed yet" and would stop every
+        // later change from being pushed at all.
         server.current = pending;
         void updateSettings({ settings: pending })
           .then((saved) => {
@@ -104,9 +114,9 @@ function useSettingsSync(): void {
             queryClient.setQueryData(queryKeys.settings(), saved);
           })
           .catch(() => {
-            // The push failed; the next change retries, and a reload takes
-            // the server's copy, which is the documented resolution.
-            server.current = null;
+            // The next change retries; a reload takes the server's copy,
+            // which is the documented resolution (`06` §6).
+            server.current = sent;
           });
       }, SESSION_SETTINGS_SYNC_DEBOUNCE_MS);
     });

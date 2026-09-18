@@ -26,7 +26,8 @@ export interface SubscriptionObserver {
 export interface TrpcStub {
   client: SessionTrpcClient;
   calls: RecordedCall[];
-  /** Result for a path, e.g. `responses.set("auth.me", { id: "u1" })`. */
+  /** Result for a path, e.g. `responses.set("auth.me", { id: "u1" })`. A
+   * function is called with the input and may throw to refuse the call. */
   responses: Map<string, unknown>;
   /** Pushes an event into every open subscription. */
   emit: (event: SessionEvent) => void;
@@ -64,7 +65,16 @@ export function createTrpcStub(responses: Record<string, unknown> = {}): TrpcStu
           if (terminal && (property === "query" || property === "mutate")) {
             return (input: unknown) => {
               stub.calls.push({ path: name, kind: property, input });
-              return Promise.resolve(stub.responses.get(name));
+              const answer = stub.responses.get(name);
+              // A function answer is how a test scripts a refusal or a
+              // sequence: it is called with the input, and what it throws the
+              // procedure rejects with.
+              if (typeof answer !== "function") return Promise.resolve(answer);
+              try {
+                return Promise.resolve((answer as (value: unknown) => unknown)(input));
+              } catch (error) {
+                return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+              }
             };
           }
           if (terminal && property === "subscribe") {

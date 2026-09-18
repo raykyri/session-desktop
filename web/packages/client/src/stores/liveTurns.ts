@@ -100,6 +100,7 @@ export const useLiveTurnsStore = create<LiveTurnsState>()((set, get) => ({
       byNode: {
         ...state.byNode,
         [nodeId]: {
+          ...EMPTY_LIVE_NODE,
           turns: snapshot.turns,
           inFlightText: snapshot.inFlightText ?? "",
           inFlightTurnId: null,
@@ -112,7 +113,16 @@ export const useLiveTurnsStore = create<LiveTurnsState>()((set, get) => ({
 
   applyRunEvent: (event) =>
     set((state) => {
-      const current = state.byNode[event.nodeId] ?? EMPTY_LIVE_NODE;
+      const current = state.byNode[event.nodeId];
+
+      // No buffer means no view seeded this node from a snapshot, and
+      // `research.run.*` is broadcast to every connection of the account
+      // (`03-api-and-events.md` §3): buffering those would grow this map with
+      // every run the user starts anywhere, and a turn-less buffer would then
+      // shadow the durable snapshot when the node is finally opened. The view
+      // that opens it seeds from `getNodeContent`; an event that arrives
+      // between that read and the seed shows up as a gap, which refetches.
+      if (!current) return state;
 
       // Already applied, or replayed after a reconnect. Dropping is correct:
       // the buffer already contains this event's effect.

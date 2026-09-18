@@ -117,6 +117,41 @@ export function cachedNode(
     ?.find((node) => node.id === nodeId);
 }
 
+/** The thread's title as the caches last saw it, or `undefined` when no cache
+ * holds the thread. The detail is preferred: it is the copy a rename writes
+ * first. */
+export function cachedTreeTitle(client: QueryClient, treeId: string): string | undefined {
+  const detail = client.getQueryData<ResearchTreeDetail>(queryKeys.tree(treeId));
+  if (detail) return detail.tree.title;
+  for (const query of client.getQueryCache().findAll({ queryKey: ["trees"] })) {
+    const summaries = query.state.data as ResearchTreeSummary[] | undefined;
+    const found = summaries?.find((summary) => summary.id === treeId);
+    if (found) return found.title;
+  }
+  return undefined;
+}
+
+/**
+ * The highlights feed carries the thread and node titles on every row
+ * (`ResearchHighlightFeedItem`), and a rename does not say what the new label
+ * of a document node is — that rule is the server's (`highlights.listFeed`).
+ * So a renamed thread refetches the feed instead of being patched into it, and
+ * only a rename does: the feed is otherwise event-patched and long-lived, and
+ * would show the old name for the rest of the session.
+ *
+ * `undefined` for `previous` means no cache held the old label, which is not
+ * the same as an empty one: there is nothing to compare, so nothing refetches.
+ */
+export function invalidateHighlightLabels(
+  client: QueryClient,
+  previous: string | null | undefined,
+  next: string | null | undefined,
+): void {
+  if (previous === undefined) return;
+  if (previous === (next ?? null)) return;
+  invalidateKeys(client, ["highlightsFeed"]);
+}
+
 export function patchActiveNodes(client: QueryClient, node: ResearchNode): void {
   client.setQueryData<ResearchNode[]>(queryKeys.activeNodes(), (nodes) =>
     nodes ? upsertResearchActivity(nodes, node) : nodes,

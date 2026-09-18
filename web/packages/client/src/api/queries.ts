@@ -18,7 +18,11 @@ import {
   isActiveResearchStatus,
   patchResearchDetailNode,
   patchResearchDetailTree,
+  patchResearchSummaryForCreatedNode,
+  patchResearchSummaryForNode,
+  patchResearchSummaryForRemovedNodes,
   patchResearchSummaryTree,
+  removeResearchDetailNodes,
   researchSummaryFromDetail,
 } from "@session/shared";
 import {
@@ -29,9 +33,9 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { useConnectionStore } from "../stores/connection.js";
+import { CONNECTION_FALLBACK_DELAY_MS, useConnectionStore } from "../stores/connection.js";
 import { useLiveTurnsStore, type LiveTurnStatus } from "../stores/liveTurns.js";
 
 import {
@@ -215,12 +219,27 @@ export function useDocuments(workspaceId: string) {
   });
 }
 
+/** No event announces a token count, so the two usage reads are the ones the
+ * app's `staleTime: Infinity` default does not fit: it belongs to the lists the
+ * subscription keeps fresh, and applied here it would freeze the figures at
+ * whatever the first visit of the session fetched. */
+export const USAGE_STALE_MS = 30_000;
+
 export function useUsage(days?: number) {
-  return useQuery({ queryKey: queryKeys.usage(), queryFn: () => getUsageSummary(days) });
+  return useQuery({
+    queryKey: queryKeys.usage(),
+    queryFn: () => getUsageSummary(days),
+    staleTime: USAGE_STALE_MS,
+  });
 }
 
 export function useAdminUsers(enabled = true) {
-  return useQuery({ queryKey: queryKeys.adminUsers(), queryFn: () => listUsers(), enabled });
+  return useQuery({
+    queryKey: queryKeys.adminUsers(),
+    queryFn: () => listUsers(),
+    staleTime: USAGE_STALE_MS,
+    enabled,
+  });
 }
 
 export function useActivityFeed(scope: { workspaceId: string; bookmarkedOnly?: boolean }) {
@@ -258,6 +277,33 @@ export interface NodeContentView {
 }
 
 /**
+ * Whether the snapshot poll is on: the stream has been down for the grace
+ * period the connection store keeps (`05-run-lifecycle-and-streaming.md` §9).
+ *
+ * The rule is a deadline rather than a status, so a status change alone cannot
+ * drive it — a tab that loses the stream and changes nothing else has to start
+ * polling when the grace elapses. The timer is what re-reads the store then;
+ * it is shared by every mounted document view, which is why the state is
+ * derived here and not inside `useNodeContent`'s poll effect.
+ */
+function useSnapshotPollFallback(): boolean {
+  const disconnectedSince = useConnectionStore((state) =>
+    state.status === "open" ? null : state.disconnectedSince,
+  );
+  const [, retest] = useState(0);
+  useEffect(() => {
+    if (disconnectedSince === null) return;
+    const remaining = disconnectedSince + CONNECTION_FALLBACK_DELAY_MS - Date.now();
+    if (remaining <= 0) return;
+    // Nothing in the store changes when a deadline passes, so the deadline is
+    // what asks for the re-render that reads the rule again.
+    const timer = setTimeout(() => retest((count) => count + 1), remaining);
+    return () => clearTimeout(timer);
+  }, [disconnectedSince]);
+  return useConnectionStore.getState().shouldPollSnapshots();
+}
+
+/**
  * The streaming protocol's client half (`05-run-lifecycle-and-streaming.md`
  * §4, §9).
  *
@@ -269,7 +315,7 @@ export interface NodeContentView {
  */
 export function useNodeContent(nodeId: string | undefined): NodeContentView {
   const id = nodeId ?? "";
-  const pollWhileDown = useConnectionStore((state) => state.status !== "open");
+  const pollWhileDown = useSnapshotPollFallback();
   const live = useLiveTurnsStore((state) => (id === "" ? undefined : state.byNode[id]));
   const seed = useLiveTurnsStore((state) => state.seed);
   const clear = useLiveTurnsStore((state) => state.clear);
@@ -287,10 +333,17 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
 
   // `refetch` is stable across renders; the query object is not, and effects
   // keyed on it would re-subscribe on every render.
-  const { data: content, refetch } = query;
+  const { data: content, dataUpdatedAt, refetch } = query;
   const active = content ? isActiveResearchStatus(content.node.status) : false;
-  const settledWithSnapshot =
-    content !== undefined && !active && content.node.responseSnapshotAt != null;
+  // What the buffer is waiting for: the durable snapshot the terminal
+  // `research.node.updated` stamps (`05-run-lifecycle-and-streaming.md` §4).
+  // A run that ends `failed`, `cancelled` or `interrupted` never writes one,
+  // and `getNodeContent` falls back to `run_turns` for it (`03` §4), so for
+  // those the terminal status is itself the signal.
+  const durableReady =
+    content !== undefined &&
+    !active &&
+    (content.node.responseSnapshotAt != null || content.node.status !== "complete");
 
   // Only while the stream is down, and only for a node that is still working:
   // polling a finished node would re-read a snapshot that cannot change.
@@ -304,7 +357,11 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
   useNodeInterest(active ? id : undefined);
 
   // Seeding is keyed on the snapshot's sequence number, so an identical
-  // refetch does not reset a buffer that has already moved past it.
+  // refetch does not reset a buffer that has already moved past it. It runs on
+  // `dataUpdatedAt` rather than on `content` alone because structural sharing
+  // hands back the very same object when a refetch finds nothing new, and the
+  // refetch a gap asks for is exactly that case: without re-seeding from it the
+  // buffer would stay frozen on its gap flag.
   const seededSeq = useRef<number | null>(null);
   useEffect(() => {
     if (id === "" || !content || !active) return;
@@ -313,13 +370,16 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
     if (seededSeq.current === seq && buffered && !buffered.gap) return;
     if (buffered && !buffered.gap && buffered.lastSeq > seq) return;
     seededSeq.current = seq;
+    // The snapshot carries every committed turn of the attempt, so re-seeding
+    // after a gap restores the turns already on screen rather than dropping
+    // them (`05-run-lifecycle-and-streaming.md` §2, §4).
     seed(id, {
       turns: content.turns,
       inFlightText: content.inFlightText ?? "",
       seq,
       status: "running",
     });
-  }, [id, content, active, seed]);
+  }, [id, content, dataUpdatedAt, active, seed]);
 
   // A gap means the buffer froze rather than render a hole; the snapshot is
   // the only way back to a consistent view.
@@ -329,25 +389,34 @@ export function useNodeContent(nodeId: string | undefined): NodeContentView {
     void refetch();
   }, [gap, id, refetch]);
 
-  // `run.finished` lands before the terminal `node.updated`; the durable
-  // snapshot exists only once the node carries `responseSnapshotAt`. One
-  // refetch after that, then the buffer goes.
+  // `run.finished` lands before the terminal `node.updated`, and the durable
+  // snapshot only exists once that update has been stamped: refetching on
+  // `run.finished` alone would race the snapshot transaction and settle the
+  // document on a read taken before it. So the single refetch waits for
+  // `durableReady`, and the buffer is dropped only after its replacement is in
+  // the cache — a failed refetch keeps the streamed text on screen and leaves
+  // the door open for the next attempt.
   const finished = live?.status === "finished";
   const refetchedForSnapshot = useRef(false);
   useEffect(() => {
-    if (id === "" || !finished) return;
-    if (settledWithSnapshot) {
-      clear(id);
-      seededSeq.current = null;
-      refetchedForSnapshot.current = false;
-      return;
-    }
+    if (id === "" || !finished || !durableReady) return;
     if (refetchedForSnapshot.current) return;
     refetchedForSnapshot.current = true;
-    void refetch();
-  }, [id, finished, settledWithSnapshot, clear, refetch]);
+    void refetch().then((result) => {
+      if (result.isError) {
+        refetchedForSnapshot.current = false;
+        return;
+      }
+      seededSeq.current = null;
+      refetchedForSnapshot.current = false;
+      clear(id);
+    });
+  }, [id, finished, durableReady, clear, refetch]);
 
-  const useLive = live !== undefined && active;
+  // The buffer stays in charge until it is dropped. Between `run.finished` and
+  // the durable refetch the cached content is still the pre-finish read, and
+  // switching to it there is the flash §4 rules out.
+  const useLive = live !== undefined && (active || live.status === "finished");
   return {
     content,
     turns: useLive ? live.turns : (content?.turns ?? []),
@@ -416,9 +485,18 @@ export function useForkResearchNode() {
   return useMutation({
     mutationFn: forkResearchNode,
     onSuccess: (node) => {
+      // The same three writes `research.node.created` makes, so the event this
+      // call causes finds its own work already done and adds nothing: the
+      // count on a summary is a delta, and invalidating the lists instead
+      // would leave the refetch racing the event for the same +1 (07 §4.1).
       patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
+      mapSummaries(client, (summary) =>
+        patchResearchSummaryForCreatedNode(summary, node, Date.now()),
+      );
       patchActiveNodes(client, node);
-      invalidateKeys(client, ["trees"], ["activity"]);
+      // A follow-up question is a new feed row, and the feed is keyset
+      // paginated: there is no correct place to splice it in by hand.
+      invalidateKeys(client, ["activity"]);
     },
   });
 }
@@ -441,11 +519,22 @@ export function useCancelResearchNode() {
   return useMutation({
     mutationFn: cancelResearchNode,
     onSuccess: (node) => {
+      // The summary counts are a delta between the node the caches held and
+      // the one that came back, so they have to be applied here, from the
+      // predecessor, before it is overwritten: the `research.node.updated`
+      // this call publishes would otherwise read the already-cancelled node as
+      // its own predecessor and move nothing.
       const previous = cachedNode(client, node.treeId, node.id);
       patchDetail(client, node.treeId, (detail) => patchResearchDetailNode(detail, node));
       patchActiveNodes(client, node);
       patchActivityFeedNode(client, node);
-      if (!previous) invalidateKeys(client, ["trees"]);
+      if (previous) {
+        mapSummaries(client, (summary) =>
+          patchResearchSummaryForNode(summary, previous, node, Date.now()),
+        );
+      } else {
+        invalidateKeys(client, ["trees"]);
+      }
     },
   });
 }
@@ -529,13 +618,25 @@ export function useRemoveResearchBranch() {
     mutationFn: removeResearchBranch,
     onSuccess: (removal) => {
       const removed = new Set(removal.removedNodeIds);
+      // The counts a removal subtracts are read off the cached rows, so they
+      // are read before the detail loses them, and the detail is patched here
+      // rather than invalidated: the `research.node.removed` that follows then
+      // finds no removed rows left and subtracts nothing a second time. A
+      // detail that was never cached leaves the counts alone, which is the
+      // conservative half of the same reducer.
+      const detail = client.getQueryData<ResearchTreeDetail>(queryKeys.tree(removal.treeId));
+      const removedNodes = (detail?.nodes ?? []).filter((node) => removed.has(node.id));
+      patchDetail(client, removal.treeId, (current) =>
+        removeResearchDetailNodes(current, removal.treeId, removed),
+      );
+      mapSummaries(client, (summary) =>
+        patchResearchSummaryForRemovedNodes(summary, removal.treeId, removedNodes, Date.now()),
+      );
       dropActiveNodes(client, (node) => removed.has(node.id));
       for (const nodeId of removed) {
         client.removeQueries({ queryKey: queryKeys.nodeContent(nodeId) });
       }
-      // Counts on the summary need the removed rows, which the caller may not
-      // have cached; the tree is the authority.
-      invalidateKeys(client, queryKeys.tree(removal.treeId), ["trees"], ["activity"]);
+      invalidateKeys(client, ["activity"], ["highlightsFeed"]);
     },
   });
 }

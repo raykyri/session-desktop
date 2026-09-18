@@ -60,23 +60,34 @@ dropped in that case, which is accepted.
 
 ```
 packages/server/src/runs/
-  admission.ts        run_queue claim loop, per-user and per-provider limits, pools
+  service.ts          RunsService: run_queue claim loop, per-user and per-provider
+                      limits, cancel, drain, auto-resume, the metadata pool
   loop.ts             one attempt: build messages → streamText → persist → events
   providers.ts        AI SDK provider construction (Vertex service account, keys), model registry binding
+  fixtureProvider.ts  the recorded-stream language model behind SESSION_FIXTURE_PROVIDERS
   messages.ts         canonical message store ↔ AI SDK ModelMessage conversion; document parts
   mapper.ts           AI SDK stream parts → Turn/TurnBlock (durable format) and turn deltas
+  errors.ts           provider failures → error class + user-facing copy; 429 backoff
   tools/
+    index.ts          the tool set one attempt runs with
+    context.ts        per-run budgets, caches, and what a tool is given
+    cache.ts          the 24 h TTL cache web_search and web_fetch share
+    ssrf.ts           the address policy in front of web_fetch
     webSearch.ts      owned search tool (vendor client, result normalization, caching)
     webFetch.ts       owned fetch tool (SSRF guard, readability extraction, size caps)
     documentRead.ts   read an attached document's text by id (for models without file input)
   prompts.ts          launch prompt assembly (uses shared/research/prompts)
   snapshots.ts        two-guard snapshot commit, revision
   metadata.ts         title, recap, encyclopedia page via generateText + Output.object on gemini-flash
-  documents.ts        upload storage, text extraction, provider part building
   usage.ts            token usage and cost recording per attempt
-  tweets.ts           syndication fetch, normalization (shared), cache
   fixtures/           recorded provider streams for tests (12-testing-linting-ci.md)
 ```
+
+Three modules the earlier sketch listed live elsewhere, because Phase 3 already
+owned them: launch-time admission checks are `src/research/admission.ts`,
+upload storage and text extraction are `src/uploads/`, and tweet syndication is
+`src/journal/tweets.ts`. Building a document into provider parts is part of
+`messages.ts`, next to the rest of the request assembly.
 
 ## 3. The agent loop (`loop.ts`)
 
@@ -305,3 +316,43 @@ Recorded AI SDK stream-part sequences per provider (success, tool loop,
 refusal, rate limit, context overflow, mid-stream error, abort) drive the
 loop in tests through a fixture provider implementing the AI SDK provider
 interface. Real-provider smoke tests run manually with credentials.
+
+## 13. Implementation notes
+
+Where the built runtime departs from the sketch above, and why.
+
+- **AI SDK version.** `ai@7` with `@ai-sdk/google-vertex@5`, `@ai-sdk/anthropic@4`,
+  and `@openrouter/ai-sdk-provider@3`. All three providers report
+  `specificationVersion: "v4"`, so the fixture provider implements
+  `LanguageModelV4`; `ai@7` accepts V2, V3, and V4 models alike. Usage arrives
+  nested (`inputTokens`, `outputTokenDetails.reasoningTokens`, …) and is
+  flattened in `usage.ts`.
+- **Retries.** `streamText` runs with `maxRetries: 0`. The loop owns the retry
+  policy: a 429 re-queues the node with backoff and keeps its place in the
+  admission order, which a transport-level retry cannot do, and every other
+  class is a classified failure the user can act on.
+- **Tool caches.** `web_search` and `web_fetch` results are cached for 24 h in a
+  bounded in-memory LRU rather than a `search_cache` table. Nothing downstream
+  needs the cache to survive a deploy, and a table would put a write on the hot
+  path of every tool call and need its own eviction job.
+- **Sequence numbers.** Run events consume a sequence number whether or not
+  they are persisted, so the counter lives in the loop between writes and
+  `runs.advanceSeq` carries it back into `nodes.run_seq` before the next write.
+  Without that, a `getNodeContent` taken after a burst of deltas would report a
+  sequence the client had already passed.
+- **Auto-resume.** Boot reconciliation only re-queues `resume_pending` nodes;
+  the claim loop is what opens the new attempt (`nodes.resumeAttempt`), so an
+  interrupted node that is claimed is resumed with its committed exchanges as
+  context. The cap of two auto-resumes is counted from `run_attempts` rows of
+  kind `resume`, which makes it survive a restart.
+- **Recap candidates.** A generated candidate is held in memory for 30 minutes
+  keyed by its id; `recaps.applyCandidate` stores the server's copy when it
+  still has one, so the text that was generated is the text that is saved.
+- **Search vendors.** Parallel is called with the `base` processor and the
+  query as its objective; the API has no recency parameter, so `recency` is
+  folded into the objective there and passed as `time_range` to Tavily.
+- **DNS rebinding.** The SSRF guard resolves the name and checks every address,
+  and re-checks each redirect, but `fetch` cannot be made to connect to a
+  pinned address with the hostname in SNI, so a name that changes answers
+  between the check and the connection is still reachable once, with no
+  credentials attached and its response only read by the model.

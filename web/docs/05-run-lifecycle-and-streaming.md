@@ -133,7 +133,12 @@ rather than failing.
 - `liveTurns` store: `Map<nodeId, { turns, inFlightText, inFlightTurnId,
   lastSeq, status }>`.
 - `useNodeContent(nodeId)` seeds from the snapshot, applies ordered deltas,
-  refetches on gaps; exposes `{ turns, inFlightText, source, error }`.
+  refetches on gaps; exposes `{ turns, inFlightText, source, error }`. The
+  buffer exists only for a node a view has seeded, so the run events that reach
+  every connection do not accumulate buffers for nodes nobody is watching. The
+  durable read waits for the terminal `research.node.updated` rather than
+  firing on `research.run.finished`, which precedes the snapshot transaction,
+  and the buffer is dropped only once that read has landed.
 - The event bridge applies run events to `liveTurns` and everything else to
   the query cache in one 16 ms batch, and publishes the interest set.
 - If SSE cannot connect for 10 s, a 2 s snapshot poll runs for displayed
