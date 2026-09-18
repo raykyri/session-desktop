@@ -16,8 +16,10 @@ import type { AppEnv, ServerDeps } from "../deps.js";
 
 import { readFont } from "./fonts.js";
 import {
+  errorPageContentSecurityPolicy,
   parseBodyFont,
   renderedPageContentSecurityPolicy,
+  renderErrorPage,
   renderMarkdownPage,
   renderTextPage,
 } from "./page.js";
@@ -124,6 +126,21 @@ export function renderKind(mime: string): RenderKind | null {
  * through. */
 export const MAX_RENDERED_BYTES = 4 * 1024 * 1024;
 
+/** A framed error: the panel reads the status off the `postMessage` the body
+ * sends and re-mints (`11-artifacts-and-browser.md` §3). */
+function errorResponse(publicOrigin: string, status: 404 | 410, message: string): Response {
+  return new Response(renderErrorPage(status, message), {
+    status,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Security-Policy": errorPageContentSecurityPolicy(publicOrigin),
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Cache-Control": "private, no-store",
+    },
+  });
+}
+
 export function artifactRoutes(deps: ServerDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
@@ -138,13 +155,13 @@ export function artifactRoutes(deps: ServerDeps): Hono<AppEnv> {
     const resolved = artifacts.resolveToken(deps.db, c.req.param("token"));
     if (!resolved) {
       // 410: the client re-mints rather than treating it as a broken link.
-      return c.text("this preview link expired\n", 410);
+      return errorResponse(deps.config.publicOrigin, 410, "This preview link expired.");
     }
     let size: number;
     try {
       size = (await stat(resolved.storagePath)).size;
     } catch {
-      return c.text("not found\n", 404);
+      return errorResponse(deps.config.publicOrigin, 404, "This document is unavailable.");
     }
 
     // `?raw=1` opts out of rendering, as on the desktop; `?session-body-font=`

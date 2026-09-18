@@ -21,6 +21,10 @@ import { create } from "zustand";
  * sidebar multi-select join when Phase 6 builds them. */
 export const OVERLAY_PRIORITY = {
   searchBar: 200,
+  /** Below the search bar: a find-in-page opened over the preview is the
+   * transient layer, and Escape belongs to it first
+   * (`11-artifacts-and-browser.md` §3). */
+  artifactPanel: 100,
 } as const;
 
 export interface OverlayEntry {

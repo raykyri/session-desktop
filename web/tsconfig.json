@@ -4,6 +4,7 @@
     { "path": "./packages/shared" },
     { "path": "./packages/db" },
     { "path": "./packages/server" },
-    { "path": "./packages/client" }
+    { "path": "./packages/client" },
+    { "path": "./tsconfig.e2e.json" }
   ]
 }

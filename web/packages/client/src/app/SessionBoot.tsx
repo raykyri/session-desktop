@@ -9,10 +9,10 @@ import type { UserSettings } from "@session/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
-import { setDraft, updateSettings } from "../api/api.js";
+import { ensureDefaultResearchWorkspace, setDraft, updateSettings } from "../api/api.js";
 import { queryKeys } from "../api/cache.js";
 import { connectEventBridge } from "../api/events.js";
-import { useSettings } from "../api/queries.js";
+import { useSettings, useWorkspaces } from "../api/queries.js";
 import { setDraftSyncTarget, type ComposerDraft, type DraftKey } from "../stores/drafts.js";
 import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
 
@@ -69,6 +69,35 @@ function useDraftSync(): void {
     setDraftSyncTarget(write);
     return () => setDraftSyncTarget(null);
   }, []);
+}
+
+/**
+ * An account with no workspace has nowhere to put a research run, and every
+ * scoped query is disabled on the empty scope (`features/sidebar/scope.ts`),
+ * so a first sign-in would land on a Home whose composer can never be
+ * submitted. `workspaces.ensureDefault` is idempotent and returns the existing
+ * default when there is one; it is called once per mount, and only after the
+ * list has actually answered with nothing.
+ */
+function useDefaultWorkspace(): void {
+  const queryClient = useQueryClient();
+  const workspaces = useWorkspaces();
+  const requested = useRef(false);
+
+  const empty = workspaces.isSuccess && (workspaces.data?.length ?? 0) === 0;
+  useEffect(() => {
+    if (!empty || requested.current) return;
+    requested.current = true;
+    void ensureDefaultResearchWorkspace()
+      .then((workspace) => {
+        queryClient.setQueryData(queryKeys.workspaces(), [workspace]);
+      })
+      .catch(() => {
+        // The next mount retries; there is nothing useful to say here, and the
+        // sidebar already renders as an account with no workspace.
+        requested.current = false;
+      });
+  }, [empty, queryClient]);
 }
 
 /**
@@ -132,5 +161,6 @@ export function SessionBoot() {
   useEventBridge();
   useDraftSync();
   useSettingsSync();
+  useDefaultWorkspace();
   return null;
 }

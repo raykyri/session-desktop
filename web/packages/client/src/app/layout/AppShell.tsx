@@ -4,6 +4,7 @@ import { Outlet, useNavigate, useRouter } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 
 import { useTreeSummaries } from "../../api/queries.js";
+import { ArtifactPanel } from "../../features/artifacts/ArtifactPanel.js";
 import { buildPaletteCommands } from "../../features/palette/commands.js";
 import { useWorkspaceScope } from "../../features/sidebar/scope.js";
 import { useNavigationStore } from "../../stores/navigation.js";
@@ -173,6 +174,7 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      <ArtifactPanel />
       <ImageLightbox />
       <DiagramLightbox />
       <NotificationStack notifications={notifications} onDismiss={dismiss} />

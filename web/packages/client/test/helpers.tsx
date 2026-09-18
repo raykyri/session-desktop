@@ -37,6 +37,15 @@ export function defaultResponses(user: User | null): Record<string, unknown> {
     },
     "system.runtimeConfig": { version: "0.0.0", models: [], limits: {}, features: {} },
     "workspaces.list": [],
+    // `SessionBoot` creates one when the list comes back empty, which is what
+    // a first sign-in does (07 §2).
+    "workspaces.ensureDefault": {
+      id: "w1",
+      name: "Research",
+      position: 0,
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_000,
+    },
     "research.listTrees": [],
     "research.listActivity": [],
     "folders.get": { folders: [], membership: {}, starred: [], collapsed: [] },
