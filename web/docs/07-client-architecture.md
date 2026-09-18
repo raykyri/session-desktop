@@ -142,10 +142,22 @@ bridge and the mutations share need the keys, and the hooks need the writers,
 so the keys sit below both rather than beside one of them.
 
 Defaults: `staleTime: Infinity` for event-patched lists (events keep them
-fresh), `refetchOnWindowFocus: false`, `retry: 1`. Mutations write their
-returned objects into the cache (`setQueryData`) using the reducers from
-`shared/research/events.ts` (ported `researchEvents.ts`: `patchTreeSummary`,
-`upsertTreeDetailNode`, `removeTreeDetailNodes`, `upsertActivityNode`, …).
+fresh), `refetchOnWindowFocus: false`, `retry: 1`. `usage.summary` and
+`admin.listUsers` set their own 30 s staleness: no event announces a token
+count, so the default would freeze the figures at the session's first read.
+Mutations write their returned objects into the cache (`setQueryData`) using
+the reducers from `shared/research/events.ts` (ported `researchEvents.ts`:
+`patchTreeSummary`, `upsertTreeDetailNode`, `removeTreeDetailNodes`,
+`upsertActivityNode`, …).
+
+The tab that made a change also receives the event it caused, so every cache a
+mutation writes is written twice. Field-replacing reducers are idempotent and
+both writers may run; the count reducers on a tree summary are deltas and have
+exactly one writer per change: the mutation applies the delta from the node it
+is replacing (which it must read before overwriting it), and the event skips
+its own delta when the node it carries is already in the caches. A mutation
+therefore does not invalidate a list whose counts the event patches — the
+refetch and the delta would race for the same `+1`.
 
 ### 4.2 Event bridge (`api/events.ts`)
 
@@ -176,7 +188,14 @@ Per event type:
   re-read above.
 
 Connection status (`connection` store) drives a subtle indicator and enables
-the snapshot-poll fallback for displayed active nodes when SSE is down.
+the snapshot-poll fallback for displayed active nodes when SSE is down, once
+the 10 s grace in `connection.shouldPollSnapshots` has passed
+(`05-run-lifecycle-and-streaming.md` §9). A subscription error that names
+`UNAUTHORIZED`, or one after which `auth.me` answers `null`, is the session
+ending rather than the network dropping: the bridge navigates to `/login` with
+the current path on `?redirect=`, because the link would otherwise reconnect
+against a dead session forever. `/login` sends a tab that already has a
+session on to that path.
 
 ### 4.3 UI state — Zustand
 

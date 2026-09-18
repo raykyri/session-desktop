@@ -70,12 +70,40 @@ export interface RouterContext {
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({ component: Outlet });
 
+/** The kitchen sink (08 §4) is registered only in development and loaded
+ * lazily, so the module is a chunk production never references. `import.meta`
+ * carries no `env` outside the bundler, and AVA imports this module directly,
+ * so the check tolerates its absence. */
+const isDevelopment = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
+
+/**
+ * Where the guard may send a tab back to. Only a rooted path of this app
+ * qualifies: `//host` is another origin to the browser, and `/login` itself
+ * would be a loop. The server applies the same rule to `return_to`
+ * (`auth/github.ts:safeReturnTo`); this one governs the in-app hop, which
+ * never reaches the server.
+ */
+export function safeRedirectPath(value: string | undefined): string | null {
+  if (value === undefined || !value.startsWith("/")) return null;
+  if (value.startsWith("//") || value.startsWith("/\\")) return null;
+  if (value === "/login" || value.startsWith("/login?")) return null;
+  return value;
+}
+
 /** Sign-in renders outside the shell: there is no sidebar, no stage header and
- * no subscription before a session exists. */
+ * no subscription before a session exists. A tab that already has one has
+ * nothing to do here — a bookmark, or Back after signing in — so it goes on to
+ * whatever it was asking for. */
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
   validateSearch: loginSearchSchema,
+  beforeLoad: async ({ context, search }) => {
+    const me = await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
+    if (!me) return;
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    throw redirect({ href: safeRedirectPath(search.redirect) ?? "/" });
+  },
   component: LoginPage,
 });
 
@@ -110,8 +138,10 @@ const shellRoute = createRoute({
   id: "_shell",
   beforeLoad: async ({ context, location }) => {
     // The kitchen sink is a design-system page with no server state; it is
-    // reachable in development without an account (07 §3).
-    if (location.pathname.startsWith("/dev/")) return;
+    // reachable in development without an account (07 §3). The exemption is
+    // conditioned on the build rather than on the path alone, so a route named
+    // `/dev/...` in a production bundle could never opt out of the guard.
+    if (isDevelopment && location.pathname.startsWith("/dev/")) return;
     const me = await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
     if (!me) {
       // The router's control-flow signal is a plain object, not an `Error`;
@@ -172,12 +202,6 @@ const adminRoute = createRoute({
   path: "/admin",
   component: AdminPage,
 });
-
-/** The kitchen sink (08 §4). Registered only in development and loaded
- * lazily, so the module is a chunk production never references. `import.meta`
- * carries no `env` outside the bundler, and AVA imports this module directly,
- * so the check tolerates its absence. */
-const isDevelopment = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
 
 const devRoutes = isDevelopment
   ? [

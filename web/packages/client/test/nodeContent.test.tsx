@@ -9,10 +9,10 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import test from "ava";
 
 import { applyEventBatch } from "../src/api/events.js";
-import { queryClientDefaults, useNodeContent } from "../src/api/queries.js";
+import { SNAPSHOT_POLL_MS, queryClientDefaults, useNodeContent } from "../src/api/queries.js";
 import { setTrpcClient } from "../src/api/trpc.js";
 import { AppProviders } from "../src/app/providers.js";
-import { useConnectionStore } from "../src/stores/connection.js";
+import { CONNECTION_FALLBACK_DELAY_MS, useConnectionStore } from "../src/stores/connection.js";
 import { useLiveTurnsStore } from "../src/stores/liveTurns.js";
 
 import { node } from "./fixtures.js";
@@ -64,7 +64,9 @@ test.beforeEach(() => {
   useConnectionStore.setState({ status: "open", disconnectedSince: null });
 });
 
-test.afterEach(() => {
+// `always`, so one failing assertion does not leave its tree mounted and turn
+// every later `getByTestId` into "found multiple elements".
+test.afterEach.always(() => {
   cleanup();
   resetDocumentRoot();
 });
@@ -105,17 +107,22 @@ test.serial("a live run keeps its turns across the swap to the durable snapshot"
   t.is(text("turns"), "turn-a,turn-b");
   t.is(text("inflight"), "");
 
-  // What the refetch after `run.finished` will find.
+  // What the refetch after the terminal update will find.
+  const settled = node({
+    status: "complete",
+    completedAt: 1_700_000_200_000,
+    responseSnapshotAt: 1_700_000_200_000,
+  });
   stub.responses.set("research.getNodeContent", {
-    node: node({
-      status: "complete",
-      completedAt: 1_700_000_200_000,
-      responseSnapshotAt: 1_700_000_200_000,
-    }),
+    node: settled,
     turns: [turn("turn-a"), turn("turn-b")],
     children: [],
     responseRevision: "r1",
   });
+
+  const readsBeforeFinish = stub.calls.filter(
+    (call) => call.path === "research.getNodeContent",
+  ).length;
 
   act(() => {
     applyEventBatch(
@@ -129,6 +136,19 @@ test.serial("a live run keeps its turns across the swap to the durable snapshot"
       ],
       queryClient,
     );
+  });
+
+  // `run.finished` precedes the snapshot transaction, so reading here would
+  // race it (05 §4): the buffer holds until the node carries the stamp.
+  t.is(
+    stub.calls.filter((call) => call.path === "research.getNodeContent").length,
+    readsBeforeFinish,
+    "the durable read waits for the terminal node update",
+  );
+  t.is(text("source"), "live", "and the streamed turns stay on screen meanwhile");
+
+  act(() => {
+    applyEventBatch([event("research.node.updated", { node: settled })], queryClient);
   });
 
   await waitUntil(t, () => text("source") === "snapshot", "the durable snapshot took over");
@@ -168,4 +188,76 @@ test.serial("a gap in the sequence refetches instead of rendering a hole", async
     () => stub.calls.filter((call) => call.path === "research.getNodeContent").length > reads,
     "the snapshot was re-read",
   );
+});
+
+test.serial("the snapshot poll waits out the connection grace", async (t) => {
+  const stub = createTrpcStub({
+    "research.getNodeContent": {
+      node: node({ status: "running" }),
+      turns: [turn("turn-a")],
+      children: [],
+      inFlightText: "",
+      seq: 5,
+    },
+  });
+  const reads = (): number =>
+    stub.calls.filter((call) => call.path === "research.getNodeContent").length;
+
+  // The stream has just dropped: 05 §9 gives it ten seconds to come back
+  // before a displayed run is polled, and a poll inside that window is two
+  // requests a second per open document for a blip nobody saw.
+  useConnectionStore.setState({ status: "closed", disconnectedSince: Date.now() });
+  mount(stub);
+  await waitUntil(t, () => text("turns") === "turn-a", "the snapshot seeded the buffer");
+  const onMount = reads();
+
+  // `act` around the wait, so a refetch that resolves during it is flushed
+  // inside the test rather than warned about after it.
+  await act(() => new Promise((resolve) => setTimeout(resolve, SNAPSHOT_POLL_MS + 300)));
+  t.is(reads(), onMount, "a stream that just dropped is not polled");
+
+  act(() => {
+    useConnectionStore.setState({
+      status: "closed",
+      disconnectedSince: Date.now() - CONNECTION_FALLBACK_DELAY_MS,
+    });
+  });
+  await act(() => new Promise((resolve) => setTimeout(resolve, SNAPSHOT_POLL_MS + 300)));
+  t.true(reads() > onMount, "once the grace elapses the snapshot is polled");
+});
+
+test.serial("a finished run whose durable read fails keeps the streamed turns", async (t) => {
+  const running = {
+    node: node({ status: "running" }),
+    turns: [turn("turn-a")],
+    children: [],
+    inFlightText: "",
+    seq: 5,
+  };
+  const stub = createTrpcStub({ "research.getNodeContent": running });
+  const queryClient = mount(stub);
+  await waitUntil(t, () => text("turns") === "turn-a", "the snapshot seeded the buffer");
+
+  const settled = node({
+    status: "failed",
+    completedAt: 1_700_000_200_000,
+    responseSnapshotAt: null,
+  });
+  stub.responses.delete("research.getNodeContent");
+  act(() => {
+    applyEventBatch(
+      [
+        event("research.run.finished", { nodeId: "n1", seq: 6, attempt: 1, status: "failed" }),
+        event("research.node.updated", { node: settled }),
+      ],
+      queryClient,
+    );
+  });
+
+  // A run that fails never writes a snapshot, so the terminal status is the
+  // signal; the read that follows it answers with nothing usable here, and the
+  // buffer is what the reader keeps looking at rather than an empty document.
+  await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+  t.is(text("turns"), "turn-a");
+  t.is(text("source"), "live");
 });

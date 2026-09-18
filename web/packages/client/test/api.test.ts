@@ -36,7 +36,12 @@ const EMPTY_FOLDERS = { folders: [], membership: {}, starred: [], collapsed: [] 
 let stub: TrpcStub;
 
 test.beforeEach(() => {
-  stub = createTrpcStub();
+  // `getResearchNodeContent` reads the answer it is given: it restates `turns`
+  // against the shared type and hands the rest of the payload through, so the
+  // stub has to answer with a payload rather than `undefined`.
+  stub = createTrpcStub({
+    "research.getNodeContent": { node: {}, turns: [], children: [], seq: 0 },
+  });
   setTrpcClient(stub.client);
 });
 

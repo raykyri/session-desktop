@@ -327,3 +327,118 @@ test.serial("a batch is coalesced and applied through the subscription", async (
 
   bridge.close();
 });
+
+test.serial("a redelivered node.created counts the node once", (t) => {
+  const queryClient = client();
+  queryClient.setQueryData(queryKeys.trees(TREES_SCOPE), [summary({ runningCount: 1 })]);
+  queryClient.setQueryData(queryKeys.tree("t1"), { tree: tree(), nodes: [node()] });
+  queryClient.setQueryData(queryKeys.activeNodes(), [node()]);
+
+  const created = event("research.node.created", {
+    node: node({ id: "n2", parentNodeId: "n1", status: "running" }),
+  });
+  applyEventBatch([created], queryClient);
+  applyEventBatch([created], queryClient);
+
+  const [patched] = queryClient.getQueryData<ResearchTreeSummary[]>(
+    queryKeys.trees(TREES_SCOPE),
+  ) as ResearchTreeSummary[];
+  t.is(patched?.runningCount, 2, "the second delivery is a replay, not a second question");
+});
+
+test.serial("an unauthorized stream error sends the tab to sign-in", (t) => {
+  const queryClient = client();
+  const stub = createTrpcStub();
+  let signedOut = 0;
+  const bridge = connectEventBridge({
+    queryClient,
+    client: stub.client,
+    setInterest: () => Promise.resolve(undefined),
+    onUnauthorized: () => (signedOut += 1),
+  });
+
+  for (const observer of stub.observers) {
+    observer.onError?.({ data: { code: "UNAUTHORIZED" } });
+    observer.onError?.({ data: { code: "UNAUTHORIZED" } });
+  }
+
+  t.is(signedOut, 1, "the sign-out is announced once, however often the link retries");
+  t.is(useConnectionStore.getState().status, "connecting");
+  bridge.close();
+});
+
+test.serial("an ordinary stream error asks whether the session survived", async (t) => {
+  const queryClient = client();
+  // The session is gone, which a native `EventSource` cannot report: it fires
+  // the same opaque error for a 401 and for a dropped connection, so the
+  // bridge asks `auth.me` rather than guessing (`06-auth-and-users.md` §2).
+  const stub = createTrpcStub({ "auth.me": null });
+  let signedOut = 0;
+  const bridge = connectEventBridge({
+    queryClient,
+    client: stub.client,
+    setInterest: () => Promise.resolve(undefined),
+    onUnauthorized: () => (signedOut += 1),
+  });
+
+  for (const observer of stub.observers) {
+    observer.onError?.(new Error("network"));
+    observer.onError?.(new Error("network"));
+  }
+  await sleep(10);
+
+  t.is(stub.calls.filter((call) => call.path === "auth.me").length, 1, "asked once per drop");
+  t.is(signedOut, 1);
+  t.is(queryClient.getQueryData(queryKeys.me()), null, "and the answer lands in the cache");
+  bridge.close();
+});
+
+test.serial("a stream error on a live session does not sign the tab out", async (t) => {
+  const queryClient = client();
+  const stub = createTrpcStub({ "auth.me": { id: "u1", login: "raymond" } });
+  let signedOut = 0;
+  const bridge = connectEventBridge({
+    queryClient,
+    client: stub.client,
+    setInterest: () => Promise.resolve(undefined),
+    onUnauthorized: () => (signedOut += 1),
+  });
+
+  for (const observer of stub.observers) observer.onError?.(new Error("network"));
+  await sleep(10);
+
+  t.is(signedOut, 0, "a dropped connection is the ordinary case");
+  bridge.close();
+});
+
+test.serial("a rename refetches the highlights feed, whose rows carry the label", (t) => {
+  const queryClient = client();
+  queryClient.setQueryData(queryKeys.tree("t1"), { tree: tree(), nodes: [node()] });
+  queryClient.setQueryData(queryKeys.trees(TREES_SCOPE), [summary()]);
+  queryClient.setQueryData(queryKeys.highlightsFeed("w1"), []);
+
+  applyEventBatch(
+    [event("research.tree.updated", { tree: tree({ title: "Renamed" }) })],
+    queryClient,
+  );
+
+  t.true(queryClient.getQueryState(queryKeys.highlightsFeed("w1"))?.isInvalidated);
+});
+
+test.serial("a status change leaves the highlights feed alone", (t) => {
+  const queryClient = client();
+  const running = node({ status: "running" });
+  queryClient.setQueryData(queryKeys.tree("t1"), { tree: tree(), nodes: [running] });
+  queryClient.setQueryData(queryKeys.trees(TREES_SCOPE), [summary()]);
+  queryClient.setQueryData(queryKeys.highlightsFeed("w1"), []);
+
+  applyEventBatch(
+    [event("research.node.updated", { node: node({ status: "complete" }) })],
+    queryClient,
+  );
+
+  t.false(
+    queryClient.getQueryState(queryKeys.highlightsFeed("w1"))?.isInvalidated,
+    "the labels on those rows did not change",
+  );
+});

@@ -7,7 +7,9 @@ import test from "ava";
 
 import { renderApp, resetDocumentRoot, testUser } from "./helpers.js";
 
-test.afterEach(() => {
+// `always`, so a failed assertion does not leave its tree mounted for the
+// next test to trip over.
+test.afterEach.always(() => {
   cleanup();
   resetDocumentRoot();
 });
@@ -74,4 +76,31 @@ test.serial("the boot loader warms the six queries the shell renders from", asyn
   ]) {
     t.true(paths.has(path), `${path} was warmed`);
   }
+});
+
+test.serial("a signed-in visit to sign-in goes on to what it asked for", async (t) => {
+  // The guard puts the path it refused on `?redirect=`; coming back with a
+  // session — after signing in, or with Back — continues there rather than
+  // showing a sign-in button to somebody who is signed in.
+  await renderApp("/login?redirect=%2Fsettings", { user: testUser() });
+
+  t.truthy(screen.getByRole("heading", { name: "Settings" }));
+  t.is(screen.queryByRole("button", { name: /Continue with GitHub/ }), null);
+});
+
+test.serial("a redirect that leaves this origin is not followed", async (t) => {
+  await renderApp("/login?redirect=%2F%2Fevil.example%2Fsteal", { user: testUser() });
+
+  t.truthy(screen.getByRole("navigation", { name: "Sections" }), "the shell rendered");
+  t.truthy(screen.getByRole("heading", { name: "Home" }), "at the root, not at the target");
+});
+
+test.serial("the kitchen sink is not a way around the guard in a build", async (t) => {
+  // `import.meta.env` is absent outside Vite, so this suite runs the route
+  // tree exactly as a production bundle carries it: no `/dev/*` route, and the
+  // guard's exemption off with it (07 §3).
+  await renderApp("/dev/ui", { user: null });
+
+  t.is(screen.queryByRole("navigation", { name: "Sections" }), null, "no shell was rendered");
+  t.is(screen.queryByRole("heading", { name: /Cool · Dark/ }), null, "and no kitchen sink");
 });

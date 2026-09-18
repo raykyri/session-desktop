@@ -127,3 +127,26 @@ test.serial("clear removes only the named node's buffer", (t) => {
   useLiveTurnsStore.getState().clearAll();
   t.deepEqual(useLiveTurnsStore.getState().byNode, {});
 });
+
+test.serial("a run event for a node no view seeded is dropped", (t) => {
+  useLiveTurnsStore.setState({ byNode: {} });
+
+  // `research.run.*` reaches every connection of the account, not just the
+  // ones watching this node (`03-api-and-events.md` §3). Buffering those would
+  // grow the map with every run the user starts anywhere, and the turn-less
+  // buffer would then shadow the snapshot when the node is finally opened.
+  apply(
+    { type: "run.started", nodeId: "unwatched", seq: 1 },
+    { type: "turn.delta", nodeId: "unwatched", seq: 2, text: "ignored" },
+    { type: "run.finished", nodeId: "unwatched", seq: 3 },
+  );
+
+  t.is(useLiveTurnsStore.getState().byNode["unwatched"], undefined);
+
+  useLiveTurnsStore.getState().seed("unwatched", { turns: [turn("t1")], seq: 3 });
+  apply({ type: "turn.delta", nodeId: "unwatched", seq: 4, text: "kept" });
+
+  const buffered = useLiveTurnsStore.getState().byNode["unwatched"];
+  t.is(buffered?.inFlightText, "kept", "the snapshot's baseline is what deltas extend");
+  t.is(buffered?.turns.length, 1);
+});

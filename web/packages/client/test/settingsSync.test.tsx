@@ -106,3 +106,30 @@ test.serial("a local change is pushed once, after the debounce", async (t) => {
   t.is(updates.length, 1, "three moves of the slider are one write");
   t.is((updates[0]?.input as { settings: { textSize: number } }).settings.textSize, 19);
 });
+
+test.serial("a push that fails does not stop the next one", async (t) => {
+  // The first write is refused; the mirror has to stay able to push, or one
+  // dropped request would silence every later preference change in the tab.
+  let calls = 0;
+  const stub = createTrpcStub({
+    ...defaultResponses(testUser()),
+    "settings.get": serverSettings({ textSize: 15 }),
+    "settings.update": () => {
+      calls += 1;
+      if (calls === 1) throw new Error("offline");
+      return serverSettings({ textSize: 18 });
+    },
+  });
+  mount(stub);
+  await waitUntil(
+    t,
+    () => useSettingsStore.getState().settings.textSize === 15,
+    "the server's copy landed",
+  );
+
+  act(() => useSettingsStore.getState().setTextSize(17));
+  await waitUntil(t, () => calls === 1, "the first push was attempted");
+
+  act(() => useSettingsStore.getState().setTextSize(18));
+  await waitUntil(t, () => calls === 2, "and a later change is still pushed");
+});

@@ -50,9 +50,11 @@ import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
 import { setEventInterest } from "./api.js";
 import {
   cachedNode,
+  cachedTreeTitle,
   dropActiveNodes,
   eachTreeList,
   eventPatchedListKeys,
+  invalidateHighlightLabels,
   invalidateKeys as invalidate,
   mapSummaries,
   patchActiveNodes,
@@ -128,6 +130,7 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
     case "research.tree.updated":
     case "research.tree.archived":
     case "research.tree.restored": {
+      invalidateHighlightLabels(client, cachedTreeTitle(client, event.tree.id), event.tree.title);
       mapSummaries(client, (summary) => patchResearchSummaryTree(summary, event.tree));
       patchDetail(client, event.tree.id, (detail) => patchResearchDetailTree(detail, event.tree));
       if (event.type !== "research.tree.updated") {
@@ -150,12 +153,19 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
     }
 
     case "research.node.created": {
+      // A summary count is a delta, so it is added once per node: the tab that
+      // forked has already counted it through `useForkResearchNode`, and a
+      // redelivery after a reconnect must not count it again. Knowing the node
+      // is what tells the two apart (07 §4.1).
+      const known = cachedNode(client, event.node.treeId, event.node.id) !== undefined;
       patchDetail(client, event.node.treeId, (detail) =>
         patchResearchDetailNode(detail, event.node),
       );
-      mapSummaries(client, (summary) =>
-        patchResearchSummaryForCreatedNode(summary, event.node, event.timestamp),
-      );
+      if (!known) {
+        mapSummaries(client, (summary) =>
+          patchResearchSummaryForCreatedNode(summary, event.node, event.timestamp),
+        );
+      }
       patchActiveNodes(client, event.node);
       invalidate(client, ["activity"]);
       return;
@@ -163,6 +173,11 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
 
     case "research.node.updated": {
       const previous = cachedNode(client, event.node.treeId, event.node.id);
+      invalidateHighlightLabels(
+        client,
+        previous === undefined ? undefined : (previous.title ?? null),
+        event.node.title ?? null,
+      );
       patchDetail(client, event.node.treeId, (detail) =>
         patchResearchDetailNode(detail, event.node),
       );
@@ -200,6 +215,12 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
     }
 
     case "research.document.updated": {
+      const knownNode = cachedNode(client, event.tree.id, event.node.id);
+      invalidateHighlightLabels(
+        client,
+        knownNode === undefined ? undefined : (knownNode.title ?? null),
+        event.node.title ?? null,
+      );
       mapSummaries(client, (summary) => patchResearchSummaryTree(summary, event.tree));
       patchDetail(client, event.tree.id, (detail) => {
         const withTree = patchResearchDetailTree(detail, event.tree);
@@ -537,6 +558,38 @@ export interface EventBridgeOptions {
   client?: SessionTrpcClient;
   /** Replaced in tests; defaults to `events.setInterest`. */
   setInterest?: (connectionId: string, nodeIds: string[]) => Promise<unknown>;
+  /** What to do when the stream reports that the session is gone. Defaults to
+   * a full navigation to `/login`. */
+  onUnauthorized?: () => void;
+}
+
+/**
+ * Whether a subscription error is the server saying the session is gone.
+ *
+ * `TRPCClientError` carries the formatter's `data.code`; the raw shape is read
+ * too, because an error that crossed the SSE framing keeps `shape` and not
+ * always `data`. Nothing else is treated as a sign-out: a dropped connection
+ * is the ordinary case, and reloading the app on one would turn a subway
+ * tunnel into a sign-in page.
+ */
+export function isUnauthorizedError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as {
+    data?: { code?: unknown } | null;
+    shape?: { data?: { code?: unknown } } | null;
+  };
+  return candidate.data?.code === "UNAUTHORIZED" || candidate.shape?.data?.code === "UNAUTHORIZED";
+}
+
+/** The default `onUnauthorized`: a real navigation, not a router push. The
+ * session is gone, so every cache in this document is worthless and the
+ * cheapest way to be sure of that is to load the page again
+ * (`06-auth-and-users.md` §2). The path being left is handed to `/login` the
+ * way the route guard hands it over. */
+function redirectToLogin(): void {
+  const here = `${window.location.pathname}${window.location.search}`;
+  const target = here === "/login" ? "/login" : `/login?redirect=${encodeURIComponent(here)}`;
+  window.location.assign(target);
 }
 
 /**
@@ -550,9 +603,16 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
   const { queryClient } = options;
   const client = options.client ?? trpc();
   const publish = options.setInterest ?? setEventInterest;
+  const onUnauthorized = options.onUnauthorized ?? redirectToLogin;
   const connection = useConnectionStore.getState();
 
   let connectionId: string | null = null;
+  /** The sign-out is announced once; the link keeps retrying until the
+   * navigation takes effect. */
+  let signedOut = false;
+  /** Reset on every `connection.ready`, so one lost session is checked once
+   * per disconnection rather than once per retry. */
+  let sessionChecked = false;
   let queue: SessionEvent[] = [];
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
@@ -574,12 +634,42 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
     flushTimer ??= setTimeout(flush, EVENT_COALESCE_MS);
   };
 
-  publishInterest = (nodeIds) => {
+  const publisher = (nodeIds: string[]): void => {
     if (connectionId === null) return;
     void publish(connectionId, nodeIds).catch(() => {
       // A connection the server has already forgotten; the next subscribe
       // publishes the set again.
     });
+  };
+  publishInterest = publisher;
+
+  const signOut = (): void => {
+    if (signedOut) return;
+    signedOut = true;
+    onUnauthorized();
+  };
+
+  /**
+   * One session check per disconnection. A subscription error does not say why
+   * the stream ended — a native `EventSource` reports a refused 401 and a
+   * dropped connection the same way — so the session itself is asked. Only a
+   * successful `null` signs the tab out; a failed check is a network problem,
+   * which is what the link's own reconnect is for.
+   */
+  const verifySession = (): void => {
+    if (signedOut || sessionChecked) return;
+    sessionChecked = true;
+    void client.auth.me
+      .query()
+      .then((user) => {
+        if (closed) return;
+        queryClient.setQueryData(queryKeys.me(), user);
+        if (user === null) signOut();
+      })
+      .catch(() => {
+        // Unreachable server: the stream's own retry is the recovery.
+        sessionChecked = false;
+      });
   };
 
   const resynchronize = (): void => {
@@ -599,6 +689,7 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
           // Interest is per connection, so a reconnect republishes it.
           publishInterest?.([...interest.keys()]);
         }
+        sessionChecked = false;
         connection.setStatus("open");
         if (opened) resynchronize();
         opened = true;
@@ -620,8 +711,13 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
           return;
       }
     },
-    onError: () => {
-      if (!closed) useConnectionStore.getState().setStatus("connecting");
+    onError: (error) => {
+      if (closed) return;
+      useConnectionStore.getState().setStatus("connecting");
+      // The link would otherwise reconnect against a session that no longer
+      // exists, forever, while the views wait for deltas that cannot come.
+      if (isUnauthorizedError(error)) signOut();
+      else verifySession();
     },
     onStopped: () => {
       if (!closed) useConnectionStore.getState().setStatus("closed");
@@ -642,7 +738,10 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
       if (flushTimer !== null) clearTimeout(flushTimer);
       flushTimer = null;
       queue = [];
-      publishInterest = null;
+      // Only if this bridge is still the one publishing: a remount installs
+      // its successor before React runs the predecessor's cleanup in some
+      // orders, and clearing it then would leave the successor mute.
+      if (publishInterest === publisher) publishInterest = null;
       subscription.unsubscribe();
       useConnectionStore.getState().setStatus("closed");
     },
