@@ -39,7 +39,14 @@ export type FixtureScenario =
   | "mid-stream-error"
   | "abort"
   | "timeout"
-  | "slow-stream";
+  | "slow-stream"
+  /** `slow-stream` stretched to the seconds an end-to-end reload needs
+   * (`12-testing-linting-ci.md` §3.6); the unit pacer's timing is asserted to
+   * the millisecond and cannot be slowed. The name is all letters and dashes
+   * because `PROMPT_MARKER` is how a run selects it. */
+  | "paced-answer"
+  /** An answer past `MIN_RECAP_CHARS`, so a run schedules a recap. */
+  | "long-answer";
 
 export const DEFAULT_FIXTURE_SCENARIO: FixtureScenario = "success-with-tools";
 

@@ -1,0 +1,117 @@
+{
+  "scenario": "long-answer",
+  "description": "One answer past MIN_RECAP_CHARS, so the run schedules a recap the way a real long answer does (`shared/src/research/recap.ts`).",
+  "steps": [
+    {
+      "parts": [
+        {
+          "type": "stream-start",
+          "warnings": []
+        },
+        {
+          "type": "response-metadata",
+          "id": "fixture-long",
+          "modelId": "fixture"
+        },
+        {
+          "type": "text-start",
+          "id": "t0"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "A skip list is an ordered dictionary built from stacked linked lists. The bottom"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": " level holds every element in sorted order; each level above it holds a random s"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "ubset of the level below, so a search starts at the sparsest level, walks forwar"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "d until the next node would overshoot, drops one level, and repeats. With a prom"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "otion probability of one half the expected height is logarithmic in the number o"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "f elements and so is the expected search, insertion and deletion cost, without a"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "ny of the rotations a balanced tree needs.\n\nThe structure is popular for concurr"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "ent and persistent stores because an insertion touches only the forward pointers"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": " on the path it descended, which makes lock-free implementations tractable and m"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "akes the write path easy to reason about under contention. The costs are the one"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "s randomization always carries: the bounds are expected rather than worst case, "
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "every node pays for its tower of pointers, and the traversal has poor locality c"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "ompared with a B-tree's wide nodes, which is why on-disk indexes still prefer th"
+        },
+        {
+          "type": "text-delta",
+          "id": "t0",
+          "delta": "e tree ([source](https://example.com/skip-lists))."
+        },
+        {
+          "type": "text-end",
+          "id": "t0"
+        },
+        {
+          "type": "finish",
+          "finishReason": {
+            "unified": "stop",
+            "raw": "end_turn"
+          },
+          "usage": {
+            "inputTokens": {
+              "total": 900,
+              "noCache": 900,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "outputTokens": {
+              "total": 260,
+              "text": 260,
+              "reasoning": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

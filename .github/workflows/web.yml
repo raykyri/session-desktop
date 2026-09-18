@@ -39,15 +39,18 @@ jobs:
       - run: npm ci
       - run: npm test
 
-  # Phase 6 adds the Playwright config and the browsers it needs
-  # (`web/docs/12-testing-linting-ci.md` §3.6). Until then `npm run test:e2e`
-  # is a placeholder that exits non-zero, so the job skips the run when no
-  # config is present and never blocks a merge.
-  # TODO(Phase 6): drop `continue-on-error` and the guard once
-  # `web/playwright.config.ts` lands.
+  # The Playwright suite (`web/docs/12-testing-linting-ci.md` §3.6): one real
+  # server with fixture providers, a temp data directory and the test-only
+  # sign-in route, serving a client build through its own static middleware.
+  # Only Chromium is installed, and `npm run test:e2e` runs only that project;
+  # WebKit is best-effort and opt-in (`npm run test:e2e:webkit`).
+  #
+  # The visual baselines are committed per platform, so the `@visual` test
+  # skips itself on a runner that has none rather than failing. To add the
+  # Linux set, run `npm run test:e2e:update-snapshots` on this image and commit
+  # `web/e2e/__screenshots__/linux/`.
   e2e:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,25 +59,17 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - id: config
-        run: |
-          if ls playwright.config.* >/dev/null 2>&1; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "no Playwright config yet; skipping e2e" >&2
-          fi
-      - if: steps.config.outputs.present == 'true'
-        run: npm run build
-      - if: steps.config.outputs.present == 'true'
-        run: npx playwright install --with-deps chromium
-      - if: steps.config.outputs.present == 'true'
-        run: npm run test:e2e
-      - if: failure() && steps.config.outputs.present == 'true'
+      - run: npx playwright install --with-deps chromium
+      # GitHub sets CI=true, which is what turns on retries, traces, the HTML
+      # report and a fresh server per run (`web/playwright.config.ts`).
+      - run: npm run test:e2e
+      - if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces
-          path: web/test-results
+          path: |
+            web/test-results
+            web/playwright-report
           if-no-files-found: ignore
 
   # The image is built on every run so a Dockerfile change cannot break a
@@ -100,7 +95,7 @@ jobs:
   # (`web/docs/13-deployment-fly.md` §2, §5).
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [check, test, docker]
+    needs: [check, test, e2e, docker]
     runs-on: ubuntu-latest
     environment: production
     concurrency:

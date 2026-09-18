@@ -10,7 +10,7 @@ import { createLogger } from "../src/logger.js";
 import { prepareDataDirectories, reconcileRuns, writeVertexCredentials } from "../src/main.js";
 import { searchFeatures } from "../src/trpc/routers/system.js";
 
-import { answerTurn, createHarness, testConfig } from "./helpers.js";
+import { ARTIFACT_ORIGIN, answerTurn, createHarness, testConfig } from "./helpers.js";
 
 test("system.health and runtimeConfig answer without a session", async (t) => {
   const harness = createHarness(t);
@@ -20,7 +20,13 @@ test("system.health and runtimeConfig answer without a session", async (t) => {
   t.is(config.limits.runsPerUser, 2);
   t.is(config.limits.documentsPerQuestion, 10);
   t.false(config.limits.enforced);
-  t.deepEqual(config.features, { webSearch: true, searchVendor: "parallel" });
+  // The artifact origin travels here because the preview panel validates
+  // `postMessage` against it (`11-artifacts-and-browser.md` §3).
+  t.deepEqual(config.features, {
+    webSearch: true,
+    searchVendor: "parallel",
+    artifactOrigin: ARTIFACT_ORIGIN,
+  });
   t.is(await anonymous.auth.me(), null);
   await t.throwsAsync(harness.caller(null).settings.get(), { message: /sign in/ });
 });

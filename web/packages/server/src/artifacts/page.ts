@@ -64,6 +64,38 @@ export function renderedPageContentSecurityPolicy(publicOrigin: string): string 
   ].join("; ");
 }
 
+/**
+ * The bridge that lets the panel recover from an expired or revoked token
+ * (`11-artifacts-and-browser.md` §2, §3). An iframe reports no status code to
+ * its embedder — cross-origin by construction here — so the error body says so
+ * itself and the panel re-mints. The status is read from the document rather
+ * than interpolated, because the CSP allows this script by the hash of exactly
+ * these bytes and an interpolated one would need a fresh hash per response.
+ */
+export const PREVIEW_ERROR_SCRIPT =
+  "(()=>{const s=Number(document.documentElement.getAttribute('data-session-status'));parent.postMessage({type:'session-preview-error',status:s},'*')})();";
+
+export const PREVIEW_ERROR_SCRIPT_SHA256 = createHash("sha256")
+  .update(PREVIEW_ERROR_SCRIPT, "utf8")
+  .digest("base64");
+
+export const PREVIEW_ERROR_SCRIPT_CSP_SOURCE = `'sha256-${PREVIEW_ERROR_SCRIPT_SHA256}'`;
+
+/** As the rendered-page policy, with the error bridge in place of the scroll
+ * one and no fonts or images to load. */
+export function errorPageContentSecurityPolicy(publicOrigin: string): string {
+  return [
+    "default-src 'none'",
+    `script-src ${PREVIEW_ERROR_SCRIPT_CSP_SOURCE}`,
+    "style-src 'unsafe-inline'",
+    "connect-src 'none'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    `frame-ancestors ${publicOrigin}`,
+  ].join("; ");
+}
+
 /** The body faces served from this origin. `?session-body-font=` names one;
  * anything else falls back to the system stack, as on the desktop. */
 export type BodyFontId = "dm-sans" | "valley-sans";
@@ -190,4 +222,18 @@ export function renderMarkdownPage(title: string, source: string, font: BodyFont
  * `.txt` or `.csv` that happens to start a line with `#` is not a heading. */
 export function renderTextPage(title: string, source: string, font: BodyFontId | null): string {
   return page(title, `<pre class="session-source">${escapeHtml(source)}</pre>\n`, font);
+}
+
+/**
+ * The body behind a 404 or 410 on `/a/:token`. Readable on its own when the
+ * URL is opened in a tab, and self-announcing when it is framed.
+ */
+export function renderErrorPage(status: number, message: string): string {
+  return (
+    `<!doctype html>\n<html lang="en" data-session-status="${status}">\n<head>\n` +
+    '<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+    `<title>${escapeHtml(message)}</title>\n<style>${pageCss(null)}</style>\n</head>\n` +
+    `<body>\n<main>\n<p>${escapeHtml(message)}</p>\n</main>\n` +
+    `<script>${PREVIEW_ERROR_SCRIPT}</script>\n</body>\n</html>\n`
+  );
 }

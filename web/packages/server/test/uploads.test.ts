@@ -7,6 +7,7 @@ import { documents } from "@session/db";
 import type { DocumentInfo } from "@session/shared";
 import test from "ava";
 
+import { PREVIEW_ERROR_SCRIPT_CSP_SOURCE } from "../src/artifacts/page.js";
 import { contentDisposition, parseRange, servedContentType } from "../src/artifacts/route.js";
 import { MAX_DOCUMENT_BYTES, resolveMimeType } from "../src/uploads/limits.js";
 import { MAX_UPLOAD_BODY_BYTES, documentStoragePath } from "../src/uploads/route.js";
@@ -159,8 +160,16 @@ test("an artifact token serves the document on the artifact origin only", async 
   t.is(ranged.headers.get("content-range"), "bytes 2-4/10");
   t.is(await ranged.text(), "234");
 
+  // An iframe reports no status to its embedder, so the 410 body announces
+  // itself and the panel re-mints (`11-artifacts-and-browser.md` §3).
   const unknown = await harness.app.request("/a/not-a-token", { headers: { Host: artifactHost } });
   t.is(unknown.status, 410);
+  t.regex(await unknown.text(), /session-preview-error/);
+  t.true(
+    unknown.headers.get("content-security-policy")?.includes(PREVIEW_ERROR_SCRIPT_CSP_SOURCE) ??
+      false,
+    "the error bridge is allowed by hash and nothing else is",
+  );
 });
 
 test("HTML is served as text and ranges are parsed conservatively", (t) => {
