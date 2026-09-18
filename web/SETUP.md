@@ -1,0 +1,232 @@
+# Setting up Session Web
+
+Two paths. **Local** needs no accounts and no network — skip to it if you only
+want to see the product run. **Deployment** provisions the real thing on
+Fly.io.
+
+Reference material this runbook points at, rather than repeats:
+`docs/13-deployment-fly.md` (what each Fly setting does and why),
+`docs/runbooks/restore.md` (bringing the data back), `.env.example` (every
+variable, annotated).
+
+---
+
+## Local
+
+Node 22.20 or newer is the only prerequisite.
+
+```sh
+cd web
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Then open `http://localhost:1480`. The API runs on `127.0.0.1:8787` and Vite
+proxies to it, so the browser sees one origin and cookies, CSRF and the event
+stream behave as they do in production.
+
+### Running with no credentials
+
+Set these two in `.env`:
+
+```sh
+SESSION_FIXTURE_PROVIDERS=1   # every model replays a recorded stream
+SESSION_TEST_AUTH=1           # enables POST /auth/test-login
+```
+
+Sign in without GitHub:
+
+```sh
+curl -c jar -X POST http://localhost:1480/auth/test-login \
+  -H 'content-type: application/json' -H 'x-requested-with: session' \
+  -d '{"login":"you","isAdmin":true}'
+```
+
+Choose a recorded scenario by prefixing a question with `fixture:<name>` — for
+example `fixture:success-with-tools how do bloom filters work?`. The scenarios
+live in `packages/server/src/runs/fixtures/`; `paced-answer` is the one to use
+when you want to watch text stream in slowly, and `refusal`, `rate-limit` and
+`timeout` exercise the failure paths.
+
+### Running against real models
+
+Leave `SESSION_FIXTURE_PROVIDERS=0` and fill in whichever credentials you
+have. Each is independent: a model whose credential is missing is reported
+unavailable and hidden rather than breaking the app. `.env.example` carries a
+link to the page that issues each one. In rough order of what it costs to
+skip:
+
+| Variable                                                       | Without it                                                                                   |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `GOOGLE_APPLICATION_CREDENTIALS_JSON`, `GOOGLE_VERTEX_PROJECT` | No default model, and no titles, recaps or encyclopedia pages — they all run on Gemini Flash |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`                     | No sign-in; `/auth/github` answers 503. Use `SESSION_TEST_AUTH=1` locally instead            |
+| `PARALLEL_API_KEY` or `TAVILY_API_KEY`                         | No web search; the agent can only read URLs it was already handed                            |
+| `OPENROUTER_API_KEY`                                           | No DeepSeek and no GPT-5.6 Luna                                                              |
+| `ANTHROPIC_API_KEY`                                            | No Claude Fable, which is admin-only anyway                                                  |
+
+For GitHub locally, register the callback as
+`http://localhost:1480/auth/github/callback`.
+
+### Everyday commands
+
+| Command                              | What it does                                               |
+| ------------------------------------ | ---------------------------------------------------------- |
+| `npm run dev`                        | Server and client with reload                              |
+| `npm run check`                      | Types, lint, format, schema drift                          |
+| `npm test`                           | Unit tests across the four packages                        |
+| `npm run test:e2e`                   | Playwright, against fixture providers                      |
+| `npm run db:admin -- <github login>` | Grants admin, which unlocks Claude Fable and the user list |
+| `npm run db:studio`                  | Browse the database                                        |
+
+State lives in `web/.data` — the database, uploaded documents, temp files.
+Delete the directory to start clean.
+
+---
+
+## Deployment
+
+### 1. Create the app and its volume
+
+```sh
+fly apps create session-dev
+fly volumes create session_data -a session-dev -r sjc -s 20
+```
+
+Create the volume before the first deploy. A machine that boots without one
+writes its database to the container filesystem and loses it on the next
+release.
+
+### 2. DNS and certificates, for both hostnames
+
+The app is reached by two names: `session.dev` for the app, and
+`artifacts.session.dev` for document previews. They must be **different
+hostnames on the same Fly app**, because the session cookie is scoped to the
+app host and must never reach the origin the preview iframe is same-origin
+with. The server enforces this by comparing the `Host` header against
+`SESSION_ARTIFACT_ORIGIN`, so both names have to resolve to the same machines
+and the database they share.
+
+Fly routes by IP rather than by hostname, so any name pointing at the app's
+addresses arrives at it, and the original `Host` is passed through untouched.
+What Fly does need is a certificate per name, since it terminates TLS:
+
+```sh
+fly ips list -a session-dev          # the addresses to point DNS at
+fly certs add session.dev -a session-dev
+fly certs add artifacts.session.dev -a session-dev
+```
+
+Add `A` and `AAAA` records for both names pointing at those addresses, plus
+the `_acme-challenge` CNAME each `fly certs add` prints. Then wait for both to
+report as issued:
+
+```sh
+fly certs check session.dev -a session-dev
+fly certs check artifacts.session.dev -a session-dev
+```
+
+DNS alone is not enough — without a certificate the second hostname fails at
+the TLS handshake and the request never reaches the app.
+
+### 3. Set the secrets
+
+Non-secret configuration is already in `fly.toml`. Everything below is a
+secret:
+
+```sh
+fly secrets set -a session-dev \
+  GITHUB_CLIENT_ID=... \
+  GITHUB_CLIENT_SECRET=... \
+  GOOGLE_APPLICATION_CREDENTIALS_JSON="$(jq -c . service-account.json)" \
+  OPENROUTER_API_KEY=... \
+  ANTHROPIC_API_KEY=... \
+  PARALLEL_API_KEY=... \
+  LITESTREAM_REPLICA_URL=s3://your-bucket/session \
+  AWS_ACCESS_KEY_ID=... \
+  AWS_SECRET_ACCESS_KEY=... \
+  SESSION_METRICS_TOKEN="$(openssl rand -hex 32)"
+```
+
+Three of those are not optional before real traffic. Without
+`LITESTREAM_REPLICA_URL` the database has no backup. Without
+`SESSION_METRICS_TOKEN` the metrics endpoint is disabled and token spend is
+unobservable. And sign-up is open to any GitHub account unless you gate it —
+`SESSION_REQUIRE_INVITE=1` is already set in `fly.toml`, and
+`SESSION_ALLOWED_GITHUB_LOGINS` is the stricter alternative.
+
+Edit `fly.toml` before deploying to set `GOOGLE_VERTEX_PROJECT` to your real
+project id; it ships with a placeholder. Register the production OAuth
+callback as `https://session.dev/auth/github/callback`.
+
+### 4. Deploy
+
+```sh
+fly deploy web -c web/fly.toml
+```
+
+The positional `web` is the build context and matters: without it flyctl hands
+Docker the repository root, where `package.json` belongs to the desktop app.
+
+The machine runs migrations on boot and reconciles any runs the previous
+process left behind. `/healthz` answers 503 until that finishes and again from
+the first moment of a drain, so Fly's proxy follows the boot rather than
+routing into a process that cannot finish what it accepts.
+
+### 5. Grant the first admin
+
+Sign in once through the browser so the account exists, then flip the flag on
+the machine. `npm run db:admin` does not work there — the runtime image
+carries the server bundle and production dependencies only, with no sources
+and no `tsx`:
+
+```sh
+fly ssh console -a session-dev -C "node -e \"
+  const db = require('better-sqlite3')('/data/session.db');
+  const r = db.prepare('update users set is_admin = 1 where login = ?').run('<github login>');
+  if (r.changes === 0) throw new Error('no account with that login');
+\""
+```
+
+Admin unlocks Claude Fable, the user list, and per-account limit overrides.
+
+### 6. Verify
+
+```sh
+curl -fsS https://session.dev/healthz                       # ok
+curl -fsS -H "Authorization: Bearer $SESSION_METRICS_TOKEN" \
+  https://session.dev/metrics | head                        # gauges
+curl -sS -o /dev/null -w '%{http_code}\n' https://artifacts.session.dev/   # 404
+```
+
+That last one should be 404, not the app's HTML: the artifact host serves
+document previews and nothing else.
+
+Then sign in, ask a question, and watch it stream.
+
+### 7. Set up what deployment does not
+
+- **Document backups.** The server archives `/data/documents` daily on its own
+  once `LITESTREAM_REPLICA_URL` or `SESSION_DOCUMENTS_REPLICA_URL` is set.
+  Confirm an archive appears in the bucket after the first day.
+- **A restore drill.** `docs/runbooks/restore.md`, once a quarter. A backup
+  nobody has restored is a hypothesis.
+- **Alerting.** Nothing scrapes `/metrics`. At minimum alert on
+  `session_daily_cost_usd` and `session_volume_free_bytes`.
+
+---
+
+## Operating notes
+
+**Deploys interrupt runs, briefly.** One machine holds the volume, so a
+release stops it before starting the next. In-flight runs are checkpointed,
+marked `interrupted`, re-queued at the head and resumed automatically on boot.
+Users see a pause, not a loss.
+
+**There is no rollback path.** Migrations run forward on boot and the server
+refuses a database carrying a migration it does not know, so redeploying an
+older image after a migration will not start. Roll forward instead.
+
+**Limits are on.** `SESSION_ENFORCE_LIMITS=1` in `fly.toml` caps daily tokens
+and runs per account, with a queue cap alongside. Admins are exempt. Raise a
+single account through the `user_limits` table rather than the global default.

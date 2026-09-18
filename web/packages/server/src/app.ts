@@ -19,6 +19,7 @@ import type { Readiness } from "./health.js";
 import { createReadiness } from "./health.js";
 import { defaultLogger } from "./logger.js";
 import { MetricsRegistry, renderMetrics } from "./metrics.js";
+import { artifactHostOnly } from "./middleware/artifactHost.js";
 import { csrfGuard } from "./middleware/csrf.js";
 import { requestLogging } from "./middleware/logging.js";
 import { requestMetrics } from "./middleware/metrics.js";
@@ -73,6 +74,8 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   // session; it is mounted before the CSRF guard and the session loader so a
   // token URL never carries either.
   app.route("/", artifactRoutes(deps));
+  // Nothing below belongs to that host.
+  app.use("*", artifactHostOnly(deps.config));
 
   app.use("*", csrfGuard(deps.config));
   app.use("*", sessionLoader(deps));
