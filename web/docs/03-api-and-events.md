@@ -189,8 +189,9 @@ Run events (new; `05-run-lifecycle-and-streaming.md` §4):
 | `research.turn.committed` | `{ nodeId, seq, turn: Turn }` — replaces any live turn with the same id; interest-filtered |
 | `research.run.finished` | `{ nodeId, attempt, seq, status, error? }` — precedes the terminal `research.node.updated` |
 
-The client's `researchEvents.ts` union grows by these four. Unknown types
-are classified `unsupported` and trigger a scoped refetch as today.
+The client's `researchEvents.ts` union grows by these five run events plus
+`models.updated`. Unknown types are classified `unsupported` and trigger a
+scoped refetch as today.
 
 ## 4. Live content protocol
 

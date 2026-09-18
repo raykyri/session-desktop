@@ -193,12 +193,14 @@ on selection.
 
 Browser conflicts: Cmd-N/T open new windows/tabs in browsers and cannot be
 intercepted, and Cmd-1..9 switch browser tabs on some platforms.
-`resolveAppShortcut` already accepts Ctrl as the primary modifier
-(`src/lib/appShortcuts.ts:40`, `:53`, `:72`), so the documented chords on
-the web are Ctrl-N / Ctrl-T for Home and Ctrl-1..9 for tabs, with Cmd
-variants still honored where the browser lets them through. The shared
-module is extended with one new chord, Shift-Cmd-H, for Home; shortcut hints
-render the platform-appropriate working chord.
+`resolveAppShortcut` accepts Ctrl as the primary modifier for the digit and
+comma chords only (`src/lib/appShortcuts.ts:40`, `:53`, `:72`); `n`/`t`
+require Meta. The shared port adds Shift-Cmd-H for Home (the documented web
+chord; `RESEARCH_HOME_SHORTCUT_LABEL` is `⇧⌘H`) and keeps Ctrl-1..9 for tabs;
+Cmd variants are honored where the browser lets them through. Cmd-F and the
+bare H/A/E keys are not app shortcuts: DOM search and the highlight actions
+handle them (`shared/research/highlights.ts`). Shift-Cmd-E is
+`toggleArtifactPanel` (renamed from the desktop's `toggleSourceBrowser`).
 
 Command palette (`features/palette`): Research section (one entry per tree,
 "N running" hint) and Actions section (Home, Toggle sidebar, Settings),
@@ -221,8 +223,10 @@ at medium). Slash commands are not ported.
 The client imports types and pure logic from `@session/shared`; it must not
 duplicate any of it. Modules ported into `shared` are listed in
 `00-plan.md` Phase 1. Client-only modules ported from `src/lib/`: `clipboard`
-(minus the Tauri branch), `transcriptSearch`, `composerTextarea`,
-`diagramLightbox`, `imageLightbox`, `windowFocus` (reduced to
+(minus the Tauri branch), `transcriptSearch`, the DOM half of
+`composerTextarea` (`growComposerTextarea`; the height math is in shared),
+the `localStorage` layers of `researchNavigation` and `researchFolders`,
+`wikilinkClickContext`/`neighborText` from `encyclopedia`, `diagramLightbox`, `imageLightbox`, `windowFocus` (reduced to
 `document.hasFocus()`), `sidebarControls`. The `humanBrowser*` modules are dropped.
 
 ## 8. Persistence keys (replacing the desktop list)

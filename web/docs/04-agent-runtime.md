@@ -16,8 +16,10 @@ pages, tweet attachments.
 
 ## 1. Models
 
-Registered in code (`packages/shared/src/models.ts`) and exposed by
-`system.runtimeConfig`:
+Registered in code (`packages/shared/src/models/registry.ts`, which also
+carries per-model prices per million tokens used for
+`usage_events.cost_estimate_micros`: Gemini 0.75/3.75, DeepSeek 0.15/0.60,
+Luna 0.20/1.20, Fable 10/50) and exposed by `system.runtimeConfig`:
 
 | id | Model | Route | AI SDK provider | Access | Search |
 | --- | --- | --- | --- | --- | --- |

@@ -4,3 +4,4 @@ coverage/
 .data/
 docs/
 package-lock.json
+packages/shared/test/fixtures/

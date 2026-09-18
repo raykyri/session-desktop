@@ -127,8 +127,9 @@ failed, first calls `encyclopedia.requestPage` with the source context:
 `{ nodeId, treeId, question: node.prompt, excerpt: <surrounding block text>,
 siblingTerms: <other wikilink terms in that block> }` (from a page:
 `pageSlug` instead of node/tree). The block text is taken from the nearest
-block-level ancestor of the clicked link, wikilinks stripped, capped at 4,000
-chars (server also caps).
+block-level ancestor of the clicked link, wikilinks stripped, capped at 1,500
+chars by the client (`shared` constant); the server stores excerpts up to
+4,000 chars (`encyclopedia.rs:40-48`).
 
 Generation (server, `04-agent-runtime.md` §9): `gemini-flash` with
 `Output.object`; `PAGE_LINKING_INSTRUCTION`; `split_title` tolerance;
