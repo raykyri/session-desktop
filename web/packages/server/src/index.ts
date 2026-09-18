@@ -1,10 +1,6 @@
-import { serve } from "@hono/node-server";
+// The process entry point. `main()` lives in its own module so tests and
+// tooling can import the boot steps without starting a server.
 
-import { app } from "./app.js";
+import { main } from "./main.js";
 
-const hostname = process.env["HOST"] ?? "127.0.0.1";
-const port = Number(process.env["PORT"] ?? 8787);
-
-serve({ fetch: app.fetch, hostname, port }, (info) => {
-  console.log(`session-server listening on http://${hostname}:${info.port}`);
-});
+main();

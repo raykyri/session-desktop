@@ -1,0 +1,150 @@
+// `GET /a/:token` on the artifact origin (`11-artifacts-and-browser.md` §2).
+//
+// The session cookie never reaches this host, so the token is the whole
+// authorization. Everything else here exists to keep a document the user
+// uploaded from executing as a page: no sniffing, no referrer, HTML served as
+// text, and a per-response CSP that allows nothing.
+
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
+import { Readable } from "node:stream";
+
+import { artifacts } from "@session/db";
+import { Hono } from "hono";
+
+import type { AppEnv, ServerDeps } from "../deps.js";
+
+/** `default-src 'none'` with inline styles for the rendered text page; no
+ * script, no frames, no network. `frame-ancestors` names the app rather than
+ * relying on `X-Frame-Options`, which cannot express "this one other origin"
+ * and would block the preview panel outright. */
+export function artifactContentSecurityPolicy(publicOrigin: string): string {
+  return `default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors ${publicOrigin}`;
+}
+
+/** Types the panel can show inline. Everything else downloads. */
+const INLINE_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "text/plain",
+]);
+
+/** HTML is never served as HTML: an uploaded page would otherwise run on the
+ * artifact origin, which is same-origin with the preview iframe. */
+export function servedContentType(mime: string): string {
+  if (mime === "text/html" || mime === "application/xhtml+xml" || mime.startsWith("text/")) {
+    return "text/plain; charset=utf-8";
+  }
+  return mime;
+}
+
+/**
+ * `Content-Disposition` for a name the user chose. Header values are
+ * ByteStrings, so a name with a character outside Latin-1 would throw where
+ * the response is constructed; the ASCII form is the fallback and `filename*`
+ * (RFC 5987) carries the real one.
+ */
+export function contentDisposition(inline: boolean, name: string): string {
+  const cleaned = name.replace(/\p{Cc}/gu, "").trim();
+  const fallback = cleaned.replace(/[^\u0020-\u007e]/g, "_").replace(/["\\]/g, "");
+  const disposition = inline ? "inline" : "attachment";
+  return `${disposition}; filename="${fallback === "" ? "document" : fallback}"; filename*=UTF-8''${encodeURIComponent(cleaned === "" ? "document" : cleaned)}`;
+}
+
+export interface ByteRange {
+  start: number;
+  end: number;
+}
+
+/** A single `bytes=` range, which is all a `<iframe>` or a PDF viewer asks
+ * for. Multipart ranges are declined by ignoring the header. */
+export function parseRange(header: string | undefined, size: number): ByteRange | null {
+  if (!header) {
+    return null;
+  }
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match) {
+    return null;
+  }
+  const [, rawStart, rawEnd] = match;
+  if (rawStart === "" && rawEnd === "") {
+    return null;
+  }
+  if (rawStart === "") {
+    const length = Number(rawEnd);
+    // An empty file has no satisfiable suffix range, and a zero-length one is
+    // not a range at all; both are answered with the whole (empty) body.
+    if (length <= 0 || size === 0) {
+      return null;
+    }
+    return { start: Math.max(0, size - length), end: size - 1 };
+  }
+  const start = Number(rawStart);
+  const end = rawEnd === "" ? size - 1 : Math.min(Number(rawEnd), size - 1);
+  if (!Number.isFinite(start) || start > end || start >= size) {
+    return null;
+  }
+  return { start, end };
+}
+
+export function artifactRoutes(deps: ServerDeps): Hono<AppEnv> {
+  const app = new Hono<AppEnv>();
+
+  app.get("/a/:token", async (c) => {
+    // One hostname serves the app and the artifacts in development; the check
+    // is what keeps a token URL from resolving on the app origin, where the
+    // session cookie would be attached.
+    const host = c.req.header("host");
+    if (host !== deps.config.artifactHost) {
+      return c.text("not found\n", 404);
+    }
+    const resolved = artifacts.resolveToken(deps.db, c.req.param("token"));
+    if (!resolved) {
+      // 410: the client re-mints rather than treating it as a broken link.
+      return c.text("this preview link expired\n", 410);
+    }
+    let size: number;
+    try {
+      size = (await stat(resolved.storagePath)).size;
+    } catch {
+      return c.text("not found\n", 404);
+    }
+
+    const contentType = servedContentType(resolved.mime);
+    const headers: Record<string, string> = {
+      "Content-Type": contentType,
+      "Content-Security-Policy": artifactContentSecurityPolicy(deps.config.publicOrigin),
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Cache-Control": "private, no-store",
+      "Accept-Ranges": "bytes",
+      "Content-Disposition": contentDisposition(
+        INLINE_TYPES.has(contentType.split(";")[0] ?? ""),
+        resolved.name,
+      ),
+    };
+
+    const range = parseRange(c.req.header("range"), size);
+    if (range) {
+      const length = range.end - range.start + 1;
+      const stream = createReadStream(resolved.storagePath, { start: range.start, end: range.end });
+      return new Response(Readable.toWeb(stream) as ReadableStream, {
+        status: 206,
+        headers: {
+          ...headers,
+          "Content-Range": `bytes ${range.start}-${range.end}/${size}`,
+          "Content-Length": String(length),
+        },
+      });
+    }
+    const stream = createReadStream(resolved.storagePath);
+    return new Response(Readable.toWeb(stream) as ReadableStream, {
+      status: 200,
+      headers: { ...headers, "Content-Length": String(size) },
+    });
+  });
+
+  return app;
+}
