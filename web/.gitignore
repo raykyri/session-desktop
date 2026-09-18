@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.data/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+playwright-report/
+test-results/
+.env

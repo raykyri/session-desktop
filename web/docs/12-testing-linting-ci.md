@@ -34,7 +34,7 @@ Per package `ava.config.mjs`:
 ```js
 export default {
   files: ["test/**/*.test.ts", "test/**/*.test.tsx"],
-  extensions: { ts: "module", tsx: "module" },
+  extensions: ["ts", "tsx"],                 // AVA 8 takes an array; tsx handles ESM
   nodeArguments: ["--import=tsx"],           // client adds "--import=./test/setup.ts"
   environmentVariables: { TSX_TSCONFIG_PATH: "tsconfig.test.json" },
   timeout: "60s",

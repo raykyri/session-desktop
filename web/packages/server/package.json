@@ -1,0 +1,22 @@
+{
+  "name": "@session/server",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "esbuild src/index.ts --bundle --packages=external --platform=node --format=esm --target=node22 --outfile=dist/server.mjs",
+    "start": "node dist/server.mjs",
+    "test": "ava"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@session/db": "*",
+    "@session/shared": "*",
+    "hono": "^4.13.8"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
