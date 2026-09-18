@@ -68,6 +68,90 @@ skip:
 For GitHub locally, register the callback as
 `http://localhost:1480/auth/github/callback`.
 
+### Getting the Vertex service-account key
+
+Gemini is reached through Vertex AI, which authenticates with a Google Cloud
+service account rather than an API key. Four steps, once.
+
+**1. Pick or create a project**, and note its id — the id, not the display
+name. It becomes `GOOGLE_VERTEX_PROJECT`.
+
+```sh
+gcloud projects create session-web --name="Session Web"   # or use an existing one
+gcloud config set project session-web
+```
+
+Billing must be enabled on it; Vertex refuses requests otherwise, and the
+error arrives at the first question rather than at boot.
+
+**2. Enable the API.**
+
+```sh
+gcloud services enable aiplatform.googleapis.com
+```
+
+Console equivalent:
+`https://console.cloud.google.com/apis/library/aiplatform.googleapis.com`
+
+**3. Create a service account and give it exactly one role.** `Vertex AI User`
+(`roles/aiplatform.user`) is enough to call models — do not grant `Vertex AI
+Administrator`, which can also manage infrastructure.
+
+```sh
+gcloud iam service-accounts create session-web   --display-name="Session Web"
+
+gcloud projects add-iam-policy-binding session-web   --member="serviceAccount:session-web@session-web.iam.gserviceaccount.com"   --role="roles/aiplatform.user"
+```
+
+Console equivalent:
+`https://console.cloud.google.com/iam-admin/serviceaccounts` → Create service
+account → grant `Vertex AI User`.
+
+**4. Download a JSON key.**
+
+```sh
+gcloud iam service-accounts keys create vertex-key.json   --iam-account=session-web@session-web.iam.gserviceaccount.com
+```
+
+Console equivalent: open the service account → Keys → Add key → Create new key
+→ JSON.
+
+That file is a long-lived credential for your project. Keep it out of the
+repository, and delete the local copy once it is in `.env` or Fly secrets.
+
+**Putting it in place.** The app wants the whole key as one line. Locally:
+
+```sh
+echo "GOOGLE_APPLICATION_CREDENTIALS_JSON=$(jq -c . vertex-key.json | sed "s/'/'\\''/g")" >> .env
+echo "GOOGLE_VERTEX_PROJECT=session-web" >> .env
+```
+
+In production it is a Fly secret (§3 below). At boot the server writes it to
+`$SESSION_DATA_DIR/tmp/vertex-credentials.json` with mode `0600` and points
+the Vertex client at that file, so the key never sits in an environment
+variable a child process could inherit.
+
+`GOOGLE_VERTEX_LOCATION` defaults to `global`, which is the right answer
+unless you have a data-residency requirement; a regional endpoint restricts
+which models you can reach.
+
+**Checking it works.** Start the server with fixtures off and look at the
+models the client is offered — Gemini appears as available only when the
+credential resolved:
+
+```sh
+curl -fsS -b jar -H 'x-requested-with: session' \
+  'http://localhost:1480/api/trpc/system.runtimeConfig?input=%7B%7D' \
+  | jq '.result.data.models[] | {id, available}'
+```
+
+A credential that is present but wrong fails at the first question instead,
+with the provider's own message on the failed node.
+
+**Rotating it.** Create a second key, replace the secret, redeploy, then
+delete the old key with `gcloud iam service-accounts keys delete`. Keys do not
+expire on their own.
+
 ### Everyday commands
 
 | Command                              | What it does                                               |
