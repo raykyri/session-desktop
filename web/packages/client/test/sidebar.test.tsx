@@ -18,7 +18,7 @@ import {
 import { useNavigationStore } from "../src/stores/navigation.js";
 import { useSelectionStore } from "../src/stores/selection.js";
 
-import { summary } from "./fixtures.js";
+import { summary, tree } from "./fixtures.js";
 import { renderApp, waitUntil } from "./helpers.js";
 import { activityPage, serverSettings, workspace, WORKSPACE_ID } from "./phase6Fixtures.js";
 import { createTrpcStub } from "./trpcStub.js";
@@ -134,6 +134,30 @@ test("a workspace with running threads refuses removal, and one without does not
   t.regex(String(workspaceRemovalRefusal(3)), /^3 research threads/);
 });
 
+/**
+ * Records which elements take pointer capture while `run` executes, and puts
+ * the prototype back afterwards. `setPointerCapture` is a jsdom stub
+ * (`test/setup.ts`), so swapping it is the only way to see the call the row's
+ * drag handler would make.
+ */
+function capturedPointersDuring(run: () => void): Element[] {
+  const captured: Element[] = [];
+  const original = Object.getOwnPropertyDescriptor(Element.prototype, "setPointerCapture");
+  Object.defineProperty(Element.prototype, "setPointerCapture", {
+    configurable: true,
+    writable: true,
+    value: function record(this: Element) {
+      captured.push(this);
+    },
+  });
+  try {
+    run();
+  } finally {
+    if (original) Object.defineProperty(Element.prototype, "setPointerCapture", original);
+  }
+  return captured;
+}
+
 const sidebarResponses = {
   "workspaces.list": [workspace()],
   "settings.get": serverSettings(),
@@ -232,5 +256,113 @@ test.serial("creating a workspace names it and sends the name", async (t) => {
   t.deepEqual(app.trpc.calls.find((call) => call.path === "workspaces.create")?.input, {
     name: "Reading",
   });
+  app.unmount();
+});
+
+test.serial("a mouse press on a row menu item stays with the menu", async (t) => {
+  useSelectionStore.getState().clear();
+  useNavigationStore.getState().setVisibilityFilter("active");
+  const app = await renderApp("/", {
+    responses: {
+      ...sidebarResponses,
+      "research.listTrees": [
+        summary({ id: "t1", title: "First", workspaceId: WORKSPACE_ID, runningCount: 0 }),
+      ],
+      "research.archiveTree": tree({ id: "t1", workspaceId: WORKSPACE_ID, archivedAt: 2 }),
+    },
+  });
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByTitle("First").length > 0,
+    "the sidebar lists a thread",
+  );
+  const row = screen.getAllByTitle("First")[0] as HTMLElement;
+
+  fireEvent.click(screen.getByLabelText("Actions for First"));
+  await waitUntil(
+    t,
+    () => screen.queryAllByRole("menuitem", { name: /^Archive/ }).length > 0,
+    "the row's ⋯ menu opens",
+  );
+  const archive = screen.getByRole("menuitem", { name: /^Archive/ });
+  // The premise of the guard: Base UI portals the popup, so the item is a React
+  // descendant of the row but not a DOM one.
+  t.false(row.contains(archive), "the item is outside the row in the DOM");
+
+  // The row's drag handler must ignore the press React replays onto it. Taking
+  // pointer capture here is what used to retarget the release to the row and
+  // leave the browser dispatching `click` on `<body>` instead of on the item.
+  const captured = capturedPointersDuring(() => {
+    fireEvent.pointerDown(archive, { button: 0, pointerId: 1 });
+  });
+  t.deepEqual(captured, [], "no row captures the pointer");
+
+  fireEvent.click(archive);
+  await waitUntil(
+    t,
+    () => app.trpc.calls.some((call) => call.path === "research.archiveTree"),
+    "the item's own action runs",
+  );
+  t.false(
+    document.body.textContent?.includes("could not be loaded") ?? false,
+    "and the thread behind the menu is not opened by the same click",
+  );
+  app.unmount();
+});
+
+test.serial("a press on the row itself still arms the drag", async (t) => {
+  useSelectionStore.getState().clear();
+  useNavigationStore.getState().setVisibilityFilter("active");
+  const app = await renderApp("/", { responses: sidebarResponses });
+
+  await waitUntil(t, () => screen.queryAllByTitle("First").length > 0, "the sidebar lists threads");
+  const row = screen.getAllByTitle("First")[0] as HTMLElement;
+
+  const captured = capturedPointersDuring(() => {
+    fireEvent.pointerDown(row, { button: 0, pointerId: 1 });
+  });
+  t.deepEqual(captured, [row], "the row takes the pointer for its own press");
+  app.unmount();
+});
+
+test.serial("a row badges an unseen update, an unseen failure, and a run in flight", async (t) => {
+  useSelectionStore.getState().clear();
+  useNavigationStore.getState().setVisibilityFilter("active");
+  const app = await renderApp("/", {
+    responses: {
+      ...sidebarResponses,
+      "research.listTrees": [
+        summary({ id: "t1", title: "Quiet", workspaceId: WORKSPACE_ID, runningCount: 0 }),
+        summary({
+          id: "t2",
+          title: "Updated",
+          workspaceId: WORKSPACE_ID,
+          runningCount: 0,
+          hasUnseenUpdate: true,
+        }),
+        summary({
+          id: "t3",
+          title: "Broken",
+          workspaceId: WORKSPACE_ID,
+          runningCount: 0,
+          // A failure outranks an update: the row has one slot and the worse
+          // news is what a reader has to act on.
+          hasUnseenUpdate: true,
+          hasUnseenFailure: true,
+        }),
+        summary({ id: "t4", title: "Busy", workspaceId: WORKSPACE_ID, runningCount: 2 }),
+      ],
+    },
+  });
+
+  await waitUntil(t, () => screen.queryAllByTitle("Quiet").length > 0, "the sidebar lists threads");
+  const badge = (title: string) =>
+    (screen.getAllByTitle(title)[0] as HTMLElement).querySelector("span[title]")?.textContent ?? "";
+
+  t.is(badge("Quiet"), "", "a seen, idle thread carries no badge");
+  t.is(badge("Updated"), "New");
+  t.is(badge("Broken"), "!");
+  t.is(badge("Busy"), "2", "a run in flight shows its count instead");
   app.unmount();
 });

@@ -316,11 +316,40 @@ hidden. `web/.env.example` documents every variable with comments.
 
 ## 12. Test fixtures
 
-Recorded AI SDK stream-part sequences per provider (success, tool loop,
-grounding, provider-executed tools with streamed inputs, refusal, rate limit,
-context overflow, mid-stream error, abort, wall-clock timeout) drive the loop
-in tests through a fixture provider implementing the AI SDK provider
-interface. Real-provider smoke tests run manually with credentials.
+Recorded AI SDK stream-part sequences drive the loop through a fixture
+provider implementing the AI SDK provider interface
+(`packages/server/src/runs/fixtureProvider.ts`). One JSON file per scenario in
+`packages/server/src/runs/fixtures/`, and `listFixtureScenarios()` is what the
+test asserting the set is complete reads:
+
+| Scenario | What it replays |
+| --- | --- |
+| `success` | A plain answer, no tools |
+| `success-with-tools` | Two tool steps and a cited answer; the default |
+| `provider-tools` | Provider-executed tools with streamed inputs |
+| `grounded` | Google Search grounding metadata |
+| `refusal` | A refusal finish |
+| `rate-limit` | A 429 before the first chunk |
+| `context-too-long` | The provider's context-overflow error |
+| `mid-stream-error` | A failure after deltas have been committed |
+| `abort` | A stream cut off part way |
+| `timeout` | A wall-clock timeout |
+| `slow-stream` | Paced deltas for the coalescing tests |
+| `paced-answer` | `slow-stream` stretched to the seconds an end-to-end reload needs |
+| `long-answer` | An answer past `MIN_RECAP_CHARS`, so a run schedules a recap |
+
+A test names a scenario through `setFixtureScenario`; a run started through
+the UI names one by putting a `fixture:<scenario>` marker in the prompt, which
+is what lets a developer drive any of these by hand under
+`SESSION_FIXTURE_PROVIDERS=1`.
+
+The same module owns the network the tools see under fixture providers:
+`fixturePageFetch` answers `web_fetch` with the recorded page in process and
+`fixtureLookup` stands in for DNS, so a fixture run makes no outbound request
+(`12-testing-linting-ci.md` §3.6). `web_search` registers only when a vendor
+key is set, so it is simply absent there.
+
+Real-provider smoke tests run manually with credentials.
 
 ## 13. Implementation notes
 

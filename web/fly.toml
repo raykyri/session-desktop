@@ -1,6 +1,9 @@
 # Fly configuration (`docs/13-deployment-fly.md` §1, §2).
 #
-#   fly deploy -c web/fly.toml
+#   fly deploy web -c web/fly.toml
+#
+# The positional `web` is the build context; without it flyctl hands Docker
+# the repository root, where `package.json` is the desktop's.
 #
 # Secrets (never here): GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
 # GOOGLE_APPLICATION_CREDENTIALS_JSON, OPENROUTER_API_KEY, ANTHROPIC_API_KEY,

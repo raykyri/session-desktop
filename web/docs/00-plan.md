@@ -214,47 +214,197 @@ Spec: `13-deployment-fly.md`.
 
 ## 8. Parity checklist
 
-Home and feeds
-- Compose and launch with a model choice (Fable hidden for non-admins;
-  Gemini grounded variant available) and attached documents; draft survives
-  reload.
-- Mixed activity feed with keyset pagination, load older, retry, refresh,
-  new-activity button, restored scroll anchor.
-- Query cards with children, recap, follow and bookmark, context menu with
-  Generate summary.
-- Journal link and X post cards with hydration, menu keycaps, undo delete;
-  adding a link or X URL from the composer (web addition).
-- Bookmarks tab; Highlights tab with day headers, refresh, and focus scroll.
-- Report import; no agent setup guide (models are always configured).
+Walked against the implemented code and the test suites at the end of Phase 9.
+A line is **verified** when every clause in it is implemented *and* named by a
+test; **partial** when it is implemented but some clause has no direct
+coverage, or a clause is incomplete; **missing** when it is not built. Counts:
+14 verified, 4 partial, 0 missing.
 
-Research document
-- Streaming answer with tool activity, thinking indicator, collapsed-answer
-  projection, sources footer, document chips; flash-free swap to the durable
-  snapshot; reload and second tab agree.
-- Queue position; `interrupted` with auto-resume; Retry on terminal states.
-- Follow-up composer with model choice, inline continuation (one slot),
-  branching cards, highlight-anchored asks with connectors.
-- Highlights create/remove/merge/focus; Ask and Expand.
-- Retry, cancel, rename, delete branch, delete tree, archive/restore.
-- Recap dialog (generate and apply); title generation.
-- Node history and swipe; browser history across pages; DOM search;
-  lightboxes; math; wikilinks to encyclopedia pages.
+Client tests are AVA files under `packages/client/test/`, server tests under
+`packages/server/test/`, shared under `packages/shared/test/`, and end-to-end
+specs under `e2e/`.
 
-Sidebar and organization
-- Workspaces and folders as before; unseen badges; shortcuts.
+### Home and feeds
 
-Encyclopedia
-- List, page view with Term line, backlinks, rewrite, delete; generated on
-  `gemini-flash`.
+- [x] **Verified** — Compose and launch with a model choice (Fable hidden for
+      non-admins; Gemini grounded variant available) and attached documents;
+      draft survives reload.
+      `features/composer/ResearchQueryComposer.tsx`; `composer.test.tsx`
+      ("Tab steps to the next launchable model and wraps", "the model list
+      hides admin-only models from everyone else", "the draft keeps the
+      prompt, the model and the attached document ids"); `admin.spec.ts` both
+      tests; `artifacts.spec.ts` attaches through this composer;
+      `library.spec.ts` "a half-written question survives a reload".
+- [ ] **Partial** — Mixed activity feed with keyset pagination, load older,
+      retry, refresh, new-activity button, restored scroll anchor.
+      All implemented in `features/home/ActivityFeed.tsx` and
+      `useActivityFeedState.ts`. Pagination is covered by `feed.test.tsx` "a
+      page with a cursor offers older activity, and fetches it once asked",
+      and the new-activity count by "only items that arrived above the
+      reader's row are counted as new". The error-state Retry button, the
+      Refresh button, the sticky new-activity button, and scroll-anchor
+      restoration have no test that drives them through the DOM.
+- [x] **Verified** — Query cards with children, recap, follow and bookmark,
+      context menu with Generate summary.
+      `features/home/ResearchQueryCard.tsx`; `feed.test.tsx` "a query card
+      renders its recap and its follow-up questions" and "a card's menu writes
+      the star it offers, and offers no folder row";
+      `research.dialogs.test.tsx` covers the Generate summary row;
+      `library.spec.ts` drives Bookmark and its two feeds.
+- [x] **Verified** — Journal link and X post cards with hydration, menu
+      keycaps, undo delete; adding a link or X URL from the composer (web
+      addition).
+      `features/journal/JournalEntryCard.tsx`, `entryMenu.ts`,
+      `server/trpc/routers/journal.ts`; `feed.test.tsx` "the journal menu
+      offers what the entry can actually do", "a hydrated post's canonical
+      permalink is what the menu acts on", "an entry whose stored URL is not
+      navigable has nothing to open", "removing a journal entry offers an undo
+      that restores the same row"; `composer.test.tsx` "a bare URL is saved to
+      the journal instead of launching a run"; `packages/server/test/journal.test.ts`.
+- [ ] **Partial** — Bookmarks tab; Highlights tab with day headers, refresh,
+      and focus scroll.
+      `routes/bookmarks.tsx`, `features/highlights/HighlightsFeed.tsx`;
+      `highlights.test.tsx` "day headers are named in local time, not in UTC"
+      and "grouping keeps the server's order and starts a section per day";
+      `research.document.test.tsx` "?highlight= scrolls the passage into view
+      and clears the param"; `research.spec.ts` and `library.spec.ts` for the
+      two tabs. The Highlights Refresh button is implemented and untested.
+- [x] **Verified** — Report import; no agent setup guide (models are always
+      configured).
+      `features/import/ReportImport.tsx`; `library.spec.ts` "a Markdown report
+      is imported as a thread"; `packages/server/test/research.test.ts` for
+      `importReport`. The desktop's `AgentSetupGuide` is deliberately absent —
+      an unconfigured model is listed and disabled, never a setup prompt.
 
-Settings and account
-- GitHub sign-in and sign-out; admin user list with model access shown.
-- Appearance, theme, font, text size, hints, motion, Cmd-Enter, research
-  instructions, notifications.
+### Research document
 
-Operations
-- One Fly app with volume, backups, health check; deploy during a run
-  resumes it.
+- [x] **Verified** — Streaming answer with tool activity, thinking indicator,
+      collapsed-answer projection, sources footer, document chips; flash-free
+      swap to the durable snapshot; reload and second tab agree.
+      `features/research/{AnswerPane,ThreadSegment,TimelineItem,SourcesFooter,DocumentChips}.tsx`,
+      `timeline.ts`; `research.timeline.test.ts` (collapsed-answer window and
+      source extraction), `nodeContent.test.tsx` "a live run keeps its turns
+      across the swap to the durable snapshot", `research.document.test.tsx`
+      "the durable snapshot replaces the live buffer without remounting";
+      `research.spec.ts` both streaming tests.
+- [x] **Verified** — Queue position; `interrupted` with auto-resume; Retry on
+      terminal states.
+      `AnswerPane.tsx`, `server/runs/service.ts`, `server/main.ts`;
+      `research.document.test.tsx` "a queued run shows its position in the
+      queue", "a claimed queued run drops the position", "an interrupted run
+      says so and offers Retry"; `runs.failures.test.ts` "admission holds runs
+      above the per-user cap and reports queue positions" and "drain
+      interrupts open runs and boot resumes them without duplicate turns".
+- [x] **Verified** — Follow-up composer with model choice, inline continuation
+      (one slot), branching cards, highlight-anchored asks with connectors.
+      `FollowupComposer.tsx`, `FollowupRail.tsx`, `layout.ts`;
+      `research.document.test.tsx` "a complete tail enables Send and forks
+      inline on Cmd-Enter", "Shift-Cmd-Enter branches whatever the selected
+      mode is", "a branch card opens its own page and the breadcrumb leads
+      back"; `research.layout.test.ts` for the connectors;
+      `packages/server/test/research.test.ts` "a second inline follow-up is a
+      conflict and a foreign id is not found"; `research.spec.ts` "a highlight
+      anchors an ask, and the follow-up runs on another model".
+- [x] **Verified** — Highlights create/remove/merge/focus; Ask and Expand.
+      `ResearchPage.tsx`, `SelectionPopover.tsx`, `capture.ts`;
+      `research.selection.test.ts` "a selection overlapping saved highlights
+      offers the merged annotation" and "snapping expands a partial word to
+      the whole word"; `packages/shared/test/researchNavigation.test.ts` for
+      removal targeting; `research.spec.ts` for the whole gesture.
+- [x] **Verified** — Retry, cancel, rename, delete branch, delete tree,
+      archive/restore.
+      `features/research/{treeMenu,DeleteBranchDialog}.tsx`;
+      `research.dialogs.test.tsx` (rename, delete-branch naming, the
+      in-flight refusals, archived-row menu); `packages/server/test/research.test.ts`
+      "a research thread runs from launch to archive"; `library.spec.ts` for
+      archiving from the sidebar row menu.
+- [x] **Verified** — Recap dialog (generate and apply); title generation.
+      `RecapDialog.tsx`, `server/runs/metadata.ts`;
+      `research.dialogs.test.tsx` "the recap dialog generates a candidate and
+      applies it", "editing the instructions retracts the candidate", "the
+      recap dialog surfaces a refusal"; `runs.metadata.test.ts` "a recap
+      candidate is generated, previewed, and applied" and "a title is
+      generated, sanitized, and given to the thread"; `research.spec.ts` "the
+      recap dialog generates a candidate and applies it".
+- [ ] **Partial** — Node history and swipe; browser history across pages; DOM
+      search; lightboxes; math; wikilinks to encyclopedia pages.
+      All implemented. Node and cross-page history are covered by
+      `packages/shared/test/researchHistory.test.ts`; math and wikilinks by
+      `markdown.test.tsx`; the wikilink route end to end by `library.spec.ts`.
+      Swipe is covered only as pure logic (`researchSwipeDirection`,
+      `researchSwipeTailCapturesWheel`) and not as a wheel gesture on the page;
+      `ui/DomSearchBar.tsx` has only a style-contract test, not a
+      find-in-page behavior test; `ui/Lightboxes.tsx` has no test of its own.
+
+### Sidebar and organization
+
+- [x] **Verified** — Workspaces and folders as before; unseen badges;
+      shortcuts.
+      `features/sidebar/*`, `packages/shared/src/research/folders.ts`;
+      `sidebar.test.tsx` ("a section reorder moves only its own rows", the
+      folder-write rollback tests, "Cmd-click builds a selection and its menu
+      acts on the whole of it", "creating a workspace names it and sends the
+      name", "a row badges an unseen update, an unseen failure, and a run in
+      flight", "a mouse press on a row menu item stays with the menu", "a
+      press on the row itself still arms the drag");
+      `packages/shared/test/researchFolders.test.ts`; `shortcuts.test.tsx`.
+
+### Encyclopedia
+
+- [x] **Verified** — List, page view with Term line, backlinks, rewrite,
+      delete; generated on `gemini-flash`.
+      `features/encyclopedia/*`, `server/runs/metadata.ts`;
+      `encyclopedia.test.tsx` ("the sidebar lists pages alphabetically once
+      one exists", "a page names its term when the model titled it
+      differently", the backlink labelling tests, "a failed page shows the
+      error and offers a rewrite"); `runs.metadata.test.ts` "an encyclopedia
+      page is generated, split, and linked" asserts `model: "gemini-flash"`;
+      `procedures.test.ts` covers `encyclopedia.deletePage`, which has no
+      client-side test of the confirm dialog.
+
+### Settings and account
+
+- [x] **Verified** — GitHub sign-in and sign-out; admin user list with model
+      access shown.
+      `routes/admin.tsx`, `app/layout/Sidebar.tsx`;
+      `packages/server/test/auth.test.ts` ("the start route stores state and a
+      verifier and redirects to GitHub", "the callback exchanges the code,
+      creates the account, and sets the cookie", "signing out ends this
+      session and leaves the account's others"); `auth.test.tsx` "a signed-out
+      visit to a shell route lands on sign-in"; `admin.test.tsx` "the token
+      column counts what the limit counts, not thinking twice" and "the model
+      access column names the gated model only where it applies".
+- [x] **Verified** — Appearance, theme, font, text size, hints, motion,
+      Cmd-Enter, research instructions, notifications.
+      `routes/settings.tsx`; `themeEffects.test.tsx` (the six attribute
+      tests), `settingsSync.test.tsx` (server copy, debounce, failure),
+      `stores.settings.test.ts`; `library.spec.ts` "the appearance settings
+      survive a reload".
+
+### Operations
+
+- [ ] **Partial** — One Fly app with volume, backups, health check; deploy
+      during a run resumes it.
+      `fly.toml`, `Dockerfile`, `litestream.yml`, `scripts/entrypoint.sh`,
+      `scripts/backup-documents.sh`, `docs/runbooks/restore.md`. The
+      resume-across-a-deploy behavior is covered by
+      `runs.failures.test.ts` "drain interrupts open runs and boot resumes
+      them without duplicate turns", and `/healthz` by `app.test.ts`. What no
+      test can stand in for is the real thing: creating the app, the volume,
+      and the certificates, setting the secrets, deploying during a live run,
+      and rehearsing a restore (`13-deployment-fly.md` §2, §6). Those remain
+      operator steps.
+
+### Not built, by decision
+
+- `account.delete` (`06-auth-and-users.md` §7) — no `account` namespace and no
+  client surface; removing an account is an operator job against the database
+  and `/data/documents/<userId>`.
+- The reader view for `http(s)` sources (`11-artifacts-and-browser.md` §4) —
+  behind `SESSION_READER_VIEW`, and never part of this checklist.
+- Per-account daily limit *enforcement* is off by default
+  (`SESSION_ENFORCE_LIMITS=0`); the schema, the admission check, and the admin
+  levers exist (`06-auth-and-users.md` §8).
 
 ## 9. Open questions
 

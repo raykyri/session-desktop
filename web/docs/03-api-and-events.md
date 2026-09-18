@@ -39,7 +39,13 @@ each replaces; "—" means new.
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
 | `system.health` | Q | → `{ ok, version }` | — (`/healthz` also served plainly) |
-| `system.runtimeConfig` | Q | → `RuntimeConfig { models: ModelInfo[], limits, features: { webSearch: boolean, searchVendor?: "parallel" \| "tavily" } }` (gated models omitted for non-admins) | `get_runtime_config`, `probe_agent_adapters` |
+| `system.runtimeConfig` | Q | → `RuntimeConfig { version, models: ModelInfo[], limits, features: { webSearch: boolean, searchVendor?: "parallel" \| "tavily", artifactOrigin: string } }` (gated models omitted for non-admins) | `get_runtime_config`, `probe_agent_adapters` |
+
+`features.artifactOrigin` is the origin the preview panel frames
+(`11-artifacts-and-browser.md` §3). The client needs it to validate
+`event.origin` on the `session-preview-scroll` bridge, and it is a property of
+the deployment rather than of the build, so it travels with the rest of the
+runtime configuration instead of a build-time constant.
 
 ### `auth`
 | `auth.me` | Q | → `User | null` | `github_account_get` |

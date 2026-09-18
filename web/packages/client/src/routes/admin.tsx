@@ -6,6 +6,7 @@
 // control: every procedure behind it is an `adminProcedure`, which answers
 // `FORBIDDEN` whatever the client chooses to show (`06-auth-and-users.md` §8).
 
+import { modelsFor } from "@session/shared";
 import { useState } from "react";
 
 import { useAdminUsers, useCreateInvites, useMe, useSetUserLimits } from "../api/queries.js";
@@ -21,6 +22,19 @@ function formatTokens(value: number): string {
 /** `costEstimateMicros` is millionths of a dollar. */
 function formatCost(micros: number): string {
   return `$${(micros / 1_000_000).toFixed(2)}`;
+}
+
+/**
+ * What the account may launch: the registry filtered by the admin flag
+ * (`04-agent-runtime.md` §1). Derived here from the row's own `isAdmin`
+ * rather than sent by `admin.listUsers`, because the gate is a pure function
+ * of that flag and a second copy on the wire could disagree with the one the
+ * server enforces at admission.
+ */
+function modelAccess(user: { isAdmin: boolean }): string {
+  return modelsFor(user)
+    .map((model) => model.label)
+    .join(", ");
 }
 
 function LimitCell({
@@ -90,6 +104,9 @@ export function AdminPage() {
                     Account
                   </th>
                   <th scope="col" className="py-1 font-medium">
+                    Model access
+                  </th>
+                  <th scope="col" className="py-1 font-medium">
                     Runs today
                   </th>
                   <th scope="col" className="py-1 font-medium">
@@ -118,6 +135,17 @@ export function AdminPage() {
                       <td className="py-1.5">
                         {user.login}
                         {user.isAdmin ? <span className="text-fg-muted"> · admin</span> : null}
+                      </td>
+                      <td className="py-1.5">
+                        {/* The full list is the title: five labels is wider
+                            than the column, and the gated one is what an
+                            administrator is looking for. */}
+                        <span
+                          className="text-fg-muted block max-w-60 truncate"
+                          title={modelAccess(user)}
+                        >
+                          {modelAccess(user)}
+                        </span>
                       </td>
                       <td className="py-1.5">{user.usage.runs}</td>
                       <td className="py-1.5">{formatTokens(tokens)}</td>

@@ -5,7 +5,11 @@ import type { SessionEvent } from "@session/shared";
 import type { ExecutionContext } from "ava";
 
 import type { ServerDeps } from "../src/deps.js";
-import { setFixtureScenario } from "../src/runs/fixtureProvider.js";
+import {
+  FIXTURE_PAGE_URL,
+  fixturePageResponse,
+  setFixtureScenario,
+} from "../src/runs/fixtureProvider.js";
 import type { Providers } from "../src/runs/providers.js";
 import type { AgentRunsService } from "../src/runs/service.js";
 import { createRunsService } from "../src/runs/service.js";
@@ -26,7 +30,7 @@ export interface FakeNetwork {
   calls: { url: string; method: string }[];
 }
 
-export const FIXTURE_PAGE_URL = "https://example.com/bloom-filters";
+export { FIXTURE_PAGE_URL };
 
 export function fakeNetwork(overrides: Record<string, () => Response> = {}): FakeNetwork {
   const calls: { url: string; method: string }[] = [];
@@ -58,15 +62,7 @@ export function fakeNetwork(overrides: Record<string, () => Response> = {}): Fak
       );
     }
     if (url.startsWith(FIXTURE_PAGE_URL)) {
-      return Promise.resolve(
-        new Response(
-          "<html><head><title>Bloom filters explained</title></head><body><article>" +
-            "<p>A Bloom filter answers set membership with a tunable false-positive rate.</p>" +
-            "<p>It never reports a false negative, which is what makes it useful as a pre-filter.</p>" +
-            "</article></body></html>",
-          { headers: { "content-type": "text/html; charset=utf-8" } },
-        ),
-      );
+      return Promise.resolve(fixturePageResponse());
     }
     return Promise.resolve(new Response("not found", { status: 404 }));
   };

@@ -8,24 +8,33 @@
 | Lint | ESLint 9 flat config | `typescript-eslint` recommended-type-checked, `eslint-plugin-react-hooks`, `eslint-plugin-jsx-a11y`, `eslint-plugin-import-x` (package boundaries per ADR-1 and `no-unused-modules` for `shared` and `db`), custom rule banning color literals in `className`/`style` |
 | Format | Prettier + `prettier-plugin-tailwindcss` | `printWidth 100`, checked in CI |
 | Unit and integration | AVA | one `ava.config.mjs` per package; TypeScript through `--import=tsx`; `client` registers `global-jsdom` and the SVG stub loader in a setup file |
-| E2E | Playwright | Chromium and WebKit; server started with fixture providers (`SESSION_FIXTURE_PROVIDERS=1`) and a temp DB |
+| E2E | Playwright | Chromium by default (`--project=chromium`), WebKit opt-in; one real server started with fixture providers (`SESSION_FIXTURE_PROVIDERS=1`), the test-only sign-in route, and a temp data directory |
 | Schema drift | `drizzle-kit check` + generate-and-diff | fails CI when a schema change lacks a migration |
 | Security | `npm audit --omit=dev` (report), dependency review action | |
 
 Root scripts (`web/package.json`):
 
 ```
-dev              concurrently: server (tsx watch) + client (vite)
-build            tsc -b && vite build (client) && esbuild bundle (server)
-test             npm run test --workspaces --if-present   (AVA per package)
-test:e2e         playwright test
-lint             eslint . && prettier --check .
-check            tsc -b && lint && drizzle-kit check
-db:generate      drizzle-kit generate
-db:migrate       node packages/db/bin/migrate.js
-db:studio        drizzle-kit studio
-db:admin         node packages/db/bin/admin.js <github login>   (sets users.is_admin)
+dev                       concurrently: server (tsx watch) + client (vite)
+build                     tsc -b && npm run build --workspaces --if-present
+                          (vite build for the client, esbuild bundle for the server)
+test                      npm run test --workspaces --if-present   (AVA per package)
+test:e2e                  playwright test --project=chromium
+test:e2e:webkit           playwright test --project=webkit
+test:e2e:update-snapshots playwright test --project=chromium --update-snapshots
+lint                      eslint . && prettier --check .
+check                     tsc -b && lint && db:check
+db:check                  drizzle-kit check
+db:generate               drizzle-kit generate
+db:migrate                tsx packages/db/bin/migrate.ts
+db:studio                 drizzle-kit studio
+db:admin                  tsx packages/db/bin/admin.ts <github login>   (sets users.is_admin)
 ```
+
+`test:e2e` pins the project because the Chromium browser is the only one CI
+installs and the only one carrying visual baselines; a machine with WebKit can
+run the same behavioral specs through `test:e2e:webkit`. The Playwright web
+server command builds the client itself, so `test:e2e` needs no prior build.
 
 ## 2. AVA configuration
 
@@ -132,32 +141,60 @@ batches and asserting cache and store state.
 
 ### 3.6 E2E (Playwright)
 
-Against a real server with fixture providers, a temp DB, and a test-only
-`/auth/test-login` route (`SESSION_TEST_AUTH=1`): sign in → attach a PDF and
-create research → watch stream and sources → reload mid-stream and see the
-same content → open a second tab and see it progress → highlight → ask →
-inline follow-up on a different model → recap → bookmark → Home and
-Bookmarks → archive → import report → encyclopedia page from a wikilink →
-settings theme switch persists across reload → document preview opens in
-the iframe → admin sees gated models, non-admin does not. Visual snapshots of Home and a document in all
-four theme × appearance combinations.
+One real server per run, with fixture providers, a temp data directory wiped
+before the run, and the test-only `/auth/test-login` route
+(`SESSION_TEST_AUTH=1`). The server serves a client build through its own
+static middleware — the deployment's arrangement rather than Vite's — and the
+build is part of the web-server command, so `npm run test:e2e` is one step. One
+worker, because the specs share the server and the run queue is per user. Each
+spec signs in as its own login so the accounts, and therefore the feeds, stay
+apart.
+
+Fixture scenarios are chosen by a `fixture:<scenario>` marker in the prompt
+(`packages/server/src/runs/fixtureProvider.ts`). Unmarked prompts replay
+`success-with-tools`, which is the default; the suite also names
+`paced-answer` (deltas stretched over seconds, so "mid-stream" is a state a
+browser can be in) and `long-answer` (past `MIN_RECAP_CHARS`, so a run
+schedules a recap). Nothing in the suite reaches the network: the fixture
+providers answer for the models, `web_search` is unregistered because no
+search key is set, and `web_fetch` reads the fixture's page in process
+(`fixturePageFetch`).
+
+| Spec | What it drives |
+| --- | --- |
+| `research.spec.ts` | Launch and stream; the Sources footer; the durable read after a reload equals the streamed text; a reload mid-stream plus a second tab on the same run; select → Highlight → the Highlights feed; Ask docked to the passage, a branch card in the rail, then an inline follow-up on a different model; the recap dialog generating and applying; the sign-in gate |
+| `library.spec.ts` | Bookmark → Home and Bookmarks; archive from the sidebar row menu and the archived filter; Markdown report import; a wikilink opening its encyclopedia page; the appearance and theme pickers surviving a reload |
+| `artifacts.spec.ts` | Attach a Markdown document, open its chip into the preview panel, framed from the artifact origin with the expected `sandbox`; Reload, Shift-Cmd-E, Escape |
+| `admin.spec.ts` | `claude-fable` offered in the composer's model menu to an admin and absent for everyone else |
+| `visual.spec.ts` | Screenshots of Home and a finished document in all four theme × appearance combinations. Tagged `@visual`, Chromium only, baselines committed per platform under `e2e/__screenshots__/{platform}/`; a platform without a set skips rather than fails |
 
 ## 4. CI (GitHub Actions, `.github/workflows/web.yml`)
 
 Triggers on pushes and PRs touching `web/**`. Jobs:
 
-1. `check`: `npm ci`, `npm run check`.
-2. `test`: `npm test` per package with coverage (`c8`) upload; Node 22.
-3. `e2e`: build, install Playwright browsers, run e2e, upload traces on
-   failure.
-4. `docker`: build the image (no push); on `main`, `flyctl deploy` with
-   `FLY_API_TOKEN` behind a manual approval environment.
+1. `check`: `npm ci`, `npm run check` (`tsc -b`, ESLint, Prettier,
+   `drizzle-kit check`).
+2. `test`: `npm ci`, `npm test` — AVA in every package. Node 22.
+3. `e2e`: `npm ci`, `npx playwright install --with-deps chromium`, then
+   `npm run test:e2e`, which builds the client and starts the server itself.
+   `web/test-results` and `web/playwright-report` are uploaded on failure.
+   Only Chromium is installed, so the `@visual` test skips itself for want of
+   Linux baselines; to add them, run `npm run test:e2e:update-snapshots` on
+   that image and commit `web/e2e/__screenshots__/linux/`.
+4. `docker`: build `web/Dockerfile` with the Buildx GitHub cache and never
+   push it, so a Dockerfile change cannot break a deploy unnoticed.
+5. `deploy`: on a push to `main` only, needs all four, and runs
+   `flyctl deploy web --remote-only -c web/fly.toml` in the `production`
+   environment, whose reviewers hold `FLY_API_TOKEN`.
 
 The desktop's root `npm run preflight` is unaffected except that
 `test:integration` (the landing server test) is removed.
 
 ## 5. Coverage targets
 
-`shared` ≥ 90% lines, `db` ≥ 85%, `server/runs` ≥ 80% with fixture
-providers, rest of `server` ≥ 75%; client components covered by behavior tests rather than a line
-target. Coverage is reported, not gating, except for `shared`.
+Intended: `shared` ≥ 90% lines, `db` ≥ 85%, `server/runs` ≥ 80% with fixture
+providers, rest of `server` ≥ 75%; client components covered by behavior tests
+rather than a line target.
+
+Not yet wired: no coverage reporter runs in CI, so these are targets to aim a
+later change at rather than numbers anything enforces today.

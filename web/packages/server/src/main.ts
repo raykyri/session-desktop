@@ -20,6 +20,7 @@ import { EventBus } from "./events/bus.js";
 import { createReadiness } from "./health.js";
 import { defaultLogger, type Logger } from "./logger.js";
 import { RateLimiter } from "./middleware/rateLimit.js";
+import { fixtureLookup, fixturePageFetch } from "./runs/fixtureProvider.js";
 import { createRunsService } from "./runs/service.js";
 
 /**
@@ -110,7 +111,18 @@ export function main(): RunningServer {
   // The agent loop is constructed before reconciliation so the nodes the last
   // process left behind are picked up by the claim loop as soon as they are
   // back in the queue (`05-run-lifecycle-and-streaming.md` §7).
-  const runs = createRunsService({ config, db, eventBus, logger });
+  const runs = createRunsService({
+    config,
+    db,
+    eventBus,
+    logger,
+    // Under fixture providers the tools read the fixture's page rather than
+    // the network, so an end-to-end run makes no outbound request at all
+    // (`12-testing-linting-ci.md` §3.6).
+    ...(config.fixtureProviders
+      ? { fetch: fixturePageFetch, toolOverrides: { lookup: fixtureLookup } }
+      : {}),
+  });
   const deps: ServerDeps = { config, db, eventBus, runs, logger };
   reconcileRuns(deps, logger);
 

@@ -51,7 +51,11 @@ builds that omit those artifacts.
   `aka-com/session`. Existing builds continue to request the endpoint embedded in
   those builds. The former `qmux.app` landing-page origin and its Fly app name are
   no longer deployment contracts: the landing site is removed and the web
-  application in `web/` is deployed on its own Fly app at `https://session.dev`.
+  application in `web/` is deployed on its own Fly app, `session-dev`, serving
+  `https://session.dev` and `https://artifacts.session.dev`
+  (`web/docs/13-deployment-fly.md`). It shares no build, no release channel,
+  and no data with the desktop app; `fly deploy web -c web/fly.toml` is its
+  whole deployment, and the desktop updater is unaffected by it.
 
 ## Native support after terminal removal
 

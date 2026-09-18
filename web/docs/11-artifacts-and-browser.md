@@ -61,9 +61,10 @@ to documents:
 
 `features/artifacts/ArtifactPanel.tsx` keeps the overlay UX that is pure
 DOM (`browserOverlay.ts` semantics, tested): a floating panel over the right
-part of the stage, address row showing the file path, Reload, Open in new
-tab, Close (Shift-Cmd-E toggles), resize edge and corner, full-width toggle,
-one panel at a time (`closeAllBrowserOverlays`, `browserOverlayShowsLink`).
+part of the stage, an address row showing the document's name — a web upload
+has no path a reader would recognise — Reload, Open in new tab, Close
+(Shift-Cmd-E toggles), resize edge and corner, full-width toggle, one panel at
+a time (`closeAllBrowserOverlays`, `browserOverlayShowsLink`).
 Body: `<iframe sandbox="allow-scripts allow-same-origin"
 referrerpolicy="no-referrer" src=<artifact url>>` — `allow-same-origin`
 refers to the artifact origin, not the app's, which is why the separate
