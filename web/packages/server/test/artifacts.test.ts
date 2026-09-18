@@ -204,3 +204,27 @@ test("the renderer and its helpers are conservative on their own", (t) => {
   t.is(readFont("../../package.json"), null);
   t.not(readFont("ValleySans-Variable.woff2"), null);
 });
+
+test("the artifact host serves artifacts and refuses the rest of the app", async (t) => {
+  const harness = createHarness(t);
+
+  // The two routes that belong to this host still answer on it.
+  const font = await harness.app.request("/__session/fonts/DMSans-Variable-Latin.woff2", {
+    headers: { Host: ARTIFACT_HOST },
+  });
+  t.is(font.status, 200);
+
+  // Everything else is the app. An auth route answering here is what would let
+  // a session cookie be set on the origin the preview iframe is same-origin
+  // with, which is the property the whole split exists to hold.
+  for (const path of ["/", "/healthz", "/auth/github", "/uploads", "/api/trpc/auth.me"]) {
+    const onArtifactHost = await harness.app.request(path, { headers: { Host: ARTIFACT_HOST } });
+    t.is(onArtifactHost.status, 404, `${path} must not answer on the artifact host`);
+  }
+
+  // The same paths are unaffected on the app host.
+  const health = await harness.app.request("/healthz", {
+    headers: { Host: new URL(PUBLIC_ORIGIN).host },
+  });
+  t.is(health.status, 200);
+});
