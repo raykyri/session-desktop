@@ -114,6 +114,40 @@ export default tseslint.config(
     },
   },
   ...boundaries,
+  // The one sanctioned crossing of the client ──► server boundary: the tRPC
+  // client is typed by the router, and `verbatimModuleSyntax` erases an
+  // `import type` at emit, so the bundle carries no edge (ADR-1,
+  // `07-client-architecture.md` §1). It is scoped to this file and to the
+  // `/router` subpath, and `@session/db` stays forbidden, so the exception
+  // cannot widen into a runtime dependency without an edit here.
+  {
+    files: ["packages/client/src/api/trpc.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@session/db", "@session/db/*"],
+              message:
+                "packages/client may not import @session/db (ADR-1 package dependency graph).",
+            },
+            {
+              group: ["@session/server", "@session/server/*", "!@session/server/router"],
+              message:
+                "packages/client may import only the AppRouter type from @session/server/router (ADR-1).",
+            },
+            {
+              // A value import would be a runtime edge; only the type is erased.
+              group: ["@session/server/router"],
+              allowTypeImports: true,
+              message: "@session/server/router may be imported only as a type (ADR-1).",
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     files: ["**/*.{js,mjs,cjs}"],
     languageOptions: { ecmaVersion: 2023, sourceType: "module" },

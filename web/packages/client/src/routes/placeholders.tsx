@@ -59,11 +59,3 @@ export function EncyclopediaPage() {
     </Page>
   );
 }
-
-export function AdminPage() {
-  return (
-    <Page title="Admin">
-      <Pending>The user list arrives with Phase 6.</Pending>
-    </Page>
-  );
-}

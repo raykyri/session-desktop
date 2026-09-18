@@ -1,16 +1,28 @@
+import type { QueryClient } from "@tanstack/react-query";
 import {
   Outlet,
-  createRootRoute,
+  createRootRouteWithContext,
   createRoute,
   createRouter,
   lazyRouteComponent,
+  redirect,
   type Router,
 } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { queryKeys } from "../api/cache.js";
+import {
+  encyclopediaQueryOptions,
+  foldersQueryOptions,
+  meQueryOptions,
+  runtimeConfigQueryOptions,
+  settingsQueryOptions,
+  treesQueryOptions,
+  workspacesQueryOptions,
+} from "../api/queries.js";
+import { AdminPage } from "../routes/admin.js";
 import { LoginPage } from "../routes/login.js";
 import {
-  AdminPage,
   BookmarksPage,
   EncyclopediaPage,
   HighlightsPage,
@@ -20,6 +32,7 @@ import {
 import { SettingsPage } from "../routes/settings.js";
 
 import { AppShell } from "./layout/AppShell.js";
+import { appQueryClient } from "./queryClient.js";
 
 // The desktop persisted several view coordinates in localStorage; on the web
 // they are search params, so a reload, a deep link and a second tab all agree
@@ -38,24 +51,78 @@ const researchSearchSchema = z.object({
   filter: z.enum(["active", "archived", "all"]).optional(),
 });
 
+/** What the server puts on `/login` when a sign-in attempt is refused
+ * (`server/src/auth/github.ts:signInError`), plus the path the guard wants to
+ * return to and an invite code a user was sent. */
+const loginSearchSchema = z.object({
+  error: z.string().optional(),
+  invite: z.string().optional(),
+  redirect: z.string().optional(),
+});
+
 export type WorkspaceScopeSearch = z.infer<typeof workspaceScopeSearchSchema>;
 export type ResearchSearch = z.infer<typeof researchSearchSchema>;
+export type LoginSearch = z.infer<typeof loginSearchSchema>;
 
-const rootRoute = createRootRoute({ component: Outlet });
+export interface RouterContext {
+  queryClient: QueryClient;
+}
+
+const rootRoute = createRootRouteWithContext<RouterContext>()({ component: Outlet });
 
 /** Sign-in renders outside the shell: there is no sidebar, no stage header and
  * no subscription before a session exists. */
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
+  validateSearch: loginSearchSchema,
   component: LoginPage,
 });
 
+/**
+ * The six queries the shell renders from, warmed in parallel once a session
+ * exists (07 §2). Fire-and-forget: the first paint is the sidebar frame and
+ * the route's own skeleton, and blocking it on six round trips would trade a
+ * fast empty shell for a slow blank page. Failures land on the queries
+ * themselves, which is where a view shows them.
+ */
+async function warmBootQueries(client: QueryClient): Promise<void> {
+  const settings = await client.ensureQueryData(settingsQueryOptions()).catch(() => null);
+  await Promise.all([
+    client.prefetchQuery(runtimeConfigQueryOptions()),
+    client.prefetchQuery(workspacesQueryOptions()),
+  ]);
+  const workspaces = client.getQueryData<{ id: string }[]>(queryKeys.workspaces());
+  const workspaceId = settings?.defaultWorkspaceId ?? workspaces?.[0]?.id ?? null;
+  if (workspaceId === null) return;
+  await Promise.all([
+    client.prefetchQuery(treesQueryOptions({ workspaceId })),
+    client.prefetchQuery(foldersQueryOptions(workspaceId)),
+    client.prefetchQuery(encyclopediaQueryOptions(workspaceId)),
+  ]);
+}
+
 /** A pathless layout route, so every signed-in view shares one `AppShell`
- * instance — and therefore one keydown listener and one overlay stack. */
+ * instance — and therefore one keydown listener, one overlay stack and one
+ * event subscription. */
 const shellRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: "_shell",
+  beforeLoad: async ({ context, location }) => {
+    // The kitchen sink is a design-system page with no server state; it is
+    // reachable in development without an account (07 §3).
+    if (location.pathname.startsWith("/dev/")) return;
+    const me = await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
+    if (!me) {
+      // The router's control-flow signal is a plain object, not an `Error`;
+      // throwing it is how `beforeLoad` redirects.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw redirect({ to: "/login", search: { redirect: location.href } });
+    }
+  },
+  loader: ({ context }) => {
+    void warmBootQueries(context.queryClient);
+  },
   component: AppShell,
 });
 
@@ -136,14 +203,20 @@ export const routeTree = rootRoute.addChildren([
   ]),
 ]);
 
+export interface AppRouterOptions extends Partial<Parameters<typeof createRouter>[0]> {
+  queryClient?: QueryClient;
+}
+
 export function createAppRouter(
-  options?: Partial<Parameters<typeof createRouter>[0]>,
+  options: AppRouterOptions = {},
 ): Router<typeof routeTree, "never", true> {
-  return createRouter({ routeTree, defaultPreload: "intent", ...options }) as Router<
-    typeof routeTree,
-    "never",
-    true
-  >;
+  const { queryClient = appQueryClient, ...rest } = options;
+  return createRouter({
+    routeTree,
+    defaultPreload: "intent",
+    context: { queryClient },
+    ...rest,
+  }) as Router<typeof routeTree, "never", true>;
 }
 
 export const router = createAppRouter();

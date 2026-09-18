@@ -7,7 +7,10 @@ document is the contract frozen at the end of Phase 3.
 
 ## 1. Transport
 
-- Base path `/api/trpc`. Batching enabled for queries; mutations unbatched.
+- Base path `/api/trpc`. Queries and mutations share one `httpBatchLink`;
+  `events.subscribe` has its own `httpSubscriptionLink` (an `EventSource`, so a
+  GET, which the origin check guards and the `X-Requested-With` header does
+  not apply to).
 - Auth: session cookie (`06-auth-and-users.md`). Every procedure except
   `auth.*` and `system.health` requires a user; `ctx.userId` scopes all repos.
 - Reconnection: the subscription carries no replay cursor. Run events carry
@@ -48,7 +51,7 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `settings.get` | Q | → `UserSettings & { researchLaunchInstruction, defaultWorkspaceId, defaultModel }` | localStorage `session.settings.v1`, `research_launch_instruction_get` |
 | `settings.update` | M | partial → full | `research_launch_instruction_set` |
 | `drafts.get` / `drafts.set` | Q/M | `{ key }` / `{ key, value }` | `interface_draft_get/set` |
-| `usage.summary` | Q | `{ days? }` → `UsageSummary` (tokens and cost estimate by model) | — (new) |
+| `usage.summary` | Q | `{ days? }` → `UsageSummary` (one UTC day of token counts, an estimated cost, and the account's limits; no per-model breakdown) | — (new) |
 | `admin.listUsers` | Q (admin) | → `User[]` with usage totals and limits | — (new) |
 | `admin.setLimits` | M (admin) | `{ userId, dailyTokens?, dailyRuns? }` | — (new) |
 | `admin.createInvites` | M (admin) | `{ count }` → codes | — (new; also grants `invites_remaining` to users later) |
