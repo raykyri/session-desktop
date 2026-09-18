@@ -74,14 +74,18 @@ test.serial(
       "a terminal node update follows the finish",
     );
 
+    // Contiguous, not merely increasing: the client applies run events in
+    // sequence and treats a hole as a lost event — it freezes its buffer and
+    // refetches the node (`client/src/stores/liveTurns.ts`). A write that takes
+    // a number without publishing an event is therefore a bug, not a gap the
+    // client can absorb.
     const seqs = seqsOf(events);
     t.true(seqs.length > 3);
     t.deepEqual(
       seqs,
-      [...seqs].sort((left, right) => left - right),
-      "run event sequences never go backwards",
+      seqs.map((_, index) => index + 1),
+      "run event sequences are contiguous from the node's initial seq of 0",
     );
-    t.is(new Set(seqs).size, seqs.length, "no sequence number is reused");
 
     // The node settled with a durable answer.
     const node = nodesRepo.get(harness.db, user.id, nodeId);
@@ -569,3 +573,41 @@ test.serial(
     t.regex(node?.error ?? "", /kept rate limiting/);
   },
 );
+
+test.serial("a long paced answer emits a sequence with no hole in it", async (t) => {
+  // `paced-answer` streams for several seconds, so the in-flight checkpoint
+  // fires many times inside one attempt. A checkpoint writes a row and
+  // publishes nothing; before this was fixed it also *allocated* a sequence
+  // number, and the next event the client saw was `lastSeq + 2`. The client
+  // reads that as a lost event: it freezes the buffer, sets `gap`, and
+  // refetches `getNodeContent` — once a second, per watched node, for the
+  // length of the run. The settle did the same thing once more.
+  setFixtureScenario("paced-answer");
+  const harness = createAgentHarness(t);
+  const { user, caller, nodeId } = await launch(harness, "pacer", "Explain consistent hashing");
+  const events = collectEvents(t, harness, user.id, [nodeId]);
+
+  await harness.settle();
+
+  const seqs = seqsOf(events);
+  t.true(seqs.length > 10, "the paced stream produced a long run of events");
+  t.deepEqual(
+    seqs,
+    seqs.map((_, index) => index + 1),
+    "every sequence number the client is shown is one past the last",
+  );
+
+  const finished = [...events].reverse().find((event) => event.type === "research.run.finished");
+  t.is(finished?.payload["status"], "complete");
+  t.is(finished?.payload["seq"], seqs.at(-1), "the finish carries the last number spent");
+
+  // And the node's own counter agrees with the last event, so a client that
+  // seeds from the snapshot after the run does not re-apply or skip anything.
+  const content = await caller.research.getNodeContent({ nodeId });
+  t.is(content.seq, seqs.at(-1));
+
+  // Many checkpoints were actually written: the fixture is long enough that
+  // the one-second checkpoint interval elapsed repeatedly.
+  const attempts = runsRepo.listAttempts(harness.db, nodeId);
+  t.is(attempts.length, 1);
+});

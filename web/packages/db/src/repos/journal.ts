@@ -65,18 +65,40 @@ export function add(db: SessionDatabase, userId: string, entry: JournalEntry): J
   });
 }
 
-/** Puts an entry back after an undo. Idempotent: restoring twice is one
- * entry, which is what an undo that was clicked twice should mean. */
+/**
+ * Puts an entry back after an undo. Idempotent: restoring twice is one entry,
+ * which is what an undo that was clicked twice should mean.
+ *
+ * The upsert is scoped to the account, as `update` is. Entry ids come from the
+ * client — an undo replays the entry the client was holding — so an unscoped
+ * `on conflict (id) do update` lets one account overwrite another's entry by
+ * restoring something carrying its id (`06-auth-and-users.md` §4). A conflict
+ * on someone else's id is a miss, not a takeover.
+ */
 export function restore(db: SessionDatabase, userId: string, entry: JournalEntry): boolean {
   const parsed = journalEntrySchema.parse(entry);
   const values = projection(userId, parsed);
-  const row = db
-    .insert(journalEntries)
-    .values(values)
-    .onConflictDoUpdate({ target: journalEntries.id, set: values })
-    .returning({ id: journalEntries.id })
-    .get();
-  return row !== undefined;
+  return transact(db, (tx) => {
+    const existing = tx
+      .select({ userId: journalEntries.userId })
+      .from(journalEntries)
+      .where(eq(journalEntries.id, parsed.id))
+      .get();
+    if (existing && existing.userId !== userId) {
+      return false;
+    }
+    const row = tx
+      .insert(journalEntries)
+      .values(values)
+      .onConflictDoUpdate({
+        target: journalEntries.id,
+        set: values,
+        where: eq(journalEntries.userId, userId),
+      })
+      .returning({ id: journalEntries.id })
+      .get();
+    return row !== undefined;
+  });
 }
 
 /** Replaces an existing entry — a hydration result, mostly. Returns false when

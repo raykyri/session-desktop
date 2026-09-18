@@ -1,13 +1,29 @@
 // A pass over the rest of the procedure inventory (`03-api-and-events.md` §2)
 // and over the boot steps (`13-deployment-fly.md` §5).
 
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 
 import { nodes, snapshots } from "@session/db";
+import type { TRPCError } from "@trpc/server";
 import test from "ava";
 
 import { createLogger } from "../src/logger.js";
-import { prepareDataDirectories, reconcileRuns, writeVertexCredentials } from "../src/main.js";
+import {
+  BACKUP_DOCUMENTS_SCRIPT,
+  DAILY_INTERVAL_MS,
+  SHUTDOWN_DEADLINE_MS,
+  backupDocuments,
+  drainWithin,
+  prepareDataDirectories,
+  reconcileRuns,
+  writeVertexCredentials,
+} from "../src/main.js";
+import {
+  INTERNAL_MESSAGE,
+  repo,
+  trpcCodeForError,
+  trpcCodeForRepoError,
+} from "../src/trpc/errors.js";
 import { searchFeatures } from "../src/trpc/routers/system.js";
 
 import { ARTIFACT_ORIGIN, answerTurn, createHarness, testConfig } from "./helpers.js";
@@ -215,4 +231,121 @@ test("a default workspace must be one of the account's own", async (t) => {
   });
   t.is((await caller.settings.update({ defaultWorkspaceId: own.id })).defaultWorkspaceId, own.id);
   t.is((await caller.settings.update({ defaultWorkspaceId: null })).defaultWorkspaceId, null);
+});
+
+test("a queued backlog is capped per account", async (t) => {
+  // `SESSION_RUNS_PER_USER` bounds how many of an account's runs hold a
+  // provider stream at once; nothing bounded how many were admitted, and a
+  // queued node is spend the deployment has already committed to. The harness
+  // never claims, so everything launched here stays waiting.
+  const harness = createHarness(t, { env: { SESSION_QUEUED_PER_USER: "3" } });
+  const user = harness.addUser("flooder");
+  const caller = harness.caller(user);
+  const workspace = await caller.workspaces.ensureDefault();
+  const launch = (n: number) =>
+    caller.research.createTree({
+      prompt: `Question ${n}`,
+      model: "gemini-flash",
+      workspaceId: workspace.id,
+    });
+
+  await launch(1);
+  await launch(2);
+  await launch(3);
+  const refused = await t.throwsAsync<TRPCError>(launch(4));
+  t.is(refused?.code, "TOO_MANY_REQUESTS");
+  t.regex(refused?.message ?? "", /3 questions waiting/);
+
+  // The cap is on what is waiting, not on what has ever been launched: a node
+  // that leaves the queue makes room.
+  const trees = await caller.research.listTrees({ workspaceId: workspace.id });
+  await caller.research.cancelNode({ nodeId: trees[0]?.rootNodeId ?? "" });
+  await t.notThrowsAsync(launch(5), "a finished question frees its slot");
+
+  // An admin is exempt, as they are from the daily limits.
+  const admin = harness.addUser("cap-admin", { isAdmin: true });
+  const adminCaller = harness.caller(admin);
+  const adminWorkspace = await adminCaller.workspaces.ensureDefault();
+  for (let index = 0; index < 5; index += 1) {
+    await adminCaller.research.createTree({
+      prompt: `Admin question ${index}`,
+      model: "gemini-flash",
+      workspaceId: adminWorkspace.id,
+    });
+  }
+  t.pass();
+});
+
+test("an unclassified failure is INTERNAL_SERVER_ERROR and keeps its message off the wire", (t) => {
+  // A driver failure — a full volume, a busy timeout, a corrupt page — has a
+  // message written for a DBA and matches none of the copy patterns. Answering
+  // `BAD_REQUEST` with that message blames the caller for the server's failure
+  // and hands out the schema, and it leaves the one class of error worth
+  // paging on indistinguishable from a typo in a form.
+  const sqlite = Object.assign(new Error("no such column: nodes.doesnt_exist"), {
+    name: "SqliteError",
+    code: "SQLITE_ERROR",
+  });
+  const full = Object.assign(new Error("database or disk is full"), { code: "SQLITE_FULL" });
+
+  for (const error of [sqlite, full, new TypeError("x.map is not a function")]) {
+    const thrown = t.throws<TRPCError>(() =>
+      repo(() => {
+        throw error;
+      }),
+    );
+    t.is(thrown?.code, "INTERNAL_SERVER_ERROR", `${error.name} is the server's fault`);
+    t.is(thrown?.message, INTERNAL_MESSAGE, "and its own message does not reach the client");
+    t.is(thrown?.cause, error, "the real error is kept for the log");
+  }
+
+  // Deliberate, user-facing refusals are unchanged.
+  t.is(trpcCodeForRepoError("research node abc was not found"), "NOT_FOUND");
+  t.is(trpcCodeForRepoError("a research node needs a title"), "BAD_REQUEST");
+  t.is(trpcCodeForError(new Error("a research node needs a title")), "BAD_REQUEST");
+  // The reorder's foreign-id message: the same answer as an absent one.
+  t.is(
+    trpcCodeForRepoError("research tree t1 is not in the requested sidebar section"),
+    "NOT_FOUND",
+  );
+});
+
+test("the drain is raced against a deadline so the WAL checkpoint always runs", async (t) => {
+  // Fly sends SIGKILL `kill_timeout` (30s) after SIGTERM. A provider that has
+  // stopped sending without closing its stream holds the drain open past that,
+  // the checkpoint never runs, and the next boot opens a database with an
+  // unclean log. What the deadline cuts short is recovered by
+  // `reconcileOnBoot`; a SIGKILL mid-checkpoint is not.
+  t.is(await drainWithin(() => Promise.resolve(), 50), true, "a prompt drain reports success");
+
+  const startedAt = Date.now();
+  const stuck = await drainWithin(() => new Promise<void>(() => undefined), 50);
+  t.is(stuck, false, "a drain that never finishes is abandoned");
+  t.true(Date.now() - startedAt < 1_000, "and abandoned at the deadline, not later");
+
+  // The deadline leaves room inside `kill_timeout` for the close and the
+  // checkpoint that follow it.
+  t.true(SHUTDOWN_DEADLINE_MS < 30_000);
+});
+
+test("the document backup is scheduled in process and is a no-op without a replica", async (t) => {
+  // `/data/documents` is files on a volume that Litestream does not replicate,
+  // so losing the volume loses every uploaded file. The script runs from here
+  // rather than from an external scheduler because the deployment is one
+  // machine holding one volume (`13-deployment-fly.md` §6).
+  t.is(DAILY_INTERVAL_MS, 24 * 60 * 60 * 1000);
+  t.true(statSync(BACKUP_DOCUMENTS_SCRIPT).isFile(), "the script resolves from this module");
+  // Executable, because it is run directly rather than through a shell.
+  t.is(statSync(BACKUP_DOCUMENTS_SCRIPT).mode & 0o111, 0o111);
+
+  const logs: string[] = [];
+  const logger = createLogger({
+    level: "error",
+    write: (line: string) => logs.push(line),
+  });
+  const withoutReplica = testConfig("/tmp/session-backup-config");
+  t.is(withoutReplica.documentsReplicaUrl, null);
+  t.is(withoutReplica.litestreamReplicaUrl, null);
+  await backupDocuments(withoutReplica, logger);
+  t.deepEqual(logs, [], "nothing is spawned and nothing is logged");
 });

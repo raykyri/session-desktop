@@ -26,6 +26,7 @@ import { RateLimiter } from "./middleware/rateLimit.js";
 import { requestContext } from "./middleware/requestId.js";
 import { securityHeaders } from "./middleware/security.js";
 import { clientStatic } from "./middleware/static.js";
+import type { AppContext } from "./trpc/base.js";
 import { createAppContext } from "./trpc/base.js";
 import { appRouter } from "./trpc/router.js";
 import { uploadRoutes } from "./uploads/route.js";
@@ -146,10 +147,21 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
           sessionToken: c.get("sessionToken"),
         }) as unknown as Record<string, unknown>;
       },
-      onError: ({ error, path }) => {
-        if (error.code === "INTERNAL_SERVER_ERROR") {
-          logger.error({ error, path }, "trpc procedure failed");
+      // Every failure the error table did not deliberately classify is logged
+      // at error level with the request id, through the per-request child
+      // logger the context carries: an unclassified error is by definition one
+      // nobody predicted, and `c.get("logger")` is what ties it to the request
+      // it broke. `logger` alone is the fallback for a failure thrown before
+      // the context existed.
+      onError: ({ error, path, type, ctx }) => {
+        if (error.code !== "INTERNAL_SERVER_ERROR") {
+          return;
         }
+        const requestLogger = (ctx as AppContext | undefined)?.logger ?? logger;
+        requestLogger.error(
+          { err: error.cause ?? error, path, type, code: error.code },
+          "trpc procedure failed",
+        );
       },
     }),
   );

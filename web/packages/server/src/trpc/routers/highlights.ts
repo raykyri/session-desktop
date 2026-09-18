@@ -1,6 +1,6 @@
 // `highlights` and `recaps` (`03-api-and-events.md` §2).
 
-import { highlights, recaps } from "@session/db";
+import { highlights, nodes, recaps } from "@session/db";
 import {
   DEFAULT_RECAP_INSTRUCTIONS,
   researchHighlightAnchorSchema,
@@ -12,7 +12,7 @@ import { z } from "zod";
 
 import { protectedProcedure, router } from "../base.js";
 import { publish } from "../emit.js";
-import { repo } from "../errors.js";
+import { repo, required } from "../errors.js";
 
 export const highlightsRouter = router({
   create: protectedProcedure
@@ -41,6 +41,14 @@ export const highlightsRouter = router({
   removeMany: protectedProcedure
     .input(z.object({ nodeId: z.string(), highlightIds: z.array(z.string()) }))
     .mutation(({ ctx, input }) => {
+      // The delete is already scoped to the account, so a foreign id removes
+      // nothing; the node is checked so the *answer* matches `remove`'s —
+      // `NOT_FOUND` for someone else's node rather than a silent empty list
+      // that reads like a successful no-op (`06-auth-and-users.md` §4).
+      required(
+        repo(() => nodes.get(ctx.db, ctx.user.id, input.nodeId)),
+        `research node ${input.nodeId} was not found`,
+      );
       const removed = repo(() =>
         highlights.removeMany(ctx.db, ctx.user.id, input.nodeId, input.highlightIds),
       );

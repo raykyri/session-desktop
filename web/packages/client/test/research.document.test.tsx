@@ -457,6 +457,32 @@ test.serial("a complete tail enables Send and forks inline on Cmd-Enter", async 
   });
 });
 
+test.serial("Shift-Tab leaves the follow-up composer instead of cycling models", async (t) => {
+  // Tab steps the model, which means the composer calls `preventDefault` on
+  // it. Doing the same to Shift-Tab is a keyboard trap: focus goes into the
+  // textarea and nothing takes it out again (WCAG 2.1.2).
+  const root = node({ id: "n1", status: "complete" });
+  await mount({
+    nodes: [root],
+    contentByNode: { n1: contentFor(root, [assistantTurn("t1", "An answer.")]) },
+  });
+  await waitUntil(
+    t,
+    () => screen.queryByLabelText("Follow-up question") !== null,
+    "the composer mounts",
+  );
+  const field = screen.getByLabelText("Follow-up question");
+
+  t.false(
+    fireEvent.keyDown(field, { key: "Tab" }),
+    "Tab is taken by the composer: two models are offered",
+  );
+  t.true(
+    fireEvent.keyDown(field, { key: "Tab", shiftKey: true }),
+    "Shift-Tab reaches the browser, so focus can move backwards out of the field",
+  );
+});
+
 test.serial("Shift-Cmd-Enter branches whatever the selected mode is", async (t) => {
   const root = node({ id: "n1", status: "complete" });
   const { trpc } = await mount({

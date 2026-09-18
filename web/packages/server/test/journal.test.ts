@@ -72,7 +72,10 @@ test("a plain URL becomes a link entry, and a bad URL is refused", async (t) => 
   });
   const removed = await caller.journal.remove({ id: entry.id });
   t.true(removed);
-  t.false(await caller.journal.remove({ id: entry.id }));
+  // An id that is gone and an id that was never this account's answer the same
+  // way, so a foreign id is never an existence oracle
+  // (`06-auth-and-users.md` §4). `update` has always answered like this.
+  await t.throwsAsync(caller.journal.remove({ id: entry.id }), { message: /was not found/ });
 });
 
 test("restore and update re-validate the URL they are handed", async (t) => {

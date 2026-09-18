@@ -88,6 +88,15 @@ export const journalRouter = router({
     .mutation(({ ctx, input }) => {
       const entry = storableEntry(input.entry);
       const restored = repo(() => journal.restore(ctx.db, ctx.user.id, entry));
+      if (!restored) {
+        // The only way an insert-or-update of one's own entry fails is that
+        // the id already belongs to another account. Answered as absence, and
+        // published to nobody (`06-auth-and-users.md` §4).
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `journal entry ${entry.id} was not found`,
+        });
+      }
       publish(ctx, "journal.entry.updated", { entry });
       return restored;
     }),
@@ -108,6 +117,13 @@ export const journalRouter = router({
     }),
 
   remove: protectedProcedure.input(z.object({ id: z.string() })).mutation(({ ctx, input }) => {
+    // Checked before the delete so an entry of another account's answers the
+    // same way an absent one does, rather than `false` — which reads to the
+    // client as "already gone" and is a different answer from "not yours".
+    required(
+      repo(() => journal.get(ctx.db, ctx.user.id, input.id)),
+      `journal entry ${input.id} was not found`,
+    );
     const removed = repo(() => journal.remove(ctx.db, ctx.user.id, input.id));
     if (removed) {
       publish(ctx, "journal.entry.removed", { id: input.id });

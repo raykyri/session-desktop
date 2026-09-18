@@ -64,6 +64,18 @@ export interface TurnWriteResult {
   attempt: number;
 }
 
+export interface CheckpointWrite extends TurnWrite {
+  /**
+   * The sequence number the run has already reached. A checkpoint publishes no
+   * event, so it must *record* the loop's counter rather than allocate a new
+   * one: allocating would leave a number no event ever carries, and the client
+   * requires the sequence it applies to be contiguous
+   * (`docs/03-api-and-events.md` §3). `advanceSeq` and the committed-turn path
+   * are the only allocators.
+   */
+  seq: number;
+}
+
 /**
  * Persists a finished turn and bumps `run_seq` in the same transaction, so a
  * client that has seen sequence `n` has seen exactly the turns written up to
@@ -82,9 +94,9 @@ export function commitTurn(db: SessionDatabase, userId: string, input: TurnWrite
 export function checkpointInFlight(
   db: SessionDatabase,
   userId: string,
-  input: TurnWrite,
+  input: CheckpointWrite,
 ): TurnWriteResult {
-  return writeTurn(db, userId, input, false);
+  return writeTurn(db, userId, input, false, input.seq);
 }
 
 function writeTurn(
@@ -92,6 +104,7 @@ function writeTurn(
   userId: string,
   input: TurnWrite,
   committed: boolean,
+  recordSeq?: number,
 ): TurnWriteResult {
   return transact(db, (tx) => {
     const node = requireNode(tx, userId, input.nodeId);
@@ -124,7 +137,10 @@ function writeTurn(
       )
       .get();
     const position = input.position ?? existing?.position ?? nextPosition(tx, node.id, attempt);
-    const seq = node.runSeq + 1;
+    // `recordSeq` writes a number the caller already owns; without one this is
+    // the allocator for a committed turn, whose event carries the number it
+    // takes here.
+    const seq = recordSeq === undefined ? node.runSeq + 1 : Math.max(recordSeq, node.runSeq);
     const at = now();
     tx.update(nodes).set({ runSeq: seq }).where(eq(nodes.id, node.id)).run();
     tx.insert(runTurns)

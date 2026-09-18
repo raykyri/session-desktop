@@ -2,7 +2,7 @@
 // (`04-agent-runtime.md` §9).
 
 import { encyclopedia, nodes as nodesRepo, snapshots as snapshotsRepo, usage } from "@session/db";
-import { MIN_RECAP_CHARS, normalizeRecap, recapJobKey } from "@session/shared";
+import { MIN_RECAP_CHARS, defaultTitle, normalizeRecap, recapJobKey } from "@session/shared";
 import test from "ava";
 
 import { setFixtureScenario } from "../src/runs/fixtureProvider.js";
@@ -219,4 +219,27 @@ test.serial("a grounded run records the searches the provider billed", async (t)
     .prepare(`SELECT count(*) AS n FROM usage_events WHERE user_id = ? AND kind = 'search'`)
     .get(user.id) as { n: number };
   t.is(searches.n, 2);
+});
+
+test.serial("a rename during title generation is not overwritten", async (t) => {
+  // The model takes seconds and the rename is a deliberate act; a generated
+  // title is a default, and a default must not replace a decision. The rename
+  // lands while `generateTitle` is awaiting the model, which is exactly the
+  // window a user hits by naming a thread as soon as its answer appears.
+  const harness = createAgentHarness(t);
+  const { user, caller, nodeId } = await completedNode(harness, "renamer");
+
+  const generating = caller.research.generateTitle({ nodeId });
+  const renamed = await caller.research.renameNode({ nodeId, title: "My own name" });
+  t.is(renamed.title, "My own name");
+
+  const returned = await generating;
+  t.is(returned, "My own name", "the generator reports the name that is actually set");
+  t.is(nodesRepo.get(harness.db, user.id, nodeId)?.title, "My own name");
+  // The thread rename rides along with the generated title, so skipping the
+  // generated title skips that too: the thread keeps the name it had rather
+  // than taking one the user did not ask for.
+  const treeId = nodesRepo.get(harness.db, user.id, nodeId)?.treeId ?? "";
+  const tree = (await caller.research.getTree({ treeId })).tree;
+  t.is(tree.title, defaultTitle("What is a bloom filter?"));
 });

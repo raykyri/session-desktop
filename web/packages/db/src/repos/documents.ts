@@ -188,6 +188,40 @@ export function readText(
     .map((row) => row.text);
 }
 
+/**
+ * Attaches documents to a node in display order, replacing any existing set —
+ * the body of `attach`, without a transaction of its own, for the repositories
+ * that create a node and attach its documents in one.
+ *
+ * Every id is checked against `userId` here rather than by the caller. A
+ * `node_documents` row written from an unchecked id is a cross-tenant write:
+ * the row is invisible to its owner, and `remove` refuses a document a node
+ * references, so one account could pin another account's file in place for
+ * good.
+ */
+export function attachWithin(
+  tx: SessionDatabase,
+  userId: string,
+  nodeId: string,
+  documentIds: readonly string[],
+): void {
+  const node = tx
+    .select({ id: nodes.id })
+    .from(nodes)
+    .where(and(eq(nodes.userId, userId), eq(nodes.id, nodeId)))
+    .get();
+  if (!node) {
+    throw new Error(`research node ${nodeId} was not found`);
+  }
+  tx.delete(nodeDocuments).where(eq(nodeDocuments.nodeId, nodeId)).run();
+  documentIds.forEach((documentId, position) => {
+    if (!get(tx, userId, documentId)) {
+      throw new Error(`document ${documentId} was not found`);
+    }
+    tx.insert(nodeDocuments).values({ nodeId, documentId, position }).run();
+  });
+}
+
 /** Attaches documents to a node in display order, replacing any existing set. */
 export function attach(
   db: SessionDatabase,
@@ -196,21 +230,7 @@ export function attach(
   documentIds: readonly string[],
 ): void {
   transact(db, (tx) => {
-    const node = tx
-      .select({ id: nodes.id })
-      .from(nodes)
-      .where(and(eq(nodes.userId, userId), eq(nodes.id, nodeId)))
-      .get();
-    if (!node) {
-      throw new Error(`research node ${nodeId} was not found`);
-    }
-    tx.delete(nodeDocuments).where(eq(nodeDocuments.nodeId, nodeId)).run();
-    documentIds.forEach((documentId, position) => {
-      if (!get(tx, userId, documentId)) {
-        throw new Error(`document ${documentId} was not found`);
-      }
-      tx.insert(nodeDocuments).values({ nodeId, documentId, position }).run();
-    });
+    attachWithin(tx, userId, nodeId, documentIds);
   });
 }
 
@@ -225,13 +245,47 @@ export function attachedTo(db: SessionDatabase, userId: string, nodeId: string):
     .map((row) => toDocumentInfo(row.document));
 }
 
+export interface DocumentRemoval {
+  removed: boolean;
+  /**
+   * Volume paths no row references any more. Deleting the row is only half of
+   * a delete: the bytes sit under `${SESSION_DATA_DIR}/documents/<user>/<sha>`
+   * and the per-user quota is computed from rows, so a delete-and-reupload
+   * cycle would leak disk without bound. The caller unlinks these — filesystem
+   * work has no place inside a SQLite transaction, and the database package
+   * has no business touching the volume (ADR-1).
+   */
+  orphanedPaths: string[];
+}
+
+/** The paths of `documentIds` that no surviving row still points at. Content
+ * is addressed by `(user_id, sha256)`, which `documents_user_sha_uq` makes
+ * unique, so in practice this is one path per removed row; the query is by
+ * path anyway so that a future second row over the same bytes cannot make this
+ * unlink a file another document is still using. */
+function orphanedPathsOf(tx: SessionDatabase, paths: readonly string[]): string[] {
+  const unique = [...new Set(paths)];
+  return unique.filter(
+    (path) =>
+      tx
+        .select({ id: documents.id })
+        .from(documents)
+        .where(eq(documents.storagePath, path))
+        .get() === undefined,
+  );
+}
+
 /** Refused while a node still references the document: its bytes are part of
  * that run's context and the thread would lose the ability to explain itself. */
-export function remove(db: SessionDatabase, userId: string, documentId: string): boolean {
+export function remove(db: SessionDatabase, userId: string, documentId: string): DocumentRemoval {
   return transact(db, (tx) => {
-    const owned = get(tx, userId, documentId);
-    if (!owned) {
-      return false;
+    const row = tx
+      .select()
+      .from(documents)
+      .where(and(eq(documents.userId, userId), eq(documents.id, documentId)))
+      .get();
+    if (!row) {
+      return { removed: false, orphanedPaths: [] };
     }
     const referenced = tx
       .select({ nodeId: nodeDocuments.nodeId })
@@ -242,6 +296,37 @@ export function remove(db: SessionDatabase, userId: string, documentId: string):
       throw new Error("this document is attached to research and cannot be removed");
     }
     tx.delete(documents).where(eq(documents.id, documentId)).run();
-    return true;
+    return { removed: true, orphanedPaths: orphanedPathsOf(tx, [row.storagePath]) };
   });
+}
+
+/**
+ * Every volume path this account's rows point at, read *before* the account is
+ * deleted. `users` cascades the rows away and leaves the bytes behind, so the
+ * caller takes this list first and unlinks it after the delete lands.
+ */
+export function storagePathsOf(db: SessionDatabase, userId: string): string[] {
+  return [
+    ...new Set(
+      db
+        .select({ storagePath: documents.storagePath })
+        .from(documents)
+        .where(eq(documents.userId, userId))
+        .all()
+        .map((row) => row.storagePath),
+    ),
+  ];
+}
+
+/** Every path any row points at. The volume sweep keeps what is in here and
+ * unlinks the rest — which is how the cascades that nobody can hand a path to
+ * (a removed workspace, a removed tree) stop leaking. */
+export function allStoragePaths(db: SessionDatabase): Set<string> {
+  return new Set(
+    db
+      .select({ storagePath: documents.storagePath })
+      .from(documents)
+      .all()
+      .map((row) => row.storagePath),
+  );
 }

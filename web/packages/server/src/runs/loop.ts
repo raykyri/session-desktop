@@ -158,9 +158,26 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   // The counter lives here between writes: deltas are forwarded and consume a
   // sequence number without writing a row, and `advanceSeq` carries the value
   // back into the node before the next write bumps it.
+  //
+  // The loop owns the counter for the length of the attempt, so every number
+  // it spends is carried by an event: `advanceSeq` and `commitTurn` are the
+  // only allocators, and the writes that publish nothing with a `seq` — the
+  // in-flight checkpoint and the status transitions — are handed the current
+  // value to record. A number allocated but never emitted is a hole, and the
+  // client freezes its buffer and refetches on one (`stores/liveTurns.ts`).
   let seq = runsRepo.advanceSeq(db, userId, nodeId, 0);
   const nextSeq = (): number => {
     seq += 1;
+    return seq;
+  };
+  /**
+   * The number a terminal event spends, persisted as well as emitted. Every
+   * other number lives only in this variable until a write carries it into the
+   * row; the last one has no write after it, so a resume or a second attempt
+   * would read the node back one short and hand the same number out twice.
+   */
+  const finishSeq = (): number => {
+    seq = runsRepo.advanceSeq(db, userId, nodeId, seq + 1);
     return seq;
   };
   const emit = (type: string, payload: Record<string, unknown>): void => {
@@ -170,8 +187,10 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     emit("research.node.updated", { node: updated, ...extra });
   };
 
-  const started = nodesRepo.setStatus(db, userId, nodeId, "running", { startedAt: Date.now() });
-  seq = runsRepo.advanceSeq(db, userId, nodeId, seq);
+  const started = nodesRepo.setStatus(db, userId, nodeId, "running", {
+    startedAt: Date.now(),
+    seq,
+  });
   runsRepo.startAttempt(db, {
     nodeId,
     attempt: node.attempt,
@@ -328,8 +347,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     if (!force && !stale && !grown) {
       return;
     }
-    seq = runsRepo.advanceSeq(db, userId, nodeId, seq);
-    seq = runsRepo.checkpointInFlight(db, userId, { nodeId, turn }).seq;
+    runsRepo.checkpointInFlight(db, userId, { nodeId, turn, seq });
     lastCheckpointAt = now;
     checkpointedLength = length;
   };
@@ -450,14 +468,13 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
 
   if (draining && !cancelled) {
     checkpoint(true);
-    const interrupted = nodesRepo.markInterrupted(db, userId, nodeId);
-    seq = runsRepo.advanceSeq(db, userId, nodeId, seq);
+    const interrupted = nodesRepo.markInterrupted(db, userId, nodeId, seq);
     finishAttempt("interrupted");
     recordUsage();
     emit("research.run.finished", {
       nodeId,
       attempt: node.attempt,
-      seq: nextSeq(),
+      seq: finishSeq(),
       status: "interrupted",
     });
     publishNode(interrupted);
@@ -469,11 +486,15 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     // stays in `run_turns` so the document keeps what it produced.
     finishAttempt("cancelled");
     recordUsage();
-    seq = runsRepo.advanceSeq(db, userId, nodeId, seq);
+    // `research.cancelNode` wrote the status from outside the loop and took a
+    // number with it. This event carries that number rather than one past it,
+    // which is what keeps the sequence contiguous whether or not the cancel
+    // raced a write of the loop's own.
+    seq = runsRepo.advanceSeq(db, userId, nodeId, seq + 1);
     emit("research.run.finished", {
       nodeId,
       attempt: node.attempt,
-      seq: nextSeq(),
+      seq,
       status: "cancelled",
     });
     const settled = nodesRepo.get(db, userId, nodeId);
@@ -507,10 +528,9 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   }
 
   // ── completion ──────────────────────────────────────────────────────────
-  seq = runsRepo.advanceSeq(db, userId, nodeId, seq);
   let commit;
   try {
-    commit = commitAnswer({ db, userId, nodeId, status: "complete" });
+    commit = commitAnswer({ db, userId, nodeId, status: "complete", seq });
   } catch (error) {
     const classified: ClassifiedError = {
       errorClass: "unknown",
@@ -549,13 +569,12 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       model: message.role === "assistant" ? node.model : null,
     })),
   );
-  seq = runsRepo.advanceSeq(db, userId, nodeId, seq);
   finishAttempt("complete");
   recordUsage();
   emit("research.run.finished", {
     nodeId,
     attempt: node.attempt,
-    seq: nextSeq(),
+    seq: finishSeq(),
     status: "complete",
   });
   const settled = nodesRepo.get(db, userId, nodeId);
@@ -580,7 +599,13 @@ function settleFailure(
   logger.warn({ nodeId, errorClass: error.errorClass, detail: error.detail }, "run failed");
   let node;
   try {
-    node = nodesRepo.setStatus(db, userId, nodeId, "failed", { error: error.message });
+    node = nodesRepo.setStatus(db, userId, nodeId, "failed", {
+      error: error.message,
+      // Inside a run the loop owns the counter and the `research.run.finished`
+      // below is what spends the next number; outside one (a model that will
+      // not resolve) this write is the allocator.
+      ...(seq === undefined ? {} : { seq }),
+    });
   } catch {
     // Already terminal: a cancel landed between the failure and this write.
     node = nodesRepo.get(db, userId, nodeId);

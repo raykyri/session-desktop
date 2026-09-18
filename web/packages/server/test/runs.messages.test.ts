@@ -301,3 +301,44 @@ test("committed turns convert back into the messages a resume replays", (t) => {
   t.is(result?.output.type, "json");
   t.true(estimateTokens(messages) > 0);
 });
+
+test("a binary part is measured rather than serialized", (t) => {
+  // `JSON.stringify` of a `Uint8Array` emits `{"0":1,"1":2,…}`, roughly 12.5
+  // bytes of string per byte of file. At the 20 MiB per-document ceiling that
+  // is a ~279 MB transient string and over a second of blocked event loop —
+  // per attachment, with ten allowed per question — and the result is thrown
+  // away, because `estimateTokenCount` samples 2,048 code units. The time
+  // bound is the assertion that matters: a regression to stringify fails here
+  // rather than merely being slow in production.
+  const megabytes = 16;
+  const bytes = new Uint8Array(megabytes * 1024 * 1024);
+  const filePart: ModelMessage = {
+    role: "user",
+    content: [{ type: "file", data: bytes, mediaType: "application/pdf", filename: "big.pdf" }],
+  };
+  const imagePart: ModelMessage = {
+    role: "user",
+    content: [{ type: "image", image: bytes, mediaType: "image/png" }],
+  };
+
+  const startedAt = performance.now();
+  const fileTokens = estimateTokens([filePart]);
+  const imageTokens = estimateTokens([imagePart]);
+  const elapsedMs = performance.now() - startedAt;
+
+  t.is(fileTokens, Math.round(bytes.byteLength / 4), "characters over four, on the byte length");
+  t.is(imageTokens, fileTokens, "an image part is measured the same way");
+  t.true(elapsedMs < 50, `estimating two ${megabytes} MiB parts took ${elapsedMs.toFixed(1)}ms`);
+
+  // The text and JSON paths are untouched.
+  t.is(
+    estimateTokens([{ role: "user", content: [{ type: "text", text: "abcd".repeat(10) }] }]),
+    10,
+  );
+  t.true(
+    estimateTokens([
+      { role: "user", content: [{ type: "file", data: "aGk=", mediaType: "text/plain" }] },
+    ]) > 0,
+    "a base64 string payload still falls through to the serialized estimate",
+  );
+});

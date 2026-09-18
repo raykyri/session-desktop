@@ -200,6 +200,16 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
       if (title === undefined) {
         return null;
       }
+      // Re-read after the await. The model takes seconds, and a rename in the
+      // meantime is a deliberate act by the user; a generated title is a
+      // default, and a default must not overwrite a decision.
+      const current = nodesRepo.get(deps.db, userId, nodeId);
+      if (!current) {
+        return null;
+      }
+      if (current.title !== null && current.title !== undefined) {
+        return current.title;
+      }
       const renamed = nodesRepo.rename(deps.db, userId, nodeId, title);
       emit(userId, "research.node.updated", { node: renamed });
       // A thread takes its name from its root question.
@@ -273,6 +283,11 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
           responseRevision: candidate.responseRevision,
           model: candidate.model,
           expectedSnapshotAt: node.responseSnapshotAt ?? null,
+          // What the node carried before the model was called. Applying a
+          // recap from the dialog changes neither the snapshot nor the
+          // revision, so without this the automatic recap comes back and
+          // replaces the summary the user wrote while it was generating.
+          expectedCurrentRecapId: node.recap?.id ?? null,
         });
         if (saved) {
           emit(userId, "research.node.updated", { node: saved });

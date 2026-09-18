@@ -29,6 +29,7 @@ import { LoginPage } from "../routes/login.js";
 import { ResearchPage } from "../routes/research.$treeId.js";
 import { SettingsPage } from "../routes/settings.js";
 
+import { RouteErrorPanel, RouteNotFoundPanel } from "./RouteBoundary.js";
 import { AppShell } from "./layout/AppShell.js";
 import { appQueryClient } from "./queryClient.js";
 
@@ -158,6 +159,14 @@ const shellRoute = createRoute({
     void warmBootQueries(context.queryClient);
   },
   component: AppShell,
+  // Declared on the layout route so both render inside the shell: a throw in
+  // one pane replaces that pane, and the sidebar, the stage header and the
+  // single event subscription stay mounted. Without a boundary anywhere on the
+  // tree, React unmounts everything on the first throw and the tab is a blank
+  // page until it is reloaded by hand — which is what a malformed diagram in a
+  // streaming markdown render would cost (07 §3).
+  errorComponent: RouteErrorPanel,
+  notFoundComponent: RouteNotFoundPanel,
 });
 
 const homeRoute = createRoute({
@@ -207,6 +216,16 @@ const adminRoute = createRoute({
   component: AdminPage,
 });
 
+/** Everything the routes above do not claim. A catch-all rather than the
+ * router's default not-found handling, because a path that matches nothing
+ * matches the pathless shell route either — and a 404 outside the shell is a
+ * bare sentence on an empty page with no way back. */
+const notFoundRoute = createRoute({
+  getParentRoute: () => shellRoute,
+  path: "/$",
+  component: RouteNotFoundPanel,
+});
+
 const devRoutes = isDevelopment
   ? [
       createRoute({
@@ -228,6 +247,8 @@ export const routeTree = rootRoute.addChildren([
     settingsRoute,
     adminRoute,
     ...devRoutes,
+    // Last: a catch-all would otherwise shadow the routes declared after it.
+    notFoundRoute,
   ]),
 ]);
 
@@ -243,6 +264,10 @@ export function createAppRouter(
     routeTree,
     defaultPreload: "intent",
     context: { queryClient },
+    // The shell's boundaries cover every signed-in view; these catch a failure
+    // on `/login`, which renders outside the shell.
+    defaultErrorComponent: RouteErrorPanel,
+    defaultNotFoundComponent: RouteNotFoundPanel,
     ...rest,
   }) as Router<typeof routeTree, "never", true>;
 }

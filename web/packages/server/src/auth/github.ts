@@ -10,6 +10,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import type { AppEnv, ServerDeps } from "../deps.js";
 import type { RateLimiter } from "../middleware/rateLimit.js";
 import { RATE_LIMITS, rateLimitByIp } from "../middleware/rateLimit.js";
+import { removeUserDocuments } from "../uploads/storage.js";
 
 import {
   clearSessionCookie,
@@ -285,8 +286,12 @@ export function githubRoutes(options: GitHubRoutesOptions): Hono<AppEnv> {
       const redeemed = invite !== null && auth.redeemInvite(deps.db, invite, user.id);
       if (!redeemed) {
         // The row exists only because this sign-up was in progress; an
-        // unusable invite must not leave an account behind.
-        users.removeUser(deps.db, user.id);
+        // unusable invite must not leave an account behind. The cascade takes
+        // the `documents` rows and with them any way of naming the files, so
+        // the paths are read first and unlinked after.
+        await removeUserDocuments(deps, user.id, c.get("logger"), () =>
+          users.removeUser(deps.db, user.id),
+        );
         auth.recordSignupAttempt(deps.db, ipHash, "invite_invalid");
         return c.redirect(signInError(config.publicOrigin, "invite_invalid"), 302);
       }

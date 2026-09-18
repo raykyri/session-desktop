@@ -111,6 +111,48 @@ export function ancestorContext(
   });
 }
 
+/** The byte length of a binary payload, or null when the value is not one.
+ * `file` parts carry `data` and `image` parts carry `image`
+ * (`documentParts`), and either may be a view over an `ArrayBuffer`. */
+function binaryByteLength(value: unknown): number | null {
+  if (value instanceof ArrayBuffer) {
+    return value.byteLength;
+  }
+  if (ArrayBuffer.isView(value)) {
+    return value.byteLength;
+  }
+  return null;
+}
+
+/**
+ * Tokens contributed by one part.
+ *
+ * Binary payloads are measured, not serialized. `JSON.stringify` of a
+ * `Uint8Array` emits `{"0":1,"1":2,…}` — about 12.5 bytes of string per byte of
+ * file — so a 20 MiB PDF (the per-document ceiling) would build a ~279 MB
+ * transient string and hold the event loop for well over a second, with ten
+ * attachments allowed per question. Every SSE stream stalls for that time and
+ * `/healthz` cannot answer, which is enough for Fly to take the machine out of
+ * the pool. And the work is discarded regardless: `estimateTokenCount` samples
+ * at most 2,048 code units.
+ *
+ * `byteLength / 4` is the same characters-over-four rule the text path uses,
+ * which is as meaningful as any number here — a provider bills an attachment by
+ * its own rules, and this estimate exists to decide what to elide.
+ */
+function estimatePartTokens(part: unknown): number {
+  if (isRecord(part)) {
+    if (typeof part["text"] === "string") {
+      return estimateTokenCount(part["text"]);
+    }
+    const bytes = binaryByteLength(part["data"]) ?? binaryByteLength(part["image"]);
+    if (bytes !== null) {
+      return Math.max(1, Math.round(bytes / 4));
+    }
+  }
+  return estimateTokenCount(JSON.stringify(part ?? ""));
+}
+
 /** Tokens, estimated the way `04` §4 specifies: characters over four, applied
  * to the message's serialized form so tool payloads and file parts count. */
 export function estimateMessageTokens(message: ModelMessage): number {
@@ -119,11 +161,7 @@ export function estimateMessageTokens(message: ModelMessage): number {
   }
   let total = 0;
   for (const part of message.content as unknown[]) {
-    if (isRecord(part) && typeof part["text"] === "string") {
-      total += estimateTokenCount(part["text"]);
-      continue;
-    }
-    total += estimateTokenCount(JSON.stringify(part ?? ""));
+    total += estimatePartTokens(part);
   }
   return total;
 }

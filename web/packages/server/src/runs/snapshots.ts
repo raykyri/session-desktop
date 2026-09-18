@@ -25,6 +25,9 @@ export interface CommitAnswerInput {
    * results always agree in this process. The injected reader lets tests
    * verify that the desktop's guard (`state.rs:8870`) rejects changing data. */
   readTurns?: (() => Turn[]) | undefined;
+  /** The run's current sequence number, forwarded to the repository so the
+   * settle records it instead of allocating a number no event carries. */
+  seq?: number | undefined;
 }
 
 export interface CommitAnswerResult {
@@ -78,6 +81,7 @@ export function commitAnswer(input: CommitAnswerInput): CommitAnswerResult {
     nodeId,
     turns,
     outcome: { status: input.status, error: input.error ?? null },
+    ...(input.seq === undefined ? {} : { seq: input.seq }),
   });
   return {
     committed: true,

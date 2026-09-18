@@ -63,6 +63,33 @@ export function assertWithinDailyLimits(ctx: LaunchContext): void {
   }
 }
 
+/**
+ * A ceiling on what one account may have *waiting* (`06-auth-and-users.md`
+ * §8). The per-user concurrency cap (`SESSION_RUNS_PER_USER`) bounds how many
+ * of an account's runs hold a provider stream at once, and the daily limits
+ * bound the day; between them nothing bounds the queue, and a queued node is
+ * spend the deployment has already committed to — a script that submits a
+ * thousand questions is admitted a thousand times and billed for all of them
+ * two at a time.
+ *
+ * Applies whatever `SESSION_ENFORCE_LIMITS` says, unlike the daily limits: the
+ * daily ceilings are a billing policy an operator opts into, this is a
+ * structural bound on the queue itself. Admins are exempt, as they are there.
+ */
+export function assertQueueHasRoom(ctx: LaunchContext): void {
+  if (ctx.user.isAdmin) {
+    return;
+  }
+  const cap = ctx.config.limits.queuedPerUser;
+  if (queue.queuedCount(ctx.db, ctx.user.id) < cap) {
+    return;
+  }
+  throw new TRPCError({
+    code: "TOO_MANY_REQUESTS",
+    message: `you already have ${cap} questions waiting to run; let some finish before starting more`,
+  });
+}
+
 /** Puts an admitted node in the run queue and wakes the agent loop. The
  * database row is what survives a restart; `runs.start` is only a nudge. */
 export function enqueueRun(ctx: LaunchContext, nodeId: string, modelId: string): void {

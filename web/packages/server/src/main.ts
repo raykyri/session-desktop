@@ -6,6 +6,7 @@
 // runs interrupted by the previous process are back in the queue before the
 // port is listening.
 
+import { execFile } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +23,7 @@ import { defaultLogger, type Logger } from "./logger.js";
 import { RateLimiter } from "./middleware/rateLimit.js";
 import { fixtureLookup, fixturePageFetch } from "./runs/fixtureProvider.js";
 import { createRunsService } from "./runs/service.js";
+import { sweepOrphanedDocuments } from "./uploads/storage.js";
 
 /**
  * Writes `GOOGLE_APPLICATION_CREDENTIALS_JSON` to a file and points
@@ -69,16 +71,61 @@ export function reconcileRuns(deps: ServerDeps, logger: Logger): void {
       adopted: reconciliation.adoptedNodeIds.length,
       interrupted: reconciliation.interruptedNodeIds.length,
       requeued: reconciliation.requeuedNodeIds.length,
+      reenqueued: reconciliation.reenqueuedNodeIds.length,
+      emptyDocuments: reconciliation.emptyDocumentNodeIds.length,
     },
     "reconciled runs from the previous process",
   );
-  for (const nodeId of reconciliation.requeuedNodeIds) {
+  for (const nodeId of [...reconciliation.requeuedNodeIds, ...reconciliation.reenqueuedNodeIds]) {
     deps.runs.start(nodeId);
   }
 }
 
 /** How often the expiries that nothing else reaps are swept. */
 export const MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
+
+/** How often the document archive is shipped and the volume is reconciled
+ * with the `documents` table (`13-deployment-fly.md` §6). */
+export const DAILY_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/** `web/scripts/backup-documents.sh`, resolved the way the migrations
+ * directory is: this module and the esbuild bundle both sit one directory
+ * below `packages/server`, so the same URL points at `web/scripts` in
+ * development and at `/app/scripts` in the image. */
+export const BACKUP_DOCUMENTS_SCRIPT = fileURLToPath(
+  new URL("../../../scripts/backup-documents.sh", import.meta.url),
+);
+
+/**
+ * The nightly document archive. Litestream replicates `session.db`
+ * continuously; `/data/documents` is files on a volume that nothing else
+ * copies, so losing the volume would lose every uploaded file.
+ *
+ * Run in process rather than from an external scheduler because the
+ * deployment is one machine with one process: a Fly scheduled machine would
+ * need the volume this one holds, and an operator-run cron is a step that is
+ * documented and then not done. A failure is logged and the next day tries
+ * again — a missed archive is not worth refusing to serve over.
+ */
+export function backupDocuments(config: Config, logger: Logger): Promise<void> {
+  if (config.documentsReplicaUrl === null && config.litestreamReplicaUrl === null) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    execFile(
+      BACKUP_DOCUMENTS_SCRIPT,
+      { env: process.env, timeout: 30 * 60 * 1000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          logger.error({ error, stderr: String(stderr).slice(0, 2000) }, "document backup failed");
+        } else {
+          logger.info({ output: String(stdout).trim().slice(0, 2000) }, "document backup complete");
+        }
+        resolve();
+      },
+    );
+  });
+}
 
 /**
  * Rows and buckets that expire on their own clock: nothing reads them again,
@@ -93,6 +140,63 @@ export function sweepExpired(deps: ServerDeps, limiter: RateLimiter, logger: Log
     artifactTokens: artifacts.revokeExpired(deps.db),
   };
   logger.debug(swept, "swept expired state");
+}
+
+/**
+ * One maintenance tick: the expiries above, plus the volume's reconciliation
+ * with the `documents` table. The sweep is what catches the deletes no caller
+ * could hand a path to — removing a workspace or a thread cascades the rows
+ * away inside SQLite and leaves the bytes — without which the mount fills and
+ * every SQLite write fails at once.
+ */
+export async function runMaintenance(
+  deps: ServerDeps,
+  limiter: RateLimiter,
+  logger: Logger,
+): Promise<void> {
+  sweepExpired(deps, limiter, logger);
+  try {
+    await sweepOrphanedDocuments(deps, logger);
+  } catch (error) {
+    logger.error({ error }, "the document sweep failed");
+  }
+}
+
+/** How long the drain is given before the process stops waiting for it. Fly's
+ * `kill_timeout` is 30s and SIGKILL follows it, so the deadline is short
+ * enough that the WAL checkpoint and the close still fit inside the budget
+ * (`13-deployment-fly.md` §5). */
+export const SHUTDOWN_DEADLINE_MS = 20_000;
+
+/**
+ * The drain, raced against its deadline. `true` when it finished on its own.
+ *
+ * Awaiting the drain outright is what makes `kill_timeout` a SIGKILL: a
+ * provider that has stopped sending without closing its stream holds it open
+ * past thirty seconds, the WAL checkpoint below never runs, and the next boot
+ * opens a database with an unclean log. What the deadline cuts short is
+ * recovered on boot — `reconcileOnBoot` marks anything still `running` as
+ * `interrupted` with `resume_pending` and re-queues it — so a drain that runs
+ * long costs a resume, while a SIGKILL costs the checkpoint.
+ */
+export async function drainWithin(
+  drain: () => Promise<void>,
+  deadlineMs: number,
+): Promise<boolean> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      drain().then(() => true),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), deadlineMs);
+        timer.unref();
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
 }
 
 export interface RunningServer {
@@ -128,9 +232,13 @@ export function main(): RunningServer {
 
   const limiter = new RateLimiter();
   const maintenance = setInterval(() => {
-    sweepExpired(deps, limiter, logger);
+    void runMaintenance(deps, limiter, logger);
   }, MAINTENANCE_INTERVAL_MS);
   maintenance.unref();
+  const nightly = setInterval(() => {
+    void backupDocuments(config, logger);
+  }, DAILY_INTERVAL_MS);
+  nightly.unref();
 
   // Migrations ran inside `openDatabase` and the previous process's runs are
   // back in the queue, so the only thing left before the check may pass is the
@@ -152,15 +260,31 @@ export function main(): RunningServer {
     // this machine while the open attempts persist their checkpoints.
     readiness.drain();
     clearInterval(maintenance);
+    clearInterval(nightly);
     logger.info({ signal }, "shutting down");
     // Stop admitting first, then let open attempts persist their checkpoint
     // and mark themselves `interrupted` with `resume_pending`.
-    await deps.runs.drain();
+    //
+    // Raced against a deadline rather than awaited outright. Fly sends SIGKILL
+    // `kill_timeout` (30s) after SIGTERM, and a provider that has stopped
+    // sending without closing its stream would hold the drain past it — the
+    // WAL checkpoint below would then never run and the next boot would open a
+    // database with an unclean log. Twenty seconds leaves ten for the close
+    // and the checkpoint. What the deadline cuts short is recovered on boot:
+    // `reconcileOnBoot` marks anything still `running` as `interrupted` with
+    // `resume_pending` and re-queues it (`13-deployment-fly.md` §5).
+    const drained = await drainWithin(() => deps.runs.drain(), SHUTDOWN_DEADLINE_MS);
+    if (!drained) {
+      logger.warn(
+        { signal, deadlineMs: SHUTDOWN_DEADLINE_MS },
+        "the drain did not finish inside its deadline; checkpointing anyway",
+      );
+    }
     deps.eventBus.closeAll();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     db.$client.pragma("wal_checkpoint(TRUNCATE)");
     closeDatabase(db);
-    logger.info({ signal }, "shutdown complete");
+    logger.info({ signal, drained }, "shutdown complete");
   };
 
   process.on("SIGTERM", () => void shutdown("SIGTERM").then(() => process.exit(0)));
