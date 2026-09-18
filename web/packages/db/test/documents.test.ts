@@ -75,8 +75,17 @@ test("a referenced document cannot be removed", (t) => {
     message: /attached to research/,
   });
   documents.attach(fixture.db, fixture.userId, detail.tree.rootNodeId, []);
-  t.true(documents.remove(fixture.db, fixture.userId, document.id));
-  t.false(documents.remove(fixture.db, fixture.userId, document.id));
+  // The removal reports the volume paths it orphaned: deleting the row is half
+  // of a delete, and the server unlinks the other half. Filesystem work stays
+  // out of this package and out of the transaction.
+  t.deepEqual(documents.remove(fixture.db, fixture.userId, document.id), {
+    removed: true,
+    orphanedPaths: [`/data/documents/${fixture.userId}/abc123`],
+  });
+  t.deepEqual(documents.remove(fixture.db, fixture.userId, document.id), {
+    removed: false,
+    orphanedPaths: [],
+  });
 });
 
 test("an artifact token resolves once, expires, and never crosses accounts", (t) => {

@@ -3,7 +3,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { artifacts, encyclopedia } from "@session/db";
+import { artifacts, encyclopedia, workspaces } from "@session/db";
 import type { SessionEvent } from "@session/shared";
 import { encyclopediaPageRequestSchema, validateEncyclopediaSlug } from "@session/shared";
 import { z } from "zod";
@@ -63,6 +63,14 @@ export const encyclopediaRouter = router({
   deletePage: protectedProcedure
     .input(z.object({ workspaceId: z.string(), slug: z.string() }))
     .mutation(({ ctx, input }) => {
+      // The workspace is checked first so a foreign id is `NOT_FOUND` rather
+      // than `{ removed: false }`, which reads as "already gone" and is a
+      // different answer from "not yours" (`06-auth-and-users.md` §4). An
+      // absent slug inside one's own workspace stays idempotent.
+      required(
+        repo(() => workspaces.get(ctx.db, ctx.user.id, input.workspaceId)),
+        `research workspace ${input.workspaceId} was not found`,
+      );
       const removed = repo(() =>
         encyclopedia.deletePage(ctx.db, ctx.user.id, input.workspaceId, input.slug),
       );

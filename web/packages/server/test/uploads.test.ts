@@ -1,7 +1,7 @@
 // Document upload, extraction, and the artifact route
 // (`04-agent-runtime.md` §8, `11-artifacts-and-browser.md` §2).
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { documents } from "@session/db";
 import type { DocumentInfo } from "@session/shared";
@@ -11,6 +11,7 @@ import { PREVIEW_ERROR_SCRIPT_CSP_SOURCE } from "../src/artifacts/page.js";
 import { contentDisposition, parseRange, servedContentType } from "../src/artifacts/route.js";
 import { MAX_DOCUMENT_BYTES, resolveMimeType } from "../src/uploads/limits.js";
 import { MAX_UPLOAD_BODY_BYTES, documentStoragePath } from "../src/uploads/route.js";
+import { sweepOrphanedDocuments } from "../src/uploads/storage.js";
 
 import { ARTIFACT_ORIGIN, PUBLIC_ORIGIN, createHarness } from "./helpers.js";
 
@@ -255,4 +256,69 @@ test("a body with no declared length is still bounded", async (t) => {
   t.is(response.status, 413);
   // The stream is cut at the ceiling rather than read to its (endless) end.
   t.true(produced <= MAX_UPLOAD_BODY_BYTES + chunk.byteLength);
+});
+
+test("deleting a document takes its bytes off the volume", async (t) => {
+  // The row is half of a delete. The per-user quota is summed from rows, so
+  // leaving the file behind lets delete-and-reupload fill the volume without
+  // bound — and when a 20 GB mount fills, every SQLite write fails at once.
+  const harness = createHarness(t);
+  const user = harness.addUser("deleter");
+  const cookie = harness.signIn(user);
+  const caller = harness.caller(user);
+  const workspace = await caller.workspaces.ensureDefault();
+
+  const response = await upload(harness, cookie, workspace.id, [
+    { name: "throwaway.txt", type: "text/plain", body: "some bytes to leak" },
+  ]);
+  const [document] = (await response.json()) as DocumentInfo[];
+  const storagePath = documentStoragePath(
+    harness.config.documentsDir,
+    user.id,
+    document?.sha256 ?? "",
+  );
+  t.true(existsSync(storagePath));
+
+  await caller.documents.remove({ documentId: document?.id ?? "" });
+  t.false(existsSync(storagePath), "the file is unlinked with the row");
+  t.is(documents.totalBytes(harness.db, user.id), 0);
+});
+
+test("the volume sweep removes bytes a cascade left behind", async (t) => {
+  // Removing a workspace or a thread cascades `documents` rows away inside
+  // SQLite; nothing can hand the server a path for those, so the sweep is what
+  // reconciles the volume with the table.
+  const harness = createHarness(t);
+  const user = harness.addUser("sweeper");
+  const cookie = harness.signIn(user);
+  const caller = harness.caller(user);
+  const workspace = await caller.workspaces.ensureDefault();
+  const second = await caller.workspaces.create({ name: "Second" });
+
+  const response = await upload(harness, cookie, second.id, [
+    { name: "cascaded.txt", type: "text/plain", body: "bytes behind a cascade" },
+  ]);
+  const [document] = (await response.json()) as DocumentInfo[];
+  const cascaded = documentStoragePath(
+    harness.config.documentsDir,
+    user.id,
+    document?.sha256 ?? "",
+  );
+  const keptResponse = await upload(harness, cookie, workspace.id, [
+    { name: "kept.txt", type: "text/plain", body: "bytes that stay" },
+  ]);
+  const [kept] = (await keptResponse.json()) as DocumentInfo[];
+  const keptPath = documentStoragePath(harness.config.documentsDir, user.id, kept?.sha256 ?? "");
+
+  await caller.workspaces.remove({ workspaceId: second.id });
+  t.is(documents.get(harness.db, user.id, document?.id ?? ""), null, "the row is gone");
+  t.true(existsSync(cascaded), "and the bytes are still there");
+
+  const swept = await sweepOrphanedDocuments(harness.deps, harness.logger);
+  t.is(swept.removed, 1);
+  t.false(existsSync(cascaded));
+  t.true(existsSync(keptPath), "a file a row still points at is kept");
+
+  // Idempotent: a second sweep finds nothing to do.
+  t.is((await sweepOrphanedDocuments(harness.deps, harness.logger)).removed, 0);
 });

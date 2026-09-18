@@ -38,6 +38,7 @@ test("the live window is the committed turns plus the checkpoint text", (t) => {
   runs.commitTurn(fixture.db, fixture.userId, { nodeId, turn: answerTurn(nodeId, "done", "t1") });
   runs.checkpointInFlight(fixture.db, fixture.userId, {
     nodeId,
+    seq: runs.liveWindow(fixture.db, fixture.userId, nodeId).seq,
     turn: answerTurn(nodeId, "still writ", "t2"),
   });
   const window = runs.liveWindow(fixture.db, fixture.userId, nodeId);
@@ -48,6 +49,7 @@ test("the live window is the committed turns plus the checkpoint text", (t) => {
   // The checkpoint keeps its slot as it grows, then becomes the committed turn.
   runs.checkpointInFlight(fixture.db, fixture.userId, {
     nodeId,
+    seq: runs.liveWindow(fixture.db, fixture.userId, nodeId).seq,
     turn: answerTurn(nodeId, "still writing", "t2"),
   });
   t.is(runs.liveWindow(fixture.db, fixture.userId, nodeId).inFlightText, "still writing");
@@ -253,11 +255,13 @@ test("a checkpoint replaces the previous one rather than accumulating", (t) => {
   const nodeId = startedRoot(fixture);
   runs.checkpointInFlight(fixture.db, fixture.userId, {
     nodeId,
+    seq: runs.liveWindow(fixture.db, fixture.userId, nodeId).seq,
     turn: answerTurn(nodeId, "first draft", "t1"),
   });
   // The runtime moved on to a new turn without committing the old checkpoint.
   runs.checkpointInFlight(fixture.db, fixture.userId, {
     nodeId,
+    seq: runs.liveWindow(fixture.db, fixture.userId, nodeId).seq,
     turn: answerTurn(nodeId, "second draft", "t2"),
   });
   const rows = fixture.db.$client
@@ -276,6 +280,7 @@ test("a committed turn does not disturb an open checkpoint", (t) => {
   const nodeId = startedRoot(fixture);
   runs.checkpointInFlight(fixture.db, fixture.userId, {
     nodeId,
+    seq: runs.liveWindow(fixture.db, fixture.userId, nodeId).seq,
     turn: answerTurn(nodeId, "streaming", "t2"),
   });
   runs.commitTurn(fixture.db, fixture.userId, {

@@ -27,6 +27,9 @@ export interface CommitAnswerInput {
    * The test that has to prove the refusal works supplies a reader that
    * changes its answer. */
   readTurns?: (() => Turn[]) | undefined;
+  /** The run's current sequence number, forwarded to the repository so the
+   * settle records it instead of allocating a number no event carries. */
+  seq?: number | undefined;
 }
 
 export interface CommitAnswerResult {
@@ -80,6 +83,7 @@ export function commitAnswer(input: CommitAnswerInput): CommitAnswerResult {
     nodeId,
     turns,
     outcome: { status: input.status, error: input.error ?? null },
+    ...(input.seq === undefined ? {} : { seq: input.seq }),
   });
   return {
     committed: true,

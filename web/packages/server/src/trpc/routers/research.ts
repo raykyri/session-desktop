@@ -22,12 +22,14 @@ import { z } from "zod";
 
 import {
   assertModelUsable,
+  assertQueueHasRoom,
   assertWithinDailyLimits,
   enqueueRun,
   nodeContent,
   queuePositionOf,
 } from "../../research/admission.js";
 import { MAX_DOCUMENTS_PER_QUESTION } from "../../uploads/limits.js";
+import { unlinkOrphans } from "../../uploads/storage.js";
 import { protectedProcedure, router } from "../base.js";
 import { publish } from "../emit.js";
 import { repo, required } from "../errors.js";
@@ -94,6 +96,7 @@ export const researchRouter = router({
     .mutation(({ ctx, input }): ResearchTreeDetail => {
       assertModelUsable(ctx, input.model);
       assertWithinDailyLimits(ctx);
+      assertQueueHasRoom(ctx);
       const detail = repo(() =>
         trees.admitRoot(ctx.db, ctx.user.id, {
           workspaceId: input.workspaceId,
@@ -129,6 +132,7 @@ export const researchRouter = router({
       const model = input.model ?? parent.model;
       assertModelUsable(ctx, model);
       assertWithinDailyLimits(ctx);
+      assertQueueHasRoom(ctx);
       const node = repo(() =>
         nodes.admitChild(ctx.db, ctx.user.id, {
           parentNodeId: input.parentNodeId,
@@ -155,6 +159,7 @@ export const researchRouter = router({
       const model = input.model ?? existing.model;
       assertModelUsable(ctx, model);
       assertWithinDailyLimits(ctx);
+      assertQueueHasRoom(ctx);
       // `resetForRetry` enqueues inside its own transaction, so the run is
       // queued the moment the status flips.
       const node = repo(() =>
@@ -384,12 +389,16 @@ export const documentsRouter = router({
     ),
   remove: protectedProcedure
     .input(z.object({ documentId: z.string() }))
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       required(
         repo(() => documentsRepo.get(ctx.db, ctx.user.id, input.documentId)),
         `document ${input.documentId} was not found`,
       );
-      repo(() => documentsRepo.remove(ctx.db, ctx.user.id, input.documentId));
+      // The row is half of a delete; the bytes on the volume are the other
+      // half, and the quota is summed from rows, so leaving them behind lets
+      // delete-and-reupload fill the mount (`13-deployment-fly.md` §6).
+      const removal = repo(() => documentsRepo.remove(ctx.db, ctx.user.id, input.documentId));
+      await unlinkOrphans(ctx.config.documentsDir, removal.orphanedPaths, ctx.logger);
       return { ok: true };
     }),
 });

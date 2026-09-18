@@ -132,6 +132,37 @@ test.serial("the send control is off until there is something to send", async (t
   app.unmount();
 });
 
+test.serial("Shift-Tab leaves the Home composer instead of cycling models", async (t) => {
+  // With more than one model Tab is the model cycle and the composer takes the
+  // key. Taking Shift-Tab as well traps focus in the prompt textarea: nothing
+  // moves it backwards and a keyboard-only user is stuck (WCAG 2.1.2).
+  useDraftsStore.setState({ byKey: {} });
+  const app = await renderApp("/", {
+    responses: {
+      ...homeResponses,
+      "system.runtimeConfig": {
+        version: "0.0.0",
+        models: [model(), model({ id: "gpt-luna", label: "GPT-5.6 Luna", provider: "openrouter" })],
+        limits: {},
+        features: {},
+      },
+    },
+  });
+  await waitUntil(
+    t,
+    () => screen.queryAllByLabelText(PROMPT_LABEL).length > 0,
+    "the composer is on Home",
+  );
+  const field = screen.getByLabelText(PROMPT_LABEL);
+
+  t.false(fireEvent.keyDown(field, { key: "Tab" }), "Tab is taken as the model cycle");
+  t.true(
+    fireEvent.keyDown(field, { key: "Tab", shiftKey: true }),
+    "Shift-Tab reaches the browser, so focus can move backwards out of the field",
+  );
+  app.unmount();
+});
+
 test.serial("the draft keeps the prompt, the model and the attached document ids", async (t) => {
   useDraftsStore.setState({ byKey: {} });
   const app = await renderApp("/", { responses: homeResponses });

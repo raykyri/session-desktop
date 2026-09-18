@@ -395,23 +395,42 @@ specs under `e2e/`.
       and rehearsing a restore (`13-deployment-fly.md` §2, §6). Those remain
       operator steps.
 
+### Cost and access controls
+
+Enforcement is **on** in the shipped configuration. `web/fly.toml` sets
+`SESSION_ENFORCE_LIMITS = "1"`, so the per-account daily token and run limits
+refuse rather than merely record, and `SESSION_REQUIRE_INVITE = "1"`, so an
+account is created only against a code an admin minted
+(`06-auth-and-users.md` §3, §8). Both default to `0` in code and in
+`web/.env.example`, which is right for local development and would be wrong on
+an origin that spends money per request — so they are set in the deployment
+file, where turning either off is a visible act.
+
+`SESSION_QUEUED_PER_USER` (default 20) caps what one account may have waiting.
+The concurrency cap bounds only what runs at once; the queue is spend already
+committed to, and it is enforced whatever `SESSION_ENFORCE_LIMITS` says.
+Per-account overrides for the daily ceilings live in `user_limits` and are set
+from `/admin`, so raising one account's limit is not the same as switching
+enforcement off (`13-deployment-fly.md` §2).
+
 ### Not built, by decision
 
 - `account.delete` (`06-auth-and-users.md` §7) — no `account` namespace and no
-  client surface; removing an account is an operator job against the database
-  and `/data/documents/<userId>`.
+  client surface; removing an account is an operator job against the database.
+  The one removal path the server does own — an abandoned sign-up that could
+  not redeem its invite — unlinks the account's bytes as well as its rows
+  (`uploads/storage.ts:removeUserDocuments`).
 - The reader view for `http(s)` sources (`11-artifacts-and-browser.md` §4) —
   behind `SESSION_READER_VIEW`, and never part of this checklist.
-- Per-account daily limit *enforcement* is off by default
-  (`SESSION_ENFORCE_LIMITS=0`); the schema, the admission check, and the admin
-  levers exist (`06-auth-and-users.md` §8).
 
 ## 9. Open questions
 
 1. Whether `gemini-flash-google` should become the default Gemini entry once
    its quality is compared to `gemini-flash` with owned search (grounding
    costs $14 per 1k queries after the free tier).
-2. Invite allotment policy once `SESSION_REQUIRE_INVITE` is switched on.
+2. Invite allotment policy. `SESSION_REQUIRE_INVITE` is on in `web/fly.toml`
+   (§8), so this is now a question about how many codes an account gets rather
+   than about when to switch the gate on.
 
 Decided since the first draft: search vendors are Parallel and Tavily, both
 optional (search is unavailable without a key); daily defaults are 1M tokens

@@ -5,7 +5,7 @@
 // scrape time instead of being mirrored in counters the process would have to
 // keep consistent with the database across a restart.
 
-import { statSync } from "node:fs";
+import { statSync, statfsSync } from "node:fs";
 
 import type { Config } from "./config.js";
 import type { ServerDeps } from "./deps.js";
@@ -169,6 +169,23 @@ export function dailyUsageByProvider(deps: ServerDeps, at = Date.now()): Provide
     .all(day) as ProviderDailyUsage[];
 }
 
+/**
+ * Free bytes on the filesystem holding the data directory. The volume is the
+ * one resource whose exhaustion takes the whole server down rather than one
+ * request: every SQLite write fails at once when the mount fills, and uploads
+ * are what fill it. `bavail` rather than `bfree` — the reserved blocks are not
+ * this process's to use. Unreadable (a path that does not exist yet) is 0,
+ * which is a gauge an alert can read rather than a scrape that fails.
+ */
+export function volumeFreeBytes(path: string): number {
+  try {
+    const stats = statfsSync(path);
+    return Number(stats.bsize) * Number(stats.bavail);
+  } catch {
+    return 0;
+  }
+}
+
 function fileSize(path: string): number {
   try {
     return statSync(path).size;
@@ -207,6 +224,10 @@ export function renderMetrics(options: RenderMetricsOptions): string {
   lines.push("# HELP session_sse_clients Open event-stream connections.");
   lines.push("# TYPE session_sse_clients gauge");
   lines.push(`session_sse_clients ${deps.eventBus.connectionCount()}`);
+
+  lines.push("# HELP session_volume_free_bytes Free space on the data volume.");
+  lines.push("# TYPE session_volume_free_bytes gauge");
+  lines.push(`session_volume_free_bytes ${volumeFreeBytes(config.dataDir)}`);
 
   lines.push("# HELP session_db_size_bytes Size of session.db and its WAL.");
   lines.push("# TYPE session_db_size_bytes gauge");

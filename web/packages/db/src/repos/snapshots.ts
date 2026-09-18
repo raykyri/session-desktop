@@ -31,6 +31,12 @@ export interface CommitInput {
   turns: readonly Turn[];
   /** The attempt's terminal outcome. `completedAt` defaults to now. */
   outcome: { status: ResearchNodeStatus; error?: string | null; completedAt?: number };
+  /** The run's current sequence number, when a run owns the counter. The
+   * commit publishes no `seq`-carrying event of its own — the loop's
+   * `research.run.finished` is the next one — so it records the number rather
+   * than allocating one the client would then see as a hole
+   * (`nodes.StatusPatch.seq`). Unset, as on the import path, keeps the bump. */
+  seq?: number | undefined;
 }
 
 export interface CommitResult {
@@ -137,7 +143,10 @@ export function commit(db: SessionDatabase, userId: string, input: CommitInput):
         responseSnapshotAt,
         responsePreview: responsePreview(turns) ?? null,
         resumePending: false,
-        runSeq: sql`${nodes.runSeq} + 1`,
+        runSeq:
+          input.seq === undefined
+            ? sql`${nodes.runSeq} + 1`
+            : sql`max(${nodes.runSeq}, ${input.seq})`,
       })
       .where(eq(nodes.id, node.id))
       .run();

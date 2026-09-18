@@ -243,6 +243,25 @@ export function position(
   return (ahead?.value ?? 0) + 1;
 }
 
+/**
+ * How many rows this account has waiting. The per-user concurrency cap bounds
+ * what *runs*; this is what bounds what has been admitted, which is the number
+ * that decides the bill — a queue is spend already committed to
+ * (`docs/06-auth-and-users.md` §8).
+ */
+export function queuedCount(
+  db: SessionDatabase,
+  userId: string,
+  pool: RunPool = "research",
+): number {
+  const row = db
+    .select({ value: sql<number>`count(*)` })
+    .from(runQueue)
+    .where(and(eq(runQueue.userId, userId), eq(runQueue.pool, pool), isNull(runQueue.claimedAt)))
+    .get();
+  return row?.value ?? 0;
+}
+
 /** Positions for every waiting node of one account, for a list render. */
 export function positions(
   db: SessionDatabase,

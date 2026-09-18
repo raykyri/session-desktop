@@ -26,14 +26,28 @@ export interface SaveRecapInput {
   model: string;
   /** The `response_snapshot_at` the generation was started against. */
   expectedSnapshotAt: number | null;
+  /**
+   * The recap id the node carried when the generation started, or null when it
+   * carried none.
+   *
+   * The other three guards all key on the *answer*, and applying a recap the
+   * user previewed changes neither the snapshot nor the revision — so an
+   * automatic recap that started before the dialog was opened would come back
+   * seconds later and silently replace the summary the user just wrote,
+   * instructions and all. `applyCandidate` already refuses on exactly this
+   * comparison; here it is a no-op, as the rest of `save` is.
+   */
+  expectedCurrentRecapId?: string | null | undefined;
 }
 
 /**
  * Commits an automatically generated recap, or does nothing.
  *
  * A no-op rather than an error: nothing asked for this recap, so a stale one
- * is not a failure to report. The three conditions are the desktop's
- * (`state.rs:8942`) — still complete, same snapshot, same revision.
+ * is not a failure to report. Three of the conditions are the desktop's
+ * (`state.rs:8942`) — still complete, same snapshot, same revision — and the
+ * fourth is `expectedCurrentRecapId`, which is what keeps a scheduled recap
+ * from overwriting one the user applied while it was generating.
  */
 export function save(
   db: SessionDatabase,
@@ -54,6 +68,12 @@ export function save(
       return null;
     }
     if ((node.responseSnapshotAt ?? null) !== input.expectedSnapshotAt) {
+      return null;
+    }
+    if (
+      input.expectedCurrentRecapId !== undefined &&
+      (node.recapJson?.id ?? null) !== (input.expectedCurrentRecapId ?? null)
+    ) {
       return null;
     }
     const snapshot = tx

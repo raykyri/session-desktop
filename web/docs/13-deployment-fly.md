@@ -33,14 +33,15 @@ kill_timeout = "30s"
   SESSION_ARTIFACT_ORIGIN = "https://artifacts.session.dev"
   SESSION_DATA_DIR = "/data"
   SESSION_RUNS_PER_USER = "2"
+  SESSION_QUEUED_PER_USER = "20"
   SESSION_RUNS_GEMINI = "8"
   SESSION_RUNS_OPENROUTER = "8"
   SESSION_RUNS_ANTHROPIC = "2"
   SESSION_RUN_TIMEOUT_SECONDS = "900"
-  SESSION_ENFORCE_LIMITS = "0"
+  SESSION_ENFORCE_LIMITS = "1"
   SESSION_DAILY_TOKENS = "1000000"
   SESSION_DAILY_RUNS = "10"
-  SESSION_REQUIRE_INVITE = "0"
+  SESSION_REQUIRE_INVITE = "1"
   SESSION_SEARCH_VENDOR = "parallel"
   GOOGLE_VERTEX_PROJECT = "session-dev"
   GOOGLE_VERTEX_LOCATION = "global"
@@ -78,6 +79,30 @@ kill_timeout = "30s"
 Runs are HTTPS streams, so memory is dominated by the Node process, SQLite
 page cache, and document text extraction; 2 GB is comfortable. Raise the
 machine size before raising the per-provider run caps.
+
+The cost ceiling and the sign-up gate are **on**. This origin pays a provider
+per token, so both are deployment settings rather than code defaults, and both
+are deliberately visible in the file:
+
+- `SESSION_ENFORCE_LIMITS = "1"` makes `SESSION_DAILY_TOKENS` and
+  `SESSION_DAILY_RUNS` refuse rather than merely record. With it at `0` the
+  usage rows are still written and nothing is ever refused, which is the right
+  default for local development and the wrong one for a public origin.
+- `SESSION_REQUIRE_INVITE = "1"` means an account is created only against a
+  code an admin minted (`06-auth-and-users.md` §3). `SESSION_ALLOWED_GITHUB_LOGINS`
+  is the narrower alternative; with neither, sign-up is open to anyone who can
+  reach the host.
+- `SESSION_QUEUED_PER_USER = "20"` caps what one account may have *waiting*.
+  `SESSION_RUNS_PER_USER` bounds only what is running at once, so without this
+  a script can admit a thousand questions and the deployment is committed to
+  paying for all of them, two at a time. Refused at launch with
+  `TOO_MANY_REQUESTS`; admins are exempt; enforced whatever
+  `SESSION_ENFORCE_LIMITS` says, because it bounds the queue itself rather
+  than the day's spend.
+
+Per-account overrides for the daily limits live in `user_limits` and are set
+from `/admin`, so raising one account's ceiling does not mean turning
+enforcement off.
 
 Deploying:
 
@@ -163,7 +188,15 @@ are removed (`14-legacy-inventory.md` §3).
 | `ANTHROPIC_API_KEY` | Claude Fable 5.1 (org configured for 30-day retention) |
 | `PARALLEL_API_KEY`, `TAVILY_API_KEY` | search vendors for `web_search` (either or both; none = search unavailable) |
 | `LITESTREAM_REPLICA_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | SQLite backups and document archive |
-| `SESSION_ALLOWED_GITHUB_LOGINS` | optional allowlist (unset = open sign-up) |
+| `SESSION_ALLOWED_GITHUB_LOGINS` | optional allowlist, narrower than the invite gate (unset = any GitHub account with a valid invite) |
+| `SESSION_METRICS_TOKEN` | bearer token for `GET /metrics` (unset = the route 404s) |
+| `SENTRY_DSN` | optional error reporting |
+
+Sign-up is gated by `SESSION_REQUIRE_INVITE = "1"` in `[env]` (§2), not by a
+secret. Mint codes from `/admin` as an admin; the first admin is granted with
+the `fly ssh console` snippet at the end of §2. `SESSION_ALLOWED_GITHUB_LOGINS`
+narrows it further and applies on top of the invite check rather than instead
+of it.
 
 ## 5. Boot and shutdown
 
@@ -177,8 +210,23 @@ the process rather than the port.
 
 Shutdown on `SIGTERM`: stop admitting; abort open provider streams after
 persisting their last checkpoint; mark their nodes `interrupted` with
-`resume_pending`; close SSE connections; checkpoint WAL; exit. Fits in
-`kill_timeout = 30s`. The next boot resumes the runs.
+`resume_pending`; close SSE connections; checkpoint WAL; exit. The next boot
+resumes the runs.
+
+The drain is raced against a 20-second deadline (`main.ts:SHUTDOWN_DEADLINE_MS`)
+rather than awaited outright, leaving ten seconds of `kill_timeout = 30s` for
+the close and the WAL checkpoint. A provider that has stopped sending without
+closing its stream would otherwise hold the drain past the timeout, and the
+SIGKILL that follows would land before the checkpoint — leaving an unclean WAL
+for the next boot to open. What the deadline cuts short is recovered on boot
+anyway: `reconcileOnBoot` marks anything still `running` as `interrupted` with
+`resume_pending` and re-queues it. A drain that runs long costs a resume; a
+SIGKILL costs the checkpoint.
+
+Boot also repairs the two states a crash between two transactions can leave and
+that no client can act on afterwards: a `queued` node with no `run_queue` row
+(re-queued at the back), and a `complete` `document` node with no snapshot
+(failed, so it can be deleted or re-imported).
 
 ## 6. Backups and restore
 
@@ -188,9 +236,20 @@ persisting their last checkpoint; mark their nodes `interrupted` with
   `web/scripts/backup-documents.sh` (`tar` of files newer than the last run's
   marker, uploaded with `web/scripts/s3-put.mjs`). The archive target is
   `SESSION_DOCUMENTS_REPLICA_URL`, defaulting to
-  `${LITESTREAM_REPLICA_URL}/documents`. Nothing schedules it inside the
-  machine: run it from a scheduled machine or a cron host with `fly ssh
-  console -C`.
+  `${LITESTREAM_REPLICA_URL}/documents`. The server runs it itself once a day
+  (`main.ts:DAILY_INTERVAL_MS`), skipping it when neither URL is set. In
+  process rather than from an external scheduler because the deployment is one
+  machine holding one volume: a Fly scheduled machine would need the volume
+  this one has, and an operator-run cron is a step that gets documented and
+  then not done. A failed run is logged and the next day tries again; the
+  marker moves only on success, so nothing is skipped.
+- The volume is reconciled with the `documents` table on the maintenance
+  interval (`main.ts:MAINTENANCE_INTERVAL_MS`, 15 min): files under
+  `/data/documents` that no row points at are unlinked. Deleting a document or
+  an account unlinks its bytes directly; removing a workspace or a thread
+  cascades the rows away inside SQLite with no path to hand over, and the sweep
+  is what stops those from filling the mount. `session_volume_free_bytes` (§7)
+  is the gauge to alert on — a full volume fails every SQLite write at once.
 - Restore, including the quarterly rehearsal:
   `web/docs/runbooks/restore.md`.
 
@@ -203,6 +262,8 @@ persisting their last checkpoint; mark their nodes `interrupted` with
   unset = the route 404s): `session_http_request_duration_seconds` by method,
   coarse route, and status class, `session_active_runs` by provider,
   `session_queue_depth`, `session_sse_clients`, `session_db_size_bytes`,
+  `session_volume_free_bytes` (free space on the data volume; alert on it —
+  see §6),
   `session_daily_tokens` and `session_daily_cost_usd` per provider for the
   current UTC day, `session_ready`. The gauges are read out of SQLite at
   scrape time (`packages/server/src/metrics.ts`).

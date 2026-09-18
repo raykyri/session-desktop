@@ -175,3 +175,61 @@ test("an archived thread refuses a recap replacement", (t) => {
     { message: /restore archived research/ },
   );
 });
+
+test("a scheduled recap does not overwrite one the user applied while it ran", (t) => {
+  const fixture = createFixture(t);
+  const target = answered(fixture);
+  // The scheduled job read the node here: no recap yet.
+  const startedWith = nodes.get(fixture.db, fixture.userId, target.nodeId)?.recap?.id ?? null;
+  t.is(startedWith, null);
+
+  // While the model was generating, the user previewed and applied their own.
+  const applied = recaps.applyCandidate(fixture.db, fixture.userId, {
+    nodeId: target.nodeId,
+    expectedResponseRevision: target.revision,
+    expectedCurrentRecapId: null,
+    candidate: {
+      id: "candidate-1",
+      text: "The user's own summary.",
+      responseRevision: target.revision,
+      instructions: "Three sentences, plain language.",
+      generatedAt: 1_700_000_000_000,
+      model: "gemini-flash",
+    },
+  });
+  t.is(applied.recap?.text, "The user's own summary.");
+
+  // Applying a recap changes neither the snapshot nor the revision, so the
+  // three older guards all still pass; only the recap identity has moved.
+  const late = recaps.save(fixture.db, fixture.userId, {
+    nodeId: target.nodeId,
+    text: "The automatic summary.",
+    responseRevision: target.revision,
+    model: "gemini-flash",
+    expectedSnapshotAt: target.snapshotAt,
+    expectedCurrentRecapId: startedWith,
+  });
+  t.is(late, null, "the stale automatic recap is a no-op");
+  t.is(
+    nodes.get(fixture.db, fixture.userId, target.nodeId)?.recap?.text,
+    "The user's own summary.",
+    "and the user's summary is untouched",
+  );
+  t.is(
+    nodes.get(fixture.db, fixture.userId, target.nodeId)?.recap?.instructions,
+    "Three sentences, plain language.",
+  );
+
+  // Nothing raced: the same save against the recap that is actually there
+  // commits.
+  const current = nodes.get(fixture.db, fixture.userId, target.nodeId)?.recap?.id ?? null;
+  const saved = recaps.save(fixture.db, fixture.userId, {
+    nodeId: target.nodeId,
+    text: "The automatic summary.",
+    responseRevision: target.revision,
+    model: "gemini-flash",
+    expectedSnapshotAt: target.snapshotAt,
+    expectedCurrentRecapId: current,
+  });
+  t.is(saved?.recap?.text, "The automatic summary.");
+});

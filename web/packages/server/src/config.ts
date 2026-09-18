@@ -117,6 +117,7 @@ const envSchema = z.object({
   SESSION_SEARCH_VENDOR: z.enum(["parallel", "tavily"]).default("parallel"),
 
   SESSION_RUNS_PER_USER: positiveInteger(2),
+  SESSION_QUEUED_PER_USER: positiveInteger(20),
   SESSION_RUNS_GEMINI: positiveInteger(8),
   SESSION_RUNS_OPENROUTER: positiveInteger(8),
   SESSION_RUNS_ANTHROPIC: positiveInteger(2),
@@ -127,6 +128,7 @@ const envSchema = z.object({
   SESSION_DAILY_RUNS: positiveInteger(10),
 
   LITESTREAM_REPLICA_URL: optionalString,
+  SESSION_DOCUMENTS_REPLICA_URL: optionalString,
   AWS_ACCESS_KEY_ID: optionalString,
   AWS_SECRET_ACCESS_KEY: optionalString,
   SENTRY_DSN: optionalString,
@@ -140,6 +142,11 @@ export type RawEnv = z.infer<typeof envSchema>;
 
 export interface RunLimits {
   perUser: number;
+  /** Nodes one account may have *waiting* at once. The per-user concurrency
+   * cap bounds what runs; without this nothing bounds what is admitted, and a
+   * queue is spend that has already been committed to
+   * (`06-auth-and-users.md` §8). */
+  queuedPerUser: number;
   vertex: number;
   openrouter: number;
   anthropic: number;
@@ -194,6 +201,9 @@ export interface Config {
   limits: RunLimits;
 
   litestreamReplicaUrl: string | null;
+  /** Where the nightly document archive is shipped. Unset disables the
+   * in-process backup (`13-deployment-fly.md` §6). */
+  documentsReplicaUrl: string | null;
   sentryDsn: string | null;
   metricsToken: string | null;
 }
@@ -291,6 +301,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
     limits: {
       perUser: value.SESSION_RUNS_PER_USER,
+      queuedPerUser: value.SESSION_QUEUED_PER_USER,
       vertex: value.SESSION_RUNS_GEMINI,
       openrouter: value.SESSION_RUNS_OPENROUTER,
       anthropic: value.SESSION_RUNS_ANTHROPIC,
@@ -301,6 +312,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
 
     litestreamReplicaUrl: value.LITESTREAM_REPLICA_URL,
+    documentsReplicaUrl: value.SESSION_DOCUMENTS_REPLICA_URL,
     sentryDsn: value.SENTRY_DSN,
     metricsToken: value.SESSION_METRICS_TOKEN,
   };

@@ -5,7 +5,7 @@ import test from "ava";
 
 import { createApp } from "../src/app.js";
 import { createReadiness } from "../src/health.js";
-import { MetricsRegistry, routeLabel, statusClass } from "../src/metrics.js";
+import { MetricsRegistry, routeLabel, statusClass, volumeFreeBytes } from "../src/metrics.js";
 
 import { createHarness } from "./helpers.js";
 
@@ -74,6 +74,16 @@ test("/metrics reports the process and the database", async (t) => {
   t.true(body.includes("session_queue_depth 0"));
   t.true(body.includes("session_sse_clients 0"));
   t.regex(body, /session_db_size_bytes\{file="db"\} [1-9][0-9]*/);
+  // The volume is the one resource whose exhaustion takes the whole server
+  // down rather than one request: every SQLite write fails at once when the
+  // mount fills, and uploads are what fill it (`13-deployment-fly.md` §7).
+  t.true(body.includes("# TYPE session_volume_free_bytes gauge"));
+  t.regex(body, /session_volume_free_bytes [1-9][0-9]*/);
+  t.is(
+    volumeFreeBytes("/nonexistent-path-for-the-gauge"),
+    0,
+    "an unreadable path is 0, not a throw",
+  );
   t.true(body.includes("# TYPE session_daily_tokens gauge"));
   t.true(body.endsWith("\n"));
 });

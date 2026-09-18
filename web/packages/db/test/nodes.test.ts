@@ -188,6 +188,7 @@ test("resume keeps the committed turns and drops the checkpoint", (t) => {
   });
   runs.checkpointInFlight(fixture.db, fixture.userId, {
     nodeId: rootId,
+    seq: runs.liveWindow(fixture.db, fixture.userId, rootId).seq,
     turn: answerTurn(rootId, "half a sentence", "turn-2"),
   });
   const interrupted = nodes.markInterrupted(fixture.db, fixture.userId, rootId);
@@ -393,4 +394,69 @@ test("a rate-limited re-queue opens a new attempt so the old row survives", (t) 
   t.throws(() => nodes.requeueAfterRateLimit(fixture.db, fixture.userId, rootId), {
     message: /already finished as cancelled/,
   });
+});
+
+test("boot re-queues a queued node whose run_queue row never landed", (t) => {
+  const fixture = createFixture(t);
+  const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    prompt: "Root",
+    model: "gemini-flash",
+  });
+  const rootId = detail.tree.rootNodeId;
+  // The node row and its queue row are separate transactions under
+  // `synchronous = NORMAL` (`routers/research.ts`: `createTree` then
+  // `enqueueRun`), so a crash between them leaves the node `queued` with
+  // nothing to admit it. The claim loop reads the queue, so it waits forever,
+  // and Retry is offered only on failed, cancelled and interrupted — there is
+  // no way out of it from the client at all.
+  t.is(queue.position(fixture.db, fixture.userId, rootId), 0, "nothing is waiting for it");
+
+  const result = nodes.reconcileOnBoot(fixture.db);
+  t.deepEqual(result.reenqueuedNodeIds, [rootId]);
+  t.deepEqual(result.requeuedNodeIds, [], "it is not a resume");
+  t.is(nodes.get(fixture.db, fixture.userId, rootId)?.status, "queued");
+  t.is(queue.position(fixture.db, fixture.userId, rootId), 1, "it is in the queue now");
+
+  // Idempotent: a second boot leaves it alone rather than re-enqueueing it.
+  t.deepEqual(nodes.reconcileOnBoot(fixture.db).reenqueuedNodeIds, []);
+});
+
+test("boot fails an imported document whose markdown never landed", (t) => {
+  const fixture = createFixture(t);
+  const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    prompt: "An import",
+    model: "gemini-flash",
+    kind: "document",
+    origin: "imported",
+    status: "complete",
+  });
+  const rootId = detail.tree.rootNodeId;
+  // `importReport` writes the row `complete` and the snapshot after it. A
+  // crash in between leaves a document that reads as "this research produced
+  // no readable response" and that `updateDocument` and `retryNode` both
+  // refuse — permanently unreadable and unrepairable.
+  const result = nodes.reconcileOnBoot(fixture.db);
+  t.deepEqual(result.emptyDocumentNodeIds, [rootId]);
+  const failed = nodes.get(fixture.db, fixture.userId, rootId);
+  t.is(failed?.status, "failed");
+  t.regex(failed?.error ?? "", /import it again/);
+
+  // A document that does have its markdown is untouched.
+  const good = trees.admitRoot(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    prompt: "A complete import",
+    model: "gemini-flash",
+    kind: "document",
+    origin: "imported",
+    status: "complete",
+  });
+  snapshots.commit(fixture.db, fixture.userId, {
+    nodeId: good.tree.rootNodeId,
+    turns: [answerTurn(good.tree.rootNodeId, "# A report")],
+    outcome: { status: "complete" },
+  });
+  t.deepEqual(nodes.reconcileOnBoot(fixture.db).emptyDocumentNodeIds, []);
+  t.is(nodes.get(fixture.db, fixture.userId, good.tree.rootNodeId)?.status, "complete");
 });

@@ -21,6 +21,7 @@ import { trees } from "../schema/trees.js";
 import { workspaces } from "../schema/workspaces.js";
 import { now, strictlyAfter } from "../time.js";
 
+import { attachWithin } from "./documents.js";
 import { toResearchHighlight, toResearchNode, toResearchTree } from "./mappers.js";
 import { deleteNodesOfTrees, hasActiveNodes } from "./subtrees.js";
 
@@ -165,9 +166,11 @@ export function admitRoot(
         recapJson: null,
       })
       .run();
-    (input.documentIds ?? []).forEach((documentId, position) => {
-      tx.insert(nodeDocuments).values({ nodeId, documentId, position }).run();
-    });
+    // Through the checked path: an id the caller supplied is not an id the
+    // caller owns, and an unchecked insert here lets one account attach
+    // another's document — permanently, because `documents.remove` refuses a
+    // document a node references (`06-auth-and-users.md` §4).
+    attachWithin(tx, userId, nodeId, input.documentIds ?? []);
     return detailFromRow(tx, treeRow);
   });
 }

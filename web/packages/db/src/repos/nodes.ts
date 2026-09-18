@@ -24,6 +24,7 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
+import { attachWithin } from "./documents.js";
 import type { NodeRow, TreeRow } from "./mappers.js";
 import { toResearchHighlight, toResearchNode } from "./mappers.js";
 import { enqueue } from "./queue.js";
@@ -201,9 +202,11 @@ export function admitChild(
       }
       throw error;
     }
-    (input.documentIds ?? []).forEach((documentId, position) => {
-      tx.insert(nodeDocuments).values({ nodeId, documentId, position }).run();
-    });
+    // Through the checked path: an id the caller supplied is not an id the
+    // caller owns, and an unchecked insert here lets one account attach
+    // another's document — permanently, because `documents.remove` refuses a
+    // document a node references (`06-auth-and-users.md` §4).
+    attachWithin(tx, userId, nodeId, input.documentIds ?? []);
     touchTree(tx, parent.treeId, at);
     return reload(tx, userId, nodeId);
   });
@@ -214,6 +217,15 @@ export interface StatusPatch {
   startedAt?: number | null | undefined;
   completedAt?: number | null | undefined;
   responsePreview?: string | null | undefined;
+  /**
+   * The sequence number a run has already reached. Set by the agent loop,
+   * which owns the counter for the duration of an attempt: a status write that
+   * publishes no `seq`-carrying event must record that number rather than
+   * allocate a fresh one, or the client sees its sequence jump and refetches
+   * (`docs/03-api-and-events.md` §3, `docs/05` §5). Unset — every caller
+   * outside a run — keeps the allocating bump.
+   */
+  seq?: number | undefined;
 }
 
 /**
@@ -248,7 +260,10 @@ export function setStatus(
             : patch.completedAt,
         responsePreview:
           patch.responsePreview === undefined ? node.responsePreview : patch.responsePreview,
-        runSeq: sql`${nodes.runSeq} + 1`,
+        runSeq:
+          patch.seq === undefined
+            ? sql`${nodes.runSeq} + 1`
+            : sql`max(${nodes.runSeq}, ${patch.seq})`,
       })
       .where(eq(nodes.id, nodeId))
       .run();
@@ -429,7 +444,13 @@ export function clearResumePending(db: SessionDatabase, userId: string, nodeId: 
 
 /** Marks a running node interrupted and flags it for auto-resume. Called by
  * the `SIGTERM` handler after the last checkpoint is persisted. */
-export function markInterrupted(db: SessionDatabase, userId: string, nodeId: string): ResearchNode {
+export function markInterrupted(
+  db: SessionDatabase,
+  userId: string,
+  nodeId: string,
+  /** The run's current sequence number; see `StatusPatch.seq`. */
+  seq?: number,
+): ResearchNode {
   return transact(db, (tx) => {
     const { node } = loadNode(tx, userId, nodeId);
     if (node.status !== "running") {
@@ -437,7 +458,11 @@ export function markInterrupted(db: SessionDatabase, userId: string, nodeId: str
     }
     const at = now();
     tx.update(nodes)
-      .set({ status: "interrupted", resumePending: true, runSeq: sql`${nodes.runSeq} + 1` })
+      .set({
+        status: "interrupted",
+        resumePending: true,
+        runSeq: seq === undefined ? sql`${nodes.runSeq} + 1` : sql`max(${nodes.runSeq}, ${seq})`,
+      })
       .where(eq(nodes.id, nodeId))
       .run();
     touchTree(tx, node.treeId, at);
@@ -452,6 +477,10 @@ export interface BootReconciliation {
   interruptedNodeIds: string[];
   /** Everything put back at the head of the queue. */
   requeuedNodeIds: string[];
+  /** `queued` nodes that had no `run_queue` row, given one. */
+  reenqueuedNodeIds: string[];
+  /** `complete` documents with no content, failed so they can be acted on. */
+  emptyDocumentNodeIds: string[];
 }
 
 /**
@@ -462,6 +491,11 @@ export interface BootReconciliation {
  * cut mid-attempt and becomes `interrupted` with `resume_pending`. `queued`
  * nodes stay queued. Every `resume_pending` node, including ones marked by a
  * clean `SIGTERM`, is re-queued ahead of new work.
+ *
+ * Boot is also the only place that can repair the two states no caller can
+ * reach afterwards, both of which are a crash between two transactions that a
+ * single one would have made impossible: a `queued` node with no queue row,
+ * and a `complete` document with no snapshot.
  */
 export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
   return transact(db, (tx) => {
@@ -469,6 +503,8 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
       adoptedNodeIds: [],
       interruptedNodeIds: [],
       requeuedNodeIds: [],
+      reenqueuedNodeIds: [],
+      emptyDocumentNodeIds: [],
     };
     const active = tx
       .select()
@@ -510,6 +546,65 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
         result.interruptedNodeIds.push(node.id);
       }
     }
+    // A `queued` node with no `run_queue` row is nothing's work: the claim
+    // loop reads the queue, so it waits forever, and Retry is offered only on
+    // `failed`, `cancelled` and `interrupted` — the user has no way out of it
+    // at all. The node row and its queue row are separate transactions under
+    // `synchronous = NORMAL` (`routers/research.ts`, `createTree` then
+    // `enqueueRun`), so a crash between them produces exactly this. Re-queued
+    // at the back rather than the head: the node is new work, not a resume.
+    const orphanedQueued = tx
+      .select({
+        id: nodes.id,
+        userId: nodes.userId,
+        model: nodes.model,
+        createdAt: nodes.createdAt,
+      })
+      .from(nodes)
+      .where(
+        and(
+          eq(nodes.status, "queued"),
+          eq(nodes.resumePending, false),
+          sql`not exists (select 1 from ${runQueue} where ${runQueue.nodeId} = ${nodes.id})`,
+        ),
+      )
+      .orderBy(asc(nodes.createdAt), asc(nodes.id))
+      .all();
+    for (const node of orphanedQueued) {
+      enqueueForRun(tx, node.userId, node.id, node.model, node.createdAt);
+      result.reenqueuedNodeIds.push(node.id);
+    }
+
+    // An imported document whose row landed `complete` but whose markdown did
+    // not (`routers/research.ts:importReport` writes them in two
+    // transactions). `getNodeContent` reports "this research produced no
+    // readable response", and both `updateDocument` and `retryNode` refuse it,
+    // so the thread is unreadable and undeletable-by-retry forever. Failing it
+    // is the smallest repair that gives the user something to act on.
+    const emptyDocuments = tx
+      .select({ id: nodes.id })
+      .from(nodes)
+      .where(
+        and(
+          eq(nodes.status, "complete"),
+          eq(nodes.kind, "document"),
+          sql`not exists (select 1 from ${responseSnapshots} where ${responseSnapshots.nodeId} = ${nodes.id})`,
+        ),
+      )
+      .orderBy(asc(nodes.id))
+      .all();
+    for (const node of emptyDocuments) {
+      tx.update(nodes)
+        .set({
+          status: "failed",
+          error: "this document was not saved completely; import it again",
+          runSeq: sql`${nodes.runSeq} + 1`,
+        })
+        .where(eq(nodes.id, node.id))
+        .run();
+      result.emptyDocumentNodeIds.push(node.id);
+    }
+
     // Every pending resume goes back to the head of the queue: `enqueued_at`
     // 0 sorts ahead of any real timestamp, and the ULID tie-break keeps the
     // original order among them.
