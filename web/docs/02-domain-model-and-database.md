@@ -243,7 +243,7 @@ tree, as in `membership: HashMap<treeId, folderId>`.
 `encyclopedia_pages`
 - `user_id` FK, `workspace_id` FK, `slug` text
 - `term`, `title`, `body` text; `status` text; `error` text null
-- `adapter` text, `model` text null, `generated_by` text null
+- `model` text (registry id; always `gemini-flash` today), `generated_by` text null
 - `links_json` text (slugs), `created_at`, `updated_at`
 - PK (`workspace_id`, `slug`)
 
@@ -366,11 +366,14 @@ Each item names the desktop source and the enforcing function.
   assembled by the runtime (`04-agent-runtime.md` §5).
 
 ### 5.5 Highlights
-- Anchor validation (`research.rs:1522-1546`): `version === 1`,
-  `projection === "answer-v1"`, `responseRevision` is exactly 64 lowercase
-  hex digits, `start < end`, `end ≤ 64 MiB`, `end - start === exact.length`
-  in UTF-16 code units, `exact.trim()` non-empty, `exact ≤ 64 KiB`,
-  `prefix`/`suffix ≤ 512 bytes`.
+- Anchor validation in the Rust evaluation order (`research.rs:1522-1546`),
+  because the order decides which message a doubly-invalid anchor gets:
+  `version === 1`; `projection === "answer-v1"`; `start < end` ("selection
+  cannot be empty"); `end ≤ 64 MiB`; `exact.trim()` non-empty; `end - start
+  === exact.length` in UTF-16 code units; `exact ≤ 64 KiB`; `prefix`/`suffix
+  ≤ 512 bytes`; `responseRevision` is exactly 64 lowercase hex digits. The
+  zod schema additionally requires integer, non-negative offsets at the tRPC
+  boundary. The shared `validateHighlightAnchor` is the single implementation.
 - The node must have a snapshot whose `revision` equals
   `anchor.responseRevision`; otherwise error "the research response changed;
   select the text again".
@@ -423,8 +426,9 @@ Each item names the desktop source and the enforcing function.
 - `feeds.highlights(userId)` returns newest-first items from non-archived
   trees with `nodeLabel` = node title or prompt, or the tree title for
   documents (`research.rs:485`).
-- `trees.summaries` computes `runningCount`, `failedCount`, `completedCount`,
-  `cancelledCount`, `hasUnseenUpdate` (latest `completed_at` > `last_viewed_at`),
+- `trees.summaries` computes `runningCount` (`queued | running`),
+  `failedCount`, `completedCount`, `cancelledCount` (`interrupted` counts in
+  no bucket and sets no attention flag; it is shown in the activity rail), `hasUnseenUpdate` (latest `completed_at` > `last_viewed_at`),
   `hasUnseenFailure` (latest failed `completed_at` > `last_viewed_at`)
   (`state.rs:3770-3776`) via grouped subqueries.
 

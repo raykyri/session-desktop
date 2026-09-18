@@ -71,7 +71,7 @@ from Rust:
   reference block cap.
 - `models.test.ts`: registry, admin gating predicate, effort mapping per
   provider, OpenRouter provider preferences (`zdr`, `data_collection`).
-- `recap.test.ts`: source extraction after last tool activity, raw-block
+- `researchRecap.test.ts`: source extraction after last tool activity, raw-block
   reset, `Summary:` stripping, 1200-char rejection.
 - `slug.test.ts`, `wikilinks.test.ts` parity with `wikilinks.rs` tests.
 - `tweets.test.ts`: URL extraction from markdown, 4-cap, placement, failure

@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "sideEffects": false,
   "main": "./src/index.ts",
   "types": "./dist/src/index.d.ts",
   "exports": {
@@ -13,5 +14,17 @@
   },
   "scripts": {
     "test": "ava"
+  },
+  "dependencies": {
+    "rehype-mathjax": "^7.1.0",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/mdast": "^4.0.4"
   }
 }
