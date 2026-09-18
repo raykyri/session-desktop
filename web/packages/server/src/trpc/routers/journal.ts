@@ -34,6 +34,28 @@ function isTweetEntry(entry: JournalEntry): entry is JournalTweetEntry {
   return entry.kind === "tweet";
 }
 
+/**
+ * The entry as it may be stored.
+ *
+ * `add` is not the only way a row reaches the table: `restore` hands back a row
+ * the client was holding and `update` replaces one outright, and both take the
+ * whole entry from the caller. Without this, the one validation `add` performs
+ * is trivially bypassed and a `javascript:` URL is stored for the renderer to
+ * defend against later. The hydrated snapshot's own permalink is checked for
+ * the same reason; its remaining URLs are produced by
+ * `tweetSnapshotFromSyndication`, which drops anything that is not a web URL.
+ */
+function storableEntry(entry: JournalEntry): JournalEntry {
+  const url = webUrl(entry.url);
+  if (!isTweetEntry(entry)) return { ...entry, url };
+  const tweet = entry.tweet;
+  return {
+    ...entry,
+    url,
+    ...(tweet ? { tweet: { ...tweet, url: webUrl(tweet.url) } } : {}),
+  };
+}
+
 export const journalRouter = router({
   /** The composer accepts a bare URL; whether it becomes a tweet card or a
    * link card is the server's call (`10` §3). */
@@ -64,22 +86,24 @@ export const journalRouter = router({
   restore: protectedProcedure
     .input(z.object({ entry: journalEntrySchema }))
     .mutation(({ ctx, input }) => {
-      const restored = repo(() => journal.restore(ctx.db, ctx.user.id, input.entry));
-      publish(ctx, "journal.entry.updated", { entry: input.entry });
+      const entry = storableEntry(input.entry);
+      const restored = repo(() => journal.restore(ctx.db, ctx.user.id, entry));
+      publish(ctx, "journal.entry.updated", { entry });
       return restored;
     }),
 
   update: protectedProcedure
     .input(z.object({ id: z.string(), entry: journalEntrySchema }))
     .mutation(({ ctx, input }) => {
-      const updated = repo(() => journal.update(ctx.db, ctx.user.id, input.id, input.entry));
+      const entry = storableEntry(input.entry);
+      const updated = repo(() => journal.update(ctx.db, ctx.user.id, input.id, entry));
       if (!updated) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: `journal entry ${input.id} was not found`,
         });
       }
-      publish(ctx, "journal.entry.updated", { entry: input.entry });
+      publish(ctx, "journal.entry.updated", { entry });
       return updated;
     }),
 

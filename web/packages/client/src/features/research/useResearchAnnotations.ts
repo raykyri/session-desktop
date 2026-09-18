@@ -36,7 +36,7 @@ import {
   sameCardTops,
 } from "./layout.js";
 import type { ConnectorGeometry, SegmentConnector } from "./layout.js";
-import { flatOffsetAtPoint, rangeForTextOffsets } from "./selection/dom.js";
+import { flatOffsetAtPoint, rangeForTextOffsets, responseRootNodeId } from "./selection/dom.js";
 import {
   ResearchHighlightPainter,
   RESEARCH_HIGHLIGHT_LAYER,
@@ -235,8 +235,8 @@ export function useResearchAnnotations(input: ResearchAnnotationsInput): Researc
     if (roots.length === 0) return;
     let frame: number | null = null;
     const observer = new MutationObserver(() => {
-      // The `<mark>` fallback rewrites these roots itself; reacting to its own
-      // work would loop.
+      // The fallback painter appends its own layer to these roots; reacting to
+      // its own work would loop.
       if (frame !== null || isFallbackPainting()) return;
       frame = requestAnimationFrame(() => {
         frame = null;
@@ -314,6 +314,11 @@ export function useResearchAnnotations(input: ResearchAnnotationsInput): Researc
     revisionsKey,
     viewKey,
     domNonce,
+    // A reflow rewraps the text, which moves the boxes the fallback paints from
+    // client rects. Re-running is free for the registry path (the resolution is
+    // unchanged, so nothing below it re-publishes) and is the only thing that
+    // keeps the fallback aligned after a resize.
+    layoutNonce,
     painter,
     segmentElement,
     highlightsByNode,
@@ -475,7 +480,19 @@ export function useResearchAnnotations(input: ResearchAnnotationsInput): Researc
     // the previous identity when nothing moved.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setConnectors((current) => (sameConnectors(current, next) ? current : next));
-  }, [chainNodeIds, resolvedCardTops, anchoredCardTops, layoutNonce, domNonce, segmentElement]);
+  }, [
+    chainNodeIds,
+    // The routes are read out of `anchoredRangesRef`, which pass 2 fills. A
+    // follow-up that arrives at an offset some other card already wanted
+    // changes that ref without changing either tops map, so the set of anchored
+    // cards is a dependency in its own right.
+    anchoredKey,
+    resolvedCardTops,
+    anchoredCardTops,
+    layoutNonce,
+    domNonce,
+    segmentElement,
+  ]);
 
   // Pass 6 — ask displacement. The composer is absolutely positioned inside the
   // rail; the cards it would cover are nudged with a transform, so the rail's
@@ -563,7 +580,7 @@ export function useResearchAnnotations(input: ResearchAnnotationsInput): Researc
   const onPointerMove = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     hoverSampleRef.current = {
       root: event.currentTarget,
-      nodeId: event.currentTarget.dataset["nodeId"] ?? null,
+      nodeId: responseRootNodeId(event.currentTarget),
       clientX: event.clientX,
       clientY: event.clientY,
     };

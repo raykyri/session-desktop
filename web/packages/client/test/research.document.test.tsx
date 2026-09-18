@@ -32,6 +32,28 @@ function assistantTurn(id: string, text: string): Turn {
   return { id, agentId: "n1", role: "assistant", blocks: [{ type: "text", text }], sourceIndex: 0 };
 }
 
+function groundedSearchTurn(id: string): Turn {
+  return {
+    id,
+    agentId: "n1",
+    role: "assistant",
+    blocks: [
+      { type: "toolUse", id: `${id}-u`, name: "google_search", input: { queries: ["memory"] } },
+      {
+        type: "toolResult",
+        toolUseId: `${id}-u`,
+        content: {
+          results: [{ url: "https://example.com/grounded", title: "Grounded" }],
+          searchEntryPoint:
+            '<style>.leak{position:fixed}</style><div class="chip"><a href="javascript:alert(1)">q</a></div>',
+        },
+        isError: false,
+      },
+    ],
+    sourceIndex: 0,
+  };
+}
+
 function searchTurn(id: string): Turn {
   return {
     id,
@@ -526,4 +548,72 @@ test.serial("a branch card opens its own page and the breadcrumb leads back", as
   // looked for inside the document.
   const article = document.querySelector("article") as HTMLElement;
   t.truthy(within(article).getByRole("button", { name: "Back" }));
+});
+
+test.serial("the answer menu acts on the thread as it is when it is opened", async (t) => {
+  // The rows are built from a value signature so they survive a streamed
+  // delta without being rebuilt; what that must not cost is freshness, so the
+  // Edit-document row reads the title the server will be asked to match at
+  // click time rather than the one the rows were built with.
+  const root = node({
+    id: "n1",
+    kind: "document",
+    status: "complete",
+    completedAt: 1_700_000_050_000,
+  });
+  const app = await mount({
+    nodes: [root],
+    contentByNode: { n1: contentFor(root, [assistantTurn("t1", "# Notes\n\nA document body.")]) },
+  });
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByLabelText("Answer actions").length > 0,
+    "the answer pane is up",
+  );
+
+  // A rename arrives the way `research.tree.updated` delivers one.
+  app.queryClient.setQueryData<ResearchTreeDetail>(["tree", "t1"], (current) =>
+    current ? { ...current, tree: { ...current.tree, title: "Renamed while open" } } : current,
+  );
+
+  fireEvent.click(screen.getAllByLabelText("Answer actions")[0] as HTMLElement);
+  await waitUntil(t, () => screen.queryAllByRole("menu").length > 0, "its menu opens");
+  const menu = screen.getAllByRole("menu").at(-1) as HTMLElement;
+  fireEvent.click(within(menu).getByText("Edit document"));
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByLabelText("Document title").length > 0,
+    "the editor opens",
+  );
+  t.is(
+    screen.getByLabelText<HTMLInputElement>("Document title").value,
+    "Renamed while open",
+    "the title it will send back is the current one, not the one it was built with",
+  );
+  app.unmount();
+});
+
+test.serial("the grounded entry point is shown, and cannot style the page", async (t) => {
+  const root = node({ id: "n1", status: "complete", completedAt: 1_700_000_050_000 });
+  const app = await mount({
+    nodes: [root],
+    contentByNode: {
+      n1: contentFor(root, [groundedSearchTurn("t1"), assistantTurn("t2", "Grounded answer.")]),
+    },
+  });
+
+  const sources = await screen.findByLabelText("Sources");
+  await waitUntil(t, () => sources.textContent?.includes("q") === true, "the chip row is shown");
+  // Google's terms require the entry point to be displayed, and it is — but a
+  // provider-authored `<style>` would be a page-wide stylesheet, so the tag is
+  // not in the allowlist and DOMPurify drops it in any case.
+  t.is(sources.querySelector("style"), null);
+  t.is(document.querySelector("style.leak"), null);
+  // The sanitizer still runs over what remains: the link keeps its text and
+  // loses its scheme.
+  const link = sources.querySelector("a[class='chip'], .chip a");
+  t.is(link?.getAttribute("href") ?? null, null);
+  app.unmount();
 });

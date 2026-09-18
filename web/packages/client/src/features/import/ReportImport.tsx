@@ -22,10 +22,7 @@ import { ControlButton } from "../../ui/Button.js";
 import { ConfirmDialogActionButton, Dialog } from "../../ui/Dialog.js";
 import { Textarea } from "../../ui/Field.js";
 import { CONTROL_BUTTON } from "../../ui/surfaces.js";
-
-/** The same ceilings the composer applies to a pasted document (`10` §5). */
-export const MAX_REPORT_WORDS = 10_000;
-export const MAX_REPORT_BYTES = 10 * 1024 * 1024;
+import { oversizeRefusal } from "../composer/limits.js";
 
 export interface StagedReport {
   name: string;
@@ -37,11 +34,9 @@ export interface StagedReport {
 export function reportRefusal(name: string, markdown: string, byteSize: number): string | null {
   if (!/\.md$/i.test(name)) return "Choose a Markdown (.md) report.";
   if (markdown.trim() === "") return "The report is empty.";
-  if (byteSize > MAX_REPORT_BYTES) return "That report is larger than 10 MiB.";
-  const words = markdown.trim().split(/\s+/).length;
-  if (words > MAX_REPORT_WORDS)
-    return `That report is ${words.toLocaleString()} words; the limit is 10,000.`;
-  return null;
+  // The picker already knows the file's size, so the ceiling is checked
+  // against that rather than against a re-encoding of its text.
+  return oversizeRefusal(markdown, "report", byteSize);
 }
 
 export function ReportImport({

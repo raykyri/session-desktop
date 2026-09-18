@@ -11,6 +11,11 @@ import {
   formatByteSize,
   nextComposerModel,
 } from "../src/features/composer/ResearchQueryComposer.js";
+import {
+  MAX_PROMPT_BYTES,
+  MAX_PROMPT_WORDS,
+  oversizeRefusal,
+} from "../src/features/composer/limits.js";
 import { homeDraftKey, useDraftsStore } from "../src/stores/drafts.js";
 
 import { summary } from "./fixtures.js";
@@ -67,6 +72,23 @@ test("Tab steps to the next launchable model and wraps", (t) => {
   t.is(nextComposerModel(models, "a"), "c", "an unavailable model is stepped over");
   t.is(nextComposerModel(models, "c"), "a", "and the list wraps");
   t.is(nextComposerModel([], "a"), "a", "with nothing to step to, nothing moves");
+});
+
+test("a question over the ceiling is refused in the words the import uses", (t) => {
+  t.is(oversizeRefusal("a short question", "question"), null);
+  t.is(
+    oversizeRefusal(`${"word ".repeat(10_001)}`, "question"),
+    "That question is 10,001 words; the limit is 10,000.",
+  );
+  t.is(
+    oversizeRefusal("x", "report", 11 * 1024 * 1024),
+    "That report is larger than 10 MiB.",
+    "the byte ceiling is checked against the size the caller already knows",
+  );
+  // Same numbers on both surfaces: the import dialog documents them as "the
+  // same limits the composer applies".
+  t.is(MAX_PROMPT_WORDS, 10_000);
+  t.is(MAX_PROMPT_BYTES, 10 * 1024 * 1024);
 });
 
 test("attachment sizes read in the unit that fits", (t) => {

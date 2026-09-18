@@ -442,3 +442,20 @@ test.serial("a status change leaves the highlights feed alone", (t) => {
     "the labels on those rows did not change",
   );
 });
+
+test.serial("archiving a thread retires its highlights, and restoring brings them back", (t) => {
+  for (const type of ["research.tree.archived", "research.tree.restored"] as const) {
+    const queryClient = client();
+    queryClient.setQueryData(queryKeys.tree("t1"), { tree: tree(), nodes: [node()] });
+    queryClient.setQueryData(queryKeys.trees(TREES_SCOPE), [summary()]);
+    queryClient.setQueryData(queryKeys.highlightsFeed("w1"), []);
+
+    const archivedAt = type === "research.tree.archived" ? 1_700_000_200_000 : null;
+    applyEventBatch([event(type, { tree: tree({ archivedAt }) })], queryClient);
+
+    t.true(
+      queryClient.getQueryState(queryKeys.highlightsFeed("w1"))?.isInvalidated,
+      `${type} moves the thread in or out of the feed's unarchived scope`,
+    );
+  }
+});

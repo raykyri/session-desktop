@@ -6,6 +6,7 @@
 // wrong — a Retry on a tweet still being hydrated, an "Open on X" on a plain
 // link — is the failure worth pinning.
 
+import { safeHref } from "@session/shared";
 import type { JournalEntry } from "@session/shared";
 
 export type JournalMenuAction = "open" | "copy" | "retry" | "delete";
@@ -19,10 +20,16 @@ export interface JournalMenuItem {
 }
 
 /** The URL an entry stands for: the canonical permalink once hydrated,
- * otherwise what the user entered. */
+ * otherwise what the user entered.
+ *
+ * Gated through `safeHref` even though `journal.add` only stores web URLs:
+ * `journal.restore` and `journal.update` take a whole entry from the client, so
+ * the stored URL is not a value this surface can assume was validated on the
+ * way in. An entry whose URL does not survive the gate simply has nothing to
+ * open or copy. */
 export function journalEntryUrl(entry: JournalEntry): string | null {
-  if (entry.kind === "link") return entry.url;
-  return entry.tweet?.url ?? entry.url;
+  const stored = entry.kind === "link" ? entry.url : (entry.tweet?.url ?? entry.url);
+  return safeHref(stored) ?? null;
 }
 
 export function journalEntryMenuItems(entry: JournalEntry): JournalMenuItem[] {

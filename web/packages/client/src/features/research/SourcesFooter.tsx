@@ -5,6 +5,15 @@
 // the answer. It is provider-authored HTML, so it goes through DOMPurify
 // before it reaches the DOM, with links forced through `safeHref` and opened
 // in a new tab.
+//
+// `style` is deliberately absent from the tag allowlist. A `<style>` block in
+// the page is global — it can restyle or cover app chrome, and its selectors
+// can probe the document — and the entry point is provider-authored, so it is
+// not markup that gets to write page-wide rules. Listing the tag would not have
+// worked in any case: DOMPurify removes `style` elements whatever the allowlist
+// says, so the entry it used to carry was configuration that never applied.
+// The `style` *attribute* stays: it is per element, DOMPurify runs its own CSS
+// filter over it, and it is what makes the chips look like chips.
 
 import { safeHref } from "@session/shared";
 import type { Turn } from "@session/shared";
@@ -15,7 +24,7 @@ import { useMemo } from "react";
 import { researchSources } from "./sources.js";
 
 const ENTRY_POINT_CONFIG = {
-  ALLOWED_TAGS: ["div", "span", "a", "style", "svg", "path", "g", "img"],
+  ALLOWED_TAGS: ["div", "span", "a", "svg", "path", "g", "img"],
   ALLOWED_ATTR: ["class", "style", "href", "target", "rel", "d", "viewBox", "fill", "src", "alt"],
 };
 

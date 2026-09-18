@@ -75,6 +75,54 @@ test("a plain URL becomes a link entry, and a bad URL is refused", async (t) => 
   t.false(await caller.journal.remove({ id: entry.id }));
 });
 
+test("restore and update re-validate the URL they are handed", async (t) => {
+  const harness = createHarness(t, { fetch: syndicationFetch({ urls: [] }) });
+  const caller = harness.caller(harness.addUser("reader"));
+  const entry = await caller.journal.add({ url: "https://example.com/post" });
+  t.true(await caller.journal.remove({ id: entry.id }));
+
+  // `add` is not the only door: both of these take the whole row from the
+  // caller, so the one check `add` makes has to be made here too.
+  await t.throwsAsync(
+    caller.journal.restore({ entry: { ...entry, url: "javascript:alert(1)" } }),
+    { message: /does not look like a link/ },
+    "a restored row cannot smuggle a script URL back in",
+  );
+  await t.throwsAsync(
+    caller.journal.update({ id: entry.id, entry: { ...entry, url: "file:///etc/passwd" } }),
+    { message: /does not look like a link/ },
+    "and neither can an update",
+  );
+
+  // The ordinary path still works, and the stored URL is the normalized one.
+  const restored = await caller.journal.restore({ entry });
+  t.true(restored);
+  const updated = await caller.journal.update({
+    id: entry.id,
+    entry: { ...entry, url: "https://example.com/moved" },
+  });
+  t.true(updated);
+});
+
+test("a restored post's permalink is checked too", async (t) => {
+  const log: FetchLog = { urls: [] };
+  const harness = createHarness(t, { fetch: syndicationFetch(log) });
+  const caller = harness.caller(harness.addUser("reader"));
+  const entry = await caller.journal.add({ url: TWEET_URL });
+  t.is(entry.kind === "tweet" ? entry.tweet?.url : null, TWEET_URL);
+  if (entry.kind !== "tweet" || !entry.tweet) {
+    t.fail("the fixture hydrates into a tweet entry");
+    return;
+  }
+  await t.throwsAsync(
+    caller.journal.restore({
+      entry: { ...entry, tweet: { ...entry.tweet, url: "javascript:alert(1)" } },
+    }),
+    { message: /does not look like a link/ },
+    "the snapshot's own permalink reaches an href in the card",
+  );
+});
+
 test("an unavailable post is recorded as a failed hydration, not an error", async (t) => {
   const log: FetchLog = { urls: [], status: 404, body: "not found" };
   const harness = createHarness(t, { fetch: syndicationFetch(log) });

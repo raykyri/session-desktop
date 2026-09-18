@@ -13,7 +13,7 @@
 
 import { isActiveResearchStatus } from "@session/shared";
 import type { ResearchNode, ResearchNodeContent, Turn } from "@session/shared";
-import { memo, useEffect, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
 import { useNodeContent } from "../../api/queries.js";
@@ -186,6 +186,29 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
     settled,
   ]);
 
+  // Bound once per node. An inline `ref` closure is a different function every
+  // render, which makes React detach and re-attach the ref — deleting and
+  // re-adding the entry in the page's element registry on every commit — and
+  // makes the memo on the pane and the rail miss unconditionally.
+  const nodeId = node.id;
+  const registerAnchor = useCallback(
+    (element: HTMLElement | null) => registerElement(nodeId, "anchor", element),
+    [registerElement, nodeId],
+  );
+  const registerGrid = useCallback(
+    (element: HTMLElement | null) => registerElement(nodeId, "grid", element),
+    [registerElement, nodeId],
+  );
+  const registerRoot = useCallback(
+    (element: HTMLElement | null) => registerElement(nodeId, "root", element),
+    [registerElement, nodeId],
+  );
+  const registerAside = useCallback(
+    (element: HTMLElement | null) => registerElement(nodeId, "aside", element),
+    [registerElement, nodeId],
+  );
+  const handleCopyAnswer = useCallback(() => onCopyAnswer(nodeId), [onCopyAnswer, nodeId]);
+
   const segmentActive = isActiveResearchStatus(node.status);
   // `[[Term]]` links resolve per segment, because the page a term opens records
   // the question it was linked from (`10-home-feed-journal-encyclopedia.md` §6).
@@ -198,7 +221,7 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
 
   return (
     <div
-      ref={(element) => registerElement(node.id, "anchor", element)}
+      ref={registerAnchor}
       className={cn("scroll-mt-4", index > 0 && "mt-11", isSelected && "is-selected")}
       data-segment-anchor={node.id}
     >
@@ -215,7 +238,7 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
         onToggleBookmark={props.onToggleBookmark}
       />
       <div
-        ref={(element) => registerElement(node.id, "grid", element)}
+        ref={registerGrid}
         className="relative grid max-w-full min-w-0 grid-cols-[minmax(0,var(--research-answer-max-width))_minmax(220px,260px)] items-start gap-(--research-column-gap) max-[900px]:grid-cols-[minmax(0,1fr)]"
         data-node-id={node.id}
       >
@@ -239,11 +262,11 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
             retryingNode={retryingNode}
             pointerOverHighlight={pointerOverHighlight}
             menuItems={answerMenuItems}
-            registerRoot={(element) => registerElement(node.id, "root", element)}
+            registerRoot={registerRoot}
             onExpandTurns={props.onExpandTurns}
             onShowFullTrace={props.onShowFullTrace}
             onRetryContentLoad={nodeContent.refetch}
-            onCopyAnswer={() => onCopyAnswer(node.id)}
+            onCopyAnswer={handleCopyAnswer}
             onCancelNode={props.onCancelNode}
             onRetryNode={props.onRetryNode}
             onRootMouseDown={props.onRootMouseDown}
@@ -262,7 +285,7 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
           anchoredCardTops={anchoredCardTops}
           resolvedCardTops={resolvedCardTops}
           askComposer={askComposer}
-          registerAside={(element) => registerElement(node.id, "aside", element)}
+          registerAside={registerAside}
           onSelectNode={onSelectNode}
           onCardHover={props.onCardHover}
         />

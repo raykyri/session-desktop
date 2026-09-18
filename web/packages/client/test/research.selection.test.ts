@@ -11,6 +11,8 @@ import test from "ava";
 
 import { captureResearchSelection } from "../src/features/research/selection/capture.js";
 import {
+  RESPONSE_ROOT_ATTRIBUTE,
+  RESPONSE_ROOT_SELECTOR,
   enclosingMessageFlatBounds,
   flatTextOffsetAt,
   formatResearchReplySnippet,
@@ -28,7 +30,7 @@ const REVISION = "a".repeat(64);
  * renders them. */
 function fixture(): HTMLElement {
   const root = document.createElement("div");
-  root.dataset["nodeId"] = "n1";
+  root.setAttribute(RESPONSE_ROOT_ATTRIBUTE, "n1");
   root.innerHTML = [
     '<section><div class="research-response-message"><p>Alpha beta gamma.</p></div></section>',
     '<details class="tool-block"><summary>web_search</summary></details>',
@@ -188,4 +190,30 @@ test("the reply snippet keeps eight words and marks the cut", (t) => {
   );
   t.is(formatResearchReplySnippet("short answer"), "short answer");
   t.is(formatResearchReplySnippet(""), "");
+});
+
+test("only the response content root claims to be one", (t) => {
+  // `data-node-id` is on the segment grid, on the rail and on every branch
+  // card, so a `closest()` walk from a selection that strayed out of the answer
+  // used to find one of those and measure an anchor against text no anchor can
+  // be resolved in. The projection root is marked with an attribute nothing
+  // else carries.
+  const grid = document.createElement("div");
+  grid.dataset["nodeId"] = "n1";
+  grid.innerHTML = [
+    `<div ${RESPONSE_ROOT_ATTRIBUTE}="n1" data-node-id="n1"><p id="answer">Alpha beta.</p></div>`,
+    '<aside data-node-id="n1"><button data-node-id="n2"><span id="card">Gamma</span></button></aside>',
+  ].join("");
+
+  const fromAnswer = grid.querySelector("#answer")?.closest(RESPONSE_ROOT_SELECTOR);
+  t.is(fromAnswer?.getAttribute(RESPONSE_ROOT_ATTRIBUTE), "n1");
+  t.is(
+    grid.querySelector("#card")?.closest(RESPONSE_ROOT_SELECTOR) ?? null,
+    null,
+    "a selection in the rail resolves to no projection root at all",
+  );
+  t.truthy(
+    grid.querySelector("#card")?.closest("[data-node-id]"),
+    "which is exactly what the old lookup would have found instead",
+  );
 });

@@ -304,10 +304,17 @@ export function DiagramBlock({ lang, code }: { lang: DiagramLang; code: string }
           </pre>
         </div>
       ) : state.status === "done" ? (
-        // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+        // A diagram is one control: it expands. The anchors inside it are
+        // sanitized into inert `#` hrefs and handled by the click below, so the
+        // enlarge action is what the element itself announces and what the
+        // keyboard gets — a pointer-only expander would leave the diagram's
+        // detail unreachable without a mouse (08 §7).
         <div
-          className="research-diagram-svg"
+          className="research-diagram-svg focus-visible:ring-focus-ring outline-none focus-visible:ring-2"
           data-lang={lang}
+          role="button"
+          tabIndex={0}
+          aria-label={`Enlarge the ${label} diagram`}
           onClick={(event) => {
             const href = diagramLinkFromEvent(event);
             if (!href) {
@@ -318,6 +325,13 @@ export function DiagramBlock({ lang, code }: { lang: DiagramLang; code: string }
             }
             event.preventDefault();
             window.open(href, "_blank", "noopener,noreferrer");
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            // Space scrolls the page by default, and the diagram is exactly the
+            // kind of tall element a reader would be scrolling past.
+            event.preventDefault();
+            openDiagramLightbox({ lang, label, svg: state.svg });
           }}
           onAuxClick={(event) => {
             // The injected anchors carry an inert href, but suppress auxiliary
