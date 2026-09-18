@@ -1,11 +1,28 @@
 import { useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
+import { useWorkspaces } from "../../api/queries.js";
+import { useWorkspaceScope } from "../../features/sidebar/scope.js";
 import { cn } from "../../lib/cn.js";
 import { useConnectionStore } from "../../stores/connection.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 import { HistoryNav } from "../../ui/HistoryNav.js";
 import { SidebarRestoreButton } from "../../ui/SidebarRestoreButton.js";
+
+/** Which workspace the stage is scoped to. Shown in the header rather than only
+ * in the sidebar because the sidebar collapses and the drawer closes, and every
+ * list under it is filtered by this one value (07 §3). */
+function WorkspaceScopeLabel() {
+  const { workspaceId } = useWorkspaceScope();
+  const workspaces = useWorkspaces();
+  const current = (workspaces.data ?? []).find((workspace) => workspace.id === workspaceId);
+  if (!current) return null;
+  return (
+    <span className="text-fg-subtle min-w-0 truncate text-xs" title={`Workspace: ${current.name}`}>
+      {current.name}
+    </span>
+  );
+}
 
 const STATUS_LABEL = {
   connecting: "Connecting",
@@ -70,6 +87,7 @@ export function StageHeader() {
           router.history.forward();
         }}
       />
+      <WorkspaceScopeLabel />
       <div className="flex-1" />
       <span
         className="text-fg-subtle flex items-center gap-1.5 text-xs"

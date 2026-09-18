@@ -45,6 +45,7 @@ import { notifyManager, type InfiniteData, type QueryClient } from "@tanstack/re
 import { useConnectionStore } from "../stores/connection.js";
 import { useLiveTurnsStore, type RunEvent } from "../stores/liveTurns.js";
 import { notificationFromPayload, useNotificationsStore } from "../stores/notifications.js";
+import { useRecapPendingStore } from "../stores/recapPending.js";
 import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
 
 import { setEventInterest } from "./api.js";
@@ -267,9 +268,11 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
     }
 
     case "research.recap.pending":
-      // A viewer hint with no cache behind it yet; the recap itself arrives as
-      // a node update, which is what the summary and the document render from.
-      // Phase 6's recap dialog gives this event a home (09 §6).
+      // A viewer hint with no cache behind it: the recap itself arrives as a
+      // node update, which is what the summary and the document render from.
+      // This only decides whether the answer shows a spinner in the recap's
+      // slot while the job runs (09 §2).
+      useRecapPendingStore.getState().set(event.nodeId, event.pending);
       return;
 
     case "models.updated": {

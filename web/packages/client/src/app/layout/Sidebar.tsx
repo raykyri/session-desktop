@@ -1,31 +1,21 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Dialog as BaseDialog } from "@base-ui/react/dialog";
+import { useNavigate } from "@tanstack/react-router";
 import { PanelLeftClose } from "lucide-react";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useLogout, useMe } from "../../api/queries.js";
+import { SidebarBody } from "../../features/sidebar/SidebarBody.js";
 import { cn } from "../../lib/cn.js";
 import {
+  NARROW_LAYOUT_WIDTH,
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
   useNavigationStore,
 } from "../../stores/navigation.js";
-import { useSettingsStore } from "../../stores/settings.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
-import { ShortcutHint } from "../../ui/Field.js";
 import { Menu, MenuItem, MenuSeparator } from "../../ui/Menu.js";
+import { DIALOG_BACKDROP } from "../../ui/surfaces.js";
 
-const NAV_ITEMS = [
-  { to: "/", label: "Home", shortcut: "⌃1" },
-  { to: "/bookmarks", label: "Bookmarks", shortcut: "⌃2" },
-  { to: "/highlights", label: "Highlights", shortcut: "⌃3" },
-] as const;
-
-/**
- * The sidebar frame: workspace/thread/folder/encyclopedia sections land here in
- * Phase 6 (09, 10). What exists now is the part the shell owns — the resize
- * handle, the collapsed state, and the top-level navigation — so the routes and
- * the shortcut dispatcher have something real to drive.
- */
 /** The account row in the sidebar footer: who is signed in, and the way out
  * (07 §3). `auth.logout` deletes the session rows; the Hono layer clears the
  * cookie on the same response, so the navigation that follows lands on
@@ -74,12 +64,40 @@ function AccountMenu() {
   );
 }
 
+/** True while the viewport is narrower than the drawer breakpoint (08 §7). */
+export function useNarrowLayout(): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    // `matchMedia` is the only layout measurement the shell makes, and jsdom
+    // ships without it; absent, the layout is the wide one, which is what a
+    // test renders against.
+    if (typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia(`(max-width: ${NARROW_LAYOUT_WIDTH - 1}px)`);
+    const sync = () => setNarrow(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+  return narrow;
+}
+
+function SidebarChrome({ onHide }: { onHide: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-2 px-3 py-2">
+      <span className="text-fg-heading text-sm font-semibold">Session</span>
+      <IconButton label="Hide sidebar" title="Hide sidebar (⇧⌘G)" onClick={onHide}>
+        <PanelLeftClose size={16} aria-hidden="true" />
+      </IconButton>
+    </div>
+  );
+}
+
 export function Sidebar() {
   const collapsed = useNavigationStore((state) => state.sidebarCollapsed);
   const width = useNavigationStore((state) => state.sidebarWidth);
   const setSidebarWidth = useNavigationStore((state) => state.setSidebarWidth);
   const setCollapsed = useNavigationStore((state) => state.setSidebarCollapsed);
-  const showShortcutHints = useSettingsStore((state) => state.settings.showShortcutHints);
+  const narrow = useNarrowLayout();
   const draggingRef = useRef(false);
 
   // Pointer capture on the handle rather than listeners on the shell: a drag
@@ -107,8 +125,36 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.style.setProperty("--sidebar-width", collapsed ? "0px" : `${width}px`);
-  }, [collapsed, width]);
+    document.documentElement.style.setProperty(
+      "--sidebar-width",
+      collapsed || narrow ? "0px" : `${width}px`,
+    );
+  }, [collapsed, narrow, width]);
+
+  // Under the breakpoint the column would leave no room for the reading
+  // surface, so the same body becomes a dismissable drawer over it (08 §7).
+  // `collapsed` doubles as the drawer's open flag, so the header's restore
+  // button and Shift-Cmd-G drive both layouts.
+  if (narrow) {
+    return (
+      <BaseDialog.Root open={!collapsed} onOpenChange={(open) => setCollapsed(!open)}>
+        <BaseDialog.Portal>
+          <BaseDialog.Backdrop className={DIALOG_BACKDROP} />
+          <BaseDialog.Popup
+            aria-label="Sidebar"
+            className={cn(
+              "border-border-divider bg-surface-sidebar fixed inset-y-0 left-0 z-(--z-dialog)",
+              "shadow-dialog flex w-[min(320px,85vw)] flex-col border-r",
+            )}
+          >
+            <SidebarChrome onHide={() => setCollapsed(true)} />
+            <SidebarBody />
+            <AccountMenu />
+          </BaseDialog.Popup>
+        </BaseDialog.Portal>
+      </BaseDialog.Root>
+    );
+  }
 
   if (collapsed) return null;
 
@@ -117,39 +163,8 @@ export function Sidebar() {
       className="border-border-divider bg-surface-sidebar relative flex h-full shrink-0 flex-col border-r"
       style={{ width }}
     >
-      <div className="flex items-center justify-between gap-2 px-3 py-2">
-        <span className="text-fg-heading text-sm font-semibold">Session</span>
-        <IconButton
-          label="Hide sidebar"
-          title="Hide sidebar (⇧⌘G)"
-          onClick={() => setCollapsed(true)}
-        >
-          <PanelLeftClose size={16} aria-hidden="true" />
-        </IconButton>
-      </div>
-
-      <nav aria-label="Sections" className="flex flex-col gap-0.5 px-2">
-        {NAV_ITEMS.map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            activeOptions={{ exact: item.to === "/" }}
-            className={cn(
-              "min-h-control-md flex items-center gap-2 rounded-md px-2.5 text-base",
-              "text-fg-secondary no-underline transition-colors duration-[120ms]",
-              "hover:bg-surface-sidebar-hover hover:text-fg-strong",
-              "data-[status=active]:bg-surface-sidebar-hover data-[status=active]:text-fg-strong",
-            )}
-            activeProps={{ "aria-current": "page" }}
-          >
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
-            {showShortcutHints ? <ShortcutHint>{item.shortcut}</ShortcutHint> : null}
-          </Link>
-        ))}
-      </nav>
-
-      <div className="flex-1" />
-
+      <SidebarChrome onHide={() => setCollapsed(true)} />
+      <SidebarBody />
       <AccountMenu />
 
       {/* The splitter. `role="slider"` rather than `separator`: a focusable
