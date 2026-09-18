@@ -1,9 +1,16 @@
-import { APP_TEXT_SIZE_MAX, APP_TEXT_SIZE_MIN } from "@session/shared";
+import {
+  APP_TEXT_SIZE_MAX,
+  APP_TEXT_SIZE_MIN,
+  RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES,
+  clampResearchLaunchInstruction,
+} from "@session/shared";
 import { useState } from "react";
 
+import { useRuntimeConfig, useSettings, useUpdateSettings, useUsage } from "../api/queries.js";
 import { BODY_FONT_OPTIONS } from "../lib/bodyFonts.js";
 import { useSettingsStore } from "../stores/settings.js";
-import { Field } from "../ui/Field.js";
+import { ControlButton } from "../ui/Button.js";
+import { Field, Textarea } from "../ui/Field.js";
 import { Select, type SelectOption } from "../ui/Select.js";
 import { TabPanel, Tabs } from "../ui/Tabs.js";
 import { Switch } from "../ui/Toggle.js";
@@ -27,11 +34,145 @@ const BODY_FONT_SELECT_OPTIONS: SelectOption[] = BODY_FONT_OPTIONS.map((option) 
 }));
 
 /**
- * Settings (07 §3). Every control here writes the local store, which
- * `ThemeEffects` applies to `<html>` synchronously. The server round-trip
- * (`settings.update`, and the Research and Usage sections that need it) joins
- * in the second half of Phase 5; the store is already the shape the server
- * stores, so that is a mutation call, not a rewrite.
+ * Research (07 §3, `06-auth-and-users.md` §6). The instruction is prepended to
+ * every launch, so it is stored on the account rather than in this tab: the
+ * 4 KiB cap is the shared clamp both halves apply, and it is applied here so
+ * the field cannot hold text the server would silently cut.
+ */
+function ResearchSection() {
+  const settings = useSettings();
+  const runtimeConfig = useRuntimeConfig();
+  const update = useUpdateSettings();
+  const setLocal = useSettingsStore((state) => state.set);
+  const defaultModel = useSettingsStore((state) => state.settings.defaultModel);
+  // The edit in progress, or `null` while the field shows the stored value.
+  // Deriving rather than mirroring in an effect is what makes the server's
+  // copy win the moment it lands (`06` §6) without clobbering typing.
+  const [edit, setEdit] = useState<string | null>(null);
+  const stored = settings.data?.researchLaunchInstruction ?? "";
+  const instruction = edit ?? stored;
+
+  const models = (runtimeConfig.data?.models ?? []).filter((model) => model.available);
+  const modelOptions: SelectOption[] = models.map((model) => ({
+    value: model.id,
+    label: model.label,
+    ...(model.adminOnly ? { detail: "admin" } : {}),
+  }));
+  const dirty = edit !== null && edit !== stored;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Field
+        label="Research instructions"
+        hint={`Prepended to every question. Up to ${RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES / 1024} KiB.`}
+      >
+        {({ id, describedBy }) => (
+          <div className="flex flex-col items-start gap-2">
+            <Textarea
+              id={id}
+              aria-describedby={describedBy}
+              rows={5}
+              className="w-full"
+              value={instruction}
+              onChange={(event) =>
+                setEdit(clampResearchLaunchInstruction(event.currentTarget.value))
+              }
+            />
+            <ControlButton
+              size="sm"
+              disabled={!dirty || update.isPending}
+              onClick={() =>
+                update.mutate(
+                  { researchLaunchInstruction: instruction.trim() === "" ? null : instruction },
+                  { onSuccess: () => setEdit(null) },
+                )
+              }
+            >
+              Save instructions
+            </ControlButton>
+          </div>
+        )}
+      </Field>
+
+      <Field label="Default model" hint="What the composer preselects.">
+        {() => (
+          <Select
+            label="Default model"
+            value={defaultModel}
+            options={
+              modelOptions.length > 0
+                ? modelOptions
+                : [{ value: defaultModel, label: defaultModel }]
+            }
+            onChange={(value) => setLocal("defaultModel", value)}
+          />
+        )}
+      </Field>
+    </div>
+  );
+}
+
+function tokenRow(label: string, value: number) {
+  return { label, value: value.toLocaleString() };
+}
+
+/**
+ * Usage (07 §3). `usage.summary` is one UTC day of totals against the
+ * account's limits; it carries no per-model dimension, so this is a totals
+ * table rather than the by-model breakdown `03-api-and-events.md` §2
+ * describes.
+ */
+function UsageSection() {
+  const usage = useUsage();
+  const summary = usage.data;
+  if (!summary) {
+    return (
+      <p className="text-fg-muted m-0 text-base">
+        {usage.isLoading ? "Loading…" : "No usage recorded."}
+      </p>
+    );
+  }
+  const rows = [
+    tokenRow("Input tokens", summary.inputTokens),
+    tokenRow("Output tokens", summary.outputTokens),
+    tokenRow("Reasoning tokens", summary.reasoningTokens),
+    tokenRow("Cached tokens", summary.cachedTokens),
+    tokenRow("Runs", summary.runs),
+    { label: "Estimated cost", value: `$${(summary.costEstimateMicros / 1_000_000).toFixed(2)}` },
+    {
+      label: "Daily token limit",
+      value: summary.dailyTokenLimit == null ? "none" : summary.dailyTokenLimit.toLocaleString(),
+    },
+    {
+      label: "Daily run limit",
+      value: summary.dailyRunLimit == null ? "none" : summary.dailyRunLimit.toLocaleString(),
+    },
+  ];
+  return (
+    <table className="w-full border-collapse text-base">
+      <caption className="text-fg-muted pb-2 text-left text-sm">
+        {new Date(summary.day).toISOString().slice(0, 10)}, UTC
+      </caption>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.label} className="border-border-divider border-t">
+            <th scope="row" className="text-fg-secondary py-1.5 text-left font-normal">
+              {row.label}
+            </th>
+            <td className="py-1.5 text-right tabular-nums">{row.value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/**
+ * Settings (07 §3). Every appearance control writes the local store, which
+ * `ThemeEffects` applies to `<html>` synchronously and `SessionBoot` pushes to
+ * `settings.update` on a 300 ms debounce; the two fields that are not part of
+ * `UserSettings` — the launch instruction and the default workspace — are
+ * written directly, because they have no local mirror to debounce.
  */
 export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
@@ -51,6 +192,8 @@ export function SettingsPage() {
           tabs={[
             { value: "appearance", label: "Appearance" },
             { value: "general", label: "General" },
+            { value: "research", label: "Research" },
+            { value: "usage", label: "Usage" },
           ]}
         >
           <TabPanel value="appearance">
@@ -152,6 +295,14 @@ export function SettingsPage() {
                 onCheckedChange={(checked) => set("requireCmdEnterToSend", checked)}
               />
             </div>
+          </TabPanel>
+
+          <TabPanel value="research">
+            <ResearchSection />
+          </TabPanel>
+
+          <TabPanel value="usage">
+            <UsageSection />
           </TabPanel>
         </Tabs>
       </div>

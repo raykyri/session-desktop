@@ -15,17 +15,22 @@ packages/client/
   src/
     main.tsx                 createRoot, providers (Query, Router, Theme)
     app/
-      router.tsx             route tree (code-based)
+      router.tsx             route tree (code-based), auth guard, boot loader
       providers.tsx
+      queryClient.ts         the client the router and the providers share
+      SessionBoot.tsx        subscription, draft writer, settings mirror
       layout/                AppShell, Sidebar, StageHeader (history nav)
     routes/
       login.tsx  home.tsx  bookmarks.tsx  highlights.tsx
       research.$treeId.tsx  encyclopedia.$slug.tsx  settings.tsx  admin.tsx
     api/
-      trpc.ts                createTRPCClient + TanStack Query integration
+      trpc.ts                createTRPCClient (batch + subscription links); the only
+                             module that names `@session/server`, as a type
       api.ts                 desktop-named wrappers (createResearchTree, …)
+      cache.ts               query key factory and the cache writers events and
+                             mutations share
       events.ts              SSE bridge: subscription → coalesced cache patches + stores
-      queries.ts             query key factory and hooks (useTreeSummaries, useNodeContent, …)
+      queries.ts             hooks and query options (useTreeSummaries, useNodeContent, …)
     stores/
       settings.ts            Zustand persist; mirrors server UserSettings
       navigation.ts          per-document node history, folder scope, visibility filter
@@ -52,7 +57,7 @@ packages/client/
 ```
 
 Dependencies: `react`, `react-dom`, `@tanstack/react-router`,
-`@tanstack/react-query`, `@trpc/client`, `@trpc/tanstack-react-query`,
+`@tanstack/react-query`, `@trpc/client`,
 `zustand`, `@base-ui-components/react`, `lucide-react`,
 `@tanstack/react-virtual`, `react-markdown`, `remark-gfm`, `remark-breaks`,
 `remark-math`, `rehype-mathjax`, `mermaid`, `@viz-js/viz`, `dompurify`,
@@ -67,11 +72,21 @@ class on `<html>` from the settings store (`App.tsx:1926-1969` logic). A
 `<meta name="color-scheme">` replaces `getCurrentWindow().setTheme`.
 
 Boot sequence: settings store hydrates from localStorage → router renders →
-`auth.me` resolves (redirect to `/login` if null) → `settings.get`,
-`system.runtimeConfig`, `workspaces.list`, `research.listTrees`,
-`folders.get`, `encyclopedia.listPages` load in parallel → SSE subscription
-opens. No "window ready" handshake; the desktop's hidden-window flash
-prevention is unnecessary.
+the shell route's `beforeLoad` resolves `auth.me` through the query cache and
+redirects to `/login` if it is null (`/login` and `/dev/ui` are outside the
+guard) → its loader warms `settings.get`, `system.runtimeConfig`,
+`workspaces.list`, `research.listTrees`, `folders.get`,
+`encyclopedia.listPages` in parallel, without blocking the first paint on them
+→ `SessionBoot` opens the SSE subscription, installs the draft writer, and
+takes the server's settings over the local mirror. No "window ready"
+handshake; the desktop's hidden-window flash prevention is unnecessary.
+
+The sign-in page reads the refusal the server put on the redirect
+(`/login?error=not_allowed|invite_required|invite_invalid|expired_state|
+missing_code|exchange_failed|profile_failed`, `server/src/auth/github.ts`) and
+sends `return_to` back through `/auth/github`. A deployment with no GitHub
+credentials answers that route with a 503 page rather than a redirect, so
+"signups are closed" has no parameter to render.
 
 ## 3. Routes
 
@@ -118,7 +133,13 @@ Query keys (factory in `api/queries.ts`):
 ["encyclopedia", workspaceId]            listPages
 ["encyclopediaPage", workspaceId, slug]  getPage
 ["activeNodes"]                          research.listActivity
+["adminUsers"]                           admin.listUsers
 ```
+
+The factory lives in `api/cache.ts` and is re-exported from `api/queries.ts`,
+which is the import path the rest of the client uses: the cache writers the
+bridge and the mutations share need the keys, and the hooks need the writers,
+so the keys sit below both rather than beside one of them.
 
 Defaults: `staleTime: Infinity` for event-patched lists (events keep them
 fresh), `refetchOnWindowFocus: false`, `retry: 1`. Mutations write their
@@ -147,7 +168,12 @@ Per event type:
   refetch for every displayed active node; the `liveTurns` store applies only
   `seq === lastSeq + 1` and refetches on gaps
   (`05-run-lifecycle-and-streaming.md` §4, §9). The bridge also publishes the
-  interest set (`events.setInterest`) from the mounted document views.
+  interest set (`events.setInterest`, debounced 200 ms) from a reference-counted
+  registry the mounted document views join through `useNodeInterest`.
+- The first event of every connection is `connection.ready`, carrying the
+  `connectionId` that `events.setInterest` addresses; a second one means the
+  link reconnected, which is what triggers the invalidation and the snapshot
+  re-read above.
 
 Connection status (`connection` store) drives a subtle indicator and enables
 the snapshot-poll fallback for displayed active nodes when SSE is down.

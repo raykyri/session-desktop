@@ -1,0 +1,198 @@
+// The query key factory (07 §4.1) and the cache writers built on it.
+//
+// Keys are built here and nowhere else, so a cache patch in the event bridge
+// and a read in a component cannot disagree about the shape of a key. The
+// writers below are shared by the bridge and by the mutations: a tree summary
+// patched from an event and the same summary patched from the mutation that
+// caused the event must land identically, or a list flickers between two
+// truths on every round trip.
+//
+// `queries.ts` re-exports `queryKeys`, which is the import path the rest of
+// the client uses; the factory lives here so the writers can use it without a
+// cycle through the hooks.
+
+import type {
+  RecentActivityPage,
+  RecentResearchQuery,
+  ResearchNode,
+  ResearchTreeDetail,
+  ResearchTreeSummary,
+} from "@session/shared";
+import { upsertResearchActivity } from "@session/shared";
+import type { InfiniteData, QueryClient } from "@tanstack/react-query";
+
+export const queryKeys = {
+  me: () => ["me"] as const,
+  settings: () => ["settings"] as const,
+  runtimeConfig: () => ["runtimeConfig"] as const,
+  usage: () => ["usage"] as const,
+  workspaces: () => ["workspaces"] as const,
+  documents: (workspaceId: string) => ["documents", workspaceId] as const,
+  folders: (workspaceId: string) => ["folders", workspaceId] as const,
+  trees: (scope: { workspaceId: string; includeArchived: boolean }) => ["trees", scope] as const,
+  tree: (treeId: string) => ["tree", treeId] as const,
+  nodeContent: (nodeId: string) => ["nodeContent", nodeId] as const,
+  activity: (scope: { workspaceId: string; bookmarkedOnly: boolean }) =>
+    ["activity", scope] as const,
+  highlightsFeed: (workspaceId: string) => ["highlightsFeed", workspaceId] as const,
+  encyclopedia: (workspaceId: string) => ["encyclopedia", workspaceId] as const,
+  encyclopediaPage: (workspaceId: string, slug: string) =>
+    ["encyclopediaPage", workspaceId, slug] as const,
+  activeNodes: () => ["activeNodes"] as const,
+  adminUsers: () => ["adminUsers"] as const,
+} as const;
+
+/** The lists the bridge invalidates on reconnect: everything the server keeps
+ * fresh through events rather than through refetching (07 §4.2). */
+export const eventPatchedListKeys = [
+  "trees",
+  "tree",
+  "activity",
+  "highlightsFeed",
+  "activeNodes",
+  "encyclopedia",
+  "workspaces",
+] as const;
+
+export function invalidateKeys(
+  client: QueryClient,
+  ...keys: readonly (readonly unknown[])[]
+): void {
+  for (const queryKey of keys) void client.invalidateQueries({ queryKey });
+}
+
+/** Every `["trees", scope]` list, whatever its workspace and archive scope. */
+export function eachTreeList(
+  client: QueryClient,
+  update: (summaries: ResearchTreeSummary[]) => ResearchTreeSummary[],
+): void {
+  client.setQueriesData<ResearchTreeSummary[]>({ queryKey: ["trees"] }, (summaries) =>
+    summaries ? update(summaries) : summaries,
+  );
+}
+
+export function mapSummaries(
+  client: QueryClient,
+  patch: (summary: ResearchTreeSummary) => ResearchTreeSummary,
+): void {
+  eachTreeList(client, (summaries) => {
+    let changed = false;
+    const next = summaries.map((summary) => {
+      const patched = patch(summary);
+      if (patched !== summary) changed = true;
+      return patched;
+    });
+    return changed ? next : summaries;
+  });
+}
+
+/** Applies a reducer to a cached tree detail, if one is cached. A detail that
+ * was never read is not created here: the reducers patch what the user is
+ * looking at, they do not prefetch. */
+export function patchDetail(
+  client: QueryClient,
+  treeId: string,
+  patch: (detail: ResearchTreeDetail | null) => ResearchTreeDetail | null,
+): void {
+  const key = queryKeys.tree(treeId);
+  const current = client.getQueryData<ResearchTreeDetail>(key);
+  if (!current) return;
+  const next = patch(current);
+  if (next && next !== current) client.setQueryData(key, next);
+}
+
+/** The node as the caches last saw it. Count deltas on a tree summary are
+ * ambiguous without it, so its absence is what makes a caller fall back to an
+ * authoritative refetch rather than guess. */
+export function cachedNode(
+  client: QueryClient,
+  treeId: string,
+  nodeId: string,
+): ResearchNode | undefined {
+  const detail = client.getQueryData<ResearchTreeDetail>(queryKeys.tree(treeId));
+  const fromDetail = detail?.nodes.find((node) => node.id === nodeId);
+  if (fromDetail) return fromDetail;
+  return client
+    .getQueryData<ResearchNode[]>(queryKeys.activeNodes())
+    ?.find((node) => node.id === nodeId);
+}
+
+export function patchActiveNodes(client: QueryClient, node: ResearchNode): void {
+  client.setQueryData<ResearchNode[]>(queryKeys.activeNodes(), (nodes) =>
+    nodes ? upsertResearchActivity(nodes, node) : nodes,
+  );
+}
+
+export function dropActiveNodes(
+  client: QueryClient,
+  predicate: (node: ResearchNode) => boolean,
+): void {
+  client.setQueryData<ResearchNode[]>(queryKeys.activeNodes(), (nodes) => {
+    if (!nodes) return nodes;
+    const next = nodes.filter((node) => !predicate(node));
+    return next.length === nodes.length ? nodes : next;
+  });
+}
+
+/** The tree a node belongs to, as far as the caches know. */
+export function treeIdForNode(client: QueryClient, nodeId: string): string | null {
+  const active = client
+    .getQueryData<ResearchNode[]>(queryKeys.activeNodes())
+    ?.find((node) => node.id === nodeId);
+  if (active) return active.treeId;
+  for (const query of client.getQueryCache().findAll({ queryKey: ["tree"] })) {
+    const detail = query.state.data as ResearchTreeDetail | undefined;
+    if (detail?.nodes.some((node) => node.id === nodeId)) return detail.tree.id;
+  }
+  return null;
+}
+
+/**
+ * The Home feed carries a compact projection of a run, not the node row, so
+ * the shared node reducers do not apply to it. The three fields a node event
+ * is authoritative for in that projection are patched in place; anything
+ * structural (a new question, a removed branch) invalidates instead, because
+ * the feed is keyset-paginated and there is no correct place to splice a row.
+ */
+export function patchActivityFeedNode(client: QueryClient, node: ResearchNode): void {
+  client.setQueriesData<InfiniteData<RecentActivityPage>>({ queryKey: ["activity"] }, (data) => {
+    if (!data) return data;
+    let changed = false;
+    const patchQuery = (query: RecentResearchQuery): RecentResearchQuery => {
+      const children = query.children?.map(patchQuery);
+      const childrenChanged =
+        children !== undefined &&
+        children.some((child, index) => child !== query.children?.[index]);
+      if (query.nodeId !== node.id) {
+        if (!childrenChanged) return query;
+        changed = true;
+        return { ...query, children };
+      }
+      const title = node.title ?? null;
+      const recap = node.recap?.text ?? null;
+      if (
+        query.status === node.status &&
+        (query.title ?? null) === title &&
+        (query.recap ?? null) === recap &&
+        !childrenChanged
+      ) {
+        return query;
+      }
+      changed = true;
+      return {
+        ...query,
+        ...(children === undefined ? {} : { children }),
+        status: node.status,
+        title,
+        recap,
+      };
+    };
+    const pages = data.pages.map((page) => {
+      const items = page.items.map((item) =>
+        item.kind === "research-query" ? { ...item, query: patchQuery(item.query) } : item,
+      );
+      return items.some((item, index) => item !== page.items[index]) ? { ...page, items } : page;
+    });
+    return changed ? { ...data, pages } : data;
+  });
+}

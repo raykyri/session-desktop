@@ -1,7 +1,8 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { PanelLeftClose } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
 
+import { useLogout, useMe } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import {
   SIDEBAR_MAX_WIDTH,
@@ -9,8 +10,9 @@ import {
   useNavigationStore,
 } from "../../stores/navigation.js";
 import { useSettingsStore } from "../../stores/settings.js";
-import { IconButton } from "../../ui/Button.js";
+import { ControlButton, IconButton } from "../../ui/Button.js";
 import { ShortcutHint } from "../../ui/Field.js";
+import { Menu, MenuItem, MenuSeparator } from "../../ui/Menu.js";
 
 const NAV_ITEMS = [
   { to: "/", label: "Home", shortcut: "⌃1" },
@@ -24,6 +26,54 @@ const NAV_ITEMS = [
  * handle, the collapsed state, and the top-level navigation — so the routes and
  * the shortcut dispatcher have something real to drive.
  */
+/** The account row in the sidebar footer: who is signed in, and the way out
+ * (07 §3). `auth.logout` deletes the session rows; the Hono layer clears the
+ * cookie on the same response, so the navigation that follows lands on
+ * `/login` with no session to find. */
+function AccountMenu() {
+  const navigate = useNavigate();
+  const me = useMe();
+  const logout = useLogout();
+  const user = me.data;
+  if (!user) return null;
+
+  return (
+    <div className="border-border-divider flex items-center gap-2 border-t px-2 py-2">
+      <Menu
+        side="top"
+        align="start"
+        label="Account"
+        trigger={
+          <ControlButton size="sm" className="min-w-0 flex-1 justify-start gap-2">
+            <span className="min-w-0 truncate">{user.login}</span>
+          </ControlButton>
+        }
+      >
+        {user.isAdmin ? (
+          <>
+            <MenuItem onClick={() => void navigate({ to: "/admin" })}>Admin</MenuItem>
+            <MenuSeparator />
+          </>
+        ) : null}
+        <MenuItem onClick={() => void navigate({ to: "/settings" })} hint="⌘,">
+          Settings
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem
+          onClick={() => {
+            logout.mutate(undefined, {
+              // Whatever the server said, this tab is done with the session.
+              onSettled: () => void navigate({ to: "/login" }),
+            });
+          }}
+        >
+          Sign out
+        </MenuItem>
+      </Menu>
+    </div>
+  );
+}
+
 export function Sidebar() {
   const collapsed = useNavigationStore((state) => state.sidebarCollapsed);
   const width = useNavigationStore((state) => state.sidebarWidth);
@@ -99,6 +149,8 @@ export function Sidebar() {
       </nav>
 
       <div className="flex-1" />
+
+      <AccountMenu />
 
       {/* The splitter. `role="slider"` rather than `separator`: a focusable
           window splitter is a widget, and the slider role is the one that

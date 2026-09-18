@@ -9,6 +9,7 @@ import { CommandPalette, type PaletteCommand } from "../../ui/CommandPalette.js"
 import { DiagramLightbox, ImageLightbox } from "../../ui/Lightboxes.js";
 import { NotificationStack } from "../../ui/NotificationStack.js";
 import { useUserNotifications } from "../../ui/useUserNotifications.js";
+import { SessionBoot } from "../SessionBoot.js";
 
 import { Sidebar } from "./Sidebar.js";
 import { StageHeader } from "./StageHeader.js";
@@ -170,6 +171,7 @@ export function AppShell() {
 
   return (
     <div className="bg-surface-workspace text-fg-primary flex h-full w-full overflow-hidden">
+      <SessionBoot />
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <StageHeader />
