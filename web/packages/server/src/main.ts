@@ -8,6 +8,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { serve } from "@hono/node-server";
 import { artifacts, auth, closeDatabase, nodes, openDatabase } from "@session/db";
@@ -16,6 +17,7 @@ import { createApp } from "./app.js";
 import { loadConfig, loadDotenvForDevelopment, type Config } from "./config.js";
 import type { ServerDeps } from "./deps.js";
 import { EventBus } from "./events/bus.js";
+import { createReadiness } from "./health.js";
 import { defaultLogger, type Logger } from "./logger.js";
 import { RateLimiter } from "./middleware/rateLimit.js";
 import { createRunsService } from "./runs/service.js";
@@ -25,6 +27,17 @@ import { createRunsService } from "./runs/service.js";
  * `GOOGLE_APPLICATION_CREDENTIALS` at it: the Google auth library reads a path,
  * and Fly secrets hold strings (`04-agent-runtime.md` §11).
  */
+/**
+ * `packages/db/migrations`, passed explicitly rather than taken from
+ * `@session/db`'s own default. The server ships as one esbuild bundle at
+ * `packages/server/dist/server.mjs`, which inlines the database package, so a
+ * path the database module resolves against its own `import.meta.url` would
+ * land next to the bundle instead. Both this module and the bundle sit one
+ * directory below `packages/server`, so this URL is the same in development,
+ * in the test runner, and in the image.
+ */
+export const MIGRATIONS_DIRECTORY = fileURLToPath(new URL("../../db/migrations", import.meta.url));
+
 export function writeVertexCredentials(config: Config): string | null {
   if (config.vertex.credentialsJson === null) {
     return null;
@@ -92,7 +105,7 @@ export function main(): RunningServer {
   prepareDataDirectories(config);
   writeVertexCredentials(config);
 
-  const db = openDatabase(config.databasePath);
+  const db = openDatabase(config.databasePath, { migrationsFolder: MIGRATIONS_DIRECTORY });
   const eventBus = new EventBus();
   // The agent loop is constructed before reconciliation so the nodes the last
   // process left behind are picked up by the claim loop as soon as they are
@@ -107,8 +120,13 @@ export function main(): RunningServer {
   }, MAINTENANCE_INTERVAL_MS);
   maintenance.unref();
 
-  const app = createApp({ ...deps, limiter });
+  // Migrations ran inside `openDatabase` and the previous process's runs are
+  // back in the queue, so the only thing left before the check may pass is the
+  // listen itself (`13-deployment-fly.md` §5).
+  const readiness = createReadiness("starting");
+  const app = createApp({ ...deps, limiter, readiness });
   const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
+    readiness.ready();
     logger.info({ host: config.host, port: info.port }, "session-server listening");
   });
 
@@ -118,6 +136,9 @@ export function main(): RunningServer {
       return;
     }
     closing = true;
+    // Fails `/healthz` before anything else happens, so Fly stops routing to
+    // this machine while the open attempts persist their checkpoints.
+    readiness.drain();
     clearInterval(maintenance);
     logger.info({ signal }, "shutting down");
     // Stop admitting first, then let open attempts persist their checkpoint

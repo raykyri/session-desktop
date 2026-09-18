@@ -1,0 +1,77 @@
+# Fly configuration (`docs/13-deployment-fly.md` §1, §2).
+#
+#   fly deploy -c web/fly.toml
+#
+# Secrets (never here): GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
+# GOOGLE_APPLICATION_CREDENTIALS_JSON, OPENROUTER_API_KEY, ANTHROPIC_API_KEY,
+# PARALLEL_API_KEY, TAVILY_API_KEY, LITESTREAM_REPLICA_URL, AWS_ACCESS_KEY_ID,
+# AWS_SECRET_ACCESS_KEY, SESSION_METRICS_TOKEN, SESSION_ALLOWED_GITHUB_LOGINS,
+# SENTRY_DSN (`13` §4).
+
+app = "session-dev"
+primary_region = "sjc"
+
+# One machine holds the volume and the open provider streams, so a deploy stops
+# it before the next one starts and the drain has to finish first.
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "8080"
+  NODE_ENV = "production"
+  SESSION_PUBLIC_ORIGIN = "https://session.dev"
+  SESSION_ARTIFACT_ORIGIN = "https://artifacts.session.dev"
+  SESSION_DATA_DIR = "/data"
+  SESSION_RUNS_PER_USER = "2"
+  SESSION_RUNS_GEMINI = "8"
+  SESSION_RUNS_OPENROUTER = "8"
+  SESSION_RUNS_ANTHROPIC = "2"
+  SESSION_RUN_TIMEOUT_SECONDS = "900"
+  SESSION_ENFORCE_LIMITS = "0"
+  SESSION_DAILY_TOKENS = "1000000"
+  SESSION_DAILY_RUNS = "10"
+  SESSION_REQUIRE_INVITE = "0"
+  SESSION_SEARCH_VENDOR = "parallel"
+  GOOGLE_VERTEX_PROJECT = "session-dev"
+  GOOGLE_VERTEX_LOCATION = "global"
+
+[[mounts]]
+  source = "session_data"
+  destination = "/data"
+  initial_size = "20gb"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # A machine that stops loses the queue it was draining and the SSE clients
+  # attached to it; it stays up.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 400
+
+  # `/healthz` is 503 until migrations and run reconciliation finish and from
+  # the first moment of the drain (`13` §5), so the proxy follows the boot.
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"
+
+[deploy]
+  # One machine with a volume cannot roll: the old one has to release the
+  # volume before the new one can claim it.
+  strategy = "immediate"

@@ -39,17 +39,79 @@ jobs:
       - run: npm ci
       - run: npm test
 
-  # TODO(Phase 8, docs/13-deployment-fly.md): enable once web/Dockerfile and
-  # web/fly.toml exist. The job builds the image without pushing; deploys stay
-  # behind a manual approval environment holding FLY_API_TOKEN.
-  #
-  # docker:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: docker/setup-buildx-action@v3
-  #     - uses: docker/build-push-action@v6
-  #       with:
-  #         context: web
-  #         file: web/Dockerfile
-  #         push: false
+  # Phase 6 adds the Playwright config and the browsers it needs
+  # (`web/docs/12-testing-linting-ci.md` §3.6). Until then `npm run test:e2e`
+  # is a placeholder that exits non-zero, so the job skips the run when no
+  # config is present and never blocks a merge.
+  # TODO(Phase 6): drop `continue-on-error` and the guard once
+  # `web/playwright.config.ts` lands.
+  e2e:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - id: config
+        run: |
+          if ls playwright.config.* >/dev/null 2>&1; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "no Playwright config yet; skipping e2e" >&2
+          fi
+      - if: steps.config.outputs.present == 'true'
+        run: npm run build
+      - if: steps.config.outputs.present == 'true'
+        run: npx playwright install --with-deps chromium
+      - if: steps.config.outputs.present == 'true'
+        run: npm run test:e2e
+      - if: failure() && steps.config.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: web/test-results
+          if-no-files-found: ignore
+
+  # The image is built on every run so a Dockerfile change cannot break a
+  # deploy unnoticed; it is never pushed. `flyctl deploy --remote-only` builds
+  # it again on Fly's builder, which is the one that matters.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: web
+          file: web/Dockerfile
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Manual approval: the `production` environment holds FLY_API_TOKEN and its
+  # reviewers. One machine with a volume deploys with `strategy = "immediate"`,
+  # so the old process drains and exits before the new one boots
+  # (`web/docs/13-deployment-fly.md` §2, §5).
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [check, test, docker]
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy-session-dev
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # The positional directory is the build context; without it flyctl would
+      # hand Docker the repository root, where `package.json` is the desktop's.
+      - run: flyctl deploy web --remote-only -c web/fly.toml
+        working-directory: ${{ github.workspace }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
