@@ -5,6 +5,8 @@
 
 import { z } from "zod";
 
+import { DEFAULT_MODEL_ID } from "../models/registry.js";
+
 export const userSchema = z.object({
   id: z.string(),
   login: z.string(),
@@ -67,6 +69,30 @@ export const userSettingsSchema = z.object({
 });
 
 export type UserSettings = z.infer<typeof userSettingsSchema>;
+
+/**
+ * The settings a brand-new account starts with.
+ *
+ * One definition rather than two: the server writes it into `user_preferences`
+ * on first access, and the client's `persist` store renders it for the first
+ * paint before the server's copy arrives (`06-auth-and-users.md` §6). Two
+ * copies of this object would drift the moment a field is added.
+ */
+export const DEFAULT_USER_SETTINGS: UserSettings = {
+  colorTheme: "green-blob",
+  appearance: "dark",
+  /** An id in the client's `BODY_FONT_OPTIONS`; the client cannot be imported
+   * from here, so the value is repeated rather than referenced. */
+  bodyFontId: "dm-sans",
+  textSize: APP_TEXT_SIZE,
+  showShortcutHints: true,
+  reduceMotion: false,
+  showToolCalls: true,
+  showAssistantTimestamps: false,
+  showNotifications: true,
+  requireCmdEnterToSend: false,
+  defaultModel: DEFAULT_MODEL_ID,
+};
 
 export const documentExtractionStatusSchema = z.enum(["pending", "ok", "failed"]);
 

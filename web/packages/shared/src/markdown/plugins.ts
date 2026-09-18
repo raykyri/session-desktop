@@ -11,11 +11,19 @@
 // `react-markdown`'s `Options`, because `shared` does not depend on React.
 // `rehypeTranscriptArtifacts` is client-side (it needs the artifact registry),
 // so the base rehype list is empty here and the client appends to it.
+//
+// `remark-math` and `rehype-mathjax/svg` are NOT imported at module scope.
+// `@session/shared`'s package entry point resolves to this TS source
+// (`main: ./src/index.ts`), and `index.ts` re-exports every module in `src/`
+// from one barrel, so a static import here would pull MathJax (several
+// hundred KB, `mathjax-full` transitively) into every bundle that imports
+// anything from `@session/shared` — including the client's main chunk, even
+// on code paths that never render math. `loadMathPlugins` below imports both
+// behind a dynamic `import()` so bundlers split them into a chunk that only
+// loads when a transcript actually needs math rendering.
 
-import rehypeMathjax from "rehype-mathjax/svg";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
 import type { PluggableList } from "unified";
 
 import { remarkWikilinks } from "./wikilinks.js";
@@ -115,10 +123,40 @@ export const baseRemarkPlugins: PluggableList = [remarkGfm, remarkBreaks, remark
  * needs the client's artifact registry and is appended there. */
 export const baseRehypePlugins: PluggableList = [];
 
-/** Loaded on demand and appended to the base lists. remark-math recognizes
- * $…$ / $$…$$ TeX; rehype-mathjax renders it to self-contained inline SVG at
- * parse time — no webfonts, no external fetches — and the glyphs use
- * currentColor so they follow the surrounding text color. */
-export const mathRemarkPlugins: PluggableList = [remarkMath, remarkTranscriptMathTweaks];
+let mathPluginsPromise: Promise<{
+  remarkPlugins: PluggableList;
+  rehypePlugins: PluggableList;
+}> | null = null;
 
-export const mathRehypePlugins: PluggableList = [rehypeMathjax];
+/** Loads the math plugins the caller appends to the base lists. remark-math
+ * recognizes $…$ / $$…$$ TeX; rehype-mathjax renders it to self-contained
+ * inline SVG at parse time — no webfonts, no external fetches — and the
+ * glyphs use currentColor so they follow the surrounding text color.
+ *
+ * remark-math is small on its own, but it is only ever useful paired with
+ * a math renderer, so it is fetched in the same dynamic import as
+ * rehype-mathjax rather than kept static — one lazy chunk, one network
+ * round trip, and remark-math never loads without the renderer it feeds.
+ *
+ * The import is memoized in a module-level promise: every caller (each
+ * transcript that turns out to contain math) awaits the same in-flight or
+ * settled load instead of requesting a second chunk. A rejection is not
+ * memoized — a chunk that failed to load once (a deploy mid-session, a dropped
+ * connection) would otherwise leave math unrenderable for the tab's lifetime. */
+export function loadMathPlugins(): Promise<{
+  remarkPlugins: PluggableList;
+  rehypePlugins: PluggableList;
+}> {
+  if (!mathPluginsPromise) {
+    mathPluginsPromise = Promise.all([import("remark-math"), import("rehype-mathjax/svg")])
+      .then(([{ default: remarkMath }, { default: rehypeMathjax }]) => ({
+        remarkPlugins: [remarkMath, remarkTranscriptMathTweaks],
+        rehypePlugins: [rehypeMathjax],
+      }))
+      .catch((error: unknown) => {
+        mathPluginsPromise = null;
+        throw error;
+      });
+  }
+  return mathPluginsPromise;
+}
