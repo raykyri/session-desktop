@@ -15,7 +15,7 @@ import {
   sameCardTops,
 } from "../src/features/research/layout.js";
 
-test("an uncrowded rail leaves every card at its passage's own offset", (t) => {
+test("cards on an unconstrained rail align directly with their target passage offsets", (t) => {
   const tops = resolveAnchoredCardTops([
     { id: "a", desiredTop: 0, height: 40 },
     { id: "b", desiredTop: 200, height: 40 },
@@ -45,7 +45,7 @@ test("the cascade orders by desired top and breaks ties on id", (t) => {
   t.is(tops["z"], 10 + 20 + ANCHORED_CARD_GAP);
 });
 
-test("a card that has room again after the cascade is not dragged down", (t) => {
+test("cards with sufficient vertical clearance avoid unnecessary downward layout shifts", (t) => {
   const tops = resolveAnchoredCardTops([
     { id: "a", desiredTop: 0, height: 20 },
     { id: "b", desiredTop: 10, height: 20 },
@@ -54,7 +54,7 @@ test("a card that has room again after the cascade is not dragged down", (t) => 
   t.is(tops["c"], 400);
 });
 
-test("connectors that do not compete all stay in lane zero", (t) => {
+test("assigns non-overlapping connectors to lane zero", (t) => {
   const lanes = assignConnectorLanes([
     { id: "a", sx: 0, sy: 0, ex: 100, ey: 10 },
     { id: "b", sx: 0, sy: 200, ex: 100, ey: 210 },
@@ -71,7 +71,7 @@ test("overlapping vertical runs get the lowest free lane, top-first", (t) => {
   t.deepEqual(lanes, [0, 1, 2]);
 });
 
-test("a lane is reused once its previous occupant has cleared it", (t) => {
+test("connector routing lanes are reused once non-overlapping vertical spans clear", (t) => {
   const lanes = assignConnectorLanes([
     { id: "a", sx: 0, sy: 0, ex: 100, ey: 50 },
     { id: "b", sx: 0, sy: 10, ex: 100, ey: 60 },
@@ -81,7 +81,7 @@ test("a lane is reused once its previous occupant has cleared it", (t) => {
   t.deepEqual(lanes, [0, 1, 0]);
 });
 
-test("lane zero draws a straight leader and later lanes an elbow", (t) => {
+test("primary lane routes as a direct straight line while outer lanes render elbow bends", (t) => {
   const connectors = buildSegmentConnectors("n1", [
     { id: "a", sx: 0, sy: 0, ex: 100, ey: 100 },
     { id: "b", sx: 0, sy: 10, ex: 100, ey: 110 },
@@ -115,7 +115,7 @@ test("a stagger is capped at a quarter of the connector's own span", (t) => {
   t.true(last?.d.includes(" 10 "));
 });
 
-test("a level pair degenerates to a straight segment", (t) => {
+test("horizontally aligned endpoints render as a simple horizontal line segment", (t) => {
   t.is(connectorElbowPath(0, 50, 100, 51), "M 0 50 L 100 51");
 });
 
@@ -126,7 +126,7 @@ test("an elbow turns at the supplied midline", (t) => {
   t.is((path.match(/Q /g) ?? []).length, 2);
 });
 
-test("card-top records compare by value, so an unchanged remeasure keeps its identity", (t) => {
+test("compares card-top coordinates by value", (t) => {
   t.true(sameCardTops({ a: 1, b: 2 }, { a: 1, b: 2 }));
   t.false(sameCardTops({ a: 1 }, { a: 1, b: 2 }));
   t.false(sameCardTops({ a: 1 }, { a: 2 }));

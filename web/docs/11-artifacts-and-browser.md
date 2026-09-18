@@ -45,8 +45,8 @@ to documents:
   path that keeps `Range` meaningful. The Markdown is sanitized
   (`remark` → `rehype-sanitize`) rather than passed through as the desktop
   did: the preview iframe carries `allow-same-origin` against the artifact
-  host, so raw HTML from an uploaded document must not survive the render even
-  before the CSP has to stop it.
+  host, so sanitization must remove raw HTML from uploaded documents rather
+  than relying only on the CSP.
 - Per-response CSP: `default-src 'none'; img-src 'self' data:; style-src
   'unsafe-inline'`; for Markdown pages only the inline scroll script hash is
   allowed (`HTML_PREVIEW_SCROLL_SCRIPT`, `file_server.rs:40`;
@@ -61,10 +61,10 @@ to documents:
 
 `features/artifacts/ArtifactPanel.tsx` keeps the overlay UX that is pure
 DOM (`browserOverlay.ts` semantics, tested): a floating panel over the right
-part of the stage, an address row showing the document's name — a web upload
-has no path a reader would recognise — Reload, Open in new tab, Close
-(Shift-Cmd-E toggles), resize edge and corner, full-width toggle, one panel at
-a time (`closeAllBrowserOverlays`, `browserOverlayShowsLink`).
+part of the stage, an address header displaying the document filename, Reload,
+Open in new tab, and Close controls (Shift-Cmd-E toggles), resize handles, a
+full-width toggle, and one active panel at a time (`closeAllBrowserOverlays`,
+`browserOverlayShowsLink`).
 Body: `<iframe sandbox="allow-scripts allow-same-origin"
 referrerpolicy="no-referrer" src=<artifact url>>` — `allow-same-origin`
 refers to the artifact origin, not the app's, which is why the separate
@@ -74,7 +74,8 @@ restore scroll on reload. The desktop's `mode` switch, screencast, input
 injection, geometry publishing, occlusion, and lifecycle queue are removed.
 
 Opening: clicking a document chip calls `artifacts.mintToken` then opens the
-panel; the same document within the token's lifetime reuses the URL.
+panel. Subsequent opens of the same document reuse the URL while its token
+remains valid.
 
 ## 4. Optional reader view (not built; would be feature flag `SESSION_READER_VIEW=1`)
 
@@ -89,8 +90,7 @@ parity checklist.
 - Native WKWebView browsing of arbitrary sites (framing is blocked by
   `X-Frame-Options`/`frame-ancestors`; a general proxy is out of scope).
 - The Codex browser plugin bridge and CDP mirror (local Unix-socket discovery,
-  headless Chromium in the image). If a visual snapshot of a source is wanted
-  later, a server-side screenshot service is the path.
+  headless Chromium in the image). If visual snapshots of web sources are required in the future, a dedicated server-side screenshot service should be implemented.
 - The artifact tray (`artifact_*` commands), `browser.open` over the control
   socket, `image_files.rs`, `session-file:` link resolution, and the
   loopback file server's directory browsing (there are no directories).

@@ -237,13 +237,13 @@ export function requestPage(
 ): RequestPageResult {
   const term = request.term.trim();
   if (term === "" || [...term].length > MAX_WIKILINK_CHARS) {
-    throw new Error(
-      `an encyclopedia page needs a term of at most ${MAX_WIKILINK_CHARS} characters`,
-    );
+    throw new Error(`Encyclopedia term must not exceed ${MAX_WIKILINK_CHARS} characters.`);
   }
   const slug = encyclopediaSlug(term);
   if (slug === "") {
-    throw new Error(`'${term}' has no letters or digits to name a page by`);
+    throw new Error(
+      `Invalid encyclopedia term: '${term}' must contain at least one alphanumeric character.`,
+    );
   }
   return transact(db, (tx) => {
     // The page's primary key is (`workspace_id`, `slug`) rather than the

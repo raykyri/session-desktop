@@ -34,7 +34,7 @@ export const MAX_RECAP_INSTRUCTIONS_CHARS = 4_000;
 export const MAX_RECAP_SOURCE_BYTES = 80_000;
 
 export const DEFAULT_RECAP_INSTRUCTIONS =
-  "Write a compact recap that directly answers the user's question using only the supplied answer. Usually use 30-70 words. For recommendations, name the recommended items and people. For analysis, preserve the main conclusion, mechanism, and essential qualifications. Short sentences and semicolon-separated phrases are fine. Do not merely describe what the answer discusses.";
+  "Write a concise recap that directly answers the user's question using only the supplied answer. Aim for 30–70 words. For recommendations, name the recommended items and people. For analysis, preserve the main conclusion, mechanism, and essential qualifications. Focus on the findings rather than describing the answer's topics.";
 
 const UTF8 = new TextEncoder();
 
@@ -203,11 +203,11 @@ export function normalizeRecap(raw: string): string | undefined {
 export function validateRecapInstructions(value: string): string {
   const trimmed = value.trim();
   if (trimmed === "") {
-    throw new Error("summary instructions cannot be empty");
+    throw new Error("Summary instructions are required.");
   }
   if (codePointCount(trimmed) > MAX_RECAP_INSTRUCTIONS_CHARS) {
     throw new Error(
-      `summary instructions cannot exceed ${MAX_RECAP_INSTRUCTIONS_CHARS} characters`,
+      `Summary instructions exceed maximum length of ${MAX_RECAP_INSTRUCTIONS_CHARS} characters.`,
     );
   }
   return trimmed;
@@ -216,9 +216,9 @@ export function validateRecapInstructions(value: string): string {
 type SchedulableNode = Pick<ResearchNode, "kind" | "status" | "responseSnapshotAt" | "recap">;
 
 /**
- * Whether an automatic recap run is warranted for a settled node: it must be a
- * run (documents are user-authored and summarize nothing), complete, with its
- * durable snapshot written, and without a recap already. A node whose kind is
+ * Whether an automatic recap should be scheduled for a settled node. The node
+ * must be a completed research run with a durable snapshot and no existing
+ * recap. User-authored documents are excluded. A node whose kind is
  * absent is a run, as the wire types define it.
  */
 export function shouldScheduleRecap(node: SchedulableNode): boolean {

@@ -2,9 +2,8 @@
 // (`05-run-lifecycle-and-streaming.md` §5,
 // `02-domain-model-and-database.md` §5.2).
 //
-// The repository owns the first guard — a snapshot must contain assistant
-// text — because a snapshot without an answer is not a snapshot. The second
-// guard is here, because only the runtime can read the live turns twice: the
+// The repository enforces that snapshots contain assistant text; empty
+// responses are invalid. The second guard is here, because only the runtime can read the live turns twice: the
 // rule (`state.rs:8870`) is that two consecutive reads must agree before the
 // answer is frozen, which is what stops a snapshot being taken of a buffer
 // another write is still in the middle of.
@@ -55,7 +54,7 @@ export function readStableTurns(
   return { turns: second, stable: revisionOf(first) === revisionOf(second) };
 }
 
-const NO_ANSWER = "this research produced no readable response";
+const NO_ANSWER = "Research completed without generating response content";
 
 /**
  * Freezes the attempt's committed turns as the node's answer and settles the
@@ -69,7 +68,11 @@ export function commitAnswer(input: CommitAnswerInput): CommitAnswerResult {
   const { db, userId, nodeId } = input;
   const { turns, stable } = readStableTurns(db, userId, nodeId, input.readTurns);
   if (!stable) {
-    return { committed: false, turns, reason: "the response was still changing when it settled" };
+    return {
+      committed: false,
+      turns,
+      reason: "Response content changed concurrently during snapshot commitment",
+    };
   }
   const hasText = turns.some(
     (turn) =>

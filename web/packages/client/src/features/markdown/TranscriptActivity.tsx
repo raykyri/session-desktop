@@ -2,8 +2,7 @@
 // (`09-research-document-view.md` §7). Ported from the desktop
 // `TranscriptActivity.tsx`; the CSS moves to utilities and the class names the
 // selection code hit-tests against (`tool-block`, `thinking-block`,
-// `activity-group-block`) are kept, because "is this row answer prose or
-// transcript machinery?" is answered by that selector
+// `activity-group-block`) are kept, because "This selector distinguishes model response prose from tool call activity rows.
 // (`selection/dom.ts:NON_TEXT_ROW_SELECTOR`).
 
 import { formatEstimatedTokenCount, thinkingProseText } from "@session/shared";
@@ -140,7 +139,7 @@ export function toolActionGroupLabel(entries: ToolEntry[]): string | null {
 
 export function activityGroupLabel(group: ActivityGroupItem): string {
   const entries = uniqueToolEntries(group.children);
-  if (entries.length === 0) return "Thought for a while";
+  if (entries.length === 0) return "Reasoning process";
   return (
     toolActionGroupLabel(entries) ??
     `Called ${group.toolCallCount} tool${group.toolCallCount === 1 ? "" : "s"}`
@@ -297,7 +296,7 @@ function ThinkingView({
     >
       <summary>
         {showChevron ? <DisclosureChevron /> : null}
-        <span>Thought for a while</span>
+        <span>Reasoning process</span>
       </summary>
       {!deferPayloads || expanded
         ? item.values.map((value, index) => {
@@ -382,8 +381,7 @@ export function TranscriptActivityItem({
 }: {
   item: ActivityItem;
   className?: string;
-  /** A top-level row under an answer: it owns the whole width and needs no
-   * chevron of its own. */
+  /** Whether this activity spans the full answer width without a chevron. */
   isRootActivity?: boolean;
   maxPayloadCharacters?: number;
   deferPayloads?: boolean;

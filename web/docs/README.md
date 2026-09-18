@@ -7,8 +7,7 @@ TypeScript, Tailwind CSS, Drizzle ORM over SQLite, an agent loop on the
 Vercel AI SDK, and deployed to Fly.io as the single app `session-dev`.
 
 This is a hard cutover. The web app does not import desktop data, does not
-run agent CLIs, and does not preserve desktop file formats, identifiers, or
-wire names except where doing so makes the port cheaper.
+run agent CLIs, and only preserves desktop file formats, identifiers, or wire names where doing so simplifies the migration.
 
 Read them in order. `00-plan.md` is the master document; its §8 is the
 parity checklist, walked and marked at the end of Phase 9.

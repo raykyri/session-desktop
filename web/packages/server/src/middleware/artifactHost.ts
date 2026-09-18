@@ -1,13 +1,8 @@
 // The artifact origin serves artifacts and nothing else
 // (`11-artifacts-and-browser.md` §2).
 //
-// `artifactRoutes` is mounted ahead of this and answers the two things that
-// belong to that host: `/a/:token` and the fonts the rendered page loads.
-// Everything after it — the tRPC API, the auth routes, uploads, the SPA — is
-// the app. The whole reason the artifact host exists is that the session
-// cookie never reaches it, and an auth route answering there is the one thing
-// that could make that untrue, so the host is refused wholesale rather than
-// route by route: a new route added later is excluded by default.
+// Isolates artifact preview endpoints (/a/:token and /__session/fonts/*) from the main application.
+// All other endpoints return 404 on the artifact host to prevent session cookie exposure.
 
 import type { MiddlewareHandler } from "hono";
 

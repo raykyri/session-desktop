@@ -122,7 +122,7 @@ export function HighlightsFeed({ workspaceId }: { workspaceId: string }) {
           <p className="text-fg-muted m-0 py-4 text-base">
             {highlights.isLoading
               ? "Loading highlights…"
-              : "Text you highlight in research answers appears here, newest first."}
+              : "No highlights yet. Highlight text in research answers to see it here."}
           </p>
         ) : (
           <div role="feed" aria-label="Highlights" aria-busy={highlights.isFetching}>

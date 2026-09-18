@@ -2,9 +2,7 @@
 // §5.12).
 //
 // The entry is stored whole and validated with the strict shared schema; the
-// columns beside it are projections the feed and hydration query on. The
-// desktop tolerated opaque blobs because it had legacy files to read; the web
-// has no imports, so an entry it cannot parse is a bug rather than history.
+// columns beside it are projections the feed and hydration query on. Strict schema validation is enforced for all entries; unparseable entries are rejected as errors.
 
 import type { JournalEntry } from "@session/shared";
 import { journalEntrySchema } from "@session/shared";
@@ -111,7 +109,7 @@ export function update(
 ): boolean {
   const parsed = journalEntrySchema.parse(entry);
   if (parsed.id !== id) {
-    throw new Error("a journal entry cannot change its id");
+    throw new Error("Cannot update journal entry ID: ID is immutable.");
   }
   const values = projection(userId, parsed);
   const row = db

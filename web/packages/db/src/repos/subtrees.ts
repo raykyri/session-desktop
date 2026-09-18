@@ -84,7 +84,7 @@ export function deleteNodesOfTrees(db: SessionDatabase, treeIds: readonly string
   }
 }
 
-/** Whether any node of these trees is still the server's responsibility. */
+/** Checks whether any node within the specified trees is currently active or queued. */
 export function hasActiveNodes(db: SessionDatabase, treeIds: readonly string[]): boolean {
   if (treeIds.length === 0) {
     return false;

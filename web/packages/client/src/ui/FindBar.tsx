@@ -178,7 +178,7 @@ export function FindBar({
         </IconButton>
         <IconButton
           label="Next match"
-          title="Next match (Enter)"
+          title="Next match (Return)"
           disabled={!hasMatches}
           onClick={() => {
             onFindNext();

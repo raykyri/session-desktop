@@ -1,9 +1,8 @@
 // Admin model gating end to end (`12-testing-linting-ci.md` §3.6).
 //
 // `claude-fable` is `adminOnly`, and `system.runtimeConfig` omits it entirely
-// for a non-admin rather than sending it disabled — so what a non-admin cannot
-// launch, a non-admin also cannot see. The admin flag is set through the
-// test-login route, which is the same `users.setAdmin` the `db:admin` script
+// for non-admin users so they cannot view or select it. The admin flag is set
+// through the test-login route, which is the same `users.setAdmin` the `db:admin` script
 // calls.
 
 import { expect, test } from "@playwright/test";
@@ -25,7 +24,7 @@ test("an admin sees the gated model in the composer's model chip", async ({ page
   await expect(page.getByTitle("Model (Tab)")).toContainText(GATED_MODEL);
 });
 
-test("a non-admin is not offered it", async ({ page }) => {
+test("hides admin-only models from non-admin users in the model menu", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-plain" });
 
   await page.getByTitle("Model (Tab)").click();

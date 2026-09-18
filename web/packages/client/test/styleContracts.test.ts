@@ -86,7 +86,7 @@ test("light blocks follow the dark theme blocks and flip color-scheme", (t) => {
   );
 });
 
-test("the root paints the workspace surface rather than the desktop's vibrancy hole", (t) => {
+test("root element applies workspace background color instead of transparent background", (t) => {
   const root = ruleBody(tokensCss, ":root");
   t.regex(root, /background:\s*var\(--workspace-bg\)/);
   t.notRegex(root, /background:\s*transparent/);

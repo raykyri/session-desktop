@@ -112,7 +112,7 @@ export function findByGitHubId(db: SessionDatabase, githubId: number): User | nu
 export function setAdmin(db: SessionDatabase, login: string, isAdmin: boolean): User {
   const row = db.update(users).set({ isAdmin }).where(eq(users.login, login)).returning().get();
   if (!row) {
-    throw new Error(`no account with the GitHub login ${login}`);
+    throw new Error(`Account not found for GitHub username '${login}'.`);
   }
   return toUser(row);
 }

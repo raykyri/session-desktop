@@ -1,10 +1,7 @@
 // Turning a live selection into a storable anchor
 // (`09-research-document-view.md` §5 items 3–5).
 //
-// The rules are the desktop's, and the refusals are the point: a selection that
-// touches transcript machinery, spans two segments, or is whitespace that
-// overlaps nothing carries nothing worth anchoring, and an anchor that cannot
-// be re-located later is worse than no anchor at all.
+// Validates text selections before creating anchors: selections spanning multiple segments, touching tool UI, or containing only whitespace cannot be reliably anchored and are rejected.
 
 import {
   expandedResearchHighlightOffsets,

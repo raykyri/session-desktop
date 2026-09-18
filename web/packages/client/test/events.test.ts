@@ -170,7 +170,7 @@ test.serial(
   },
 );
 
-test.serial("a node update with no cached predecessor refetches rather than guesses", (t) => {
+test.serial("refetches after a node update with no cached predecessor", (t) => {
   const queryClient = client();
   queryClient.setQueryData(queryKeys.trees(TREES_SCOPE), [summary()]);
 
@@ -298,7 +298,7 @@ test.serial("a reconnect invalidates the lists and re-reads displayed nodes", (t
   stub.emit(event("connection.ready", { connectionId: "c1" }));
   t.false(
     queryClient.getQueryState(queryKeys.trees(TREES_SCOPE))?.isInvalidated,
-    "the first connection has nothing to catch up on",
+    "the initial SSE connection does not invalidate cached tree lists",
   );
 
   stub.emit(event("connection.ready", { connectionId: "c2" }));
@@ -476,19 +476,22 @@ test.serial("a status change leaves the highlights feed alone", (t) => {
   );
 });
 
-test.serial("archiving a thread retires its highlights, and restoring brings them back", (t) => {
-  for (const type of ["research.tree.archived", "research.tree.restored"] as const) {
-    const queryClient = client();
-    queryClient.setQueryData(queryKeys.tree("t1"), { tree: tree(), nodes: [node()] });
-    queryClient.setQueryData(queryKeys.trees(TREES_SCOPE), [summary()]);
-    queryClient.setQueryData(queryKeys.highlightsFeed("w1"), []);
+test.serial(
+  "archiving removes a thread's highlights from the feed and restoring re-adds them",
+  (t) => {
+    for (const type of ["research.tree.archived", "research.tree.restored"] as const) {
+      const queryClient = client();
+      queryClient.setQueryData(queryKeys.tree("t1"), { tree: tree(), nodes: [node()] });
+      queryClient.setQueryData(queryKeys.trees(TREES_SCOPE), [summary()]);
+      queryClient.setQueryData(queryKeys.highlightsFeed("w1"), []);
 
-    const archivedAt = type === "research.tree.archived" ? 1_700_000_200_000 : null;
-    applyEventBatch([event(type, { tree: tree({ archivedAt }) })], queryClient);
+      const archivedAt = type === "research.tree.archived" ? 1_700_000_200_000 : null;
+      applyEventBatch([event(type, { tree: tree({ archivedAt }) })], queryClient);
 
-    t.true(
-      queryClient.getQueryState(queryKeys.highlightsFeed("w1"))?.isInvalidated,
-      `${type} moves the thread in or out of the feed's unarchived scope`,
-    );
-  }
-});
+      t.true(
+        queryClient.getQueryState(queryKeys.highlightsFeed("w1"))?.isInvalidated,
+        `${type} moves the thread in or out of the feed's unarchived scope`,
+      );
+    }
+  },
+);

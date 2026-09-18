@@ -52,9 +52,8 @@ test.serial("Shift-Cmd-G toggles the sidebar", async (t) => {
   t.false(useNavigationStore.getState().sidebarCollapsed);
 });
 
-// Which chords a text field swallows is the shared table's decision, not the
-// dispatcher's (07 §5); what the shell owes is passing the flag through.
-test.serial("a text field blocks only the chords that compete with typing", async (t) => {
+// Input elements suppress conflicting typing shortcuts based on the shared shortcut configuration; the shell forwards the suppression flag.
+test.serial("text fields suppress only shortcuts that conflict with text input", async (t) => {
   await renderApp("/");
   const input = document.createElement("input");
   document.body.appendChild(input);
@@ -93,16 +92,19 @@ test.serial("a contenteditable target counts as a text field", async (t) => {
   editable.remove();
 });
 
-test.serial("Ctrl-1..9 reaches the tab routes the browser would eat as Cmd", async (t) => {
-  const { container } = await renderApp("/");
-  t.truthy(container);
+test.serial(
+  "Ctrl-1..9 navigates to tab routes without browser Cmd shortcut conflicts",
+  async (t) => {
+    const { container } = await renderApp("/");
+    t.truthy(container);
 
-  press("2", { ctrlKey: true });
-  t.truthy(await screen.findByRole("heading", { name: "Bookmarks" }));
+    press("2", { ctrlKey: true });
+    t.truthy(await screen.findByRole("heading", { name: "Bookmarks" }));
 
-  press("1", { ctrlKey: true });
-  t.truthy(await screen.findByRole("heading", { name: "Home" }));
-});
+    press("1", { ctrlKey: true });
+    t.truthy(await screen.findByRole("heading", { name: "Home" }));
+  },
+);
 
 test.serial("Cmd-, opens Settings", async (t) => {
   await renderApp("/");
@@ -131,32 +133,35 @@ test.serial("Escape goes to the top of the overlay stack", async (t) => {
   t.deepEqual(dismissed, ["selection", "search"]);
 });
 
-test.serial("an open library layer takes Escape before the app's stack does", async (t) => {
-  await renderApp("/");
-  const dismissed: string[] = [];
-  act(() => {
-    useOverlaysStore
-      .getState()
-      .register("selection", ABOVE_SEARCH_BAR, () => dismissed.push("selection"));
-  });
+test.serial(
+  "an open modal dialog intercepts Escape before the application overlay stack",
+  async (t) => {
+    await renderApp("/");
+    const dismissed: string[] = [];
+    act(() => {
+      useOverlaysStore
+        .getState()
+        .register("selection", ABOVE_SEARCH_BAR, () => dismissed.push("selection"));
+    });
 
-  press("k", { metaKey: true });
-  const palette = await screen.findByRole("dialog", { name: "Command palette" });
+    press("k", { metaKey: true });
+    const palette = await screen.findByRole("dialog", { name: "Command palette" });
 
-  press("Escape", {}, palette);
-  t.deepEqual(dismissed, [], "Base UI owns dismissal while its layer is open (07 §4.4)");
-  await waitUntil(
-    t,
-    () => screen.queryByRole("dialog", { name: "Command palette" }) === null,
-    "Base UI closes the palette on Escape",
-  );
+    press("Escape", {}, palette);
+    t.deepEqual(dismissed, [], "Base UI owns dismissal while its layer is open (07 §4.4)");
+    await waitUntil(
+      t,
+      () => screen.queryByRole("dialog", { name: "Command palette" }) === null,
+      "Base UI closes the palette on Escape",
+    );
 
-  // With the dialog gone the stack is the shell's again.
-  press("Escape");
-  t.deepEqual(dismissed, ["selection"]);
-});
+    // With the dialog gone the stack is the shell's again.
+    press("Escape");
+    t.deepEqual(dismissed, ["selection"]);
+  },
+);
 
-test.serial("app chords stand down while a library layer is open", async (t) => {
+test.serial("global application shortcuts are disabled while a modal dialog is open", async (t) => {
   await renderApp("/");
   press("k", { metaKey: true });
   await screen.findByRole("dialog", { name: "Command palette" });
@@ -169,20 +174,23 @@ test.serial("app chords stand down while a library layer is open", async (t) => 
   );
 });
 
-test.serial("Escape with an empty stack is left to the page", async (t) => {
-  await renderApp("/");
-  const event = new window.KeyboardEvent("keydown", {
-    key: "Escape",
-    bubbles: true,
-    cancelable: true,
-  });
-  act(() => {
-    document.body.dispatchEvent(event);
-  });
-  t.false(event.defaultPrevented);
-});
+test.serial(
+  "Escape propagates to default browser behavior when the overlay stack is empty",
+  async (t) => {
+    await renderApp("/");
+    const event = new window.KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      document.body.dispatchEvent(event);
+    });
+    t.false(event.defaultPrevented);
+  },
+);
 
-test.serial("shortcuts the shell does not own are re-dispatched to the mounted view", async (t) => {
+test.serial("unhandled shell shortcuts are dispatched to the active mounted view", async (t) => {
   await renderApp("/");
   const seen: unknown[] = [];
   const listener = (event: Event) => seen.push((event as CustomEvent).detail);

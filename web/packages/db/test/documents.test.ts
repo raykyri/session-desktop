@@ -16,7 +16,7 @@ function upload(fixture: ReturnType<typeof createFixture>, sha256: string, name 
   });
 }
 
-test("uploading the same bytes twice is one document", (t) => {
+test("deduplicates identical document uploads by content hash", (t) => {
   const fixture = createFixture(t);
   const first = upload(fixture, "abc123");
   const second = upload(fixture, "abc123", "a-copy.pdf");
@@ -62,7 +62,7 @@ test("attached documents follow the node in display order", (t) => {
   );
 });
 
-test("a referenced document cannot be removed", (t) => {
+test("prevents deletion of documents referenced by research nodes", (t) => {
   const fixture = createFixture(t);
   const document = upload(fixture, "abc123");
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
@@ -72,12 +72,10 @@ test("a referenced document cannot be removed", (t) => {
     documentIds: [document.id],
   });
   t.throws(() => documents.remove(fixture.db, fixture.userId, document.id), {
-    message: /attached to research/,
+    message: /currently attached to one or more research threads/,
   });
   documents.attach(fixture.db, fixture.userId, detail.tree.rootNodeId, []);
-  // The removal reports the volume paths it orphaned: deleting the row is half
-  // of a delete, and the server unlinks the other half. Filesystem work stays
-  // out of this package and out of the transaction.
+  // Document removal returns unreferenced storage paths for external filesystem deletion outside the database transaction.
   t.deepEqual(documents.remove(fixture.db, fixture.userId, document.id), {
     removed: true,
     orphanedPaths: [`/data/documents/${fixture.userId}/abc123`],
@@ -115,12 +113,12 @@ test("drafts are per key and bounded", (t) => {
   drafts.set(fixture.db, fixture.userId, "composer", "a whole question");
   t.is(drafts.get(fixture.db, fixture.userId, "composer"), "a whole question");
   t.throws(() => drafts.set(fixture.db, fixture.userId, "k".repeat(200), "x"), {
-    message: /draft keys cannot exceed/,
+    message: /Draft key exceeds maximum size/,
   });
   t.throws(
     () =>
       drafts.set(fixture.db, fixture.userId, "big", "x".repeat(drafts.MAX_DRAFT_VALUE_BYTES + 1)),
-    { message: /cannot exceed/ },
+    { message: /Draft value exceeds maximum allowed size/ },
   );
   t.true(drafts.remove(fixture.db, fixture.userId, "composer"));
   t.false(drafts.remove(fixture.db, fixture.userId, "composer"));
@@ -149,7 +147,7 @@ test("preferences start at the defaults and merge field by field", (t) => {
           preferences.MAX_RESEARCH_LAUNCH_INSTRUCTION_BYTES + 1,
         ),
       }),
-    { message: /cannot exceed/ },
+    { message: /exceed maximum allowed size/ },
   );
 });
 

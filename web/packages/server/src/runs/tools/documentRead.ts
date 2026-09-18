@@ -79,18 +79,21 @@ export function createDocumentReadTool(ctx: RunToolContext, attachedIds: readonl
     execute: ({ documentId, chunk = 0 }): DocumentReadOutput => {
       const empty = { documentId, chunk, chunkCount: 0, hasMore: false, text: "" };
       if (!allowed.has(documentId)) {
-        return { ...empty, error: `no document ${documentId} is attached to this question` };
+        return {
+          ...empty,
+          error: `No document with ID '${documentId}' is attached to this question.`,
+        };
       }
       const info = documentsRepo.get(ctx.db, ctx.userId, documentId);
       if (!info) {
-        return { ...empty, error: `document ${documentId} was not found` };
+        return { ...empty, error: `Document '${documentId}' was not found.` };
       }
       const chunks = chunkDocumentText(documentPlainText(ctx, documentId));
       if (chunks.length === 0) {
         return {
           ...empty,
           name: info.name,
-          error: `no text could be extracted from ${info.name}`,
+          error: `No text could be extracted from '${info.name}'.`,
         };
       }
       const text = chunks[chunk];
@@ -99,7 +102,7 @@ export function createDocumentReadTool(ctx: RunToolContext, attachedIds: readonl
           ...empty,
           name: info.name,
           chunkCount: chunks.length,
-          error: `${info.name} has ${chunks.length} chunks; ${chunk} is past the end`,
+          error: `'${info.name}' has ${chunks.length} chunks; requested chunk ${chunk} is out of bounds.`,
         };
       }
       return {

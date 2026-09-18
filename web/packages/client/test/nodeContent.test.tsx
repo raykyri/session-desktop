@@ -71,126 +71,132 @@ test.afterEach.always(() => {
   resetDocumentRoot();
 });
 
-test.serial("a live run keeps its turns across the swap to the durable snapshot", async (t) => {
-  const stub = createTrpcStub({
-    "research.getNodeContent": {
-      node: node({ status: "running" }),
-      turns: [turn("turn-a")],
+test.serial(
+  "preserves active turns when transitioning from live stream to durable snapshot",
+  async (t) => {
+    const stub = createTrpcStub({
+      "research.getNodeContent": {
+        node: node({ status: "running" }),
+        turns: [turn("turn-a")],
+        children: [],
+        inFlightText: "",
+        seq: 5,
+      },
+    });
+    const queryClient = mount(stub);
+
+    await waitUntil(t, () => text("turns") === "turn-a", "the snapshot seeded the buffer");
+    t.is(text("source"), "live", "an active node reads from the buffer");
+
+    act(() => {
+      applyEventBatch(
+        [
+          event("research.turn.delta", { nodeId: "n1", seq: 6, turnId: "turn-b", text: "Hel" }),
+          event("research.turn.delta", { nodeId: "n1", seq: 7, turnId: "turn-b", text: "lo" }),
+        ],
+        queryClient,
+      );
+    });
+    t.is(text("inflight"), "Hello");
+    t.is(text("turns"), "turn-a", "an in-flight turn is not committed");
+
+    act(() => {
+      applyEventBatch(
+        [event("research.turn.committed", { nodeId: "n1", seq: 8, turn: turn("turn-b") })],
+        queryClient,
+      );
+    });
+    t.is(text("turns"), "turn-a,turn-b");
+    t.is(text("inflight"), "");
+
+    // What the refetch after the terminal update will find.
+    const settled = node({
+      status: "complete",
+      completedAt: 1_700_000_200_000,
+      responseSnapshotAt: 1_700_000_200_000,
+    });
+    stub.responses.set("research.getNodeContent", {
+      node: settled,
+      turns: [turn("turn-a"), turn("turn-b")],
       children: [],
-      inFlightText: "",
-      seq: 5,
-    },
-  });
-  const queryClient = mount(stub);
+      responseRevision: "r1",
+    });
 
-  await waitUntil(t, () => text("turns") === "turn-a", "the snapshot seeded the buffer");
-  t.is(text("source"), "live", "an active node reads from the buffer");
+    const readsBeforeFinish = stub.calls.filter(
+      (call) => call.path === "research.getNodeContent",
+    ).length;
 
-  act(() => {
-    applyEventBatch(
-      [
-        event("research.turn.delta", { nodeId: "n1", seq: 6, turnId: "turn-b", text: "Hel" }),
-        event("research.turn.delta", { nodeId: "n1", seq: 7, turnId: "turn-b", text: "lo" }),
-      ],
-      queryClient,
+    act(() => {
+      applyEventBatch(
+        [
+          event("research.run.finished", {
+            nodeId: "n1",
+            seq: 9,
+            attempt: 1,
+            status: "complete",
+          }),
+        ],
+        queryClient,
+      );
+    });
+
+    // `run.finished` precedes the snapshot transaction, so reading here would
+    // race it (05 §4): the buffer holds until the node carries the stamp.
+    t.is(
+      stub.calls.filter((call) => call.path === "research.getNodeContent").length,
+      readsBeforeFinish,
+      "the durable read waits for the terminal node update",
     );
-  });
-  t.is(text("inflight"), "Hello");
-  t.is(text("turns"), "turn-a", "an in-flight turn is not committed");
+    t.is(text("source"), "live", "and the streamed turns stay on screen meanwhile");
 
-  act(() => {
-    applyEventBatch(
-      [event("research.turn.committed", { nodeId: "n1", seq: 8, turn: turn("turn-b") })],
-      queryClient,
+    act(() => {
+      applyEventBatch([event("research.node.updated", { node: settled })], queryClient);
+    });
+
+    await waitUntil(t, () => text("source") === "snapshot", "the durable snapshot took over");
+    t.is(text("turns"), "turn-a,turn-b", "no turn was lost in the swap");
+    t.is(
+      useLiveTurnsStore.getState().byNode["n1"],
+      undefined,
+      "the live buffer is dropped once the snapshot holds the same turns",
     );
-  });
-  t.is(text("turns"), "turn-a,turn-b");
-  t.is(text("inflight"), "");
+  },
+);
 
-  // What the refetch after the terminal update will find.
-  const settled = node({
-    status: "complete",
-    completedAt: 1_700_000_200_000,
-    responseSnapshotAt: 1_700_000_200_000,
-  });
-  stub.responses.set("research.getNodeContent", {
-    node: settled,
-    turns: [turn("turn-a"), turn("turn-b")],
-    children: [],
-    responseRevision: "r1",
-  });
+test.serial(
+  "sequence number gaps trigger refetches instead of rendering incomplete text",
+  async (t) => {
+    const stub = createTrpcStub({
+      "research.getNodeContent": {
+        node: node({ status: "running" }),
+        turns: [turn("turn-a")],
+        children: [],
+        inFlightText: "",
+        seq: 5,
+      },
+    });
+    const queryClient = mount(stub);
+    await waitUntil(t, () => text("turns") === "turn-a", "the snapshot seeded the buffer");
+    const reads = stub.calls.filter((call) => call.path === "research.getNodeContent").length;
 
-  const readsBeforeFinish = stub.calls.filter(
-    (call) => call.path === "research.getNodeContent",
-  ).length;
+    act(() => {
+      // 6 is missing, so 7 must not be applied.
+      applyEventBatch(
+        [event("research.turn.delta", { nodeId: "n1", seq: 7, turnId: "turn-b", text: "lo" })],
+        queryClient,
+      );
+    });
 
-  act(() => {
-    applyEventBatch(
-      [
-        event("research.run.finished", {
-          nodeId: "n1",
-          seq: 9,
-          attempt: 1,
-          status: "complete",
-        }),
-      ],
-      queryClient,
+    t.is(text("inflight"), "", "the buffer froze rather than render text with a hole");
+    await waitUntil(
+      t,
+      () => stub.calls.filter((call) => call.path === "research.getNodeContent").length > reads,
+      "the snapshot was re-read",
     );
-  });
+  },
+);
 
-  // `run.finished` precedes the snapshot transaction, so reading here would
-  // race it (05 §4): the buffer holds until the node carries the stamp.
-  t.is(
-    stub.calls.filter((call) => call.path === "research.getNodeContent").length,
-    readsBeforeFinish,
-    "the durable read waits for the terminal node update",
-  );
-  t.is(text("source"), "live", "and the streamed turns stay on screen meanwhile");
-
-  act(() => {
-    applyEventBatch([event("research.node.updated", { node: settled })], queryClient);
-  });
-
-  await waitUntil(t, () => text("source") === "snapshot", "the durable snapshot took over");
-  t.is(text("turns"), "turn-a,turn-b", "no turn was lost in the swap");
-  t.is(
-    useLiveTurnsStore.getState().byNode["n1"],
-    undefined,
-    "the live buffer is dropped once the snapshot holds the same turns",
-  );
-});
-
-test.serial("a gap in the sequence refetches instead of rendering a hole", async (t) => {
-  const stub = createTrpcStub({
-    "research.getNodeContent": {
-      node: node({ status: "running" }),
-      turns: [turn("turn-a")],
-      children: [],
-      inFlightText: "",
-      seq: 5,
-    },
-  });
-  const queryClient = mount(stub);
-  await waitUntil(t, () => text("turns") === "turn-a", "the snapshot seeded the buffer");
-  const reads = stub.calls.filter((call) => call.path === "research.getNodeContent").length;
-
-  act(() => {
-    // 6 is missing, so 7 must not be applied.
-    applyEventBatch(
-      [event("research.turn.delta", { nodeId: "n1", seq: 7, turnId: "turn-b", text: "lo" })],
-      queryClient,
-    );
-  });
-
-  t.is(text("inflight"), "", "the buffer froze rather than render text with a hole");
-  await waitUntil(
-    t,
-    () => stub.calls.filter((call) => call.path === "research.getNodeContent").length > reads,
-    "the snapshot was re-read",
-  );
-});
-
-test.serial("the snapshot poll waits out the connection grace", async (t) => {
+test.serial("snapshot polling delays until the disconnection grace period elapses", async (t) => {
   const stub = createTrpcStub({
     "research.getNodeContent": {
       node: node({ status: "running" }),

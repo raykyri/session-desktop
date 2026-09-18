@@ -215,7 +215,7 @@ function clientSources(directory: string): string[] {
   return files;
 }
 
-test("no menu row advertises a key the menu does not bind", (t) => {
+test("menu items do not display shortcut hints that are not bound to handlers", (t) => {
   // A `MenuItem` sits on a Base UI menu, whose only key behaviour is
   // typeahead: a row labelled "D" would move the highlight to "Delete"
   // rather than delete. So a `hint` may carry a chord the shell's table
@@ -333,8 +333,7 @@ test.serial("the launcher submenu opens with ArrowRight and reports its own valu
   fireEvent.click(screen.getByRole("button", { name: /^Launch model: / }));
   await screen.findAllByRole("menuitemradio");
 
-  // The submenu is the reason this is a Menu rather than a Select: the library
-  // owns ArrowRight-opens / ArrowLeft-closes, which the desktop hand-rolled.
+  // Implemented using Base UI Menu to provide native arrow key expansion and collapse for submenus.
   const submenuTrigger = screen.getByRole("menuitem", { name: /Reasoning/ });
   key(submenuTrigger, "ArrowRight");
 
@@ -541,7 +540,7 @@ test.serial("the image lightbox opens from its module store and dismisses itself
   t.is(getImageLightbox(), null, "closing goes through the module store, not local state");
 });
 
-test.serial("history nav disables the direction it cannot go", (t) => {
+test.serial("history navigation controls disable unavailable travel directions", (t) => {
   const moves: string[] = [];
   render(
     <HistoryNav
@@ -559,7 +558,7 @@ test.serial("history nav disables the direction it cannot go", (t) => {
   t.deepEqual(moves, ["back"]);
 });
 
-test.serial("the sidebar restore button advertises its chord", (t) => {
+test.serial("the sidebar restore button includes its shortcut in the tooltip", (t) => {
   let restored = 0;
   render(<SidebarRestoreButton onRestore={() => (restored += 1)} />);
   const button = screen.getByRole("button", { name: "Show sidebar" });

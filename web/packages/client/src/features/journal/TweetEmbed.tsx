@@ -20,8 +20,7 @@ const EXTERNAL = { target: "_blank", rel: "noopener noreferrer" } as const;
  * `tweetSnapshotFromSyndication` already drops anything that is not a web URL,
  * and `journal.restore`/`update` re-check the permalink — but every field below
  * becomes an `href`, and a snapshot is third-party data that has been through a
- * round trip of client-supplied storage. Gating at the point of render is the
- * check that does not depend on remembering the other two.
+ * round trip of client-supplied storage. Validating at render time guarantees safety even if earlier checks were skipped.
  */
 function tweetHref(url: string | undefined): string | undefined {
   return url === undefined ? undefined : safeHref(url);
@@ -130,8 +129,7 @@ function TweetMediaStrip({
   return (
     <div className={classes}>
       {media.map((item, index) => {
-        // Known dimensions reserve the box before the image lands, so the feed
-        // does not reflow as media arrives.
+        // Reserve the known aspect ratio before loading to prevent feed reflow.
         const aspect =
           item.width && item.height ? { aspectRatio: `${item.width} / ${item.height}` } : undefined;
         const image = (
@@ -278,8 +276,8 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
   const authorUrl = `https://x.com/${tweet.author.handle}`;
   const age = formatTweetAge(tweet.createdAt);
   return (
-    // A `div` rather than an `article`: the whole embed is one link target, and
-    // an interactive role on a landmark-ish element is a lie to a screen reader.
+    // Use a `div` rather than an `article` because the entire embed is one link
+    // target; interactive roles on landmarks can cause screen-reader conflicts.
     <div
       className="journal-tweet"
       aria-label={`Open post by @${tweet.author.handle}`}
@@ -406,8 +404,8 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
           </div>
         ) : null}
         {tweet.replies !== undefined || tweet.likes !== undefined ? (
-          // Counts as captured, not controls: this is a journal entry, so the
-          // engagement reads as metadata and nothing here acts on X.
+          // Render engagement metrics as static text because interaction with
+          // external X posts is not supported.
           <div className="journal-tweet-stats">
             {tweet.replies !== undefined ? (
               <span className="journal-tweet-stat" title={`${tweet.replies} replies`}>

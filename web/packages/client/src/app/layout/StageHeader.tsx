@@ -9,9 +9,7 @@ import { useNavigationStore } from "../../stores/navigation.js";
 import { HistoryNav } from "../../ui/HistoryNav.js";
 import { SidebarRestoreButton } from "../../ui/SidebarRestoreButton.js";
 
-/** Which workspace the stage is scoped to. Shown in the header rather than only
- * in the sidebar because the sidebar collapses and the drawer closes, and every
- * list under it is filtered by this one value (07 §3). */
+/** Displays the active workspace scope in the stage header so the current filter remains visible when the sidebar is collapsed. */
 function WorkspaceScopeLabel() {
   const { workspaceId } = useWorkspaceScope();
   const workspaces = useWorkspaces();
@@ -43,8 +41,8 @@ const STATUS_DOT = {
  * Back and forward drive browser history (ADR-7). TanStack Router does not
  * expose "can go forward", and `window.history.length` cannot distinguish
  * forward entries from entries behind the current one, so the header tracks
- * its own index into the session's history: every subscription tick that grows
- * the length is a push, and the index moves with it.
+ * its own position in the session history and increments it when navigation
+ * adds an entry.
  */
 export function StageHeader() {
   const router = useRouter();

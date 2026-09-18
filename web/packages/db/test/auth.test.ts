@@ -4,7 +4,7 @@ import { auth, closeDatabase, openDatabase, users } from "../src/index.js";
 
 import { createFixture } from "./helpers.js";
 
-test("a GitHub identity keeps its account across a login rename", (t) => {
+test("retains user account association when GitHub username is renamed", (t) => {
   const db = openDatabase(":memory:");
   const first = users.upsertFromGitHub(db, { githubId: 7, login: "old", name: "A" });
   t.true(first.created);
@@ -32,7 +32,7 @@ test("admin is set by login and is not granted by sign-in", (t) => {
   t.true(users.setAdmin(db, "raymond", true).isAdmin);
   users.upsertFromGitHub(db, { githubId: 9, login: "raymond" });
   t.true(users.findByLogin(db, "raymond")?.isAdmin ?? false);
-  t.throws(() => users.setAdmin(db, "nobody", true), { message: /no account/ });
+  t.throws(() => users.setAdmin(db, "nobody", true), { message: /Account not found/ });
   closeDatabase(db);
 });
 
@@ -46,14 +46,14 @@ test("the session table stores the hash, not the cookie", (t) => {
   t.is(auth.readSession(fixture.db, "not-a-token"), null);
 });
 
-test("a session expires by idleness and by absolute age", (t) => {
+test("expires sessions upon inactivity timeout and absolute lifetime limit", (t) => {
   const fixture = createFixture(t);
   const idle = auth.createSession(fixture.db, fixture.userId);
   fixture.db.$client
     .prepare(`UPDATE sessions SET last_seen_at = ? WHERE id = ?`)
     .run(Date.now() - auth.SESSION_IDLE_MS - 1, idle.id);
   t.is(auth.readSession(fixture.db, idle.token), null);
-  // The read that found the expired row removed it.
+  // Verify that reading an expired session deletes it immediately.
   t.deepEqual(fixture.db.$client.prepare(`SELECT count(*) AS n FROM sessions`).get(), { n: 0 });
 
   const aged = auth.createSession(fixture.db, fixture.userId);
@@ -63,7 +63,7 @@ test("a session expires by idleness and by absolute age", (t) => {
   t.is(auth.readSession(fixture.db, aged.token), null);
 });
 
-test("last_seen_at slides at most once every five minutes", (t) => {
+test("throttles last_seen_at updates to at most once per 5-minute window", (t) => {
   const fixture = createFixture(t);
   const session = auth.createSession(fixture.db, fixture.userId);
   const before = auth.readSession(fixture.db, session.token);
@@ -76,7 +76,7 @@ test("last_seen_at slides at most once every five minutes", (t) => {
   t.true((touched?.lastSeenAt ?? 0) > (before?.lastSeenAt ?? 0) - auth.SESSION_TOUCH_INTERVAL_MS);
 });
 
-test("an oauth state is single use and expires", (t) => {
+test("invalidates OAuth state after single use or expiration", (t) => {
   const fixture = createFixture(t);
   auth.createOAuthState(fixture.db, { state: "s1", codeVerifier: "v1", returnTo: "/r/1" });
   t.deepEqual(auth.consumeOAuthState(fixture.db, "s1"), {

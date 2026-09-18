@@ -81,7 +81,7 @@ export function reconcileRuns(deps: ServerDeps, logger: Logger): void {
   }
 }
 
-/** How often the expiries that nothing else reaps are swept. */
+/** Interval for removing expired sessions and state records. */
 export const MAINTENANCE_INTERVAL_MS = 15 * 60 * 1000;
 
 /** How often the document archive is shipped and the volume is reconciled

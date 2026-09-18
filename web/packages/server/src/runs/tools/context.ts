@@ -44,9 +44,9 @@ export class ToolBudget {
 }
 
 export const SEARCH_BUDGET_SPENT =
-  "the web_search budget for this run is spent; answer from the sources you already have";
+  "The web_search invocation limit has been reached for this run. Answer using existing sources.";
 export const FETCH_BUDGET_SPENT =
-  "the web_fetch budget for this run is spent; answer from the pages you have already read";
+  "The web_fetch invocation limit has been reached for this run. Answer using previously retrieved pages.";
 
 /** Vendor and page caches live for the process, not for one run: two runs on
  * the same topic minutes apart should not pay the vendor twice. */

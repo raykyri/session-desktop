@@ -17,10 +17,9 @@
 //     cross-origin iframe reports a status its embedder cannot read; the panel
 //     answers it by minting a new token.
 //
-// Both are accepted only from the artifact origin. The origin arrives with
-// `system.runtimeConfig` (`features.artifactOrigin`), because it is a property
-// of the deployment rather than of the build; until it has loaded the panel
-// ignores every message, which is the safe direction to fail.
+// Both messages are accepted only from the artifact origin provided by
+// `system.runtimeConfig` (`features.artifactOrigin`). Messages are ignored until
+// the deployment-specific origin is available.
 
 import { ExternalLink, RotateCw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";

@@ -35,7 +35,7 @@ Vite proxies to it.
 ### Getting a Vertex service-account key
 
 Gemini is reached through Vertex AI, which authenticates with a Google Cloud
-service account rather than an API key. Four steps, once.
+service account rather than an API key. This one-time setup requires four steps.
 
 **1. Pick or create a project**, and note its id. Save it as `GOOGLE_VERTEX_PROJECT`.
 
@@ -44,8 +44,8 @@ gcloud projects create session-dev-web --name="Session Web"   # or use an existi
 gcloud config set project session-dev-web
 ```
 
-Billing must be enabled on it; Vertex refuses requests otherwise, and the
-error arrives at the first question rather than at boot.
+Billing must be enabled on the Google Cloud project. Otherwise, Vertex AI
+rejects requests when the first question runs rather than during startup.
 
 **2. Enable the API.**
 
@@ -82,7 +82,7 @@ Console equivalent: open the service account → Keys → Add key → Create new
 That file is a long-lived credential for your project. Keep it out of the
 repository, and delete the local copy once it is in `.env` or Fly secrets.
 
-**Putting it in place.** The app wants the whole key as one line. Locally:
+**Configure the key.** The application requires the complete JSON key on one line. For local development:
 
 ```sh
 echo "GOOGLE_APPLICATION_CREDENTIALS_JSON=$(jq -c . vertex-key.json | sed "s/'/'\\''/g")" >> .env
@@ -98,9 +98,9 @@ variable a child process could inherit.
 unless you have a data-residency requirement; a regional endpoint restricts
 which models you can reach.
 
-**Checking it works.** Start the server with fixtures off and look at the
-models the client is offered — Gemini appears as available only when the
-credential resolved:
+**Verify the configuration.** Start the server with fixture providers disabled
+and inspect model availability. Gemini is available only when the credential
+resolves successfully:
 
 ```sh
 curl -fsS -b jar -H 'x-requested-with: session' \
@@ -235,8 +235,8 @@ callback as `https://session.dev/auth/github/callback`.
 fly deploy web -c web/fly.toml
 ```
 
-The positional `web` is the build context and matters: without it flyctl hands
-Docker the repository root, where `package.json` belongs to the desktop app.
+The positional `web` argument sets the build context. Without it, flyctl uses
+the repository root, whose `package.json` defines the desktop application.
 
 The machine runs migrations on boot and reconciles any runs the previous
 process left behind. `/healthz` answers 503 until that finishes and again from

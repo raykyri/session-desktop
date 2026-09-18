@@ -9,7 +9,7 @@ import { summary } from "./fixtures.js";
 const noop = () => undefined;
 const actions = { openTree: noop, openHome: noop, toggleSidebar: noop, openSettings: noop };
 
-test("a thread's hint counts what is running in it, and nothing otherwise", (t) => {
+test("palette thread hints display the active run count only when runs are in progress", (t) => {
   t.is(runningHint(summary({ runningCount: 2 })), "2 running");
   t.is(runningHint(summary({ runningCount: 0 })), undefined);
 });

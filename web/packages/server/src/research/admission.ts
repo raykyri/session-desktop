@@ -16,8 +16,7 @@ export interface LaunchContext extends AppContext {
 
 /**
  * Whether this account may launch on this model, and whether the deployment
- * can reach it at all. Both answer `PRECONDITION_FAILED`: a client that shows
- * a model it should not have is a stale client, not a forbidden user
+ * can reach it at all. Returns PRECONDITION_FAILED when an unavailable or unconfigured model is requested, indicating client state needs refreshing.
  * (`04-agent-runtime.md` §1).
  */
 export function assertModelUsable(ctx: LaunchContext, modelId: string): string {
@@ -38,8 +37,7 @@ export function assertModelUsable(ctx: LaunchContext, modelId: string): string {
 }
 
 /**
- * Daily token and run limits (`06-auth-and-users.md` §8). Usage is recorded
- * whatever `SESSION_ENFORCE_LIMITS` says; only the refusal is switched.
+ * Daily token and run limits (`06-auth-and-users.md` §8). Usage is tracked unconditionally; SESSION_ENFORCE_LIMITS controls whether requests exceeding the limit are rejected.
  */
 export function assertWithinDailyLimits(ctx: LaunchContext): void {
   if (!ctx.config.limits.enforceDailyLimits) {
@@ -57,8 +55,8 @@ export function assertWithinDailyLimits(ctx: LaunchContext): void {
       code: "TOO_MANY_REQUESTS",
       message:
         decision.reason === "runs"
-          ? "you have reached today's research limit; it resets at midnight UTC"
-          : "you have reached today's token limit; it resets at midnight UTC",
+          ? "You have reached your daily research limit. The limit resets at midnight UTC."
+          : "You have reached your daily token limit. The limit resets at midnight UTC.",
     });
   }
 }
@@ -86,7 +84,7 @@ export function assertQueueHasRoom(ctx: LaunchContext): void {
   }
   throw new TRPCError({
     code: "TOO_MANY_REQUESTS",
-    message: `you already have ${cap} questions waiting to run; let some finish before starting more`,
+    message: `You already have ${cap} questions queued. Wait for running questions to finish before submitting more.`,
   });
 }
 
@@ -154,7 +152,7 @@ export function nodeContent(ctx: LaunchContext, nodeId: string): ResearchNodeCon
       content.inFlightText = live.inFlightText;
     }
   } else if (nodes.isTerminalStatus(node.status)) {
-    content.sourceError = node.error ?? "this research produced no readable response";
+    content.sourceError = node.error ?? "Research completed without generating response content";
   }
   if (node.status === "queued") {
     const position = queuePositionOf(ctx, nodeId);

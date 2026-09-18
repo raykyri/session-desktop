@@ -1,9 +1,6 @@
 // The tweet proxy (`03-api-and-events.md` §2, `journal.rs:142-187`).
 //
-// The browser cannot call the syndication CDN itself: the CSP has no
-// `connect-src` for it and its CORS policy only answers X's own origins. The
-// server fetches instead, and — as on the desktop — builds the URL itself from
-// two shape-validated parameters rather than accepting one from the caller.
+// Proxies tweet requests through the server because browser CORS and CSP policies prevent direct client requests to the syndication CDN.
 
 import { tweets } from "@session/db";
 import type { SessionDatabase } from "@session/db";
@@ -15,7 +12,7 @@ const SYNDICATION_ENDPOINT = "https://cdn.syndication.twimg.com/tweet-result";
 /** The desktop's cap, kept: `tweet_cache.payload_json` is bounded at 1 MiB. */
 export const MAX_TWEET_RESPONSE_BYTES = 1024 * 1024;
 
-/** How long the syndication CDN has to answer. */
+/** Syndication CDN fetch timeout in milliseconds. */
 export const TWEET_FETCH_TIMEOUT_MS = 10_000;
 
 /** A cached payload this new is reused rather than refetched. */
@@ -30,10 +27,14 @@ export class TweetFetchError extends Error {
 
 export function validateTweetFetchArgs(id: string, token: string): void {
   if (id === "" || id.length > 25 || !/^[0-9]+$/.test(id)) {
-    throw new TweetFetchError("invalid tweet id");
+    throw new TweetFetchError(
+      "Invalid tweet ID: expected a numeric string of at most 25 characters.",
+    );
   }
   if (token === "" || token.length > 32 || !/^[a-zA-Z0-9]+$/.test(token)) {
-    throw new TweetFetchError("invalid tweet token");
+    throw new TweetFetchError(
+      "Invalid tweet token: expected an alphanumeric string of at most 32 characters.",
+    );
   }
 }
 
@@ -56,20 +57,19 @@ export async function fetchTweetJson(
   validateTweetFetchArgs(id, token);
   const response = await doFetch(syndicationUrl(id, token), {
     headers: { "User-Agent": "session", Accept: "application/json" },
-    // A syndication CDN that accepts the connection and then says nothing
-    // would otherwise hold the request open for as long as it liked.
+    // Enforces timeout on CDN responses to prevent stalled connections.
     signal: AbortSignal.timeout(TWEET_FETCH_TIMEOUT_MS),
   });
   const declared = Number(response.headers.get("content-length") ?? "0");
   if (declared > MAX_TWEET_RESPONSE_BYTES) {
-    throw new TweetFetchError("tweet response was too large");
+    throw new TweetFetchError("Tweet response exceeds maximum allowed size");
   }
   if (!response.ok) {
-    throw new TweetFetchError(`tweet fetch failed: HTTP ${response.status}`);
+    throw new TweetFetchError(`Tweet fetch request failed with HTTP ${response.status}.`);
   }
   const body = await response.text();
   if (Buffer.byteLength(body, "utf8") > MAX_TWEET_RESPONSE_BYTES) {
-    throw new TweetFetchError("tweet response was too large");
+    throw new TweetFetchError("Tweet response exceeds maximum allowed size");
   }
   return body;
 }

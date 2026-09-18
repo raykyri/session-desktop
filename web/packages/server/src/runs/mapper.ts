@@ -32,7 +32,7 @@ export interface MapperOptions {
   /** Prefix of every turn id. The node id, so turn ids are unique per node
    * and stable across a resume. */
   runId: string;
-  /** `Turn.agentId`; the node id, there being no agent records on the web. */
+  /** Maps to `Turn.agentId`; the web platform uses the node ID because it has no separate agent records. */
   agentId: string;
   /** First step number. A resume continues past the turns the interrupted
    * attempt already committed, so their ids are never reused. */

@@ -1,10 +1,9 @@
 #!/bin/sh
 # Container entrypoint (`docs/13-deployment-fly.md` §3, §5).
 #
-# Runs as root only long enough to own the volume and write the Vertex
-# credential, then drops to `session` (uid 1000) for the process that serves
-# requests. With LITESTREAM_REPLICA_URL set the server runs as Litestream's
-# child so replication starts before the first write and stops after the last.
+# Initializes volume permissions and credentials as root, then runs the server
+# as the unprivileged `session` user (uid 1000). With LITESTREAM_REPLICA_URL set,
+# the server runs as Litestream's child so replication covers all writes.
 
 set -eu
 
@@ -44,8 +43,7 @@ if [ -n "${GOOGLE_APPLICATION_CREDENTIALS_JSON:-}" ]; then
 fi
 
 if [ -n "${LITESTREAM_REPLICA_URL:-}" ]; then
-  # `-restore-if-db-not-exists` is what makes a replacement volume recover on
-  # its own; an empty replica is not an error, it just starts fresh.
+  # Use `-restore-if-db-not-exists` to automatically restore existing database replicas to new volumes, or initialize a fresh database if none exists.
   set -- litestream replicate \
     -config "$LITESTREAM_CONFIG" \
     -restore-if-db-not-exists \

@@ -1,8 +1,7 @@
 // CSRF and origin policy (`06-auth-and-users.md` §5).
 //
-// Two independent barriers: the request's origin must be ours, and a mutation
-// must carry `X-Requested-With: session`, a header a cross-origin form or
-// image cannot set without a preflight the server never answers.
+// CSRF protection: validates request origin and requires X-Requested-With header on mutations
+// to block un-preflighted cross-origin requests.
 
 import type { MiddlewareHandler } from "hono";
 
@@ -21,9 +20,7 @@ export interface OriginCheck {
 
 /**
  * `Origin` is compared when present; browsers omit it on same-origin GETs, so
- * an absent header is not by itself a failure. The literal `null` origin is
- * not ours — it is what a sandboxed frame, a `data:` document, or a
- * cross-scheme redirect sends — and is refused with the rest.
+ * an absent header is not by itself a failure. Rejects null origins from sandboxed iframes, data URLs, and cross-scheme redirects.
  * `Sec-Fetch-Site: cross-site` is rejected outright: it is set by the browser
  * and cannot be forged by page script.
  */
@@ -39,7 +36,7 @@ export function checkOrigin(headers: Headers, publicOrigin: string): OriginCheck
   return { ok: true };
 }
 
-/** Whether this request has to prove it came from our own page. */
+/** Determines whether the request requires same-origin CSRF verification. */
 function isGuarded(method: string, path: string): boolean {
   if (!SAFE_METHODS.has(method)) {
     return true;
@@ -63,7 +60,10 @@ export function csrfGuard(config: Config): MiddlewareHandler<AppEnv> {
       !SAFE_METHODS.has(method) &&
       c.req.header(REQUESTED_WITH_HEADER)?.toLowerCase() !== REQUESTED_WITH_VALUE
     ) {
-      return c.json({ error: `mutations require ${REQUESTED_WITH_HEADER}: session` }, 403);
+      return c.json(
+        { error: `Missing required ${REQUESTED_WITH_HEADER}: session header for mutation` },
+        403,
+      );
     }
     return next();
   };

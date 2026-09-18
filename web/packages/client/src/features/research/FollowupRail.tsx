@@ -86,8 +86,8 @@ export const ConnectorOverlay = memo(
 export interface FollowupRailProps {
   nodeId: string;
   cards: readonly ResearchNode[];
-  /** Node ids whose answer settled while the reader was here and that have not
-   * been opened yet. */
+  /** IDs of follow-up nodes that finished while this page was active and have not
+   * been opened. */
   unreadIds: ReadonlySet<string>;
   /** The anchored card currently hover-linked to its passage, from either end. */
   linkedAnchorId: string | null;
@@ -146,7 +146,7 @@ export const FollowupRail = memo(function FollowupRail({
         {unread ? (
           <span
             className="bg-accent pointer-events-none absolute top-[3px] right-0 size-1.5 rounded-full"
-            aria-label="New answer, not opened yet"
+            aria-label="Unread response"
           />
         ) : null}
         <strong className="text-fg-interactive min-w-0 text-sm leading-snug">{child.prompt}</strong>

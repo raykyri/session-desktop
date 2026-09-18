@@ -368,13 +368,15 @@ export function reorder(
       .all()
       .map((row) => row.id);
     if (treeIds.length !== expected.length) {
-      throw new Error("research tree order is stale; refresh before reordering");
+      throw new Error(
+        "Reorder conflict: tree sequence is stale. Refresh the list before reordering.",
+      );
     }
     const known = new Set(expected);
     const seen = new Set<string>();
     for (const treeId of treeIds) {
       if (seen.has(treeId)) {
-        throw new Error("research tree order contains a duplicate tree");
+        throw new Error("Invalid reorder request: list contains duplicate tree IDs.");
       }
       if (!known.has(treeId)) {
         throw new Error(`research tree ${treeId} is not in the requested sidebar section`);
@@ -404,7 +406,7 @@ export function rename(
 ): ResearchTree {
   const clean = sanitizeResearchTitle(title);
   if (clean === undefined) {
-    throw new Error("a research thread needs a title");
+    throw new Error("Research thread title is required.");
   }
   const row = db
     .update(trees)
@@ -517,7 +519,7 @@ export function remove(db: SessionDatabase, userId: string, treeId: string): voi
   transact(db, (tx) => {
     const row = requireTreeRow(tx, userId, treeId);
     if (hasActiveNodes(tx, [row.id])) {
-      throw new Error("cancel this research before removing it");
+      throw new Error("Cannot delete research thread with an active run: cancel the run first.");
     }
     deleteNodesOfTrees(tx, [row.id]);
     tx.delete(trees).where(eq(trees.id, row.id)).run();

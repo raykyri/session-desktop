@@ -4,8 +4,7 @@
 // connections. There is no replay buffer: a client that misses events
 // refetches (`05-run-lifecycle-and-streaming.md` §4), which is why a
 // connection whose queue overflows is closed rather than trimmed silently —
-// closing makes the client resynchronize, trimming would leave it with a hole
-// it cannot see.
+// Closes overflowed connections to trigger a full client resynchronization rather than silently dropping missed events.
 
 import type { SessionEvent } from "@session/shared";
 
@@ -13,7 +12,7 @@ import type { SessionEvent } from "@session/shared";
  * (`events.setInterest`); everything else goes to every connection. */
 const INTEREST_FILTERED_PREFIX = "research.turn.";
 
-/** A slow reader is disconnected rather than allowed to grow without bound. */
+/** Disconnects clients whose pending event queue exceeds MAX_QUEUED_EVENTS to bound server memory. */
 const MAX_QUEUED_EVENTS = 2048;
 
 export interface Subscription {
@@ -52,8 +51,7 @@ export class EventBus {
       connections = new Map();
       this.#byUser.set(connection.userId, connections);
     }
-    // Two tabs can restore the same persisted connection id; the older stream
-    // is ended rather than left registered under an id it no longer owns.
+    // Closes previous SSE connection if a new connection is registered with the same connection ID.
     const replaced = connections.get(connection.id);
     if (replaced) {
       replaced.closed = true;
@@ -187,8 +185,7 @@ export class EventBus {
     return total;
   }
 
-  /** `SIGTERM`: close every SSE connection so clients reconnect to the next
-   * boot rather than sitting on a dead socket (`05` §7). */
+  /** Closes active SSE connections on SIGTERM to prompt client reconnection. */
   closeAll(): void {
     for (const connections of [...this.#byUser.values()]) {
       for (const connection of [...connections.values()]) {

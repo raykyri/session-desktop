@@ -39,12 +39,12 @@ Goals
   zero-retention providers, for every user; Claude Fable 5.1 for admin users.
   Medium reasoning effort everywhere. Documents (PDF, text, images)
   attachable as context.
-- Multi-user with open GitHub sign-up; per-account daily token and run
-  limits, and sign-up throttling by IP, GitHub account age, and invite codes,
-  added later on a schema that exists from day one.
-- Server-authoritative durable state in SQLite; runs that outlive tabs,
-  devices, and deploys, with output durable while streaming and streams any
-  client can rejoin from a snapshot.
+- The system supports multiple users with open GitHub sign-up. Per-account
+  daily token and run limits, along with sign-up throttling by IP, GitHub
+  account age, and invite codes, will be added later using the initial schema.
+- Durable state is server-authoritative in SQLite. Runs outlive tabs, devices,
+  and deployments; output is persisted while streaming, and any client can
+  rejoin an active stream from a snapshot.
 - One Fly app; reproducible `Dockerfile` and `fly.toml`.
 - Type-safe end to end, linted, tested with recorded provider fixtures so
   the runtime is testable without credentials.
@@ -174,14 +174,14 @@ Spec: `09-research-document-view.md`, `10-home-feed-journal-encyclopedia.md`.
 Spec: `11-artifacts-and-browser.md`.
 - Token-scoped routes on `artifacts.session.dev` serving attached documents;
   sandboxed preview panel; link context menu.
-- Exit: documents open in the panel; nothing reachable without a token.
+- Exit: documents open in the preview panel, and every route requires a valid token.
 
 ### Phase 8 — Deployment and operations (medium)
 Spec: `13-deployment-fly.md`.
 - Dockerfile, `fly.toml`, volume, secrets, migrations on boot, graceful
   shutdown with resume, Litestream, logs, metrics.
-- Exit: `fly deploy` during an active run pauses and resumes it; restore
-  rehearsed.
+- Exit: `fly deploy` during an active run pauses and resumes it, and the restore
+  procedure has been rehearsed and verified.
 
 ### Phase 9 — Parity verification and cutover (small)
 - Walk §8; update `README.md` and `docs/`; announce.
@@ -193,7 +193,7 @@ Spec: `13-deployment-fly.md`.
 - Every active node is renderable from one `getNodeContent` call.
 - Every mutation is a transaction; snapshot commits use `synchronous=FULL`.
 - The app owns conversation history; it is append-only.
-- Terminal status is monotonic; response revision is the concurrency token.
+- Terminal status transitions are irreversible; response revision hashes serve as concurrency tokens.
 - Pure logic lives in `shared` with fixtures.
 - One toolset for every model so the UI and evaluation are uniform.
 
@@ -238,8 +238,8 @@ specs under `e2e/`.
 - [ ] **Partial** — Mixed activity feed with keyset pagination, load older,
       retry, refresh, new-activity button, restored scroll anchor.
       All implemented in `features/home/ActivityFeed.tsx` and
-      `useActivityFeedState.ts`. Pagination is covered by `feed.test.tsx` "a
-      page with a cursor offers older activity, and fetches it once asked",
+      `useActivityFeedState.ts`. Pagination is covered by `feed.test.tsx` "renders a
+      pagination button for a cursor and fetches the next page on click",
       and the new-activity count by "only items that arrived above the
       reader's row are counted as new". The error-state Retry button, the
       Refresh button, the sticky new-activity button, and scroll-anchor
@@ -252,14 +252,14 @@ specs under `e2e/`.
       `research.dialogs.test.tsx` covers the Generate summary row;
       `library.spec.ts` drives Bookmark and its two feeds.
 - [x] **Verified** — Journal link and X post cards with hydration, menu
-      rows (no keycaps: a Base UI menu binds no letter), undo delete; adding a
+      rows (without shortcut badges: Base UI menus do not support letter shortcuts), undo delete; adding a
       link or X URL from the composer (web addition).
       `features/journal/JournalEntryCard.tsx`, `entryMenu.ts`,
       `server/trpc/routers/journal.ts`; `feed.test.tsx` "the journal menu
-      offers what the entry can actually do", "a hydrated post's canonical
-      permalink is what the menu acts on", "an entry whose stored URL is not
-      navigable has nothing to open", "removing a journal entry offers an undo
-      that restores the same row"; `composer.test.tsx` "a bare URL is saved to
+      displays only actions supported by the entry", "journal actions use a
+      hydrated post's canonical permalink", "an entry with an invalid stored
+      URL omits actions that require it", "removing a journal entry displays an
+      undo action that restores the same row"; `composer.test.tsx` "a bare URL is saved to
       the journal instead of launching a run"; `packages/server/test/journal.test.ts`.
 - [ ] **Partial** — Bookmarks tab; Highlights tab with day headers, refresh,
       and focus scroll.
@@ -273,8 +273,7 @@ specs under `e2e/`.
       configured).
       `features/import/ReportImport.tsx`; `library.spec.ts` "a Markdown report
       is imported as a thread"; `packages/server/test/research.test.ts` for
-      `importReport`. The desktop's `AgentSetupGuide` is deliberately absent —
-      an unconfigured model is listed and disabled, never a setup prompt.
+      `importReport`. The desktop's `AgentSetupGuide` is omitted; unconfigured models are simply displayed as disabled in the list rather than prompting the user to complete setup.
 
 ### Research document
 
@@ -291,17 +290,18 @@ specs under `e2e/`.
       terminal states.
       `AnswerPane.tsx`, `server/runs/service.ts`, `server/main.ts`;
       `research.document.test.tsx` "a queued run shows its position in the
-      queue", "a claimed queued run drops the position", "an interrupted run
-      says so and offers Retry"; `runs.failures.test.ts` "admission holds runs
+      queue", "hides the queue position after a worker claims the run",
+      "displays an interruption notice and Retry button for an interrupted
+      run"; `runs.failures.test.ts` "admission holds runs
       above the per-user cap and reports queue positions" and "drain
       interrupts open runs and boot resumes them without duplicate turns".
 - [x] **Verified** — Follow-up composer with model choice, inline continuation
       (one slot), branching cards, highlight-anchored asks with connectors.
       `FollowupComposer.tsx`, `FollowupRail.tsx`, `layout.ts`;
-      `research.document.test.tsx` "a complete tail enables Send and forks
-      inline on Cmd-Enter", "Shift-Cmd-Enter branches whatever the selected
-      mode is", "a branch card opens its own page and the breadcrumb leads
-      back"; `research.layout.test.ts` for the connectors;
+      `research.document.test.tsx` "enables Send after the parent completes and
+      submits an inline follow-up on Cmd-Enter", "Shift-Cmd-Enter submits a
+      branch regardless of the selected mode", "opens a branch page with a
+      breadcrumb back to the parent"; `research.layout.test.ts` for the connectors;
       `packages/server/test/research.test.ts` "a second inline follow-up is a
       conflict and a foreign id is not found"; `research.spec.ts` "a highlight
       anchors an ask, and the follow-up runs on another model".
@@ -321,7 +321,7 @@ specs under `e2e/`.
 - [x] **Verified** — Recap dialog (generate and apply); title generation.
       `RecapDialog.tsx`, `server/runs/metadata.ts`;
       `research.dialogs.test.tsx` "the recap dialog generates a candidate and
-      applies it", "editing the instructions retracts the candidate", "the
+      applies it", "editing recap instructions clears the generated candidate", "the
       recap dialog surfaces a refusal"; `runs.metadata.test.ts` "a recap
       candidate is generated, previewed, and applied" and "a title is
       generated, sanitized, and given to the thread"; `research.spec.ts` "the
@@ -342,10 +342,9 @@ specs under `e2e/`.
       shortcuts.
       `features/sidebar/*`, `packages/shared/src/research/folders.ts`;
       `sidebar.test.tsx` ("a section reorder moves only its own rows", the
-      folder-write rollback tests, "Cmd-click builds a selection and its menu
-      acts on the whole of it", "creating a workspace names it and sends the
-      name", "a row badges an unseen update, an unseen failure, and a run in
-      flight", "a mouse press on a row menu item stays with the menu", "a
+      folder-write rollback tests, "Cmd-click selects multiple items and applies menu actions to the
+      selection", "creating a workspace names it and sends the name",
+      "displays status badges for unread updates, failures, and active runs", "a mouse press on a row menu item stays with the menu", "a
       press on the row itself still arms the drag");
       `packages/shared/test/researchFolders.test.ts`; `shortcuts.test.tsx`.
 
@@ -369,10 +368,11 @@ specs under `e2e/`.
       `routes/admin.tsx`, `app/layout/Sidebar.tsx`;
       `packages/server/test/auth.test.ts` ("the start route stores state and a
       verifier and redirects to GitHub", "the callback exchanges the code,
-      creates the account, and sets the cookie", "signing out ends this
-      session and leaves the account's others"); `auth.test.tsx` "a signed-out
-      visit to a shell route lands on sign-in"; `admin.test.tsx` "the token
-      column counts what the limit counts, not thinking twice" and "the model
+      creates the account, and sets the cookie", "signing out terminates the
+      current session and leaves the account's other sessions active");
+      `auth.test.tsx` "unauthenticated shell routes redirect to sign-in";
+      `admin.test.tsx` "the token column counts only tokens included in the
+      limit without double-counting" and "the model
       access column names the gated model only where it applies".
 - [x] **Verified** — Appearance, theme, font, text size, hints, motion,
       Cmd-Enter, research instructions, notifications.
@@ -389,11 +389,7 @@ specs under `e2e/`.
       `scripts/backup-documents.sh`, `docs/runbooks/restore.md`. The
       resume-across-a-deploy behavior is covered by
       `runs.failures.test.ts` "drain interrupts open runs and boot resumes
-      them without duplicate turns", and `/healthz` by `app.test.ts`. What no
-      test can stand in for is the real thing: creating the app, the volume,
-      and the certificates, setting the secrets, deploying during a live run,
-      and rehearsing a restore (`13-deployment-fly.md` §2, §6). Those remain
-      operator steps.
+      them without duplicate turns", and `/healthz` by `app.test.ts`. Automated tests cannot replace actual infrastructure provisioning: creating the app, volume, and certificates, configuring secrets, deploying during an active run, and rehearsing a restore must still be validated manually by an operator.
 
 ### Cost and access controls
 
@@ -402,13 +398,10 @@ Enforcement is **on** in the shipped configuration. `web/fly.toml` sets
 refuse rather than merely record, and `SESSION_REQUIRE_INVITE = "1"`, so an
 account is created only against a code an admin minted
 (`06-auth-and-users.md` §3, §8). Both default to `0` in code and in
-`web/.env.example`, which is right for local development and would be wrong on
-an origin that spends money per request — so they are set in the deployment
-file, where turning either off is a visible act.
+`web/.env.example`, so they are explicitly configured in the deployment file, ensuring any changes to these limits are tracked in source control.
 
 `SESSION_QUEUED_PER_USER` (default 20) caps what one account may have waiting.
-The concurrency cap bounds only what runs at once; the queue is spend already
-committed to, and it is enforced whatever `SESSION_ENFORCE_LIMITS` says.
+The concurrency cap limits only active executions, whereas queued runs represent committed resource expenditure and are capped regardless of the `SESSION_ENFORCE_LIMITS` setting.
 Per-account overrides for the daily ceilings live in `user_limits` and are set
 from `/admin`, so raising one account's limit is not the same as switching
 enforcement off (`13-deployment-fly.md` §2).
@@ -417,9 +410,7 @@ enforcement off (`13-deployment-fly.md` §2).
 
 - `account.delete` (`06-auth-and-users.md` §7) — no `account` namespace and no
   client surface; removing an account is an operator job against the database.
-  The one removal path the server does own — an abandoned sign-up that could
-  not redeem its invite — unlinks the account's bytes as well as its rows
-  (`uploads/storage.ts:removeUserDocuments`).
+  The only automated deletion path handled by the server is an abandoned sign-up with an unredeemed invite, which deletes both uploaded files from storage and associated database records (`uploads/storage.ts:removeUserDocuments`).
 - The reader view for `http(s)` sources (`11-artifacts-and-browser.md` §4) —
   behind `SESSION_READER_VIEW`, and never part of this checklist.
 
@@ -428,9 +419,7 @@ enforcement off (`13-deployment-fly.md` §2).
 1. Whether `gemini-flash-google` should become the default Gemini entry once
    its quality is compared to `gemini-flash` with owned search (grounding
    costs $14 per 1k queries after the free tier).
-2. Invite allotment policy. `SESSION_REQUIRE_INVITE` is on in `web/fly.toml`
-   (§8), so this is now a question about how many codes an account gets rather
-   than about when to switch the gate on.
+2. Invite allotment policy. Because `SESSION_REQUIRE_INVITE` is enabled in `web/fly.toml` (§8), the remaining decision is the invite allocation policy per account rather than when to activate the requirement.
 
 Decided since the first draft: search vendors are Parallel and Tavily, both
 optional (search is unavailable without a key); daily defaults are 1M tokens

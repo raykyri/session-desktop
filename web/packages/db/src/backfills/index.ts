@@ -3,9 +3,7 @@
 // after `migrate()`, in declaration order, each inside its own transaction,
 // and records the ones that ran in `backfills`.
 //
-// The list is empty: the first schema has no history to rewrite. It exists so
-// the first backfill is a one-line addition rather than a new mechanism
-// invented under pressure.
+// Currently empty as the initial schema requires no data migrations. This registry allows future backfills to be added incrementally.
 
 import { sql } from "drizzle-orm";
 

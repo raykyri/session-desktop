@@ -34,9 +34,7 @@ function MessageBlockView({ block, role }: { block: MessageBlock; role: string }
     if (role === "assistant") {
       return <ResearchMarkdown markdown={block.text} oversized={OVERSIZED_MARKDOWN_POLICY} />;
     }
-    // A user turn inside a response is leakage, not content: render it as
-    // literal text under a callout rather than as prose the reader might take
-    // for the answer.
+    // Display unexpected user turns inside responses as raw text callouts to distinguish them from model output.
     return <p className="text-fg-muted text-sm whitespace-pre-wrap">{block.text}</p>;
   }
   return (

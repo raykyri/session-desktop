@@ -189,26 +189,29 @@ test.serial("a completed answer renders its prose, word count and sources", asyn
   t.truthy(screen.getByText("example.com"));
 });
 
-test.serial("an interrupted run says so and offers Retry", async (t) => {
-  const root = node({ id: "n1", status: "interrupted", error: null });
-  const { trpc } = await mount({
-    nodes: [root],
-    contentByNode: { n1: contentFor(root, [], { responseRevision: undefined }) },
-  });
+test.serial(
+  "displays an interruption notice and Retry button for an interrupted run",
+  async (t) => {
+    const root = node({ id: "n1", status: "interrupted", error: null });
+    const { trpc } = await mount({
+      nodes: [root],
+      contentByNode: { n1: contentFor(root, [], { responseRevision: undefined }) },
+    });
 
-  await waitUntil(
-    t,
-    () => screen.queryByText("The run was interrupted. Resuming…") !== null,
-    "the interrupted copy is shown",
-  );
-  const retry = screen.getByRole("button", { name: "Retry" });
-  fireEvent.click(retry);
-  await waitUntil(
-    t,
-    () => trpc.calls.some((call) => call.path === "research.retryNode"),
-    "Retry relaunches the node in place",
-  );
-});
+    await waitUntil(
+      t,
+      () => screen.queryByText("The run was interrupted. Resuming…") !== null,
+      "the interrupted copy is shown",
+    );
+    const retry = screen.getByRole("button", { name: "Retry" });
+    fireEvent.click(retry);
+    await waitUntil(
+      t,
+      () => trpc.calls.some((call) => call.path === "research.retryNode"),
+      "Retry relaunches the node in place",
+    );
+  },
+);
 
 test.serial("a queued run shows its position in the queue", async (t) => {
   const root = node({ id: "n1", status: "queued", startedAt: null });
@@ -226,7 +229,7 @@ test.serial("a queued run shows its position in the queue", async (t) => {
   );
 });
 
-test.serial("a claimed queued run drops the position", async (t) => {
+test.serial("hides the queue position after a worker claims the run", async (t) => {
   const root = node({ id: "n1", status: "queued", startedAt: null });
   await mount({
     nodes: [root],
@@ -325,7 +328,7 @@ test.serial("a highlight outside the collapsed answer is reported, not dropped",
 
   await waitUntil(
     t,
-    () => screen.queryByText(/1 highlight not visible in this view/) !== null,
+    () => screen.queryByText(/1 hidden highlight/) !== null,
     "the hidden-highlight notice appears",
   );
   // The only thing that can reveal it is the full transcript, so that is what
@@ -335,7 +338,7 @@ test.serial("a highlight outside the collapsed answer is reported, not dropped",
   fireEvent.click(reveal);
   await waitUntil(
     t,
-    () => screen.queryByText(/highlight not visible in this view/) === null,
+    () => screen.queryByText(/hidden highlight/) === null,
     "revealing the trace locates the passage",
   );
 });
@@ -419,43 +422,46 @@ test.serial(
   },
 );
 
-test.serial("a complete tail enables Send and forks inline on Cmd-Enter", async (t) => {
-  const root = node({ id: "n1", status: "complete" });
-  const { trpc } = await mount({
-    nodes: [root],
-    contentByNode: { n1: contentFor(root, [assistantTurn("t1", "An answer.")]) },
-  });
+test.serial(
+  "enables Send after the parent completes and submits an inline follow-up on Cmd-Enter",
+  async (t) => {
+    const root = node({ id: "n1", status: "complete" });
+    const { trpc } = await mount({
+      nodes: [root],
+      contentByNode: { n1: contentFor(root, [assistantTurn("t1", "An answer.")]) },
+    });
 
-  await waitUntil(
-    t,
-    () => screen.queryByLabelText("Follow-up question") !== null,
-    "the composer mounts",
-  );
-  const field = screen.getByLabelText("Follow-up question");
-  t.false(field.hasAttribute("disabled"));
-  const send = screen.getByRole("button", { name: /Send/ });
-  t.true(send.hasAttribute("disabled"));
+    await waitUntil(
+      t,
+      () => screen.queryByLabelText("Follow-up question") !== null,
+      "the composer mounts",
+    );
+    const field = screen.getByLabelText("Follow-up question");
+    t.false(field.hasAttribute("disabled"));
+    const send = screen.getByRole("button", { name: /Send/ });
+    t.true(send.hasAttribute("disabled"));
 
-  fireEvent.change(field, { target: { value: "And then?" } });
-  await waitUntil(
-    t,
-    () => !screen.getByRole("button", { name: /Send/ }).hasAttribute("disabled"),
-    "typing enables Send",
-  );
+    fireEvent.change(field, { target: { value: "And then?" } });
+    await waitUntil(
+      t,
+      () => !screen.getByRole("button", { name: /Send/ }).hasAttribute("disabled"),
+      "typing enables Send",
+    );
 
-  fireEvent.keyDown(field, { key: "Enter", metaKey: true });
-  await waitUntil(
-    t,
-    () => trpc.calls.some((call) => call.path === "research.forkNode"),
-    "Cmd-Enter submits",
-  );
-  const call = trpc.calls.find((entry) => entry.path === "research.forkNode");
-  t.like(call?.input, {
-    parentNodeId: "n1",
-    prompt: "And then?",
-    inline: true,
-  });
-});
+    fireEvent.keyDown(field, { key: "Enter", metaKey: true });
+    await waitUntil(
+      t,
+      () => trpc.calls.some((call) => call.path === "research.forkNode"),
+      "Cmd-Enter submits",
+    );
+    const call = trpc.calls.find((entry) => entry.path === "research.forkNode");
+    t.like(call?.input, {
+      parentNodeId: "n1",
+      prompt: "And then?",
+      inline: true,
+    });
+  },
+);
 
 test.serial("Shift-Tab leaves the follow-up composer instead of cycling models", async (t) => {
   // Tab steps the model, which means the composer calls `preventDefault` on
@@ -483,7 +489,7 @@ test.serial("Shift-Tab leaves the follow-up composer instead of cycling models",
   );
 });
 
-test.serial("Shift-Cmd-Enter branches whatever the selected mode is", async (t) => {
+test.serial("Shift-Cmd-Enter submits a branch regardless of the selected mode", async (t) => {
   const root = node({ id: "n1", status: "complete" });
   const { trpc } = await mount({
     nodes: [root],
@@ -540,7 +546,7 @@ test.serial("the document marks the tree viewed on arrival", async (t) => {
   );
 });
 
-test.serial("a branch card opens its own page and the breadcrumb leads back", async (t) => {
+test.serial("opens a branch page with a breadcrumb back to the parent", async (t) => {
   const root = node({ id: "n1", status: "complete" });
   const branch = node({
     id: "n2",

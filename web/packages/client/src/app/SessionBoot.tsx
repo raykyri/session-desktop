@@ -1,8 +1,6 @@
 // What starts once a session exists (07 §2, §4.2, §8).
 //
-// Three things live here because all three are per-account and per-tab, and
-// none of them belongs to a view: the event subscription, the draft writer,
-// and the settings mirror's agreement with the server. `AppShell` mounts this
+// Manages account- and session-scoped background services: server events subscription, draft persistence, and settings synchronization. `AppShell` mounts this
 // once, behind the auth guard, so none of it runs on `/login`.
 
 import { userSettingsSchema } from "@session/shared";
@@ -68,8 +66,7 @@ function useDraftSync(): void {
     const write = (key: DraftKey, draft: ComposerDraft | null): void => {
       // An empty value is the server's delete.
       void setDraft(key, draft === null ? "" : JSON.stringify(draft)).catch(() => {
-        // A failed draft write is not worth a toast: the local copy is still
-        // there and the next keystroke retries.
+        // Draft sync errors do not trigger notifications; the local draft remains preserved in localStorage and retries on subsequent changes.
       });
     };
     setDraftSyncTarget(write);
@@ -129,8 +126,7 @@ function useSettingsSync(): void {
   useEffect(() => {
     const unsubscribe = useSettingsStore.subscribe((state, previous) => {
       if (state.settings === previous.settings) return;
-      // Before the server's copy lands there is nothing to disagree with, and
-      // pushing the persisted local record would overwrite the account's.
+      // Wait until remote settings are fetched before syncing changes to prevent overwriting server state with stale local data.
       if (server.current === null) return;
       if (sameSettings(state.settings, server.current)) return;
       if (timer.current !== null) clearTimeout(timer.current);
@@ -184,7 +180,7 @@ function useSettingsSync(): void {
  *
  * It cannot feed back into itself: the reducers write it with `setQueryData`,
  * and the only things that invalidate it are a bridge reconnect and an event
- * the parser could not vouch for (`api/cache.ts`, `api/events.ts`), neither of
+ * that fails parsing (`api/cache.ts`, `api/events.ts`), neither of
  * which a refetch produces. `staleTime` is infinite and focus refetching is
  * off, so mounting it costs one request per session.
  */

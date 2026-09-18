@@ -82,7 +82,7 @@ test("refuses a database carrying a migration this build does not know", (t) => 
     t.deepEqual(unknownMigrations(client, MIGRATIONS_FOLDER), ["0".repeat(64)]);
     client.close();
     const error = t.throws(() => openDatabase(path), { instanceOf: UnknownMigrationError });
-    t.true(error?.message.includes("does not know"));
+    t.true(error?.message.includes("unrecognized migration"));
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

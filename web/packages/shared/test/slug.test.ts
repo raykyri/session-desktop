@@ -45,7 +45,7 @@ test("validation accepts only what the slugger itself produces", (t) => {
   t.is(validateEncyclopediaSlug("claude-3-opus"), "claude-3-opus");
   for (const invalid of ["", "Daemon", "../etc", "a b", "daemon-", "a--b"]) {
     t.throws(() => validateEncyclopediaSlug(invalid), {
-      message: `'${invalid}' is not a valid encyclopedia page slug`,
+      message: `Invalid slug '${invalid}': must contain only lowercase alphanumeric characters and hyphens.`,
     });
   }
 });

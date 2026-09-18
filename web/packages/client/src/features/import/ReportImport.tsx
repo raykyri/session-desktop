@@ -61,14 +61,14 @@ export function ReportImport({
       .then((markdown) => {
         const refusal = reportRefusal(file.name, markdown, file.size);
         if (refusal) {
-          pushErrorToast("That report could not be imported", new Error(refusal));
+          pushErrorToast("Could not import report", new Error(refusal));
           return;
         }
         setPrompt("");
         setError(null);
         setReport({ name: file.name, markdown });
       })
-      .catch((failure: unknown) => pushErrorToast("That report could not be read", failure));
+      .catch((failure: unknown) => pushErrorToast("Failed to read report file.", failure));
   }, []);
 
   // The drop listener is installed once against the column, so it reads the
@@ -154,7 +154,7 @@ export function ReportImport({
           if (!open) close();
         }}
         title="Import report"
-        description="The prompt that produced this report becomes the thread's question."
+        description="The prompt that generated this report will be used as the initial query."
         footer={
           <>
             <BaseDialog.Close className={CONTROL_BUTTON} disabled={busy}>

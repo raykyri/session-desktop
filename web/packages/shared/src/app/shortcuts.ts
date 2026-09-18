@@ -36,10 +36,7 @@ export interface AppShortcutInput {
   editableTarget?: boolean | undefined;
 }
 
-/** Hint label for the Home command. Browsers own Cmd-N and Cmd-T and never
- * deliver them to the page, so the hint advertises Shift-Cmd-H — the chord
- * that always reaches the app — even though Cmd-N/Cmd-T still resolve where a
- * host lets them through. */
+/** Display shortcut label for Home. Uses Shift-Cmd-H by default since standard browser shortcuts (Cmd-N/Cmd-T) are intercepted by web browsers. */
 export const RESEARCH_HOME_SHORTCUT_LABEL = "⇧⌘H";
 
 function normalizedKey(key: string): string {

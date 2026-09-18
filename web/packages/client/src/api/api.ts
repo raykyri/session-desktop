@@ -55,9 +55,7 @@ export function logout() {
   return trpc().auth.logout.mutate();
 }
 
-/** Where sign-in starts. `return_to` is validated server-side
- * (`auth/github.ts:safeReturnTo`), so a hostile value is dropped rather than
- * corrected here. */
+/** Constructs the GitHub OAuth initiation URL. Invalid or untrusted return_to values are rejected on the server. */
 export function gitHubSignInUrl(returnTo?: string, invite?: string): string {
   const params = new URLSearchParams();
   if (returnTo) params.set("return_to", returnTo);
@@ -66,8 +64,7 @@ export function gitHubSignInUrl(returnTo?: string, invite?: string): string {
   return `/auth/github${query === "" ? "" : `?${query}`}`;
 }
 
-/** The sign-in entry point. A real redirect, not a fetch: the OAuth handshake
- * has to leave the SPA. */
+/** Initiates full browser navigation to the GitHub OAuth endpoint. */
 export function startGitHubSignIn(returnTo?: string, invite?: string): void {
   window.location.assign(gitHubSignInUrl(returnTo, invite));
 }
@@ -456,10 +453,9 @@ export interface UploadProgress {
 }
 
 /**
- * `POST /uploads` (`03-api-and-events.md` §5). Multipart rather than tRPC
- * because the payload is bytes, and `XMLHttpRequest` rather than `fetch`
- * because only it reports upload progress — a 20 MiB PDF with no progress bar
- * looks like a hang.
+ * `POST /uploads` (`03-api-and-events.md` §5). Uses multipart rather than tRPC
+ * for binary payloads and XMLHttpRequest rather than fetch to report upload
+ * progress.
  */
 export function uploadDocuments(
   workspaceId: string,
@@ -500,8 +496,7 @@ export function uploadDocuments(
         resolve(parsed as DocumentInfo[]);
         return;
       }
-      // The route answers every refusal as `{ error }`; showing that text is
-      // the point, since it names the file and the reason.
+      // Server upload errors return an { error } payload containing the filename and failure reason.
       const message =
         typeof parsed === "object" &&
         parsed !== null &&

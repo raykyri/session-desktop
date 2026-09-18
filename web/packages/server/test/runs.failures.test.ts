@@ -80,7 +80,7 @@ test.serial("a run that outlasts the wall-clock cap is stopped and classified", 
 
   const node = nodesRepo.get(harness.db, user.id, nodeId);
   t.is(node?.status, "failed");
-  t.regex(node?.error ?? "", /longer than this deployment allows/);
+  t.regex(node?.error ?? "", /exceeded the maximum duration allowed/);
   const attempt = runsRepo.listAttempts(harness.db, nodeId)[0];
   t.is(attempt?.outcome, "failed");
   t.is(attempt?.errorClass, "timeout", "a timeout is not a network error or an unknown one");
@@ -126,7 +126,7 @@ test.serial("an attempt that throws where the loop does not expect it still sett
 
   const node = nodesRepo.get(harness.db, user.id, nodeId);
   t.is(node?.status, "failed", "a node nothing is running must not stay `running`");
-  t.regex(node?.error ?? "", /stopped unexpectedly/);
+  t.regex(node?.error ?? "", /Research execution terminated unexpectedly/);
   t.is(
     harness.db.$client.prepare(`SELECT 1 FROM run_queue WHERE node_id = ?`).get(nodeId),
     undefined,
@@ -134,7 +134,7 @@ test.serial("an attempt that throws where the loop does not expect it still sett
   );
 });
 
-test.serial("the answer is not frozen while it is still moving", async (t) => {
+test.serial("prevents snapshot commit while the response stream remains active", async (t) => {
   const harness = createAgentHarness(t);
   const { user, nodeId } = await launch(harness, "unstable");
   nodesRepo.setStatus(harness.db, user.id, nodeId, "running");
@@ -151,7 +151,7 @@ test.serial("the answer is not frozen while it is still moving", async (t) => {
     },
   });
   t.false(shifting.committed);
-  t.regex(shifting.reason ?? "", /still changing/);
+  t.regex(shifting.reason ?? "", /Response content changed concurrently/);
   t.is(read, 2, "two reads, no third attempt");
 
   // A settled read with no assistant text is the other refusal: a run that
@@ -164,11 +164,11 @@ test.serial("the answer is not frozen while it is still moving", async (t) => {
     readTurns: () => [turnOf(nodeId, "user", "a tool result and nothing else")],
   });
   t.false(empty.committed);
-  t.regex(empty.reason ?? "", /no readable response/);
+  t.regex(empty.reason ?? "", /completed without generating response content/);
   t.is(nodesRepo.get(harness.db, user.id, nodeId)?.status, "running", "neither settled the node");
 });
 
-test.serial("an answer past the snapshot cap is refused with the desktop's copy", async (t) => {
+test.serial("rejects responses exceeding snapshot byte limit with an error", async (t) => {
   const harness = createAgentHarness(t);
   const { user, nodeId } = await launch(harness, "verbose");
   nodesRepo.setStatus(harness.db, user.id, nodeId, "running");
@@ -185,7 +185,7 @@ test.serial("an answer past the snapshot cap is refused with the desktop's copy"
         status: "complete",
         readTurns: () => huge,
       }),
-    { message: /response could not be preserved/ },
+    { message: /response exceeded the maximum snapshot storage limit/ },
   );
   t.is(
     harness.db.$client.prepare(`SELECT 1 FROM response_snapshots WHERE node_id = ?`).get(nodeId),

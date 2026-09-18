@@ -1,9 +1,9 @@
 // Size policy for rendered transcript content (`09-research-document-view.md`
 // §7).
 //
-// The server caps a response snapshot at 64 MB, which is far past what
-// Markdown parsing and eager React element creation absorb without freezing
-// the tab. Past `MARKDOWN_CHAR_LIMIT` a block renders as preformatted text,
+// The server caps response snapshots at 64 MB, above the maximum Markdown
+// payload that can be parsed without blocking the browser thread. Past
+// `MARKDOWN_CHAR_LIMIT`, a block renders as preformatted text,
 // itself capped at `PLAINTEXT_DISPLAY_CHAR_LIMIT` because laying out one
 // multi-megabyte text node is as expensive as parsing it.
 
@@ -26,8 +26,8 @@ export const OVERSIZED_MARKDOWN_POLICY: OversizedMarkdownPolicy = {
   fallbackClassName: "research-plaintext",
 };
 
-/** Reasoning runs long and react-markdown re-parses on every render, so the
- * thinking disclosure uses the same guardrail as the answer. */
+/** Applies the answer size limit to reasoning output because react-markdown
+ * re-parses the content on every render. */
 export const OVERSIZED_THINKING_MARKDOWN: OversizedMarkdownPolicy = {
   maxCharacters: MARKDOWN_CHAR_LIMIT,
   maxDisplayCharacters: MARKDOWN_CHAR_LIMIT,

@@ -14,7 +14,7 @@ test("a bookmarked thread shows in Home and Bookmarks, and archiving hides it", 
   await startResearch(page, "What is a skip list?");
   await waitForAnswer(page);
 
-  // The thread actions sit under the root question once the run settles.
+  // Thread actions menu is displayed below the root question after run completion.
   await page.getByRole("button", { name: "Bookmark", exact: true }).click();
   await expect(page.getByRole("button", { name: "Remove bookmark" })).toBeVisible();
 
@@ -51,8 +51,7 @@ test("a bookmarked thread shows in Home and Bookmarks, and archiving hides it", 
   await expect(page).toHaveURL(/\/bookmarks$/);
   await expect(page.locator("[data-base-ui-inert]")).toHaveCount(0);
 
-  // It is hidden by the filter rather than gone: switching to archived brings
-  // it back.
+  // The item is filtered from the active view; switching to the archived filter displays it.
   await sidebar.getByRole("button", { name: /^Show .* research$/ }).click();
   await page.getByRole("menuitem", { name: "archived" }).click();
   await expect(rows).toHaveCount(1);
@@ -100,14 +99,13 @@ test("a wikilink in an answer opens an encyclopedia page for the term", async ({
   });
 });
 
-test("a half-written question survives a reload", async ({ page }) => {
+test("preserves unsubmitted prompt draft text across page reload", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-draft" });
 
   const composer = page.getByRole("textbox", { name: "What would you like to investigate?" });
   await composer.click();
   await composer.fill("What is a rope data structure?");
-  // The mirror to `sessionStorage` is what a reload in the same tab reads back
-  // (`stores/drafts.ts`); the server copy is a debounce behind it.
+  // Draft state is restored immediately from `sessionStorage`, with server persistence debounced.
   await page.waitForTimeout(500);
 
   await page.reload();
@@ -117,7 +115,7 @@ test("a half-written question survives a reload", async ({ page }) => {
   ).toHaveValue("What is a rope data structure?");
 });
 
-test("the appearance settings survive a reload", async ({ page }) => {
+test("persists theme and appearance preferences across page reloads", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-settings" });
   const html = page.locator("html");
   await expect(html).toHaveAttribute("data-appearance", "dark");

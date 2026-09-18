@@ -146,7 +146,7 @@ test.serial(
   },
 );
 
-test.serial("the tool budget is spent, not exceeded", async (t) => {
+test.serial("enforces tool call limits without exceeding the configured threshold", async (t) => {
   const harness = createAgentHarness(t);
   const { user, nodeId } = await launch(harness, "budgeter");
   // Twenty searches, then one more that must come back as the budget error.
@@ -187,7 +187,7 @@ test.serial("the tool budget is spent, not exceeded", async (t) => {
     t.is(result.error, undefined, `search ${index + 1} is within budget`);
   }
   const overflow = (await execute({ query: "one too many" }, options)) as { error?: string };
-  t.regex(overflow.error ?? "", /budget for this run is spent/);
+  t.regex(overflow.error ?? "", /web_search invocation limit has been reached/);
   t.is(budget.searches, 21);
 });
 
@@ -244,7 +244,7 @@ test.serial("context overflow and a mid-stream error are classified apart", asyn
   t.is(runsRepo.listAttempts(harness.db, overflow.nodeId)[0]?.errorClass, "context_too_long");
   t.regex(
     nodesRepo.get(harness.db, overflow.user.id, overflow.nodeId)?.error ?? "",
-    /outgrown the model's context/,
+    /Context window limit exceeded/,
   );
 
   setFixtureScenario("mid-stream-error");
@@ -534,45 +534,40 @@ test.serial("a wake-up during a claim round is not lost", async (t) => {
   );
 });
 
-test.serial(
-  "the 429 budget is counted from the attempts, so a restart cannot reset it",
-  async (t) => {
-    setFixtureScenario("rate-limit");
-    const harness = createAgentHarness(t);
-    const { user, nodeId } = await launch(harness, "persistent");
+test.serial("persists rate limit retry counts across service restarts", async (t) => {
+  setFixtureScenario("rate-limit");
+  const harness = createAgentHarness(t);
+  const { user, nodeId } = await launch(harness, "persistent");
 
-    // Three backoffs, each served by a different service — a deploy between
-    // every one of them — and the fourth 429 gives up.
-    const backoffs: number[] = [];
-    for (let round = 0; round < 3; round += 1) {
-      const process = round === 0 ? harness : nextProcessAgent(harness);
-      await process.settle();
-      const node = nodesRepo.get(harness.db, user.id, nodeId);
-      t.is(node?.status, "queued", `429 number ${round + 1} re-queues`);
-      t.is(node?.attempt, round + 2, "and opens a new attempt so its row survives");
-      const row = harness.db.$client
-        .prepare("SELECT not_before FROM run_queue WHERE node_id = ?")
-        .get(nodeId) as { not_before: number };
-      backoffs.push(row.not_before - Date.now());
-      harness.db.$client
-        .prepare("UPDATE run_queue SET not_before = 0 WHERE node_id = ?")
-        .run(nodeId);
-    }
-    t.deepEqual(
-      backoffs.map((backoff) => Math.round(backoff / 1000)),
-      [5, 20, 60],
-      "the backoff grows across processes rather than restarting at five seconds",
-    );
-
-    const spent = runsRepo.listAttempts(harness.db, nodeId);
-    t.is(spent.filter((attempt) => attempt.outcome === "rate_limited").length, 3);
-
-    await nextProcessAgent(harness).settle();
+  // Three backoffs, each served by a different service — a deploy between
+  // every one of them — and the fourth 429 gives up.
+  const backoffs: number[] = [];
+  for (let round = 0; round < 3; round += 1) {
+    const process = round === 0 ? harness : nextProcessAgent(harness);
+    await process.settle();
     const node = nodesRepo.get(harness.db, user.id, nodeId);
-    t.is(node?.status, "failed");
-    t.regex(node?.error ?? "", /kept rate limiting/);
-  },
-);
+    t.is(node?.status, "queued", `429 number ${round + 1} re-queues`);
+    t.is(node?.attempt, round + 2, "and opens a new attempt so its row survives");
+    const row = harness.db.$client
+      .prepare("SELECT not_before FROM run_queue WHERE node_id = ?")
+      .get(nodeId) as { not_before: number };
+    backoffs.push(row.not_before - Date.now());
+    harness.db.$client.prepare("UPDATE run_queue SET not_before = 0 WHERE node_id = ?").run(nodeId);
+  }
+  t.deepEqual(
+    backoffs.map((backoff) => Math.round(backoff / 1000)),
+    [5, 20, 60],
+    "the backoff grows across processes rather than restarting at five seconds",
+  );
+
+  const spent = runsRepo.listAttempts(harness.db, nodeId);
+  t.is(spent.filter((attempt) => attempt.outcome === "rate_limited").length, 3);
+
+  await nextProcessAgent(harness).settle();
+  const node = nodesRepo.get(harness.db, user.id, nodeId);
+  t.is(node?.status, "failed");
+  t.regex(node?.error ?? "", /Model provider rate limit exceeded repeatedly/);
+});
 
 test.serial("a long paced answer emits a sequence with no hole in it", async (t) => {
   // `paced-answer` streams for several seconds, so the in-flight checkpoint

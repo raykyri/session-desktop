@@ -1,9 +1,7 @@
 // Every mutating procedure, called by the wrong account
 // (`06-auth-and-users.md` §4, `03-api-and-events.md` §2).
 //
-// The rule is one sentence: a row another account owns answers exactly as a
-// row that does not exist. `NOT_FOUND` either way, so an id is never an
-// existence oracle, and nothing on the owner's side moves.
+// Cross-tenant resource queries return NOT_FOUND to prevent ID enumeration and unauthorized modifications.
 //
 // Written as a table rather than as one test per procedure because the risk is
 // a procedure nobody thought about: a new mutation that takes an id has to be
@@ -368,7 +366,7 @@ const ATTEMPTS: readonly Attempt[] = [
   },
 ];
 
-test("no account can name another's rows", async (t) => {
+test("prevents cross-account access and returns NOT_FOUND for unauthorized entity IDs", async (t) => {
   const harness = createHarness(t);
   const owner = harness.addUser("owner");
   const ownerCaller = harness.caller(owner);

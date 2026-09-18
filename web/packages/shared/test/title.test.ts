@@ -30,7 +30,7 @@ test("a page without a usable heading keeps the term as its title", (t) => {
   t.deepEqual(splitTitle("# \nbody", "Daemon"), { title: "Daemon", body: "# \nbody" });
 });
 
-test("short junk before the heading is dropped and a later heading is not", (t) => {
+test("ignores leading non-heading text and preserves the first valid heading", (t) => {
   t.deepEqual(splitTitle("ic# ORCID\n\n**ORCID** is…", "ORCID"), {
     title: "ORCID",
     body: "**ORCID** is…",

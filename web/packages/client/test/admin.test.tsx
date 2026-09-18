@@ -28,24 +28,27 @@ const adminUser = (usage: Record<string, number>) => ({
   workspaceCount: 1,
 });
 
-test.serial("the token column counts what the limit counts, not thinking twice", async (t) => {
-  await renderApp("/admin", {
-    user: testUser({ isAdmin: true }),
-    responses: {
-      "admin.listUsers": [
-        adminUser({ inputTokens: 1_000, outputTokens: 500, reasoningTokens: 400 }),
-      ],
-    },
-  });
+test.serial(
+  "the token usage column excludes reasoning tokens to prevent double-counting",
+  async (t) => {
+    await renderApp("/admin", {
+      user: testUser({ isAdmin: true }),
+      responses: {
+        "admin.listUsers": [
+          adminUser({ inputTokens: 1_000, outputTokens: 500, reasoningTokens: 400 }),
+        ],
+      },
+    });
 
-  const row = await screen.findByText("someone");
-  const cells = [...(row.closest("tr")?.querySelectorAll("td") ?? [])].map(
-    (cell) => cell.textContent,
-  );
-  // `reasoningTokens` is a breakdown of `outputTokens`, so the sum is 1,500 —
-  // the same number `db/repos/usage.ts:admissionCheck` spends.
-  t.is(cells[3], "1.5k");
-});
+    const row = await screen.findByText("someone");
+    const cells = [...(row.closest("tr")?.querySelectorAll("td") ?? [])].map(
+      (cell) => cell.textContent,
+    );
+    // `reasoningTokens` is a breakdown of `outputTokens`, so the sum is 1,500 —
+    // the same number `db/repos/usage.ts:admissionCheck` spends.
+    t.is(cells[3], "1.5k");
+  },
+);
 
 test.serial("the model access column names the gated model only where it applies", async (t) => {
   await renderApp("/admin", {
@@ -68,5 +71,8 @@ test.serial("the model access column names the gated model only where it applies
   t.false(plain.includes("Claude Fable 5.1"), "and a non-admin does not have the gated one");
 
   const admin = await accessOf("boss");
-  t.true(admin.includes("Claude Fable 5.1"), "which is exactly what the admin flag buys");
+  t.true(
+    admin.includes("Claude Fable 5.1"),
+    "verifying the admin flag grants access to restricted models",
+  );
 });

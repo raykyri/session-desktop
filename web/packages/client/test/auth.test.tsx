@@ -21,16 +21,16 @@ test.serial("a signed-out visit to a shell route lands on sign-in", async (t) =>
   t.is(screen.queryByRole("navigation", { name: "Sections" }), null, "no shell was rendered");
 });
 
-test.serial("the sign-in page reports the server's refusal", async (t) => {
+test.serial("the sign-in page displays server authentication error messages", async (t) => {
   await renderApp("/login?error=invite_required", { user: null });
 
   t.is(
     screen.getByRole("alert").textContent,
-    "Signing up needs an invite code. Use the link you were sent.",
+    "An invite code is required to create an account. Please use the invitation link you received.",
   );
 });
 
-test.serial("an unrecognized refusal still says something", async (t) => {
+test.serial("unrecognized authentication errors display a default error message", async (t) => {
   await renderApp("/login?error=teapot", { user: null });
 
   t.is(screen.getByRole("alert").textContent, "Sign-in did not complete. Try again.");
@@ -81,7 +81,7 @@ test.serial("the boot loader warms the seven queries the shell renders from", as
   }
 });
 
-test.serial("a signed-in visit to sign-in goes on to what it asked for", async (t) => {
+test.serial("authenticated visits to /login redirect to the requested target URL", async (t) => {
   // The guard puts the path it refused on `?redirect=`; coming back with a
   // session — after signing in, or with Back — continues there rather than
   // showing a sign-in button to somebody who is signed in.
@@ -98,12 +98,15 @@ test.serial("a redirect that leaves this origin is not followed", async (t) => {
   t.truthy(screen.getByRole("heading", { name: "Home" }), "at the root, not at the target");
 });
 
-test.serial("the kitchen sink is not a way around the guard in a build", async (t) => {
-  // `import.meta.env` is absent outside Vite, so this suite runs the route
-  // tree exactly as a production bundle carries it: no `/dev/*` route, and the
-  // guard's exemption off with it (07 §3).
-  await renderApp("/dev/ui", { user: null });
+test.serial(
+  "development kitchen sink routes do not bypass authentication in production builds",
+  async (t) => {
+    // `import.meta.env` is absent outside Vite, so this suite runs the route
+    // tree exactly as a production bundle carries it: no `/dev/*` route, and the
+    // guard's exemption off with it (07 §3).
+    await renderApp("/dev/ui", { user: null });
 
-  t.is(screen.queryByRole("navigation", { name: "Sections" }), null, "no shell was rendered");
-  t.is(screen.queryByRole("heading", { name: /Cool · Dark/ }), null, "and no kitchen sink");
-});
+    t.is(screen.queryByRole("navigation", { name: "Sections" }), null, "no shell was rendered");
+    t.is(screen.queryByRole("heading", { name: /Cool · Dark/ }), null, "and no kitchen sink");
+  },
+);

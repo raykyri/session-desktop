@@ -1,10 +1,7 @@
 // Admission control (`docs/05-run-lifecycle-and-streaming.md` §8,
 // `docs/04-agent-runtime.md` §10).
 //
-// The desktop had unbounded parallelism because each run was the user's own
-// machine spawning a CLI. On the web one machine serves everyone, so runs wait
-// in `run_queue` and the loop claims them under per-user, per-provider, and
-// pool-wide caps.
+// Queue system implementing rate-limiting and admission control across users and providers.
 
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 
@@ -72,7 +69,7 @@ export function enqueue(db: SessionDatabase, userId: string, input: EnqueueInput
 
 export interface ClaimLimits {
   pool?: RunPool | undefined;
-  /** How many claims this call may hand out. */
+  /** Maximum claims returned by this call. */
   limit?: number | undefined;
   /** Concurrent runs per user (2 for research). */
   perUser?: number | undefined;
@@ -233,8 +230,7 @@ export function position(
       and(
         eq(runQueue.pool, row.pool),
         isNull(runQueue.claimedAt),
-        // A row serving a 429 backoff is invisible to `claim`, so counting it
-        // would tell the user they are further back than they will be served.
+        // Rows backed off due to HTTP 429 are excluded from active claim counts to avoid overstating queue wait depth.
         or(isNull(runQueue.notBefore), sql`${runQueue.notBefore} <= ${at}`),
         sql`(${runQueue.enqueuedAt}, ${runQueue.nodeId}) < (${row.enqueuedAt}, ${row.nodeId})`,
       ),
@@ -244,7 +240,7 @@ export function position(
 }
 
 /**
- * How many rows this account has waiting. The per-user concurrency cap bounds
+ * Number of rows queued for this account. The per-user concurrency cap bounds
  * what *runs*; this is what bounds what has been admitted, which is the number
  * that decides the bill — a queue is spend already committed to
  * (`docs/06-auth-and-users.md` §8).

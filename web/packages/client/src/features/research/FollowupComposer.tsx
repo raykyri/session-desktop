@@ -1,10 +1,8 @@
 // The follow-up composer (`09-research-document-view.md` §2, §7).
 //
-// One component in two placements: the thread composer at the end of the
-// answer column, and — while a targeted ask is open — a docked copy beside the
-// passage in that segment's rail. The docked placement is what makes the
-// `docked` prop load-bearing rather than cosmetic: an ask is always a branch,
-// so the mode picker is absent there and ⇧⌘↵ has nothing to override.
+// The thread composer appears after the answer column. A docked composer appears
+// beside a selected passage and creates a branch attached to that text. Docked
+// mode omits the mode picker.
 //
 // Mode is a property of the submission, so it lives on the control that
 // submits rather than as a tab strip above the field: ⌘↵ sends in the selected
@@ -39,7 +37,7 @@ export const FOLLOWUP_MODE_OPTIONS: {
   shortcut: string | null;
 }[] = [
   { mode: "thread", label: "Continue thread", shortcut: null },
-  { mode: "branch", label: "New branch in sidebar", shortcut: "⇧⌘↵" },
+  { mode: "branch", label: "Open as new branch in sidebar", shortcut: "⇧⌘↵" },
 ];
 
 export interface FollowupComposerProps {
@@ -148,11 +146,7 @@ export function FollowupComposer({
           <span className="research-prompt-quote border-accent min-w-0 flex-1 border-l-2 pl-2 text-xs">
             {quoteDisplayText(quote ?? "")}
           </span>
-          <IconButton
-            label="Cancel the targeted question"
-            title="Cancel (Esc)"
-            onClick={onDismissAsk}
-          >
+          <IconButton label="Cancel question" title="Cancel (Esc)" onClick={onDismissAsk}>
             <X size={12} aria-hidden="true" />
           </IconButton>
         </div>

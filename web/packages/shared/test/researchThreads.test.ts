@@ -27,7 +27,7 @@ function node(id: string, overrides: Partial<ResearchNode> = {}): ResearchNode {
   };
 }
 
-test("a lone node is a chain of itself", (t) => {
+test("returns single-element chain for a node with no inline children or parents", (t) => {
   const nodes = [node("root")];
   t.deepEqual(inlineChainFor(nodes, "root"), ["root"]);
   t.is(inlineChildOf(nodes, "root"), null);
@@ -81,7 +81,7 @@ test("duplicate inline children resolve to the oldest, stably", (t) => {
   t.deepEqual(inlineChainFor(nodes, "late"), ["late"]);
 });
 
-test("a parent-link cycle cannot hang the walk", (t) => {
+test("prevents infinite loops when traversing circular parent node references", (t) => {
   const nodes = [
     node("a", { parentNodeId: "b", inline: true }),
     node("b", { parentNodeId: "a", inline: true }),
@@ -143,8 +143,7 @@ test("canFollowUpFrom gates on completion alone, for every node kind", (t) => {
 test("canRetryResearchNode allows every status resetForRetry accepts", (t) => {
   t.is(canRetryResearchNode(node("failed", { status: "failed" })), true);
   t.is(canRetryResearchNode(node("cancelled", { status: "cancelled" })), true);
-  // Auto-resume normally clears an interruption, but after repeated failed
-  // resumes the node stays interrupted and Retry is the way out.
+  // Allows manual retry when automatic resumption attempts have failed repeatedly.
   t.is(canRetryResearchNode(node("interrupted", { status: "interrupted" })), true);
   t.is(canRetryResearchNode(node("done")), false);
   for (const status of ["queued", "running"] as const) {
@@ -152,7 +151,7 @@ test("canRetryResearchNode allows every status resetForRetry accepts", (t) => {
   }
 });
 
-test("document tails continue a thread on the same terms as run tails", (t) => {
+test("allows follow-up thread continuation identically for both document and run endpoints", (t) => {
   const document = node("doc", { kind: "document" });
   t.is(canContinueThread([document], document), true);
   const run = node("run", { kind: "run" });

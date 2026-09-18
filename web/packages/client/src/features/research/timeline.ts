@@ -1,6 +1,4 @@
-// The content-derived half of a thread segment (`09-research-document-view.md`
-// §7): the turns a node's answer is folded from, what the reader sees when the
-// fold is empty, how long the run has been going, and the sources it cited.
+// Timeline projection logic: extracts messages from turns, provides empty-state placeholders, and calculates run durations.
 //
 // Pure, so the projection is testable without a DOM. The desktop kept the same
 // derivation behind a per-node cache keyed on content identity; here the query
@@ -142,12 +140,12 @@ export function answerEmptyStateText(input: {
   if (node.status === "interrupted") return "The run was interrupted. Resuming…";
   if (sourceError) return `The response is no longer available: ${sourceError}`;
   if (node.status === "complete") {
-    return "Research completed, but its response is unavailable.";
+    return "Research finished, but the response could not be loaded.";
   }
   if (isActiveResearchStatus(node.status)) {
-    return hasAnyTimelineItem ? "Waiting for the final response…" : "Working…";
+    return hasAnyTimelineItem ? "Generating response…" : "Working…";
   }
-  return "No response is available.";
+  return "No response was generated.";
 }
 
 export function formatRunDuration(durationMs: number): string {

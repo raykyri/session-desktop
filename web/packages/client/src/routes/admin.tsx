@@ -83,7 +83,9 @@ export function AdminPage() {
     return (
       <div className="research-reading-surface h-full overflow-y-auto px-8 py-10">
         <h1 className="text-input text-fg-heading m-0 font-semibold">Admin</h1>
-        <p className="max-w-feed text-fg-muted mt-3 text-base">This page is for administrators.</p>
+        <p className="max-w-feed text-fg-muted mt-3 text-base">
+          You must be an administrator to access this page.
+        </p>
       </div>
     );
   }
@@ -125,10 +127,9 @@ export function AdminPage() {
               </thead>
               <tbody>
                 {users.data.map((user) => {
-                  // `reasoningTokens` is a breakdown of `outputTokens`, not a
-                  // third bucket, so adding it would double-count thinking and
-                  // disagree with the limit the server enforces
-                  // (`db/repos/usage.ts:admissionCheck`).
+                  // `reasoningTokens` is included in `outputTokens`; excluding it
+                  // from this sum prevents double-counting and matches the server
+                  // limit (`db/repos/usage.ts:admissionCheck`).
                   const tokens = user.usage.inputTokens + user.usage.outputTokens;
                   return (
                     <tr key={user.id} className="border-border-divider border-t">
@@ -178,7 +179,7 @@ export function AdminPage() {
 
         <section className="flex flex-col gap-3">
           <h2 className="text-fg-heading m-0 text-base font-semibold">Invites</h2>
-          <Field label="How many" hint="Codes are shown once; copy them before leaving.">
+          <Field label="Number of invites" hint="Codes are shown once; copy them before leaving.">
             {({ id, describedBy }) => (
               <div className="flex items-center gap-2">
                 <Input

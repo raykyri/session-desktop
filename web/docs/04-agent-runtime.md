@@ -51,10 +51,10 @@ OpenRouter `reasoning: { effort: "medium" }` for both `gpt-luna` and
 `deepseek-flash`; Gemini medium thinking level. The desktop's per-model
 effort option lists (`src/lib/launcherModels.ts`) are not ported.
 
-Model switching: a follow-up may choose any model the user may access. The
-thread's message history is provider-neutral (§4), so a fork onto another
-model replays the same messages; provider-specific reasoning blocks are
-dropped in that case, which is accepted.
+Model switching: users may choose any model they can access for a follow-up.
+The thread's message history is provider-neutral (§4), so a fork onto another
+model replays the same messages and discards provider-specific reasoning
+blocks as intended.
 
 ## 2. Module layout
 
@@ -131,21 +131,18 @@ mapper (reasoning block shapes, tool-call id formats).
 ## 4. Canonical message store
 
 The desktop delegated conversation state to each CLI's session files and
-forked with `--resume --fork-session`. The web app owns the conversation.
+forked with `--resume --fork-session`. The web application stores and manages
+conversation state directly.
 
 `node_messages` (`02-domain-model-and-database.md` §3.3): the ordered AI SDK
 `ModelMessage[]` produced by one node's attempt, stored as JSON, including
 tool calls and tool results, with provider-specific reasoning metadata kept
 in `providerMetadata` where the SDK preserves it. A node's context is the
 concatenation of its ancestors' messages along the tree path plus its own.
-Forking is a data operation: a child node's context starts from its parent's
-messages; nothing is copied until the child completes, when its own
-messages are appended under its id.
+Forking is a lightweight data operation: child nodes inherit their parent's message context by reference. New messages are only written to the database under the child's ID once the child completes its run.
 
 Rules
-- Append-only. Messages of a completed node are never edited (Fable 5.1
-  invalidates thinking blocks on edited history; other providers do not
-  care, but one rule is simpler).
+- Append-only. Messages of a completed node are never edited (Claude Fable 5.1 invalidates thinking blocks if history is modified; other providers allow modifications, but enforcing a single append-only invariant keeps behavior consistent across all models).
 - Same-model forks keep reasoning metadata; cross-model forks drop it (the
   SDK and providers ignore foreign reasoning blocks).
 - Context budget: before a request, if the estimated token count of the
@@ -153,8 +150,7 @@ Rules
   results older than the last two nodes are replaced by a one-line
   placeholder ("[tool result elided]") and, if still over budget, the oldest
   nodes' exchanges are replaced by a summary generated once by `gemini-flash`
-  and cached on the node (`node_summaries`). The displayed document is
-  unaffected; this only shapes what the model sees.
+  and cached on the node (`node_summaries`). The rendered document in the UI remains unchanged; this compaction only affects the context window passed to the model.
 - `document` parents (imported reports) have no messages; their markdown is
   embedded in the child's prompt as the desktop did (`research.rs:2054`).
 
@@ -167,9 +163,7 @@ instruction wrapped and neutralized exactly as the desktop did
 4 KiB cap). The user message is the bare question, plus a quoted passage for
 highlight-anchored follow-ups (`research.rs:2293`), plus tweet reference
 material (`tweets.rs`), plus document parts. The displayed `node.prompt`
-remains the bare question. The response boundary is trivial now: the answer
-is the assistant text of this node's attempt, so `response_boundary`
-matching (`research.rs:1852`) is not ported.
+remains the bare question. Response boundary detection is no longer needed: the answer directly corresponds to the assistant messages generated during the attempt, eliminating the need to port desktop boundary matching (`research.rs:1852`).
 
 Tool descriptions instruct the model to cite sources inline as Markdown
 links, to prefer `web_fetch` on results it relies on, and to stop searching
@@ -217,8 +211,8 @@ informed the choice:
 | Parallel | $1 / 1k (Turbo/Fast) to $5 / 1k (Basic/Advanced) | compressed excerpts; Extract API $1 / 1k for full text | cheapest overall; excerpts are LLM-shaped |
 | Google Search grounding (Gemini 3.x) | $14 / 1k search queries after 5,000 free per month | no page text: cited segments, redirect URIs, titles | only usable inside Gemini requests (§6.2) |
 
-Whichever vendor is chosen, `web_fetch` remains for URLs the model wants to
-read in full and for user-pasted links.
+Regardless of the selected vendor, `web_fetch` remains available for full-page
+retrieval and user-pasted links.
 
 ### 6.2 Google Search grounding (`gemini-flash-google`)
 
@@ -263,9 +257,7 @@ Users attach files to a question (`10-home-feed-journal-encyclopedia.md`
 §1). Server side (`documents.ts`):
 
 - Accepted: PDF, Markdown, plain text, CSV, JSON, DOCX (converted to text),
-  PNG/JPEG/WebP images. 20 MiB per file, 10 files per question, 20 MiB per
-  user, so one largest-allowed file fills the quota and the next upload is
-  refused until something is deleted.
+  PNG/JPEG/WebP images. Limits are 20 MiB per file, 10 files per question, and 20 MiB per user. A single 20 MiB file reaches the per-user limit, preventing further uploads until existing files are deleted.
 - Storage: `/data/documents/<userId>/<sha256>` on the volume; metadata in
   `documents`; extracted text in `document_text` (per page for PDFs).
   Documents are kept indefinitely; there is no expiry job.
@@ -307,7 +299,7 @@ daily limits (tokens and runs) are enforced at admission from
 
 ## 11. Credentials and configuration
 
-Deployment-level only; users supply nothing. Fly secrets:
+Credentials are configured only at the deployment level; users do not provide API keys. Fly secrets:
 `GOOGLE_APPLICATION_CREDENTIALS_JSON` (Vertex service account; written to a
 file at boot) with `GOOGLE_VERTEX_PROJECT` and `GOOGLE_VERTEX_LOCATION`,
 `OPENROUTER_API_KEY` (DeepSeek and Luna), `ANTHROPIC_API_KEY`,
@@ -319,9 +311,9 @@ hidden. `web/.env.example` documents every variable with comments.
 
 Recorded AI SDK stream-part sequences drive the loop through a fixture
 provider implementing the AI SDK provider interface
-(`packages/server/src/runs/fixtureProvider.ts`). One JSON file per scenario in
-`packages/server/src/runs/fixtures/`, and `listFixtureScenarios()` is what the
-test asserting the set is complete reads:
+(`packages/server/src/runs/fixtureProvider.ts`). Each scenario has one JSON
+file in `packages/server/src/runs/fixtures/`, and the fixture completeness test
+reads `listFixtureScenarios()`:
 
 | Scenario | What it replays |
 | --- | --- |
@@ -339,15 +331,9 @@ test asserting the set is complete reads:
 | `paced-answer` | `slow-stream` stretched to the seconds an end-to-end reload needs |
 | `long-answer` | An answer past `MIN_RECAP_CHARS`, so a run schedules a recap |
 
-A test names a scenario through `setFixtureScenario`; a run started through
-the UI names one by putting a `fixture:<scenario>` marker in the prompt, which
-is what lets a developer drive any of these by hand under
-`SESSION_FIXTURE_PROVIDERS=1`.
+Tests select scenarios via `setFixtureScenario`, while UI runs can specify a `fixture:<scenario>` prompt prefix, enabling developers to trigger specific scenarios manually when `SESSION_FIXTURE_PROVIDERS=1` is enabled.
 
-The same module owns the network the tools see under fixture providers:
-`fixturePageFetch` answers `web_fetch` with the recorded page in process and
-`fixtureLookup` stands in for DNS, so a fixture run makes no outbound request
-(`12-testing-linting-ci.md` §3.6). `web_search` registers only when a vendor
+This module mocks network calls during fixture runs: `fixturePageFetch` intercepts `web_fetch` to return recorded page content in-process, and `fixtureLookup` mocks DNS resolution, preventing outbound network requests (`12-testing-linting-ci.md` §3.6). `web_search` registers only when a vendor
 key is set, so it is simply absent there.
 
 Real-provider smoke tests run manually with credentials.
@@ -369,13 +355,9 @@ Where the built runtime departs from the sketch above, and why.
   policy: a 429 re-queues the node with backoff and keeps its place in the
   admission order, which a transport-level retry cannot do, and every other
   class is a classified failure the user can act on. The backoff is counted
-  from `run_attempts` rows with outcome `rate_limited`, not from memory, so a
-  deploy in the middle of a backoff does not hand the node a fresh three; the
+  from `run_attempts` rows with outcome `rate_limited`, not from memory, ensuring that a deployment during backoff does not reset the retry limit back to three attempts; the
   re-queue increments `attempt` because `run_attempts` is keyed by
-  `(node_id, attempt)` and a retry reusing the number would overwrite the row
-  the count reads. Metadata runs are the exception and keep `maxRetries: 1`:
-  they own no queue row to re-enter, so a transport retry is the only one they
-  can have.
+  `(node_id, attempt)` and reusing an attempt number would overwrite the previous record used to track retry counts. Metadata runs are the exception and keep `maxRetries: 1`: they do not create queue records, meaning transport-level retries are their only retry mechanism.
 - **Tool caches.** `web_search` and `web_fetch` results are cached for 24 h in a
   bounded in-memory LRU rather than a `search_cache` table. Nothing downstream
   needs the cache to survive a deploy, and a table would put a write on the hot
@@ -385,14 +367,9 @@ Where the built runtime departs from the sketch above, and why.
   `runs.advanceSeq` carries it back into `nodes.run_seq` before the next write.
   Without that, a `getNodeContent` taken after a burst of deltas would report a
   sequence the client had already passed.
-- **Auto-resume.** Boot reconciliation only re-queues `resume_pending` nodes;
-  the claim loop is what opens the new attempt (`nodes.resumeAttempt`), so an
-  interrupted node that is claimed is resumed with its committed exchanges as
-  context. The cap of two auto-resumes is counted from `run_attempts` rows of
+- **Auto-resume.** Boot reconciliation only re-queues `resume_pending` nodes; the queue processor opens the new attempt (`nodes.resumeAttempt`), resuming the interrupted node using its committed message exchanges as context. The cap of two auto-resumes is counted from `run_attempts` rows of
   kind `resume`, which makes it survive a restart.
-- **Recap candidates.** A generated candidate is held in memory for 30 minutes
-  keyed by its id; `recaps.applyCandidate` stores the server's copy when it
-  still has one, so the text that was generated is the text that is saved.
+- **Recap candidates.** A generated candidate is held in memory for 30 minutes keyed by its ID; `recaps.applyCandidate` uses the server-cached candidate if still present in memory, guaranteeing that the saved recap matches the generated candidate text.
 - **Search vendors.** Parallel is called with the `base` processor and the
   query as its objective; the API has no recency parameter, so `recency` is
   folded into the objective there and passed as `time_range` to Tavily.
@@ -405,19 +382,17 @@ Where the built runtime departs from the sketch above, and why.
   `dispatcher: new Agent({ connect: { lookup } })` with a `lookup` that returns
   only the address the guard already approved — feasible, but it replaces
   Node's connection path (happy eyeballs, address-family selection, proxy
-  support) for every outbound page read, which is not a trade worth making for
-  this exposure today. Address *forms* are not part of the gap: the WHATWG URL
+  support) for every outbound page read, which introduces unnecessary complexity given the application's current threat model. Address *forms* are not part of the gap: the WHATWG URL
   parser normalizes decimal, octal, hexadecimal, shorthand, and fullwidth hosts
-  into a dotted quad before the guard sees them, which `runs.tools` pins.
-- **Route fallback.** `gpt-luna` asks for the `~openai/gpt-luna-latest` alias
-  and falls back to the pinned `openai/gpt-5.6-luna` when OpenRouter answers
-  404 or "not a valid model". The swap is a wrapper around the language model
+  into a dotted quad before the guard sees them, which is strictly verified by unit tests in `runs.tools`.
+- **Route fallback.** The runtime requests the `~openai/gpt-luna-latest` alias
+  for `gpt-luna` and falls back to the pinned `openai/gpt-5.6-luna` when
+  OpenRouter returns 404 or "not a valid model". The swap is a wrapper around the language model
   rather than a branch in the loop, because a missing route is rejected at the
   call and never mid-stream; the route it settles on is remembered for the
   process. A 400 refusal on the data policy is *not* a missing route and stays
-  `provider_unavailable`: falling back there would be re-asking the same
-  question of a provider bound by the same rule.
-- **The question is a message.** A node's `node_messages` open with the user
+  `provider_unavailable`: falling back in that case would merely resubmit the prompt to an alternate provider subject to the same policy constraints.
+- **Including user prompts in message history.** A node's `node_messages` open with the user
   message the attempt asked, followed by the provider's response messages. The
   AI SDK's `responseMessages` carries only what the model produced, so without
   this a descendant would replay a history of answers with no questions — and
@@ -425,7 +400,4 @@ Where the built runtime departs from the sketch above, and why.
   text is stored: document parts are rebuilt from the node's ancestors on every
   attempt, so persisting them would put file bytes in the row and send each
   attachment twice.
-- **Giving up on a resume.** The node that has spent its two auto-resumes keeps
-  `interrupted` and its partial output, and `resume_pending` is cleared with
-  its queue row. Left set, every later boot would re-queue a node the runtime
-  has already decided not to resume.
+- **Terminating failed resumes.** A node that exceeds the two-resume limit remains in the `interrupted` status with its partial output preserved, while `resume_pending` and its queue entry are cleared. If `resume_pending` remained set, every subsequent restart would repeatedly re-queue a node that should no longer be resumed.

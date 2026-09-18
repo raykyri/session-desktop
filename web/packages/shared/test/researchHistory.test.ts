@@ -20,7 +20,7 @@ import {
   researchWorkspaceHistoryForward,
 } from "../src/research/history.js";
 
-test("empty history can go neither way", (t) => {
+test("disallows backward and forward navigation when history is empty", (t) => {
   t.is(canGoBack(EMPTY_RESEARCH_HISTORY), false);
   t.is(canGoForward(EMPTY_RESEARCH_HISTORY), false);
   t.is(researchHistoryBack(EMPTY_RESEARCH_HISTORY), null);

@@ -18,8 +18,7 @@ import {
 /** Where `createApp` mounts the procedure endpoint (`server/src/app.ts`). */
 export const TRPC_ENDPOINT = "/api/trpc";
 
-/** The second CSRF barrier (`06-auth-and-users.md` §5): a cross-origin form
- * or image cannot set a custom header without a preflight we never answer. */
+/** CSRF defense: cross-origin requests cannot include custom headers without CORS preflight approval. */
 export const REQUESTED_WITH_HEADER = "X-Requested-With";
 export const REQUESTED_WITH_VALUE = "session";
 
@@ -56,9 +55,7 @@ export function createSessionTrpcClient(options: TrpcClientOptions = {}): Sessio
         false: httpBatchLink({
           url,
           headers: () => REQUESTED_WITH_HEADERS,
-          // Same-origin already sends the cookie; stating it means a future
-          // absolute `url` (a preview deployment, a test server) keeps the
-          // session rather than silently signing the user out.
+          // Explicitly setting credentials ensures authentication cookies are sent even if an absolute URL is configured for testing or preview environments.
           fetch: (input, init) => doFetch(input, { ...init, credentials: "include" }),
         }),
       }),

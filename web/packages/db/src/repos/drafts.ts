@@ -23,10 +23,10 @@ export function get(db: SessionDatabase, userId: string, key: string): string | 
 
 export function set(db: SessionDatabase, userId: string, key: string, value: string): void {
   if (Buffer.byteLength(key, "utf8") > MAX_DRAFT_KEY_BYTES) {
-    throw new Error(`draft keys cannot exceed ${MAX_DRAFT_KEY_BYTES} bytes`);
+    throw new Error(`Draft key exceeds maximum size of ${MAX_DRAFT_KEY_BYTES} bytes.`);
   }
   if (Buffer.byteLength(value, "utf8") > MAX_DRAFT_VALUE_BYTES) {
-    throw new Error(`a draft cannot exceed ${MAX_DRAFT_VALUE_BYTES} bytes`);
+    throw new Error(`Draft value exceeds maximum allowed size of ${MAX_DRAFT_VALUE_BYTES} bytes.`);
   }
   const at = now();
   db.insert(interfaceDrafts)

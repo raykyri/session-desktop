@@ -261,9 +261,7 @@ export function ActivityFeed({
     scrollRef.current?.scrollTo({ top: 0, behavior: feedScrollBehavior() });
   };
 
-  /** The mirror of "Load older activity": back to page one, at the top. No
-   * refetch — the reader asked to return to what they already had, not for
-   * fresher rows; the header's Refresh is the control that asks for those. */
+  /** Returns to the first page and scrolls to the top without refetching. */
   const backToLatest = () => {
     dropOlderPages();
     setNewCount(0);
@@ -295,8 +293,8 @@ export function ActivityFeed({
         );
         return;
       case "delete":
-        // The entry is kept in hand rather than refetched: `journal.restore`
-        // takes the whole row back, so undo needs the copy that was on screen.
+        // Retain the deleted entry locally so undo can restore it without
+        // refetching.
         setUndoEntry(entry);
         void deleteJournalEntry(entry.id)
           .then(() => client.invalidateQueries({ queryKey: ["activity"] }))
@@ -311,7 +309,7 @@ export function ActivityFeed({
   const openRecapDialog = (nodeId: string) => {
     void getResearchNodeContent(nodeId)
       .then(setRecapContent)
-      .catch((error: unknown) => pushErrorToast("That answer could not be read", error));
+      .catch((error: unknown) => pushErrorToast("Could not read answer", error));
   };
 
   const folderState = folders.data ?? EMPTY_FOLDER_STATE;
@@ -322,10 +320,9 @@ export function ActivityFeed({
         tree={tree}
         archived={tree.archivedAt != null}
         folderState={folderState}
-        // The star is folder state, which the feed can write as well as the
-        // sidebar can. The two folder rows are not offered here: this surface
-        // has no folder dialog to send them to, and a row that does nothing is
-        // worse than a row that is absent (`10` §2).
+        // Star status is folder state, which can be updated from either the feed
+        // or sidebar. Folder actions are omitted because this surface has no
+        // folder dialog to support them (`10` §2).
         onToggleStar={(treeId) =>
           void applyFolderState(client, workspaceId, toggleResearchStar(folderState, treeId))
         }
@@ -345,18 +342,10 @@ export function ActivityFeed({
 
   const nothingYet = feed.isSuccess && events.length === 0;
 
-  // "Back to latest" is offered only when it would move something: either
-  // older pages are loaded (so there are pages to drop) or the reader is off
-  // the top (so there is somewhere to scroll back to).
-  //
-  // The new-activity counter wins whenever it is showing. It is sticky, so it
-  // is already pinned in the viewport, and it lands in the same place — two
-  // controls with one destination, one of them below the fold, reads as a
-  // mistake rather than as a choice. The counter also clears the arrivals it
-  // announces, which "Back to latest" has no business doing silently. Once the
-  // reader takes the counter (or scrolls to the top, which clears it), the
-  // pair-with-"Load older activity" control comes back if the conditions above
-  // still hold.
+  // Show "Back to latest" only when older pages are loaded or the reader has
+  // scrolled away from the latest activity. The new-activity counter takes
+  // priority because it provides the same navigation and also clears the
+  // pending arrival count.
   const showBackToLatest = newCount === 0 && ((feed.data?.pages.length ?? 0) > 1 || awayFromTop);
 
   return (
@@ -414,7 +403,7 @@ export function ActivityFeed({
                 scrollToTop();
               }}
             >
-              {newCount} new {newCount === 1 ? "activity" : "activities"}
+              {newCount} new {newCount === 1 ? "update" : "updates"}
             </ControlButton>
           </div>
         ) : null}
@@ -478,8 +467,8 @@ export function ActivityFeed({
           {nothingYet ? (
             <p className="text-fg-muted m-0 py-6 text-base">
               {bookmarkedOnly
-                ? "Bookmarked research appears here, newest first."
-                : "Research queries and saved sources appear here, newest first."}
+                ? "No bookmarked research yet. Bookmark a research thread to see it here."
+                : "No recent activity yet. Run a query or save a source to see it here."}
             </p>
           ) : null}
 

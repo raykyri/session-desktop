@@ -3,8 +3,8 @@
 // here: the DOM search bar today, the selection popover and sidebar
 // multi-select with Phase 6. `AppShell` installs one capture-phase keydown
 // listener and gives Escape to the top entry, which replaces the desktop's
-// hand-ordered dispatcher (`App.tsx:9094-9220`). While a Base UI layer is
-// open the shell stands down entirely and this stack is not consulted.
+// hand-ordered dispatcher (`App.tsx:9094-9220`). Base UI layers handle Escape
+// directly while open, bypassing this stack.
 //
 // "Top" is the highest priority, and among equal priorities the most recently
 // registered — so two layers in one band unwind in open order, while a layer

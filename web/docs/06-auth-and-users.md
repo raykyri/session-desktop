@@ -85,8 +85,7 @@ few values in a Rust preferences file. On the web:
 - `settings.get/update` persist `UserSettings` server-side so settings
   follow the account across browsers. The client also mirrors them in a
   Zustand `persist` store for instant first paint and applies the server copy
-  when it loads (server wins on conflict; `settings.updated` events keep tabs
-  in sync).
+  when it loads (the server version takes precedence during conflicts; `settings.updated` events synchronize changes across tabs).
 - There are no user-supplied provider keys; the desktop's OpenRouter key
   setting and the `openrouter_*` commands are dropped. `defaultModel` is a
   user setting (default `gemini-flash`).
@@ -103,8 +102,7 @@ Not implemented. There is no `account.delete` procedure: the router has no
 `account` namespace, and nothing in the client offers deletion. The shape it
 would take is unchanged — cancel the user's active runs, delete the user row
 and let the foreign keys cascade, then remove the user's documents from the
-volume — but until it exists, removing an account is an operator job against
-the database and `/data/documents/<userId>`.
+volume — but until an automated procedure is implemented, account deletion must be performed manually by an operator via database queries and deleting `/data/documents/<userId>`.
 
 ## 8. Rate limits
 
@@ -121,10 +119,7 @@ so the limit does not add it again, and it agrees with the cost estimate
 recorded beside it. Defaults from env (`SESSION_DAILY_TOKENS=1000000`,
 `SESSION_DAILY_RUNS=10`), overridable per user in `user_limits`; admins exempt.
 Checked at admission (`research.createTree`, `forkNode`, `retryNode`), which
-answers `TOO_MANY_REQUESTS` as `03-api-and-events.md` §2 specifies; the
-earlier sketch of holding the node `queued` with a `limitReached` flag is not
-built, because a refusal the composer can show is clearer than a node that
-looks queued and is not.
+answers `TOO_MANY_REQUESTS` as `03-api-and-events.md` §2 specifies; because displaying an explicit error in the query composer provides clearer feedback than creating a node that appears queued but cannot execute.
 
 Sign-up throttling (later): per-IP attempts per hour, minimum GitHub account
 age (`github_created_at`), and invite codes as described in §3.

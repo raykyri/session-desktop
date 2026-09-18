@@ -1,9 +1,7 @@
 // The two sidebar writes that reorder things, with optimistic updates and
 // rollback (`10-home-feed-journal-encyclopedia.md` §7).
 //
-// Both are drag results, so they have to land before the round trip: a row that
-// snaps back to where it was and then jumps forward 200 ms later reads as a
-// failed drag. They are plain functions over a `QueryClient` rather than
+// Apply optimistic reordering immediately during drag operations to avoid visual lag before server confirmation. They are plain functions over a `QueryClient` rather than
 // `useMutation` hooks because the sidebar calls them from pointer handlers and
 // the tests call them without a component.
 
@@ -31,8 +29,8 @@ export function applyOrderToSection(
     positions.push(index);
     byId.set(tree.id, tree);
   }
-  // A list that does not hold exactly the moved section is not a list this
-  // move describes: reordering it against a partial order would drop rows.
+  // Abort if the target list does not contain the complete section being
+  // moved; applying a partial order would drop rows.
   if (positions.length !== orderedTreeIds.length) return trees;
   if (new Set(orderedTreeIds).size !== orderedTreeIds.length) return trees;
   const replacements = orderedTreeIds.map((treeId) => byId.get(treeId));
@@ -47,8 +45,8 @@ export function applyOrderToSection(
 
 /**
  * Writes a folder state: stars, membership, collapsed flags, folder records.
- * Applied to every cached copy first, sent second, and rolled back to exactly
- * what was there when the call is refused.
+ * Optimistically updates each cached copy, sends the mutation, and restores
+ * the previous state on failure.
  */
 export async function applyFolderState(
   client: QueryClient,
@@ -59,14 +57,14 @@ export async function applyFolderState(
   const previous = client.getQueryData<ResearchFolderState>(key);
   client.setQueryData(key, next);
   try {
-    // The server returns the stored state, which is the authority on what was
-    // accepted; the optimistic copy is only a guess at it.
+    // Replace the optimistic cache state with the authoritative state returned
+    // by the server.
     client.setQueryData(key, await setResearchFolders(workspaceId, next));
     return true;
   } catch (error) {
     if (previous === undefined) client.removeQueries({ queryKey: key });
     else client.setQueryData(key, previous);
-    pushErrorToast("The folder change could not be saved", error);
+    pushErrorToast("Failed to save folder changes", error);
     return false;
   }
 }
@@ -92,7 +90,7 @@ export async function applyTreeOrder(
     return true;
   } catch (error) {
     for (const [key, trees] of snapshots) client.setQueryData(key, trees);
-    pushErrorToast("The new order could not be saved", error);
+    pushErrorToast("Failed to save new order", error);
     return false;
   }
 }

@@ -22,9 +22,8 @@ export interface JournalMenuItem {
  *
  * Gated through `safeHref` even though `journal.add` only stores web URLs:
  * `journal.restore` and `journal.update` take a whole entry from the client, so
- * the stored URL is not a value this surface can assume was validated on the
- * way in. An entry whose URL does not survive the gate simply has nothing to
- * open or copy. */
+ * the stored URL cannot be assumed valid. Entries with invalid URLs omit the
+ * actions that would open or copy them. */
 export function journalEntryUrl(entry: JournalEntry): string | null {
   const stored = entry.kind === "link" ? entry.url : (entry.tweet?.url ?? entry.url);
   return safeHref(stored) ?? null;

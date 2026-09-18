@@ -32,9 +32,8 @@ export interface RecapDialogProps {
 }
 
 export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogProps) {
-  // Pinned when the dialog opens: the node keeps streaming events while it is
-  // up, and a concurrency token that moved under the reader would turn every
-  // apply into a refusal.
+  // Pin the revision token when the dialog opens so streaming updates do not
+  // invalidate the optimistic concurrency check used when applying changes.
   const [baseline] = useState(() => ({
     responseRevision: content.responseRevision ?? "",
     recap: content.node.recap ?? null,
@@ -122,7 +121,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
             disabled={loadingDefaults || generating || applying || !instructions.trim()}
             onClick={generate}
           >
-            {generating ? "Generating…" : candidate ? "Generate again" : "Generate candidate"}
+            {generating ? "Generating…" : candidate ? "Generate again" : "Generate summary"}
           </ControlButton>
           {candidate ? (
             <ConfirmDialogActionButton
@@ -154,7 +153,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
       </label>
       <section className="mt-4">
         <h3 className="text-fg-subtle m-0 text-xs font-semibold tracking-wide uppercase">
-          Candidate
+          Generated summary
         </h3>
         {generating ? (
           <p className="text-fg-muted mt-1 flex items-center gap-2 text-sm">
@@ -163,7 +162,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
           </p>
         ) : (
           <p className="text-fg-primary mt-1 text-sm">
-            {candidate?.text ?? "Generate a new summary first."}
+            {candidate?.text ?? "No summary generated yet. Select Generate summary to create one."}
           </p>
         )}
       </section>

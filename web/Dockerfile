@@ -36,8 +36,7 @@ RUN npm ci --no-audit --no-fund \
        && rm -rf /var/lib/apt/lists/* \
        && npm ci --no-audit --no-fund )
 
-# A native module that did not build is a boot failure on the machine with the
-# volume attached; fail here instead.
+# Verify native module compilation during image build to prevent runtime boot failures.
 RUN node -e "require('better-sqlite3'); console.log('better-sqlite3 ok')"
 
 # ── build ────────────────────────────────────────────────────────────────────

@@ -25,17 +25,13 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 }
 
 /**
- * A route that threw. The message is shown because it is often the useful part
- * ("the response changed"), and the two ways out are offered explicitly:
- * re-run the route's own loaders, which fixes anything that was a bad fetch,
- * or reload the document, which fixes a component left in a state it cannot
- * re-render out of.
+ * Error boundary component displaying the exception message and providing two recovery options: retry route loaders or reload the window.
  */
 export function RouteErrorPanel({ error }: { error: unknown }) {
   const router = useRouter();
   const message = error instanceof Error ? error.message : "";
   return (
-    <Panel title="This view could not be shown">
+    <Panel title="Unable to load this page">
       <p className="text-fg-secondary m-0 text-sm">
         {message || "Something went wrong while rendering this page."}
       </p>
@@ -56,8 +52,7 @@ export function RouteErrorPanel({ error }: { error: unknown }) {
   );
 }
 
-/** An address that matches no route, and a thread or page that no longer
- * exists — the router raises the same condition for both. */
+/** Rendered for unknown URLs or resources that have been deleted. */
 export function RouteNotFoundPanel() {
   return (
     <Panel title="Not found">

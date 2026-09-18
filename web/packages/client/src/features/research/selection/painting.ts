@@ -11,9 +11,7 @@
 //   session-research-selected-highlights the selection's own tone (priority 2)
 //
 // The `Highlight` objects are created once and mutated rather than replaced:
-// WebKit leaves a deleted registry entry's paint on screen until an unrelated
-// event invalidates the text layer, and mutation avoids it. It is harmless
-// elsewhere.
+// WebKit fails to clear removed highlight entries until forced; mutating existing entries works around this rendering bug.
 //
 // Firefox before 140 has no registry. There, saved highlights — and only those;
 // the transient layers repaint far too often to pay for it — fall back to a
@@ -125,14 +123,7 @@ export function isFallbackPainting(): boolean {
  * The fallback's own layer: one absolutely positioned element appended after
  * everything the renderer produced.
  *
- * The obvious fallback — wrapping each resolved range in a `<mark>` — cannot be
- * used here, and the reason is worth stating because it is not obvious: the
- * ranges sit inside DOM that React owns, and moving a text node into a wrapper
- * leaves React holding a node whose parent is no longer the one its fiber
- * records. The next insertion or removal among that parent's children throws,
- * including the removal React performs when the document unmounts. A trailing
- * extra child, by contrast, is something React never touches: it inserts before
- * nodes it knows and removes subtrees by their topmost element.
+ * Note: Wrapping ranges in <mark> tags would corrupt React's virtual DOM reconciliation; an absolute overlay layer avoids modifying React-managed nodes.
  *
  * The layer also contributes no text, so `root.textContent` — the `answer-v1`
  * projection every anchor is measured against — is byte-identical with and

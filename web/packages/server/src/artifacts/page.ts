@@ -11,9 +11,7 @@
 //   - the Markdown is sanitized. The desktop let raw HTML through because the
 //     overlay's opaque-origin sandbox contained it; here the iframe carries
 //     `allow-same-origin` against the artifact host, so a `<script>` in an
-//     uploaded document would run on that host if the CSP ever slipped.
-//     Sanitizing is the first of the two defenses, the script-hash CSP below
-//     the second.
+// Sanitization provides defense-in-depth against script execution in uploaded markdown.
 
 import { createHash } from "node:crypto";
 
@@ -28,8 +26,7 @@ import { unified } from "unified";
  * Verbatim from `file_server.rs:40`. The panel restores scroll after a reload
  * from the `session-preview-scroll` messages this posts; it is the only script
  * the page CSP allows, and it is allowed by the hash of exactly these bytes, so
- * editing this string without re-deriving the hash would break the bridge
- * rather than widen it.
+ * The CSP script-src hash must match PREVIEW_SCROLL_SCRIPT exactly or browser execution will be blocked.
  */
 export const PREVIEW_SCROLL_SCRIPT =
   "(()=>{let f=0;addEventListener('scroll',()=>{cancelAnimationFrame(f);f=requestAnimationFrame(()=>parent.postMessage({type:'session-preview-scroll',x:scrollX,y:scrollY},'*'))},{passive:true});addEventListener('message',e=>{const d=e.data;if(d?.type!=='session-preview-scroll-restore'||!Number.isFinite(d.x)||!Number.isFinite(d.y))return;requestAnimationFrame(()=>requestAnimationFrame(()=>scrollTo(d.x,d.y)))})})();";
@@ -66,9 +63,7 @@ export function renderedPageContentSecurityPolicy(publicOrigin: string): string 
 
 /**
  * The bridge that lets the panel recover from an expired or revoked token
- * (`11-artifacts-and-browser.md` §2, §3). An iframe reports no status code to
- * its embedder — cross-origin by construction here — so the error body says so
- * itself and the panel re-mints. The status is read from the document rather
+ * (`11-artifacts-and-browser.md` §2, §3). Because cross-origin iframes cannot expose HTTP status codes, the error page posts its status via postMessage to prompt token re-minting. The status is read from the document rather
  * than interpolated, because the CSP allows this script by the hash of exactly
  * these bytes and an interpolated one would need a fresh hash per response.
  */

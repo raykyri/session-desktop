@@ -77,16 +77,15 @@ redirects to `/login` if it is null (`/login` and `/dev/ui` are outside the
 guard) → its loader warms `settings.get`, `system.runtimeConfig`,
 `workspaces.list`, `research.listTrees`, `folders.get`,
 `encyclopedia.listPages` in parallel, without blocking the first paint on them
-→ `SessionBoot` opens the SSE subscription, installs the draft writer, and
-takes the server's settings over the local mirror. No "window ready"
-handshake; the desktop's hidden-window flash prevention is unnecessary.
+→ `SessionBoot` initializes the SSE subscription, activates the draft persistence listener, and updates local settings with the authoritative server configuration. There is no "window ready" handshake because the desktop's hidden-window
+flash prevention is unnecessary in the browser.
 
-The sign-in page reads the refusal the server put on the redirect
+The sign-in page extracts the error parameter returned in the redirect URL
 (`/login?error=not_allowed|invite_required|invite_invalid|expired_state|
 missing_code|exchange_failed|profile_failed`, `server/src/auth/github.ts`) and
-sends `return_to` back through `/auth/github`. A deployment with no GitHub
-credentials answers that route with a 503 page rather than a redirect, so
-"signups are closed" has no parameter to render.
+sends `return_to` back through `/auth/github`. If a deployment has no GitHub credentials, the server returns a 503 page for
+that route instead of redirecting, so the sign-in page receives no error
+parameter.
 
 ## 3. Routes
 
@@ -143,21 +142,18 @@ so the keys sit below both rather than beside one of them.
 
 Defaults: `staleTime: Infinity` for event-patched lists (events keep them
 fresh), `refetchOnWindowFocus: false`, `retry: 1`. `usage.summary` and
-`admin.listUsers` set their own 30 s staleness: no event announces a token
-count, so the default would freeze the figures at the session's first read.
+`admin.listUsers` use a 30-second stale time because events do not update token
+counts, which would otherwise remain stale after the initial load.
 Mutations write their returned objects into the cache (`setQueryData`) using
 the reducers from `shared/research/events.ts` (ported `researchEvents.ts`:
 `patchTreeSummary`, `upsertTreeDetailNode`, `removeTreeDetailNodes`,
 `upsertActivityNode`, …).
 
-The tab that made a change also receives the event it caused, so every cache a
-mutation writes is written twice. Field-replacing reducers are idempotent and
+Because the originating tab receives broadcast events for its own mutations, cache updates are applied both by the mutation response and by the subsequent SSE event. Field-replacing reducers are idempotent and
 both writers may run; the count reducers on a tree summary are deltas and have
 exactly one writer per change: the mutation applies the delta from the node it
 is replacing (which it must read before overwriting it), and the event skips
-its own delta when the node it carries is already in the caches. A mutation
-therefore does not invalidate a list whose counts the event patches — the
-refetch and the delta would race for the same `+1`.
+its own delta when the node it carries is already in the caches. Mutations therefore avoid invalidating lists whose count fields are patched by events, preventing race conditions where a full refetch and an event delta might double-increment a counter.
 
 ### 4.2 Event bridge (`api/events.ts`)
 
@@ -193,8 +189,7 @@ the 10 s grace in `connection.shouldPollSnapshots` has passed
 (`05-run-lifecycle-and-streaming.md` §9). A subscription error that names
 `UNAUTHORIZED`, or one after which `auth.me` answers `null`, is the session
 ending rather than the network dropping: the bridge navigates to `/login` with
-the current path on `?redirect=`, because the link would otherwise reconnect
-against a dead session forever. `/login` sends a tab that already has a
+the current path on `?redirect=`, to prevent the client from repeatedly attempting to reconnect with invalid session credentials. `/login` sends a tab that already has a
 session on to that path.
 
 ### 4.3 UI state — Zustand
@@ -225,13 +220,9 @@ This replaces `App.tsx:9094-9220`.
 ## 5. Keyboard shortcuts and command palette
 
 `shared/app/shortcuts.ts` is the ported `resolveAppShortcut`
-(`src/lib/appShortcuts.ts`). `AppShell` installs one capture-phase listener
-that stands down while a Base UI layer is open — the library owns dismissal
-for its own dialogs, menus and popovers, with correct nesting — and otherwise
-passes every keydown to the shared table, `isEditableTarget` included. Whether
+(`src/lib/appShortcuts.ts`). `AppShell` registers a single capture-phase keydown listener that is bypassed when a Base UI overlay is active (allowing the library to manage nested dialog and menu dismissals natively), delegating all other key events to the shared shortcut table. Whether
 a text field swallows a chord is decided per chord there, not for the listener
-as a whole: this app is used from a composer most of the time, and Cmd-J
-("focus the follow-ups") exists to be pressed from one. Only the chords that
+as a whole: users spend most of their time in composer inputs, and shortcuts like Cmd-J ("focus follow-ups") are explicitly intended to be triggered while editing text. Only the chords that
 compete with text editing or with the caret's own navigation require a
 non-editable target — Cmd/Ctrl-1..9, Ctrl-Tab, Shift-Cmd-[ / ], and
 Cmd-Alt-Up/Down. It dispatches:
@@ -305,9 +296,9 @@ the `localStorage` layers of `researchNavigation` and `researchFolders`,
 - `safeHref` from `shared/links` allows only `http:`, `https:` and
   `mailto:`, and returns the resolved absolute URL so a protocol-relative
   href cannot resolve unpredictably downstream. The desktop's `session-file:`
-  scheme is not a destination on the web: agents have no filesystem, so no
-  answer produces one (`11-artifacts-and-browser.md` §1). External links open
-  with `target="_blank" rel="noopener noreferrer"`.
+  scheme is unsupported on the web because web agents cannot access a local
+  filesystem (`11-artifacts-and-browser.md` §1). External links open with
+  `target="_blank" rel="noopener noreferrer"`.
 - Remote images in Markdown stay blocked (`BlockedMarkdownImage`); tweet media
   is allowed from the twimg hosts listed above.
 - Diagram SVG passes through DOMPurify's SVG profile with the

@@ -67,12 +67,12 @@ test("with no streamed turn id the synthetic turn is named after the node", (t) 
   t.is(turns[0]?.id, "n1::in-flight");
 });
 
-test("no in-flight text leaves the committed list untouched", (t) => {
+test("returns committed turns unchanged when in-flight text is empty", (t) => {
   const committed = [assistantTurn("t1", "done")];
   t.is(timelineTurns("n1", committed, "", null), committed);
 });
 
-test("the in-flight block's timeline key survives the commit", (t) => {
+test("timeline React key remains stable when streaming block transitions to committed turn", (t) => {
   // While streaming: one committed turn plus the growing tail.
   const streaming = view(timelineTurns("n1", [assistantTurn("t1", "A")], "B", "t2"));
   // After the commit: the same two turns, the second now durable.
@@ -97,7 +97,7 @@ test("the collapsed answer starts after the last tool call", (t) => {
   t.true(built.timelineItems.length > built.displayedTimelineItems.length);
 });
 
-test("the full trace shows what the collapsed answer hides", (t) => {
+test("expanding trace view displays reasoning and intermediate tool executions", (t) => {
   const turns = [
     assistantTurn("t1", "Let me look."),
     toolTurn("t2", "web_search", { query: "memory" }, { results: [] }),
@@ -122,7 +122,7 @@ test("a long trace renders its tail and reports the rest as hidden", (t) => {
     built.hiddenTimelineItemCount,
     built.displayedTimelineItems.length - TIMELINE_ITEM_RENDER_WINDOW,
   );
-  // The window keeps the newest items: a run reads bottom-up.
+  // The render window retains the most recent items.
   t.is(
     built.visibleTimelineItems[built.visibleTimelineItems.length - 1],
     built.displayedTimelineItems[built.displayedTimelineItems.length - 1],
@@ -166,16 +166,19 @@ function emptyFor(overrides: Partial<ResearchNode>, hasAnyTimelineItem = false):
   });
 }
 
-test("the empty-state cascade names the reason it has", (t) => {
+test("empty state renders the specific error or completion message", (t) => {
   t.is(emptyFor({ status: "failed", error: "provider refused" }), "provider refused");
   t.is(emptyFor({ status: "cancelled" }), "Research was cancelled.");
   t.is(emptyFor({ status: "interrupted" }), "The run was interrupted. Resuming…");
   t.is(emptyFor({ status: "running" }), "Working…");
-  t.is(emptyFor({ status: "running" }, true), "Waiting for the final response…");
-  t.is(emptyFor({ status: "complete" }), "Research completed, but its response is unavailable.");
+  t.is(emptyFor({ status: "running" }, true), "Generating response…");
+  t.is(
+    emptyFor({ status: "complete" }),
+    "Research finished, but the response could not be loaded.",
+  );
 });
 
-test("a source error outranks a completed status", (t) => {
+test("source error state takes display precedence over normal completion status", (t) => {
   t.is(
     answerEmptyStateText({
       node: node({ status: "complete" }),
@@ -234,7 +237,7 @@ test("sources are the distinct URLs of the searches and fetches", (t) => {
     ),
   ]);
   t.is(sources.length, 2);
-  // The fetched page wins the title, and its domain is stripped of `www.`.
+  // The fetched page title takes precedence, and `www.` is removed from its domain.
   t.deepEqual(
     sources.map((source) => [source.title, source.domain, source.fetched]),
     [
@@ -244,7 +247,7 @@ test("sources are the distinct URLs of the searches and fetches", (t) => {
   );
 });
 
-test("an untitled fetch promotes the row without losing the name search gave it", (t) => {
+test("document fetch preserves previously discovered search title when response title is empty", (t) => {
   const { sources } = researchSources([
     toolTurn(
       "t1",
@@ -265,7 +268,7 @@ test("an untitled fetch promotes the row without losing the name search gave it"
   );
 });
 
-test("an unsafe source URL never reaches the footer", (t) => {
+test("unsafe or non-HTTP source URLs are filtered out of the citations footer", (t) => {
   const { sources } = researchSources([
     toolTurn(
       "t1",
@@ -298,7 +301,7 @@ test("a grounded search contributes its titles and its entry point", (t) => {
   t.deepEqual(searchEntryPoints, ["<div>chips</div>"]);
 });
 
-test("a failed tool result contributes nothing", (t) => {
+test("excludes failed tool results from source citations", (t) => {
   const failing: Turn = {
     id: "t1",
     agentId: "n1",

@@ -13,9 +13,9 @@ export interface OpenArtifactRequest {
 }
 
 /**
- * Mints a token and shows the document, reusing the URL when the same document
- * already has a token with life left in it. Rejects when the mint fails, so
- * the caller can say so where the click happened.
+ * Generates a preview token and opens the document, reusing an unexpired token
+ * when available. Rejects on failure so the caller can report the error at the
+ * interaction point.
  */
 export async function openArtifactDocument(request: OpenArtifactRequest): Promise<void> {
   const store = useArtifactPanelStore.getState();

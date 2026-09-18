@@ -13,7 +13,7 @@ test.beforeEach(() => {
   useSettingsStore.setState({ settings: { ...DEFAULT_USER_SETTINGS }, hydrated: false });
 });
 
-test.serial("defaults are the shipped appearance until something is stored", (t) => {
+test.serial("uses default appearance settings when local storage is empty", (t) => {
   t.is(useSettingsStore.getState().settings.appearance, "dark");
   t.is(useSettingsStore.getState().settings.colorTheme, "green-blob");
   t.is(useSettingsStore.getState().settings.bodyFontId, "dm-sans");
@@ -46,7 +46,7 @@ test.serial("hydration flips `hydrated` even when nothing was stored", async (t)
 test.serial("a stored record still carrying `showShortcutHints` loads intact", async (t) => {
   // The setting was removed with the sidebar's Cmd-held badges, but every
   // browser that ran an earlier build still has it in `session.settings.v2`.
-  // The whole record must survive; only the dead key goes.
+  // Preserve valid settings while removing deprecated keys.
   localStorage.setItem(
     SETTINGS_STORAGE_KEY,
     JSON.stringify({
@@ -108,7 +108,7 @@ test.serial("toggleAppearance flips between the two appearances", (t) => {
 // The default record lives in `shared`, which cannot import the client's font
 // list and so repeats the id as a literal. This is the seam where that would
 // drift unnoticed.
-test("the shared default body font id is one the client actually offers", (t) => {
+test("the shared default font identifier exists in the client font options", (t) => {
   t.is(DEFAULT_USER_SETTINGS.bodyFontId, DEFAULT_BODY_FONT_ID);
   t.truthy(
     BODY_FONT_OPTIONS.find((option) => option.id === DEFAULT_USER_SETTINGS.bodyFontId),

@@ -73,19 +73,19 @@ test("an empty or inverted selection is rejected", (t) => {
     message(t, () => {
       validateHighlightAnchor(anchor({ start: 24, end: 24 }));
     }),
-    "research highlight selection cannot be empty",
+    "Invalid highlight anchor: selection cannot be empty.",
   );
   t.is(
     message(t, () => {
       validateHighlightAnchor(anchor({ start: 30, end: 24 }));
     }),
-    "research highlight selection cannot be empty",
+    "Invalid highlight anchor: selection cannot be empty.",
   );
   t.is(
     message(t, () => {
       validateHighlightAnchor(anchor({ start: 0, end: 3, exact: "   " }));
     }),
-    "research highlight selection cannot be empty",
+    "Invalid highlight anchor: selection cannot be empty.",
   );
 });
 
@@ -94,13 +94,13 @@ test("offsets must match the selected text and stay inside a snapshot", (t) => {
     message(t, () => {
       validateHighlightAnchor(anchor({ end: 25 }));
     }),
-    "research highlight has invalid selection offsets",
+    "Invalid highlight anchor: selection offsets do not match text length.",
   );
   t.is(
     message(t, () => {
       validateHighlightAnchor(anchor({ start: 0, end: 1, exact: "🌊" }));
     }),
-    "research highlight has invalid selection offsets",
+    "Invalid highlight anchor: selection offsets do not match text length.",
   );
   t.is(
     message(t, () => {
@@ -108,7 +108,7 @@ test("offsets must match the selected text and stay inside a snapshot", (t) => {
         anchor({ start: MAX_RESPONSE_SNAPSHOT_BYTES, end: MAX_RESPONSE_SNAPSHOT_BYTES + 14 }),
       );
     }),
-    "research highlight has invalid selection offsets",
+    "Invalid highlight anchor: selection offsets do not match text length.",
   );
 });
 
@@ -119,19 +119,19 @@ test("the selection and its context are size-capped in utf-8 bytes", (t) => {
     message(t, () => {
       validateHighlightAnchor(anchor({ start: 0, end: wide.length, exact: wide }));
     }),
-    "research highlight selection is too large",
+    "Highlight selection exceeds maximum allowed byte limit.",
   );
   t.is(
     message(t, () => {
       validateHighlightAnchor(anchor({ prefix: "é".repeat(MAX_HIGHLIGHT_CONTEXT_BYTES / 2 + 1) }));
     }),
-    "research highlight selection is too large",
+    "Highlight selection exceeds maximum allowed byte limit.",
   );
   t.is(
     message(t, () => {
       validateHighlightAnchor(anchor({ suffix: "x".repeat(MAX_HIGHLIGHT_CONTEXT_BYTES + 1) }));
     }),
-    "research highlight selection is too large",
+    "Highlight selection exceeds maximum allowed byte limit.",
   );
   t.notThrows(() => {
     validateHighlightAnchor(anchor({ suffix: "é".repeat(MAX_HIGHLIGHT_CONTEXT_BYTES / 2) }));
@@ -150,7 +150,7 @@ test("the response revision must be 64 lowercase hex digits", (t) => {
       message(t, () => {
         validateHighlightAnchor(anchor({ responseRevision: revision }));
       }),
-      "research highlight has an invalid response revision",
+      "Invalid highlight anchor: response revision format is invalid.",
       revision.slice(0, 8),
     );
   }
@@ -184,25 +184,25 @@ test("a node's highlight set is bounded by count, ids, anchors, and bytes", (t) 
     message(t, () => {
       validateHighlightCollection(many);
     }),
-    "a research answer can have at most 500 highlights",
+    "Maximum highlight limit reached: at most 500 highlights allowed per answer.",
   );
   t.is(
     message(t, () => {
       validateHighlightCollection([highlight(), highlight()]);
     }),
-    "research highlights must have unique non-empty ids",
+    "Highlight validation failed: IDs must be unique and non-empty.",
   );
   t.is(
     message(t, () => {
       validateHighlightCollection([highlight({}, "")]);
     }),
-    "research highlights must have unique non-empty ids",
+    "Highlight validation failed: IDs must be unique and non-empty.",
   );
   t.is(
     message(t, () => {
       validateHighlightCollection([highlight({ end: 25 })]);
     }),
-    "research highlight has invalid selection offsets",
+    "Invalid highlight anchor: selection offsets do not match text length.",
   );
   // The flat overhead makes the byte cap bind before the count cap: 500 of
   // these fit the count but not the 512 KiB budget.
@@ -215,7 +215,7 @@ test("a node's highlight set is bounded by count, ids, anchors, and bytes", (t) 
     message(t, () => {
       validateHighlightCollection(heavy);
     }),
-    "a research answer contains too much highlight data",
+    "Highlight byte size exceeds maximum allowed per answer.",
   );
   t.notThrows(() => {
     validateHighlightCollection(heavy.slice(0, 60));
@@ -231,6 +231,6 @@ test("the per-user budget is checked before an insertion", (t) => {
     message(t, () => {
       validateHighlightBudget(MAX_RESEARCH_HIGHLIGHT_BYTES_TOTAL, added);
     }),
-    "your account contains too much saved research highlight data",
+    "Total account highlight storage limit exceeded.",
   );
 });

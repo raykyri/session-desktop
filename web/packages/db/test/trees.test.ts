@@ -12,7 +12,7 @@ function admit(fixture: ReturnType<typeof createFixture>, prompt: string) {
   });
 }
 
-test("admitRoot writes the thread and its root in one step, at position 0", (t) => {
+test("creates thread and root node atomically at position 0", (t) => {
   const fixture = createFixture(t);
   const first = admit(fixture, "First question");
   const second = admit(fixture, "Second question");
@@ -30,7 +30,7 @@ test("admitRoot writes the thread and its root in one step, at position 0", (t) 
   );
 });
 
-test("admitRoot refuses an empty prompt and a foreign workspace", (t) => {
+test("rejects root node creation with empty prompt or unauthorized workspace ID", (t) => {
   const fixture = createFixture(t);
   t.throws(
     () =>
@@ -75,7 +75,7 @@ test("summaries count statuses and raise attention flags only for unseen ones", 
   t.is(seen?.failedCount, 1, "the lifetime count survives the acknowledgement");
 });
 
-test("an interrupted run counts in no bucket and raises no flag", (t) => {
+test("excludes interrupted runs from attention summary counts and status flags", (t) => {
   const fixture = createFixture(t);
   const detail = admit(fixture, "Root");
   const rootId = detail.tree.rootNodeId;
@@ -102,7 +102,7 @@ test("reorder replaces one section and rejects stale, duplicate, and foreign ids
 
   t.throws(
     () => trees.reorder(fixture.db, fixture.userId, fixture.workspaceId, false, [first.tree.id]),
-    { message: /order is stale/ },
+    { message: /Reorder conflict: tree sequence is stale/ },
   );
   t.throws(
     () =>
@@ -166,11 +166,11 @@ test("follow, bookmark, rename, and touch move updated_at strictly forward", (t)
   t.is(after, before + 1, "a clock that went backwards still advances updated_at");
 });
 
-test("removing a thread is refused while it has an active run", (t) => {
+test("prevents thread deletion when runs are actively executing", (t) => {
   const fixture = createFixture(t);
   const detail = admit(fixture, "Root");
   t.throws(() => trees.remove(fixture.db, fixture.userId, detail.tree.id), {
-    message: /cancel this research/,
+    message: /Cannot delete research thread with an active run/,
   });
   nodes.setStatus(fixture.db, fixture.userId, detail.tree.rootNodeId, "cancelled");
   trees.remove(fixture.db, fixture.userId, detail.tree.id);

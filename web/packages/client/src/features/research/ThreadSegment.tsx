@@ -5,11 +5,7 @@
 // each own a memo boundary, so a follow-up streaming a preview in the margin
 // does not rebuild the answer's element tree.
 //
-// This is also where a segment's content is fetched. The hook has to live at a
-// fixed position in the tree — a chain that grows would otherwise change the
-// number of hooks the page calls — so each segment reads its own node and
-// publishes what the page's cross-segment machinery needs (the revision the
-// highlights anchor against, the answer text the next segment quotes) back up.
+// Each segment fetches its own content independently to comply with React hook rules during dynamic list growth, bubbling required state back to the parent.
 
 import { isActiveResearchStatus } from "@session/shared";
 import type { ResearchNode, ResearchNodeContent, Turn } from "@session/shared";

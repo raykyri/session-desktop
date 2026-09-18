@@ -8,13 +8,12 @@
 // text is copied byte for byte: it is tuned prose, and `prompts.test.ts` pins
 // the sentences that matter.
 //
-// What the web changes: the desktop handed the assembled prompt to a CLI as
-// one process argument, so its caps were argv caps and the system prompt came
-// from the CLI. Here the request is a normal model call with an explicit
-// system prompt ({@link RESEARCH_SYSTEM_PROMPT}, new), and the caps are kept
-// only where they bound what reaches the model — the 4 KiB user instruction
-// and the tweet reference material. The exported-conversation builders are
-// gone with terminal conversations (`04-agent-runtime.md` §5).
+// The desktop passed the assembled prompt to a CLI as one process argument, so
+// its limits applied to argv and the CLI supplied the system prompt. The web
+// sends a model request with an explicit system prompt
+// ({@link RESEARCH_SYSTEM_PROMPT}); limits remain only for the 4 KiB user
+// instruction and tweet reference material. Exported-conversation builders
+// were removed with terminal conversations (`04-agent-runtime.md` §5).
 
 import type { ResearchMessageAttachment } from "../types/research.js";
 import type { QuotedTweetSnapshot, TweetSnapshot } from "../types/tweet.js";
@@ -130,7 +129,7 @@ export function sanitizedResearchLaunchInstruction(raw: string): string | undefi
   const bytes = utf8ByteLength(trimmed);
   if (bytes > RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES) {
     throw new Error(
-      `research instructions are limited to ${RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES} bytes; this one has ${bytes}`,
+      `Research instructions exceed limit (${bytes} bytes; maximum allowed is ${RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES} bytes).`,
     );
   }
   return trimmed;
@@ -140,9 +139,7 @@ const LEADING_WHITESPACE = /^\p{White_Space}+/u;
 const WHITESPACE = /\p{White_Space}/u;
 const WHITESPACE_RUN = /\p{White_Space}+/u;
 
-/** Whether the text right after a `<` opens or closes the instruction
- * wrapper, as leniently as a reader might accept it: `</ Research-Instructions >`
- * counts. */
+/** Detects opening and closing instruction tag delimiters with permissive whitespace and case matching. */
 function isWrapperTag(segment: string): boolean {
   let rest = segment.replace(LEADING_WHITESPACE, "");
   if (rest.startsWith("/")) {
@@ -265,7 +262,7 @@ export function documentFollowupPrompt(title: string, markdown: string, question
   const words = documentWordCount(markdown);
   if (words > MAX_RESEARCH_DOCUMENT_WORDS) {
     throw new Error(
-      `this document is too large to include in a follow-up prompt (${words} words; the limit is ${MAX_RESEARCH_DOCUMENT_WORDS})`,
+      `Document exceeds maximum word count for follow-up prompts (${words} words; limit is ${MAX_RESEARCH_DOCUMENT_WORDS} words).`,
     );
   }
   // The title lands inside a quoted attribute: strip quotes and collapse

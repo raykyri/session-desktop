@@ -36,7 +36,7 @@ function cacheControl(path: string): string {
   return path.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache";
 }
 
-/** Resolves a URL path inside `root`, or null when it escapes it. */
+/** Resolves a URL path within root, returning null if the path traverses outside root. */
 export function resolveWithinRoot(root: string, urlPath: string): string | null {
   const decoded = (() => {
     try {
@@ -53,9 +53,7 @@ export function resolveWithinRoot(root: string, urlPath: string): string | null 
 }
 
 /**
- * Static assets with an SPA fallback: any GET that is not an API, auth,
- * upload, or artifact route and does not match a file is answered with
- * `index.html` so the router owns the URL space.
+ * Serves static client assets with SPA fallback: unmatched GET requests return index.html for client-side routing.
  */
 export function clientStatic(distDirectory: string): MiddlewareHandler<AppEnv> | null {
   const root = resolve(distDirectory);

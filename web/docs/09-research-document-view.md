@@ -4,9 +4,9 @@ Port of `src/components/research/ResearchDocument.tsx` (5,593 lines, 35
 `useState`, ~30 mirror refs) and its satellites (`ResearchMessage.tsx`,
 `ResearchRecap.tsx`, `ResearchRecapDialog.tsx`, `ResearchThreadActions.tsx`,
 `ResearchDocumentChrome.tsx`, `DocumentComposer.tsx`) to
-`packages/client/src/features/research/`. This is the largest UI subsystem
-and the one with the most subtle behavior; the port keeps its structure and
-algorithms, moves its data plumbing onto TanStack Query and Zustand, and
+`packages/client/src/features/research/`. This is the largest and most complex UI subsystem. The port preserves its
+structure and algorithms, migrates state management to TanStack Query and
+Zustand, and
 deletes the WebKit and Tauri workarounds.
 
 ## 1. Concepts
@@ -65,8 +65,7 @@ Rail: `position: relative` flex column. Stacked cards flow; anchored cards
 and the docked ask composer are `position: absolute; left: 0; right: 2px`
 with computed `top`. Collision pass (`:3582`): sort desired tops, measure card
 heights, cascade downward with a 12 px gap. Ask displacement (`:3635`):
-cards the docked composer would cover get an inline `translateY` with a 350
-ms transition; clearing the transforms animates them home.
+clearing the inline transforms animates the cards back to their default layout positions.
 
 Measurement: a per-segment element registry (`anchor`, `grid`, `root`,
 `aside`) filled by ref callbacks (`:2044-2073`); one `ResizeObserver` on the
@@ -95,9 +94,7 @@ All of this ports as-is; only the styling moves to utilities and the scoped
 Desktop: `detail` (tree + nodes) arrives as a prop replaced on every
 `research.node.updated`, which the Rust side emits once per text delta that
 changes the 220-char preview (`state.rs:9152`, `:8735`) with only the
-frontend's 16 ms coalescing as a limit, so up to ~60×/s; turns are fetched
-per chain node with a 1 Hz poll; a large amount of memo/identity machinery (`useStableValue`, `segmentViewCacheRef`,
-`sameSegmentNode`, string keys for every effect) exists to survive that.
+frontend's 16 ms coalescing as a limit, so up to ~60×/s; turns are polled at 1 Hz for each chain node, requiring extensive memoization workarounds (`useStableValue`, `segmentViewCacheRef`, `sameSegmentNode`, and string effect dependencies) to mitigate frequent re-renders.
 
 Web:
 - `useQuery(["tree", treeId])` gives `ResearchTreeDetail`; events patch it
@@ -117,10 +114,9 @@ Web:
   query invalidation keyed on those fields in the event bridge.
 - Highlight mutations (`highlights.create/remove/removeMany`) write the
   returned value into the `tree` cache node's `highlights`
-  (`patchNodeHighlights` logic, `:4073`); the write is confirmed rather than
-  optimistic, because a passage is painted from its stored id and a
-  provisional one would stack with the real highlight in the overlap layer for
-  a frame. Create-then-remove ordering for Expand is preserved (`:4134`).
+  (`patchNodeHighlights` logic, `:4073`); the write waits for server confirmation rather than applying optimistically,
+  because highlights render from persisted IDs. A provisional ID would briefly
+  duplicate the persisted highlight in the overlap layer. Create-then-remove ordering for Expand is preserved (`:4134`).
 - Mutations owned by the page (previously props from `App.tsx`):
   `research.forkNode`, `cancelNode`, `retryNode`, `renameTree`,
   `renameNode`, `removeBranch`, `removeTree`, `setTreeFollowed`,
@@ -175,9 +171,10 @@ and the DOM glue in `features/research/selection/`:
    objects are created once and mutated (WebKit repaint bug; harmless
    elsewhere). DOM search uses the same registry with distinct names.
 8. Anchor relocation (`resolveResearchHighlightOffset`): same revision + exact
-   + both contexts → stored offsets; else nearest occurrence of `exact` whose
-   prefix and suffix match; else a single occurrence matching one side; else
-   orphaned (never guessed). Orphans go to the hidden-highlights notice.
+   + both contexts → stored offsets. Otherwise, use the nearest occurrence of `exact` whose prefix
+   and suffix match, then a single occurrence matching one side. If no match is
+   found, mark the highlight as orphaned rather than guessing; the
+   hidden-highlights notice lists orphaned highlights.
 9. Click on a painted highlight (`selectAnnotationAtPoint`) selects the whole
    annotation and re-enters capture so removal goes through the same popover.
    Hover sets `is-highlight-hovered` and raises the paired card + connector.
@@ -186,14 +183,9 @@ and the DOM glue in `features/research/selection/`:
     `max(72px, height/3)` from the top; then clear the param.
 
 Browser support: the Custom Highlight API is available in Chromium, Safari,
-and Firefox ≥ 140. When absent, selection still works but saved highlights —
-and only those; the transient layers repaint far too often to pay for it — are
-painted by a fallback layer (a small new module; the desktop had no fallback
-because WKWebView always had the API). The layer is one absolutely positioned
+and Firefox ≥ 140. If the API is unavailable, text selection still works, but only saved highlights are rendered via a DOM fallback overlay, since rendering transient selection layers using DOM elements causes prohibitive repaint costs. The layer is one absolutely positioned
 element appended after everything the renderer produced, holding one box per
-client rect of each resolved range. Wrapping the ranges in `<mark>` is not
-available: the ranges sit inside DOM React owns, and moving a text node into a
-wrapper leaves React holding a node whose recorded parent no longer matches.
+client rect of each resolved range. Wrapping highlighted ranges in `<mark>` tags is not feasible: because React manages these DOM nodes, wrapping them alters the DOM hierarchy and triggers reconciliation errors.
 The layer contributes no text, so the `answer-v1` projection is identical with
 and without it, and it is repainted on the same reflow nonce the geometry
 passes use.
@@ -216,7 +208,7 @@ Scroll restoration: `useLayoutEffect` gated on "every chain node has content
 or a terminal error" and latched once per visit; if nothing was saved and the
 selected node is mid-chain, scroll to that segment; `recordScroll` debounced
 250 ms into the store; final flush on unmount; `pendingScrollNodeId` scrolls
-to a just-submitted inline follow-up once the detail delivers it.
+to a newly submitted inline follow-up when the updated detail includes it.
 
 "Show earlier": `TIMELINE_ITEM_RENDER_WINDOW = 100`; expansion persisted per
 tree (`expandedByNode`) because saved scroll offsets depend on it; full-trace
@@ -237,15 +229,15 @@ Oversize policy constants: `MARKDOWN_CHAR_LIMIT = 100_000`,
 `PLAINTEXT_DISPLAY_CHAR_LIMIT = 1_000_000`, `ACTIVITY_PAYLOAD_CHAR_LIMIT =
 200_000`. Activity disclosures via `TranscriptActivityItem`; thinking is an
 activity item. Empty-state cascade: failed → cancelled → `sourceError` →
-complete-but-unavailable → active ("Waiting for the final response…" or
-"Working…") → "No response is available." Duration text from a 1 s tick
+complete-but-unavailable → active ("Generating response…" or
+"Working…") → "No response was generated." Duration text from a 1 s tick
 that runs only while a chain node is active ("Generating for 1m 08s", "Ran
 for …", "Waiting to start").
 
 Streaming: the live turns from `liveTurns` feed the same
 `buildTimelineItems`; the in-flight assistant turn's text grows in place, so
-the markdown for that block re-renders per delta (≤ 20/s). The desktop's
-`ResearchTimelineItem` memo per item keeps other items stable. When the
+the markdown for that block re-renders per delta (≤ 20/s). The desktop memoizes each `ResearchTimelineItem` so unaffected items do not
+re-render. When the
 snapshot arrives, the same `Turn[]` shape produces identical timeline keys,
 so the DOM is reconciled without a flash.
 

@@ -11,12 +11,11 @@ import { oauthStates, sessions } from "../schema/sessions.js";
 import { invites, signupAttempts, userLimits, users } from "../schema/users.js";
 import { now } from "../time.js";
 
-/** Idle expiry: a session unused for this long is gone. */
+/** Inactivity timeout duration after which a session is invalidated. */
 export const SESSION_IDLE_MS = 30 * 24 * 60 * 60 * 1000;
-/** Absolute expiry: a session is never valid past this, however active. */
+/** Maximum session lifetime regardless of user activity. */
 export const SESSION_ABSOLUTE_MS = 90 * 24 * 60 * 60 * 1000;
-/** `last_seen_at` is rewritten at most this often, so a busy tab does not
- * turn every read into a write. */
+/** `Minimum interval between updates to `last_seen_at` to throttle write frequency during active reads. */
 export const SESSION_TOUCH_INTERVAL_MS = 5 * 60 * 1000;
 /** An OAuth state is single-use and short-lived. */
 export const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
@@ -67,9 +66,7 @@ export interface AuthenticatedSession {
 }
 
 /**
- * Resolves a cookie value to its session, applying both expiries and the
- * sliding touch. An expired row is deleted on the way out rather than left to
- * a sweeper: the read already found it.
+ * Resolves a session by cookie value, checking idle and absolute expiration and refreshing activity timestamps. Expired sessions are deleted immediately inline upon lookup.
  */
 export function readSession(db: SessionDatabase, token: string): AuthenticatedSession | null {
   const id = hashSessionToken(token);
@@ -130,9 +127,7 @@ export function createOAuthState(
 }
 
 /**
- * Takes an OAuth state out of the table and returns it, or null when it is
- * absent or expired. Single use: the delete is the read, so a replayed
- * callback finds nothing.
+ * Retrieves and atomically consumes an OAuth state record, returning null if missing or expired to prevent replay attacks.
  */
 export function consumeOAuthState(
   db: SessionDatabase,
@@ -157,9 +152,7 @@ export function deleteExpiredOAuthStates(db: SessionDatabase, at: number = now()
     .all().length;
 }
 
-/** Mints codes and debits the creator's allotment in one transaction, so two
- * concurrent requests cannot both spend the last invite. `createdBy` null
- * mints operator codes, which have no allotment to debit. */
+/** Generates invite codes and decrements the creator's remaining invite quota within a single transaction to prevent race conditions. System operator codes (where `createdBy` is null) bypass quota limits. */
 export function createInvites(
   db: SessionDatabase,
   createdBy: string | null,

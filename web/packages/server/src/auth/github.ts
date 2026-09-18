@@ -23,7 +23,7 @@ const AUTHORIZATION_ENDPOINT = "https://github.com/login/oauth/authorize";
 const TOKEN_ENDPOINT = "https://github.com/login/oauth/access_token";
 const PROFILE_ENDPOINT = "https://api.github.com/user";
 
-/** How long `api.github.com` has to answer before the sign-in is abandoned. */
+/** HTTP timeout for api.github.com requests during OAuth profile exchange. */
 const PROFILE_TIMEOUT_MS = 10_000;
 
 /** `read:user` rather than the desktop's empty scope: the profile fields the
@@ -285,10 +285,7 @@ export function githubRoutes(options: GitHubRoutesOptions): Hono<AppEnv> {
     if (created && config.requireInvite) {
       const redeemed = invite !== null && auth.redeemInvite(deps.db, invite, user.id);
       if (!redeemed) {
-        // The row exists only because this sign-up was in progress; an
-        // unusable invite must not leave an account behind. The cascade takes
-        // the `documents` rows and with them any way of naming the files, so
-        // the paths are read first and unlinked after.
+        // If invite redemption fails during signup, roll back account creation and remove uploaded files from disk before deleting database records.
         await removeUserDocuments(deps, user.id, c.get("logger"), () =>
           users.removeUser(deps.db, user.id),
         );

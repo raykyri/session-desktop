@@ -50,11 +50,15 @@ function node(overrides: Partial<ResearchNode> = {}): ResearchNode {
 test("the default instructions are copied verbatim", (t) => {
   t.true(
     DEFAULT_RECAP_INSTRUCTIONS.startsWith(
-      "Write a compact recap that directly answers the user's question using only the supplied answer.",
+      "Write a concise recap that directly answers the user's question using only the supplied answer.",
     ),
   );
-  t.true(DEFAULT_RECAP_INSTRUCTIONS.includes("Usually use 30-70 words."));
-  t.true(DEFAULT_RECAP_INSTRUCTIONS.endsWith("Do not merely describe what the answer discusses."));
+  t.true(DEFAULT_RECAP_INSTRUCTIONS.includes("Aim for 30–70 words."));
+  t.true(
+    DEFAULT_RECAP_INSTRUCTIONS.endsWith(
+      "Focus on the findings rather than describing the answer's topics.",
+    ),
+  );
 });
 
 test("recap source and output keep only wikilink display text", (t) => {
@@ -117,7 +121,7 @@ test("markdown structure becomes plain prose", (t) => {
   );
 });
 
-test("an imported report is summarized however short it is", (t) => {
+test("generates summaries for imported reports regardless of length", (t) => {
   const turns = [turn("assistant", [text("Short imported report.")])];
   t.is(extractRecapSource(turns, false), undefined);
   t.is(extractRecapSource(turns, true), "Short imported report.");
@@ -152,12 +156,12 @@ test("custom instructions are non-empty and bounded", (t) => {
   t.is(validateRecapInstructions("  Preserve caveats.  "), "Preserve caveats.");
   t.regex(
     t.throws(() => validateRecapInstructions(" \n "))?.message ?? "",
-    /summary instructions cannot be empty/,
+    /Summary instructions are required\./,
   );
   t.regex(
     t.throws(() => validateRecapInstructions("x".repeat(MAX_RECAP_INSTRUCTIONS_CHARS + 1)))
       ?.message ?? "",
-    /cannot exceed 4000 characters/,
+    /exceed maximum length of 4000 characters/,
   );
   t.notThrows(() => validateRecapInstructions("é".repeat(MAX_RECAP_INSTRUCTIONS_CHARS)));
 });

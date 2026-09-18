@@ -113,7 +113,7 @@ test("applying a previewed recap checks the recap identity and the answer", (t) 
         expectedCurrentRecapId: "something-else",
         candidate,
       }),
-    { message: /summary changed while the preview was open/ },
+    { message: /Summary conflict: the summary was modified while the preview was open/ },
   );
   t.throws(
     () =>
@@ -122,7 +122,7 @@ test("applying a previewed recap checks the recap identity and the answer", (t) 
         expectedResponseRevision: "0".repeat(64),
         candidate,
       }),
-    { message: /belongs to a different answer/ },
+    { message: /candidate response revision does not match the current answer revision/ },
   );
   t.throws(
     () =>
@@ -131,7 +131,7 @@ test("applying a previewed recap checks the recap identity and the answer", (t) 
         expectedResponseRevision: target.revision,
         candidate: { ...candidate, instructions: "   " },
       }),
-    { message: /instructions cannot be empty/ },
+    { message: /Summary instructions are required/ },
   );
 
   const applied = recaps.applyCandidate(fixture.db, fixture.userId, {
@@ -150,11 +150,11 @@ test("applying a previewed recap checks the recap identity and the answer", (t) 
         expectedResponseRevision: target.revision,
         candidate: { ...candidate, id: "candidate-2" },
       }),
-    { message: /summary changed while the preview was open/ },
+    { message: /Summary conflict: the summary was modified while the preview was open/ },
   );
 });
 
-test("an archived thread refuses a recap replacement", (t) => {
+test("rejects summary replacement on archived threads", (t) => {
   const fixture = createFixture(t);
   const target = answered(fixture);
   trees.archive(fixture.db, fixture.userId, target.treeId);
@@ -172,11 +172,11 @@ test("an archived thread refuses a recap replacement", (t) => {
           instructions: "y",
         },
       }),
-    { message: /restore archived research/ },
+    { message: /Cannot update summary of archived research/ },
   );
 });
 
-test("a scheduled recap does not overwrite one the user applied while it ran", (t) => {
+test("prevents background recap from overwriting user-applied summary", (t) => {
   const fixture = createFixture(t);
   const target = answered(fixture);
   // The scheduled job read the node here: no recap yet.

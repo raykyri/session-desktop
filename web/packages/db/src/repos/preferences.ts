@@ -113,7 +113,7 @@ export function normalizeLaunchInstruction(value: string | null): string | null 
   }
   if (Buffer.byteLength(trimmed, "utf8") > MAX_RESEARCH_LAUNCH_INSTRUCTION_BYTES) {
     throw new Error(
-      `research instructions cannot exceed ${MAX_RESEARCH_LAUNCH_INSTRUCTION_BYTES} bytes`,
+      `Research instructions exceed maximum allowed size of ${MAX_RESEARCH_LAUNCH_INSTRUCTION_BYTES} bytes.`,
     );
   }
   return trimmed;

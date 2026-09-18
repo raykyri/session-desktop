@@ -47,16 +47,14 @@ export class ResearchDocumentWordLimitExceeded extends Error {
   readonly count: number;
 
   constructor(limit: number, count: number) {
-    super(`Documents are limited to ${limit} words for now`);
+    super(`Document exceeds maximum limit of ${limit} words.`);
     this.name = "ResearchDocumentWordLimitExceeded";
     this.limit = limit;
     this.count = count;
   }
 }
 
-/** Counts without retaining the matches. When a limit is supplied, stop at
- * the first word over it so a dense 10 MB value cannot monopolize or exhaust
- * the renderer merely to establish that submission is disabled. */
+/** Counts words up to the specified limit without retaining matches, aborting early once exceeded to optimize parsing performance. */
 export function countResearchDocumentWords(
   markdown: string,
   limit = Number.POSITIVE_INFINITY,

@@ -1,5 +1,4 @@
-// Request-level rate limits (`06-auth-and-users.md` §8). In-memory token
-// buckets; one process, so there is nothing to share.
+// In-memory token bucket rate limiting for single-process deployments.
 
 import type { MiddlewareHandler } from "hono";
 
@@ -56,8 +55,7 @@ export class RateLimiter {
     return { allowed: true, retryAfter: 0 };
   }
 
-  /** Drops buckets that have been full for a while, so a long-lived process
-   * does not accumulate one entry per address forever. */
+  /** Evicts expired rate limit buckets to bound memory usage in long-running processes. */
   sweep(spec: BucketSpec = RATE_LIMITS.uploads): number {
     const at = this.#now();
     let removed = 0;
@@ -80,7 +78,7 @@ export function rateLimitByIp(
   return async (c, next) => {
     const result = limiter.take(`${scope}:ip:${c.get("clientIp")}`, spec);
     if (!result.allowed) {
-      return c.json({ error: "too many requests" }, 429, {
+      return c.json({ error: "Rate limit exceeded. Please try again shortly." }, 429, {
         "Retry-After": String(result.retryAfter),
       });
     }

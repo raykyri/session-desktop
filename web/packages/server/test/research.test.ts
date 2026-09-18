@@ -140,7 +140,7 @@ test("a research thread runs from launch to archive", async (t) => {
   t.is(cancelled.status, "cancelled");
   t.deepEqual(harness.runs.cancelled, [child.id]);
   await t.throwsAsync(caller.research.cancelNode({ nodeId: child.id }), {
-    message: /already finished/,
+    message: /already in terminal status/,
   });
 
   const retried = await caller.research.retryNode({ nodeId: child.id });
@@ -226,7 +226,7 @@ test("daily limits refuse a launch only when enforcement is on", async (t) => {
       model: "gemini-flash",
       workspaceId: workspace.id,
     }),
-    { message: /today's research limit/ },
+    { message: /daily research limit/ },
   );
   // An admin is exempt.
   const admin = harness.addUser("chief", { isAdmin: true });

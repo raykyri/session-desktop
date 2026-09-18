@@ -90,8 +90,7 @@ export const SegmentPrompt = memo(function SegmentPrompt({
   const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
   const modelSummary = index === 0 ? formatResearchModelSummary(node.model, node.origin) : "";
   const askedAt = index === 0 && Number.isFinite(node.createdAt) ? node.createdAt : null;
-  // The footer waits for the answer: Follow, the model and an age are all
-  // claims about a settled thread.
+  // Metadata items (follow button, model badge, elapsed time) are displayed only after the run completes.
   const showFooter = index === 0 && !running;
   const parentNodeId = node.parentNodeId ?? null;
 

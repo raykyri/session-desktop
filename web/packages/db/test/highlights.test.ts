@@ -73,7 +73,7 @@ test("the anchor validator runs before the revision lookup, in its own order", (
         ...anchorFor(revision, "abc"),
         end: 9,
       }),
-    { message: /invalid selection offsets/ },
+    { message: /selection offsets do not match text length/ },
   );
   t.throws(
     () =>
@@ -81,11 +81,11 @@ test("the anchor validator runs before the revision lookup, in its own order", (
         ...anchorFor(revision, "abc"),
         prefix: "p".repeat(600),
       }),
-    { message: /selection is too large/ },
+    { message: /selection exceeds maximum allowed byte limit/ },
   );
   t.throws(
     () => highlights.create(fixture.db, fixture.userId, nodeId, anchorFor("NOTHEX", "abc")),
-    { message: /invalid response revision/ },
+    { message: /response revision format is invalid/ },
   );
 });
 
@@ -100,7 +100,7 @@ test("the per-node byte cap binds before the count cap", (t) => {
       created += 1;
     }
   });
-  t.is(error?.message, "a research answer contains too much highlight data");
+  t.is(error?.message, "Highlight data exceeds the maximum allowed byte limit for this answer.");
   t.true(created > 0);
   t.true(created < MAX_RESEARCH_HIGHLIGHTS_PER_NODE);
 });

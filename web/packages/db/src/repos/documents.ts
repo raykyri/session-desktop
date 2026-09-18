@@ -248,12 +248,9 @@ export function attachedTo(db: SessionDatabase, userId: string, nodeId: string):
 export interface DocumentRemoval {
   removed: boolean;
   /**
-   * Volume paths no row references any more. Deleting the row is only half of
-   * a delete: the bytes sit under `${SESSION_DATA_DIR}/documents/<user>/<sha>`
-   * and the per-user quota is computed from rows, so a delete-and-reupload
-   * cycle would leak disk without bound. The caller unlinks these — filesystem
-   * work has no place inside a SQLite transaction, and the database package
-   * has no business touching the volume (ADR-1).
+   * Storage paths no longer referenced by database rows. The caller deletes
+   * these files outside the SQLite transaction to prevent unbounded disk use
+   * from repeated delete-and-upload cycles (ADR-1).
    */
   orphanedPaths: string[];
 }
@@ -275,8 +272,7 @@ function orphanedPathsOf(tx: SessionDatabase, paths: readonly string[]): string[
   );
 }
 
-/** Refused while a node still references the document: its bytes are part of
- * that run's context and the thread would lose the ability to explain itself. */
+/** Rejects deletion if any research node still references the document, ensuring context integrity for existing run records. */
 export function remove(db: SessionDatabase, userId: string, documentId: string): DocumentRemoval {
   return transact(db, (tx) => {
     const row = tx
@@ -293,7 +289,9 @@ export function remove(db: SessionDatabase, userId: string, documentId: string):
       .where(eq(nodeDocuments.documentId, documentId))
       .get();
     if (referenced) {
-      throw new Error("this document is attached to research and cannot be removed");
+      throw new Error(
+        "Cannot delete document: it is currently attached to one or more research threads.",
+      );
     }
     tx.delete(documents).where(eq(documents.id, documentId)).run();
     return { removed: true, orphanedPaths: orphanedPathsOf(tx, [row.storagePath]) };
@@ -301,9 +299,7 @@ export function remove(db: SessionDatabase, userId: string, documentId: string):
 }
 
 /**
- * Every volume path this account's rows point at, read *before* the account is
- * deleted. `users` cascades the rows away and leaves the bytes behind, so the
- * caller takes this list first and unlinks it after the delete lands.
+ * Returns all storage volume paths associated with an account before account deletion, allowing the caller to remove physical files after database records cascade.
  */
 export function storagePathsOf(db: SessionDatabase, userId: string): string[] {
   return [

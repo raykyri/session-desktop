@@ -16,7 +16,7 @@ test("workspaces are ordered, renamed, and scoped to their account", (t) => {
   t.is(workspaces.get(fixture.db, fixture.userId, other.workspaceId), null);
   t.is(workspaces.rename(fixture.db, fixture.userId, second.id, "  Notes  ").name, "Notes");
   t.throws(() => workspaces.rename(fixture.db, fixture.userId, second.id, "   "), {
-    message: /needs a name/,
+    message: /Workspace name is required/,
   });
   t.throws(() => workspaces.rename(fixture.db, fixture.userId, other.workspaceId, "x"), {
     message: /was not found/,
@@ -46,7 +46,7 @@ test("reorder rejects a stale list, a duplicate, and a foreign workspace", (t) =
   );
 });
 
-test("removing a workspace is refused while a run is active", (t) => {
+test("prevents workspace deletion while runs are actively executing", (t) => {
   const fixture = createFixture(t);
   const detail = trees.admitRoot(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
@@ -55,7 +55,7 @@ test("removing a workspace is refused while a run is active", (t) => {
   });
   const rootId = detail.tree.rootNodeId;
   t.throws(() => workspaces.remove(fixture.db, fixture.userId, fixture.workspaceId), {
-    message: /cancel the workspace's active research/,
+    message: /Cannot delete workspace: all active research runs must be cancelled/,
   });
   nodes.setStatus(fixture.db, fixture.userId, rootId, "cancelled");
   const removal = workspaces.remove(fixture.db, fixture.userId, fixture.workspaceId);
@@ -103,7 +103,7 @@ test("ensureDefault creates one workspace and setDefault records the choice", (t
   t.is(workspaces.ensureDefault(fixture.db, fixture.userId).id, fixture.workspaceId);
 });
 
-test("an account with no workspace gets one", (t) => {
+test("automatically creates a default workspace for new accounts", (t) => {
   const fixture = createFixture(t);
   workspaces.remove(fixture.db, fixture.userId, fixture.workspaceId);
   const created = workspaces.ensureDefault(fixture.db, fixture.userId);

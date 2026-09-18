@@ -165,7 +165,7 @@ search key is set, and `web_fetch` reads the fixture's page in process
 | `research.spec.ts` | Launch and stream; the Sources footer; the durable read after a reload equals the streamed text; a reload mid-stream plus a second tab on the same run; select → Highlight → the Highlights feed; Ask docked to the passage, a branch card in the rail, then an inline follow-up on a different model; the recap dialog generating and applying; the sign-in gate |
 | `library.spec.ts` | Bookmark → Home and Bookmarks; archive from the sidebar row menu and the archived filter; Markdown report import; a wikilink opening its encyclopedia page; the appearance and theme pickers surviving a reload |
 | `artifacts.spec.ts` | Attach a Markdown document, open its chip into the preview panel, framed from the artifact origin with the expected `sandbox`; Reload, Shift-Cmd-E, Escape |
-| `admin.spec.ts` | `claude-fable` offered in the composer's model menu to an admin and absent for everyone else |
+| `admin.spec.ts` | `claude-fable` visible in the composer's model menu for administrators and hidden for other users |
 | `visual.spec.ts` | Screenshots of Home and a finished document in all four theme × appearance combinations. Tagged `@visual`, Chromium only, baselines committed per platform under `e2e/__screenshots__/{platform}/`; a platform without a set skips rather than fails |
 
 ## 4. CI (GitHub Actions, `.github/workflows/web.yml`)
@@ -178,9 +178,7 @@ Triggers on pushes and PRs touching `web/**`. Jobs:
 3. `e2e`: `npm ci`, `npx playwright install --with-deps chromium`, then
    `npm run test:e2e`, which builds the client and starts the server itself.
    `web/test-results` and `web/playwright-report` are uploaded on failure.
-   Only Chromium is installed, so the `@visual` test skips itself for want of
-   Linux baselines; to add them, run `npm run test:e2e:update-snapshots` on
-   that image and commit `web/e2e/__screenshots__/linux/`.
+   Because CI only installs Chromium, `@visual` tests are skipped due to missing Linux baseline images; to generate them, run `npm run test:e2e:update-snapshots` inside the Linux test container and commit the resulting snapshots.
 4. `docker`: build `web/Dockerfile` with the Buildx GitHub cache and never
    push it, so a Dockerfile change cannot break a deploy unnoticed.
 5. `deploy`: on a push to `main` only, needs all four, and runs
@@ -196,5 +194,4 @@ Intended: `shared` ≥ 90% lines, `db` ≥ 85%, `server/runs` ≥ 80% with fixtu
 providers, rest of `server` ≥ 75%; client components covered by behavior tests
 rather than a line target.
 
-Not yet wired: no coverage reporter runs in CI, so these are targets to aim a
-later change at rather than numbers anything enforces today.
+Not yet configured: CI does not currently execute a coverage reporter, so these figures serve as development targets rather than enforced quality gates.

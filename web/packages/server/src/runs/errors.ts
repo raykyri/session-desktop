@@ -1,10 +1,9 @@
 // Provider failures, classified (`04-agent-runtime.md` §3.6,
 // `05-run-lifecycle-and-streaming.md` §10).
 //
-// Two things depend on the class. The loop does: `rate_limited` re-queues with
-// backoff instead of failing, everything else settles the node. And the user
-// does: the message is what the document shows under a failed run, so it says
-// what happened and what to do about it, without a status code.
+// Error classification controls both retry behavior and user-facing copy.
+// `rate_limited` errors re-queue the node with backoff; all other errors settle
+// the node, and their mapped messages explain the failure in the document view.
 
 import { APICallError } from "@ai-sdk/provider";
 
@@ -58,16 +57,17 @@ const NETWORK_PATTERNS = [
 ];
 
 const COPY: Record<RunErrorClass, string> = {
-  rate_limited: "the model provider is rate limiting this deployment; the run will retry shortly",
-  auth: "this deployment's credential for the model was rejected; an operator has to fix it",
-  content_filter: "the model declined to answer this question; try rewording it or another model",
-  context_too_long:
-    "this thread has outgrown the model's context; start a new thread with the question",
+  rate_limited: "The model provider is rate limiting this deployment. The run will retry shortly.",
+  auth: "Provider authentication failed for this model. Please contact an administrator.",
+  content_filter:
+    "The model declined to answer this question. Rephrase the question or select another model.",
+  context_too_long: "Context window limit exceeded. Please start a new thread for this question.",
   provider_unavailable:
-    "no zero-retention provider was available for this model; try again or pick another model",
-  network: "the connection to the model provider failed part-way through the answer",
-  timeout: "the run took longer than this deployment allows and was stopped",
-  unknown: "the model provider returned an error",
+    "No zero-retention provider is available for this model. Try again or select another model.",
+  network: "The connection to the model provider was interrupted before the answer finished.",
+  timeout:
+    "The run exceeded the maximum duration allowed by this Session instance and was stopped.",
+  unknown: "The model provider returned an error.",
 };
 
 /** The class of one thrown provider error. */

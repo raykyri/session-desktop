@@ -33,10 +33,7 @@ import { RouteErrorPanel, RouteNotFoundPanel } from "./RouteBoundary.js";
 import { AppShell } from "./layout/AppShell.js";
 import { appQueryClient } from "./queryClient.js";
 
-// The desktop persisted several view coordinates in localStorage; on the web
-// they are search params, so a reload, a deep link and a second tab all agree
-// (ADR-7). Every one is validated, so a hand-edited URL cannot put an
-// unrepresentable value into a store.
+// UI view state is stored in URL query parameters rather than localStorage to ensure deep links and multiple tabs remain synchronized. Validated via Zod schemas to reject invalid inputs.
 const workspaceScopeSearchSchema = z.object({
   /** Workspace scope. Absent means the account's default workspace. */
   ws: z.string().optional(),
@@ -56,9 +53,7 @@ const researchSearchSchema = z.object({
   filter: z.enum(["active", "archived", "all"]).optional(),
 });
 
-/** What the server puts on `/login` when a sign-in attempt is refused
- * (`server/src/auth/github.ts:signInError`), plus the path the guard wants to
- * return to and an invite code a user was sent. */
+/** Query parameters passed to /login when authentication fails, including redirect target and optional invite code. */
 const loginSearchSchema = z.object({
   error: z.string().optional(),
   invite: z.string().optional(),
@@ -82,9 +77,7 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({ component: Outle
 const isDevelopment = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
 
 /**
- * Where the guard may send a tab back to. Only a rooted path of this app
- * qualifies: `//host` is another origin to the browser, and `/login` itself
- * would be a loop. The server applies the same rule to `return_to`
+ * Validates return paths after login to ensure redirects stay on the same origin and avoid redirect loops to /login. The server applies the same rule to `return_to`
  * (`auth/github.ts:safeReturnTo`); this one governs the in-app hop, which
  * never reaches the server.
  */
@@ -95,10 +88,7 @@ export function safeRedirectPath(value: string | undefined): string | null {
   return value;
 }
 
-/** Sign-in renders outside the shell: there is no sidebar, no stage header and
- * no subscription before a session exists. A tab that already has one has
- * nothing to do here — a bookmark, or Back after signing in — so it goes on to
- * whatever it was asking for. */
+/** The login route renders without the application shell. Already-authenticated users visiting /login are redirected to their destination or the root route. */
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
@@ -113,11 +103,9 @@ const loginRoute = createRoute({
 });
 
 /**
- * The six queries the shell renders from, warmed in parallel once a session
- * exists (07 §2). Fire-and-forget: the first paint is the sidebar frame and
- * the route's own skeleton, and blocking it on six round trips would trade a
- * fast empty shell for a slow blank page. Failures land on the queries
- * themselves, which is where a view shows them.
+ * Warms the six shell queries asynchronously after session creation (07 §2),
+ * allowing the sidebar and route skeleton to render without waiting for all
+ * network requests. Individual query components handle failures.
  */
 async function warmBootQueries(client: QueryClient): Promise<void> {
   const settings = await client.ensureQueryData(settingsQueryOptions()).catch(() => null);
@@ -159,12 +147,8 @@ const shellRoute = createRoute({
     void warmBootQueries(context.queryClient);
   },
   component: AppShell,
-  // Declared on the layout route so both render inside the shell: a throw in
-  // one pane replaces that pane, and the sidebar, the stage header and the
-  // single event subscription stay mounted. Without a boundary anywhere on the
-  // tree, React unmounts everything on the first throw and the tab is a blank
-  // page until it is reloaded by hand — which is what a malformed diagram in a
-  // streaming markdown render would cost (07 §3).
+  // Keep error and not-found views inside the shell so the sidebar, stage
+  // header, and event subscription remain mounted when a route fails.
   errorComponent: RouteErrorPanel,
   notFoundComponent: RouteNotFoundPanel,
 });
@@ -216,10 +200,7 @@ const adminRoute = createRoute({
   component: AdminPage,
 });
 
-/** Everything the routes above do not claim. A catch-all rather than the
- * router's default not-found handling, because a path that matches nothing
- * matches the pathless shell route either — and a 404 outside the shell is a
- * bare sentence on an empty page with no way back. */
+/** Catch-all route that renders the 404 panel within the shell so users retain access to navigation when requesting an invalid path. */
 const notFoundRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/$",

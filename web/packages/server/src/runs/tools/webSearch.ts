@@ -231,7 +231,7 @@ export function createWebSearchTool(ctx: RunToolContext, signal: AbortSignal) {
           );
         }
       }
-      return { results: [], error: `search is unavailable right now (${failures.join("; ")})` };
+      return { results: [], error: `Search service unavailable: ${failures.join("; ")}` };
     },
   });
 }

@@ -17,13 +17,14 @@ import { ControlButton } from "../ui/Button.js";
  * subscription before a session exists.
  */
 const SIGN_IN_ERRORS: Readonly<Record<string, string>> = {
-  not_allowed: "That GitHub account is not on this deployment's allowlist.",
-  invite_required: "Signing up needs an invite code. Use the link you were sent.",
-  invite_invalid: "That invite code has already been used, or it does not exist.",
+  not_allowed: "This GitHub account is not authorized to access this Session instance.",
+  invite_required:
+    "An invite code is required to create an account. Please use the invitation link you received.",
+  invite_invalid: "This invite code is invalid or has already been used.",
   expired_state: "The sign-in attempt timed out. Try again.",
   missing_code: "GitHub did not complete the sign-in. Try again.",
-  exchange_failed: "GitHub refused the sign-in. Try again.",
-  profile_failed: "GitHub did not return an account. Try again.",
+  exchange_failed: "GitHub sign-in could not be completed. Please try again.",
+  profile_failed: "Could not retrieve your GitHub account profile. Please try again.",
 };
 
 /** lucide-react dropped its brand icons in v1, so the GitHub mark is inlined

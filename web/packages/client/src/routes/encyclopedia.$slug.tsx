@@ -8,8 +8,6 @@ import { useWorkspaceScope } from "../features/sidebar/scope.js";
 export function EncyclopediaPage() {
   const { slug } = useParams({ from: "/_shell/e/$slug" });
   const { workspaceId } = useWorkspaceScope();
-  // `key` remounts on a slug change: the view holds per-page state (the delete
-  // confirmation, the rewrite in flight) that must not survive navigating from
-  // one page to the next through a wikilink.
+  // Re-keying on slug changes resets view state (such as active confirmations or in-flight edits) when navigating between encyclopedia pages.
   return <EncyclopediaPageView key={slug} workspaceId={workspaceId} slug={slug} />;
 }

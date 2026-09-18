@@ -32,7 +32,7 @@ import { chunkDocumentText, documentPlainText } from "./tools/documentRead.js";
  * the budget is what keeps a long thread cheap, not only what keeps it legal. */
 export const CONTEXT_BUDGET_TOKENS = 200_000;
 
-/** How many nodes at the end of the path keep their tool results in full. */
+/** Number of trailing nodes that retain complete tool results. */
 const NODES_KEEPING_TOOL_RESULTS = 2;
 
 export const ELIDED_TOOL_RESULT = "[tool result elided]";

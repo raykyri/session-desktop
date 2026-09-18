@@ -5,8 +5,7 @@
 // shows, the full-transcript toggle, and Cancel while a run is in flight.
 //
 // The breadcrumb collapses deep paths to "root / … / parent / current": the
-// intermediate crumbs add little wayfinding at that depth and rendering them
-// all squeezes every crumb into an unreadable sliver.
+// Deep hierarchies collapse intermediate breadcrumbs to prevent UI crowding.
 
 import type { ResearchNode, ResearchTreeDetail } from "@session/shared";
 import { ScrollText, X } from "lucide-react";
@@ -127,7 +126,7 @@ export function DocumentHeader({
       </nav>
       {threadLength > 1 ? (
         <span className="text-fg-subtle shrink-0 text-xs">
-          {threadLength} in thread
+          {threadLength} {threadLength === 1 ? "turn" : "turns"} in thread
           {branchCount > 0 ? ` · ${branchCount} ${branchCount === 1 ? "branch" : "branches"}` : ""}
         </span>
       ) : null}

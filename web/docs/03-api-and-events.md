@@ -20,7 +20,7 @@ document is the contract frozen at the end of Phase 3.
   same-origin`) to match `SESSION_PUBLIC_ORIGIN`; the cookie is `SameSite=Lax`.
 - Input validation: zod schemas from `shared`; output types inferred.
 - Errors: tRPC error codes; `message` carries the desktop's user-facing text
-  (for example "the research response changed; select the text again").
+  (for example "The research response has been updated; please reselect the text.").
   Codes used: `BAD_REQUEST` (validation), `NOT_FOUND`, `CONFLICT`
   (optimistic-concurrency and slot conflicts), `PRECONDITION_FAILED`
   (adapter not ready, credentials missing), `FORBIDDEN`, `UNAUTHORIZED`,
@@ -43,9 +43,9 @@ each replaces; "—" means new.
 
 `features.artifactOrigin` is the origin the preview panel frames
 (`11-artifacts-and-browser.md` §3). The client needs it to validate
-`event.origin` on the `session-preview-scroll` bridge, and it is a property of
-the deployment rather than of the build, so it travels with the rest of the
-runtime configuration instead of a build-time constant.
+`event.origin` on the `session-preview-scroll` bridge. Because the origin is
+configured per deployment, runtime configuration provides it instead of the
+client bundle.
 
 ### `auth`
 | Procedure | Kind | Input → Output | Desktop |
@@ -74,7 +74,7 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `workspaces.ensureDefault` | M | → `Workspace` | `ensure_default_research_workspace_command` |
 | `workspaces.create` | M | `{ name }` → `Workspace` | `research_workspace_create_pick` |
 | `workspaces.rename` | M | `{ workspaceId, name }` | `research_workspace_rename`, `group_rename` |
-| `workspaces.remove` | M | `{ workspaceId }` → `{ removedTreeIds }` | `research_workspace_remove` (refuses while runs are active; deletes trees) |
+| `workspaces.remove` | M | `{ workspaceId }` → `{ removedTreeIds }` | `research_workspace_remove` (blocked while runs are active; deletes trees) |
 | `workspaces.setDefault` | M | `{ workspaceId }` | — |
 | `workspaces.reorder` | M | `{ workspaceIds }` | `group_reorder` |
 | `folders.get` / `folders.set` | Q/M | `{ workspaceId }` / `ResearchFolderState` → normalized | `list_research_folders`, `set_research_folders` |
@@ -145,7 +145,7 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
 | `events.subscribe` | subscription | → stream of `SessionEvent` | `listen("session-event")` |
-| `events.setInterest` | M | `{ connectionId, nodeIds }` → `{ applied }` (false when the server has forgotten the connection) | — (which active nodes this connection wants turn deltas for) |
+| `events.setInterest` | M | `{ connectionId, nodeIds }` → `{ applied }` (false when the connection has expired or been terminated on the server) | — (which active nodes this connection wants turn deltas for) |
 
 Dropped without replacement (legacy or native-only): every pane, split,
 group-as-terminal, agent queue, remote, worktree, prompt library, artifact
@@ -172,10 +172,10 @@ interface SessionEvent {
 }
 ```
 
-Server side: `EventBus` holds per-user subscriber sets. Every
-repository-mutating server call emits through the bus after its transaction
-commits. There is no buffer and no replay: on reconnect the client
-invalidates list queries and refetches snapshots for displayed active nodes.
+On the server, `EventBus` maintains per-user subscriber sets. Every server
+call that mutates repository data emits through the bus after its transaction
+commits. The server has no event buffer or replay mechanism, so reconnecting
+clients invalidate list queries and refetch snapshots for displayed active nodes.
 Each connection has an interest set (`events.setInterest`); `research.turn.*`
 events are delivered only to connections interested in that node, while
 `research.node.updated` goes to every connection of the user.
@@ -206,7 +206,7 @@ unless noted:
 | `settings.updated` | `{ settings }` | another tab changed settings |
 | `models.updated` | `{ models }` | provider availability change |
 | `notification.requested` | `{ id, title, body, tone, timeoutMs, createdAt }` | server-originated toasts |
-| `connection.ready` | `{ connectionId }` | the first event of every connection; supplies the id `events.setInterest` addresses, and a second one means the link reconnected (`07-client-architecture.md` §4.2) |
+| `connection.ready` | `{ connectionId }` | the initial event of every connection; supplies the connection ID for `events.setInterest`, and subsequent emissions indicate that the link has reconnected (`07-client-architecture.md` §4.2) |
 
 Run events (new; `05-run-lifecycle-and-streaming.md` §4):
 
@@ -219,8 +219,7 @@ Run events (new; `05-run-lifecycle-and-streaming.md` §4):
 | `research.run.finished` | `{ nodeId, attempt, seq, status, error? }` — precedes the terminal `research.node.updated` |
 
 The client's `researchEvents.ts` union grows by these five run events plus
-`models.updated`. Unknown types are classified `unsupported` and trigger a
-scoped refetch as today.
+`models.updated`. Unknown types are categorized as `unsupported` and trigger a scoped refetch, matching the behavior of the desktop client.
 
 ## 4. Live content protocol
 

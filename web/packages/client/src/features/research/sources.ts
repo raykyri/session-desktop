@@ -1,9 +1,7 @@
 // The Sources footer under an answer (`09-research-document-view.md` §7).
 //
 // New on the web: the desktop's agents cited inside their prose and nowhere
-// else, while the owned tools here record exactly which pages a run read. The
-// list is derived from the recorded turns rather than stored, so it stays true
-// to the transcript the reader is looking at — including the full-trace view,
+// else, while the owned tools here record exactly which pages a run read. Derived dynamically from turn data to maintain consistency with the rendered transcript. — including the full-trace view,
 // where the same tool results are visible as disclosures.
 //
 // Three shapes are read, all produced by the server (`04-agent-runtime.md` §6
@@ -55,10 +53,7 @@ function domainOf(url: string): string {
 }
 
 /**
- * Distinct sources in first-mention order, with fetched pages winning the title
- * of a page that search only listed. A URL that `safeHref` rejects never
- * appears: a tool result is model-influenced input, and a footer of links is
- * exactly where an unvalidated scheme would be clicked.
+ * Fetched page titles take precedence over search snippets. Unsafe URLs are filtered out to prevent link-based attacks.
  */
 export function researchSources(turns: readonly Turn[]): ResearchSourceList {
   const byUrl = new Map<string, ResearchSource>();

@@ -1,9 +1,6 @@
 // The sidebar's visibility filter (`10-home-feed-journal-encyclopedia.md` §7).
 //
-// `?filter=` is the authority and the `navigation` store is the memory: the URL
-// is what a reload, a deep link and a second tab agree on (ADR-7), and the
-// store is what supplies the value on a route that was opened without one, so
-// the choice survives navigating between pages.
+// `?Syncs the active visibility filter between query parameters and global navigation state.
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect } from "react";

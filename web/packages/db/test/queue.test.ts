@@ -19,7 +19,7 @@ function admit(
   return nodeId;
 }
 
-test("claims round-robin across users rather than draining one queue", (t) => {
+test("schedules run claims round-robin across users", (t) => {
   const fixture = createFixture(t);
   const other = addUser(fixture.db, "second");
   let at = 1_000;
@@ -85,7 +85,7 @@ test("a provider at its cap does not block a node on another provider", (t) => {
   );
 });
 
-test("a backoff hides a row until its time comes", (t) => {
+test("excludes backed-off queue entries from claim selection until cooldown expires", (t) => {
   const fixture = createFixture(t);
   admit(fixture, fixture.userId, fixture.workspaceId, "a1");
   queue.enqueue(fixture.db, fixture.userId, { nodeId: "a1", provider: "vertex", enqueuedAt: 1 });
@@ -146,7 +146,7 @@ test("a node from another account cannot be enqueued", (t) => {
   );
 });
 
-test("a backed-off row is not counted as ahead of the ones still waiting", (t) => {
+test("excludes backed-off items from queue position calculations for waiting runs", (t) => {
   const fixture = createFixture(t);
   let at = 1_000;
   for (const nodeId of ["a1", "a2", "a3"]) {

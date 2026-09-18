@@ -49,13 +49,13 @@ test("a section reorder moves only its own rows", (t) => {
   );
 });
 
-test("a reorder that does not name the whole section is refused", (t) => {
+test("reorder requests omitting section items are rejected without modifying order", (t) => {
   const trees = [summary({ id: "a" }), summary({ id: "b" })];
   t.is(applyOrderToSection(trees, "t1-workspace", false, ["a"]), trees);
   t.is(applyOrderToSection(trees, "w1", false, ["a", "a"]), trees);
 });
 
-test("a folder write lands optimistically and keeps what the server returned", async (t) => {
+test("folder updates apply optimistically and reconcile with server responses", async (t) => {
   const stored = folderState({ starred: ["t1"] });
   const stub = createTrpcStub({ "folders.set": stored });
   setTrpcClient(stub.client);
@@ -74,7 +74,7 @@ test("a folder write lands optimistically and keeps what the server returned", a
   });
 });
 
-test("a refused folder write rolls the cache back to exactly what was there", async (t) => {
+test("a failed folder update rolls back the cache to its previous state", async (t) => {
   const before = folderState({ starred: ["t1"] });
   const stub = createTrpcStub({
     "folders.set": () => {
@@ -91,7 +91,7 @@ test("a refused folder write rolls the cache back to exactly what was there", as
   t.deepEqual(client.getQueryData(queryKeys.folders("w1")), before);
 });
 
-test("a tree reorder is applied to every cached list and rolled back on refusal", async (t) => {
+test("tree reordering updates all cached lists and reverts upon server error", async (t) => {
   const stub = createTrpcStub({
     "research.reorderTrees": () => {
       throw new Error("nope");
@@ -121,14 +121,14 @@ test("a tree reorder is applied to every cached list and rolled back on refusal"
   }
 });
 
-test("the visibility filter accepts only the three it knows", (t) => {
+test("visibility filter validation accepts only recognized filter values", (t) => {
   t.is(parseVisibilityFilter("archived"), "archived");
   t.is(parseVisibilityFilter("all"), "all");
   t.is(parseVisibilityFilter("everything"), null);
   t.is(parseVisibilityFilter(undefined), null);
 });
 
-test("a workspace with running threads refuses removal, and one without does not", (t) => {
+test("workspace removal is blocked while threads are active and permitted when idle", (t) => {
   t.is(workspaceRemovalRefusal(0), null);
   t.regex(String(workspaceRemovalRefusal(1)), /still running/);
   t.regex(String(workspaceRemovalRefusal(3)), /^3 research threads/);
@@ -187,37 +187,48 @@ test.serial("`?filter=` chooses which sections the sidebar shows", async (t) => 
   app.unmount();
 });
 
-test.serial("Cmd-click builds a selection and its menu acts on the whole of it", async (t) => {
-  useSelectionStore.getState().clear();
-  useNavigationStore.getState().setVisibilityFilter("active");
-  const app = await renderApp("/", { responses: sidebarResponses });
+test.serial(
+  "Cmd-click selects multiple items and applies menu actions to the selection",
+  async (t) => {
+    useSelectionStore.getState().clear();
+    useNavigationStore.getState().setVisibilityFilter("active");
+    const app = await renderApp("/", { responses: sidebarResponses });
 
-  await waitUntil(t, () => screen.queryAllByTitle("First").length > 0, "the sidebar lists threads");
-  const first = screen.getAllByTitle("First")[0] as HTMLElement;
-  const second = screen.getAllByTitle("Second")[0] as HTMLElement;
-  fireEvent.click(first, { metaKey: true });
-  fireEvent.click(second, { metaKey: true });
+    await waitUntil(
+      t,
+      () => screen.queryAllByTitle("First").length > 0,
+      "the sidebar lists threads",
+    );
+    const first = screen.getAllByTitle("First")[0] as HTMLElement;
+    const second = screen.getAllByTitle("Second")[0] as HTMLElement;
+    fireEvent.click(first, { metaKey: true });
+    fireEvent.click(second, { metaKey: true });
 
-  await waitUntil(
-    t,
-    () => useSelectionStore.getState().ids.length === 2,
-    "a modified click extends the selection rather than navigating",
-  );
-  t.truthy(screen.getByText("2 selected"));
+    await waitUntil(
+      t,
+      () => useSelectionStore.getState().ids.length === 2,
+      "a modified click extends the selection rather than navigating",
+    );
+    t.truthy(screen.getByText("2 selected"));
 
-  fireEvent.contextMenu(second);
-  await waitUntil(
-    t,
-    () => screen.queryAllByRole("menu").length > 0,
-    "right-clicking inside the selection opens a menu",
-  );
-  const menu = screen.getAllByRole("menu").at(-1) as HTMLElement;
-  t.truthy(within(menu).getByText("New folder with 2 items"));
-  // Archive and Delete carried "A" and "D" keycaps that nothing bound.
-  t.is(menu.querySelectorAll("kbd").length, 0, "no row advertises a key it does not bind");
-  useSelectionStore.getState().clear();
-  app.unmount();
-});
+    fireEvent.contextMenu(second);
+    await waitUntil(
+      t,
+      () => screen.queryAllByRole("menu").length > 0,
+      "right-clicking inside the selection opens a menu",
+    );
+    const menu = screen.getAllByRole("menu").at(-1) as HTMLElement;
+    t.truthy(within(menu).getByText("New folder with 2 items"));
+    // Archive and Delete carried "A" and "D" keycaps that nothing bound.
+    t.is(
+      menu.querySelectorAll("kbd").length,
+      0,
+      "omits keyboard shortcuts from menu items without handlers",
+    );
+    useSelectionStore.getState().clear();
+    app.unmount();
+  },
+);
 
 test.serial("creating a workspace names it and sends the name", async (t) => {
   useSelectionStore.getState().clear();
@@ -328,7 +339,7 @@ test.serial("a press on the row itself still arms the drag", async (t) => {
   app.unmount();
 });
 
-test.serial("a row badges an unseen update, an unseen failure, and a run in flight", async (t) => {
+test.serial("displays status badges for unread updates, failures, and active runs", async (t) => {
   useSelectionStore.getState().clear();
   useNavigationStore.getState().setVisibilityFilter("active");
   const app = await renderApp("/", {
@@ -348,8 +359,7 @@ test.serial("a row badges an unseen update, an unseen failure, and a run in flig
           title: "Broken",
           workspaceId: WORKSPACE_ID,
           runningCount: 0,
-          // A failure outranks an update: the row has one slot and the worse
-          // news is what a reader has to act on.
+          // An unseen failure takes display precedence over an unread update.
           hasUnseenUpdate: true,
           hasUnseenFailure: true,
         }),

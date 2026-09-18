@@ -37,8 +37,7 @@ export function NameDialog({
   const [value, setValue] = useState(initialValue);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // A reopened dialog starts from the value it was opened with, not from what
-  // the last edit left behind.
+  // Reset the draft to the current initial value whenever the dialog reopens.
   const [lastOpen, setLastOpen] = useState(open);
   if (lastOpen !== open) {
     setLastOpen(open);
@@ -93,9 +92,7 @@ export function NameDialog({
 }
 
 /**
- * A confirmation whose action can be refused by the server. The dialog stays
- * open on failure with the reason beside the button, which is the only way the
- * user can tell a refusal ("this workspace still has runs") from a no-op.
+ * Displays server rejection messages directly in the dialog so the user understands why the action failed.
  */
 export function AsyncConfirmDialog({
   open,
