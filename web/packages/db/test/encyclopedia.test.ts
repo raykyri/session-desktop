@@ -215,3 +215,51 @@ test("a page cannot be created in another account's workspace", (t) => {
   );
   t.is(page.page.slug, "kelp");
 });
+
+test("the prompt takes the newest sources; the stored order is the display order", (t) => {
+  const fixture = createFixture(t);
+  for (let index = 0; index < 7; index += 1) {
+    encyclopedia.requestPage(
+      fixture.db,
+      fixture.userId,
+      request(fixture.workspaceId, "Term", {
+        nodeId: `node-${index}`,
+        excerpt: `excerpt ${index}`,
+      }),
+    );
+  }
+
+  // The five most recent passages, newest first — `encyclopedia.rs:449-453`
+  // reverses the stored list before taking five, and taking the front of the
+  // ascending list instead would write the page from the oldest excerpts.
+  t.deepEqual(
+    encyclopedia
+      .newestSources(fixture.db, fixture.userId, fixture.workspaceId, "term")
+      .map((source) => source.nodeId),
+    ["node-6", "node-5", "node-4", "node-3", "node-2"],
+  );
+  t.is(
+    encyclopedia.newestSources(fixture.db, fixture.userId, fixture.workspaceId, "term", 2).length,
+    2,
+  );
+
+  // What the page carries is untouched: the "Mentioned in" list reads it in
+  // the order the links were made.
+  t.deepEqual(
+    encyclopedia
+      .getPage(fixture.db, fixture.userId, fixture.workspaceId, "term")
+      ?.sources.map((source) => source.nodeId),
+    ["node-0", "node-1", "node-2", "node-3", "node-4", "node-5", "node-6"],
+  );
+
+  const other = addUser(fixture.db, "encyclopedia-sources-other");
+  t.deepEqual(
+    encyclopedia.newestSources(fixture.db, other.userId, fixture.workspaceId, "term"),
+    [],
+    "another account reads no sources out of a page it does not own",
+  );
+  t.deepEqual(
+    encyclopedia.newestSources(fixture.db, fixture.userId, fixture.workspaceId, "missing"),
+    [],
+  );
+});

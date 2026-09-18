@@ -10,13 +10,14 @@ import {
   MAX_ENCYCLOPEDIA_EXCERPT_CHARS,
   MAX_ENCYCLOPEDIA_QUESTION_CHARS,
   MAX_ENCYCLOPEDIA_SIBLING_TERMS,
+  MAX_ENCYCLOPEDIA_SOURCES_IN_PROMPT,
   MAX_WIKILINK_CHARS,
   encyclopediaSlug,
   truncateEncyclopediaText,
   validateEncyclopediaSlug,
   wikilinkTerms,
 } from "@session/shared";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
 import { transact } from "../connection.js";
@@ -74,6 +75,41 @@ function sourcesFor(db: SessionDatabase, workspaceId: string, slug: string): Enc
       and(eq(encyclopediaSources.workspaceId, workspaceId), eq(encyclopediaSources.slug, slug)),
     )
     .orderBy(asc(encyclopediaSources.createdAt), asc(encyclopediaSources.id))
+    .all()
+    .map(toSource);
+}
+
+/**
+ * The newest sources for a page, newest first — what the page prompt sends
+ * (`encyclopedia.rs:449-453`, which reverses the stored list before taking
+ * five).
+ *
+ * The ordering is in the query rather than in the caller. `sourcesFor` returns
+ * the stored ascending order because that is what the page's "Mentioned in"
+ * list displays, and a caller that sliced the front of that list would write
+ * the page from the five oldest passages — the ones least likely to be why the
+ * term is being looked up now. Older sources still count as backlinks; they
+ * only stay out of the prompt, which is what keeps it bounded.
+ */
+export function newestSources(
+  db: SessionDatabase,
+  userId: string,
+  workspaceId: string,
+  slug: string,
+  limit: number = MAX_ENCYCLOPEDIA_SOURCES_IN_PROMPT,
+): EncyclopediaSource[] {
+  validateEncyclopediaSlug(slug);
+  if (!pageRow(db, userId, workspaceId, slug)) {
+    return [];
+  }
+  return db
+    .select()
+    .from(encyclopediaSources)
+    .where(
+      and(eq(encyclopediaSources.workspaceId, workspaceId), eq(encyclopediaSources.slug, slug)),
+    )
+    .orderBy(desc(encyclopediaSources.createdAt), desc(encyclopediaSources.id))
+    .limit(limit)
     .all()
     .map(toSource);
 }
