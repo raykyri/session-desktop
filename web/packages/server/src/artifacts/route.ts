@@ -6,13 +6,21 @@
 // text, and a per-response CSP that allows nothing.
 
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 
 import { artifacts } from "@session/db";
 import { Hono } from "hono";
 
 import type { AppEnv, ServerDeps } from "../deps.js";
+
+import { readFont } from "./fonts.js";
+import {
+  parseBodyFont,
+  renderedPageContentSecurityPolicy,
+  renderMarkdownPage,
+  renderTextPage,
+} from "./page.js";
 
 /** `default-src 'none'` with inline styles for the rendered text page; no
  * script, no frames, no network. `frame-ancestors` names the app rather than
@@ -89,6 +97,33 @@ export function parseRange(header: string | undefined, size: number): ByteRange 
   return { start, end };
 }
 
+/** How a document is presented when it is not streamed as-is. Markdown is
+ * rendered; the plain-text family is shown in the same page as source, so a
+ * `.txt` beginning with `#` is not turned into a heading. `text/html` is
+ * deliberately absent: it stays `text/plain` (`11-artifacts-and-browser.md`
+ * §2). */
+export type RenderKind = "markdown" | "text";
+
+export function renderKind(mime: string): RenderKind | null {
+  switch (mime.split(";")[0]?.trim().toLowerCase()) {
+    case "text/markdown":
+    case "text/x-markdown":
+      return "markdown";
+    case "text/plain":
+    case "text/csv":
+    case "application/json":
+    case "text/json":
+      return "text";
+    default:
+      return null;
+  }
+}
+
+/** Rendering reads the whole document into memory and doubles it as HTML; past
+ * this size the document is streamed as text instead, which `Range` can page
+ * through. */
+export const MAX_RENDERED_BYTES = 4 * 1024 * 1024;
+
 export function artifactRoutes(deps: ServerDeps): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
 
@@ -110,6 +145,30 @@ export function artifactRoutes(deps: ServerDeps): Hono<AppEnv> {
       size = (await stat(resolved.storagePath)).size;
     } catch {
       return c.text("not found\n", 404);
+    }
+
+    // `?raw=1` opts out of rendering, as on the desktop; `?session-body-font=`
+    // picks the body face the page loads from this origin.
+    const font = parseBodyFont(c.req.query("session-body-font"));
+    const kind = renderKind(resolved.mime);
+    if (c.req.query("raw") !== "1" && kind !== null && size <= MAX_RENDERED_BYTES) {
+      const source = await readFile(resolved.storagePath, "utf8");
+      const html =
+        kind === "markdown"
+          ? renderMarkdownPage(resolved.name, source, font)
+          : renderTextPage(resolved.name, source, font);
+      // The rendered page is a different entity from the stored bytes, so a
+      // byte range into the source would be meaningless: `Range` is ignored
+      // and `Accept-Ranges: none` says so.
+      return c.body(html, 200, {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Security-Policy": renderedPageContentSecurityPolicy(deps.config.publicOrigin),
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "Cache-Control": "private, no-store",
+        "Accept-Ranges": "none",
+        "Content-Disposition": contentDisposition(true, `${resolved.name}.html`),
+      });
     }
 
     const contentType = servedContentType(resolved.mime);
@@ -143,6 +202,27 @@ export function artifactRoutes(deps: ServerDeps): Hono<AppEnv> {
     return new Response(Readable.toWeb(stream) as ReadableStream, {
       status: 200,
       headers: { ...headers, "Content-Length": String(size) },
+    });
+  });
+
+  // The faces the rendered pages ask for. Public on this origin and immutable:
+  // the files are release assets, not user data, and the token protects the
+  // document, not the typeface.
+  app.get("/__session/fonts/:file", (c) => {
+    if (c.req.header("host") !== deps.config.artifactHost) {
+      return c.text("not found\n", 404);
+    }
+    const bytes = readFont(c.req.param("file"));
+    if (!bytes) {
+      return c.text("not found\n", 404);
+    }
+    return c.body(bytes, 200, {
+      "Content-Type": "font/woff2",
+      "Content-Length": String(bytes.byteLength),
+      "Content-Security-Policy": "default-src 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Cache-Control": "public, max-age=31536000, immutable",
     });
   });
 

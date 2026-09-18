@@ -36,9 +36,17 @@ to documents:
   the file from `/data/documents/<userId>/<sha256>` with the stored MIME
   type, `Range` support, `Content-Length`, `Cache-Control: private,
   no-store`. Markdown and text documents render server-side to a styled HTML
-  page with the same `MARKDOWN_PAGE_CSS` and `?session-body-font=` selection
-  as the desktop (`file_server.rs:528-549`, `:873-927`), fonts served from
-  `/__session/fonts/*.woff2` on the artifact origin.
+  page with `MARKDOWN_PAGE_CSS` and the `?session-body-font=` selection
+  ported from the desktop (`file_server.rs:528-549`, `:873-927`), fonts
+  served from `/__session/fonts/*.woff2` on the artifact origin — a literal
+  allowlist of the six faces in `packages/server/assets/fonts`, with the
+  colors taken from the app's tokens rather than the desktop's grays. Text is
+  shown as source in the same shell; `?raw=1` opts out of rendering and is the
+  path that keeps `Range` meaningful. The Markdown is sanitized
+  (`remark` → `rehype-sanitize`) rather than passed through as the desktop
+  did: the preview iframe carries `allow-same-origin` against the artifact
+  host, so raw HTML from an uploaded document must not survive the render even
+  before the CSP has to stop it.
 - Per-response CSP: `default-src 'none'; img-src 'self' data:; style-src
   'unsafe-inline'`; for Markdown pages only the inline scroll script hash is
   allowed (`HTML_PREVIEW_SCROLL_SCRIPT`, `file_server.rs:40`;

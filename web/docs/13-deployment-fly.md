@@ -13,9 +13,14 @@ CNAMEs.
 
 ## 2. `web/fly.toml`
 
+The file is `web/fly.toml`; `kill_signal` and `kill_timeout` are top-level
+keys (Fly's schema has no `[deploy]` entry for them).
+
 ```toml
 app = "session-dev"
 primary_region = "sjc"
+kill_signal = "SIGTERM"
+kill_timeout = "30s"
 
 [build]
   dockerfile = "Dockerfile"
@@ -68,8 +73,6 @@ primary_region = "sjc"
 
 [deploy]
   strategy = "immediate"      # one machine with a volume cannot roll
-  kill_signal = "SIGTERM"
-  kill_timeout = "30s"
 ```
 
 Runs are HTTPS streams, so memory is dominated by the Node process, SQLite
@@ -79,17 +82,33 @@ machine size before raising the per-provider run caps.
 ## 3. Dockerfile (`web/Dockerfile`)
 
 Multi-stage on `node:22-bookworm-slim`: `deps` (`npm ci`, build tools for
-`better-sqlite3` if no prebuilt binary), `build` (`npm run build`),
-`runtime` (production `node_modules`, `packages/client/dist`,
-`packages/server/dist`, `packages/db/migrations`, the Litestream binary,
-`tini`). The entrypoint writes `GOOGLE_APPLICATION_CREDENTIALS_JSON` to
-`/tmp/vertex-sa.json` and exports `GOOGLE_APPLICATION_CREDENTIALS`, then runs
-`litestream replicate -exec "node packages/server/dist/main.js"` when
-`LITESTREAM_REPLICA_URL` is set, else the server directly. Runs as user
-`session` (uid 1000). No agent CLIs, no browsers, no per-user OS accounts.
+`better-sqlite3` only if the platform has no prebuilt binary), `build` (the
+Vite client bundle and the esbuild server bundle; `tsc -b` is CI's `check`
+job, not the image's), `runtime` (production `node_modules`,
+`packages/client/dist/app`, `packages/server/dist/server.mjs`,
+`packages/server/assets/fonts`, `packages/db/migrations`, the Litestream
+binary pinned by version and SHA-256, `tini` as PID 1).
+
+The server bundle inlines `@session/db` and `@session/shared`, which publish
+TypeScript sources, and leaves every npm package external, so `better-sqlite3`
+and the extraction libraries (`unpdf`, `mammoth`, `linkedom`) load from
+`node_modules` at runtime. `main.ts` passes the migrations folder explicitly
+(`../../db/migrations` relative to the module) because the bundle sits where
+the database package's own default would not resolve.
+
+`web/scripts/entrypoint.sh` takes ownership of the volume, writes
+`GOOGLE_APPLICATION_CREDENTIALS_JSON` to
+`$SESSION_DATA_DIR/tmp/vertex-credentials.json` (0600, the same path the
+server writes at boot) and exports `GOOGLE_APPLICATION_CREDENTIALS`, then runs
+`litestream replicate -config /etc/litestream.yml -restore-if-db-not-exists
+-exec "node /app/packages/server/dist/server.mjs"` when
+`LITESTREAM_REPLICA_URL` is set, else the server directly. Those steps need
+root — a Fly volume arrives owned by root — so the entrypoint re-execs the
+process itself as `session` (uid 1000) with `setpriv`. No agent CLIs, no
+browsers, no per-user OS accounts.
 
 `web/.dockerignore` allowlists `web/**` minus `node_modules`, `**/dist`,
-`docs`, `.data`. The repo root's Dockerfile, `.dockerignore`, and `fly.toml`
+`docs`, `.data`, and `.env*`. The repo root's Dockerfile, `.dockerignore`, and `fly.toml`
 are removed (`14-legacy-inventory.md` §3).
 
 ## 4. Secrets (`fly secrets set -a session-dev`)
@@ -110,7 +129,9 @@ Boot: validate env → write the Vertex credential file → open DB (pragmas) �
 `migrate()` (refuse on unknown migrations) → backfills → re-queue
 `resume_pending` nodes (`05-run-lifecycle-and-streaming.md` §7) → probe
 provider credentials (async; missing ones mark models `unavailable`) →
-listen. `/healthz` returns 200 after migrations complete.
+listen. `/healthz` returns 503 (`starting`) until the listen callback runs and
+503 (`draining`) from the first moment of the drain, so Fly's check follows
+the process rather than the port.
 
 Shutdown on `SIGTERM`: stop admitting; abort open provider streams after
 persisting their last checkpoint; mark their nodes `interrupted` with
@@ -119,21 +140,30 @@ persisting their last checkpoint; mark their nodes `interrupted` with
 
 ## 6. Backups and restore
 
-- Litestream replicates the WAL continuously to Tigris or S3; retention 30
-  days; snapshot every 6 h.
-- `/data/documents` archived nightly to the same bucket (`tar` of new files
-  by mtime).
-- Restore rehearsal (quarterly): new volume, `litestream restore -o
-  /data/session.db`, restore documents, start the app, verify counts.
+- Litestream replicates continuously to Tigris or S3; retention 30 days;
+  snapshot every 6 h (`web/litestream.yml`, copied to `/etc/litestream.yml`).
+- `/data/documents` archived to the same bucket by
+  `web/scripts/backup-documents.sh` (`tar` of files newer than the last run's
+  marker, uploaded with `web/scripts/s3-put.mjs`). The archive target is
+  `SESSION_DOCUMENTS_REPLICA_URL`, defaulting to
+  `${LITESTREAM_REPLICA_URL}/documents`. Nothing schedules it inside the
+  machine: run it from a scheduled machine or a cron host with `fly ssh
+  console -C`.
+- Restore, including the quarterly rehearsal:
+  `web/docs/runbooks/restore.md`.
 
 ## 7. Observability
 
 - Structured JSON logs to stdout; `X-Request-Id` echoed; per-attempt run
   logs (`nodeId`, `userId`, model, steps, tool calls, tokens, cost estimate,
   outcome).
-- `/metrics` (Prometheus text, bearer-protected): request latency, active
-  runs by provider, queue depth, SSE clients, DB size, tokens and cost per
-  provider per day.
+- `/metrics` (Prometheus text, bearer-protected by `SESSION_METRICS_TOKEN`;
+  unset = the route 404s): `session_http_request_duration_seconds` by method,
+  coarse route, and status class, `session_active_runs` by provider,
+  `session_queue_depth`, `session_sse_clients`, `session_db_size_bytes`,
+  `session_daily_tokens` and `session_daily_cost_usd` per provider for the
+  current UTC day, `session_ready`. The gauges are read out of SQLite at
+  scrape time (`packages/server/src/metrics.ts`).
 - Optional Sentry via `SENTRY_DSN`.
 
 ## 8. Local development

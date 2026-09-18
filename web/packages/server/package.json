@@ -17,7 +17,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --packages=external --platform=node --format=esm --target=node22 --outfile=dist/server.mjs",
+    "build": "esbuild src/index.ts --bundle --packages=external --alias:@session/db=../db/src/index.ts --alias:@session/shared=../shared/src/index.ts --platform=node --format=esm --target=node22 --outfile=dist/server.mjs",
     "start": "node dist/server.mjs",
     "test": "ava"
   },
@@ -26,6 +26,7 @@
     "@ai-sdk/google-vertex": "^5.0.87",
     "@ai-sdk/provider": "^4.0.17",
     "@ai-sdk/provider-utils": "^5.0.44",
+    "@aws-sdk/client-s3": "^3.1135.0",
     "@hono/node-server": "^2.1.1",
     "@hono/trpc-server": "^0.4.2",
     "@mozilla/readability": "^0.6.0",
@@ -38,6 +39,12 @@
     "hono": "^4.13.8",
     "linkedom": "^0.18.13",
     "mammoth": "^1.12.3",
+    "rehype-sanitize": "^6.0.0",
+    "rehype-stringify": "^10.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
+    "unified": "^11.0.5",
     "unpdf": "^1.8.1",
     "zod": "^4.6.5"
   },

@@ -135,7 +135,9 @@ test("an artifact token serves the document on the artifact origin only", async 
   t.is((await harness.request(path)).status, 404);
 
   const artifactHost = new URL(ARTIFACT_ORIGIN).host;
-  const served = await harness.app.request(path, { headers: { Host: artifactHost } });
+  // `?raw=1` is the byte path: without it a text document is rendered into the
+  // styled page (`artifacts.test.ts`).
+  const served = await harness.app.request(`${path}?raw=1`, { headers: { Host: artifactHost } });
   t.is(served.status, 200);
   t.is(served.headers.get("content-type"), "text/plain; charset=utf-8");
   t.is(served.headers.get("x-content-type-options"), "nosniff");
@@ -150,7 +152,7 @@ test("an artifact token serves the document on the artifact origin only", async 
   t.is(served.headers.get("x-frame-options"), null);
   t.is(await served.text(), "0123456789");
 
-  const ranged = await harness.app.request(path, {
+  const ranged = await harness.app.request(`${path}?raw=1`, {
     headers: { Host: artifactHost, Range: "bytes=2-4" },
   });
   t.is(ranged.status, 206);
@@ -199,7 +201,7 @@ test("a document named outside Latin-1 is still served", async (t) => {
   ]);
   const [document] = (await uploaded.json()) as DocumentInfo[];
   const minted = await caller.artifacts.mintToken({ documentId: document?.id ?? "" });
-  const served = await harness.app.request(new URL(minted.url).pathname, {
+  const served = await harness.app.request(`${new URL(minted.url).pathname}?raw=1`, {
     headers: { Host: new URL(ARTIFACT_ORIGIN).host },
   });
   t.is(served.status, 200);

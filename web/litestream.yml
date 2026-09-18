@@ -1,0 +1,29 @@
+# Litestream 0.5 configuration, copied to /etc/litestream.yml by the Dockerfile
+# (`docs/13-deployment-fly.md` §6).
+#
+# Everything deployment-specific arrives as an environment variable, which
+# Litestream expands before parsing: SESSION_DATA_DIR and LITESTREAM_REPLICA_URL
+# from `fly.toml [env]` and `fly secrets`, AWS_ACCESS_KEY_ID and
+# AWS_SECRET_ACCESS_KEY read directly by the S3 client. The entrypoint only runs
+# `litestream replicate` when LITESTREAM_REPLICA_URL is set, so an unexpanded
+# empty URL never reaches this file in practice.
+
+logging:
+  level: info
+  type: json
+
+# A full snapshot every 6 hours, 30 days of history (`13` §6). Retention covers
+# snapshots and the LTX files that hang off them, so it is the restore window.
+snapshot:
+  interval: 6h
+  retention: 720h
+
+# A final sync before the process exits, inside the 30s kill_timeout the server
+# drains in.
+shutdown-sync-timeout: 20s
+
+dbs:
+  - path: ${SESSION_DATA_DIR}/session.db
+    replica:
+      url: ${LITESTREAM_REPLICA_URL}
+      sync-interval: 1s
