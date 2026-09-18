@@ -62,7 +62,10 @@ the server persists or forwards.
 ## 4. Streaming protocol: snapshot plus ordered deltas
 
 1. Snapshot. `research.getNodeContent(nodeId)` returns
-   `{ node, turns, inFlightText, seq, responseRevision?, queuePosition? }`.
+   `{ node, turns, inFlightText, seq, children, responseRevision?,
+   sourceError?, queuePosition? }` — the same shape `03-api-and-events.md` §2
+   gives; `sourceError` is what the document view's empty-state cascade reads
+   when a settled node has no turns to show.
    For an active node, `turns` are committed turns from `run_turns` and
    `inFlightText` the latest checkpoint.
 2. Deltas over the SSE subscription: `research.run.started`,
@@ -113,7 +116,8 @@ the queue. Resume re-issues the attempt from the node's persisted context:
 the interrupted attempt's committed tool exchanges are kept as context (they
 are real messages), the in-flight partial assistant text is discarded, and
 the model continues from the last committed step. `attempt` increments and
-`resume_kind = "auto"` is recorded. The user sees the status flip to
+the new `run_attempts` row records `kind = "resume"`, which is also what the
+auto-resume cap counts. The user sees the status flip to
 `running` and text resume; the discarded partial is replaced.
 
 Retry (user action) on `failed`, `cancelled`, or `interrupted` starts a

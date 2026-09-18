@@ -48,12 +48,17 @@ the deployment rather than of the build, so it travels with the rest of the
 runtime configuration instead of a build-time constant.
 
 ### `auth`
-| `auth.me` | Q | → `User | null` | `github_account_get` |
+| Procedure | Kind | Input → Output | Desktop |
+| --- | --- | --- | --- |
+| `auth.me` | Q | → `User \| null` | `github_account_get` |
 | `auth.logout` | M | → void | `github_logout` |
+
 Login start/callback are plain Hono routes (`/auth/github`,
 `/auth/github/callback`), not tRPC (`06-auth-and-users.md`).
 
 ### `settings`
+| Procedure | Kind | Input → Output | Desktop |
+| --- | --- | --- | --- |
 | `settings.get` | Q | → `UserSettings & { researchLaunchInstruction, defaultWorkspaceId, defaultModel }` | localStorage `session.settings.v1`, `research_launch_instruction_get` |
 | `settings.update` | M | partial → full | `research_launch_instruction_set` |
 | `drafts.get` / `drafts.set` | Q/M | `{ key }` / `{ key, value }` | `interface_draft_get/set` |
@@ -63,6 +68,8 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `admin.createInvites` | M (admin) | `{ count }` → codes | — (new; also grants `invites_remaining` to users later) |
 
 ### `workspaces`
+| Procedure | Kind | Input → Output | Desktop |
+| --- | --- | --- | --- |
 | `workspaces.list` | Q | → `Workspace[]` (with `treeCount`) | `list_research_workspaces`, `list_groups` |
 | `workspaces.ensureDefault` | M | → `Workspace` | `ensure_default_research_workspace_command` |
 | `workspaces.create` | M | `{ name }` → `Workspace` | `research_workspace_create_pick` |
@@ -73,6 +80,8 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `folders.get` / `folders.set` | Q/M | `{ workspaceId }` / `ResearchFolderState` → normalized | `list_research_folders`, `set_research_folders` |
 
 ### `research`
+| Procedure | Kind | Input → Output | Desktop |
+| --- | --- | --- | --- |
 | `research.listTrees` | Q | `{ workspaceId?, includeArchived? }` → `ResearchTreeSummary[]` | `list_research_trees` |
 | `research.reorderTrees` | M | `{ workspaceId, archived, treeIds }` | `reorder_research_trees` |
 | `research.getTree` | Q | `{ treeId }` → `ResearchTreeDetail` | `get_research_tree` |
@@ -103,10 +112,14 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `recaps.applyCandidate` | M | `{ nodeId, expectedResponseRevision, expectedCurrentRecapId?, candidate }` → `ResearchNode` | `apply_research_recap_candidate` |
 
 ### `feed`
+| Procedure | Kind | Input → Output | Desktop |
+| --- | --- | --- | --- |
 | `feed.recentActivity` | Q | `{ workspaceId?, limit?, before?: RecentActivityCursor, bookmarkedOnly? }` → `RecentActivityPage` | `list_recent_activity` (`workspaceId` and `bookmarkedOnly` filters are new; the desktop feed spans all workspaces and filtered bookmarks client-side) |
 | `feed.recentQueries` | Q | `{ limit?, before? }` → `RecentResearchQueryPage` | `list_recent_research_queries` |
 
 ### `journal`
+| Procedure | Kind | Input → Output | Desktop |
+| --- | --- | --- | --- |
 | `journal.add` | M | `{ url }` → entry (server classifies link vs tweet, schedules hydration) | — (new; the desktop has no creation UI, entries exist only from legacy data) |
 | `journal.restore` | M | `{ entry }` → boolean | `journal_restore` |
 | `journal.update` | M | `{ id, entry }` → boolean | `journal_update` |
@@ -115,18 +128,24 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `journal.hydrateTweet` | M | `{ entryId }` → entry | client loop over `journal_fetch_tweet` |
 
 ### `encyclopedia`
+| Procedure | Kind | Input → Output | Desktop |
+| --- | --- | --- | --- |
 | `encyclopedia.listPages` | Q | `{ workspaceId }` → `EncyclopediaPageSummary[]` | `encyclopedia_list_pages` |
-| `encyclopedia.getPage` | Q | `{ workspaceId, slug }` → `EncyclopediaPage | null` | `encyclopedia_get_page` |
+| `encyclopedia.getPage` | Q | `{ workspaceId, slug }` → `EncyclopediaPage \| null` | `encyclopedia_get_page` |
 | `encyclopedia.requestPage` | M | `EncyclopediaPageRequest` (without `adapter`/`model`) → `EncyclopediaPage` | `encyclopedia_request_page` (generated on `gemini-flash`) |
 | `encyclopedia.regeneratePage` | M | `{ workspaceId, slug }` → `EncyclopediaPage` | `encyclopedia_regenerate_page` |
 | `encyclopedia.deletePage` | M | `{ workspaceId, slug }` → void | `encyclopedia_delete_page` |
 
 ### `artifacts` (Phase 7)
+| Procedure | Kind | Input → Output | Desktop |
+| --- | --- | --- | --- |
 | `artifacts.mintToken` | M | `{ documentId }` → `{ url }` | `browser_open_local_path` |
 
 ### `events`
+| Procedure | Kind | Input → Output | Desktop |
+| --- | --- | --- | --- |
 | `events.subscribe` | subscription | → stream of `SessionEvent` | `listen("session-event")` |
-| `events.setInterest` | M | `{ connectionId, nodeIds }` → void | — (which active nodes this connection wants turn deltas for) |
+| `events.setInterest` | M | `{ connectionId, nodeIds }` → `{ applied }` (false when the server has forgotten the connection) | — (which active nodes this connection wants turn deltas for) |
 
 Dropped without replacement (legacy or native-only): every pane, split,
 group-as-terminal, agent queue, remote, worktree, prompt library, artifact
@@ -187,6 +206,7 @@ unless noted:
 | `settings.updated` | `{ settings }` | another tab changed settings |
 | `models.updated` | `{ models }` | provider availability change |
 | `notification.requested` | `{ id, title, body, tone, timeoutMs, createdAt }` | server-originated toasts |
+| `connection.ready` | `{ connectionId }` | the first event of every connection; supplies the id `events.setInterest` addresses, and a second one means the link reconnected (`07-client-architecture.md` §4.2) |
 
 Run events (new; `05-run-lifecycle-and-streaming.md` §4):
 

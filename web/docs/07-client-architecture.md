@@ -43,8 +43,8 @@ packages/client/
       connection.ts          SSE status
     ui/                      design-system wrappers (08-design-system-and-styling.md)
     features/
-      sidebar/  home/  research/  encyclopedia/  highlights/  journal/
-      composer/  markdown/  settings/  agents/  import/  palette/  artifacts/
+      artifacts/  composer/  encyclopedia/  highlights/  home/  import/
+      journal/  markdown/  palette/  research/  sidebar/
     lib/                     client-only helpers (clipboard, keyboard, dom search)
     styles/
       app.css                @import "tailwindcss"; @theme inline; @custom-variant; layers
@@ -302,10 +302,12 @@ the `localStorage` layers of `researchNavigation` and `researchFolders`,
   'none'; base-uri 'none'; form-action 'self' https://github.com`. No
   `unsafe-eval`, so the `PACKAGE_VERSION` define for MathJax stays
   (`vite.config.ts:9-17`).
-- `safeHref` from `shared/links` still allows only `http:`, `https:`,
-  `mailto:`, and `session-file:` (resolved to artifact URLs at click time,
-  Phase 7). External links open with `target="_blank" rel="noopener
-  noreferrer"`.
+- `safeHref` from `shared/links` allows only `http:`, `https:` and
+  `mailto:`, and returns the resolved absolute URL so a protocol-relative
+  href cannot resolve unpredictably downstream. The desktop's `session-file:`
+  scheme is not a destination on the web: agents have no filesystem, so no
+  answer produces one (`11-artifacts-and-browser.md` §1). External links open
+  with `target="_blank" rel="noopener noreferrer"`.
 - Remote images in Markdown stay blocked (`BlockedMarkdownImage`); tweet media
   is allowed from the twimg hosts listed above.
 - Diagram SVG passes through DOMPurify's SVG profile with the

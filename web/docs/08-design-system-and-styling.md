@@ -146,13 +146,15 @@ Port of `TranscriptMarkdown.tsx`, `DiagramBlock.tsx`, `TranscriptActivity.tsx`:
   remarkTranscriptMathTweaks]` + `[rehypeMathjax]` lazy-loaded and swapped in
   via `useSyncExternalStore` as today (`TranscriptMarkdown.tsx:207`, `:871`).
   The two plugin lists are unified into one module in `shared/markdown`
-  (the desktop kept two, `06` pain point 6).
+  (the desktop kept two, which had to be kept in step by hand).
 - `normalizeLatexMathDelimiters`, `escapeWikilinkTablePipes` on source.
 - `MarkdownLink` reads `WikilinkActionsContext` for resolve/activate.
 - Code blocks → `DiagramBlock` for mermaid/dot/graphviz, lazy, DOMPurify SVG
   profile, `MutationObserver` on `data-appearance` for theme.
-- `BlockedMarkdownImage`; image markers via `shared/imageMarkers` render
-  thumbnails only for `session-file:` paths resolvable to artifacts (Phase 7).
+- `BlockedMarkdownImage`; the pasted-image markers a desktop transcript can
+  carry are collapsed out of the source by `shared/markdown/imageMarkers`
+  before parsing, because the files they name do not exist on the web.
+  Attached documents are the web's image path (`04-agent-runtime.md` §8).
 - `rehypeTranscriptArtifacts` keeps inline-code file links producing
   artifact buttons; the Codex inline-visualization directives and content
   references are dropped with their native backend.
