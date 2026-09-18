@@ -136,7 +136,7 @@ Options: Auth.js, better-auth, Lucia-style hand-rolled sessions with `arctic`
 for OAuth, Clerk/Auth0 (hosted).
 
 Choice: hand-rolled sessions (`sessions` table, 32-byte random id, HttpOnly
-Secure SameSite=Lax cookie, sliding 30-day expiry) with `arctic` performing
+Secure SameSite=Lax cookie, sliding expiry: 30 days idle, 90 days absolute) with `arctic` performing
 the GitHub authorization-code + PKCE exchange. Sign-up is open to any GitHub account; `users.is_admin` is a
 manually set database flag that gates the expensive models
 (`06-auth-and-users.md` §3). Rate limits on sign-up and usage come later.
@@ -350,8 +350,9 @@ and deploys are handled by resume rather than by a second app
 ## ADR-14 Identifiers, time, statuses
 
 Ids are ULIDs (`[0-9A-HJKMNP-TV-Z]{26}`) for every row. Timestamps are integer
-milliseconds since the Unix epoch. Node statuses are `queued | starting |
-running | complete | failed | cancelled | interrupted`; `interrupted` is new
+milliseconds since the Unix epoch. Node statuses are `queued | running |
+complete | failed | cancelled | interrupted`; `interrupted` is new and the
+desktop's `starting` is gone, because nothing is spawned
 (`05-run-lifecycle-and-streaming.md` §3). No desktop identifier or file
 format is accepted.
 

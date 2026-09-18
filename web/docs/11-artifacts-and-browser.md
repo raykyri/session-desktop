@@ -5,8 +5,8 @@ The desktop's browser overlay (`BrowserOverlay.tsx`, `human_browser.rs`,
 a sandboxed iframe over a token-bearing loopback file server, a native
 WKWebView child for arbitrary web pages, and a CDP screencast mirror of a
 headless Chromium driven by Codex's browser plugin. Only the first has a web
-equivalent; the other two are dropped (`01-architecture-decisions.md`,
-survey conclusion). This document specifies Phase 7.
+equivalent; the other two are dropped (ADR-10 in
+`01-architecture-decisions.md`). This document specifies Phase 7.
 
 ## 1. What the panel shows
 
@@ -76,7 +76,7 @@ injection, geometry publishing, occlusion, and lifecycle queue are removed.
 Opening: clicking a document chip calls `artifacts.mintToken` then opens the
 panel; the same document within the token's lifetime reuses the URL.
 
-## 4. Optional reader view (feature flag `SESSION_READER_VIEW=1`)
+## 4. Optional reader view (not built; would be feature flag `SESSION_READER_VIEW=1`)
 
 For `http(s)` sources, "Read here" reuses the `web_fetch` tool's cached
 readable text for that URL (or fetches it with the same SSRF guard) and

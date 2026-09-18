@@ -366,14 +366,27 @@ Each item names the desktop source and the enforcing function.
   assembled by the runtime (`04-agent-runtime.md` §5).
 
 ### 5.5 Highlights
-- Anchor validation in the Rust evaluation order (`research.rs:1522-1546`),
-  because the order decides which message a doubly-invalid anchor gets:
-  `version === 1`; `projection === "answer-v1"`; `start < end` ("selection
-  cannot be empty"); `end ≤ 64 MiB`; `exact.trim()` non-empty; `end - start
-  === exact.length` in UTF-16 code units; `exact ≤ 64 KiB`; `prefix`/`suffix
-  ≤ 512 bytes`; `responseRevision` is exactly 64 lowercase hex digits. The
-  zod schema additionally requires integer, non-negative offsets at the tRPC
-  boundary. The shared `validateHighlightAnchor` is the single implementation.
+- Anchor validation follows `research.rs:1522-1546`, which groups the checks
+  so one message covers each class of malformed anchor. The grouping is the
+  contract; the order within a group is not observable:
+  1. `version !== 1` or `projection !== "answer-v1"` → "unsupported research
+     highlight anchor".
+  2. `start >= end` or `exact.trim()` empty → "research highlight selection
+     cannot be empty".
+  3. `end > 64 MiB` or `end - start !== exact.length` in UTF-16 code units →
+     "research highlight has invalid selection offsets".
+  4. `exact > 64 KiB` or `prefix > 512 B` or `suffix > 512 B` → "research
+     highlight selection is too large".
+  5. `responseRevision` is not 64 hex digits → "research highlight has an
+     invalid response revision".
+
+  So an anchor that is both empty and over-long reports "cannot be empty".
+  One deliberate divergence from the Rust: it accepted either case for the
+  revision because it only ever compared one it had written itself, while the
+  web takes anchors from clients and requires the lowercase form
+  `responseRevision` emits. The zod schema additionally requires integer,
+  non-negative offsets at the tRPC boundary, and the shared
+  `validateHighlightAnchor` is the single implementation.
 - The node must have a snapshot whose `revision` equals
   `anchor.responseRevision`; otherwise error "the research response changed;
   select the text again".

@@ -181,7 +181,7 @@ Owned by the app so that every model has the same capabilities and the UI
 renders the same activity and sources.
 
 - `web_search({ query, recency? })` → `{ results: [{ title, url, snippet,
-  publishedAt? }] }`. Vendor client behind one interface (§10 question);
+  publishedAt? }] }`. Vendor client behind one interface (§6.1);
   results cached 24 h by normalized query; 10 results per call.
 - `web_fetch({ url })` → `{ url, title, text, truncated }`. Server-side
   fetch with SSRF guard (public IPs only, 3 redirects, 10 s, 5 MiB), HTML
