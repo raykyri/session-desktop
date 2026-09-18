@@ -1,0 +1,107 @@
+import { Menu as BaseMenu } from "@base-ui/react/menu";
+import type { ReactElement, ReactNode } from "react";
+
+import { cn } from "../lib/cn.js";
+
+import { MENU_ITEM, MENU_SEPARATOR, POPOVER_SURFACE } from "./surfaces.js";
+
+export interface MenuProps {
+  /** The element the menu hangs off. Base UI merges the trigger props onto it
+   * through `render`, rather than wrapping it — a wrapper would nest a second
+   * `role="button"` around the caller's own button. */
+  trigger: ReactElement;
+  children: ReactNode;
+  /** Controlled open state; omit for an uncontrolled menu. */
+  open?: boolean | undefined;
+  onOpenChange?: ((open: boolean) => void) | undefined;
+  side?: "top" | "bottom" | "left" | "right";
+  align?: "start" | "center" | "end";
+  className?: string;
+  triggerClassName?: string;
+  /** Accessible name for the popup when the trigger is an icon button. */
+  label?: string | undefined;
+}
+
+/**
+ * Dropdown menus (08 §4): tree row menus, the settings menu, journal card
+ * menus. Base UI owns roving focus, typeahead, and Escape, so the desktop's
+ * `clampContextMenuToViewport` math is gone (ADR-9).
+ */
+export function Menu({
+  trigger,
+  children,
+  open,
+  onOpenChange,
+  side = "bottom",
+  align = "start",
+  className,
+  triggerClassName,
+  label,
+}: MenuProps) {
+  return (
+    <BaseMenu.Root
+      {...(open === undefined ? {} : { open })}
+      {...(onOpenChange === undefined ? {} : { onOpenChange })}
+    >
+      <BaseMenu.Trigger className={triggerClassName} render={trigger} />
+      <BaseMenu.Portal>
+        <BaseMenu.Positioner side={side} align={align} sideOffset={6} className="z-(--z-popover)">
+          <BaseMenu.Popup
+            className={cn(POPOVER_SURFACE, "min-w-44", className)}
+            {...(label === undefined ? {} : { "aria-label": label })}
+          >
+            {children}
+          </BaseMenu.Popup>
+        </BaseMenu.Positioner>
+      </BaseMenu.Portal>
+    </BaseMenu.Root>
+  );
+}
+
+export interface MenuItemProps {
+  children: ReactNode;
+  onClick?: (() => void) | undefined;
+  disabled?: boolean | undefined;
+  tone?: "default" | "danger";
+  /** Right-aligned detail: a shortcut label or the current value. */
+  hint?: ReactNode;
+  className?: string;
+  /** Keeps the menu open after activation (a toggle row). */
+  closeOnClick?: boolean | undefined;
+}
+
+export function MenuItem({
+  children,
+  onClick,
+  disabled = false,
+  tone = "default",
+  hint,
+  className,
+  closeOnClick,
+}: MenuItemProps) {
+  return (
+    <BaseMenu.Item
+      disabled={disabled}
+      {...(closeOnClick === undefined ? {} : { closeOnClick })}
+      onClick={onClick ? () => onClick() : undefined}
+      className={cn(MENU_ITEM, tone === "danger" && "text-danger-muted", className)}
+    >
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {hint === undefined ? null : (
+        <span className="text-fg-disabled ml-auto shrink-0 text-xs">{hint}</span>
+      )}
+    </BaseMenu.Item>
+  );
+}
+
+export function MenuSeparator({ className }: { className?: string }) {
+  return <BaseMenu.Separator className={cn(MENU_SEPARATOR, className)} />;
+}
+
+export function MenuGroupLabel({ children }: { children: ReactNode }) {
+  return (
+    <BaseMenu.GroupLabel className="text-fg-subtle px-2.5 pt-2 pb-1 text-xs">
+      {children}
+    </BaseMenu.GroupLabel>
+  );
+}

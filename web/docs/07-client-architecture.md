@@ -181,8 +181,15 @@ This replaces `App.tsx:9094-9220`.
 
 `shared/app/shortcuts.ts` is the ported `resolveAppShortcut`
 (`src/lib/appShortcuts.ts`). `AppShell` installs one capture-phase listener
-that ignores events when a Base UI dialog is open or the target is editable
-(`isEditableTarget`), and dispatches:
+that stands down while a Base UI layer is open — the library owns dismissal
+for its own dialogs, menus and popovers, with correct nesting — and otherwise
+passes every keydown to the shared table, `isEditableTarget` included. Whether
+a text field swallows a chord is decided per chord there, not for the listener
+as a whole: this app is used from a composer most of the time, and Cmd-J
+("focus the follow-ups") exists to be pressed from one. Only the chords that
+compete with text editing or with the caret's own navigation require a
+non-editable target — Cmd/Ctrl-1..9, Ctrl-Tab, Shift-Cmd-[ / ], and
+Cmd-Alt-Up/Down. It dispatches:
 
 Cmd-1..9 focus tab · Cmd-N/T Home + focus composer · Shift-Cmd-G toggle
 sidebar · Ctrl-Tab / Shift-Cmd-] cycle · Cmd-Alt-Up/Down move item · Cmd-,

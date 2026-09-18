@@ -92,13 +92,36 @@ test("Shift-Cmd-[ and Shift-Cmd-] cycle, with curly variants normalized", (t) =>
   });
 });
 
-test("an editable target keeps the reorder chord from firing", (t) => {
-  t.is(
-    resolveAppShortcut(
-      shortcut({ key: "ArrowDown", metaKey: true, altKey: true, editableTarget: true }),
-    ),
-    null,
-  );
+// The table, not the dispatcher, decides what an editable target blocks: the
+// app is used from a composer most of the time, and a chord that dies there is
+// a chord nobody can rely on.
+test("an editable target blocks only the chords that compete with text editing", (t) => {
+  const inField = (overrides: Partial<Parameters<typeof resolveAppShortcut>[0]>) =>
+    resolveAppShortcut(shortcut({ ...overrides, editableTarget: true }));
+
+  // Cmd-Alt-Arrow is word-wise selection, the digits and the cycle chords move
+  // between documents while the caret is mid-sentence.
+  t.is(inField({ key: "ArrowDown", metaKey: true, altKey: true }), null);
+  t.is(inField({ key: "3", metaKey: true }), null);
+  t.is(inField({ key: "3", ctrlKey: true }), null);
+  t.is(inField({ key: "Tab", ctrlKey: true }), null);
+  t.is(inField({ key: "]", metaKey: true, shiftKey: true }), null);
+
+  // Everything else still reaches the app from inside a composer. Cmd-J is the
+  // clearest case: jumping to the follow-ups is a thing you do while typing.
+  t.deepEqual(inField({ key: "j", metaKey: true }), { type: "focusFollowups" });
+  t.deepEqual(inField({ key: "k", metaKey: true }), { type: "openCommandPalette" });
+  t.deepEqual(inField({ key: ",", metaKey: true }), { type: "openSettings" });
+  t.deepEqual(inField({ key: "o", metaKey: true }), { type: "openFolderMenu" });
+  t.deepEqual(inField({ key: "g", metaKey: true, shiftKey: true }), {
+    type: "toggleLeftSidebar",
+  });
+  t.deepEqual(inField({ key: "h", metaKey: true, shiftKey: true }), {
+    type: "focusResearchHome",
+  });
+  t.deepEqual(inField({ key: "e", metaKey: true, shiftKey: true }), {
+    type: "toggleArtifactPanel",
+  });
 });
 
 test("terminal, pane, split, and remote chords no longer resolve", (t) => {

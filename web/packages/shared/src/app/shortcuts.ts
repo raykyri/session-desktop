@@ -5,6 +5,15 @@
 //
 // Every chord here is a research-surface command. The desktop's terminal,
 // pane, split, and remote chords are gone with the surfaces they drove.
+//
+// `editableTarget` is decided per chord, not for the table as a whole. Most of
+// this app's time is spent in a composer, and a palette or a settings chord
+// that stops working the moment the caret is in a text field is a chord the
+// user cannot rely on — Cmd-J ("focus the follow-ups") exists precisely to be
+// pressed from one. Only the chords that compete with text editing or with
+// the caret's own navigation stand down: the digit and cycle chords move
+// between documents, and the reorder chord shares Cmd-Alt-Arrow with word-wise
+// selection.
 
 export type AppShortcutCommand =
   | { type: "focusResearchTab"; tabIndex: number }
@@ -62,7 +71,7 @@ export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand 
   ) {
     return { type: "moveResearchItem", direction: key === "arrowup" ? -1 : 1 };
   }
-  if (onePrimaryModifier && !option && !shift && /^[1-9]$/.test(key)) {
+  if (onePrimaryModifier && !option && !shift && !input.editableTarget && /^[1-9]$/.test(key)) {
     return { type: "focusResearchTab", tabIndex: Number(key) - 1 };
   }
   if (command && !control && !option && !shift && (key === "n" || key === "t")) {
@@ -77,8 +86,9 @@ export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand 
     return { type: "toggleLeftSidebar" };
   }
   if (
-    (!command && control && !option && key === "tab") ||
-    (command && !control && !option && shift && (key === "[" || key === "]"))
+    !input.editableTarget &&
+    ((!command && control && !option && key === "tab") ||
+      (command && !control && !option && shift && (key === "[" || key === "]")))
   ) {
     const previous = key === "[" || (key === "tab" && shift);
     return { type: "cycleResearchTab", direction: previous ? -1 : 1 };
