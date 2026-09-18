@@ -177,7 +177,11 @@ export function admissionCheck(
   const at = options.at ?? now();
   const totals = dailyTotals(db, userId, at);
   const limits = effectiveLimits(db, userId, options.defaults ?? {});
-  const spentTokens = totals.inputTokens + totals.outputTokens + totals.reasoningTokens;
+  // `reasoning_tokens` is a breakdown of `output_tokens`, not a third bucket —
+  // the SDK reports `outputTokens.total` as text plus reasoning and the runtime
+  // stores both — so adding it here would charge thinking twice and disagree
+  // with the cost estimate recorded beside it.
+  const spentTokens = totals.inputTokens + totals.outputTokens;
   const remainingTokens =
     limits.dailyTokens === null ? null : Math.max(0, limits.dailyTokens - spentTokens);
   const remainingRuns =

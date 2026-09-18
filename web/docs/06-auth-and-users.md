@@ -108,13 +108,18 @@ Request-level (from launch): per user 60 mutations/min, 10
 In-memory token buckets in Hono middleware (single process).
 
 Usage-level (schema now, enforcement later, `SESSION_ENFORCE_LIMITS=1`):
-per account per UTC day, `daily_tokens` (input + output + reasoning across
-all models, from `usage_events`) and `daily_runs` (research attempts).
-Defaults from env (`SESSION_DAILY_TOKENS=1000000`, `SESSION_DAILY_RUNS=10`),
-overridable per user in `user_limits`; admins exempt.
-Checked at admission: a node over limit stays `queued` with a
-`limitReached` flag in `research.node.updated` and is admitted after
-midnight UTC or when the limit is raised, so nothing is lost.
+per account per UTC day, `daily_tokens` (input + output across all models,
+from `usage_events`) and `daily_runs` (research attempts). `usage_events`
+stores `reasoning_tokens` as a breakdown of `output_tokens` rather than as a
+third bucket — that is how the AI SDK reports it (`04-agent-runtime.md` §13) —
+so the limit does not add it again, and it agrees with the cost estimate
+recorded beside it. Defaults from env (`SESSION_DAILY_TOKENS=1000000`,
+`SESSION_DAILY_RUNS=10`), overridable per user in `user_limits`; admins exempt.
+Checked at admission (`research.createTree`, `forkNode`, `retryNode`), which
+answers `TOO_MANY_REQUESTS` as `03-api-and-events.md` §2 specifies; the
+earlier sketch of holding the node `queued` with a `limitReached` flag is not
+built, because a refusal the composer can show is clearer than a node that
+looks queued and is not.
 
 Sign-up throttling (later): per-IP attempts per hour, minimum GitHub account
 age (`github_created_at`), and invite codes as described in §3.

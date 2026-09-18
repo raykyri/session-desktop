@@ -1,0 +1,87 @@
+{
+  "scenario": "provider-tools",
+  "description": "The shapes a real provider streams that the happy-path fixture skips: a tool call whose input arrives as deltas, and a pair of provider-executed calls, one of which fails inside the provider.",
+  "steps": [
+    {
+      "parts": [
+        { "type": "stream-start", "warnings": [] },
+        { "type": "response-metadata", "id": "fixture-pt-1", "modelId": "fixture" },
+        { "type": "tool-input-start", "id": "call-search-1", "toolName": "web_search" },
+        { "type": "tool-input-delta", "id": "call-search-1", "delta": "{\"query\":" },
+        {
+          "type": "tool-input-delta",
+          "id": "call-search-1",
+          "delta": "\"bloom filter false positive rate\"}"
+        },
+        { "type": "tool-input-end", "id": "call-search-1" },
+        {
+          "type": "tool-call",
+          "toolCallId": "call-search-1",
+          "toolName": "web_search",
+          "input": "{\"query\":\"bloom filter false positive rate\"}"
+        },
+        {
+          "type": "tool-call",
+          "toolCallId": "provider-1",
+          "toolName": "google_search",
+          "input": "{\"queries\":[\"bloom filter\"]}",
+          "providerExecuted": true,
+          "dynamic": true
+        },
+        {
+          "type": "tool-result",
+          "toolCallId": "provider-1",
+          "toolName": "google_search",
+          "dynamic": true,
+          "result": {
+            "results": [{ "url": "https://example.net/bloom", "title": "Bloom filters" }]
+          }
+        },
+        {
+          "type": "tool-call",
+          "toolCallId": "provider-2",
+          "toolName": "google_search",
+          "input": "{\"queries\":[\"bloom filter tuning\"]}",
+          "providerExecuted": true,
+          "dynamic": true
+        },
+        {
+          "type": "tool-result",
+          "toolCallId": "provider-2",
+          "toolName": "google_search",
+          "dynamic": true,
+          "isError": true,
+          "result": { "code": "UNAVAILABLE", "detail": "grounding quota exhausted" }
+        },
+        {
+          "type": "finish",
+          "finishReason": { "unified": "tool-calls", "raw": "tool_use" },
+          "usage": {
+            "inputTokens": { "total": 900, "noCache": 900, "cacheRead": 0, "cacheWrite": 0 },
+            "outputTokens": { "total": 40, "text": 30, "reasoning": 10 }
+          }
+        }
+      ]
+    },
+    {
+      "parts": [
+        { "type": "stream-start", "warnings": [] },
+        { "type": "text-start", "id": "t1" },
+        {
+          "type": "text-delta",
+          "id": "t1",
+          "delta": "A [[Bloom filter]] trades a tunable false-positive rate for constant space."
+        },
+        { "type": "text-end", "id": "t1" },
+        {
+          "type": "finish",
+          "finishReason": { "unified": "stop", "raw": "end_turn" },
+          "usage": {
+            "inputTokens": { "total": 1600, "noCache": 1600, "cacheRead": 0, "cacheWrite": 0 },
+            "outputTokens": { "total": 90, "text": 90, "reasoning": 0 }
+          }
+        }
+      ]
+    }
+  ]
+}

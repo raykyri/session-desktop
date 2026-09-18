@@ -19,6 +19,14 @@ export interface CommitAnswerInput {
   nodeId: string;
   status: ResearchNodeStatus;
   error?: string | null;
+  /** Reads the live turns; called twice, and the two results must agree.
+   *
+   * A seam rather than a fixed read because in this process they always do:
+   * SQLite reads are synchronous and the loop is the only writer, so the guard
+   * is the desktop's rule carried over (`state.rs:8870`) and cannot fail here.
+   * The test that has to prove the refusal works supplies a reader that
+   * changes its answer. */
+  readTurns?: (() => Turn[]) | undefined;
 }
 
 export interface CommitAnswerResult {
@@ -37,9 +45,10 @@ export function readStableTurns(
   db: SessionDatabase,
   userId: string,
   nodeId: string,
+  read: () => Turn[] = () => runsRepo.liveWindow(db, userId, nodeId).turns,
 ): { turns: Turn[]; stable: boolean } {
-  const first = runsRepo.liveWindow(db, userId, nodeId).turns;
-  const second = runsRepo.liveWindow(db, userId, nodeId).turns;
+  const first = read();
+  const second = read();
   return { turns: second, stable: revisionOf(first) === revisionOf(second) };
 }
 
@@ -55,7 +64,7 @@ const NO_ANSWER = "this research produced no readable response";
  */
 export function commitAnswer(input: CommitAnswerInput): CommitAnswerResult {
   const { db, userId, nodeId } = input;
-  const { turns, stable } = readStableTurns(db, userId, nodeId);
+  const { turns, stable } = readStableTurns(db, userId, nodeId, input.readTurns);
   if (!stable) {
     return { committed: false, turns, reason: "the response was still changing when it settled" };
   }

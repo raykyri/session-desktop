@@ -13,7 +13,7 @@ import type { RunToolContext } from "../src/runs/tools/context.js";
 import { ToolBudget, createToolCaches } from "../src/runs/tools/context.js";
 import { chunkDocumentText, createDocumentReadTool } from "../src/runs/tools/documentRead.js";
 import { BlockedUrlError, assertFetchableUrl, isPrivateAddress } from "../src/runs/tools/ssrf.js";
-import { extractHtml, fetchReadablePage } from "../src/runs/tools/webFetch.js";
+import { extractHtml, fetchCacheKey, fetchReadablePage } from "../src/runs/tools/webFetch.js";
 import { createWebSearchTool, searchVendors } from "../src/runs/tools/webSearch.js";
 
 import { createHarness } from "./helpers.js";
@@ -314,4 +314,41 @@ test("the tool cache expires entries and evicts the coldest", (t) => {
   t.is(cache.get("b"), undefined, "the least recently used entry was evicted");
   now += 101;
   t.is(cache.get("a"), undefined, "an expired entry is gone");
+});
+
+test("an IP written another way is still an IP", async (t) => {
+  // The WHATWG parser normalizes decimal, octal, hexadecimal, shorthand, and
+  // fullwidth forms into a dotted quad before the guard sees the host, which
+  // is why the address policy does not have to parse them itself. The test
+  // pins that reliance: a parser that stopped normalizing would open the guard.
+  for (const raw of [
+    "http://2130706433/",
+    "http://0177.0.0.1/",
+    "http://0x7f000001/",
+    "http://127.1/",
+    "http://１２７.0.0.1/",
+    "http://[::ffff:127.0.0.1]/",
+    "http://[0:0:0:0:0:ffff:a00:1]/",
+    "http://[::ffff:169.254.169.254]/",
+  ]) {
+    await t.throwsAsync(assertFetchableUrl(raw), {
+      instanceOf: BlockedUrlError,
+      message: /not a public address/,
+    });
+  }
+  // A name is not an address, so it goes to the resolver rather than the
+  // parser: `nip.io`-style hosts are caught by what they resolve to.
+  await t.throwsAsync(
+    assertFetchableUrl("http://127.0.0.1.nip.io/", {
+      lookup: () => Promise.resolve([{ address: "127.0.0.1", family: 4 }]),
+    }),
+    { message: /resolves to a private address/ },
+  );
+});
+
+test("the fetch cache key ignores what does not change the response", (t) => {
+  t.is(fetchCacheKey("https://Example.COM/a"), fetchCacheKey("https://example.com/a"));
+  t.is(fetchCacheKey("https://example.com/a#section"), fetchCacheKey("https://example.com/a"));
+  t.not(fetchCacheKey("https://example.com/a?q=1"), fetchCacheKey("https://example.com/a"));
+  t.is(fetchCacheKey("not a url"), "not a url", "an unparsable string is its own key");
 });

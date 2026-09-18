@@ -235,10 +235,14 @@ instead of the owned `web_search`. Behavior differences the runtime handles:
 - Google's terms require displaying the Search Suggestions from
   `searchEntryPoint` when grounded results are shown; the document footer
   renders them for grounded answers.
-- Whether `google_search` can be combined with function tools
-  (`web_fetch`, `document_read`) in one Gemini 3.8 request is verified in
-  the Phase 4 spike; if not, `gemini-flash-google` runs with grounding only
-  and documents are inlined as text.
+- `google_search` is combined with the function tools (`web_fetch`,
+  `document_read`) in one request. `@ai-sdk/google` sends both the
+  `googleSearch` tool and the `functionDeclarations` with
+  `functionCallingConfig: { mode: "VALIDATED" }` for a Gemini 3 model, and
+  warns about the combination only for Gemini 2 and older, so
+  `gemini-flash-google` keeps its owned tools rather than running with
+  grounding only. What a live Gemini 3.8 request does with both is still to be
+  confirmed against the API.
 - Billing is per search query, several per prompt; usage is recorded as
   `search` events from `webSearchQueries.length`.
 
@@ -313,8 +317,9 @@ hidden. `web/.env.example` documents every variable with comments.
 ## 12. Test fixtures
 
 Recorded AI SDK stream-part sequences per provider (success, tool loop,
-refusal, rate limit, context overflow, mid-stream error, abort) drive the
-loop in tests through a fixture provider implementing the AI SDK provider
+grounding, provider-executed tools with streamed inputs, refusal, rate limit,
+context overflow, mid-stream error, abort, wall-clock timeout) drive the loop
+in tests through a fixture provider implementing the AI SDK provider
 interface. Real-provider smoke tests run manually with credentials.
 
 ## 13. Implementation notes
@@ -326,11 +331,21 @@ Where the built runtime departs from the sketch above, and why.
   `specificationVersion: "v4"`, so the fixture provider implements
   `LanguageModelV4`; `ai@7` accepts V2, V3, and V4 models alike. Usage arrives
   nested (`inputTokens`, `outputTokenDetails.reasoningTokens`, …) and is
-  flattened in `usage.ts`.
+  flattened in `usage.ts`. `outputTokens` is the SDK's *total* output — text
+  plus reasoning — so `reasoning_tokens` is stored as a breakdown of it and is
+  added neither to the cost estimate nor to the daily token limit
+  (`06-auth-and-users.md` §8).
 - **Retries.** `streamText` runs with `maxRetries: 0`. The loop owns the retry
   policy: a 429 re-queues the node with backoff and keeps its place in the
   admission order, which a transport-level retry cannot do, and every other
-  class is a classified failure the user can act on.
+  class is a classified failure the user can act on. The backoff is counted
+  from `run_attempts` rows with outcome `rate_limited`, not from memory, so a
+  deploy in the middle of a backoff does not hand the node a fresh three; the
+  re-queue increments `attempt` because `run_attempts` is keyed by
+  `(node_id, attempt)` and a retry reusing the number would overwrite the row
+  the count reads. Metadata runs are the exception and keep `maxRetries: 1`:
+  they own no queue row to re-enter, so a transport retry is the only one they
+  can have.
 - **Tool caches.** `web_search` and `web_fetch` results are cached for 24 h in a
   bounded in-memory LRU rather than a `search_cache` table. Nothing downstream
   needs the cache to survive a deploy, and a table would put a write on the hot
@@ -355,4 +370,32 @@ Where the built runtime departs from the sketch above, and why.
   and re-checks each redirect, but `fetch` cannot be made to connect to a
   pinned address with the hostname in SNI, so a name that changes answers
   between the check and the connection is still reachable once, with no
-  credentials attached and its response only read by the model.
+  credentials attached and its response only read by the model. Closing it
+  means taking `undici` as a direct dependency and passing
+  `dispatcher: new Agent({ connect: { lookup } })` with a `lookup` that returns
+  only the address the guard already approved — feasible, but it replaces
+  Node's connection path (happy eyeballs, address-family selection, proxy
+  support) for every outbound page read, which is not a trade worth making for
+  this exposure today. Address *forms* are not part of the gap: the WHATWG URL
+  parser normalizes decimal, octal, hexadecimal, shorthand, and fullwidth hosts
+  into a dotted quad before the guard sees them, which `runs.tools` pins.
+- **Route fallback.** `gpt-luna` asks for the `~openai/gpt-luna-latest` alias
+  and falls back to the pinned `openai/gpt-5.6-luna` when OpenRouter answers
+  404 or "not a valid model". The swap is a wrapper around the language model
+  rather than a branch in the loop, because a missing route is rejected at the
+  call and never mid-stream; the route it settles on is remembered for the
+  process. A 400 refusal on the data policy is *not* a missing route and stays
+  `provider_unavailable`: falling back there would be re-asking the same
+  question of a provider bound by the same rule.
+- **The question is a message.** A node's `node_messages` open with the user
+  message the attempt asked, followed by the provider's response messages. The
+  AI SDK's `responseMessages` carries only what the model produced, so without
+  this a descendant would replay a history of answers with no questions — and
+  on Anthropic, a request whose first message is an assistant turn. Only the
+  text is stored: document parts are rebuilt from the node's ancestors on every
+  attempt, so persisting them would put file bytes in the row and send each
+  attachment twice.
+- **Giving up on a resume.** The node that has spent its two auto-resumes keeps
+  `interrupted` and its partial output, and `resume_pending` is cleared with
+  its queue row. Left set, every later boot would re-queue a node the runtime
+  has already decided not to resume.

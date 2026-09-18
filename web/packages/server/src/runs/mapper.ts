@@ -22,6 +22,10 @@ export interface MapperHandlers {
   onThinking?: (active: boolean) => void;
   /** A turn reached its final form and should be persisted and published. */
   onTurnCommitted?: (turn: Turn) => void;
+  /** Google Search grounding ran inside the provider: how many queries it
+   * billed (`04-agent-runtime.md` §6.2). No owned tool was called, so this is
+   * the only place the usage can be counted. */
+  onGroundedSearch?: (queries: number) => void;
 }
 
 export interface MapperOptions {
@@ -38,14 +42,16 @@ export interface MapperOptions {
   now?: () => number;
 }
 
+// Every field Vertex sends is optional *and* nullable; the shapes below say so
+// rather than trusting `?.` to cover a `null` the types denied.
 interface GroundingChunk {
-  web?: { uri?: string; title?: string };
+  web?: { uri?: string | null; title?: string | null } | null;
 }
 
 interface GroundingMetadata {
-  webSearchQueries?: string[];
-  groundingChunks?: GroundingChunk[];
-  searchEntryPoint?: { renderedContent?: string };
+  webSearchQueries?: string[] | null;
+  groundingChunks?: GroundingChunk[] | null;
+  searchEntryPoint?: { renderedContent?: string | null } | null;
 }
 
 function groundingOf(metadata: unknown): GroundingMetadata | null {
@@ -81,6 +87,7 @@ export class TurnMapper {
   #text = "";
   #toolResults: TurnBlock[] = [];
   #thinking = false;
+  #sources: { url: string; title: string }[] = [];
 
   constructor(options: MapperOptions, handlers: MapperHandlers = {}) {
     this.#options = {
@@ -170,6 +177,16 @@ export class TurnMapper {
       case "reasoning-end":
         this.#setThinking(false);
         return;
+      case "source": {
+        // Grounded answers reach the SDK two ways depending on which Gemini
+        // API the provider used: `groundingMetadata` on the step, or `source`
+        // parts. Both end up in the same synthetic `google_search` result, so
+        // the timeline and the Sources footer do not care which one arrived.
+        if (part.sourceType === "url" && part.url !== "") {
+          this.#sources.push({ url: part.url, title: part.title ?? part.url });
+        }
+        return;
+      }
       case "tool-call": {
         this.#setThinking(false);
         this.#assistantBlocks.push({
@@ -219,14 +236,31 @@ export class TurnMapper {
    */
   #applyGrounding(metadata: unknown): void {
     const grounding = groundingOf(metadata);
-    if (!grounding) {
+    const queries = grounding?.webSearchQueries ?? [];
+    const chunks = grounding?.groundingChunks ?? [];
+    const results: { url: string; title: string }[] = [];
+    const seen = new Set<string>();
+    for (const source of [
+      ...chunks.flatMap((chunk) =>
+        chunk.web?.uri === undefined || chunk.web.uri === null
+          ? []
+          : [{ url: chunk.web.uri, title: chunk.web.title ?? chunk.web.uri }],
+      ),
+      ...this.#sources,
+    ]) {
+      if (seen.has(source.url)) {
+        continue;
+      }
+      seen.add(source.url);
+      results.push(source);
+    }
+    if (queries.length === 0 && results.length === 0) {
       return;
     }
-    const queries = grounding.webSearchQueries ?? [];
-    const chunks = grounding.groundingChunks ?? [];
-    if (queries.length === 0 && chunks.length === 0) {
-      return;
-    }
+    // Billing is per query, several per prompt (`04` §6.2). A step that
+    // grounded without naming its queries still cost one search.
+    this.#handlers.onGroundedSearch?.(Math.max(queries.length, 1));
+    const entryPoint = grounding?.searchEntryPoint?.renderedContent;
     const toolUseId = `${this.assistantTurnId}-google-search`;
     this.#assistantBlocks.push({
       type: "toolUse",
@@ -238,14 +272,10 @@ export class TurnMapper {
       type: "toolResult",
       toolUseId,
       content: {
-        results: chunks.flatMap((chunk) =>
-          chunk.web?.uri === undefined
-            ? []
-            : [{ url: chunk.web.uri, title: chunk.web.title ?? chunk.web.uri }],
-        ),
-        ...(grounding.searchEntryPoint?.renderedContent === undefined
+        results,
+        ...(entryPoint === undefined || entryPoint === null
           ? {}
-          : { searchEntryPoint: grounding.searchEntryPoint.renderedContent }),
+          : { searchEntryPoint: entryPoint }),
       },
       isError: false,
     });
@@ -265,6 +295,7 @@ export class TurnMapper {
     }
     this.#assistantBlocks = [];
     this.#toolResults = [];
+    this.#sources = [];
     this.#text = "";
     this.#step += 1;
   }
@@ -293,6 +324,19 @@ export function errorText(error: unknown): string {
     const message: unknown = error.message;
     if (typeof message === "string") {
       return message;
+    }
+  }
+  // A provider-executed tool reports its failure as the JSON payload it would
+  // have returned, not as an `Error` (`ai` turns a `tool-result` carrying
+  // `isError` into a `tool-error` whose `error` is that value). `String()` on
+  // it is "[object Object]", which tells the reader nothing.
+  if (typeof error === "object" && error !== null) {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      // Circular, or a value `JSON` refuses: there is nothing left to say
+      // about it that is more useful than that it failed.
+      return "the tool reported an error that could not be read";
     }
   }
   return String(error);

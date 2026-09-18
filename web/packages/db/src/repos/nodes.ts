@@ -365,6 +365,68 @@ export function resumeAttempt(db: SessionDatabase, userId: string, nodeId: strin
   });
 }
 
+/**
+ * Puts a rate-limited attempt back in the queue
+ * (`docs/05-run-lifecycle-and-streaming.md` §8).
+ *
+ * The attempt number moves, which is what makes the 429 survive a restart:
+ * `run_attempts` is keyed by `(node_id, attempt)`, so a re-queue that reused
+ * the number would have the retry overwrite the `rate_limited` row the backoff
+ * is counted from. The queue row itself is left to
+ * `queue.requeueWithBackoff`, which keeps the node's place in the admission
+ * order rather than sending it to the back.
+ *
+ * The partial output of the rate-limited attempt goes: the retry starts from
+ * the parent's context, and rows left under the old attempt number would be
+ * invisible to `liveWindow` and never collected.
+ */
+export function requeueAfterRateLimit(
+  db: SessionDatabase,
+  userId: string,
+  nodeId: string,
+): ResearchNode {
+  return transact(db, (tx) => {
+    const { node } = loadNode(tx, userId, nodeId);
+    if (isTerminalStatus(node.status)) {
+      throw new Error(
+        `research node ${nodeId} already finished as ${node.status} and cannot be re-queued`,
+      );
+    }
+    tx.delete(runTurns).where(eq(runTurns.nodeId, nodeId)).run();
+    tx.update(nodes)
+      .set({
+        status: "queued",
+        attempt: node.attempt + 1,
+        error: null,
+        startedAt: null,
+        // Not reset to zero the way a retry does: a client watching this node
+        // has already applied sequence numbers from the attempt that was
+        // throttled, and rewinding the counter would make every event after
+        // the backoff look like a replay.
+        runSeq: sql`${nodes.runSeq} + 1`,
+      })
+      .where(eq(nodes.id, nodeId))
+      .run();
+    touchTree(tx, node.treeId);
+    return reload(tx, userId, nodeId);
+  });
+}
+
+/**
+ * Gives up on auto-resuming a node (`docs/05-run-lifecycle-and-streaming.md`
+ * §3). The node keeps its `interrupted` status and its partial output, and the
+ * user's Retry is what moves it from here; clearing the flag is what stops
+ * every subsequent boot from re-queueing a node the runtime has already
+ * decided not to resume.
+ */
+export function clearResumePending(db: SessionDatabase, userId: string, nodeId: string): void {
+  transact(db, (tx) => {
+    const { node } = loadNode(tx, userId, nodeId);
+    tx.update(nodes).set({ resumePending: false }).where(eq(nodes.id, node.id)).run();
+    tx.delete(runQueue).where(eq(runQueue.nodeId, node.id)).run();
+  });
+}
+
 /** Marks a running node interrupted and flags it for auto-resume. Called by
  * the `SIGTERM` handler after the last checkpoint is persisted. */
 export function markInterrupted(db: SessionDatabase, userId: string, nodeId: string): ResearchNode {

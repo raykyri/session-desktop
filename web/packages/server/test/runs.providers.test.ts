@@ -1,12 +1,18 @@
 // Provider construction and the options every request carries
 // (`04-agent-runtime.md` §1, §11).
 
+import { APICallError } from "@ai-sdk/provider";
 import { MODEL_REGISTRY, findModel } from "@session/shared";
 import { generateText } from "ai";
 import test from "ava";
 
 import { DEFAULT_FIXTURE_SCENARIO, listFixtureScenarios } from "../src/runs/fixtureProvider.js";
-import { createProviders, openRouterSettings, providerOptionsFor } from "../src/runs/providers.js";
+import {
+  createProviders,
+  isMissingRouteError,
+  openRouterSettings,
+  providerOptionsFor,
+} from "../src/runs/providers.js";
 
 import { testConfig } from "./helpers.js";
 
@@ -126,8 +132,80 @@ test("every scenario the runtime names has a fixture on disk", (t) => {
     "abort",
     "slow-stream",
     "grounded",
+    "provider-tools",
+    "timeout",
   ]) {
     t.true(scenarios.includes(required), `${required} is recorded`);
   }
   t.true(scenarios.includes(DEFAULT_FIXTURE_SCENARIO));
+});
+
+test("a missing OpenRouter alias falls back to the pinned slug", async (t) => {
+  const asked: string[] = [];
+  const fetchImpl: typeof globalThis.fetch = (_input, init) => {
+    const body = JSON.parse(typeof init?.body === "string" ? init.body : "{}") as {
+      model?: string;
+    };
+    asked.push(body.model ?? "");
+    if (body.model === "~openai/gpt-luna-latest") {
+      return Promise.resolve(
+        Response.json(
+          { error: { message: "~openai/gpt-luna-latest is not a valid model ID" } },
+          {
+            status: 404,
+          },
+        ),
+      );
+    }
+    return Promise.resolve(
+      Response.json({
+        id: "gen-1",
+        model: "openai/gpt-5.6-luna",
+        object: "chat.completion",
+        created: 0,
+        choices: [
+          { index: 0, message: { role: "assistant", content: "ok" }, finish_reason: "stop" },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 2, total_tokens: 12 },
+      }),
+    );
+  };
+  const providers = createProviders(productionConfig(), { fetch: fetchImpl, fixtures: false });
+  const resolved = providers.resolve("gpt-luna");
+  t.truthy(resolved);
+  if (!resolved) {
+    return;
+  }
+  const first = await generateText({ model: resolved.model, prompt: "hello", maxRetries: 0 });
+  t.is(first.text, "ok");
+  t.deepEqual(asked, ["~openai/gpt-luna-latest", "openai/gpt-5.6-luna"]);
+
+  // The route the 404 settled on sticks: the alias is not asked for again.
+  const again = providers.resolve("gpt-luna");
+  await generateText({ model: again?.model ?? resolved.model, prompt: "again", maxRetries: 0 });
+  t.deepEqual(asked, ["~openai/gpt-luna-latest", "openai/gpt-5.6-luna", "openai/gpt-5.6-luna"]);
+});
+
+test("a data-policy refusal is not treated as a missing route", (t) => {
+  t.false(
+    isMissingRouteError(
+      new APICallError({
+        message: "No endpoints found matching your data policy",
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 400,
+      }),
+    ),
+  );
+  t.true(
+    isMissingRouteError(
+      new APICallError({
+        message: "not found",
+        url: "https://openrouter.ai/api/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 404,
+      }),
+    ),
+  );
+  t.false(isMissingRouteError(new Error("socket hang up")));
 });

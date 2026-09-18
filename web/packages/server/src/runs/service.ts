@@ -51,9 +51,10 @@ export interface RunsService {
     nodeId: string,
     instructions: string,
   ): Promise<ResearchRecapCandidate>;
-  /** The candidate this server issued under `id`, so `recaps.applyCandidate`
-   * stores the text that was generated rather than the text it was handed. */
-  recallRecapCandidate(id: string): ResearchRecapCandidate | null;
+  /** The candidate this server issued to this account under `id`, so
+   * `recaps.applyCandidate` stores the text that was generated rather than the
+   * text it was handed. */
+  recallRecapCandidate(userId: string, id: string): ResearchRecapCandidate | null;
   /** `SIGTERM`: stop admitting, persist checkpoints, mark open attempts
    * `interrupted` with `resume_pending` (`05` §7). Resolves when it is safe to
    * exit. */
@@ -181,11 +182,11 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
   };
 
   const active = new Map<string, ActiveRun>();
-  const requeues = new Map<string, number>();
   const metadataQueue: MetadataJob[] = [];
   const metadataRunning = new Set<Promise<void>>();
   let draining = false;
   let ticking: Promise<void> | null = null;
+  let tickAgain = false;
 
   const emit = (userId: string, type: string, payload: Record<string, unknown>): void => {
     deps.eventBus.emit(userId, sessionEvent(type, payload));
@@ -201,11 +202,19 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
     }
   };
 
+  /** How many 429s this node has already served a backoff for. Counted from
+   * `run_attempts` rather than from memory so a deploy in the middle of a
+   * backoff does not hand the node a fresh three (`04-agent-runtime.md` §13). */
+  const rateLimitedSoFar = (nodeId: string): number =>
+    runsRepo.listAttempts(deps.db, nodeId).filter((attempt) => attempt.outcome === "rate_limited")
+      .length;
+
   const settleRateLimited = (userId: string, nodeId: string): void => {
-    const spent = requeues.get(nodeId) ?? 0;
-    const backoff = spent >= MAX_RATE_LIMIT_REQUEUES ? null : backoffFor(spent);
+    // The attempt that just ended has already written its `rate_limited` row,
+    // so the first 429 counts one and takes the first backoff.
+    const spent = rateLimitedSoFar(nodeId);
+    const backoff = spent > MAX_RATE_LIMIT_REQUEUES ? null : backoffFor(spent - 1);
     if (backoff === null) {
-      requeues.delete(nodeId);
       queueRepo.release(deps.db, nodeId);
       const node = nodesRepo.setStatus(deps.db, userId, nodeId, "failed", {
         error: "the model provider kept rate limiting this run; try again later",
@@ -213,11 +222,27 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
       emit(userId, "research.node.updated", { node });
       return;
     }
-    requeues.set(nodeId, spent + 1);
-    const node = nodesRepo.setStatus(deps.db, userId, nodeId, "queued");
+    const node = nodesRepo.requeueAfterRateLimit(deps.db, userId, nodeId);
     queueRepo.requeueWithBackoff(deps.db, nodeId, Date.now() + backoff);
-    logger.info({ nodeId, backoffMs: backoff, attempt: spent + 1 }, "re-queued after a 429");
+    logger.info({ nodeId, backoffMs: backoff, requeue: spent }, "re-queued after a 429");
     emit(userId, "research.node.updated", { node });
+  };
+
+  /** Last resort for an attempt that threw past the loop's own settlement:
+   * a node no longer being run must not stay `running`. */
+  const settleUnhandled = (nodeId: string, userId: string): void => {
+    try {
+      const node = nodesRepo.get(deps.db, userId, nodeId);
+      if (!node || nodesRepo.isTerminalStatus(node.status)) {
+        return;
+      }
+      const failed = nodesRepo.setStatus(deps.db, userId, nodeId, "failed", {
+        error: "this research stopped unexpectedly; try it again",
+      });
+      emit(userId, "research.node.updated", { node: failed });
+    } catch (error) {
+      logger.error({ nodeId, error }, "could not settle a node after a failed attempt");
+    }
   };
 
   const begin = (nodeId: string, userId: string, kind: "fresh" | "resume"): void => {
@@ -236,7 +261,6 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
         if (result.outcome === "rate_limited") {
           settleRateLimited(userId, nodeId);
         } else {
-          requeues.delete(nodeId);
           queueRepo.release(deps.db, nodeId);
         }
         if (result.outcome === "complete") {
@@ -251,6 +275,12 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
       .catch((error: unknown) => {
         logger.error({ nodeId, error }, "run attempt threw");
         queueRepo.release(deps.db, nodeId);
+        // The loop settles the node on every failure it knows about; this is
+        // the one it does not. A throw past its own handlers — a SQLite write
+        // that failed while the last turn was being committed, most likely —
+        // would otherwise leave the node `running` with nothing left to move
+        // it, until a restart reconciled it hours later.
+        settleUnhandled(nodeId, userId);
       })
       .finally(() => {
         active.delete(nodeId);
@@ -351,8 +381,8 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
       return candidate;
     },
 
-    recallRecapCandidate(id) {
-      return metadata.recallRecapCandidate(id);
+    recallRecapCandidate(userId, id) {
+      return metadata.recallRecapCandidate(userId, id);
     },
 
     async tick() {
@@ -360,11 +390,16 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
         return;
       }
       // One claim round at a time: two overlapping rounds would each see the
-      // other's un-started claims as free capacity.
+      // other's un-started claims as free capacity. A wake-up that arrives
+      // mid-round is remembered rather than dropped — the round may already
+      // have read the queue by then, and without the flag the node would wait
+      // for the interval, or forever where there is no interval.
       if (ticking) {
+        tickAgain = true;
         await ticking;
         return;
       }
+      tickAgain = false;
       ticking = (async () => {
         const claimed = queueRepo.claim(deps.db, {
           pool: "research",
@@ -392,7 +427,9 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
               .filter((attempt) => attempt.kind === "resume").length;
             if (resumesSoFar >= MAX_AUTO_RESUMES) {
               logger.warn({ nodeId: node.id }, "auto-resume gave up; leaving it interrupted");
-              queueRepo.release(deps.db, node.id);
+              // The flag goes with the queue row: left set, every later boot
+              // would re-queue a node the runtime has already given up on.
+              nodesRepo.clearResumePending(deps.db, run.userId, node.id);
               continue;
             }
             const resumed = nodesRepo.resumeAttempt(deps.db, run.userId, node.id);
@@ -420,6 +457,9 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
           ticking = null;
         });
       await ticking;
+      if (tickAgain && !draining) {
+        await service.tick();
+      }
     },
 
     async idle() {
@@ -430,6 +470,11 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
 
     async drain() {
       draining = true;
+      tickAgain = false;
+      // A claim round that was already past its `draining` check can still be
+      // starting attempts; they have to be in `active` before it is read, or
+      // the process would exit with a stream open and a node left `running`.
+      await ticking?.catch(() => undefined);
       const open = [...active.values()];
       for (const run of open) {
         run.controller.abort();

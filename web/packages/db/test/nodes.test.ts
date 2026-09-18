@@ -314,3 +314,83 @@ test("a boot re-queue with no queue row records the model's provider", (t) => {
   t.is(row.provider, "vertex", "the per-provider cap keys on the provider, not the model id");
   t.is(row.enqueued_at, 0, "a resume goes to the head of the queue");
 });
+
+test("giving up on auto-resume stops the node being re-queued on every boot", (t) => {
+  const fixture = createFixture(t);
+  const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    prompt: "Root",
+    model: "gemini-flash",
+  });
+  const rootId = detail.tree.rootNodeId;
+  nodes.setStatus(fixture.db, fixture.userId, rootId, "running");
+  nodes.markInterrupted(fixture.db, fixture.userId, rootId);
+  t.deepEqual(nodes.reconcileOnBoot(fixture.db).requeuedNodeIds, [rootId]);
+
+  nodes.clearResumePending(fixture.db, fixture.userId, rootId);
+  t.is(
+    fixture.db.$client.prepare(`SELECT 1 FROM run_queue WHERE node_id = ?`).get(rootId),
+    undefined,
+    "the queue row goes with the flag",
+  );
+  t.is(
+    nodes.get(fixture.db, fixture.userId, rootId)?.status,
+    "interrupted",
+    "the node keeps its status and its partial output for Retry",
+  );
+  t.deepEqual(nodes.reconcileOnBoot(fixture.db).requeuedNodeIds, [], "no later boot re-queues it");
+});
+
+test("a rate-limited re-queue opens a new attempt so the old row survives", (t) => {
+  const fixture = createFixture(t);
+  const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    prompt: "Root",
+    model: "gemini-flash",
+  });
+  const rootId = detail.tree.rootNodeId;
+  nodes.setStatus(fixture.db, fixture.userId, rootId, "running");
+  runs.startAttempt(fixture.db, {
+    nodeId: rootId,
+    attempt: 1,
+    kind: "fresh",
+    model: "gemini-flash",
+  });
+  runs.finishAttempt(fixture.db, { nodeId: rootId, attempt: 1, outcome: "rate_limited" });
+  runs.commitTurn(fixture.db, fixture.userId, {
+    nodeId: rootId,
+    turn: answerTurn(rootId, "a partial the retry will not reuse", "turn-1"),
+  });
+  const seqOf = (): number =>
+    (
+      fixture.db.$client.prepare(`SELECT run_seq FROM nodes WHERE id = ?`).get(rootId) as {
+        run_seq: number;
+      }
+    ).run_seq;
+  const before = seqOf();
+
+  const requeued = nodes.requeueAfterRateLimit(fixture.db, fixture.userId, rootId);
+  t.is(requeued.status, "queued");
+  t.is(requeued.attempt, 2);
+  t.is(requeued.startedAt ?? null, null, "the new attempt has not started");
+
+  // The next attempt writes under attempt 2, so the throttled row is still
+  // there to count the backoff from after a restart.
+  runs.startAttempt(fixture.db, {
+    nodeId: rootId,
+    attempt: 2,
+    kind: "fresh",
+    model: "gemini-flash",
+  });
+  t.deepEqual(
+    runs.listAttempts(fixture.db, rootId).map((attempt) => attempt.outcome),
+    ["rate_limited", null],
+  );
+  t.deepEqual(runs.liveWindow(fixture.db, fixture.userId, rootId).turns, []);
+  t.true(seqOf() > before, "the sequence counter moves forward rather than rewinding");
+
+  nodes.setStatus(fixture.db, fixture.userId, rootId, "cancelled");
+  t.throws(() => nodes.requeueAfterRateLimit(fixture.db, fixture.userId, rootId), {
+    message: /already finished as cancelled/,
+  });
+});

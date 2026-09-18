@@ -5,6 +5,8 @@ import { encyclopedia, nodes as nodesRepo, snapshots as snapshotsRepo, usage } f
 import { MIN_RECAP_CHARS, normalizeRecap, recapJobKey } from "@session/shared";
 import test from "ava";
 
+import { setFixtureScenario } from "../src/runs/fixtureProvider.js";
+
 import { answerTurn, createHarness } from "./helpers.js";
 import { collectEvents, createAgentHarness } from "./runsHelpers.js";
 
@@ -195,4 +197,26 @@ test.serial("the noop service reports that metadata runs are unavailable", async
   );
   // The title falls back to what the node already has.
   t.is(typeof (await caller.research.generateTitle({ nodeId })), "string");
+});
+
+test.serial("a grounded run records the searches the provider billed", async (t) => {
+  setFixtureScenario("grounded");
+  const harness = createAgentHarness(t);
+  const user = harness.addUser("grounded");
+  const caller = harness.caller(user);
+  const workspace = await caller.workspaces.ensureDefault();
+  const detail = await caller.research.createTree({
+    prompt: "What is the Kessler syndrome?",
+    model: "gemini-flash-google",
+    workspaceId: workspace.id,
+  });
+  await harness.settle();
+  t.is(nodesRepo.get(harness.db, user.id, detail.nodes[0]?.id ?? "")?.status, "complete");
+
+  // Two `webSearchQueries`, billed per query, with no owned tool involved
+  // (`04-agent-runtime.md` §6.2).
+  const searches = harness.db.$client
+    .prepare(`SELECT count(*) AS n FROM usage_events WHERE user_id = ? AND kind = 'search'`)
+    .get(user.id) as { n: number };
+  t.is(searches.n, 2);
 });
