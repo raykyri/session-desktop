@@ -12,8 +12,10 @@ processes so commands, generated hooks, event listeners, and environment variabl
 come from the same build. Old executable and environment aliases are not supported.
 
 Rename app-owned `QMUX_*` settings to `SESSION_*` in local build configuration,
-external scripts, and deployment secrets. Examples include `SESSION_CONFIG`,
-`SESSION_BUILD_TARGET` and `SESSION_PUBLIC_ORIGIN`. The app supplies fresh
+external scripts, and deployment secrets. Examples include `SESSION_CONFIG` and
+`SESSION_BUILD_TARGET`. `SESSION_PUBLIC_ORIGIN` now configures the web
+application at `https://session.dev` (`web/.env.example`), not a landing page.
+The app supplies fresh
 `SESSION_SOCK`, `SESSION_TOKEN`, `SESSION_CLI`, and pane/agent variables to children;
 do not copy credentials from an old process. Inherited Session context is cleared
 before fresh pane credentials are installed.
@@ -44,10 +46,12 @@ builds that omit those artifacts.
   Session names. Generated hooks, profiles, plugin files, remote tmux identities,
   SSH control paths, and browser automation profiles also use Session prefixes.
   No legacy values or paths are read or migrated.
-- The updater public/private key identity, `qmux.app`, and the Fly app name remain
-  separate deployment contracts. The updater endpoint, release download URLs,
-  landing-page source link, and release script now use `aka-com/session`.
-  Existing builds continue to request the endpoint embedded in those builds.
+- The updater public/private key identity remains a separate deployment contract.
+  The updater endpoint, release download URLs, and release script use
+  `aka-com/session`. Existing builds continue to request the endpoint embedded in
+  those builds. The former `qmux.app` landing-page origin and its Fly app name are
+  no longer deployment contracts: the landing site is removed and the web
+  application in `web/` is deployed on its own Fly app at `https://session.dev`.
 
 ## Native support after terminal removal
 

@@ -48,13 +48,13 @@ function sourceFilesIn(directory) {
 
 function main() {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-  const sources = ["src", "web"].flatMap((directory) => sourceFilesIn(resolve(root, directory)));
-  const tests = ["tests", "web"].flatMap((directory) => sourceFilesIn(resolve(root, directory)))
+  const sources = ["src"].flatMap((directory) => sourceFilesIn(resolve(root, directory)));
+  const tests = ["tests"].flatMap((directory) => sourceFilesIn(resolve(root, directory)))
     .filter((file) => /\.test\.tsx?$/.test(file));
-  // The application and separately bundled website are runtime roots.
+  // The application entrypoint is the runtime root.
   // Tests are deliberate roots too: helpers supporting independent contracts
   // should not be deleted merely because the current UI does not import them.
-  const roots = ["src/main.tsx", "web/server.tsx"]
+  const roots = ["src/main.tsx"]
     .map((file) => resolve(root, file));
   const configPath = resolve(root, "tsconfig.json");
   const config = ts.readConfigFile(configPath, ts.sys.readFile);
@@ -67,7 +67,7 @@ function main() {
   }));
   const unused = unreachableModules([...new Set([...sources, ...tests])], [...roots, ...tests], parsed.options);
   if (unused.length > 0) {
-    process.stderr.write(`Modules unreachable from app, browser, website, or tests:\n${unused.map((file) => `  ${relative(root, file)}`).join("\n")}\n`);
+    process.stderr.write(`Modules unreachable from app, browser, or tests:\n${unused.map((file) => `  ${relative(root, file)}`).join("\n")}\n`);
     process.exitCode = 1;
   } else {
     process.stdout.write("All first-party TypeScript modules are reachable from an entrypoint or test.\n");

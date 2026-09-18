@@ -58,23 +58,38 @@ npm run preflight
 npm run build
 ```
 
-`npm run preflight` is shared with the release script. It checks frontend/server
+`npm run preflight` is shared with the release script. It checks frontend
 TypeScript (including unused symbols), module reachability, Rust formatting, and
-all unit, server integration, and Rust tests. For a faster frontend-only check, use
+all unit and Rust tests. For a faster frontend-only check, use
 `npm run check:types` and `npm run test:unit`.
 
 Use `npm run test:node -- tests/example.test.ts` for focused TypeScript tests.
-This runner and `dev:site` share `tsconfig.runtime.json`, so JSX uses the same
-automatic React transform as the builds. The module reachability check recognizes
-the app entrypoint, the website server, and tests, including literal lazy imports
-and type-only imports; it does not audit Rust command registration or unused exports
-inside otherwise reachable modules.
+The runner uses `tsconfig.runtime.json`, so JSX uses the same automatic React
+transform as the builds. The module reachability check recognizes the app
+entrypoint and tests, including literal lazy imports and type-only imports; it
+does not audit Rust command registration or unused exports inside otherwise
+reachable modules.
 
 The Tauri product name is `Session`; the executable is `session`, with standalone
 `session-cli` and shared `session-proto` crates. Apple bundle/Keychain identity,
 signing keys, native bridge symbols, and existing data paths remain unchanged.
 See [docs/session-cutover.md](docs/session-cutover.md) for environment changes and
 restart/deployment requirements.
+
+## Web application
+
+`web/` holds the Session web application: an npm workspaces root with
+`packages/shared`, `packages/db`, `packages/server`, and `packages/client`. It
+is developed and checked independently of the desktop app:
+
+```sh
+cd web
+npm install
+npm run check && npm test
+```
+
+Plans and specifications are in [web/docs](web/docs), starting with
+[web/docs/00-plan.md](web/docs/00-plan.md).
 
 ## Keyboard shortcuts
 
