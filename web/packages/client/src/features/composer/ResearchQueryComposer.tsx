@@ -39,6 +39,7 @@ import {
 import { Menu, MenuItem } from "../../ui/Menu.js";
 import { FORM_FIELD } from "../../ui/surfaces.js";
 
+import { oversizeRefusal } from "./limits.js";
 import { ModelIcon } from "./modelIcon.js";
 
 /** A prompt that is nothing but one web URL is a link to keep, not a question
@@ -282,10 +283,18 @@ export function ResearchQueryComposer({ workspaceId }: { workspaceId: string }) 
 
   async function submit() {
     if (!canSubmit || !selected) return;
+    const link = bareUrl(prompt);
+    // The same ceilings the report import applies, refused with the same
+    // sentence (`features/composer/limits.ts`). A bare URL is a link to keep
+    // rather than text to send, so it is not measured against them.
+    const refusal = link ? null : oversizeRefusal(prompt.trim(), "question");
+    if (refusal) {
+      setError(refusal);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      const link = bareUrl(prompt);
       if (link) {
         // A bare URL is a journal entry, not a run. The feed is keyset
         // paginated, so the new row arrives through a refetch rather than a

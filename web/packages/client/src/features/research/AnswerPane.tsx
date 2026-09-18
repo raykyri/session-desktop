@@ -22,6 +22,7 @@ import { Menu } from "../../ui/Menu.js";
 
 import { SourcesFooter } from "./SourcesFooter.js";
 import { TimelineItem } from "./TimelineItem.js";
+import { RESPONSE_ROOT_ATTRIBUTE } from "./selection/dom.js";
 import { answerEmptyStateText } from "./timeline.js";
 import type { SegmentView } from "./timeline.js";
 
@@ -221,7 +222,7 @@ export const AnswerPane = memo(function AnswerPane({
               {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
               <div
                 ref={registerRoot}
-                data-node-id={node.id}
+                {...{ [RESPONSE_ROOT_ATTRIBUTE]: node.id }}
                 className={cn(
                   // `relative` is the fallback highlight layer's positioning
                   // context (`selection/painting.ts`).

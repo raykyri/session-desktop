@@ -21,6 +21,23 @@ export const NON_TEXT_ROW_SELECTOR = ".tool-block, .thinking-block, .activity-gr
  * one message and to find the seams between them. */
 export const RESPONSE_MESSAGE_CLASS = "research-response-message";
 
+/**
+ * Marks the one element whose `textContent` *is* the `answer-v1` projection.
+ *
+ * It is not `data-node-id`: that attribute is on the segment grid, on the rail
+ * and on every branch card as well, so a `closest()` walk from a selection that
+ * strayed outside the answer would find one of those and measure an anchor
+ * against text no anchor can be resolved in. This attribute is on the response
+ * content root and nowhere else, and its value is the node id.
+ */
+export const RESPONSE_ROOT_ATTRIBUTE = "data-research-response-root";
+export const RESPONSE_ROOT_SELECTOR = `[${RESPONSE_ROOT_ATTRIBUTE}]`;
+
+/** The node a response root belongs to, or null when the element is not one. */
+export function responseRootNodeId(root: HTMLElement | null | undefined): string | null {
+  return root?.getAttribute(RESPONSE_ROOT_ATTRIBUTE) || null;
+}
+
 export function textNodesWithin(root: HTMLElement): Text[] {
   const nodes: Text[] = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);

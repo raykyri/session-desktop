@@ -67,13 +67,17 @@ export function researchSources(turns: readonly Turn[]): ResearchSourceList {
   const add = (rawUrl: unknown, rawTitle: unknown, fetched: boolean) => {
     const url = safeHref(rawUrl);
     if (!url) return;
-    const title = typeof rawTitle === "string" && rawTitle.trim() ? rawTitle.trim() : domainOf(url);
+    const named = typeof rawTitle === "string" && rawTitle.trim() ? rawTitle.trim() : null;
     const existing = byUrl.get(url);
     if (existing) {
-      if (fetched && !existing.fetched) byUrl.set(url, { ...existing, title, fetched: true });
+      // A fetch promotes the row, but an untitled fetch of a page search
+      // already named must not replace that name with a bare domain.
+      if (fetched && !existing.fetched) {
+        byUrl.set(url, { ...existing, title: named ?? existing.title, fetched: true });
+      }
       return;
     }
-    byUrl.set(url, { url, title, domain: domainOf(url), fetched });
+    byUrl.set(url, { url, title: named ?? domainOf(url), domain: domainOf(url), fetched });
   };
 
   // Tool results arrive in later turns than the calls they answer, so the

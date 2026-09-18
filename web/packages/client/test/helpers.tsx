@@ -74,12 +74,14 @@ export async function renderApp(
 
   // The app's defaults plus `gcTime: Infinity`, which is what keeps a cache
   // out of Node's timer queue: any finite value schedules a five-minute
-  // collection per query, and AVA waits for it before exiting.
+  // collection per query — and per settled mutation — and AVA waits for it
+  // before exiting.
   const queryClient =
     options.queryClient ??
     new QueryClient({
       defaultOptions: {
         queries: { ...queryClientDefaults.queries, gcTime: Number.POSITIVE_INFINITY },
+        mutations: { gcTime: Number.POSITIVE_INFINITY },
       },
     });
   // The guard reads `auth.me` through the cache; seeding it keeps the first

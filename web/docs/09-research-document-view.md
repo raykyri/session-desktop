@@ -115,10 +115,12 @@ Web:
   while SSE is down.
 - `fetchStamp` (`${status}:${responseSnapshotAt}:${recap.id}`) is replaced by
   query invalidation keyed on those fields in the event bridge.
-- Highlight mutations (`highlights.create/remove/removeMany`) update the
-  `tree` cache node's `highlights` optimistically (`patchNodeHighlights`
-  logic, `:4073`) and reconcile from the returned value; create-then-remove
-  ordering for Expand is preserved (`:4134`).
+- Highlight mutations (`highlights.create/remove/removeMany`) write the
+  returned value into the `tree` cache node's `highlights`
+  (`patchNodeHighlights` logic, `:4073`); the write is confirmed rather than
+  optimistic, because a passage is painted from its stored id and a
+  provisional one would stack with the real highlight in the overlap layer for
+  a frame. Create-then-remove ordering for Expand is preserved (`:4134`).
 - Mutations owned by the page (previously props from `App.tsx`):
   `research.forkNode`, `cancelNode`, `retryNode`, `renameTree`,
   `renameNode`, `removeBranch`, `removeTree`, `setTreeFollowed`,
@@ -184,10 +186,17 @@ and the DOM glue in `features/research/selection/`:
     `max(72px, height/3)` from the top; then clear the param.
 
 Browser support: the Custom Highlight API is available in Chromium, Safari,
-and Firefox ≥ 140. When absent, selection still works but painting falls
-back to `<mark>`-wrapping of resolved ranges for saved highlights only
-(a small new module; the desktop had no fallback because WKWebView always
-had the API).
+and Firefox ≥ 140. When absent, selection still works but saved highlights —
+and only those; the transient layers repaint far too often to pay for it — are
+painted by a fallback layer (a small new module; the desktop had no fallback
+because WKWebView always had the API). The layer is one absolutely positioned
+element appended after everything the renderer produced, holding one box per
+client rect of each resolved range. Wrapping the ranges in `<mark>` is not
+available: the ranges sit inside DOM React owns, and moving a text node into a
+wrapper leaves React holding a node whose recorded parent no longer matches.
+The layer contributes no text, so the `answer-v1` projection is identical with
+and without it, and it is repainted on the same reflow nonce the geometry
+passes use.
 
 ## 6. Navigation within the document
 

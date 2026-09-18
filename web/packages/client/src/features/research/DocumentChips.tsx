@@ -9,7 +9,10 @@
 //
 // The window is opened before the mint resolves and navigated afterwards: a
 // popup opened inside an await is not a user gesture any more, and every
-// browser blocks it.
+// browser blocks it. That is also why the placeholder is opened without
+// `noopener`: `window.open` returns null whenever `noopener` or `noreferrer` is
+// in the feature string, and a null handle is a handle this cannot navigate.
+// The reverse reference is severed on the handle instead.
 
 import { FileText } from "lucide-react";
 import { useState } from "react";
@@ -29,7 +32,8 @@ export function DocumentChips({
   const byId = new Map((documents.data ?? []).map((document) => [document.id, document]));
 
   const open = (documentId: string) => {
-    const tab = window.open("", "_blank", "noopener,noreferrer");
+    const tab = window.open("about:blank", "_blank");
+    if (tab) tab.opener = null;
     mintArtifactToken(documentId)
       .then(({ url }) => {
         if (tab) tab.location.href = url;

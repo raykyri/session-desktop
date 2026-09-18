@@ -5,6 +5,7 @@
 // with no wrapper chrome of its own, so a feed of posts reads as posts rather
 // than as posts framed inside content items (`journal.css:1-5`).
 
+import { safeHref } from "@session/shared";
 import type { JournalEntry } from "@session/shared";
 import { Copy, ExternalLink, LoaderCircle, MoreHorizontal, RotateCw, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -60,9 +61,14 @@ export function JournalEntryMenuItems({
 }
 
 function EntryLink({ url }: { url: string }) {
+  // The stored URL reaches an `href` here, and a restored entry's URL was never
+  // re-validated by the server, so it renders as a link only if `safeHref`
+  // accepts it and as plain text otherwise.
+  const safe = safeHref(url);
+  if (!safe) return <span className="text-fg-muted break-all">{url}</span>;
   return (
     <a
-      href={url}
+      href={safe}
       className="text-fg-link-external break-all underline-offset-2 hover:underline"
       {...EXTERNAL}
       onClick={(event) => event.stopPropagation()}

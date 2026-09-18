@@ -141,6 +141,17 @@ test("a hydrated post's canonical permalink is what the menu acts on", (t) => {
   );
 });
 
+test("an entry whose stored URL is not navigable has nothing to open", (t) => {
+  // `journal.add` only stores web URLs, but `journal.restore` takes a whole
+  // entry from the client, so the renderer gates the stored URL itself.
+  const hostile = { ...linkEntry(), url: "javascript:alert(1)" };
+  t.is(journalEntryUrl(hostile), null);
+  t.deepEqual(
+    journalEntryMenuItems(hostile).map((item) => item.action),
+    ["copy", "delete"],
+  );
+});
+
 const feedResponses = (page: unknown) => ({
   "workspaces.list": [workspace()],
   "settings.get": serverSettings(),
@@ -232,6 +243,46 @@ test.serial("removing a journal entry offers an undo that restores the same row"
       }
     ).entry.id,
     "j1",
+  );
+  app.unmount();
+});
+
+test.serial("a card's menu writes the star it offers, and offers no folder row", async (t) => {
+  useNavigationStore.setState({ feedAnchorByView: {} });
+  const app = await renderApp("/bookmarks", {
+    queryClient: testQueryClient(),
+    responses: {
+      ...feedResponses(activityPage([queryItem(researchQuery())])),
+      "folders.set": { folders: [], membership: {}, starred: ["t1"], collapsed: [] },
+    },
+  });
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByText("What is collective memory?").length > 0,
+    "the research card is on the feed",
+  );
+  fireEvent.contextMenu(screen.getByText("What is collective memory?"));
+  await waitUntil(t, () => screen.queryAllByRole("menu").length > 0, "its menu opens");
+  const menu = screen.getAllByRole("menu").at(-1) as HTMLElement;
+  // The feed has no folder dialog, so the two rows that would need one are not
+  // offered here rather than offered and inert.
+  t.is(within(menu).queryByText("New folder with item"), null);
+  t.is(within(menu).queryByText("Remove from folder"), null);
+
+  fireEvent.click(within(menu).getByText("Star"));
+  await waitUntil(
+    t,
+    () => app.trpc.calls.some((call) => call.path === "folders.set"),
+    "starring from the feed is the same folder write the sidebar makes",
+  );
+  t.deepEqual(
+    (
+      app.trpc.calls.find((call) => call.path === "folders.set")?.input as {
+        state: { starred: string[] };
+      }
+    ).state.starred,
+    ["t1"],
   );
   app.unmount();
 });

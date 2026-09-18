@@ -24,7 +24,7 @@ import type { ResearchHighlightAnchor, ResearchNode } from "@session/shared";
 import { useNavigate, useParams, useRouter, useSearch } from "@tanstack/react-router";
 import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import {
   useCancelResearchNode,
@@ -60,6 +60,7 @@ import { SelectionPopover } from "./SelectionPopover.js";
 import { ThreadSegment } from "./ThreadSegment.js";
 import type { PublishedSegment, SegmentElementKind } from "./ThreadSegment.js";
 import { RESEARCH_ANSWER_MAX_WIDTH } from "./layout.js";
+import type { SegmentConnector } from "./layout.js";
 import { useHighlightMutations, useUpdateResearchDocument } from "./mutations.js";
 import type { CapturedResearchSelection } from "./selection/capture.js";
 import { isEditableEventTarget, rangeForTextOffsets } from "./selection/dom.js";
@@ -73,6 +74,63 @@ const SCROLL_RECORD_DEBOUNCE_MS = 250;
 /** One identity for "the tree has not arrived yet", so the memos below do not
  * rebuild on every render while it is loading. */
 const NO_NODES: ResearchNode[] = [];
+/** One identity for "this segment has nothing unread", for the same reason:
+ * `ThreadSegment` and its rail are memoized on their props. */
+const NO_UNREAD: ReadonlySet<string> = new Set<string>();
+/** Same again for the two "nothing here" lists a segment can be handed. A `??
+ * []` in the render would be a new array per render and per segment, which is
+ * all it takes for a memo to never hold. */
+const NO_CONNECTORS: SegmentConnector[] = [];
+const NO_CHILDREN: ResearchNode[] = [];
+
+/**
+ * What one node's menu renders, reduced to the seven answers that decide it.
+ *
+ * The rows are a prop of a memoized pane, and they are built from this rather
+ * than from the node and segment objects on purpose: those are replaced by
+ * every research event — up to twice a second while a run streams — while
+ * these answers change perhaps twice in a whole run. Encoding them as a string
+ * is what lets the memo below take one primitive dependency and still be a
+ * pure function of everything it reads (09 §4).
+ *
+ * Everything the rows need at *click* time — the document's markdown, the
+ * tree's current title, the node's highlight ids — is deliberately absent:
+ * those are read from the latest-values ref when the row is pressed, so a menu
+ * that was built a commit ago cannot act on a stale title.
+ */
+interface NodeMenuRowSpec {
+  nodeId: string;
+  copyThread: boolean;
+  retry: boolean;
+  retryDisabled: boolean;
+  regenerate: boolean;
+  editDocument: boolean;
+  editDisabled: boolean;
+  isRoot: boolean;
+}
+
+const MENU_ROW_SEPARATOR = "\u0001";
+
+function encodeNodeMenuRow(nodeId: string, flags: readonly boolean[]): string {
+  return `${nodeId}${MENU_ROW_SEPARATOR}${flags.map((flag) => (flag ? "1" : "0")).join("")}`;
+}
+
+function decodeNodeMenuRow(encoded: string): NodeMenuRowSpec | null {
+  const separator = encoded.lastIndexOf(MENU_ROW_SEPARATOR);
+  if (separator < 0) return null;
+  const flags = encoded.slice(separator + 1);
+  const at = (index: number) => flags[index] === "1";
+  return {
+    nodeId: encoded.slice(0, separator),
+    copyThread: at(0),
+    retry: at(1),
+    retryDisabled: at(2),
+    regenerate: at(3),
+    editDocument: at(4),
+    editDisabled: at(5),
+    isRoot: at(6),
+  };
+}
 /** Reserved width for the selection popover; the Expand action makes it wider. */
 const POPOVER_WIDTH = 260;
 const POPOVER_WIDTH_WITH_EXPAND = 340;
@@ -267,6 +325,20 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     for (const id of chainNodeIds) map[id] = nodesById.get(id)?.highlights ?? [];
     return map;
   }, [chainNodeIds, nodesById]);
+
+  // Built once per chain rather than per render: a fresh `Set` per segment per
+  // render would defeat the rail's memo, and the rail re-renders every card —
+  // each with a Markdown preview — when it is not memoized.
+  const unreadIdsBySegment = useMemo(() => {
+    const map = new Map<string, ReadonlySet<string>>();
+    for (const segmentId of chainNodeIds) {
+      const unread = (childrenBySegment.get(segmentId) ?? [])
+        .filter((child) => child.status === "complete" && !openedFollowupIds.has(child.id))
+        .map((child) => child.id);
+      map.set(segmentId, unread.length === 0 ? NO_UNREAD : new Set(unread));
+    }
+    return map;
+  }, [chainNodeIds, childrenBySegment, openedFollowupIds]);
 
   const anchoredEntries = useMemo<AnchoredEntry[]>(() => {
     const entries: AnchoredEntry[] = [];
@@ -528,6 +600,28 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   // navigation, so it lands a render or two later; without the latch the pass
   // runs again in between and scrolls a second time.
   const focusedHighlightRef = useRef<string | null>(null);
+
+  // `useMutation` builds a fresh result object on every render, so a callback
+  // that depends on one is a callback with a new identity on every render — and
+  // every such callback handed to a memoized segment defeats its memo. The
+  // entry points themselves are bound once per observer, so they are what the
+  // callbacks below depend on.
+  const forkMutate = fork.mutateAsync;
+  const cancelMutate = cancelNode.mutateAsync;
+  const retryMutate = retryNode.mutateAsync;
+  const removeBranchMutate = removeBranch.mutateAsync;
+  const removeTreeMutate = removeTree.mutateAsync;
+  const setFollowedMutate = setFollowed.mutate;
+  const setBookmarkedMutate = setBookmarked.mutate;
+
+  // What a click acts on is what is on screen when it happens, not what was on
+  // screen when its callback was created. Reading these through a ref is what
+  // lets every handler below be created once: the alternative is a new closure
+  // per streamed delta, which is the same memo break by another route (09 §4).
+  const latestRef = useRef({ detail, segments, chainNodes, nodesById });
+  useEffect(() => {
+    latestRef.current = { detail, segments, chainNodes, nodesById };
+  });
 
   const recordScrollNow = useCallback(() => {
     const scroller = scrollerRef.current;
@@ -791,14 +885,13 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       const inline = !ask && submissionMode === "thread";
       if (inline && !canContinueThread(nodes, target)) return;
       setSubmitting(true);
-      fork
-        .mutateAsync({
-          parentNodeId: target.id,
-          prompt,
-          model: composerModel,
-          queryAnchor: ask?.anchor ?? null,
-          inline,
-        })
+      forkMutate({
+        parentNodeId: target.id,
+        prompt,
+        model: composerModel,
+        queryAnchor: ask?.anchor ?? null,
+        inline,
+      })
         .then((child) => {
           setFollowup("");
           setAsk(null);
@@ -815,7 +908,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       composerModel,
       detail,
       followup,
-      fork,
+      forkMutate,
       lastCompleteChainNode,
       mode,
       nodes,
@@ -830,40 +923,42 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   const handleCancel = useCallback(
     (nodeId: string) => {
       setCancelling(true);
-      cancelNode
-        .mutateAsync(nodeId)
+      cancelMutate(nodeId)
         .catch((error: unknown) => toast(errorMessage(error), "warning"))
         .finally(() => setCancelling(false));
     },
-    [cancelNode, toast],
+    [cancelMutate, toast],
   );
 
   const handleRetry = useCallback(
     (nodeId: string) => {
       // The clicked control disables itself, but a second control for the same
       // node (the composer's Retry beside the menu's) fires before that lands.
+      // This identity changes when a retry starts or settles, which is also
+      // when the menu rows' own `retryDisabled` flips — one re-render, not one
+      // per delta.
       if (retryingNodeId !== null) return;
       setRetryingNodeId(nodeId);
-      retryNode
-        .mutateAsync({ nodeId })
+      retryMutate({ nodeId })
         .catch((error: unknown) => toast(errorMessage(error), "warning"))
         .finally(() => setRetryingNodeId((current) => (current === nodeId ? null : current)));
     },
-    [retryNode, retryingNodeId, toast],
+    [retryMutate, retryingNodeId, toast],
   );
 
   const copyAnswer = useCallback(
     (nodeId: string) => {
-      const text = segments[nodeId]?.rawAnswer ?? "";
+      const text = latestRef.current.segments[nodeId]?.rawAnswer ?? "";
       if (!text) return;
       writeClipboardText(text)
         .then(() => toast("Copied research answer"))
         .catch(() => toast("Couldn’t copy the research answer", "warning"));
     },
-    [segments, toast],
+    [toast],
   );
 
   const copyThread = useCallback(() => {
+    const { chainNodes, segments } = latestRef.current;
     const parts: string[] = [];
     for (const node of chainNodes) {
       const body = (segments[node.id]?.rawAnswer ?? "").trim();
@@ -879,7 +974,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     writeClipboardText(parts.join("\n\n---\n\n"))
       .then(() => toast("Copied thread"))
       .catch(() => toast("Couldn’t copy the thread", "warning"));
-  }, [chainNodes, segments, toast]);
+  }, [toast]);
 
   const confirmDelete = useCallback(() => {
     if (!deletingNodeId || !detail) return;
@@ -887,8 +982,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     const failed = (error: unknown) =>
       setDeleteError(error instanceof Error ? error.message : String(error));
     if (deletingNodeId === detail.tree.rootNodeId) {
-      removeTree
-        .mutateAsync(detail.tree.id)
+      removeTreeMutate(detail.tree.id)
         .then(() => {
           setDeletingNodeId(null);
           void navigate({ to: "/" });
@@ -896,14 +990,13 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         .catch(failed);
       return;
     }
-    removeBranch
-      .mutateAsync(deletingNodeId)
+    removeBranchMutate(deletingNodeId)
       .then((removal) => {
         setDeletingNodeId(null);
         applySelection(removal.parentNodeId);
       })
       .catch(failed);
-  }, [applySelection, deletingNodeId, detail, navigate, removeBranch, removeTree]);
+  }, [applySelection, deletingNodeId, detail, navigate, removeBranchMutate, removeTreeMutate]);
 
   /* --------------------------------------------------------------- lifecycle */
 
@@ -929,12 +1022,16 @@ function ResearchDocument({ treeId }: { treeId: string }) {
 
   /* ------------------------------------------------------------------ render */
 
+  // The detail object is replaced by every research event, so the toggles read
+  // the flag they invert at click time rather than closing over it.
   const handleToggleFollow = useCallback(() => {
-    if (detail) setFollowed.mutate({ treeId, value: !detail.tree.followed });
-  }, [detail, setFollowed, treeId]);
+    const tree = latestRef.current.detail?.tree;
+    if (tree) setFollowedMutate({ treeId, value: !tree.followed });
+  }, [setFollowedMutate, treeId]);
   const handleToggleBookmark = useCallback(() => {
-    if (detail) setBookmarked.mutate({ treeId, value: !detail.tree.bookmarked });
-  }, [detail, setBookmarked, treeId]);
+    const tree = latestRef.current.detail?.tree;
+    if (tree) setBookmarkedMutate({ treeId, value: !tree.bookmarked });
+  }, [setBookmarkedMutate, treeId]);
   const handleExpandTurns = useCallback(
     (nodeId: string) => setExpanded(nodeId, true),
     [setExpanded],
@@ -948,6 +1045,96 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     (childId: string, entering: boolean) => setLinkedAnchorId(entering ? childId : null),
     [setLinkedAnchorId],
   );
+
+  /* ------------------------------------------------------------- node menu */
+
+  const openEditSession = useCallback((nodeId: string) => {
+    // Read at click time: the markdown, the revision the edit is stamped
+    // against and the title the server checks are all values that may have
+    // moved since these rows were built.
+    const { detail, segments, nodesById } = latestRef.current;
+    const segment = segments[nodeId];
+    const node = nodesById.get(nodeId);
+    if (!detail || !node || !segment?.responseRevision) return;
+    if (segment.editableDocumentMarkdown === null) return;
+    setEditSession({
+      nodeId,
+      markdown: segment.editableDocumentMarkdown,
+      title: detail.tree.title,
+      responseRevision: segment.responseRevision,
+      highlightIds: node.highlights.map((highlight) => highlight.id),
+    });
+  }, []);
+
+  const renderNodeMenu = useCallback(
+    (spec: NodeMenuRowSpec, asContextMenu: boolean): ReactNode => {
+      const Item = asContextMenu ? ContextMenuItem : MenuItem;
+      const Separator = asContextMenu ? ContextMenuSeparator : MenuSeparator;
+      return (
+        <>
+          {spec.copyThread ? <Item onClick={copyThread}>Copy thread as Markdown</Item> : null}
+          {spec.retry ? (
+            <Item disabled={spec.retryDisabled} onClick={() => handleRetry(spec.nodeId)}>
+              Retry run
+            </Item>
+          ) : null}
+          {spec.regenerate ? (
+            <Item onClick={() => setRecapNodeId(spec.nodeId)}>Generate summary</Item>
+          ) : null}
+          {spec.editDocument ? (
+            <Item disabled={spec.editDisabled} onClick={() => openEditSession(spec.nodeId)}>
+              Edit document
+            </Item>
+          ) : null}
+          <Separator />
+          <Item tone="danger" onClick={() => setDeletingNodeId(spec.nodeId)}>
+            {spec.isRoot ? "Delete research" : "Delete"}
+          </Item>
+        </>
+      );
+    },
+    [copyThread, handleRetry, openEditSession],
+  );
+
+  // One node's rows, as the string the memo below is keyed on. Encoding is the
+  // whole point: this is the only thing the rows are built from, so a delta
+  // that leaves all seven answers alone leaves the rows' identity alone too.
+  const encodeNodeMenu = useCallback(
+    (nodeId: string): string | null => {
+      const node = nodesById.get(nodeId);
+      if (!node) return null;
+      const segment = segments[nodeId];
+      const hasRevision = Boolean(segment?.responseRevision);
+      const isRoot = nodeId === detail?.tree.rootNodeId;
+      return encodeNodeMenuRow(nodeId, [
+        chainNodeIds.includes(nodeId) && chainNodes.length > 1,
+        !archived && canRetryResearchNode(node),
+        retryingNodeId !== null,
+        !archived && hasRevision && Boolean(node.recap?.text.trim()),
+        isRoot && (node.kind ?? "run") === "document",
+        archived || !hasRevision || segment?.editableDocumentMarkdown == null,
+        isRoot,
+      ]);
+    },
+    [archived, chainNodeIds, chainNodes.length, detail, nodesById, retryingNodeId, segments],
+  );
+
+  const answerMenuSignature = chainNodeIds
+    .map((nodeId) => encodeNodeMenu(nodeId) ?? "")
+    .filter((row) => row !== "")
+    .join("\n");
+
+  // The answer panes' menus. The dependency list is honest — the rows really
+  // are a pure function of the signature and the (stable) renderer — which is
+  // what lets a memoized pane keep its menu across a streamed delta (09 §4).
+  const answerMenuByNode = useMemo(() => {
+    const map = new Map<string, ReactNode>();
+    for (const row of answerMenuSignature.split("\n")) {
+      const spec = decodeNodeMenuRow(row);
+      if (spec) map.set(spec.nodeId, renderNodeMenu(spec, false));
+    }
+    return map;
+  }, [answerMenuSignature, renderNodeMenu]);
 
   if (!detail || !selectedNodeId) {
     return (
@@ -970,54 +1157,13 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     0,
   );
 
-  const nodeMenuRows = (nodeId: string, asContextMenu: boolean) => {
-    const node = nodesById.get(nodeId);
-    if (!node) return null;
-    const Item = asContextMenu ? ContextMenuItem : MenuItem;
-    const Separator = asContextMenu ? ContextMenuSeparator : MenuSeparator;
-    const segment = segments[nodeId];
-    const isRoot = nodeId === detail.tree.rootNodeId;
-    const canRegenerate = Boolean(
-      !archived && segment?.responseRevision && node.recap?.text.trim(),
-    );
-    return (
-      <>
-        {chainNodeIds.includes(nodeId) && chainNodes.length > 1 ? (
-          <Item onClick={copyThread}>Copy thread as Markdown</Item>
-        ) : null}
-        {!archived && canRetryResearchNode(node) ? (
-          <Item disabled={retryingNodeId !== null} onClick={() => handleRetry(nodeId)}>
-            Retry run
-          </Item>
-        ) : null}
-        {canRegenerate ? (
-          <Item onClick={() => setRecapNodeId(nodeId)}>Generate summary</Item>
-        ) : null}
-        {isRoot && (node.kind ?? "run") === "document" ? (
-          <Item
-            disabled={
-              archived || !segment?.responseRevision || segment.editableDocumentMarkdown === null
-            }
-            onClick={() => {
-              if (!segment?.responseRevision || segment.editableDocumentMarkdown === null) return;
-              setEditSession({
-                nodeId,
-                markdown: segment.editableDocumentMarkdown,
-                title: detail.tree.title,
-                responseRevision: segment.responseRevision,
-                highlightIds: node.highlights.map((highlight) => highlight.id),
-              });
-            }}
-          >
-            Edit document
-          </Item>
-        ) : null}
-        <Separator />
-        <Item tone="danger" onClick={() => setDeletingNodeId(nodeId)}>
-          {isRoot ? "Delete research" : "Delete"}
-        </Item>
-      </>
-    );
+  // The right-click menu can address a branch card, which is not on this page's
+  // chain, so it builds its rows on demand rather than reading the map above.
+  // Nothing memoized takes them as a prop, so there is nothing to keep stable.
+  const contextMenuRows = (nodeId: string): ReactNode => {
+    const encoded = encodeNodeMenu(nodeId);
+    const spec = encoded === null ? null : decodeNodeMenuRow(encoded);
+    return spec ? renderNodeMenu(spec, true) : null;
   };
 
   const composer = (docked: boolean) => (
@@ -1105,17 +1251,12 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         >
           {chainNodes.map((node, index) => {
             const previous = chainNodes[index - 1];
-            const unreadIds = new Set(
-              (childrenBySegment.get(node.id) ?? [])
-                .filter((child) => child.status === "complete" && !openedFollowupIds.has(child.id))
-                .map((child) => child.id),
-            );
             const linked = annotations.linkedAnchorId;
             return (
               <ContextMenu
                 key={node.id}
                 label="Research actions"
-                items={nodeMenuRows(menuNodeId ?? node.id, true)}
+                items={contextMenuRows(menuNodeId ?? node.id)}
               >
                 <div
                   onContextMenuCapture={(event) => {
@@ -1153,9 +1294,9 @@ function ResearchDocument({ treeId }: { treeId: string }) {
                         ? linked
                         : null
                     }
-                    connectors={annotations.connectorsBySegment.get(node.id) ?? []}
-                    segmentChildren={childrenBySegment.get(node.id) ?? []}
-                    unreadIds={unreadIds}
+                    connectors={annotations.connectorsBySegment.get(node.id) ?? NO_CONNECTORS}
+                    segmentChildren={childrenBySegment.get(node.id) ?? NO_CHILDREN}
+                    unreadIds={unreadIdsBySegment.get(node.id) ?? NO_UNREAD}
                     anchoredCardTops={annotations.anchoredCardTops}
                     resolvedCardTops={annotations.resolvedCardTops}
                     showRunControls={
@@ -1165,7 +1306,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
                     canRetryNode={!archived && canRetryResearchNode(node)}
                     retryingNode={retryingNodeId === node.id}
                     askComposer={ask?.nodeId === node.id ? composer(true) : null}
-                    answerMenuItems={nodeMenuRows(node.id, false)}
+                    answerMenuItems={answerMenuByNode.get(node.id) ?? null}
                     registerElement={registerElement}
                     publish={publish}
                     onToggleFollow={handleToggleFollow}

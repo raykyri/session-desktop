@@ -12,6 +12,7 @@ import {
   buildRecentActivityFromItems,
   normalizeJournalEntry,
   recentActivityItemId,
+  toggleResearchStar,
 } from "@session/shared";
 import type {
   JournalEntry,
@@ -55,6 +56,7 @@ import { JournalEntryCard } from "../journal/JournalEntryCard.js";
 import { journalEntryUrl, type JournalMenuAction } from "../journal/entryMenu.js";
 import { RecapDialog } from "../research/RecapDialog.js";
 import { DeleteTreeDialog, RenameTreeDialog, ResearchTreeMenuItems } from "../research/treeMenu.js";
+import { applyFolderState } from "../sidebar/mutations.js";
 
 import { ResearchQueryCard } from "./ResearchQueryCard.js";
 import { countNewAbove, FEED_TOP_THRESHOLD, useFeedScrollAnchor } from "./useActivityFeedState.js";
@@ -283,19 +285,25 @@ export function ActivityFeed({
       .catch((error: unknown) => pushErrorToast("That answer could not be read", error));
   };
 
+  const folderState = folders.data ?? EMPTY_FOLDER_STATE;
+
   const treeMenu = (tree: ResearchTreeSummary | undefined, query: RecentResearchQuery | null) =>
     tree ? (
       <ResearchTreeMenuItems
         tree={tree}
         archived={tree.archivedAt != null}
-        folderState={folders.data ?? EMPTY_FOLDER_STATE}
-        onToggleStar={() => undefined}
+        folderState={folderState}
+        // The star is folder state, which the feed can write as well as the
+        // sidebar can. The two folder rows are not offered here: this surface
+        // has no folder dialog to send them to, and a row that does nothing is
+        // worse than a row that is absent (`10` §2).
+        onToggleStar={(treeId) =>
+          void applyFolderState(client, workspaceId, toggleResearchStar(folderState, treeId))
+        }
         onRename={setRenamingTree}
         onArchive={(treeId) => archive.mutate({ treeId, archived: true })}
         onRestore={(treeId) => archive.mutate({ treeId, archived: false })}
         onDelete={setDeletingTree}
-        onRemoveFromFolder={() => undefined}
-        onRequestCreateFolder={() => undefined}
         // Only a settled answer that already has a summary can be summarized
         // again (`ResearchActivityFeed.tsx:1437`).
         onRegenerateSummary={

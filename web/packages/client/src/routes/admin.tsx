@@ -108,8 +108,11 @@ export function AdminPage() {
               </thead>
               <tbody>
                 {users.data.map((user) => {
-                  const tokens =
-                    user.usage.inputTokens + user.usage.outputTokens + user.usage.reasoningTokens;
+                  // `reasoningTokens` is a breakdown of `outputTokens`, not a
+                  // third bucket, so adding it would double-count thinking and
+                  // disagree with the limit the server enforces
+                  // (`db/repos/usage.ts:admissionCheck`).
+                  const tokens = user.usage.inputTokens + user.usage.outputTokens;
                   return (
                     <tr key={user.id} className="border-border-divider border-t">
                       <td className="py-1.5">

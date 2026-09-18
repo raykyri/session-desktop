@@ -8,8 +8,11 @@
 //
 // The cache rule is the one in 07 §4.1: a mutation writes what the server
 // returned, and the `research.*` event it causes finds that work already done.
-// Highlight edits are applied optimistically as well — the round trip is short
-// but the paint is immediate, and a failure restores the previous list.
+// Highlight edits are confirmed writes rather than optimistic ones: a passage
+// is painted from its stored id, so a provisional highlight would be painted
+// under an id the `research.highlight.created` event does not carry, and the
+// two would briefly stack over the same words in the overlap layer. The round
+// trip is one call and the paint follows it within a frame.
 
 import type {
   ResearchHighlight,

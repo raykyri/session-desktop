@@ -244,6 +244,27 @@ test("sources are the distinct URLs of the searches and fetches", (t) => {
   );
 });
 
+test("an untitled fetch promotes the row without losing the name search gave it", (t) => {
+  const { sources } = researchSources([
+    toolTurn(
+      "t1",
+      "web_search",
+      { query: "memory" },
+      { results: [{ url: "https://a.example/one", title: "One", snippet: "…" }] },
+    ),
+    toolTurn(
+      "t2",
+      "web_fetch",
+      { url: "https://a.example/one" },
+      { url: "https://a.example/one", text: "…", truncated: false },
+    ),
+  ]);
+  t.deepEqual(
+    sources.map((source) => [source.title, source.fetched]),
+    [["One", true]],
+  );
+});
+
 test("an unsafe source URL never reaches the footer", (t) => {
   const { sources } = researchSources([
     toolTurn(

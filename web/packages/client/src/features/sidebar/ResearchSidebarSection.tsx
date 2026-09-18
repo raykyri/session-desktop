@@ -284,16 +284,46 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
   const memberTrees = (folderId: string) =>
     [...trees, ...archivedTrees].filter((tree) => folderState.membership[tree.id] === folderId);
 
-  const archiveMany = async (treeIds: string[]) => {
+  /**
+   * Applies a per-thread write across a selection, one at a time.
+   *
+   * A refusal is a property of a thread, not of the batch — archiving is
+   * refused while that thread has a run in flight — so one refusal must not
+   * strand the rest of the selection unprocessed. Every thread is attempted and
+   * the count that failed is what the caller reports.
+   */
+  const applyToMany = async (
+    treeIds: string[],
+    write: (treeId: string) => Promise<unknown>,
+  ): Promise<number> => {
+    let failed = 0;
     for (const treeId of treeIds) {
-      await archive.mutateAsync({ treeId, archived: true });
+      try {
+        await write(treeId);
+      } catch {
+        failed += 1;
+      }
     }
+    return failed;
   };
 
-  const removeMany = async (treeIds: string[]) => {
-    for (const treeId of treeIds) {
-      await remove.mutateAsync(treeId);
-    }
+  const archiveMany = (treeIds: string[]) =>
+    applyToMany(treeIds, (treeId) => archive.mutateAsync({ treeId, archived: true }));
+
+  const removeMany = (treeIds: string[]) =>
+    applyToMany(treeIds, (treeId) => remove.mutateAsync(treeId));
+
+  /** "3 of 5 could not be archived", or nothing when they all went through. */
+  const reportBatch = (verb: "archived" | "deleted", failed: number, total: number) => {
+    if (failed === 0) return;
+    pushErrorToast(
+      `${failed} of ${total} could not be ${verb}`,
+      new Error(
+        failed === total
+          ? `None of the ${total} could be ${verb}.`
+          : `${total - failed} of ${total} were ${verb}; the rest were refused.`,
+      ),
+    );
   };
 
   /* ---------------------------------------------------------------------
@@ -611,9 +641,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
         onClick={() => {
           const ids = [...selectedIds];
           clearSelection();
-          void archiveMany(ids).catch((error: unknown) =>
-            pushErrorToast("Some research could not be archived", error),
-          );
+          void archiveMany(ids).then((failed) => reportBatch("archived", failed, ids.length));
         }}
       />
       <IconMenuItem
@@ -624,9 +652,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
         onClick={() => {
           const ids = [...selectedIds];
           clearSelection();
-          void removeMany(ids).catch((error: unknown) =>
-            pushErrorToast("Some research could not be deleted", error),
-          );
+          void removeMany(ids).then((failed) => reportBatch("deleted", failed, ids.length));
         }}
       />
     </>
@@ -780,9 +806,8 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
               onRename={setRenamingFolder}
               onDissolve={setDissolving}
               onArchive={() => {
-                void archiveMany(memberTrees(folder.id).map((tree) => tree.id)).catch(
-                  (error: unknown) => pushErrorToast("The folder could not be archived", error),
-                );
+                const ids = memberTrees(folder.id).map((tree) => tree.id);
+                void archiveMany(ids).then((failed) => reportBatch("archived", failed, ids.length));
               }}
               onDelete={setDeletingFolder}
             />
@@ -874,8 +899,9 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
                 onRename={setRenamingFolder}
                 onDissolve={setDissolving}
                 onArchive={() => {
-                  void archiveMany(memberTrees(folder.id).map((tree) => tree.id)).catch(
-                    (error: unknown) => pushErrorToast("The folder could not be archived", error),
+                  const ids = memberTrees(folder.id).map((tree) => tree.id);
+                  void archiveMany(ids).then((failed) =>
+                    reportBatch("archived", failed, ids.length),
                   );
                 }}
                 onDelete={setDeletingFolder}
@@ -1052,7 +1078,17 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
         }}
         onConfirm={async () => {
           if (!deletingFolder) return;
-          await removeMany(memberTrees(deletingFolder.id).map((tree) => tree.id));
+          const ids = memberTrees(deletingFolder.id).map((tree) => tree.id);
+          const failed = await removeMany(ids);
+          if (failed > 0) {
+            // The folder still holds whatever was refused, so it is not
+            // dissolved; the dialog stays open with this as its error.
+            throw new Error(
+              failed === ids.length
+                ? `None of the ${ids.length} could be deleted.`
+                : `${ids.length - failed} of ${ids.length} were deleted; the rest were refused.`,
+            );
+          }
           writeFolders(dissolveResearchFolder(folderState, deletingFolder.id));
         }}
       />

@@ -6,6 +6,7 @@
 // `target="_blank" rel="noopener noreferrer"` (07 §9). The recipe classes live
 // in `styles/tweet.css`, so the markup here is the same tree the desktop built.
 
+import { safeHref } from "@session/shared";
 import type { QuotedTweetSnapshot, TweetSnapshot, TweetTextRun } from "@session/shared";
 import { Play } from "lucide-react";
 import { useState } from "react";
@@ -13,10 +14,24 @@ import type { CSSProperties } from "react";
 
 const EXTERNAL = { target: "_blank", rel: "noopener noreferrer" } as const;
 
+/**
+ * A destination from the snapshot, or undefined.
+ *
+ * `tweetSnapshotFromSyndication` already drops anything that is not a web URL,
+ * and `journal.restore`/`update` re-check the permalink — but every field below
+ * becomes an `href`, and a snapshot is third-party data that has been through a
+ * round trip of client-supplied storage. Gating at the point of render is the
+ * check that does not depend on remembering the other two.
+ */
+function tweetHref(url: string | undefined): string | undefined {
+  return url === undefined ? undefined : safeHref(url);
+}
+
 /** Opens the post the embed stands for, unless a descendant link already
  * handled the click. */
 function openInNewTab(url: string): void {
-  window.open(url, "_blank", "noopener,noreferrer");
+  const safe = safeHref(url);
+  if (safe) window.open(safe, "_blank", "noopener,noreferrer");
 }
 
 // No avatar (older snapshots, deleted images) renders an initial on a disc
@@ -77,7 +92,12 @@ function TweetText({ runs, className }: { runs: TweetTextRun[]; className: strin
     <p className={className}>
       {runs.map((run, index) =>
         run.kind === "link" && run.url ? (
-          <a key={index} href={run.url} {...EXTERNAL} onClick={(event) => event.stopPropagation()}>
+          <a
+            key={index}
+            href={tweetHref(run.url)}
+            {...EXTERNAL}
+            onClick={(event) => event.stopPropagation()}
+          >
             {run.text}
           </a>
         ) : (
@@ -130,7 +150,7 @@ function TweetMediaStrip({
             </span>
           );
         }
-        const watchUrl = item.watchUrl;
+        const watchUrl = tweetHref(item.watchUrl);
         return (
           <a
             key={index}
@@ -233,7 +253,7 @@ function TweetLinkCardView({ card }: { card: NonNullable<TweetSnapshot["card"]> 
   return (
     <a
       className={`journal-tweet-card${card.large ? "is-large" : ""}`}
-      href={card.url}
+      href={tweetHref(card.url)}
       {...EXTERNAL}
       onClick={(event) => event.stopPropagation()}
     >
@@ -282,7 +302,7 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
     >
       <a
         className="journal-tweet-avatar-link"
-        href={authorUrl}
+        href={tweetHref(authorUrl)}
         aria-hidden="true"
         tabIndex={-1}
         {...EXTERNAL}
@@ -300,7 +320,7 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
           <div className="journal-tweet-who">
             <a
               className="journal-tweet-author"
-              href={authorUrl}
+              href={tweetHref(authorUrl)}
               {...EXTERNAL}
               onClick={(event) => event.stopPropagation()}
             >
@@ -316,7 +336,7 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
               </span>
               <a
                 className="journal-tweet-age"
-                href={tweet.url}
+                href={tweetHref(tweet.url)}
                 title={formatTweetDate(tweet.createdAt) ?? undefined}
                 {...EXTERNAL}
                 onClick={(event) => event.stopPropagation()}
@@ -335,7 +355,7 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
         {tweet.partial ? (
           <a
             className="journal-tweet-more"
-            href={tweet.url}
+            href={tweetHref(tweet.url)}
             {...EXTERNAL}
             onClick={(event) => event.stopPropagation()}
           >
@@ -370,7 +390,7 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
               />
               <a
                 className="journal-tweet-author"
-                href={`https://x.com/${quoted.author.handle}`}
+                href={tweetHref(`https://x.com/${quoted.author.handle}`)}
                 {...EXTERNAL}
                 onClick={(event) => event.stopPropagation()}
               >

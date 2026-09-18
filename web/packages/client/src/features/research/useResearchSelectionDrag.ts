@@ -23,10 +23,12 @@ import { captureResearchSelection } from "./selection/capture.js";
 import type { CapturedResearchSelection } from "./selection/capture.js";
 import {
   NON_TEXT_ROW_SELECTOR,
+  RESPONSE_ROOT_SELECTOR,
   applyDirectionalSelectionRange,
   flatOffsetAtPoint,
   messageFlatBoundaries,
   rangeForTextOffsets,
+  responseRootNodeId,
   selectionTouchesNonTextRow,
 } from "./selection/dom.js";
 import { supportsHighlightApi } from "./selection/painting.js";
@@ -91,10 +93,11 @@ export function useResearchSelectionDrag(
       range.commonAncestorContainer instanceof Element
         ? range.commonAncestorContainer
         : range.commonAncestorContainer.parentElement;
-    // A selection that spans two segments anchors nowhere: the projection is
-    // per segment.
-    const root = container?.closest<HTMLElement>("[data-node-id]") ?? null;
-    const nodeId = root?.dataset["nodeId"] ?? null;
+    // A selection that spans two segments — or that leaves the answer for the
+    // rail beside it — anchors nowhere: the projection is one response root's
+    // text and nothing else's.
+    const root = container?.closest<HTMLElement>(RESPONSE_ROOT_SELECTOR) ?? null;
+    const nodeId = responseRootNodeId(root);
     const revision = nodeId ? revisionByNode[nodeId] : undefined;
     if (!root || !nodeId || !revision) {
       onCapture(null);
@@ -150,7 +153,7 @@ export function useResearchSelectionDrag(
   const onRootMouseDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     const root = event.currentTarget;
-    const nodeId = root.dataset["nodeId"] ?? null;
+    const nodeId = responseRootNodeId(root);
     const revision = nodeId ? inputRef.current.revisionByNode[nodeId] : undefined;
     const target = event.target instanceof Element ? event.target : null;
     const anchorOffset = flatOffsetAtPoint(root, event.clientX, event.clientY);
@@ -252,7 +255,7 @@ export function useResearchSelectionDrag(
   const onRootClick = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
       const root = event.currentTarget;
-      const nodeId = root.dataset["nodeId"];
+      const nodeId = responseRootNodeId(root);
       const selection = window.getSelection();
       if (!nodeId || !selection || !selection.isCollapsed) return;
       // Links keep their own behavior; popping the bar under a navigation would

@@ -137,7 +137,10 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
       if (event.type !== "research.tree.updated") {
         // Archiving moves the thread between the `includeArchived` scopes,
         // and which list it belongs to is the server's answer, not a patch's.
-        invalidate(client, ["trees"]);
+        // The highlights feed reads from unarchived threads only
+        // (`db/repos/highlights.ts:feed`), so archiving retires this thread's
+        // rows and restoring brings them back (`10` §4).
+        invalidate(client, ["trees"], ["highlightsFeed"]);
       }
       return;
     }
