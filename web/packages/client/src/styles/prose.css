@@ -212,34 +212,55 @@
 }
 
 /* Wikilinks: key terms the agent marked as [[Term]]. A term without an
-   encyclopedia page uses a muted tint of the base text color with a dotted
-   underline, separating it from navigable URLs; once a page exists the
-   underline turns solid, and a page still being written pulses. */
-.research-prose a.research-wikilink {
+   encyclopedia page uses a muted tint of the base text color; the dotted
+   underline is painted but transparent so it can fade in. Hovering or
+   focusing any link in the same prose, recap, or document frame reveals
+   every wikilink — populated pages included — as that dotted hover
+   state. A page still being written pulses. */
+:is(.research-prose, .research-summary-text) a.research-wikilink {
   cursor: pointer;
   color: color-mix(in srgb, var(--text-strong) 90%, transparent);
   text-decoration: underline dotted;
-  text-decoration-color: color-mix(in srgb, var(--text-strong) 40%, transparent);
+  text-decoration-color: transparent;
   text-underline-offset: 2px;
+  transition:
+    color 120ms ease,
+    text-decoration-color 120ms ease,
+    text-decoration-style 120ms ease;
 }
 
-.research-prose a.research-wikilink:hover,
-.research-prose a.research-wikilink:focus-visible {
-  color: var(--text-strong);
-  text-decoration-color: color-mix(in srgb, var(--text-strong) 60%, transparent);
-}
-
-.research-prose a.research-wikilink.is-ready {
-  text-decoration-style: solid;
+:is(.research-prose, .research-summary-text) a.research-wikilink.is-ready {
+  text-decoration: underline solid;
   text-decoration-color: color-mix(in srgb, var(--text-strong) 55%, transparent);
 }
 
-.research-prose a.research-wikilink.is-generating {
+:is(.research-prose, .research-summary-text) a.research-wikilink.is-generating {
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, var(--text-strong) 40%, transparent);
+  transition: none;
   animation: research-wikilink-pulse 1.6s ease-in-out infinite;
 }
 
-.research-prose a.research-wikilink.is-failed {
+:is(.research-prose, .research-summary-text) a.research-wikilink.is-failed {
+  text-decoration: underline dotted;
   text-decoration-color: var(--status-failed-fg);
+}
+
+:is(.research-prose, .research-summary-text, .research-document-frame):has(
+    a:is(:hover, :focus-visible)
+  )
+  a.research-wikilink,
+:is(.research-prose, .research-summary-text, .research-document-frame):has(
+    a:is(:hover, :focus-visible)
+  )
+  a.research-wikilink.is-ready,
+:is(.research-prose, .research-summary-text) a.research-wikilink:hover,
+:is(.research-prose, .research-summary-text) a.research-wikilink:focus-visible,
+:is(.research-prose, .research-summary-text) a.research-wikilink.is-ready:hover,
+:is(.research-prose, .research-summary-text) a.research-wikilink.is-ready:focus-visible {
+  color: var(--text-strong);
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, var(--text-strong) 60%, transparent);
 }
 
 .research-prose blockquote {

@@ -814,7 +814,11 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             side="bottom"
             align="end"
             trigger={
-              <IconButton label={`Actions for ${tree.title}`} className="shrink-0 translate-x-0.5">
+              <IconButton
+                label={`Actions for ${tree.title}`}
+                tooltip={false}
+                className="shrink-0 translate-x-0.5"
+              >
                 <MoreHorizontal size={14} aria-hidden="true" />
               </IconButton>
             }
@@ -939,6 +943,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
               trigger={
                 <IconButton
                   label={`Actions for ${folder.name}`}
+                  tooltip={false}
                   className="shrink-0 translate-x-0.5"
                 >
                   <MoreHorizontal size={14} aria-hidden="true" />
