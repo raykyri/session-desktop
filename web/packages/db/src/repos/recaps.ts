@@ -14,6 +14,7 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
+import { upsertResearchRoot } from "./feedgen.js";
 import { get as getNode } from "./nodes.js";
 
 export interface SaveRecapInput {
@@ -89,6 +90,7 @@ export function save(
       model: input.model,
     };
     tx.update(nodes).set({ recapJson: recap }).where(eq(nodes.id, node.id)).run();
+    upsertResearchRoot(tx, node.id);
     return getNode(tx, userId, node.id);
   });
 }
@@ -163,6 +165,7 @@ export function applyCandidate(
       instructions,
     };
     tx.update(nodes).set({ recapJson: recap }).where(eq(nodes.id, node.id)).run();
+    upsertResearchRoot(tx, node.id);
     const updated = getNode(tx, userId, node.id);
     if (!updated) {
       throw new Error(`research node ${node.id} was not found`);
@@ -174,8 +177,13 @@ export function applyCandidate(
 /** Drops a node's recap. Used when a retry invalidates the answer it summed
  * up; `nodes.resetForRetry` already does this as part of its reset. */
 export function clear(db: SessionDatabase, userId: string, nodeId: string): void {
-  db.update(nodes)
-    .set({ recapJson: null })
-    .where(and(eq(nodes.userId, userId), eq(nodes.id, nodeId)))
-    .run();
+  transact(db, (tx) => {
+    const row = tx
+      .update(nodes)
+      .set({ recapJson: null })
+      .where(and(eq(nodes.userId, userId), eq(nodes.id, nodeId)))
+      .returning({ id: nodes.id })
+      .get();
+    if (row) upsertResearchRoot(tx, row.id);
+  });
 }

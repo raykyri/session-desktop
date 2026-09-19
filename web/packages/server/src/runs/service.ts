@@ -14,6 +14,7 @@ import type { ResearchRecapCandidate } from "@session/shared";
 import type { Config } from "../config.js";
 import type { EventBus } from "../events/bus.js";
 import { sessionEvent } from "../events/bus.js";
+import { emitFeedItemUpsertedForNode } from "../events/feed.js";
 import type { Logger } from "../logger.js";
 import { createLogger } from "../logger.js";
 
@@ -218,12 +219,14 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
         error: "Model provider rate limit exceeded repeatedly; please try again later",
       });
       emit(userId, "research.node.updated", { node });
+      emitFeedItemUpsertedForNode(deps, node.id);
       return;
     }
     const node = nodesRepo.requeueAfterRateLimit(deps.db, userId, nodeId);
     queueRepo.requeueWithBackoff(deps.db, nodeId, Date.now() + backoff);
     logger.info({ nodeId, backoffMs: backoff, requeue: spent }, "re-queued after a 429");
     emit(userId, "research.node.updated", { node });
+    emitFeedItemUpsertedForNode(deps, node.id);
   };
 
   /** Last resort for an attempt that threw past the loop's own settlement:
@@ -238,6 +241,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
         error: "Research execution terminated unexpectedly; please retry",
       });
       emit(userId, "research.node.updated", { node: failed });
+      emitFeedItemUpsertedForNode(deps, failed.id);
     } catch (error) {
       logger.error({ nodeId, error }, "could not settle a node after a failed attempt");
     }

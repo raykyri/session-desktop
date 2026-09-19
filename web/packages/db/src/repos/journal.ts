@@ -13,6 +13,8 @@ import { transact } from "../connection.js";
 import { parseJsonColumn } from "../json.js";
 import { journalEntries } from "../schema/journal.js";
 
+import { removeJournalEntry, upsertJournalEntry } from "./feedgen.js";
+
 /** Milliseconds for the feed's ordering; entries carry an ISO string. */
 function occurredAt(entry: JournalEntry): number {
   const parsed = Date.parse(entry.createdAt);
@@ -59,6 +61,7 @@ export function add(db: SessionDatabase, userId: string, entry: JournalEntry): J
       throw new Error(`journal entry ${parsed.id} already exists`);
     }
     tx.insert(journalEntries).values(projection(userId, parsed)).run();
+    upsertJournalEntry(tx, userId, parsed.id);
     return parsed;
   });
 }
@@ -95,6 +98,7 @@ export function restore(db: SessionDatabase, userId: string, entry: JournalEntry
       })
       .returning({ id: journalEntries.id })
       .get();
+    if (row) upsertJournalEntry(tx, userId, parsed.id);
     return row !== undefined;
   });
 }
@@ -112,22 +116,30 @@ export function update(
     throw new Error("Cannot update journal entry ID: ID is immutable.");
   }
   const values = projection(userId, parsed);
-  const row = db
-    .update(journalEntries)
-    .set(values)
-    .where(and(eq(journalEntries.userId, userId), eq(journalEntries.id, id)))
-    .returning({ id: journalEntries.id })
-    .get();
-  return row !== undefined;
+  return transact(db, (tx) => {
+    const row = tx
+      .update(journalEntries)
+      .set(values)
+      .where(and(eq(journalEntries.userId, userId), eq(journalEntries.id, id)))
+      .returning({ id: journalEntries.id })
+      .get();
+    if (row) upsertJournalEntry(tx, userId, id);
+    return row !== undefined;
+  });
 }
 
 export function remove(db: SessionDatabase, userId: string, id: string): boolean {
-  const row = db
-    .delete(journalEntries)
-    .where(and(eq(journalEntries.userId, userId), eq(journalEntries.id, id)))
-    .returning({ id: journalEntries.id })
-    .get();
-  return row !== undefined;
+  return transact(db, (tx) => {
+    const existing = tx
+      .select({ id: journalEntries.id })
+      .from(journalEntries)
+      .where(and(eq(journalEntries.userId, userId), eq(journalEntries.id, id)))
+      .get();
+    if (!existing) return false;
+    removeJournalEntry(tx, id);
+    tx.delete(journalEntries).where(eq(journalEntries.id, id)).run();
+    return true;
+  });
 }
 
 export function get(db: SessionDatabase, userId: string, id: string): JournalEntry | null {

@@ -50,7 +50,7 @@ test.serial("reads reach the query procedures with their inputs", async (t) => {
   await getResearchTree("t1");
   await listResearchTrees({ workspaceId: "w1", includeArchived: true });
   await getResearchNodeContent("n1");
-  await listRecentActivity({ workspaceId: "w1", bookmarkedOnly: true });
+  await listRecentActivity({ scope: "workspace", workspaceId: "w1", bookmarkedOnly: true });
 
   t.deepEqual(stub.calls, [
     { path: "auth.me", kind: "query", input: undefined },
@@ -64,7 +64,7 @@ test.serial("reads reach the query procedures with their inputs", async (t) => {
     {
       path: "feed.recentActivity",
       kind: "query",
-      input: { workspaceId: "w1", bookmarkedOnly: true },
+      input: { scope: "workspace", workspaceId: "w1", bookmarkedOnly: true },
     },
   ]);
 });

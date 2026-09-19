@@ -87,8 +87,8 @@ test("guests read the public catalog and cannot mutate it", async (t) => {
   t.is(detail.tree.id, created.tree.id);
   const content = await guest.research.getNodeContent({ nodeId });
   t.is(content.node.id, nodeId);
-  const activity = await guest.feed.recentActivity({ workspaceId: workspace.id });
-  t.is(activity.items.length, 1);
+  const activity = await guest.feed.recentActivity({ scope: "all" });
+  t.is(activity.items.length, 2);
   t.is(
     (await guest.encyclopedia.getPage({ workspaceId: workspace.id, slug: page.slug }))?.slug,
     page.slug,
@@ -231,7 +231,10 @@ test("scopes feed activity and encyclopedia pages to the workspace", async (t) =
     outcome: { status: "complete" },
   });
 
-  const activity = await caller.feed.recentActivity({ workspaceId: workspace.id });
+  const activity = await caller.feed.recentActivity({
+    scope: "workspace",
+    workspaceId: workspace.id,
+  });
   t.is(activity.items.length, 1);
   const queries = await caller.feed.recentQueries({ limit: 10 });
   t.is(queries.items.length, 1);

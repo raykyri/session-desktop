@@ -46,6 +46,7 @@ import { z } from "zod";
 import type { Config } from "../config.js";
 import type { EventBus } from "../events/bus.js";
 import { sessionEvent } from "../events/bus.js";
+import { emitFeedItemUpsertedForNode } from "../events/feed.js";
 import type { Logger } from "../logger.js";
 
 import { classifyRunError } from "./errors.js";
@@ -311,6 +312,7 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
       }
       const renamed = nodesRepo.rename(deps.db, userId, nodeId, title);
       emit(userId, "research.node.updated", { node: renamed });
+      emitFeedItemUpsertedForNode(deps, renamed.id);
       // A thread takes its name from its root question.
       if (renamed.parentNodeId === null || renamed.parentNodeId === undefined) {
         const tree = treesRepo.rename(deps.db, userId, renamed.treeId, title);
@@ -390,6 +392,7 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
         });
         if (saved) {
           emit(userId, "research.node.updated", { node: saved });
+          emitFeedItemUpsertedForNode(deps, saved.id);
         }
         return saved !== null;
       } finally {

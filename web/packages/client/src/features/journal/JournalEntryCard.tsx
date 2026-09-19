@@ -82,7 +82,7 @@ export function JournalEntryCard({
   onAction,
 }: {
   entry: JournalEntry;
-  onAction: (action: JournalMenuAction) => void;
+  onAction?: (action: JournalMenuAction) => void;
 }) {
   const signedIn = useSignedIn();
   const isTweetCard = entry.kind === "tweet" && entry.hydration === "ok" && entry.tweet;
@@ -98,7 +98,7 @@ export function JournalEntryCard({
         <p className="text-status-failed m-0 text-sm">
           Couldn’t load this post{entry.error ? ` — ${entry.error}` : ""}.
         </p>
-        {signedIn ? (
+        {signedIn && onAction ? (
           <button
             type="button"
             className="text-fg-interactive flex items-center gap-1 border-0 bg-transparent p-0 text-sm underline-offset-2 hover:underline"
@@ -133,7 +133,7 @@ export function JournalEntryCard({
       title={new Date(entry.createdAt).toLocaleString()}
     >
       {body}
-      {signedIn ? (
+      {signedIn && onAction ? (
         <span className="absolute top-2 right-2">
           <Menu
             side="bottom"
@@ -152,7 +152,7 @@ export function JournalEntryCard({
     </article>
   );
 
-  if (!signedIn) return article;
+  if (!signedIn || !onAction) return article;
   return (
     <ContextMenu
       label="Saved entry actions"

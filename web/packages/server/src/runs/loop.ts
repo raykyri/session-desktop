@@ -30,6 +30,7 @@ import { stepCountIs, streamText } from "ai";
 import type { Config } from "../config.js";
 import type { EventBus } from "../events/bus.js";
 import { sessionEvent } from "../events/bus.js";
+import { emitFeedItemUpsertedForNode } from "../events/feed.js";
 import type { Logger } from "../logger.js";
 
 import type { ClassifiedError } from "./errors.js";
@@ -186,8 +187,13 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   const emit = (type: string, payload: Record<string, unknown>): void => {
     eventBus.emit(userId, sessionEvent(type, payload));
   };
-  const publishNode = (updated: ResearchNode, extra: Record<string, unknown> = {}): void => {
+  const publishNode = (
+    updated: ResearchNode,
+    extra: Record<string, unknown> = {},
+    updateFeed = false,
+  ): void => {
     emit("research.node.updated", { node: updated, ...extra });
+    if (updateFeed) emitFeedItemUpsertedForNode(deps, updated.id);
   };
 
   const started = nodesRepo.setStatus(db, userId, nodeId, "running", {
@@ -200,7 +206,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     kind: input.kind,
     model: node.model,
   });
-  publishNode(started);
+  publishNode(started, {}, true);
   emit("research.run.started", {
     nodeId,
     attempt: node.attempt,
@@ -488,7 +494,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       seq: finishSeq(),
       status: "interrupted",
     });
-    publishNode(interrupted);
+    publishNode(interrupted, {}, true);
     return { outcome: "interrupted" };
   }
 
@@ -510,7 +516,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     });
     const settled = nodesRepo.get(db, userId, nodeId);
     if (settled) {
-      publishNode(settled);
+      publishNode(settled, {}, true);
     }
     return { outcome: "cancelled" };
   }
@@ -590,7 +596,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   });
   const settled = nodesRepo.get(db, userId, nodeId);
   if (settled) {
-    publishNode(settled);
+    publishNode(settled, {}, true);
   }
   return { outcome: "complete", scheduleTitle: settled?.title == null, scheduleRecap: true };
 }
@@ -634,6 +640,7 @@ function settleFailure(
   );
   if (node) {
     eventBus.emit(userId, sessionEvent("research.node.updated", { node }));
+    emitFeedItemUpsertedForNode(deps, node.id);
   }
 }
 

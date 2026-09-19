@@ -2,12 +2,11 @@
 // (`docs/02-domain-model-and-database.md` §4). `openDatabase()` runs these
 // after `migrate()`, in declaration order, each inside its own transaction,
 // and records the ones that ran in `backfills`.
-//
-// Currently empty as the initial schema requires no data migrations. This registry allows future backfills to be added incrementally.
 
 import { sql } from "drizzle-orm";
 
 import type { SessionDatabase } from "../connection.js";
+import { backfill as backfillFeedItems } from "../repos/feedgen.js";
 import { backfills } from "../schema/backfills.js";
 import { now } from "../time.js";
 
@@ -19,7 +18,13 @@ export interface Backfill {
   run: (db: SessionDatabase) => void;
 }
 
-export const BACKFILLS: readonly Backfill[] = [];
+export const BACKFILLS: readonly Backfill[] = [
+  {
+    id: "2026-09-19-feed-items",
+    description: "materialize journal entries and research roots in the Home feed",
+    run: backfillFeedItems,
+  },
+];
 
 /** Applies every backfill this build knows that the database has not recorded.
  * Returns the ids applied, so boot can log them. */

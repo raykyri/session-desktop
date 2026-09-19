@@ -12,6 +12,7 @@ import { trees } from "../schema/trees.js";
 import { workspaces } from "../schema/workspaces.js";
 import { now } from "../time.js";
 
+import { removeResearchTree } from "./feedgen.js";
 import { ensure as ensurePreferences, update as updatePreferences } from "./preferences.js";
 import { deleteNodesOfTrees } from "./subtrees.js";
 
@@ -146,6 +147,7 @@ export function remove(
       .map((row) => row.id);
     // Leaves before parents: `nodes.parent_node_id` is RESTRICT, so the tree
     // cascade cannot delete a parent while its children are still there.
+    for (const treeId of removedTreeIds) removeResearchTree(tx, treeId);
     deleteNodesOfTrees(tx, removedTreeIds);
     tx.delete(workspaces)
       .where(and(eq(workspaces.userId, userId), eq(workspaces.id, workspaceId)))

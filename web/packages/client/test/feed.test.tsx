@@ -210,6 +210,90 @@ const feedResponses = (page: unknown) => ({
   "documents.list": [],
 });
 
+test.serial("Home switches among global, personal, and workspace feed caches", async (t) => {
+  useNavigationStore.setState({ feedMode: "all", feedAnchorByView: {} });
+  const page = activityPage([queryItem(researchQuery())]);
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: feedResponses(page),
+  });
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByRole("heading", { name: "All Users" }).length > 0,
+    "the global feed is the default",
+  );
+  const allCall = app.trpc.calls.find((call) => call.path === "feed.recentActivity");
+  t.deepEqual(allCall?.input, { scope: "all", bookmarkedOnly: false, before: null });
+  t.truthy(
+    app.queryClient.getQueryData(
+      queryKeys.activity({ scope: "all", workspaceId: null, bookmarkedOnly: false }),
+    ),
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Feed scope: All Users" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "My Workspaces" }));
+  await waitUntil(
+    t,
+    () => screen.queryAllByRole("heading", { name: "My Workspaces" }).length > 0,
+    "the personal cross-workspace feed is selected",
+  );
+  const mineCall = app.trpc.calls.filter((call) => call.path === "feed.recentActivity").at(-1);
+  t.deepEqual(mineCall?.input, { scope: "mine", bookmarkedOnly: false, before: null });
+  t.truthy(
+    app.queryClient.getQueryData(
+      queryKeys.activity({ scope: "mine", workspaceId: null, bookmarkedOnly: false }),
+    ),
+  );
+  t.is(useNavigationStore.getState().feedMode, "workspaces");
+
+  fireEvent.click(screen.getByRole("button", { name: "Feed scope: My Workspaces" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Collective memory" }));
+  await waitUntil(
+    t,
+    () => screen.queryAllByRole("heading", { name: "Collective memory" }).length > 0,
+    "the current workspace feed is selected",
+  );
+  const workspaceCall = app.trpc.calls.filter((call) => call.path === "feed.recentActivity").at(-1);
+  t.deepEqual(workspaceCall?.input, {
+    scope: "workspace",
+    workspaceId: WORKSPACE_ID,
+    bookmarkedOnly: false,
+    before: null,
+  });
+  t.truthy(
+    app.queryClient.getQueryData(
+      queryKeys.activity({
+        scope: "workspace",
+        workspaceId: WORKSPACE_ID,
+        bookmarkedOnly: false,
+      }),
+    ),
+  );
+  t.is(useNavigationStore.getState().feedMode, "workspace");
+  app.unmount();
+});
+
+test.serial("guests see only All Users without a scope switcher", async (t) => {
+  useNavigationStore.setState({ feedMode: "workspace", feedAnchorByView: {} });
+  const app = await renderApp("/?feed=workspaces", {
+    user: null,
+    queryClient: testQueryClient(),
+    responses: feedResponses(activityPage([])),
+  });
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByRole("heading", { name: "All Users" }).length > 0,
+    "guest Home is global",
+  );
+  t.is(screen.queryByRole("button", { name: /Feed scope:/ }), null);
+  const call = app.trpc.calls.find((entry) => entry.path === "feed.recentActivity");
+  t.deepEqual(call?.input, { scope: "all", bookmarkedOnly: false, before: null });
+  app.unmount();
+  useNavigationStore.setState({ feedMode: "all" });
+});
+
 test.serial("renders pagination for a cursor and fetches the next page on click", async (t) => {
   const app = await renderApp("/bookmarks", {
     queryClient: testQueryClient(),
@@ -458,7 +542,7 @@ test.serial("the new-activity counter offers the way back to the head", async (t
 
   // An arrival above the reader, the way the event bridge patches page 0.
   app.queryClient.setQueryData<InfiniteData<RecentActivityPage>>(
-    queryKeys.activity({ workspaceId: WORKSPACE_ID, bookmarkedOnly: true }),
+    queryKeys.activity({ scope: "workspace", workspaceId: WORKSPACE_ID, bookmarkedOnly: true }),
     (data) =>
       data
         ? {
@@ -508,7 +592,7 @@ test.serial("opening a thread writes the feed's current scroll offset immediatel
   fireEvent.click(screen.getByText("What is collective memory?"));
 
   t.is(
-    useNavigationStore.getState().feedAnchorFor(`home:${WORKSPACE_ID}`)?.top,
+    useNavigationStore.getState().feedAnchorFor("all-users")?.top,
     900,
     "the click flushes scrollTop so a back navigation can restore it",
   );
@@ -518,7 +602,7 @@ test.serial("opening a thread writes the feed's current scroll offset immediatel
 test.serial("returning to the feed restores the scroll offset it was left at", async (t) => {
   useNavigationStore.setState({
     feedAnchorByView: {
-      [`home:${WORKSPACE_ID}`]: { key: "research:n1", offset: 0, top: 900 },
+      ["all-users"]: { key: "research:n1", offset: 0, top: 900 },
     },
   });
   scrolls.length = 0;
@@ -553,10 +637,10 @@ test.serial("unmounting the feed does not replace a saved offset with scrollTop 
   );
   await scrollFeedTo(900);
   fireEvent.click(screen.getByText("What is collective memory?"));
-  t.is(useNavigationStore.getState().feedAnchorFor(`home:${WORKSPACE_ID}`)?.top, 900);
+  t.is(useNavigationStore.getState().feedAnchorFor("all-users")?.top, 900);
   app.unmount();
   t.is(
-    useNavigationStore.getState().feedAnchorFor(`home:${WORKSPACE_ID}`)?.top,
+    useNavigationStore.getState().feedAnchorFor("all-users")?.top,
     900,
     "a detached scroller reading scrollTop 0 must not wipe the flushed position",
   );

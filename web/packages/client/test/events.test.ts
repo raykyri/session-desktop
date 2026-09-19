@@ -1,11 +1,12 @@
 import type {
+  RecentActivityPage,
   ResearchNode,
   ResearchTreeDetail,
   ResearchTreeSummary,
   SessionEvent,
 } from "@session/shared";
 import { DEFAULT_USER_SETTINGS } from "@session/shared";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, type InfiniteData } from "@tanstack/react-query";
 import test from "ava";
 
 import { queryKeys } from "../src/api/cache.js";
@@ -22,6 +23,7 @@ import { useNotificationsStore } from "../src/stores/notifications.js";
 import { useSettingsStore } from "../src/stores/settings.js";
 
 import { node, summary, tree } from "./fixtures.js";
+import { activityPage, queryItem, researchQuery } from "./phase6Fixtures.js";
 import { createTrpcStub } from "./trpcStub.js";
 
 const TREES_SCOPE = { workspaceId: "w1", includeArchived: false };
@@ -495,3 +497,124 @@ test.serial(
     }
   },
 );
+
+test.serial("feed item events patch and invalidate only matching scope caches", (t) => {
+  const queryClient = client();
+  queryClient.setQueryData(queryKeys.me(), { id: "u1" });
+  const allKey = queryKeys.activity({ scope: "all", workspaceId: null, bookmarkedOnly: false });
+  const mineKey = queryKeys.activity({ scope: "mine", workspaceId: null, bookmarkedOnly: false });
+  const workspaceKey = queryKeys.activity({
+    scope: "workspace",
+    workspaceId: "w1",
+    bookmarkedOnly: false,
+  });
+  const otherWorkspaceKey = queryKeys.activity({
+    scope: "workspace",
+    workspaceId: "w2",
+    bookmarkedOnly: false,
+  });
+  const bookmarksKey = queryKeys.activity({
+    scope: "workspace",
+    workspaceId: "w1",
+    bookmarkedOnly: true,
+  });
+  const initial = queryItem(researchQuery({ workspaceId: "w1" }));
+  const data = (items: RecentActivityPage["items"]): InfiniteData<RecentActivityPage> => ({
+    pages: [activityPage(items)],
+    pageParams: [null],
+  });
+  for (const key of [allKey, mineKey, workspaceKey, bookmarksKey]) {
+    queryClient.setQueryData(key, data([initial]));
+  }
+  queryClient.setQueryData(otherWorkspaceKey, data([]));
+
+  const updated = queryItem(
+    researchQuery({ workspaceId: "w1", title: "Updated", recap: "Updated recap" }),
+  );
+  applyEventBatch(
+    [
+      event("feed.item.upserted", {
+        id: "n1",
+        kind: "research",
+        authorId: "u1",
+        occurredAt: updated.occurredAt,
+        sourceRank: 1,
+        workspaceId: "w1",
+        bookmarked: true,
+        item: updated,
+      }),
+    ],
+    queryClient,
+  );
+
+  for (const key of [allKey, mineKey, workspaceKey, bookmarksKey]) {
+    const page = queryClient.getQueryData<InfiniteData<RecentActivityPage>>(key)?.pages[0];
+    const item = page?.items[0];
+    t.is(item?.kind === "research-query" ? item.query.title : null, "Updated");
+    t.false(queryClient.getQueryState(key)?.isInvalidated);
+  }
+  t.deepEqual(
+    queryClient.getQueryData<InfiniteData<RecentActivityPage>>(otherWorkspaceKey)?.pages[0]?.items,
+    [],
+  );
+
+  applyEventBatch(
+    [
+      event("feed.item.upserted", {
+        id: "n2",
+        kind: "research",
+        authorId: "u2",
+        occurredAt: 1_700_000_200_000,
+        sourceRank: 1,
+        workspaceId: "w2",
+        bookmarked: false,
+        item: queryItem(researchQuery({ nodeId: "n2", treeId: "t2", workspaceId: "w2" })),
+      }),
+    ],
+    queryClient,
+  );
+  t.true(queryClient.getQueryState(allKey)?.isInvalidated);
+  t.false(queryClient.getQueryState(mineKey)?.isInvalidated);
+  t.false(queryClient.getQueryState(workspaceKey)?.isInvalidated);
+
+  applyEventBatch(
+    [
+      event("feed.item.upserted", {
+        id: "n1",
+        kind: "research",
+        authorId: "u1",
+        occurredAt: updated.occurredAt,
+        sourceRank: 1,
+        workspaceId: "w1",
+        bookmarked: false,
+        item: updated,
+      }),
+    ],
+    queryClient,
+  );
+  t.deepEqual(
+    queryClient.getQueryData<InfiniteData<RecentActivityPage>>(bookmarksKey)?.pages[0]?.items,
+    [],
+  );
+
+  applyEventBatch(
+    [
+      event("feed.item.removed", {
+        id: "n1",
+        kind: "research",
+        authorId: "u1",
+        occurredAt: updated.occurredAt,
+        sourceRank: 1,
+        workspaceId: "w1",
+        bookmarked: false,
+      }),
+    ],
+    queryClient,
+  );
+  for (const key of [allKey, mineKey, workspaceKey]) {
+    t.deepEqual(
+      queryClient.getQueryData<InfiniteData<RecentActivityPage>>(key)?.pages[0]?.items,
+      [],
+    );
+  }
+});

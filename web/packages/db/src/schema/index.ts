@@ -7,6 +7,7 @@ export * from "./documents.js";
 export * from "./drafts.js";
 export * from "./encyclopedia.js";
 export * from "./folders.js";
+export * from "./feedItems.js";
 export * from "./highlights.js";
 export * from "./journal.js";
 export * from "./nodes.js";

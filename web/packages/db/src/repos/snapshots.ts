@@ -17,6 +17,7 @@ import { responseSnapshots } from "../schema/snapshots.js";
 import { trees } from "../schema/trees.js";
 import { now, strictlyAfter } from "../time.js";
 
+import { upsertResearchRoot } from "./feedgen.js";
 import { get as getNode, isTerminalStatus } from "./nodes.js";
 import { touchTree } from "./trees.js";
 
@@ -153,6 +154,7 @@ export function commit(db: SessionDatabase, userId: string, input: CommitInput):
       .run();
     tx.delete(runTurns).where(eq(runTurns.nodeId, node.id)).run();
     touchTree(tx, node.treeId, at);
+    upsertResearchRoot(tx, node.id);
     const updated = getNode(tx, userId, node.id);
     if (!updated) {
       throw new Error(`research node ${node.id} was not found`);
@@ -270,6 +272,7 @@ export function applyReplacedTurns(
     .set({ updatedAt: sql`max(${at}, ${trees.updatedAt} + 1)` })
     .where(eq(trees.id, node.treeId))
     .run();
+  upsertResearchRoot(tx, node.id);
   return { revision: rev, responseSnapshotAt, byteSize };
 }
 

@@ -10,6 +10,7 @@ import {
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { emitFeedItemUpsertedForNode } from "../../events/feed.js";
 import { protectedProcedure, publicProcedure, router } from "../base.js";
 import { catalogUserId } from "../catalog.js";
 import { publish } from "../emit.js";
@@ -142,6 +143,7 @@ export const recapsRouter = router({
         }),
       );
       publish(ctx, "research.node.updated", { node });
+      emitFeedItemUpsertedForNode(ctx, node.id);
       // Every exit path settles the pending flag (`04-agent-runtime.md` §9).
       publish(ctx, "research.recap.pending", { nodeId: input.nodeId, pending: false });
       return node;

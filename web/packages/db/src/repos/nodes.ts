@@ -25,6 +25,7 @@ import { trees } from "../schema/trees.js";
 import { now } from "../time.js";
 
 import { attachWithin } from "./documents.js";
+import { upsertResearchRoot } from "./feedgen.js";
 import type { NodeRow, TreeRow } from "./mappers.js";
 import { toResearchHighlight, toResearchNode } from "./mappers.js";
 import { enqueue } from "./queue.js";
@@ -40,6 +41,10 @@ const TERMINAL_STATUSES: readonly ResearchNodeStatus[] = [
   "cancelled",
   "interrupted",
 ];
+
+function syncFeedItem(db: SessionDatabase, node: Pick<NodeRow, "id" | "parentNodeId">): void {
+  if (node.parentNodeId === null) upsertResearchRoot(db, node.id);
+}
 
 export function isTerminalStatus(status: ResearchNodeStatus): boolean {
   return TERMINAL_STATUSES.includes(status);
@@ -271,6 +276,7 @@ export function setStatus(
       .where(eq(nodes.id, nodeId))
       .run();
     touchTree(tx, node.treeId, at);
+    syncFeedItem(tx, node);
     return reload(tx, userId, nodeId);
   });
 }
@@ -340,6 +346,7 @@ export function resetForRetry(
       .run();
     enqueueForRun(tx, userId, node.id, model ?? node.model, at);
     touchTree(tx, node.treeId, at);
+    syncFeedItem(tx, node);
     return reload(tx, userId, nodeId);
   });
 }
@@ -381,6 +388,7 @@ export function resumeAttempt(db: SessionDatabase, userId: string, nodeId: strin
       .run();
     enqueueForRun(tx, userId, node.id, node.model, 0);
     touchTree(tx, node.treeId, at);
+    syncFeedItem(tx, node);
     return reload(tx, userId, nodeId);
   });
 }
@@ -428,6 +436,7 @@ export function requeueAfterRateLimit(
       .where(eq(nodes.id, nodeId))
       .run();
     touchTree(tx, node.treeId);
+    syncFeedItem(tx, node);
     return reload(tx, userId, nodeId);
   });
 }
@@ -471,6 +480,7 @@ export function markInterrupted(
       .where(eq(nodes.id, nodeId))
       .run();
     touchTree(tx, node.treeId, at);
+    syncFeedItem(tx, node);
     return reload(tx, userId, nodeId);
   });
 }
@@ -618,6 +628,13 @@ export function reconcileOnBoot(db: SessionDatabase): BootReconciliation {
     }
     // Reset claims previously acquired by terminated server instances.
     tx.update(runQueue).set({ claimedAt: null }).run();
+    for (const nodeId of new Set([
+      ...result.adoptedNodeIds,
+      ...result.interruptedNodeIds,
+      ...result.emptyDocumentNodeIds,
+    ])) {
+      upsertResearchRoot(tx, nodeId);
+    }
     return result;
   });
 }
@@ -636,6 +653,7 @@ export function rename(
     const { node } = loadNode(tx, userId, nodeId);
     tx.update(nodes).set({ title: clean }).where(eq(nodes.id, nodeId)).run();
     touchTree(tx, node.treeId);
+    syncFeedItem(tx, node);
     return reload(tx, userId, nodeId);
   });
 }

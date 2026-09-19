@@ -24,6 +24,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 export const NAVIGATION_STORAGE_KEY = "session.navigation.v2";
 
 export type ResearchVisibilityFilter = "active" | "archived" | "all";
+export type FeedMode = "all" | "workspaces" | "workspace";
 
 export const SIDEBAR_MIN_WIDTH = 208;
 export const SIDEBAR_MAX_WIDTH = 420;
@@ -55,6 +56,7 @@ export interface NavigationState {
   scrollByNode: Record<string, SavedScrollOffset>;
   expandedByNode: Record<string, boolean>;
   feedAnchorByView: Record<string, FeedScrollAnchor>;
+  feedMode: FeedMode;
   visibilityFilter: ResearchVisibilityFilter;
   sidebarCollapsed: boolean;
   sidebarWidth: number;
@@ -73,6 +75,7 @@ export interface NavigationState {
 
   recordFeedAnchor: (view: string, anchor: FeedScrollAnchor | null) => void;
   feedAnchorFor: (view: string) => FeedScrollAnchor | null;
+  setFeedMode: (mode: FeedMode) => void;
 
   setVisibilityFilter: (filter: ResearchVisibilityFilter) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
@@ -91,6 +94,7 @@ export const useNavigationStore = create<NavigationState>()(
       scrollByNode: {},
       expandedByNode: {},
       feedAnchorByView: {},
+      feedMode: "all",
       visibilityFilter: "active",
       sidebarCollapsed: false,
       sidebarWidth: SIDEBAR_DEFAULT_WIDTH,
@@ -163,6 +167,7 @@ export const useNavigationStore = create<NavigationState>()(
           return { feedAnchorByView: { ...state.feedAnchorByView, [view]: anchor } };
         }),
       feedAnchorFor: (view) => get().feedAnchorByView[view] ?? null,
+      setFeedMode: (feedMode) => set({ feedMode }),
 
       setVisibilityFilter: (visibilityFilter) => set({ visibilityFilter }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
@@ -171,12 +176,13 @@ export const useNavigationStore = create<NavigationState>()(
     }),
     {
       name: NAVIGATION_STORAGE_KEY,
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         scrollByNode: state.scrollByNode,
         expandedByNode: state.expandedByNode,
         feedAnchorByView: state.feedAnchorByView,
+        feedMode: state.feedMode,
         visibilityFilter: state.visibilityFilter,
         sidebarCollapsed: state.sidebarCollapsed,
         sidebarWidth: state.sidebarWidth,

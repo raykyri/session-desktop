@@ -1,10 +1,11 @@
 // `workspaces` and `folders` (`03-api-and-events.md` §2).
 
-import { folders, workspaces } from "@session/db";
+import { feedItems, folders, workspaces } from "@session/db";
 import type { Workspace } from "@session/shared";
 import { emptyResearchFolderState, researchFolderStateSchema } from "@session/shared";
 import { z } from "zod";
 
+import { emitFeedItemRemoved } from "../../events/feed.js";
 import { protectedProcedure, publicProcedure, router } from "../base.js";
 import { catalogUserId } from "../catalog.js";
 import { publish } from "../emit.js";
@@ -65,7 +66,9 @@ export const workspacesRouter = router({
         repo(() => workspaces.get(ctx.db, ctx.user.id, input.workspaceId)),
         `research workspace ${input.workspaceId} was not found`,
       );
+      const removedFeedItems = feedItems.forWorkspace(ctx.db, input.workspaceId);
       const result = repo(() => workspaces.remove(ctx.db, ctx.user.id, input.workspaceId));
+      for (const item of removedFeedItems) emitFeedItemRemoved(ctx.eventBus, item);
       for (const treeId of result.removedTreeIds) {
         publish(ctx, "research.tree.removed", { treeId });
       }

@@ -1,11 +1,9 @@
 // The Home feed (`docs/02-domain-model-and-database.md` §5.9).
 //
-// Journal entries and root research questions are two tables with nothing in
-// common but a timestamp, and the feed is one keyset-paginated stream over
-// both. The merge is a `UNION ALL` of two shaped subqueries so the cursor
-// predicate, the ordering, and the limit are evaluated once by SQLite rather
-// than by fetching both sides whole and sorting in memory, which is what the
-// desktop did when everything was already in one process's heap.
+// Journal entries and root research questions are materialized into
+// `feed_items` by the source repositories. Reads apply one keyset predicate to
+// that stream, then project the selected source rows into their public feed
+// shapes.
 //
 // The order is `(occurred_at DESC, source_rank DESC, id DESC)` with journal
 // rank 0 and research rank 1, matching the shared cursor comparator so the
@@ -21,8 +19,6 @@ import type {
   RecentResearchQueryPage,
 } from "@session/shared";
 import {
-  JOURNAL_ACTIVITY_SOURCE_RANK,
-  RESEARCH_ACTIVITY_SOURCE_RANK,
   journalEntrySchema,
   researchHighlightAnchorSchema,
   researchMessageAttachmentSchema,
@@ -34,6 +30,8 @@ import { z } from "zod";
 import type { SessionDatabase } from "../connection.js";
 import { parseJsonColumn, parseNullableJsonColumn } from "../json.js";
 
+import * as feedItemsRepo from "./feedItems.js";
+import type { FeedItemDescriptor, FeedScope } from "./feedItems.js";
 import type { NodeRow } from "./mappers.js";
 
 const attachmentListSchema = z.array(researchMessageAttachmentSchema);
@@ -43,19 +41,13 @@ export const MAX_FEED_LIMIT = 100;
 export const DEFAULT_FEED_LIMIT = 20;
 
 export interface RecentActivityOptions {
+  scope?: FeedScope | undefined;
   workspaceId?: string | null | undefined;
   limit?: number | undefined;
   before?: RecentActivityCursor | null | undefined;
   /** Bookmarked threads only. Journal entries are excluded when set: a
    * bookmark is a property of a thread, and a link has none. */
   bookmarkedOnly?: boolean | undefined;
-}
-
-interface ActivityRow {
-  source: "journal" | "research";
-  occurredAt: number;
-  sourceRank: number;
-  id: string;
 }
 
 function clampLimit(limit: number | undefined): number {
@@ -66,8 +58,8 @@ function clampLimit(limit: number | undefined): number {
   return Math.min(MAX_FEED_LIMIT, Math.max(MIN_FEED_LIMIT, Math.trunc(value)));
 }
 
-/** A node row as the feed shows it. Only run nodes reach here. */
-export function toRecentResearchQuery(row: NodeRow): RecentResearchQuery {
+/** A node row as the feed shows it. */
+export function toRecentResearchQuery(row: NodeRow, workspaceId?: string): RecentResearchQuery {
   const anchor = parseNullableJsonColumn(
     researchHighlightAnchorSchema,
     row.queryAnchorJson,
@@ -77,6 +69,7 @@ export function toRecentResearchQuery(row: NodeRow): RecentResearchQuery {
   return {
     nodeId: row.id,
     treeId: row.treeId,
+    ...(workspaceId === undefined ? {} : { workspaceId }),
     parentNodeId: row.parentNodeId,
     inline: row.inline,
     prompt: row.prompt,
@@ -104,51 +97,32 @@ export function toRecentResearchQuery(row: NodeRow): RecentResearchQuery {
  */
 export function recentActivity(
   db: SessionDatabase,
-  userId: string,
+  userId: string | null,
   options: RecentActivityOptions = {},
 ): RecentActivityPage {
   const limit = clampLimit(options.limit);
-  const cursor = options.before ?? null;
-  const keyset = cursor
-    ? sql`WHERE occurred_at < ${cursor.occurredAt}
-        OR (occurred_at = ${cursor.occurredAt}
-          AND (source_rank < ${cursor.sourceRank}
-            OR (source_rank = ${cursor.sourceRank} AND id < ${cursor.id})))`
-    : sql``;
-  const journalSide = options.bookmarkedOnly
-    ? sql`SELECT 'journal' AS source, 0 AS occurred_at, ${JOURNAL_ACTIVITY_SOURCE_RANK} AS source_rank, '' AS id WHERE 0`
-    : sql`SELECT 'journal' AS source, je.created_at AS occurred_at,
-            ${JOURNAL_ACTIVITY_SOURCE_RANK} AS source_rank, je.id AS id
-          FROM journal_entries je
-          WHERE je.user_id = ${userId} AND je.kind IN ('link', 'tweet')`;
-  const rows = db.all<ActivityRow>(sql`
-    SELECT source, occurred_at AS occurredAt, source_rank AS sourceRank, id FROM (
-      ${journalSide}
-      UNION ALL
-      SELECT 'research' AS source, n.created_at AS occurred_at,
-        ${RESEARCH_ACTIVITY_SOURCE_RANK} AS source_rank, n.id AS id
-      FROM nodes n
-      JOIN trees t ON t.id = n.tree_id
-      WHERE n.user_id = ${userId}
-        AND n.parent_node_id IS NULL
-        AND n.kind = 'run'
-        AND t.archived_at IS NULL
-        ${options.workspaceId ? sql`AND t.workspace_id = ${options.workspaceId}` : sql``}
-        ${options.bookmarkedOnly ? sql`AND t.bookmarked = 1` : sql``}
-    )
-    ${keyset}
-    ORDER BY occurred_at DESC, source_rank DESC, id DESC
-    LIMIT ${limit + 1}
-  `);
+  const rows = feedItemsRepo.stream(db, {
+    scope: options.scope ?? "workspace",
+    userId,
+    workspaceId: options.workspaceId ?? null,
+    bookmarkedOnly: options.bookmarkedOnly ?? false,
+    before: options.before ?? null,
+    limit: limit + 1,
+  });
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
   const journalIds = page.filter((row) => row.source === "journal").map((row) => row.id);
   const researchIds = page.filter((row) => row.source === "research").map((row) => row.id);
+  const workspaceByResearchId = new Map(
+    page
+      .filter((row) => row.source === "research")
+      .map((row) => [row.id, row.workspaceId ?? undefined] as const),
+  );
   const entries = new Map<string, JournalEntry>();
   if (journalIds.length > 0) {
     for (const row of db.all<{ id: string; entryJson: string }>(sql`
       SELECT id, entry_json AS entryJson FROM journal_entries
-      WHERE user_id = ${userId} AND id IN (${sql.join(
+      WHERE id IN (${sql.join(
         journalIds.map((id) => sql`${id}`),
         sql`, `,
       )})
@@ -171,7 +145,10 @@ export function recentActivity(
       sql`, `,
     );
     for (const row of db.all<NodeRow>(sql`SELECT * FROM nodes WHERE id IN (${idList})`)) {
-      queries.set(row.id, toRecentResearchQuery(normalizeNodeRow(row)));
+      queries.set(
+        row.id,
+        toRecentResearchQuery(normalizeNodeRow(row), workspaceByResearchId.get(row.id)),
+      );
     }
     for (const row of db.all<NodeRow>(sql`
       SELECT * FROM nodes
@@ -183,7 +160,7 @@ export function recentActivity(
         continue;
       }
       const list = childrenByParent.get(node.parentNodeId) ?? [];
-      list.push(toRecentResearchQuery(node));
+      list.push(toRecentResearchQuery(node, workspaceByResearchId.get(node.parentNodeId)));
       childrenByParent.set(node.parentNodeId, list);
     }
   }
@@ -214,12 +191,72 @@ export function recentActivity(
   };
 }
 
+export interface FeedEventItem extends FeedItemDescriptor {
+  item: RecentActivityItem;
+}
+
+export function eventItem(
+  db: SessionDatabase,
+  descriptor: FeedItemDescriptor,
+): FeedEventItem | null {
+  if (descriptor.kind === "journal") {
+    const row = db.get<{ entryJson: string }>(sql`
+      SELECT entry_json AS entryJson FROM journal_entries WHERE id = ${descriptor.id}
+    `);
+    if (!row) return null;
+    return {
+      ...descriptor,
+      item: {
+        kind: "journal",
+        occurredAt: descriptor.occurredAt,
+        entry: parseJsonColumn(
+          journalEntrySchema,
+          JSON.parse(row.entryJson) as unknown,
+          "journal_entries.entry_json",
+        ),
+      },
+    };
+  }
+  const row = db.get<NodeRow>(sql`SELECT * FROM nodes WHERE id = ${descriptor.id}`);
+  if (!row) return null;
+  const query = toRecentResearchQuery(normalizeNodeRow(row), descriptor.workspaceId ?? undefined);
+  const children = db
+    .all<NodeRow>(
+      sql`
+      SELECT * FROM nodes
+      WHERE parent_node_id = ${descriptor.id} AND kind = 'run'
+      ORDER BY created_at ASC, id ASC
+    `,
+    )
+    .map((child) =>
+      toRecentResearchQuery(normalizeNodeRow(child), descriptor.workspaceId ?? undefined),
+    );
+  return {
+    ...descriptor,
+    item: {
+      kind: "research-query",
+      occurredAt: descriptor.occurredAt,
+      query: { ...query, children },
+    },
+  };
+}
+
+export function eventItemForJournal(db: SessionDatabase, journalId: string): FeedEventItem | null {
+  const descriptor = feedItemsRepo.forJournal(db, journalId);
+  return descriptor ? eventItem(db, descriptor) : null;
+}
+
+export function eventItemForNode(db: SessionDatabase, nodeId: string): FeedEventItem | null {
+  const descriptor = feedItemsRepo.forNode(db, nodeId);
+  return descriptor ? eventItem(db, descriptor) : null;
+}
+
 /**
  * Raw `SELECT *` gives snake_case columns and SQLite's integers for booleans
  * and JSON text for the JSON columns; the drizzle mappers expect the shapes
- * the query builder produces. This is the one place raw rows are used, for the
- * `IN (…)` forms the builder cannot express over a keyset union, so the
- * conversion lives here rather than in the mapper.
+ * the query builder produces. This is the one place raw rows are used for the
+ * feed's `IN (…)` lookups, so the conversion lives here rather than in the
+ * mapper.
  */
 function normalizeNodeRow(row: Record<string, unknown>): NodeRow {
   const parse = (value: unknown): unknown =>

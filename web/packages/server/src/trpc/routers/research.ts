@@ -3,6 +3,7 @@
 
 import {
   documents as documentsRepo,
+  feedItems,
   nodes,
   queue,
   researchDocuments,
@@ -20,6 +21,7 @@ import {
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { emitFeedItemRemoved, emitFeedItemUpsertedForNode } from "../../events/feed.js";
 import {
   assertModelUsable,
   assertQueueHasRoom,
@@ -120,6 +122,7 @@ export const researchRouter = router({
       enqueueRun(ctx, node.id, input.model);
       publish(ctx, "research.tree.created", { tree: detail.tree, node });
       publishNode(ctx, node, queuePositionOf(ctx, node.id));
+      emitFeedItemUpsertedForNode(ctx, node.id);
       return detail;
     }),
 
@@ -156,6 +159,8 @@ export const researchRouter = router({
       enqueueRun(ctx, node.id, model);
       publish(ctx, "research.node.created", { node });
       publishNode(ctx, node, queuePositionOf(ctx, node.id));
+      const feedItem = feedItems.forTree(ctx.db, node.treeId);
+      if (feedItem) emitFeedItemUpsertedForNode(ctx, feedItem.id);
       return node;
     }),
 
@@ -179,6 +184,7 @@ export const researchRouter = router({
       );
       ctx.runs.start(node.id);
       publishNode(ctx, node, queuePositionOf(ctx, node.id));
+      emitFeedItemUpsertedForNode(ctx, node.id);
       return repo(() => trees.detail(ctx.db, ctx.user.id, node.treeId));
     }),
 
@@ -199,6 +205,7 @@ export const researchRouter = router({
       queue.release(ctx.db, node.id);
       ctx.runs.cancel(node.id);
       publishNode(ctx, node);
+      emitFeedItemUpsertedForNode(ctx, node.id);
       return node;
     }),
 
@@ -215,6 +222,7 @@ export const researchRouter = router({
     .mutation(({ ctx, input }) => {
       const node = repo(() => nodes.rename(ctx.db, ctx.user.id, input.nodeId, input.title));
       publishNode(ctx, node);
+      emitFeedItemUpsertedForNode(ctx, node.id);
       return node;
     }),
 
@@ -262,6 +270,7 @@ export const researchRouter = router({
         markdownChanged: result.markdownChanged,
         removedHighlightCount: result.removedHighlightCount,
       });
+      emitFeedItemUpsertedForNode(ctx, result.node.id);
       return result;
     }),
 
@@ -286,14 +295,17 @@ export const researchRouter = router({
     .mutation(({ ctx, input }) => {
       const tree = repo(() => trees.setBookmarked(ctx.db, ctx.user.id, input.treeId, input.value));
       publish(ctx, "research.tree.updated", { tree });
+      emitFeedItemUpsertedForNode(ctx, tree.rootNodeId);
       return tree;
     }),
 
   archiveTree: protectedProcedure
     .input(z.object({ treeId: z.string() }))
     .mutation(({ ctx, input }) => {
+      const feedItem = feedItems.forTree(ctx.db, input.treeId);
       const tree = repo(() => trees.archive(ctx.db, ctx.user.id, input.treeId));
       publish(ctx, "research.tree.archived", { tree });
+      emitFeedItemRemoved(ctx.eventBus, feedItem);
       return tree;
     }),
 
@@ -302,6 +314,7 @@ export const researchRouter = router({
     .mutation(({ ctx, input }) => {
       const tree = repo(() => trees.restore(ctx.db, ctx.user.id, input.treeId));
       publish(ctx, "research.tree.restored", { tree });
+      emitFeedItemUpsertedForNode(ctx, tree.rootNodeId);
       return tree;
     }),
 
@@ -312,8 +325,10 @@ export const researchRouter = router({
         repo(() => trees.get(ctx.db, ctx.user.id, input.treeId)),
         `research tree ${input.treeId} was not found`,
       );
+      const feedItem = feedItems.forTree(ctx.db, input.treeId);
       repo(() => trees.remove(ctx.db, ctx.user.id, input.treeId));
       publish(ctx, "research.tree.removed", { treeId: input.treeId });
+      emitFeedItemRemoved(ctx.eventBus, feedItem);
       return { ok: true };
     }),
 
@@ -326,6 +341,8 @@ export const researchRouter = router({
         parentNodeId: removal.parentNodeId,
         removedNodeIds: removal.removedNodeIds,
       });
+      const feedItem = feedItems.forTree(ctx.db, removal.treeId);
+      if (feedItem) emitFeedItemUpsertedForNode(ctx, feedItem.id);
       return removal;
     }),
 
@@ -389,6 +406,7 @@ export const researchRouter = router({
       const fresh = repo(() => trees.detail(ctx.db, ctx.user.id, detail.tree.id));
       const root = required(fresh.nodes[0], "the imported thread has no root node");
       publish(ctx, "research.tree.created", { tree: fresh.tree, node: root });
+      emitFeedItemUpsertedForNode(ctx, root.id);
       return fresh;
     }),
 });

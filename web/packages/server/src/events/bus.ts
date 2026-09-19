@@ -156,6 +156,12 @@ export class EventBus {
     }
   }
 
+  emitAll(event: SessionEvent): void {
+    for (const connections of [...this.#byUser.values()]) {
+      for (const connection of [...connections.values()]) this.#deliver(connection, event);
+    }
+  }
+
   #deliver(connection: Connection, event: SessionEvent): void {
     if (connection.closed) {
       return;

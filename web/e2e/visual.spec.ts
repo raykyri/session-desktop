@@ -38,8 +38,8 @@ test.describe("@visual", () => {
     );
 
     await signIn(page, { login: "e2e-visual" });
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+    await page.goto("/?feed=workspaces");
+    await expect(page.getByRole("heading", { name: "My Workspaces", level: 1 })).toBeVisible();
     const treeId = await startResearch(page, "What is a bloom filter?");
     await waitForAnswer(page);
 
@@ -52,10 +52,10 @@ test.describe("@visual", () => {
 
       const name = `${colorTheme}-${appearance}`;
 
-      await page.goto("/");
+      await page.goto("/?feed=workspaces");
       await expect(page.locator("html")).toHaveAttribute("data-appearance", appearance);
       await expect(page.locator("html")).toHaveAttribute("data-color-theme", colorTheme);
-      await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "My Workspaces", level: 1 })).toBeVisible();
       // Mask relative timestamp elements to prevent false visual regression diffs from dynamic time updates.
       await expect(page).toHaveScreenshot(`home-${name}.png`, {
         mask: [page.locator("time")],

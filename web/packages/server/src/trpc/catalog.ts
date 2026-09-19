@@ -1,5 +1,5 @@
 // The public catalog is the first admin account, else the oldest account.
-// Guests read that owner's workspaces, threads, encyclopedia, and feed.
+// Guests read that owner's workspaces, threads, and encyclopedia. The Home feed is global.
 // Signed-in callers still read their own rows. Mutations stay behind
 // `protectedProcedure` (`06-auth-and-users.md` §4).
 
