@@ -389,7 +389,7 @@ export function ActivityFeed({
                   >
                     {source.kind === "journal" ? (
                       <>
-                        <ActivityMetadataLine event={event} />
+                        <ActivityMetadataLine event={event} className="text-xs" />
                         <JournalEntryCard
                           entry={source.entry}
                           onAction={(action) => runEntryAction(source.entry, action)}
