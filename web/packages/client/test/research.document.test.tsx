@@ -14,7 +14,7 @@ import type {
   Turn,
 } from "@session/shared";
 import { QueryClient } from "@tanstack/react-query";
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import test from "ava";
 
 import { queryClientDefaults } from "../src/api/queries.js";
@@ -172,6 +172,49 @@ test.afterEach.always(() => {
 });
 
 /* --------------------------------------------------------------- rendering */
+
+test.serial("the document stays hidden until every segment has loaded", async (t) => {
+  const root = node({ id: "n1", status: "complete" });
+  const detail = detailFor([root]);
+  const content = contentFor(root, [assistantTurn("t1", "Loaded answer")]);
+  let resolveContent!: (value: ResearchNodeContent) => void;
+  const pendingContent = new Promise<ResearchNodeContent>((resolve) => {
+    resolveContent = resolve;
+  });
+
+  await renderApp("/r/t1", {
+    queryClient: testQueryClient(),
+    responses: {
+      "research.getTree": detail,
+      "research.getNodeContent": pendingContent,
+      "research.markTreeViewed": detail.tree,
+      "documents.list": [],
+    },
+  });
+
+  await waitUntil(
+    t,
+    () => screen.queryByRole("status", { name: "Loading research" }) !== null,
+    "the document loading gate is shown",
+  );
+  const frame = screen.getByText(root.prompt).closest(".research-document-frame");
+  t.true(frame?.classList.contains("invisible"));
+  t.is(frame?.getAttribute("aria-hidden"), "true");
+  t.is(frame?.closest("article")?.getAttribute("aria-busy"), "true");
+
+  act(() => {
+    resolveContent(content);
+  });
+  await waitUntil(
+    t,
+    () => screen.queryByText("Loaded answer") !== null,
+    "the loaded document is revealed",
+  );
+  t.falsy(screen.queryByRole("status", { name: "Loading research" }));
+  t.false(frame?.classList.contains("invisible"));
+  t.is(frame?.getAttribute("aria-hidden"), "false");
+  t.is(frame?.closest("article")?.getAttribute("aria-busy"), "false");
+});
 
 test.serial("a completed answer renders its prose, word count and sources", async (t) => {
   const root = node({ id: "n1", status: "complete", completedAt: 1_700_000_050_000 });
@@ -409,7 +452,7 @@ test.serial(
 
     await waitUntil(
       t,
-      () => screen.queryByLabelText("Follow-up question") !== null,
+      () => screen.queryByRole("textbox", { name: "Follow-up question" }) !== null,
       "the composer mounts",
     );
     const field = screen.getByLabelText("Follow-up question");
@@ -433,7 +476,7 @@ test.serial(
 
     await waitUntil(
       t,
-      () => screen.queryByLabelText("Follow-up question") !== null,
+      () => screen.queryByRole("textbox", { name: "Follow-up question" }) !== null,
       "the composer mounts",
     );
     const field = screen.getByLabelText("Follow-up question");

@@ -54,8 +54,8 @@ export function SidebarBody() {
       </nav>
 
       <WorkspaceSwitcher workspaceId={workspaceId} onSelect={setScope} />
-      <EncyclopediaSection workspaceId={workspaceId} activeSlug={activeSlug} />
       <ResearchSidebarSection workspaceId={workspaceId} />
+      <EncyclopediaSection workspaceId={workspaceId} activeSlug={activeSlug} />
     </div>
   );
 }

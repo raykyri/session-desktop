@@ -1242,10 +1242,24 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       />
       <article
         ref={scrollerRef}
-        className="research-reading-surface min-h-0 flex-1 overflow-x-clip overflow-y-auto px-8 py-8 max-[900px]:px-7"
+        className="research-reading-surface relative min-h-0 flex-1 overflow-x-clip overflow-y-auto px-8 py-8 max-[900px]:px-7"
+        aria-busy={!chainSettled}
         onScroll={onScroll}
       >
-        <div ref={contentRef} className="research-document-frame min-w-0">
+        {!chainSettled ? (
+          <div
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            role="status"
+            aria-label="Loading research"
+          >
+            <LoaderCircle className="session-spin text-fg-muted" size={24} aria-hidden="true" />
+          </div>
+        ) : null}
+        <div
+          ref={contentRef}
+          className={cn("research-document-frame min-w-0", !chainSettled && "invisible")}
+          aria-hidden={!chainSettled}
+        >
           {chainNodes.map((node, index) => {
             const previous = chainNodes[index - 1];
             const linked = annotations.linkedAnchorId;

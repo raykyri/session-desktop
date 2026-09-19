@@ -181,7 +181,10 @@ export function AppShell() {
           on the stage's left edge, and a button laid over it would cover it. */}
       {sidebarCollapsed ? (
         <div className="flex shrink-0 items-start px-1 pt-2">
-          <SidebarRestoreButton onRestore={() => setSidebarCollapsed(false)} />
+          <SidebarRestoreButton
+            className="translate-x-0.5"
+            onRestore={() => setSidebarCollapsed(false)}
+          />
         </div>
       ) : null}
       <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
