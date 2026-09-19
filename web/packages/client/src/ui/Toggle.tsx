@@ -64,6 +64,8 @@ export interface CheckboxProps {
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
   label: ReactNode;
+  /** Explanatory line under the label, in the same click target. */
+  description?: ReactNode;
   disabled?: boolean;
   className?: string;
 }
@@ -72,19 +74,20 @@ export function Checkbox({
   checked,
   onCheckedChange,
   label,
+  description,
   disabled = false,
   className,
 }: CheckboxProps) {
   const id = useId();
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div className={cn("flex items-start gap-2", className)}>
       <BaseCheckbox.Root
         id={id}
         checked={checked}
         onCheckedChange={(next) => onCheckedChange(next)}
         disabled={disabled}
         className={cn(
-          "flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm",
+          "mt-0.5 flex size-4 shrink-0 cursor-pointer items-center justify-center rounded-sm",
           "border-border-control bg-control text-fg-on-accent border",
           "data-checked:border-accent-strong data-checked:bg-accent-strong",
           "data-disabled:cursor-default data-disabled:opacity-60",
@@ -95,8 +98,11 @@ export function Checkbox({
           <Check size={11} strokeWidth={3} aria-hidden="true" />
         </BaseCheckbox.Indicator>
       </BaseCheckbox.Root>
-      <label htmlFor={id} className="text-fg-primary cursor-pointer text-base">
-        {label}
+      <label htmlFor={id} className="min-w-0 cursor-pointer">
+        <span className="text-fg-primary block text-base">{label}</span>
+        {description ? (
+          <span className="text-fg-muted mt-0.5 block text-sm">{description}</span>
+        ) : null}
       </label>
     </div>
   );

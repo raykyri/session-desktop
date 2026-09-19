@@ -9,7 +9,7 @@
 // explicitly: there is no whitespace between one message's last word and the
 // next one's first.
 
-import { isEditableTarget } from "@session/shared";
+import { isEditableTarget, stripWikilinks } from "@session/shared";
 
 /** Excludes non-content UI elements (tool inputs/outputs, thinking disclosures) from text selection anchors. */
 export const NON_TEXT_ROW_SELECTOR = ".tool-block, .thinking-block, .activity-group-block";
@@ -281,7 +281,7 @@ const REPLY_SNIPPET_WORDS = 8;
  * Punctuation tokens do not count toward the budget and a trailing ellipsis
  * marks a cut. */
 export function formatResearchReplySnippet(answer: string, maxWords = REPLY_SNIPPET_WORDS): string {
-  const tokens = quoteDisplayText(answer.replace(/^#{1,6}\s+/gm, ""))
+  const tokens = quoteDisplayText(stripWikilinks(answer).replace(/^#{1,6}\s+/gm, ""))
     .split(" ")
     .filter(Boolean);
   if (tokens.length === 0) return "";

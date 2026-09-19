@@ -97,7 +97,7 @@ parameter.
 | `/highlights` | `HighlightsPage` | |
 | `/r/$treeId` | `ResearchPage` | search `?node=&highlight=&filter=`; `key={treeId}` remount as today |
 | `/e/$slug` | `EncyclopediaPage` | search `?ws=` |
-| `/settings` | `SettingsPage` | sections: General, Appearance, Research (instructions, default model), Usage |
+| `/settings` | `SettingsPage` | tabs: General (appearance, reading and composing, research instructions and default model), Usage |
 | `/admin` | `AdminPage` | admin only: user list with usage and model access |
 
 Search params validated with zod (`validateSearch`). The workspace scope

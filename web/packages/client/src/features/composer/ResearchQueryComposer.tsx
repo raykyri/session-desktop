@@ -451,7 +451,7 @@ export function ResearchQueryComposer({
               onClick={() => updateModel(candidate.id)}
             >
               <span className="flex min-w-0 items-center gap-2">
-                <ModelIcon modelId={candidate.id} />
+                <ModelIcon modelId={candidate.id} reserve />
                 <span className="truncate">{candidate.label}</span>
               </span>
             </MenuItem>

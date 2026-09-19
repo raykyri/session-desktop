@@ -40,19 +40,16 @@ export const RESEARCH_HIGHLIGHT_CONTEXT_LENGTH = 128;
 /** Timeline items rendered before the "Show N earlier" expander appears. */
 export const TIMELINE_ITEM_RENDER_WINDOW = 100;
 
-/** The answer column's cap. Declared as a custom property on the document
- * content root and consumed by the grid, so the number lives in one place
- * (the desktop spelled it literally at four sites to work around a WebKit
- * `var()` bug that the web does not have — 09 §3). */
-export const RESEARCH_ANSWER_MAX_WIDTH = "640px";
-
-/** The document's two columns: the answer column, capped at
- * `--research-answer-max-width`, and the follow-up rail. Every row of a
- * segment (prompt, answer, trailing composer) lays out on this grid so the
- * prompt and the answer wrap at the same edge whatever the viewport; under
- * 900px the rail drops beneath and the one column takes the width. */
+/** The document's two columns: the reading column, capped at
+ * `--research-answer-max-width`, and the rail (both declared on
+ * `.research-reading-surface`, `prose.css`; the desktop spelled the cap
+ * literally at four sites to work around a WebKit `var()` bug the web does
+ * not have — 09 §3). Every row of a segment (prompt, answer, trailing
+ * composer) and an encyclopedia page's body lay out on this grid so they wrap
+ * at one edge whatever the viewport; under 900px the rail drops beneath and
+ * the one column takes the width. */
 export const RESEARCH_COLUMNS_CLASS =
-  "grid grid-cols-[minmax(0,var(--research-answer-max-width))_minmax(220px,260px)] " +
+  "grid grid-cols-[minmax(0,var(--research-answer-max-width))_minmax(220px,var(--research-rail-width))] " +
   "gap-(--research-column-gap) max-[900px]:grid-cols-[minmax(0,1fr)]";
 
 export interface AnchoredCardPlacement {

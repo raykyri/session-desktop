@@ -8,7 +8,7 @@
 // about.
 
 import type { ResearchNode } from "@session/shared";
-import { ArrowLeft, Bookmark, Reply } from "lucide-react";
+import { ArrowLeft, Reply } from "lucide-react";
 import { memo } from "react";
 
 import { cn } from "../../lib/cn.js";
@@ -18,46 +18,11 @@ import { ControlButton } from "../../ui/Button.js";
 import { ResearchMarkdown } from "../markdown/index.js";
 
 import { DocumentChips } from "./DocumentChips.js";
+import { ThreadActions } from "./ThreadActions.js";
 import { formatResearchReplySnippet, quoteDisplayText } from "./selection/dom.js";
 
 /** Follow and Bookmark for one thread. Both flags live on the tree, so Home's
  * card and the open thread render the same pair from the same state. */
-export function ThreadActions({
-  followed,
-  bookmarked,
-  onToggleFollow,
-  onToggleBookmark,
-}: {
-  followed: boolean;
-  bookmarked: boolean;
-  onToggleFollow: () => void;
-  onToggleBookmark: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <ControlButton
-        size="sm"
-        aria-pressed={followed}
-        title={followed ? "Stop following this thread" : "Follow this thread"}
-        className={cn(followed && "text-fg-strong border-border-control-accent")}
-        onClick={onToggleFollow}
-      >
-        {followed ? "Following" : "Follow"}
-      </ControlButton>
-      <ControlButton
-        size="sm"
-        aria-pressed={bookmarked}
-        aria-label={bookmarked ? "Remove bookmark" : "Bookmark"}
-        title={bookmarked ? "Remove bookmark" : "Bookmark this thread"}
-        className={cn("px-2", bookmarked && "text-fg-strong border-border-control-accent")}
-        onClick={onToggleBookmark}
-      >
-        <Bookmark size={13} aria-hidden="true" fill={bookmarked ? "currentColor" : "none"} />
-      </ControlButton>
-    </div>
-  );
-}
-
 export interface SegmentPromptProps {
   node: ResearchNode;
   /** Position in the rendered spine. Index 0 is the page's question. */
@@ -122,13 +87,7 @@ export const SegmentPrompt = memo(function SegmentPrompt({
         <DocumentChips documentIds={node.documentIds} workspaceId={workspaceId} />
       ) : null}
       {showFooter ? (
-        <div className="text-fg-subtle mt-1.5 mb-[26px] flex min-w-0 items-center gap-2.5 text-sm">
-          <ThreadActions
-            followed={followed}
-            bookmarked={bookmarked}
-            onToggleFollow={onToggleFollow}
-            onToggleBookmark={onToggleBookmark}
-          />
+        <div className="text-fg-subtle mt-1.5 mb-[26px] flex min-w-0 items-center gap-3 text-xs">
           <span
             className="min-w-0 truncate"
             title={askedAt !== null ? new Date(askedAt).toLocaleString() : undefined}
@@ -139,6 +98,13 @@ export const SegmentPrompt = memo(function SegmentPrompt({
               <time dateTime={new Date(askedAt).toISOString()}>{formatRelativeTime(askedAt)}</time>
             ) : null}
           </span>
+          <ThreadActions
+            className="ml-auto"
+            followed={followed}
+            bookmarked={bookmarked}
+            onToggleFollow={onToggleFollow}
+            onToggleBookmark={onToggleBookmark}
+          />
         </div>
       ) : null}
     </div>

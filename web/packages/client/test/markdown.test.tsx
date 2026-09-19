@@ -44,6 +44,23 @@ test.serial("a wikilink renders as a link and activates through context", (t) =>
   t.deepEqual(activated, ["Collective memory"]);
 });
 
+test.serial("a wikilink without a page asks before creating one", async (t) => {
+  const activated: string[] = [];
+  render(
+    <WikilinkActionsProvider
+      actions={{ resolve: () => null, activate: (term) => activated.push(term), interactive: true }}
+    >
+      <ResearchMarkdown markdown="See [[Memory palace]]." />
+    </WikilinkActionsProvider>,
+  );
+
+  screen.getByRole("link", { name: "Memory palace" }).click();
+  t.deepEqual(activated, [], "a click alone does not write a page");
+  const confirm = await screen.findByRole("button", { name: "Create page" });
+  confirm.click();
+  t.deepEqual(activated, ["Memory palace"]);
+});
+
 test.serial("without a provider a wikilink is inert but still reads as linked", (t) => {
   render(<ResearchMarkdown markdown="See [[Memory palace]]." />);
   const link = screen.getByText("Memory palace");

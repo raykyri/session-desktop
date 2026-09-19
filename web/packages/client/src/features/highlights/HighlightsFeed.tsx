@@ -8,12 +8,11 @@
 
 import type { ResearchHighlightFeedItem } from "@session/shared";
 import { useNavigate } from "@tanstack/react-router";
-import { RotateCw } from "lucide-react";
 import { Fragment } from "react";
 
 import { useHighlightsFeed } from "../../api/queries.js";
 import { formatRelativeTime } from "../../lib/relativeTime.js";
-import { IconButton, ControlButton } from "../../ui/Button.js";
+import { ControlButton } from "../../ui/Button.js";
 
 /** "Today", "Yesterday", or a calendar date. Local time, because a highlight
  * belongs to the reader's day rather than to UTC's. */
@@ -99,14 +98,6 @@ export function HighlightsFeed({ workspaceId }: { workspaceId: string }) {
       <div className="mx-auto flex w-full max-w-[calc(var(--spacing-feed)+2*clamp(20px,4vw,48px))] flex-col px-[clamp(20px,4vw,48px)] pb-12">
         <div className="flex items-center justify-between gap-2 pt-6 pb-4">
           <h1 className="text-input text-fg-heading m-0 font-semibold">Highlights</h1>
-          <IconButton
-            label="Refresh Highlights"
-            title="Refresh Highlights"
-            disabled={highlights.isFetching}
-            onClick={() => void highlights.refetch()}
-          >
-            <RotateCw size={15} aria-hidden="true" />
-          </IconButton>
         </div>
 
         {highlights.isError ? (

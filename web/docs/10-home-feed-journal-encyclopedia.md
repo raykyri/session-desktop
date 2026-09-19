@@ -125,7 +125,10 @@ Rewrite (`regeneratePage`) and Delete (`deletePage`, confirm). Events
 Wikilink activation (`WikilinkActionsContext`): `resolve(term)` looks the
 slug up in the cached page list → `ready | generating | failed | missing`;
 `activate(term, element)` navigates to `/e/$slug` and, when missing or
-failed, first calls `encyclopedia.requestPage` with the source context:
+failed, first calls `encyclopedia.requestPage` with the source context. The
+renderer only calls `activate` for a missing or failed term after the reader
+confirms in a popover on the link ("Write an encyclopedia page for X?"), so
+a stray click on linked text does not start a model call. Source context:
 `{ nodeId, treeId, question: node.prompt, excerpt: <surrounding block text>,
 siblingTerms: <other wikilink terms in that block> }` (from a page:
 `pageSlug` instead of node/tree). The block text is taken from the nearest

@@ -24,7 +24,7 @@ import type { ResearchHighlightAnchor, ResearchNode } from "@session/shared";
 import { useNavigate, useParams, useRouter, useSearch } from "@tanstack/react-router";
 import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import {
   useCancelResearchNode,
@@ -60,7 +60,7 @@ import { RecapDialog } from "./RecapDialog.js";
 import { SelectionPopover } from "./SelectionPopover.js";
 import { ThreadSegment } from "./ThreadSegment.js";
 import type { PublishedSegment, SegmentElementKind } from "./ThreadSegment.js";
-import { RESEARCH_ANSWER_MAX_WIDTH, RESEARCH_COLUMNS_CLASS } from "./layout.js";
+import { RESEARCH_COLUMNS_CLASS } from "./layout.js";
 import type { SegmentConnector } from "./layout.js";
 import { useHighlightMutations, useUpdateResearchDocument } from "./mutations.js";
 import type { CapturedResearchSelection } from "./selection/capture.js";
@@ -1232,16 +1232,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         className="research-reading-surface min-h-0 flex-1 overflow-x-clip overflow-y-auto px-8 py-8 max-[900px]:px-7"
         onScroll={onScroll}
       >
-        <div
-          ref={contentRef}
-          className="mx-auto w-[min(100%,1160px)] min-w-0"
-          style={
-            {
-              "--research-answer-max-width": RESEARCH_ANSWER_MAX_WIDTH,
-              "--research-column-gap": "clamp(28px, 4vw, 52px)",
-            } as CSSProperties
-          }
-        >
+        <div ref={contentRef} className="research-document-frame min-w-0">
           {chainNodes.map((node, index) => {
             const previous = chainNodes[index - 1];
             const linked = annotations.linkedAnchorId;
