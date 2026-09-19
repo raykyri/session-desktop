@@ -38,7 +38,8 @@ export interface FeedAnchorControl {
   /** Records the current anchor, debounced. */
   record: (anchor: FeedScrollAnchor | null) => void;
   /** Writes any pending anchor now. Call before navigating away so a click
-   * that never produced a scroll event still leaves a position to restore. */
+   * that never produced a scroll event still leaves a position to restore.
+   * Unmount must not recapture: a detached scroller often reads scrollTop 0. */
   flush: () => void;
   /** The anchor this feed was last left at, read once per mount. */
   initial: FeedScrollAnchor | null;

@@ -70,7 +70,11 @@ function feedScroller(): HTMLElement {
  * synthetic handlers; the feed subscribes natively. */
 async function scrollFeedTo(top: number): Promise<void> {
   const scroller = feedScroller();
-  Object.defineProperty(scroller, "scrollTop", { value: top, configurable: true });
+  Object.defineProperty(scroller, "scrollTop", {
+    value: top,
+    configurable: true,
+    writable: true,
+  });
   await act(() => {
     scroller.dispatchEvent(new Event("scroll"));
     return Promise.resolve();
@@ -378,6 +382,14 @@ test.serial("a query card renders its recap and its follow-up questions", async 
   // The child quotes the passage it was asked about, which is what tells a
   // reader it is anchored rather than a plain continuation.
   t.regex(followUps.textContent ?? "", /@a shared store of meaning/);
+  const modelMark = within(screen.getByRole("feed")).getByRole("button", {
+    name: "Gemini 3.8 Flash",
+  });
+  t.truthy(modelMark, "the model name is the Gemini mark");
+  const feedArticle = modelMark.closest("[role='article']");
+  t.truthy(feedArticle?.querySelector("time[datetime]"), "the timestamp sits next to the mark");
+  t.is(feedArticle?.querySelectorAll("time").length, 1, "the timestamp above the question is gone");
+  t.is(within(feedArticle as HTMLElement).queryByText("Gemini 3.8 Flash"), null);
   app.unmount();
 });
 
@@ -525,4 +537,27 @@ test.serial("returning to the feed restores the scroll offset it was left at", a
     "the scroller is returned to the saved offset instead of 0",
   );
   app.unmount();
+});
+
+test.serial("unmounting the feed does not replace a saved offset with scrollTop 0", async (t) => {
+  useNavigationStore.setState({ feedAnchorByView: {} });
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: feedResponses(activityPage([queryItem(researchQuery())])),
+  });
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByText("What is collective memory?").length > 0,
+    "the home feed lists a thread",
+  );
+  await scrollFeedTo(900);
+  fireEvent.click(screen.getByText("What is collective memory?"));
+  t.is(useNavigationStore.getState().feedAnchorFor(`home:${WORKSPACE_ID}`)?.top, 900);
+  app.unmount();
+  t.is(
+    useNavigationStore.getState().feedAnchorFor(`home:${WORKSPACE_ID}`)?.top,
+    900,
+    "a detached scroller reading scrollTop 0 must not wipe the flushed position",
+  );
 });

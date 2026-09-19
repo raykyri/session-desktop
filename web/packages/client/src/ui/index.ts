@@ -14,6 +14,7 @@ export * from "./FindBar.js";
 export * from "./HistoryNav.js";
 export * from "./Lightboxes.js";
 export * from "./Menu.js";
+export * from "./ModelMark.js";
 export * from "./NotificationStack.js";
 export * from "./Popover.js";
 export * from "./Select.js";

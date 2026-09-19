@@ -120,6 +120,15 @@ function captureFeedAnchor(
   };
 }
 
+/** Pixel offset of `node` from the start of `scroller`'s content. The composer
+ * and title sit above the virtual list, so TanStack Virtual needs this as
+ * `scrollMargin` and restore must not treat list offset 0 as scrollTop 0. */
+function offsetWithinScroller(scroller: HTMLElement, node: HTMLElement): number {
+  return (
+    node.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop
+  );
+}
+
 export function ActivityFeed({
   workspaceId,
   bookmarkedOnly = false,
@@ -148,11 +157,13 @@ export function ActivityFeed({
 
   const internalScrollRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = externalScrollRef ?? internalScrollRef;
-  // Read once so a remount starts the virtualizer at the saved offset instead
-  // of 0. The layout effect below still applies `top` in case this ran before
-  // the workspace id (and therefore `view`) had resolved.
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
+  // Read once the workspace is known so a remount starts at the saved offset
+  // instead of 0. Do not snapshot `home:` before `workspaceId` resolves — that
+  // locked initialOffset at 0 and the virtualizer later wrote it over restore.
   const initialScrollOffset = useRef<number | undefined>(undefined);
-  if (initialScrollOffset.current === undefined) {
+  if (initialScrollOffset.current === undefined && workspaceId !== "") {
     initialScrollOffset.current = useNavigationStore.getState().feedAnchorFor(view)?.top ?? 0;
   }
 
@@ -202,6 +213,7 @@ export function ActivityFeed({
     },
     getItemKey: (index) => events[index]?.id ?? index,
     overscan: 6,
+    scrollMargin,
     initialOffset: initialScrollOffset.current,
     // The viewport's size before the resize observer reports one. A zero
     // height would put the first render's range at nothing and leave the feed
@@ -215,36 +227,66 @@ export function ActivityFeed({
    * ------------------------------------------------------------------ */
 
   const virtualItems = virtualizer.getVirtualItems();
-  const restoredRef = useRef(false);
+  const listSize = virtualizer.getTotalSize();
+
   useLayoutEffect(() => {
-    if (restoredRef.current || events.length === 0 || workspaceId === "") return;
-    const saved = useNavigationStore.getState().feedAnchorFor(view) ?? anchor.initial;
-    if (!saved) {
-      restoredRef.current = true;
+    const scroller = scrollRef.current;
+    const list = listRef.current;
+    if (!scroller || !list) return;
+    const next = offsetWithinScroller(scroller, list);
+    setScrollMargin((current) => (current === next ? current : next));
+  }, [header, events.length, listSize, scrollRef]);
+
+  // Restore by writing `scrollTop` directly. `virtualizer.scrollToOffset` goes
+  // through alignment/clamping and a reconcile loop: before the list is tall
+  // enough that loop snaps to ~the first row and hides the composer. Keep the
+  // target until measurements settle or the reader scrolls away.
+  const pendingRestoreTop = useRef<number | null>(null);
+  const restorePrepared = useRef(false);
+  useLayoutEffect(() => {
+    if (workspaceId === "") return;
+    if (!restorePrepared.current) {
+      const saved = useNavigationStore.getState().feedAnchorFor(view) ?? anchor.initial;
+      if (typeof saved?.top === "number") {
+        pendingRestoreTop.current = saved.top;
+        restorePrepared.current = true;
+      } else if (saved) {
+        if (events.length === 0) return;
+        const index = events.findIndex((event) => event.id === saved.key);
+        if (index < 0) {
+          restorePrepared.current = true;
+        } else {
+          const offsetForIndex = virtualizer.getOffsetForIndex(index, "start");
+          pendingRestoreTop.current = offsetForIndex
+            ? Math.max(0, offsetForIndex[0] - saved.offset)
+            : 0;
+          restorePrepared.current = true;
+        }
+      } else {
+        restorePrepared.current = true;
+      }
+    }
+    const target = pendingRestoreTop.current;
+    const scroller = scrollRef.current;
+    if (target === null || !scroller || events.length === 0) return;
+    const max = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    if (target > max && Math.abs(scroller.scrollTop - max) <= 1) {
+      pendingRestoreTop.current = null;
       return;
     }
-    let target: number | null = typeof saved.top === "number" ? saved.top : null;
-    if (target === null) {
-      // Pre-`top` persisted anchors: map the saved row back to an offset.
-      const index = events.findIndex((event) => event.id === saved.key);
-      if (index < 0) {
-        restoredRef.current = true;
-        return;
-      }
-      const offsetForIndex = virtualizer.getOffsetForIndex(index, "start");
-      target = offsetForIndex ? Math.max(0, offsetForIndex[0] - saved.offset) : 0;
-    }
-    restoredRef.current = true;
-    virtualizer.scrollToOffset(target);
-    const scroller = scrollRef.current;
-    if (scroller) scroller.scrollTop = target;
-  }, [anchor.initial, events, scrollRef, view, virtualizer, workspaceId]);
+    if (Math.abs(scroller.scrollTop - target) > 1) scroller.scrollTop = target;
+  }, [anchor.initial, events, listSize, scrollMargin, scrollRef, view, virtualizer, workspaceId]);
 
   const onScroll = useCallback(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     const atTop = scroller.scrollTop <= FEED_TOP_THRESHOLD;
     if (atTop) setNewCount(0);
+    const pending = pendingRestoreTop.current;
+    if (pending !== null) {
+      if (Math.abs(scroller.scrollTop - pending) <= 1) pendingRestoreTop.current = null;
+      else return;
+    }
     // An empty range is a measurement gap, not "the reader is at the top".
     // Writing null here used to wipe a saved position on remount.
     if (virtualizer.getVirtualItems().length === 0) return;
@@ -257,7 +299,10 @@ export function ActivityFeed({
     scroller.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       scroller.removeEventListener("scroll", onScroll);
-      onScroll();
+      // Flush the last real scroll. Do not recapture here: this effect cleans
+      // up after the node is gone, and a detached scroller often reads
+      // scrollTop 0, which would replace the position openQuery just saved
+      // with "top of the first feed item".
       anchor.flush();
     };
   }, [anchor, onScroll, scrollRef]);
@@ -421,7 +466,7 @@ export function ActivityFeed({
             </div>
           ) : null}
 
-          <div role="feed" aria-label={title} aria-busy={feed.isFetching}>
+          <div ref={listRef} role="feed" aria-label={title} aria-busy={feed.isFetching}>
             <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
               {virtualItems.map((virtualRow) => {
                 const event = events[virtualRow.index];
@@ -433,7 +478,12 @@ export function ActivityFeed({
                     ref={virtualizer.measureElement}
                     data-index={virtualRow.index}
                     className="absolute top-0 left-0 w-full"
-                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                    style={{
+                      // `start` is in scroller coordinates (it includes
+                      // `scrollMargin`); this node is already below the title
+                      // and composer, so the margin has to come off again.
+                      transform: `translateY(${virtualRow.start - scrollMargin}px)`,
+                    }}
                   >
                     <div
                       className="flex flex-col gap-[9px] pt-[21px] pb-5"
@@ -451,7 +501,7 @@ export function ActivityFeed({
                         </>
                       ) : (
                         <>
-                          <ActivityMetadataLine event={event} />
+                          <ActivityMetadataLine event={event} showTime={false} />
                           <ResearchQueryCard
                             query={source.query}
                             tree={treeById.get(source.query.treeId)}

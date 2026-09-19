@@ -2,6 +2,7 @@ import { findModel, type RecentActivityEvent } from "@session/shared";
 
 import { cn } from "../lib/cn.js";
 import { formatRelativeTime } from "../lib/relativeTime.js";
+
 import { METADATA_LINE_COMPACT } from "./surfaces.js";
 
 /**
@@ -39,12 +40,16 @@ export function formatActivityMetadataSummary(event: RecentActivityEvent): strin
 export function ActivityMetadataLine({
   event,
   className,
+  showTime = true,
 }: {
   event: RecentActivityEvent;
   className?: string;
+  /** Research cards carry the time next to the model mark; omit it here. */
+  showTime?: boolean;
 }) {
-  const finiteTime = Number.isFinite(event.occurredAt);
+  const finiteTime = showTime && Number.isFinite(event.occurredAt);
   const summary = formatActivityMetadataSummary(event);
+  if (!summary && !finiteTime) return null;
   return (
     <div
       className={cn("text-fg-activity", METADATA_LINE_COMPACT, className)}

@@ -481,6 +481,14 @@ test.serial(
     );
     const field = screen.getByLabelText("Follow-up question");
     t.false(field.hasAttribute("disabled"));
+    const footer = screen.getByText("Follow").closest("div")?.parentElement;
+    t.truthy(footer, "the prompt footer is on the completed thread");
+    t.truthy(
+      within(footer as HTMLElement).getByRole("button", { name: "Gemini 3.8 Flash" }),
+      "the prompt footer uses the Gemini mark",
+    );
+    t.truthy(footer?.querySelector("time[datetime]"));
+    t.false((footer?.textContent ?? "").includes("·"), "no middot after the mark");
     const send = screen.getByRole("button", { name: /Send/ });
     t.true(send.hasAttribute("disabled"));
 

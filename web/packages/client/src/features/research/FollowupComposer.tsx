@@ -111,7 +111,8 @@ export function FollowupComposer({
     textarea.style.height = `${composerTextareaHeight(textarea.scrollHeight)}px`;
   }, [value, textareaRef]);
 
-  const modelLabel = findModel(model)?.label ?? model;
+  const resolvedModel = models.find((entry) => entry.id === model) ?? models[0] ?? null;
+  const modelLabel = resolvedModel?.label ?? findModel(model)?.label ?? model;
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (isComposerSubmitShortcut(event)) {
@@ -122,7 +123,7 @@ export function FollowupComposer({
     }
     if (models.length > 1 && launcherTabAction(event, true) === "cycle-model") {
       event.preventDefault();
-      const index = models.findIndex((entry) => entry.id === model);
+      const index = models.findIndex((entry) => entry.id === (resolvedModel?.id ?? model));
       const next = models[(index + 1 + models.length) % models.length];
       if (next) onModelChange(next.id);
     }
@@ -168,6 +169,7 @@ export function FollowupComposer({
           <Menu
             label="Model"
             align="start"
+            size="sm"
             trigger={
               <button
                 type="button"
@@ -185,7 +187,7 @@ export function FollowupComposer({
                 key={entry.id}
                 onClick={() => onModelChange(entry.id)}
                 disabled={!entry.available}
-                selected={entry.id === model}
+                selected={entry.id === resolvedModel?.id}
               >
                 {entry.label}
               </MenuItem>

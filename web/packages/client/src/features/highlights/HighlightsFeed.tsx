@@ -96,7 +96,7 @@ export function HighlightsFeed({ workspaceId }: { workspaceId: string }) {
   };
 
   return (
-    <div className="research-reading-surface h-full overflow-y-auto px-8 max-[900px]:px-7">
+    <div className="research-reading-surface h-full overflow-y-auto pr-8 pl-[42px] max-[900px]:pr-7 max-[900px]:pl-[38px]">
       <div className="research-document-frame flex min-w-0 flex-col pb-12">
         <div className="max-w-feed flex w-full flex-col">
           <div className="flex items-center justify-between gap-2 pt-6 pb-4">

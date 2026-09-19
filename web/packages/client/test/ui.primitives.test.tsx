@@ -206,6 +206,23 @@ test.serial("a menu opens and is navigable from the keyboard", async (t) => {
   await waitUntil(t, () => chosen.join() === "bookmark", "Enter runs the highlighted item");
 });
 
+test.serial("a small menu uses compact type and padding on its rows", async (t) => {
+  render(
+    <Menu size="sm" trigger={<ControlButton size="sm">Model</ControlButton>} label="Model">
+      <MenuItem selected>Gemini 3.8 Flash</MenuItem>
+    </Menu>,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Model" }));
+  const menu = await screen.findByRole("menu");
+  const item = screen.getByRole("menuitem", { name: "Gemini 3.8 Flash" });
+
+  t.true(menu.className.includes("p-0.5"), "the popup uses the compact padding");
+  t.true(menu.className.includes("rounded-md"), "the popup uses the compact radius");
+  t.true(item.className.includes("text-sm"), "rows match a small trigger's type size");
+  t.false(item.className.includes("text-base"));
+});
+
 function clientSources(directory: string): string[] {
   const files: string[] = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {

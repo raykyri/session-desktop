@@ -5,7 +5,14 @@ import { Fragment } from "react";
 
 import { cn } from "../lib/cn.js";
 
-import { CONTROL_BUTTON, MENU_ITEM, MENU_SEPARATOR, POPOVER_SURFACE } from "./surfaces.js";
+import {
+  CONTROL_BUTTON,
+  MENU_ITEM,
+  MENU_ITEM_SIZE,
+  MENU_SEPARATOR,
+  POPOVER_SURFACE,
+  POPOVER_SURFACE_SIZE,
+} from "./surfaces.js";
 
 export interface SelectOption {
   value: string;
@@ -37,7 +44,7 @@ const TRIGGER_SIZE_CLASS = {
 } as const;
 
 function optionRowClass(option: SelectOption): string {
-  return cn(MENU_ITEM, option.tone === "danger" && "text-danger-muted");
+  return cn(MENU_ITEM, MENU_ITEM_SIZE.md, option.tone === "danger" && "text-danger-muted");
 }
 
 function OptionContent({ option, selected }: { option: SelectOption; selected: boolean }) {
@@ -102,7 +109,7 @@ export function Select({
           className="z-(--z-select-popover)"
         >
           <BaseSelect.Popup
-            className={cn(POPOVER_SURFACE, "min-w-[var(--anchor-width)]")}
+            className={cn(POPOVER_SURFACE, POPOVER_SURFACE_SIZE.md, "min-w-[var(--anchor-width)]")}
             style={{ minWidth: "var(--anchor-width)" }}
           >
             <BaseSelect.List>
@@ -218,7 +225,7 @@ export function LauncherSelect({
           className="z-(--z-select-popover)"
         >
           <BaseMenu.Popup
-            className={cn(POPOVER_SURFACE, "min-w-[var(--anchor-width)]")}
+            className={cn(POPOVER_SURFACE, POPOVER_SURFACE_SIZE.md, "min-w-[var(--anchor-width)]")}
             style={{ minWidth: "var(--anchor-width)" }}
           >
             <BaseMenu.RadioGroup
@@ -246,7 +253,7 @@ export function LauncherSelect({
               <>
                 <div className={MENU_SEPARATOR} role="separator" />
                 <BaseMenu.SubmenuRoot>
-                  <BaseMenu.SubmenuTrigger className={MENU_ITEM}>
+                  <BaseMenu.SubmenuTrigger className={cn(MENU_ITEM, MENU_ITEM_SIZE.md)}>
                     <span className="min-w-0 flex-1 truncate">{submenu.label}</span>
                     <span className="text-fg-subtle shrink-0 text-xs">
                       {submenuSelected?.label}
@@ -260,7 +267,9 @@ export function LauncherSelect({
                       sideOffset={4}
                       className="z-(--z-select-popover)"
                     >
-                      <BaseMenu.Popup className={cn(POPOVER_SURFACE, "min-w-44")}>
+                      <BaseMenu.Popup
+                        className={cn(POPOVER_SURFACE, POPOVER_SURFACE_SIZE.md, "min-w-44")}
+                      >
                         <BaseMenu.RadioGroup
                           value={submenu.value}
                           onValueChange={(next: string) => submenu.onChange(next)}

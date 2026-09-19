@@ -47,7 +47,7 @@ export function LoginPage() {
         <div className="flex flex-col gap-2">
           <h1 className="text-title text-fg-heading m-0 font-semibold">Session</h1>
           <p className="text-fg-secondary m-0 text-base">
-            A research workspace. Sign in to start an investigation.
+            A research workspace. Sign in to get started.
           </p>
         </div>
 

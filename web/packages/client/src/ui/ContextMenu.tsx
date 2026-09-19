@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "../lib/cn.js";
 
-import { CONTEXT_MENU_SURFACE, MENU_ITEM, MENU_SEPARATOR } from "./surfaces.js";
+import { CONTEXT_MENU_SURFACE, MENU_ITEM, MENU_ITEM_SIZE, MENU_SEPARATOR } from "./surfaces.js";
 
 export interface ContextMenuProps {
   /** The region that owns the right-click. */
@@ -55,7 +55,12 @@ export function ContextMenuItem({
     <BaseContextMenu.Item
       disabled={disabled}
       onClick={onClick ? () => onClick() : undefined}
-      className={cn(MENU_ITEM, "whitespace-nowrap", tone === "danger" && "text-danger-muted")}
+      className={cn(
+        MENU_ITEM,
+        MENU_ITEM_SIZE.md,
+        "whitespace-nowrap",
+        tone === "danger" && "text-danger-muted",
+      )}
     >
       {icon}
       <span>{children}</span>
