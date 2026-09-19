@@ -33,7 +33,7 @@ deletes the WebKit and Tauri workarounds.
 | `DocumentHeader` | `:5105` | `HistoryNav`, breadcrumb, "N in thread · M branches" chip, sidebar restore, full-transcript toggle |
 | `ThreadSegment` (memo) | `:1621` | One spine node: `SegmentPrompt` + grid of `ConnectorOverlay`, `AnswerPane`, `FollowupRail`; registers anchor and grid elements |
 | `SegmentPrompt` (memo) | `:1514` | Back link (index 0), "Reply to" snippet (index > 0), quoted passage blockquote, `ResearchUserMessage`, the question's embedded posts (`TweetAttachments`), root footer with `ThreadActions` (Follow/Bookmark), model summary, relative time |
-| `AnswerPane` (memo, custom comparator) | `:1118` | Loading/error/failure states, `Recap`, empty-state copy cascade, "Show N earlier response items", the selection root, footer (word count, duration, hidden-highlights notice, copy, answer menu); the status line under an active answer carries a confirmed Cancel link |
+| `AnswerPane` (memo, custom comparator) | `:1118` | Loading/error/failure states, `Recap`, empty-state copy cascade, "Show N earlier response items", the selection root, footer (word count, duration, hidden-highlights notice, copy, answer menu) once the run settles; while it is active a single status line replaces the footer, carrying the queue position, "Working…"/"Thinking…", the elapsed time and a confirmed Cancel link |
 | `TimelineItem` (memo) | `:782` | One timeline message: markdown body, raw disclosures, activity disclosures, "Excluded from active context" chip |
 | `FollowupRail` (memo) | `:1391` | Docked ask composer slot, stacked cards, anchored cards (absolute `top`) |
 | `ConnectorOverlay` (memo) | `:1485` | SVG paths and endpoint dots per connector |
@@ -243,8 +243,10 @@ Oversize policy constants: `MARKDOWN_CHAR_LIMIT = 100_000`,
 activity item. Empty-state cascade: failed → cancelled → `sourceError` →
 complete-but-unavailable → active ("Generating response…" or
 "Working…") → "No response was generated." Duration text from a 1 s tick
-that runs only while a chain node is active ("Generating for 1m 08s", "Ran
-for …", "Waiting to start").
+that runs only while a chain node is active: bare while the run is active
+("1m 08s", on the status line beside "Working…"), "Ran for …" or a bare
+duration in the settled footer, and nothing at all before the run starts —
+the status line already reports that.
 
 Streaming: the live turns from `liveTurns` feed the same
 `buildTimelineItems`; the in-flight assistant turn's text grows in place, so
@@ -255,7 +257,9 @@ so the DOM is reconciled without a flash.
 
 Retry and cancel surfaces: answer-pane Retry (`failed | cancelled |
 interrupted`, not archived; `interrupted` normally auto-resumes and shows
-"Resuming…" first), a "Queued · N ahead" line while `queued`, a Cancel link beside "Working…" on
+"Resuming…" first), "Queued · N ahead" on the status line while `queued`
+behind other runs (a claimed run reads "Working…" instead; there is no
+second "Queued" line), a Cancel link beside "Working…" on
 every active segment (behind a confirm dialog), composer "Retry follow-up" for a settled inline tail, "Retry run" in
 the node menu. `paneId`-based conditions (`cancellationNeedsRetry`,
 `!paneId`) are removed: the web has no pane-backed runs.

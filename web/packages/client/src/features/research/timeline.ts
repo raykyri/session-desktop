@@ -159,16 +159,18 @@ export function formatRunDuration(durationMs: number): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
-/** The footer's duration line, or null when there is nothing to say. Computed
- * by the page so the once-per-second tick only re-renders the segments whose
- * text actually changes. */
+/** The duration line, or null when there is nothing to say. An active run's
+ * elapsed time rides the "Working…" status line, so it is bare — a prefix
+ * there would only restate the status — and a run that has not started yet
+ * says nothing, since that line already reports it. A settled run's label goes
+ * in the answer footer, where it needs the prefix to read as run time.
+ * Computed by the page so the once-per-second tick only re-renders the
+ * segments whose text actually changes. */
 export function durationLabel(node: ResearchNode, now: number): string | null {
-  const active = isActiveResearchStatus(node.status);
-  if (node.startedAt) {
-    const prefix = active ? "Generating for " : node.status !== "complete" ? "Ran for " : "";
-    return `${prefix}${formatRunDuration((node.completedAt ?? now) - node.startedAt)}`;
-  }
-  return active ? "Waiting to start" : null;
+  if (!node.startedAt) return null;
+  const elapsed = formatRunDuration((node.completedAt ?? now) - node.startedAt);
+  if (isActiveResearchStatus(node.status)) return elapsed;
+  return node.status === "complete" ? elapsed : `Ran for ${elapsed}`;
 }
 
 export function statusLabel(status: ResearchNode["status"]): string {

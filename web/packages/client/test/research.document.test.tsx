@@ -315,7 +315,7 @@ test.serial("a queued run shows its position in the queue", async (t) => {
   );
 });
 
-test.serial("hides the queue position after a worker claims the run", async (t) => {
+test.serial("a claimed run says only that it is working, with no footer", async (t) => {
   const root = node({ id: "n1", status: "queued", startedAt: null });
   await mount({
     nodes: [root],
@@ -323,7 +323,11 @@ test.serial("hides the queue position after a worker claims the run", async (t) 
       n1: contentFor(root, [], { responseRevision: undefined, queuePosition: 0 }),
     },
   });
-  await waitUntil(t, () => screen.queryByText("Queued") !== null, "a bare Queued line is shown");
+  await waitUntil(t, () => screen.queryByText("Working…") !== null, "the status line is shown");
+  // Nothing behind the run to report, and no metadata to meter yet.
+  t.is(screen.queryByText("Queued"), null);
+  t.is(screen.queryByText("0 words"), null);
+  t.is(screen.queryByRole("button", { name: "Answer actions" }), null);
 });
 
 /* ------------------------------------------------------ streaming handover */
