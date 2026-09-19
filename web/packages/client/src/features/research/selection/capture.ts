@@ -1,7 +1,9 @@
 // Turning a live selection into a storable anchor
 // (`09-research-document-view.md` §5 items 3–5).
 //
-// Validates text selections before creating anchors: selections spanning multiple segments, touching tool UI, or containing only whitespace cannot be reliably anchored and are rejected.
+// A selection spanning multiple segments, touching tool UI, or containing
+// only whitespace cannot be reliably anchored, and is rejected rather than
+// captured.
 
 import {
   expandedResearchHighlightOffsets,

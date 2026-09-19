@@ -842,7 +842,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       resolvedHighlights(id).some((entry) => entry.id === focusHighlightId),
     );
     if (!owner) {
-      // Keep waiting while the chain is still settling; give up once it has.
+      // Keep waiting while the chain is still settling; clear the param once it
+      // has settled, whether or not the highlight resolved.
       if (chainSettled) clear();
       return;
     }

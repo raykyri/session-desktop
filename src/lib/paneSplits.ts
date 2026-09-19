@@ -32,7 +32,7 @@ interface JoinPaneSplitOptions {
   /** Axis to lay the inserted pane out along, relative to its anchor's branch.
    * When it differs from that branch's axis the anchor leaf becomes a nested
    * branch. Omitted means "append along whatever axis the anchor already uses",
-   * which is what joins and drags want. */
+   * which is the behavior joins and drags use. */
   nestAxis?: PaneSplitAxis;
 }
 

@@ -1,7 +1,8 @@
 // The two sidebar writes that reorder things, with optimistic updates and
 // rollback (`10-home-feed-journal-encyclopedia.md` §7).
 //
-// Apply optimistic reordering immediately during drag operations to avoid visual lag before server confirmation. They are plain functions over a `QueryClient` rather than
+// The reordering is applied optimistically so a drag does not wait on the
+// server round trip. They are plain functions over a `QueryClient` rather than
 // `useMutation` hooks because the sidebar calls them from pointer handlers and
 // the tests call them without a component.
 

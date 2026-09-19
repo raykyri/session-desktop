@@ -55,7 +55,7 @@ export function createSessionTrpcClient(options: TrpcClientOptions = {}): Sessio
         false: httpBatchLink({
           url,
           headers: () => REQUESTED_WITH_HEADERS,
-          // Explicitly setting credentials ensures authentication cookies are sent even if an absolute URL is configured for testing or preview environments.
+          // Explicit credentials so auth cookies still ride along when `url` points at another origin (tests, preview deploys).
           fetch: (input, init) => doFetch(input, { ...init, credentials: "include" }),
         }),
       }),

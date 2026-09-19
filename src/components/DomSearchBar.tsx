@@ -184,8 +184,8 @@ export default function DomSearchBar({
     }
   }, [open, debouncedTerm, caseSensitive, useRegex]);
 
-  // Rendered markdown can change without a React prop the search controller
-  // knows about (streaming text, diagrams, expanded details). Observe the DOM
+  // Rendered markdown can change without a corresponding React prop change
+  // (streaming text, diagrams, expanded details). Observe the DOM
   // and coalesce those rescans without moving the reader's viewport.
   useEffect(() => {
     if (!open) {

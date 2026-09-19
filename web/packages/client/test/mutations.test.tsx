@@ -1,6 +1,7 @@
 // Mutations and the events they cause write the same caches (07 §4.1).
 //
-// Summary counts are delta-based; optimistic updates must coordinate with server event handlers to prevent duplicate counter increments. These tests apply
+// Summary counts are deltas, so an optimistic update and the server event for
+// the same change must not both apply it. These tests apply
 // both halves in the order the browser sees them: the mutation's own reply
 // first, then the event the server published for the same change, which this
 // tab receives like any other (`03-api-and-events.md` §3).

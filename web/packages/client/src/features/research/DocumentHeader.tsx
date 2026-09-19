@@ -6,8 +6,9 @@
 // Node-level back/forward has no buttons here: it is driven by ⌘[ / ⌘] and the
 // mouse back/forward buttons (`ResearchPage.tsx`).
 //
-// The breadcrumb collapses deep paths to "root / … / parent / current": the
-// Deep hierarchies collapse intermediate breadcrumbs to prevent UI crowding.
+// A path longer than four nodes collapses to "root / … / parent / current",
+// with the omitted middle nodes represented by a count rather than shown in
+// full.
 
 import { defaultTitle, isActiveResearchStatus } from "@session/shared";
 import type { ResearchNode, ResearchTreeDetail } from "@session/shared";

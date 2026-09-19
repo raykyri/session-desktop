@@ -1,6 +1,7 @@
 // What starts once a session exists (07 §2, §4.2, §8).
 //
-// Manages account- and session-scoped background services: server events subscription, draft persistence, and settings synchronization. `AppShell` mounts this
+// Account- and session-scoped background services: the server events
+// subscription, draft persistence, and settings sync. `AppShell` mounts this
 // once; it no-ops until a session exists, so none of it runs for guests or on
 // `/login`.
 

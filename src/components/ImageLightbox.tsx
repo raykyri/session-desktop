@@ -10,7 +10,7 @@ import {
 // set, full-size over a dimmed backdrop; dismissed by clicking anywhere or the
 // close button. Escape is handled by the app-level Escape dispatcher in App
 // (which reads this component's module store), so there is no keydown listener
-// here — it kept the dispatcher's fixed overlay ordering the whole story. The
+// here — the dispatcher stays the single source of truth for overlay order. The
 // image is already a loaded data URL, so there is no loading state here — the
 // thumbnail the user clicked shares the same cached bytes.
 export default function ImageLightbox() {

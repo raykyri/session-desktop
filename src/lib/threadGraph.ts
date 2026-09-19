@@ -147,8 +147,8 @@ export function pendingGraphOverlayTurns(
     return null;
   }
   for (let index = firstMissing; index < turns.length; index += 1) {
-    // A "missing" turn the graph does know (on any branch) means divergence,
-    // not appending; interleaved branch members are caught here too.
+    // A "missing" turn that the graph already contains (on any branch) means
+    // divergence, not appending; interleaved branch members are caught here too.
     if (graph.nodes[turns[index].id]?.kind === "turn") {
       return null;
     }

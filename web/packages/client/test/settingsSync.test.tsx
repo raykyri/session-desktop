@@ -1,4 +1,4 @@
-// Server settings take precedence on initial load; local modifications sync after debouncing, and server echo events are discarded.
+// The server's copy wins on initial load; local changes push after a debounce, and the tab's own echo of a push it just sent is dropped.
 
 import { DEFAULT_USER_SETTINGS } from "@session/shared";
 import { QueryClient } from "@tanstack/react-query";
@@ -105,7 +105,7 @@ test.serial("a local change is pushed once, after the debounce", async (t) => {
 });
 
 test.serial("a push that fails does not stop the next one", async (t) => {
-  // If the initial update request fails, synchronization must continue so subsequent preference changes can retry.
+  // A failed push must not stop later ones from being sent.
   let calls = 0;
   const stub = createTrpcStub({
     ...defaultResponses(testUser()),

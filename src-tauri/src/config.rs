@@ -143,8 +143,8 @@ pub struct RuntimeConfig {
     // Port of the loopback file server, so the frontend can recognize token-bearing
     // file-server URLs and force them to load sandboxed (never as a same-origin
     // document that could read the token back). Filled in by `get_runtime_config`
-    // from live state after the server binds; `None` here since config alone can't
-    // know the ephemeral port.
+    // from live state after the server binds; `None` here because the ephemeral
+    // port is not yet known at config load time.
     pub file_server_port: Option<u16>,
 }
 

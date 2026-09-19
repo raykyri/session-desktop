@@ -2294,7 +2294,7 @@ function ResearchDocument({
 
   // Scroll offsets and selections for deleted nodes would otherwise sit in
   // localStorage forever (tree-level pruning happens in the app shell, which
-  // does not know a tree's nodes).
+  // has no access to a tree's nodes).
   useEffect(() => {
     if (treeId && detail) {
       const validNodeIds = new Set(detail.nodes.map((node) => node.id));

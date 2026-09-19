@@ -1,4 +1,5 @@
-// Timeline projection logic: extracts messages from turns, provides empty-state placeholders, and calculates run durations.
+// Projects a node's turns into timeline messages, empty-state placeholders,
+// and run durations.
 //
 // Pure, so the projection is testable without a DOM. The desktop kept the same
 // derivation behind a per-node cache keyed on content identity; here the query

@@ -1,8 +1,10 @@
 // The Sources footer under an answer (`09-research-document-view.md` §7).
 //
 // New on the web: the desktop's agents cited inside their prose and nowhere
-// else, while the owned tools here record exactly which pages a run read. Derived dynamically from turn data to maintain consistency with the rendered transcript. — including the full-trace view,
-// where the same tool results are visible as disclosures.
+// else, while the owned tools here record exactly which pages a run read.
+// This footer derives its list from the turns themselves, so it stays
+// consistent with whatever the transcript shows — including the full-trace
+// view, where the same tool results are visible as disclosures.
 //
 // Three shapes are read, all produced by the server (`04-agent-runtime.md` §6
 // and `runs/mapper.ts`):

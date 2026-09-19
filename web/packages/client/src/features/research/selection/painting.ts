@@ -11,7 +11,8 @@
 //   session-research-selected-highlights the selection's own tone (priority 2)
 //
 // The `Highlight` objects are created once and mutated rather than replaced:
-// WebKit fails to clear removed highlight entries until forced; mutating existing entries works around this rendering bug.
+// WebKit fails to visually clear a removed range until the `Highlight` object
+// itself is mutated, so replacing it wholesale would leave stale paint behind.
 //
 // Firefox before 140 has no registry. There, saved highlights — and only those;
 // the transient layers repaint far too often to pay for it — fall back to a

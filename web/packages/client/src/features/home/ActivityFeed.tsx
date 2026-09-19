@@ -222,8 +222,8 @@ export function ActivityFeed({
     [items],
   );
 
-  // The lint reports the skip regardless of the directive above; the opt-out
-  // is the directive, this only quiets the notice.
+  // useVirtualizer's API triggers this lint rule unconditionally; the disable
+  // below is the only way to suppress the warning.
   // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: events.length,

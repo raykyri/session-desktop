@@ -1065,8 +1065,8 @@ fn browser_tab_no_longer_exists(error: &str) -> bool {
 }
 
 /// Forward screencast frames from the CDP controller to the pane that owns the
-/// streaming tab. Frames are dropped rather than queued when no mirror wants
-/// them, so a closed overlay costs nothing until its screencast is stopped.
+/// streaming tab. Frames are dropped rather than queued when no mirror is
+/// subscribed, so a closed overlay costs nothing until its screencast is stopped.
 fn start_screencast_pump(backend: &Arc<BrowserBackend>) -> Result<(), String> {
     let Some(engine) = backend.engine.as_ref() else {
         return Ok(());
