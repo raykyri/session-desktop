@@ -6,6 +6,7 @@
 
 import type { ResearchTreeSummary } from "@session/shared";
 
+import { formatChord } from "../../lib/platform.js";
 import type { PaletteCommand } from "../../ui/CommandPalette.js";
 
 export interface PaletteActions {
@@ -32,19 +33,25 @@ export function buildPaletteCommands(
     action: () => actions.openTree(tree.id),
   }));
   commands.push(
-    { id: "home", section: "Actions", title: "Home", hint: "⇧⌘H", action: actions.openHome },
+    {
+      id: "home",
+      section: "Actions",
+      title: "Home",
+      hint: formatChord("mod+shift+h"),
+      action: actions.openHome,
+    },
     {
       id: "toggle-sidebar",
       section: "Actions",
       title: "Toggle sidebar",
-      hint: "⇧⌘G",
+      hint: formatChord("mod+shift+g"),
       action: actions.toggleSidebar,
     },
     {
       id: "settings",
       section: "Actions",
       title: "Settings",
-      hint: "⌘,",
+      hint: formatChord("mod+,"),
       action: actions.openSettings,
     },
   );

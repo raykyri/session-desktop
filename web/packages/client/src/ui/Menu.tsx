@@ -1,4 +1,5 @@
 import { Menu as BaseMenu } from "@base-ui/react/menu";
+import { Check } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 
 import { cn } from "../lib/cn.js";
@@ -68,6 +69,9 @@ export interface MenuItemProps {
   className?: string;
   /** Keeps the menu open after activation (a toggle row). */
   closeOnClick?: boolean | undefined;
+  /** The row is the current value: a leading check in the strong foreground.
+   * `undefined` reserves no slot; a boolean reserves it so rows line up. */
+  selected?: boolean | undefined;
 }
 
 export function MenuItem({
@@ -78,17 +82,24 @@ export function MenuItem({
   hint,
   className,
   closeOnClick,
+  selected,
 }: MenuItemProps) {
   return (
     <BaseMenu.Item
       disabled={disabled}
       {...(closeOnClick === undefined ? {} : { closeOnClick })}
       onClick={onClick ? () => onClick() : undefined}
+      aria-checked={selected}
       className={cn(MENU_ITEM, tone === "danger" && "text-danger-muted", className)}
     >
+      {selected === undefined ? null : (
+        <span className="text-fg-strong inline-flex w-3 shrink-0 justify-center" aria-hidden="true">
+          {selected ? <Check size={12} /> : null}
+        </span>
+      )}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {hint === undefined ? null : (
-        <span className="text-fg-disabled ml-auto shrink-0 text-xs">{hint}</span>
+        <span className="text-fg-muted ml-auto shrink-0 text-xs">{hint}</span>
       )}
     </BaseMenu.Item>
   );

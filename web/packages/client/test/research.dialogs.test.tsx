@@ -286,7 +286,9 @@ test.serial("renaming commits the trimmed title", (t) => {
       tree={{ id: "t1", title: "Collective memory" }}
       open
       onClose={() => undefined}
-      onRename={(treeId, title) => renamed.push([treeId, title])}
+      onRename={(treeId, title) => {
+        renamed.push([treeId, title]);
+      }}
     />,
   );
   const input = screen.getByLabelText("Thread title");
@@ -302,7 +304,9 @@ test.serial("renaming to the same title is a no-op", (t) => {
       tree={{ id: "t1", title: "Collective memory" }}
       open
       onClose={() => undefined}
-      onRename={(treeId) => renamed.push(treeId)}
+      onRename={(treeId) => {
+        renamed.push(treeId);
+      }}
     />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Rename" }));

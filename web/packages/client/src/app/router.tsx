@@ -191,12 +191,14 @@ const encyclopediaRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/settings",
+  validateSearch: workspaceScopeSearchSchema,
   component: SettingsPage,
 });
 
 const adminRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/admin",
+  validateSearch: workspaceScopeSearchSchema,
   component: AdminPage,
 });
 

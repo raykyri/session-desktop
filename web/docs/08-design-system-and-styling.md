@@ -13,13 +13,14 @@ primitives.
   becomes `var(--workspace-bg)`.
 - `reduced-motion.css` `@media (prefers-reduced-motion)` block.
 - The switching model: `data-color-theme="green-blob|orange-blob"`,
-  `data-appearance="dark|light"`, `data-body-font` on `<html>`, plus
-  `.reduce-motion` on the shell.
+  `data-appearance="dark|light"` (resolved from the `system` setting against
+  `prefers-color-scheme`), `data-body-font` on `<html>`. Reduced motion follows
+  the OS preference only.
 - Fonts: DM Sans, Valley Sans (variable, bundled, OFL, `font-display: swap`),
   JetBrains Mono, Ioskeley Mono (`font-display: block`, `tokens.css:1-133`);
   the DM Sans half-pixel optical offset
-  (`--font-ui-size-offset`). Local-font probing for Anthropic Sans Text and
-  Inter is kept via `document.fonts.check()`; they remain unbundled.
+  (`--font-ui-size-offset`). Inter is offered only when a local face loads
+  (`FontFace` probe in `lib/bodyFonts.ts`); it remains unbundled.
 
 ## 2. Tailwind v4 integration (`styles/app.css`)
 
@@ -73,7 +74,6 @@ primitives.
 
 @custom-variant light (&:where([data-appearance="light"], [data-appearance="light"] *));
 @custom-variant warm (&:where([data-color-theme="orange-blob"], [data-color-theme="orange-blob"] *));
-@custom-variant reduce-motion (&:where(.reduce-motion, .reduce-motion *));
 
 @layer components {
   @import "./prose.css";

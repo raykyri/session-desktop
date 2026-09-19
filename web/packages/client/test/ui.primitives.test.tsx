@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import test from "ava";
 import { useState } from "react";
 
+import { formatChord } from "../src/lib/platform.js";
 import {
   closeImageLightbox,
   getImageLightbox,
@@ -562,7 +563,7 @@ test.serial("the sidebar restore button includes its shortcut in the tooltip", (
   let restored = 0;
   render(<SidebarRestoreButton onRestore={() => (restored += 1)} />);
   const button = screen.getByRole("button", { name: "Show sidebar" });
-  t.is(button.getAttribute("title"), "Show sidebar (⇧⌘G)");
+  t.is(button.getAttribute("title"), `Show sidebar (${formatChord("mod+shift+g")})`);
   fireEvent.click(button);
   t.is(restored, 1);
 });

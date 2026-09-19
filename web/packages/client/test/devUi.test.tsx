@@ -34,7 +34,7 @@ test.serial("the kitchen sink mounts every primitive in all four combinations", 
   // The launcher trigger names itself with the value it is showing, so the
   // label is a prefix rather than the whole name.
   t.is(screen.getAllByRole("button", { name: /^Launch model: / }).length, 4);
-  t.is(screen.getAllByRole("switch", { name: "Reduce motion" }).length, 4);
+  t.is(screen.getAllByRole("switch", { name: "Example switch" }).length, 4);
   t.is(screen.getAllByRole("tab", { name: "General" }).length, 4);
   // One per panel: the second find bar in the sink is a `DomSearchBar`,
   // which renders nothing until Cmd-F opens it.

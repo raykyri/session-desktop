@@ -193,15 +193,15 @@ function WikilinkAnchor({
           >
             <p className="text-fg-primary m-0 text-sm">
               {status === "failed"
-                ? `Writing “${term}” failed. Try again?`
-                : `Write an encyclopedia page for “${term}”?`}
+                ? `Couldn’t create the page for “${term}”.`
+                : `Create an encyclopedia page for “${term}”?`}
             </p>
             <div className="flex items-center justify-end gap-1.5">
               <ControlButton size="sm" onClick={() => setConfirming(false)}>
                 Cancel
               </ControlButton>
               <ControlButton size="sm" className="text-fg-strong" onClick={create}>
-                {status === "failed" ? "Try again" : "Create page"}
+                {status === "failed" ? "Retry" : "Create page"}
               </ControlButton>
             </div>
           </BasePopover.Popup>

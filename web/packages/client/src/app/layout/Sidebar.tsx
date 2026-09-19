@@ -1,14 +1,16 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { useNavigate } from "@tanstack/react-router";
-import { PanelLeftClose } from "lucide-react";
+import { ChevronUp, PanelLeftClose } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useLogout, useMe } from "../../api/queries.js";
 import memMonochromeLightLogoUrl from "../../assets/brand/mem-monochrome-light.svg";
 import memMonochromeLogoUrl from "../../assets/brand/mem-monochrome.svg";
 import { SidebarBody } from "../../features/sidebar/SidebarBody.js";
+import { SIDEBAR_ROW } from "../../features/sidebar/rows.js";
 import { useResolvedAppearance } from "../../lib/appearance.js";
 import { cn } from "../../lib/cn.js";
+import { formatChord } from "../../lib/platform.js";
 import {
   NARROW_LAYOUT_WIDTH,
   SIDEBAR_MAX_WIDTH,
@@ -16,7 +18,7 @@ import {
   useNavigationStore,
 } from "../../stores/navigation.js";
 import { selectAppearance, useSettingsStore } from "../../stores/settings.js";
-import { ControlButton, IconButton } from "../../ui/Button.js";
+import { IconButton } from "../../ui/Button.js";
 import { Menu, MenuItem, MenuSeparator } from "../../ui/Menu.js";
 import { DIALOG_BACKDROP } from "../../ui/surfaces.js";
 
@@ -31,27 +33,32 @@ function AccountMenu() {
   if (!user) return null;
 
   return (
-    <div className="flex items-center gap-2 px-2 py-2">
+    <div className="flex items-center gap-2 px-2 pt-0.5 pb-2">
       <Menu
         side="top"
         align="start"
         label="Account"
         trigger={
-          <ControlButton
-            size="sm"
-            className="min-h-[calc(var(--control-h-sm)+2px)]! min-w-0 flex-1 justify-start gap-2 py-px text-base!"
-          >
-            <span className="min-w-0 truncate">{user.login}</span>
-          </ControlButton>
+          <button type="button" className={cn(SIDEBAR_ROW, "border-0 bg-transparent text-left")}>
+            <span className="min-w-0 flex-1 truncate">{user.login}</span>
+            <ChevronUp size={14} aria-hidden="true" className="shrink-0" />
+          </button>
         }
       >
         {user.isAdmin ? (
           <>
-            <MenuItem onClick={() => void navigate({ to: "/admin" })}>Admin</MenuItem>
+            <MenuItem
+              onClick={() => void navigate({ to: "/admin", search: (previous) => previous })}
+            >
+              Admin
+            </MenuItem>
             <MenuSeparator />
           </>
         ) : null}
-        <MenuItem onClick={() => void navigate({ to: "/settings" })} hint="⌘,">
+        <MenuItem
+          onClick={() => void navigate({ to: "/settings", search: (previous) => previous })}
+          hint={formatChord("mod+,")}
+        >
           Settings
         </MenuItem>
         <MenuSeparator />
@@ -101,7 +108,11 @@ function SidebarChrome({ onHide }: { onHide: () => void }) {
           className="block h-auto w-5"
         />
       </span>
-      <IconButton label="Hide sidebar" title="Hide sidebar (⇧⌘G)" onClick={onHide}>
+      <IconButton
+        label="Hide sidebar"
+        title={`Hide sidebar (${formatChord("mod+shift+g")})`}
+        onClick={onHide}
+      >
         <PanelLeftClose size={16} aria-hidden="true" />
       </IconButton>
     </div>

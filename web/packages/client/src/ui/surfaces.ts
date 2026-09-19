@@ -10,26 +10,54 @@
 export const FOCUS_RING =
   "outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-inset";
 
-/** The default bordered button: menus, dialogs, toolbars. */
+/** Pressed feedback shared by every button kind: a slight shrink that reads
+ * in both appearances without a dedicated token. */
+export const PRESSED = "active:not-disabled:scale-[0.97]";
+
+/** The default bordered button: menus, dialogs, toolbars. Height, side padding
+ * and type size are NOT here: `cn` does not merge, so they live only in the
+ * size recipes (`CONTROL_BUTTON_SIZE`) and a caller picks one. */
 export const CONTROL_BUTTON =
-  "inline-flex min-h-control-md flex-wrap items-center justify-center gap-x-2 gap-y-0.5 " +
-  "rounded-md border border-border-control bg-control px-3 pt-px text-base text-fg-control " +
-  "transition-colors duration-[120ms] hover:bg-control-hover " +
+  "inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 " +
+  "rounded-md border border-border-control bg-control pt-px text-fg-control " +
+  "transition-[color,background-color,border-color,scale] duration-[120ms] hover:bg-control-hover " +
   "disabled:cursor-default disabled:text-fg-disabled disabled:hover:bg-control " +
+  PRESSED +
+  " " +
   FOCUS_RING;
+
+export const CONTROL_BUTTON_SIZE = {
+  sm: "min-h-control-sm px-2 text-sm",
+  md: "min-h-control-md px-3 text-base",
+  lg: "min-h-control-lg px-3 text-base",
+} as const;
 
 /** Chrome-neutral: the icon renders in theme colors with no box of its own. */
 export const ICON_BUTTON =
   "inline-flex shrink-0 items-center justify-center rounded-md border-0 bg-transparent p-0 " +
-  "text-fg-secondary transition-colors duration-[120ms] " +
+  "text-fg-secondary transition-[color,background-color,scale] duration-[120ms] " +
   "hover:not-disabled:bg-surface-hover hover:not-disabled:text-fg-strong " +
   "disabled:cursor-default disabled:text-fg-disabled " +
+  PRESSED +
+  " " +
+  FOCUS_RING;
+
+/** A menu trigger with no box of its own: label plus chevron, the ghost hover
+ * of an icon button, the small control height. */
+export const GHOST_TRIGGER =
+  "inline-flex min-h-control-sm min-w-0 items-center gap-1 rounded-md border-0 bg-transparent px-1.5 " +
+  "text-sm text-fg-secondary transition-[color,background-color,scale] duration-[120ms] " +
+  "hover:not-disabled:bg-surface-hover hover:not-disabled:text-fg-strong " +
+  "disabled:cursor-default disabled:text-fg-disabled " +
+  PRESSED +
+  " " +
   FOCUS_RING;
 
 /** Text that behaves like a button. */
 export const LINK_BUTTON =
   "inline min-h-0 border-0 bg-transparent p-0 text-left underline-offset-2 " +
-  "hover:underline disabled:cursor-default disabled:text-fg-disabled " +
+  "hover:not-disabled:underline active:not-disabled:opacity-70 " +
+  "disabled:cursor-default disabled:text-fg-disabled " +
   FOCUS_RING;
 
 /** Floating chrome: menus, select popups, popovers. */
@@ -45,7 +73,7 @@ export const CONTEXT_MENU_SURFACE =
 export const MENU_ITEM =
   "flex w-full min-w-0 cursor-pointer select-none items-center justify-start gap-2 " +
   "rounded-md border border-transparent px-2.5 py-1 text-left text-base text-fg-primary " +
-  "data-highlighted:bg-surface-popover-item-hover data-[selected]:text-fg-strong " +
+  "data-highlighted:bg-surface-popover-item-hover data-[selected]:text-fg-strong active:brightness-90 " +
   "data-disabled:cursor-default data-disabled:text-fg-disabled " +
   FOCUS_RING;
 
@@ -60,7 +88,7 @@ export const FORM_FIELD =
 
 export const INPUT_FIELD = `${FORM_FIELD} min-h-control-md`;
 
-export const SHORTCUT_HINT = "whitespace-nowrap text-xs leading-none text-fg-disabled";
+export const SHORTCUT_HINT = "whitespace-nowrap text-xs leading-none text-fg-muted";
 
 export const DIALOG_BACKDROP = "fixed inset-0 bg-surface-scrim";
 

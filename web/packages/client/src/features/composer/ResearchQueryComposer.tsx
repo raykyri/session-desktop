@@ -22,14 +22,14 @@ import {
 } from "@session/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Loader, Paperclip, X } from "lucide-react";
+import { ChevronDown, Loader, LoaderCircle, Paperclip, X } from "lucide-react";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { addJournalEntry, uploadDocuments } from "../../api/api.js";
 import { queryKeys, useCreateResearchTree, useMe, useRuntimeConfig } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
-import { errorMessage } from "../../lib/toast.js";
+import { errorMessage, pushToast } from "../../lib/toast.js";
 import { homeDraftKey, useDraftsStore } from "../../stores/drafts.js";
 import { useSettingsStore } from "../../stores/settings.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
@@ -38,6 +38,7 @@ import {
   isComposerSubmitShortcut,
 } from "../../ui/ComposerSubmitShortcut.js";
 import { Menu, MenuItem } from "../../ui/Menu.js";
+import { GHOST_TRIGGER } from "../../ui/surfaces.js";
 
 import { oversizeRefusal } from "./limits.js";
 
@@ -293,6 +294,9 @@ export function ResearchQueryComposer({
   const uploading = attachments.some((attachment) => attachment.status === "uploading");
   const canSubmit =
     prompt.trim() !== "" && !submitting && !uploading && workspaceId !== "" && selected !== null;
+  // A prompt that is one URL is kept as a link, not sent as a question; the
+  // button says so before it is pressed.
+  const savesLink = bareUrl(prompt) !== null;
 
   async function submit() {
     if (!canSubmit || !selected) return;
@@ -317,6 +321,7 @@ export function ResearchQueryComposer({
         setPrompt("");
         setAttachments([]);
         clearDraft(draftKey);
+        pushToast({ title: "Link saved to the journal", tone: "success" });
         return;
       }
       const detail = await createTree.mutateAsync({
@@ -347,6 +352,7 @@ export function ResearchQueryComposer({
       aria-label="New research"
       className={cn(
         "border-border-control bg-surface-field flex flex-col gap-2 rounded-lg border p-2",
+        "focus-within:border-focus-ring focus-within:shadow-[inset_0_0_0_1px_var(--focus-ring)]",
         dragging && "border-focus-ring",
       )}
       onSubmit={(event) => {
@@ -443,9 +449,14 @@ export function ResearchQueryComposer({
           align="start"
           label="Model"
           trigger={
-            <ControlButton size="sm" title="Model (Tab)">
+            <button
+              type="button"
+              title="Model (Tab)"
+              className={cn(GHOST_TRIGGER, "-ml-0.5 max-w-44")}
+            >
               <span className="truncate">{selected?.label ?? model}</span>
-            </ControlButton>
+              <ChevronDown size={13} aria-hidden="true" className="shrink-0" />
+            </button>
           }
         >
           {models.map((candidate) => (
@@ -453,6 +464,7 @@ export function ResearchQueryComposer({
               key={candidate.id}
               disabled={!candidate.available}
               hint={candidate.available ? undefined : "unavailable"}
+              selected={candidate.id === model}
               onClick={() => updateModel(candidate.id)}
             >
               <span className="truncate">{candidate.label}</span>
@@ -485,11 +497,21 @@ export function ResearchQueryComposer({
         <ControlButton
           type="submit"
           size="sm"
+          className="gap-x-1.5"
           disabled={!canSubmit}
-          aria-label={submitting ? "Starting research" : "Start research"}
-          title={submitting ? "Starting research" : "Start research"}
+          aria-label={submitting ? "Starting" : savesLink ? "Save link" : "Start research"}
         >
-          <ComposerSubmitShortcutGlyph ariaHidden />
+          {submitting ? (
+            <>
+              <LoaderCircle className="session-spin" size={12} aria-hidden="true" />
+              <span>Starting…</span>
+            </>
+          ) : (
+            <>
+              {savesLink ? <span>Save link</span> : null}
+              <ComposerSubmitShortcutGlyph ariaHidden />
+            </>
+          )}
         </ControlButton>
       </div>
 

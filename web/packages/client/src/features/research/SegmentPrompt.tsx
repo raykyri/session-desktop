@@ -36,6 +36,7 @@ export interface SegmentPromptProps {
   onSelectNode: (nodeId: string) => void;
   onToggleFollow: () => void;
   onToggleBookmark: () => void;
+  actionsBusy?: boolean;
 }
 
 export const SegmentPrompt = memo(function SegmentPrompt({
@@ -49,6 +50,7 @@ export const SegmentPrompt = memo(function SegmentPrompt({
   onSelectNode,
   onToggleFollow,
   onToggleBookmark,
+  actionsBusy = false,
 }: SegmentPromptProps) {
   if ((node.kind ?? "run") === "document") return null;
 
@@ -60,7 +62,7 @@ export const SegmentPrompt = memo(function SegmentPrompt({
   const parentNodeId = node.parentNodeId ?? null;
 
   return (
-    <div className="flex min-w-0 flex-col gap-[5px]">
+    <div className="flex min-w-0 flex-col gap-1">
       {index === 0 && parentNodeId ? (
         <div>
           <ControlButton size="sm" onClick={() => onSelectNode(parentNodeId)}>
@@ -80,14 +82,14 @@ export const SegmentPrompt = memo(function SegmentPrompt({
           {quoteDisplayText(node.queryAnchor.exact)}
         </blockquote>
       ) : null}
-      <div className={cn("text-fg-strong w-fit max-w-full", showFooter ? "mb-0" : "mb-[26px]")}>
+      <div className={cn("text-fg-strong w-fit max-w-full", showFooter ? "mb-0" : "mb-6")}>
         <ResearchMarkdown markdown={node.prompt} />
       </div>
       {node.documentIds.length > 0 ? (
         <DocumentChips documentIds={node.documentIds} workspaceId={workspaceId} />
       ) : null}
       {showFooter ? (
-        <div className="text-fg-subtle mt-1.5 mb-[26px] flex min-w-0 items-center gap-3 text-base">
+        <div className="text-fg-subtle mt-1.5 mb-6 flex min-w-0 items-center gap-3 text-base">
           <span
             className="min-w-0 truncate"
             title={askedAt !== null ? new Date(askedAt).toLocaleString() : undefined}
@@ -104,6 +106,7 @@ export const SegmentPrompt = memo(function SegmentPrompt({
             bookmarked={bookmarked}
             onToggleFollow={onToggleFollow}
             onToggleBookmark={onToggleBookmark}
+            busy={actionsBusy}
           />
         </div>
       ) : null}

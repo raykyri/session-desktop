@@ -39,10 +39,11 @@ export const appearanceSchema = z.enum(["dark", "light", "system"]);
 
 export type Appearance = z.infer<typeof appearanceSchema>;
 
-/** Session text zoom; the desktop's `APP_TEXT_SIZE` bounds are kept. */
+/** Text size. Each step is one pixel on every `--fs-*` size, from two below
+ * the default to four above. */
 export const APP_TEXT_SIZE = 14;
-export const APP_TEXT_SIZE_MIN = 8;
-export const APP_TEXT_SIZE_MAX = 32;
+export const APP_TEXT_SIZE_MIN = 12;
+export const APP_TEXT_SIZE_MAX = 18;
 
 export const userSettingsSchema = z.object({
   /** Color theme for application chrome and active states. */
@@ -52,8 +53,6 @@ export const userSettingsSchema = z.object({
   /** Id into the client's body font options. */
   bodyFontId: z.string(),
   textSize: z.number().int().min(APP_TEXT_SIZE_MIN).max(APP_TEXT_SIZE_MAX),
-  /** Disable decorative and status pulse animations. */
-  reduceMotion: z.boolean(),
   /** Show tool calls and other activity detail in research answers. */
   showToolCalls: z.boolean(),
   /** Show a wall-clock timestamp after each run of assistant messages. */
@@ -81,7 +80,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
    * from here, so the value is repeated rather than referenced. */
   bodyFontId: "dm-sans",
   textSize: APP_TEXT_SIZE,
-  reduceMotion: false,
   showToolCalls: true,
   showAssistantTimestamps: false,
   showNotifications: true,

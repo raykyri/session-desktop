@@ -369,8 +369,17 @@ test.serial("displays status badges for unread updates, failures, and active run
   });
 
   await waitUntil(t, () => screen.queryAllByTitle("Quiet").length > 0, "the sidebar lists threads");
-  const badge = (title: string) =>
-    (screen.getAllByTitle(title)[0] as HTMLElement).querySelector("span[title]")?.textContent ?? "";
+  // The visible badge only: each carries a visually hidden sentence for
+  // screen readers as well.
+  const badge = (title: string) => {
+    const span = (screen.getAllByTitle(title)[0] as HTMLElement).querySelector("span[title]");
+    if (!span) return "";
+    return [...span.childNodes]
+      .filter((node) => !(node instanceof HTMLElement && node.classList.contains("sr-only")))
+      .map((node) => node.textContent ?? "")
+      .join("")
+      .trim();
+  };
 
   t.is(badge("Quiet"), "", "a seen, idle thread carries no badge");
   t.is(badge("Updated"), "New");

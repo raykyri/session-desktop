@@ -82,6 +82,7 @@ export interface ThreadSegmentProps {
   publish: (segment: PublishedSegment) => void;
   onToggleFollow: () => void;
   onToggleBookmark: () => void;
+  actionsBusy?: boolean;
   onSelectNode: (nodeId: string) => void;
   onExpandTurns: (nodeId: string) => void;
   onShowFullTrace: (nodeId: string) => void;
@@ -234,6 +235,7 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
           onSelectNode={onSelectNode}
           onToggleFollow={props.onToggleFollow}
           onToggleBookmark={props.onToggleBookmark}
+          actionsBusy={props.actionsBusy ?? false}
         />
       </div>
       <div

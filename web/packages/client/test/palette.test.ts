@@ -3,6 +3,7 @@
 import test from "ava";
 
 import { buildPaletteCommands, runningHint } from "../src/features/palette/commands.js";
+import { formatChord } from "../src/lib/platform.js";
 
 import { summary } from "./fixtures.js";
 
@@ -28,9 +29,9 @@ test("the palette lists every thread, then the actions", (t) => {
     [
       ["Research", "First", "1 running"],
       ["Research", "Second", undefined],
-      ["Actions", "Home", "⇧⌘H"],
-      ["Actions", "Toggle sidebar", "⇧⌘G"],
-      ["Actions", "Settings", "⌘,"],
+      ["Actions", "Home", formatChord("mod+shift+h")],
+      ["Actions", "Toggle sidebar", formatChord("mod+shift+g")],
+      ["Actions", "Settings", formatChord("mod+,")],
     ],
   );
 });

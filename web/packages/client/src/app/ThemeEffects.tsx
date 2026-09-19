@@ -1,4 +1,4 @@
-import { APP_TEXT_SIZE, clamp } from "@session/shared";
+import { APP_TEXT_SIZE, APP_TEXT_SIZE_MAX, APP_TEXT_SIZE_MIN, clamp } from "@session/shared";
 import { useEffect, useLayoutEffect } from "react";
 
 import { useResolvedAppearance } from "../lib/appearance.js";
@@ -8,8 +8,9 @@ import { useSettingsStore } from "../stores/settings.js";
 /**
  * Writes the settings store onto `<html>` (07 §2, ported from
  * `App.tsx:1926-1969`): `data-color-theme`, `data-appearance`,
- * `data-body-font`, the `--font-ui` stack, the `reduce-motion` class, and the
- * `color-scheme` meta that replaces the desktop's `getCurrentWindow().setTheme`.
+ * `data-body-font`, the `--font-ui` stack, and the `color-scheme` meta that
+ * replaces the desktop's `getCurrentWindow().setTheme`. Reduced motion follows
+ * the OS preference alone (`prefers-reduced-motion` in `prose.css`).
  *
  * Everything runs in a layout effect so the attributes land before paint —
  * switching or restoring a theme must not flash the default palette. The
@@ -51,14 +52,14 @@ export function ThemeEffects() {
     root.dataset["bodyFont"] = settings.bodyFontId;
   }, [bodyFontFamily, settings.bodyFontId]);
 
-  useLayoutEffect(() => {
-    document.documentElement.classList.toggle("reduce-motion", settings.reduceMotion);
-  }, [settings.reduceMotion]);
-
   // App text size adjusts reading surface zoom via CSS variables rather than root font size, as layout tokens are pixel-based. It becomes `--app-text-zoom`, which `prose.css` folds into the
   // reading surface's body size (the desktop's `--turn-font-delta`).
   useLayoutEffect(() => {
-    const zoom = clamp((settings.textSize - APP_TEXT_SIZE) * 0.25, 0, 1);
+    const zoom = clamp(
+      settings.textSize - APP_TEXT_SIZE,
+      APP_TEXT_SIZE_MIN - APP_TEXT_SIZE,
+      APP_TEXT_SIZE_MAX - APP_TEXT_SIZE,
+    );
     document.documentElement.style.setProperty("--app-text-zoom", `${zoom}px`);
   }, [settings.textSize]);
 

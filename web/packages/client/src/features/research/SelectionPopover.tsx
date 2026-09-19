@@ -27,12 +27,12 @@ export const SELECTION_POPOVER_OVERLAY_PRIORITY = 150;
 
 const ACTION =
   "border-border-default bg-highlight-action text-fg-interactive hover:bg-highlight-action-hover " +
-  "focus-visible:ring-focus-ring inline-flex min-h-[27px] w-max items-center gap-[7px] " +
-  "rounded-[5px] border px-2 text-sm leading-none shadow-sm outline-none focus-visible:ring-2 " +
-  "disabled:text-fg-activity disabled:cursor-default";
+  "focus-visible:ring-focus-ring inline-flex min-h-control-sm w-max items-center gap-[7px] " +
+  "rounded-sm border px-2 text-sm shadow-sm outline-none focus-visible:ring-2 " +
+  "disabled:text-fg-muted disabled:cursor-default";
 
 const KEYCAP =
-  "border-border-subtle text-fg-faint rounded-[3px] border px-1 py-px font-mono text-[10px]";
+  "border-border-subtle text-fg-secondary rounded-sm border px-1 py-px font-mono text-xs leading-none";
 
 export interface SelectionPopoverProps {
   left: number;

@@ -48,16 +48,6 @@ test.serial("appearance drives the color-scheme meta the tokens cannot reach", (
   t.is(meta()?.content, "light");
 });
 
-test.serial("reduce motion is a class on the root, not a per-component prop", (t) => {
-  render(<ThemeEffects />);
-
-  act(() => useSettingsStore.getState().set("reduceMotion", true));
-  t.true(document.documentElement.classList.contains("reduce-motion"));
-
-  act(() => useSettingsStore.getState().set("reduceMotion", false));
-  t.false(document.documentElement.classList.contains("reduce-motion"));
-});
-
 test.serial("the body font choice sets both the stack and the optical marker", (t) => {
   render(<ThemeEffects />);
 
@@ -67,16 +57,15 @@ test.serial("the body font choice sets both the stack and the optical marker", (
   t.regex(document.documentElement.style.getPropertyValue("--font-ui"), /Valley Sans/);
 });
 
-test.serial("text size becomes a bounded reading zoom, not a root font size", (t) => {
+test.serial("text size becomes a bounded pixel zoom, not a root font size", (t) => {
   render(<ThemeEffects />);
 
   act(() => useSettingsStore.getState().setTextSize(14));
   t.is(document.documentElement.style.getPropertyValue("--app-text-zoom"), "0px");
 
-  act(() => useSettingsStore.getState().setTextSize(32));
-  t.is(
-    document.documentElement.style.getPropertyValue("--app-text-zoom"),
-    "1px",
-    "the zoom is capped at one pixel, as on the desktop",
-  );
+  act(() => useSettingsStore.getState().setTextSize(18));
+  t.is(document.documentElement.style.getPropertyValue("--app-text-zoom"), "4px");
+
+  act(() => useSettingsStore.getState().setTextSize(12));
+  t.is(document.documentElement.style.getPropertyValue("--app-text-zoom"), "-2px");
 });

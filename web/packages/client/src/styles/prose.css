@@ -22,7 +22,7 @@
      ThemeEffects (the desktop's `--turn-font-delta`). Adding it here rather
      than at each declaration means every size derived from the body size —
      the summary, the markdown delta, tweet copy — tracks the setting once. */
-  --research-body-font-size: calc(var(--fs-input) - 0.5px + var(--app-text-zoom, 0px));
+  --research-body-font-size: calc(var(--fs-input) - 0.5px);
   /* 1.5 less one pixel; `em` resolves against the element's own font size, so
      the prompt bubble, the answer, the recap and tweet copy all read at the
      same tightened leading. */
@@ -540,28 +540,9 @@ html.wrap-code-blocks .research-prose-code-block pre code {
   animation: session-status-dot-pulse 1.3s ease-in-out infinite;
 }
 
-/* Accessibility overrides outrank component transitions. Ported from the
-   desktop `reduced-motion.css`; the explicit `reduce-motion` class (the
-   setting) and the media query (the OS preference) apply the same rules. */
-.reduce-motion,
-.reduce-motion *,
-.reduce-motion *::before,
-.reduce-motion *::after {
-  scroll-behavior: auto !important;
-  transition-delay: 0s !important;
-  transition-duration: 0.01ms !important;
-}
-
-.reduce-motion .session-thinking-dot {
-  animation: none;
-  opacity: 1;
-  transform: none;
-}
-
-.reduce-motion .session-notification {
-  transform: none;
-}
-
+/* Accessibility overrides outrank component transitions. The OS preference
+   is the one source; `.session-spin` stays, since a spinner that does not
+   spin reads as stuck. */
 @media (prefers-reduced-motion: reduce) {
   :root,
   *,
@@ -578,7 +559,13 @@ html.wrap-code-blocks .research-prose-code-block pre code {
     transform: none;
   }
 
+  /* Tailwind's translate utilities write `translate`, not `transform`. */
   .session-notification {
     transform: none;
+    translate: none;
+  }
+
+  .research-prose a.research-wikilink.is-generating {
+    animation: none;
   }
 }

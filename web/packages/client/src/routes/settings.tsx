@@ -5,14 +5,25 @@ import {
   appearanceSchema,
   clampResearchLaunchInstruction,
 } from "@session/shared";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { useRuntimeConfig, useSettings, useUpdateSettings, useUsage } from "../api/queries.js";
+import { setDefaultResearchWorkspace } from "../api/api.js";
+import {
+  queryKeys,
+  useRuntimeConfig,
+  useSettings,
+  useUpdateSettings,
+  useUsage,
+  useWorkspaces,
+} from "../api/queries.js";
 import { BODY_FONT_OPTIONS } from "../lib/bodyFonts.js";
+import { errorMessage, pushErrorToast, pushToast } from "../lib/toast.js";
 import { useSettingsStore } from "../stores/settings.js";
 import { ControlButton } from "../ui/Button.js";
 import { Field, Textarea } from "../ui/Field.js";
+import { QueryState } from "../ui/QueryState.js";
 import { Select, type SelectOption } from "../ui/Select.js";
 import { Checkbox } from "../ui/Toggle.js";
 
@@ -75,12 +86,19 @@ function ResearchSection() {
     ...(model.adminOnly ? { detail: "admin" } : {}),
   }));
   const dirty = edit !== null && edit !== stored;
+  const client = useQueryClient();
+  const workspaces = useWorkspaces();
+  const workspaceOptions: SelectOption[] = (workspaces.data ?? []).map((workspace) => ({
+    value: workspace.id,
+    label: workspace.name,
+  }));
 
   return (
     <div className="flex flex-col gap-5">
       <Field
         label="Research instructions"
         hint={`Added to the beginning of every research question. Up to ${RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES / 1024} KiB.`}
+        error={update.error ? errorMessage(update.error) : undefined}
       >
         {({ id, describedBy }) => (
           <div className="flex flex-col items-start gap-2">
@@ -100,13 +118,36 @@ function ResearchSection() {
               onClick={() =>
                 update.mutate(
                   { researchLaunchInstruction: instruction.trim() === "" ? null : instruction },
-                  { onSuccess: () => setEdit(null) },
+                  {
+                    onSuccess: () => {
+                      setEdit(null);
+                      pushToast({ title: "Instructions saved", tone: "success" });
+                    },
+                  },
                 )
               }
             >
-              Save instructions
+              {update.isPending ? "Saving…" : "Save instructions"}
             </ControlButton>
           </div>
+        )}
+      </Field>
+
+      <Field label="Default workspace">
+        {() => (
+          <Select
+            label="Default workspace"
+            value={settings.data?.defaultWorkspaceId ?? ""}
+            options={workspaceOptions}
+            className={PICKER_CLASS}
+            onChange={(value) => {
+              void setDefaultResearchWorkspace(value)
+                .then(() => client.invalidateQueries({ queryKey: queryKeys.settings() }))
+                .catch((error: unknown) =>
+                  pushErrorToast("Failed to set default workspace", error),
+                );
+            }}
+          />
         )}
       </Field>
 
@@ -144,9 +185,14 @@ function UsageSection() {
   const summary = usage.data;
   if (!summary) {
     return (
-      <p className="text-fg-muted m-0 text-base">
-        {usage.isLoading ? "Loading…" : "No usage recorded."}
-      </p>
+      <QueryState
+        className="py-0"
+        loading={usage.isLoading}
+        loadingLabel="Loading usage…"
+        error={usage.isError ? "Couldn’t load usage." : undefined}
+        onRetry={() => void usage.refetch()}
+        empty="No usage recorded."
+      />
     );
   }
   const rows = [
@@ -199,7 +245,7 @@ export function SettingsPage() {
   return (
     <div className="h-full overflow-y-auto px-8 py-10">
       <div className="mx-auto flex w-[min(640px,100%)] flex-col gap-6">
-        <h1 className="text-input text-fg-heading m-0 font-semibold">Settings</h1>
+        <h1 className="text-title text-fg-heading m-0 font-semibold">Settings</h1>
 
         <div className="flex flex-col gap-8">
           <SettingsGroup title="Appearance">
@@ -260,7 +306,7 @@ export function SettingsPage() {
             </Field>
           </SettingsGroup>
 
-          <SettingsGroup title="Reading and composing">
+          <SettingsGroup title="Reading">
             <Checkbox
               label="Show tool calls"
               description="Include searches, fetches and document reads in answers."
@@ -273,6 +319,9 @@ export function SettingsPage() {
               checked={settings.showAssistantTimestamps}
               onCheckedChange={(checked) => set("showAssistantTimestamps", checked)}
             />
+          </SettingsGroup>
+
+          <SettingsGroup title="Notifications">
             <Checkbox
               label="Notifications"
               description="Show popup notifications for background server events."
@@ -281,7 +330,7 @@ export function SettingsPage() {
             />
           </SettingsGroup>
 
-          <SettingsGroup title="Research">
+          <SettingsGroup title="Research defaults">
             <ResearchSection />
           </SettingsGroup>
 

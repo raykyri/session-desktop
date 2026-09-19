@@ -53,7 +53,7 @@ test.serial("server settings override local cached settings on startup", async (
   useSettingsStore.getState().set("textSize", 14);
   const stub = createTrpcStub({
     ...defaultResponses(testUser()),
-    "settings.get": serverSettings({ appearance: "light", textSize: 20 }),
+    "settings.get": serverSettings({ appearance: "light", textSize: 17 }),
   });
 
   mount(stub);
@@ -63,7 +63,7 @@ test.serial("server settings override local cached settings on startup", async (
     () => useSettingsStore.getState().settings.appearance === "light",
     "the account's appearance setting was applied",
   );
-  t.is(useSettingsStore.getState().settings.textSize, 20);
+  t.is(useSettingsStore.getState().settings.textSize, 17);
   t.false(
     stub.calls.some((call) => call.path === "settings.update"),
     "applying the server's own copy is not a change to push back",
@@ -74,7 +74,7 @@ test.serial("a local change is pushed once, after the debounce", async (t) => {
   const stub = createTrpcStub({
     ...defaultResponses(testUser()),
     "settings.get": serverSettings({ textSize: 15 }),
-    "settings.update": serverSettings({ textSize: 19 }),
+    "settings.update": serverSettings({ textSize: 18 }),
   });
   mount(stub);
   // A change made before the account's copy lands would be overwritten by it,
@@ -87,9 +87,9 @@ test.serial("a local change is pushed once, after the debounce", async (t) => {
 
   act(() => {
     // A slider drag: several changes inside one debounce window.
+    useSettingsStore.getState().setTextSize(16);
     useSettingsStore.getState().setTextSize(17);
     useSettingsStore.getState().setTextSize(18);
-    useSettingsStore.getState().setTextSize(19);
   });
 
   await waitUntil(
@@ -101,7 +101,7 @@ test.serial("a local change is pushed once, after the debounce", async (t) => {
 
   const updates = stub.calls.filter((call) => call.path === "settings.update");
   t.is(updates.length, 1, "three moves of the slider are one write");
-  t.is((updates[0]?.input as { settings: { textSize: number } }).settings.textSize, 19);
+  t.is((updates[0]?.input as { settings: { textSize: number } }).settings.textSize, 18);
 });
 
 test.serial("a push that fails does not stop the next one", async (t) => {

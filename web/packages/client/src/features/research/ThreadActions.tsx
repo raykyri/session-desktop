@@ -6,22 +6,28 @@
 import { Bookmark, BookmarkCheck } from "lucide-react";
 
 import { cn } from "../../lib/cn.js";
+import { FOCUS_RING } from "../../ui/surfaces.js";
 
 const ACTION_CLASS =
-  "text-fg-subtle hover:text-fg-strong flex items-center gap-1 border-0 bg-transparent p-0 " +
-  "aria-pressed:text-fg-secondary";
+  "text-fg-subtle hover:not-disabled:text-fg-strong flex items-center gap-1 rounded-sm border-0 bg-transparent p-0 " +
+  "aria-pressed:text-fg-secondary disabled:cursor-default active:not-disabled:opacity-70 " +
+  FOCUS_RING;
 
 export function ThreadActions({
   followed,
   bookmarked,
   onToggleFollow,
   onToggleBookmark,
+  busy = false,
   className,
 }: {
   followed: boolean;
   bookmarked: boolean;
   onToggleFollow: () => void;
   onToggleBookmark: () => void;
+  /** A toggle is in flight: both controls wait so a second click cannot send
+   * the stale value again. */
+  busy?: boolean;
   className?: string;
 }) {
   return (
@@ -31,6 +37,7 @@ export function ThreadActions({
         aria-pressed={followed}
         title={followed ? "Stop following this thread" : "Follow this thread"}
         className={ACTION_CLASS}
+        disabled={busy}
         onClick={onToggleFollow}
       >
         <span>{followed ? "Following" : "Follow"}</span>
@@ -40,6 +47,7 @@ export function ThreadActions({
         aria-pressed={bookmarked}
         title={bookmarked ? "Remove bookmark" : "Bookmark this thread"}
         className={ACTION_CLASS}
+        disabled={busy}
         onClick={onToggleBookmark}
       >
         {bookmarked ? (

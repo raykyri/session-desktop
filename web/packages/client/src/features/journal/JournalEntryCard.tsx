@@ -128,7 +128,7 @@ export function JournalEntryCard({
           "relative",
           isTweetCard
             ? "border-border-divider rounded-lg border"
-            : "bg-surface-card border-border-divider rounded-lg border p-3",
+            : "bg-surface-card border-border-divider rounded-lg border px-3 py-2.5",
         )}
         title={new Date(entry.createdAt).toLocaleString()}
       >

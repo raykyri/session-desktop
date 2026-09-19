@@ -18,7 +18,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
       role="alert"
       className="mx-auto flex max-w-[46ch] flex-col items-start gap-3 px-6 py-16"
     >
-      <h1 className="text-fg-primary m-0 text-lg font-medium">{title}</h1>
+      <h1 className="text-title text-fg-primary m-0 font-medium">{title}</h1>
       {children}
     </section>
   );

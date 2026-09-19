@@ -93,9 +93,9 @@ test.serial("a v1-shaped blob does not leak desktop keys into the v2 shape", (t)
 
 test.serial("text size is clamped to the documented bounds", (t) => {
   useSettingsStore.getState().setTextSize(999);
-  t.is(useSettingsStore.getState().settings.textSize, 32);
+  t.is(useSettingsStore.getState().settings.textSize, 18);
   useSettingsStore.getState().setTextSize(-4);
-  t.is(useSettingsStore.getState().settings.textSize, 8);
+  t.is(useSettingsStore.getState().settings.textSize, 12);
 });
 
 test.serial("toggleAppearance flips between the two appearances", (t) => {

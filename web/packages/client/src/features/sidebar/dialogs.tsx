@@ -8,10 +8,11 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { useEffect, useRef, useState } from "react";
 
+import { cn } from "../../lib/cn.js";
 import { errorMessage } from "../../lib/toast.js";
 import { ConfirmDialogActionButton, Dialog } from "../../ui/Dialog.js";
 import { Input } from "../../ui/Field.js";
-import { CONTROL_BUTTON } from "../../ui/surfaces.js";
+import { CONTROL_BUTTON, CONTROL_BUTTON_SIZE } from "../../ui/surfaces.js";
 
 /** A dialog whose whole content is one text field and a confirming action:
  * create a folder, rename a folder, rename a thread, name a workspace. */
@@ -68,7 +69,9 @@ export function NameDialog({
       {...(description === undefined ? {} : { description })}
       footer={
         <>
-          <BaseDialog.Close className={CONTROL_BUTTON}>Cancel</BaseDialog.Close>
+          <BaseDialog.Close className={cn(CONTROL_BUTTON, CONTROL_BUTTON_SIZE.md)}>
+            Cancel
+          </BaseDialog.Close>
           <ConfirmDialogActionButton disabled={trimmed === ""} onClick={submit}>
             {confirmLabel}
           </ConfirmDialogActionButton>
@@ -135,7 +138,10 @@ export function AsyncConfirmDialog({
       {...(tone === "danger" ? { initialFocus: confirmRef } : {})}
       footer={
         <>
-          <BaseDialog.Close className={CONTROL_BUTTON} disabled={pending}>
+          <BaseDialog.Close
+            className={cn(CONTROL_BUTTON, CONTROL_BUTTON_SIZE.md)}
+            disabled={pending}
+          >
             Cancel
           </BaseDialog.Close>
           <ConfirmDialogActionButton

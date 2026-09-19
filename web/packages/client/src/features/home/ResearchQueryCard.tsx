@@ -55,23 +55,22 @@ const STATUS_LABEL: Record<string, string> = {
 export function ResearchQueryCard({
   query,
   tree,
-  metadata,
   menuItems,
   onOpen,
   onOpenChild,
   onToggleFollow,
   onToggleBookmark,
+  actionsBusy = false,
 }: {
   query: RecentResearchQuery;
   tree: ResearchTreeSummary | undefined;
-  /** The event metadata line, rendered on the footer row. */
-  metadata: ReactNode;
   /** The thread menu, shared with the sidebar. */
   menuItems: ReactNode;
   onOpen: () => void;
   onOpenChild: (child: RecentResearchQuery) => void;
   onToggleFollow: () => void;
   onToggleBookmark: () => void;
+  actionsBusy?: boolean;
 }) {
   const recap = query.recap?.trim() ?? "";
   const running = isActiveResearchStatus(query.status);
@@ -166,7 +165,6 @@ export function ResearchQueryCard({
           {status ? (
             <span className={cn(query.status === "failed" && "text-status-failed")}>{status}</span>
           ) : null}
-          {metadata}
           <span className="flex-1" />
           {!running ? (
             <ThreadActions
@@ -174,6 +172,7 @@ export function ResearchQueryCard({
               bookmarked={bookmarked}
               onToggleFollow={onToggleFollow}
               onToggleBookmark={onToggleBookmark}
+              busy={actionsBusy}
             />
           ) : null}
         </div>

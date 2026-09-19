@@ -448,7 +448,7 @@ test.serial(
       "typing enables Send",
     );
 
-    fireEvent.keyDown(field, { key: "Enter", metaKey: true });
+    fireEvent.keyDown(field, { key: "Enter", metaKey: true, ctrlKey: true });
     await waitUntil(
       t,
       () => trpc.calls.some((call) => call.path === "research.forkNode"),
@@ -503,7 +503,7 @@ test.serial("Shift-Cmd-Enter submits a branch regardless of the selected mode", 
   );
   const field = screen.getByLabelText("Follow-up question");
   fireEvent.change(field, { target: { value: "A side question" } });
-  fireEvent.keyDown(field, { key: "Enter", metaKey: true, shiftKey: true });
+  fireEvent.keyDown(field, { key: "Enter", metaKey: true, ctrlKey: true, shiftKey: true });
 
   await waitUntil(
     t,
