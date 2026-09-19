@@ -61,7 +61,10 @@ Cards:
   the question's embedded posts (`TweetAttachments`, shared with the open
   thread; a trailing permalink that embedded is dropped from the displayed
   text by `visibleResearchPrompt`), up to one level of `children` as compact
-  rows, Follow
+  rows — indented under the question, each marked with the desktop's elbow
+  (`journal.css` `.recent-query-child::before`, re-expressed as `before:`
+  utilities) and reading at the body size, its `@` passage quote subdued and
+  its question a link into the child node — Follow
   and Bookmark toggles beside the timestamp once the query is no longer
   running (`ResearchActivityFeed.tsx:365`; `research.setTreeFollowed` /
   `setTreeBookmarked`, optimistic). While the run is in flight the card shows
