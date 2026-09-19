@@ -100,7 +100,7 @@ export function WorkspaceSwitcher({
   };
 
   return (
-    <div className="relative flex items-center gap-1 px-2 pt-1">
+    <div className="relative flex items-center gap-1 px-2 pt-0.5">
       <Menu
         open={open}
         onOpenChange={setOpen}
@@ -143,7 +143,7 @@ export function WorkspaceSwitcher({
             <MenuSeparator />
             <IconMenuItem
               icon={<Star size={13} aria-hidden="true" />}
-              label={isDefault ? "Default workspace" : "Set as default"}
+              label="Make default workspace"
               disabled={isDefault}
               onClick={() => {
                 void setDefaultResearchWorkspace(current.id)

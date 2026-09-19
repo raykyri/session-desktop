@@ -35,7 +35,7 @@ export const colorThemeSchema = z.enum(["green-blob", "orange-blob"]);
 
 export type ColorTheme = z.infer<typeof colorThemeSchema>;
 
-export const appearanceSchema = z.enum(["dark", "light"]);
+export const appearanceSchema = z.enum(["dark", "light", "system"]);
 
 export type Appearance = z.infer<typeof appearanceSchema>;
 
@@ -60,8 +60,6 @@ export const userSettingsSchema = z.object({
   showAssistantTimestamps: z.boolean(),
   /** Overlay toasts for server-originated notifications. */
   showNotifications: z.boolean(),
-  /** Require Command-Enter instead of bare Enter for composer submit. */
-  requireCmdEnterToSend: z.boolean(),
   /** Registry id the composer preselects. */
   defaultModel: z.string(),
 });
@@ -87,7 +85,6 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   showToolCalls: true,
   showAssistantTimestamps: false,
   showNotifications: true,
-  requireCmdEnterToSend: false,
   defaultModel: DEFAULT_MODEL_ID,
 };
 

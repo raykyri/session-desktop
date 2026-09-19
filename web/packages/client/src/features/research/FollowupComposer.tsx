@@ -37,7 +37,7 @@ export const FOLLOWUP_MODE_OPTIONS: {
   shortcut: string | null;
 }[] = [
   { mode: "thread", label: "Continue thread", shortcut: null },
-  { mode: "branch", label: "Open as new branch in sidebar", shortcut: "⇧⌘↵" },
+  { mode: "branch", label: "Start side branch", shortcut: "⇧⌘↵" },
 ];
 
 export interface FollowupComposerProps {
@@ -205,7 +205,12 @@ export function FollowupComposer({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <ControlButton size="sm" disabled={!canSubmit} onClick={() => onSubmit()}>
+          <ControlButton
+            size="sm"
+            className="gap-x-1.5 px-1.5"
+            disabled={!canSubmit}
+            onClick={() => onSubmit()}
+          >
             <span>{submitLabel}</span>
             {submitting ? null : <ComposerSubmitShortcutGlyph className="text-fg-disabled" />}
           </ControlButton>
@@ -220,7 +225,7 @@ export function FollowupComposer({
                   disabled={disabled}
                   aria-label="Follow-up mode"
                   title="Continue this thread or start a new branch"
-                  className="px-1.5"
+                  className="px-1"
                 >
                   <ChevronDown size={13} aria-hidden="true" />
                 </ControlButton>

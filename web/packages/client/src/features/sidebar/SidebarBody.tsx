@@ -34,7 +34,7 @@ export function SidebarBody() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto pb-2">
-      <nav aria-label="Sections" className="flex flex-col gap-0.5 px-2">
+      <nav aria-label="Sections" className="flex flex-col gap-px px-2">
         {NAV_ITEMS.map((item) => (
           <Link
             key={item.to}

@@ -256,8 +256,8 @@ ports with: a model chip cycling through the models the user may access on
 Tab (`launcherKeyboard`, reduced to one dimension), an attach button and
 drag-drop for documents (chips with name, size, extraction status, remove),
 draft persistence (prompt, model, attached document ids),
-`growComposerTextarea`, `isComposerSubmitShortcut` with
-`requireCmdEnterToSend`. Dropped: the "Ask network" toggle, provider
+`growComposerTextarea`, `isComposerSubmitShortcut` (⌘↵ on Apple platforms,
+Ctrl↵ elsewhere; Enter inserts a newline). Dropped: the "Ask network" toggle, provider
 cycling, custom model input, and per-model effort options (effort is fixed
 at medium). Slash commands are not ported.
 

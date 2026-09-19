@@ -1,8 +1,9 @@
 // Follow and Bookmark for a thread, shared by the Home card and the thread's
-// prompt footer so the two surfaces read the same: icon plus label, no box,
+// prompt footer so the two surfaces read the same: a label (Bookmark with its
+// glyph), no box,
 // the strong foreground on hover and while the state is on.
 
-import { Bell, BellOff, Bookmark, BookmarkCheck } from "lucide-react";
+import { Bookmark, BookmarkCheck } from "lucide-react";
 
 import { cn } from "../../lib/cn.js";
 
@@ -32,11 +33,6 @@ export function ThreadActions({
         className={ACTION_CLASS}
         onClick={onToggleFollow}
       >
-        {followed ? (
-          <Bell size={12} aria-hidden="true" />
-        ) : (
-          <BellOff size={12} aria-hidden="true" />
-        )}
         <span>{followed ? "Following" : "Follow"}</span>
       </button>
       <button

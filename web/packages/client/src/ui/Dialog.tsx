@@ -1,6 +1,7 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { LoaderCircle } from "lucide-react";
-import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref, RefObject } from "react";
+import { useRef } from "react";
 
 import { cn } from "../lib/cn.js";
 
@@ -20,6 +21,8 @@ export interface DialogProps {
   /** `trap-focus` keeps the page scrollable behind the dialog; used by the
    * panels that sit beside live content. */
   modal?: boolean | "trap-focus";
+  /** The element focused on open instead of the first tabbable one. */
+  initialFocus?: RefObject<HTMLElement | null> | undefined;
 }
 
 /**
@@ -37,12 +40,16 @@ export function Dialog({
   footer,
   className,
   modal = true,
+  initialFocus,
 }: DialogProps) {
   return (
     <BaseDialog.Root open={open} onOpenChange={onOpenChange} modal={modal}>
       <BaseDialog.Portal>
         <BaseDialog.Backdrop className={DIALOG_BACKDROP} />
-        <BaseDialog.Popup className={cn(DIALOG_POPUP, className)}>
+        <BaseDialog.Popup
+          className={cn(DIALOG_POPUP, className)}
+          {...(initialFocus === undefined ? {} : { initialFocus })}
+        >
           <BaseDialog.Title className="text-fg-heading m-0 text-base font-semibold">
             {title}
           </BaseDialog.Title>
@@ -118,7 +125,8 @@ export interface ConfirmDialogProps {
   onConfirm: () => void;
 }
 
-/** Title, prose, Cancel, and one confirming action. */
+/** Title, prose, Cancel, and one confirming action. A destructive dialog
+ * opens with the action focused, so Enter confirms and Escape cancels. */
 export function ConfirmDialog({
   open,
   onOpenChange,
@@ -131,18 +139,21 @@ export function ConfirmDialog({
   tone = "default",
   onConfirm,
 }: ConfirmDialogProps) {
+  const confirmRef = useRef<HTMLButtonElement>(null);
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
       title={title}
       {...(description === undefined ? {} : { description })}
+      {...(tone === "danger" ? { initialFocus: confirmRef } : {})}
       footer={
         <>
           <BaseDialog.Close className={CONTROL_BUTTON} disabled={pending}>
             {cancelLabel}
           </BaseDialog.Close>
           <ConfirmDialogActionButton
+            ref={confirmRef}
             pending={pending}
             tone={tone}
             {...(pendingLabel === undefined ? {} : { pendingLabel })}

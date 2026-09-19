@@ -326,7 +326,7 @@ specs under `e2e/`.
       candidate is generated, previewed, and applied" and "a title is
       generated, sanitized, and given to the thread"; `research.spec.ts` "the
       recap dialog generates a candidate and applies it".
-- [ ] **Partial** — Node history and swipe; browser history across pages; DOM
+- [ ] **Partial** — Node history; browser history across pages; DOM
       search; lightboxes; math; wikilinks to encyclopedia pages.
       All implemented. Node and cross-page history are covered by
       `packages/shared/test/researchHistory.test.ts`; math and wikilinks by

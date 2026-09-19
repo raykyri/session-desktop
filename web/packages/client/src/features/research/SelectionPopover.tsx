@@ -107,7 +107,7 @@ export function SelectionPopover({
     <div
       data-research-selection-actions
       className="fixed z-(--z-context-menu) flex gap-px"
-      style={{ left, top, visibility: offscreen ? "hidden" : undefined }}
+      style={{ left, top: top + 2, visibility: offscreen ? "hidden" : undefined }}
     >
       <button
         type="button"

@@ -7,6 +7,7 @@ import { useLogout, useMe } from "../../api/queries.js";
 import memMonochromeLightLogoUrl from "../../assets/brand/mem-monochrome-light.svg";
 import memMonochromeLogoUrl from "../../assets/brand/mem-monochrome.svg";
 import { SidebarBody } from "../../features/sidebar/SidebarBody.js";
+import { useResolvedAppearance } from "../../lib/appearance.js";
 import { cn } from "../../lib/cn.js";
 import {
   NARROW_LAYOUT_WIDTH,
@@ -36,7 +37,10 @@ function AccountMenu() {
         align="start"
         label="Account"
         trigger={
-          <ControlButton size="sm" className="min-w-0 flex-1 justify-start gap-2">
+          <ControlButton
+            size="sm"
+            className="min-h-[calc(var(--control-h-sm)+2px)]! min-w-0 flex-1 justify-start gap-2 py-px text-base!"
+          >
             <span className="min-w-0 truncate">{user.login}</span>
           </ControlButton>
         }
@@ -86,9 +90,9 @@ export function useNarrowLayout(): boolean {
 /** The sidebar's top row: the desktop's monochrome "M" mark (20px wide, one
  * file per appearance) and the hide control. */
 function SidebarChrome({ onHide }: { onHide: () => void }) {
-  const appearance = useSettingsStore(selectAppearance);
+  const appearance = useResolvedAppearance(useSettingsStore(selectAppearance));
   return (
-    <div className="flex items-center justify-between gap-2 px-3 py-2">
+    <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-2.5">
       <span className="flex items-center px-0.5" aria-label="Session">
         <img
           src={appearance === "light" ? memMonochromeLightLogoUrl : memMonochromeLogoUrl}
@@ -197,7 +201,7 @@ export function Sidebar() {
         aria-valuemin={SIDEBAR_MIN_WIDTH}
         aria-valuemax={SIDEBAR_MAX_WIDTH}
         tabIndex={0}
-        className="hover:bg-accent-soft absolute inset-y-0 -right-1 w-2 cursor-col-resize"
+        className="hover:bg-accent-soft/50 absolute inset-y-0 -right-1 w-2 cursor-col-resize"
         onPointerDown={startResize}
         onPointerMove={onResize}
         onPointerUp={endResize}

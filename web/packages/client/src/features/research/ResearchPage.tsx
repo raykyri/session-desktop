@@ -70,7 +70,6 @@ import { durationLabel } from "./timeline.js";
 import { ASK_ENTRY_ID, useResearchAnnotations } from "./useResearchAnnotations.js";
 import type { AnchoredEntry } from "./useResearchAnnotations.js";
 import { useResearchSelectionDrag } from "./useResearchSelectionDrag.js";
-import { useResearchSwipeNavigation } from "./useResearchSwipeNavigation.js";
 
 const SCROLL_RECORD_DEBOUNCE_MS = 250;
 /** One identity for "the tree has not arrived yet", so the memos below do not
@@ -692,8 +691,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     else router.history.forward();
   }, [applySelection, router, treeId]);
 
-  useResearchSwipeNavigation(scrollerRef, goBack, goForward, chainKey);
-
   // Cmd-[ / Cmd-] and Alt-arrows mirror the header pair; the dedicated mouse
   // back/forward buttons do too. All are ignored while typing, so the composer
   // keeps word-wise motion.
@@ -1200,30 +1197,35 @@ function ResearchDocument({ treeId }: { treeId: string }) {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      <DocumentHeader
-        detail={detail}
-        selectedNodeId={selectedNodeId}
-        threadLength={chainNodes.length}
-        branchCount={branchCount}
-        onSelectNode={selectNode}
-        fullTrace={
-          selectedSegment && selectedSegment.turns.length > 0
-            ? {
-                active: Boolean(fullTraceNodes[selectedNodeId]),
-                onToggle: () =>
-                  setFullTraceNodes((current) => ({
-                    ...current,
-                    [selectedNodeId]: !current[selectedNodeId],
-                  })),
-              }
-            : null
-        }
-        cancel={
-          selectedNode && isActiveResearchStatus(selectedNode.status)
-            ? { busy: cancelling, onCancel: () => handleCancel(selectedNode.id) }
-            : null
-        }
-      />
+      {/* The header names the thread and counts its turns; both change as
+          segments land, so it waits for the chain to settle rather than
+          repainting on each arrival. */}
+      {chainSettled ? (
+        <DocumentHeader
+          detail={detail}
+          selectedNodeId={selectedNodeId}
+          threadLength={chainNodes.length}
+          branchCount={branchCount}
+          onSelectNode={selectNode}
+          fullTrace={
+            selectedSegment && selectedSegment.turns.length > 0
+              ? {
+                  active: Boolean(fullTraceNodes[selectedNodeId]),
+                  onToggle: () =>
+                    setFullTraceNodes((current) => ({
+                      ...current,
+                      [selectedNodeId]: !current[selectedNodeId],
+                    })),
+                }
+              : null
+          }
+          cancel={
+            selectedNode && isActiveResearchStatus(selectedNode.status)
+              ? { busy: cancelling, onCancel: () => handleCancel(selectedNode.id) }
+              : null
+          }
+        />
+      ) : null}
       <DomSearchBar
         active
         placeholder="Find in research"

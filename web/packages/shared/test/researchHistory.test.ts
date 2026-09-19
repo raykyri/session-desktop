@@ -14,8 +14,6 @@ import {
   pushResearchWorkspaceHistory,
   researchHistoryBack,
   researchHistoryForward,
-  researchSwipeDirection,
-  researchSwipeTailCapturesWheel,
   researchWorkspaceHistoryBack,
   researchWorkspaceHistoryForward,
 } from "../src/research/history.js";
@@ -75,15 +73,6 @@ test("push does not mutate the prior history value", (t) => {
   const after = pushResearchHistory(before, "b");
   t.deepEqual(before, { entries: ["a"], index: 0 });
   t.not(before.entries, after.entries);
-});
-
-test("horizontal wheel gestures resolve only after clear dominant travel", (t) => {
-  t.is(researchSwipeDirection(-79, 0), 0);
-  t.is(researchSwipeDirection(79, 0), 0);
-  t.is(researchSwipeDirection(-100, 90), 0);
-  t.is(researchSwipeDirection(100, 90), 0);
-  t.is(researchSwipeDirection(-100, 20), -1);
-  t.is(researchSwipeDirection(100, 20), 1);
 });
 
 test("pruning deleted visits preserves the surviving cursor position", (t) => {
@@ -191,13 +180,4 @@ test("pruning preserves the current visit and returns the same stack when unchan
     pruneResearchWorkspaceHistory(forwardStack, () => false),
     { entries: [journal], index: 0 },
   );
-});
-
-test("swipe tail captures horizontal momentum per wheel event", (t) => {
-  t.is(researchSwipeTailCapturesWheel(-40, 0), true);
-  t.is(researchSwipeTailCapturesWheel(-12, 4), true);
-  // Vertical scroll is not captured.
-  t.is(researchSwipeTailCapturesWheel(0, 30), false);
-  t.is(researchSwipeTailCapturesWheel(4, 12), false);
-  t.is(researchSwipeTailCapturesWheel(10, -10), false);
 });

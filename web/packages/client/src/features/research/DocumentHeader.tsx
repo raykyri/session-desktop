@@ -77,8 +77,11 @@ export function DocumentHeader({
   );
 
   return (
-    <header className="border-border-divider flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
-      <nav className="flex min-w-0 flex-1 items-center gap-1 text-sm" aria-label="Research path">
+    <header className="research-reading-surface border-border-divider flex shrink-0 items-center gap-2 border-b px-8 pt-[7px] pb-1.5 max-[900px]:px-7">
+      <nav
+        className="flex min-w-0 flex-1 items-center gap-1 text-[length:var(--research-body-font-size)]"
+        aria-label="Research path"
+      >
         {crumbs.map((entry, position) =>
           entry.kind === "ellipsis" ? (
             <span key="ellipsis" className="flex items-center gap-1">
