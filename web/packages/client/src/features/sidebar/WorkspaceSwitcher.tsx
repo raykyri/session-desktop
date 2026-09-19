@@ -22,11 +22,11 @@ import {
 import { queryKeys, useSettings, useTreeSummaries, useWorkspaces } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { pushErrorToast, pushToast } from "../../lib/toast.js";
-import { ControlButton } from "../../ui/Button.js";
 import { Menu, MenuItem, MenuSeparator } from "../../ui/Menu.js";
 
 import { AsyncConfirmDialog, NameDialog } from "./dialogs.js";
 import { IconMenuItem } from "./menuRows.js";
+import { SIDEBAR_ROW } from "./rows.js";
 
 type WorkspaceRow = Workspace & { treeCount?: number };
 
@@ -90,7 +90,7 @@ export function WorkspaceSwitcher({
   };
 
   return (
-    <div className="relative flex items-center gap-1 px-2 pt-2">
+    <div className="relative flex items-center gap-1 px-2 pt-1">
       <Menu
         open={open}
         onOpenChange={setOpen}
@@ -99,13 +99,11 @@ export function WorkspaceSwitcher({
         label="Workspaces"
         className="min-w-64"
         trigger={
-          <ControlButton size="sm" className="min-w-0 flex-1 justify-start gap-2">
-            <Folder size={13} aria-hidden="true" />
-            <span className="min-w-0 flex-1 truncate text-left">
-              {current ? current.name : "Workspaces"}
-            </span>
-            <ChevronDown size={13} aria-hidden="true" />
-          </ControlButton>
+          <button type="button" className={cn(SIDEBAR_ROW, "border-0 bg-transparent text-left")}>
+            <Folder size={14} aria-hidden="true" className="shrink-0" />
+            <span className="min-w-0 flex-1 truncate">{current ? current.name : "Workspaces"}</span>
+            <ChevronDown size={14} aria-hidden="true" className="shrink-0" />
+          </button>
         }
       >
         {list.map((workspace) => (

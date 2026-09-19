@@ -23,6 +23,10 @@ import { ModelIcon } from "../composer/modelIcon.js";
 import { TweetEmbed } from "../journal/TweetEmbed.js";
 import { ResearchMarkdown } from "../markdown/index.js";
 
+/** The prompt bubble's padding plus its 1px border, so the recap, follow-ups
+ * and metadata below it start on the same column as the prompt text. */
+const CARD_TEXT_INSET = "px-[calc(var(--spacing)*3+1px)]";
+
 /** The short quote a follow-up anchored to a passage shows above its question
  * (`ResearchActivityFeed.tsx:318`). */
 export function queryTargetExcerpt(target: string, maxWords = 5, maxChars = 40): string {
@@ -126,16 +130,26 @@ export function ResearchQueryCard({
         ) : null}
 
         {running ? (
-          <p className="text-fg-muted m-0 flex items-center gap-1.5 text-sm" role="status">
+          <p
+            className={cn(CARD_TEXT_INSET, "text-fg-muted m-0 flex items-center gap-1.5 text-sm")}
+            role="status"
+          >
             <LoaderCircle size={13} aria-hidden="true" className="session-spin" />
             <span>Generating answer</span>
           </p>
         ) : recap ? (
-          <ResearchMarkdown markdown={recap} variant="summary" />
+          <ResearchMarkdown
+            markdown={`Summary: ${recap}`}
+            variant="summary"
+            className={CARD_TEXT_INSET}
+          />
         ) : null}
 
         {query.children && query.children.length > 0 ? (
-          <ul aria-label="Follow-up questions" className="m-0 flex list-none flex-col gap-1 p-0">
+          <ul
+            aria-label="Follow-up questions"
+            className={cn(CARD_TEXT_INSET, "m-0 flex list-none flex-col gap-1 p-0")}
+          >
             {query.children.map((child) => {
               const excerpt = queryTargetExcerpt(child.queryTarget ?? "");
               return (
@@ -161,7 +175,12 @@ export function ResearchQueryCard({
           </ul>
         ) : null}
 
-        <div className="text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        <div
+          className={cn(
+            CARD_TEXT_INSET,
+            "text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1 text-xs",
+          )}
+        >
           <span className="flex items-center gap-1">
             <ModelIcon modelId={query.model} size={12} />
             <span>{modelLabel}</span>

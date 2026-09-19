@@ -19,7 +19,7 @@ packages/client/
       providers.tsx
       queryClient.ts         the client the router and the providers share
       SessionBoot.tsx        subscription, draft writer, settings mirror
-      layout/                AppShell, Sidebar, StageHeader (history nav)
+      layout/                AppShell, Sidebar
     routes/
       login.tsx  home.tsx  bookmarks.tsx  highlights.tsx
       research.$treeId.tsx  encyclopedia.$slug.tsx  settings.tsx  admin.tsx

@@ -41,6 +41,7 @@ import {
   useTreeDetail,
 } from "../../api/queries.js";
 import { writeClipboardText } from "../../lib/clipboard.js";
+import { cn } from "../../lib/cn.js";
 import { errorMessage, pushToast } from "../../lib/toast.js";
 import { nodeDraftKey, useDraftsStore } from "../../stores/drafts.js";
 import { useNavigationStore } from "../../stores/navigation.js";
@@ -59,7 +60,7 @@ import { RecapDialog } from "./RecapDialog.js";
 import { SelectionPopover } from "./SelectionPopover.js";
 import { ThreadSegment } from "./ThreadSegment.js";
 import type { PublishedSegment, SegmentElementKind } from "./ThreadSegment.js";
-import { RESEARCH_ANSWER_MAX_WIDTH } from "./layout.js";
+import { RESEARCH_ANSWER_MAX_WIDTH, RESEARCH_COLUMNS_CLASS } from "./layout.js";
 import type { SegmentConnector } from "./layout.js";
 import { useHighlightMutations, useUpdateResearchDocument } from "./mutations.js";
 import type { CapturedResearchSelection } from "./selection/capture.js";
@@ -676,9 +677,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     if (!history || history.entries.length === 0) visitNode(treeId, selectedNodeId);
   }, [selectedNodeId, treeId, visitNode]);
 
-  const canGoBack = useNavigationStore((state) => state.canGoBack(treeId));
-  const canGoForward = useNavigationStore((state) => state.canGoForward(treeId));
-
   const goBack = useCallback(() => {
     const nodeId = useNavigationStore.getState().goBack(treeId);
     if (nodeId) applySelection(nodeId);
@@ -1203,10 +1201,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         selectedNodeId={selectedNodeId}
         threadLength={chainNodes.length}
         branchCount={branchCount}
-        canGoBack={canGoBack}
-        canGoForward={canGoForward}
-        onBack={goBack}
-        onForward={goForward}
         onSelectNode={selectNode}
         fullTrace={
           selectedSegment && selectedSegment.turns.length > 0
@@ -1329,7 +1323,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
             );
           })}
           {ask ? null : (
-            <div className="mt-8 grid grid-cols-[minmax(0,var(--research-answer-max-width))_minmax(220px,260px)] gap-(--research-column-gap) max-[900px]:grid-cols-[minmax(0,1fr)]">
+            <div className={cn(RESEARCH_COLUMNS_CLASS, "mt-8")}>
               <div className="min-w-0">{composer(false)}</div>
               <div aria-hidden="true" />
             </div>

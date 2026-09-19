@@ -95,7 +95,7 @@ export const SegmentPrompt = memo(function SegmentPrompt({
   const parentNodeId = node.parentNodeId ?? null;
 
   return (
-    <div className="flex flex-col gap-[5px]">
+    <div className="flex min-w-0 flex-col gap-[5px]">
       {index === 0 && parentNodeId ? (
         <div>
           <ControlButton size="sm" onClick={() => onSelectNode(parentNodeId)}>
@@ -105,22 +105,17 @@ export const SegmentPrompt = memo(function SegmentPrompt({
         </div>
       ) : null}
       {index > 0 && replySnippet ? (
-        <div className="text-fg-subtle flex max-w-[min(100%,640px)] min-w-0 items-center gap-1.5 text-sm">
+        <div className="text-fg-subtle flex min-w-0 items-center gap-1.5 text-sm">
           <Reply size={12} aria-hidden="true" />
           <span className="min-w-0 truncate">{`Reply to: ${replySnippet}`}</span>
         </div>
       ) : null}
       {node.queryAnchor ? (
-        <blockquote className="research-prompt-quote border-accent my-1.5 w-fit max-w-[min(100%,640px)] border-l-2 pl-2.5">
+        <blockquote className="research-prompt-quote border-accent my-1.5 w-fit max-w-full border-l-2 pl-2.5">
           {quoteDisplayText(node.queryAnchor.exact)}
         </blockquote>
       ) : null}
-      <div
-        className={cn(
-          "text-fg-strong w-fit max-w-[min(100%,640px)]",
-          showFooter ? "mb-0" : "mb-[26px]",
-        )}
-      >
+      <div className={cn("text-fg-strong w-fit max-w-full", showFooter ? "mb-0" : "mb-[26px]")}>
         <ResearchMarkdown markdown={node.prompt} />
       </div>
       {node.documentIds.length > 0 ? (

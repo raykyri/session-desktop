@@ -495,8 +495,8 @@ test.serial(
     );
     t.is(cached?.pages.length, 1, "the feed is showing page one again");
     t.deepEqual(scrolls.at(-1), { top: 0, behavior: "smooth" }, "at the top");
-    // Returning to the latest loaded page does not refetch; the header Refresh
-    // action requests newer rows.
+    // Returning to the latest loaded page does not refetch; the subscription
+    // and the new-items counter deliver newer rows.
     t.is(
       app.trpc.calls.filter((call) => call.path === "feed.recentActivity").length,
       2,

@@ -22,6 +22,7 @@ import { WikilinkActionsProvider } from "../markdown/index.js";
 import { AnswerPane } from "./AnswerPane.js";
 import { ConnectorOverlay, FollowupRail } from "./FollowupRail.js";
 import { SegmentPrompt } from "./SegmentPrompt.js";
+import { RESEARCH_COLUMNS_CLASS } from "./layout.js";
 import type { SegmentConnector } from "./layout.js";
 import { buildSegmentView, timelineTurns } from "./timeline.js";
 import type { SegmentView } from "./timeline.js";
@@ -221,21 +222,23 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
       className={cn("scroll-mt-4", index > 0 && "mt-11", isSelected && "is-selected")}
       data-segment-anchor={node.id}
     >
-      <SegmentPrompt
-        node={node}
-        index={index}
-        replyToAnswer={replyToAnswer}
-        running={segmentActive}
-        followed={followed}
-        bookmarked={bookmarked}
-        workspaceId={workspaceId}
-        onSelectNode={onSelectNode}
-        onToggleFollow={props.onToggleFollow}
-        onToggleBookmark={props.onToggleBookmark}
-      />
+      <div className={RESEARCH_COLUMNS_CLASS}>
+        <SegmentPrompt
+          node={node}
+          index={index}
+          replyToAnswer={replyToAnswer}
+          running={segmentActive}
+          followed={followed}
+          bookmarked={bookmarked}
+          workspaceId={workspaceId}
+          onSelectNode={onSelectNode}
+          onToggleFollow={props.onToggleFollow}
+          onToggleBookmark={props.onToggleBookmark}
+        />
+      </div>
       <div
         ref={registerGrid}
-        className="relative grid max-w-full min-w-0 grid-cols-[minmax(0,var(--research-answer-max-width))_minmax(220px,260px)] items-start gap-(--research-column-gap) max-[900px]:grid-cols-[minmax(0,1fr)]"
+        className={cn(RESEARCH_COLUMNS_CLASS, "relative max-w-full min-w-0 items-start")}
         data-node-id={node.id}
       >
         <ConnectorOverlay connectors={connectors} linkedAnchorId={linkedAnchorId} />

@@ -24,6 +24,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Loader, Paperclip, X } from "lucide-react";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { addJournalEntry, uploadDocuments } from "../../api/api.js";
 import { queryKeys, useCreateResearchTree, useMe, useRuntimeConfig } from "../../api/queries.js";
@@ -37,7 +38,6 @@ import {
   isComposerSubmitShortcut,
 } from "../../ui/ComposerSubmitShortcut.js";
 import { Menu, MenuItem } from "../../ui/Menu.js";
-import { FORM_FIELD } from "../../ui/surfaces.js";
 
 import { oversizeRefusal } from "./limits.js";
 import { ModelIcon } from "./modelIcon.js";
@@ -124,7 +124,15 @@ function attachmentFromDocument(document: DocumentInfo): Attachment {
   };
 }
 
-export function ResearchQueryComposer({ workspaceId }: { workspaceId: string }) {
+export function ResearchQueryComposer({
+  workspaceId,
+  tools,
+}: {
+  workspaceId: string;
+  /** Extra icon controls rendered after the attach button, such as the
+   * report import trigger. */
+  tools?: ReactNode;
+}) {
   const navigate = useNavigate();
   const client = useQueryClient();
   const me = useMe();
@@ -359,10 +367,7 @@ export function ResearchQueryComposer({ workspaceId }: { workspaceId: string }) 
         value={prompt}
         aria-label="What would you like to investigate?"
         placeholder="What would you like to investigate?"
-        className={cn(
-          FORM_FIELD,
-          "resize-none border-0 bg-transparent px-1 py-1 focus:shadow-none",
-        )}
+        className="research-composer-text text-fg-primary placeholder:text-fg-placeholder disabled:text-fg-disabled min-w-0 resize-none border-0 bg-transparent px-1 py-1 outline-none"
         style={{ maxHeight: COMPOSER_TEXTAREA_MAX_HEIGHT }}
         onChange={(event) => updatePrompt(event.currentTarget.value)}
         onKeyDown={(event) => {
@@ -471,6 +476,7 @@ export function ResearchQueryComposer({ workspaceId }: { workspaceId: string }) 
             attach(files);
           }}
         />
+        {tools}
 
         <div className="flex-1" />
 
