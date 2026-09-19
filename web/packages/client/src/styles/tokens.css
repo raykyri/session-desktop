@@ -20,6 +20,7 @@
   --fs-xs: calc(11px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
   --fs-sm: calc(12px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
   --fs-base: calc(13px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  --fs-input: calc(13px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
   --fs-reading: calc(14px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
   /* Page and dialog titles: one step above the reading body. */
   --fs-title: calc(17px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));

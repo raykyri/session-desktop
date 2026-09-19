@@ -19,6 +19,7 @@ import { DocumentChips } from "../src/features/research/DocumentChips.js";
 import { useArtifactPanelStore } from "../src/stores/artifactPanel.js";
 import { OVERLAY_PRIORITY, useOverlaysStore } from "../src/stores/overlays.js";
 
+import { testUser } from "./helpers.js";
 import { createTrpcStub, type TrpcStub } from "./trpcStub.js";
 
 const ARTIFACT_ORIGIN = "http://artifacts.localhost:8787";
@@ -144,6 +145,7 @@ const RUNTIME_CONFIG = {
 
 function mount(options: MountOptions = {}): { stub: TrpcStub } {
   const stub = createTrpcStub({
+    "auth.me": testUser(),
     "system.runtimeConfig": RUNTIME_CONFIG,
     "documents.list": [
       { id: "d1", name: "notes.md", mime: "text/markdown", extractionStatus: "done" },
@@ -158,8 +160,9 @@ function mount(options: MountOptions = {}): { stub: TrpcStub } {
       mutations: { gcTime: Number.POSITIVE_INFINITY },
     },
   });
-  // Seeded rather than awaited: the bridge is only armed once the origin is
-  // known, and in the browser the router prefetches it before the shell mounts.
+  // Seeded rather than awaited: auth and runtime config are prefetched before
+  // the shell mounts, and the bridge is armed only once the origin is known.
+  queryClient.setQueryData(queryKeys.me(), testUser());
   queryClient.setQueryData(queryKeys.runtimeConfig(), RUNTIME_CONFIG);
   render(
     <AppProviders queryClient={queryClient}>
