@@ -19,6 +19,7 @@ import type { ReactNode } from "react";
 
 import { useSignedIn } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
+import { LinkButton } from "../../ui/Button.js";
 import { ContextMenu } from "../../ui/ContextMenu.js";
 import { ModelMeta } from "../../ui/ModelMark.js";
 import { METADATA_LINE } from "../../ui/surfaces.js";
@@ -152,26 +153,44 @@ export function ResearchQueryCard({
       ) : null}
 
       {query.children && query.children.length > 0 ? (
-        <ul aria-label="Follow-up questions" className="m-0 flex list-none flex-col gap-1 p-0">
+        <ul
+          aria-label="Follow-up questions"
+          className="m-0 flex list-none flex-col gap-1.5 p-0 pl-2.5"
+        >
           {query.children.map((child) => {
             const excerpt = queryTargetExcerpt(child.queryTarget ?? "");
             return (
-              <li key={child.nodeId} className="text-fg-secondary min-w-0 text-sm">
+              <li
+                key={child.nodeId}
+                className={cn(
+                  // A follow-up reads at the body size, like the question it
+                  // hangs off, on the tighter leading these one- or two-line
+                  // rows want (`journal.css` `.recent-query-child`).
+                  "text-reading relative min-w-0 pl-[18px] leading-[1.3]",
+                  // The elbow marking the row as a branch off that question:
+                  // a 7px box half a line tall with only its left and bottom
+                  // edges drawn, aligned to the first line's cap height.
+                  "before:border-fg-subtle before:absolute before:top-[calc(0.15em-2px)]",
+                  "before:left-0.5 before:h-[0.5em] before:w-[7px] before:rounded-bl-[2px]",
+                  "before:border-b before:border-l before:content-['']",
+                )}
+              >
                 {excerpt ? (
                   <span className="text-fg-subtle" title={child.queryTarget ?? undefined}>
                     @{excerpt}{" "}
                   </span>
                 ) : null}
-                <button
-                  type="button"
-                  className="border-0 bg-transparent p-0 text-left underline-offset-2 hover:underline"
+                <LinkButton
+                  // The row wraps inside the card, so a long unbroken token
+                  // breaks rather than widening the feed column.
+                  className="text-fg-interactive text-[length:inherit] leading-[inherit] [overflow-wrap:anywhere]"
                   onClick={(event) => {
                     event.stopPropagation();
                     onOpenChild(child);
                   }}
                 >
                   {promptPreview(child.prompt)}
-                </button>
+                </LinkButton>
               </li>
             );
           })}
