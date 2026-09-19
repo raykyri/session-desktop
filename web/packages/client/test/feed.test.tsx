@@ -378,7 +378,7 @@ test.serial("a query card renders its recap and its follow-up questions", async 
 });
 
 /* -------------------------------------------------------------------------
- * "Back to latest": the mirror of "Load older activity"
+ * Returning to the head of the feed
  * ---------------------------------------------------------------------- */
 
 test("an animated jump stands down when the platform asks for less motion", (t) => {
@@ -420,93 +420,7 @@ function pagedFeedResponses() {
   };
 }
 
-test.serial("hides Back to latest until the user leaves the top of the feed", async (t) => {
-  useNavigationStore.setState({ feedAnchorByView: {} });
-  const app = await renderApp("/bookmarks", {
-    queryClient: testQueryClient(),
-    responses: feedResponses(activityPage([queryItem(researchQuery())])),
-  });
-
-  await waitUntil(
-    t,
-    () => screen.queryAllByText("What is collective memory?").length > 0,
-    "the feed is on page one",
-  );
-  t.is(
-    screen.queryByText("Back to latest"),
-    null,
-    "the first page retains the complete virtual list window",
-  );
-
-  await scrollFeedTo(900);
-  await waitUntil(
-    t,
-    () => screen.queryAllByText("Back to latest").length > 0,
-    "scrolling away from the top is enough on its own",
-  );
-
-  scrolls.length = 0;
-  fireEvent.click(screen.getByText("Back to latest"));
-  t.deepEqual(scrolls.at(-1), { top: 0, behavior: "smooth" }, "and it returns to the top");
-  app.unmount();
-});
-
-test.serial(
-  "“Back to latest” drops the older pages and returns the feed to page one",
-  async (t) => {
-    useNavigationStore.setState({ feedAnchorByView: {} });
-    const app = await renderApp("/bookmarks", {
-      queryClient: testQueryClient(),
-      responses: pagedFeedResponses(),
-    });
-
-    await waitUntil(
-      t,
-      () => screen.queryAllByText("Load older activity").length > 0,
-      "the head page offers an older one",
-    );
-    t.is(
-      screen.queryByText("Back to latest"),
-      null,
-      "the back button is absent before the initial page loads",
-    );
-
-    fireEvent.click(screen.getByText("Load older activity"));
-    await waitUntil(
-      t,
-      () => screen.queryAllByText("An older question?").length > 0,
-      "the older page lands",
-    );
-    await waitUntil(
-      t,
-      () => screen.queryAllByText("Back to latest").length > 0,
-      "Back to latest appears beside pagination",
-    );
-
-    scrolls.length = 0;
-    fireEvent.click(screen.getByText("Back to latest"));
-    await waitUntil(
-      t,
-      () => screen.queryAllByText("An older question?").length === 0,
-      "the accumulated pages are dropped",
-    );
-    const cached = app.queryClient.getQueryData<{ pages: unknown[] }>(
-      queryKeys.activity({ workspaceId: WORKSPACE_ID, bookmarkedOnly: true }),
-    );
-    t.is(cached?.pages.length, 1, "the feed is showing page one again");
-    t.deepEqual(scrolls.at(-1), { top: 0, behavior: "smooth" }, "at the top");
-    // Returning to the latest loaded page does not refetch; the subscription
-    // and the new-items counter deliver newer rows.
-    t.is(
-      app.trpc.calls.filter((call) => call.path === "feed.recentActivity").length,
-      2,
-      "and asking to go back is not a third request",
-    );
-    app.unmount();
-  },
-);
-
-test.serial("the new-activity counter takes precedence while visible", async (t) => {
+test.serial("the new-activity counter offers the way back to the head", async (t) => {
   useNavigationStore.setState({ feedAnchorByView: {} });
   const app = await renderApp("/bookmarks", {
     queryClient: testQueryClient(),
@@ -521,8 +435,8 @@ test.serial("the new-activity counter takes precedence while visible", async (t)
   fireEvent.click(screen.getByText("Load older activity"));
   await waitUntil(
     t,
-    () => screen.queryAllByText("Back to latest").length > 0,
-    "older pages put the way back on screen",
+    () => screen.queryAllByText("An older question?").length > 0,
+    "the older page lands",
   );
   await scrollFeedTo(900);
 
@@ -558,11 +472,6 @@ test.serial("the new-activity counter takes precedence while visible", async (t)
     t,
     () => screen.queryAllByText("1 new update").length > 0,
     "the counter announces what arrived above the reader",
-  );
-  t.is(
-    screen.queryByText("Back to latest"),
-    null,
-    "and the pinned counter is the only offer to return to the head",
   );
   app.unmount();
 });

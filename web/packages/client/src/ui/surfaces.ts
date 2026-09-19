@@ -43,7 +43,7 @@ export const CONTEXT_MENU_SURFACE =
 /** One selectable row inside any of the surfaces above. */
 export const MENU_ITEM =
   "flex w-full min-w-0 cursor-pointer select-none items-center justify-start gap-2 " +
-  "rounded-md border border-transparent px-2.5 py-1.5 text-left text-base text-fg-primary " +
+  "rounded-md border border-transparent px-2.5 py-[5px] text-left text-base text-fg-primary " +
   "data-highlighted:bg-surface-popover-item-hover data-[selected]:text-fg-strong " +
   "data-disabled:cursor-default data-disabled:text-fg-disabled " +
   FOCUS_RING;
