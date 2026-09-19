@@ -168,7 +168,7 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
                         <button
                           type="button"
                           disabled={!source.nodeId && !source.pageSlug}
-                          className="block max-w-full border-0 bg-transparent p-0 text-left text-base decoration-dotted underline-offset-2 hover:not-disabled:underline disabled:cursor-default"
+                          className="decoration-fg-muted block max-w-full border-0 bg-transparent p-0 text-left text-base decoration-dotted underline-offset-2 hover:not-disabled:underline disabled:cursor-default"
                           onClick={() => {
                             if (source.nodeId && source.treeId) {
                               void navigate({

@@ -1003,7 +1003,10 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
                 type="button"
                 aria-label={`Show ${filter} research`}
                 title={`Show ${filter} research`}
-                className={cn(ICON_BUTTON, "h-control-sm translate-x-0.5 px-1 text-xs capitalize")}
+                className={cn(
+                  ICON_BUTTON,
+                  "text-fg-subtle h-control-sm translate-x-0.5 px-1 text-xs capitalize",
+                )}
               >
                 {filter}
               </button>
@@ -1018,7 +1021,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
           <IconButton
             label="New folder"
             title="New folder"
-            className="translate-x-0.5"
+            className="text-fg-subtle translate-x-0.5"
             disabled={workspaceId === ""}
             onClick={() => setPendingFolder({ treeIds: [] })}
           >
