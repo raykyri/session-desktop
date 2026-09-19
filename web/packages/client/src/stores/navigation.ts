@@ -152,7 +152,12 @@ export const useNavigationStore = create<NavigationState>()(
             delete next[view];
             return { feedAnchorByView: next };
           }
-          if (current && current.key === anchor.key && current.offset === anchor.offset) {
+          if (
+            current &&
+            current.key === anchor.key &&
+            current.offset === anchor.offset &&
+            current.top === anchor.top
+          ) {
             return state;
           }
           return { feedAnchorByView: { ...state.feedAnchorByView, [view]: anchor } };

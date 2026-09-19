@@ -106,7 +106,7 @@ test("a wikilink in an answer opens an encyclopedia page for the term", async ({
 test("preserves unsubmitted prompt draft text across page reload", async ({ page }) => {
   await signInAndOpenHome(page, { login: "e2e-draft" });
 
-  const composer = page.getByRole("textbox", { name: "What do you want to research?" });
+  const composer = page.getByRole("textbox", { name: "What do you want to investigate?" });
   await composer.click();
   await composer.fill("What is a rope data structure?");
   // Draft state is restored immediately from `sessionStorage`, with server persistence debounced.
@@ -114,7 +114,7 @@ test("preserves unsubmitted prompt draft text across page reload", async ({ page
 
   await page.reload();
   await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "What do you want to research?" })).toHaveValue(
+  await expect(page.getByRole("textbox", { name: "What do you want to investigate?" })).toHaveValue(
     "What is a rope data structure?",
   );
 });

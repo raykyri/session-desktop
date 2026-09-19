@@ -4,7 +4,7 @@ import type { KeyboardEvent } from "react";
 
 import { cn } from "../lib/cn.js";
 
-import { DIALOG_BACKDROP, FORM_FIELD, MENU_ITEM } from "./surfaces.js";
+import { DIALOG_BACKDROP, FORM_FIELD, MENU_ITEM, MENU_ITEM_SIZE } from "./surfaces.js";
 
 /** One runnable entry. Commands are grouped by section in the order the
  * sections first appear in the array. */
@@ -161,6 +161,7 @@ export function CommandPalette({ open, onClose, commands }: CommandPaletteProps)
                       data-palette-index={index}
                       className={cn(
                         MENU_ITEM,
+                        MENU_ITEM_SIZE.md,
                         index === selectedIndex && "bg-surface-popover-item-hover",
                       )}
                       onMouseMove={() => setSelectedIndex(index)}

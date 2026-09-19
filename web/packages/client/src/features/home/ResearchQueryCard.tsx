@@ -9,7 +9,6 @@
 
 import type { RecentResearchQuery, ResearchTreeSummary } from "@session/shared";
 import {
-  findModel,
   isActiveResearchStatus,
   stripTaggedInstructionBlocksForPreview,
   stripWikilinks,
@@ -19,6 +18,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
 import { ContextMenu } from "../../ui/ContextMenu.js";
+import { ModelMeta } from "../../ui/ModelMark.js";
 import { METADATA_LINE } from "../../ui/surfaces.js";
 import { TweetEmbed } from "../journal/TweetEmbed.js";
 import { ResearchMarkdown } from "../markdown/index.js";
@@ -111,8 +111,6 @@ export function ResearchQueryCard({
   const recap = query.recap?.trim() ?? "";
   const running = isActiveResearchStatus(query.status);
   const status = STATUS_LABEL[query.status];
-  const modelLabel =
-    query.origin === "imported" ? "Imported" : (findModel(query.model)?.label ?? query.model);
   const attachments = (query.attachments ?? []).filter(
     (attachment) => attachment.status === "resolved" && attachment.tweet,
   );
@@ -190,7 +188,7 @@ export function ResearchQueryCard({
             METADATA_LINE,
           )}
         >
-          <span>{modelLabel}</span>
+          <ModelMeta modelId={query.model} origin={query.origin} at={query.createdAt} />
           {status ? (
             <span className={cn(query.status === "failed" && "text-status-failed")}>{status}</span>
           ) : null}

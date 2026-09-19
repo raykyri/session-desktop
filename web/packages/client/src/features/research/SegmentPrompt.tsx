@@ -12,9 +12,8 @@ import { ArrowLeft, Reply } from "lucide-react";
 import { memo } from "react";
 
 import { cn } from "../../lib/cn.js";
-import { formatRelativeTime } from "../../lib/relativeTime.js";
-import { formatResearchModelSummary } from "../../ui/ActivityMetadataLine.js";
 import { ControlButton } from "../../ui/Button.js";
+import { ModelMeta } from "../../ui/ModelMark.js";
 import { METADATA_LINE } from "../../ui/surfaces.js";
 import { ResearchMarkdown } from "../markdown/index.js";
 
@@ -56,7 +55,6 @@ export const SegmentPrompt = memo(function SegmentPrompt({
   if ((node.kind ?? "run") === "document") return null;
 
   const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
-  const modelSummary = index === 0 ? formatResearchModelSummary(node.model, node.origin) : "";
   const askedAt = index === 0 && Number.isFinite(node.createdAt) ? node.createdAt : null;
   // Metadata items (follow button, model badge, elapsed time) are displayed only after the run completes.
   const showFooter = index === 0 && !running;
@@ -96,16 +94,7 @@ export const SegmentPrompt = memo(function SegmentPrompt({
             METADATA_LINE,
           )}
         >
-          <span
-            className="min-w-0 truncate"
-            title={askedAt !== null ? new Date(askedAt).toLocaleString() : undefined}
-          >
-            {modelSummary}
-            {modelSummary && askedAt !== null ? " · " : null}
-            {askedAt !== null ? (
-              <time dateTime={new Date(askedAt).toISOString()}>{formatRelativeTime(askedAt)}</time>
-            ) : null}
-          </span>
+          <ModelMeta modelId={node.model} origin={node.origin} at={askedAt} />
           <ThreadActions
             className="ml-auto"
             followed={followed}

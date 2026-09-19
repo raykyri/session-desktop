@@ -178,6 +178,16 @@ function Kitchen() {
             Delete
           </MenuItem>
         </Menu>
+        <Menu
+          size="sm"
+          trigger={<ControlButton size="sm">Small menu</ControlButton>}
+          label="Small example menu"
+        >
+          <MenuItem selected onClick={() => {}}>
+            Gemini Flash
+          </MenuItem>
+          <MenuItem onClick={() => {}}>DeepSeek Flash</MenuItem>
+        </Menu>
         <ContextMenu
           label="Link actions"
           items={

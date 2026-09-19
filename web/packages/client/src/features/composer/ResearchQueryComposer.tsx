@@ -22,7 +22,7 @@ import {
 } from "@session/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Loader, LoaderCircle, Paperclip, X } from "lucide-react";
+import { ChevronDown, Globe, Loader, LoaderCircle, Paperclip, X } from "lucide-react";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -352,7 +352,7 @@ export function ResearchQueryComposer({
       aria-label="New thread"
       className={cn(
         "border-border-control bg-surface-field flex flex-col gap-2 rounded-lg border p-2",
-        "focus-within:border-focus-ring focus-within:shadow-[inset_0_0_0_1px_var(--focus-ring)]",
+        "focus-within:border-focus-ring",
         dragging && "border-focus-ring",
       )}
       onSubmit={(event) => {
@@ -377,8 +377,8 @@ export function ResearchQueryComposer({
         ref={promptRef}
         rows={2}
         value={prompt}
-        aria-label="What do you want to research?"
-        placeholder="What do you want to research?"
+        aria-label="What do you want to investigate?"
+        placeholder="What do you want to investigate?"
         className="research-composer-text text-fg-primary placeholder:text-fg-placeholder disabled:text-fg-disabled min-w-0 resize-none border-0 bg-transparent px-1 py-1 outline-none"
         style={{ maxHeight: COMPOSER_TEXTAREA_MAX_HEIGHT }}
         onChange={(event) => updatePrompt(event.currentTarget.value)}
@@ -448,6 +448,7 @@ export function ResearchQueryComposer({
           side="bottom"
           align="start"
           label="Model"
+          size="sm"
           trigger={
             <button
               type="button"
@@ -464,7 +465,7 @@ export function ResearchQueryComposer({
               key={candidate.id}
               disabled={!candidate.available}
               hint={candidate.available ? undefined : "unavailable"}
-              selected={candidate.id === model}
+              selected={candidate.id === selected?.id}
               onClick={() => updateModel(candidate.id)}
             >
               <span className="truncate">{candidate.label}</span>
@@ -493,6 +494,10 @@ export function ResearchQueryComposer({
         {tools}
 
         <div className="flex-1" />
+
+        <IconButton label="Public">
+          <Globe size={14} aria-hidden="true" />
+        </IconButton>
 
         <ControlButton
           type="submit"

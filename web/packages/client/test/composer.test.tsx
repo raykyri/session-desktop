@@ -125,7 +125,7 @@ const homeResponses = {
   "documents.list": [],
 };
 
-const PROMPT_LABEL = "What do you want to research?";
+const PROMPT_LABEL = "What do you want to investigate?";
 
 test.serial("disables the submit button when the composer is empty", async (t) => {
   useDraftsStore.setState({ byKey: {} });

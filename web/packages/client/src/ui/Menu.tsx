@@ -1,10 +1,21 @@
 import { Menu as BaseMenu } from "@base-ui/react/menu";
 import { Check } from "lucide-react";
+import { createContext, useContext } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { cn } from "../lib/cn.js";
 
-import { MENU_ITEM, MENU_SEPARATOR, POPOVER_SURFACE } from "./surfaces.js";
+import {
+  MENU_ITEM,
+  MENU_ITEM_SIZE,
+  MENU_SEPARATOR,
+  POPOVER_SURFACE,
+  POPOVER_SURFACE_SIZE,
+} from "./surfaces.js";
+
+export type MenuSize = "sm" | "md";
+
+const MenuSizeContext = createContext<MenuSize>("md");
 
 export interface MenuProps {
   /** The element the menu hangs off. Base UI merges the trigger props onto it
@@ -21,6 +32,8 @@ export interface MenuProps {
   triggerClassName?: string;
   /** Accessible name for the popup when the trigger is an icon button. */
   label?: string | undefined;
+  /** `sm` matches a small trigger (`GHOST_TRIGGER`, small `ControlButton`). */
+  size?: MenuSize;
 }
 
 /**
@@ -38,24 +51,27 @@ export function Menu({
   className,
   triggerClassName,
   label,
+  size = "md",
 }: MenuProps) {
   return (
-    <BaseMenu.Root
-      {...(open === undefined ? {} : { open })}
-      {...(onOpenChange === undefined ? {} : { onOpenChange })}
-    >
-      <BaseMenu.Trigger className={triggerClassName} render={trigger} />
-      <BaseMenu.Portal>
-        <BaseMenu.Positioner side={side} align={align} sideOffset={6} className="z-(--z-popover)">
-          <BaseMenu.Popup
-            className={cn(POPOVER_SURFACE, "min-w-44", className)}
-            {...(label === undefined ? {} : { "aria-label": label })}
-          >
-            {children}
-          </BaseMenu.Popup>
-        </BaseMenu.Positioner>
-      </BaseMenu.Portal>
-    </BaseMenu.Root>
+    <MenuSizeContext.Provider value={size}>
+      <BaseMenu.Root
+        {...(open === undefined ? {} : { open })}
+        {...(onOpenChange === undefined ? {} : { onOpenChange })}
+      >
+        <BaseMenu.Trigger className={triggerClassName} render={trigger} />
+        <BaseMenu.Portal>
+          <BaseMenu.Positioner side={side} align={align} sideOffset={6} className="z-(--z-popover)">
+            <BaseMenu.Popup
+              className={cn(POPOVER_SURFACE, POPOVER_SURFACE_SIZE[size], "min-w-44", className)}
+              {...(label === undefined ? {} : { "aria-label": label })}
+            >
+              {children}
+            </BaseMenu.Popup>
+          </BaseMenu.Positioner>
+        </BaseMenu.Portal>
+      </BaseMenu.Root>
+    </MenuSizeContext.Provider>
   );
 }
 
@@ -84,13 +100,19 @@ export function MenuItem({
   closeOnClick,
   selected,
 }: MenuItemProps) {
+  const size = useContext(MenuSizeContext);
   return (
     <BaseMenu.Item
       disabled={disabled}
       {...(closeOnClick === undefined ? {} : { closeOnClick })}
       onClick={onClick ? () => onClick() : undefined}
       aria-checked={selected}
-      className={cn(MENU_ITEM, tone === "danger" && "text-danger-muted", className)}
+      className={cn(
+        MENU_ITEM,
+        MENU_ITEM_SIZE[size],
+        tone === "danger" && "text-danger-muted",
+        className,
+      )}
     >
       {selected === undefined ? null : (
         <span className="text-fg-strong inline-flex w-3 shrink-0 justify-center" aria-hidden="true">

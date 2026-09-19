@@ -60,22 +60,34 @@ export const LINK_BUTTON =
   "disabled:cursor-default disabled:text-fg-disabled " +
   FOCUS_RING;
 
-/** Floating chrome: menus, select popups, popovers. */
+/** Floating chrome: menus, select popups, popovers. Radius and padding are
+ * NOT here: `cn` does not merge, so they live in `POPOVER_SURFACE_SIZE`. */
 export const POPOVER_SURFACE =
-  "flex min-w-0 flex-col rounded-lg border border-border-divider bg-surface-popover " +
-  "p-1 text-fg-primary shadow-popover origin-(--transform-origin) outline-none";
+  "flex min-w-0 flex-col border border-border-divider bg-surface-popover " +
+  "text-fg-primary shadow-popover origin-(--transform-origin) outline-none";
+
+export const POPOVER_SURFACE_SIZE = {
+  sm: "rounded-md p-0.5",
+  md: "rounded-lg p-1",
+} as const;
 
 export const CONTEXT_MENU_SURFACE =
   "flex min-w-0 flex-col rounded-lg border border-border-default bg-surface-context-menu " +
   "p-1 text-fg-primary shadow-context-menu origin-(--transform-origin)";
 
-/** One selectable row inside any of the surfaces above. */
+/** One selectable row inside any of the surfaces above. Padding and type size
+ * are NOT here: `cn` does not merge, so they live in `MENU_ITEM_SIZE`. */
 export const MENU_ITEM =
   "flex w-full min-w-0 cursor-pointer select-none items-center justify-start gap-2 " +
-  "rounded-md border border-transparent px-2.5 py-1 text-left text-base text-fg-primary " +
+  "rounded-md border border-transparent text-left text-fg-primary " +
   "data-highlighted:bg-surface-popover-item-hover data-[selected]:text-fg-strong active:brightness-90 " +
   "data-disabled:cursor-default data-disabled:text-fg-disabled " +
   FOCUS_RING;
+
+export const MENU_ITEM_SIZE = {
+  sm: "px-2 py-[3px] text-sm",
+  md: "px-2.5 py-1 text-base",
+} as const;
 
 export const MENU_SEPARATOR = "my-1 h-px shrink-0 bg-border-divider";
 

@@ -47,7 +47,7 @@ export function Popover({
           className="z-(--z-popover)"
         >
           <BasePopover.Popup
-            className={cn(POPOVER_SURFACE, "p-3", className)}
+            className={cn(POPOVER_SURFACE, "rounded-lg p-3", className)}
             {...(label === undefined ? {} : { "aria-label": label })}
           >
             {children}

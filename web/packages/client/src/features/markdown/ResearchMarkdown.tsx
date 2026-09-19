@@ -189,7 +189,7 @@ function WikilinkAnchor({
         >
           <BasePopover.Popup
             aria-label={`Create encyclopedia page: ${term}`}
-            className={cn(POPOVER_SURFACE, "flex max-w-72 flex-col gap-2.5 p-3")}
+            className={cn(POPOVER_SURFACE, "flex max-w-72 flex-col gap-2.5 rounded-lg p-3")}
           >
             <p className="text-fg-primary m-0 text-sm">
               {status === "failed"
