@@ -30,7 +30,8 @@ import {
 } from "../../research/admission.js";
 import { MAX_DOCUMENTS_PER_QUESTION } from "../../uploads/limits.js";
 import { unlinkOrphans } from "../../uploads/storage.js";
-import { protectedProcedure, router } from "../base.js";
+import { protectedProcedure, publicProcedure, router } from "../base.js";
+import { catalogUserId } from "../catalog.js";
 import { publish } from "../emit.js";
 import { repo, required } from "../errors.js";
 
@@ -49,20 +50,22 @@ function publishNode(
 }
 
 export const researchRouter = router({
-  listTrees: protectedProcedure
+  listTrees: publicProcedure
     .input(
       z
         .object({ workspaceId: z.string().optional(), includeArchived: z.boolean().optional() })
         .optional(),
     )
-    .query(({ ctx, input }) =>
-      repo(() =>
-        trees.summaries(ctx.db, ctx.user.id, {
+    .query(({ ctx, input }) => {
+      const userId = catalogUserId(ctx);
+      if (userId === null) return [];
+      return repo(() =>
+        trees.summaries(ctx.db, userId, {
           workspaceId: input?.workspaceId ?? null,
           includeArchived: input?.includeArchived ?? false,
         }),
-      ),
-    ),
+      );
+    }),
 
   reorderTrees: protectedProcedure
     .input(
@@ -75,12 +78,19 @@ export const researchRouter = router({
       return { ok: true };
     }),
 
-  getTree: protectedProcedure.input(z.object({ treeId: z.string() })).query(({ ctx, input }) => {
+  getTree: publicProcedure.input(z.object({ treeId: z.string() })).query(({ ctx, input }) => {
+    const userId = catalogUserId(ctx);
+    if (userId === null) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: `research tree ${input.treeId} was not found`,
+      });
+    }
     required(
-      repo(() => trees.get(ctx.db, ctx.user.id, input.treeId)),
+      repo(() => trees.get(ctx.db, userId, input.treeId)),
       `research tree ${input.treeId} was not found`,
     );
-    return repo(() => trees.detail(ctx.db, ctx.user.id, input.treeId));
+    return repo(() => trees.detail(ctx.db, userId, input.treeId));
   }),
 
   createTree: protectedProcedure
@@ -208,9 +218,18 @@ export const researchRouter = router({
       return node;
     }),
 
-  getNodeContent: protectedProcedure
+  getNodeContent: publicProcedure
     .input(z.object({ nodeId: z.string() }))
-    .query(({ ctx, input }) => nodeContent(ctx, input.nodeId)),
+    .query(({ ctx, input }) => {
+      const userId = catalogUserId(ctx);
+      if (userId === null) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `research node ${input.nodeId} was not found`,
+        });
+      }
+      return nodeContent({ db: ctx.db, user: { id: userId } }, input.nodeId);
+    }),
 
   updateDocument: protectedProcedure
     .input(

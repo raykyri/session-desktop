@@ -72,6 +72,7 @@ export interface ThreadSegmentProps {
   anchoredCardTops: Record<string, number>;
   resolvedCardTops: Record<string, number>;
   cancelling: boolean;
+  canCancel: boolean;
   canRetryNode: boolean;
   retryingNode: boolean;
   askComposer: ReactNode;
@@ -119,6 +120,7 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
     anchoredCardTops,
     resolvedCardTops,
     cancelling,
+    canCancel,
     canRetryNode,
     retryingNode,
     askComposer,
@@ -256,6 +258,7 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
             hiddenHighlightCount={hiddenHighlightCount}
             recapPending={recapPending}
             cancelling={cancelling}
+            canCancel={canCancel}
             canRetryNode={canRetryNode}
             retryingNode={retryingNode}
             pointerOverHighlight={pointerOverHighlight}

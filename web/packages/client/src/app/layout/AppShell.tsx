@@ -3,7 +3,7 @@ import type { AppShortcutCommand } from "@session/shared";
 import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 
-import { useTreeSummaries } from "../../api/queries.js";
+import { useSignedIn, useTreeSummaries } from "../../api/queries.js";
 import { ArtifactPanel } from "../../features/artifacts/ArtifactPanel.js";
 import { buildPaletteCommands } from "../../features/palette/commands.js";
 import { useWorkspaceScope } from "../../features/sidebar/scope.js";
@@ -56,6 +56,8 @@ export function AppShell() {
   const toggleSidebar = useNavigationStore((state) => state.toggleSidebar);
   const sidebarCollapsed = useNavigationStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useNavigationStore((state) => state.setSidebarCollapsed);
+  const signedIn = useSignedIn();
+  const tabRoutes: readonly string[] = signedIn ? TAB_ROUTES : ["/"];
   const onResearchDocument = useRouterState({
     select: (state) => state.location.pathname.startsWith("/r/"),
   });
@@ -67,7 +69,7 @@ export function AppShell() {
     (command: AppShortcutCommand) => {
       switch (command.type) {
         case "focusResearchTab": {
-          const path = TAB_ROUTES[command.tabIndex];
+          const path = tabRoutes[command.tabIndex];
           if (path) void navigate({ to: path });
           return;
         }
@@ -75,12 +77,9 @@ export function AppShell() {
           void navigate({ to: "/" });
           return;
         case "cycleResearchTab": {
-          const current = TAB_ROUTES.indexOf(
-            router.state.location.pathname as (typeof TAB_ROUTES)[number],
-          );
+          const current = tabRoutes.indexOf(router.state.location.pathname);
           const from = current === -1 ? 0 : current;
-          const next =
-            TAB_ROUTES[(from + command.direction + TAB_ROUTES.length) % TAB_ROUTES.length];
+          const next = tabRoutes[(from + command.direction + tabRoutes.length) % tabRoutes.length];
           if (next) void navigate({ to: next });
           return;
         }
@@ -103,7 +102,7 @@ export function AppShell() {
           return;
       }
     },
-    [navigate, router, toggleSidebar],
+    [navigate, router, tabRoutes, toggleSidebar],
   );
 
   useEffect(() => {

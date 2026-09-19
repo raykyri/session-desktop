@@ -47,6 +47,76 @@ test("returns health status and runtime config for unauthenticated requests", as
   await t.throwsAsync(harness.caller(null).settings.get(), { message: /sign in/ });
 });
 
+test("guests read the public catalog and cannot mutate it", async (t) => {
+  const harness = createHarness(t);
+  const owner = harness.addUser("publisher", { isAdmin: true });
+  const other = harness.addUser("other-account");
+  const signedIn = harness.caller(owner);
+  const otherCaller = harness.caller(other);
+  const workspace = await signedIn.workspaces.ensureDefault();
+  const otherWorkspace = await otherCaller.workspaces.ensureDefault();
+  const created = await signedIn.research.createTree({
+    prompt: "What is collective memory?",
+    model: "gemini-flash",
+    workspaceId: workspace.id,
+  });
+  const otherTree = await otherCaller.research.createTree({
+    prompt: "A private question",
+    model: "gemini-flash",
+    workspaceId: otherWorkspace.id,
+  });
+  const nodeId = created.nodes[0]?.id ?? "";
+  snapshots.commit(harness.db, owner.id, {
+    nodeId,
+    turns: [answerTurn(nodeId, "Collective memory is shared.")],
+    outcome: { status: "complete" },
+  });
+  const page = await signedIn.encyclopedia.requestPage({
+    workspaceId: workspace.id,
+    term: "Collective memory",
+    source: { nodeId, excerpt: "Collective memory is shared.", siblingTerms: [] },
+  });
+
+  const guest = harness.caller(null);
+  const listed = await guest.workspaces.list();
+  t.is(listed[0]?.id, workspace.id);
+  const trees = await guest.research.listTrees({ workspaceId: workspace.id });
+  t.is(trees.length, 1);
+  t.is(trees[0]?.title, "What is collective memory?");
+  const detail = await guest.research.getTree({ treeId: created.tree.id });
+  t.is(detail.tree.id, created.tree.id);
+  const content = await guest.research.getNodeContent({ nodeId });
+  t.is(content.node.id, nodeId);
+  const activity = await guest.feed.recentActivity({ workspaceId: workspace.id });
+  t.is(activity.items.length, 1);
+  t.is(
+    (await guest.encyclopedia.getPage({ workspaceId: workspace.id, slug: page.slug }))?.slug,
+    page.slug,
+  );
+
+  const otherSeesOwner = await otherCaller.research.listTrees({ workspaceId: workspace.id });
+  t.is(otherSeesOwner.length, 0);
+  await t.throwsAsync(guest.research.getTree({ treeId: otherTree.tree.id }), {
+    message: /not found/,
+  });
+  await t.throwsAsync(guest.research.getNodeContent({ nodeId: otherTree.nodes[0]?.id ?? "" }), {
+    message: /not found/,
+  });
+  await t.throwsAsync(
+    guest.encyclopedia.getPage({ workspaceId: otherWorkspace.id, slug: page.slug }),
+    { message: /not found/ },
+  );
+  await t.throwsAsync(guest.research.listActivity(), { message: /sign in/ });
+  await t.throwsAsync(
+    guest.research.createTree({
+      prompt: "Should not work",
+      model: "gemini-flash",
+      workspaceId: workspace.id,
+    }),
+    { message: /sign in/ },
+  );
+});
+
 test("selects available search vendor based on configured API keys", (t) => {
   const withTavilyOnly = testConfig("/tmp/session-config", {
     PARALLEL_API_KEY: "",
@@ -115,7 +185,7 @@ test("workspaces and folders behave as the sidebar expects", async (t) => {
   const second = await caller.workspaces.create({ name: "Reading" });
   t.deepEqual(
     (await caller.workspaces.list()).map((workspace) => workspace.name),
-    ["Research", "Reading"],
+    ["Default Workspace", "Reading"],
   );
   await caller.workspaces.reorder({ workspaceIds: [second.id, first.id] });
   t.deepEqual(

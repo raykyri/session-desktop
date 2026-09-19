@@ -50,7 +50,7 @@ import {
   StarOff,
   Trash2,
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useMemo, useRef, useState } from "react";
 import type {
   PointerEvent as ReactPointerEvent,
   MouseEvent as ReactMouseEvent,
@@ -62,6 +62,7 @@ import {
   useFolders,
   useRemoveResearchTree,
   useRenameResearchTree,
+  useSignedIn,
   useTreeSummaries,
 } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
@@ -185,6 +186,7 @@ const EMPTY_FOLDER_STATE: ResearchFolderState = {
 };
 
 export function ResearchSidebarSection({ workspaceId }: { workspaceId: string }) {
+  const signedIn = useSignedIn();
   const navigate = useNavigate();
   const client = useQueryClient();
   const { filter, setFilter } = useVisibilityFilter();
@@ -243,15 +245,21 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
   const suppressClickRef = useRef(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const [guestCollapsed, setGuestCollapsed] = useState<ReadonlySet<string> | null>(null);
 
   const writeFolders = useCallback(
-    (next: ResearchFolderState) => void applyFolderState(client, workspaceId, next),
-    [client, workspaceId],
+    (next: ResearchFolderState) => {
+      if (!signedIn) return;
+      void applyFolderState(client, workspaceId, next);
+    },
+    [client, signedIn, workspaceId],
   );
   const writeOrder = useCallback(
-    (archived: boolean, treeIds: string[]) =>
-      void applyTreeOrder(client, workspaceId, archived, treeIds),
-    [client, workspaceId],
+    (archived: boolean, treeIds: string[]) => {
+      if (!signedIn) return;
+      void applyTreeOrder(client, workspaceId, archived, treeIds);
+    },
+    [client, signedIn, workspaceId],
   );
 
   const openTree = useCallback(
@@ -304,7 +312,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
   const selectFromClick = useCallback(
     (event: ReactMouseEvent<HTMLElement>, treeId: string, archived: boolean) => {
       if (suppressClickRef.current || event.detail > 1) return;
-      if (!archived && (event.shiftKey || event.metaKey || event.ctrlKey)) {
+      if (signedIn && !archived && (event.shiftKey || event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         updateSelection(treeId, event.shiftKey);
         return;
@@ -313,7 +321,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
       anchorRef.current = archived ? null : treeId;
       openTree(treeId);
     },
-    [clearSelection, openTree, selectedIds.length, updateSelection],
+    [clearSelection, openTree, selectedIds.length, signedIn, updateSelection],
   );
 
   /* ---------------------------------------------------------------------
@@ -331,8 +339,21 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
 
   const toggleStar = (id: string) => writeFolders(toggleResearchStar(folderState, id));
 
-  const setCollapsed = (folderId: string, collapsed: boolean) =>
+  const setCollapsed = (folderId: string, collapsed: boolean) => {
+    if (!signedIn) {
+      setGuestCollapsed((current) => {
+        const next = new Set(current ?? folderState.collapsed);
+        if (collapsed) next.add(folderId);
+        else next.delete(folderId);
+        return next;
+      });
+      return;
+    }
     writeFolders(setResearchFolderCollapsed(folderState, folderId, collapsed));
+  };
+
+  const folderIsCollapsed = (folderId: string) =>
+    (guestCollapsed ?? new Set(folderState.collapsed)).has(folderId);
 
   const memberTrees = (folderId: string) =>
     [...trees, ...archivedTrees].filter((tree) => folderState.membership[tree.id] === folderId);
@@ -499,6 +520,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
 
   function onPointerDown(event: ReactPointerEvent<HTMLElement>, id: string, scope: DragScope) {
     if (
+      !signedIn ||
       !isOwnRowEvent(event) ||
       event.button !== 0 ||
       event.shiftKey ||
@@ -726,114 +748,100 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
     const selected = activeTreeId === tree.id;
     const multi = !archived && selectedIds.includes(tree.id);
     const inSelectionMenu = multi && selectedIds.length > 1;
-    return (
-      <ContextMenu
-        key={tree.id}
-        label={
-          inSelectionMenu
-            ? `Actions for ${selectedIds.length} selected items`
-            : `Actions for ${tree.title}`
-        }
-        items={
-          inSelectionMenu ? (
-            multiSelectionItems
-          ) : (
-            <ResearchTreeMenuItems {...treeMenuProps(tree, archived)} />
-          )
+    const row = (
+      <div
+        data-research-row
+        data-research-tree-id={tree.id}
+        data-research-archived={archived ? "true" : "false"}
+        {...(options.unitList === "units" && options.unitIndex !== undefined
+          ? { "data-research-unit-index": options.unitIndex }
+          : {})}
+        {...(options.unitList === "starred" && options.unitIndex !== undefined
+          ? { "data-research-star-index": options.unitIndex }
+          : {})}
+        {...(options.folderId === undefined
+          ? {}
+          : { "data-research-folder-member": options.folderId })}
+        className={cn(
+          SIDEBAR_ROW,
+          "group relative",
+          selected && SIDEBAR_ROW_SELECTED,
+          multi && SIDEBAR_ROW_MULTI,
+          options.folderId !== undefined && "pl-6",
+          starred && "pr-8",
+          archived && "text-fg-muted",
+          draggingId === tree.id && "opacity-50",
+          options.dropClass,
+        )}
+        role="button"
+        tabIndex={0}
+        aria-current={selected ? "page" : undefined}
+        title={tree.title}
+        onPointerDown={(event) => onPointerDown(event, tree.id, options.dragScope)}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        onClick={(event) => {
+          if (!isOwnRowEvent(event) || inRowButton(event)) return;
+          selectFromClick(event, tree.id, archived);
+        }}
+        onKeyDown={(event) => {
+          // The row and its ⋯ button are separate stops for the keyboard, so
+          // Enter on the button must open the menu and nothing else.
+          if (event.target !== event.currentTarget) return;
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          openTree(tree.id);
+        }}
+        onDoubleClick={
+          archived || !signedIn
+            ? undefined
+            : (event) => {
+                if (!isOwnRowEvent(event) || inRowButton(event)) return;
+                setRenamingTree(tree);
+              }
         }
       >
-        <div
-          data-research-row
-          data-research-tree-id={tree.id}
-          data-research-archived={archived ? "true" : "false"}
-          {...(options.unitList === "units" && options.unitIndex !== undefined
-            ? { "data-research-unit-index": options.unitIndex }
-            : {})}
-          {...(options.unitList === "starred" && options.unitIndex !== undefined
-            ? { "data-research-star-index": options.unitIndex }
-            : {})}
-          {...(options.folderId === undefined
-            ? {}
-            : { "data-research-folder-member": options.folderId })}
-          className={cn(
-            SIDEBAR_ROW,
-            "group relative",
-            selected && SIDEBAR_ROW_SELECTED,
-            multi && SIDEBAR_ROW_MULTI,
-            options.folderId !== undefined && "pl-6",
-            starred && "pr-8",
-            archived && "text-fg-muted",
-            draggingId === tree.id && "opacity-50",
-            options.dropClass,
-          )}
-          role="button"
-          tabIndex={0}
-          aria-current={selected ? "page" : undefined}
-          title={tree.title}
-          onPointerDown={(event) => onPointerDown(event, tree.id, options.dragScope)}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerCancel}
-          onClick={(event) => {
-            if (!isOwnRowEvent(event) || inRowButton(event)) return;
-            selectFromClick(event, tree.id, archived);
-          }}
-          onKeyDown={(event) => {
-            // The row and its ⋯ button are separate stops for the keyboard, so
-            // Enter on the button must open the menu and nothing else.
-            if (event.target !== event.currentTarget) return;
-            if (event.key !== "Enter" && event.key !== " ") return;
-            event.preventDefault();
-            openTree(tree.id);
-          }}
-          onDoubleClick={
-            archived
-              ? undefined
-              : (event) => {
-                  if (!isOwnRowEvent(event) || inRowButton(event)) return;
-                  setRenamingTree(tree);
-                }
-          }
-        >
-          <StatusDot tree={tree} archived={archived} />
-          {tree.kind === "document" ? (
-            <FileText size={12} aria-hidden="true" className="text-fg-subtle shrink-0" />
-          ) : null}
-          <span className="min-w-0 flex-1 truncate">{tree.title}</span>
-          {!archived && tree.runningCount > 0 ? (
-            <span
-              className="text-status-active flex shrink-0 items-center gap-1 text-base"
-              title={`${tree.runningCount} running`}
-            >
-              <LoaderCircle size={12} className="session-spin" aria-hidden="true" />
-              {tree.runningCount > 1 ? tree.runningCount : null}
-              <span className="sr-only">
-                {tree.runningCount === 1
-                  ? "1 run in progress"
-                  : `${tree.runningCount} runs in progress`}
-              </span>
+        <StatusDot tree={tree} archived={archived} />
+        {tree.kind === "document" ? (
+          <FileText size={12} aria-hidden="true" className="text-fg-subtle shrink-0" />
+        ) : null}
+        <span className="min-w-0 flex-1 truncate">{tree.title}</span>
+        {!archived && tree.runningCount > 0 ? (
+          <span
+            className="text-status-active flex shrink-0 items-center gap-1 text-base"
+            title={`${tree.runningCount} running`}
+          >
+            <LoaderCircle size={12} className="session-spin" aria-hidden="true" />
+            {tree.runningCount > 1 ? tree.runningCount : null}
+            <span className="sr-only">
+              {tree.runningCount === 1
+                ? "1 run in progress"
+                : `${tree.runningCount} runs in progress`}
             </span>
-          ) : !archived && tree.hasUnseenFailure ? (
-            <span
-              className="text-status-failed shrink-0 text-base"
-              title="Failed since last viewed — open to acknowledge"
-            >
-              <span aria-hidden="true">!</span>
-              <span className="sr-only">Failed since last viewed</span>
-            </span>
-          ) : !archived && tree.hasUnseenUpdate ? (
-            <span
-              className="text-status-attention shrink-0 text-xs"
-              title="Updated since last viewed"
-            >
-              New<span className="sr-only"> since last viewed</span>
-            </span>
-          ) : null}
-          {starred ? (
-            <span className={ROW_STAR_SLOT} aria-hidden="true">
-              <Star size={12} className="text-fg-subtle" />
-            </span>
-          ) : null}
+          </span>
+        ) : !archived && tree.hasUnseenFailure ? (
+          <span
+            className="text-status-failed shrink-0 text-base"
+            title="Failed since last viewed — open to acknowledge"
+          >
+            <span aria-hidden="true">!</span>
+            <span className="sr-only">Failed since last viewed</span>
+          </span>
+        ) : !archived && tree.hasUnseenUpdate ? (
+          <span
+            className="text-status-attention shrink-0 text-xs"
+            title="Updated since last viewed"
+          >
+            New<span className="sr-only"> since last viewed</span>
+          </span>
+        ) : null}
+        {starred ? (
+          <span className={ROW_STAR_SLOT} aria-hidden="true">
+            <Star size={12} className="text-fg-subtle" />
+          </span>
+        ) : null}
+        {signedIn ? (
           <Menu
             label={`Actions for ${tree.title}`}
             side="bottom"
@@ -850,7 +858,27 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
           >
             <ResearchTreeMenuItems {...treeMenuProps(tree, archived)} />
           </Menu>
-        </div>
+        ) : null}
+      </div>
+    );
+    if (!signedIn) return <Fragment key={tree.id}>{row}</Fragment>;
+    return (
+      <ContextMenu
+        key={tree.id}
+        label={
+          inSelectionMenu
+            ? `Actions for ${selectedIds.length} selected items`
+            : `Actions for ${tree.title}`
+        }
+        items={
+          inSelectionMenu ? (
+            multiSelectionItems
+          ) : (
+            <ResearchTreeMenuItems {...treeMenuProps(tree, archived)} />
+          )
+        }
+      >
+        {row}
       </ContextMenu>
     );
   }
@@ -868,19 +896,91 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
       });
     }
     const { folder } = unit;
-    const collapsed = folderState.collapsed.includes(folder.id);
+    const collapsed = folderIsCollapsed(folder.id);
     const folderStarred = isResearchStarred(folderState, folder.id);
     const hasRunning = memberTrees(folder.id).some((tree) => tree.runningCount > 0);
-    return (
+    const folderHeader = (
       <div
-        key={folder.id}
-        role="group"
-        aria-label={`${folder.name} (${unit.trees.length})`}
-        className="flex flex-col gap-px"
+        data-research-row
+        data-research-folder-id={folder.id}
+        role="button"
+        tabIndex={0}
+        aria-expanded={!collapsed}
+        {...(list === "units" ? { "data-research-unit-index": unitIndex } : {})}
+        {...(list === "starred" ? { "data-research-star-index": unitIndex } : {})}
+        className={cn(
+          SIDEBAR_ROW,
+          "group relative",
+          folderStarred && "pr-8",
+          draggingId === folder.id && "opacity-50",
+          dropTarget?.kind === "folder" && dropTarget.folderId === folder.id && dropTarget.onHeader
+            ? "ring-focus-ring ring-1 ring-inset"
+            : null,
+          gapClass(
+            dropTarget,
+            list,
+            unitIndex,
+            units.length,
+            collapsed || unit.trees.length === 0 ? "only" : "first",
+          ),
+        )}
+        onPointerDown={(event) => onPointerDown(event, folder.id, scope)}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        onClick={(event) => {
+          if (!isOwnRowEvent(event) || suppressClickRef.current || inRowButton(event)) {
+            return;
+          }
+          setCollapsed(folder.id, !collapsed);
+        }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          setCollapsed(folder.id, !collapsed);
+        }}
       >
-        <ContextMenu
-          label={`Actions for ${folder.name}`}
-          items={
+        <button
+          type="button"
+          aria-label={`${collapsed ? "Expand" : "Collapse"} ${folder.name}`}
+          aria-expanded={!collapsed}
+          className="text-fg-subtle shrink-0 border-0 bg-transparent p-0"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            setCollapsed(folder.id, !collapsed);
+          }}
+        >
+          <ChevronRight
+            size={12}
+            aria-hidden="true"
+            className={cn("transition-transform duration-[120ms]", !collapsed && "rotate-90")}
+          />
+        </button>
+        <Folder size={12} aria-hidden="true" className="text-fg-subtle shrink-0" />
+        <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+        <span className="text-fg-disabled shrink-0 text-xs">{unit.trees.length}</span>
+        {folderStarred ? (
+          <span className={ROW_STAR_SLOT} aria-hidden="true">
+            <Star size={12} className="text-fg-subtle" />
+          </span>
+        ) : null}
+        {signedIn ? (
+          <Menu
+            label={`Actions for ${folder.name}`}
+            side="bottom"
+            align="end"
+            trigger={
+              <IconButton
+                label={`Actions for ${folder.name}`}
+                tooltip={false}
+                className={ROW_OVERFLOW_MENU}
+              >
+                <MoreHorizontal size={14} aria-hidden="true" />
+              </IconButton>
+            }
+          >
             <FolderMenuItems
               folder={folder}
               starred={folderStarred}
@@ -895,90 +995,21 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
               }}
               onDelete={setDeletingFolder}
             />
-          }
-        >
-          <div
-            data-research-row
-            data-research-folder-id={folder.id}
-            role="button"
-            tabIndex={0}
-            aria-expanded={!collapsed}
-            {...(list === "units" ? { "data-research-unit-index": unitIndex } : {})}
-            {...(list === "starred" ? { "data-research-star-index": unitIndex } : {})}
-            className={cn(
-              SIDEBAR_ROW,
-              "group relative",
-              folderStarred && "pr-8",
-              draggingId === folder.id && "opacity-50",
-              dropTarget?.kind === "folder" &&
-                dropTarget.folderId === folder.id &&
-                dropTarget.onHeader
-                ? "ring-focus-ring ring-1 ring-inset"
-                : null,
-              gapClass(
-                dropTarget,
-                list,
-                unitIndex,
-                units.length,
-                collapsed || unit.trees.length === 0 ? "only" : "first",
-              ),
-            )}
-            onPointerDown={(event) => onPointerDown(event, folder.id, scope)}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerCancel}
-            onClick={(event) => {
-              if (!isOwnRowEvent(event) || suppressClickRef.current || inRowButton(event)) {
-                return;
-              }
-              setCollapsed(folder.id, !collapsed);
-            }}
-            onKeyDown={(event) => {
-              if (event.target !== event.currentTarget) return;
-              if (event.key !== "Enter" && event.key !== " ") return;
-              event.preventDefault();
-              setCollapsed(folder.id, !collapsed);
-            }}
-          >
-            <button
-              type="button"
-              aria-label={`${collapsed ? "Expand" : "Collapse"} ${folder.name}`}
-              aria-expanded={!collapsed}
-              className="text-fg-subtle shrink-0 border-0 bg-transparent p-0"
-              onPointerDown={(event) => event.stopPropagation()}
-              onClick={(event) => {
-                event.stopPropagation();
-                setCollapsed(folder.id, !collapsed);
-              }}
-            >
-              <ChevronRight
-                size={12}
-                aria-hidden="true"
-                className={cn("transition-transform duration-[120ms]", !collapsed && "rotate-90")}
-              />
-            </button>
-            <Folder size={12} aria-hidden="true" className="text-fg-subtle shrink-0" />
-            <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-            <span className="text-fg-disabled shrink-0 text-xs">{unit.trees.length}</span>
-            {folderStarred ? (
-              <span className={ROW_STAR_SLOT} aria-hidden="true">
-                <Star size={12} className="text-fg-subtle" />
-              </span>
-            ) : null}
-            <Menu
-              label={`Actions for ${folder.name}`}
-              side="bottom"
-              align="end"
-              trigger={
-                <IconButton
-                  label={`Actions for ${folder.name}`}
-                  tooltip={false}
-                  className={ROW_OVERFLOW_MENU}
-                >
-                  <MoreHorizontal size={14} aria-hidden="true" />
-                </IconButton>
-              }
-            >
+          </Menu>
+        ) : null}
+      </div>
+    );
+    return (
+      <div
+        key={folder.id}
+        role="group"
+        aria-label={`${folder.name} (${unit.trees.length})`}
+        className="flex flex-col gap-px"
+      >
+        {signedIn ? (
+          <ContextMenu
+            label={`Actions for ${folder.name}`}
+            items={
               <FolderMenuItems
                 folder={folder}
                 starred={folderStarred}
@@ -995,9 +1026,13 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
                 }}
                 onDelete={setDeletingFolder}
               />
-            </Menu>
-          </div>
-        </ContextMenu>
+            }
+          >
+            {folderHeader}
+          </ContextMenu>
+        ) : (
+          folderHeader
+        )}
         {collapsed
           ? null
           : unit.trees.map((tree, memberIndex) =>
@@ -1052,15 +1087,17 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
               </MenuItem>
             ))}
           </Menu>
-          <IconButton
-            label="New folder"
-            title="New folder"
-            className="text-fg-subtle translate-x-0.5"
-            disabled={workspaceId === ""}
-            onClick={() => setPendingFolder({ treeIds: [] })}
-          >
-            <FolderPlus size={ICON} aria-hidden="true" />
-          </IconButton>
+          {signedIn ? (
+            <IconButton
+              label="New folder"
+              title="New folder"
+              className="text-fg-subtle translate-x-0.5"
+              disabled={workspaceId === ""}
+              onClick={() => setPendingFolder({ treeIds: [] })}
+            >
+              <FolderPlus size={ICON} aria-hidden="true" />
+            </IconButton>
+          ) : null}
         </span>
       </div>
 

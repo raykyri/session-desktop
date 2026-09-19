@@ -24,7 +24,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 
 import { requestEncyclopediaPage } from "../../api/api.js";
-import { useEncyclopediaPages } from "../../api/queries.js";
+import { useEncyclopediaPages, useSignedIn } from "../../api/queries.js";
 import { pushErrorToast } from "../../lib/toast.js";
 import type { WikilinkActions, WikilinkStatus } from "../markdown/index.js";
 
@@ -103,6 +103,7 @@ export function useWikilinkActions(
   origin: WikilinkOrigin | null,
 ): WikilinkActions {
   const navigate = useNavigate();
+  const signedIn = useSignedIn();
   const pages = useEncyclopediaPages(workspaceId);
   const summaries = pages.data;
 
@@ -113,7 +114,7 @@ export function useWikilinkActions(
         const slug = encyclopediaSlug(term);
         if (slug === "" || workspaceId === "") return;
         const status = statusForSlug(summaries, slug);
-        if (status === null || status === "failed") {
+        if (signedIn && (status === null || status === "failed")) {
           const context = wikilinkClickContext(anchor, term);
           void requestEncyclopediaPage({
             workspaceId,
@@ -131,7 +132,8 @@ export function useWikilinkActions(
         void navigate({ to: "/e/$slug", params: { slug }, search: { ws: workspaceId } });
       },
       interactive: workspaceId !== "",
+      canRequest: signedIn && workspaceId !== "",
     }),
-    [navigate, origin, summaries, workspaceId],
+    [navigate, origin, signedIn, summaries, workspaceId],
   );
 }

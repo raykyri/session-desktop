@@ -13,6 +13,7 @@ import {
   queryKeys,
   useRuntimeConfig,
   useSettings,
+  useSignedIn,
   useUpdateSettings,
   useUsage,
   useWorkspaces,
@@ -256,6 +257,7 @@ function UsageSection() {
  * written directly, because they have no local mirror to debounce.
  */
 export function SettingsPage() {
+  const signedIn = useSignedIn();
   const settings = useSettingsStore((state) => state.settings);
   const set = useSettingsStore((state) => state.set);
   const setTextSize = useSettingsStore((state) => state.setTextSize);
@@ -348,13 +350,21 @@ export function SettingsPage() {
             />
           </SettingsGroup>
 
-          <SettingsGroup title="Research defaults">
-            <ResearchSection />
-          </SettingsGroup>
+          {signedIn ? (
+            <>
+              <SettingsGroup title="Research defaults">
+                <ResearchSection />
+              </SettingsGroup>
 
-          <SettingsGroup title="Usage">
-            <UsageSection />
-          </SettingsGroup>
+              <SettingsGroup title="Usage">
+                <UsageSection />
+              </SettingsGroup>
+            </>
+          ) : (
+            <p className="text-fg-muted m-0 text-base">
+              Sign in to edit research defaults and see usage.
+            </p>
+          )}
         </div>
       </div>
     </div>

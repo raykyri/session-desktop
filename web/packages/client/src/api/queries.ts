@@ -157,8 +157,13 @@ export function useMe() {
   return useQuery(meQueryOptions());
 }
 
+export function useSignedIn(): boolean {
+  return Boolean(useMe().data);
+}
+
 export function useSettings() {
-  return useQuery(settingsQueryOptions());
+  const signedIn = useSignedIn();
+  return useQuery({ ...settingsQueryOptions(), enabled: signedIn });
 }
 
 export function useRuntimeConfig() {
@@ -210,10 +215,11 @@ export function useEncyclopediaPage(workspaceId: string, slug: string) {
 }
 
 export function useDocuments(workspaceId: string) {
+  const signedIn = useSignedIn();
   return useQuery({
     queryKey: queryKeys.documents(workspaceId),
     queryFn: () => listDocuments(workspaceId),
-    enabled: workspaceId !== "",
+    enabled: signedIn && workspaceId !== "",
   });
 }
 
@@ -221,10 +227,12 @@ export function useDocuments(workspaceId: string) {
 export const USAGE_STALE_MS = 30_000;
 
 export function useUsage(days?: number) {
+  const signedIn = useSignedIn();
   return useQuery({
     queryKey: queryKeys.usage(),
     queryFn: () => getUsageSummary(days),
     staleTime: USAGE_STALE_MS,
+    enabled: signedIn,
   });
 }
 

@@ -6,24 +6,39 @@ import { randomUUID } from "node:crypto";
 import { artifacts, encyclopedia, workspaces } from "@session/db";
 import type { SessionEvent } from "@session/shared";
 import { encyclopediaPageRequestSchema, validateEncyclopediaSlug } from "@session/shared";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { protectedProcedure, router } from "../base.js";
+import { protectedProcedure, publicProcedure, router } from "../base.js";
+import { catalogUserId } from "../catalog.js";
 import { publish } from "../emit.js";
 import { repo, required } from "../errors.js";
 
 export const encyclopediaRouter = router({
-  listPages: protectedProcedure
+  listPages: publicProcedure
     .input(z.object({ workspaceId: z.string() }))
-    .query(({ ctx, input }) =>
-      repo(() => encyclopedia.listPages(ctx.db, ctx.user.id, input.workspaceId)),
-    ),
+    .query(({ ctx, input }) => {
+      const userId = catalogUserId(ctx);
+      if (userId === null) return [];
+      return repo(() => encyclopedia.listPages(ctx.db, userId, input.workspaceId));
+    }),
 
-  getPage: protectedProcedure
+  getPage: publicProcedure
     .input(z.object({ workspaceId: z.string(), slug: z.string() }))
-    .query(({ ctx, input }) =>
-      repo(() => encyclopedia.getPage(ctx.db, ctx.user.id, input.workspaceId, input.slug)),
-    ),
+    .query(({ ctx, input }) => {
+      const userId = catalogUserId(ctx);
+      if (userId === null) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `encyclopedia page ${input.slug} was not found`,
+        });
+      }
+      required(
+        repo(() => workspaces.get(ctx.db, userId, input.workspaceId)),
+        `research workspace ${input.workspaceId} was not found`,
+      );
+      return repo(() => encyclopedia.getPage(ctx.db, userId, input.workspaceId, input.slug));
+    }),
 
   /** Inserts or merges the page row and, when this call is what puts it into
    * `generating`, schedules the `gemini-flash` run that fills it. */

@@ -79,6 +79,7 @@ export interface AnswerPaneProps {
   hiddenHighlightCount: number;
   recapPending: boolean;
   cancelling: boolean;
+  canCancel: boolean;
   canRetryNode: boolean;
   retryingNode: boolean;
   pointerOverHighlight: boolean;
@@ -112,6 +113,7 @@ export const AnswerPane = memo(function AnswerPane({
   hiddenHighlightCount,
   recapPending,
   cancelling,
+  canCancel,
   canRetryNode,
   retryingNode,
   pointerOverHighlight,
@@ -237,13 +239,15 @@ export const AnswerPane = memo(function AnswerPane({
                 aria-hidden="true"
               />
               {thinking ? "Thinking…" : "Working…"}
-              <LinkButton
-                className="ml-1.5"
-                disabled={cancelling}
-                onClick={() => setConfirmingCancel(true)}
-              >
-                {cancelling ? "Cancelling…" : "Cancel"}
-              </LinkButton>
+              {canCancel ? (
+                <LinkButton
+                  className="ml-1.5"
+                  disabled={cancelling}
+                  onClick={() => setConfirmingCancel(true)}
+                >
+                  {cancelling ? "Cancelling…" : "Cancel"}
+                </LinkButton>
+              ) : null}
             </p>
           ) : null}
           <ConfirmDialog
@@ -293,17 +297,19 @@ export const AnswerPane = memo(function AnswerPane({
                   <Copy size={14} aria-hidden="true" />
                 </IconButton>
               ) : null}
-              <Menu
-                label="Answer actions"
-                align="end"
-                trigger={
-                  <IconButton label="Answer actions">
-                    <MoreHorizontal size={15} aria-hidden="true" />
-                  </IconButton>
-                }
-              >
-                {menuItems}
-              </Menu>
+              {menuItems ? (
+                <Menu
+                  label="Answer actions"
+                  align="end"
+                  trigger={
+                    <IconButton label="Answer actions">
+                      <MoreHorizontal size={15} aria-hidden="true" />
+                    </IconButton>
+                  }
+                >
+                  {menuItems}
+                </Menu>
+              ) : null}
             </span>
           </footer>
         </>

@@ -11,6 +11,7 @@ import type { ResearchNode } from "@session/shared";
 import { ArrowLeft, Reply } from "lucide-react";
 import { memo } from "react";
 
+import { useSignedIn } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { ControlButton } from "../../ui/Button.js";
 import { ModelMeta } from "../../ui/ModelMark.js";
@@ -52,8 +53,8 @@ export const SegmentPrompt = memo(function SegmentPrompt({
   onToggleBookmark,
   actionsBusy = false,
 }: SegmentPromptProps) {
+  const signedIn = useSignedIn();
   if ((node.kind ?? "run") === "document") return null;
-
   const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
   const askedAt = index === 0 && Number.isFinite(node.createdAt) ? node.createdAt : null;
   // Metadata items (follow button, model badge, elapsed time) are displayed only after the run completes.
@@ -95,14 +96,16 @@ export const SegmentPrompt = memo(function SegmentPrompt({
           )}
         >
           <ModelMeta modelId={node.model} origin={node.origin} at={askedAt} />
-          <ThreadActions
-            className="ml-auto"
-            followed={followed}
-            bookmarked={bookmarked}
-            onToggleFollow={onToggleFollow}
-            onToggleBookmark={onToggleBookmark}
-            busy={actionsBusy}
-          />
+          {signedIn ? (
+            <ThreadActions
+              className="ml-auto"
+              followed={followed}
+              bookmarked={bookmarked}
+              onToggleFollow={onToggleFollow}
+              onToggleBookmark={onToggleBookmark}
+              busy={actionsBusy}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>

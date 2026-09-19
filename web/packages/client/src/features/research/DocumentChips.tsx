@@ -10,7 +10,7 @@
 import { FileText } from "lucide-react";
 import { useState } from "react";
 
-import { useDocuments } from "../../api/queries.js";
+import { useDocuments, useSignedIn } from "../../api/queries.js";
 import { openArtifactDocument } from "../artifacts/openArtifact.js";
 
 export function DocumentChips({
@@ -20,6 +20,7 @@ export function DocumentChips({
   documentIds: readonly string[];
   workspaceId: string;
 }) {
+  const signedIn = useSignedIn();
   const documents = useDocuments(workspaceId);
   const [failed, setFailed] = useState<string | null>(null);
   const byId = new Map((documents.data ?? []).map((document) => [document.id, document]));
@@ -36,11 +37,21 @@ export function DocumentChips({
       {documentIds.map((documentId) => {
         const info = byId.get(documentId);
         const name = info?.name ?? "Attached document";
+        const chipClass =
+          "border-border-control bg-control text-fg-secondary inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs";
+        if (!signedIn) {
+          return (
+            <span key={documentId} className={chipClass} title={name}>
+              <FileText size={12} aria-hidden="true" />
+              <span className="min-w-0 truncate">{name}</span>
+            </span>
+          );
+        }
         return (
           <button
             key={documentId}
             type="button"
-            className="border-border-control bg-control text-fg-secondary hover:bg-control-hover focus-visible:ring-focus-ring inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-xs outline-none focus-visible:ring-2"
+            className={`${chipClass} hover:bg-control-hover focus-visible:ring-focus-ring outline-none focus-visible:ring-2`}
             title={`${name} · Open in preview panel`}
             onClick={() => open(documentId, name)}
           >

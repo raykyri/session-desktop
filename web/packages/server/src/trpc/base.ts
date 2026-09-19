@@ -70,7 +70,8 @@ export const middleware = t.middleware;
 export const createCallerFactory = t.createCallerFactory;
 export const mergeRouters = t.mergeRouters;
 
-/** No session required: `system.health` and `auth.*` only. */
+/** No session required. Catalog reads bind to the public owner when
+ * `ctx.user` is null (`catalog.ts`). Mutations that write stay protected. */
 export const publicProcedure = t.procedure;
 
 /** 60 mutations a minute per account (`06` §8). Queries are cheap and

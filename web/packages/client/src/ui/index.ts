@@ -11,6 +11,7 @@ export * from "./Dialog.js";
 export * from "./DomSearchBar.js";
 export * from "./Field.js";
 export * from "./FindBar.js";
+export * from "./GitHubMark.js";
 export * from "./HistoryNav.js";
 export * from "./Lightboxes.js";
 export * from "./Menu.js";

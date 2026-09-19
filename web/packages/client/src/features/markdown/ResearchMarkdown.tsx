@@ -139,9 +139,11 @@ function WikilinkAnchor({
   const [confirming, setConfirming] = useState(false);
   const anchorRef = useRef<HTMLAnchorElement | null>(null);
   const status = actions.resolve(term);
+  const canRequest = actions.canRequest ?? actions.interactive;
   const activate = (element: HTMLElement) => {
     if (!actions.interactive) return;
     if (status === null || status === "failed") {
+      if (!canRequest) return;
       setConfirming(true);
       return;
     }
@@ -166,7 +168,9 @@ function WikilinkAnchor({
             ? undefined
             : status
               ? `Open encyclopedia page: ${term}`
-              : `Create encyclopedia page: ${term}`
+              : canRequest
+                ? `Create encyclopedia page: ${term}`
+                : undefined
         }
         onClick={(event) => {
           event.preventDefault();

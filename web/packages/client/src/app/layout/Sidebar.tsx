@@ -1,8 +1,9 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { PanelLeftClose, User } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { startGitHubSignIn } from "../../api/api.js";
 import { useLogout, useMe } from "../../api/queries.js";
 import memMonochromeLightLogoUrl from "../../assets/brand/mem-monochrome-light.svg";
 import memMonochromeLogoUrl from "../../assets/brand/mem-monochrome.svg";
@@ -19,6 +20,7 @@ import {
 } from "../../stores/navigation.js";
 import { selectAppearance, useSettingsStore } from "../../stores/settings.js";
 import { IconButton } from "../../ui/Button.js";
+import { GitHubMark } from "../../ui/GitHubMark.js";
 import { Menu, MenuItem, MenuSeparator } from "../../ui/Menu.js";
 import { DIALOG_BACKDROP } from "../../ui/surfaces.js";
 
@@ -30,7 +32,34 @@ function AccountMenu() {
   const me = useMe();
   const logout = useLogout();
   const user = me.data;
-  if (!user) return null;
+  const returnTo = useRouterState({
+    select: (state) => `${state.location.pathname}${state.location.searchStr}`,
+  });
+
+  if (!user) {
+    return (
+      <div className="flex items-center gap-2 px-2 pt-0.5 pb-2">
+        <Menu
+          side="top"
+          align="start"
+          label="Account"
+          trigger={
+            <button type="button" className={cn(SIDEBAR_ROW, "border-0 bg-transparent text-left")}>
+              <span className="min-w-0 flex-1 truncate">Sign in</span>
+              <User size={14} aria-hidden="true" className="shrink-0" />
+            </button>
+          }
+        >
+          <MenuItem onClick={() => startGitHubSignIn(returnTo)}>
+            <span className="flex min-w-0 items-center gap-2">
+              <GitHubMark size={14} />
+              <span className="truncate">Log in with GitHub</span>
+            </span>
+          </MenuItem>
+        </Menu>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2 px-2 pt-0.5 pb-2">
@@ -64,8 +93,7 @@ function AccountMenu() {
         <MenuItem
           onClick={() => {
             logout.mutate(undefined, {
-              // Clear local session state and redirect to login regardless of server logout response.
-              onSettled: () => void navigate({ to: "/login" }),
+              onSettled: () => void navigate({ to: "/" }),
             });
           }}
         >

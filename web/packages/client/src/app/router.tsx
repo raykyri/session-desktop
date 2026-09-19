@@ -103,12 +103,15 @@ const loginRoute = createRoute({
 });
 
 /**
- * Warms the six shell queries asynchronously after session creation (07 §2),
- * allowing the sidebar and route skeleton to render without waiting for all
- * network requests. Individual query components handle failures.
+ * Warms the shell queries the sidebar renders from (07 §2). Account settings
+ * wait for a session; guests still prefetch the public catalog. Individual
+ * query components handle failures.
  */
 async function warmBootQueries(client: QueryClient): Promise<void> {
-  const settings = await client.ensureQueryData(settingsQueryOptions()).catch(() => null);
+  const me = await client.ensureQueryData(meQueryOptions()).catch(() => null);
+  const settings = me
+    ? await client.ensureQueryData(settingsQueryOptions()).catch(() => null)
+    : null;
   await Promise.all([
     client.prefetchQuery(runtimeConfigQueryOptions()),
     client.prefetchQuery(workspacesQueryOptions()),
@@ -123,9 +126,9 @@ async function warmBootQueries(client: QueryClient): Promise<void> {
   ]);
 }
 
-/** A pathless layout route, so every signed-in view shares one `AppShell`
- * instance — and therefore one keydown listener, one overlay stack and one
- * event subscription. */
+/** A pathless layout route, so every public and signed-in view shares one
+ * `AppShell` instance — and therefore one keydown listener, one overlay stack
+ * and one event subscription. */
 const shellRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: "_shell",
@@ -135,13 +138,7 @@ const shellRoute = createRoute({
     // conditioned on the build rather than on the path alone, so a route named
     // `/dev/...` in a production bundle could never opt out of the guard.
     if (isDevelopment && location.pathname.startsWith("/dev/")) return;
-    const me = await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
-    if (!me) {
-      // The router's control-flow signal is a plain object, not an `Error`;
-      // throwing it is how `beforeLoad` redirects.
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw redirect({ to: "/login", search: { redirect: location.href } });
-    }
+    await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
   },
   loader: ({ context }) => {
     void warmBootQueries(context.queryClient);
@@ -160,10 +157,25 @@ const homeRoute = createRoute({
   component: HomePage,
 });
 
+async function requireSignedIn({
+  context,
+  location,
+}: {
+  context: RouterContext;
+  location: { href: string };
+}): Promise<void> {
+  const me = await context.queryClient.ensureQueryData(meQueryOptions()).catch(() => null);
+  if (!me) {
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    throw redirect({ to: "/login", search: { redirect: location.href } });
+  }
+}
+
 const bookmarksRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/bookmarks",
   validateSearch: workspaceScopeSearchSchema,
+  beforeLoad: requireSignedIn,
   component: BookmarksPage,
 });
 
@@ -171,6 +183,7 @@ const highlightsRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/highlights",
   validateSearch: workspaceScopeSearchSchema,
+  beforeLoad: requireSignedIn,
   component: HighlightsPage,
 });
 
@@ -199,6 +212,7 @@ const adminRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/admin",
   validateSearch: workspaceScopeSearchSchema,
+  beforeLoad: requireSignedIn,
   component: AdminPage,
 });
 

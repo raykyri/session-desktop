@@ -4,6 +4,7 @@
 
 import { useRef } from "react";
 
+import { useSignedIn } from "../api/queries.js";
 import { ResearchQueryComposer } from "../features/composer/ResearchQueryComposer.js";
 import { ActivityFeed } from "../features/home/ActivityFeed.js";
 import { ReportImport } from "../features/import/ReportImport.js";
@@ -11,6 +12,7 @@ import { useWorkspaceScope } from "../features/sidebar/scope.js";
 
 export function HomePage() {
   const { workspaceId } = useWorkspaceScope();
+  const signedIn = useSignedIn();
   // The drop target is the whole column, so a report can be dropped anywhere on
   // the page rather than onto the composer's import icon alone (`10` §5).
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -21,12 +23,14 @@ export function HomePage() {
       title="Home"
       scrollRef={scrollRef}
       header={
-        <div className="pb-6">
-          <ResearchQueryComposer
-            workspaceId={workspaceId}
-            tools={<ReportImport workspaceId={workspaceId} dropTarget={scrollRef} />}
-          />
-        </div>
+        signedIn ? (
+          <div className="pb-6">
+            <ResearchQueryComposer
+              workspaceId={workspaceId}
+              tools={<ReportImport workspaceId={workspaceId} dropTarget={scrollRef} />}
+            />
+          </div>
+        ) : null
       }
     />
   );
