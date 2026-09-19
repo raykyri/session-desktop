@@ -96,7 +96,6 @@ function ResearchSection() {
               }
             />
             <ControlButton
-              size="sm"
               disabled={!dirty || update.isPending}
               onClick={() =>
                 update.mutate(
@@ -121,7 +120,6 @@ function ResearchSection() {
                 ? modelOptions
                 : [{ value: defaultModel, label: defaultModel }]
             }
-            size="sm"
             className={PICKER_CLASS}
             onChange={(value) => setLocal("defaultModel", value)}
           />
@@ -169,7 +167,7 @@ function UsageSection() {
   ];
   return (
     <table className="w-full border-collapse text-base">
-      <caption className="text-fg-muted pb-2 text-left text-sm">
+      <caption className="text-fg-muted pb-2 text-left text-base">
         {new Date(summary.day).toISOString().slice(0, 10)}, UTC
       </caption>
       <tbody>
@@ -211,7 +209,6 @@ export function SettingsPage() {
                   label="Appearance"
                   value={settings.appearance}
                   options={APPEARANCE_OPTIONS}
-                  size="sm"
                   className={PICKER_CLASS}
                   onChange={(value) =>
                     set("appearance", appearanceSchema.catch("dark").parse(value))
@@ -226,7 +223,6 @@ export function SettingsPage() {
                   label="Theme"
                   value={settings.colorTheme}
                   options={COLOR_THEME_OPTIONS}
-                  size="sm"
                   className={PICKER_CLASS}
                   onChange={(value) =>
                     set("colorTheme", value === "orange-blob" ? "orange-blob" : "green-blob")
@@ -241,7 +237,6 @@ export function SettingsPage() {
                   label="Body font"
                   value={settings.bodyFontId}
                   options={BODY_FONT_SELECT_OPTIONS}
-                  size="sm"
                   className={PICKER_CLASS}
                   onChange={(value) => set("bodyFontId", value)}
                 />
