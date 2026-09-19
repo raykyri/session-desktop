@@ -52,7 +52,7 @@ packages/client/
       prose.css              .research-prose, code, tables (from transcript.css/research-surface.css)
       tweet.css              .journal-tweet recipe (from research-surface.css)
       fonts.css              @font-face (from tokens.css:1-133)
-    assets/fonts/ model-icons/ brand/
+    assets/fonts/ brand/
   test/                      AVA + global-jsdom + Testing Library
 ```
 

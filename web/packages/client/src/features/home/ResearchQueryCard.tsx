@@ -19,7 +19,6 @@ import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
 import { ContextMenu } from "../../ui/ContextMenu.js";
-import { ModelIcon } from "../composer/modelIcon.js";
 import { TweetEmbed } from "../journal/TweetEmbed.js";
 import { ResearchMarkdown } from "../markdown/index.js";
 import { ThreadActions } from "../research/ThreadActions.js";
@@ -182,10 +181,7 @@ export function ResearchQueryCard({
             "text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1 text-xs",
           )}
         >
-          <span className="flex items-center gap-1">
-            <ModelIcon modelId={query.model} size={12} />
-            <span>{modelLabel}</span>
-          </span>
+          <span>{modelLabel}</span>
           {status ? (
             <span className={cn(query.status === "failed" && "text-status-failed")}>{status}</span>
           ) : null}

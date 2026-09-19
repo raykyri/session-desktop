@@ -62,6 +62,20 @@ test("the model list hides admin-only models from everyone else", (t) => {
   );
 });
 
+test("the model list hides unavailable models unless none is available", (t) => {
+  const mixed = [model(), model({ id: "gpt", label: "GPT", available: false })];
+  t.deepEqual(
+    composerModels(mixed, false).map((entry) => entry.id),
+    ["gemini-flash"],
+  );
+  const none = [model({ available: false }), model({ id: "gpt", label: "GPT", available: false })];
+  t.deepEqual(
+    composerModels(none, false).map((entry) => entry.id),
+    ["gemini-flash", "gpt"],
+    "with nothing to launch, every model is listed so the picker explains itself",
+  );
+});
+
 test("falls back to default model registry when server runtime config is empty", (t) => {
   t.true(composerModels(undefined, false).length > 0);
   t.true(composerModels([], false).every((entry) => entry.available));

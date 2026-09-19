@@ -109,6 +109,11 @@ export function ActivityFeed({
   header,
   scrollRef: externalScrollRef,
 }: ActivityFeedProps) {
+  // Opted out of the React Compiler: `useVirtualizer` returns functions that
+  // cannot be memoized without going stale, so the compiler would skip this
+  // component anyway and warn about it.
+  "use no memo";
+
   const navigate = useNavigate();
   const client = useQueryClient();
   const feed = useActivityFeed({ workspaceId, bookmarkedOnly });
@@ -158,6 +163,9 @@ export function ActivityFeed({
     [items],
   );
 
+  // The lint reports the skip regardless of the directive above; the opt-out
+  // is the directive, this only quiets the notice.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: events.length,
     getScrollElement: () => scrollRef.current,

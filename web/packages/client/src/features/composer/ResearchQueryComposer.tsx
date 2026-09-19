@@ -40,7 +40,6 @@ import {
 import { Menu, MenuItem } from "../../ui/Menu.js";
 
 import { oversizeRefusal } from "./limits.js";
-import { ModelIcon } from "./modelIcon.js";
 
 /** A prompt containing only one web URL is saved as a Journal bookmark
  * (`10` §2). Additional text causes the prompt to run as a research query. */
@@ -60,14 +59,16 @@ export function formatByteSize(bytes: number): string {
 
 /** The models this account may launch on. The registry says which exist and
  * who may use them; the deployment's runtime config says which have a
- * configured provider, and one that does not is listed and disabled rather
- * than hidden — the desktop's `AgentSetupGuide` is not ported (`10` §1). */
+ * configured provider. Models without one are hidden, unless none has one:
+ * then every model is listed, disabled, so the picker explains itself rather
+ * than standing empty — the desktop's `AgentSetupGuide` is not ported
+ * (`10` §1). */
 export function composerModels(
   runtimeModels: readonly ModelInfo[] | undefined,
   isAdmin: boolean,
 ): ModelInfo[] {
   if (runtimeModels && runtimeModels.length > 0) {
-    return runtimeModels.filter((model) => !model.adminOnly || isAdmin);
+    return launchableModels(runtimeModels.filter((model) => !model.adminOnly || isAdmin));
   }
   return MODEL_REGISTRY.filter((model) => !model.adminOnly || isAdmin).map((model) => ({
     id: model.id,
@@ -78,6 +79,12 @@ export function composerModels(
     supportsFiles: model.supportsFiles,
     supportsImages: model.supportsImages,
   }));
+}
+
+/** The available models, or all of them when none is available. */
+export function launchableModels(models: readonly ModelInfo[]): ModelInfo[] {
+  const available = models.filter((model) => model.available);
+  return available.length > 0 ? available : [...models];
 }
 
 /** Tab steps to the next launchable model, wrapping. A model the deployment
@@ -437,8 +444,7 @@ export function ResearchQueryComposer({
           align="start"
           label="Model"
           trigger={
-            <ControlButton size="sm" className="gap-1.5" title="Model (Tab)">
-              <ModelIcon modelId={selected?.id ?? model} />
+            <ControlButton size="sm" title="Model (Tab)">
               <span className="truncate">{selected?.label ?? model}</span>
             </ControlButton>
           }
@@ -450,10 +456,7 @@ export function ResearchQueryComposer({
               hint={candidate.available ? undefined : "unavailable"}
               onClick={() => updateModel(candidate.id)}
             >
-              <span className="flex min-w-0 items-center gap-2">
-                <ModelIcon modelId={candidate.id} reserve />
-                <span className="truncate">{candidate.label}</span>
-              </span>
+              <span className="truncate">{candidate.label}</span>
             </MenuItem>
           ))}
         </Menu>
