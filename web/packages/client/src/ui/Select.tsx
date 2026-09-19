@@ -27,7 +27,14 @@ export interface SelectProps {
   disabled?: boolean;
   className?: string;
   placeholder?: string;
+  /** `sm` matches a small `ControlButton`; the default matches a medium one. */
+  size?: "sm" | "md";
 }
+
+const TRIGGER_SIZE_CLASS = {
+  sm: "min-h-control-sm px-2 text-sm",
+  md: "min-h-control-md px-2.5",
+} as const;
 
 function optionRowClass(option: SelectOption): string {
   return cn(MENU_ITEM, option.tone === "danger" && "text-danger-muted");
@@ -63,18 +70,27 @@ export function Select({
   disabled = false,
   className,
   placeholder,
+  size = "md",
 }: SelectProps) {
   return (
     <BaseSelect.Root
       value={value}
+      // `items` is what lets the closed trigger print the label rather than
+      // the raw value: the list is not mounted until the popup opens.
+      items={options.map((option) => ({ value: option.value, label: option.label }))}
       onValueChange={(next) => onChange(next ?? "")}
       disabled={disabled}
     >
       <BaseSelect.Trigger
         aria-label={label}
-        className={cn(CONTROL_BUTTON, "justify-between gap-2 px-2.5", className)}
+        className={cn(
+          CONTROL_BUTTON,
+          TRIGGER_SIZE_CLASS[size],
+          "justify-between gap-2 text-left",
+          className,
+        )}
       >
-        <BaseSelect.Value className="min-w-0 truncate" placeholder={placeholder} />
+        <BaseSelect.Value className="min-w-0 flex-1 truncate" placeholder={placeholder} />
         <BaseSelect.Icon className="text-fg-subtle shrink-0">
           <ChevronDown size={13} aria-hidden="true" />
         </BaseSelect.Icon>

@@ -5,6 +5,7 @@ import {
   clampResearchLaunchInstruction,
 } from "@session/shared";
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 import { useRuntimeConfig, useSettings, useUpdateSettings, useUsage } from "../api/queries.js";
 import { BODY_FONT_OPTIONS } from "../lib/bodyFonts.js";
@@ -13,7 +14,7 @@ import { ControlButton } from "../ui/Button.js";
 import { Field, Textarea } from "../ui/Field.js";
 import { Select, type SelectOption } from "../ui/Select.js";
 import { TabPanel, Tabs } from "../ui/Tabs.js";
-import { Switch } from "../ui/Toggle.js";
+import { Checkbox } from "../ui/Toggle.js";
 
 const APPEARANCE_OPTIONS: SelectOption[] = [
   { value: "dark", label: "Dark" },
@@ -39,6 +40,20 @@ const BODY_FONT_SELECT_OPTIONS: SelectOption[] = BODY_FONT_OPTIONS.map((option) 
  * 4 KiB cap is the shared clamp both halves apply, and it is applied here so
  * the field cannot hold text the server would silently cut.
  */
+/** Compact, content-sized pickers: a preference has a handful of values, and
+ * a control stretched to the column reads as a form field awaiting input. */
+const PICKER_CLASS = "w-fit min-w-44";
+
+/** A titled group inside the General tab. */
+function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section aria-label={title} className="flex flex-col gap-4">
+      <h2 className="text-fg-heading m-0 text-base font-semibold">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
 function ResearchSection() {
   const settings = useSettings();
   const runtimeConfig = useRuntimeConfig();
@@ -104,6 +119,8 @@ function ResearchSection() {
                 ? modelOptions
                 : [{ value: defaultModel, label: defaultModel }]
             }
+            size="sm"
+            className={PICKER_CLASS}
             onChange={(value) => setLocal("defaultModel", value)}
           />
         )}
@@ -178,7 +195,7 @@ export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
   const set = useSettingsStore((state) => state.set);
   const setTextSize = useSettingsStore((state) => state.setTextSize);
-  const [section, setSection] = useState("appearance");
+  const [section, setSection] = useState("general");
 
   return (
     <div className="h-full overflow-y-auto px-8 py-10">
@@ -190,108 +207,112 @@ export function SettingsPage() {
           onValueChange={setSection}
           label="Settings sections"
           tabs={[
-            { value: "appearance", label: "Appearance" },
             { value: "general", label: "General" },
-            { value: "research", label: "Research" },
             { value: "usage", label: "Usage" },
           ]}
         >
-          <TabPanel value="appearance">
-            <div className="flex flex-col gap-5">
-              <Field label="Appearance" hint="Independent of the system setting.">
-                {() => (
-                  <Select
-                    label="Appearance"
-                    value={settings.appearance}
-                    options={APPEARANCE_OPTIONS}
-                    onChange={(value) => set("appearance", value === "light" ? "light" : "dark")}
-                  />
-                )}
-              </Field>
-
-              <Field label="Theme" hint="Selects the accent color and background tone.">
-                {() => (
-                  <Select
-                    label="Theme"
-                    value={settings.colorTheme}
-                    options={COLOR_THEME_OPTIONS}
-                    onChange={(value) =>
-                      set("colorTheme", value === "orange-blob" ? "orange-blob" : "green-blob")
-                    }
-                  />
-                )}
-              </Field>
-
-              <Field
-                label="Body font"
-                hint="Anthropic Sans Text and Inter are available only if installed locally."
-              >
-                {() => (
-                  <Select
-                    label="Body font"
-                    value={settings.bodyFontId}
-                    options={BODY_FONT_SELECT_OPTIONS}
-                    onChange={(value) => set("bodyFontId", value)}
-                  />
-                )}
-              </Field>
-
-              <Field label={`Text size (${settings.textSize})`} hint="Scales answer text.">
-                {({ id, describedBy }) => (
-                  <input
-                    id={id}
-                    aria-describedby={describedBy}
-                    type="range"
-                    min={APP_TEXT_SIZE_MIN}
-                    max={APP_TEXT_SIZE_MAX}
-                    step={1}
-                    value={settings.textSize}
-                    className="accent-accent w-full"
-                    onChange={(event) => setTextSize(Number(event.currentTarget.value))}
-                  />
-                )}
-              </Field>
-
-              <Switch
-                label="Reduce motion"
-                description="Disable non-essential animations and transitions. Progress indicators remain active."
-                checked={settings.reduceMotion}
-                onCheckedChange={(checked) => set("reduceMotion", checked)}
-              />
-            </div>
-          </TabPanel>
-
           <TabPanel value="general">
-            <div className="flex flex-col gap-5">
-              <Switch
-                label="Show tool calls"
-                description="Include searches, fetches and document reads in answers."
-                checked={settings.showToolCalls}
-                onCheckedChange={(checked) => set("showToolCalls", checked)}
-              />
-              <Switch
-                label="Show timestamps"
-                description="Display timestamps on assistant responses."
-                checked={settings.showAssistantTimestamps}
-                onCheckedChange={(checked) => set("showAssistantTimestamps", checked)}
-              />
-              <Switch
-                label="Notifications"
-                description="Show popup notifications for background server events."
-                checked={settings.showNotifications}
-                onCheckedChange={(checked) => set("showNotifications", checked)}
-              />
-              <Switch
-                label="Require ⌘↵ to send"
-                description="When enabled, press ⌘↵ to send. When disabled, press Enter to send and Shift-Enter for a new line."
-                checked={settings.requireCmdEnterToSend}
-                onCheckedChange={(checked) => set("requireCmdEnterToSend", checked)}
-              />
-            </div>
-          </TabPanel>
+            <div className="flex flex-col gap-8">
+              <SettingsGroup title="Appearance">
+                <Field label="Appearance" hint="Independent of the system setting.">
+                  {() => (
+                    <Select
+                      label="Appearance"
+                      value={settings.appearance}
+                      options={APPEARANCE_OPTIONS}
+                      size="sm"
+                      className={PICKER_CLASS}
+                      onChange={(value) => set("appearance", value === "light" ? "light" : "dark")}
+                    />
+                  )}
+                </Field>
 
-          <TabPanel value="research">
-            <ResearchSection />
+                <Field label="Theme" hint="Selects the accent color and background tone.">
+                  {() => (
+                    <Select
+                      label="Theme"
+                      value={settings.colorTheme}
+                      options={COLOR_THEME_OPTIONS}
+                      size="sm"
+                      className={PICKER_CLASS}
+                      onChange={(value) =>
+                        set("colorTheme", value === "orange-blob" ? "orange-blob" : "green-blob")
+                      }
+                    />
+                  )}
+                </Field>
+
+                <Field
+                  label="Body font"
+                  hint="Anthropic Sans Text and Inter are available only if installed locally."
+                >
+                  {() => (
+                    <Select
+                      label="Body font"
+                      value={settings.bodyFontId}
+                      options={BODY_FONT_SELECT_OPTIONS}
+                      size="sm"
+                      className={PICKER_CLASS}
+                      onChange={(value) => set("bodyFontId", value)}
+                    />
+                  )}
+                </Field>
+
+                <Field label={`Text size (${settings.textSize})`} hint="Scales answer text.">
+                  {({ id, describedBy }) => (
+                    <input
+                      id={id}
+                      aria-describedby={describedBy}
+                      type="range"
+                      min={APP_TEXT_SIZE_MIN}
+                      max={APP_TEXT_SIZE_MAX}
+                      step={1}
+                      value={settings.textSize}
+                      className="accent-accent w-64 max-w-full"
+                      onChange={(event) => setTextSize(Number(event.currentTarget.value))}
+                    />
+                  )}
+                </Field>
+
+                <Checkbox
+                  label="Reduce motion"
+                  description="Disable non-essential animations and transitions. Progress indicators remain active."
+                  checked={settings.reduceMotion}
+                  onCheckedChange={(checked) => set("reduceMotion", checked)}
+                />
+              </SettingsGroup>
+
+              <SettingsGroup title="Reading and composing">
+                <Checkbox
+                  label="Show tool calls"
+                  description="Include searches, fetches and document reads in answers."
+                  checked={settings.showToolCalls}
+                  onCheckedChange={(checked) => set("showToolCalls", checked)}
+                />
+                <Checkbox
+                  label="Show timestamps"
+                  description="Display timestamps on assistant responses."
+                  checked={settings.showAssistantTimestamps}
+                  onCheckedChange={(checked) => set("showAssistantTimestamps", checked)}
+                />
+                <Checkbox
+                  label="Notifications"
+                  description="Show popup notifications for background server events."
+                  checked={settings.showNotifications}
+                  onCheckedChange={(checked) => set("showNotifications", checked)}
+                />
+                <Checkbox
+                  label="Require ⌘↵ to send"
+                  description="When enabled, press ⌘↵ to send. When disabled, press Enter to send and Shift-Enter for a new line."
+                  checked={settings.requireCmdEnterToSend}
+                  onCheckedChange={(checked) => set("requireCmdEnterToSend", checked)}
+                />
+              </SettingsGroup>
+
+              <SettingsGroup title="Research">
+                <ResearchSection />
+              </SettingsGroup>
+            </div>
           </TabPanel>
 
           <TabPanel value="usage">

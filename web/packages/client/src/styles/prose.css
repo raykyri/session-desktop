@@ -13,6 +13,11 @@
 /* Home and a research thread read at the same scale even though their layouts
    differ, so both mount this surface. */
 .research-reading-surface {
+  /* The document columns (09 §3): the reading column, the gap, and the rail
+     that holds follow-ups and annotations beside it. */
+  --research-answer-max-width: 640px;
+  --research-column-gap: clamp(28px, 4vw, 52px);
+  --research-rail-width: 260px;
   /* `--app-text-zoom` is the bounded text-size setting, written on <html> by
      ThemeEffects (the desktop's `--turn-font-delta`). Adding it here rather
      than at each declaration means every size derived from the body size —
@@ -36,6 +41,30 @@
     var(--research-body-font-size) - 14px - var(--font-ui-size-offset)
   );
   --research-markdown-line-height-delta: 0.12;
+}
+
+/* Where a document's columns sit in the surface. The frame is as wide as the
+   reading column plus the rail. In a window too narrow to hold both beside a
+   centered column, it hugs the left edge; as the window widens it drifts right
+   until the reading column is centered and the rail has the space right of
+   center. `%` here is the surface's content width, so the rule is one
+   expression rather than a breakpoint. Threads and encyclopedia pages share
+   it, so the two kinds of document line up when switching between them. */
+.research-document-frame {
+  width: 100%;
+  max-width: calc(
+    var(--research-answer-max-width) + var(--research-column-gap) + var(--research-rail-width)
+  );
+  margin-inline-start: max(
+    0px,
+    min(
+      calc((100% - var(--research-answer-max-width)) / 2),
+      calc(
+        100% - var(--research-answer-max-width) - var(--research-column-gap) -
+          var(--research-rail-width)
+      )
+    )
+  );
 }
 
 .research-prose {

@@ -88,6 +88,8 @@ test("a wikilink in an answer opens an encyclopedia page for the term", async ({
   const wikilink = responseRoot(page).locator('[data-wikilink="Bloom filter"]').first();
   await expect(wikilink).toBeVisible();
   await wikilink.click();
+  // No page yet, so the click asks first (`features/markdown/ResearchMarkdown.tsx`).
+  await page.getByRole("button", { name: "Create page" }).click();
 
   await page.waitForURL(/\/e\/bloom-filter/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText(/Bloom filter/i, {

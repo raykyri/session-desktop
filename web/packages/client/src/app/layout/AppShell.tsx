@@ -34,8 +34,8 @@ const BASE_UI_LAYER_SELECTOR =
  * The application frame (07 §1, §4.4, §5): sidebar, the routed view, the two
  * lightboxes, the toast region, and the command palette. There is no bar above
  * the routed view: page-level back/forward is the browser's (ADR-7), and the
- * only shell control over the stage is the sidebar restore button, shown while
- * the sidebar is collapsed.
+ * only shell control beside the stage is the sidebar restore button, shown in
+ * a slim column while the sidebar is collapsed.
  *
  * It installs exactly one capture-phase keydown listener, which does two
  * things in order:
@@ -173,17 +173,16 @@ export function AppShell() {
     <div className="bg-surface-workspace text-fg-primary flex h-full w-full overflow-hidden">
       <SessionBoot />
       <Sidebar />
-      <div className="relative flex min-w-0 flex-1 flex-col">
-        {sidebarCollapsed ? (
-          <SidebarRestoreButton
-            className="absolute top-2 left-2 z-10"
-            onRestore={() => setSidebarCollapsed(false)}
-          />
-        ) : null}
-        <main className="min-h-0 flex-1 overflow-hidden">
-          <Outlet />
-        </main>
-      </div>
+      {/* A slim column rather than a floating control: a document's title sits
+          on the stage's left edge, and a button laid over it would cover it. */}
+      {sidebarCollapsed ? (
+        <div className="flex shrink-0 items-start px-1 pt-2">
+          <SidebarRestoreButton onRestore={() => setSidebarCollapsed(false)} />
+        </div>
+      ) : null}
+      <main className="min-h-0 min-w-0 flex-1 overflow-hidden">
+        <Outlet />
+      </main>
       <ArtifactPanel />
       <ImageLightbox />
       <DiagramLightbox />

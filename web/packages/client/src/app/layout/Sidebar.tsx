@@ -112,6 +112,12 @@ export function Sidebar() {
   const narrow = useNarrowLayout();
   const draggingRef = useRef(false);
 
+  // Crossing into the narrow layout closes the drawer: a column that was open
+  // beside the page would otherwise reappear as a sheet covering it.
+  useEffect(() => {
+    if (narrow) setCollapsed(true);
+  }, [narrow, setCollapsed]);
+
   // Pointer capture on the handle rather than listeners on the shell: a drag
   // that leaves the window still ends, and the text selection a bare mousemove
   // drag would paint never starts.

@@ -17,6 +17,7 @@
 // navigable. Inline-code file links are recognized but not promoted: the
 // artifact store they would open lands in Phase 7.
 
+import { Popover as BasePopover } from "@base-ui/react/popover";
 import {
   baseRehypePlugins,
   baseRemarkPlugins,
@@ -26,12 +27,14 @@ import {
   normalizeLatexMathDelimiters,
   safeHref,
 } from "@session/shared";
-import { isValidElement, memo, useEffect, useSyncExternalStore } from "react";
+import { isValidElement, memo, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ComponentPropsWithoutRef, ReactElement, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 
 import { cn } from "../../lib/cn.js";
+import { ControlButton } from "../../ui/Button.js";
+import { POPOVER_SURFACE } from "../../ui/surfaces.js";
 
 import { DiagramBlock, diagramLangFromClassName, nodeText } from "./DiagramBlock.js";
 import {
@@ -43,6 +46,7 @@ import {
 import { isOversizedMarkdown, oversizedFallbackText } from "./policy.js";
 import type { OversizedMarkdownPolicy } from "./policy.js";
 import { useWikilinkActions } from "./wikilinks.js";
+import type { WikilinkActions } from "./wikilinks.js";
 
 interface TranscriptHastNode {
   type: string;
@@ -107,17 +111,58 @@ export function MarkdownLink({
   const term = node?.properties?.["dataWikilink"];
 
   if (typeof term === "string") {
-    const status = wikilinks.resolve(term);
-    const activate = (element: HTMLElement) => wikilinks.activate(term, element);
-    return (
+    return <WikilinkAnchor {...props} term={term} actions={wikilinks} />;
+  }
+
+  const { children, ...rest } = props;
+  const safe = safeHref(href);
+  if (!safe) return <span {...rest}>{children}</span>;
+  return (
+    <a {...rest} href={safe} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
+}
+
+/**
+ * A term with a page opens it on click. A term without one asks first: writing
+ * a page is a model call, and a stray click on linked text should not start
+ * one. The confirmation is a small popover on the link itself, so the reader
+ * keeps their place; Enter and a click both open it, and either button or
+ * Escape closes it.
+ */
+function WikilinkAnchor({
+  term,
+  actions,
+  ...props
+}: ComponentPropsWithoutRef<"a"> & { term: string; actions: WikilinkActions }) {
+  const [confirming, setConfirming] = useState(false);
+  const anchorRef = useRef<HTMLAnchorElement | null>(null);
+  const status = actions.resolve(term);
+  const activate = (element: HTMLElement) => {
+    if (!actions.interactive) return;
+    if (status === null || status === "failed") {
+      setConfirming(true);
+      return;
+    }
+    actions.activate(term, element);
+  };
+  const create = () => {
+    setConfirming(false);
+    if (anchorRef.current) actions.activate(term, anchorRef.current);
+  };
+
+  return (
+    <BasePopover.Root open={confirming} onOpenChange={setConfirming}>
       <a
         {...props}
+        ref={anchorRef}
         className={cn(props.className, status ? `is-${status}` : null)}
         role="link"
         tabIndex={0}
         data-wikilink={term}
         title={
-          !wikilinks.interactive
+          !actions.interactive
             ? undefined
             : status
               ? `Open encyclopedia page: ${term}`
@@ -134,16 +179,35 @@ export function MarkdownLink({
           }
         }}
       />
-    );
-  }
-
-  const { children, ...rest } = props;
-  const safe = safeHref(href);
-  if (!safe) return <span {...rest}>{children}</span>;
-  return (
-    <a {...rest} href={safe} target="_blank" rel="noopener noreferrer">
-      {children}
-    </a>
+      <BasePopover.Portal>
+        <BasePopover.Positioner
+          anchor={anchorRef}
+          side="bottom"
+          align="start"
+          sideOffset={6}
+          className="z-(--z-popover)"
+        >
+          <BasePopover.Popup
+            aria-label={`Create encyclopedia page: ${term}`}
+            className={cn(POPOVER_SURFACE, "flex max-w-72 flex-col gap-2.5 p-3")}
+          >
+            <p className="text-fg-primary m-0 text-sm">
+              {status === "failed"
+                ? `Writing “${term}” failed. Try again?`
+                : `Write an encyclopedia page for “${term}”?`}
+            </p>
+            <div className="flex items-center justify-end gap-1.5">
+              <ControlButton size="sm" onClick={() => setConfirming(false)}>
+                Cancel
+              </ControlButton>
+              <ControlButton size="sm" className="text-fg-strong" onClick={create}>
+                {status === "failed" ? "Try again" : "Create page"}
+              </ControlButton>
+            </div>
+          </BasePopover.Popup>
+        </BasePopover.Positioner>
+      </BasePopover.Portal>
+    </BasePopover.Root>
   );
 }
 

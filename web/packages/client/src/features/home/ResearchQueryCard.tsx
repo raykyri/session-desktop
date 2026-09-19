@@ -14,7 +14,7 @@ import {
   stripTaggedInstructionBlocksForPreview,
   stripWikilinks,
 } from "@session/shared";
-import { Bell, BellOff, Bookmark, BookmarkCheck, LoaderCircle } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
@@ -22,6 +22,7 @@ import { ContextMenu } from "../../ui/ContextMenu.js";
 import { ModelIcon } from "../composer/modelIcon.js";
 import { TweetEmbed } from "../journal/TweetEmbed.js";
 import { ResearchMarkdown } from "../markdown/index.js";
+import { ThreadActions } from "../research/ThreadActions.js";
 
 /** The prompt bubble's padding plus its 1px border, so the recap, follow-ups
  * and metadata below it start on the same column as the prompt text. */
@@ -191,36 +192,12 @@ export function ResearchQueryCard({
           {metadata}
           <span className="flex-1" />
           {!running ? (
-            <>
-              <button
-                type="button"
-                aria-pressed={followed}
-                title={followed ? "Unfollow" : "Follow"}
-                className="text-fg-subtle hover:text-fg-strong flex items-center gap-1 border-0 bg-transparent p-0"
-                onClick={onToggleFollow}
-              >
-                {followed ? (
-                  <Bell size={12} aria-hidden="true" />
-                ) : (
-                  <BellOff size={12} aria-hidden="true" />
-                )}
-                <span>{followed ? "Following" : "Follow"}</span>
-              </button>
-              <button
-                type="button"
-                aria-pressed={bookmarked}
-                title={bookmarked ? "Remove bookmark" : "Bookmark"}
-                className="text-fg-subtle hover:text-fg-strong flex items-center gap-1 border-0 bg-transparent p-0"
-                onClick={onToggleBookmark}
-              >
-                {bookmarked ? (
-                  <BookmarkCheck size={12} aria-hidden="true" />
-                ) : (
-                  <Bookmark size={12} aria-hidden="true" />
-                )}
-                <span>{bookmarked ? "Bookmarked" : "Bookmark"}</span>
-              </button>
-            </>
+            <ThreadActions
+              followed={followed}
+              bookmarked={bookmarked}
+              onToggleFollow={onToggleFollow}
+              onToggleBookmark={onToggleBookmark}
+            />
           ) : null}
         </div>
       </div>
