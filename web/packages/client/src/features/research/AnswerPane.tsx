@@ -174,13 +174,6 @@ export const AnswerPane = memo(function AnswerPane({
               onRetry={onRetryContentLoad}
             />
           ) : null}
-          {node.status === "queued" ? (
-            <p className="text-fg-muted mb-3 text-sm" role="status">
-              {queuePosition === undefined || queuePosition <= 0
-                ? "Queued"
-                : `Queued · ${queuePosition} ahead`}
-            </p>
-          ) : null}
           {node.status === "failed" && view.timelineItems.length > 0 ? (
             <div className="mb-3 flex flex-col items-start gap-2" role="alert">
               <p className="text-status-failed m-0 text-sm">{node.error ?? "The run failed."}</p>
@@ -238,7 +231,17 @@ export const AnswerPane = memo(function AnswerPane({
                 className="bg-status-active session-thinking-dot size-1.5 rounded-full"
                 aria-hidden="true"
               />
-              {thinking ? "Thinking…" : "Working…"}
+              {/* One line for the whole active state: the queue position while
+                  the run waits behind others, then what it is doing. A separate
+                  "Queued" line above this one only restated it. */}
+              <span>
+                {queuePosition !== undefined && queuePosition > 0
+                  ? `Queued · ${queuePosition} ahead`
+                  : thinking
+                    ? "Thinking…"
+                    : "Working…"}
+              </span>
+              {durationText ? <span>· {durationText}</span> : null}
               {canCancel ? (
                 <LinkButton
                   className="ml-1.5"
@@ -266,52 +269,58 @@ export const AnswerPane = memo(function AnswerPane({
             }}
           />
           {node.status === "complete" ? <SourcesFooter turns={turns} /> : null}
-          <footer
-            className={cn(
-              "text-fg-subtle min-h-control-sm mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5",
-              METADATA_LINE,
-            )}
-          >
-            <span>
-              {view.answerWordCount.toLocaleString()}{" "}
-              {view.answerWordCount === 1 ? "word" : "words"}
-            </span>
-            {durationText ? <span>{durationText}</span> : null}
-            {hiddenHighlightCount > 0 ? (
-              <span title="These highlights are in collapsed or hidden sections.">
-                {hiddenHighlightCount} hidden{" "}
-                {hiddenHighlightCount === 1 ? "highlight" : "highlights"}
-                {view.hasTranscriptActivity && !view.showFullTrace ? (
-                  <>
-                    {" · "}
-                    <LinkButton onClick={() => onShowFullTrace(node.id)}>
-                      Show full transcript
-                    </LinkButton>
-                  </>
+          {/* An in-flight run has nothing to meter: the word count is 0 or
+              mid-stream, and copy/retry apply to a settled answer. The status
+              line above already reports the run, so the footer waits for it to
+              settle; the segment's context menu still carries the ⋯ rows. */}
+          {segmentActive ? null : (
+            <footer
+              className={cn(
+                "text-fg-subtle min-h-control-sm mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5",
+                METADATA_LINE,
+              )}
+            >
+              <span>
+                {view.answerWordCount.toLocaleString()}{" "}
+                {view.answerWordCount === 1 ? "word" : "words"}
+              </span>
+              {durationText ? <span>{durationText}</span> : null}
+              {hiddenHighlightCount > 0 ? (
+                <span title="These highlights are in collapsed or hidden sections.">
+                  {hiddenHighlightCount} hidden{" "}
+                  {hiddenHighlightCount === 1 ? "highlight" : "highlights"}
+                  {view.hasTranscriptActivity && !view.showFullTrace ? (
+                    <>
+                      {" · "}
+                      <LinkButton onClick={() => onShowFullTrace(node.id)}>
+                        Show full transcript
+                      </LinkButton>
+                    </>
+                  ) : null}
+                </span>
+              ) : null}
+              <span className="flex items-center gap-0.5">
+                {node.status === "complete" && view.rawAnswer ? (
+                  <IconButton label="Copy answer as Markdown" onClick={onCopyAnswer}>
+                    <Copy size={14} aria-hidden="true" />
+                  </IconButton>
+                ) : null}
+                {menuItems ? (
+                  <Menu
+                    label="Answer actions"
+                    align="end"
+                    trigger={
+                      <IconButton label="Answer actions">
+                        <MoreHorizontal size={15} aria-hidden="true" />
+                      </IconButton>
+                    }
+                  >
+                    {menuItems}
+                  </Menu>
                 ) : null}
               </span>
-            ) : null}
-            <span className="flex items-center gap-0.5">
-              {node.status === "complete" && view.rawAnswer ? (
-                <IconButton label="Copy answer as Markdown" onClick={onCopyAnswer}>
-                  <Copy size={14} aria-hidden="true" />
-                </IconButton>
-              ) : null}
-              {menuItems ? (
-                <Menu
-                  label="Answer actions"
-                  align="end"
-                  trigger={
-                    <IconButton label="Answer actions">
-                      <MoreHorizontal size={15} aria-hidden="true" />
-                    </IconButton>
-                  }
-                >
-                  {menuItems}
-                </Menu>
-              ) : null}
-            </span>
-          </footer>
+            </footer>
+          )}
         </>
       )}
     </section>

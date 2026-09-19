@@ -197,13 +197,16 @@ test("durations read as minutes and seconds once past a minute", (t) => {
 });
 
 test("the duration line says what the run is doing", (t) => {
+  // An active run's elapsed time rides the "Working…" status line, so it is
+  // bare; a settled one is read on its own in the footer and says what it is.
   const started = node({ status: "running", startedAt: 1_000, completedAt: null });
-  t.is(durationLabel(started, 6_000), "Generating for 5s");
+  t.is(durationLabel(started, 6_000), "5s");
   const done = node({ status: "complete", startedAt: 1_000, completedAt: 4_000 });
   t.is(durationLabel(done, 9_999), "3s");
   const failed = node({ status: "failed", startedAt: 1_000, completedAt: 3_000 });
   t.is(durationLabel(failed, 9_999), "Ran for 2s");
-  t.is(durationLabel(node({ status: "queued", startedAt: null }), 0), "Waiting to start");
+  // Nothing to meter before the run starts: the status line covers it.
+  t.is(durationLabel(node({ status: "queued", startedAt: null }), 0), null);
   t.is(durationLabel(node({ status: "cancelled", startedAt: null }), 0), null);
 });
 
