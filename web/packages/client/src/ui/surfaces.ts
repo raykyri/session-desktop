@@ -90,6 +90,17 @@ export const INPUT_FIELD = `${FORM_FIELD} min-h-control-md`;
 
 export const SHORTCUT_HINT = "whitespace-nowrap text-xs leading-none text-fg-muted";
 
+/** Model, time, Follow/Bookmark, word count. Nested buttons otherwise snap to
+ * `--fs-base` from the global form rule in `app.css`. */
+export const METADATA_LINE =
+  "text-[length:calc(var(--fs-base)-1px)] " +
+  "[&_a]:text-[length:inherit] [&_button]:text-[length:inherit]";
+
+/** Feed event line and highlight provenance: one step below `METADATA_LINE`. */
+export const METADATA_LINE_COMPACT =
+  "text-[length:calc(var(--fs-xs)-1px)] " +
+  "[&_a]:text-[length:inherit] [&_button]:text-[length:inherit]";
+
 export const DIALOG_BACKDROP = "fixed inset-0 bg-surface-scrim";
 
 export const DIALOG_POPUP =

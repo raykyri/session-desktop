@@ -15,6 +15,7 @@ import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../lib/relativeTime.js";
 import { formatResearchModelSummary } from "../../ui/ActivityMetadataLine.js";
 import { ControlButton } from "../../ui/Button.js";
+import { METADATA_LINE } from "../../ui/surfaces.js";
 import { ResearchMarkdown } from "../markdown/index.js";
 
 import { DocumentChips } from "./DocumentChips.js";
@@ -89,7 +90,12 @@ export const SegmentPrompt = memo(function SegmentPrompt({
         <DocumentChips documentIds={node.documentIds} workspaceId={workspaceId} />
       ) : null}
       {showFooter ? (
-        <div className="text-fg-subtle mt-1.5 mb-6 flex min-w-0 items-center gap-3 text-base">
+        <div
+          className={cn(
+            "text-fg-subtle mt-[5px] mb-6 flex min-w-0 items-center gap-3",
+            METADATA_LINE,
+          )}
+        >
           <span
             className="min-w-0 truncate"
             title={askedAt !== null ? new Date(askedAt).toLocaleString() : undefined}

@@ -19,6 +19,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
 import { ContextMenu } from "../../ui/ContextMenu.js";
+import { METADATA_LINE } from "../../ui/surfaces.js";
 import { TweetEmbed } from "../journal/TweetEmbed.js";
 import { ResearchMarkdown } from "../markdown/index.js";
 import { ThreadActions } from "../research/ThreadActions.js";
@@ -42,6 +43,41 @@ export function queryTargetExcerpt(target: string, maxWords = 5, maxChars = 40):
 
 export function promptPreview(prompt: string): string {
   return stripWikilinks(stripTaggedInstructionBlocksForPreview(prompt)).trim();
+}
+
+/** Opens the thread the way the question does: a clickable block, no hover
+ * underline, and inner links/buttons keep their own clicks. */
+function OpenThreadControl({
+  onOpen,
+  className,
+  children,
+}: {
+  onOpen: () => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={cn(
+        "w-fit max-w-full cursor-pointer text-left no-underline hover:no-underline",
+        className,
+      )}
+      onClick={(event) => {
+        if (event.target instanceof Element && event.target.closest("a, button")) return;
+        onOpen();
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        onOpen();
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -93,23 +129,9 @@ export function ResearchQueryCard({
         ) : null}
 
         <article className="mb-0.5">
-          <div
-            role="button"
-            tabIndex={0}
-            className="research-prose cursor-pointer text-left"
-            onClick={(event) => {
-              if (event.target instanceof Element && event.target.closest("a, button")) return;
-              onOpen();
-            }}
-            onKeyDown={(event) => {
-              if (event.target !== event.currentTarget) return;
-              if (event.key !== "Enter" && event.key !== " ") return;
-              event.preventDefault();
-              onOpen();
-            }}
-          >
+          <OpenThreadControl onOpen={onOpen} className="research-prose">
             {promptPreview(query.prompt)}
-          </div>
+          </OpenThreadControl>
         </article>
 
         {attachments.length > 0 ? (
@@ -130,7 +152,9 @@ export function ResearchQueryCard({
             <span>Generating answer</span>
           </p>
         ) : recap ? (
-          <ResearchMarkdown markdown={`Summary: ${recap}`} variant="summary" />
+          <OpenThreadControl onOpen={onOpen}>
+            <ResearchMarkdown markdown={`Summary: ${recap}`} variant="summary" />
+          </OpenThreadControl>
         ) : null}
 
         {query.children && query.children.length > 0 ? (
@@ -160,7 +184,12 @@ export function ResearchQueryCard({
           </ul>
         ) : null}
 
-        <div className="text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1 text-base">
+        <div
+          className={cn(
+            "text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1",
+            METADATA_LINE,
+          )}
+        >
           <span>{modelLabel}</span>
           {status ? (
             <span className={cn(query.status === "failed" && "text-status-failed")}>{status}</span>

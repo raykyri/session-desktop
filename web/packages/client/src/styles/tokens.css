@@ -13,12 +13,14 @@
      smaller than the other body-font options at the same nominal size. */
   --font-ui-size-offset: 0px;
 
-  /* Type scale. Controls and body share --fs-base; the two main typing surfaces
-     (composer + launcher) use --fs-input; xs/sm are for hints, badges, meta. */
+  /* Type scale. Controls share --fs-base; --fs-reading anchors the reading
+     surface (prose, summaries, the composer and launcher, dialog titles, the
+     sidebar's rows), with the research sizes derived from it in prose.css;
+     xs/sm are for hints, badges, meta. */
   --fs-xs: calc(11px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
   --fs-sm: calc(12px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
   --fs-base: calc(13px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
-  --fs-input: calc(15px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  --fs-reading: calc(14px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
   /* Page and dialog titles: one step above the reading body. */
   --fs-title: calc(17px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
 

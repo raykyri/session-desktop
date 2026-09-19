@@ -272,10 +272,10 @@ test.serial("a thread with a run in flight can be neither archived nor deleted",
 
 test.serial("the summary row appears only where it is offered", (t) => {
   const calls = menuFor({ onRegenerateSummary: () => undefined });
-  t.truthy(screen.getByRole("menuitem", { name: /Summary…/ }));
+  t.truthy(screen.getByRole("menuitem", { name: /Regenerate summary…/ }));
   cleanup();
   menuFor();
-  t.is(screen.queryByRole("menuitem", { name: /Summary…/ }), null);
+  t.is(screen.queryByRole("menuitem", { name: /Regenerate summary…/ }), null);
   t.deepEqual(calls, []);
 });
 

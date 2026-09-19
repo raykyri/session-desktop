@@ -6,11 +6,11 @@
 import { Bookmark, BookmarkCheck } from "lucide-react";
 
 import { cn } from "../../lib/cn.js";
-import { FOCUS_RING } from "../../ui/surfaces.js";
+import { FOCUS_RING, METADATA_LINE } from "../../ui/surfaces.js";
 
 const ACTION_CLASS =
   "text-fg-subtle hover:not-disabled:text-fg-strong flex items-center gap-1 rounded-sm border-0 bg-transparent p-0 " +
-  "aria-pressed:text-fg-secondary disabled:cursor-default active:not-disabled:opacity-70 " +
+  "text-[length:inherit] aria-pressed:text-fg-secondary disabled:cursor-default active:not-disabled:opacity-70 " +
   FOCUS_RING;
 
 export function ThreadActions({
@@ -31,7 +31,7 @@ export function ThreadActions({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-center gap-3", className)}>
+    <div className={cn("flex items-center gap-3", METADATA_LINE, className)}>
       <button
         type="button"
         aria-pressed={followed}

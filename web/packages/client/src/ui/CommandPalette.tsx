@@ -122,7 +122,7 @@ export function CommandPalette({ open, onClose, commands }: CommandPaletteProps)
             {...(filtered[selectedIndex]
               ? { "aria-activedescendant": optionId(selectedIndex) }
               : {})}
-            className={cn(FORM_FIELD, "min-h-control-lg text-input")}
+            className={cn(FORM_FIELD, "min-h-control-lg text-reading")}
             placeholder="Type a command or search…"
             aria-label="Command palette filter"
             value={query}

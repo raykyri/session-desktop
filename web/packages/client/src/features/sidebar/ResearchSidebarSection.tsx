@@ -800,7 +800,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             </span>
           ) : !archived && tree.hasUnseenUpdate ? (
             <span
-              className="text-status-attention shrink-0 text-base"
+              className="text-status-attention shrink-0 text-xs"
               title="Updated since last viewed"
             >
               New<span className="sr-only"> since last viewed</span>

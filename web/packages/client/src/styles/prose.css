@@ -22,14 +22,14 @@
      ThemeEffects (the desktop's `--turn-font-delta`). Adding it here rather
      than at each declaration means every size derived from the body size —
      the summary, the markdown delta, tweet copy — tracks the setting once. */
-  --research-body-font-size: calc(var(--fs-input) - 0.5px);
+  --research-body-font-size: var(--fs-reading);
   /* 1.5 less one pixel; `em` resolves against the element's own font size, so
      the prompt bubble, the answer, the recap and tweet copy all read at the
      same tightened leading. */
   --research-body-line-height: calc(1.5em - 1px);
   --research-summary-font-size: var(--research-body-font-size);
   --research-summary-line-height: var(--research-body-line-height);
-  --research-meta-font-size: calc(var(--fs-input) - 2px);
+  --research-meta-font-size: calc(var(--fs-reading) - 2px);
   --research-meta-line-height: 1.35;
   --research-compact-font-size: var(--research-meta-font-size);
   --research-compact-line-height: 1.45;

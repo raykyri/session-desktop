@@ -134,7 +134,7 @@ export function FollowupComposer({
       ref={composerRef}
       className={cn(
         "flex flex-col gap-2 transition-transform duration-[350ms]",
-        "focus-within:border-focus-ring focus-within:shadow-[inset_0_0_0_1px_var(--focus-ring)]",
+        "focus-within:border-focus-ring",
         docked
           ? "border-border-default bg-surface-panel z-[5] rounded-[10px] border px-3 py-2.5 shadow-md"
           : "border-border-default bg-surface-card relative rounded-[10px] border px-3 py-2.5",

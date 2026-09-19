@@ -356,7 +356,7 @@ export function DevUiPage() {
           data-appearance={combination.appearance}
           className="border-border-divider bg-surface-workspace text-fg-primary border-b px-8 py-8"
         >
-          <h2 className="text-input text-fg-heading mt-0 mb-6 font-semibold">
+          <h2 className="text-reading text-fg-heading mt-0 mb-6 font-semibold">
             {combination.label}
           </h2>
           <Kitchen />

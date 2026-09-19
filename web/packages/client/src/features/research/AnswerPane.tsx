@@ -21,6 +21,7 @@ import { ControlButton, IconButton, LinkButton } from "../../ui/Button.js";
 import { ConfirmDialog } from "../../ui/Dialog.js";
 import { Menu } from "../../ui/Menu.js";
 import { QueryState } from "../../ui/QueryState.js";
+import { METADATA_LINE } from "../../ui/surfaces.js";
 
 import { SourcesFooter } from "./SourcesFooter.js";
 import { TimelineItem } from "./TimelineItem.js";
@@ -261,7 +262,12 @@ export const AnswerPane = memo(function AnswerPane({
             }}
           />
           {node.status === "complete" ? <SourcesFooter turns={turns} /> : null}
-          <footer className="text-fg-subtle min-h-control-sm mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-base">
+          <footer
+            className={cn(
+              "text-fg-subtle min-h-control-sm mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5",
+              METADATA_LINE,
+            )}
+          >
             <span>
               {view.answerWordCount.toLocaleString()}{" "}
               {view.answerWordCount === 1 ? "word" : "words"}
@@ -274,7 +280,7 @@ export const AnswerPane = memo(function AnswerPane({
                 {view.hasTranscriptActivity && !view.showFullTrace ? (
                   <>
                     {" · "}
-                    <LinkButton className="text-sm" onClick={() => onShowFullTrace(node.id)}>
+                    <LinkButton onClick={() => onShowFullTrace(node.id)}>
                       Show full transcript
                     </LinkButton>
                   </>

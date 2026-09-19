@@ -394,7 +394,7 @@ export function ActivityFeed({
                     style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
                     <div
-                      className="flex flex-col gap-1.5 py-5"
+                      className="flex flex-col gap-[7px] py-5"
                       role="article"
                       aria-posinset={virtualRow.index + 1}
                       aria-setsize={feed.hasNextPage ? -1 : events.length}
