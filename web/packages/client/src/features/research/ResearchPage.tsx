@@ -49,6 +49,7 @@ import { useRecapPendingStore } from "../../stores/recapPending.js";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../../ui/ContextMenu.js";
 import { DomSearchBar } from "../../ui/DomSearchBar.js";
 import { MenuItem, MenuSeparator } from "../../ui/Menu.js";
+import { launchableModels } from "../composer/ResearchQueryComposer.js";
 
 import { DeleteBranchDialog } from "./DeleteBranchDialog.js";
 import { DocumentEditor } from "./DocumentEditor.js";
@@ -374,7 +375,10 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   );
 
   const usableModels = useMemo(
-    () => (runtimeConfig?.models ?? []).filter((model) => !model.adminOnly || me?.isAdmin),
+    () =>
+      launchableModels(
+        (runtimeConfig?.models ?? []).filter((model) => !model.adminOnly || me?.isAdmin),
+      ),
     [runtimeConfig, me],
   );
 

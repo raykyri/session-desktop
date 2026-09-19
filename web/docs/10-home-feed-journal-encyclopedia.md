@@ -22,8 +22,8 @@ Sections top to bottom:
    to the `tree` cache and the summary prepended to `trees` (position 0).
 3. `ReportImport` drop target and composer icon (§5). The desktop's
    `AgentSetupGuide` (`App.tsx:11877`) is not ported: models are configured
-   by the deployment, and an unavailable provider is shown as a disabled
-   model in the composer.
+   by the deployment; a model without a provider is hidden from the pickers,
+   unless no model has one, in which case all are listed, disabled.
 5. Activity feed (§2).
 6. Delete-undo bar for journal removals (`journalUndo`, `App.tsx:6460`).
 
