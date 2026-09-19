@@ -36,7 +36,7 @@ export interface StagedReport {
 export function reportRefusal(name: string, markdown: string, byteSize: number): string | null {
   if (!/\.md$/i.test(name)) return "Choose a Markdown (.md) report.";
   if (markdown.trim() === "") return "The report is empty.";
-  // The picker already knows the file's size, so the ceiling is checked
+  // The picker already reports the file's size, so the ceiling is checked
   // against that rather than against a re-encoding of its text.
   return oversizeRefusal(markdown, "report", byteSize);
 }

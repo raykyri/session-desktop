@@ -92,7 +92,7 @@ import { addNodeInterest } from "./events.js";
 
 export { queryKeys, eventPatchedListKeys } from "./cache.js";
 
-/** Query client defaults: lists updated via server events do not auto-expire to prevent background refetches from colliding with event updates. */
+/** Query client defaults: lists the event bridge keeps fresh never auto-expire, so a background refetch cannot race an event-driven update. */
 export const queryClientDefaults = {
   queries: {
     staleTime: Number.POSITIVE_INFINITY,
@@ -225,7 +225,7 @@ export function useDocuments(workspaceId: string) {
   });
 }
 
-/** Usage queries use a 30-second stale time because token counts are not broadcast over SSE events and must be periodically refetched. */
+/** Token counts are not pushed over SSE, so usage queries poll on a 30-second stale time instead. */
 export const USAGE_STALE_MS = 30_000;
 
 export function useUsage(days?: number) {
@@ -319,9 +319,11 @@ function useSnapshotPollFallback(): boolean {
  * §4, §9).
  *
  * The snapshot seeds the live buffer with the sequence number it was taken at,
- * The event bridge strictly applies sequential turn updates; missing sequence numbers trigger a snapshot refetch to prevent missing content. When the run settles the buffer is dropped
- * in the same pass that installs the durable snapshot, so the timeline does not
- * flash: both paths produce the same `Turn[]`.
+ * and the bridge applies only the next delta in sequence, refetching the
+ * snapshot on a gap rather than rendering content with a piece missing. When
+ * the run settles the buffer is dropped in the same pass that installs the
+ * durable snapshot, so the timeline does not flash: both paths produce the
+ * same `Turn[]`.
  */
 export function useNodeContent(nodeId: string | undefined): NodeContentView {
   const id = nodeId ?? "";
@@ -625,7 +627,9 @@ export function useRemoveResearchBranch() {
       // The counts a removal subtracts are read off the cached rows, so they
       // are read before the detail loses them, and the detail is patched here
       // rather than invalidated: the `research.node.removed` that follows then
-      // finds no removed rows left and subtracts nothing a second time. If the tree detail is not in cache, counts remain unmodified as a fallback.
+      // finds no removed rows left and subtracts nothing a second time. With
+      // no cached detail, there is nothing to read or patch, so the counts
+      // stay as they are.
       const detail = client.getQueryData<ResearchTreeDetail>(queryKeys.tree(removal.treeId));
       const removedNodes = (detail?.nodes ?? []).filter((node) => removed.has(node.id));
       patchDetail(client, removal.treeId, (current) =>

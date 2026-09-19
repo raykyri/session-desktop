@@ -497,8 +497,8 @@ function conversationSection(
   let noticeEmitted = false;
   for (const [index, message] of history.entries()) {
     if (dropped.has(index)) {
-      // The gap is always announced, so the receiving agent knows the record is
-      // partial rather than believing it is complete.
+      // The gap is always announced, so the record is marked partial instead
+      // of appearing complete to the receiving agent.
       if (!noticeEmitted) {
         noticeEmitted = true;
         parts.push(`[… ${dropped.size} earlier message(s) omitted for length …]`);
@@ -791,8 +791,8 @@ function truncateText(text: string, limit: number) {
 // Both halves are pulled back to a line boundary, so the surviving text ends
 // and resumes on whole lines instead of mid-identifier — a cut through the
 // middle of a path or a code fence reads as corruption to the next agent.
-// Neither snap gives up more than a quarter of its slice, which is the cost of
-// hunting for a newline in prose that has none.
+// Neither snap discards more than a quarter of its slice, which bounds the
+// cost of hunting for a newline in prose that has none.
 function snapHead(slice: string) {
   const at = slice.lastIndexOf("\n");
   return at >= slice.length * 0.75 ? slice.slice(0, at) : slice;

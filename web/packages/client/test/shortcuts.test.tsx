@@ -52,7 +52,8 @@ test.serial("Shift-Cmd-G toggles the sidebar", async (t) => {
   t.false(useNavigationStore.getState().sidebarCollapsed);
 });
 
-// Input elements suppress conflicting typing shortcuts based on the shared shortcut configuration; the shell forwards the suppression flag.
+// The shared shortcut table marks which chords a text field should keep for
+// typing; the shell reads that flag before dispatching.
 test.serial("text fields suppress only shortcuts that conflict with text input", async (t) => {
   await renderApp("/");
   const input = document.createElement("input");

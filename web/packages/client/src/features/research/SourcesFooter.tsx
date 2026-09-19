@@ -8,7 +8,8 @@
 //
 // `style` is deliberately absent from the tag allowlist. A `<style>` block in
 // the page is global — it can restyle or cover app chrome, and its selectors
-// can probe the document — Disallow <style> tags to prevent external search provider HTML from affecting global application styles.
+// can probe the document — so it is dropped to keep the search provider's HTML
+// from reaching outside its own chips.
 // The `style` *attribute* stays: it is per element, DOMPurify runs its own CSS
 // filter over it, and it is what makes the chips look like chips.
 

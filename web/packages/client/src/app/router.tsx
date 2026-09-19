@@ -33,7 +33,9 @@ import { RouteErrorPanel, RouteNotFoundPanel } from "./RouteBoundary.js";
 import { AppShell } from "./layout/AppShell.js";
 import { appQueryClient } from "./queryClient.js";
 
-// UI view state is stored in URL query parameters rather than localStorage to ensure deep links and multiple tabs remain synchronized. Validated via Zod schemas to reject invalid inputs.
+// View state is kept in URL query parameters rather than localStorage so deep
+// links and multiple tabs stay in sync; each schema below validates and
+// rejects malformed values.
 const workspaceScopeSearchSchema = z.object({
   /** Workspace scope. Absent means the account's default workspace. */
   ws: z.string().optional(),

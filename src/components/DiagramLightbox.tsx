@@ -10,8 +10,8 @@ import {
 // SVG openDiagramLightbox last set, full-page over a dimmed backdrop; dismissed
 // by clicking the backdrop or the close button. Escape is handled by the
 // app-level Escape dispatcher in App (which reads this component's module
-// store), so there is no keydown listener here — it keeps the dispatcher's
-// fixed overlay ordering the whole story. The SVG is already rendered and
+// store), so there is no keydown listener here — the dispatcher stays the
+// single source of truth for overlay order. The SVG is already rendered and
 // sanitized by DiagramBlock, so there is no loading state — expansion reuses
 // the exact bytes already on screen.
 export default function DiagramLightbox() {

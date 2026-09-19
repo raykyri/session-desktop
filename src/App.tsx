@@ -3951,8 +3951,8 @@ function MainApp() {
   }
 
   // Collapse every native child. A dropped AppKit hide can leave a white
-  // WKWebView square over the terminal after React already thinks the overlay
-  // is closed; this is the recovery path for that leftover.
+  // WKWebView square over the terminal after React state already marks the
+  // overlay as closed; this is the recovery path for that leftover.
   function hideEveryHumanBrowser() {
     return hideAllHumanBrowsers().catch((error) => {
       reportHumanBrowserError(error);

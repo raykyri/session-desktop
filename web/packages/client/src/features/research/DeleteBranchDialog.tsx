@@ -1,10 +1,12 @@
 // Deleting a follow-up, a branch, or the thread's root
 // (`09-research-document-view.md` §8).
 //
-// One dialog handles all three branch shapes because only the confirmation copy
-// differs. `researchBranchInfo` provides the descendant count in each case.
-// Active runs must be cancelled before deletion to prevent partial deletion or
-// orphaned background processes.
+// One dialog handles all three branch shapes because only the confirmation
+// copy differs; `researchBranchInfo` gives the descendant count in each case.
+// A branch with a run still in flight is refused rather than queued for
+// deletion: the server would have to cancel it first, and a reader who cancels
+// deliberately gets a better outcome than one who discovers a half-deleted
+// thread.
 
 import { researchBranchInfo } from "@session/shared";
 import type { ResearchNode, ResearchTreeDetail } from "@session/shared";

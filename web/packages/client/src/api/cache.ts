@@ -90,7 +90,7 @@ export function mapSummaries(
   });
 }
 
-/** Applies updates to an existing cached tree detail without populating new cache entries. */
+/** Patches a tree detail already in the cache. A no-op when nothing is cached for it. */
 export function patchDetail(
   client: QueryClient,
   treeId: string,
@@ -103,7 +103,7 @@ export function patchDetail(
   if (next && next !== current) client.setQueryData(key, next);
 }
 
-/** The node as the caches last saw it. If the prior node state is missing from cache, callers fall back to a full refetch to recalculate summary counts accurately. */
+/** The node as the caches last saw it: from the tree detail if it is cached, else from the active-nodes list. `undefined` when neither cache holds it. */
 export function cachedNode(
   client: QueryClient,
   treeId: string,

@@ -2,8 +2,8 @@
 // (`09-research-document-view.md` §7). Ported from the desktop
 // `TranscriptActivity.tsx`; the CSS moves to utilities and the class names the
 // selection code hit-tests against (`tool-block`, `thinking-block`,
-// `activity-group-block`) are kept, because "This selector distinguishes model response prose from tool call activity rows.
-// (`selection/dom.ts:NON_TEXT_ROW_SELECTOR`).
+// `activity-group-block`) are kept, because that selector distinguishes model
+// response prose from tool call activity rows (`selection/dom.ts:NON_TEXT_ROW_SELECTOR`).
 
 import { formatEstimatedTokenCount, thinkingProseText } from "@session/shared";
 import type {

@@ -351,7 +351,7 @@ test.serial("the launcher submenu opens with ArrowRight and reports its own valu
   fireEvent.click(screen.getByRole("button", { name: /^Launch model: / }));
   await screen.findAllByRole("menuitemradio");
 
-  // Implemented using Base UI Menu to provide native arrow key expansion and collapse for submenus.
+  // ArrowRight opens the submenu; Base UI supplies this without extra wiring.
   const submenuTrigger = screen.getByRole("menuitem", { name: /Reasoning/ });
   key(submenuTrigger, "ArrowRight");
 

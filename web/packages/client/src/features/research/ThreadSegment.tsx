@@ -5,7 +5,10 @@
 // each own a memo boundary, so a follow-up streaming a preview in the margin
 // does not rebuild the answer's element tree.
 //
-// Each segment fetches its own content independently to comply with React hook rules during dynamic list growth, bubbling required state back to the parent.
+// Each segment fetches its own content rather than the page fetching one list
+// for the whole chain, so a chain that grows a segment does not change the
+// number of hooks this component calls; what the page needs is bubbled back up
+// through callbacks.
 
 import { isActiveResearchStatus } from "@session/shared";
 import type { ResearchNode, ResearchNodeContent, Turn } from "@session/shared";

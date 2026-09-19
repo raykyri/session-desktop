@@ -9,8 +9,9 @@
 // store and never touch the query cache (a run at 30 events/s would invalidate
 // list queries thirty times a second), everything else is a targeted
 // `setQueryData` through the reducers in `@session/shared`, and anything the
-// parser calls `malformed` or `unsupported` becomes a scoped invalidation —
-// Unrecognized or malformed server events trigger cache invalidation and refetching to prevent silent stale state.
+// parser calls `malformed` or `unsupported` becomes a scoped invalidation, so
+// an event the client cannot apply still triggers a refetch instead of
+// leaving the cache stale.
 
 import type {
   EncyclopediaPage,
@@ -681,7 +682,8 @@ export interface EventBridgeOptions {
  *
  * `TRPCClientError` carries the formatter's `data.code`; the raw shape is read
  * too, because an error that crossed the SSE framing keeps `shape` and not
- * always `data`. Only explicit unauthorized status codes trigger sign-out; transient connection drops attempt reconnection without clearing the user session.
+ * always `data`. Only an explicit unauthorized code signs the tab out; a
+ * transient connection drop instead goes through the link's own reconnect.
  */
 export function isUnauthorizedError(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
@@ -692,8 +694,10 @@ export function isUnauthorizedError(error: unknown): boolean {
   return candidate.data?.code === "UNAUTHORIZED" || candidate.shape?.data?.code === "UNAUTHORIZED";
 }
 
-/** The default `onUnauthorized`: a real navigation, not a router push. When the session expires, performing a full page redirect to /login ensures all memory and query caches are cleanly reinitialized.). The path being left is handed to `/login` the
- * way the route guard hands it over. */
+/** The default `onUnauthorized`: a real navigation, not a router push, so
+ * every in-memory store and query cache is reinitialized on the way back to
+ * `/login`. The path being left is handed to `/login` the same way the route
+ * guard hands it over. */
 function redirectToLogin(): void {
   const here = `${window.location.pathname}${window.location.search}`;
   const target = here === "/login" ? "/login" : `/login?redirect=${encodeURIComponent(here)}`;
@@ -745,7 +749,8 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
   const publisher = (nodeIds: string[]): void => {
     if (connectionId === null) return;
     void publish(connectionId, nodeIds).catch(() => {
-      // If the connection has terminated on the server, interest subscriptions will be re-sent on reconnection.
+      // A failed publish is not retried here: a reconnect republishes the
+      // whole interest set anyway.
     });
   };
   publishInterest = publisher;
@@ -845,7 +850,8 @@ export function connectEventBridge(options: EventBridgeOptions): EventBridgeHand
       if (flushTimer !== null) clearTimeout(flushTimer);
       flushTimer = null;
       queue = [];
-      // Avoid clearing publish callbacks if a newly mounted bridge instance has already registered its own publisher.
+      // Only clear the shared callback if it is still this instance's; a
+      // newly mounted bridge may have already installed its own.
       if (publishInterest === publisher) publishInterest = null;
       subscription.unsubscribe();
       useConnectionStore.getState().setStatus("closed");

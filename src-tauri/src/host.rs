@@ -623,7 +623,7 @@ exec "${{cli#SESSION_CLI=}}" ping
     /// The full `ssh …` argv for `remote`, or `None` on a local host.
     ///
     /// Exposed separately from [`Host::command`] because a pane is spawned
-    /// through Session's pty layer, which wants a program and args rather than a
+    /// through Session's pty layer, which takes a program and args rather than a
     /// built `Command`.
     pub fn ssh_argv(
         &self,

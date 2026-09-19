@@ -8,7 +8,7 @@
 //
 // The bare keys are claimed here rather than in the app's chord table (07 §5):
 // they are only shortcuts while a selection is live, and `resolveAppShortcut`
-// has no way to know that.
+// has no access to that state.
 
 import {
   isResearchAskActionShortcut,

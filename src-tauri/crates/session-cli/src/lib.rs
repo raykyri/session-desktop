@@ -735,7 +735,7 @@ fn run_agent_exec(adapter_id: String, args: Vec<String>) -> Result<(), String> {
         command.env(env.key, env.value);
     }
     // The containing shell is a user principal. The agent process receives the
-    // pane token needed by hooks/MCP, but never inherits cross-pane user power.
+    // pane token needed by hooks/MCP, but never inherits cross-pane user privileges.
     if launch.supervised {
         command.env_remove("SESSION_USER_TOKEN");
     }
@@ -1030,7 +1030,7 @@ mod tests {
         assert_eq!(parse_version_line(&line), Some(VERSION));
         assert_eq!(parse_version_line("session-cli 0.3.2\n"), Some("0.3.2"));
         assert_eq!(parse_version_line("not-a-version"), None);
-        // Matching package versions do not make an old helper speak SESSION_* envs.
+        // A matching version string alone does not mean an old helper binary supports SESSION_* env vars.
         assert_eq!(parse_version_line(&format!("qmux-cli {VERSION}")), None);
     }
 

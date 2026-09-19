@@ -8819,7 +8819,7 @@ impl AppState {
                     {
                         last_error = Some(format!("snapshot failed: {err}"));
                         // Keep the pane alive while retries remain — the snapshot
-                        // wants the live turns — but a deterministic failure (e.g.
+                        // needs the live turns — but a deterministic failure (e.g.
                         // a response over the snapshot size cap) would otherwise
                         // skip kill_pane on every attempt and nothing re-triggers
                         // retirement once the flag is cleared. On the last attempt
@@ -20066,7 +20066,7 @@ mod tests {
 
         // First process: stash a draft for one agent. The agent must exist so the draft
         // survives restore's orphaned-draft pruning (a real draft always has a live
-        // agent — the frontend only drafts for agents it knows about).
+        // agent — the frontend only drafts for agents present in its own agent list).
         {
             let state = AppState::new(config.clone());
             assert!(state.restore_session().is_empty());
