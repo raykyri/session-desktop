@@ -115,3 +115,10 @@ test("the shared default font identifier exists in the client font options", (t)
     "the default must be a real option, not just a matching string",
   );
 });
+
+test("Inter is a bundled body font, not an optional local face", (t) => {
+  const inter = BODY_FONT_OPTIONS.find((option) => option.id === "inter");
+  t.truthy(inter);
+  t.is(inter?.localNames, undefined);
+  t.regex(inter?.stack ?? "", /Inter/);
+});

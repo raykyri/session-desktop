@@ -385,5 +385,24 @@ test.serial("displays status badges for unread updates, failures, and active run
   t.is(badge("Updated"), "New");
   t.is(badge("Broken"), "!");
   t.is(badge("Busy"), "2", "a run in flight shows its count instead");
+
+  const statusDot = (title: string) =>
+    (screen.getAllByTitle(title)[0] as HTMLElement).querySelector(":scope > span[aria-hidden]");
+  t.true(
+    statusDot("Quiet")?.className.includes("bg-fg-subtle/50"),
+    "a completed thread uses a fainter gray status mark",
+  );
+  t.true(
+    statusDot("Busy")?.className.includes("bg-status-active"),
+    "a running thread keeps the active mark",
+  );
+  t.true(
+    statusDot("Broken")?.className.includes("bg-status-failed"),
+    "a failed thread keeps the failed mark",
+  );
+
+  const menu = screen.getByLabelText("Actions for Quiet");
+  t.true(menu.className.includes("opacity-0"), "the ⋯ trigger is hidden until hover");
+  t.true(menu.className.includes("absolute"), "and overlays the title rather than taking a column");
   app.unmount();
 });

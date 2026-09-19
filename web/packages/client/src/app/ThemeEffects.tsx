@@ -63,7 +63,8 @@ export function ThemeEffects() {
     document.documentElement.style.setProperty("--app-text-zoom", `${zoom}px`);
   }, [settings.textSize]);
 
-  // Inter is an optional local font; if unavailable on the client system, fall back to default system fonts.
+  // Optional local faces (none on the web after Inter was bundled) fall back
+  // if `FontFace` cannot load them from the host.
   useEffect(() => {
     let disposed = false;
     void detectAvailableBodyFonts().then((available) => {

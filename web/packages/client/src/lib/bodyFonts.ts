@@ -3,10 +3,10 @@
 // into this list, which is client-only: the server stores the id and never
 // needs to know the stack.
 //
-// DM Sans, Valley Sans, JetBrains Mono and Ioskeley Mono are bundled under the
-// SIL OFL 1.1 (`styles/fonts.css`). Inter is not bundled; it is offered only
-// when `FontFace` can load it from the host, which is what
-// `detectAvailableBodyFonts` probes.
+// DM Sans, Valley Sans, Inter, JetBrains Mono and Ioskeley Mono are bundled
+// under the SIL OFL 1.1 (`styles/fonts.css`). Optional faces still use
+// `localNames` so `detectAvailableBodyFonts` can hide them when the host
+// does not have them.
 
 export interface BodyFontOption {
   id: string;
@@ -23,12 +23,7 @@ const SYSTEM_BODY_FONT_STACK =
 export const BODY_FONT_OPTIONS: readonly BodyFontOption[] = [
   { id: "dm-sans", label: "DM Sans", stack: `"DM Sans", ${SYSTEM_BODY_FONT_STACK}` },
   { id: "valley-sans", label: "Valley Sans", stack: `"Valley Sans", ${SYSTEM_BODY_FONT_STACK}` },
-  {
-    id: "inter",
-    label: "Inter",
-    stack: `"Inter", ${SYSTEM_BODY_FONT_STACK}`,
-    localNames: ["Inter Regular", "Inter-Regular"],
-  },
+  { id: "inter", label: "Inter", stack: `"Inter", ${SYSTEM_BODY_FONT_STACK}` },
   { id: "system", label: "System", stack: SYSTEM_BODY_FONT_STACK },
 ];
 

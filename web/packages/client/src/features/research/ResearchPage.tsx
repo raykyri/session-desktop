@@ -1246,7 +1246,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       />
       <article
         ref={scrollerRef}
-        className="research-reading-surface relative min-h-0 flex-1 overflow-x-clip overflow-y-auto px-8 py-8 max-[900px]:px-7"
+        className="research-reading-surface relative min-h-0 flex-1 overflow-x-clip overflow-y-auto py-8 pr-8 pl-[42px] max-[900px]:pr-7 max-[900px]:pl-[38px]"
         aria-busy={!chainSettled}
         onScroll={onScroll}
       >

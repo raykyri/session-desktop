@@ -55,6 +55,10 @@ test.serial("the body font choice sets both the stack and the optical marker", (
 
   t.is(document.documentElement.dataset["bodyFont"], "valley-sans");
   t.regex(document.documentElement.style.getPropertyValue("--font-ui"), /Valley Sans/);
+
+  act(() => useSettingsStore.getState().set("bodyFontId", "inter"));
+  t.is(document.documentElement.dataset["bodyFont"], "inter");
+  t.regex(document.documentElement.style.getPropertyValue("--font-ui"), /Inter/);
 });
 
 test.serial("text size becomes a bounded pixel zoom, not a root font size", (t) => {

@@ -47,6 +47,7 @@ import {
 import { writeClipboardText } from "../../lib/clipboard.js";
 import { cn } from "../../lib/cn.js";
 import { errorMessage, pushErrorToast, pushToast } from "../../lib/toast.js";
+import { useNavigationStore, type FeedScrollAnchor } from "../../stores/navigation.js";
 import { ActivityMetadataLine } from "../../ui/ActivityMetadataLine.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
 import { QueryState } from "../../ui/QueryState.js";
@@ -103,6 +104,22 @@ export interface ActivityFeedProps {
 /** How long the "Entry removed" undo offer stays, matching a toast. */
 const UNDO_MS = 8000;
 
+function captureFeedAnchor(
+  scroller: HTMLElement,
+  virtualItems: { key: string | number | bigint; start: number; end: number }[],
+): FeedScrollAnchor {
+  const top = scroller.scrollTop;
+  const visible =
+    virtualItems.find((item) => item.start <= top && item.end > top) ??
+    virtualItems.find((item) => item.end > top) ??
+    virtualItems[0];
+  return {
+    key: visible ? String(visible.key) : "",
+    offset: visible ? visible.start - top : 0,
+    top,
+  };
+}
+
 export function ActivityFeed({
   workspaceId,
   bookmarkedOnly = false,
@@ -131,6 +148,13 @@ export function ActivityFeed({
 
   const internalScrollRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = externalScrollRef ?? internalScrollRef;
+  // Read once so a remount starts the virtualizer at the saved offset instead
+  // of 0. The layout effect below still applies `top` in case this ran before
+  // the workspace id (and therefore `view`) had resolved.
+  const initialScrollOffset = useRef<number | undefined>(undefined);
+  if (initialScrollOffset.current === undefined) {
+    initialScrollOffset.current = useNavigationStore.getState().feedAnchorFor(view)?.top ?? 0;
+  }
 
   const [undoEntry, setUndoEntry] = useState<JournalEntry | null>(null);
   const [newCount, setNewCount] = useState(0);
@@ -178,6 +202,7 @@ export function ActivityFeed({
     },
     getItemKey: (index) => events[index]?.id ?? index,
     overscan: 6,
+    initialOffset: initialScrollOffset.current,
     // The viewport's size before the resize observer reports one. A zero
     // height would put the first render's range at nothing and leave the feed
     // blank until a scroll or a resize; one screen's worth is the guess the
@@ -192,38 +217,50 @@ export function ActivityFeed({
   const virtualItems = virtualizer.getVirtualItems();
   const restoredRef = useRef(false);
   useLayoutEffect(() => {
-    if (restoredRef.current || events.length === 0) return;
-    const saved = anchor.initial;
+    if (restoredRef.current || events.length === 0 || workspaceId === "") return;
+    const saved = useNavigationStore.getState().feedAnchorFor(view) ?? anchor.initial;
     if (!saved) {
       restoredRef.current = true;
       return;
     }
-    const index = events.findIndex((event) => event.id === saved.key);
-    if (index < 0) {
-      restoredRef.current = true;
-      return;
+    let target: number | null = typeof saved.top === "number" ? saved.top : null;
+    if (target === null) {
+      // Pre-`top` persisted anchors: map the saved row back to an offset.
+      const index = events.findIndex((event) => event.id === saved.key);
+      if (index < 0) {
+        restoredRef.current = true;
+        return;
+      }
+      const offsetForIndex = virtualizer.getOffsetForIndex(index, "start");
+      target = offsetForIndex ? Math.max(0, offsetForIndex[0] - saved.offset) : 0;
     }
     restoredRef.current = true;
-    virtualizer.scrollToIndex(index, { align: "start" });
+    virtualizer.scrollToOffset(target);
     const scroller = scrollRef.current;
-    if (scroller) scroller.scrollTop = Math.max(0, scroller.scrollTop - saved.offset);
-  }, [anchor.initial, events, scrollRef, virtualizer]);
+    if (scroller) scroller.scrollTop = target;
+  }, [anchor.initial, events, scrollRef, view, virtualizer, workspaceId]);
 
   const onScroll = useCallback(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     const atTop = scroller.scrollTop <= FEED_TOP_THRESHOLD;
     if (atTop) setNewCount(0);
-    const top = virtualizer.getVirtualItems()[0];
-    anchor.record(top ? { key: String(top.key), offset: top.start - scroller.scrollTop } : null);
+    // An empty range is a measurement gap, not "the reader is at the top".
+    // Writing null here used to wipe a saved position on remount.
+    if (virtualizer.getVirtualItems().length === 0) return;
+    anchor.record(captureFeedAnchor(scroller, virtualizer.getVirtualItems()));
   }, [anchor, scrollRef, virtualizer]);
 
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     scroller.addEventListener("scroll", onScroll, { passive: true });
-    return () => scroller.removeEventListener("scroll", onScroll);
-  }, [onScroll, scrollRef]);
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      onScroll();
+      anchor.flush();
+    };
+  }, [anchor, onScroll, scrollRef]);
 
   const knownIdsRef = useRef<Set<string>>(new Set());
   const previousTopRef = useRef<string | null>(null);
@@ -246,6 +283,11 @@ export function ActivityFeed({
   };
 
   const openQuery = (query: RecentResearchQuery) => {
+    const scroller = scrollRef.current;
+    if (scroller) {
+      anchor.record(captureFeedAnchor(scroller, virtualizer.getVirtualItems()));
+      anchor.flush();
+    }
     void navigate({
       to: "/r/$treeId",
       params: { treeId: query.treeId },
@@ -326,7 +368,7 @@ export function ActivityFeed({
   return (
     <div
       ref={scrollRef}
-      className="research-reading-surface h-full overflow-y-auto px-8 max-[900px]:px-7"
+      className="research-reading-surface h-full overflow-y-auto pr-8 pl-[42px] max-[900px]:pr-7 max-[900px]:pl-[38px]"
     >
       <div className="research-document-frame flex min-w-0 flex-col pb-12">
         <div className="max-w-feed flex w-full flex-col">
@@ -394,7 +436,7 @@ export function ActivityFeed({
                     style={{ transform: `translateY(${virtualRow.start}px)` }}
                   >
                     <div
-                      className="flex flex-col gap-[7px] py-5"
+                      className="flex flex-col gap-[9px] pt-[21px] pb-5"
                       role="article"
                       aria-posinset={virtualRow.index + 1}
                       aria-setsize={feed.hasNextPage ? -1 : events.length}

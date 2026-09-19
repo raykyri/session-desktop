@@ -123,6 +123,27 @@ const DRAG_CLICK_SUPPRESS_MS = 100;
 
 const ICON = 13;
 
+/** Overlay ⋯ at the row's trailing edge so titles can use the full width.
+ * The chip is 75% of the row hover fill so the title still reads, then solid
+ * when the button itself is hovered, focused, or open. */
+const ROW_OVERFLOW_MENU =
+  "absolute top-0 right-[7px] bottom-0 z-2 my-auto " +
+  "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 " +
+  "focus-visible:pointer-events-auto focus-visible:opacity-100 " +
+  "data-popup-open:pointer-events-auto data-popup-open:opacity-100 " +
+  "bg-surface-sidebar-hover/75 hover:not-disabled:bg-surface-sidebar-hover " +
+  "focus-visible:bg-surface-sidebar-hover data-popup-open:bg-surface-sidebar-hover";
+
+const ROW_OVERFLOW_MENU_MULTI =
+  "bg-accent-subtle/75 hover:not-disabled:bg-accent-subtle " +
+  "focus-visible:bg-accent-subtle data-popup-open:bg-accent-subtle";
+
+/** Same slot as the ⋯; hidden while the menu is shown. */
+const ROW_STAR_SLOT =
+  "pointer-events-none absolute top-0 right-[7px] bottom-0 z-1 my-auto " +
+  "flex size-control-sm items-center justify-center " +
+  "group-hover:invisible group-has-[[data-popup-open]]:invisible";
+
 type DragScope =
   | { kind: "units" }
   | { kind: "starred" }
@@ -736,9 +757,11 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             : { "data-research-folder-member": options.folderId })}
           className={cn(
             SIDEBAR_ROW,
+            "group relative",
             selected && SIDEBAR_ROW_SELECTED,
             multi && SIDEBAR_ROW_MULTI,
             options.folderId !== undefined && "pl-6",
+            starred && "pr-8",
             archived && "text-fg-muted",
             draggingId === tree.id && "opacity-50",
             options.dropClass,
@@ -807,7 +830,9 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             </span>
           ) : null}
           {starred ? (
-            <Star size={12} aria-hidden="true" className="text-fg-subtle shrink-0" />
+            <span className={ROW_STAR_SLOT} aria-hidden="true">
+              <Star size={12} className="text-fg-subtle" />
+            </span>
           ) : null}
           <Menu
             label={`Actions for ${tree.title}`}
@@ -817,7 +842,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
               <IconButton
                 label={`Actions for ${tree.title}`}
                 tooltip={false}
-                className="shrink-0 translate-x-0.5"
+                className={cn(ROW_OVERFLOW_MENU, multi && ROW_OVERFLOW_MENU_MULTI)}
               >
                 <MoreHorizontal size={14} aria-hidden="true" />
               </IconButton>
@@ -882,6 +907,8 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             {...(list === "starred" ? { "data-research-star-index": unitIndex } : {})}
             className={cn(
               SIDEBAR_ROW,
+              "group relative",
+              folderStarred && "pr-8",
               draggingId === folder.id && "opacity-50",
               dropTarget?.kind === "folder" &&
                 dropTarget.folderId === folder.id &&
@@ -934,7 +961,9 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             <span className="min-w-0 flex-1 truncate">{folder.name}</span>
             <span className="text-fg-disabled shrink-0 text-xs">{unit.trees.length}</span>
             {folderStarred ? (
-              <Star size={12} aria-hidden="true" className="text-fg-subtle shrink-0" />
+              <span className={ROW_STAR_SLOT} aria-hidden="true">
+                <Star size={12} className="text-fg-subtle" />
+              </span>
             ) : null}
             <Menu
               label={`Actions for ${folder.name}`}
@@ -944,7 +973,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
                 <IconButton
                   label={`Actions for ${folder.name}`}
                   tooltip={false}
-                  className="shrink-0 translate-x-0.5"
+                  className={ROW_OVERFLOW_MENU}
                 >
                   <MoreHorizontal size={14} aria-hidden="true" />
                 </IconButton>
@@ -1081,7 +1110,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
         description={
           pendingFolder && pendingFolder.treeIds.length > 0
             ? `Create a folder with ${pendingFolder.treeIds.length} ${pendingFolder.treeIds.length === 1 ? "item" : "items"}.`
-            : "Create an empty folder for research you want to organize later."
+            : "Create a new folder to organize your queries."
         }
         label="Folder name"
         confirmLabel="Create"
@@ -1187,7 +1216,7 @@ function StatusDot({ tree, archived }: { tree: ResearchTreeSummary; archived: bo
       ? "bg-status-active"
       : tree.hasUnseenFailure || tree.failedCount > 0
         ? "bg-status-failed"
-        : "bg-status-success";
+        : "bg-fg-subtle/50";
   return <span aria-hidden="true" className={cn("size-1.5 shrink-0 rounded-full", tone)} />;
 }
 

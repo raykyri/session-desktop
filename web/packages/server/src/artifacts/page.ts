@@ -93,10 +93,10 @@ export function errorPageContentSecurityPolicy(publicOrigin: string): string {
 
 /** The body faces served from this origin. `?session-body-font=` names one;
  * anything else falls back to the system stack, as on the desktop. */
-export type BodyFontId = "dm-sans" | "valley-sans";
+export type BodyFontId = "dm-sans" | "inter" | "valley-sans";
 
 export function parseBodyFont(value: string | null | undefined): BodyFontId | null {
-  return value === "dm-sans" || value === "valley-sans" ? value : null;
+  return value === "dm-sans" || value === "inter" || value === "valley-sans" ? value : null;
 }
 
 const SYSTEM_FONT_STACK =
@@ -110,21 +110,25 @@ const DM_SANS_FONT_FACE_CSS =
   "@font-face { font-family: 'DM Sans'; src: url('/__session/fonts/DMSans-VariableItalic-LatinExt.woff2') format('woff2'); font-style: italic; font-weight: 100 1000; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }" +
   "@font-face { font-family: 'DM Sans'; src: url('/__session/fonts/DMSans-VariableItalic-Latin.woff2') format('woff2'); font-style: italic; font-weight: 100 1000; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }";
 
+const INTER_FONT_FACE_CSS =
+  "@font-face { font-family: 'Inter'; src: url('/__session/fonts/Inter-Variable-LatinExt.woff2') format('woff2'); font-style: normal; font-weight: 100 900; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }" +
+  "@font-face { font-family: 'Inter'; src: url('/__session/fonts/Inter-Variable-Latin.woff2') format('woff2'); font-style: normal; font-weight: 100 900; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }" +
+  "@font-face { font-family: 'Inter'; src: url('/__session/fonts/Inter-VariableItalic-LatinExt.woff2') format('woff2'); font-style: italic; font-weight: 100 900; font-display: swap; unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }" +
+  "@font-face { font-family: 'Inter'; src: url('/__session/fonts/Inter-VariableItalic-Latin.woff2') format('woff2'); font-style: italic; font-weight: 100 900; font-display: swap; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }";
+
 const VALLEY_SANS_FONT_FACE_CSS =
   "@font-face { font-family: 'Valley Sans'; src: url('/__session/fonts/ValleySans-Variable.woff2') format('woff2'); font-style: normal; font-weight: 100 900; font-display: swap; }" +
   "@font-face { font-family: 'Valley Sans'; src: url('/__session/fonts/ValleySans-VariableItalic.woff2') format('woff2'); font-style: italic; font-weight: 100 900; font-display: swap; }";
 
 function fontFaceCss(font: BodyFontId | null): string {
-  if (font === "dm-sans") {
-    return DM_SANS_FONT_FACE_CSS;
-  }
+  if (font === "dm-sans") return DM_SANS_FONT_FACE_CSS;
+  if (font === "inter") return INTER_FONT_FACE_CSS;
   return font === "valley-sans" ? VALLEY_SANS_FONT_FACE_CSS : "";
 }
 
 function bodyFontStack(font: BodyFontId | null): string {
-  if (font === "dm-sans") {
-    return `'DM Sans', ${SYSTEM_FONT_STACK}`;
-  }
+  if (font === "dm-sans") return `'DM Sans', ${SYSTEM_FONT_STACK}`;
+  if (font === "inter") return `'Inter', ${SYSTEM_FONT_STACK}`;
   return font === "valley-sans" ? `'Valley Sans', ${SYSTEM_FONT_STACK}` : SYSTEM_FONT_STACK;
 }
 

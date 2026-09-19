@@ -284,6 +284,14 @@ function Kitchen() {
               </a>
               .
             </p>
+            <ul>
+              <li>An unordered item</li>
+              <li>Another item</li>
+            </ul>
+            <ol>
+              <li>An ordered item</li>
+              <li>A second step</li>
+            </ol>
             <blockquote>A quoted line.</blockquote>
             <pre>
               <code>const answer = 42;</code>

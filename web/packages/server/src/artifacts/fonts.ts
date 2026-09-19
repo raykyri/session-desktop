@@ -2,7 +2,7 @@
 // (`11-artifacts-and-browser.md` §2, `file_server.rs:627`).
 //
 // Rendered pages load their body face from their own origin, so the page needs
-// no network and its CSP can stay at `font-src 'self'`. Only the six files the
+// no network and its CSP can stay at `font-src 'self'`. Only the files the
 // page CSS names are reachable: the handler matches the request against a
 // literal allowlist rather than resolving a path under a directory, so there is
 // no traversal to defend against.
@@ -11,12 +11,16 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** The faces `?session-body-font=` can select, both weights of both families. */
+/** The faces `?session-body-font=` can select. */
 export const FONT_FILES: readonly string[] = [
   "DMSans-Variable-Latin.woff2",
   "DMSans-Variable-LatinExt.woff2",
   "DMSans-VariableItalic-Latin.woff2",
   "DMSans-VariableItalic-LatinExt.woff2",
+  "Inter-Variable-Latin.woff2",
+  "Inter-Variable-LatinExt.woff2",
+  "Inter-VariableItalic-Latin.woff2",
+  "Inter-VariableItalic-LatinExt.woff2",
   "ValleySans-Variable.woff2",
   "ValleySans-VariableItalic.woff2",
 ];

@@ -37,6 +37,8 @@ test("a bookmarked thread shows in Home and Bookmarks, and archiving hides it", 
   // so the row is counted rather than named.
   const rows = sidebar.getByRole("button", { name: /^Actions for / });
   await expect(rows).toHaveCount(1);
+  // The ⋯ trigger is pointer-events-none until the row is hovered.
+  await sidebar.locator("[data-research-row]").first().hover();
   await rows.first().click();
   const archive = page.getByRole("menuitem", { name: /^Archive/ });
   await expect(archive).toBeVisible();

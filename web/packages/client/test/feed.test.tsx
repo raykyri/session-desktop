@@ -479,3 +479,50 @@ test.serial("the new-activity counter offers the way back to the head", async (t
   );
   app.unmount();
 });
+
+test.serial("opening a thread writes the feed's current scroll offset immediately", async (t) => {
+  useNavigationStore.setState({ feedAnchorByView: {} });
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: feedResponses(activityPage([queryItem(researchQuery())])),
+  });
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByText("What is collective memory?").length > 0,
+    "the home feed lists a thread",
+  );
+  await scrollFeedTo(900);
+  fireEvent.click(screen.getByText("What is collective memory?"));
+
+  t.is(
+    useNavigationStore.getState().feedAnchorFor(`home:${WORKSPACE_ID}`)?.top,
+    900,
+    "the click flushes scrollTop so a back navigation can restore it",
+  );
+  app.unmount();
+});
+
+test.serial("returning to the feed restores the scroll offset it was left at", async (t) => {
+  useNavigationStore.setState({
+    feedAnchorByView: {
+      [`home:${WORKSPACE_ID}`]: { key: "research:n1", offset: 0, top: 900 },
+    },
+  });
+  scrolls.length = 0;
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: feedResponses(activityPage([queryItem(researchQuery())])),
+  });
+
+  await waitUntil(
+    t,
+    () => screen.queryAllByText("What is collective memory?").length > 0,
+    "the home feed lists a thread",
+  );
+  t.true(
+    scrolls.some((options) => options.top === 900) || feedScroller().scrollTop === 900,
+    "the scroller is returned to the saved offset instead of 0",
+  );
+  app.unmount();
+});

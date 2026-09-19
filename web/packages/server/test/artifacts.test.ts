@@ -140,6 +140,11 @@ test("the rendered page loads a body face only when one is named", async (t) => 
   t.true(valley.includes("/__session/fonts/ValleySans-Variable.woff2"));
   t.false(valley.includes("DM Sans"));
 
+  const inter = await (await get(harness, `${path}?session-body-font=inter`)).text();
+  t.true(inter.includes("/__session/fonts/Inter-Variable-Latin.woff2"));
+  t.true(inter.includes("font-family: 'Inter'"));
+  t.false(inter.includes("DM Sans"));
+
   const nonsense = await (await get(harness, `${path}?session-body-font=comic-sans`)).text();
   t.false(nonsense.includes("@font-face"));
 });
@@ -197,12 +202,13 @@ test("the renderer and its helpers are conservative on their own", (t) => {
   t.false(renderMarkdown("[x](javascript:alert(1))").includes("javascript:"));
   t.is(parseBodyFont("dm-sans"), "dm-sans");
   t.is(parseBodyFont("valley-sans"), "valley-sans");
-  t.is(parseBodyFont("inter"), null);
+  t.is(parseBodyFont("inter"), "inter");
   t.is(parseBodyFont(undefined), null);
   t.is(escapeHtml('<a href="x">&</a>'), "&lt;a href=&quot;x&quot;&gt;&amp;&lt;/a&gt;");
   t.true(renderedPageContentSecurityPolicy("https://session.dev").includes("object-src 'none'"));
   t.is(readFont("../../package.json"), null);
   t.not(readFont("ValleySans-Variable.woff2"), null);
+  t.not(readFont("Inter-Variable-Latin.woff2"), null);
 });
 
 test("the artifact host serves artifacts and refuses the rest of the app", async (t) => {

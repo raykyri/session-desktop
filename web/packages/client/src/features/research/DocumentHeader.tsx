@@ -96,7 +96,7 @@ export function DocumentHeader({
   );
 
   return (
-    <header className="research-reading-surface border-border-divider flex shrink-0 items-center gap-2 border-b pt-2 pr-3.5 pb-[7px] pl-8 max-[900px]:pl-7">
+    <header className="research-reading-surface border-border-divider flex shrink-0 items-center gap-2 border-b pt-2 pr-3.5 pb-2 pl-[42px] max-[900px]:pl-[38px]">
       {leading ? (
         <div className="-my-0.5 -ml-6 flex shrink-0 items-center max-[900px]:-ml-5">{leading}</div>
       ) : null}

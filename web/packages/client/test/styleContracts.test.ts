@@ -147,6 +147,25 @@ test("prose typography is declared on the renderer, not on the surfaces that pla
   }
 });
 
+test("research prose restores list markers that Tailwind preflight strips", (t) => {
+  const css = withoutComments(proseCss);
+  t.regex(
+    css,
+    /\.research-prose ul,\s*\.research-prose ol\s*\{[^}]*list-style:\s*revert/,
+    "unordered and ordered lists undo Tailwind's list-style: none",
+  );
+  t.regex(
+    css,
+    /\.research-prose ol\s*\{[^}]*padding-left:\s*20px/,
+    "ordered lists keep a slightly wider gutter for the numbers",
+  );
+  t.regex(
+    css,
+    /\.research-prose ul\.contains-task-list,\s*\.research-prose li\.task-list-item\s*\{[^}]*list-style:\s*none/,
+    "task items keep the checkbox and drop the disc",
+  );
+});
+
 // ---------------------------------------------------------------- §6 item 5
 
 test("DM Sans adds one optical half-pixel to UI type but not to monospace", (t) => {
@@ -264,8 +283,9 @@ test("app.css declares the two custom variants the structural rules need", (t) =
 test("the font faces moved out of tokens.css into fonts.css", (t) => {
   const fontsCss = readFileSync(join(stylesDirectory, "fonts.css"), "utf8");
   t.false(withoutComments(tokensCss).includes("@font-face"));
-  t.is((withoutComments(fontsCss).match(/@font-face/g) ?? []).length, 14);
+  t.is((withoutComments(fontsCss).match(/@font-face/g) ?? []).length, 18);
   t.regex(fontsCss, /url\("\.\.\/assets\/fonts\/DMSans-Variable-Latin\.woff2"\)/);
+  t.regex(fontsCss, /url\("\.\.\/assets\/fonts\/Inter-Variable-Latin\.woff2"\)/);
   // Code faces block rather than swap: a metric swap inside a code block
   // reflows the whole answer.
   t.regex(fontsCss, /"JetBrains Mono"[\s\S]*?font-display: block/);
