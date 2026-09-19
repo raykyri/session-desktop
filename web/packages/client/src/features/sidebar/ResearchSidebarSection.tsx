@@ -779,7 +779,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
           <span className="min-w-0 flex-1 truncate">{tree.title}</span>
           {!archived && tree.runningCount > 0 ? (
             <span
-              className="text-status-active flex shrink-0 items-center gap-1 text-xs"
+              className="text-status-active flex shrink-0 items-center gap-1 text-base"
               title={`${tree.runningCount} running`}
             >
               <LoaderCircle size={12} className="session-spin" aria-hidden="true" />
@@ -787,14 +787,14 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             </span>
           ) : !archived && tree.hasUnseenFailure ? (
             <span
-              className="text-status-failed shrink-0 text-xs"
+              className="text-status-failed shrink-0 text-base"
               title="Failed since last viewed — open to acknowledge"
             >
               !
             </span>
           ) : !archived && tree.hasUnseenUpdate ? (
             <span
-              className="text-status-attention shrink-0 text-xs"
+              className="text-status-attention shrink-0 text-base"
               title="Updated since last viewed"
             >
               New
@@ -917,7 +917,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             </button>
             <Folder size={12} aria-hidden="true" className="text-fg-subtle shrink-0" />
             <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-            <span className="text-fg-disabled shrink-0 text-xs">{unit.trees.length}</span>
+            <span className="text-fg-disabled shrink-0 text-base">{unit.trees.length}</span>
             {folderStarred ? (
               <Star size={12} aria-hidden="true" className="text-fg-subtle shrink-0" />
             ) : null}
@@ -989,7 +989,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
                 type="button"
                 aria-label={`Show ${filter} research`}
                 title={`Show ${filter} research`}
-                className={cn(ICON_BUTTON, "h-control-sm px-1 text-xs capitalize")}
+                className={cn(ICON_BUTTON, "h-control-sm px-1 text-base capitalize")}
               >
                 {filter}
               </button>
@@ -1017,7 +1017,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
       </div>
 
       {selectedIds.length > 1 ? (
-        <div className="text-fg-secondary flex items-center justify-between gap-2 px-2.5 py-1 text-xs">
+        <div className="text-fg-secondary flex items-center justify-between gap-2 px-2.5 py-1 text-base">
           <span>{selectedIds.length} selected</span>
           <button
             type="button"
@@ -1040,7 +1040,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
         <>
           <div className={SIDEBAR_SECTION_HEADING}>
             <span>Archived</span>
-            <span className="text-fg-disabled text-xs">{visibleArchived.length}</span>
+            <span className="text-fg-disabled text-base">{visibleArchived.length}</span>
           </div>
           {visibleArchived.map((tree, index) =>
             renderTreeRow(tree, {
@@ -1053,7 +1053,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
       ) : null}
 
       {summaries.isSuccess && all.length === 0 ? (
-        <p className="text-fg-muted m-0 px-2.5 py-2 text-sm">No research yet.</p>
+        <p className="text-fg-muted m-0 px-2.5 py-2 text-base">No research yet.</p>
       ) : null}
 
       <NameDialog
