@@ -182,7 +182,7 @@ export function Sidebar() {
 
   return (
     <div
-      className="sidebar-type-scale border-border-divider bg-surface-sidebar relative flex h-full shrink-0 flex-col border-r"
+      className="border-border-divider bg-surface-sidebar relative flex h-full shrink-0 flex-col border-r"
       style={{ width }}
     >
       <SidebarChrome onHide={() => setCollapsed(true)} />

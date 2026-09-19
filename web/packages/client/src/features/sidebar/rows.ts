@@ -9,7 +9,7 @@ export const SIDEBAR_ROW =
   "focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-inset outline-none";
 
 export const SIDEBAR_SECTION_HEADING =
-  "flex min-h-control-sm items-center justify-between gap-2 px-2.5 text-xs text-fg-subtle";
+  "flex min-h-control-sm items-center justify-between gap-2 px-2.5 text-base text-fg-subtle";
 
 /** The selected thread, page or route. */
 export const SIDEBAR_ROW_SELECTED = "bg-surface-sidebar-hover text-fg-strong";
