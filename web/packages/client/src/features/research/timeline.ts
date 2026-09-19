@@ -133,7 +133,7 @@ export function answerEmptyStateText(input: {
   node: ResearchNode;
   sourceError: string | undefined;
   hasAnyTimelineItem: boolean;
-}): string {
+}): string | null {
   const { node, sourceError, hasAnyTimelineItem } = input;
   if (node.status === "failed") return node.error ?? "The run failed.";
   if (node.status === "cancelled") return "The run was cancelled.";
@@ -143,7 +143,9 @@ export function answerEmptyStateText(input: {
     return "The run finished, but the answer could not be loaded.";
   }
   if (isActiveResearchStatus(node.status)) {
-    return hasAnyTimelineItem ? "Generating response…" : "Working…";
+    // Nothing at all yet: the status line under the answer already reads
+    // "Working…", so a second line here would repeat it.
+    return hasAnyTimelineItem ? "Generating response…" : null;
   }
   return "No response was generated.";
 }

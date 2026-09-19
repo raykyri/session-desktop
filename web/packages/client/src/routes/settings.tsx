@@ -1,8 +1,7 @@
 import {
-  APP_TEXT_SIZE_MAX,
-  APP_TEXT_SIZE_MIN,
   RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES,
   appearanceSchema,
+  clamp,
   clampResearchLaunchInstruction,
 } from "@session/shared";
 import { useQueryClient } from "@tanstack/react-query";
@@ -40,6 +39,18 @@ const COLOR_THEME_OPTIONS: SelectOption[] = [
   { value: "orange-blob", label: "Warm" },
 ];
 
+/** Five named sizes in pixels. The stored value keeps the wider schema range;
+ * a size outside these steps (from an earlier build) shows the nearest one. */
+const TEXT_SIZE_OPTIONS: SelectOption[] = [
+  { value: "13", label: "Extra small", detail: "13 px" },
+  { value: "14", label: "Small", detail: "14 px" },
+  { value: "15", label: "Medium", detail: "15 px" },
+  { value: "16", label: "Large", detail: "16 px" },
+  { value: "17", label: "Extra large", detail: "17 px" },
+];
+const TEXT_SIZE_OPTION_MIN = 13;
+const TEXT_SIZE_OPTION_MAX = 17;
+
 const BODY_FONT_SELECT_OPTIONS: SelectOption[] = BODY_FONT_OPTIONS.map((option) => ({
   value: option.id,
   label: option.label,
@@ -60,7 +71,9 @@ const PICKER_CLASS = "w-fit min-w-44";
 function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section aria-label={title} className="flex flex-col gap-4">
-      <h2 className="text-fg-heading m-0 text-base font-semibold">{title}</h2>
+      <h2 className="text-fg-heading border-border-faint m-0 border-b pb-2 text-base font-semibold">
+        {title}
+      </h2>
       {children}
     </section>
   );
@@ -97,14 +110,13 @@ function ResearchSection() {
     <div className="flex flex-col gap-5">
       <Field
         label="Research instructions"
-        hint={`Added to the beginning of every research question. Up to ${RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES / 1024} KiB.`}
         error={update.error ? errorMessage(update.error) : undefined}
       >
         {({ id, describedBy }) => (
           <div className="flex flex-col items-start gap-2">
             <Textarea
               id={id}
-              aria-describedby={describedBy}
+              aria-describedby={describedBy ?? `${id}-hint`}
               rows={3}
               className="w-full"
               placeholder="For example: Prefer primary sources and cite them inline."
@@ -113,22 +125,28 @@ function ResearchSection() {
                 setEdit(clampResearchLaunchInstruction(event.currentTarget.value))
               }
             />
-            <ControlButton
-              disabled={!dirty || update.isPending}
-              onClick={() =>
-                update.mutate(
-                  { researchLaunchInstruction: instruction.trim() === "" ? null : instruction },
-                  {
-                    onSuccess: () => {
-                      setEdit(null);
-                      pushToast({ title: "Instructions saved", tone: "success" });
+            <div className="flex items-center gap-3">
+              <ControlButton
+                disabled={!dirty || update.isPending}
+                onClick={() =>
+                  update.mutate(
+                    { researchLaunchInstruction: instruction.trim() === "" ? null : instruction },
+                    {
+                      onSuccess: () => {
+                        setEdit(null);
+                        pushToast({ title: "Instructions saved", tone: "success" });
+                      },
                     },
-                  },
-                )
-              }
-            >
-              {update.isPending ? "Saving…" : "Save instructions"}
-            </ControlButton>
+                  )
+                }
+              >
+                {update.isPending ? "Saving…" : "Save instructions"}
+              </ControlButton>
+              <p id={`${id}-hint`} className="text-fg-muted m-0 text-base">
+                Added to the beginning of every research question. Up to{" "}
+                {RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES / 1024} KiB.
+              </p>
+            </div>
           </div>
         )}
       </Field>
@@ -289,18 +307,16 @@ export function SettingsPage() {
               )}
             </Field>
 
-            <Field label={`Text size (${settings.textSize})`}>
-              {({ id, describedBy }) => (
-                <input
-                  id={id}
-                  aria-describedby={describedBy}
-                  type="range"
-                  min={APP_TEXT_SIZE_MIN}
-                  max={APP_TEXT_SIZE_MAX}
-                  step={1}
-                  value={settings.textSize}
-                  className="accent-accent w-64 max-w-full"
-                  onChange={(event) => setTextSize(Number(event.currentTarget.value))}
+            <Field label="Text size">
+              {() => (
+                <Select
+                  label="Text size"
+                  value={String(
+                    clamp(settings.textSize, TEXT_SIZE_OPTION_MIN, TEXT_SIZE_OPTION_MAX),
+                  )}
+                  options={TEXT_SIZE_OPTIONS}
+                  className={PICKER_CLASS}
+                  onChange={(value) => setTextSize(Number(value))}
                 />
               )}
             </Field>

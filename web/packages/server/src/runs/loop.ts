@@ -34,6 +34,10 @@ import type { Logger } from "../logger.js";
 
 import type { ClassifiedError } from "./errors.js";
 import { classifyRunError, refusalError, timeoutError } from "./errors.js";
+import {
+  createGroundingRedirectResolver,
+  resolveGroundingRedirects,
+} from "./groundingRedirects.js";
 import { TurnMapper } from "./mapper.js";
 import { buildMessages, messagesFromCommittedTurns } from "./messages.js";
 import type { MetadataRunner } from "./metadata.js";
@@ -334,6 +338,12 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
     },
   );
 
+  const groundingRedirects = createGroundingRedirectResolver({
+    fetch: deps.fetch,
+    logger,
+    signal: input.signal,
+  });
+
   const checkpoint = (force: boolean): void => {
     const turn = mapper.inFlightTurn();
     if (!turn) {
@@ -405,7 +415,9 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       if (part.type === "abort") {
         break;
       }
-      mapper.handle(part);
+      // Grounded citations arrive as Google redirect links; the mapper commits
+      // the step with the pages they stand for (`groundingRedirects.ts`).
+      mapper.handle(await resolveGroundingRedirects(part, groundingRedirects));
       if (part.type === "text-delta") {
         checkpoint(false);
         publishPreview();

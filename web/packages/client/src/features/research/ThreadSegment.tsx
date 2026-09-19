@@ -71,7 +71,6 @@ export interface ThreadSegmentProps {
   unreadIds: ReadonlySet<string>;
   anchoredCardTops: Record<string, number>;
   resolvedCardTops: Record<string, number>;
-  showRunControls: boolean;
   cancelling: boolean;
   canRetryNode: boolean;
   retryingNode: boolean;
@@ -119,7 +118,6 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
     unreadIds,
     anchoredCardTops,
     resolvedCardTops,
-    showRunControls,
     cancelling,
     canRetryNode,
     retryingNode,
@@ -257,7 +255,6 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
             durationText={durationText}
             hiddenHighlightCount={hiddenHighlightCount}
             recapPending={recapPending}
-            showRunControls={showRunControls}
             cancelling={cancelling}
             canRetryNode={canRetryNode}
             retryingNode={retryingNode}

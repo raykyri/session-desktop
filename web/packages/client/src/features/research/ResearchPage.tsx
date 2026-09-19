@@ -50,6 +50,7 @@ import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../../ui/Con
 import { ConfirmDialog } from "../../ui/Dialog.js";
 import { DomSearchBar } from "../../ui/DomSearchBar.js";
 import { MenuItem, MenuSeparator } from "../../ui/Menu.js";
+import { SidebarRestoreButton } from "../../ui/SidebarRestoreButton.js";
 import { launchableModels } from "../composer/ResearchQueryComposer.js";
 
 import { DeleteBranchDialog } from "./DeleteBranchDialog.js";
@@ -228,6 +229,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     return history ? (history.entries[history.index] ?? null) : null;
   });
   const visitNode = useNavigationStore((state) => state.visitNode);
+  const sidebarCollapsed = useNavigationStore((state) => state.sidebarCollapsed);
+  const setSidebarCollapsed = useNavigationStore((state) => state.setSidebarCollapsed);
   const recordScroll = useNavigationStore((state) => state.recordScroll);
   const restoreScroll = useNavigationStore((state) => state.restoreScroll);
   const setExpanded = useNavigationStore((state) => state.setExpanded);
@@ -1093,7 +1096,9 @@ function ResearchDocument({ treeId }: { treeId: string }) {
               Edit document
             </Item>
           ) : null}
-          <Separator />
+          {spec.copyThread || spec.retry || spec.regenerate || spec.editDocument ? (
+            <Separator />
+          ) : null}
           <Item tone="danger" onClick={() => setDeletingNodeId(spec.nodeId)}>
             {spec.isRoot ? "Delete thread" : "Delete"}
           </Item>
@@ -1156,7 +1161,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     );
   }
 
-  const selectedNode = nodesById.get(selectedNodeId) ?? null;
   const selectedSegment = segments[selectedNodeId];
   const branchCount = chainNodeIds.reduce(
     (total, id) => total + (childrenBySegment.get(id)?.length ?? 0),
@@ -1210,6 +1214,11 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       {chainSettled ? (
         <DocumentHeader
           detail={detail}
+          leading={
+            sidebarCollapsed ? (
+              <SidebarRestoreButton onRestore={() => setSidebarCollapsed(false)} />
+            ) : null
+          }
           selectedNodeId={selectedNodeId}
           threadLength={chainNodes.length}
           branchCount={branchCount}
@@ -1224,11 +1233,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
                       [selectedNodeId]: !current[selectedNodeId],
                     })),
                 }
-              : null
-          }
-          cancel={
-            selectedNode && isActiveResearchStatus(selectedNode.status)
-              ? { busy: cancelling, onCancel: () => handleCancel(selectedNode.id) }
               : null
           }
         />
@@ -1310,9 +1314,6 @@ function ResearchDocument({ treeId }: { treeId: string }) {
                     unreadIds={unreadIdsBySegment.get(node.id) ?? NO_UNREAD}
                     anchoredCardTops={annotations.anchoredCardTops}
                     resolvedCardTops={annotations.resolvedCardTops}
-                    showRunControls={
-                      isActiveResearchStatus(node.status) && node.id !== selectedNodeId
-                    }
                     cancelling={cancelling}
                     canRetryNode={!archived && canRetryResearchNode(node)}
                     retryingNode={retryingNodeId === node.id}
