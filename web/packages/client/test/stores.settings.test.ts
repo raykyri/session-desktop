@@ -3,6 +3,7 @@ import test from "ava";
 
 import { BODY_FONT_OPTIONS, DEFAULT_BODY_FONT_ID } from "../src/lib/bodyFonts.js";
 import {
+  GUEST_USER_SETTINGS,
   SETTINGS_STORAGE_KEY,
   normalizeSettings,
   useSettingsStore,
@@ -10,12 +11,13 @@ import {
 
 test.beforeEach(() => {
   localStorage.clear();
-  useSettingsStore.setState({ settings: { ...DEFAULT_USER_SETTINGS }, hydrated: false });
+  useSettingsStore.setState({ settings: { ...GUEST_USER_SETTINGS }, hydrated: false });
 });
 
 test.serial("uses default appearance settings when local storage is empty", (t) => {
   t.is(useSettingsStore.getState().settings.appearance, "dark");
-  t.is(useSettingsStore.getState().settings.colorTheme, "green-blob");
+  t.is(useSettingsStore.getState().settings.colorTheme, "orange-blob");
+  t.is(useSettingsStore.getState().settings.textSize, 15);
   t.is(useSettingsStore.getState().settings.bodyFontId, "dm-sans");
 });
 
@@ -25,7 +27,12 @@ test.serial("hydration reads the persisted record under session.settings.v2", as
     JSON.stringify({
       version: 2,
       state: {
-        settings: { ...DEFAULT_USER_SETTINGS, appearance: "light", colorTheme: "orange-blob" },
+        settings: {
+          ...DEFAULT_USER_SETTINGS,
+          appearance: "light",
+          colorTheme: "orange-blob",
+          textSize: 16,
+        },
       },
     }),
   );
@@ -34,13 +41,14 @@ test.serial("hydration reads the persisted record under session.settings.v2", as
 
   t.is(useSettingsStore.getState().settings.appearance, "light");
   t.is(useSettingsStore.getState().settings.colorTheme, "orange-blob");
+  t.is(useSettingsStore.getState().settings.textSize, 16);
   t.true(useSettingsStore.getState().hydrated);
 });
 
 test.serial("hydration flips `hydrated` even when nothing was stored", async (t) => {
   await useSettingsStore.persist.rehydrate();
   t.true(useSettingsStore.getState().hydrated);
-  t.deepEqual(useSettingsStore.getState().settings, DEFAULT_USER_SETTINGS);
+  t.deepEqual(useSettingsStore.getState().settings, GUEST_USER_SETTINGS);
 });
 
 test.serial("a stored record still carrying `showShortcutHints` loads intact", async (t) => {
@@ -62,8 +70,25 @@ test.serial("a stored record still carrying `showShortcutHints` loads intact", a
   const settings = useSettingsStore.getState().settings;
   t.is(settings.appearance, "light", "the rest of the record is not discarded");
   t.false("showShortcutHints" in settings, "and the removed key is not carried forward");
-  t.deepEqual(settings, { ...DEFAULT_USER_SETTINGS, appearance: "light" });
+  t.deepEqual(settings, { ...GUEST_USER_SETTINGS, appearance: "light" });
 });
+
+test.serial(
+  "a v2 Cool/Small local record migrates to the guest Warm/Medium defaults",
+  async (t) => {
+    localStorage.setItem(
+      SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        version: 2,
+        state: { settings: { ...DEFAULT_USER_SETTINGS } },
+      }),
+    );
+
+    await useSettingsStore.persist.rehydrate();
+
+    t.deepEqual(useSettingsStore.getState().settings, GUEST_USER_SETTINGS);
+  },
+);
 
 test.serial("a partially readable record keeps the fields it got right", (t) => {
   const settings = normalizeSettings({

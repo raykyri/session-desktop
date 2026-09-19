@@ -6,11 +6,13 @@
 // Persistence key is `session.settings.v2`, replacing the desktop's
 // `session.settings.v1` (07 §8). The version bump is deliberate: the desktop
 // record carried terminal, worktree and agent keys that no longer exist, so a
-// v1 blob must not be read back into this shape.
+// v1 blob must not be read back into this shape. Persist `version` 3 migrates
+// a still-default Cool/Small local record to the guest Warm/Medium defaults.
 //
 // `DEFAULT_USER_SETTINGS` comes from `shared`: the server writes the same
 // object into `user_preferences` on first access, and a second copy here would
-// drift the moment a field is added.
+// drift the moment a field is added. Guests paint from `GUEST_USER_SETTINGS`
+// until a session lands.
 
 import {
   APP_TEXT_SIZE_MAX,
@@ -28,6 +30,14 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { resolveAppearance } from "../lib/appearance.js";
 
 export const SETTINGS_STORAGE_KEY = "session.settings.v2";
+
+/** First paint for a guest: Warm theme and Medium type. Account defaults stay
+ * `DEFAULT_USER_SETTINGS`; `SessionBoot` replaces this once a session exists. */
+export const GUEST_USER_SETTINGS: UserSettings = {
+  ...DEFAULT_USER_SETTINGS,
+  colorTheme: "orange-blob",
+  textSize: 15,
+};
 
 export interface SettingsState {
   settings: UserSettings;
@@ -72,7 +82,7 @@ export function normalizeSettings(value: unknown): UserSettings {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      settings: { ...DEFAULT_USER_SETTINGS },
+      settings: { ...GUEST_USER_SETTINGS },
       hydrated: false,
       setHydrated: () => set({ hydrated: true }),
       set: (key, value) => set((state) => ({ settings: { ...state.settings, [key]: value } })),
@@ -96,17 +106,37 @@ export const useSettingsStore = create<SettingsState>()(
             textSize: Math.round(clamp(textSize, APP_TEXT_SIZE_MIN, APP_TEXT_SIZE_MAX)),
           },
         })),
-      reset: () => set({ settings: { ...DEFAULT_USER_SETTINGS } }),
+      reset: () => set({ settings: { ...GUEST_USER_SETTINGS } }),
     }),
     {
       name: SETTINGS_STORAGE_KEY,
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ settings: state.settings }),
-      merge: (persisted, current) => ({
-        ...current,
-        settings: normalizeSettings((persisted as { settings?: unknown } | undefined)?.settings),
-      }),
+      migrate: (persisted, version) => {
+        const settings = normalizeSettings(
+          (persisted as { settings?: unknown } | undefined)?.settings,
+        );
+        if (version >= 3) return { settings };
+        return {
+          settings: {
+            ...settings,
+            ...(settings.colorTheme === DEFAULT_USER_SETTINGS.colorTheme
+              ? { colorTheme: GUEST_USER_SETTINGS.colorTheme }
+              : {}),
+            ...(settings.textSize === DEFAULT_USER_SETTINGS.textSize
+              ? { textSize: GUEST_USER_SETTINGS.textSize }
+              : {}),
+          },
+        };
+      },
+      merge: (persisted, current) => {
+        const stored = (persisted as { settings?: unknown } | undefined)?.settings;
+        return {
+          ...current,
+          settings: stored === undefined ? current.settings : normalizeSettings(stored),
+        };
+      },
       // Fires once the persisted record has been read, including when there is
       // none; either way the shell may paint.
       onRehydrateStorage: () => (state) => {
