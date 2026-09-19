@@ -107,7 +107,7 @@ export function HighlightsFeed({ workspaceId }: { workspaceId: string }) {
               loadingLabel="Loading highlights…"
               error={highlights.isError ? "Couldn’t load highlights." : undefined}
               onRetry={() => void highlights.refetch()}
-              empty="No highlights yet. Highlight text in research answers to see it here."
+              empty="No highlights yet. Highlight text in an answer to see it here."
             />
           ) : (
             <div aria-label="Highlights" aria-busy={highlights.isFetching}>

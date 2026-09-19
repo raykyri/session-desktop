@@ -49,7 +49,7 @@ export async function signInAndOpenHome(page: Page, options: SignInOptions): Pro
  * the text of the question (`packages/server/src/runs/fixtureProvider.ts`).
  */
 export async function startResearch(page: Page, prompt: string): Promise<string> {
-  const composer = page.getByRole("textbox", { name: "What would you like to investigate?" });
+  const composer = page.getByRole("textbox", { name: "What do you want to research?" });
   await composer.click();
   await composer.fill(prompt);
   await page.getByRole("button", { name: "Start research" }).click();

@@ -135,12 +135,12 @@ export function answerEmptyStateText(input: {
   hasAnyTimelineItem: boolean;
 }): string {
   const { node, sourceError, hasAnyTimelineItem } = input;
-  if (node.status === "failed") return node.error ?? "The research run failed.";
-  if (node.status === "cancelled") return "Research was cancelled.";
+  if (node.status === "failed") return node.error ?? "The run failed.";
+  if (node.status === "cancelled") return "The run was cancelled.";
   if (node.status === "interrupted") return "The run was interrupted. Resuming…";
   if (sourceError) return `The response is no longer available: ${sourceError}`;
   if (node.status === "complete") {
-    return "Research finished, but the response could not be loaded.";
+    return "The run finished, but the answer could not be loaded.";
   }
   if (isActiveResearchStatus(node.status)) {
     return hasAnyTimelineItem ? "Generating response…" : "Working…";

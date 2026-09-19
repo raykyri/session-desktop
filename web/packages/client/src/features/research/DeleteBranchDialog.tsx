@@ -40,16 +40,16 @@ export function DeleteBranchDialog({
   const isRoot = node.id === detail.tree.rootNodeId;
   const count = info.descendantCount;
   const title = isRoot
-    ? "Delete research"
+    ? "Delete thread"
     : node.inline && count > 0
       ? "Delete the rest of this thread?"
       : count > 0
-        ? "Delete this research branch?"
+        ? "Delete this branch?"
         : "Delete this follow-up?";
   const body = isRoot
     ? count > 0
       ? `This permanently deletes the root answer and all ${count} follow-up${count === 1 ? "" : "s"}.`
-      : "This permanently deletes the root answer and its research history."
+      : "This permanently deletes the root answer and the thread’s history."
     : node.inline && count > 0
       ? `This permanently deletes this follow-up and everything after it in the thread — ${count} descendant node${count === 1 ? "" : "s"} in total, including any branches. The parent answer will remain in place without this branch.`
       : count > 0
@@ -82,7 +82,7 @@ export function DeleteBranchDialog({
       pending={busy}
       pendingLabel="Deleting…"
       confirmDisabled={info.hasActiveRuns}
-      confirmLabel={isRoot ? "Delete research" : deleteBranchLabel(node, count)}
+      confirmLabel={isRoot ? "Delete thread" : deleteBranchLabel(node, count)}
       onConfirm={onConfirm}
     />
   );

@@ -131,7 +131,7 @@ test("visibility filter validation accepts only recognized filter values", (t) =
 test("workspace removal is blocked while threads are active and permitted when idle", (t) => {
   t.is(workspaceRemovalRefusal(0), null);
   t.regex(String(workspaceRemovalRefusal(1)), /still running/);
-  t.regex(String(workspaceRemovalRefusal(3)), /^3 research threads/);
+  t.regex(String(workspaceRemovalRefusal(3)), /^3 threads/);
 });
 
 /**

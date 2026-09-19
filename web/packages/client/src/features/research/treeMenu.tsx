@@ -65,7 +65,7 @@ export function ResearchTreeMenuItems({
     <>
       {onRegenerateSummary ? (
         <>
-          <MenuItem onClick={onRegenerateSummary}>Generate summary</MenuItem>
+          <MenuItem onClick={onRegenerateSummary}>Summary…</MenuItem>
           <MenuSeparator />
         </>
       ) : null}
@@ -195,7 +195,7 @@ export function DeleteTreeDialog({
       title={`Delete “${tree.title}”?`}
       description={
         <>
-          This permanently deletes this research, its answers, and its follow-up history. This can’t
+          This permanently deletes this thread, its answers, and its follow-up history. This can’t
           be undone.
           {error ? (
             <span className="text-status-failed mt-2 block" role="alert">
@@ -207,7 +207,7 @@ export function DeleteTreeDialog({
       tone="danger"
       pending={busy}
       pendingLabel="Deleting…"
-      confirmLabel="Delete research"
+      confirmLabel="Delete thread"
       onConfirm={() => onRemove(tree.id)}
     />
   );

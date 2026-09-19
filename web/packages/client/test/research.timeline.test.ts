@@ -168,14 +168,11 @@ function emptyFor(overrides: Partial<ResearchNode>, hasAnyTimelineItem = false):
 
 test("empty state renders the specific error or completion message", (t) => {
   t.is(emptyFor({ status: "failed", error: "provider refused" }), "provider refused");
-  t.is(emptyFor({ status: "cancelled" }), "Research was cancelled.");
+  t.is(emptyFor({ status: "cancelled" }), "The run was cancelled.");
   t.is(emptyFor({ status: "interrupted" }), "The run was interrupted. Resuming…");
   t.is(emptyFor({ status: "running" }), "Working…");
   t.is(emptyFor({ status: "running" }, true), "Generating response…");
-  t.is(
-    emptyFor({ status: "complete" }),
-    "Research finished, but the response could not be loaded.",
-  );
+  t.is(emptyFor({ status: "complete" }), "The run finished, but the answer could not be loaded.");
 });
 
 test("source error state takes display precedence over normal completion status", (t) => {

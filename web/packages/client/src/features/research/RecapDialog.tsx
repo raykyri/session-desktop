@@ -110,7 +110,7 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
       onOpenChange={(next) => {
         if (!next && !applying) onClose();
       }}
-      title="Generate summary"
+      title={baseline.recap ? "Rewrite summary" : "Generate summary"}
       className="w-[min(560px,calc(100vw-32px))]"
       footer={
         <>
@@ -121,7 +121,13 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
             disabled={loadingDefaults || generating || applying || !instructions.trim()}
             onClick={generate}
           >
-            {generating ? "Generating…" : candidate ? "Generate again" : "Generate summary"}
+            {generating
+              ? "Generating…"
+              : candidate
+                ? "Generate again"
+                : baseline.recap
+                  ? "Rewrite summary"
+                  : "Generate summary"}
           </ControlButton>
           {candidate ? (
             <ConfirmDialogActionButton
@@ -162,7 +168,10 @@ export function RecapDialog({ content, open, onClose, onApplied }: RecapDialogPr
           </p>
         ) : (
           <p className="text-fg-primary mt-1 text-sm">
-            {candidate?.text ?? "No summary generated yet. Select Generate summary to create one."}
+            {candidate?.text ??
+              (baseline.recap
+                ? "Generate a candidate to replace the current summary."
+                : "No summary yet. Select Generate summary to write one.")}
           </p>
         )}
       </section>

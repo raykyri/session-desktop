@@ -91,7 +91,7 @@ export function AppShell() {
           toggleSidebar();
           return;
         case "focusFollowups":
-        case "openFolderMenu":
+        case "openWorkspaceMenu":
         case "toggleArtifactPanel":
         case "moveResearchItem":
           // Owned by the mounted view rather than the shell: the shell

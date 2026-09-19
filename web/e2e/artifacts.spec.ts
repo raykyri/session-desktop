@@ -21,7 +21,7 @@ test("an attached document opens in the preview panel and reloads in place", asy
   await signInAndOpenHome(page, { login: "e2e-artifact" });
 
   // Set input files programmatically on the hidden file input element.
-  await page.locator('form[aria-label="New research"] input[type="file"]').setInputFiles({
+  await page.locator('form[aria-label="New thread"] input[type="file"]').setInputFiles({
     name: "ring-buffers.md",
     mimeType: "text/markdown",
     buffer: Buffer.from(REPORT),

@@ -349,7 +349,7 @@ export function ResearchQueryComposer({
 
   return (
     <form
-      aria-label="New research"
+      aria-label="New thread"
       className={cn(
         "border-border-control bg-surface-field flex flex-col gap-2 rounded-lg border p-2",
         "focus-within:border-focus-ring focus-within:shadow-[inset_0_0_0_1px_var(--focus-ring)]",
@@ -377,8 +377,8 @@ export function ResearchQueryComposer({
         ref={promptRef}
         rows={2}
         value={prompt}
-        aria-label="What would you like to investigate?"
-        placeholder="What would you like to investigate?"
+        aria-label="What do you want to research?"
+        placeholder="What do you want to research?"
         className="research-composer-text text-fg-primary placeholder:text-fg-placeholder disabled:text-fg-disabled min-w-0 resize-none border-0 bg-transparent px-1 py-1 outline-none"
         style={{ maxHeight: COMPOSER_TEXTAREA_MAX_HEIGHT }}
         onChange={(event) => updatePrompt(event.currentTarget.value)}
