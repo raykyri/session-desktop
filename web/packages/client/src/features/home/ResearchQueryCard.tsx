@@ -138,7 +138,7 @@ export function ResearchQueryCard({
         </article>
       ) : null}
 
-      <TweetAttachments attachments={query.attachments} />
+      <TweetAttachments attachments={query.attachments} className="pb-1" />
 
       {running ? (
         <p className="text-fg-muted m-0 flex items-center gap-1.5 text-sm" role="status">

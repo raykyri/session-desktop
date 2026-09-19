@@ -102,7 +102,7 @@ export const SegmentPrompt = memo(function SegmentPrompt({
       ) : null}
       <TweetAttachments
         attachments={node.attachments}
-        className={cn("w-full", prompt && "mt-2.5", !showFooter && "mb-6")}
+        className={cn("w-full pb-1", prompt && "mt-2.5", !showFooter && "mb-6")}
       />
       {node.documentIds.length > 0 ? (
         <DocumentChips documentIds={node.documentIds} workspaceId={workspaceId} />
