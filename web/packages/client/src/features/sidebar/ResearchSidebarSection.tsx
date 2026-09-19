@@ -784,20 +784,26 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             >
               <LoaderCircle size={12} className="session-spin" aria-hidden="true" />
               {tree.runningCount > 1 ? tree.runningCount : null}
+              <span className="sr-only">
+                {tree.runningCount === 1
+                  ? "1 run in progress"
+                  : `${tree.runningCount} runs in progress`}
+              </span>
             </span>
           ) : !archived && tree.hasUnseenFailure ? (
             <span
               className="text-status-failed shrink-0 text-base"
               title="Failed since last viewed — open to acknowledge"
             >
-              !
+              <span aria-hidden="true">!</span>
+              <span className="sr-only">Failed since last viewed</span>
             </span>
           ) : !archived && tree.hasUnseenUpdate ? (
             <span
               className="text-status-attention shrink-0 text-base"
               title="Updated since last viewed"
             >
-              New
+              New<span className="sr-only"> since last viewed</span>
             </span>
           ) : null}
           {starred ? (
@@ -837,7 +843,12 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
     const folderStarred = isResearchStarred(folderState, folder.id);
     const hasRunning = memberTrees(folder.id).some((tree) => tree.runningCount > 0);
     return (
-      <div key={folder.id} role="group" aria-label={`${folder.name} (${unit.trees.length})`}>
+      <div
+        key={folder.id}
+        role="group"
+        aria-label={`${folder.name} (${unit.trees.length})`}
+        className="flex flex-col gap-px"
+      >
         <ContextMenu
           label={`Actions for ${folder.name}`}
           items={
@@ -917,7 +928,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             </button>
             <Folder size={12} aria-hidden="true" className="text-fg-subtle shrink-0" />
             <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-            <span className="text-fg-disabled shrink-0 text-base">{unit.trees.length}</span>
+            <span className="text-fg-disabled shrink-0 text-xs">{unit.trees.length}</span>
             {folderStarred ? (
               <Star size={12} aria-hidden="true" className="text-fg-subtle shrink-0" />
             ) : null}
@@ -989,18 +1000,14 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
                 type="button"
                 aria-label={`Show ${filter} research`}
                 title={`Show ${filter} research`}
-                className={cn(ICON_BUTTON, "h-control-sm px-1 text-base capitalize")}
+                className={cn(ICON_BUTTON, "h-control-sm px-1 text-xs capitalize")}
               >
                 {filter}
               </button>
             }
           >
             {(["active", "archived", "all"] as const).map((option) => (
-              <MenuItem
-                key={option}
-                onClick={() => setFilter(option)}
-                hint={filter === option ? "✓" : undefined}
-              >
+              <MenuItem key={option} onClick={() => setFilter(option)} selected={filter === option}>
                 <span className="capitalize">{option}</span>
               </MenuItem>
             ))}
@@ -1040,7 +1047,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
         <>
           <div className={SIDEBAR_SECTION_HEADING}>
             <span>Archived</span>
-            <span className="text-fg-disabled text-base">{visibleArchived.length}</span>
+            <span className="text-fg-disabled text-xs">{visibleArchived.length}</span>
           </div>
           {visibleArchived.map((tree, index) =>
             renderTreeRow(tree, {
@@ -1077,7 +1084,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
           tree={renamingTree}
           open
           onClose={() => setRenamingTree(null)}
-          onRename={(treeId, title) => rename.mutate({ treeId, title })}
+          onRename={(treeId, title) => rename.mutateAsync({ treeId, title })}
         />
       ) : null}
 
@@ -1266,8 +1273,8 @@ function gapClass(
   const before = target.index === unitIndex && (role === "first" || role === "only");
   const after =
     target.index === length && unitIndex === length - 1 && (role === "last" || role === "only");
-  if (before) return "border-accent border-t";
-  if (after) return "border-accent border-b";
+  if (before) return "shadow-[0_-1px_0_0_var(--color-accent)]";
+  if (after) return "shadow-[0_1px_0_0_var(--color-accent)]";
   return undefined;
 }
 
@@ -1279,8 +1286,9 @@ function memberDropClass(
 ): string | undefined {
   if (target?.kind !== "folder" || target.folderId !== folderId || target.onHeader)
     return undefined;
-  if (target.index === index) return "border-accent border-t";
-  if (target.index === length && index === length - 1) return "border-accent border-b";
+  if (target.index === index) return "shadow-[0_-1px_0_0_var(--color-accent)]";
+  if (target.index === length && index === length - 1)
+    return "shadow-[0_1px_0_0_var(--color-accent)]";
   return undefined;
 }
 
@@ -1290,7 +1298,8 @@ function archivedDropClass(
   length: number,
 ): string | undefined {
   if (target?.kind !== "gap" || target.scope.kind !== "archived") return undefined;
-  if (target.index === index) return "border-accent border-t";
-  if (target.index === length && index === length - 1) return "border-accent border-b";
+  if (target.index === index) return "shadow-[0_-1px_0_0_var(--color-accent)]";
+  if (target.index === length && index === length - 1)
+    return "shadow-[0_1px_0_0_var(--color-accent)]";
   return undefined;
 }

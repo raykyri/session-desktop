@@ -2,8 +2,8 @@
 //
 // The breadcrumb down to the selected node, a chip counting what this page
 // shows, the full-transcript toggle, and Cancel while a run is in flight.
-// Node-level back/forward has no buttons here: it is driven by ⌘[ / ⌘] and
-// trackpad swipes (`ResearchPage.tsx`).
+// Node-level back/forward has no buttons here: it is driven by ⌘[ / ⌘] and the
+// mouse back/forward buttons (`ResearchPage.tsx`).
 //
 // The breadcrumb collapses deep paths to "root / … / parent / current": the
 // Deep hierarchies collapse intermediate breadcrumbs to prevent UI crowding.
@@ -118,8 +118,10 @@ export function DocumentHeader({
       </nav>
       {threadLength > 1 ? (
         <span className="text-fg-subtle shrink-0 text-xs">
-          {threadLength} {threadLength === 1 ? "turn" : "turns"} in thread
-          {branchCount > 0 ? ` · ${branchCount} ${branchCount === 1 ? "branch" : "branches"}` : ""}
+          {threadLength} turns in thread
+          {branchCount > 0
+            ? ` · ${branchCount} ${branchCount === 1 ? "branch" : "branches"} in thread`
+            : ""}
         </span>
       ) : null}
       {fullTrace ? (

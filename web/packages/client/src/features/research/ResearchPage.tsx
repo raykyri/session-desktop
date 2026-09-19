@@ -42,11 +42,12 @@ import {
 } from "../../api/queries.js";
 import { writeClipboardText } from "../../lib/clipboard.js";
 import { cn } from "../../lib/cn.js";
-import { errorMessage, pushToast } from "../../lib/toast.js";
+import { pushErrorToast, pushToast } from "../../lib/toast.js";
 import { nodeDraftKey, useDraftsStore } from "../../stores/drafts.js";
 import { useNavigationStore } from "../../stores/navigation.js";
 import { useRecapPendingStore } from "../../stores/recapPending.js";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator } from "../../ui/ContextMenu.js";
+import { ConfirmDialog } from "../../ui/Dialog.js";
 import { DomSearchBar } from "../../ui/DomSearchBar.js";
 import { MenuItem, MenuSeparator } from "../../ui/Menu.js";
 import { launchableModels } from "../composer/ResearchQueryComposer.js";
@@ -184,11 +185,10 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   const markViewed = useMarkTreeViewed();
   const updateDocument = useUpdateResearchDocument();
   const highlights = useHighlightMutations(treeId);
-  const toast = useCallback(
-    (title: string, tone: "info" | "warning" = "info") =>
-      pushToast({ title, tone: tone === "warning" ? "warning" : "info" }),
-    [],
-  );
+  const toast = useCallback((title: string) => pushToast({ title, tone: "info" }), []);
+  // Retrying a completed answer discards it; the dialog stands between the
+  // click and the run. Failed or cancelled nodes retry at once.
+  const [confirmingRetry, setConfirmingRetry] = useState<string | null>(null);
 
   /* ------------------------------------------------------------------ refs */
 
@@ -541,7 +541,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
           window.getSelection()?.removeAllRanges();
           setAction(null);
         })
-        .catch((error: unknown) => toast(errorMessage(error), "warning"))
+        .catch((error: unknown) => pushErrorToast("The highlight could not be saved", error))
         .finally(() => setSavingHighlight(false));
     },
     [savingHighlight, toast],
@@ -898,7 +898,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
           // the new segment.
           if (inline) pendingScrollNodeIdRef.current = child.id;
         })
-        .catch((error: unknown) => toast(errorMessage(error), "warning"))
+        .catch((error: unknown) => pushErrorToast("The follow-up could not be sent", error))
         .finally(() => setSubmitting(false));
     },
     [
@@ -923,7 +923,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     (nodeId: string) => {
       setCancelling(true);
       cancelMutate(nodeId)
-        .catch((error: unknown) => toast(errorMessage(error), "warning"))
+        .catch((error: unknown) => pushErrorToast("The run could not be cancelled", error))
         .finally(() => setCancelling(false));
     },
     [cancelMutate, toast],
@@ -939,10 +939,17 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       if (retryingNodeId !== null) return;
       setRetryingNodeId(nodeId);
       retryMutate({ nodeId })
-        .catch((error: unknown) => toast(errorMessage(error), "warning"))
+        .catch((error: unknown) => pushErrorToast("The answer could not be retried", error))
         .finally(() => setRetryingNodeId((current) => (current === nodeId ? null : current)));
     },
-    [retryMutate, retryingNodeId, toast],
+    [retryMutate, retryingNodeId],
+  );
+  const requestRetry = useCallback(
+    (nodeId: string) => {
+      if (nodesById.get(nodeId)?.status === "complete") setConfirmingRetry(nodeId);
+      else handleRetry(nodeId);
+    },
+    [handleRetry, nodesById],
   );
 
   const copyAnswer = useCallback(
@@ -951,7 +958,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       if (!text) return;
       writeClipboardText(text)
         .then(() => toast("Answer copied to clipboard"))
-        .catch(() => toast("Failed to copy answer", "warning"));
+        .catch((error: unknown) => pushErrorToast("The answer could not be copied", error));
     },
     [toast],
   );
@@ -972,7 +979,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     if (parts.length === 0) return;
     writeClipboardText(parts.join("\n\n---\n\n"))
       .then(() => toast("Thread copied to clipboard"))
-      .catch(() => toast("Failed to copy thread", "warning"));
+      .catch((error: unknown) => pushErrorToast("The thread could not be copied", error));
   }, [toast]);
 
   const confirmDelete = useCallback(() => {
@@ -1074,7 +1081,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         <>
           {spec.copyThread ? <Item onClick={copyThread}>Copy thread as Markdown</Item> : null}
           {spec.retry ? (
-            <Item disabled={spec.retryDisabled} onClick={() => handleRetry(spec.nodeId)}>
+            <Item disabled={spec.retryDisabled} onClick={() => requestRetry(spec.nodeId)}>
               Retry run
             </Item>
           ) : null}
@@ -1093,7 +1100,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         </>
       );
     },
-    [copyThread, handleRetry, openEditSession],
+    [copyThread, requestRetry, openEditSession],
   );
 
   // One node's rows, as the string the memo below is keyed on. Encoding is the
@@ -1186,7 +1193,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       hint={composerHint}
       retry={
         !docked && canRetryTail && tailNode
-          ? { busy: retryingNodeId === tailNode.id, onRetry: () => handleRetry(tailNode.id) }
+          ? { busy: retryingNodeId === tailNode.id, onRetry: () => requestRetry(tailNode.id) }
           : null
       }
       textareaRef={textareaRef}
@@ -1301,12 +1308,13 @@ function ResearchDocument({ treeId }: { treeId: string }) {
                     publish={publish}
                     onToggleFollow={handleToggleFollow}
                     onToggleBookmark={handleToggleBookmark}
+                    actionsBusy={setFollowed.isPending || setBookmarked.isPending}
                     onSelectNode={selectNode}
                     onExpandTurns={handleExpandTurns}
                     onShowFullTrace={handleShowFullTrace}
                     onCopyAnswer={copyAnswer}
                     onCancelNode={handleCancel}
-                    onRetryNode={handleRetry}
+                    onRetryNode={requestRetry}
                     onCardHover={handleCardHover}
                     onRootMouseDown={drag.onRootMouseDown}
                     onRootMouseUp={drag.onRootMouseUp}
@@ -1387,6 +1395,21 @@ function ResearchDocument({ treeId }: { treeId: string }) {
           }}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={confirmingRetry !== null}
+        onOpenChange={(next) => {
+          if (!next) setConfirmingRetry(null);
+        }}
+        title="Retry this answer?"
+        description="The current answer and its summary are replaced by a new run."
+        confirmLabel="Retry answer"
+        onConfirm={() => {
+          const nodeId = confirmingRetry;
+          setConfirmingRetry(null);
+          if (nodeId) handleRetry(nodeId);
+        }}
+      />
     </div>
   );
 }

@@ -45,7 +45,7 @@ export function LoginPage() {
     <div className="bg-surface-workspace flex h-full w-full items-center justify-center px-6">
       <div className="flex w-[min(360px,100%)] flex-col items-center gap-6 text-center">
         <div className="flex flex-col gap-2">
-          <h1 className="text-input text-fg-heading m-0 font-semibold">Session</h1>
+          <h1 className="text-title text-fg-heading m-0 font-semibold">Session</h1>
           <p className="text-fg-secondary m-0 text-base">
             A research workspace. Sign in to start an investigation.
           </p>

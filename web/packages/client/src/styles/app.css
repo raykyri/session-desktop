@@ -15,11 +15,18 @@
    as `--color-fg-*` (`text-fg-primary`) and the type scale as
    `--text-xs|sm|base|input` pointing at `--fs-*`. */
 @theme inline {
-  /* Type scale. */
+  /* Type scale. Leading is declared here too, so Tailwind's defaults (tuned
+     for a 12/14/16px scale) do not give the smallest text the tightest line. */
   --text-xs: var(--fs-xs);
+  --text-xs--line-height: 1.45;
   --text-sm: var(--fs-sm);
+  --text-sm--line-height: 1.45;
   --text-base: var(--fs-base);
+  --text-base--line-height: 1.5;
   --text-input: var(--fs-input);
+  --text-input--line-height: 1.5;
+  --text-title: var(--fs-title);
+  --text-title--line-height: 1.35;
 
   --font-ui: var(--font-ui);
   --font-mono: var(--font-mono);
@@ -176,7 +183,6 @@
    these; everything else re-resolves through `var()` on its own. */
 @custom-variant light (&:where([data-appearance="light"], [data-appearance="light"] *));
 @custom-variant warm (&:where([data-color-theme="orange-blob"], [data-color-theme="orange-blob"] *));
-@custom-variant reduce-motion (&:where(.reduce-motion, .reduce-motion *));
 
 @layer base {
   html,

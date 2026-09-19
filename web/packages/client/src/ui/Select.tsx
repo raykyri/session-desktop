@@ -33,7 +33,7 @@ export interface SelectProps {
 
 const TRIGGER_SIZE_CLASS = {
   sm: "min-h-control-sm px-2 text-sm",
-  md: "min-h-control-md px-2.5",
+  md: "min-h-control-md px-2.5 text-base",
 } as const;
 
 function optionRowClass(option: SelectOption): string {
@@ -196,7 +196,7 @@ export function LauncherSelect({
         disabled={disabled}
         className={cn(
           CONTROL_BUTTON,
-          "justify-between gap-2 px-2.5",
+          "min-h-control-md justify-between gap-2 px-2.5 text-base",
           selected?.tone === "danger" && "text-danger-muted",
           className,
         )}

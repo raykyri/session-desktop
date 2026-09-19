@@ -6,7 +6,7 @@ import { useRef } from "react";
 import { cn } from "../lib/cn.js";
 
 import { ControlButton } from "./Button.js";
-import { CONTROL_BUTTON, DIALOG_BACKDROP, DIALOG_POPUP } from "./surfaces.js";
+import { CONTROL_BUTTON, CONTROL_BUTTON_SIZE, DIALOG_BACKDROP, DIALOG_POPUP } from "./surfaces.js";
 
 export interface DialogProps {
   open: boolean;
@@ -50,7 +50,7 @@ export function Dialog({
           className={cn(DIALOG_POPUP, className)}
           {...(initialFocus === undefined ? {} : { initialFocus })}
         >
-          <BaseDialog.Title className="text-fg-heading m-0 text-base font-semibold">
+          <BaseDialog.Title className="text-fg-heading text-input m-0 font-semibold">
             {title}
           </BaseDialog.Title>
           {description ? (
@@ -122,6 +122,8 @@ export interface ConfirmDialogProps {
   pending?: boolean;
   pendingLabel?: string;
   tone?: "default" | "danger";
+  /** The confirm action is unavailable for a reason the description states. */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
 }
 
@@ -137,6 +139,7 @@ export function ConfirmDialog({
   pending = false,
   pendingLabel,
   tone = "default",
+  confirmDisabled = false,
   onConfirm,
 }: ConfirmDialogProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
@@ -149,13 +152,17 @@ export function ConfirmDialog({
       {...(tone === "danger" ? { initialFocus: confirmRef } : {})}
       footer={
         <>
-          <BaseDialog.Close className={CONTROL_BUTTON} disabled={pending}>
+          <BaseDialog.Close
+            className={cn(CONTROL_BUTTON, CONTROL_BUTTON_SIZE.md)}
+            disabled={pending}
+          >
             {cancelLabel}
           </BaseDialog.Close>
           <ConfirmDialogActionButton
             ref={confirmRef}
             pending={pending}
             tone={tone}
+            disabled={confirmDisabled}
             {...(pendingLabel === undefined ? {} : { pendingLabel })}
             onClick={onConfirm}
           >

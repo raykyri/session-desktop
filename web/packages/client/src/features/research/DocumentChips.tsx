@@ -32,7 +32,7 @@ export function DocumentChips({
   };
 
   return (
-    <div className="mb-[26px] flex max-w-[min(100%,640px)] flex-wrap gap-1.5">
+    <div className="flex max-w-[min(100%,640px)] flex-wrap gap-1.5">
       {documentIds.map((documentId) => {
         const info = byId.get(documentId);
         const name = info?.name ?? "Attached document";

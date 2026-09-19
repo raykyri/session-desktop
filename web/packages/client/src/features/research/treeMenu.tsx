@@ -14,8 +14,9 @@ import { isResearchStarred } from "@session/shared";
 import type { ResearchFolderState, ResearchTreeSummary } from "@session/shared";
 import { useState } from "react";
 
+import { errorMessage } from "../../lib/toast.js";
 import { ControlButton } from "../../ui/Button.js";
-import { ConfirmDialogActionButton, Dialog } from "../../ui/Dialog.js";
+import { ConfirmDialog, ConfirmDialogActionButton, Dialog } from "../../ui/Dialog.js";
 import { Input } from "../../ui/Field.js";
 import { MenuItem, MenuSeparator } from "../../ui/Menu.js";
 
@@ -102,28 +103,55 @@ export function RenameTreeDialog({
   tree: ResearchTreeSummary | { id: string; title: string };
   open: boolean;
   onClose: () => void;
-  onRename: (treeId: string, title: string) => void;
+  /** Resolves once the rename is stored; the dialog stays open until then and
+   * shows a rejection instead of closing over it. */
+  onRename: (treeId: string, title: string) => Promise<unknown> | void;
 }) {
   const [draft, setDraft] = useState(tree.title);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const trimmed = draft.trim();
   const submit = () => {
-    if (trimmed && trimmed !== tree.title) onRename(tree.id, trimmed);
-    onClose();
+    if (pending) return;
+    if (!trimmed || trimmed === tree.title) {
+      onClose();
+      return;
+    }
+    setPending(true);
+    setError(null);
+    Promise.resolve(onRename(tree.id, trimmed))
+      .then(() => onClose())
+      .catch((failure: unknown) => setError(errorMessage(failure)))
+      .finally(() => setPending(false));
   };
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) onClose();
+        if (!next && !pending) onClose();
       }}
       title="Rename thread"
       footer={
         <>
-          <ControlButton onClick={onClose}>Cancel</ControlButton>
-          <ControlButton onClick={submit}>Rename</ControlButton>
+          <ControlButton disabled={pending} onClick={onClose}>
+            Cancel
+          </ControlButton>
+          <ConfirmDialogActionButton
+            disabled={trimmed === ""}
+            pending={pending}
+            pendingLabel="Renaming…"
+            onClick={submit}
+          >
+            Rename
+          </ConfirmDialogActionButton>
         </>
       }
     >
+      {error ? (
+        <p className="text-status-failed m-0 mb-2 text-sm" role="alert">
+          {error}
+        </p>
+      ) : null}
       <Input
         // Focus the text field immediately upon dialog display.
         // eslint-disable-next-line jsx-a11y/no-autofocus
@@ -159,34 +187,28 @@ export function DeleteTreeDialog({
   onRemove: (treeId: string) => void;
 }) {
   return (
-    <Dialog
+    <ConfirmDialog
       open={open}
       onOpenChange={(next) => {
         if (!next && !busy) onClose();
       }}
       title={`Delete “${tree.title}”?`}
-      description="This permanently deletes this research, its answers, and its follow-up history. This can’t be undone."
-      footer={
+      description={
         <>
-          <ControlButton disabled={busy} onClick={onClose}>
-            Cancel
-          </ControlButton>
-          <ConfirmDialogActionButton
-            tone="danger"
-            pending={busy}
-            pendingLabel="Deleting…"
-            onClick={() => onRemove(tree.id)}
-          >
-            Delete research
-          </ConfirmDialogActionButton>
+          This permanently deletes this research, its answers, and its follow-up history. This can’t
+          be undone.
+          {error ? (
+            <span className="text-status-failed mt-2 block" role="alert">
+              {error}
+            </span>
+          ) : null}
         </>
       }
-    >
-      {error ? (
-        <p className="text-status-failed m-0 text-sm" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </Dialog>
+      tone="danger"
+      pending={busy}
+      pendingLabel="Deleting…"
+      confirmLabel="Delete research"
+      onConfirm={() => onRemove(tree.id)}
+    />
   );
 }

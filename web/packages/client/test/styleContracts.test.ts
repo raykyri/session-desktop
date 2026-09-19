@@ -152,7 +152,10 @@ test("prose typography is declared on the renderer, not on the surfaces that pla
 test("DM Sans adds one optical half-pixel to UI type but not to monospace", (t) => {
   const root = ruleBody(tokensCss, ":root");
   for (const step of ["xs", "sm", "base", "input"]) {
-    t.regex(root, new RegExp(`--fs-${step}:\\s*calc\\([^;]+var\\(--font-ui-size-offset\\)\\)`));
+    t.regex(
+      root,
+      new RegExp(`--fs-${step}:\\s*calc\\([^;]+var\\(--font-ui-size-offset\\)[^;]*\\)`),
+    );
   }
   t.regex(
     ruleBody(tokensCss, ':root[data-body-font="dm-sans"]'),
@@ -248,10 +251,14 @@ test("the theme maps the app's color ramp under fg-* and every surface under sur
   }
 });
 
-test("app.css declares the three custom variants the structural rules need", (t) => {
+test("app.css declares the two custom variants the structural rules need", (t) => {
   t.regex(appCss, /@custom-variant light \(/);
   t.regex(appCss, /@custom-variant warm \(/);
-  t.regex(appCss, /@custom-variant reduce-motion \(/);
+  t.notRegex(
+    appCss,
+    /@custom-variant reduce-motion \(/,
+    "the setting is gone; the OS preference is the one source",
+  );
 });
 
 test("the font faces moved out of tokens.css into fonts.css", (t) => {
@@ -264,10 +271,11 @@ test("the font faces moved out of tokens.css into fonts.css", (t) => {
   t.regex(fontsCss, /"JetBrains Mono"[\s\S]*?font-display: block/);
 });
 
-test("the reduced-motion block is kept and covers both the setting and the preference", (t) => {
+test("the reduced-motion block follows the OS preference and cancels Tailwind translates", (t) => {
   t.regex(proseCss, /@media \(prefers-reduced-motion: reduce\)/);
-  t.regex(proseCss, /\.reduce-motion,\n\.reduce-motion \*/);
+  t.notRegex(proseCss, /\.reduce-motion,/);
   t.regex(proseCss, /transition-duration: 0\.01ms !important/);
+  t.regex(proseCss, /translate: none/);
 });
 
 test("DOM search paints through the documented highlight registry names", (t) => {

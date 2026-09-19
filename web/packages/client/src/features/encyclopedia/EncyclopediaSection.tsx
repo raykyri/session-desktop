@@ -36,12 +36,12 @@ export function EncyclopediaSection({
   if (sorted.length === 0) return null;
 
   return (
-    <section aria-label="Encyclopedia" className="flex min-w-0 flex-col gap-0.5 px-2 pt-3">
+    <section aria-label="Encyclopedia" className="flex min-w-0 flex-col gap-px px-2 pt-3">
       <div className={SIDEBAR_SECTION_HEADING}>
         <span>Encyclopedia</span>
         <span className="text-fg-disabled text-xs">{sorted.length}</span>
       </div>
-      <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+      <ul className="m-0 flex list-none flex-col gap-px p-0">
         {sorted.map((page) => {
           const selected = page.slug === activeSlug;
           return (
@@ -51,7 +51,11 @@ export function EncyclopediaSection({
                 params={{ slug: page.slug }}
                 search={(previous: Record<string, unknown>) => previous}
                 aria-current={selected ? "page" : undefined}
-                title={page.status === "failed" ? `${page.title} (generation failed)` : page.title}
+                title={
+                  page.status === "failed"
+                    ? `${page.title} (couldn’t create this page)`
+                    : page.title
+                }
                 className={cn(SIDEBAR_ROW, selected && "bg-surface-sidebar-hover text-fg-strong")}
               >
                 <span className="min-w-0 flex-1 truncate">{page.title}</span>
@@ -59,13 +63,13 @@ export function EncyclopediaSection({
                   <LoaderCircle
                     size={13}
                     className="session-spin text-fg-subtle shrink-0"
-                    aria-label="Writing page"
+                    aria-label="Creating page"
                   />
                 ) : page.status === "failed" ? (
                   <CircleAlert
                     size={13}
                     className="text-status-failed shrink-0"
-                    aria-label="Generation failed"
+                    aria-label="Couldn’t create this page"
                   />
                 ) : null}
               </Link>

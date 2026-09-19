@@ -7,6 +7,7 @@
 // `FORBIDDEN` whatever the client chooses to show (`06-auth-and-users.md` §8).
 
 import { modelsFor } from "@session/shared";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { useAdminUsers, useCreateInvites, useMe, useSetUserLimits } from "../api/queries.js";
@@ -82,9 +83,12 @@ export function AdminPage() {
   if (!isAdmin) {
     return (
       <div className="research-reading-surface h-full overflow-y-auto px-8 py-10">
-        <h1 className="text-input text-fg-heading m-0 font-semibold">Admin</h1>
+        <h1 className="text-title text-fg-heading m-0 font-semibold">Admin</h1>
         <p className="max-w-feed text-fg-muted mt-3 text-base">
-          You must be an administrator to access this page.
+          You must be an administrator to access this page.{" "}
+          <Link to="/" search={(previous) => previous} className="text-fg-interactive">
+            Back to Home
+          </Link>
         </p>
       </div>
     );
@@ -93,7 +97,7 @@ export function AdminPage() {
   return (
     <div className="h-full overflow-y-auto px-8 py-10">
       <div className="mx-auto flex w-[min(880px,100%)] flex-col gap-8">
-        <h1 className="text-input text-fg-heading m-0 font-semibold">Admin</h1>
+        <h1 className="text-title text-fg-heading m-0 font-semibold">Admin</h1>
 
         <section className="flex flex-col gap-3">
           <h2 className="text-fg-heading m-0 text-base font-semibold">Accounts</h2>

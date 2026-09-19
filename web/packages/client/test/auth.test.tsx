@@ -51,7 +51,6 @@ test.serial("the boot loader warms the seven queries the shell renders from", as
         appearance: "dark",
         bodyFontId: "dm-sans",
         textSize: 14,
-        reduceMotion: false,
         showToolCalls: true,
         showAssistantTimestamps: false,
         showNotifications: true,

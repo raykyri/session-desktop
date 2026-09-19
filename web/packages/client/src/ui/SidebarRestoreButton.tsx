@@ -1,6 +1,7 @@
 import { PanelLeftOpen } from "lucide-react";
 
 import { cn } from "../lib/cn.js";
+import { formatChord } from "../lib/platform.js";
 
 import { IconButton } from "./Button.js";
 
@@ -17,7 +18,7 @@ export interface SidebarRestoreButtonProps {
 export function SidebarRestoreButton({
   onRestore,
   className,
-  shortcutLabel = "⇧⌘G",
+  shortcutLabel = formatChord("mod+shift+g"),
 }: SidebarRestoreButtonProps) {
   return (
     <IconButton

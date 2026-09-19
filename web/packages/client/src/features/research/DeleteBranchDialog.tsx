@@ -9,8 +9,7 @@
 import { researchBranchInfo } from "@session/shared";
 import type { ResearchNode, ResearchTreeDetail } from "@session/shared";
 
-import { ControlButton } from "../../ui/Button.js";
-import { ConfirmDialogActionButton, Dialog } from "../../ui/Dialog.js";
+import { ConfirmDialog } from "../../ui/Dialog.js";
 
 export function deleteBranchLabel(node: ResearchNode, descendantCount: number): string {
   if (node.inline && descendantCount > 0) return "Delete from here";
@@ -58,40 +57,33 @@ export function DeleteBranchDialog({
         : "This permanently deletes the follow-up and its response.";
 
   return (
-    <Dialog
+    <ConfirmDialog
       open
       onOpenChange={(next) => {
         if (!next && !busy) onCancel();
       }}
       title={title}
-      description={<>{body} This cannot be undone.</>}
-      footer={
+      description={
         <>
-          <ControlButton disabled={busy} onClick={onCancel}>
-            Cancel
-          </ControlButton>
-          <ConfirmDialogActionButton
-            tone="danger"
-            pending={busy}
-            pendingLabel="Deleting…"
-            disabled={info.hasActiveRuns}
-            title={
-              info.hasActiveRuns
-                ? "Stop or wait for this branch to finish before deleting it"
-                : undefined
-            }
-            onClick={onConfirm}
-          >
-            {isRoot ? "Delete research" : deleteBranchLabel(node, count)}
-          </ConfirmDialogActionButton>
+          {body} This cannot be undone.
+          {info.hasActiveRuns ? (
+            <span className="mt-2 block">
+              Stop or wait for this branch to finish before deleting it.
+            </span>
+          ) : null}
+          {error ? (
+            <span className="text-status-failed mt-2 block" role="alert">
+              {error}
+            </span>
+          ) : null}
         </>
       }
-    >
-      {error ? (
-        <p className="text-status-failed m-0 text-sm" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </Dialog>
+      tone="danger"
+      pending={busy}
+      pendingLabel="Deleting…"
+      confirmDisabled={info.hasActiveRuns}
+      confirmLabel={isRoot ? "Delete research" : deleteBranchLabel(node, count)}
+      onConfirm={onConfirm}
+    />
   );
 }

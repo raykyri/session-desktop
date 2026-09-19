@@ -15,10 +15,12 @@
 
   /* Type scale. Controls and body share --fs-base; the two main typing surfaces
      (composer + launcher) use --fs-input; xs/sm are for hints, badges, meta. */
-  --fs-xs: calc(11px + var(--font-ui-size-offset));
-  --fs-sm: calc(12px + var(--font-ui-size-offset));
-  --fs-base: calc(13px + var(--font-ui-size-offset));
-  --fs-input: calc(15px + var(--font-ui-size-offset));
+  --fs-xs: calc(11px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  --fs-sm: calc(12px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  --fs-base: calc(13px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  --fs-input: calc(15px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
+  /* Page and dialog titles: one step above the reading body. */
+  --fs-title: calc(17px + var(--font-ui-size-offset) + var(--app-text-zoom, 0px));
 
   /* Control heights. sm = inline/table actions, md = default, lg = composer + launcher. */
   --control-h-sm: 26px;
@@ -64,8 +66,8 @@
   --text-activity: #8f9994;
   --text-interactive: #edf0ec;
   --text-heading: #f4f3ec;
-  --text-subtle: #7f8884;
-  --text-faint: #6f7773;
+  --text-subtle: #949d98;
+  --text-faint: #8a938e;
   --text-disabled: #797d80;
   --placeholder-color: #6b726d;
   /* Extended text ramp. --text-max is the maximum-contrast state text used by
@@ -393,8 +395,8 @@
   --text-activity: #6a736e;
   --text-interactive: #1c2123;
   --text-heading: #121617;
-  --text-subtle: #6e7772;
-  --text-faint: #7d8581;
+  --text-subtle: #67706b;
+  --text-faint: #6b746f;
   --text-disabled: #8f9693;
   --placeholder-color: #8e958f;
   --text-max: #000000;

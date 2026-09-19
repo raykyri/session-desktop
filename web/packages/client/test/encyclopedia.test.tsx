@@ -122,7 +122,7 @@ test.serial("a failed page shows the error and offers a rewrite", async (t) => {
     () => screen.queryAllByText("the model returned nothing").length > 0,
     "the failure is shown",
   );
-  fireEvent.click(screen.getByText("Try again"));
+  fireEvent.click(screen.getByText("Retry"));
   await waitUntil(
     t,
     () => app.trpc.calls.some((call) => call.path === "encyclopedia.regeneratePage"),

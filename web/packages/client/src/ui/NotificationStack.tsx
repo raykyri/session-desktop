@@ -105,7 +105,7 @@ function NotificationCard({
     <article
       className={cn(
         "session-notification pointer-events-auto flex w-80 items-start gap-1 rounded-lg border",
-        "bg-surface-popover shadow-popover p-3 transition-[opacity,transform] duration-[180ms]",
+        "bg-surface-popover shadow-popover p-3 transition-[opacity,translate] duration-[180ms]",
         TONE_BORDER[notification.tone],
         phase === "visible" ? "translate-x-0 opacity-100" : "translate-x-2 opacity-0",
       )}

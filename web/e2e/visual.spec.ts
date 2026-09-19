@@ -46,7 +46,7 @@ test.describe("@visual", () => {
     for (const { appearance, colorTheme } of COMBINATIONS) {
       const response = await page.request.post(`${APP_ORIGIN}/api/trpc/settings.update`, {
         headers: { "x-requested-with": "session", "content-type": "application/json" },
-        data: { settings: { appearance, colorTheme, reduceMotion: true } },
+        data: { settings: { appearance, colorTheme } },
       });
       expect(response.ok()).toBe(true);
 

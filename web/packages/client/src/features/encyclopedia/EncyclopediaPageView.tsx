@@ -18,6 +18,7 @@ import { cn } from "../../lib/cn.js";
 import { pushErrorToast } from "../../lib/toast.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
 import { ConfirmDialog } from "../../ui/Dialog.js";
+import { QueryState } from "../../ui/QueryState.js";
 import { ResearchMarkdown, WikilinkActionsProvider } from "../markdown/index.js";
 import { RESEARCH_COLUMNS_CLASS } from "../research/layout.js";
 import { AsyncConfirmDialog } from "../sidebar/dialogs.js";
@@ -70,23 +71,18 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
       <div className={cn("research-document-frame", RESEARCH_COLUMNS_CLASS)}>
         <div className="min-w-0 pb-12">
           {query.isError ? (
-            <p className="text-status-failed py-6 text-base" role="alert">
-              This page could not be loaded.
-            </p>
+            <QueryState error="Couldn’t load this page." onRetry={() => void query.refetch()} />
           ) : !page ? (
-            <p
-              className="text-fg-muted flex items-center gap-2 py-6 text-base"
-              role="status"
-              aria-live="polite"
-            >
-              <LoaderCircle size={14} className="session-spin" aria-hidden="true" />
-              {query.isLoading ? "Preparing page…" : "This page does not exist."}
-            </p>
+            <QueryState
+              loading={query.isLoading}
+              loadingLabel="Preparing page…"
+              empty="This page does not exist."
+            />
           ) : (
             <article>
               <header className="flex items-start justify-between gap-3 pb-4">
                 <div className="min-w-0">
-                  <h1 className="text-fg-heading m-0 text-xl font-semibold">{page.title}</h1>
+                  <h1 className="text-title text-fg-heading m-0 font-semibold">{page.title}</h1>
                   {page.title !== page.term ? (
                     <p className="text-fg-subtle mt-1 mb-0 text-sm">Term: {page.term}</p>
                   ) : null}
@@ -94,12 +90,12 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
                     {generating ? (
                       <>
                         <LoaderCircle size={12} className="session-spin" aria-hidden="true" />
-                        <span>Writing</span>
+                        <span>Creating…</span>
                       </>
                     ) : page.status === "failed" ? (
                       <>
                         <CircleAlert size={12} className="text-status-failed" aria-hidden="true" />
-                        <span>Generation failed</span>
+                        <span>Couldn’t create this page</span>
                       </>
                     ) : (
                       <span>Updated {new Date(page.updatedAt).toLocaleString()}</span>
@@ -146,10 +142,10 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
               {page.status === "failed" ? (
                 <div role="alert" className="flex flex-col items-start gap-2 py-2">
                   <p className="text-status-failed m-0 text-base">
-                    {page.error ?? "The page could not be written."}
+                    {page.error ?? "Couldn’t create this page."}
                   </p>
                   <ControlButton size="sm" onClick={regenerate} disabled={busy}>
-                    Try again
+                    Retry
                   </ControlButton>
                 </div>
               ) : null}

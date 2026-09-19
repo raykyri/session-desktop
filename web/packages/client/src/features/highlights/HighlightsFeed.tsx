@@ -12,7 +12,7 @@ import { Fragment } from "react";
 
 import { useHighlightsFeed } from "../../api/queries.js";
 import { formatRelativeTime } from "../../lib/relativeTime.js";
-import { ControlButton } from "../../ui/Button.js";
+import { QueryState } from "../../ui/QueryState.js";
 
 /** "Today", "Yesterday", or a calendar date. Local time, because a highlight
  * belongs to the reader's day rather than to UTC's. */
@@ -94,81 +94,79 @@ export function HighlightsFeed({ workspaceId }: { workspaceId: string }) {
   };
 
   return (
-    <div className="research-reading-surface h-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-[calc(var(--spacing-feed)+2*clamp(20px,4vw,48px))] flex-col px-[clamp(20px,4vw,48px)] pb-12">
-        <div className="flex items-center justify-between gap-2 pt-6 pb-4">
-          <h1 className="text-input text-fg-heading m-0 font-semibold">Highlights</h1>
-        </div>
+    <div className="research-reading-surface h-full overflow-y-auto px-8 max-[900px]:px-7">
+      <div className="research-document-frame flex min-w-0 flex-col pb-12">
+        <div className="max-w-feed flex w-full flex-col">
+          <div className="flex items-center justify-between gap-2 pt-6 pb-4">
+            <h1 className="text-title text-fg-heading m-0 font-semibold">Highlights</h1>
+          </div>
 
-        {highlights.isError ? (
-          <div className="flex flex-col items-start gap-2 py-4">
-            <p className="text-status-failed m-0 text-base" role="alert">
-              Highlights could not be loaded.
-            </p>
-            <ControlButton size="sm" onClick={() => void highlights.refetch()}>
-              Retry
-            </ControlButton>
-          </div>
-        ) : items.length === 0 ? (
-          <p className="text-fg-muted m-0 py-4 text-base">
-            {highlights.isLoading
-              ? "Loading highlights…"
-              : "No highlights yet. Highlight text in research answers to see it here."}
-          </p>
-        ) : (
-          <div role="feed" aria-label="Highlights" aria-busy={highlights.isFetching}>
-            {groups.map((group) => (
-              <Fragment key={group.label}>
-                <h2 className="text-fg-subtle mt-6 mb-2 text-xs font-normal">{group.label}</h2>
-                {group.items.map((item) => {
-                  const label =
-                    item.nodeLabel && item.nodeLabel !== item.treeTitle
-                      ? `${item.treeTitle} › ${item.nodeLabel}`
-                      : item.treeTitle;
-                  const prefix = excerptContext(item.prefix, "prefix");
-                  const suffix = excerptContext(item.suffix, "suffix");
-                  return (
-                    <article key={item.highlightId} className="border-border-divider border-b py-4">
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        title="Open in thread"
-                        className="research-prose cursor-pointer text-left"
-                        onClick={() => open(item)}
-                        onKeyDown={(event) => {
-                          if (event.key !== "Enter" && event.key !== " ") return;
-                          event.preventDefault();
-                          open(item);
-                        }}
+          {highlights.isError || items.length === 0 ? (
+            <QueryState
+              loading={highlights.isLoading}
+              loadingLabel="Loading highlights…"
+              error={highlights.isError ? "Couldn’t load highlights." : undefined}
+              onRetry={() => void highlights.refetch()}
+              empty="No highlights yet. Highlight text in research answers to see it here."
+            />
+          ) : (
+            <div aria-label="Highlights" aria-busy={highlights.isFetching}>
+              {groups.map((group) => (
+                <Fragment key={group.label}>
+                  <h2 className="text-fg-subtle mt-6 mb-2 text-xs font-normal">{group.label}</h2>
+                  {group.items.map((item) => {
+                    const label =
+                      item.nodeLabel && item.nodeLabel !== item.treeTitle
+                        ? `${item.treeTitle} › ${item.nodeLabel}`
+                        : item.treeTitle;
+                    const prefix = excerptContext(item.prefix, "prefix");
+                    const suffix = excerptContext(item.suffix, "suffix");
+                    return (
+                      <article
+                        key={item.highlightId}
+                        className="border-border-divider border-b py-4"
                       >
-                        {prefix ? <span className="text-fg-muted">{`…${prefix}`}</span> : null}
-                        <mark className="bg-highlight text-fg-primary">{item.exact}</mark>
-                        {suffix ? <span className="text-fg-muted">{`${suffix}…`}</span> : null}
-                      </div>
-                      <div className="text-fg-subtle mt-2 flex items-center gap-2 text-xs">
-                        <button
-                          type="button"
-                          className="min-w-0 truncate border-0 bg-transparent p-0 text-left underline-offset-2 hover:underline"
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          title="Open in thread"
+                          className="research-prose cursor-pointer text-left"
                           onClick={() => open(item)}
+                          onKeyDown={(event) => {
+                            if (event.key !== "Enter" && event.key !== " ") return;
+                            event.preventDefault();
+                            open(item);
+                          }}
                         >
-                          {label}
-                        </button>
-                        {Number.isFinite(item.createdAt) ? (
-                          <time
-                            dateTime={new Date(item.createdAt).toISOString()}
-                            title={new Date(item.createdAt).toLocaleString()}
+                          {prefix ? <span className="text-fg-muted">{`…${prefix}`}</span> : null}
+                          <mark className="bg-highlight text-fg-primary">{item.exact}</mark>
+                          {suffix ? <span className="text-fg-muted">{`${suffix}…`}</span> : null}
+                        </div>
+                        <div className="text-fg-subtle mt-2 flex items-center gap-2 text-xs">
+                          <button
+                            type="button"
+                            className="min-w-0 truncate border-0 bg-transparent p-0 text-left underline-offset-2 hover:underline"
+                            onClick={() => open(item)}
                           >
-                            {formatRelativeTime(item.createdAt)}
-                          </time>
-                        ) : null}
-                      </div>
-                    </article>
-                  );
-                })}
-              </Fragment>
-            ))}
-          </div>
-        )}
+                            {label}
+                          </button>
+                          {Number.isFinite(item.createdAt) ? (
+                            <time
+                              dateTime={new Date(item.createdAt).toISOString()}
+                              title={new Date(item.createdAt).toLocaleString()}
+                            >
+                              {formatRelativeTime(item.createdAt)}
+                            </time>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </Fragment>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

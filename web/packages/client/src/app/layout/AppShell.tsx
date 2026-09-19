@@ -18,8 +18,7 @@ import { SessionBoot } from "../SessionBoot.js";
 
 import { Sidebar } from "./Sidebar.js";
 
-/** The routes Cmd-1..9 and Ctrl-Tab cycle through, in sidebar order. Trees
- * join this list once `research.listTrees` is wired. */
+/** The routes Cmd-1..9 and Ctrl-Tab cycle through, in sidebar order. */
 const TAB_ROUTES = ["/", "/bookmarks", "/highlights"] as const;
 
 /** An open Base UI dialog, popover, menu or select popup, if there is one.
@@ -162,10 +161,15 @@ export function AppShell() {
   // every render of a closed dialog is work nobody sees.
   const commands: PaletteCommand[] = paletteOpen
     ? buildPaletteCommands(trees.data ?? [], {
-        openTree: (treeId) => void navigate({ to: "/r/$treeId", params: { treeId }, search: {} }),
-        openHome: () => void navigate({ to: "/" }),
+        openTree: (treeId) =>
+          void navigate({
+            to: "/r/$treeId",
+            params: { treeId },
+            search: (previous) => ({ ws: (previous as { ws?: string }).ws }),
+          }),
+        openHome: () => void navigate({ to: "/", search: (previous) => previous }),
         toggleSidebar,
-        openSettings: () => void navigate({ to: "/settings" }),
+        openSettings: () => void navigate({ to: "/settings", search: (previous) => previous }),
       })
     : [];
 

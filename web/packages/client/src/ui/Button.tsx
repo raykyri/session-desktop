@@ -2,7 +2,8 @@ import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 import { cn } from "../lib/cn.js";
 
-import { CONTROL_BUTTON, ICON_BUTTON, LINK_BUTTON } from "./surfaces.js";
+import { Tooltip } from "./Tooltip.js";
+import { CONTROL_BUTTON, CONTROL_BUTTON_SIZE, ICON_BUTTON, LINK_BUTTON } from "./surfaces.js";
 
 type NativeButtonProps = ButtonHTMLAttributes<HTMLButtonElement>;
 
@@ -15,14 +16,11 @@ export interface ControlButtonProps extends NativeButtonProps {
   size?: "sm" | "md" | "lg";
 }
 
-const SIZE_CLASS = {
-  sm: "min-h-control-sm px-2 text-sm",
-  md: "min-h-control-md",
-  lg: "min-h-control-lg",
-} as const;
+const SIZE_CLASS = CONTROL_BUTTON_SIZE;
 
 const DANGER_CLASS =
-  "border-danger-border bg-danger-bg text-danger-strong hover:bg-danger-bg-hover";
+  "border-danger-border bg-danger-bg text-danger-strong hover:not-disabled:bg-danger-bg-hover " +
+  "disabled:border-border-control disabled:bg-control";
 
 export function ControlButton({
   ref,
@@ -58,17 +56,20 @@ export function IconButton({
   children,
   ...props
 }: IconButtonProps) {
+  // The label doubles as the tooltip, shown on hover and on keyboard focus
+  // alike; `title` is left to callers that need overflow text.
   return (
-    <button
-      {...props}
-      ref={ref}
-      type={type}
-      aria-label={label}
-      title={props.title ?? label}
-      className={cn(ICON_BUTTON, "size-control-sm", className)}
-    >
-      {children}
-    </button>
+    <Tooltip content={props.title ?? label}>
+      <button
+        {...props}
+        ref={ref}
+        type={type}
+        aria-label={label}
+        className={cn(ICON_BUTTON, "size-control-sm", className)}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 

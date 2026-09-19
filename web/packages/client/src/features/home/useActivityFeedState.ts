@@ -24,10 +24,9 @@ export const FEED_TOP_THRESHOLD = 60;
 /**
  * How the feed's two "return to the head" controls should travel.
  *
- * The OS preference is the one consulted, not the app's `reduceMotion`
- * setting: that setting is worded for decorative transitions, while a several-
- * screen animated jump is the kind of motion `prefers-reduced-motion` exists
- * to suppress. `matchMedia` is optional here because jsdom does not implement
+ * The OS preference is the one consulted (the app has no motion setting of
+ * its own): a several-screen animated jump is the kind of motion
+ * `prefers-reduced-motion` exists to suppress. `matchMedia` is optional here because jsdom does not implement
  * it, and a missing implementation reads as "no preference stated".
  */
 export function feedScrollBehavior(): ScrollBehavior {

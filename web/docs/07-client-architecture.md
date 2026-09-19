@@ -67,8 +67,8 @@ Dependencies: `react`, `react-dom`, `@tanstack/react-router`,
 
 `main.tsx` mounts `QueryClientProvider`, the tRPC provider, `RouterProvider`,
 and a `ThemeEffects` component that writes `data-color-theme`,
-`data-appearance`, `data-body-font`, `--font-ui`, and the `reduce-motion`
-class on `<html>` from the settings store (`App.tsx:1926-1969` logic). A
+`data-appearance`, `data-body-font` and `--font-ui` on `<html>` from the
+settings store (`App.tsx:1926-1969` logic). A
 `<meta name="color-scheme">` replaces `getCurrentWindow().setTheme`.
 
 Boot sequence: settings store hydrates from localStorage → router renders →

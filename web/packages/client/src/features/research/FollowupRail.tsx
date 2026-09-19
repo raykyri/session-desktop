@@ -24,7 +24,7 @@ const CARD =
   "focus-visible:ring-2 focus-visible:ring-focus-ring outline-none";
 
 const ANCHORED_CARD =
-  "absolute right-0.5 left-0 z-[1] border-border-subtle bg-surface-card px-[11px] py-[9px] " +
+  "absolute right-0.5 left-0 z-[1] border-border-subtle bg-surface-card px-3 py-2.5 " +
   "hover:z-[4] hover:border-border-default max-[900px]:static";
 
 export const ConnectorOverlay = memo(
@@ -183,7 +183,7 @@ export const FollowupRail = memo(function FollowupRail({
       aria-label="Follow-ups"
     >
       {askComposer}
-      <div className="flex flex-col gap-5">{stacked.map((child) => renderCard(child))}</div>
+      <div className="flex flex-col gap-4">{stacked.map((child) => renderCard(child))}</div>
       {anchored.map(({ child, top }) => renderCard(child, top))}
     </aside>
   );

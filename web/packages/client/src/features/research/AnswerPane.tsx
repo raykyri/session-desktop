@@ -19,6 +19,7 @@ import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { cn } from "../../lib/cn.js";
 import { ControlButton, IconButton, LinkButton } from "../../ui/Button.js";
 import { Menu } from "../../ui/Menu.js";
+import { QueryState } from "../../ui/QueryState.js";
 
 import { SourcesFooter } from "./SourcesFooter.js";
 import { TimelineItem } from "./TimelineItem.js";
@@ -56,7 +57,7 @@ export function Recap({
       </p>
     ) : null;
   }
-  return <p className="research-summary-text mb-7">Summary: {recap.text.trim()}</p>;
+  return <p className="research-summary-text mb-8">Summary: {recap.text.trim()}</p>;
 }
 
 export interface AnswerPaneProps {
@@ -146,34 +147,25 @@ export const AnswerPane = memo(function AnswerPane({
     </ControlButton>
   ) : null;
 
-  const noContent = contentLoading && view.timelineItems.length === 0;
+  const noContent = (contentLoading || Boolean(contentError)) && view.timelineItems.length === 0;
 
   return (
     <section className="min-w-0" aria-label="Research response">
       {noContent ? (
-        <div className="text-fg-muted flex items-center gap-2 py-4 text-sm">
-          {contentError ? (
-            <>
-              <p role="alert" className="m-0">
-                {contentError}
-              </p>
-              <ControlButton size="sm" onClick={onRetryContentLoad}>
-                Retry
-              </ControlButton>
-            </>
-          ) : (
-            <LoaderCircle className="session-spin" size={18} aria-hidden="true" />
-          )}
-        </div>
+        <QueryState
+          loading={!contentError}
+          loadingLabel="Loading answer…"
+          error={contentError ? `Couldn’t load the answer: ${contentError}` : undefined}
+          onRetry={onRetryContentLoad}
+        />
       ) : (
         <>
           {contentError ? (
-            <div className="text-fg-muted mb-3 flex items-center gap-2 text-sm" role="alert">
-              <p className="m-0">Failed to refresh response: {contentError}</p>
-              <ControlButton size="sm" onClick={onRetryContentLoad}>
-                Retry
-              </ControlButton>
-            </div>
+            <QueryState
+              className="py-0 pb-3"
+              error={`Couldn’t refresh the answer: ${contentError}`}
+              onRetry={onRetryContentLoad}
+            />
           ) : null}
           {node.status === "queued" ? (
             <p className="text-fg-muted mb-3 text-sm" role="status">
@@ -223,7 +215,7 @@ export const AnswerPane = memo(function AnswerPane({
                 className={cn(
                   // `relative` is the fallback highlight layer's positioning
                   // context (`selection/painting.ts`).
-                  "relative flex min-w-0 flex-col gap-[9px]",
+                  "relative flex min-w-0 flex-col gap-2",
                   pointerOverHighlight && "cursor-pointer",
                 )}
                 onMouseDown={onRootMouseDown}
@@ -249,7 +241,7 @@ export const AnswerPane = memo(function AnswerPane({
             </p>
           ) : null}
           {node.status === "complete" ? <SourcesFooter turns={turns} /> : null}
-          <footer className="text-fg-placeholder mt-5 flex min-h-6 flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+          <footer className="text-fg-subtle min-h-control-sm mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-base">
             <span>
               {view.answerWordCount.toLocaleString()}{" "}
               {view.answerWordCount === 1 ? "word" : "words"}

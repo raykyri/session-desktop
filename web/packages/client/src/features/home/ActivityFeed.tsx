@@ -49,6 +49,7 @@ import { cn } from "../../lib/cn.js";
 import { errorMessage, pushErrorToast, pushToast } from "../../lib/toast.js";
 import { ActivityMetadataLine } from "../../ui/ActivityMetadataLine.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
+import { QueryState } from "../../ui/QueryState.js";
 import { JournalEntryCard } from "../journal/JournalEntryCard.js";
 import { journalEntryUrl, type JournalMenuAction } from "../journal/entryMenu.js";
 import { RecapDialog } from "../research/RecapDialog.js";
@@ -98,6 +99,9 @@ export interface ActivityFeedProps {
    * off the whole column. */
   scrollRef?: React.RefObject<HTMLDivElement | null>;
 }
+
+/** How long the "Entry removed" undo offer stays, matching a toast. */
+const UNDO_MS = 8000;
 
 export function ActivityFeed({
   workspaceId,
@@ -269,6 +273,10 @@ export function ActivityFeed({
         // Retain the deleted entry locally so undo can restore it without
         // refetching.
         setUndoEntry(entry);
+        window.setTimeout(
+          () => setUndoEntry((current) => (current?.id === entry.id ? null : current)),
+          UNDO_MS,
+        );
         void deleteJournalEntry(entry.id)
           .then(() => client.invalidateQueries({ queryKey: ["activity"] }))
           .catch((error: unknown) => {
@@ -316,149 +324,157 @@ export function ActivityFeed({
   const nothingYet = feed.isSuccess && events.length === 0;
 
   return (
-    <div ref={scrollRef} className="research-reading-surface h-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-[calc(var(--spacing-feed)+2*clamp(20px,4vw,48px))] flex-col px-[clamp(20px,4vw,48px)] pb-12">
-        <div className="flex items-center justify-between gap-2 pt-6 pb-4">
-          <h1 className="text-input text-fg-heading m-0 font-semibold">{title}</h1>
-        </div>
+    <div
+      ref={scrollRef}
+      className="research-reading-surface h-full overflow-y-auto px-8 max-[900px]:px-7"
+    >
+      <div className="research-document-frame flex min-w-0 flex-col pb-12">
+        <div className="max-w-feed flex w-full flex-col">
+          <div className="flex items-center justify-between gap-2 pt-6 pb-4">
+            <h1 className="text-title text-fg-heading m-0 font-semibold">{title}</h1>
+          </div>
 
-        {header}
+          {header}
 
-        {undoEntry ? (
-          <div
-            role="status"
-            className="border-border-divider bg-surface-panel my-3 flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
-          >
-            <span className="flex-1">Entry removed</span>
-            <ControlButton
-              size="sm"
-              className="gap-1.5"
-              onClick={() => {
-                const entry = undoEntry;
-                setUndoEntry(null);
-                void restoreJournalEntry(entry)
-                  .then(() => client.invalidateQueries({ queryKey: ["activity"] }))
-                  .catch((error: unknown) =>
-                    pushErrorToast("The entry could not be restored", error),
-                  );
-              }}
+          {undoEntry ? (
+            <div
+              role="status"
+              className="border-border-divider bg-surface-panel my-3 flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
             >
-              <Undo2 size={12} aria-hidden="true" />
-              <span>Undo</span>
-            </ControlButton>
-            <IconButton label="Dismiss undo" onClick={() => setUndoEntry(null)}>
-              <X size={12} aria-hidden="true" />
-            </IconButton>
-          </div>
-        ) : null}
-
-        {newCount > 0 ? (
-          <div className="sticky top-2 z-1 flex justify-center" role="status" aria-live="polite">
-            <ControlButton
-              size="sm"
-              className="rounded-full"
-              onClick={() => {
-                setNewCount(0);
-                scrollToTop();
-              }}
-            >
-              {newCount} new {newCount === 1 ? "update" : "updates"}
-            </ControlButton>
-          </div>
-        ) : null}
-
-        <div role="feed" aria-label={title} aria-busy={feed.isFetching}>
-          <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
-            {virtualItems.map((virtualRow) => {
-              const event = events[virtualRow.index];
-              if (!event) return null;
-              const source = event.source;
-              return (
-                <div
-                  key={virtualRow.key}
-                  ref={virtualizer.measureElement}
-                  data-index={virtualRow.index}
-                  className="absolute top-0 left-0 w-full"
-                  style={{ transform: `translateY(${virtualRow.start}px)` }}
-                >
-                  <div
-                    className="flex flex-col gap-1.5 py-5"
-                    role="article"
-                    aria-posinset={virtualRow.index + 1}
-                    aria-setsize={feed.hasNextPage ? -1 : events.length}
-                  >
-                    {source.kind === "journal" ? (
-                      <>
-                        <ActivityMetadataLine event={event} className="text-xs" />
-                        <JournalEntryCard
-                          entry={source.entry}
-                          onAction={(action) => runEntryAction(source.entry, action)}
-                        />
-                      </>
-                    ) : (
-                      <ResearchQueryCard
-                        query={source.query}
-                        tree={treeById.get(source.query.treeId)}
-                        metadata={<ActivityMetadataLine event={event} />}
-                        menuItems={treeMenu(treeById.get(source.query.treeId), source.query)}
-                        onOpen={() => openQuery(source.query)}
-                        onOpenChild={openQuery}
-                        onToggleFollow={() =>
-                          setFollowed.mutate({
-                            treeId: source.query.treeId,
-                            value: !treeById.get(source.query.treeId)?.followed,
-                          })
-                        }
-                        onToggleBookmark={() =>
-                          setBookmarked.mutate({
-                            treeId: source.query.treeId,
-                            value: !treeById.get(source.query.treeId)?.bookmarked,
-                          })
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {nothingYet ? (
-            <p className="text-fg-muted m-0 py-4 text-base">
-              {bookmarkedOnly
-                ? "No bookmarked research yet. Bookmark a research thread to see it here."
-                : "No recent activity yet. Run a query or save a source to see it here."}
-            </p>
-          ) : null}
-
-          <div aria-live="polite" className="flex flex-col items-start gap-2 py-4">
-            {feed.hasNextPage ? (
+              <span className="flex-1">Entry removed</span>
               <ControlButton
                 size="sm"
                 className="gap-1.5"
-                disabled={feed.isFetchingNextPage}
-                onClick={() => void feed.fetchNextPage()}
+                onClick={() => {
+                  const entry = undoEntry;
+                  setUndoEntry(null);
+                  void restoreJournalEntry(entry)
+                    .then(() => client.invalidateQueries({ queryKey: ["activity"] }))
+                    .catch((error: unknown) =>
+                      pushErrorToast("The entry could not be restored", error),
+                    );
+                }}
               >
-                <ChevronDown size={13} aria-hidden="true" />
-                <span>
-                  {feed.isFetchingNextPage
-                    ? "Loading…"
-                    : feed.isFetchNextPageError
-                      ? "Retry older activity"
-                      : "Load older activity"}
-                </span>
+                <Undo2 size={12} aria-hidden="true" />
+                <span>Undo</span>
               </ControlButton>
-            ) : null}
-            {feed.isFetchNextPageError ? (
-              <p className={cn("text-status-failed m-0 text-sm")} role="alert">
-                Couldn’t load older activity.
-              </p>
-            ) : null}
-            {feed.isError ? (
-              <ControlButton size="sm" onClick={() => void feed.refetch()}>
-                Retry
+              <IconButton label="Dismiss undo" onClick={() => setUndoEntry(null)}>
+                <X size={12} aria-hidden="true" />
+              </IconButton>
+            </div>
+          ) : null}
+
+          {newCount > 0 ? (
+            <div className="sticky top-2 z-1 flex justify-center" role="status" aria-live="polite">
+              <ControlButton
+                size="sm"
+                className="rounded-full"
+                onClick={() => {
+                  setNewCount(0);
+                  scrollToTop();
+                }}
+              >
+                {newCount} new {newCount === 1 ? "update" : "updates"}
               </ControlButton>
+            </div>
+          ) : null}
+
+          <div role="feed" aria-label={title} aria-busy={feed.isFetching}>
+            <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+              {virtualItems.map((virtualRow) => {
+                const event = events[virtualRow.index];
+                if (!event) return null;
+                const source = event.source;
+                return (
+                  <div
+                    key={virtualRow.key}
+                    ref={virtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    className="absolute top-0 left-0 w-full"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    <div
+                      className="flex flex-col gap-1.5 py-5"
+                      role="article"
+                      aria-posinset={virtualRow.index + 1}
+                      aria-setsize={feed.hasNextPage ? -1 : events.length}
+                    >
+                      {source.kind === "journal" ? (
+                        <>
+                          <ActivityMetadataLine event={event} />
+                          <JournalEntryCard
+                            entry={source.entry}
+                            onAction={(action) => runEntryAction(source.entry, action)}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <ActivityMetadataLine event={event} />
+                          <ResearchQueryCard
+                            query={source.query}
+                            tree={treeById.get(source.query.treeId)}
+                            menuItems={treeMenu(treeById.get(source.query.treeId), source.query)}
+                            onOpen={() => openQuery(source.query)}
+                            onOpenChild={openQuery}
+                            onToggleFollow={() =>
+                              setFollowed.mutate({
+                                treeId: source.query.treeId,
+                                value: !treeById.get(source.query.treeId)?.followed,
+                              })
+                            }
+                            onToggleBookmark={() =>
+                              setBookmarked.mutate({
+                                treeId: source.query.treeId,
+                                value: !treeById.get(source.query.treeId)?.bookmarked,
+                              })
+                            }
+                            actionsBusy={setFollowed.isPending || setBookmarked.isPending}
+                          />
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {nothingYet ? (
+              <QueryState
+                empty={
+                  bookmarkedOnly
+                    ? "No bookmarked research yet. Bookmark a research thread to see it here."
+                    : "No recent activity yet. Run a query or save a source to see it here."
+                }
+              />
             ) : null}
+
+            <div aria-live="polite" className="flex flex-col items-start gap-2 py-4">
+              {feed.hasNextPage ? (
+                <ControlButton
+                  size="sm"
+                  className="gap-1.5"
+                  disabled={feed.isFetchingNextPage}
+                  onClick={() => void feed.fetchNextPage()}
+                >
+                  <ChevronDown size={13} aria-hidden="true" />
+                  <span>
+                    {feed.isFetchingNextPage
+                      ? "Loading…"
+                      : feed.isFetchNextPageError
+                        ? "Retry older activity"
+                        : "Load older activity"}
+                  </span>
+                </ControlButton>
+              ) : null}
+              {feed.isFetchNextPageError ? (
+                <p className={cn("text-status-failed m-0 text-sm")} role="alert">
+                  Couldn’t load older activity.
+                </p>
+              ) : null}
+              {feed.isError ? (
+                <QueryState error="Couldn’t load activity." onRetry={() => void feed.refetch()} />
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
@@ -480,7 +496,7 @@ export function ActivityFeed({
           tree={renamingTree}
           open
           onClose={() => setRenamingTree(null)}
-          onRename={(treeId, title) => rename.mutate({ treeId, title })}
+          onRename={(treeId, title) => rename.mutateAsync({ treeId, title })}
         />
       ) : null}
       {deletingTree ? (

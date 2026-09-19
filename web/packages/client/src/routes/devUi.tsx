@@ -3,6 +3,7 @@ import { Ellipsis, Link2 } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { cn } from "../lib/cn.js";
+import { formatChord } from "../lib/platform.js";
 import { openDiagramLightbox, openImageLightbox } from "../stores/lightboxes.js";
 import type { NotificationItem } from "../stores/notifications.js";
 import { ControlButton, IconButton, LinkButton } from "../ui/Button.js";
@@ -112,7 +113,7 @@ function Kitchen() {
           <Ellipsis size={16} aria-hidden="true" />
         </IconButton>
         <LinkButton>Link button</LinkButton>
-        <ShortcutHint>⇧⌘G</ShortcutHint>
+        <ShortcutHint>{formatChord("mod+shift+g")}</ShortcutHint>
         <ComposerSubmitShortcutGlyph />
         <HistoryNav canGoBack canGoForward={false} onBack={() => {}} onForward={() => {}} />
         <SidebarRestoreButton onRestore={() => {}} />
@@ -160,16 +161,16 @@ function Kitchen() {
             ],
           }}
         />
-        <Switch label="Reduce motion" checked={switchOn} onCheckedChange={setSwitchOn} />
+        <Switch label="Example switch" checked={switchOn} onCheckedChange={setSwitchOn} />
         <Checkbox label="Include archived" checked={checked} onCheckedChange={setChecked} />
       </Row>
 
       <Row title="Layers">
         <Menu trigger={<ControlButton>Menu</ControlButton>} label="Example menu">
-          <MenuItem hint="⌘R" onClick={() => {}}>
+          <MenuItem hint={formatChord("mod+r")} onClick={() => {}}>
             Rename
           </MenuItem>
-          <MenuItem hint="⌘B" onClick={() => {}}>
+          <MenuItem hint={formatChord("mod+b")} onClick={() => {}}>
             Bookmark
           </MenuItem>
           <MenuSeparator />
@@ -325,7 +326,13 @@ function Kitchen() {
         onClose={() => setPaletteOpen(false)}
         commands={[
           { id: "home", section: "Actions", title: "Home", action: () => {} },
-          { id: "settings", section: "Actions", title: "Settings", hint: "⌘,", action: () => {} },
+          {
+            id: "settings",
+            section: "Actions",
+            title: "Settings",
+            hint: formatChord("mod+,"),
+            action: () => {},
+          },
           {
             id: "tree",
             section: "Research",

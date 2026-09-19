@@ -15,14 +15,19 @@
 
 import { composerTextareaHeight, findModel, launcherTabAction } from "@session/shared";
 import type { ModelInfo } from "@session/shared";
-import { Check, ChevronDown, LoaderCircle, X } from "lucide-react";
+import { ChevronDown, LoaderCircle, X } from "lucide-react";
 import { useLayoutEffect } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
 
 import { cn } from "../../lib/cn.js";
+import { formatChord } from "../../lib/platform.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
-import { ComposerSubmitShortcutGlyph } from "../../ui/ComposerSubmitShortcut.js";
+import {
+  ComposerSubmitShortcutGlyph,
+  isComposerSubmitShortcut,
+} from "../../ui/ComposerSubmitShortcut.js";
 import { Menu, MenuItem } from "../../ui/Menu.js";
+import { GHOST_TRIGGER } from "../../ui/surfaces.js";
 
 import { quoteDisplayText } from "./selection/dom.js";
 
@@ -37,7 +42,7 @@ export const FOLLOWUP_MODE_OPTIONS: {
   shortcut: string | null;
 }[] = [
   { mode: "thread", label: "Continue thread", shortcut: null },
-  { mode: "branch", label: "Start side branch", shortcut: "⇧⌘↵" },
+  { mode: "branch", label: "Start side branch", shortcut: formatChord("mod+shift+enter") },
 ];
 
 export interface FollowupComposerProps {
@@ -110,11 +115,7 @@ export function FollowupComposer({
   const modelLabel = findModel(model)?.label ?? model;
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (
-      event.key === "Enter" &&
-      (event.metaKey || event.ctrlKey) &&
-      !event.nativeEvent.isComposing
-    ) {
+    if (isComposerSubmitShortcut(event)) {
       event.preventDefault();
       // A targeted ask is already a branch, so it ignores the shift.
       onSubmit(!docked && event.shiftKey ? "branch" : undefined);
@@ -133,8 +134,9 @@ export function FollowupComposer({
       ref={composerRef}
       className={cn(
         "flex flex-col gap-2 transition-transform duration-[350ms]",
+        "focus-within:border-focus-ring focus-within:shadow-[inset_0_0_0_1px_var(--focus-ring)]",
         docked
-          ? "border-border-default bg-surface-panel z-[5] rounded-[10px] border px-2.5 py-[9px] shadow-md"
+          ? "border-border-default bg-surface-panel z-[5] rounded-[10px] border px-3 py-2.5 shadow-md"
           : "border-border-default bg-surface-card relative rounded-[10px] border px-3 py-2.5",
         docked && dockedTop !== null && "absolute right-0.5 left-0 max-[900px]:static",
         disabled && "opacity-55",
@@ -168,15 +170,15 @@ export function FollowupComposer({
             label="Model"
             align="start"
             trigger={
-              <ControlButton
-                size="sm"
+              <button
+                type="button"
                 disabled={disabled || models.length === 0}
                 title="Model for this follow-up"
-                className="max-w-44"
+                className={cn(GHOST_TRIGGER, "-ml-1.5 max-w-44")}
               >
                 <span className="min-w-0 truncate">{modelLabel}</span>
-                <ChevronDown size={12} aria-hidden="true" />
-              </ControlButton>
+                <ChevronDown size={13} aria-hidden="true" className="shrink-0" />
+              </button>
             }
           >
             {models.map((entry) => (
@@ -184,7 +186,7 @@ export function FollowupComposer({
                 key={entry.id}
                 onClick={() => onModelChange(entry.id)}
                 disabled={!entry.available}
-                hint={entry.id === model ? <Check size={12} aria-hidden="true" /> : undefined}
+                selected={entry.id === model}
               >
                 {entry.label}
               </MenuItem>
@@ -239,13 +241,9 @@ export function FollowupComposer({
                     textareaRef.current?.focus();
                   }}
                   hint={option.shortcut}
+                  selected={mode === option.mode}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <span className="inline-flex w-3 justify-center">
-                      {mode === option.mode ? <Check size={12} aria-hidden="true" /> : null}
-                    </span>
-                    {option.label}
-                  </span>
+                  {option.label}
                 </MenuItem>
               ))}
             </Menu>

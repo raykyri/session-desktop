@@ -100,7 +100,7 @@ export function WorkspaceSwitcher({
   };
 
   return (
-    <div className="relative flex items-center gap-1 px-2 pt-0.5">
+    <div className="relative flex items-center gap-1 px-2 pt-px">
       <Menu
         open={open}
         onOpenChange={setOpen}
