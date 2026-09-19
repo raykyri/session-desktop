@@ -14,8 +14,8 @@ import {
   ArrowUp,
   Check,
   ChevronDown,
-  Folder,
-  FolderPlus,
+  Box,
+  Plus,
   Pencil,
   Star,
   Trash2,
@@ -44,8 +44,8 @@ type WorkspaceRow = Workspace & { treeCount?: number };
 export function workspaceRemovalRefusal(runningTrees: number): string | null {
   if (runningTrees === 0) return null;
   return runningTrees === 1
-    ? "One research thread here is still running. Wait for it to finish or cancel it first."
-    : `${runningTrees} research threads here are still running. Wait for them to finish or cancel them first.`;
+    ? "One thread here is still running. Wait for it to finish or cancel it first."
+    : `${runningTrees} threads here are still running. Wait for them to finish or cancel them first.`;
 }
 
 export function WorkspaceSwitcher({
@@ -70,7 +70,7 @@ export function WorkspaceSwitcher({
   useEffect(() => {
     const onShortcut = (event: Event) => {
       const command = (event as CustomEvent<AppShortcutCommand>).detail;
-      if (command?.type === "openFolderMenu") setOpen((current) => !current);
+      if (command?.type === "openWorkspaceMenu") setOpen((current) => !current);
     };
     window.addEventListener("session:shortcut", onShortcut);
     return () => window.removeEventListener("session:shortcut", onShortcut);
@@ -110,7 +110,7 @@ export function WorkspaceSwitcher({
         className="min-w-64"
         trigger={
           <button type="button" className={cn(SIDEBAR_ROW, "border-0 bg-transparent text-left")}>
-            <Folder size={14} aria-hidden="true" className="shrink-0" />
+            <Box size={14} aria-hidden="true" className="shrink-0" />
             <span className="min-w-0 flex-1 truncate">{current ? current.name : "Workspaces"}</span>
             <ChevronDown size={14} aria-hidden="true" className="shrink-0" />
           </button>
@@ -134,7 +134,7 @@ export function WorkspaceSwitcher({
         ))}
         {list.length > 0 ? <MenuSeparator /> : null}
         <IconMenuItem
-          icon={<FolderPlus size={13} aria-hidden="true" />}
+          icon={<Plus size={13} aria-hidden="true" />}
           label="New workspace…"
           onClick={() => setCreating(true)}
         />
@@ -186,7 +186,7 @@ export function WorkspaceSwitcher({
       <NameDialog
         open={creating}
         title="New workspace"
-        description="Each workspace has separate research threads, folders, and encyclopedia pages."
+        description="Each workspace has separate threads, folders, and encyclopedia pages."
         label="Workspace name"
         confirmLabel="Create"
         onOpenChange={setCreating}
@@ -220,7 +220,7 @@ export function WorkspaceSwitcher({
         title={current ? `Delete “${current.name}”?` : "Delete workspace?"}
         description={
           workspaceRemovalRefusal(runningTrees) ??
-          "This deletes the workspace and every research thread inside it. This can’t be undone."
+          "This deletes the workspace and every thread inside it. This can’t be undone."
         }
         confirmLabel="Delete workspace"
         pendingLabel="Deleting…"

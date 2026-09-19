@@ -20,9 +20,8 @@ export function formatResearchModelSummary(modelId: string, origin?: string | nu
  */
 export function formatActivityMetadataSummary(event: RecentActivityEvent): string {
   if (event.object.kind === "research-query") {
-    if (event.execution?.origin === "imported") return "Imported";
     if (event.relationship?.kind === "follow-up") {
-      return `Replied in “${event.context?.label ?? "Research"}”`;
+      return event.context?.label ? `Replied in “${event.context.label}”` : "Replied in a thread";
     }
     return "";
   }

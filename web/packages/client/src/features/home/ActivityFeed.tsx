@@ -311,10 +311,10 @@ export function ActivityFeed({
         onArchive={(treeId) => archive.mutate({ treeId, archived: true })}
         onRestore={(treeId) => archive.mutate({ treeId, archived: false })}
         onDelete={setDeletingTree}
-        // Only a settled answer that already has a summary can be summarized
-        // again (`ResearchActivityFeed.tsx:1437`).
+        // Any settled answer can be summarized; the dialog says whether it is
+        // writing a first summary or replacing one.
         onRegenerateSummary={
-          query && tree.archivedAt == null && query.status === "complete" && query.recap?.trim()
+          query && tree.archivedAt == null && query.status === "complete"
             ? () => openRecapDialog(query.nodeId)
             : undefined
         }
@@ -442,7 +442,7 @@ export function ActivityFeed({
               <QueryState
                 empty={
                   bookmarkedOnly
-                    ? "No bookmarked research yet. Bookmark a research thread to see it here."
+                    ? "No bookmarked threads yet. Bookmark a thread to see it here."
                     : "No recent activity yet. Run a query or save a source to see it here."
                 }
               />

@@ -150,7 +150,7 @@ export const AnswerPane = memo(function AnswerPane({
   const noContent = (contentLoading || Boolean(contentError)) && view.timelineItems.length === 0;
 
   return (
-    <section className="min-w-0" aria-label="Research response">
+    <section className="min-w-0" aria-label="Answer">
       {noContent ? (
         <QueryState
           loading={!contentError}
@@ -176,9 +176,7 @@ export const AnswerPane = memo(function AnswerPane({
           ) : null}
           {node.status === "failed" && view.timelineItems.length > 0 ? (
             <div className="mb-3 flex flex-col items-start gap-2" role="alert">
-              <p className="text-status-failed m-0 text-sm">
-                {node.error ?? "The research run failed."}
-              </p>
+              <p className="text-status-failed m-0 text-sm">{node.error ?? "The run failed."}</p>
               {retryButton}
             </div>
           ) : null}

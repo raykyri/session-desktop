@@ -1086,7 +1086,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
             </Item>
           ) : null}
           {spec.regenerate ? (
-            <Item onClick={() => setRecapNodeId(spec.nodeId)}>Generate summary</Item>
+            <Item onClick={() => setRecapNodeId(spec.nodeId)}>Summary…</Item>
           ) : null}
           {spec.editDocument ? (
             <Item disabled={spec.editDisabled} onClick={() => openEditSession(spec.nodeId)}>
@@ -1095,7 +1095,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
           ) : null}
           <Separator />
           <Item tone="danger" onClick={() => setDeletingNodeId(spec.nodeId)}>
-            {spec.isRoot ? "Delete research" : "Delete"}
+            {spec.isRoot ? "Delete thread" : "Delete"}
           </Item>
         </>
       );
@@ -1117,7 +1117,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         chainNodeIds.includes(nodeId) && chainNodes.length > 1,
         !archived && canRetryResearchNode(node),
         retryingNodeId !== null,
-        !archived && hasRevision && Boolean(node.recap?.text.trim()),
+        !archived && hasRevision,
         isRoot && (node.kind ?? "run") === "document",
         archived || !hasRevision || segment?.editableDocumentMarkdown == null,
         isRoot,

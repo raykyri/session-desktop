@@ -1016,7 +1016,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             ))}
           </Menu>
           <IconButton
-            label="New research folder"
+            label="New folder"
             title="New folder"
             className="translate-x-0.5"
             disabled={workspaceId === ""}
@@ -1064,7 +1064,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
       ) : null}
 
       {summaries.isSuccess && all.length === 0 ? (
-        <p className="text-fg-muted m-0 px-2.5 py-2 text-base">No research yet.</p>
+        <p className="text-fg-muted m-0 px-2.5 py-2 text-base">No threads yet.</p>
       ) : null}
 
       <NameDialog

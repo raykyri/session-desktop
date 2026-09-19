@@ -24,7 +24,7 @@ export type AppShortcutCommand =
   | { type: "openCommandPalette" }
   | { type: "toggleLeftSidebar" }
   | { type: "focusFollowups" }
-  | { type: "openFolderMenu" }
+  | { type: "openWorkspaceMenu" }
   | { type: "toggleArtifactPanel" };
 
 export interface AppShortcutInput {
@@ -100,7 +100,7 @@ export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand 
     return { type: "focusFollowups" };
   }
   if (command && !control && !option && !shift && key === "o") {
-    return { type: "openFolderMenu" };
+    return { type: "openWorkspaceMenu" };
   }
   if (command && !control && !option && shift && key === "e") {
     return { type: "toggleArtifactPanel" };

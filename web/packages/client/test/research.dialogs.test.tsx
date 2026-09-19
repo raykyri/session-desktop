@@ -78,7 +78,7 @@ test.serial("the recap dialog generates a candidate and applies it", async (t) =
     "the default instructions load",
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Generate summary" }));
+  fireEvent.click(screen.getByRole("button", { name: "Rewrite summary" }));
   await waitUntil(
     t,
     () => screen.queryByText("A fresher summary.") !== null,
@@ -127,10 +127,10 @@ test.serial("editing recap instructions clears the generated candidate", async (
 
   await waitUntil(
     t,
-    () => !screen.getByRole("button", { name: "Generate summary" }).hasAttribute("disabled"),
+    () => !screen.getByRole("button", { name: "Rewrite summary" }).hasAttribute("disabled"),
     "the default instructions load",
   );
-  fireEvent.click(screen.getByRole("button", { name: "Generate summary" }));
+  fireEvent.click(screen.getByRole("button", { name: "Rewrite summary" }));
   await waitUntil(
     t,
     () => screen.queryByText("A fresher summary.") !== null,
@@ -139,7 +139,7 @@ test.serial("editing recap instructions clears the generated candidate", async (
   fireEvent.change(screen.getByLabelText("Instructions"), { target: { value: "Be terse." } });
   // A candidate produced from different instructions cannot be applied.
   t.is(screen.queryByRole("button", { name: "Use this summary" }), null);
-  t.truthy(screen.getByText("No summary generated yet. Select Generate summary to create one."));
+  t.truthy(screen.getByText("Generate a candidate to replace the current summary."));
 });
 
 test.serial("the recap dialog surfaces a refusal", async (t) => {
@@ -160,10 +160,10 @@ test.serial("the recap dialog surfaces a refusal", async (t) => {
   );
   await waitUntil(
     t,
-    () => !screen.getByRole("button", { name: "Generate summary" }).hasAttribute("disabled"),
+    () => !screen.getByRole("button", { name: "Rewrite summary" }).hasAttribute("disabled"),
     "the default instructions load",
   );
-  fireEvent.click(screen.getByRole("button", { name: "Generate summary" }));
+  fireEvent.click(screen.getByRole("button", { name: "Rewrite summary" }));
   await waitUntil(t, () => screen.queryByRole("alert") !== null, "the server's message is shown");
   t.truthy(screen.getByText("The research response has been updated; please reselect the text."));
 });
@@ -184,7 +184,7 @@ test.serial("branch deletion confirmation lists descendants that will be removed
       onConfirm={() => undefined}
     />,
   );
-  t.truthy(screen.getByText("Delete this research branch?"));
+  t.truthy(screen.getByText("Delete this branch?"));
   t.truthy(screen.getByText(/This also permanently deletes 1 descendant follow-up\./));
   t.truthy(screen.getByRole("button", { name: "Delete branch" }));
 });
@@ -217,7 +217,7 @@ test.serial("deleting the root is named as deleting the research", (t) => {
       onConfirm={() => undefined}
     />,
   );
-  t.truthy(screen.getByRole("heading", { name: "Delete research" }));
+  t.truthy(screen.getByRole("heading", { name: "Delete thread" }));
 });
 
 /* -------------------------------------------------------------- tree menu */
@@ -272,10 +272,10 @@ test.serial("a thread with a run in flight can be neither archived nor deleted",
 
 test.serial("the summary row appears only where it is offered", (t) => {
   const calls = menuFor({ onRegenerateSummary: () => undefined });
-  t.truthy(screen.getByRole("menuitem", { name: /Generate summary/ }));
+  t.truthy(screen.getByRole("menuitem", { name: /Summary…/ }));
   cleanup();
   menuFor();
-  t.is(screen.queryByRole("menuitem", { name: /Generate summary/ }), null);
+  t.is(screen.queryByRole("menuitem", { name: /Summary…/ }), null);
   t.deepEqual(calls, []);
 });
 
@@ -326,7 +326,7 @@ test.serial("the delete dialog names the thread and stays busy while it works", 
     />,
   );
   t.truthy(screen.getByRole("heading", { name: "Delete “Collective memory”?" }));
-  fireEvent.click(screen.getByRole("button", { name: "Delete research" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete thread" }));
   t.deepEqual(removed, ["t1"]);
 
   cleanup();

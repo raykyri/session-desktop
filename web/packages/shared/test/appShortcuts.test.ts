@@ -68,7 +68,7 @@ test("keeps the research document and panel shortcuts", (t) => {
     type: "focusFollowups",
   });
   t.deepEqual(resolveAppShortcut(shortcut({ key: "o", metaKey: true })), {
-    type: "openFolderMenu",
+    type: "openWorkspaceMenu",
   });
   t.deepEqual(resolveAppShortcut(shortcut({ key: "e", metaKey: true, shiftKey: true })), {
     type: "toggleArtifactPanel",
@@ -110,7 +110,7 @@ test("suppresses only shortcuts that conflict with standard text editing when in
   t.deepEqual(inField({ key: "j", metaKey: true }), { type: "focusFollowups" });
   t.deepEqual(inField({ key: "k", metaKey: true }), { type: "openCommandPalette" });
   t.deepEqual(inField({ key: ",", metaKey: true }), { type: "openSettings" });
-  t.deepEqual(inField({ key: "o", metaKey: true }), { type: "openFolderMenu" });
+  t.deepEqual(inField({ key: "o", metaKey: true }), { type: "openWorkspaceMenu" });
   t.deepEqual(inField({ key: "g", metaKey: true, shiftKey: true }), {
     type: "toggleLeftSidebar",
   });

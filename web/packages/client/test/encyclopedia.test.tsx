@@ -71,7 +71,7 @@ test("a backlink is labelled by the question that asked for the page", (t) => {
     "What is collective memory?",
   );
   t.is(sourceLabel({ pageSlug: "amnesia", excerpt: "", createdAt: 1 }), "Encyclopedia page");
-  t.is(sourceLabel({ excerpt: "", createdAt: 1 }), "Research thread");
+  t.is(sourceLabel({ excerpt: "", createdAt: 1 }), "Thread");
 });
 
 test("a long backlink excerpt is cut at a word", (t) => {

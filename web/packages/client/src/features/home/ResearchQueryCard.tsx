@@ -84,7 +84,7 @@ export function ResearchQueryCard({
   const bookmarked = Boolean(tree?.bookmarked);
 
   return (
-    <ContextMenu label={`Actions for ${tree?.title ?? "research"}`} items={menuItems}>
+    <ContextMenu label={`Actions for ${tree?.title ?? "this thread"}`} items={menuItems}>
       <div className="flex flex-col gap-2">
         {query.queryTarget ? (
           <p className="research-prompt-quote m-0 truncate" title={query.queryTarget}>

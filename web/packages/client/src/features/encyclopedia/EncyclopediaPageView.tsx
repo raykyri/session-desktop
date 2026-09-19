@@ -38,7 +38,7 @@ export function shortExcerpt(text: string, limit = SOURCE_EXCERPT_LIMIT): string
 export function sourceLabel(source: EncyclopediaSource): string {
   if (source.question) return source.question;
   if (source.pageSlug) return "Encyclopedia page";
-  return "Research thread";
+  return "Thread";
 }
 
 export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: string; slug: string }) {
