@@ -15,7 +15,7 @@ import { now } from "../time.js";
 import { ensure as ensurePreferences, update as updatePreferences } from "./preferences.js";
 import { deleteNodesOfTrees } from "./subtrees.js";
 
-export const DEFAULT_WORKSPACE_NAME = "Research";
+export const DEFAULT_WORKSPACE_NAME = "Default Workspace";
 
 /** Active and pending run statuses that indicate in-flight execution. */
 const ACTIVE_STATUSES = ["queued", "running"] as const;
