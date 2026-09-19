@@ -207,9 +207,7 @@ export function FollowupComposer({
         <div className="flex shrink-0 items-center gap-1">
           <ControlButton size="sm" disabled={!canSubmit} onClick={() => onSubmit()}>
             <span>{submitLabel}</span>
-            {submitting ? null : (
-              <ComposerSubmitShortcutGlyph requireCmdEnter className="text-fg-disabled" />
-            )}
+            {submitting ? null : <ComposerSubmitShortcutGlyph className="text-fg-disabled" />}
           </ControlButton>
           {docked ? null : (
             <Menu

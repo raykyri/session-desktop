@@ -196,6 +196,16 @@
     text-rendering: optimizeLegibility;
   }
 
+  /* The sidebar reads one pixel larger than the rest of the chrome. Overriding
+     the Tailwind size variables here means every text-xs/sm/base inside it
+     moves together; portaled menus and dialogs are outside and keep the app
+     scale. */
+  .sidebar-type-scale {
+    --text-xs: calc(var(--fs-xs) + 1px);
+    --text-sm: calc(var(--fs-sm) + 1px);
+    --text-base: calc(var(--fs-base) + 1px);
+  }
+
   ::selection {
     background: var(--status-info-fg);
     color: var(--selection-fg);

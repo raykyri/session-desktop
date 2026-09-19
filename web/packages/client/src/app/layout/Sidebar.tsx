@@ -30,7 +30,7 @@ function AccountMenu() {
   if (!user) return null;
 
   return (
-    <div className="border-border-divider flex items-center gap-2 border-t px-2 py-2">
+    <div className="flex items-center gap-2 px-2 py-2">
       <Menu
         side="top"
         align="start"
@@ -178,7 +178,7 @@ export function Sidebar() {
 
   return (
     <div
-      className="border-border-divider bg-surface-sidebar relative flex h-full shrink-0 flex-col border-r"
+      className="sidebar-type-scale border-border-divider bg-surface-sidebar relative flex h-full shrink-0 flex-col border-r"
       style={{ width }}
     >
       <SidebarChrome onHide={() => setCollapsed(true)} />

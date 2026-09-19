@@ -17,10 +17,10 @@ import {
 const admin = { isAdmin: true };
 const member = { isAdmin: false };
 
-test("registers exactly the five models in 04-agent-runtime.md", (t) => {
+test("registers exactly the four models in 04-agent-runtime.md", (t) => {
   t.deepEqual(
     MODEL_REGISTRY.map((model) => model.id),
-    ["gemini-flash", "gemini-flash-google", "deepseek-flash", "gpt-luna", "claude-fable"],
+    ["gemini-flash", "deepseek-flash", "gpt-luna", "claude-fable"],
   );
 });
 
@@ -35,12 +35,15 @@ test("findModel returns null for an unregistered id", (t) => {
   t.is(findModel("gpt-astra"), null);
 });
 
+test("findModel serves the withdrawn grounded Gemini id from the plain entry", (t) => {
+  t.is(findModel("gemini-flash-google")?.id, "gemini-flash");
+});
+
 test("routes and providers match the registry table", (t) => {
   t.deepEqual(
     MODEL_REGISTRY.map((model) => [model.id, model.provider, model.route]),
     [
       ["gemini-flash", "vertex", "gemini-3.8-flash"],
-      ["gemini-flash-google", "vertex", "gemini-3.8-flash"],
       ["deepseek-flash", "openrouter", "deepseek/deepseek-v4.1-flash"],
       ["gpt-luna", "openrouter", "~openai/gpt-luna-latest"],
       ["claude-fable", "anthropic", "claude-fable-5-1"],
@@ -49,10 +52,10 @@ test("routes and providers match the registry table", (t) => {
   t.is(findModel("gpt-luna")?.fallbackRoute, "openai/gpt-5.6-luna");
 });
 
-test("only the grounded Gemini entry uses native search", (t) => {
+test("only the Gemini entry uses native search", (t) => {
   t.deepEqual(
     MODEL_REGISTRY.filter((model) => model.nativeSearch).map((model) => model.id),
-    ["gemini-flash-google"],
+    ["gemini-flash"],
   );
 });
 
@@ -82,7 +85,7 @@ test("canUseModel treats a signed-out caller as a non-admin", (t) => {
 test("modelsFor hides admin-only models and preserves registry order", (t) => {
   t.deepEqual(
     modelsFor(member).map((model) => model.id),
-    ["gemini-flash", "gemini-flash-google", "deepseek-flash", "gpt-luna"],
+    ["gemini-flash", "deepseek-flash", "gpt-luna"],
   );
   t.is(modelsFor(admin).length, MODEL_REGISTRY.length);
 });
@@ -91,7 +94,7 @@ test("deepseek-flash takes no file or image parts", (t) => {
   const deepseek = findModel("deepseek-flash");
   t.false(deepseek?.supportsFiles);
   t.false(deepseek?.supportsImages);
-  for (const id of ["gemini-flash", "gemini-flash-google", "gpt-luna", "claude-fable"]) {
+  for (const id of ["gemini-flash", "gpt-luna", "claude-fable"]) {
     const model = findModel(id);
     t.true(model?.supportsFiles, `${id} supports files`);
     t.true(model?.supportsImages, `${id} supports images`);
@@ -134,7 +137,6 @@ test("prices are the per-million-token figures from the plan", (t) => {
     MODEL_REGISTRY.map((model) => [model.id, model.pricing.input, model.pricing.output]),
     [
       ["gemini-flash", 0.75, 3.75],
-      ["gemini-flash-google", 0.75, 3.75],
       ["deepseek-flash", 0.15, 0.6],
       ["gpt-luna", 0.2, 1.2],
       ["claude-fable", 10, 50],

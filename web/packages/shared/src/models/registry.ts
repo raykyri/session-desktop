@@ -49,17 +49,6 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
     adminOnly: false,
     supportsFiles: true,
     supportsImages: true,
-    nativeSearch: false,
-    pricing: { input: 0.75, output: 3.75 },
-  },
-  {
-    id: "gemini-flash-google",
-    label: "Gemini 3.8 Flash (Google Search)",
-    provider: "vertex",
-    route: "gemini-3.8-flash",
-    adminOnly: false,
-    supportsFiles: true,
-    supportsImages: true,
     nativeSearch: true,
     pricing: { input: 0.75, output: 3.75 },
   },
@@ -109,8 +98,15 @@ export const METADATA_MODEL_ID = "gemini-flash";
 
 const BY_ID = new Map(MODEL_REGISTRY.map((model) => [model.id, model]));
 
+/** Withdrawn ids that stored threads still carry, and the entry that serves
+ * them now. `gemini-flash-google` was Gemini 3.8 Flash with Google Search
+ * grounding; grounding is now on the plain entry. */
+const LEGACY_MODEL_IDS: Readonly<Record<string, string>> = {
+  "gemini-flash-google": "gemini-flash",
+};
+
 export function findModel(id: string): ModelEntry | null {
-  return BY_ID.get(id) ?? null;
+  return BY_ID.get(LEGACY_MODEL_IDS[id] ?? id) ?? null;
 }
 
 /** Whether `user` may launch on `modelId`. An unknown id is never usable, so

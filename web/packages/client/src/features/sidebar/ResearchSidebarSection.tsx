@@ -1047,9 +1047,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
       ) : null}
 
       {summaries.isSuccess && all.length === 0 ? (
-        <p className="text-fg-muted m-0 px-2.5 py-2 text-sm">
-          No research yet. Start an investigation to see it here.
-        </p>
+        <p className="text-fg-muted m-0 px-2.5 py-2 text-sm">No research yet.</p>
       ) : null}
 
       <NameDialog

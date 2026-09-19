@@ -99,12 +99,12 @@ test("an OpenRouter request carries zdr and data_collection in its body", async 
   t.is(sent?.["model"], "deepseek/deepseek-v4.1-flash");
 });
 
-test("the Google-grounded entry adds the provider tool and the plain one does not", (t) => {
+test("the Gemini entry adds the grounding tool and the OpenRouter ones do not", (t) => {
   const providers = createProviders(productionConfig());
-  t.deepEqual(Object.keys(providers.resolve("gemini-flash")?.providerTools ?? {}), []);
-  t.deepEqual(Object.keys(providers.resolve("gemini-flash-google")?.providerTools ?? {}), [
+  t.deepEqual(Object.keys(providers.resolve("gemini-flash")?.providerTools ?? {}), [
     "google_search",
   ]);
+  t.deepEqual(Object.keys(providers.resolve("gpt-luna")?.providerTools ?? {}), []);
 });
 
 test("a test build always resolves to the fixture provider", (t) => {

@@ -3,7 +3,7 @@
 // The same three tools for every model, so the timeline, the Sources footer,
 // and any evaluation of one model against another see the same capabilities.
 // `web_search` is absent when the deployment has no search vendor, and
-// `gemini-flash-google` replaces it with Vertex's own grounding tool
+// a `nativeSearch` entry replaces it with Vertex's own grounding tool
 // (`providers.ts`).
 
 import type { ToolSet } from "ai";
