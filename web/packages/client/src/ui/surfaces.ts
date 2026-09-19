@@ -63,7 +63,7 @@ export const LINK_BUTTON =
 /** Floating chrome: menus, select popups, popovers. */
 export const POPOVER_SURFACE =
   "flex min-w-0 flex-col rounded-lg border border-border-divider bg-surface-popover " +
-  "p-1 text-fg-primary shadow-popover origin-(--transform-origin)";
+  "p-1 text-fg-primary shadow-popover origin-(--transform-origin) outline-none";
 
 export const CONTEXT_MENU_SURFACE =
   "flex min-w-0 flex-col rounded-lg border border-border-default bg-surface-context-menu " +

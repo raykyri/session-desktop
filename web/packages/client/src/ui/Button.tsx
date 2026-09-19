@@ -46,6 +46,9 @@ export interface IconButtonProps extends NativeButtonProps {
    * (08 §7). */
   label: string;
   children: ReactNode;
+  /** When false, the label is aria-only. Overflow menus that already name
+   * the popup skip the hover tip. */
+  tooltip?: boolean;
 }
 
 export function IconButton({
@@ -54,23 +57,24 @@ export function IconButton({
   className,
   type = "button",
   children,
+  tooltip = true,
   ...props
 }: IconButtonProps) {
   // The label doubles as the tooltip, shown on hover and on keyboard focus
   // alike; `title` is left to callers that need overflow text.
-  return (
-    <Tooltip content={props.title ?? label}>
-      <button
-        {...props}
-        ref={ref}
-        type={type}
-        aria-label={label}
-        className={cn(ICON_BUTTON, "size-control-sm", className)}
-      >
-        {children}
-      </button>
-    </Tooltip>
+  const button = (
+    <button
+      {...props}
+      ref={ref}
+      type={type}
+      aria-label={label}
+      className={cn(ICON_BUTTON, "size-control-sm", className)}
+    >
+      {children}
+    </button>
   );
+  if (!tooltip) return button;
+  return <Tooltip content={props.title ?? label}>{button}</Tooltip>;
 }
 
 export interface LinkButtonProps extends NativeButtonProps {

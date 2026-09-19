@@ -205,6 +205,15 @@
     color: var(--selection-fg);
   }
 
+  /* Browser default :focus-visible is a lighter system blue. Match the
+     app's --focus-ring. Controls that opt into FOCUS_RING set outline-none
+     and draw their own inset ring. */
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+    border-radius: 5px;
+  }
+
   /* lucide-react sets width/height attributes, but as a flex item an SVG can
      still collapse to a sliver instead of honoring that intrinsic size. */
   .lucide {

@@ -61,7 +61,7 @@ function OpenThreadControl({
       role="button"
       tabIndex={0}
       className={cn(
-        "w-fit max-w-full cursor-pointer text-left no-underline hover:no-underline",
+        "w-fit max-w-full cursor-pointer rounded-[5px] text-left no-underline hover:no-underline",
         className,
       )}
       onClick={(event) => {
