@@ -198,10 +198,9 @@ passes use.
 → `scrollToSegment` (smooth, `block: "start"`); different chain → begin page
 visit (scroll top, reset per-visit state). `selectNode` also pushes the
 per-tree history stack (`researchHistory.ts`), pruned when nodes are deleted.
-Cmd-[ / Cmd-] and Alt-Left/Right (non-editable target), mouse buttons 3/4,
-and the wheel swipe hook (`useResearchSwipeNavigation`: non-passive wheel,
-scaled deltas, defers to nested horizontal scrollers, 180 ms momentum
-latch) navigate the stack and fall through to router history when exhausted.
+Cmd-[ / Cmd-] and Alt-Left/Right (non-editable target) and mouse buttons 3/4
+navigate the stack and fall through to router history when exhausted. Trackpad
+swipes are left to the browser.
 
 Cmd-J focuses the tail composer (window event from the shortcut dispatcher).
 Escape exits ask mode.

@@ -247,7 +247,7 @@
   --chrome-header-bg: #14171a;
   --pane-hover-bg: #1b1f21;
   --pane-tab-hover-bg: var(--pane-hover-bg);
-  --research-sidebar-hover-bg: var(--pane-hover-bg);
+  --research-sidebar-hover-bg: #1e2325;
   --markdown-table-header-bg: color-mix(
     in srgb,
     var(--pane-hover-bg) 75%,
@@ -319,7 +319,7 @@
   --chrome-header-bg: #171716;
   --pane-hover-bg: #23211f;
   --pane-tab-hover-bg: var(--right-pane-bg);
-  --research-sidebar-hover-bg: #222221;
+  --research-sidebar-hover-bg: #252524;
   --markdown-table-header-bg: color-mix(
     in srgb,
     var(--pane-hover-bg) 75%,
@@ -526,7 +526,7 @@
   --chrome-header-bg: #f1f3f2;
   --pane-hover-bg: #eaedec;
   --pane-tab-hover-bg: var(--pane-hover-bg);
-  --research-sidebar-hover-bg: var(--pane-hover-bg);
+  --research-sidebar-hover-bg: #e8ebea;
   --markdown-table-header-bg: color-mix(
     in srgb,
     var(--pane-hover-bg) 75%,
@@ -595,7 +595,7 @@
   --chrome-header-bg: #f4f2ef;
   --pane-hover-bg: #ece8e3;
   --pane-tab-hover-bg: var(--right-pane-bg);
-  --research-sidebar-hover-bg: #eeebe6;
+  --research-sidebar-hover-bg: #ece9e4;
   --markdown-table-header-bg: color-mix(
     in srgb,
     var(--pane-hover-bg) 75%,

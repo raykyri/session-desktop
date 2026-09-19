@@ -70,6 +70,7 @@ import { useSelectionStore } from "../../stores/selection.js";
 import { IconButton } from "../../ui/Button.js";
 import { ContextMenu } from "../../ui/ContextMenu.js";
 import { Menu, MenuItem, MenuSeparator } from "../../ui/Menu.js";
+import { ICON_BUTTON } from "../../ui/surfaces.js";
 import { useOverlay } from "../../ui/useOverlay.js";
 import { DeleteTreeDialog, RenameTreeDialog, ResearchTreeMenuItems } from "../research/treeMenu.js";
 
@@ -974,7 +975,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
     <section
       ref={sectionRef}
       aria-label="Research"
-      className="flex min-w-0 flex-col gap-0.5 px-2 pt-3"
+      className="flex min-w-0 flex-col gap-px px-2 pt-3"
     >
       <div className={SIDEBAR_SECTION_HEADING}>
         <span>Research</span>
@@ -984,9 +985,14 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             side="bottom"
             align="end"
             trigger={
-              <IconButton label={`Show ${filter} research`} title={`Show ${filter} research`}>
-                <span className="text-xs capitalize">{filter}</span>
-              </IconButton>
+              <button
+                type="button"
+                aria-label={`Show ${filter} research`}
+                title={`Show ${filter} research`}
+                className={cn(ICON_BUTTON, "h-control-sm px-1 text-xs capitalize")}
+              >
+                {filter}
+              </button>
             }
           >
             {(["active", "archived", "all"] as const).map((option) => (
@@ -1024,7 +1030,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
       ) : null}
 
       {activeListVisible && lists.starred.length > 0 ? (
-        <div role="group" aria-label="Starred research" className="flex flex-col gap-0.5">
+        <div role="group" aria-label="Starred research" className="flex flex-col gap-px">
           {lists.starred.map((unit, index) => renderUnit(unit, index, "starred"))}
         </div>
       ) : null}

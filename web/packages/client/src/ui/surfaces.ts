@@ -13,7 +13,7 @@ export const FOCUS_RING =
 /** The default bordered button: menus, dialogs, toolbars. */
 export const CONTROL_BUTTON =
   "inline-flex min-h-control-md flex-wrap items-center justify-center gap-x-2 gap-y-0.5 " +
-  "rounded-md border border-border-control bg-control px-3 text-base text-fg-control " +
+  "rounded-md border border-border-control bg-control px-3 pt-px text-base text-fg-control " +
   "transition-colors duration-[120ms] hover:bg-control-hover " +
   "disabled:cursor-default disabled:text-fg-disabled disabled:hover:bg-control " +
   FOCUS_RING;
@@ -22,7 +22,8 @@ export const CONTROL_BUTTON =
 export const ICON_BUTTON =
   "inline-flex shrink-0 items-center justify-center rounded-md border-0 bg-transparent p-0 " +
   "text-fg-secondary transition-colors duration-[120ms] " +
-  "hover:not-disabled:text-fg-strong disabled:cursor-default disabled:text-fg-disabled " +
+  "hover:not-disabled:bg-surface-hover hover:not-disabled:text-fg-strong " +
+  "disabled:cursor-default disabled:text-fg-disabled " +
   FOCUS_RING;
 
 /** Text that behaves like a button. */
@@ -43,7 +44,7 @@ export const CONTEXT_MENU_SURFACE =
 /** One selectable row inside any of the surfaces above. */
 export const MENU_ITEM =
   "flex w-full min-w-0 cursor-pointer select-none items-center justify-start gap-2 " +
-  "rounded-md border border-transparent px-2.5 py-[5px] text-left text-base text-fg-primary " +
+  "rounded-md border border-transparent px-2.5 py-1 text-left text-base text-fg-primary " +
   "data-highlighted:bg-surface-popover-item-hover data-[selected]:text-fg-strong " +
   "data-disabled:cursor-default data-disabled:text-fg-disabled " +
   FOCUS_RING;

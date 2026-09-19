@@ -25,6 +25,8 @@ import {
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
+import { resolveAppearance } from "../lib/appearance.js";
+
 export const SETTINGS_STORAGE_KEY = "session.settings.v2";
 
 export interface SettingsState {
@@ -84,7 +86,7 @@ export const useSettingsStore = create<SettingsState>()(
         set((state) => ({
           settings: {
             ...state.settings,
-            appearance: state.settings.appearance === "light" ? "dark" : "light",
+            appearance: resolveAppearance(state.settings.appearance) === "light" ? "dark" : "light",
           },
         })),
       setTextSize: (textSize) =>

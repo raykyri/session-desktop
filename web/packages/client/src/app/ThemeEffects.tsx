@@ -1,6 +1,7 @@
 import { APP_TEXT_SIZE, clamp } from "@session/shared";
 import { useEffect, useLayoutEffect } from "react";
 
+import { useResolvedAppearance } from "../lib/appearance.js";
 import { bodyFontStackFor, detectAvailableBodyFonts } from "../lib/bodyFonts.js";
 import { useSettingsStore } from "../stores/settings.js";
 
@@ -22,6 +23,8 @@ export function ThemeEffects() {
   const settings = useSettingsStore((state) => state.settings);
   const patch = useSettingsStore((state) => state.patch);
   const bodyFontFamily = bodyFontStackFor(settings.bodyFontId);
+  // "system" resolves against the OS preference and tracks it live.
+  const appearance = useResolvedAppearance(settings.appearance);
 
   useLayoutEffect(() => {
     document.documentElement.dataset["colorTheme"] = settings.colorTheme;
@@ -29,7 +32,7 @@ export function ThemeEffects() {
 
   useLayoutEffect(() => {
     const root = document.documentElement;
-    root.dataset["appearance"] = settings.appearance;
+    root.dataset["appearance"] = appearance;
     // Synchronizes color-scheme meta tags for native controls, scrollbars, and embedded iframe contexts.
     let meta = document.querySelector<HTMLMetaElement>('meta[name="color-scheme"]');
     if (!meta) {
@@ -37,8 +40,8 @@ export function ThemeEffects() {
       meta.name = "color-scheme";
       document.head.appendChild(meta);
     }
-    meta.content = settings.appearance;
-  }, [settings.appearance]);
+    meta.content = appearance;
+  }, [appearance]);
 
   useLayoutEffect(() => {
     const root = document.documentElement;

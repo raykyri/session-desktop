@@ -115,6 +115,7 @@ export function AsyncConfirmDialog({
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
 
   const [lastOpen, setLastOpen] = useState(open);
   if (lastOpen !== open) {
@@ -131,12 +132,14 @@ export function AsyncConfirmDialog({
       }}
       title={title}
       {...(description === undefined ? {} : { description })}
+      {...(tone === "danger" ? { initialFocus: confirmRef } : {})}
       footer={
         <>
           <BaseDialog.Close className={CONTROL_BUTTON} disabled={pending}>
             Cancel
           </BaseDialog.Close>
           <ConfirmDialogActionButton
+            ref={confirmRef}
             tone={tone}
             pending={pending}
             pendingLabel={pendingLabel}

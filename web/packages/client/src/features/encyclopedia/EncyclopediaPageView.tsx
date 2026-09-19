@@ -17,6 +17,7 @@ import { useEncyclopediaPage } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { pushErrorToast } from "../../lib/toast.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
+import { ConfirmDialog } from "../../ui/Dialog.js";
 import { ResearchMarkdown, WikilinkActionsProvider } from "../markdown/index.js";
 import { RESEARCH_COLUMNS_CLASS } from "../research/layout.js";
 import { AsyncConfirmDialog } from "../sidebar/dialogs.js";
@@ -45,6 +46,7 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
   const page = query.data ?? null;
   const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmingRewrite, setConfirmingRewrite] = useState(false);
   // Onward links resolve inside the same workspace, and a page requested from
   // here records this page as its source rather than a research node.
   const actions = useWikilinkActions(workspaceId, { kind: "page", pageSlug: slug });
@@ -109,7 +111,7 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
                     label="Rewrite page"
                     title="Rewrite page"
                     disabled={generating || busy}
-                    onClick={regenerate}
+                    onClick={() => setConfirmingRewrite(true)}
                   >
                     <RotateCw size={15} aria-hidden="true" />
                   </IconButton>
@@ -170,7 +172,7 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
                         <button
                           type="button"
                           disabled={!source.nodeId && !source.pageSlug}
-                          className="text-fg-interactive block max-w-full truncate border-0 bg-transparent p-0 text-left text-base underline-offset-2 hover:not-disabled:underline disabled:cursor-default"
+                          className="block max-w-full border-0 bg-transparent p-0 text-left text-base decoration-dotted underline-offset-2 hover:not-disabled:underline disabled:cursor-default"
                           onClick={() => {
                             if (source.nodeId && source.treeId) {
                               void navigate({
@@ -189,11 +191,13 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
                             }
                           }}
                         >
-                          {sourceLabel(source)}
+                          <span className="text-fg-interactive block truncate">
+                            {sourceLabel(source)}
+                          </span>
+                          <span className="text-fg-muted block">
+                            {shortExcerpt(source.excerpt)}
+                          </span>
                         </button>
-                        <p className="text-fg-muted m-0 text-base">
-                          {shortExcerpt(source.excerpt)}
-                        </p>
                       </li>
                     ))}
                   </ul>
@@ -204,6 +208,24 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
         </div>
         <div aria-hidden="true" />
       </div>
+
+      <ConfirmDialog
+        open={confirmingRewrite}
+
+        onOpenChange={setConfirmingRewrite}
+
+        title="Rewrite this page?"
+
+        description="The current text is replaced by a newly generated page."
+
+        confirmLabel="Rewrite page"
+
+        onConfirm={() => {
+          setConfirmingRewrite(false);
+
+          regenerate();
+        }}
+      />
 
       <AsyncConfirmDialog
         open={deleting}

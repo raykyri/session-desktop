@@ -2,6 +2,7 @@ import {
   APP_TEXT_SIZE_MAX,
   APP_TEXT_SIZE_MIN,
   RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES,
+  appearanceSchema,
   clampResearchLaunchInstruction,
 } from "@session/shared";
 import { useState } from "react";
@@ -16,6 +17,7 @@ import { Select, type SelectOption } from "../ui/Select.js";
 import { Checkbox } from "../ui/Toggle.js";
 
 const APPEARANCE_OPTIONS: SelectOption[] = [
+  { value: "system", label: "System" },
   { value: "dark", label: "Dark" },
   { value: "light", label: "Light" },
 ];
@@ -211,7 +213,9 @@ export function SettingsPage() {
                   options={APPEARANCE_OPTIONS}
                   size="sm"
                   className={PICKER_CLASS}
-                  onChange={(value) => set("appearance", value === "light" ? "light" : "dark")}
+                  onChange={(value) =>
+                    set("appearance", appearanceSchema.catch("dark").parse(value))
+                  }
                 />
               )}
             </Field>

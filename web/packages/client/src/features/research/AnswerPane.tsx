@@ -269,22 +269,24 @@ export const AnswerPane = memo(function AnswerPane({
                 ) : null}
               </span>
             ) : null}
-            {node.status === "complete" && view.rawAnswer ? (
-              <IconButton label="Copy answer as Markdown" onClick={onCopyAnswer}>
-                <Copy size={14} aria-hidden="true" />
-              </IconButton>
-            ) : null}
-            <Menu
-              label="Answer actions"
-              align="end"
-              trigger={
-                <IconButton label="Answer actions">
-                  <MoreHorizontal size={15} aria-hidden="true" />
+            <span className="flex items-center gap-0.5">
+              {node.status === "complete" && view.rawAnswer ? (
+                <IconButton label="Copy answer as Markdown" onClick={onCopyAnswer}>
+                  <Copy size={14} aria-hidden="true" />
                 </IconButton>
-              }
-            >
-              {menuItems}
-            </Menu>
+              ) : null}
+              <Menu
+                label="Answer actions"
+                align="end"
+                trigger={
+                  <IconButton label="Answer actions">
+                    <MoreHorizontal size={15} aria-hidden="true" />
+                  </IconButton>
+                }
+              >
+                {menuItems}
+              </Menu>
+            </span>
             {showRunControls ? (
               <ControlButton
                 size="sm"

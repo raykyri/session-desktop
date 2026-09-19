@@ -36,7 +36,9 @@ export function ComposerSubmitShortcutGlyph({
       aria-label={ariaHidden ? undefined : composerSubmitShortcutAriaLabel(apple)}
     >
       {apple ? "⌘" : "Ctrl"}
-      <span aria-hidden="true">↵</span>
+      <span aria-hidden="true" className="relative top-0.5">
+        ↵
+      </span>
     </span>
   );
 }

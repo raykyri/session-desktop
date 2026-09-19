@@ -226,7 +226,6 @@
 .research-prose a.research-wikilink:hover,
 .research-prose a.research-wikilink:focus-visible {
   color: var(--text-strong);
-  text-decoration-style: solid;
   text-decoration-color: color-mix(in srgb, var(--text-strong) 60%, transparent);
 }
 
@@ -349,11 +348,9 @@ html.wrap-code-blocks .research-prose-code-block pre code {
   border-bottom-color: var(--markdown-table-header-border);
 }
 
+/* Models separate sections with rules; the reading surface does not draw them. */
 .research-prose hr {
-  height: 1px;
-  margin: 10px 0;
-  border: 0;
-  background: var(--surface-border-strong);
+  display: none;
 }
 
 /* GFM task-list checkboxes, always rendered disabled. */

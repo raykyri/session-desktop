@@ -97,7 +97,7 @@ export function ResearchQueryCard({
           </p>
         ) : null}
 
-        <article className="bg-surface-card border-border-divider rounded-lg border px-3 py-2.5">
+        <article className="bg-surface-card border-border-divider mb-0.5 rounded-lg border px-3 py-2.5">
           <div
             role="button"
             tabIndex={0}

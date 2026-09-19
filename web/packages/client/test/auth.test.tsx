@@ -55,7 +55,6 @@ test.serial("the boot loader warms the seven queries the shell renders from", as
         showToolCalls: true,
         showAssistantTimestamps: false,
         showNotifications: true,
-        requireCmdEnterToSend: false,
         defaultModel: "gemini-flash",
         researchLaunchInstruction: null,
         defaultWorkspaceId: "w1",
