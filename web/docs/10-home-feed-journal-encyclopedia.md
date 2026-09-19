@@ -20,7 +20,7 @@ Sections top to bottom:
    the returned document ids. Submit → `research.createTree` with
    `documentIds` → navigate to `/r/$treeId`; the returned detail is written
    to the `tree` cache and the summary prepended to `trees` (position 0).
-3. `ReportImport` drop target and button (§5). The desktop's
+3. `ReportImport` drop target and composer icon (§5). The desktop's
    `AgentSetupGuide` (`App.tsx:11877`) is not ported: models are configured
    by the deployment, and an unavailable provider is shown as a disabled
    model in the composer.
@@ -37,7 +37,7 @@ Live updates: events patch page 0 through the shared reducers
 (`upsertActivityNode`, `removeActivityNode`, `journal.entry.*`). New items
 arriving while the user is scrolled down increment a counter shown on the
 "new activity" button, which scrolls to top and clears it (desktop behavior).
-"Refresh" refetches page 0 only; "Load older" fetches the next page; a failed
+"Load older" fetches the next page; a failed
 page shows Retry.
 
 Virtualization: TanStack Virtual with dynamic measurement (`measureElement`);
@@ -94,7 +94,8 @@ list; `research.tree.archived` removes that tree's items.
 ## 5. Report import
 
 `ResearchReportImport.tsx` minus the Tauri drag-drop branch (`:66-80`) and
-`readResearchReport`. `<input type="file" accept=".md">` and HTML5 drop on
+`readResearchReport`. An upload icon in the composer's control row, next to
+the attach button, opens `<input type="file" accept=".md">`; HTML5 drop on
 the Home column; one file at a time; `.md` only; non-empty; modal dialog
 asking for the prompt that produced the report; token estimate via
 `estimateTokenCount`. Submit → `research.importReport({ markdown, prompt,

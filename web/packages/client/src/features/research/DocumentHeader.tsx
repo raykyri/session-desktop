@@ -1,8 +1,9 @@
 // The document's own header (`09-research-document-view.md` §2).
 //
-// Node-level back/forward (the page-level pair lives in the stage header),
-// the breadcrumb down to the selected node, a chip counting what this page
+// The breadcrumb down to the selected node, a chip counting what this page
 // shows, the full-transcript toggle, and Cancel while a run is in flight.
+// Node-level back/forward has no buttons here: it is driven by ⌘[ / ⌘] and
+// trackpad swipes (`ResearchPage.tsx`).
 //
 // The breadcrumb collapses deep paths to "root / … / parent / current": the
 // Deep hierarchies collapse intermediate breadcrumbs to prevent UI crowding.
@@ -12,8 +13,8 @@ import { ScrollText, X } from "lucide-react";
 import { useMemo } from "react";
 
 import { cn } from "../../lib/cn.js";
-import { ControlButton, IconButton, LinkButton } from "../../ui/Button.js";
-import { HistoryNav } from "../../ui/HistoryNav.js";
+import { ControlButton, IconButton } from "../../ui/Button.js";
+import { FOCUS_RING } from "../../ui/surfaces.js";
 
 export type BreadcrumbEntry =
   { kind: "node"; node: ResearchNode; index: number } | { kind: "ellipsis"; count: number };
@@ -55,10 +56,6 @@ export interface DocumentHeaderProps {
   selectedNodeId: string;
   threadLength: number;
   branchCount: number;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  onBack: () => void;
-  onForward: () => void;
   onSelectNode: (nodeId: string) => void;
   /** Present only when the selected segment has activity worth revealing. */
   fullTrace: { active: boolean; onToggle: () => void } | null;
@@ -70,10 +67,6 @@ export function DocumentHeader({
   selectedNodeId,
   threadLength,
   branchCount,
-  canGoBack,
-  canGoForward,
-  onBack,
-  onForward,
   onSelectNode,
   fullTrace,
   cancel,
@@ -85,14 +78,6 @@ export function DocumentHeader({
 
   return (
     <header className="border-border-divider flex shrink-0 items-center gap-2 border-b px-3 py-1.5">
-      <HistoryNav
-        canGoBack={canGoBack}
-        canGoForward={canGoForward}
-        onBack={onBack}
-        onForward={onForward}
-        backLabel="Back (⌘[)"
-        forwardLabel="Forward (⌘])"
-      />
       <nav className="flex min-w-0 flex-1 items-center gap-1 text-sm" aria-label="Research path">
         {crumbs.map((entry, position) =>
           entry.kind === "ellipsis" ? (
@@ -114,12 +99,16 @@ export function DocumentHeader({
                   /
                 </span>
               ) : null}
-              <LinkButton
-                className="text-fg-secondary hover:text-fg-strong min-w-0 truncate"
+              <button
+                type="button"
+                className={cn(
+                  "text-fg-secondary hover:text-fg-strong min-w-0 truncate border-0 bg-transparent p-0 text-left",
+                  FOCUS_RING,
+                )}
                 onClick={() => onSelectNode(entry.node.id)}
               >
                 {entry.index === 0 ? detail.tree.title : (entry.node.title ?? entry.node.prompt)}
-              </LinkButton>
+              </button>
             </span>
           ),
         )}

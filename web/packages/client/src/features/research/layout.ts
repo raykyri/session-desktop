@@ -46,6 +46,15 @@ export const TIMELINE_ITEM_RENDER_WINDOW = 100;
  * `var()` bug that the web does not have — 09 §3). */
 export const RESEARCH_ANSWER_MAX_WIDTH = "640px";
 
+/** The document's two columns: the answer column, capped at
+ * `--research-answer-max-width`, and the follow-up rail. Every row of a
+ * segment (prompt, answer, trailing composer) lays out on this grid so the
+ * prompt and the answer wrap at the same edge whatever the viewport; under
+ * 900px the rail drops beneath and the one column takes the width. */
+export const RESEARCH_COLUMNS_CLASS =
+  "grid grid-cols-[minmax(0,var(--research-answer-max-width))_minmax(220px,260px)] " +
+  "gap-(--research-column-gap) max-[900px]:grid-cols-[minmax(0,1fr)]";
+
 export interface AnchoredCardPlacement {
   id: string;
   /** Where the card wants to sit: the passage's top, relative to the rail. */

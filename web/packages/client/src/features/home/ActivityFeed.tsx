@@ -27,7 +27,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { InfiniteData } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronUp, RotateCw, Undo2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Undo2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -250,18 +250,12 @@ export function ActivityFeed({
     );
   };
 
-  const refreshHead = () => {
-    // "Refresh" is the head, not the whole feed.
-    dropOlderPages();
-    void feed.refetch();
-    setNewCount(0);
-  };
-
   const scrollToTop = () => {
     scrollRef.current?.scrollTo({ top: 0, behavior: feedScrollBehavior() });
   };
 
-  /** Returns to the first page and scrolls to the top without refetching. */
+  /** Returns to the first page and scrolls to the top without refetching;
+   * newer rows arrive through the subscription and the new-items counter. */
   const backToLatest = () => {
     dropOlderPages();
     setNewCount(0);
@@ -353,14 +347,6 @@ export function ActivityFeed({
       <div className="mx-auto flex w-full max-w-[calc(var(--spacing-feed)+2*clamp(20px,4vw,48px))] flex-col px-[clamp(20px,4vw,48px)] pb-12">
         <div className="flex items-center justify-between gap-2 pt-6 pb-4">
           <h1 className="text-input text-fg-heading m-0 font-semibold">{title}</h1>
-          <IconButton
-            label={`Refresh ${title}`}
-            title={`Refresh ${title}`}
-            onClick={refreshHead}
-            disabled={feed.isFetching}
-          >
-            <RotateCw size={15} aria-hidden="true" />
-          </IconButton>
         </div>
 
         {header}
@@ -419,7 +405,7 @@ export function ActivityFeed({
                   key={virtualRow.key}
                   ref={virtualizer.measureElement}
                   data-index={virtualRow.index}
-                  className="border-border-divider absolute top-0 left-0 w-full border-b"
+                  className="absolute top-0 left-0 w-full"
                   style={{ transform: `translateY(${virtualRow.start}px)` }}
                 >
                   <div

@@ -153,7 +153,7 @@ export function FollowupComposer({
       ) : null}
       <textarea
         ref={textareaRef}
-        className="text-fg-primary placeholder:text-fg-placeholder max-h-50 w-full resize-none border-0 bg-transparent p-0 text-sm outline-none"
+        className="research-composer-text text-fg-primary placeholder:text-fg-placeholder max-h-50 w-full resize-none border-0 bg-transparent p-0 outline-none"
         value={value}
         placeholder={placeholder}
         aria-label="Follow-up question"

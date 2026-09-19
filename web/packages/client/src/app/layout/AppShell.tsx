@@ -12,11 +12,11 @@ import { useOverlaysStore } from "../../stores/overlays.js";
 import { CommandPalette, type PaletteCommand } from "../../ui/CommandPalette.js";
 import { DiagramLightbox, ImageLightbox } from "../../ui/Lightboxes.js";
 import { NotificationStack } from "../../ui/NotificationStack.js";
+import { SidebarRestoreButton } from "../../ui/SidebarRestoreButton.js";
 import { useUserNotifications } from "../../ui/useUserNotifications.js";
 import { SessionBoot } from "../SessionBoot.js";
 
 import { Sidebar } from "./Sidebar.js";
-import { StageHeader } from "./StageHeader.js";
 
 /** The routes Cmd-1..9 and Ctrl-Tab cycle through, in sidebar order. Trees
  * join this list once `research.listTrees` is wired. */
@@ -31,8 +31,11 @@ const BASE_UI_LAYER_SELECTOR =
   '[data-open][role="menu"],[data-open][role="listbox"]';
 
 /**
- * The application frame (07 §1, §4.4, §5): sidebar, stage header, the routed
- * view, the two lightboxes, the toast region, and the command palette.
+ * The application frame (07 §1, §4.4, §5): sidebar, the routed view, the two
+ * lightboxes, the toast region, and the command palette. There is no bar above
+ * the routed view: page-level back/forward is the browser's (ADR-7), and the
+ * only shell control over the stage is the sidebar restore button, shown while
+ * the sidebar is collapsed.
  *
  * It installs exactly one capture-phase keydown listener, which does two
  * things in order:
@@ -52,6 +55,8 @@ export function AppShell() {
   const navigate = useNavigate();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const toggleSidebar = useNavigationStore((state) => state.toggleSidebar);
+  const sidebarCollapsed = useNavigationStore((state) => state.sidebarCollapsed);
+  const setSidebarCollapsed = useNavigationStore((state) => state.setSidebarCollapsed);
   const { notifications, dismiss } = useUserNotifications();
   const { workspaceId } = useWorkspaceScope();
   const trees = useTreeSummaries({ workspaceId });
@@ -168,8 +173,13 @@ export function AppShell() {
     <div className="bg-surface-workspace text-fg-primary flex h-full w-full overflow-hidden">
       <SessionBoot />
       <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <StageHeader />
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        {sidebarCollapsed ? (
+          <SidebarRestoreButton
+            className="absolute top-2 left-2 z-10"
+            onRestore={() => setSidebarCollapsed(false)}
+          />
+        ) : null}
         <main className="min-h-0 flex-1 overflow-hidden">
           <Outlet />
         </main>

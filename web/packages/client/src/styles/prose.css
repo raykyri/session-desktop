@@ -18,7 +18,10 @@
      than at each declaration means every size derived from the body size —
      the summary, the markdown delta, tweet copy — tracks the setting once. */
   --research-body-font-size: calc(var(--fs-input) - 0.5px + var(--app-text-zoom, 0px));
-  --research-body-line-height: 1.5;
+  /* 1.5 less one pixel; `em` resolves against the element's own font size, so
+     the prompt bubble, the answer, the recap and tweet copy all read at the
+     same tightened leading. */
+  --research-body-line-height: calc(1.5em - 1px);
   --research-summary-font-size: var(--research-body-font-size);
   --research-summary-line-height: var(--research-body-line-height);
   --research-meta-font-size: calc(var(--fs-input) - 2px);
@@ -61,6 +64,13 @@
   font-weight: 400;
   line-height: var(--research-summary-line-height);
   white-space: normal;
+}
+
+/* The composers read at the body size so a question looks the same while it is
+   typed as once it is asked. */
+.research-composer-text {
+  font-size: var(--research-body-font-size);
+  line-height: var(--research-body-line-height);
 }
 
 .research-prompt-quote {

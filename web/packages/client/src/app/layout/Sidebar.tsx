@@ -4,6 +4,8 @@ import { PanelLeftClose } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useLogout, useMe } from "../../api/queries.js";
+import memMonochromeLightLogoUrl from "../../assets/brand/mem-monochrome-light.svg";
+import memMonochromeLogoUrl from "../../assets/brand/mem-monochrome.svg";
 import { SidebarBody } from "../../features/sidebar/SidebarBody.js";
 import { cn } from "../../lib/cn.js";
 import {
@@ -12,6 +14,7 @@ import {
   SIDEBAR_MIN_WIDTH,
   useNavigationStore,
 } from "../../stores/navigation.js";
+import { selectAppearance, useSettingsStore } from "../../stores/settings.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
 import { Menu, MenuItem, MenuSeparator } from "../../ui/Menu.js";
 import { DIALOG_BACKDROP } from "../../ui/surfaces.js";
@@ -80,10 +83,20 @@ export function useNarrowLayout(): boolean {
   return narrow;
 }
 
+/** The sidebar's top row: the desktop's monochrome "M" mark (20px wide, one
+ * file per appearance) and the hide control. */
 function SidebarChrome({ onHide }: { onHide: () => void }) {
+  const appearance = useSettingsStore(selectAppearance);
   return (
     <div className="flex items-center justify-between gap-2 px-3 py-2">
-      <span className="text-fg-heading text-sm font-semibold">Session</span>
+      <span className="flex items-center px-0.5" aria-label="Session">
+        <img
+          src={appearance === "light" ? memMonochromeLightLogoUrl : memMonochromeLogoUrl}
+          alt=""
+          aria-hidden="true"
+          className="block h-auto w-5"
+        />
+      </span>
       <IconButton label="Hide sidebar" title="Hide sidebar (⇧⌘G)" onClick={onHide}>
         <PanelLeftClose size={16} aria-hidden="true" />
       </IconButton>
@@ -132,7 +145,7 @@ export function Sidebar() {
 
   // Under the breakpoint the column would leave no room for the reading
   // surface, so the same body becomes a dismissable drawer over it (08 §7).
-  // `collapsed` doubles as the drawer's open flag, so the header's restore
+  // `collapsed` doubles as the drawer's open flag, so the shell's restore
   // button and Shift-Cmd-G drive both layouts.
   if (narrow) {
     return (

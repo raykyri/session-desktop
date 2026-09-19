@@ -6,6 +6,8 @@
 // `.md` only, non-empty, within the same limits the composer applies; the
 // dialog asks for the prompt that produced the report, because an imported
 // document with no question behind it has nothing to thread follow-ups onto.
+// The trigger is an icon button; the composer renders it next to the attach
+// control.
 
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { estimateTokenCount } from "@session/shared";
@@ -18,7 +20,7 @@ import type { RefObject } from "react";
 import { importResearchReport } from "../../api/api.js";
 import { queryKeys } from "../../api/queries.js";
 import { errorMessage, pushErrorToast } from "../../lib/toast.js";
-import { ControlButton } from "../../ui/Button.js";
+import { IconButton } from "../../ui/Button.js";
 import { ConfirmDialogActionButton, Dialog } from "../../ui/Dialog.js";
 import { Textarea } from "../../ui/Field.js";
 import { CONTROL_BUTTON } from "../../ui/surfaces.js";
@@ -88,7 +90,7 @@ export function ReportImport({
   }, [report]);
 
   // HTML5 drop on the Home column, so a report can be dropped anywhere on the
-  // page rather than onto the button alone.
+  // page rather than onto the icon alone.
   useEffect(() => {
     const target = dropTarget.current;
     if (!target) return;
@@ -127,15 +129,13 @@ export function ReportImport({
 
   return (
     <>
-      <ControlButton
-        size="sm"
-        className="gap-1.5"
+      <IconButton
+        label="Import report"
         title="Import a Markdown report"
         onClick={() => inputRef.current?.click()}
       >
         <Upload size={14} aria-hidden="true" />
-        <span>Import report</span>
-      </ControlButton>
+      </IconButton>
       <input
         ref={inputRef}
         type="file"

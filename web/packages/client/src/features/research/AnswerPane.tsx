@@ -149,10 +149,7 @@ export const AnswerPane = memo(function AnswerPane({
   const noContent = contentLoading && view.timelineItems.length === 0;
 
   return (
-    <section
-      className="max-w-[var(--research-answer-max-width)] min-w-0"
-      aria-label="Research response"
-    >
+    <section className="min-w-0" aria-label="Research response">
       {noContent ? (
         <div className="text-fg-muted flex items-center gap-2 py-4 text-sm">
           {contentError ? (

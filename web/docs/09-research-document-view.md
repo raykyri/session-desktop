@@ -59,7 +59,9 @@ vertical list with 44 px between them. In Tailwind: the grid becomes
 utilities with arbitrary values referencing tokens
 (`grid-cols-[minmax(0,640px)_minmax(220px,260px)]`), and the desktop's
 literal 640 px (a WebKit `var()` workaround explained at `research.css:838-843`,
-applied at `:940`) becomes a token `--research-answer-max-width`.
+applied at `:940`) becomes a token `--research-answer-max-width`. The grid
+class is `RESEARCH_COLUMNS_CLASS` (`layout.ts`), and a segment's prompt row
+lays out on it too, so the prompt and the answer share one wrapping edge.
 
 Rail: `position: relative` flex column. Stacked cards flow; anchored cards
 and the docked ask composer are `position: absolute; left: 0; right: 2px`
