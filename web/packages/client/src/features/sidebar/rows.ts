@@ -4,7 +4,7 @@
 
 export const SIDEBAR_ROW =
   "flex min-h-control-md w-full min-w-0 cursor-pointer items-center gap-2 rounded-md " +
-  "px-2.5 text-[length:calc(var(--fs-reading)-0.5px)] text-fg-secondary no-underline " +
+  "px-2.5 text-[length:calc(var(--fs-reading)-1px)] text-fg-secondary no-underline " +
   "transition-colors duration-[120ms] " +
   "hover:bg-surface-sidebar-hover hover:text-fg-strong " +
   "focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-inset outline-none";

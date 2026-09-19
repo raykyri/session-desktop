@@ -37,6 +37,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { CONNECTION_FALLBACK_DELAY_MS, useConnectionStore } from "../stores/connection.js";
 import { useLiveTurnsStore, type LiveTurnStatus } from "../stores/liveTurns.js";
+import { useSettingsStore } from "../stores/settings.js";
 
 import {
   archiveResearchTree,
@@ -671,6 +672,7 @@ export function useLogout() {
     onSuccess: () => {
       // Clear the React Query cache on logout to purge user data from memory.
       client.clear();
+      useSettingsStore.getState().reset();
     },
   });
 }
