@@ -1089,7 +1089,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
             </Item>
           ) : null}
           {spec.regenerate ? (
-            <Item onClick={() => setRecapNodeId(spec.nodeId)}>Summary…</Item>
+            <Item onClick={() => setRecapNodeId(spec.nodeId)}>Regenerate summary…</Item>
           ) : null}
           {spec.editDocument ? (
             <Item disabled={spec.editDisabled} onClick={() => openEditSession(spec.nodeId)}>

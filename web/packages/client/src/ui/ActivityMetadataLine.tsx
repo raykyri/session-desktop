@@ -2,6 +2,7 @@ import { findModel, type RecentActivityEvent } from "@session/shared";
 
 import { cn } from "../lib/cn.js";
 import { formatRelativeTime } from "../lib/relativeTime.js";
+import { METADATA_LINE_COMPACT } from "./surfaces.js";
 
 /**
  * The model that answered a thread's root prompt. The desktop composed this
@@ -46,7 +47,7 @@ export function ActivityMetadataLine({
   const summary = formatActivityMetadataSummary(event);
   return (
     <div
-      className={cn("text-fg-activity text-xs", className)}
+      className={cn("text-fg-activity", METADATA_LINE_COMPACT, className)}
       title={finiteTime ? new Date(event.occurredAt).toLocaleString() : undefined}
     >
       <span>

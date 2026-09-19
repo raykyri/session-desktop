@@ -65,7 +65,7 @@ export function ResearchTreeMenuItems({
     <>
       {onRegenerateSummary ? (
         <>
-          <MenuItem onClick={onRegenerateSummary}>Summary…</MenuItem>
+          <MenuItem onClick={onRegenerateSummary}>Regenerate summary…</MenuItem>
           <MenuSeparator />
         </>
       ) : null}

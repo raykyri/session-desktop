@@ -11,8 +11,10 @@ import { useNavigate } from "@tanstack/react-router";
 import { Fragment } from "react";
 
 import { useHighlightsFeed } from "../../api/queries.js";
+import { cn } from "../../lib/cn.js";
 import { formatRelativeTime } from "../../lib/relativeTime.js";
 import { QueryState } from "../../ui/QueryState.js";
+import { METADATA_LINE_COMPACT } from "../../ui/surfaces.js";
 
 /** "Today", "Yesterday", or a calendar date. Local time, because a highlight
  * belongs to the reader's day rather than to UTC's. */
@@ -142,7 +144,12 @@ export function HighlightsFeed({ workspaceId }: { workspaceId: string }) {
                           <mark className="bg-highlight text-fg-primary">{item.exact}</mark>
                           {suffix ? <span className="text-fg-muted">{`${suffix}…`}</span> : null}
                         </div>
-                        <div className="text-fg-subtle mt-2 flex items-center gap-2 text-xs">
+                        <div
+                          className={cn(
+                            "text-fg-subtle mt-2 flex items-center gap-2",
+                            METADATA_LINE_COMPACT,
+                          )}
+                        >
                           <button
                             type="button"
                             className="min-w-0 truncate border-0 bg-transparent p-0 text-left underline-offset-2 hover:underline"

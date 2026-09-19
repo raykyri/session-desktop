@@ -23,8 +23,8 @@
   --text-sm--line-height: 1.45;
   --text-base: var(--fs-base);
   --text-base--line-height: 1.5;
-  --text-input: var(--fs-input);
-  --text-input--line-height: 1.5;
+  --text-reading: var(--fs-reading);
+  --text-reading--line-height: 1.5;
   --text-title: var(--fs-title);
   --text-title--line-height: 1.35;
 

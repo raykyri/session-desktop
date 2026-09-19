@@ -34,7 +34,7 @@ primitives.
   --text-xs: var(--fs-xs);
   --text-sm: var(--fs-sm);
   --text-base: var(--fs-base);
-  --text-input: var(--fs-input);
+  --text-reading: var(--fs-reading);
   --font-ui: var(--font-ui);
   --font-mono: var(--font-mono);
   --radius-sm: var(--radius-sm);

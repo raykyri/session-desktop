@@ -50,7 +50,7 @@ export function Dialog({
           className={cn(DIALOG_POPUP, className)}
           {...(initialFocus === undefined ? {} : { initialFocus })}
         >
-          <BaseDialog.Title className="text-fg-heading text-input m-0 font-semibold">
+          <BaseDialog.Title className="text-fg-heading text-reading m-0 font-semibold">
             {title}
           </BaseDialog.Title>
           {description ? (

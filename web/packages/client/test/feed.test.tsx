@@ -364,6 +364,10 @@ test.serial("a query card renders its recap and its follow-up questions", async 
     () => screen.queryAllByText(/shared store of meaning, maintained/).length > 0,
     "the recap is the card's body once the run has settled",
   );
+  t.truthy(
+    screen.getByRole("button", { name: /Summary: A shared store of meaning/ }),
+    "the recap opens the thread the same way the question does",
+  );
   await waitUntil(
     t,
     () => screen.queryAllByLabelText("Follow-up questions").length > 0,
