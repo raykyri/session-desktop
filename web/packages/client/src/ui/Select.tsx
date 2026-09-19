@@ -101,7 +101,10 @@ export function Select({
           sideOffset={6}
           className="z-(--z-select-popover)"
         >
-          <BaseSelect.Popup className={cn(POPOVER_SURFACE, "min-w-(--anchor-width)")}>
+          <BaseSelect.Popup
+            className={cn(POPOVER_SURFACE, "min-w-[var(--anchor-width)]")}
+            style={{ minWidth: "var(--anchor-width)" }}
+          >
             <BaseSelect.List>
               {options.map((option) => (
                 // A plain wrapper element would sit between the listbox and
@@ -127,7 +130,7 @@ export function Select({
                     <BaseSelect.ItemText className="min-w-0 flex-1 truncate">
                       {option.label}
                     </BaseSelect.ItemText>
-                    {option.detail ? (
+                    {option.detail && option.value !== value ? (
                       <span className="text-fg-subtle shrink-0 text-xs">{option.detail}</span>
                     ) : null}
                     <BaseSelect.ItemIndicator className="ml-1 shrink-0">
@@ -214,7 +217,10 @@ export function LauncherSelect({
           sideOffset={6}
           className="z-(--z-select-popover)"
         >
-          <BaseMenu.Popup className={cn(POPOVER_SURFACE, "min-w-(--anchor-width)")}>
+          <BaseMenu.Popup
+            className={cn(POPOVER_SURFACE, "min-w-[var(--anchor-width)]")}
+            style={{ minWidth: "var(--anchor-width)" }}
+          >
             <BaseMenu.RadioGroup
               value={value}
               onValueChange={(next: string) => onChange(next)}

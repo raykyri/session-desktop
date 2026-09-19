@@ -52,7 +52,7 @@ export default function ResearchFolderDialog({
         <p>
           {itemCount > 0
             ? `Create a folder with ${itemCount} ${itemCount === 1 ? "item" : "items"}:`
-            : "Create an empty folder for research you want to organize later."}
+            : "Create a new folder to organize your queries."}
         </p>
         <input
           className="rename-dialog-input"

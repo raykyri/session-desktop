@@ -179,9 +179,9 @@ export default function EncyclopediaPageView({
                 <div className="encyclopedia-page-pending" role="status" aria-live="polite">
                   <p>
                     <LoaderCircle size={14} className="is-spinning" aria-hidden="true" />
-                    Writing this page from{" "}
-                    {page.sources.length === 1 ? "one passage" : `${page.sources.length} passages`}
-                    …
+                    {page.sources.length === 1
+                      ? "Creating page from reference passage:"
+                      : `Creating page from ${page.sources.length} reference passages:`}
                   </p>
                   {latestSource ? (
                     <blockquote className="encyclopedia-page-source-excerpt">

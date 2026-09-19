@@ -136,6 +136,16 @@ test.serial("the variant chooses the typography, not the layout root", (t) => {
   t.true(compact.container.firstElementChild?.className.includes("research-prose--compact"));
 });
 
+test.serial("unordered and ordered lists render as lists", (t) => {
+  const { container } = render(
+    <ResearchMarkdown markdown={"- alpha\n- beta\n\n1. first\n2. second"} />,
+  );
+  t.is(container.querySelectorAll(".research-prose > ul > li").length, 2);
+  t.is(container.querySelectorAll(".research-prose > ol > li").length, 2);
+  t.true(container.querySelector("ul")?.textContent?.includes("alpha"));
+  t.true(container.querySelector("ol")?.textContent?.includes("first"));
+});
+
 test.serial("inline mode drops block wrappers and keeps inline formatting", (t) => {
   const { container } = render(<ResearchMarkdown markdown={"# Heading\n\nwith **bold**"} inline />);
   t.is(container.querySelector("h1"), null);

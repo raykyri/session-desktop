@@ -184,9 +184,13 @@
   color: var(--text-tertiary);
 }
 
+/* Tailwind Preflight sets `list-style: none` on every ul/ol, so reports were
+   indenting as lists with no markers. Revert to the user-agent disc/decimal
+   (and nested circle/square) so unordered and ordered lists both read. */
 .research-prose ul,
 .research-prose ol {
   padding-left: 18px;
+  list-style: revert;
 }
 
 .research-prose ol {
@@ -195,6 +199,11 @@
 
 .research-prose li {
   margin: 3px 0;
+}
+
+.research-prose ul.contains-task-list,
+.research-prose li.task-list-item {
+  list-style: none;
 }
 
 .research-prose li > p {

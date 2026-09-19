@@ -128,8 +128,9 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
                   className="text-fg-muted flex flex-col gap-2 text-base"
                 >
                   <p className="m-0">
-                    Writing this page from{" "}
-                    {page.sources.length === 1 ? "one passage" : `${page.sources.length} passages`}…
+                    {page.sources.length === 1
+                      ? "Creating page from reference passage:"
+                      : `Creating page from ${page.sources.length} reference passages:`}
                   </p>
                   {latestSource ? (
                     <blockquote className="border-border-blockquote text-fg-secondary m-0 border-l-2 pl-3 text-base">
@@ -168,7 +169,7 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
                         <button
                           type="button"
                           disabled={!source.nodeId && !source.pageSlug}
-                          className="decoration-fg-muted block max-w-full border-0 bg-transparent p-0 text-left text-base decoration-dotted underline-offset-2 hover:not-disabled:underline disabled:cursor-default"
+                          className="decoration-fg-muted/50 block max-w-full border-0 bg-transparent p-0 text-left text-base decoration-dotted underline-offset-2 hover:not-disabled:underline disabled:cursor-default"
                           onClick={() => {
                             if (source.nodeId && source.treeId) {
                               void navigate({
@@ -212,9 +213,9 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
 
         title="Rewrite this page?"
 
-        description="The current text is replaced by a newly generated page."
+        description="The current text will replaced by a newly generated page."
 
-        confirmLabel="Rewrite page"
+        confirmLabel="Continue"
 
         onConfirm={() => {
           setConfirmingRewrite(false);

@@ -38,11 +38,15 @@ export interface SavedScrollOffset {
 }
 
 /** Where a feed was left: the id of the row under the viewport's top edge and
- * its pixel offset from it (`10` §2). Keyed by feed — Home and Bookmarks
- * scroll independently. */
+ * its pixel offset from it (`10` §2), plus the scroller's `scrollTop`. Keyed
+ * by feed — Home and Bookmarks scroll independently. `top` is the restore
+ * path; key+offset still describe the visible row if the list shifted. */
 export interface FeedScrollAnchor {
   key: string;
   offset: number;
+  /** Scroller `scrollTop` when the feed was left. Older persisted anchors
+   * omit it and fall back to key+offset. */
+  top?: number;
 }
 
 export interface NavigationState {

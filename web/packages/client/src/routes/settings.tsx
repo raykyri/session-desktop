@@ -267,59 +267,61 @@ export function SettingsPage() {
 
         <div className="flex flex-col gap-8">
           <SettingsGroup title="Appearance">
-            <Field label="Appearance">
-              {() => (
-                <Select
-                  label="Appearance"
-                  value={settings.appearance}
-                  options={APPEARANCE_OPTIONS}
-                  className={PICKER_CLASS}
-                  onChange={(value) =>
-                    set("appearance", appearanceSchema.catch("dark").parse(value))
-                  }
-                />
-              )}
-            </Field>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <Field label="Appearance">
+                {() => (
+                  <Select
+                    label="Appearance"
+                    value={settings.appearance}
+                    options={APPEARANCE_OPTIONS}
+                    className="w-full"
+                    onChange={(value) =>
+                      set("appearance", appearanceSchema.catch("dark").parse(value))
+                    }
+                  />
+                )}
+              </Field>
 
-            <Field label="Theme">
-              {() => (
-                <Select
-                  label="Theme"
-                  value={settings.colorTheme}
-                  options={COLOR_THEME_OPTIONS}
-                  className={PICKER_CLASS}
-                  onChange={(value) =>
-                    set("colorTheme", value === "orange-blob" ? "orange-blob" : "green-blob")
-                  }
-                />
-              )}
-            </Field>
+              <Field label="Theme">
+                {() => (
+                  <Select
+                    label="Theme"
+                    value={settings.colorTheme}
+                    options={COLOR_THEME_OPTIONS}
+                    className="w-full"
+                    onChange={(value) =>
+                      set("colorTheme", value === "orange-blob" ? "orange-blob" : "green-blob")
+                    }
+                  />
+                )}
+              </Field>
 
-            <Field label="Body font">
-              {() => (
-                <Select
-                  label="Body font"
-                  value={settings.bodyFontId}
-                  options={BODY_FONT_SELECT_OPTIONS}
-                  className={PICKER_CLASS}
-                  onChange={(value) => set("bodyFontId", value)}
-                />
-              )}
-            </Field>
+              <Field label="Body font">
+                {() => (
+                  <Select
+                    label="Body font"
+                    value={settings.bodyFontId}
+                    options={BODY_FONT_SELECT_OPTIONS}
+                    className="w-full"
+                    onChange={(value) => set("bodyFontId", value)}
+                  />
+                )}
+              </Field>
 
-            <Field label="Text size">
-              {() => (
-                <Select
-                  label="Text size"
-                  value={String(
-                    clamp(settings.textSize, TEXT_SIZE_OPTION_MIN, TEXT_SIZE_OPTION_MAX),
-                  )}
-                  options={TEXT_SIZE_OPTIONS}
-                  className={PICKER_CLASS}
-                  onChange={(value) => setTextSize(Number(value))}
-                />
-              )}
-            </Field>
+              <Field label="Text size">
+                {() => (
+                  <Select
+                    label="Text size"
+                    value={String(
+                      clamp(settings.textSize, TEXT_SIZE_OPTION_MIN, TEXT_SIZE_OPTION_MAX),
+                    )}
+                    options={TEXT_SIZE_OPTIONS}
+                    className="w-full"
+                    onChange={(value) => setTextSize(Number(value))}
+                  />
+                )}
+              </Field>
+            </div>
           </SettingsGroup>
 
           <SettingsGroup title="Reading">

@@ -37,6 +37,9 @@ export function feedScrollBehavior(): ScrollBehavior {
 export interface FeedAnchorControl {
   /** Records the current anchor, debounced. */
   record: (anchor: FeedScrollAnchor | null) => void;
+  /** Writes any pending anchor now. Call before navigating away so a click
+   * that never produced a scroll event still leaves a position to restore. */
+  flush: () => void;
   /** The anchor this feed was last left at, read once per mount. */
   initial: FeedScrollAnchor | null;
 }
@@ -86,7 +89,7 @@ export function useFeedScrollAnchor(view: string): FeedAnchorControl {
   // Memoized: the feed hangs a native `scroll` listener off this control, and
   // a fresh object every render would detach and re-attach that listener on
   // every commit.
-  return useMemo(() => ({ record, initial }), [record, initial]);
+  return useMemo(() => ({ record, flush, initial }), [record, flush, initial]);
 }
 
 /**
