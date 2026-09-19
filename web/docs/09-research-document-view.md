@@ -30,10 +30,10 @@ deletes the WebKit and Tauri workarounds.
 | Component | Source | Responsibility |
 | --- | --- | --- |
 | `ResearchPage` (route) | `App.tsx:11929` wiring + `ResearchDocument:1760` | Loads `tree` and route params, owns per-tree stores, renders header, search bar, scroller, portals |
-| `DocumentHeader` | `:5105` | `HistoryNav`, breadcrumb, "N in thread · M branches" chip, sidebar restore, full-transcript toggle, Cancel / Retry-cancel |
+| `DocumentHeader` | `:5105` | `HistoryNav`, breadcrumb, "N in thread · M branches" chip, sidebar restore, full-transcript toggle |
 | `ThreadSegment` (memo) | `:1621` | One spine node: `SegmentPrompt` + grid of `ConnectorOverlay`, `AnswerPane`, `FollowupRail`; registers anchor and grid elements |
 | `SegmentPrompt` (memo) | `:1514` | Back link (index 0), "Reply to" snippet (index > 0), quoted passage blockquote, `ResearchUserMessage`, root footer with `ThreadActions` (Follow/Bookmark), model summary, relative time |
-| `AnswerPane` (memo, custom comparator) | `:1118` | Loading/error/failure states, `Recap`, empty-state copy cascade, "Show N earlier response items", the selection root, footer (word count, duration, hidden-highlights notice, copy, answer menu, per-segment Cancel) |
+| `AnswerPane` (memo, custom comparator) | `:1118` | Loading/error/failure states, `Recap`, empty-state copy cascade, "Show N earlier response items", the selection root, footer (word count, duration, hidden-highlights notice, copy, answer menu); the status line under an active answer carries a confirmed Cancel link |
 | `TimelineItem` (memo) | `:782` | One timeline message: markdown body, raw disclosures, activity disclosures, "Excluded from active context" chip |
 | `FollowupRail` (memo) | `:1391` | Docked ask composer slot, stacked cards, anchored cards (absolute `top`) |
 | `ConnectorOverlay` (memo) | `:1485` | SVG paths and endpoint dots per connector |
@@ -244,8 +244,8 @@ so the DOM is reconciled without a flash.
 
 Retry and cancel surfaces: answer-pane Retry (`failed | cancelled |
 interrupted`, not archived; `interrupted` normally auto-resumes and shows
-"Resuming…" first), a "Queued · N ahead" line while `queued`, per-segment Cancel for active non-selected segments, header
-Cancel, composer "Retry follow-up" for a settled inline tail, "Retry run" in
+"Resuming…" first), a "Queued · N ahead" line while `queued`, a Cancel link beside "Working…" on
+every active segment (behind a confirm dialog), composer "Retry follow-up" for a settled inline tail, "Retry run" in
 the node menu. `paneId`-based conditions (`cancellationNeedsRetry`,
 `!paneId`) are removed: the web has no pane-backed runs.
 

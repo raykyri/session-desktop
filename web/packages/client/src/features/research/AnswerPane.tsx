@@ -3,9 +3,9 @@
 // Everything about one node's response lives here: its loading and failure
 // states, the recap, the collapsed-fold empty-state cascade, the "show earlier"
 // window, the selection root the highlight machinery measures against, the
-// sources, and the footer (word count, duration, hidden-highlight notice, copy,
-// the answer menu, and a local cancel button for branch runs not targeted by
-// the header cancel button).
+// sources, the status line with its Cancel link while the run is active, and
+// the footer (word count, duration, hidden-highlight notice, copy, and the
+// answer menu).
 //
 // It is memoized apart from its segment's rail: a follow-up card streaming a
 // preview in the margin must not rebuild the answer's element tree or re-run
@@ -13,11 +13,12 @@
 
 import type { ResearchNode, ResearchNodeContent, Turn } from "@session/shared";
 import { Copy, LoaderCircle, MoreHorizontal, RefreshCw } from "lucide-react";
-import { memo } from "react";
+import { memo, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
 import { ControlButton, IconButton, LinkButton } from "../../ui/Button.js";
+import { ConfirmDialog } from "../../ui/Dialog.js";
 import { Menu } from "../../ui/Menu.js";
 import { QueryState } from "../../ui/QueryState.js";
 
@@ -76,8 +77,6 @@ export interface AnswerPaneProps {
   durationText: string | null;
   hiddenHighlightCount: number;
   recapPending: boolean;
-  /** A run streaming in a segment the header's Cancel does not follow. */
-  showRunControls: boolean;
   cancelling: boolean;
   canRetryNode: boolean;
   retryingNode: boolean;
@@ -111,7 +110,6 @@ export const AnswerPane = memo(function AnswerPane({
   durationText,
   hiddenHighlightCount,
   recapPending,
-  showRunControls,
   cancelling,
   canRetryNode,
   retryingNode,
@@ -148,6 +146,12 @@ export const AnswerPane = memo(function AnswerPane({
   ) : null;
 
   const noContent = (contentLoading || Boolean(contentError)) && view.timelineItems.length === 0;
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const emptyStateText = answerEmptyStateText({
+    node,
+    sourceError: view.content?.sourceError,
+    hasAnyTimelineItem: view.timelineItems.length > 0,
+  });
 
   return (
     <section className="min-w-0" aria-label="Answer">
@@ -183,13 +187,9 @@ export const AnswerPane = memo(function AnswerPane({
           <Recap content={view.content} pending={recapPending} />
           {view.displayedTimelineItems.length === 0 ? (
             <div className="flex flex-col items-start gap-2">
-              <p className="text-fg-muted m-0 text-sm">
-                {answerEmptyStateText({
-                  node,
-                  sourceError: view.content?.sourceError,
-                  hasAnyTimelineItem: view.timelineItems.length > 0,
-                })}
-              </p>
+              {emptyStateText === null ? null : (
+                <p className="text-fg-muted m-0 text-sm">{emptyStateText}</p>
+              )}
               {node.status === "failed" ||
               node.status === "cancelled" ||
               node.status === "interrupted"
@@ -236,8 +236,30 @@ export const AnswerPane = memo(function AnswerPane({
                 aria-hidden="true"
               />
               {thinking ? "Thinking…" : "Working…"}
+              <LinkButton
+                className="ml-1.5"
+                disabled={cancelling}
+                onClick={() => setConfirmingCancel(true)}
+              >
+                {cancelling ? "Cancelling…" : "Cancel"}
+              </LinkButton>
             </p>
           ) : null}
+          <ConfirmDialog
+            open={confirmingCancel}
+            onOpenChange={(next) => {
+              if (!next) setConfirmingCancel(false);
+            }}
+            title="Cancel this run?"
+            description="The run stops within a second. Any partial answer stays readable."
+            confirmLabel="Cancel run"
+            cancelLabel="Keep running"
+            tone="danger"
+            onConfirm={() => {
+              setConfirmingCancel(false);
+              onCancelNode(node.id);
+            }}
+          />
           {node.status === "complete" ? <SourcesFooter turns={turns} /> : null}
           <footer className="text-fg-subtle min-h-control-sm mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-base">
             <span>
@@ -277,16 +299,6 @@ export const AnswerPane = memo(function AnswerPane({
                 {menuItems}
               </Menu>
             </span>
-            {showRunControls ? (
-              <ControlButton
-                size="sm"
-                className="ml-auto"
-                disabled={cancelling}
-                onClick={() => onCancelNode(node.id)}
-              >
-                {cancelling ? "Cancelling…" : "Cancel"}
-              </ControlButton>
-            ) : null}
           </footer>
         </>
       )}

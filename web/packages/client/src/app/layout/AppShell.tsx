@@ -1,6 +1,6 @@
 import { appShortcutAllowsRepeat, isEditableTarget, resolveAppShortcut } from "@session/shared";
 import type { AppShortcutCommand } from "@session/shared";
-import { Outlet, useNavigate, useRouter } from "@tanstack/react-router";
+import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 
 import { useTreeSummaries } from "../../api/queries.js";
@@ -56,6 +56,9 @@ export function AppShell() {
   const toggleSidebar = useNavigationStore((state) => state.toggleSidebar);
   const sidebarCollapsed = useNavigationStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useNavigationStore((state) => state.setSidebarCollapsed);
+  const onResearchDocument = useRouterState({
+    select: (state) => state.location.pathname.startsWith("/r/"),
+  });
   const { notifications, dismiss } = useUserNotifications();
   const { workspaceId } = useWorkspaceScope();
   const trees = useTreeSummaries({ workspaceId });
@@ -178,8 +181,10 @@ export function AppShell() {
       <SessionBoot />
       <Sidebar />
       {/* A slim column rather than a floating control: a document's title sits
-          on the stage's left edge, and a button laid over it would cover it. */}
-      {sidebarCollapsed ? (
+          on the stage's left edge, and a button laid over it would cover it.
+          The research document has a header band that reaches the left edge,
+          so it places the button inside that band instead (`DocumentHeader`). */}
+      {sidebarCollapsed && !onResearchDocument ? (
         <div className="flex shrink-0 items-start px-1 pt-2">
           <SidebarRestoreButton
             className="translate-x-0.5"

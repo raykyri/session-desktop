@@ -158,7 +158,7 @@ test("the word count counts the answer, not the trace", (t) => {
 
 /* ----------------------------------------------------------- empty states */
 
-function emptyFor(overrides: Partial<ResearchNode>, hasAnyTimelineItem = false): string {
+function emptyFor(overrides: Partial<ResearchNode>, hasAnyTimelineItem = false): string | null {
   return answerEmptyStateText({
     node: node(overrides),
     sourceError: undefined,
@@ -170,7 +170,9 @@ test("empty state renders the specific error or completion message", (t) => {
   t.is(emptyFor({ status: "failed", error: "provider refused" }), "provider refused");
   t.is(emptyFor({ status: "cancelled" }), "The run was cancelled.");
   t.is(emptyFor({ status: "interrupted" }), "The run was interrupted. Resuming…");
-  t.is(emptyFor({ status: "running" }), "Working…");
+  // The status line already reads "Working…"; the empty state stays silent.
+  t.is(emptyFor({ status: "running" }), null);
+  t.is(emptyFor({ status: "queued" }), null);
   t.is(emptyFor({ status: "running" }, true), "Generating response…");
   t.is(emptyFor({ status: "complete" }), "The run finished, but the answer could not be loaded.");
 });

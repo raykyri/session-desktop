@@ -1,19 +1,22 @@
 // The document's own header (`09-research-document-view.md` §2).
 //
 // The breadcrumb down to the selected node, a chip counting what this page
-// shows, the full-transcript toggle, and Cancel while a run is in flight.
+// shows, and the full-transcript toggle. Cancel lives on the segment's status
+// line (`AnswerPane.tsx`).
 // Node-level back/forward has no buttons here: it is driven by ⌘[ / ⌘] and the
 // mouse back/forward buttons (`ResearchPage.tsx`).
 //
 // The breadcrumb collapses deep paths to "root / … / parent / current": the
 // Deep hierarchies collapse intermediate breadcrumbs to prevent UI crowding.
 
+import { defaultTitle, isActiveResearchStatus } from "@session/shared";
 import type { ResearchNode, ResearchTreeDetail } from "@session/shared";
-import { ScrollText, X } from "lucide-react";
+import { ScrollText } from "lucide-react";
 import { useMemo } from "react";
+import type { ReactNode } from "react";
 
 import { cn } from "../../lib/cn.js";
-import { ControlButton, IconButton } from "../../ui/Button.js";
+import { IconButton } from "../../ui/Button.js";
 import { FOCUS_RING } from "../../ui/surfaces.js";
 
 export type BreadcrumbEntry =
@@ -51,25 +54,41 @@ export function collapseBreadcrumb(path: ResearchNode[]): BreadcrumbEntry[] {
   ];
 }
 
+/** The tree's title is the truncated question until the root run settles and
+ * the metadata model names the thread (`runs/metadata.ts`). Until then the
+ * header reads "New thread"; the stored title is untouched, so the sidebar and
+ * the tab keep the question. A root that failed or was cancelled never gets a
+ * generated title, so its question stays. */
+export function displayedTreeTitle(detail: ResearchTreeDetail, root: ResearchNode): string {
+  const generated = root.title !== null && root.title !== undefined;
+  const settling = isActiveResearchStatus(root.status) || root.status === "complete";
+  if (!generated && settling && detail.tree.title === defaultTitle(root.prompt)) {
+    return "New thread";
+  }
+  return detail.tree.title;
+}
+
 export interface DocumentHeaderProps {
   detail: ResearchTreeDetail;
+  /** Rendered before the breadcrumb: the sidebar restore button while the
+   * sidebar is collapsed, so the header reaches the stage's left edge. */
+  leading?: ReactNode;
   selectedNodeId: string;
   threadLength: number;
   branchCount: number;
   onSelectNode: (nodeId: string) => void;
   /** Present only when the selected segment has activity worth revealing. */
   fullTrace: { active: boolean; onToggle: () => void } | null;
-  cancel: { busy: boolean; onCancel: () => void } | null;
 }
 
 export function DocumentHeader({
   detail,
+  leading,
   selectedNodeId,
   threadLength,
   branchCount,
   onSelectNode,
   fullTrace,
-  cancel,
 }: DocumentHeaderProps) {
   const crumbs = useMemo(
     () => collapseBreadcrumb(breadcrumbPath(detail, selectedNodeId)),
@@ -77,7 +96,10 @@ export function DocumentHeader({
   );
 
   return (
-    <header className="research-reading-surface border-border-divider flex shrink-0 items-center gap-2 border-b px-8 pt-[7px] pb-1.5 max-[900px]:px-7">
+    <header className="research-reading-surface border-border-divider flex shrink-0 items-center gap-2 border-b pt-2 pr-3.5 pb-[7px] pl-8 max-[900px]:pl-7">
+      {leading ? (
+        <div className="-my-0.5 -ml-6 flex shrink-0 items-center max-[900px]:-ml-5">{leading}</div>
+      ) : null}
       <nav
         className="flex min-w-0 flex-1 items-center gap-1 text-[length:var(--research-body-font-size)]"
         aria-label="Research path"
@@ -110,7 +132,9 @@ export function DocumentHeader({
                 )}
                 onClick={() => onSelectNode(entry.node.id)}
               >
-                {entry.index === 0 ? detail.tree.title : (entry.node.title ?? entry.node.prompt)}
+                {entry.index === 0
+                  ? displayedTreeTitle(detail, entry.node)
+                  : (entry.node.title ?? entry.node.prompt)}
               </button>
             </span>
           ),
@@ -133,12 +157,6 @@ export function DocumentHeader({
         >
           <ScrollText size={15} aria-hidden="true" />
         </IconButton>
-      ) : null}
-      {cancel ? (
-        <ControlButton size="sm" disabled={cancel.busy} onClick={cancel.onCancel}>
-          <X size={14} aria-hidden="true" />
-          {cancel.busy ? "Cancelling…" : "Cancel"}
-        </ControlButton>
       ) : null}
     </header>
   );

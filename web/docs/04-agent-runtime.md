@@ -223,8 +223,13 @@ instead of the owned `web_search`. Behavior differences the runtime handles:
   `groundingSupports` mapping answer segments to chunks, `searchEntryPoint`),
   not page text. The mapper turns each grounded step into a synthetic
   `toolUse`/`toolResult` pair named `google_search` so the timeline and the
-  Sources footer render uniformly; the Sources footer shows chunk titles and
-  resolves redirect URIs to their final host for display.
+  Sources footer render uniformly. Before the mapper sees a `source` part or
+  a step's `groundingChunks`, the run loop resolves each
+  `vertexaisearch.cloud.google.com/grounding-api-redirect/…` link to the
+  page it stands for with one HEAD request (`runs/groundingRedirects.ts`,
+  memoized per run, 4 s timeout, the redirect link kept on failure), so the
+  stored turns, the Sources footer, copied answers and later context windows
+  carry real URLs.
 - Google's terms require displaying the Search Suggestions from
   `searchEntryPoint` when grounded results are shown; the document footer
   renders them for grounded answers.
