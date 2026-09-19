@@ -191,7 +191,7 @@ export function ResearchQueryCard({
           <span className={cn(query.status === "failed" && "text-status-failed")}>{status}</span>
         ) : null}
         <span className="flex-1" />
-        {signedIn && !running ? (
+        {signedIn && tree && !running ? (
           <ThreadActions
             followed={followed}
             bookmarked={bookmarked}

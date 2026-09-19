@@ -22,6 +22,12 @@ import { workspaces } from "../schema/workspaces.js";
 import { now, strictlyAfter } from "../time.js";
 
 import { attachWithin } from "./documents.js";
+import {
+  markArchived,
+  removeResearchTree,
+  upsertResearchRoot,
+  upsertResearchTree,
+} from "./feedgen.js";
 import { toResearchHighlight, toResearchNode, toResearchTree } from "./mappers.js";
 import { deleteNodesOfTrees, hasActiveNodes } from "./subtrees.js";
 
@@ -171,6 +177,7 @@ export function admitRoot(
     // another's document — permanently, because `documents.remove` refuses a
     // document a node references (`06-auth-and-users.md` §4).
     attachWithin(tx, userId, nodeId, input.documentIds ?? []);
+    upsertResearchRoot(tx, nodeId);
     return detailFromRow(tx, treeRow);
   });
 }
@@ -453,7 +460,11 @@ export function setBookmarked(
   treeId: string,
   bookmarked: boolean,
 ): ResearchTree {
-  return setFlag(db, userId, treeId, { bookmarked });
+  return transact(db, (tx) => {
+    const tree = setFlag(tx, userId, treeId, { bookmarked });
+    upsertResearchTree(tx, treeId);
+    return tree;
+  });
 }
 
 /** Viewing acknowledges unseen updates and failures. */
@@ -479,11 +490,13 @@ export function archive(db: SessionDatabase, userId: string, treeId: string): Re
         ),
       )
       .run();
-    return setFlag(tx, userId, treeId, {
+    const tree = setFlag(tx, userId, treeId, {
       archivedAt: at,
       position: 0,
       updatedAt: strictlyAfter(row.updatedAt, at),
     });
+    markArchived(tx, treeId, true);
+    return tree;
   });
 }
 
@@ -504,11 +517,13 @@ export function restore(db: SessionDatabase, userId: string, treeId: string): Re
         ),
       )
       .run();
-    return setFlag(tx, userId, treeId, {
+    const tree = setFlag(tx, userId, treeId, {
       archivedAt: null,
       position: 0,
       updatedAt: strictlyAfter(row.updatedAt, at),
     });
+    markArchived(tx, treeId, false);
+    return tree;
   });
 }
 
@@ -521,6 +536,7 @@ export function remove(db: SessionDatabase, userId: string, treeId: string): voi
     if (hasActiveNodes(tx, [row.id])) {
       throw new Error("Cannot delete research thread with an active run: cancel the run first.");
     }
+    removeResearchTree(tx, row.id);
     deleteNodesOfTrees(tx, [row.id]);
     tx.delete(trees).where(eq(trees.id, row.id)).run();
   });

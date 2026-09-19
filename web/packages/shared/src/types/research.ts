@@ -273,6 +273,7 @@ export interface RecentResearchQuery {
   children?: RecentResearchQuery[] | undefined;
   nodeId: string;
   treeId: string;
+  workspaceId?: string | undefined;
   parentNodeId?: string | null | undefined;
   inline: boolean;
   prompt: string;
@@ -293,6 +294,7 @@ export const recentResearchQuerySchema: z.ZodType<RecentResearchQuery> = z.lazy(
     children: z.array(recentResearchQuerySchema).optional(),
     nodeId: z.string(),
     treeId: z.string(),
+    workspaceId: z.string().optional(),
     parentNodeId: z.string().nullish(),
     inline: z.boolean(),
     prompt: z.string(),

@@ -1,9 +1,18 @@
 import type { JournalEntry, RecentActivityCursor, RecentActivityItem } from "@session/shared";
 import test from "ava";
 
-import { feeds, journal, nodes, trees, workspaces } from "../src/index.js";
+import {
+  feedgen,
+  feedItems,
+  feeds,
+  journal,
+  nodes,
+  schema,
+  trees,
+  workspaces,
+} from "../src/index.js";
 
-import { createFixture } from "./helpers.js";
+import { addUser, createFixture } from "./helpers.js";
 
 function linkEntry(id: string, at: number): JournalEntry {
   return {
@@ -31,6 +40,7 @@ test("the feed merges both sources under one cursor, newest first", (t) => {
   fixture.db.$client
     .prepare(`UPDATE nodes SET created_at = ? WHERE id = ?`)
     .run(base + 2000, research.tree.rootNodeId);
+  feedgen.upsertResearchRoot(fixture.db, research.tree.rootNodeId);
   journal.add(fixture.db, fixture.userId, linkEntry("j2", base + 3000));
 
   const page = feeds.recentActivity(fixture.db, fixture.userId, { limit: 10 });
@@ -51,6 +61,7 @@ test("a tie in occurredAt is broken by source rank, research first", (t) => {
   fixture.db.$client
     .prepare(`UPDATE nodes SET created_at = ? WHERE id = ?`)
     .run(at, research.tree.rootNodeId);
+  feedgen.upsertResearchRoot(fixture.db, research.tree.rootNodeId);
   const page = feeds.recentActivity(fixture.db, fixture.userId, { limit: 10 });
   t.deepEqual(page.items.map(itemId), ["n1", "j1"]);
 });
@@ -71,6 +82,7 @@ test("pagination walks the whole feed exactly once across ties", (t) => {
     fixture.db.$client
       .prepare(`UPDATE nodes SET created_at = ? WHERE id = ?`)
       .run(at, detail.tree.rootNodeId);
+    feedgen.upsertResearchRoot(fixture.db, detail.tree.rootNodeId);
   }
   const seen: string[] = [];
   let cursor: RecentActivityCursor | null = null;
@@ -152,6 +164,7 @@ test("the workspace filter narrows research and keeps journal entries", (t) => {
   fixture.db.$client
     .prepare(`UPDATE nodes SET created_at = ? WHERE id = ?`)
     .run(1_700_000_002_000, "here");
+  feedgen.upsertResearchRoot(fixture.db, "here");
   const page = feeds.recentActivity(fixture.db, fixture.userId, {
     workspaceId: fixture.workspaceId,
     limit: 10,
@@ -180,6 +193,100 @@ test("bookmarkedOnly shows bookmarked threads and no journal entries", (t) => {
     limit: 10,
   });
   t.deepEqual(page.items.map(itemId), ["kept"]);
+});
+
+test("feedgen materializes writes and removes archived or deleted sources", (t) => {
+  const fixture = createFixture(t);
+  const entry = linkEntry("journal-row", 1_700_000_000_000);
+  journal.add(fixture.db, fixture.userId, entry);
+  const detail = trees.admitRoot(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    prompt: "Root",
+    model: "gemini-flash",
+    nodeId: "root-row",
+    status: "complete",
+  });
+  nodes.admitChild(fixture.db, fixture.userId, {
+    parentNodeId: "root-row",
+    prompt: "Child",
+    nodeId: "child-row",
+  });
+  nodes.setStatus(fixture.db, fixture.userId, "child-row", "cancelled");
+
+  t.is(feedItems.forJournal(fixture.db, entry.id)?.authorId, fixture.userId);
+  t.is(feedItems.forNode(fixture.db, "root-row")?.workspaceId, fixture.workspaceId);
+  t.is(feedItems.forNode(fixture.db, "child-row"), null);
+
+  trees.archive(fixture.db, fixture.userId, detail.tree.id);
+  t.is(feedItems.forNode(fixture.db, "root-row"), null);
+  trees.restore(fixture.db, fixture.userId, detail.tree.id);
+  t.truthy(feedItems.forNode(fixture.db, "root-row"));
+  journal.remove(fixture.db, fixture.userId, entry.id);
+  t.is(feedItems.forJournal(fixture.db, entry.id), null);
+  trees.remove(fixture.db, fixture.userId, detail.tree.id);
+  t.is(feedItems.forNode(fixture.db, "root-row"), null);
+});
+
+test("all, mine, and workspace scopes read one materialized stream", (t) => {
+  const fixture = createFixture(t);
+  const otherWorkspace = workspaces.create(fixture.db, fixture.userId, "Other");
+  const stranger = addUser(fixture.db, "stranger-feed");
+  journal.add(fixture.db, fixture.userId, linkEntry("mine-journal", 1_700_000_000_000));
+  trees.admitRoot(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    prompt: "Mine here",
+    model: "gemini-flash",
+    nodeId: "mine-here",
+  });
+  trees.admitRoot(fixture.db, fixture.userId, {
+    workspaceId: otherWorkspace.id,
+    prompt: "Mine elsewhere",
+    model: "gemini-flash",
+    nodeId: "mine-elsewhere",
+  });
+  journal.add(fixture.db, stranger.userId, linkEntry("stranger-journal", 1_700_000_000_001));
+  trees.admitRoot(fixture.db, stranger.userId, {
+    workspaceId: stranger.workspaceId,
+    prompt: "Stranger root",
+    model: "gemini-flash",
+    nodeId: "stranger-root",
+  });
+
+  const all = feeds.recentActivity(fixture.db, null, { scope: "all", limit: 20 });
+  t.deepEqual(
+    all.items.map(itemId).sort(),
+    ["mine-journal", "mine-here", "mine-elsewhere", "stranger-journal", "stranger-root"].sort(),
+  );
+  const mine = feeds.recentActivity(fixture.db, fixture.userId, { scope: "mine", limit: 20 });
+  t.deepEqual(
+    mine.items.map(itemId).sort(),
+    ["mine-journal", "mine-here", "mine-elsewhere"].sort(),
+  );
+  const workspace = feeds.recentActivity(fixture.db, fixture.userId, {
+    scope: "workspace",
+    workspaceId: fixture.workspaceId,
+    limit: 20,
+  });
+  t.deepEqual(workspace.items.map(itemId).sort(), ["mine-journal", "mine-here"].sort());
+});
+
+test("the feed_items backfill is idempotent", (t) => {
+  const fixture = createFixture(t);
+  journal.add(fixture.db, fixture.userId, linkEntry("backfill-journal", 1_700_000_000_000));
+  trees.admitRoot(fixture.db, fixture.userId, {
+    workspaceId: fixture.workspaceId,
+    prompt: "Backfill root",
+    model: "gemini-flash",
+    nodeId: "backfill-root",
+  });
+  fixture.db.delete(schema.feedItems).run();
+
+  feedgen.backfill(fixture.db);
+  feedgen.backfill(fixture.db);
+
+  t.truthy(feedItems.forJournal(fixture.db, "backfill-journal"));
+  t.truthy(feedItems.forNode(fixture.db, "backfill-root"));
+  t.is(feeds.recentActivity(fixture.db, fixture.userId, { limit: 20 }).items.length, 2);
 });
 
 test("paginates only root research questions in recentQueries", (t) => {

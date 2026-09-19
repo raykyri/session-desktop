@@ -13,7 +13,9 @@ Layout: `.research-reading-surface` column capped at
 `--research-feed-max-width` (540 px) plus padding, vertical scroll only.
 
 Sections top to bottom:
-1. Header with `HistoryNav` and workspace scope label.
+1. Header title and signed-in feed switcher: `All Users`, `My Workspaces`, or
+   the current workspace name. The mode is mirrored between `?feed=` and the
+   navigation store; guests always see `All Users`.
 2. `ResearchQueryComposer` (`07-client-architecture.md` §6) with model chip
    and document attachments. Files go to `POST /uploads` as soon as they are
    dropped (progress and extraction status on the chips); the draft stores
@@ -29,12 +31,17 @@ Sections top to bottom:
 
 ## 2. Activity feed
 
-Data: `useInfiniteQuery(["activity", { workspaceId, bookmarkedOnly }])` over
-`feed.recentActivity`, page size 50, `getNextPageParam = nextCursor`.
-Items are `RecentActivityItem` (`journal` or `research-query`).
+Data: `useInfiniteQuery(["activity", { scope, workspaceId, bookmarkedOnly }])`
+over `feed.recentActivity`, page size 50, `getNextPageParam = nextCursor`.
+`all` reads every public post, `mine` reads the signed-in account across all
+workspaces, and `workspace` preserves the existing account-wide journal plus
+workspace-filtered research behavior. Items are `RecentActivityItem` (`journal`
+or `research-query`).
 
-Live updates: events patch page 0 through the shared reducers
-(`upsertActivityNode`, `removeActivityNode`, `journal.entry.*`). New items
+Live updates: `feed.item.upserted` and `feed.item.removed` patch or invalidate
+only cache keys whose author/workspace/bookmark scope matches. Existing node
+and journal events still patch in-place status, title, recap, and hydration
+fields. New items
 arriving while the user is scrolled down increment a counter shown on the
 "new activity" button, which scrolls to top and clears it (desktop behavior).
 "Load older" fetches the next page; a failed
@@ -42,8 +49,9 @@ page shows Retry.
 
 Virtualization: TanStack Virtual with dynamic measurement (`measureElement`);
 replaces the hand-rolled canvas rows in `ResearchActivityFeed.tsx`. Scroll
-anchor (top item id + offset) saved to the `navigation` store, debounced 200
-ms, flushed on `pagehide` (`useActivityFeedState.ts`), restored on return.
+anchor (top item id + offset) saved to the `navigation` store under
+`all-users`, `my-workspaces`, or `ws:<id>`, debounced 200 ms, flushed on
+`pagehide` (`useActivityFeedState.ts`), restored on return.
 
 Cards:
 - `ResearchQueryCard`: prompt (tagged-instruction stripped, wikilinks

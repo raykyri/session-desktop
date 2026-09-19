@@ -7,6 +7,7 @@
 
 import type {
   RecentActivityCursor,
+  RecentActivityScope,
   ResearchFolderState,
   ResearchNodeContent,
   ResearchTree,
@@ -246,19 +247,25 @@ export function useAdminUsers(enabled = true) {
   });
 }
 
-export function useActivityFeed(scope: { workspaceId: string; bookmarkedOnly?: boolean }) {
+export function useActivityFeed(scope: {
+  scope: RecentActivityScope;
+  workspaceId?: string | null;
+  bookmarkedOnly?: boolean;
+}) {
   const bookmarkedOnly = scope.bookmarkedOnly ?? false;
+  const workspaceId = scope.scope === "workspace" ? scope.workspaceId || null : null;
   return useInfiniteQuery({
-    queryKey: queryKeys.activity({ workspaceId: scope.workspaceId, bookmarkedOnly }),
+    queryKey: queryKeys.activity({ scope: scope.scope, workspaceId, bookmarkedOnly }),
     queryFn: ({ pageParam }) =>
       listRecentActivity({
-        workspaceId: scope.workspaceId,
+        scope: scope.scope,
+        ...(workspaceId ? { workspaceId } : {}),
         bookmarkedOnly,
         before: pageParam,
       }),
     initialPageParam: null as RecentActivityCursor | null,
     getNextPageParam: (page) => page.nextCursor ?? null,
-    enabled: scope.workspaceId !== "",
+    enabled: scope.scope !== "workspace" || workspaceId !== null,
   });
 }
 

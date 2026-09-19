@@ -6,6 +6,10 @@ import { z } from "zod";
 import { journalEntrySchema } from "./journal.js";
 import { recentActivityCursorSchema, recentResearchQuerySchema } from "./research.js";
 
+export const recentActivityScopeSchema = z.enum(["all", "mine", "workspace"]);
+
+export type RecentActivityScope = z.infer<typeof recentActivityScopeSchema>;
+
 export const recentActivityItemSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("journal"),

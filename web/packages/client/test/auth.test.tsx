@@ -111,7 +111,7 @@ test.serial("a redirect that leaves this origin is not followed", async (t) => {
   await renderApp("/login?redirect=%2F%2Fevil.example%2Fsteal", { user: testUser() });
 
   t.truthy(screen.getByRole("navigation", { name: "Sections" }), "the shell rendered");
-  t.truthy(screen.getByRole("heading", { name: "Home" }), "at the root, not at the target");
+  t.truthy(screen.getByRole("heading", { name: "All Users" }), "at the root, not at the target");
 });
 
 test.serial("development kitchen sink routes are absent from production builds", async (t) => {

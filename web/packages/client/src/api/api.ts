@@ -18,6 +18,7 @@ import type {
   JournalEntry,
   RecentActivityCursor,
   RecentActivityPage,
+  RecentActivityScope,
   RecentResearchQueryCursor,
   ResearchBranchRemoval,
   ResearchFolderState,
@@ -342,6 +343,7 @@ export function applyResearchRecapCandidate(request: {
  * ---------------------------------------------------------------------- */
 
 export function listRecentActivity(input?: {
+  scope?: RecentActivityScope;
   workspaceId?: string;
   limit?: number;
   before?: RecentActivityCursor | null;

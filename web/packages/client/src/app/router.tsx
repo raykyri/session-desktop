@@ -40,6 +40,7 @@ const workspaceScopeSearchSchema = z.object({
   /** The sidebar's visibility filter, which is chrome rather than page state
    * but belongs in the URL for the same reason `ws` does (ADR-7, `10` §7). */
   filter: z.enum(["active", "archived", "all"]).optional(),
+  feed: z.string().optional(),
 });
 
 const researchSearchSchema = z.object({
@@ -51,6 +52,7 @@ const researchSearchSchema = z.object({
   /** A highlight to scroll to and focus once the document lands. */
   highlight: z.string().optional(),
   filter: z.enum(["active", "archived", "all"]).optional(),
+  feed: z.string().optional(),
 });
 
 /** Query parameters passed to /login when authentication fails, including redirect target and optional invite code. */

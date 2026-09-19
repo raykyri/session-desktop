@@ -9,14 +9,22 @@
 // cycle through the hooks.
 
 import type {
+  RecentActivityItem,
   RecentActivityPage,
+  RecentActivityScope,
   RecentResearchQuery,
   ResearchNode,
   ResearchTreeDetail,
   ResearchTreeSummary,
 } from "@session/shared";
-import { upsertResearchActivity } from "@session/shared";
+import { recentActivityItemId, upsertResearchActivity } from "@session/shared";
 import type { InfiniteData, QueryClient } from "@tanstack/react-query";
+
+export interface ActivityQueryScope {
+  scope: RecentActivityScope;
+  workspaceId: string | null;
+  bookmarkedOnly: boolean;
+}
 
 export const queryKeys = {
   me: () => ["me"] as const,
@@ -29,8 +37,7 @@ export const queryKeys = {
   trees: (scope: { workspaceId: string; includeArchived: boolean }) => ["trees", scope] as const,
   tree: (treeId: string) => ["tree", treeId] as const,
   nodeContent: (nodeId: string) => ["nodeContent", nodeId] as const,
-  activity: (scope: { workspaceId: string; bookmarkedOnly: boolean }) =>
-    ["activity", scope] as const,
+  activity: (scope: ActivityQueryScope) => ["activity", scope] as const,
   highlightsFeed: (workspaceId: string) => ["highlightsFeed", workspaceId] as const,
   encyclopedia: (workspaceId: string) => ["encyclopedia", workspaceId] as const,
   encyclopediaPage: (workspaceId: string, slug: string) =>
@@ -182,8 +189,12 @@ export function treeIdForNode(client: QueryClient, nodeId: string): string | nul
  * structural (a new question, a removed branch) invalidates instead, because
  * the feed is keyset-paginated and there is no correct place to splice a row.
  */
-export function patchActivityFeedNode(client: QueryClient, node: ResearchNode): void {
-  client.setQueriesData<InfiniteData<RecentActivityPage>>({ queryKey: ["activity"] }, (data) => {
+export function patchActivityFeedNode(
+  client: QueryClient,
+  node: ResearchNode,
+  queryKey: readonly unknown[] = ["activity"],
+): void {
+  client.setQueriesData<InfiniteData<RecentActivityPage>>({ queryKey }, (data) => {
     if (!data) return data;
     let changed = false;
     const patchQuery = (query: RecentResearchQuery): RecentResearchQuery => {
@@ -220,6 +231,50 @@ export function patchActivityFeedNode(client: QueryClient, node: ResearchNode): 
         item.kind === "research-query" ? { ...item, query: patchQuery(item.query) } : item,
       );
       return items.some((item, index) => item !== page.items[index]) ? { ...page, items } : page;
+    });
+    return changed ? { ...data, pages } : data;
+  });
+}
+
+export function patchActivityFeedItem(
+  client: QueryClient,
+  queryKey: ReturnType<typeof queryKeys.activity>,
+  item: RecentActivityItem,
+): boolean {
+  let found = false;
+  const id = recentActivityItemId(item);
+  client.setQueryData<InfiniteData<RecentActivityPage>>(queryKey, (data) => {
+    if (!data) return data;
+    let changed = false;
+    const pages = data.pages.map((page) => {
+      let pageChanged = false;
+      const items = page.items.map((existing) => {
+        if (recentActivityItemId(existing) !== id) return existing;
+        found = true;
+        changed = true;
+        pageChanged = true;
+        return item;
+      });
+      return pageChanged ? { ...page, items } : page;
+    });
+    return changed ? { ...data, pages } : data;
+  });
+  return found;
+}
+
+export function removeActivityFeedItem(
+  client: QueryClient,
+  queryKey: ReturnType<typeof queryKeys.activity>,
+  id: string,
+): void {
+  client.setQueryData<InfiniteData<RecentActivityPage>>(queryKey, (data) => {
+    if (!data) return data;
+    let changed = false;
+    const pages = data.pages.map((page) => {
+      const items = page.items.filter((item) => recentActivityItemId(item) !== id);
+      if (items.length === page.items.length) return page;
+      changed = true;
+      return { ...page, items };
     });
     return changed ? { ...data, pages } : data;
   });

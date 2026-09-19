@@ -21,7 +21,7 @@ test("a bookmarked thread shows in Home and Bookmarks, and archiving hides it", 
   const title = "What is a skip list?";
 
   await page.goto("/");
-  const home = page.getByRole("feed", { name: "Home" });
+  const home = page.getByRole("feed", { name: "All Users" });
   // The row and the card are both articles, so the outermost match is taken.
   await expect(home.getByRole("article").filter({ hasText: title }).first()).toBeVisible();
 
@@ -113,7 +113,7 @@ test("preserves unsubmitted prompt draft text across page reload", async ({ page
   await page.waitForTimeout(500);
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "All Users", level: 1 })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "What do you want to investigate?" })).toHaveValue(
     "What is a rope data structure?",
   );

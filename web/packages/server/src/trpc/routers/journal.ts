@@ -1,7 +1,7 @@
 // `journal` and `feed` (`03-api-and-events.md` §2,
 // `10-home-feed-journal-encyclopedia.md` §3).
 
-import { feeds, journal, newId } from "@session/db";
+import { feedItems, feeds, journal, newId } from "@session/db";
 import type { JournalEntry, JournalTweetEntry } from "@session/shared";
 import {
   applyJournalTweetHydration,
@@ -14,6 +14,7 @@ import {
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { emitFeedItemRemoved, emitFeedItemUpsertedForJournal } from "../../events/feed.js";
 import { TweetFetchError, fetchTweetJson, lookupTweet } from "../../journal/tweets.js";
 import { RATE_LIMITS } from "../../middleware/rateLimit.js";
 import { protectedProcedure, publicProcedure, router } from "../base.js";
@@ -71,6 +72,7 @@ export const journalRouter = router({
         : { ...base, kind: "link", url };
       entry = repo(() => journal.add(ctx.db, ctx.user.id, entry));
       publish(ctx, "journal.entry.updated", { entry });
+      emitFeedItemUpsertedForJournal(ctx, entry.id);
 
       if (isTweetEntry(entry)) {
         // Hydration is attempted immediately and its failure is recorded on
@@ -78,6 +80,7 @@ export const journalRouter = router({
         const hydrated = await hydrate(ctx, entry);
         if (hydrated !== entry) {
           publish(ctx, "journal.entry.updated", { entry: hydrated });
+          emitFeedItemUpsertedForJournal(ctx, hydrated.id);
           return hydrated;
         }
       }
@@ -98,6 +101,7 @@ export const journalRouter = router({
         });
       }
       publish(ctx, "journal.entry.updated", { entry });
+      emitFeedItemUpsertedForJournal(ctx, entry.id);
       return restored;
     }),
 
@@ -113,6 +117,7 @@ export const journalRouter = router({
         });
       }
       publish(ctx, "journal.entry.updated", { entry });
+      emitFeedItemUpsertedForJournal(ctx, entry.id);
       return updated;
     }),
 
@@ -124,9 +129,11 @@ export const journalRouter = router({
       repo(() => journal.get(ctx.db, ctx.user.id, input.id)),
       `journal entry ${input.id} was not found`,
     );
+    const feedItem = feedItems.forJournal(ctx.db, input.id);
     const removed = repo(() => journal.remove(ctx.db, ctx.user.id, input.id));
     if (removed) {
       publish(ctx, "journal.entry.removed", { id: input.id });
+      emitFeedItemRemoved(ctx.eventBus, feedItem);
     }
     return removed;
   }),
@@ -165,6 +172,7 @@ export const journalRouter = router({
       }
       const hydrated = await hydrate(ctx, entry);
       publish(ctx, "journal.entry.updated", { entry: hydrated });
+      emitFeedItemUpsertedForJournal(ctx, hydrated.id);
       return hydrated;
     }),
 });
@@ -213,6 +221,7 @@ export const feedRouter = router({
     .input(
       z
         .object({
+          scope: z.enum(["all", "mine", "workspace"]).optional(),
           workspaceId: z.string().optional(),
           limit: z.number().int().min(1).max(100).optional(),
           before: recentActivityCursorSchema.nullish(),
@@ -221,10 +230,19 @@ export const feedRouter = router({
         .optional(),
     )
     .query(({ ctx, input }) => {
-      const userId = catalogUserId(ctx);
-      if (userId === null) return { items: [], nextCursor: null };
+      const scope = input?.scope ?? (ctx.user === null ? "all" : "workspace");
+      if (ctx.user === null && scope !== "all") {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "sign in to read this feed" });
+      }
+      if (scope === "all" && input?.bookmarkedOnly === true) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "the global feed cannot be filtered by private bookmarks",
+        });
+      }
       return repo(() =>
-        feeds.recentActivity(ctx.db, userId, {
+        feeds.recentActivity(ctx.db, ctx.user?.id ?? null, {
+          scope,
           workspaceId: input?.workspaceId ?? null,
           ...(input?.limit === undefined ? {} : { limit: input.limit }),
           before: input?.before ?? null,

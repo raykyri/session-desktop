@@ -17,7 +17,9 @@ import type {
   EncyclopediaPageSummary,
   JournalEntry,
   ParsedResearchEvent,
+  RecentActivityItem,
   RecentActivityPage,
+  User,
   ResearchFolderState,
   ResearchHighlightFeedItem,
   ResearchNodeContent,
@@ -28,6 +30,8 @@ import type {
 import {
   parseResearchEvent,
   patchResearchDetailHighlightCreated,
+  recentActivityItemId,
+  recentActivityItemSchema,
   patchResearchDetailHighlightsRemoved,
   patchResearchDetailNode,
   patchResearchDetailTree,
@@ -58,10 +62,13 @@ import {
   invalidateKeys as invalidate,
   mapSummaries,
   patchActiveNodes,
+  patchActivityFeedItem,
   patchActivityFeedNode,
   patchDetail,
   queryKeys,
+  removeActivityFeedItem,
   treeIdForNode,
+  type ActivityQueryScope,
 } from "./cache.js";
 import { trpc, type SessionTrpcClient } from "./trpc.js";
 
@@ -121,9 +128,6 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
           : [summary, ...summaries],
       );
       patchActiveNodes(client, event.node);
-      // A new root question is a new feed row, and the feed is keyset
-      // paginated: there is no correct place to splice it in by hand.
-      invalidate(client, ["activity"]);
       return;
     }
 
@@ -151,7 +155,7 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
       });
       client.removeQueries({ queryKey: queryKeys.tree(event.treeId) });
       dropActiveNodes(client, (node) => node.treeId === event.treeId);
-      invalidate(client, ["activity"], ["highlightsFeed"]);
+      invalidate(client, ["highlightsFeed"]);
       return;
     }
 
@@ -170,7 +174,6 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
         );
       }
       patchActiveNodes(client, event.node);
-      invalidate(client, ["activity"]);
       return;
     }
 
@@ -213,7 +216,7 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
       for (const nodeId of removed) {
         client.removeQueries({ queryKey: queryKeys.nodeContent(nodeId) });
       }
-      invalidate(client, ["activity"], ["highlightsFeed"]);
+      invalidate(client, ["highlightsFeed"]);
       return;
     }
 
@@ -298,9 +301,114 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
  * Non-research events
  * ---------------------------------------------------------------------- */
 
+interface FeedEventMetadata {
+  id: string;
+  kind: "journal" | "research";
+  authorId: string;
+  workspaceId: string | null;
+  bookmarked: boolean;
+}
+
+function feedEventMetadata(payload: Record<string, unknown>): FeedEventMetadata | null {
+  const id = payload["id"];
+  const kind = payload["kind"];
+  const authorId = payload["authorId"];
+  const workspaceId = payload["workspaceId"];
+  const bookmarked = payload["bookmarked"];
+  if (
+    typeof id !== "string" ||
+    (kind !== "journal" && kind !== "research") ||
+    typeof authorId !== "string" ||
+    (workspaceId !== null && typeof workspaceId !== "string") ||
+    typeof bookmarked !== "boolean"
+  ) {
+    return null;
+  }
+  return { id, kind, authorId, workspaceId, bookmarked };
+}
+
+function cachedActivityScopes(client: QueryClient): ActivityQueryScope[] {
+  const scopes: ActivityQueryScope[] = [];
+  for (const query of client.getQueryCache().findAll({ queryKey: ["activity"] })) {
+    const value = query.queryKey[1];
+    if (typeof value !== "object" || value === null) continue;
+    const scope = (value as Record<string, unknown>)["scope"];
+    const workspaceId = (value as Record<string, unknown>)["workspaceId"];
+    const bookmarkedOnly = (value as Record<string, unknown>)["bookmarkedOnly"];
+    if (
+      (scope !== "all" && scope !== "mine" && scope !== "workspace") ||
+      (workspaceId !== null && typeof workspaceId !== "string") ||
+      typeof bookmarkedOnly !== "boolean"
+    ) {
+      continue;
+    }
+    scopes.push({ scope, workspaceId, bookmarkedOnly });
+  }
+  return scopes;
+}
+
+function feedItemBelongs(
+  scope: ActivityQueryScope,
+  metadata: FeedEventMetadata,
+  userId: string | null,
+): boolean {
+  if (scope.bookmarkedOnly && (metadata.kind !== "research" || !metadata.bookmarked)) return false;
+  if (scope.scope === "all") return true;
+  if (userId === null || metadata.authorId !== userId) return false;
+  if (scope.scope === "mine" || metadata.kind === "journal") return true;
+  return metadata.workspaceId === scope.workspaceId;
+}
+
+function applyFeedItemUpserted(client: QueryClient, payload: Record<string, unknown>): void {
+  const metadata = feedEventMetadata(payload);
+  const parsed = recentActivityItemSchema.safeParse(payload["item"]);
+  if (!metadata || !parsed.success) {
+    invalidate(client, ["activity"]);
+    return;
+  }
+  const item: RecentActivityItem = parsed.data;
+  const expectedId = `${metadata.kind === "journal" ? "journal" : "research"}:${metadata.id}`;
+  if (recentActivityItemId(item) !== expectedId) {
+    invalidate(client, ["activity"]);
+    return;
+  }
+  const userId = client.getQueryData<User>(queryKeys.me())?.id ?? null;
+  for (const scope of cachedActivityScopes(client)) {
+    const key = queryKeys.activity(scope);
+    if (!feedItemBelongs(scope, metadata, userId)) {
+      removeActivityFeedItem(client, key, expectedId);
+      continue;
+    }
+    if (!patchActivityFeedItem(client, key, item)) invalidate(client, key);
+  }
+}
+
+function applyFeedItemRemoved(client: QueryClient, payload: Record<string, unknown>): void {
+  const metadata = feedEventMetadata(payload);
+  if (!metadata) {
+    invalidate(client, ["activity"]);
+    return;
+  }
+  const userId = client.getQueryData<User>(queryKeys.me())?.id ?? null;
+  const id = `${metadata.kind === "journal" ? "journal" : "research"}:${metadata.id}`;
+  for (const scope of cachedActivityScopes(client)) {
+    if (feedItemBelongs(scope, metadata, userId)) {
+      removeActivityFeedItem(client, queryKeys.activity(scope), id);
+    }
+  }
+}
+
 function applyOtherEvent(client: QueryClient, event: SessionEvent): void {
   const payload = event.payload;
   switch (event.type) {
+    case "feed.item.upserted":
+      applyFeedItemUpserted(client, payload);
+      return;
+
+    case "feed.item.removed":
+      applyFeedItemRemoved(client, payload);
+      return;
+
     case "encyclopedia.page.updated": {
       const page = payload["page"] as EncyclopediaPage | undefined;
       if (!page || typeof page.slug !== "string") return;
@@ -344,7 +452,7 @@ function applyOtherEvent(client: QueryClient, event: SessionEvent): void {
     case "journal.entry.updated": {
       const entry = payload["entry"] as JournalEntry | undefined;
       if (!entry || typeof entry.id !== "string") return;
-      if (!replaceJournalEntry(client, entry)) invalidate(client, ["activity"]);
+      replaceJournalEntry(client, entry);
       return;
     }
 
@@ -389,7 +497,7 @@ function applyOtherEvent(client: QueryClient, event: SessionEvent): void {
       );
       client.removeQueries({ queryKey: queryKeys.folders(workspaceId) });
       client.removeQueries({ queryKey: queryKeys.encyclopedia(workspaceId) });
-      invalidate(client, ["trees"], ["activity"], ["highlightsFeed"]);
+      invalidate(client, ["trees"], ["highlightsFeed"]);
       return;
     }
 

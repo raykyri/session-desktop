@@ -9,6 +9,7 @@
 // visible.
 
 import { documents as documentsRepo, journal as journalRepo, snapshots } from "@session/db";
+import type { SessionEvent } from "@session/shared";
 import type { TRPCError } from "@trpc/server";
 import test from "ava";
 
@@ -95,7 +96,7 @@ function ownerState(caller: Caller, owned: Owned) {
     caller.highlights.listFeed({ workspaceId: owned.workspaceId }),
     caller.documents.list({ workspaceId: owned.workspaceId }),
     caller.encyclopedia.listPages({ workspaceId: owned.workspaceId }),
-    caller.feed.recentActivity({ workspaceId: owned.workspaceId }),
+    caller.feed.recentActivity({ scope: "workspace", workspaceId: owned.workspaceId }),
   ]);
 }
 
@@ -413,4 +414,84 @@ test("prevents cross-account access and returns NOT_FOUND for unauthorized entit
     ownerCaller.documents.remove({ documentId: owned.documentId }),
     "the owner can still delete their own document",
   );
+});
+
+test("global feed reads cross accounts while personal scopes and fields stay bounded", async (t) => {
+  const harness = createHarness(t);
+  const first = harness.addUser("first-feed-owner");
+  const second = harness.addUser("second-feed-owner");
+  const firstCaller = harness.caller(first);
+  const secondCaller = harness.caller(second);
+  const firstWorkspace = await firstCaller.workspaces.ensureDefault();
+  const secondWorkspace = await secondCaller.workspaces.ensureDefault();
+  await firstCaller.research.createTree({
+    prompt: "First public root",
+    model: "gemini-flash",
+    workspaceId: firstWorkspace.id,
+  });
+  await secondCaller.research.createTree({
+    prompt: "Second public root",
+    model: "gemini-flash",
+    workspaceId: secondWorkspace.id,
+  });
+  await firstCaller.journal.add({ url: "https://example.com/first" });
+  await secondCaller.journal.add({ url: "https://example.com/second" });
+
+  const itemIds = (page: Awaited<ReturnType<typeof firstCaller.feed.recentActivity>>) =>
+    page.items.map((item) => (item.kind === "journal" ? item.entry.id : item.query.nodeId)).sort();
+  const all = await firstCaller.feed.recentActivity({ scope: "all" });
+  const strangerAll = await secondCaller.feed.recentActivity({ scope: "all" });
+  const guestAll = await harness.caller(null).feed.recentActivity();
+  t.deepEqual(itemIds(strangerAll), itemIds(all));
+  t.deepEqual(itemIds(guestAll), itemIds(all));
+  t.is(all.items.length, 4);
+
+  const mine = await firstCaller.feed.recentActivity({ scope: "mine" });
+  t.is(mine.items.length, 2);
+  const workspace = await firstCaller.feed.recentActivity({
+    scope: "workspace",
+    workspaceId: firstWorkspace.id,
+  });
+  t.deepEqual(itemIds(workspace), itemIds(mine));
+
+  const publicQuery = all.items.find((item) => item.kind === "research-query");
+  t.is(publicQuery?.kind, "research-query");
+  if (publicQuery?.kind === "research-query") {
+    t.false("userId" in publicQuery.query);
+    t.false("documentIds" in publicQuery.query);
+    t.false("error" in publicQuery.query);
+    t.false("highlights" in publicQuery.query);
+  }
+
+  const guest = harness.caller(null);
+  await t.throwsAsync(guest.feed.recentActivity({ scope: "mine" }), { message: /sign in/ });
+  await t.throwsAsync(guest.feed.recentActivity({ scope: "workspace" }), {
+    message: /sign in/,
+  });
+  await t.throwsAsync(guest.feed.recentActivity({ scope: "all", bookmarkedOnly: true }), {
+    message: /private bookmarks/,
+  });
+});
+
+test("feed item events fan out to other signed-in accounts", async (t) => {
+  const harness = createHarness(t);
+  const author = harness.addUser("feed-event-author");
+  const observer = harness.addUser("feed-event-observer");
+  const subscription = harness.eventBus.subscribe(observer.id, "feed-observer");
+  const caller = harness.caller(author);
+
+  const entry = await caller.journal.add({ url: "https://example.com/broadcast" });
+  const upserted = await subscription.events.next();
+  const upsertedEvent = upserted.value as SessionEvent | undefined;
+  t.false(upserted.done);
+  t.is(upsertedEvent?.type, "feed.item.upserted");
+  t.is((upsertedEvent?.payload["item"] as { entry?: { id?: string } }).entry?.id, entry.id);
+
+  await caller.journal.remove({ id: entry.id });
+  const removed = await subscription.events.next();
+  const removedEvent = removed.value as SessionEvent | undefined;
+  t.false(removed.done);
+  t.is(removedEvent?.type, "feed.item.removed");
+  t.is(removedEvent?.payload["id"], entry.id);
+  subscription.close();
 });

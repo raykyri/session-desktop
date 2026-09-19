@@ -17,6 +17,7 @@ import {
 import type {
   JournalEntry,
   RecentActivityItem,
+  RecentActivityScope,
   RecentResearchQuery,
   ResearchFolderState,
   ResearchNodeContent,
@@ -48,9 +49,14 @@ import {
 import { writeClipboardText } from "../../lib/clipboard.js";
 import { cn } from "../../lib/cn.js";
 import { errorMessage, pushErrorToast, pushToast } from "../../lib/toast.js";
-import { useNavigationStore, type FeedScrollAnchor } from "../../stores/navigation.js";
+import {
+  useNavigationStore,
+  type FeedMode,
+  type FeedScrollAnchor,
+} from "../../stores/navigation.js";
 import { ActivityMetadataLine } from "../../ui/ActivityMetadataLine.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
+import { Menu, MenuItem } from "../../ui/Menu.js";
 import { QueryState } from "../../ui/QueryState.js";
 import { JournalEntryCard } from "../journal/JournalEntryCard.js";
 import { journalEntryUrl, type JournalMenuAction } from "../journal/entryMenu.js";
@@ -91,6 +97,12 @@ const EMPTY_FOLDER_STATE: ResearchFolderState = {
 
 export interface ActivityFeedProps {
   workspaceId: string;
+  scope?: RecentActivityScope;
+  scopeSwitcher?: {
+    mode: FeedMode;
+    workspaceTitle: string;
+    onChange: (mode: FeedMode) => void;
+  };
   /** Bookmarks is the same feed with the server filtering roots by
    * `trees.bookmarked`; it has no composer and no import target. */
   bookmarkedOnly?: boolean;
@@ -132,6 +144,8 @@ function offsetWithinScroller(scroller: HTMLElement, node: HTMLElement): number 
 
 export function ActivityFeed({
   workspaceId,
+  scope = "workspace",
+  scopeSwitcher,
   bookmarkedOnly = false,
   title,
   header,
@@ -144,7 +158,7 @@ export function ActivityFeed({
 
   const navigate = useNavigate();
   const client = useQueryClient();
-  const feed = useActivityFeed({ workspaceId, bookmarkedOnly });
+  const feed = useActivityFeed({ scope, workspaceId, bookmarkedOnly });
   const summaries = useTreeSummaries({ workspaceId });
   const folders = useFolders(workspaceId);
   const rename = useRenameResearchTree();
@@ -154,7 +168,18 @@ export function ActivityFeed({
   const setBookmarked = useSetTreeBookmarked();
 
   const signedIn = useSignedIn();
-  const view = `${bookmarkedOnly ? "bookmarks" : "home"}:${workspaceId}`;
+  const canManage = signedIn && scope !== "all";
+  const view = bookmarkedOnly
+    ? workspaceId === ""
+      ? ""
+      : `bookmarks:${workspaceId}`
+    : scope === "all"
+      ? "all-users"
+      : scope === "mine"
+        ? "my-workspaces"
+        : workspaceId === ""
+          ? ""
+          : `ws:${workspaceId}`;
   const anchor = useFeedScrollAnchor(view);
 
   const internalScrollRef = useRef<HTMLDivElement | null>(null);
@@ -165,7 +190,7 @@ export function ActivityFeed({
   // instead of 0. Do not snapshot `home:` before `workspaceId` resolves — that
   // locked initialOffset at 0 and the virtualizer later wrote it over restore.
   const initialScrollOffset = useRef<number | undefined>(undefined);
-  if (initialScrollOffset.current === undefined && workspaceId !== "") {
+  if (initialScrollOffset.current === undefined && view !== "") {
     initialScrollOffset.current = useNavigationStore.getState().feedAnchorFor(view)?.top ?? 0;
   }
 
@@ -246,7 +271,7 @@ export function ActivityFeed({
   const pendingRestoreTop = useRef<number | null>(null);
   const restorePrepared = useRef(false);
   useLayoutEffect(() => {
-    if (workspaceId === "") return;
+    if (view === "") return;
     if (!restorePrepared.current) {
       const saved = useNavigationStore.getState().feedAnchorFor(view) ?? anchor.initial;
       if (typeof saved?.top === "number") {
@@ -338,7 +363,10 @@ export function ActivityFeed({
     void navigate({
       to: "/r/$treeId",
       params: { treeId: query.treeId },
-      search: { node: query.nodeId, ...(workspaceId === "" ? {} : { ws: workspaceId }) },
+      search: {
+        node: query.nodeId,
+        ...((query.workspaceId ?? workspaceId) ? { ws: query.workspaceId ?? workspaceId } : {}),
+      },
     });
   };
 
@@ -421,6 +449,42 @@ export function ActivityFeed({
         <div className="max-w-feed flex w-full flex-col">
           <div className="flex items-center justify-between gap-2 pt-6 pb-4">
             <h1 className="text-title text-fg-heading m-0 font-semibold">{title}</h1>
+            {scopeSwitcher ? (
+              <Menu
+                align="end"
+                size="sm"
+                label="Feed scope"
+                trigger={
+                  <ControlButton
+                    size="sm"
+                    className="max-w-52 gap-1.5"
+                    aria-label={`Feed scope: ${title}`}
+                  >
+                    <span className="truncate">{title}</span>
+                    <ChevronDown size={13} aria-hidden="true" />
+                  </ControlButton>
+                }
+              >
+                <MenuItem
+                  selected={scopeSwitcher.mode === "all"}
+                  onClick={() => scopeSwitcher.onChange("all")}
+                >
+                  All Users
+                </MenuItem>
+                <MenuItem
+                  selected={scopeSwitcher.mode === "workspaces"}
+                  onClick={() => scopeSwitcher.onChange("workspaces")}
+                >
+                  My Workspaces
+                </MenuItem>
+                <MenuItem
+                  selected={scopeSwitcher.mode === "workspace"}
+                  onClick={() => scopeSwitcher.onChange("workspace")}
+                >
+                  {scopeSwitcher.workspaceTitle || "Workspace"}
+                </MenuItem>
+              </Menu>
+            ) : null}
           </div>
 
           {header}
@@ -498,7 +562,12 @@ export function ActivityFeed({
                           <ActivityMetadataLine event={event} />
                           <JournalEntryCard
                             entry={source.entry}
-                            onAction={(action) => runEntryAction(source.entry, action)}
+                            {...(canManage
+                              ? {
+                                  onAction: (action: JournalMenuAction) =>
+                                    runEntryAction(source.entry, action),
+                                }
+                              : {})}
                           />
                         </>
                       ) : (
@@ -508,7 +577,7 @@ export function ActivityFeed({
                             query={source.query}
                             tree={treeById.get(source.query.treeId)}
                             menuItems={
-                              signedIn
+                              canManage
                                 ? treeMenu(treeById.get(source.query.treeId), source.query)
                                 : null
                             }

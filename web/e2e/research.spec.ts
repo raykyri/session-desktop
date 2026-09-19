@@ -155,7 +155,7 @@ test("the recap dialog generates a candidate and applies it", async ({ page }) =
 
 test("the home feed is public and personal routes still require a session", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "All Users", level: 1 })).toBeVisible();
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
 
   await page.goto("/bookmarks");
@@ -165,5 +165,5 @@ test("the home feed is public and personal routes still require a session", asyn
 
   await signIn(page, { login: "e2e-guard" });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "All Users", level: 1 })).toBeVisible();
 });

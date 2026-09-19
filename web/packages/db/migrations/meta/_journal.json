@@ -8,6 +8,13 @@
       "when": 1789724163058,
       "tag": "0000_initial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789809142063,
+      "tag": "0001_sloppy_bruce_banner",
+      "breakpoints": true
     }
   ]
 }

@@ -114,7 +114,7 @@ Login start/callback are plain Hono routes (`/auth/github`,
 ### `feed`
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
-| `feed.recentActivity` | Q | `{ workspaceId?, limit?, before?: RecentActivityCursor, bookmarkedOnly? }` → `RecentActivityPage` | `list_recent_activity` (`workspaceId` and `bookmarkedOnly` filters are new; the desktop feed spans all workspaces and filtered bookmarks client-side) |
+| `feed.recentActivity` | Q | `{ scope?: "all" \| "mine" \| "workspace", workspaceId?, limit?, before?: RecentActivityCursor, bookmarkedOnly? }` → `RecentActivityPage` | `list_recent_activity`; guests may read only `all`; `mine` spans the signed-in account's workspaces; `workspace` keeps journal account-wide and filters research by `workspaceId`; `bookmarkedOnly` is refused for `all` because bookmark state is private |
 | `feed.recentQueries` | Q | `{ limit?, before? }` → `RecentResearchQueryPage` | `list_recent_research_queries` |
 
 ### `journal`
@@ -178,7 +178,9 @@ commits. The server has no event buffer or replay mechanism, so reconnecting
 clients invalidate list queries and refetch snapshots for displayed active nodes.
 Each connection has an interest set (`events.setInterest`); `research.turn.*`
 events are delivered only to connections interested in that node, while
-`research.node.updated` goes to every connection of the user.
+`research.node.updated` goes to every connection of the user. Materialized
+`feed.item.*` events fan out to every signed-in connection because an `all`
+cache includes other authors; guests have no event subscription.
 
 Event types, payloads identical to the desktop (`src/lib/researchEvents.ts:90`)
 unless noted:
@@ -203,6 +205,8 @@ unless noted:
 | `folders.updated` | `{ workspaceId, state }` | new (desktop kept folders client-side) |
 | `journal.entry.updated` | `{ entry }` | add, hydrate, update, restore |
 | `journal.entry.removed` | `{ id }` | remove |
+| `feed.item.upserted` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId, bookmarked, item }` | public feed source create/update/restore |
+| `feed.item.removed` | `{ id, kind, authorId, occurredAt, sourceRank, workspaceId, bookmarked }` | source delete or archive |
 | `settings.updated` | `{ settings }` | another tab changed settings |
 | `models.updated` | `{ models }` | provider availability change |
 | `notification.requested` | `{ id, title, body, tone, timeoutMs, createdAt }` | server-originated toasts |

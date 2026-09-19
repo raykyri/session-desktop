@@ -39,7 +39,7 @@ export async function signIn(page: Page, options: SignInOptions): Promise<Signed
 export async function signInAndOpenHome(page: Page, options: SignInOptions): Promise<SignedInUser> {
   const user = await signIn(page, options);
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "All Users", level: 1 })).toBeVisible();
   return user;
 }
 

@@ -19,11 +19,11 @@ packages/db/
       workspaces.ts  folders.ts  trees.ts  nodes.ts  highlights.ts
       snapshots.ts  runs.ts (run_turns, run_attempts, run_queue, node_messages, node_summaries)
       documents.ts  usage.ts  journal.ts  tweets.ts  encyclopedia.ts
-      drafts.ts  artifacts.ts  index.ts
+      feedItems.ts  drafts.ts  artifacts.ts  index.ts
     repos/
       users.ts  auth.ts  workspaces.ts  folders.ts  trees.ts  nodes.ts
       highlights.ts  snapshots.ts  documents.ts  recaps.ts  feeds.ts
-      journal.ts  encyclopedia.ts  drafts.ts  artifacts.ts
+      feedItems.ts  feedgen.ts  journal.ts  encyclopedia.ts  drafts.ts  artifacts.ts
     ids.ts                   # ulid(), validateId()
     time.ts                  # now(): number (ms)
     index.ts                 # public surface: openDatabase, repos, types
@@ -232,6 +232,18 @@ tree, as in `membership: HashMap<treeId, folderId>`.
 - `entry_json` text — the full entry as the frontend's `journal.ts` defines it
 - Index (`user_id`, `created_at`, `id`)
 
+`feed_items`
+- `id` text PK, `author_id` FK, `kind` text (`journal | research`)
+- `occurred_at`, `source_rank`; nullable source FKs `journal_id`, `node_id`,
+  `tree_id`, `workspace_id`
+- Indexes (`occurred_at DESC`, `source_rank DESC`, `id DESC`) and
+  (`author_id`, `occurred_at DESC`); unique source indexes on `journal_id` and
+  `node_id`
+- Written synchronously in the same transaction as journal/root changes;
+  source deletion or tree archiving removes the row. Backfill
+  `2026-09-19-feed-items` materializes existing journal entries and
+  non-archived roots once.
+
 `tweet_cache`
 - `tweet_id` PK, `payload_json` text (raw syndication body, ≤ 1 MiB),
   `snapshot_json` text null (`TweetSnapshot`, ≤ 128 KiB; source URLs ≤ 8 KiB,
@@ -425,14 +437,14 @@ Each item names the desktop source and the enforcing function.
   (`state.rs:8992`). Instructions trimmed, non-empty, ≤ 4000 chars.
 
 ### 5.9 Feeds
-- `feeds.recentActivity(userId, workspaceId | null, limit, cursor)` merges
-  visible journal entries (`kind IN ('link','tweet')`) and root `run` nodes on
-  non-archived trees under one cursor `(occurredAt DESC, sourceRank DESC, id
-  DESC)` with `sourceRank` journal = 0, research = 1 (`state.rs:3994`,
-  `journal.rs:94-112`). The `workspaceId` filter is new: the desktop feed
-  and highlights list span every workspace (`state.rs:3994-4124`, `:4235`). `limit` clamped to 1..100. Implemented as a `UNION ALL`
-  over two shaped subqueries with keyset predicates, then children attached
-  per root (one level, same tree, `kind = run`, `(created_at, id)` asc).
+- `feeds.recentActivity(userId, { scope, workspaceId, limit, cursor })` reads
+  `feed_items` under one cursor `(occurredAt DESC, sourceRank DESC, id DESC)`
+  with `sourceRank` journal = 0, research = 1. `all` reads public feed rows from
+  every account, `mine` filters `author_id` without a workspace predicate, and
+  `workspace` filters the caller's research roots by `workspace_id` while
+  keeping that caller's journal account-wide. `limit` is clamped to 1..100.
+  Source rows are projected after keyset selection; direct research children
+  are attached per root in `(created_at, id)` ascending order.
 - `feeds.highlights(userId)` returns newest-first items from non-archived
   trees with `nodeLabel` = node title or prompt, or the tree title for
   documents (`research.rs:485`).
