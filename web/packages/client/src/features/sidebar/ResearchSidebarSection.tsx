@@ -1254,7 +1254,10 @@ function StatusDot({ tree, archived }: { tree: ResearchTreeSummary; archived: bo
       : tree.hasUnseenFailure || tree.failedCount > 0
         ? "bg-status-failed"
         : "bg-fg-subtle/50";
-  return <span aria-hidden="true" className={cn("size-1.5 shrink-0 rounded-full", tone)} />;
+  // mx-1 centers the 6px dot in the 14px slot the top-level nav icons occupy
+  // (14px icon = 6px dot + 2x4px margin), so the dot's center aligns with the
+  // nav icons' center and the title starts where Home/Bookmarks titles start.
+  return <span aria-hidden="true" className={cn("mx-1 size-1.5 shrink-0 rounded-full", tone)} />;
 }
 
 function FolderMenuItems({

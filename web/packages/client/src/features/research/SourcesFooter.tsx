@@ -15,7 +15,6 @@
 import { safeHref } from "@session/shared";
 import type { Turn } from "@session/shared";
 import DOMPurify from "dompurify";
-import { ExternalLink } from "lucide-react";
 import { useMemo } from "react";
 
 import { researchSources } from "./sources.js";
@@ -70,7 +69,6 @@ export function SourcesFooter({ turns }: { turns: readonly Turn[] }) {
                 {source.title}
               </a>
               <span className="text-fg-faint shrink-0 text-xs">{source.domain}</span>
-              <ExternalLink className="text-fg-faint shrink-0" size={11} aria-hidden="true" />
             </li>
           ))}
         </ul>

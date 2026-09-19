@@ -91,12 +91,16 @@ function NotificationCard({
 
   const content = (
     <>
-      <span className={cn("shrink-0", TONE_ICON_COLOR[notification.tone])}>
+      <span className={cn("flex shrink-0 items-center", TONE_ICON_COLOR[notification.tone])}>
         <ToneIcon tone={notification.tone} />
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
-        <strong className="text-fg-strong min-w-0 truncate text-base">{notification.title}</strong>
-        <span className="text-fg-secondary text-sm">{notification.body}</span>
+        <strong className="text-fg-strong min-w-0 truncate text-base font-semibold">
+          {notification.title}
+        </strong>
+        {notification.body ? (
+          <span className="text-fg-secondary text-sm">{notification.body}</span>
+        ) : null}
       </span>
     </>
   );
@@ -104,7 +108,7 @@ function NotificationCard({
   return (
     <article
       className={cn(
-        "session-notification pointer-events-auto flex w-80 items-start gap-1 rounded-lg border",
+        "session-notification pointer-events-auto flex w-80 items-center gap-1 rounded-lg border",
         "bg-surface-popover shadow-popover p-3 transition-[opacity,translate] duration-[180ms]",
         TONE_BORDER[notification.tone],
         phase === "visible" ? "translate-x-0 opacity-100" : "translate-x-2 opacity-0",
@@ -117,7 +121,7 @@ function NotificationCard({
       {notification.href && onOpen ? (
         <button
           type="button"
-          className="flex min-w-0 flex-1 cursor-pointer items-start gap-2 border-0 bg-transparent p-0 text-left"
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-left"
           aria-label={`${notification.title}: ${notification.body}. Open.`}
           onClick={() => {
             onOpen(notification.href!);
@@ -127,7 +131,7 @@ function NotificationCard({
           {content}
         </button>
       ) : (
-        <div className="flex min-w-0 flex-1 items-start gap-2">{content}</div>
+        <div className="flex min-w-0 flex-1 items-center gap-2">{content}</div>
       )}
       <IconButton label="Dismiss notification" onClick={beginDismiss}>
         <X size={15} aria-hidden="true" />
