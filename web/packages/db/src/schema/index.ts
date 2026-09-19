@@ -5,6 +5,7 @@ export * from "./artifacts.js";
 export * from "./backfills.js";
 export * from "./documents.js";
 export * from "./drafts.js";
+export * from "./embeds.js";
 export * from "./encyclopedia.js";
 export * from "./folders.js";
 export * from "./feedItems.js";

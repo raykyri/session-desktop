@@ -84,8 +84,9 @@ packages/server/src/runs/
 
 Three modules the earlier sketch listed live elsewhere, because Phase 3 already
 owned them: launch-time admission checks are `src/research/admission.ts`,
-upload storage and text extraction are `src/uploads/`, and tweet syndication is
-`src/journal/tweets.ts`. Building a document into provider parts is part of
+upload storage and text extraction are `src/uploads/`, and tweet hydration is
+`src/journal/tweets.ts` (with `oembed.ts` behind it and `attachments.ts` in
+front). Building a document into provider parts is part of
 `messages.ts`, next to the rest of the request assembly.
 
 ## 3. The agent loop (`loop.ts`)
@@ -161,7 +162,9 @@ instruction wrapped and neutralized exactly as the desktop did
 (`research.rs:2321-2453`, `<research-linking>`, `<research-instructions>`,
 4 KiB cap). The user message is the bare question, plus a quoted passage for
 highlight-anchored follow-ups (`research.rs:2293`), plus tweet reference
-material (`tweets.rs`), plus document parts. The displayed `node.prompt`
+material (`tweets.rs`) — the posts the question links to, resolved at launch
+and stored on the node (`journal/attachments.ts`), carried into the request as
+explicitly untrusted evidence — plus document parts. The displayed `node.prompt`
 remains the bare question. Response boundary detection is no longer needed: the answer directly corresponds to the assistant messages generated during the attempt, eliminating the need to port desktop boundary matching (`research.rs:1852`).
 
 Tool descriptions instruct the model to cite sources inline as Markdown

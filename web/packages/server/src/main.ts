@@ -17,6 +17,7 @@ import { artifacts, auth, closeDatabase, nodes, openDatabase } from "@session/db
 import { createApp } from "./app.js";
 import { loadConfig, loadDotenvForDevelopment, type Config } from "./config.js";
 import type { ServerDeps } from "./deps.js";
+import { sweepEmbeds } from "./embeds/storage.js";
 import { EventBus } from "./events/bus.js";
 import { createReadiness } from "./health.js";
 import { defaultLogger, type Logger } from "./logger.js";
@@ -55,6 +56,7 @@ export function writeVertexCredentials(config: Config): string | null {
 export function prepareDataDirectories(config: Config): void {
   mkdirSync(config.dataDir, { recursive: true });
   mkdirSync(config.documentsDir, { recursive: true });
+  mkdirSync(config.embedsDir, { recursive: true });
   mkdirSync(config.tmpDir, { recursive: true });
 }
 
@@ -159,6 +161,20 @@ export async function runMaintenance(
     await sweepOrphanedDocuments(deps, logger);
   } catch (error) {
     logger.error({ error }, "the document sweep failed");
+  }
+  try {
+    const swept = await sweepEmbeds({
+      db: deps.db,
+      embedsDir: deps.config.embedsDir,
+      fetch: deps.fetch ?? globalThis.fetch,
+      logger,
+      maxBytes: deps.config.embedCacheBytes,
+    });
+    if (swept.evicted > 0 || swept.prunedRows > 0) {
+      logger.info({ ...swept }, "swept the embed asset cache");
+    }
+  } catch (error) {
+    logger.error({ error }, "the embed sweep failed");
   }
 }
 

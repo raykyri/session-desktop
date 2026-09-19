@@ -645,3 +645,77 @@ test.serial("unmounting the feed does not replace a saved offset with scrollTop 
     "a detached scroller reading scrollTop 0 must not wipe the flushed position",
   );
 });
+
+/** A hydrated post, as `journal/tweets.ts` normalizes one. */
+function tweetSnapshot() {
+  return {
+    id: "20",
+    url: "https://x.com/session/status/20",
+    author: { name: "Session", handle: "session", verified: true },
+    createdAt: "2022-12-04T00:00:00.000Z",
+    runs: [{ kind: "text" as const, text: "A post about bloom filters" }],
+    partial: false,
+    media: [],
+    likes: 3,
+  };
+}
+
+test.serial(
+  "a running question says it is generating rather than repeating its status",
+  async (t) => {
+    useNavigationStore.setState({ feedMode: "all", feedAnchorByView: {} });
+    const page = activityPage([queryItem(researchQuery({ status: "running" }))]);
+    const app = await renderApp("/", {
+      queryClient: testQueryClient(),
+      responses: feedResponses(page),
+    });
+
+    await waitUntil(
+      t,
+      () => screen.queryAllByText("Generating answer").length > 0,
+      "the card says the answer is being written",
+    );
+    // The status word beside the model would only restate the line above it;
+    // the desktop drops its whole footer while a question runs.
+    t.is(screen.queryByText("Running"), null);
+    t.is(screen.queryByText("Queued"), null);
+    app.unmount();
+  },
+);
+
+test.serial("an embedded post replaces the permalink that trailed the question", async (t) => {
+  useNavigationStore.setState({ feedMode: "all", feedAnchorByView: {} });
+  const url = "https://x.com/session/status/20";
+  const page = activityPage([
+    queryItem(
+      researchQuery({
+        prompt: `What about this? ${url}`,
+        attachments: [
+          {
+            kind: "tweet",
+            schemaVersion: 1,
+            sourceUrl: url,
+            tweetId: "20",
+            placement: "trailing",
+            provider: "xSyndication",
+            status: "resolved",
+            attemptedAt: 1,
+            fetchedAt: 2,
+            tweet: tweetSnapshot(),
+          },
+        ],
+      }),
+    ),
+  ]);
+  const app = await renderApp("/", {
+    queryClient: testQueryClient(),
+    responses: feedResponses(page),
+  });
+
+  const embed = await screen.findByRole("link", { name: "Open post by @session" });
+  t.truthy(within(embed).getByText("A post about bloom filters"));
+  t.truthy(screen.getByText("What about this?"));
+  t.is(screen.queryByText(`What about this? ${url}`), null, "the card stands in for the URL");
+  t.truthy(screen.getByRole("list", { name: "Attached posts" }));
+  app.unmount();
+});

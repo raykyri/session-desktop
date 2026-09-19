@@ -12,6 +12,8 @@ import { Play } from "lucide-react";
 import { useState } from "react";
 import type { CSSProperties } from "react";
 
+import { cn } from "../../lib/cn.js";
+
 const EXTERNAL = { target: "_blank", rel: "noopener noreferrer" } as const;
 
 /**
@@ -250,7 +252,11 @@ function VerifiedBadge() {
 function TweetLinkCardView({ card }: { card: NonNullable<TweetSnapshot["card"]> }) {
   return (
     <a
-      className={`journal-tweet-card${card.large ? "is-large" : ""}`}
+      // Built with `cn` rather than a template literal: Prettier's Tailwind
+      // plugin rewrites the literal parts of a `className` template and takes
+      // the separating space with them, which silently fuses the modifier onto
+      // the base class.
+      className={cn("journal-tweet-card", card.large && "is-large")}
       href={tweetHref(card.url)}
       {...EXTERNAL}
       onClick={(event) => event.stopPropagation()}

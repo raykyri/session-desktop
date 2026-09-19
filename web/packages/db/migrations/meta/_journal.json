@@ -15,6 +15,13 @@
       "when": 1789809142063,
       "tag": "0001_sloppy_bruce_banner",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789815821227,
+      "tag": "0002_embed_assets",
+      "breakpoints": true
     }
   ]
 }
