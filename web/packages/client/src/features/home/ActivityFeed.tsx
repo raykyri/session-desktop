@@ -17,17 +17,15 @@ import {
 import type {
   JournalEntry,
   RecentActivityItem,
-  RecentActivityPage,
   RecentResearchQuery,
   ResearchFolderState,
   ResearchNodeContent,
   ResearchTreeSummary,
 } from "@session/shared";
 import { useQueryClient } from "@tanstack/react-query";
-import type { InfiniteData } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronUp, Undo2, X } from "lucide-react";
+import { ChevronDown, Undo2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -37,7 +35,6 @@ import {
   restoreJournalEntry,
 } from "../../api/api.js";
 import {
-  queryKeys,
   useActivityFeed,
   useArchiveResearchTree,
   useRemoveResearchTree,
@@ -133,10 +130,6 @@ export function ActivityFeed({
 
   const [undoEntry, setUndoEntry] = useState<JournalEntry | null>(null);
   const [newCount, setNewCount] = useState(0);
-  // Whether the reader is off the head of the list. Tracked rather than read
-  // on demand because it decides whether a control renders, and a scroll
-  // position is not something React re-reads on its own.
-  const [awayFromTop, setAwayFromTop] = useState(false);
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
   // The recap dialog needs the node's content, which the feed row does not
@@ -217,7 +210,6 @@ export function ActivityFeed({
     if (!scroller) return;
     const atTop = scroller.scrollTop <= FEED_TOP_THRESHOLD;
     if (atTop) setNewCount(0);
-    setAwayFromTop(!atTop);
     const top = virtualizer.getVirtualItems()[0];
     anchor.record(top ? { key: String(top.key), offset: top.start - scroller.scrollTop } : null);
   }, [anchor, scrollRef, virtualizer]);
@@ -245,29 +237,8 @@ export function ActivityFeed({
    * Actions
    * ------------------------------------------------------------------ */
 
-  // Older pages are keyset results that cannot have changed shape, so both
-  // "back to the head" paths simply discard them rather than reconciling them
-  // (`10` §2).
-  const dropOlderPages = () => {
-    client.setQueryData<InfiniteData<RecentActivityPage>>(
-      queryKeys.activity({ workspaceId, bookmarkedOnly }),
-      (data) =>
-        data && data.pages.length > 1
-          ? { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) }
-          : data,
-    );
-  };
-
   const scrollToTop = () => {
     scrollRef.current?.scrollTo({ top: 0, behavior: feedScrollBehavior() });
-  };
-
-  /** Returns to the first page and scrolls to the top without refetching;
-   * newer rows arrive through the subscription and the new-items counter. */
-  const backToLatest = () => {
-    dropOlderPages();
-    setNewCount(0);
-    scrollToTop();
   };
 
   const openQuery = (query: RecentResearchQuery) => {
@@ -343,12 +314,6 @@ export function ActivityFeed({
     ) : null;
 
   const nothingYet = feed.isSuccess && events.length === 0;
-
-  // Show "Back to latest" only when older pages are loaded or the reader has
-  // scrolled away from the latest activity. The new-activity counter takes
-  // priority because it provides the same navigation and also clears the
-  // pending arrival count.
-  const showBackToLatest = newCount === 0 && ((feed.data?.pages.length ?? 0) > 1 || awayFromTop);
 
   return (
     <div ref={scrollRef} className="research-reading-surface h-full overflow-y-auto">
@@ -459,7 +424,7 @@ export function ActivityFeed({
           </div>
 
           {nothingYet ? (
-            <p className="text-fg-muted m-0 py-6 text-base">
+            <p className="text-fg-muted m-0 py-4 text-base">
               {bookmarkedOnly
                 ? "No bookmarked research yet. Bookmark a research thread to see it here."
                 : "No recent activity yet. Run a query or save a source to see it here."}
@@ -482,12 +447,6 @@ export function ActivityFeed({
                       ? "Retry older activity"
                       : "Load older activity"}
                 </span>
-              </ControlButton>
-            ) : null}
-            {showBackToLatest ? (
-              <ControlButton size="sm" className="gap-1.5" onClick={backToLatest}>
-                <ChevronUp size={13} aria-hidden="true" />
-                <span>Back to latest</span>
               </ControlButton>
             ) : null}
             {feed.isFetchNextPageError ? (

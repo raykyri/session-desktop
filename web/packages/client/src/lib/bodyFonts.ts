@@ -4,9 +4,9 @@
 // needs to know the stack.
 //
 // DM Sans, Valley Sans, JetBrains Mono and Ioskeley Mono are bundled under the
-// SIL OFL 1.1 (`styles/fonts.css`). Anthropic Sans Text and Inter are not
-// bundled; they are offered only when `FontFace` can load them from the host,
-// which is what `detectAvailableBodyFonts` probes.
+// SIL OFL 1.1 (`styles/fonts.css`). Inter is not bundled; it is offered only
+// when `FontFace` can load it from the host, which is what
+// `detectAvailableBodyFonts` probes.
 
 export interface BodyFontOption {
   id: string;
@@ -22,12 +22,6 @@ const SYSTEM_BODY_FONT_STACK =
 
 export const BODY_FONT_OPTIONS: readonly BodyFontOption[] = [
   { id: "dm-sans", label: "DM Sans", stack: `"DM Sans", ${SYSTEM_BODY_FONT_STACK}` },
-  {
-    id: "anthropic-sans-text",
-    label: "Anthropic Sans Text",
-    stack: `"Anthropic Sans Text", ${SYSTEM_BODY_FONT_STACK}`,
-    localNames: ["Anthropic Sans Text Regular", "AnthropicSansText-Regular"],
-  },
   { id: "valley-sans", label: "Valley Sans", stack: `"Valley Sans", ${SYSTEM_BODY_FONT_STACK}` },
   {
     id: "inter",

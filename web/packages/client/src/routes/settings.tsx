@@ -13,7 +13,6 @@ import { useSettingsStore } from "../stores/settings.js";
 import { ControlButton } from "../ui/Button.js";
 import { Field, Textarea } from "../ui/Field.js";
 import { Select, type SelectOption } from "../ui/Select.js";
-import { TabPanel, Tabs } from "../ui/Tabs.js";
 import { Checkbox } from "../ui/Toggle.js";
 
 const APPEARANCE_OPTIONS: SelectOption[] = [
@@ -44,7 +43,7 @@ const BODY_FONT_SELECT_OPTIONS: SelectOption[] = BODY_FONT_OPTIONS.map((option) 
  * a control stretched to the column reads as a form field awaiting input. */
 const PICKER_CLASS = "w-fit min-w-44";
 
-/** A titled group inside the General tab. */
+/** A titled group on the settings page. */
 function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section aria-label={title} className="flex flex-col gap-4">
@@ -86,8 +85,9 @@ function ResearchSection() {
             <Textarea
               id={id}
               aria-describedby={describedBy}
-              rows={5}
+              rows={3}
               className="w-full"
+              placeholder="For example: Prefer primary sources and cite them inline."
               value={instruction}
               onChange={(event) =>
                 setEdit(clampResearchLaunchInstruction(event.currentTarget.value))
@@ -109,7 +109,7 @@ function ResearchSection() {
         )}
       </Field>
 
-      <Field label="Default model" hint="Default model selected in the composer.">
+      <Field label="Default model">
         {() => (
           <Select
             label="Default model"
@@ -195,130 +195,107 @@ export function SettingsPage() {
   const settings = useSettingsStore((state) => state.settings);
   const set = useSettingsStore((state) => state.set);
   const setTextSize = useSettingsStore((state) => state.setTextSize);
-  const [section, setSection] = useState("general");
 
   return (
     <div className="h-full overflow-y-auto px-8 py-10">
       <div className="mx-auto flex w-[min(640px,100%)] flex-col gap-6">
         <h1 className="text-input text-fg-heading m-0 font-semibold">Settings</h1>
 
-        <Tabs
-          value={section}
-          onValueChange={setSection}
-          label="Settings sections"
-          tabs={[
-            { value: "general", label: "General" },
-            { value: "usage", label: "Usage" },
-          ]}
-        >
-          <TabPanel value="general">
-            <div className="flex flex-col gap-8">
-              <SettingsGroup title="Appearance">
-                <Field label="Appearance" hint="Independent of the system setting.">
-                  {() => (
-                    <Select
-                      label="Appearance"
-                      value={settings.appearance}
-                      options={APPEARANCE_OPTIONS}
-                      size="sm"
-                      className={PICKER_CLASS}
-                      onChange={(value) => set("appearance", value === "light" ? "light" : "dark")}
-                    />
-                  )}
-                </Field>
+        <div className="flex flex-col gap-8">
+          <SettingsGroup title="Appearance">
+            <Field label="Appearance">
+              {() => (
+                <Select
+                  label="Appearance"
+                  value={settings.appearance}
+                  options={APPEARANCE_OPTIONS}
+                  size="sm"
+                  className={PICKER_CLASS}
+                  onChange={(value) => set("appearance", value === "light" ? "light" : "dark")}
+                />
+              )}
+            </Field>
 
-                <Field label="Theme" hint="Selects the accent color and background tone.">
-                  {() => (
-                    <Select
-                      label="Theme"
-                      value={settings.colorTheme}
-                      options={COLOR_THEME_OPTIONS}
-                      size="sm"
-                      className={PICKER_CLASS}
-                      onChange={(value) =>
-                        set("colorTheme", value === "orange-blob" ? "orange-blob" : "green-blob")
-                      }
-                    />
-                  )}
-                </Field>
+            <Field label="Theme">
+              {() => (
+                <Select
+                  label="Theme"
+                  value={settings.colorTheme}
+                  options={COLOR_THEME_OPTIONS}
+                  size="sm"
+                  className={PICKER_CLASS}
+                  onChange={(value) =>
+                    set("colorTheme", value === "orange-blob" ? "orange-blob" : "green-blob")
+                  }
+                />
+              )}
+            </Field>
 
-                <Field
+            <Field label="Body font">
+              {() => (
+                <Select
                   label="Body font"
-                  hint="Anthropic Sans Text and Inter are available only if installed locally."
-                >
-                  {() => (
-                    <Select
-                      label="Body font"
-                      value={settings.bodyFontId}
-                      options={BODY_FONT_SELECT_OPTIONS}
-                      size="sm"
-                      className={PICKER_CLASS}
-                      onChange={(value) => set("bodyFontId", value)}
-                    />
-                  )}
-                </Field>
-
-                <Field label={`Text size (${settings.textSize})`} hint="Scales answer text.">
-                  {({ id, describedBy }) => (
-                    <input
-                      id={id}
-                      aria-describedby={describedBy}
-                      type="range"
-                      min={APP_TEXT_SIZE_MIN}
-                      max={APP_TEXT_SIZE_MAX}
-                      step={1}
-                      value={settings.textSize}
-                      className="accent-accent w-64 max-w-full"
-                      onChange={(event) => setTextSize(Number(event.currentTarget.value))}
-                    />
-                  )}
-                </Field>
-
-                <Checkbox
-                  label="Reduce motion"
-                  description="Disable non-essential animations and transitions. Progress indicators remain active."
-                  checked={settings.reduceMotion}
-                  onCheckedChange={(checked) => set("reduceMotion", checked)}
+                  value={settings.bodyFontId}
+                  options={BODY_FONT_SELECT_OPTIONS}
+                  size="sm"
+                  className={PICKER_CLASS}
+                  onChange={(value) => set("bodyFontId", value)}
                 />
-              </SettingsGroup>
+              )}
+            </Field>
 
-              <SettingsGroup title="Reading and composing">
-                <Checkbox
-                  label="Show tool calls"
-                  description="Include searches, fetches and document reads in answers."
-                  checked={settings.showToolCalls}
-                  onCheckedChange={(checked) => set("showToolCalls", checked)}
+            <Field label={`Text size (${settings.textSize})`}>
+              {({ id, describedBy }) => (
+                <input
+                  id={id}
+                  aria-describedby={describedBy}
+                  type="range"
+                  min={APP_TEXT_SIZE_MIN}
+                  max={APP_TEXT_SIZE_MAX}
+                  step={1}
+                  value={settings.textSize}
+                  className="accent-accent w-64 max-w-full"
+                  onChange={(event) => setTextSize(Number(event.currentTarget.value))}
                 />
-                <Checkbox
-                  label="Show timestamps"
-                  description="Display timestamps on assistant responses."
-                  checked={settings.showAssistantTimestamps}
-                  onCheckedChange={(checked) => set("showAssistantTimestamps", checked)}
-                />
-                <Checkbox
-                  label="Notifications"
-                  description="Show popup notifications for background server events."
-                  checked={settings.showNotifications}
-                  onCheckedChange={(checked) => set("showNotifications", checked)}
-                />
-                <Checkbox
-                  label="Require ⌘↵ to send"
-                  description="When enabled, press ⌘↵ to send. When disabled, press Enter to send and Shift-Enter for a new line."
-                  checked={settings.requireCmdEnterToSend}
-                  onCheckedChange={(checked) => set("requireCmdEnterToSend", checked)}
-                />
-              </SettingsGroup>
+              )}
+            </Field>
+          </SettingsGroup>
 
-              <SettingsGroup title="Research">
-                <ResearchSection />
-              </SettingsGroup>
-            </div>
-          </TabPanel>
+          <SettingsGroup title="Reading and composing">
+            <Checkbox
+              label="Show tool calls"
+              description="Include searches, fetches and document reads in answers."
+              checked={settings.showToolCalls}
+              onCheckedChange={(checked) => set("showToolCalls", checked)}
+            />
+            <Checkbox
+              label="Show timestamps"
+              description="Display timestamps on assistant responses."
+              checked={settings.showAssistantTimestamps}
+              onCheckedChange={(checked) => set("showAssistantTimestamps", checked)}
+            />
+            <Checkbox
+              label="Notifications"
+              description="Show popup notifications for background server events."
+              checked={settings.showNotifications}
+              onCheckedChange={(checked) => set("showNotifications", checked)}
+            />
+            <Checkbox
+              label="Require ⌘↵ to send"
+              description="When enabled, press ⌘↵ to send. When disabled, press Enter to send and Shift-Enter for a new line."
+              checked={settings.requireCmdEnterToSend}
+              onCheckedChange={(checked) => set("requireCmdEnterToSend", checked)}
+            />
+          </SettingsGroup>
 
-          <TabPanel value="usage">
+          <SettingsGroup title="Research">
+            <ResearchSection />
+          </SettingsGroup>
+
+          <SettingsGroup title="Usage">
             <UsageSection />
-          </TabPanel>
-        </Tabs>
+          </SettingsGroup>
+        </div>
       </div>
     </div>
   );

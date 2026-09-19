@@ -87,7 +87,7 @@ export const SegmentPrompt = memo(function SegmentPrompt({
         <DocumentChips documentIds={node.documentIds} workspaceId={workspaceId} />
       ) : null}
       {showFooter ? (
-        <div className="text-fg-subtle mt-1.5 mb-[26px] flex min-w-0 items-center gap-3 text-xs">
+        <div className="text-fg-subtle mt-1.5 mb-[26px] flex min-w-0 items-center gap-3 text-base">
           <span
             className="min-w-0 truncate"
             title={askedAt !== null ? new Date(askedAt).toLocaleString() : undefined}

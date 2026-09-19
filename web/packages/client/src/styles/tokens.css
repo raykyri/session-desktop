@@ -91,6 +91,8 @@
   --status-active-border-strong: rgba(215, 168, 79, 0.62);
   --status-warning-fg: #d8b878;
   --status-info-fg: #6da7ec;
+  /* Text over a ::selection highlight, which uses --status-info-fg as its background. */
+  --selection-fg: #ffffff;
   --status-info-bg: rgba(109, 167, 236, 0.08);
   --status-info-bg-hover: rgba(109, 167, 236, 0.14);
   --status-info-border: rgba(109, 167, 236, 0.25);
@@ -412,6 +414,7 @@
   --status-active-border-strong: rgba(154, 107, 18, 0.62);
   --status-warning-fg: #9a6f16;
   --status-info-fg: #2a6fc0;
+  --selection-fg: #ffffff;
   --status-info-bg: rgba(42, 111, 192, 0.08);
   --status-info-bg-hover: rgba(42, 111, 192, 0.14);
   --status-info-border: rgba(42, 111, 192, 0.25);

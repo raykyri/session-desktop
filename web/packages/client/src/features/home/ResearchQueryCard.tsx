@@ -97,7 +97,7 @@ export function ResearchQueryCard({
           </p>
         ) : null}
 
-        <article className="bg-surface-card border-border-divider rounded-lg border p-3">
+        <article className="bg-surface-card border-border-divider rounded-lg border px-3 py-2.5">
           <div
             role="button"
             tabIndex={0}
@@ -178,7 +178,7 @@ export function ResearchQueryCard({
         <div
           className={cn(
             CARD_TEXT_INSET,
-            "text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1 text-xs",
+            "text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1 text-base",
           )}
         >
           <span>{modelLabel}</span>

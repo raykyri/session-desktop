@@ -59,7 +59,7 @@ export function ThemeEffects() {
     document.documentElement.style.setProperty("--app-text-zoom", `${zoom}px`);
   }, [settings.textSize]);
 
-  // Anthropic Sans Text and Inter are optional local fonts; if unavailable on the client system, fall back to default system fonts.
+  // Inter is an optional local font; if unavailable on the client system, fall back to default system fonts.
   useEffect(() => {
     let disposed = false;
     void detectAvailableBodyFonts().then((available) => {

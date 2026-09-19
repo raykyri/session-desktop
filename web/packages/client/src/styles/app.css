@@ -198,6 +198,7 @@
 
   ::selection {
     background: var(--status-info-fg);
+    color: var(--selection-fg);
   }
 
   /* lucide-react sets width/height attributes, but as a flex item an SVG can
