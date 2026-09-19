@@ -357,8 +357,8 @@ selection.
 ## ADR-16 Models, effort, and access
 
 Choice: a code-level model registry: `gemini-flash` (Gemini 3.8 Flash on
-Vertex AI via a service account; default; runs every metadata job),
-`gemini-flash-google` (the same model with Google Search grounding),
+Vertex AI via a service account with Google Search grounding; default; runs
+every metadata job),
 `deepseek-flash` (DeepSeek V4.1 Flash via OpenRouter) and `gpt-luna`
 (GPT-5.6 Luna via OpenRouter, `~openai/gpt-luna-latest`), both restricted to
 zero-data-retention, no-collection providers with `zdr: true` and
@@ -377,7 +377,7 @@ per-model options matrix from the UI and the eval.
 Choice: `web_search` (vendor behind one interface, cached), `web_fetch`
 (server-side fetch with SSRF guard and readable-text extraction, cached),
 and `document_read` (attached documents), supplied to every model, plus one
-native alternative: `gemini-flash-google` uses Google Search grounding
+native alternative: `gemini-flash` uses Google Search grounding
 inside Gemini instead of the owned search tool, rendered through the same
 activity and Sources UI.
 

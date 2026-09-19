@@ -83,7 +83,7 @@ account), OpenRouter (zero-retention providers only), and Anthropic.
 | Database | SQLite via `better-sqlite3`, WAL; Drizzle ORM; drizzle-kit migrations |
 | Auth | GitHub OAuth (PKCE) via `arctic`; DB sessions; `users.is_admin` set manually |
 | Agents | Vercel AI SDK `streamText` loop with owned `web_search`, `web_fetch`, `document_read` tools; `@anthropic-ai/sdk` escape hatch if needed; app owns conversation history |
-| Models | `gemini-flash` (default), `gemini-flash-google` (Google Search grounding), `deepseek-flash` and `gpt-luna` via OpenRouter ZDR/no-collection routing, all users; `claude-fable` admin only; effort fixed at medium; metadata runs on `gemini-flash` |
+| Models | `gemini-flash` (default, Google Search grounding), `deepseek-flash` and `gpt-luna` via OpenRouter ZDR/no-collection routing, all users; `claude-fable` admin only; effort fixed at medium; metadata runs on `gemini-flash` |
 | Streaming | Snapshot + per-node ordered deltas; durable checkpoints; `interrupted` with auto-resume on deploy |
 | Client state | TanStack Query (event-patched) + Zustand; TanStack Router |
 | Styling / components | Tailwind v4 over the preserved `tokens.css`; Base UI primitives; lucide-react; TanStack Virtual |
@@ -416,9 +416,8 @@ enforcement off (`13-deployment-fly.md` §2).
 
 ## 9. Open questions
 
-1. Whether `gemini-flash-google` should become the default Gemini entry once
-   its quality is compared to `gemini-flash` with owned search (grounding
-   costs $14 per 1k queries after the free tier).
+1. Resolved: Google Search grounding is on the only Gemini entry,
+   `gemini-flash` (grounding costs $14 per 1k queries after the free tier).
 2. Invite allotment policy. Because `SESSION_REQUIRE_INVITE` is enabled in `web/fly.toml` (§8), the remaining decision is the invite allocation policy per account rather than when to activate the requirement.
 
 Decided since the first draft: search vendors are Parallel and Tavily, both

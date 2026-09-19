@@ -35,9 +35,11 @@ async function launch(
   const user = harness.addUser(login);
   const caller = harness.caller(user);
   const workspace = await caller.workspaces.ensureDefault();
+  // An owned-tools model: the fixtures here exercise `web_search`, which the
+  // grounded Gemini entry replaces with the provider's own search.
   const detail = await caller.research.createTree({
     prompt,
-    model: "gemini-flash",
+    model: "gpt-luna",
     workspaceId: workspace.id,
   });
   const nodeId = detail.nodes[0]?.id ?? "";

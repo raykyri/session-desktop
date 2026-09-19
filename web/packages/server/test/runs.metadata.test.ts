@@ -286,7 +286,7 @@ test.serial("a grounded run records the searches the provider billed", async (t)
   const workspace = await caller.workspaces.ensureDefault();
   const detail = await caller.research.createTree({
     prompt: "What is the Kessler syndrome?",
-    model: "gemini-flash-google",
+    model: "gemini-flash",
     workspaceId: workspace.id,
   });
   await harness.settle();

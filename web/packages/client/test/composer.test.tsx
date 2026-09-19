@@ -223,7 +223,7 @@ test.serial("a bare URL is saved to the journal instead of launching a run", asy
 
   const field = screen.getByLabelText(PROMPT_LABEL);
   fireEvent.change(field, { target: { value: "https://example.com/a" } });
-  fireEvent.keyDown(field, { key: "Enter" });
+  fireEvent.keyDown(field, { key: "Enter", ctrlKey: true, metaKey: true });
 
   await waitUntil(
     t,
@@ -264,7 +264,7 @@ test.serial("a launch that is refused keeps every field for the retry", async (t
 
   const field = screen.getByLabelText(PROMPT_LABEL);
   fireEvent.change(field, { target: { value: "What is collective memory?" } });
-  fireEvent.keyDown(field, { key: "Enter" });
+  fireEvent.keyDown(field, { key: "Enter", ctrlKey: true, metaKey: true });
 
   await waitUntil(
     t,

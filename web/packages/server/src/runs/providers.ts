@@ -45,7 +45,7 @@ export interface ResolvedModel {
   entry: ModelEntry;
   model: LanguageModel;
   providerOptions: ProviderOptions;
-  /** Merged into the owned tool set. Empty except for `gemini-flash-google`. */
+  /** Merged into the owned tool set. Empty unless the entry uses native search. */
   providerTools: ToolSet;
 }
 

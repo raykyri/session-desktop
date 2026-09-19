@@ -280,12 +280,6 @@ export function SettingsPage() {
               checked={settings.showNotifications}
               onCheckedChange={(checked) => set("showNotifications", checked)}
             />
-            <Checkbox
-              label="Require ⌘↵ to send"
-              description="When enabled, press ⌘↵ to send. When disabled, press Enter to send and Shift-Enter for a new line."
-              checked={settings.requireCmdEnterToSend}
-              onCheckedChange={(checked) => set("requireCmdEnterToSend", checked)}
-            />
           </SettingsGroup>
 
           <SettingsGroup title="Research">

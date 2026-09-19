@@ -1,8 +1,8 @@
 // The Home composer (`07-client-architecture.md` §6, ported from
 // `ResearchQueryComposer.tsx`).
 //
-// Kept: the growing textarea, `isComposerSubmitShortcut` with
-// `requireCmdEnterToSend`, Tab as the model cycle (`launcherTabAction`, now one
+// Kept: the growing textarea, `isComposerSubmitShortcut` (⌘↵ on Apple
+// platforms, Ctrl↵ elsewhere), Tab as the model cycle (`launcherTabAction`, now one
 // dimension), and draft persistence — prompt, model, and the ids of whatever
 // was attached.
 //
@@ -145,7 +145,6 @@ export function ResearchQueryComposer({
   const me = useMe();
   const runtimeConfig = useRuntimeConfig();
   const createTree = useCreateResearchTree();
-  const requireCmdEnterToSend = useSettingsStore((state) => state.settings.requireCmdEnterToSend);
   const defaultModel = useSettingsStore((state) => state.settings.defaultModel);
 
   const draftKey = homeDraftKey(workspaceId);
@@ -387,7 +386,7 @@ export function ResearchQueryComposer({
             updateModel(nextComposerModel(models, model));
             return;
           }
-          if (!isComposerSubmitShortcut(event, requireCmdEnterToSend)) return;
+          if (!isComposerSubmitShortcut(event)) return;
           event.preventDefault();
           void submit();
         }}
@@ -490,7 +489,7 @@ export function ResearchQueryComposer({
           aria-label={submitting ? "Starting research" : "Start research"}
           title={submitting ? "Starting research" : "Start research"}
         >
-          <ComposerSubmitShortcutGlyph requireCmdEnter={requireCmdEnterToSend} ariaHidden />
+          <ComposerSubmitShortcutGlyph ariaHidden />
         </ControlButton>
       </div>
 

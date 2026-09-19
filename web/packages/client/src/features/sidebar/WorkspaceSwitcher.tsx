@@ -9,7 +9,17 @@
 
 import type { AppShortcutCommand, Workspace } from "@session/shared";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, Folder, FolderPlus, Pencil, Star, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronDown,
+  Folder,
+  FolderPlus,
+  Pencil,
+  Star,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -132,11 +142,6 @@ export function WorkspaceSwitcher({
           <>
             <MenuSeparator />
             <IconMenuItem
-              icon={<Pencil size={13} aria-hidden="true" />}
-              label={`Rename “${current.name}”`}
-              onClick={() => setRenaming(true)}
-            />
-            <IconMenuItem
               icon={<Star size={13} aria-hidden="true" />}
               label={isDefault ? "Default workspace" : "Set as default"}
               disabled={isDefault}
@@ -151,13 +156,23 @@ export function WorkspaceSwitcher({
                   );
               }}
             />
-            <MenuItem onClick={() => move(-1)} disabled={list[0]?.id === current.id}>
-              Move up
-            </MenuItem>
-            <MenuItem onClick={() => move(1)} disabled={list.at(-1)?.id === current.id}>
-              Move down
-            </MenuItem>
-            <MenuSeparator />
+            <IconMenuItem
+              icon={<ArrowUp size={13} aria-hidden="true" />}
+              label="Move up"
+              disabled={list[0]?.id === current.id}
+              onClick={() => move(-1)}
+            />
+            <IconMenuItem
+              icon={<ArrowDown size={13} aria-hidden="true" />}
+              label="Move down"
+              disabled={list.at(-1)?.id === current.id}
+              onClick={() => move(1)}
+            />
+            <IconMenuItem
+              icon={<Pencil size={13} aria-hidden="true" />}
+              label={`Rename “${current.name}”`}
+              onClick={() => setRenaming(true)}
+            />
             <IconMenuItem
               icon={<Trash2 size={13} aria-hidden="true" />}
               label={`Delete “${current.name}”`}

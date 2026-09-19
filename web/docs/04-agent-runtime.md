@@ -23,8 +23,7 @@ Luna 0.20/1.20, Fable 10/50) and exposed by `system.runtimeConfig`:
 
 | id | Model | Route | AI SDK provider | Access | Search |
 | --- | --- | --- | --- | --- | --- |
-| `gemini-flash` | Gemini 3.8 Flash | Vertex AI, service account | `@ai-sdk/google-vertex` | all users, default | owned tools |
-| `gemini-flash-google` | Gemini 3.8 Flash with Google Search grounding | Vertex AI | `@ai-sdk/google-vertex` with the `google_search` provider tool | all users | native grounding (§6.2) |
+| `gemini-flash` | Gemini 3.8 Flash | Vertex AI, service account | `@ai-sdk/google-vertex` with the `google_search` provider tool | all users, default | native grounding (§6.2) |
 | `deepseek-flash` | DeepSeek V4.1 Flash | OpenRouter `deepseek/deepseek-v4.1-flash`, `provider: { zdr: true, data_collection: "deny" }` | `@openrouter/ai-sdk-provider` | all users | owned tools |
 | `gpt-luna` | GPT-5.6 Luna | OpenRouter `~openai/gpt-luna-latest` (falls back to `openai/gpt-5.6-luna` if the alias is absent), `provider: { zdr: true, data_collection: "deny" }` | `@openrouter/ai-sdk-provider` | all users | owned tools |
 | `claude-fable` | Claude Fable 5.1 (`claude-fable-5-1`) | Anthropic API | `@ai-sdk/anthropic`, `@anthropic-ai/sdk` escape hatch (§7) | admin only | owned tools |
@@ -200,7 +199,7 @@ present; the other is the fallback after a vendor error. With neither
 `PARALLEL_API_KEY` nor `TAVILY_API_KEY` set, the tool is unavailable: runs
 proceed with `web_fetch` and `document_read` only, `runtimeConfig.features.webSearch`
 is false, and the composer shows "Web search unavailable";
-`gemini-flash-google` keeps Google Search grounding. The comparison that
+`gemini-flash` keeps Google Search grounding. The comparison that
 informed the choice:
 
 | Vendor | Search price | Content | Notes |
@@ -214,9 +213,9 @@ informed the choice:
 Regardless of the selected vendor, `web_fetch` remains available for full-page
 retrieval and user-pasted links.
 
-### 6.2 Google Search grounding (`gemini-flash-google`)
+### 6.2 Google Search grounding (`gemini-flash`)
 
-The `gemini-flash-google` model entry passes Vertex's `google_search` tool
+The `gemini-flash` model entry passes Vertex's `google_search` tool
 instead of the owned `web_search`. Behavior differences the runtime handles:
 
 - Grounding returns `groundingMetadata` (`webSearchQueries`,
@@ -234,7 +233,7 @@ instead of the owned `web_search`. Behavior differences the runtime handles:
   `googleSearch` tool and the `functionDeclarations` with
   `functionCallingConfig: { mode: "VALIDATED" }` for a Gemini 3 model, and
   warns about the combination only for Gemini 2 and older, so
-  `gemini-flash-google` keeps its owned tools rather than running with
+  `gemini-flash` keeps its owned tools rather than running with
   grounding only. What a live Gemini 3.8 request does with both is still to be
   confirmed against the API.
 - Billing is per search query, several per prompt; usage is recorded as

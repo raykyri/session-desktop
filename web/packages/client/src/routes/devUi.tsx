@@ -112,7 +112,7 @@ function Kitchen() {
         </IconButton>
         <LinkButton>Link button</LinkButton>
         <ShortcutHint>⇧⌘G</ShortcutHint>
-        <ComposerSubmitShortcutGlyph requireCmdEnter />
+        <ComposerSubmitShortcutGlyph />
         <HistoryNav canGoBack canGoForward={false} onBack={() => {}} onForward={() => {}} />
         <SidebarRestoreButton onRestore={() => {}} />
       </Row>

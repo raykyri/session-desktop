@@ -1,42 +1,41 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { cn } from "../lib/cn.js";
+import { isApplePlatform } from "../lib/platform.js";
 
 /**
- * Whether a composer keydown means "send", ported from the desktop
- * `ComposerSubmitShortcut.tsx`. `isComposing` is checked first: an IME
- * confirming a candidate sends Enter, and treating that as submit posts a
- * half-typed sentence.
+ * Whether a composer keydown means "send": ⌘↵ on Apple platforms, Ctrl↵
+ * elsewhere. A bare Enter inserts a newline. `isComposing` is checked first:
+ * an IME confirming a candidate sends Enter, and treating that as submit posts
+ * a half-typed sentence.
  */
 export function isComposerSubmitShortcut(
   event: ReactKeyboardEvent,
-  requireCmdEnter: boolean,
+  apple: boolean = isApplePlatform(),
 ): boolean {
   if (event.key !== "Enter" || event.nativeEvent.isComposing) return false;
-  if (requireCmdEnter) return event.metaKey;
-  return !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
+  return apple ? event.metaKey : event.ctrlKey;
 }
 
-export function composerSubmitShortcutAriaLabel(requireCmdEnter: boolean): string {
-  return requireCmdEnter ? "Command Enter" : "Enter";
+export function composerSubmitShortcutAriaLabel(apple: boolean = isApplePlatform()): string {
+  return apple ? "Command Enter" : "Control Enter";
 }
 
 export function ComposerSubmitShortcutGlyph({
-  requireCmdEnter,
   className,
   ariaHidden = false,
 }: {
-  requireCmdEnter: boolean;
   className?: string;
   ariaHidden?: boolean;
 }) {
+  const apple = isApplePlatform();
   return (
     <span
       className={cn("inline-flex items-center gap-0.5 text-xs leading-none", className)}
       aria-hidden={ariaHidden ? "true" : undefined}
-      aria-label={ariaHidden ? undefined : composerSubmitShortcutAriaLabel(requireCmdEnter)}
+      aria-label={ariaHidden ? undefined : composerSubmitShortcutAriaLabel(apple)}
     >
-      {requireCmdEnter ? "⌘" : null}
+      {apple ? "⌘" : "Ctrl"}
       <span aria-hidden="true">↵</span>
     </span>
   );

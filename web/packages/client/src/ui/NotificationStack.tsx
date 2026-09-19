@@ -2,7 +2,6 @@ import { CheckCircle2, CircleAlert, Info, TriangleAlert, X } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cn } from "../lib/cn.js";
-import { formatShortRelativeTime } from "../lib/relativeTime.js";
 import {
   MAX_VISIBLE_NOTIFICATIONS,
   type NotificationItem,
@@ -43,13 +42,11 @@ function ToneIcon({ tone }: { tone: NotificationTone }) {
 
 function NotificationCard({
   notification,
-  now,
   active,
   onDismiss,
   onOpen,
 }: {
   notification: NotificationItem;
-  now: number;
   active: boolean;
   onDismiss: (id: string) => void;
   onOpen?: ((href: string) => void) | undefined;
@@ -98,17 +95,7 @@ function NotificationCard({
         <ToneIcon tone={notification.tone} />
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="flex items-baseline gap-2">
-          <strong className="text-fg-strong min-w-0 truncate text-base">
-            {notification.title}
-          </strong>
-          <time
-            className="text-fg-subtle ml-auto shrink-0 text-xs"
-            dateTime={new Date(notification.createdAt).toISOString()}
-          >
-            {formatShortRelativeTime(notification.createdAt, now)}
-          </time>
-        </span>
+        <strong className="text-fg-strong min-w-0 truncate text-base">{notification.title}</strong>
         <span className="text-fg-secondary text-sm">{notification.body}</span>
       </span>
     </>
@@ -163,19 +150,7 @@ export function NotificationStack({ notifications, onDismiss, onOpen }: Notifica
   const [windowActive, setWindowActive] = useState(
     () => document.visibilityState === "visible" && document.hasFocus(),
   );
-  const [now, setNow] = useState(() => Date.now());
   const visible = notifications.slice(0, MAX_VISIBLE_NOTIFICATIONS);
-
-  // The clock only ticks while something is on screen. A toast that arrives
-  // between ticks reads against a slightly stale `now`, which puts its age at
-  // or before zero — and `formatShortRelativeTime` renders that as "now", which
-  // is what it is. Resetting the clock on arrival would mean calling `Date.now`
-  // during render for no visible difference.
-  useEffect(() => {
-    if (visible.length === 0) return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [visible.length]);
 
   useEffect(() => {
     const update = () =>
@@ -203,7 +178,6 @@ export function NotificationStack({ notifications, onDismiss, onOpen }: Notifica
         <NotificationCard
           key={notification.id}
           notification={notification}
-          now={now}
           active={windowActive}
           onDismiss={onDismiss}
           onOpen={onOpen}

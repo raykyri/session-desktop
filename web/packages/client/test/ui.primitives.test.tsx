@@ -570,19 +570,30 @@ test.serial("the sidebar restore button includes its shortcut in the tooltip", (
 test.serial("the composer submit glyph matches the shortcut it describes", (t) => {
   render(
     <>
-      <ComposerSubmitShortcutGlyph requireCmdEnter />
+      <ComposerSubmitShortcutGlyph />
       <ShortcutHint>⌘K</ShortcutHint>
     </>,
   );
 
-  t.truthy(screen.getByLabelText("Command Enter"));
+  t.truthy(screen.getByLabelText(/^(Command|Control) Enter$/));
   t.truthy(screen.getByText("⌘K"));
 
-  const enter = { key: "Enter", metaKey: false, nativeEvent: { isComposing: false } };
-  t.true(isComposerSubmitShortcut(enter as never, false));
-  t.false(isComposerSubmitShortcut(enter as never, true));
+  const enter = {
+    key: "Enter",
+    metaKey: false,
+    ctrlKey: false,
+    nativeEvent: { isComposing: false },
+  };
+  t.false(isComposerSubmitShortcut(enter as never, true), "a bare Enter inserts a newline");
+  t.false(isComposerSubmitShortcut(enter as never, false));
+  t.true(isComposerSubmitShortcut({ ...enter, metaKey: true } as never, true), "⌘↵ on Apple");
+  t.false(isComposerSubmitShortcut({ ...enter, ctrlKey: true } as never, true));
+  t.true(isComposerSubmitShortcut({ ...enter, ctrlKey: true } as never, false), "Ctrl↵ elsewhere");
   t.false(
-    isComposerSubmitShortcut({ ...enter, nativeEvent: { isComposing: true } } as never, false),
+    isComposerSubmitShortcut(
+      { ...enter, metaKey: true, nativeEvent: { isComposing: true } } as never,
+      true,
+    ),
     "an IME confirmation is not a submit",
   );
 });
