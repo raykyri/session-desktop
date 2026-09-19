@@ -33,7 +33,7 @@ export function Switch({
       <label htmlFor={id} className="min-w-0 cursor-pointer">
         <span className="text-fg-primary block text-base">{label}</span>
         {description ? (
-          <span className="text-fg-muted mt-0.5 block text-sm">{description}</span>
+          <span className="text-fg-muted mt-0.5 block text-base">{description}</span>
         ) : null}
       </label>
       <BaseSwitch.Root
@@ -101,7 +101,7 @@ export function Checkbox({
       <label htmlFor={id} className="min-w-0 cursor-pointer">
         <span className="text-fg-primary block text-base">{label}</span>
         {description ? (
-          <span className="text-fg-muted mt-0.5 block text-sm">{description}</span>
+          <span className="text-fg-muted mt-0.5 block text-base">{description}</span>
         ) : null}
       </label>
     </div>

@@ -23,10 +23,6 @@ import { TweetEmbed } from "../journal/TweetEmbed.js";
 import { ResearchMarkdown } from "../markdown/index.js";
 import { ThreadActions } from "../research/ThreadActions.js";
 
-/** The prompt bubble's padding plus its 1px border, so the recap, follow-ups
- * and metadata below it start on the same column as the prompt text. */
-const CARD_TEXT_INSET = "px-[calc(var(--spacing)*3+1px)]";
-
 /** The short quote a follow-up anchored to a passage shows above its question
  * (`ResearchActivityFeed.tsx:318`). */
 export function queryTargetExcerpt(target: string, maxWords = 5, maxChars = 40): string {
@@ -97,7 +93,7 @@ export function ResearchQueryCard({
           </p>
         ) : null}
 
-        <article className="bg-surface-card border-border-divider mb-0.5 rounded-lg border px-3 py-2.5">
+        <article className="mb-0.5">
           <div
             role="button"
             tabIndex={0}
@@ -130,26 +126,16 @@ export function ResearchQueryCard({
         ) : null}
 
         {running ? (
-          <p
-            className={cn(CARD_TEXT_INSET, "text-fg-muted m-0 flex items-center gap-1.5 text-sm")}
-            role="status"
-          >
+          <p className="text-fg-muted m-0 flex items-center gap-1.5 text-sm" role="status">
             <LoaderCircle size={13} aria-hidden="true" className="session-spin" />
             <span>Generating answer</span>
           </p>
         ) : recap ? (
-          <ResearchMarkdown
-            markdown={`Summary: ${recap}`}
-            variant="summary"
-            className={CARD_TEXT_INSET}
-          />
+          <ResearchMarkdown markdown={`Summary: ${recap}`} variant="summary" />
         ) : null}
 
         {query.children && query.children.length > 0 ? (
-          <ul
-            aria-label="Follow-up questions"
-            className={cn(CARD_TEXT_INSET, "m-0 flex list-none flex-col gap-1 p-0")}
-          >
+          <ul aria-label="Follow-up questions" className="m-0 flex list-none flex-col gap-1 p-0">
             {query.children.map((child) => {
               const excerpt = queryTargetExcerpt(child.queryTarget ?? "");
               return (
@@ -175,12 +161,7 @@ export function ResearchQueryCard({
           </ul>
         ) : null}
 
-        <div
-          className={cn(
-            CARD_TEXT_INSET,
-            "text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1 text-base",
-          )}
-        >
+        <div className="text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1 text-base">
           <span>{modelLabel}</span>
           {status ? (
             <span className={cn(query.status === "failed" && "text-status-failed")}>{status}</span>

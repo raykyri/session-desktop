@@ -23,14 +23,14 @@ export function Field({ label, hint, error, className, children }: FieldProps) {
   const message = error ?? hint;
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={id} className="text-fg-secondary text-sm">
+      <label htmlFor={id} className="text-fg-secondary text-base">
         {label}
       </label>
       {children({ id, describedBy: message ? messageId : undefined })}
       {message ? (
         <p
           id={messageId}
-          className={cn("m-0 text-xs", error ? "text-status-failed" : "text-fg-muted")}
+          className={cn("m-0 text-base", error ? "text-status-failed" : "text-fg-muted")}
         >
           {message}
         </p>
