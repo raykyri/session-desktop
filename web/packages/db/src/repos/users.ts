@@ -118,7 +118,7 @@ export function setAdmin(db: SessionDatabase, login: string, isAdmin: boolean): 
 }
 
 export function listUsers(db: SessionDatabase): User[] {
-  return db.select().from(users).orderBy(asc(users.createdAt)).all().map(toUser);
+  return db.select().from(users).orderBy(asc(users.createdAt), asc(users.id)).all().map(toUser);
 }
 
 /** Removes the account. Foreign keys cascade everything it owns; the caller

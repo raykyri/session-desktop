@@ -10,7 +10,8 @@ import {
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { protectedProcedure, router } from "../base.js";
+import { protectedProcedure, publicProcedure, router } from "../base.js";
+import { catalogUserId } from "../catalog.js";
 import { publish } from "../emit.js";
 import { repo, required } from "../errors.js";
 
@@ -59,15 +60,17 @@ export const highlightsRouter = router({
       return removed;
     }),
 
-  listFeed: protectedProcedure
+  listFeed: publicProcedure
     .input(z.object({ workspaceId: z.string().optional() }).optional())
-    .query(({ ctx, input }) =>
-      repo(() => highlights.feed(ctx.db, ctx.user.id, input?.workspaceId ?? null)),
-    ),
+    .query(({ ctx, input }) => {
+      const userId = catalogUserId(ctx);
+      if (userId === null) return [];
+      return repo(() => highlights.feed(ctx.db, userId, input?.workspaceId ?? null));
+    }),
 });
 
 export const recapsRouter = router({
-  defaultInstructions: protectedProcedure.query(() => DEFAULT_RECAP_INSTRUCTIONS),
+  defaultInstructions: publicProcedure.query(() => DEFAULT_RECAP_INSTRUCTIONS),
 
   /**
    * A `gemini-flash` metadata run the dialog waits on

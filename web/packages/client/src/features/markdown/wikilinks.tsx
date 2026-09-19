@@ -19,12 +19,16 @@ export interface WikilinkActions {
   activate: (term: string, anchor: HTMLElement) => void;
   /** Whether rendered terms can open or create encyclopedia pages. */
   interactive: boolean;
+  /** Whether missing or failed terms may request a new page. Defaults to
+   * `interactive`. Guests can open existing pages but not create them. */
+  canRequest?: boolean;
 }
 
 export const NOOP_WIKILINK_ACTIONS: WikilinkActions = {
   resolve: () => null,
   activate: () => undefined,
   interactive: false,
+  canRequest: false,
 };
 
 export const WikilinkActionsContext = createContext<WikilinkActions>(NOOP_WIKILINK_ACTIONS);

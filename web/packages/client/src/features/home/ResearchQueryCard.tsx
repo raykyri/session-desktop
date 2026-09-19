@@ -16,6 +16,7 @@ import {
 import { LoaderCircle } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { useSignedIn } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { ContextMenu } from "../../ui/ContextMenu.js";
 import { ModelMeta } from "../../ui/ModelMark.js";
@@ -114,96 +115,99 @@ export function ResearchQueryCard({
   const attachments = (query.attachments ?? []).filter(
     (attachment) => attachment.status === "resolved" && attachment.tweet,
   );
+  const signedIn = useSignedIn();
   const followed = Boolean(tree?.followed);
   const bookmarked = Boolean(tree?.bookmarked);
 
+  const body = (
+    <div className="flex flex-col gap-2">
+      {query.queryTarget ? (
+        <p className="research-prompt-quote m-0 truncate" title={query.queryTarget}>
+          @{queryTargetExcerpt(query.queryTarget)}
+        </p>
+      ) : null}
+
+      <article className="mb-0.5">
+        <OpenThreadControl onOpen={onOpen} className="research-prose">
+          {promptPreview(query.prompt)}
+        </OpenThreadControl>
+      </article>
+
+      {attachments.length > 0 ? (
+        <ul aria-label="Attached posts" className="m-0 flex list-none flex-col gap-2 p-0">
+          {attachments.map((attachment) =>
+            attachment.tweet ? (
+              <li key={attachment.tweetId} className="border-border-divider rounded-lg border">
+                <TweetEmbed tweet={attachment.tweet} />
+              </li>
+            ) : null,
+          )}
+        </ul>
+      ) : null}
+
+      {running ? (
+        <p className="text-fg-muted m-0 flex items-center gap-1.5 text-sm" role="status">
+          <LoaderCircle size={13} aria-hidden="true" className="session-spin" />
+          <span>Generating answer</span>
+        </p>
+      ) : recap ? (
+        <OpenThreadControl onOpen={onOpen}>
+          <ResearchMarkdown markdown={`Summary: ${recap}`} variant="summary" />
+        </OpenThreadControl>
+      ) : null}
+
+      {query.children && query.children.length > 0 ? (
+        <ul aria-label="Follow-up questions" className="m-0 flex list-none flex-col gap-1 p-0">
+          {query.children.map((child) => {
+            const excerpt = queryTargetExcerpt(child.queryTarget ?? "");
+            return (
+              <li key={child.nodeId} className="text-fg-secondary min-w-0 text-sm">
+                {excerpt ? (
+                  <span className="text-fg-subtle" title={child.queryTarget ?? undefined}>
+                    @{excerpt}{" "}
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  className="border-0 bg-transparent p-0 text-left underline-offset-2 hover:underline"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenChild(child);
+                  }}
+                >
+                  {promptPreview(child.prompt)}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+
+      <div
+        className={cn("text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1", METADATA_LINE)}
+      >
+        <ModelMeta modelId={query.model} origin={query.origin} at={query.createdAt} />
+        {status ? (
+          <span className={cn(query.status === "failed" && "text-status-failed")}>{status}</span>
+        ) : null}
+        <span className="flex-1" />
+        {signedIn && !running ? (
+          <ThreadActions
+            followed={followed}
+            bookmarked={bookmarked}
+            onToggleFollow={onToggleFollow}
+            onToggleBookmark={onToggleBookmark}
+            busy={actionsBusy}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+
+  if (!signedIn || !menuItems) return body;
   return (
     <ContextMenu label={`Actions for ${tree?.title ?? "this thread"}`} items={menuItems}>
-      <div className="flex flex-col gap-2">
-        {query.queryTarget ? (
-          <p className="research-prompt-quote m-0 truncate" title={query.queryTarget}>
-            @{queryTargetExcerpt(query.queryTarget)}
-          </p>
-        ) : null}
-
-        <article className="mb-0.5">
-          <OpenThreadControl onOpen={onOpen} className="research-prose">
-            {promptPreview(query.prompt)}
-          </OpenThreadControl>
-        </article>
-
-        {attachments.length > 0 ? (
-          <ul aria-label="Attached posts" className="m-0 flex list-none flex-col gap-2 p-0">
-            {attachments.map((attachment) =>
-              attachment.tweet ? (
-                <li key={attachment.tweetId} className="border-border-divider rounded-lg border">
-                  <TweetEmbed tweet={attachment.tweet} />
-                </li>
-              ) : null,
-            )}
-          </ul>
-        ) : null}
-
-        {running ? (
-          <p className="text-fg-muted m-0 flex items-center gap-1.5 text-sm" role="status">
-            <LoaderCircle size={13} aria-hidden="true" className="session-spin" />
-            <span>Generating answer</span>
-          </p>
-        ) : recap ? (
-          <OpenThreadControl onOpen={onOpen}>
-            <ResearchMarkdown markdown={`Summary: ${recap}`} variant="summary" />
-          </OpenThreadControl>
-        ) : null}
-
-        {query.children && query.children.length > 0 ? (
-          <ul aria-label="Follow-up questions" className="m-0 flex list-none flex-col gap-1 p-0">
-            {query.children.map((child) => {
-              const excerpt = queryTargetExcerpt(child.queryTarget ?? "");
-              return (
-                <li key={child.nodeId} className="text-fg-secondary min-w-0 text-sm">
-                  {excerpt ? (
-                    <span className="text-fg-subtle" title={child.queryTarget ?? undefined}>
-                      @{excerpt}{" "}
-                    </span>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="border-0 bg-transparent p-0 text-left underline-offset-2 hover:underline"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onOpenChild(child);
-                    }}
-                  >
-                    {promptPreview(child.prompt)}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
-
-        <div
-          className={cn(
-            "text-fg-subtle flex flex-wrap items-center gap-x-3 gap-y-1",
-            METADATA_LINE,
-          )}
-        >
-          <ModelMeta modelId={query.model} origin={query.origin} at={query.createdAt} />
-          {status ? (
-            <span className={cn(query.status === "failed" && "text-status-failed")}>{status}</span>
-          ) : null}
-          <span className="flex-1" />
-          {!running ? (
-            <ThreadActions
-              followed={followed}
-              bookmarked={bookmarked}
-              onToggleFollow={onToggleFollow}
-              onToggleBookmark={onToggleBookmark}
-              busy={actionsBusy}
-            />
-          ) : null}
-        </div>
-      </div>
+      {body}
     </ContextMenu>
   );
 }

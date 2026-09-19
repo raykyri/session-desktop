@@ -8,6 +8,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Bookmark, Highlighter, Home } from "lucide-react";
 
+import { useSignedIn } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { EncyclopediaSection } from "../encyclopedia/EncyclopediaSection.js";
 
@@ -27,15 +28,17 @@ const NAV_ITEMS = [
 ] as const;
 
 export function SidebarBody() {
+  const signedIn = useSignedIn();
   const { workspaceId, setScope } = useWorkspaceScope();
   const activeSlug = useRouterState({
     select: (state) => routeParam(state.matches.at(-1)?.params, "slug"),
   });
+  const navItems = signedIn ? NAV_ITEMS : NAV_ITEMS.filter((item) => item.to === "/");
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto pb-2">
       <nav aria-label="Sections" className="flex flex-col gap-px px-2">
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <Link
             key={item.to}
             to={item.to}

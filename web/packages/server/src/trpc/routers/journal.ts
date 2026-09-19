@@ -16,7 +16,8 @@ import { z } from "zod";
 
 import { TweetFetchError, fetchTweetJson, lookupTweet } from "../../journal/tweets.js";
 import { RATE_LIMITS } from "../../middleware/rateLimit.js";
-import { protectedProcedure, router } from "../base.js";
+import { protectedProcedure, publicProcedure, router } from "../base.js";
+import { catalogUserId } from "../catalog.js";
 import { publish } from "../emit.js";
 import { repo, required } from "../errors.js";
 
@@ -208,7 +209,7 @@ async function hydrate(ctx: JournalContext, entry: JournalTweetEntry): Promise<J
 }
 
 export const feedRouter = router({
-  recentActivity: protectedProcedure
+  recentActivity: publicProcedure
     .input(
       z
         .object({
@@ -219,18 +220,20 @@ export const feedRouter = router({
         })
         .optional(),
     )
-    .query(({ ctx, input }) =>
-      repo(() =>
-        feeds.recentActivity(ctx.db, ctx.user.id, {
+    .query(({ ctx, input }) => {
+      const userId = catalogUserId(ctx);
+      if (userId === null) return { items: [], nextCursor: null };
+      return repo(() =>
+        feeds.recentActivity(ctx.db, userId, {
           workspaceId: input?.workspaceId ?? null,
           ...(input?.limit === undefined ? {} : { limit: input.limit }),
           before: input?.before ?? null,
           ...(input?.bookmarkedOnly === undefined ? {} : { bookmarkedOnly: input.bookmarkedOnly }),
         }),
-      ),
-    ),
+      );
+    }),
 
-  recentQueries: protectedProcedure
+  recentQueries: publicProcedure
     .input(
       z
         .object({
@@ -240,13 +243,15 @@ export const feedRouter = router({
         })
         .optional(),
     )
-    .query(({ ctx, input }) =>
-      repo(() =>
-        feeds.recentQueries(ctx.db, ctx.user.id, {
+    .query(({ ctx, input }) => {
+      const userId = catalogUserId(ctx);
+      if (userId === null) return { items: [], nextCursor: null };
+      return repo(() =>
+        feeds.recentQueries(ctx.db, userId, {
           workspaceId: input?.workspaceId ?? null,
           ...(input?.limit === undefined ? {} : { limit: input.limit }),
           before: input?.before ?? null,
         }),
-      ),
-    ),
+      );
+    }),
 });

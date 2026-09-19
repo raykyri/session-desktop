@@ -2,10 +2,11 @@
 
 import { folders, workspaces } from "@session/db";
 import type { Workspace } from "@session/shared";
-import { researchFolderStateSchema } from "@session/shared";
+import { emptyResearchFolderState, researchFolderStateSchema } from "@session/shared";
 import { z } from "zod";
 
-import { protectedProcedure, router } from "../base.js";
+import { protectedProcedure, publicProcedure, router } from "../base.js";
+import { catalogUserId } from "../catalog.js";
 import { publish } from "../emit.js";
 import { repo, required } from "../errors.js";
 
@@ -13,18 +14,22 @@ export interface WorkspaceWithCount extends Workspace {
   treeCount: number;
 }
 
-function listWithCounts(ctx: {
-  db: Parameters<typeof workspaces.list>[0];
-  user: { id: string };
-}): WorkspaceWithCount[] {
-  const counts = workspaces.treeCounts(ctx.db, ctx.user.id);
+function listWithCounts(
+  db: Parameters<typeof workspaces.list>[0],
+  userId: string,
+): WorkspaceWithCount[] {
+  const counts = workspaces.treeCounts(db, userId);
   return workspaces
-    .list(ctx.db, ctx.user.id)
+    .list(db, userId)
     .map((workspace) => ({ ...workspace, treeCount: counts.get(workspace.id) ?? 0 }));
 }
 
 export const workspacesRouter = router({
-  list: protectedProcedure.query(({ ctx }) => repo(() => listWithCounts(ctx))),
+  list: publicProcedure.query(({ ctx }) => {
+    const userId = catalogUserId(ctx);
+    if (userId === null) return [];
+    return repo(() => listWithCounts(ctx.db, userId));
+  }),
 
   ensureDefault: protectedProcedure.mutation(({ ctx }) => {
     const before = repo(() => workspaces.list(ctx.db, ctx.user.id)).length;
@@ -88,11 +93,11 @@ export const workspacesRouter = router({
 });
 
 export const foldersRouter = router({
-  get: protectedProcedure
-    .input(z.object({ workspaceId: z.string() }))
-    .query(({ ctx, input }) =>
-      repo(() => folders.getState(ctx.db, ctx.user.id, input.workspaceId)),
-    ),
+  get: publicProcedure.input(z.object({ workspaceId: z.string() })).query(({ ctx, input }) => {
+    const userId = catalogUserId(ctx);
+    if (userId === null) return emptyResearchFolderState();
+    return repo(() => folders.getState(ctx.db, userId, input.workspaceId));
+  }),
 
   set: protectedProcedure
     .input(z.object({ workspaceId: z.string(), state: researchFolderStateSchema }))

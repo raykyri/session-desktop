@@ -29,7 +29,13 @@ import {
   reorderResearchWorkspaces,
   setDefaultResearchWorkspace,
 } from "../../api/api.js";
-import { queryKeys, useSettings, useTreeSummaries, useWorkspaces } from "../../api/queries.js";
+import {
+  queryKeys,
+  useSettings,
+  useSignedIn,
+  useTreeSummaries,
+  useWorkspaces,
+} from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { pushErrorToast, pushToast } from "../../lib/toast.js";
 import { Menu, MenuItem, MenuSeparator } from "../../ui/Menu.js";
@@ -76,6 +82,7 @@ export function WorkspaceSwitcher({
     return () => window.removeEventListener("session:shortcut", onShortcut);
   }, []);
 
+  const signedIn = useSignedIn();
   const list: WorkspaceRow[] = workspaces.data ?? [];
   const current = list.find((workspace) => workspace.id === workspaceId) ?? null;
   const isDefault = settings.data?.defaultWorkspaceId === workspaceId;
@@ -132,13 +139,15 @@ export function WorkspaceSwitcher({
             </span>
           </MenuItem>
         ))}
-        {list.length > 0 ? <MenuSeparator /> : null}
-        <IconMenuItem
-          icon={<Plus size={13} aria-hidden="true" />}
-          label="New workspace…"
-          onClick={() => setCreating(true)}
-        />
-        {current ? (
+        {signedIn && list.length > 0 ? <MenuSeparator /> : null}
+        {signedIn ? (
+          <IconMenuItem
+            icon={<Plus size={13} aria-hidden="true" />}
+            label="New workspace…"
+            onClick={() => setCreating(true)}
+          />
+        ) : null}
+        {signedIn && current ? (
           <>
             <MenuSeparator />
             <IconMenuItem

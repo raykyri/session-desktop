@@ -1,8 +1,8 @@
-// The guard (07 §2): no session means `/login`, whatever was asked for, and a
-// session means the shell. The redirect is what keeps a signed-out tab from
-// firing every boot query at a server that will refuse them.
+// The shell is public (07 §2). Guests read the catalog; `/bookmarks`,
+// `/highlights`, and `/admin` still redirect to `/login`. Account-scoped boot
+// queries (`settings.get`, live events) stay behind a session.
 
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import test from "ava";
 
 import { renderApp, resetDocumentRoot, testUser } from "./helpers.js";
@@ -14,11 +14,12 @@ test.afterEach.always(() => {
   resetDocumentRoot();
 });
 
-test.serial("a signed-out visit to a shell route lands on sign-in", async (t) => {
+test.serial("a signed-out visit to a shell route renders the public shell", async (t) => {
   await renderApp("/r/t1", { user: null });
 
-  t.truthy(screen.getByRole("button", { name: /Continue with GitHub/ }));
-  t.is(screen.queryByRole("navigation", { name: "Sections" }), null, "no shell was rendered");
+  t.truthy(screen.getByRole("navigation", { name: "Sections" }));
+  t.truthy(screen.getByRole("button", { name: "Sign in" }));
+  t.is(screen.queryByRole("button", { name: /Continue with GitHub/ }), null);
 });
 
 test.serial("the sign-in page displays server authentication error messages", async (t) => {
@@ -41,6 +42,23 @@ test.serial("a signed-in visit renders the shell and the account row", async (t)
 
   t.truthy(screen.getByRole("navigation", { name: "Sections" }));
   t.truthy(screen.getByRole("button", { name: "raymond" }));
+});
+
+test.serial("a guest account menu offers GitHub sign-in", async (t) => {
+  await renderApp("/", { user: null });
+  fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+  t.truthy(await screen.findByRole("menuitem", { name: /Log in with GitHub/ }));
+});
+
+test.serial("a guest visit does not fetch account-scoped boot queries", async (t) => {
+  const { trpc } = await renderApp("/", { user: null });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const paths = trpc.calls.map((call) => call.path);
+  t.false(paths.includes("settings.get"));
+  t.false(paths.includes("research.listActivity"));
+  t.false(paths.includes("workspaces.ensureDefault"));
+  t.true(paths.includes("system.runtimeConfig"));
+  t.true(paths.includes("workspaces.list"));
 });
 
 test.serial("the boot loader warms the seven queries the shell renders from", async (t) => {
@@ -96,15 +114,11 @@ test.serial("a redirect that leaves this origin is not followed", async (t) => {
   t.truthy(screen.getByRole("heading", { name: "Home" }), "at the root, not at the target");
 });
 
-test.serial(
-  "development kitchen sink routes do not bypass authentication in production builds",
-  async (t) => {
-    // `import.meta.env` is absent outside Vite, so this suite runs the route
-    // tree exactly as a production bundle carries it: no `/dev/*` route, and the
-    // guard's exemption off with it (07 §3).
-    await renderApp("/dev/ui", { user: null });
+test.serial("development kitchen sink routes are absent from production builds", async (t) => {
+  // `import.meta.env` is absent outside Vite, so this suite runs the route
+  // tree exactly as a production bundle carries it: no `/dev/*` route.
+  await renderApp("/dev/ui", { user: null });
 
-    t.is(screen.queryByRole("navigation", { name: "Sections" }), null, "no shell was rendered");
-    t.is(screen.queryByRole("heading", { name: /Cool · Dark/ }), null, "and no kitchen sink");
-  },
-);
+  t.truthy(screen.getByRole("navigation", { name: "Sections" }), "the public shell still renders");
+  t.is(screen.queryByRole("heading", { name: /Cool · Dark/ }), null, "and no kitchen sink");
+});

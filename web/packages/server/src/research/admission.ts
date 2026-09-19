@@ -97,7 +97,10 @@ export function enqueueRun(ctx: LaunchContext, nodeId: string, modelId: string):
 }
 
 /** 1-based place in the queue while the node waits, absent once it is claimed. */
-export function queuePositionOf(ctx: LaunchContext, nodeId: string): number | undefined {
+export function queuePositionOf(
+  ctx: { db: AppContext["db"]; user: { id: string } },
+  nodeId: string,
+): number | undefined {
   const position = queue.position(ctx.db, ctx.user.id, nodeId);
   return position > 0 ? position : undefined;
 }
@@ -124,7 +127,10 @@ function toCard(node: {
  * the live window from `run_turns`, then an explanation for a finished node
  * that produced nothing readable.
  */
-export function nodeContent(ctx: LaunchContext, nodeId: string): ResearchNodeContent {
+export function nodeContent(
+  ctx: { db: AppContext["db"]; user: { id: string } },
+  nodeId: string,
+): ResearchNodeContent {
   const node = required(
     repo(() => nodes.get(ctx.db, ctx.user.id, nodeId)),
     `research node ${nodeId} was not found`,

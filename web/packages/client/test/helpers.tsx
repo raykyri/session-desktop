@@ -55,7 +55,7 @@ export function defaultResponses(user: User | null): Record<string, unknown> {
 }
 
 export interface RenderAppOptions {
-  /** `null` renders a signed-out app, which the guard sends to `/login`. */
+  /** `null` renders a signed-out guest in the public shell. */
   user?: User | null;
   queryClient?: QueryClient;
   responses?: Record<string, unknown>;

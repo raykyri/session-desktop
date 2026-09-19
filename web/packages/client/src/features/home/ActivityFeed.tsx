@@ -36,6 +36,7 @@ import {
 } from "../../api/api.js";
 import {
   useActivityFeed,
+  useSignedIn,
   useArchiveResearchTree,
   useRemoveResearchTree,
   useRenameResearchTree,
@@ -152,6 +153,7 @@ export function ActivityFeed({
   const setFollowed = useSetTreeFollowed();
   const setBookmarked = useSetTreeBookmarked();
 
+  const signedIn = useSignedIn();
   const view = `${bookmarkedOnly ? "bookmarks" : "home"}:${workspaceId}`;
   const anchor = useFeedScrollAnchor(view);
 
@@ -505,7 +507,11 @@ export function ActivityFeed({
                           <ResearchQueryCard
                             query={source.query}
                             tree={treeById.get(source.query.treeId)}
-                            menuItems={treeMenu(treeById.get(source.query.treeId), source.query)}
+                            menuItems={
+                              signedIn
+                                ? treeMenu(treeById.get(source.query.treeId), source.query)
+                                : null
+                            }
                             onOpen={() => openQuery(source.query)}
                             onOpenChild={openQuery}
                             onToggleFollow={() =>

@@ -1015,9 +1015,9 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   const detailLoaded = detail !== undefined;
   const viewedMutate = markViewed.mutate;
   useEffect(() => {
-    if (!detailLoaded) return;
+    if (!detailLoaded || !me) return;
     viewedMutate(treeId);
-  }, [detailLoaded, completedCount, treeId, viewedMutate]);
+  }, [detailLoaded, completedCount, me, treeId, viewedMutate]);
 
   const anyActive = chainNodes.some((node) => isActiveResearchStatus(node.status));
   useEffect(() => {
@@ -1083,29 +1083,31 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       return (
         <>
           {spec.copyThread ? <Item onClick={copyThread}>Copy thread as Markdown</Item> : null}
-          {spec.retry ? (
+          {me && spec.retry ? (
             <Item disabled={spec.retryDisabled} onClick={() => requestRetry(spec.nodeId)}>
               Retry run
             </Item>
           ) : null}
-          {spec.regenerate ? (
+          {me && spec.regenerate ? (
             <Item onClick={() => setRecapNodeId(spec.nodeId)}>Regenerate summary…</Item>
           ) : null}
-          {spec.editDocument ? (
+          {me && spec.editDocument ? (
             <Item disabled={spec.editDisabled} onClick={() => openEditSession(spec.nodeId)}>
               Edit document
             </Item>
           ) : null}
-          {spec.copyThread || spec.retry || spec.regenerate || spec.editDocument ? (
+          {me && (spec.copyThread || spec.retry || spec.regenerate || spec.editDocument) ? (
             <Separator />
           ) : null}
-          <Item tone="danger" onClick={() => setDeletingNodeId(spec.nodeId)}>
-            {spec.isRoot ? "Delete thread" : "Delete"}
-          </Item>
+          {me ? (
+            <Item tone="danger" onClick={() => setDeletingNodeId(spec.nodeId)}>
+              {spec.isRoot ? "Delete thread" : "Delete"}
+            </Item>
+          ) : null}
         </>
       );
     },
-    [copyThread, requestRetry, openEditSession],
+    [copyThread, me, requestRetry, openEditSession],
   );
 
   // One node's rows, as the string the memo below is keyed on. Encoding is the
@@ -1120,15 +1122,15 @@ function ResearchDocument({ treeId }: { treeId: string }) {
       const isRoot = nodeId === detail?.tree.rootNodeId;
       return encodeNodeMenuRow(nodeId, [
         chainNodeIds.includes(nodeId) && chainNodes.length > 1,
-        !archived && canRetryResearchNode(node),
+        Boolean(me) && !archived && canRetryResearchNode(node),
         retryingNodeId !== null,
-        !archived && hasRevision,
-        isRoot && (node.kind ?? "run") === "document",
+        Boolean(me) && !archived && hasRevision,
+        Boolean(me) && isRoot && (node.kind ?? "run") === "document",
         archived || !hasRevision || segment?.editableDocumentMarkdown == null,
         isRoot,
       ]);
     },
-    [archived, chainNodeIds, chainNodes.length, detail, nodesById, retryingNodeId, segments],
+    [archived, chainNodeIds, chainNodes.length, detail, me, nodesById, retryingNodeId, segments],
   );
 
   const answerMenuSignature = chainNodeIds
@@ -1176,35 +1178,36 @@ function ResearchDocument({ treeId }: { treeId: string }) {
     return spec ? renderNodeMenu(spec, true) : null;
   };
 
-  const composer = (docked: boolean) => (
-    <FollowupComposer
-      docked={docked}
-      quote={ask?.anchor.exact}
-      dockedTop={docked ? annotations.askComposerTop : null}
-      onDismissAsk={() => setAsk(null)}
-      value={followup}
-      onChange={setFollowup}
-      mode={mode}
-      onModeChange={setMode}
-      model={composerModel}
-      onModelChange={setSelectedModel}
-      models={usableModels}
-      placeholder={placeholder}
-      submitLabel={submitLabel}
-      disabled={composerDisabled}
-      canSubmit={canSubmit}
-      submitting={submitting}
-      hint={composerHint}
-      retry={
-        !docked && canRetryTail && tailNode
-          ? { busy: retryingNodeId === tailNode.id, onRetry: () => requestRetry(tailNode.id) }
-          : null
-      }
-      textareaRef={textareaRef}
-      composerRef={composerRef}
-      onSubmit={submit}
-    />
-  );
+  const composer = (docked: boolean) =>
+    me ? (
+      <FollowupComposer
+        docked={docked}
+        quote={ask?.anchor.exact}
+        dockedTop={docked ? annotations.askComposerTop : null}
+        onDismissAsk={() => setAsk(null)}
+        value={followup}
+        onChange={setFollowup}
+        mode={mode}
+        onModeChange={setMode}
+        model={composerModel}
+        onModelChange={setSelectedModel}
+        models={usableModels}
+        placeholder={placeholder}
+        submitLabel={submitLabel}
+        disabled={composerDisabled}
+        canSubmit={canSubmit}
+        submitting={submitting}
+        hint={composerHint}
+        retry={
+          !docked && canRetryTail && tailNode
+            ? { busy: retryingNodeId === tailNode.id, onRetry: () => requestRetry(tailNode.id) }
+            : null
+        }
+        textareaRef={textareaRef}
+        composerRef={composerRef}
+        onSubmit={submit}
+      />
+    ) : null;
 
   return (
     <div className="flex h-full min-w-0 flex-col">
@@ -1267,78 +1270,89 @@ function ResearchDocument({ treeId }: { treeId: string }) {
           {chainNodes.map((node, index) => {
             const previous = chainNodes[index - 1];
             const linked = annotations.linkedAnchorId;
+            const menuSpec = decodeNodeMenuRow(encodeNodeMenu(node.id) ?? "");
+            const showMenu = Boolean(menuSpec && (me || menuSpec.copyThread));
+            const segment = (
+              <div
+                onContextMenuCapture={
+                  showMenu
+                    ? (event) => {
+                        const card =
+                          event.target instanceof Element
+                            ? event.target.closest<HTMLElement>("[data-research-card-node-id]")
+                            : null;
+                        setMenuNodeId(card?.dataset["researchCardNodeId"] ?? node.id);
+                      }
+                    : undefined
+                }
+              >
+                <ThreadSegment
+                  node={node}
+                  index={index}
+                  treeId={treeId}
+                  workspaceId={detail.tree.workspaceId}
+                  isSelected={node.id === selectedNodeId}
+                  replyToAnswer={
+                    previous
+                      ? (segments[previous.id]?.rawAnswer.trim() ??
+                        previous.responsePreview?.trim() ??
+                        null)
+                      : null
+                  }
+                  followed={Boolean(detail.tree.followed)}
+                  bookmarked={Boolean(detail.tree.bookmarked)}
+                  showAllTurns={Boolean(expandedByNode[node.id])}
+                  showFullTrace={Boolean(fullTraceNodes[node.id])}
+                  durationText={durationLabel(node, now)}
+                  hiddenHighlightCount={annotations.hiddenHighlightsByNode[node.id] ?? 0}
+                  recapPending={recapPendingNodeIds.has(node.id)}
+                  pointerOverHighlight={annotations.pointerHighlightNodeId === node.id}
+                  linkedAnchorId={
+                    linked &&
+                    (childrenBySegment.get(node.id) ?? []).some((child) => child.id === linked)
+                      ? linked
+                      : null
+                  }
+                  connectors={annotations.connectorsBySegment.get(node.id) ?? NO_CONNECTORS}
+                  segmentChildren={childrenBySegment.get(node.id) ?? NO_CHILDREN}
+                  unreadIds={unreadIdsBySegment.get(node.id) ?? NO_UNREAD}
+                  anchoredCardTops={annotations.anchoredCardTops}
+                  resolvedCardTops={annotations.resolvedCardTops}
+                  cancelling={cancelling}
+                  canCancel={Boolean(me)}
+                  canRetryNode={Boolean(me) && !archived && canRetryResearchNode(node)}
+                  retryingNode={retryingNodeId === node.id}
+                  askComposer={ask?.nodeId === node.id ? composer(true) : null}
+                  answerMenuItems={me ? (answerMenuByNode.get(node.id) ?? null) : null}
+                  registerElement={registerElement}
+                  publish={publish}
+                  onToggleFollow={handleToggleFollow}
+                  onToggleBookmark={handleToggleBookmark}
+                  actionsBusy={setFollowed.isPending || setBookmarked.isPending}
+                  onSelectNode={selectNode}
+                  onExpandTurns={handleExpandTurns}
+                  onShowFullTrace={handleShowFullTrace}
+                  onCopyAnswer={copyAnswer}
+                  onCancelNode={handleCancel}
+                  onRetryNode={requestRetry}
+                  onCardHover={handleCardHover}
+                  onRootMouseDown={drag.onRootMouseDown}
+                  onRootMouseUp={drag.onRootMouseUp}
+                  onRootKeyUp={drag.onRootKeyUp}
+                  onRootClick={drag.onRootClick}
+                  onRootMouseMove={annotations.onPointerMove}
+                  onRootMouseLeave={annotations.onPointerLeave}
+                />
+              </div>
+            );
+            if (!showMenu) return <div key={node.id}>{segment}</div>;
             return (
               <ContextMenu
                 key={node.id}
                 label="Research actions"
                 items={contextMenuRows(menuNodeId ?? node.id)}
               >
-                <div
-                  onContextMenuCapture={(event) => {
-                    const card =
-                      event.target instanceof Element
-                        ? event.target.closest<HTMLElement>("[data-research-card-node-id]")
-                        : null;
-                    setMenuNodeId(card?.dataset["researchCardNodeId"] ?? node.id);
-                  }}
-                >
-                  <ThreadSegment
-                    node={node}
-                    index={index}
-                    treeId={treeId}
-                    workspaceId={detail.tree.workspaceId}
-                    isSelected={node.id === selectedNodeId}
-                    replyToAnswer={
-                      previous
-                        ? (segments[previous.id]?.rawAnswer.trim() ??
-                          previous.responsePreview?.trim() ??
-                          null)
-                        : null
-                    }
-                    followed={Boolean(detail.tree.followed)}
-                    bookmarked={Boolean(detail.tree.bookmarked)}
-                    showAllTurns={Boolean(expandedByNode[node.id])}
-                    showFullTrace={Boolean(fullTraceNodes[node.id])}
-                    durationText={durationLabel(node, now)}
-                    hiddenHighlightCount={annotations.hiddenHighlightsByNode[node.id] ?? 0}
-                    recapPending={recapPendingNodeIds.has(node.id)}
-                    pointerOverHighlight={annotations.pointerHighlightNodeId === node.id}
-                    linkedAnchorId={
-                      linked &&
-                      (childrenBySegment.get(node.id) ?? []).some((child) => child.id === linked)
-                        ? linked
-                        : null
-                    }
-                    connectors={annotations.connectorsBySegment.get(node.id) ?? NO_CONNECTORS}
-                    segmentChildren={childrenBySegment.get(node.id) ?? NO_CHILDREN}
-                    unreadIds={unreadIdsBySegment.get(node.id) ?? NO_UNREAD}
-                    anchoredCardTops={annotations.anchoredCardTops}
-                    resolvedCardTops={annotations.resolvedCardTops}
-                    cancelling={cancelling}
-                    canRetryNode={!archived && canRetryResearchNode(node)}
-                    retryingNode={retryingNodeId === node.id}
-                    askComposer={ask?.nodeId === node.id ? composer(true) : null}
-                    answerMenuItems={answerMenuByNode.get(node.id) ?? null}
-                    registerElement={registerElement}
-                    publish={publish}
-                    onToggleFollow={handleToggleFollow}
-                    onToggleBookmark={handleToggleBookmark}
-                    actionsBusy={setFollowed.isPending || setBookmarked.isPending}
-                    onSelectNode={selectNode}
-                    onExpandTurns={handleExpandTurns}
-                    onShowFullTrace={handleShowFullTrace}
-                    onCopyAnswer={copyAnswer}
-                    onCancelNode={handleCancel}
-                    onRetryNode={requestRetry}
-                    onCardHover={handleCardHover}
-                    onRootMouseDown={drag.onRootMouseDown}
-                    onRootMouseUp={drag.onRootMouseUp}
-                    onRootKeyUp={drag.onRootKeyUp}
-                    onRootClick={drag.onRootClick}
-                    onRootMouseMove={annotations.onPointerMove}
-                    onRootMouseLeave={annotations.onPointerLeave}
-                  />
-                </div>
+                {segment}
               </ContextMenu>
             );
           })}
@@ -1351,7 +1365,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
         </div>
       </article>
 
-      {action ? (
+      {me && action ? (
         <SelectionPopover
           left={action.left}
           top={action.top}

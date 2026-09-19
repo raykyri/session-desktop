@@ -1,7 +1,8 @@
 // What starts once a session exists (07 §2, §4.2, §8).
 //
 // Manages account- and session-scoped background services: server events subscription, draft persistence, and settings synchronization. `AppShell` mounts this
-// once, behind the auth guard, so none of it runs on `/login`.
+// once; it no-ops until a session exists, so none of it runs for guests or on
+// `/login`.
 
 import { userSettingsSchema } from "@session/shared";
 import type { UserSettings } from "@session/shared";
@@ -11,7 +12,7 @@ import { useEffect, useRef } from "react";
 import { ensureDefaultResearchWorkspace, setDraft, updateSettings } from "../api/api.js";
 import { queryKeys } from "../api/cache.js";
 import { connectEventBridge } from "../api/events.js";
-import { useActiveNodes, useSettings, useWorkspaces } from "../api/queries.js";
+import { useActiveNodes, useMe, useSettings, useWorkspaces } from "../api/queries.js";
 import { setDraftSyncTarget, type ComposerDraft, type DraftKey } from "../stores/drafts.js";
 import { normalizeSettings, useSettingsStore } from "../stores/settings.js";
 
@@ -189,6 +190,12 @@ function useActiveNodeCache(): void {
 }
 
 export function SessionBoot() {
+  const me = useMe();
+  if (!me.data) return null;
+  return <SignedInSessionBoot />;
+}
+
+function SignedInSessionBoot() {
   useEventBridge();
   useActiveNodeCache();
   useDraftSync();

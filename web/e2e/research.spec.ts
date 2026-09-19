@@ -153,9 +153,16 @@ test("the recap dialog generates a candidate and applies it", async ({ page }) =
   );
 });
 
-test("requires authentication before accessing application routes", async ({ page }) => {
+test("the home feed is public and personal routes still require a session", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+
+  await page.goto("/bookmarks");
   await expect(page).toHaveURL(/\/login/);
+  await page.goto("/highlights");
+  await expect(page).toHaveURL(/\/login/);
+
   await signIn(page, { login: "e2e-guard" });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Home", level: 1 })).toBeVisible();

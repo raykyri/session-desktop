@@ -26,7 +26,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
 import { mintArtifactToken } from "../../api/api.js";
-import { useRuntimeConfig } from "../../api/queries.js";
+import { useRuntimeConfig, useSignedIn } from "../../api/queries.js";
 import { useArtifactPanelStore } from "../../stores/artifactPanel.js";
 import { OVERLAY_PRIORITY } from "../../stores/overlays.js";
 import { ICON_BUTTON } from "../../ui/surfaces.js";
@@ -82,6 +82,7 @@ export function ArtifactPanel() {
   const close = useArtifactPanelStore((state) => state.close);
   const reload = useArtifactPanelStore((state) => state.reload);
   const toggleFullWidth = useArtifactPanelStore((state) => state.toggleFullWidth);
+  const signedIn = useSignedIn();
 
   const artifactOrigin = useRuntimeConfig().data?.features.artifactOrigin ?? null;
   const frameRef = useRef<HTMLIFrameElement | null>(null);
@@ -91,31 +92,39 @@ export function ArtifactPanel() {
 
   useOverlay(current !== null, OVERLAY_PRIORITY.artifactPanel, close);
 
+  useEffect(() => {
+    if (!signedIn) close();
+  }, [signedIn, close]);
+
   // Shift-Cmd-E, re-dispatched by the shell (07 §5).
   useEffect(() => {
     const onShortcut = (event: Event) => {
       const command = (event as CustomEvent<{ type?: string }>).detail;
-      if (command?.type !== "toggleArtifactPanel") return;
+      if (command?.type !== "toggleArtifactPanel" || !signedIn) return;
       useArtifactPanelStore.getState().toggle();
     };
     window.addEventListener("session:shortcut", onShortcut);
     return () => window.removeEventListener("session:shortcut", onShortcut);
-  }, []);
+  }, [signedIn]);
 
-  const remint = useCallback((documentId: string) => {
-    setReminting(true);
-    mintArtifactToken(documentId)
-      .then(({ url, expiresAt }) => {
-        const state = useArtifactPanelStore.getState();
-        // The panel may have moved on to another document while the mint was
-        // in flight; a stale answer must not replace it.
-        if (state.current?.documentId !== documentId) return;
-        state.remint(url, expiresAt);
-        setError(null);
-      })
-      .catch(() => setError("This preview could not be reopened."))
-      .finally(() => setReminting(false));
-  }, []);
+  const remint = useCallback(
+    (documentId: string) => {
+      if (!signedIn) return;
+      setReminting(true);
+      mintArtifactToken(documentId)
+        .then(({ url, expiresAt }) => {
+          const state = useArtifactPanelStore.getState();
+          // The panel may have moved on to another document while the mint was
+          // in flight; a stale answer must not replace it.
+          if (state.current?.documentId !== documentId) return;
+          state.remint(url, expiresAt);
+          setError(null);
+        })
+        .catch(() => setError("This preview could not be reopened."))
+        .finally(() => setReminting(false));
+    },
+    [signedIn],
+  );
 
   // The bridge. Registered whenever the origin is known, not only while the
   // panel is open, so a message racing a close is still dropped by origin

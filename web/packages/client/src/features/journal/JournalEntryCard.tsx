@@ -9,6 +9,7 @@ import type { JournalEntry } from "@session/shared";
 import { Copy, ExternalLink, LoaderCircle, MoreHorizontal, RotateCw, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { useSignedIn } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { IconButton } from "../../ui/Button.js";
 import { ContextMenu } from "../../ui/ContextMenu.js";
@@ -83,6 +84,7 @@ export function JournalEntryCard({
   entry: JournalEntry;
   onAction: (action: JournalMenuAction) => void;
 }) {
+  const signedIn = useSignedIn();
   const isTweetCard = entry.kind === "tweet" && entry.hydration === "ok" && entry.tweet;
   let body: ReactNode;
   if (entry.kind === "link") {
@@ -96,14 +98,16 @@ export function JournalEntryCard({
         <p className="text-status-failed m-0 text-sm">
           Couldn’t load this post{entry.error ? ` — ${entry.error}` : ""}.
         </p>
-        <button
-          type="button"
-          className="text-fg-interactive flex items-center gap-1 border-0 bg-transparent p-0 text-sm underline-offset-2 hover:underline"
-          onClick={() => onAction("retry")}
-        >
-          <RotateCw size={12} aria-hidden="true" />
-          <span>Retry</span>
-        </button>
+        {signedIn ? (
+          <button
+            type="button"
+            className="text-fg-interactive flex items-center gap-1 border-0 bg-transparent p-0 text-sm underline-offset-2 hover:underline"
+            onClick={() => onAction("retry")}
+          >
+            <RotateCw size={12} aria-hidden="true" />
+            <span>Retry</span>
+          </button>
+        ) : null}
       </div>
     );
   } else {
@@ -118,21 +122,18 @@ export function JournalEntryCard({
     );
   }
 
-  return (
-    <ContextMenu
-      label="Saved entry actions"
-      items={<JournalEntryMenuItems entry={entry} onAction={onAction} />}
+  const article = (
+    <article
+      className={cn(
+        "relative",
+        isTweetCard
+          ? "border-border-divider rounded-lg border"
+          : "bg-surface-card border-border-divider rounded-lg border px-3 py-2.5",
+      )}
+      title={new Date(entry.createdAt).toLocaleString()}
     >
-      <article
-        className={cn(
-          "relative",
-          isTweetCard
-            ? "border-border-divider rounded-lg border"
-            : "bg-surface-card border-border-divider rounded-lg border px-3 py-2.5",
-        )}
-        title={new Date(entry.createdAt).toLocaleString()}
-      >
-        {body}
+      {body}
+      {signedIn ? (
         <span className="absolute top-2 right-2">
           <Menu
             side="bottom"
@@ -147,7 +148,17 @@ export function JournalEntryCard({
             <JournalEntryMenuItems entry={entry} onAction={onAction} />
           </Menu>
         </span>
-      </article>
+      ) : null}
+    </article>
+  );
+
+  if (!signedIn) return article;
+  return (
+    <ContextMenu
+      label="Saved entry actions"
+      items={<JournalEntryMenuItems entry={entry} onAction={onAction} />}
+    >
+      {article}
     </ContextMenu>
   );
 }

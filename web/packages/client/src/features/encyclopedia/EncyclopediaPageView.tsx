@@ -13,7 +13,7 @@ import { CircleAlert, LoaderCircle, RotateCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import { deleteEncyclopediaPage, regenerateEncyclopediaPage } from "../../api/api.js";
-import { useEncyclopediaPage } from "../../api/queries.js";
+import { useEncyclopediaPage, useSignedIn } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { pushErrorToast } from "../../lib/toast.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
@@ -43,6 +43,7 @@ export function sourceLabel(source: EncyclopediaSource): string {
 
 export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: string; slug: string }) {
   const navigate = useNavigate();
+  const signedIn = useSignedIn();
   const query = useEncyclopediaPage(workspaceId, slug);
   const page = query.data ?? null;
   const [deleting, setDeleting] = useState(false);
@@ -102,23 +103,25 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
                     )}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <IconButton
-                    label="Rewrite page"
-                    title="Rewrite page"
-                    disabled={generating || busy}
-                    onClick={() => setConfirmingRewrite(true)}
-                  >
-                    <RotateCw size={15} aria-hidden="true" />
-                  </IconButton>
-                  <IconButton
-                    label="Delete page"
-                    title="Delete page"
-                    onClick={() => setDeleting(true)}
-                  >
-                    <Trash2 size={15} aria-hidden="true" />
-                  </IconButton>
-                </div>
+                {signedIn ? (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <IconButton
+                      label="Rewrite page"
+                      title="Rewrite page"
+                      disabled={generating || busy}
+                      onClick={() => setConfirmingRewrite(true)}
+                    >
+                      <RotateCw size={15} aria-hidden="true" />
+                    </IconButton>
+                    <IconButton
+                      label="Delete page"
+                      title="Delete page"
+                      onClick={() => setDeleting(true)}
+                    >
+                      <Trash2 size={15} aria-hidden="true" />
+                    </IconButton>
+                  </div>
+                ) : null}
               </header>
 
               {generating ? (
@@ -145,9 +148,11 @@ export function EncyclopediaPageView({ workspaceId, slug }: { workspaceId: strin
                   <p className="text-status-failed m-0 text-base">
                     {page.error ?? "Couldn’t create this page."}
                   </p>
-                  <ControlButton size="sm" onClick={regenerate} disabled={busy}>
-                    Retry
-                  </ControlButton>
+                  {signedIn ? (
+                    <ControlButton size="sm" onClick={regenerate} disabled={busy}>
+                      Retry
+                    </ControlButton>
+                  ) : null}
                 </div>
               ) : null}
 
