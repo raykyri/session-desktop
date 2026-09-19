@@ -157,5 +157,12 @@ test.serial("the sidebar lists pages alphabetically once one exists", async (t) 
     .map((item) => item.textContent?.trim())
     .filter((title): title is string => title === "Amnesia" || title === "Zeitgeist");
   t.deepEqual(titles, ["Amnesia", "Zeitgeist"]);
+  const research = screen.getByRole("region", { name: "Research" });
+  const encyclopedia = screen.getByRole("region", { name: "Encyclopedia" });
+  t.truthy(
+    research.compareDocumentPosition(encyclopedia) & Node.DOCUMENT_POSITION_FOLLOWING,
+    "the encyclopedia follows Research",
+  );
+  t.is(encyclopedia.querySelector(":scope > div")?.textContent, "Encyclopedia");
   app.unmount();
 });

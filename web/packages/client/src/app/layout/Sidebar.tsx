@@ -1,6 +1,6 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { useNavigate } from "@tanstack/react-router";
-import { ChevronUp, PanelLeftClose } from "lucide-react";
+import { PanelLeftClose, User } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useLogout, useMe } from "../../api/queries.js";
@@ -41,7 +41,7 @@ function AccountMenu() {
         trigger={
           <button type="button" className={cn(SIDEBAR_ROW, "border-0 bg-transparent text-left")}>
             <span className="min-w-0 flex-1 truncate">{user.login}</span>
-            <ChevronUp size={14} aria-hidden="true" className="shrink-0" />
+            <User size={14} aria-hidden="true" className="shrink-0" />
           </button>
         }
       >
@@ -57,7 +57,6 @@ function AccountMenu() {
         ) : null}
         <MenuItem
           onClick={() => void navigate({ to: "/settings", search: (previous) => previous })}
-          hint={formatChord("mod+,")}
         >
           Settings
         </MenuItem>

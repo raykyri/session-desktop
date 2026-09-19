@@ -814,7 +814,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
             side="bottom"
             align="end"
             trigger={
-              <IconButton label={`Actions for ${tree.title}`} className="shrink-0">
+              <IconButton label={`Actions for ${tree.title}`} className="shrink-0 translate-x-0.5">
                 <MoreHorizontal size={14} aria-hidden="true" />
               </IconButton>
             }
@@ -937,7 +937,10 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
               side="bottom"
               align="end"
               trigger={
-                <IconButton label={`Actions for ${folder.name}`} className="shrink-0">
+                <IconButton
+                  label={`Actions for ${folder.name}`}
+                  className="shrink-0 translate-x-0.5"
+                >
                   <MoreHorizontal size={14} aria-hidden="true" />
                 </IconButton>
               }
@@ -1000,7 +1003,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
                 type="button"
                 aria-label={`Show ${filter} research`}
                 title={`Show ${filter} research`}
-                className={cn(ICON_BUTTON, "h-control-sm px-1 text-xs capitalize")}
+                className={cn(ICON_BUTTON, "h-control-sm translate-x-0.5 px-1 text-xs capitalize")}
               >
                 {filter}
               </button>
@@ -1015,6 +1018,7 @@ export function ResearchSidebarSection({ workspaceId }: { workspaceId: string })
           <IconButton
             label="New research folder"
             title="New folder"
+            className="translate-x-0.5"
             disabled={workspaceId === ""}
             onClick={() => setPendingFolder({ treeIds: [] })}
           >

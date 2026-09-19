@@ -37,10 +37,7 @@ export function EncyclopediaSection({
 
   return (
     <section aria-label="Encyclopedia" className="flex min-w-0 flex-col gap-px px-2 pt-3">
-      <div className={SIDEBAR_SECTION_HEADING}>
-        <span>Encyclopedia</span>
-        <span className="text-fg-disabled text-xs">{sorted.length}</span>
-      </div>
+      <div className={SIDEBAR_SECTION_HEADING}>Encyclopedia</div>
       <ul className="m-0 flex list-none flex-col gap-px p-0">
         {sorted.map((page) => {
           const selected = page.slug === activeSlug;
