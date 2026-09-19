@@ -216,6 +216,49 @@ test.serial("the document stays hidden until every segment has loaded", async (t
   t.is(frame?.closest("article")?.getAttribute("aria-busy"), "false");
 });
 
+test.serial("a question's embedded posts stand in for the permalink it trailed", async (t) => {
+  const url = "https://x.com/session/status/20";
+  const root = node({
+    id: "n1",
+    status: "complete",
+    prompt: `What about this? ${url}`,
+    attachments: [
+      {
+        kind: "tweet",
+        schemaVersion: 1,
+        sourceUrl: url,
+        tweetId: "20",
+        placement: "trailing",
+        provider: "xSyndication",
+        status: "resolved",
+        attemptedAt: 1,
+        fetchedAt: 2,
+        tweet: {
+          id: "20",
+          url,
+          author: { name: "Session", handle: "session" },
+          createdAt: "2022-12-04T00:00:00.000Z",
+          runs: [{ kind: "text", text: "A post about bloom filters" }],
+          partial: false,
+          media: [],
+        },
+      },
+    ],
+  });
+  await mount({
+    nodes: [root],
+    contentByNode: { n1: contentFor(root, [assistantTurn("t1", "An answer.")]) },
+  });
+
+  await waitUntil(t, () => screen.queryByText("An answer.") !== null, "the document renders");
+  const embed = screen.getByRole("link", { name: "Open post by @session" });
+  t.truthy(within(embed).getByText("A post about bloom filters"));
+  t.truthy(screen.getByRole("list", { name: "Attached posts" }));
+  // The card replaces the URL; the stored prompt still carries it.
+  t.truthy(screen.getByText("What about this?"));
+  t.is(screen.queryByText(root.prompt), null);
+});
+
 test.serial("a completed answer renders its prose, word count and sources", async (t) => {
   const root = node({ id: "n1", status: "complete", completedAt: 1_700_000_050_000 });
   await mount({

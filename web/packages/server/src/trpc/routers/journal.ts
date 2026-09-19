@@ -8,14 +8,18 @@ import {
   journalEntrySchema,
   recentActivityCursorSchema,
   recentResearchQueryCursorSchema,
-  syndicationToken,
   tweetIdFromUrl,
 } from "@session/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { emitFeedItemRemoved, emitFeedItemUpsertedForJournal } from "../../events/feed.js";
-import { TweetFetchError, fetchTweetJson, lookupTweet } from "../../journal/tweets.js";
+import {
+  TWEET_UNAVAILABLE_MESSAGE,
+  TweetFetchError,
+  fetchTweetJson,
+  resolveTweet,
+} from "../../journal/tweets.js";
 import { RATE_LIMITS } from "../../middleware/rateLimit.js";
 import { protectedProcedure, publicProcedure, router } from "../base.js";
 import { catalogUserId } from "../catalog.js";
@@ -190,28 +194,24 @@ function asTrpcError(error: unknown): TRPCError {
   return new TRPCError({ code: "BAD_GATEWAY", message });
 }
 
-/** One hydration attempt, written through to the entry and the tweet cache. */
+/**
+ * One hydration attempt, written through to the entry and the tweet cache.
+ * `resolveTweet` answers rather than throws — it has a fallback provider to
+ * try first — so a post that cannot be read is recorded on the entry and the
+ * saved link stays worth keeping either way.
+ */
 async function hydrate(ctx: JournalContext, entry: JournalTweetEntry): Promise<JournalTweetEntry> {
-  let next: JournalTweetEntry;
-  try {
-    const result = await lookupTweet(
-      ctx.db,
-      ctx.fetch,
-      entry.tweetId,
-      syndicationToken(entry.tweetId),
-    );
-    next = applyJournalTweetHydration(
-      entry,
-      result.snapshot
-        ? { hydration: "ok", tweet: result.snapshot }
-        : { hydration: "failed", error: "This post is unavailable." },
-    );
-  } catch (error) {
-    next = applyJournalTweetHydration(entry, {
-      hydration: "failed",
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  const result = await resolveTweet(
+    { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
+    entry.tweetId,
+    { handle: URL.parse(entry.url)?.pathname.split("/").filter(Boolean)[0] },
+  );
+  const next = applyJournalTweetHydration(
+    entry,
+    result.snapshot
+      ? { hydration: "ok", tweet: result.snapshot }
+      : { hydration: "failed", error: result.failure ?? TWEET_UNAVAILABLE_MESSAGE },
+  );
   repo(() => journal.update(ctx.db, ctx.user.id, entry.id, next));
   return next;
 }

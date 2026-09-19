@@ -245,10 +245,27 @@ tree, as in `membership: HashMap<treeId, folderId>`.
   non-archived roots once.
 
 `tweet_cache`
-- `tweet_id` PK, `payload_json` text (raw syndication body, ≤ 1 MiB),
+- `tweet_id` PK, `payload_json` text (raw provider body, ≤ 1 MiB),
   `snapshot_json` text null (`TweetSnapshot`, ≤ 128 KiB; source URLs ≤ 8 KiB,
   `tweets.rs:18-19`), `fetched_at`, `status` text (`resolved |
-  unavailable`), `failure` text null
+  unavailable`), `provider` text null (`xSyndication | xOembed`; which
+  pipeline produced the snapshot — null on an unavailable row and on rows
+  written before the fallback existed), `failure` text null
+- Shared across accounts: a post's public payload is the same for everyone and
+  the row records nothing about who asked. A row this side of
+  `TWEET_CACHE_TTL_MS` (6 h) is reused rather than refetched, failures
+  included, so a deleted post is not re-asked on every render.
+
+`embed_assets`
+- `hash` PK (SHA-256 of `source_url`, hex — the `/embeds/<hash>` a stored
+  snapshot carries), `source_url` text, `content_type` text null, `bytes`
+  integer, `stored_at` integer null, `last_access_at`, `created_at`
+- Index: (`last_access_at`) — the sweep's eviction order
+- The mapping from a snapshot's rewritten image URL back to the origin one.
+  The row outlives the bytes: the sweep unlinks files and clears `stored_at`,
+  and the next request for that hash re-fetches. Also shared across accounts,
+  and registered at hydration rather than when the image is first served
+  (`13-deployment-fly.md` §6).
 
 ### 3.5 Encyclopedia
 

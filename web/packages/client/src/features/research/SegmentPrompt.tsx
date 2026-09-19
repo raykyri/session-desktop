@@ -8,6 +8,7 @@
 // about.
 
 import type { ResearchNode } from "@session/shared";
+import { visibleResearchPrompt } from "@session/shared";
 import { ArrowLeft, Reply } from "lucide-react";
 import { memo } from "react";
 
@@ -16,6 +17,7 @@ import { cn } from "../../lib/cn.js";
 import { ControlButton } from "../../ui/Button.js";
 import { ModelMeta } from "../../ui/ModelMark.js";
 import { METADATA_LINE } from "../../ui/surfaces.js";
+import { TweetAttachments, resolvedTweets } from "../journal/TweetAttachments.js";
 import { ResearchMarkdown } from "../markdown/index.js";
 
 import { DocumentChips } from "./DocumentChips.js";
@@ -56,6 +58,12 @@ export const SegmentPrompt = memo(function SegmentPrompt({
   const signedIn = useSignedIn();
   if ((node.kind ?? "run") === "document") return null;
   const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
+  // The posts the question links to are embedded below it, and a permalink
+  // that trailed the question is dropped from the text the card replaces
+  // (`ResearchMessage.tsx:visibleResearchPrompt`). The stored prompt is
+  // untouched: it is what the run was launched with.
+  const prompt = visibleResearchPrompt(node.prompt, node.attachments);
+  const embedded = resolvedTweets(node.attachments).length > 0;
   const askedAt = index === 0 && Number.isFinite(node.createdAt) ? node.createdAt : null;
   // Metadata items (follow button, model badge, elapsed time) are displayed only after the run completes.
   const showFooter = index === 0 && !running;
@@ -82,9 +90,20 @@ export const SegmentPrompt = memo(function SegmentPrompt({
           {quoteDisplayText(node.queryAnchor.exact)}
         </blockquote>
       ) : null}
-      <div className={cn("text-fg-strong w-fit max-w-full", showFooter ? "mb-0" : "mb-6")}>
-        <ResearchMarkdown markdown={node.prompt} />
-      </div>
+      {prompt ? (
+        <div
+          className={cn(
+            "text-fg-strong w-fit max-w-full",
+            showFooter || embedded ? "mb-0" : "mb-6",
+          )}
+        >
+          <ResearchMarkdown markdown={prompt} />
+        </div>
+      ) : null}
+      <TweetAttachments
+        attachments={node.attachments}
+        className={cn("w-full", prompt && "mt-2.5", !showFooter && "mb-6")}
+      />
       {node.documentIds.length > 0 ? (
         <DocumentChips documentIds={node.documentIds} workspaceId={workspaceId} />
       ) : null}

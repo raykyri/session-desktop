@@ -14,5 +14,9 @@ export const tweetCache = sqliteTable("tweet_cache", {
   snapshotJson: text("snapshot_json", { mode: "json" }).$type<TweetSnapshot>(),
   fetchedAt: integer("fetched_at").notNull(),
   status: text("status", { enum: ["resolved", "unavailable"] }).notNull(),
+  /** Which pipeline produced `snapshot_json`: the syndication CDN, or the
+   * publish endpoint's reduced oEmbed payload when syndication refused. Null
+   * on an unavailable row and on rows written before the fallback existed. */
+  provider: text("provider", { enum: ["xSyndication", "xOembed"] }),
   failure: text("failure"),
 });

@@ -4,10 +4,12 @@ import {
   MAX_TWEETS_PER_MESSAGE,
   classifyTweetFetchFailure,
   syndicationToken,
+  tweetAttachment,
   tweetAttachmentFromFetch,
   tweetIdFromUrl,
   tweetReferences,
   tweetSnapshotFromSyndication,
+  visibleResearchPrompt,
 } from "../src/journal/tweets.js";
 import type { TweetSnapshot } from "../src/types/tweet.js";
 
@@ -294,4 +296,77 @@ test("fetch errors map onto the stored failure taxonomy", (t) => {
   t.is(classifyTweetFetchFailure("HTTP 404"), "notFound");
   t.is(classifyTweetFetchFailure("Not Found"), "notFound");
   t.is(classifyTweetFetchFailure("connection refused"), "network");
+  // The two outcomes that are not transport errors round-trip through the
+  // sentence `tweet_cache` stores.
+  t.is(classifyTweetFetchFailure("This post is unavailable."), "invalidPayload");
+  t.is(classifyTweetFetchFailure("invalid payload"), "invalidPayload");
+});
+
+test("an attachment records which provider answered", (t) => {
+  const reference = tweetReferences("https://x.com/jack/status/20")[0];
+  t.truthy(reference);
+  if (!reference) return;
+  const tweet = snapshot("20");
+
+  const reduced = tweetAttachment(
+    reference,
+    { status: "resolved", provider: "xOembed", tweet, fetchedAt: 2 },
+    1,
+  );
+  t.is(reduced.provider, "xOembed");
+  t.is(reduced.status, "resolved");
+  t.is(reduced.tweet?.id, "20");
+
+  // Nothing answered, so the provider recorded is the one that was asked
+  // about the post itself.
+  const failed = tweetAttachment(reference, { status: "unavailable", failure: "timeout" }, 1);
+  t.is(failed.provider, "xSyndication");
+  t.is(failed.failure, "timeout");
+  t.is(failed.fetchedAt, undefined);
+});
+
+test("a trailing permalink that embedded is dropped from the message as shown", (t) => {
+  const url = "https://x.com/jack/status/20";
+  const reference = tweetReferences(`What about this? ${url}`)[0];
+  t.truthy(reference);
+  if (!reference) return;
+  const resolved = tweetAttachment(
+    reference,
+    { status: "resolved", provider: "xSyndication", tweet: snapshot("20"), fetchedAt: 2 },
+    1,
+  );
+
+  t.is(visibleResearchPrompt(`What about this? ${url}`, [resolved]), "What about this?");
+  // A question that is nothing but the permalink shows as the card alone.
+  t.is(visibleResearchPrompt(url, [{ ...resolved, placement: "trailing" }]), "");
+  // An inline permalink is part of the sentence and stays in it.
+  t.is(
+    visibleResearchPrompt(`Compare ${url} with the other one`, [
+      { ...resolved, placement: "inline" },
+    ]),
+    `Compare ${url} with the other one`,
+  );
+  // A post that did not resolve leaves its permalink readable.
+  t.is(
+    visibleResearchPrompt(`What about this? ${url}`, [
+      { ...resolved, status: "unavailable", tweet: undefined, failure: "notFound" },
+    ]),
+    `What about this? ${url}`,
+  );
+  t.is(visibleResearchPrompt("no attachments at all"), "no attachments at all");
+});
+
+test("several trailing permalinks come off the end one by one", (t) => {
+  const first = "https://x.com/one/status/20";
+  const second = "https://x.com/two/status/21";
+  const prompt = `Compare:\n${first}\n${second}\n`;
+  const attachments = tweetReferences(prompt).map((reference) =>
+    tweetAttachment(
+      reference,
+      { status: "resolved", provider: "xSyndication", tweet: snapshot("20"), fetchedAt: 2 },
+      1,
+    ),
+  );
+  t.is(attachments.length, 2);
+  t.is(visibleResearchPrompt(prompt, attachments), "Compare:");
 });

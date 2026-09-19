@@ -4,7 +4,7 @@
 // Keyed by tweet id and shared across accounts: the payload is public and
 // identical for everyone, and the row records nothing about who asked.
 
-import type { TweetSnapshot } from "@session/shared";
+import type { TweetAttachmentProvider, TweetSnapshot } from "@session/shared";
 import { MAX_TWEET_SNAPSHOT_BYTES, tweetSnapshotSchema } from "@session/shared";
 import { eq, lt } from "drizzle-orm";
 
@@ -22,6 +22,9 @@ export interface CachedTweet {
   snapshot: TweetSnapshot | null;
   fetchedAt: number;
   status: "resolved" | "unavailable";
+  /** Which pipeline produced the snapshot; null on an unavailable row and on
+   * rows written before the oEmbed fallback existed. */
+  provider: TweetAttachmentProvider | null;
   failure: string | null;
 }
 
@@ -40,6 +43,7 @@ export function get(db: SessionDatabase, tweetId: string): CachedTweet | null {
     ),
     fetchedAt: row.fetchedAt,
     status: row.status,
+    provider: row.provider,
     failure: row.failure,
   };
 }
@@ -49,6 +53,7 @@ export interface PutTweetInput {
   payload?: unknown;
   snapshot?: TweetSnapshot | null | undefined;
   status: "resolved" | "unavailable";
+  provider?: TweetAttachmentProvider | null | undefined;
   failure?: string | null | undefined;
 }
 
@@ -72,6 +77,7 @@ export function put(db: SessionDatabase, input: PutTweetInput): CachedTweet {
     snapshotJson: input.snapshot ?? null,
     fetchedAt: at,
     status: input.status,
+    provider: input.provider ?? null,
     failure: input.failure ?? null,
   };
   db.insert(tweetCache)
@@ -84,6 +90,7 @@ export function put(db: SessionDatabase, input: PutTweetInput): CachedTweet {
     snapshot: input.snapshot ?? null,
     fetchedAt: at,
     status: input.status,
+    provider: input.provider ?? null,
     failure: input.failure ?? null,
   };
 }

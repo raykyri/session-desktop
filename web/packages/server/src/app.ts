@@ -15,6 +15,7 @@ import type { OAuthClient } from "./auth/github.js";
 import { githubRoutes } from "./auth/github.js";
 import { clearSessionCookie, sessionLoader } from "./auth/session.js";
 import type { AppEnv, ServerDeps } from "./deps.js";
+import { embedRoutes } from "./embeds/route.js";
 import type { Readiness } from "./health.js";
 import { createReadiness } from "./health.js";
 import { defaultLogger } from "./logger.js";
@@ -124,6 +125,9 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
     }),
   );
   app.route("/", uploadRoutes({ deps: { ...deps, logger }, limiter }));
+  // Public, like the cards whose images it serves: the Home feed renders
+  // signed out, and an embed asset says nothing about who stored it.
+  app.route("/", embedRoutes({ deps: { ...deps, logger } }));
 
   // `auth.logout` clears the session rows; the cookie is this layer's to
   // clear, so the mutation is mirrored here rather than given a `Set-Cookie`

@@ -127,7 +127,11 @@ export function JournalEntryCard({
       className={cn(
         "relative",
         isTweetCard
-          ? "border-border-divider rounded-lg border"
+          ? // The tweet card is the entry rather than a tweet framed inside a
+            // content item, but it keeps the entry's own padding
+            // (`journal.css:290`): with none, the avatar and the age stamp sit
+            // against the border.
+            "journal-tweet-entry border-border-divider rounded-lg border px-3.5 py-3"
           : "bg-surface-card border-border-divider rounded-lg border px-3 py-2.5",
       )}
       title={new Date(entry.createdAt).toLocaleString()}

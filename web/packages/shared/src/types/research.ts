@@ -110,13 +110,22 @@ export const researchRecapCandidateSchema = z.object({
 
 export type ResearchRecapCandidate = z.infer<typeof researchRecapCandidateSchema>;
 
+/** Which pipeline produced the snapshot. `xSyndication` is the full payload
+ * the desktop reads (media, quotes, cards, counts); `xOembed` is the reduced
+ * one the publish endpoint returns when syndication refuses, and carries only
+ * author, text, and date (`journal/oembed.ts`). Stored so a card can be told
+ * apart from a full one later without refetching it. */
+export const tweetAttachmentProviderSchema = z.enum(["xSyndication", "xOembed"]);
+
+export type TweetAttachmentProvider = z.infer<typeof tweetAttachmentProviderSchema>;
+
 export const researchTweetAttachmentSchema = z.object({
   kind: z.literal("tweet"),
   schemaVersion: z.literal(1),
   sourceUrl: z.string(),
   tweetId: z.string(),
   placement: z.enum(["inline", "trailing"]),
-  provider: z.literal("xSyndication"),
+  provider: tweetAttachmentProviderSchema,
   status: z.enum(["resolved", "unavailable"]),
   attemptedAt: z.number(),
   fetchedAt: z.number().optional(),

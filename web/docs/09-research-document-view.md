@@ -32,7 +32,7 @@ deletes the WebKit and Tauri workarounds.
 | `ResearchPage` (route) | `App.tsx:11929` wiring + `ResearchDocument:1760` | Loads `tree` and route params, owns per-tree stores, renders header, search bar, scroller, portals |
 | `DocumentHeader` | `:5105` | `HistoryNav`, breadcrumb, "N in thread · M branches" chip, sidebar restore, full-transcript toggle |
 | `ThreadSegment` (memo) | `:1621` | One spine node: `SegmentPrompt` + grid of `ConnectorOverlay`, `AnswerPane`, `FollowupRail`; registers anchor and grid elements |
-| `SegmentPrompt` (memo) | `:1514` | Back link (index 0), "Reply to" snippet (index > 0), quoted passage blockquote, `ResearchUserMessage`, root footer with `ThreadActions` (Follow/Bookmark), model summary, relative time |
+| `SegmentPrompt` (memo) | `:1514` | Back link (index 0), "Reply to" snippet (index > 0), quoted passage blockquote, `ResearchUserMessage`, the question's embedded posts (`TweetAttachments`), root footer with `ThreadActions` (Follow/Bookmark), model summary, relative time |
 | `AnswerPane` (memo, custom comparator) | `:1118` | Loading/error/failure states, `Recap`, empty-state copy cascade, "Show N earlier response items", the selection root, footer (word count, duration, hidden-highlights notice, copy, answer menu); the status line under an active answer carries a confirmed Cancel link |
 | `TimelineItem` (memo) | `:782` | One timeline message: markdown body, raw disclosures, activity disclosures, "Excluded from active context" chip |
 | `FollowupRail` (memo) | `:1391` | Docked ask composer slot, stacked cards, anchored cards (absolute `top`) |
@@ -43,6 +43,17 @@ deletes the WebKit and Tauri workarounds.
 | `RecapDialog` | `ResearchRecapDialog.tsx` | instructions → candidate → apply (the desktop's adapter/model picker is dropped; recaps run on `gemini-flash`) |
 | `DeleteBranchDialog` | `:5501` | confirm with active-run refusal |
 | `DocumentEditor` | `DocumentComposer.tsx` | edit modal for `document` roots (creation not exposed, as today) |
+
+The posts a question links to are resolved once, at launch, and stored on the
+node (`journal/attachments.ts`); `SegmentPrompt` renders the snapshots below
+the question and drops from the displayed text any permalink that trailed it
+and did embed (`visibleResearchPrompt`, ported from
+`ResearchMessage.tsx:63`). The stored prompt is never rewritten: it is what
+the run was launched with, and a post that did not resolve leaves its
+permalink readable. The card itself is `TweetEmbed`, the same component the
+Home feed and a journal entry mount (`10-home-feed-journal-encyclopedia.md`
+§2); the desktop's side-by-side treatment for several posts in one message is
+not ported, so they stack.
 
 `ResearchRecap` renders only for `kind === "run"`, `status === "complete"`,
 and `recap.responseRevision === content.responseRevision`. The desktop's

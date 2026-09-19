@@ -22,6 +22,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { emitFeedItemRemoved, emitFeedItemUpsertedForNode } from "../../events/feed.js";
+import { resolveMessageAttachments } from "../../journal/attachments.js";
 import {
   assertModelUsable,
   assertQueueHasRoom,
@@ -105,16 +106,25 @@ export const researchRouter = router({
         documentIds,
       }),
     )
-    .mutation(({ ctx, input }): ResearchTreeDetail => {
+    .mutation(async ({ ctx, input }): Promise<ResearchTreeDetail> => {
       assertModelUsable(ctx, input.model);
       assertWithinDailyLimits(ctx);
       assertQueueHasRoom(ctx);
+      // The posts the question links to are resolved before the node exists,
+      // so the snapshot is on the row the run and every later reader see
+      // (`journal/attachments.ts`). Admission is checked first: a launch that
+      // is going to be refused should not spend a fetch.
+      const attachments = await resolveMessageAttachments(
+        { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
+        input.prompt,
+      );
       const detail = repo(() =>
         trees.admitRoot(ctx.db, ctx.user.id, {
           workspaceId: input.workspaceId,
           prompt: input.prompt,
           model: input.model,
           ...(input.title === undefined ? {} : { title: input.title }),
+          ...(attachments.length === 0 ? {} : { attachments }),
           ...(input.documentIds === undefined ? {} : { documentIds: input.documentIds }),
         }),
       );
@@ -137,7 +147,7 @@ export const researchRouter = router({
         documentIds,
       }),
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       const parent = required(
         repo(() => nodes.get(ctx.db, ctx.user.id, input.parentNodeId)),
         `research node ${input.parentNodeId} was not found`,
@@ -146,6 +156,10 @@ export const researchRouter = router({
       assertModelUsable(ctx, model);
       assertWithinDailyLimits(ctx);
       assertQueueHasRoom(ctx);
+      const attachments = await resolveMessageAttachments(
+        { db: ctx.db, fetch: ctx.fetch, logger: ctx.logger },
+        input.prompt,
+      );
       const node = repo(() =>
         nodes.admitChild(ctx.db, ctx.user.id, {
           parentNodeId: input.parentNodeId,
@@ -153,6 +167,7 @@ export const researchRouter = router({
           model,
           ...(input.inline === undefined ? {} : { inline: input.inline }),
           ...(input.queryAnchor === undefined ? {} : { queryAnchor: input.queryAnchor }),
+          ...(attachments.length === 0 ? {} : { attachments }),
           ...(input.documentIds === undefined ? {} : { documentIds: input.documentIds }),
         }),
       );

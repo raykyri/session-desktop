@@ -123,6 +123,10 @@ const envSchema = z.object({
   SESSION_RUNS_ANTHROPIC: positiveInteger(2),
   SESSION_RUN_TIMEOUT_SECONDS: positiveInteger(900),
 
+  /** Bytes the embed-asset cache may hold on the volume before the sweep
+   * evicts the least recently served (`13-deployment-fly.md` §6). */
+  SESSION_EMBED_CACHE_BYTES: positiveInteger(2 * 1024 * 1024 * 1024),
+
   SESSION_ENFORCE_LIMITS: flag(false),
   SESSION_DAILY_TOKENS: positiveInteger(1_000_000),
   SESSION_DAILY_RUNS: positiveInteger(10),
@@ -179,6 +183,9 @@ export interface Config {
   dataDir: string;
   databasePath: string;
   documentsDir: string;
+  /** Cached images behind `/embeds/:hash`; disposable, unlike `documentsDir`. */
+  embedsDir: string;
+  embedCacheBytes: number;
   tmpDir: string;
 
   github: { clientId: string | null; clientSecret: string | null; callbackUrl: string };
@@ -267,6 +274,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     dataDir,
     databasePath: join(dataDir, "session.db"),
     documentsDir: join(dataDir, "documents"),
+    embedsDir: join(dataDir, "embeds"),
+    embedCacheBytes: value.SESSION_EMBED_CACHE_BYTES,
     tmpDir: join(dataDir, "tmp"),
 
     github: {

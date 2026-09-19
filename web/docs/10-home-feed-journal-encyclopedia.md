@@ -58,10 +58,16 @@ Cards:
   stripped), model icon and label, document count, status, relative time,
   recap text
   (`.research-summary-text`), `queryTarget` quote for anchored follow-ups,
-  tweet attachments, up to one level of `children` as compact rows, Follow
+  the question's embedded posts (`TweetAttachments`, shared with the open
+  thread; a trailing permalink that embedded is dropped from the displayed
+  text by `visibleResearchPrompt`), up to one level of `children` as compact
+  rows, Follow
   and Bookmark toggles beside the timestamp once the query is no longer
   running (`ResearchActivityFeed.tsx:365`; `research.setTreeFollowed` /
-  `setTreeBookmarked`, optimistic). Right-click opens the same tree menu as
+  `setTreeBookmarked`, optimistic). While the run is in flight the card shows
+  the "Generating answer" line and no status word: the desktop drops its whole
+  footer for a running question (`ResearchActivityFeed.tsx:466`), so repeating
+  "Queued" or "Running" beside the model would only restate the spinner. Right-click opens the same tree menu as
   the sidebar (`ResearchTreeMenuItems`, including Generate summary) with
   rename and delete dialogs rendered inline in the feed
   (`ResearchActivityFeed.tsx:1408-1441`). Click → `/r/$treeId?node=<nodeId>`.

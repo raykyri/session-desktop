@@ -12,6 +12,7 @@ import * as artifacts from "./artifacts.js";
 import * as auth from "./auth.js";
 import * as documents from "./documents.js";
 import * as drafts from "./drafts.js";
+import * as embeds from "./embeds.js";
 import * as encyclopedia from "./encyclopedia.js";
 import * as feedItems from "./feedItems.js";
 import * as feedgen from "./feedgen.js";
@@ -40,6 +41,7 @@ export {
   auth,
   documents,
   drafts,
+  embeds,
   encyclopedia,
   feedgen,
   feedItems,

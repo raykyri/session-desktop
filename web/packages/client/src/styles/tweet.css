@@ -13,6 +13,13 @@
   cursor: pointer;
 }
 
+/* Only a feed entry carries the hover menu that sits in the header's top-right
+   corner; an embed inside a research message has none and needs no inset
+   (`journal.css:137-141`). */
+.journal-tweet-entry .journal-tweet-head {
+  padding-right: 22px;
+}
+
 .journal-tweet-avatar-link {
   display: block;
   line-height: 0;

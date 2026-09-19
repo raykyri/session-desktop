@@ -40,6 +40,9 @@ kill_timeout = "30s"
   SESSION_RUNS_OPENROUTER = "8"
   SESSION_RUNS_ANTHROPIC = "2"
   SESSION_RUN_TIMEOUT_SECONDS = "900"
+  # The embed-asset cache is disposable and shares the 20 GB mount with the
+  # database and the uploads, so it is given a budget the sweep enforces.
+  SESSION_EMBED_CACHE_BYTES = "2147483648"
   SESSION_ENFORCE_LIMITS = "1"
   SESSION_DAILY_TOKENS = "1000000"
   SESSION_DAILY_RUNS = "10"

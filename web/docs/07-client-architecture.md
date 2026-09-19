@@ -299,8 +299,11 @@ the `localStorage` layers of `researchNavigation` and `researchFolders`,
   scheme is unsupported on the web because web agents cannot access a local
   filesystem (`11-artifacts-and-browser.md` §1). External links open with
   `target="_blank" rel="noopener noreferrer"`.
-- Remote images in Markdown stay blocked (`BlockedMarkdownImage`); tweet media
-  is allowed from the twimg hosts listed above.
+- Remote images in Markdown stay blocked (`BlockedMarkdownImage`). Tweet media
+  is served from this origin: a snapshot hydrated by the server points at
+  `/embeds/<hash>` (`03-api-and-events.md` §5), so a rendered card makes no
+  request to X. The twimg hosts stay in `img-src` for snapshots stored before
+  the cache existed.
 - Diagram SVG passes through DOMPurify's SVG profile with the
   `afterSanitizeAttributes` hook (`DiagramBlock.tsx:106-166`).
 

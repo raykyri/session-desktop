@@ -236,6 +236,21 @@ Startup reconciliation also resolves inconsistent states that can occur if the s
   interval (`main.ts:MAINTENANCE_INTERVAL_MS`, 15 min): files under
   `/data/documents` that no row points at are unlinked. Deleting a document or user account deletes the underlying files immediately. When workspaces or threads are deleted, SQLite foreign key cascades remove database records without deleting disk files; the periodic sweep detects and removes these orphaned files to prevent the volume from filling up. `session_volume_free_bytes` (§7)
   is the gauge to alert on — a full volume fails every SQLite write at once.
+- `/data/embeds` is the one directory on the volume that is **not** backed up
+  and not reconciled against a table the way `/data/documents` is. It holds
+  the images of embedded posts, keyed by the SHA-256 of the origin URL
+  (`GET /embeds/:hash`, `03-api-and-events.md` §5), and every file in it can
+  be fetched again from the URL its `embed_assets` row remembers. Losing it
+  costs one round trip per image, so it is a cache, not data.
+- The same maintenance interval sweeps that cache
+  (`embeds/storage.ts:sweepEmbeds`): assets not served in 30 days are
+  unlinked, and then the least recently served are unlinked until the total
+  fits `SESSION_EMBED_CACHE_BYTES` (2 GiB by default, of a 20 GB mount). The
+  row is kept and only its file state cleared, so the next request for that
+  hash re-fetches; mappings that hold no bytes and have not been asked for in
+  180 days are dropped outright. The budget is what keeps a cache of
+  third-party images from being the thing that fills the volume the database
+  writes to.
 - Restore, including the quarterly rehearsal:
   `web/docs/runbooks/restore.md`.
 

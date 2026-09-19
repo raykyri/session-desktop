@@ -12,6 +12,7 @@ import {
   isActiveResearchStatus,
   stripTaggedInstructionBlocksForPreview,
   stripWikilinks,
+  visibleResearchPrompt,
 } from "@session/shared";
 import { LoaderCircle } from "lucide-react";
 import type { ReactNode } from "react";
@@ -21,7 +22,7 @@ import { cn } from "../../lib/cn.js";
 import { ContextMenu } from "../../ui/ContextMenu.js";
 import { ModelMeta } from "../../ui/ModelMark.js";
 import { METADATA_LINE } from "../../ui/surfaces.js";
-import { TweetEmbed } from "../journal/TweetEmbed.js";
+import { TweetAttachments } from "../journal/TweetAttachments.js";
 import { ResearchMarkdown } from "../markdown/index.js";
 import { ThreadActions } from "../research/ThreadActions.js";
 
@@ -81,9 +82,11 @@ function OpenThreadControl({
   );
 }
 
+/** Settled statuses only. A card whose run is still in flight says so above
+ * the metadata line ("Generating answer"), and the desktop drops its whole
+ * footer while a question runs (`ResearchActivityFeed.tsx:466`), so repeating
+ * "Queued" or "Running" here would only restate the spinner. */
 const STATUS_LABEL: Record<string, string> = {
-  queued: "Queued",
-  running: "Running",
   failed: "Failed",
   cancelled: "Cancelled",
   interrupted: "Interrupted",
@@ -111,10 +114,10 @@ export function ResearchQueryCard({
 }) {
   const recap = query.recap?.trim() ?? "";
   const running = isActiveResearchStatus(query.status);
-  const status = STATUS_LABEL[query.status];
-  const attachments = (query.attachments ?? []).filter(
-    (attachment) => attachment.status === "resolved" && attachment.tweet,
-  );
+  const status = running ? undefined : STATUS_LABEL[query.status];
+  // A permalink the card embeds is presentation-only when it trails the
+  // question, exactly as in an open thread (`visibleResearchPrompt`).
+  const prompt = promptPreview(visibleResearchPrompt(query.prompt, query.attachments));
   const signedIn = useSignedIn();
   const followed = Boolean(tree?.followed);
   const bookmarked = Boolean(tree?.bookmarked);
@@ -127,23 +130,15 @@ export function ResearchQueryCard({
         </p>
       ) : null}
 
-      <article className="mb-0.5">
-        <OpenThreadControl onOpen={onOpen} className="research-prose">
-          {promptPreview(query.prompt)}
-        </OpenThreadControl>
-      </article>
-
-      {attachments.length > 0 ? (
-        <ul aria-label="Attached posts" className="m-0 flex list-none flex-col gap-2 p-0">
-          {attachments.map((attachment) =>
-            attachment.tweet ? (
-              <li key={attachment.tweetId} className="border-border-divider rounded-lg border">
-                <TweetEmbed tweet={attachment.tweet} />
-              </li>
-            ) : null,
-          )}
-        </ul>
+      {prompt ? (
+        <article className="mb-0.5">
+          <OpenThreadControl onOpen={onOpen} className="research-prose">
+            {prompt}
+          </OpenThreadControl>
+        </article>
       ) : null}
+
+      <TweetAttachments attachments={query.attachments} />
 
       {running ? (
         <p className="text-fg-muted m-0 flex items-center gap-1.5 text-sm" role="status">

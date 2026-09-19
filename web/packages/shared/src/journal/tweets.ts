@@ -19,7 +19,7 @@ import type { Nodes } from "mdast";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 
-import type { ResearchMessageAttachment } from "../types/research.js";
+import type { ResearchMessageAttachment, TweetAttachmentProvider } from "../types/research.js";
 import type {
   QuotedTweetSnapshot,
   TweetLinkCard,
@@ -81,7 +81,12 @@ function byteLength(value: string): number {
 
 /** An external URL a snapshot may carry: http(s), hosted, and small enough to
  * store. Anything else is dropped during normalization rather than persisted
- * and rendered. */
+ * and rendered. Exported for the oEmbed normalizer, which builds a snapshot
+ * from a different payload and owes the same guarantee. */
+export function tweetWebUrl(value: string | undefined): string | undefined {
+  return value !== undefined && validWebUrl(value) ? value : undefined;
+}
+
 function validWebUrl(value: string): boolean {
   if (byteLength(value) > MAX_TWEET_SOURCE_URL_BYTES) {
     return false;
@@ -411,6 +416,15 @@ export function tweetSnapshotFromSyndication(id: string, payload: unknown): Twee
       snapshot.quoted = quoted;
     }
   }
+  return storableTweetSnapshot(snapshot);
+}
+
+/**
+ * The snapshot, or null when it must not be stored: the identity checks above
+ * plus the size cap a `nodes.attachments_json` row and a `tweet_cache` row are
+ * both held to. Every normalizer ends here, whichever payload it read.
+ */
+export function storableTweetSnapshot(snapshot: TweetSnapshot): TweetSnapshot | null {
   if (!validSnapshotIdentity(snapshot)) {
     return null;
   }
@@ -533,7 +547,16 @@ export function tweetReferences(message: string): TweetReference[] {
   return references;
 }
 
-/** Classify a fetch error into the taxonomy stored on an attachment. */
+/**
+ * Classify a failure message into the taxonomy stored on an attachment.
+ *
+ * The message is the classifier's only input, including for a failure read
+ * back out of `tweet_cache` — which stores the sentence, not the term — so
+ * the two outcomes that are not transport errors are recognized here too: a
+ * payload that parsed but is not a post (a deleted, withheld or protected one
+ * comes back as a tombstone), and a body that is not the expected shape at
+ * all.
+ */
 export function classifyTweetFetchFailure(error: string): TweetAttachmentFailure {
   const lower = error.toLowerCase();
   if (lower.includes("timed out") || lower.includes("timeout")) {
@@ -541,6 +564,9 @@ export function classifyTweetFetchFailure(error: string): TweetAttachmentFailure
   }
   if (lower.includes("404") || lower.includes("not found")) {
     return "notFound";
+  }
+  if (lower.includes("unavailable") || lower.includes("invalid payload")) {
+    return "invalidPayload";
   }
   return "network";
 }
@@ -550,12 +576,25 @@ export function classifyTweetFetchFailure(error: string): TweetAttachmentFailure
 export type TweetFetchOutcome =
   { ok: true; payload: unknown; fetchedAt: number } | { ok: false; error: string };
 
+/** How one reference ended: a snapshot from whichever provider produced it, or
+ * the reason there is none. The server resolves through syndication first and
+ * the publish endpoint second, so the provider is an input here rather than a
+ * constant. */
+export type TweetResolution =
+  | {
+      status: "resolved";
+      provider: TweetAttachmentProvider;
+      tweet: TweetSnapshot;
+      fetchedAt: number;
+    }
+  | { status: "unavailable"; failure: TweetAttachmentFailure };
+
 /** The attachment recorded for one reference. A message keeps its own text
  * either way: an unavailable post leaves the permalink readable, and the
  * failure says whether retrying is worth it. */
-export function tweetAttachmentFromFetch(
+export function tweetAttachment(
   reference: TweetReference,
-  outcome: TweetFetchOutcome,
+  resolution: TweetResolution,
   attemptedAt: number,
 ): ResearchMessageAttachment {
   const base = {
@@ -564,15 +603,81 @@ export function tweetAttachmentFromFetch(
     sourceUrl: reference.sourceUrl,
     tweetId: reference.tweetId,
     placement: reference.placement,
-    provider: "xSyndication",
     attemptedAt,
   } as const;
-  if (outcome.ok) {
-    const tweet = tweetSnapshotFromSyndication(reference.tweetId, outcome.payload);
-    if (tweet) {
-      return { ...base, status: "resolved", fetchedAt: outcome.fetchedAt, tweet };
-    }
-    return { ...base, status: "unavailable", failure: "invalidPayload" };
+  if (resolution.status === "resolved") {
+    return {
+      ...base,
+      provider: resolution.provider,
+      status: "resolved",
+      fetchedAt: resolution.fetchedAt,
+      tweet: resolution.tweet,
+    };
   }
-  return { ...base, status: "unavailable", failure: classifyTweetFetchFailure(outcome.error) };
+  // An unavailable post has no provider that answered; the syndication
+  // endpoint is the one that was asked first, and the failure says what came
+  // back.
+  return { ...base, provider: "xSyndication", status: "unavailable", failure: resolution.failure };
+}
+
+/** {@link tweetAttachment} for a raw syndication body: the normalization a
+ * fetched payload still needs, and `invalidPayload` when it is a tombstone or
+ * an unrecognized shape. */
+export function tweetAttachmentFromFetch(
+  reference: TweetReference,
+  outcome: TweetFetchOutcome,
+  attemptedAt: number,
+): ResearchMessageAttachment {
+  if (!outcome.ok) {
+    return tweetAttachment(
+      reference,
+      { status: "unavailable", failure: classifyTweetFetchFailure(outcome.error) },
+      attemptedAt,
+    );
+  }
+  const tweet = tweetSnapshotFromSyndication(reference.tweetId, outcome.payload);
+  return tweetAttachment(
+    reference,
+    tweet
+      ? {
+          status: "resolved",
+          provider: "xSyndication",
+          tweet,
+          fetchedAt: outcome.fetchedAt,
+        }
+      : { status: "unavailable", failure: "invalidPayload" },
+    attemptedAt,
+  );
+}
+
+/**
+ * The message as the reader sees it: a trailing permalink whose post did
+ * embed is presentation-only, so the card replaces it rather than repeating
+ * the URL underneath (`ResearchMessage.tsx:visibleResearchPrompt`).
+ *
+ * The stored prompt is never rewritten — the run was launched with the
+ * author's own text, and an attachment that later fails to resolve must leave
+ * the permalink readable. Attachments are walked newest-last so a message
+ * ending in several permalinks drops them one by one from the end.
+ */
+export function visibleResearchPrompt(
+  prompt: string,
+  attachments: readonly ResearchMessageAttachment[] = [],
+): string {
+  let visible = prompt;
+  for (const attachment of [...attachments].reverse()) {
+    if (
+      attachment.status !== "resolved" ||
+      attachment.placement !== "trailing" ||
+      !attachment.tweet
+    ) {
+      continue;
+    }
+    const trimmed = visible.trimEnd();
+    if (!trimmed.endsWith(attachment.sourceUrl)) {
+      continue;
+    }
+    visible = trimmed.slice(0, -attachment.sourceUrl.length).trimEnd();
+  }
+  return visible;
 }

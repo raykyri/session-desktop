@@ -85,8 +85,8 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `research.listTrees` | Q | `{ workspaceId?, includeArchived? }` → `ResearchTreeSummary[]` | `list_research_trees` |
 | `research.reorderTrees` | M | `{ workspaceId, archived, treeIds }` | `reorder_research_trees` |
 | `research.getTree` | Q | `{ treeId }` → `ResearchTreeDetail` | `get_research_tree` |
-| `research.createTree` | M | `{ prompt, title?, model, workspaceId, documentIds? }` → `ResearchTreeDetail` | `create_research_tree` (`PRECONDITION_FAILED` on a gated or unavailable model; `TOO_MANY_REQUESTS` when daily limits are enforced and exhausted) |
-| `research.forkNode` | M | `{ parentNodeId, prompt, model?, queryAnchor?, inline?, documentIds? }` → `ResearchNode` | `fork_research_node` (`model` defaults to the parent's) |
+| `research.createTree` | M | `{ prompt, title?, model, workspaceId, documentIds? }` → `ResearchTreeDetail` | `create_research_tree` (`PRECONDITION_FAILED` on a gated or unavailable model; `TOO_MANY_REQUESTS` when daily limits are enforced and exhausted; resolves the X permalinks in `prompt` into the node's attachments first, as `create_research_tree` does) |
+| `research.forkNode` | M | `{ parentNodeId, prompt, model?, queryAnchor?, inline?, documentIds? }` → `ResearchNode` | `fork_research_node` (`model` defaults to the parent's; resolves its own attachments) |
 | `research.retryNode` | M | `{ nodeId, model? }` → `ResearchTreeDetail` | `retry_research_node` (also accepts `interrupted`) |
 | `research.cancelNode` | M | `{ nodeId }` → `ResearchNode` | `cancel_research_node` |
 | `research.renameTree` | M | `{ treeId, title }` → `ResearchTree` | `rename_research_tree` |
@@ -126,6 +126,15 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `journal.remove` | M | `{ id }` → boolean | `journal_remove` |
 | `journal.fetchTweet` | M | `{ id, token }` → `string` (raw JSON) | `journal_fetch_tweet` |
 | `journal.hydrateTweet` | M | `{ entryId }` → entry | client loop over `journal_fetch_tweet` |
+
+Hydration (`journal/tweets.ts`) is one cache-first pipeline shared by journal
+entries and research attachments, with two providers in order:
+`cdn.syndication.twimg.com/tweet-result` for the whole post (media, quoted
+post, link card, counts), then `publish.twitter.com/oembed` for the author,
+text and date when syndication does not serve it. The provider that answered
+is stored on the row and on the attachment (`xSyndication | xOembed`), so a
+reduced card is recognizable as one. A resolved snapshot is stored with its
+image URLs rewritten to `/embeds/<hash>` (§5).
 
 ### `encyclopedia`
 | Procedure | Kind | Input → Output | Desktop |
@@ -242,6 +251,7 @@ snapshot → `run_turns` → `sourceError` for finished nodes without a snapshot
 | `GET /healthz` | `ok\n`, `Cache-Control: no-store` (Fly check) |
 | `GET /auth/github`, `GET /auth/github/callback`, `POST /auth/logout` | OAuth flow |
 | `POST /uploads` | multipart document upload (auth; `workspaceId` field; returns `DocumentInfo[]`); 20 MiB per file, 10 files |
+| `GET /embeds/:hash` | one cached image of an embedded post (public, `immutable`); the hash is SHA-256 of the origin URL and names an `embed_assets` row, whose bytes are fetched on the first request and may be swept back off the volume (`13-deployment-fly.md` §6) |
 | `GET /a/:token` | attached document bytes, on `artifacts.session.dev` only (Phase 7) |
 | `GET /*` | built client `index.html` (SPA fallback) and hashed assets |
 
