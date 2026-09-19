@@ -47,7 +47,7 @@ export function ActivityMetadataLine({
   const summary = formatActivityMetadataSummary(event);
   return (
     <div
-      className={cn("text-fg-activity text-xs", className)}
+      className={cn("text-fg-activity", className)}
       title={finiteTime ? new Date(event.occurredAt).toLocaleString() : undefined}
     >
       <span>
