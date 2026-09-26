@@ -14,7 +14,6 @@ mod headless_process;
 mod host;
 mod human_browser;
 mod image_files;
-mod journal;
 mod launch_path;
 mod mcp;
 mod native_support;
@@ -1561,33 +1560,6 @@ fn list_research_folders(state: tauri::State<'_, AppState>) -> Result<ResearchFo
 }
 
 #[tauri::command]
-fn journal_restore(
-    state: tauri::State<'_, AppState>,
-    entry: serde_json::Value,
-) -> Result<bool, String> {
-    state.restore_journal_entry(entry)
-}
-
-#[tauri::command]
-fn journal_update(
-    state: tauri::State<'_, AppState>,
-    id: String,
-    entry: serde_json::Value,
-) -> Result<bool, String> {
-    state.update_journal_entry(&id, entry)
-}
-
-#[tauri::command]
-fn journal_remove(state: tauri::State<'_, AppState>, id: String) -> Result<bool, String> {
-    state.remove_journal_entry(&id)
-}
-
-#[tauri::command]
-async fn journal_fetch_tweet(id: String, token: String) -> Result<String, String> {
-    journal::fetch_tweet_json(&id, &token).await
-}
-
-#[tauri::command]
 fn set_research_folders(
     state: tauri::State<'_, AppState>,
     folders: ResearchFolderState,
@@ -1622,8 +1594,8 @@ fn list_research_highlights(
 async fn list_recent_activity(
     state: tauri::State<'_, AppState>,
     limit: Option<usize>,
-    before: Option<journal::RecentActivityCursor>,
-) -> Result<journal::RecentActivityPage, String> {
+    before: Option<RecentResearchQueryCursor>,
+) -> Result<research::RecentActivityPage, String> {
     state.list_recent_activity(limit.unwrap_or(50), before)
 }
 
@@ -1752,6 +1724,71 @@ async fn import_research_report(
     })
     .await
     .map_err(|err| format!("report import failed: {err}"))?
+}
+
+#[tauri::command]
+async fn create_research_note(
+    state: tauri::State<'_, AppState>,
+    request: research::CreateResearchNoteRequest,
+) -> Result<ResearchTreeDetail, String> {
+    let state = state.inner().clone();
+    let attachments = tweets::resolve_research_message_attachments(&request.body).await;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = workspace::lock_research_workspace_mutations()?;
+        validate_launch_workspace(&state, Some(&request.workspace_id), LaunchOrigin::Research)?;
+        state.create_research_note(request, attachments)
+    })
+    .await
+    .map_err(|err| format!("create_research_note task failed: {err}"))?
+}
+
+#[tauri::command]
+async fn create_research_note_follow_up(
+    state: tauri::State<'_, AppState>,
+    parent_node_id: String,
+    body: String,
+) -> Result<ResearchNode, String> {
+    let state = state.inner().clone();
+    let attachments = tweets::resolve_research_message_attachments(&body).await;
+    tauri::async_runtime::spawn_blocking(move || {
+        state.create_research_note_follow_up(&parent_node_id, body, attachments)
+    })
+    .await
+    .map_err(|err| format!("create_research_note_follow_up task failed: {err}"))?
+}
+
+/// The note author's response to a member reply (`in_reply_to` set). There
+/// is no network transport, so nothing else can deliver member replies yet;
+/// debug builds accept `member` (with no `in_reply_to`) so the reply UI can
+/// be exercised from the webview. Release builds refuse it.
+#[tauri::command]
+fn add_research_note_reply(
+    state: tauri::State<'_, AppState>,
+    node_id: String,
+    in_reply_to: Option<String>,
+    body: String,
+    member: Option<research::NoteReplyAuthor>,
+) -> Result<ResearchNode, String> {
+    let author = match member {
+        Some(member @ research::NoteReplyAuthor::Member { .. }) if cfg!(debug_assertions) => member,
+        Some(_) => return Err("member replies can only arrive from the network".to_string()),
+        None => research::NoteReplyAuthor::Author,
+    };
+    state.add_research_note_reply(research::AddNoteReplyRequest {
+        node_id,
+        body,
+        author,
+        in_reply_to,
+    })
+}
+
+#[tauri::command]
+fn remove_research_note_reply(
+    state: tauri::State<'_, AppState>,
+    node_id: String,
+    reply_id: String,
+) -> Result<ResearchNode, String> {
+    state.remove_research_note_reply(&node_id, &reply_id)
 }
 
 #[tauri::command]
@@ -1909,6 +1946,7 @@ async fn fork_research_node(
     parent_node_id: String,
     prompt: String,
     query_anchor: Option<research::ResearchHighlightAnchor>,
+    reply_anchor: Option<String>,
     inline: Option<bool>,
 ) -> Result<ResearchNode, String> {
     let state = state.inner().clone();
@@ -1927,6 +1965,7 @@ async fn fork_research_node(
                 &parent_node_id,
                 prompt,
                 query_anchor,
+                reply_anchor,
                 inline,
                 attachments,
             )?;
@@ -1999,6 +2038,21 @@ fn launch_research_child_run(
                 &tweets::prompt_with_research_attachments(child.prompt.clone(), &child.attachments),
                 child.query_anchor.as_ref(),
             );
+            let launch_prompt = match launch_prompt {
+                Ok(launch_prompt) => launch_prompt,
+                Err(err) => {
+                    let _ = state.fail_research_node(&child.id, err.clone());
+                    return Err(err);
+                }
+            };
+            return launch_fresh_research_run(state, &child.id, workspace, launch_prompt);
+        }
+        research::ResearchNodeKind::Note => {
+            // A note has no session to fork. Its follow-up launches a fresh
+            // run whose prompt carries the note and its replies as context.
+            // Reply text is other people's words, so the builder neutralizes
+            // it; the question (and any anchored reply) is wrapped there too.
+            let launch_prompt = state.research_note_followup_prompt(&parent.id, child, &question);
             let launch_prompt = match launch_prompt {
                 Ok(launch_prompt) => launch_prompt,
                 Err(err) => {
@@ -3670,10 +3724,6 @@ fn main() {
             reorder_research_trees,
             list_research_folders,
             set_research_folders,
-            journal_restore,
-            journal_update,
-            journal_remove,
-            journal_fetch_tweet,
             list_research_activity,
             list_recent_research_queries,
             list_research_highlights,
@@ -3683,6 +3733,10 @@ fn main() {
             export_pane_to_research,
             read_research_report,
             import_research_report,
+            create_research_note,
+            create_research_note_follow_up,
+            add_research_note_reply,
+            remove_research_note_reply,
             update_research_document,
             read_transcript_image,
             save_pasted_image,

@@ -18,7 +18,11 @@ pub const MAX_RESEARCH_DOCUMENT_WORDS: usize = 10_000;
 /// Backstop for word-sparse documents (one giant token counts as one word).
 /// Imports and the composer both advertise this exact limit.
 pub const MAX_RESEARCH_DOCUMENT_BYTES: usize = 10 * 1024 * 1024;
-pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 7;
+pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 8;
+/// Written when the newest feature in an archive is message attachments, with
+/// no note nodes, delivery records, or reply anchors. Builds that predate
+/// notes (which accept versions 1–7) cannot deserialize the `note` kind.
+const DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_NOTES: u32 = 7;
 /// Written when the newest feature in an archive is inline follow-ups or
 /// conversation highlights, but no research message carries attachments.
 const DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_ATTACHMENTS: u32 = 6;
@@ -258,7 +262,10 @@ impl ResearchNodeStatus {
 /// session, pane bindings); `Document` nodes carry user-authored markdown that
 /// rides the same response-snapshot pipeline as run responses; `Conversation`
 /// nodes carry a terminal agent conversation exported as a point-in-time
-/// snapshot, sanitized and severed from its source session. The default keeps
+/// snapshot, sanitized and severed from its source session; `Note` nodes carry
+/// a user-authored question or saved link in `prompt`, with no response of
+/// their own. A note is a tree root or a child of another note; its other
+/// children are `Run` follow-ups launched with the note as context. The default keeps
 /// every pre-documents `state.json` and detached archive loading as plain
 /// runs.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -268,6 +275,7 @@ pub enum ResearchNodeKind {
     Run,
     Document,
     Conversation,
+    Note,
 }
 
 impl ResearchNodeKind {
@@ -309,6 +317,71 @@ pub enum ResearchNodeOrigin {
     TerminalExport,
     Imported,
 }
+
+/// Network state of a note posted with Ask network. Link and post notes (a
+/// body that is a single URL, saved without asking anyone) carry none.
+/// Transport is not implemented: `Posted` records the user's intent, and
+/// `replies` holds the author's own responses until member replies can arrive.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteDelivery {
+    pub status: NoteDeliveryStatus,
+    pub posted_at: u128,
+    /// Chronological. A reply with `in_reply_to` set follows the reply it
+    /// responds to in time, never precedes it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub replies: Vec<NoteReply>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NoteDeliveryStatus {
+    Posted,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteReply {
+    pub id: String,
+    pub author: NoteReplyAuthor,
+    /// Markdown.
+    pub body: String,
+    /// Set on the note author's response to a member's reply. One level
+    /// only: the target is a reply whose own `in_reply_to` is `None`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub in_reply_to: Option<String>,
+    pub created_at: u128,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum NoteReplyAuthor {
+    /// The note's author (this Session's user).
+    Author,
+    /// Another person in the user's network.
+    Member {
+        id: String,
+        display_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        handle: Option<String>,
+    },
+}
+
+impl NoteReplyAuthor {
+    pub fn label(&self) -> &str {
+        match self {
+            Self::Author => "the user",
+            Self::Member { display_name, .. } => display_name,
+        }
+    }
+}
+
+/// Byte cap for a note body and for each reply.
+pub const MAX_NOTE_TEXT_BYTES: usize = 64 * 1024;
+pub const MAX_NOTE_REPLIES: usize = 1_000;
+/// Top-level replies the Home feed carries per note; the card fetches the
+/// rest from the full node when the user expands it.
+pub const RECENT_ACTIVITY_NOTE_REPLY_LIMIT: usize = 5;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -378,6 +451,15 @@ pub struct ResearchNode {
     /// byte-identically to builds that predate the field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<ResearchNodeOrigin>,
+    /// Network state; only on notes posted with Ask network.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivery: Option<NoteDelivery>,
+    /// On a run whose parent is a note: the id of the reply (in the parent's
+    /// `delivery.replies`) this follow-up was asked about. Parallels
+    /// `query_anchor`, which targets a passage of a parent's answer. A
+    /// removed reply leaves the id dangling; readers treat it as absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reply_anchor: Option<String>,
     pub status: ResearchNodeStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
@@ -422,7 +504,24 @@ pub struct RecentResearchQuery {
     pub model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<ResearchNodeOrigin>,
+    pub kind: ResearchNodeKind,
+    /// A note's network state, with `replies` cut to the first
+    /// [`RECENT_ACTIVITY_NOTE_REPLY_LIMIT`] top-level replies (each with its
+    /// responses). `reply_count` is the uncut top-level count.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivery: Option<NoteDelivery>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub reply_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reply_anchor: Option<String>,
+    /// Display name of the reply `reply_anchor` names, resolved against the
+    /// parent note; absent when the reply was removed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reply_anchor_author: Option<String>,
     pub status: ResearchNodeStatus,
+    /// Why the run failed, shown on Home's follow-up rows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
     pub created_at: u128,
     /// Current answer recap, when one has been generated for this run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -447,7 +546,19 @@ impl From<&ResearchNode> for RecentResearchQuery {
             adapter: node.adapter.clone(),
             model: node.model.clone(),
             origin: node.origin,
+            kind: node.kind,
+            delivery: node
+                .delivery
+                .as_ref()
+                .map(|delivery| capped_note_delivery(delivery, RECENT_ACTIVITY_NOTE_REPLY_LIMIT)),
+            reply_count: node
+                .delivery
+                .as_ref()
+                .map_or(0, |delivery| top_level_reply_count(&delivery.replies)),
+            reply_anchor: node.reply_anchor.clone(),
+            reply_anchor_author: None,
             status: node.status,
+            error: node.error.clone(),
             created_at: node.created_at,
             recap: node.recap.as_ref().and_then(|recap| {
                 let text = recap.text.trim();
@@ -455,6 +566,255 @@ impl From<&ResearchNode> for RecentResearchQuery {
             }),
         }
     }
+}
+
+fn is_zero(value: &usize) -> bool {
+    *value == 0
+}
+
+pub fn top_level_reply_count(replies: &[NoteReply]) -> usize {
+    replies
+        .iter()
+        .filter(|reply| reply.in_reply_to.is_none())
+        .count()
+}
+
+/// The delivery with only the first `limit` top-level replies and the
+/// responses to them, preserving chronological order.
+pub fn capped_note_delivery(delivery: &NoteDelivery, limit: usize) -> NoteDelivery {
+    let kept = delivery
+        .replies
+        .iter()
+        .filter(|reply| reply.in_reply_to.is_none())
+        .take(limit)
+        .map(|reply| reply.id.as_str())
+        .collect::<HashSet<_>>();
+    NoteDelivery {
+        status: delivery.status,
+        posted_at: delivery.posted_at,
+        replies: delivery
+            .replies
+            .iter()
+            .filter(|reply| {
+                kept.contains(reply.id.as_str())
+                    || reply
+                        .in_reply_to
+                        .as_deref()
+                        .is_some_and(|parent| kept.contains(parent))
+            })
+            .cloned()
+            .collect(),
+    }
+}
+
+/// The feed's page shape; research roots (runs and notes) are its only source.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentActivityPage {
+    pub items: Vec<RecentResearchQuery>,
+    pub next_cursor: Option<RecentResearchQueryCursor>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateResearchNoteRequest {
+    pub body: String,
+    /// Agent that answers the note's AI follow-ups by default. Not provenance:
+    /// the note itself is user-authored.
+    pub adapter: String,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub effort: Option<String>,
+    pub workspace_id: String,
+    /// True for Ask network (the note gets a delivery record). False saves a
+    /// single-URL body as a link or post note with no network state.
+    pub ask_network: bool,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddNoteReplyRequest {
+    pub node_id: String,
+    pub body: String,
+    pub author: NoteReplyAuthor,
+    #[serde(default)]
+    pub in_reply_to: Option<String>,
+}
+
+/// Display name of the author of the reply `child.reply_anchor` names in
+/// `parent`'s delivery, or `None` when either is missing.
+pub fn reply_anchor_author(parent: &ResearchNode, child: &ResearchNode) -> Option<String> {
+    let reply_id = child.reply_anchor.as_deref()?;
+    parent
+        .delivery
+        .as_ref()?
+        .replies
+        .iter()
+        .find(|reply| reply.id == reply_id)
+        .map(|reply| match &reply.author {
+            NoteReplyAuthor::Author => "You".to_string(),
+            NoteReplyAuthor::Member { display_name, .. } => display_name.clone(),
+        })
+}
+
+/// A note node as its create paths admit it: settled `Complete` (a note has
+/// no run), with the follow-up agent defaults stored like a run's so its AI
+/// children inherit them. `worktree_dir` is filled in at admission.
+#[allow(clippy::too_many_arguments)]
+pub fn new_note_node(
+    id: String,
+    tree_id: String,
+    parent_node_id: Option<String>,
+    body: String,
+    attachments: Vec<crate::tweets::ResearchMessageAttachment>,
+    adapter: String,
+    model: Option<String>,
+    effort: Option<String>,
+    group_id: String,
+    ask_network: bool,
+    now: u128,
+) -> ResearchNode {
+    ResearchNode {
+        id,
+        tree_id,
+        parent_node_id,
+        query_anchor: None,
+        inline: false,
+        prompt: body,
+        attachments,
+        title: None,
+        response_preview: None,
+        adapter,
+        model,
+        effort,
+        group_id,
+        worktree_dir: String::new(),
+        native_session_id: None,
+        transcript_path: None,
+        prompt_native_id: None,
+        agent_id: None,
+        pane_id: None,
+        runtime: ResearchRuntime::Pane,
+        thread_id: None,
+        kind: ResearchNodeKind::Note,
+        origin: None,
+        delivery: ask_network.then(|| NoteDelivery {
+            status: NoteDeliveryStatus::Posted,
+            posted_at: now,
+            replies: Vec::new(),
+        }),
+        reply_anchor: None,
+        status: ResearchNodeStatus::Complete,
+        error: None,
+        response_snapshot_at: None,
+        recap: None,
+        created_at: now,
+        started_at: None,
+        completed_at: Some(now),
+        highlights: Vec::new(),
+    }
+}
+
+/// True when a node carries anything a pre-notes build cannot read.
+pub fn node_uses_note_fields(node: &ResearchNode) -> bool {
+    node.kind == ResearchNodeKind::Note || node.delivery.is_some() || node.reply_anchor.is_some()
+}
+
+/// Structural rules the note create paths maintain: only notes carry
+/// delivery, a note's parent is a note, a reply anchor sits on a run whose
+/// parent is a note, and replies nest at most one level.
+pub fn validate_note_node_shape(
+    node: &ResearchNode,
+    node_by_id: &HashMap<&str, &ResearchNode>,
+) -> Result<(), String> {
+    let parent_kind = node
+        .parent_node_id
+        .as_deref()
+        .and_then(|parent_id| node_by_id.get(parent_id))
+        .map(|parent| parent.kind);
+    if node.delivery.is_some() && node.kind != ResearchNodeKind::Note {
+        return Err(format!("research node {} has delivery but is not a note", node.id));
+    }
+    if node.kind == ResearchNodeKind::Note
+        && parent_kind.is_some_and(|kind| kind != ResearchNodeKind::Note)
+    {
+        return Err(format!("research note {} has a parent that is not a note", node.id));
+    }
+    if node.reply_anchor.is_some()
+        && (node.kind != ResearchNodeKind::Run || parent_kind != Some(ResearchNodeKind::Note))
+    {
+        return Err(format!(
+            "research node {} has a reply anchor but is not a follow-up of a note",
+            node.id
+        ));
+    }
+    if let Some(delivery) = &node.delivery {
+        validate_note_replies(&delivery.replies)
+            .map_err(|err| format!("research note {}: {err}", node.id))?;
+    }
+    Ok(())
+}
+
+pub fn validate_note_replies(replies: &[NoteReply]) -> Result<(), String> {
+    if replies.len() > MAX_NOTE_REPLIES {
+        return Err(format!("more than {MAX_NOTE_REPLIES} replies"));
+    }
+    let mut top_level = HashSet::new();
+    let mut seen = HashSet::new();
+    for reply in replies {
+        if reply.id.is_empty() || !seen.insert(reply.id.as_str()) {
+            return Err("reply ids must be unique and non-empty".to_string());
+        }
+        if reply.body.trim().is_empty() || reply.body.len() > MAX_NOTE_TEXT_BYTES {
+            return Err(format!("reply {} has an empty or oversized body", reply.id));
+        }
+        match reply.in_reply_to.as_deref() {
+            None => {
+                top_level.insert(reply.id.as_str());
+            }
+            // Earlier-only lookup also enforces chronological order.
+            Some(parent) if top_level.contains(parent) => {}
+            Some(_) => {
+                return Err(format!(
+                    "reply {} responds to a reply that is not an earlier top-level reply",
+                    reply.id
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// True when the whole note body is one http(s) URL: the composer saves such
+/// a body as a link (or, for an X status URL, a post) rather than a question.
+pub fn note_body_is_single_url(body: &str) -> bool {
+    let trimmed = body.trim();
+    !trimmed.is_empty()
+        && !trimmed.contains(char::is_whitespace)
+        && url::Url::parse(trimmed)
+            .is_ok_and(|url| matches!(url.scheme(), "http" | "https") && url.host().is_some())
+}
+
+/// Tree title for a note: its first non-empty line, cut to a sidebar-sized
+/// label. Notes are hidden from the sidebar, but breadcrumbs, menus, and the
+/// Highlights feed still show the tree title.
+pub fn note_default_title(body: &str) -> String {
+    const MAX_CHARS: usize = 80;
+    let line = body
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("Note");
+    if line.chars().count() <= MAX_CHARS {
+        return line.to_string();
+    }
+    let cut = line.chars().take(MAX_CHARS - 1).collect::<String>();
+    let cut = match cut.rfind(char::is_whitespace) {
+        Some(index) if index > MAX_CHARS / 2 => cut[..index].trim_end().to_string(),
+        _ => cut,
+    };
+    format!("{cut}…")
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -868,12 +1228,21 @@ fn validate_detached_archive(archive: &DetachedResearchArchive) -> Result<(), St
                 node.id
             ));
         }
-        if !node.attachments.is_empty() && archive.version < DETACHED_RESEARCH_ARCHIVE_VERSION {
+        if !node.attachments.is_empty()
+            && archive.version < DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_NOTES
+        {
             return Err(format!(
                 "research node {} contains attachments that require archive version {}",
+                node.id, DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_NOTES
+            ));
+        }
+        if node_uses_note_fields(node) && archive.version < DETACHED_RESEARCH_ARCHIVE_VERSION {
+            return Err(format!(
+                "research node {} contains note data that requires archive version {}",
                 node.id, DETACHED_RESEARCH_ARCHIVE_VERSION
             ));
         }
+        validate_note_node_shape(node, &node_by_id)?;
         crate::tweets::validate_research_message_attachments(&node.attachments)?;
         validate_highlight_collection(&node.highlights)?;
         highlight_bytes_total = highlight_bytes_total
@@ -885,7 +1254,9 @@ fn validate_detached_archive(archive: &DetachedResearchArchive) -> Result<(), St
         // create paths are the only writers and never nest them, so a nested
         // one is corruption.
         let root_only_label = match node.kind {
-            ResearchNodeKind::Run => None,
+            // Notes nest under notes (network follow-ups); their parent kind
+            // is checked by `validate_note_node_shape` above.
+            ResearchNodeKind::Run | ResearchNodeKind::Note => None,
             ResearchNodeKind::Document => Some("document"),
             ResearchNodeKind::Conversation => Some("conversation"),
         };
@@ -967,8 +1338,10 @@ fn validate_detached_archive(archive: &DetachedResearchArchive) -> Result<(), St
 /// raises. Pre-conversations builds refuse anything above 4, and
 /// pre-documents builds anything above 3, the same way.
 pub fn detached_archive_version(nodes: &[ResearchNode]) -> u32 {
-    if nodes.iter().any(|node| !node.attachments.is_empty()) {
+    if nodes.iter().any(node_uses_note_fields) {
         DETACHED_RESEARCH_ARCHIVE_VERSION
+    } else if nodes.iter().any(|node| !node.attachments.is_empty()) {
+        DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_NOTES
     } else if nodes.iter().any(|node| {
         node.inline || (node.kind == ResearchNodeKind::Conversation && !node.highlights.is_empty())
     }) {
@@ -2120,13 +2493,20 @@ const CONVERSATION_TURN_OVERHEAD_BYTES: usize = 33;
 /// output captured by the original session — cannot forge or break the
 /// structure the fresh agent is told to trust. Other markup is left intact.
 fn neutralized_conversation_markup(text: &str) -> String {
-    fn is_serialization_tag(segment: &str) -> bool {
+    neutralized_tag_markup(text, &["conversation", "turn"])
+}
+
+/// Entity-escapes the `<` of every opening or closing tag named in `names`
+/// (any case, any whitespace a lenient reader would accept), leaving other
+/// markup intact.
+fn neutralized_tag_markup(text: &str, names: &[&str]) -> String {
+    let is_serialization_tag = |segment: &str| -> bool {
         // Lenient readers can accept `</ conversation>` or `< turn …>`, so
         // whitespace around the slash and name must not smuggle the
         // vocabulary through.
         let rest = segment.trim_start();
         let rest = rest.strip_prefix('/').unwrap_or(rest).trim_start();
-        for name in ["conversation", "turn"] {
+        for name in names {
             let Some(head) = rest.get(..name.len()) else {
                 continue;
             };
@@ -2140,7 +2520,7 @@ fn neutralized_conversation_markup(text: &str) -> String {
             }
         }
         false
-    }
+    };
     let mut segments = text.split('<');
     let mut result = String::with_capacity(text.len());
     if let Some(first) = segments.next() {
@@ -2296,6 +2676,77 @@ pub fn query_followup_prompt(exact: &str, question: &str) -> String {
         format!("{question}\n\nThe request above refers to this quoted passage:\n\n> {quote}")
     } else {
         format!("The user's question refers to this quoted passage:\n\n> {quote}\n\n{question}")
+    }
+}
+
+const NOTE_CONTEXT_TAGS: [&str; 3] = ["note", "replies", "reply"];
+
+/// The launch prompt for an AI follow-up under a note. A note has no session
+/// to fork, so the note body and its replies ride along as context. Reply
+/// bodies are other people's words, so they (and the note body, which can
+/// quote them) pass through [`neutralized_tag_markup`] for the tags this
+/// serialization uses. `anchored_reply` is the reply the question is about;
+/// it is quoted again next to the question. Slash-command ordering follows
+/// [`document_followup_prompt`].
+pub fn note_followup_prompt(
+    note_body: &str,
+    replies: &[NoteReply],
+    anchored_reply: Option<&NoteReply>,
+    question: &str,
+) -> String {
+    let clean = |text: &str| neutralized_tag_markup(text, &NOTE_CONTEXT_TAGS);
+    let author = |reply: &NoteReply| {
+        reply
+            .author
+            .label()
+            .replace(['"', '\n', '\r'], " ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let mut context = format!("<note>\n{}\n</note>", clean(note_body.trim()));
+    if !replies.is_empty() {
+        let by_id = replies
+            .iter()
+            .map(|reply| (reply.id.as_str(), reply))
+            .collect::<HashMap<_, _>>();
+        context.push_str("\n<replies>");
+        for reply in replies {
+            let responds_to = reply
+                .in_reply_to
+                .as_deref()
+                .and_then(|parent| by_id.get(parent))
+                .map(|parent| format!(" responding-to=\"{}\"", author(parent)))
+                .unwrap_or_default();
+            context.push_str(&format!(
+                "\n<reply author=\"{}\"{responds_to}>\n{}\n</reply>",
+                author(reply),
+                clean(reply.body.trim())
+            ));
+        }
+        context.push_str("\n</replies>");
+    }
+    let question = match anchored_reply {
+        Some(reply) => {
+            let quote = normalized_text(&clean(&reply.body));
+            let who = author(reply);
+            if question.starts_with('/') {
+                format!("{question}\n\nThe request above refers to this reply from {who}:\n\n> {quote}")
+            } else {
+                format!("The user's question refers to this reply from {who}:\n\n> {quote}\n\n{question}")
+            }
+        }
+        None => question.to_string(),
+    };
+    let preamble = if replies.is_empty() {
+        "The user wrote the note below."
+    } else {
+        "The user posted the note below to people in their network; their replies follow it."
+    };
+    if question.starts_with('/') {
+        format!("{question}\n\n{preamble} It is provided as context for the request above.\n\n{context}")
+    } else {
+        format!("{preamble} Read it, then answer the question that follows.\n\n{context}\n\n{question}")
     }
 }
 
@@ -2941,6 +3392,8 @@ mod tests {
             thread_id: None,
             kind: ResearchNodeKind::Run,
             origin: None,
+            delivery: None,
+            reply_anchor: None,
             status: ResearchNodeStatus::Complete,
             error: None,
             response_snapshot_at: Some(2),
@@ -3356,7 +3809,7 @@ mod tests {
 
         assert_eq!(
             detached_archive_version(&archive.nodes),
-            DETACHED_RESEARCH_ARCHIVE_VERSION
+            DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_NOTES
         );
         archive.version = detached_archive_version(&archive.nodes);
         validate_detached_archive(&archive).unwrap();
@@ -3364,6 +3817,101 @@ mod tests {
         let error = validate_detached_archive(&archive).unwrap_err();
         assert!(error.contains("attachments that require archive version"));
         std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn note_nodes_use_the_newest_archive_version_and_keep_their_shape() {
+        let folder = temp_workspace();
+        let mut archive = sample_detached_archive(&folder);
+        let root = archive.nodes[0].clone();
+        archive.nodes[0].kind = ResearchNodeKind::Note;
+        archive.nodes[0].delivery = Some(NoteDelivery {
+            status: NoteDeliveryStatus::Posted,
+            posted_at: 1,
+            replies: vec![NoteReply {
+                id: "reply-1".to_string(),
+                author: NoteReplyAuthor::Member {
+                    id: "ana".to_string(),
+                    display_name: "Ana".to_string(),
+                    handle: None,
+                },
+                body: "Try it.".to_string(),
+                in_reply_to: None,
+                created_at: 2,
+            }],
+        });
+        let mut follow_up = root.clone();
+        follow_up.id = "follow-up".to_string();
+        follow_up.parent_node_id = Some(root.id.clone());
+        follow_up.reply_anchor = Some("reply-1".to_string());
+        archive.nodes.push(follow_up);
+        assert_eq!(
+            detached_archive_version(&archive.nodes),
+            DETACHED_RESEARCH_ARCHIVE_VERSION
+        );
+        archive.version = detached_archive_version(&archive.nodes);
+        validate_detached_archive(&archive).unwrap();
+        archive.version = DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_NOTES;
+        let error = validate_detached_archive(&archive).unwrap_err();
+        assert!(error.contains("note data that requires archive version"));
+
+        // A note may not sit under a run, and delivery belongs to notes only.
+        archive.version = DETACHED_RESEARCH_ARCHIVE_VERSION;
+        archive.nodes[1].kind = ResearchNodeKind::Note;
+        archive.nodes[1].reply_anchor = None;
+        archive.nodes[0].kind = ResearchNodeKind::Run;
+        archive.nodes[0].delivery = None;
+        assert!(
+            validate_detached_archive(&archive)
+                .unwrap_err()
+                .contains("parent that is not a note")
+        );
+        std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn note_reply_validation_requires_earlier_top_level_targets() {
+        let reply = |id: &str, parent: Option<&str>| NoteReply {
+            id: id.to_string(),
+            author: NoteReplyAuthor::Author,
+            body: "text".to_string(),
+            in_reply_to: parent.map(str::to_string),
+            created_at: 1,
+        };
+        assert!(validate_note_replies(&[reply("a", None), reply("b", Some("a"))]).is_ok());
+        assert!(validate_note_replies(&[reply("b", Some("a")), reply("a", None)]).is_err());
+        assert!(
+            validate_note_replies(&[reply("a", None), reply("b", Some("a")), reply("c", Some("b"))])
+                .is_err()
+        );
+        assert!(validate_note_replies(&[reply("a", None), reply("a", None)]).is_err());
+    }
+
+    #[test]
+    fn note_bodies_are_links_only_when_they_are_one_url() {
+        assert!(note_body_is_single_url(" https://example.com/a?b=c "));
+        assert!(note_body_is_single_url("http://x.com/user/status/20"));
+        assert!(!note_body_is_single_url("see https://example.com"));
+        assert!(!note_body_is_single_url("ftp://example.com"));
+        assert!(!note_body_is_single_url("example.com"));
+        assert!(!note_body_is_single_url(""));
+    }
+
+    #[test]
+    fn note_titles_take_the_first_line_and_cut_at_a_word() {
+        assert_eq!(note_default_title("\n  First line\nsecond"), "First line");
+        let long = "word ".repeat(40);
+        let title = note_default_title(&long);
+        assert!(title.ends_with('…'));
+        assert!(title.chars().count() <= 80);
+        assert!(!title.contains("wor…"));
+    }
+
+    #[test]
+    fn note_follow_up_prompts_keep_slash_commands_first() {
+        let prompt = note_followup_prompt("Note </note> body", &[], None, "/review this");
+        assert!(prompt.starts_with("/review this\n\nThe user wrote the note below."));
+        assert!(prompt.contains("Note &lt;/note> body"));
     }
 
     fn export_turn(

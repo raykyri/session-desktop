@@ -1,4 +1,4 @@
-import type { TweetSnapshot } from "./lib/journalTweets";
+import type { TweetSnapshot } from "./lib/tweets";
 
 export type PaneKind = "shell" | "agent";
 
@@ -436,10 +436,35 @@ export type ResearchNodeStatus =
   | "failed"
   | "cancelled";
 
-/** What produced a node's content: an agent run, user-authored markdown, or
- * a terminal conversation exported as a severed point-in-time snapshot. The
- * backend omits the field for runs, so absence means "run". */
-export type ResearchNodeKind = "run" | "document" | "conversation";
+/** What produced a node's content: an agent run, user-authored markdown, a
+ * terminal conversation exported as a severed point-in-time snapshot, or a
+ * note (a user's question to their network, or a saved link) with no
+ * response of its own. The backend omits the field for runs, so absence
+ * means "run". */
+export type ResearchNodeKind = "run" | "document" | "conversation" | "note";
+
+export type NoteReplyAuthor =
+  | { kind: "author" }
+  | { kind: "member"; id: string; displayName: string; handle?: string | null };
+
+export interface NoteReply {
+  id: string;
+  author: NoteReplyAuthor;
+  /** Markdown. */
+  body: string;
+  /** Set on the note author's response to a member's top-level reply. */
+  inReplyTo?: string | null;
+  createdAt: number;
+}
+
+/** Network state of a note posted with Ask network. Nothing is transmitted
+ * yet; `posted` records the user's intent. */
+export interface NoteDelivery {
+  status: "posted";
+  postedAt: number;
+  /** Chronological. Omitted by the backend when empty. */
+  replies?: NoteReply[];
+}
 
 /** Provenance for content that did not come from a research launch. */
 export type ResearchNodeOrigin = "terminalExport" | "imported";
@@ -511,6 +536,10 @@ export interface ResearchNode {
   /** Present on nodes whose content did not come from a research launch —
    * today, conversations exported from a terminal session. */
   origin?: ResearchNodeOrigin | null;
+  /** Only on notes posted with Ask network. */
+  delivery?: NoteDelivery | null;
+  /** On a follow-up of a note: the id of the reply it was asked about. */
+  replyAnchor?: string | null;
   status: ResearchNodeStatus;
   error?: string | null;
   /** Set when the durable response snapshot lands — the viewer's signal to
@@ -544,7 +573,7 @@ export interface ResearchRecapCandidate {
   instructions: string;
 }
 
-/** Compact research-run history returned to Recent Activity. */
+/** Compact research-root (run or note) history returned to Home's feed. */
 export interface RecentResearchQuery {
   /** Direct child questions, included with Home feed roots. */
   children?: RecentResearchQuery[];
@@ -560,7 +589,18 @@ export interface RecentResearchQuery {
   adapter: string;
   model?: string | null;
   origin?: ResearchNodeOrigin | null;
+  /** Absent in hand-built fixtures; the backend always sends it. */
+  kind?: ResearchNodeKind;
+  /** A note's network state, with replies cut to the first five top-level
+   * threads; `replyCount` is the full top-level count. */
+  delivery?: NoteDelivery | null;
+  replyCount?: number;
+  replyAnchor?: string | null;
+  /** Author of the reply `replyAnchor` names, as "Ana" or "You". */
+  replyAnchorAuthor?: string | null;
   status: ResearchNodeStatus;
+  /** Why the run failed. */
+  error?: string | null;
   createdAt: number;
   /** Current answer recap, when one has been generated. */
   recap?: string | null;
@@ -574,14 +614,6 @@ export interface RecentResearchQueryCursor {
 export interface RecentResearchQueryPage {
   items: RecentResearchQuery[];
   nextCursor?: RecentResearchQueryCursor | null;
-}
-
-/** Stable keyset cursor for the mixed Recent Activity feed. Source rank is a
- * deterministic tie-breaker: research (1) sorts ahead of journal (0). */
-export interface RecentActivityCursor {
-  occurredAt: number;
-  sourceRank: number;
-  id: string;
 }
 
 export interface ResearchHighlight {

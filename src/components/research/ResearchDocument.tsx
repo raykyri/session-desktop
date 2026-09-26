@@ -15,6 +15,8 @@ import {
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
 import { formatResearchModelSummary } from "../ActivityMetadataLine";
+import ResearchNoteDocument from "./ResearchNoteDocument";
+import type { NoteActions } from "./ResearchNote";
 import { formatRelativeTime } from "../../lib/transcriptSessions";
 import ResearchThreadActions from "./ResearchThreadActions";
 import { growComposerTextarea } from "../../lib/composerTextarea";
@@ -135,6 +137,8 @@ interface ResearchDocumentProps {
     queryAnchor?: ResearchHighlightAnchor | null,
     inline?: boolean,
   ) => Promise<ResearchNode>;
+  /** Replies and follow-ups on a note page (see ResearchNoteDocument). */
+  noteActions: NoteActions;
   onRemoveBranch: (nodeId: string) => Promise<ResearchBranchRemoval>;
   onRemoveTree: (treeId: string) => Promise<void>;
   /** Persist the thread's Follow / Bookmark flags; the tree update event
@@ -922,6 +926,9 @@ interface ThreadSegmentProps {
   index: number;
   /** Previous segment's answer, for the follow-up "Reply to:" line. */
   replyToAnswer: string | null;
+  /** For a follow-up of a note asked about one reply: that reply's text,
+   * quoted above the question the way an anchored passage is. */
+  replyQuote?: string | null;
   /** Thread-level Follow / Bookmark state, rendered on the root prompt's
    * footer row. */
   followed: boolean;
@@ -1624,6 +1631,7 @@ const ThreadSegment = memo(function ThreadSegment({
   node,
   index,
   replyToAnswer,
+  replyQuote = null,
   followed,
   bookmarked,
   onToggleFollow,
@@ -1686,7 +1694,7 @@ const ThreadSegment = memo(function ThreadSegment({
         visible={!view.isDocument && !view.isConversation}
         index={index}
         parentNodeId={node.parentNodeId ?? null}
-        queryQuote={node.queryAnchor?.exact ?? null}
+        queryQuote={node.queryAnchor?.exact ?? replyQuote}
         prompt={node.prompt}
         attachments={node.attachments}
         adapter={node.adapter}
@@ -1764,6 +1772,7 @@ function ResearchDocument({
   detailError,
   onRetryDetail,
   onFork,
+  noteActions,
   onRemoveBranch,
   onRemoveTree,
   onSetFollowed,
@@ -5037,12 +5046,18 @@ function ResearchDocument({
         : segmentActive
           ? "Waiting to start"
           : null;
+    const replyQuote = node.replyAnchor
+      ? detail.nodes
+          .find((candidate) => candidate.id === node.parentNodeId)
+          ?.delivery?.replies?.find((reply) => reply.id === node.replyAnchor)?.body ?? null
+      : null;
     return (
       <ThreadSegment
         key={node.id}
         view={view}
         node={node}
         index={index}
+        replyQuote={replyQuote}
         replyToAnswer={
           index > 0
             ? segmentViews[index - 1]?.rawAnswer.trim() ||
@@ -5096,6 +5111,34 @@ function ResearchDocument({
       />
     );
   });
+
+  // A note has no answer to render, highlight, or branch from; its page lists
+  // its replies and follow-ups instead. Selection, history, and the workspace
+  // navigation around it are still this component's.
+  if (displayNode.kind === "note") {
+    return (
+      <TranscriptLinkActionsProvider actions={linkActions}>
+        <TranscriptWikilinkActionsProvider actions={wikilinkActions}>
+          <ResearchNoteDocument
+            detail={detail}
+            note={displayNode}
+            archived={archived}
+            followed={treeFollowed}
+            bookmarked={treeBookmarked}
+            actions={noteActions}
+            canGoBack={canGoBack}
+            canGoForward={canGoForward}
+            onBack={goBack}
+            onForward={goForward}
+            onShowSidebar={onShowSidebar}
+            onToggleFollow={handleToggleFollow}
+            onToggleBookmark={handleToggleBookmark}
+            onSelectNode={handleSelectNode}
+          />
+        </TranscriptWikilinkActionsProvider>
+      </TranscriptLinkActionsProvider>
+    );
+  }
 
   return (
     <TranscriptLinkActionsProvider actions={linkActions}>

@@ -1,0 +1,516 @@
+/* Notes: Ask-network questions and saved links on Home cards and on a note's
+   page. Replies and follow-ups share one outline — an avatar (or glyph)
+   gutter joined by a spine — so both surfaces read the same. */
+
+.note-outline {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.note-outline-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.note-outline-label {
+  margin-bottom: 8px;
+  color: var(--text-subtle);
+  font-size: calc(12px + var(--font-ui-size-offset));
+}
+
+.note-placeholder,
+.note-document-placeholder {
+  margin: 0;
+  color: var(--text-subtle);
+  font-size: var(--research-meta-font-size);
+  font-style: italic;
+}
+
+.note-document-placeholder {
+  padding: 12px 14px;
+  border: 1px dashed var(--surface-border-default);
+  border-radius: var(--radius-lg);
+  font-style: normal;
+}
+
+/* — Outline — */
+
+.note-thread-list {
+  --note-gutter: 20px;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note-thread-list.is-nested {
+  --note-gutter: 16px;
+  margin-top: 10px;
+}
+
+.note-thread-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--note-gutter) minmax(0, 1fr);
+  column-gap: 10px;
+  padding-bottom: 14px;
+}
+
+.note-thread-item:last-child {
+  padding-bottom: 0;
+}
+
+/* The spine runs from below this item's avatar to the next item's. */
+.note-thread-item:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--note-gutter) + 2px);
+  bottom: 2px;
+  left: calc(var(--note-gutter) / 2 - 0.5px);
+  border-left: 1px solid var(--surface-border-default);
+}
+
+.note-thread-gutter {
+  display: flex;
+  justify-content: center;
+}
+
+.note-thread-body {
+  min-width: 0;
+}
+
+.note-avatar,
+.note-glyph {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: none;
+  width: var(--note-gutter);
+  height: var(--note-gutter);
+  align-items: center;
+  justify-content: center;
+}
+
+.note-avatar {
+  border-radius: 50%;
+  color: var(--note-avatar-fg);
+  font-size: calc(var(--note-gutter) * 0.45);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.note-avatar.tone-0 {
+  background: var(--note-avatar-tone-0);
+}
+
+.note-avatar.tone-1 {
+  background: var(--note-avatar-tone-1);
+}
+
+.note-avatar.tone-2 {
+  background: var(--note-avatar-tone-2);
+}
+
+.note-avatar.is-self {
+  background: var(--control-bg);
+  color: var(--text-muted);
+  border: 1px solid var(--control-border);
+  font-size: calc(var(--note-gutter) * 0.32);
+}
+
+.note-glyph {
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text-muted);
+}
+
+/* — Replies — */
+
+.note-reply-head {
+  display: flex;
+  min-height: var(--note-gutter);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-subtle);
+  font-size: var(--research-meta-font-size);
+  line-height: var(--research-meta-line-height);
+}
+
+.note-reply-author {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.note-reply-text {
+  margin-top: 1px;
+}
+
+/* Row actions appear on hover or focus so a long reply list stays quiet. */
+.note-thread-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 3px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.note-thread-item:hover > .note-thread-body > .note-thread-actions,
+.note-thread-body:focus-within > .note-thread-actions {
+  opacity: 1;
+}
+
+.note-thread-link {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-activity);
+  font-size: calc(12.5px + var(--font-ui-size-offset));
+  cursor: pointer;
+}
+
+.note-thread-link:hover:not(:disabled) {
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.note-thread-link:disabled {
+  cursor: default;
+}
+
+.note-show-more {
+  align-self: flex-start;
+  margin: 10px 0 0 calc(var(--note-gutter, 20px) + 10px);
+}
+
+.note-thread-error {
+  margin: 4px 0 0;
+  color: var(--status-failed-fg);
+  font-size: calc(12.5px + var(--font-ui-size-offset));
+}
+
+/* — Follow-ups — */
+
+.note-followup-question {
+  color: var(--text-interactive);
+  font-size: var(--research-body-font-size);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.note-followup-question:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--text-subtle);
+  text-underline-offset: 3px;
+}
+
+.note-followup-question:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.note-followup-target {
+  color: var(--text-subtle);
+}
+
+.note-followup-recap {
+  margin: 3px 0 0;
+}
+
+.note-thread-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  color: var(--text-subtle);
+  font-size: calc(12.5px + var(--font-ui-size-offset));
+}
+
+.note-thread-meta.is-failed {
+  color: var(--status-failed-fg);
+}
+
+.note-thread-meta-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.note-thread-spinner,
+.note-field-spinner,
+.note-segment-spinner {
+  flex: none;
+  color: var(--text-muted);
+  animation: spinner-spin 0.9s linear infinite;
+}
+
+.note-add-followup {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-activity);
+  font-size: var(--research-meta-font-size);
+  cursor: pointer;
+}
+
+.note-add-followup:hover {
+  color: var(--text-secondary);
+}
+
+/* The composer row has no glyph, so no spine leads into it. */
+.note-thread-item[data-type="composer"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.note-thread-item[data-type="composer"] > .note-thread-gutter {
+  display: none;
+}
+
+/* — Fields — */
+
+.note-field-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.note-field {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 4px;
+  border: 1px solid var(--surface-border-default);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--transition-fast);
+}
+
+.note-field:focus-within {
+  border-color: var(--control-border);
+  background: var(--field-bg, transparent);
+}
+
+.note-field.is-respond {
+  margin-top: 8px;
+  padding-left: 8px;
+}
+
+.note-field input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 2px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: calc(var(--research-body-font-size) - 0.5px);
+}
+
+.note-field input::placeholder {
+  color: var(--text-subtle);
+}
+
+.note-field-mode {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-md);
+  background: var(--surface-fill-subtle);
+}
+
+.note-field-mode-button {
+  min-height: 0;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: calc(11.5px + var(--font-ui-size-offset));
+  cursor: pointer;
+}
+
+.note-field-mode-button:hover {
+  color: var(--text-primary);
+}
+
+.note-field-mode-button.is-active {
+  background: var(--control-bg);
+  color: var(--text-strong);
+}
+
+.note-field-target {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  min-height: 0;
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--surface-fill-subtle);
+  color: var(--text-muted);
+  font-size: calc(12px + var(--font-ui-size-offset));
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.note-field-target:hover {
+  color: var(--text-primary);
+}
+
+.note-field-model {
+  flex: none;
+  color: var(--text-subtle);
+  font-size: calc(12px + var(--font-ui-size-offset));
+  white-space: nowrap;
+}
+
+/* — Saved links — */
+
+.note-link-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-interactive);
+  text-decoration: none;
+}
+
+.note-link-card-url {
+  font-size: var(--research-body-font-size);
+  overflow-wrap: anywhere;
+}
+
+.note-link-card:hover .note-link-card-url {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.note-link-card-host {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-subtle);
+  font-size: calc(12.5px + var(--font-ui-size-offset));
+}
+
+/* A feed time that links to the thread (link and post cards). */
+.activity-metadata-open {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.activity-metadata-open:hover {
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* — Note page — */
+
+.note-document {
+  max-width: 640px;
+}
+
+.note-document-kind,
+.note-document-parent {
+  color: var(--text-subtle);
+  font-size: calc(12.5px + var(--font-ui-size-offset));
+}
+
+.note-document-parent {
+  align-self: flex-start;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.note-document-parent:hover {
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.note-document-group {
+  display: flex;
+  flex-direction: column;
+  margin-top: 34px;
+}
+
+.note-document-group-label {
+  margin: 0 0 18px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--surface-border-faint);
+  color: var(--text-subtle);
+  font-size: calc(12px + var(--font-ui-size-offset));
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.note-document-group > .note-thread-list > .note-thread-item {
+  padding-bottom: 22px;
+}
+
+.note-document-group > .note-thread-list > .note-thread-item:last-child {
+  padding-bottom: 0;
+}
+
+.note-segment {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 32px;
+}
+
+.note-segment-meta {
+  color: var(--text-subtle);
+  font-size: calc(12.5px + var(--font-ui-size-offset));
+}
+
+.note-segment-question {
+  width: fit-content;
+  max-width: 100%;
+  color: var(--text-strong);
+  font-size: var(--research-body-font-size);
+  cursor: pointer;
+}
+
+.note-segment-question:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--text-subtle);
+  text-underline-offset: 3px;
+}
+
+.note-segment-question:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.note-segment-answer {
+  margin-top: 10px;
+}
+
+.note-segment-spinner {
+  margin-top: 10px;
+}

@@ -1,7 +1,7 @@
 import { trackRemoteStartup, recordRemoteStartup, reconcileRemoteReservation, forgetRemoteStartup } from "./remoteStartup";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { JournalEntry, RecentActivityPage } from "./journal";
+import type { RecentActivityPage } from "./activity";
 import type { PaneLayoutItem } from "./paneTree";
 import type { ResearchFolderState } from "./researchFolders";
 import type { WorktreeLocation } from "./settings";
@@ -37,7 +37,7 @@ import type {
   RemoveQueuedAgentTurnResult,
   ReorderQueuedAgentTurnResult,
   ResearchBranchRemoval,
-  RecentActivityCursor,
+  RecentResearchQueryCursor,
   ResearchHighlight,
   ResearchHighlightFeedItem,
   ResearchHighlightAnchor,
@@ -327,7 +327,7 @@ export function listResearchActivity() {
 
 export function listRecentActivity(
   limit = 50,
-  before?: RecentActivityCursor | null,
+  before?: RecentResearchQueryCursor | null,
 ) {
   return invoke<RecentActivityPage>("list_recent_activity", {
     limit,
@@ -335,22 +335,34 @@ export function listRecentActivity(
   });
 }
 
-export function restoreJournalEntry(entry: JournalEntry) {
-  return invoke<boolean>("journal_restore", { entry });
+/** Creates a note tree. `askNetwork` notes are posted to the network (no
+ * transport yet); a body that is a single URL can be saved with
+ * `askNetwork: false` as a link or post. The agent fields are the default
+ * for the note's AI follow-ups. */
+export function createResearchNote(request: {
+  body: string;
+  adapter: string;
+  model?: string | null;
+  effort?: string | null;
+  workspaceId: string;
+  askNetwork: boolean;
+}) {
+  return invoke<ResearchTreeDetail>("create_research_note", { request });
 }
 
-export function updateJournalEntry(id: string, entry: JournalEntry) {
-  return invoke<boolean>("journal_update", { id, entry });
+/** A network follow-up: another note under a network note. */
+export function createResearchNoteFollowUp(parentNodeId: string, body: string) {
+  return invoke<ResearchNode>("create_research_note_follow_up", { parentNodeId, body });
 }
 
-export function deleteJournalEntry(id: string) {
-  return invoke<boolean>("journal_remove", { id });
+/** The note author's response to a member's reply. */
+export function respondToResearchNoteReply(nodeId: string, inReplyTo: string, body: string) {
+  return invoke<ResearchNode>("add_research_note_reply", { nodeId, inReplyTo, body });
 }
 
-/** Fetches a tweet's raw syndication JSON through the backend (the webview
- * cannot reach X directly). `token` comes from syndicationToken(id). */
-export function fetchJournalTweet(id: string, token: string) {
-  return invoke<string>("journal_fetch_tweet", { id, token });
+/** Deletes one of the note author's own responses. */
+export function removeResearchNoteReply(nodeId: string, replyId: string) {
+  return invoke<ResearchNode>("remove_research_note_reply", { nodeId, replyId });
 }
 
 export function getResearchTree(treeId: string) {
@@ -443,11 +455,13 @@ export function forkResearchNode(
   prompt: string,
   queryAnchor?: ResearchHighlightAnchor | null,
   inline = false,
+  replyAnchor?: string | null,
 ) {
   return invoke<ResearchNode>("fork_research_node", {
     parentNodeId,
     prompt,
     queryAnchor: queryAnchor ?? null,
+    replyAnchor: replyAnchor ?? null,
     inline,
   });
 }

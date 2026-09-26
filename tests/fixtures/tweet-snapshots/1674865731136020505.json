@@ -1,0 +1,25 @@
+{
+  "id": "1674865731136020505",
+  "url": "https://x.com/elonmusk/status/1674865731136020505",
+  "author": {
+    "name": "Elon Musk",
+    "handle": "elonmusk",
+    "avatarUrl": "https://pbs.twimg.com/profile_images/2053244804520427520/m8mdWZCG_normal.jpg",
+    "verified": true
+  },
+  "createdAt": "2023-06-30T19:41:22.000Z",
+  "runs": [
+    {
+      "kind": "text",
+      "text": "@TitterDaily Temporary emergency measure. We were getting data pillaged so much that it was degrading service for normal users!"
+    }
+  ],
+  "partial": false,
+  "media": [],
+  "replies": 825,
+  "likes": 13289,
+  "replyTo": {
+    "handle": "xDaily",
+    "id": "1674765247255654400"
+  }
+}

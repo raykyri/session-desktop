@@ -40,6 +40,18 @@ export function formatResearchModelSummary(
  * the provider/object details, so this line only orients the reader in time and
  * names the containing thread when a reply belongs to one. */
 export function formatActivityMetadataSummary(event: ActivityEvent): string {
+  if (event.action.kind === "posted") {
+    const source = event.source as { query?: { replyCount?: number } } | undefined;
+    const replies = source?.query?.replyCount ?? 0;
+    return replies > 0
+      ? `${event.action.label} · ${replies === 1 ? "1 reply" : `${replies} replies`} ·`
+      : `${event.action.label} ·`;
+  }
+  if (event.object.kind === "post" || event.object.kind === "link") {
+    return event.context?.kind === "source"
+      ? `${event.action.label} · ${event.context.label} ·`
+      : `${event.action.label} ·`;
+  }
   if (event.object.kind === "research-query") {
     if (event.execution?.origin === "imported") return "Imported";
     if (event.relationship?.kind === "follow-up") {
@@ -58,8 +70,12 @@ export function formatActivityMetadataSummary(event: ActivityEvent): string {
  * content surface because it describes the event, not the object payload. */
 export default function ActivityMetadataLine({
   event,
+  onOpen,
 }: {
   event: ActivityEvent;
+  /** Makes the time a link to the item, for cards whose body has no link
+   * of its own to the thread (a saved link or post). */
+  onOpen?: () => void;
 }) {
   const finiteTime = Number.isFinite(event.occurredAt);
   const summary = formatActivityMetadataSummary(event);
@@ -73,9 +89,22 @@ export default function ActivityMetadataLine({
         {finiteTime ? (
           <>
             {summary ? " " : null}
-            <time dateTime={new Date(event.occurredAt).toISOString()}>
-              {formatRelativeTime(event.occurredAt)}
-            </time>
+            {onOpen ? (
+              <button
+                type="button"
+                className="activity-metadata-open"
+                title="Open thread"
+                onClick={onOpen}
+              >
+                <time dateTime={new Date(event.occurredAt).toISOString()}>
+                  {formatRelativeTime(event.occurredAt)}
+                </time>
+              </button>
+            ) : (
+              <time dateTime={new Date(event.occurredAt).toISOString()}>
+                {formatRelativeTime(event.occurredAt)}
+              </time>
+            )}
           </>
         ) : null}
       </span>

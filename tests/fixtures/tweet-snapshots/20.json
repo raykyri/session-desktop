@@ -1,0 +1,21 @@
+{
+  "id": "20",
+  "url": "https://x.com/jack/status/20",
+  "author": {
+    "name": "jack",
+    "handle": "jack",
+    "avatarUrl": "https://pbs.twimg.com/profile_images/1661201415899951105/azNjKOSH_normal.jpg",
+    "verified": true
+  },
+  "createdAt": "2006-03-21T20:50:14.000Z",
+  "runs": [
+    {
+      "kind": "text",
+      "text": "just setting up my twttr"
+    }
+  ],
+  "partial": false,
+  "media": [],
+  "replies": 17999,
+  "likes": 309060
+}
