@@ -1,14 +1,9 @@
-import {
-  compareRecentActivityItems,
-  activityCursorIsBefore,
-  recentActivityItemId,
-  recentActivityItemCursor,
-  type JournalEntry,
-  type RecentActivityItem,
-} from "./journal";
-import type { RecentActivityCursor } from "../types";
 import type {
+  NoteDelivery,
+  NoteReply,
   RecentResearchQuery,
+  RecentResearchQueryCursor,
+  ResearchNode,
   ResearchNodeStatus,
   ResearchTreeSummary,
 } from "../types";
@@ -20,9 +15,9 @@ import type {
 export interface ActivityEvent<TSource = unknown> {
   id: string;
   actor: { kind: "user" | "agent" | "system"; label: string };
-  action: { kind: "saved" | "asked" | "created" | "completed"; label: string };
+  action: { kind: "saved" | "asked" | "posted" | "created" | "completed"; label: string };
   object: {
-    kind: "link" | "post" | "research-query" | "artifact" | "task";
+    kind: "link" | "post" | "note" | "research-query" | "artifact" | "task";
     id: string;
     label: string;
   };
@@ -34,17 +29,79 @@ export interface ActivityEvent<TSource = unknown> {
   source: TSource;
 }
 
-export type RecentActivitySource =
-  | { kind: "journal"; entry: JournalEntry }
-  | { kind: "research-query"; query: RecentResearchQuery };
+export type RecentActivitySource = { kind: "research-query"; query: RecentResearchQuery };
 
 export type RecentActivityEvent = ActivityEvent<RecentActivitySource>;
 
+/** One page of Home's feed: research roots (runs and notes), newest first. */
+export interface RecentActivityPage {
+  items: RecentResearchQuery[];
+  nextCursor?: RecentResearchQueryCursor | null;
+}
+
+/** Top-level replies Home carries per note; mirrors the backend's
+ * `RECENT_ACTIVITY_NOTE_REPLY_LIMIT`. */
+export const RECENT_ACTIVITY_NOTE_REPLY_LIMIT = 5;
+
+export function topLevelReplyCount(replies: NoteReply[] = []): number {
+  return replies.filter((reply) => !reply.inReplyTo).length;
+}
+
+/** The delivery with only the first `limit` top-level replies and the
+ * responses to them, matching the backend's feed payload. */
+export function cappedNoteDelivery(delivery: NoteDelivery, limit: number): NoteDelivery {
+  const kept = new Set(
+    (delivery.replies ?? [])
+      .filter((reply) => !reply.inReplyTo)
+      .slice(0, limit)
+      .map((reply) => reply.id),
+  );
+  return {
+    ...delivery,
+    replies: (delivery.replies ?? []).filter(
+      (reply) => kept.has(reply.id) || (reply.inReplyTo != null && kept.has(reply.inReplyTo)),
+    ),
+  };
+}
+
+/** Display name of a reply's author as follow-ups name it ("@Ana's reply"). */
+export function noteReplyAuthorName(reply: NoteReply): string {
+  return reply.author.kind === "member" ? reply.author.displayName : "You";
+}
+
+export function recentActivityCursor(query: RecentResearchQuery): RecentResearchQueryCursor {
+  return { createdAt: query.createdAt, nodeId: query.nodeId };
+}
+
+export function activityCursorIsBefore(
+  candidate: RecentResearchQueryCursor,
+  boundary: RecentResearchQueryCursor,
+): boolean {
+  return (
+    candidate.createdAt < boundary.createdAt ||
+    (candidate.createdAt === boundary.createdAt && candidate.nodeId < boundary.nodeId)
+  );
+}
+
+/** Newest first; ties broken by descending node id, as the backend pages. */
+export function compareRecentActivityItems(
+  left: RecentResearchQuery,
+  right: RecentResearchQuery,
+): number {
+  return (
+    right.createdAt - left.createdAt ||
+    (right.nodeId < left.nodeId ? -1 : right.nodeId > left.nodeId ? 1 : 0)
+  );
+}
+
 export function recentResearchQueryFromNode(
-  node: import("../types").ResearchNode,
+  node: ResearchNode,
   includeFollowUps = false,
 ): RecentResearchQuery | null {
-  if ((node.kind && node.kind !== "run") || (!includeFollowUps && node.parentNodeId)) return null;
+  const kind = node.kind ?? "run";
+  if ((kind !== "run" && kind !== "note") || (!includeFollowUps && node.parentNodeId)) {
+    return null;
+  }
   return {
     nodeId: node.id,
     treeId: node.treeId,
@@ -57,83 +114,114 @@ export function recentResearchQueryFromNode(
     adapter: node.adapter,
     model: node.model,
     ...(node.origin ? { origin: node.origin } : {}),
+    kind,
+    ...(node.delivery
+      ? {
+          delivery: cappedNoteDelivery(node.delivery, RECENT_ACTIVITY_NOTE_REPLY_LIMIT),
+          replyCount: topLevelReplyCount(node.delivery.replies),
+        }
+      : {}),
+    ...(node.replyAnchor ? { replyAnchor: node.replyAnchor } : {}),
     status: node.status,
+    ...(node.error ? { error: node.error } : {}),
     createdAt: node.createdAt,
     recap: node.recap?.text.trim() || undefined,
   };
 }
 
+/** Resolves a follow-up's reply target against its loaded parent. The
+ * parent's delivery may be cut to the first replies; a target outside that
+ * window keeps the author name the backend supplied. */
+function withReplyAnchorAuthor(
+  child: RecentResearchQuery,
+  parent: RecentResearchQuery,
+  existing?: RecentResearchQuery,
+): RecentResearchQuery {
+  if (!child.replyAnchor) return child;
+  const reply = parent.delivery?.replies?.find((candidate) => candidate.id === child.replyAnchor);
+  const author = reply ? noteReplyAuthorName(reply) : existing?.replyAnchorAuthor;
+  return author ? { ...child, replyAnchorAuthor: author } : child;
+}
+
 /** Live node events update children within their loaded root, without changing feed order. */
 export function upsertRecentActivityResearchNode(
-  items: RecentActivityItem[],
-  node: import("../types").ResearchNode,
-): RecentActivityItem[] {
+  items: RecentResearchQuery[],
+  node: ResearchNode,
+): RecentResearchQuery[] {
   const query = recentResearchQueryFromNode(node, true);
   if (!query) return items;
   if (query.parentNodeId) {
     return items.map((item) => {
-      if (
-        item.kind !== "research-query" ||
-        item.query.nodeId !== query.parentNodeId ||
-        item.query.treeId !== query.treeId
-      ) return item;
+      if (item.nodeId !== query.parentNodeId || item.treeId !== query.treeId) return item;
+      const existing = item.children?.find((child) => child.nodeId === query.nodeId);
+      const child = withReplyAnchorAuthor(query, item, existing);
       const children = [
-        ...(item.query.children ?? []).filter((child) => child.nodeId !== query.nodeId),
-        query,
+        ...(item.children ?? []).filter((candidate) => candidate.nodeId !== query.nodeId),
+        child,
       ].sort((left, right) =>
         left.createdAt - right.createdAt || left.nodeId.localeCompare(right.nodeId),
       );
-      return { ...item, query: { ...item.query, children } };
+      return { ...item, children };
     });
   }
-  const existing = items.find((item) => item.kind === "research-query" && item.query.nodeId === query.nodeId);
-  if (existing?.kind === "research-query") query.children = existing.query.children;
-  return upsertRecentActivityItem(items, recentActivityItemFromResearchQuery(query));
+  const existing = items.find((item) => item.nodeId === query.nodeId);
+  if (existing) query.children = existing.children;
+  return upsertRecentActivityItem(items, query);
 }
 
-export function upsertRecentResearchQuery(
-  queries: RecentResearchQuery[],
+export function activityEventFromResearchQuery(
   query: RecentResearchQuery,
-): RecentResearchQuery[] {
-  return [...queries.filter((candidate) => candidate.nodeId !== query.nodeId), query].sort(
-    (left, right) => right.createdAt - left.createdAt || right.nodeId.localeCompare(left.nodeId),
-  );
-}
-
-function journalTimestamp(entry: JournalEntry): number {
-  const timestamp = Date.parse(entry.createdAt);
-  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY;
-}
-
-function journalObject(entry: JournalEntry): ActivityEvent["object"] {
-  if (entry.kind === "link") {
-    return { kind: "link", id: entry.id, label: "Link" };
-  }
-  return { kind: "post", id: entry.id, label: "Post" };
-}
-
-export function activityEventFromJournalEntry(entry: JournalEntry): RecentActivityEvent {
-  const sourceLabel =
-    entry.kind === "tweet"
-      ? entry.tweet?.author.handle
-        ? `@${entry.tweet.author.handle}`
-        : "X"
-      : (() => {
-          try {
-            return new URL(entry.url).hostname;
-          } catch {
-            return "Saved link";
-          }
-        })();
+  tree?: ResearchTreeSummary,
+): RecentActivityEvent {
+  const followUp = Boolean(query.parentNodeId);
+  const note = query.kind === "note";
+  const object: RecentActivityEvent["object"] = note
+    ? { kind: noteObjectKind(query), id: query.nodeId, label: "Note" }
+    : { kind: "research-query", id: query.nodeId, label: "Research" };
+  const action: RecentActivityEvent["action"] = !note
+    ? { kind: "asked", label: "asked" }
+    : query.delivery
+      ? { kind: "posted", label: "Posted to network" }
+      : { kind: "saved", label: object.kind === "post" ? "Saved post" : "Saved link" };
+  const sourceLabel = note && !query.delivery ? savedSourceLabel(query) : null;
   return {
-    id: `journal:${entry.id}`,
+    id: `research:${query.nodeId}`,
     actor: { kind: "user", label: "You" },
-    action: { kind: "saved", label: "saved" },
-    object: journalObject(entry),
-    ...(sourceLabel ? { context: { kind: "source" as const, label: sourceLabel } } : {}),
-    occurredAt: journalTimestamp(entry),
-    source: { kind: "journal", entry },
+    action,
+    object,
+    context: sourceLabel
+      ? { kind: "source", label: sourceLabel }
+      : { kind: "research", label: tree?.title ?? "Research" },
+    relationship: {
+      kind: followUp ? "follow-up" : "top-level",
+      label: followUp ? "Follow-up" : "Top-level",
+    },
+    execution: {
+      adapter: query.adapter,
+      model: query.model,
+      ...(query.origin ? { origin: query.origin } : {}),
+    },
+    state: visibleResearchState(query.status),
+    occurredAt: query.createdAt,
+    source: { kind: "research-query", query },
   };
+}
+
+/** A note with no delivery is a saved URL: a post when it resolved to a
+ * tweet, otherwise a link. */
+function noteObjectKind(query: RecentResearchQuery): "note" | "post" | "link" {
+  if (query.delivery) return "note";
+  return query.attachments?.some((attachment) => attachment.kind === "tweet") ? "post" : "link";
+}
+
+function savedSourceLabel(query: RecentResearchQuery): string | null {
+  const tweet = query.attachments?.find((attachment) => attachment.kind === "tweet")?.tweet;
+  if (tweet?.author.handle) return `@${tweet.author.handle}`;
+  try {
+    return new URL(query.prompt.trim()).hostname;
+  } catch {
+    return null;
+  }
 }
 
 function visibleResearchState(status: ResearchNodeStatus): ActivityEvent["state"] {
@@ -153,65 +241,11 @@ function visibleResearchState(status: ResearchNodeStatus): ActivityEvent["state"
   }
 }
 
-export function activityEventFromResearchQuery(
-  query: RecentResearchQuery,
-  tree?: ResearchTreeSummary,
-): RecentActivityEvent {
-  const followUp = Boolean(query.parentNodeId);
-  return {
-    id: `research:${query.nodeId}`,
-    actor: { kind: "user", label: "You" },
-    action: { kind: "asked", label: "asked" },
-    object: { kind: "research-query", id: query.nodeId, label: "Research" },
-    context: { kind: "research", label: tree?.title ?? "Research" },
-    relationship: {
-      kind: followUp ? "follow-up" : "top-level",
-      label: followUp ? "Follow-up" : "Top-level",
-    },
-    execution: {
-      adapter: query.adapter,
-      model: query.model,
-      ...(query.origin ? { origin: query.origin } : {}),
-    },
-    state: visibleResearchState(query.status),
-    occurredAt: query.createdAt,
-    source: { kind: "research-query", query },
-  };
-}
-
-export function buildRecentActivity(
-  entries: JournalEntry[],
-  queries: RecentResearchQuery[],
-  trees: ResearchTreeSummary[],
-): RecentActivityEvent[] {
-  const treeById = new Map(trees.map((tree) => [tree.id, tree]));
-  return [
-    ...entries.map(activityEventFromJournalEntry),
-    ...queries.map((query) => activityEventFromResearchQuery(query, treeById.get(query.treeId))),
-  ].sort((left, right) => right.occurredAt - left.occurredAt || right.id.localeCompare(left.id));
-}
-
-export function recentActivityItemFromJournalEntry(entry: JournalEntry): RecentActivityItem {
-  const occurredAt = Date.parse(entry.createdAt);
-  return {
-    kind: "journal",
-    occurredAt: Number.isFinite(occurredAt) ? occurredAt : 0,
-    entry,
-  };
-}
-
-export function recentActivityItemFromResearchQuery(
-  query: RecentResearchQuery,
-): RecentActivityItem {
-  return { kind: "research-query", occurredAt: query.createdAt, query };
-}
-
 export function upsertRecentActivityItem(
-  items: RecentActivityItem[],
-  item: RecentActivityItem,
-): RecentActivityItem[] {
-  const id = recentActivityItemId(item);
-  const next = items.filter((candidate) => recentActivityItemId(candidate) !== id);
+  items: RecentResearchQuery[],
+  item: RecentResearchQuery,
+): RecentResearchQuery[] {
+  const next = items.filter((candidate) => candidate.nodeId !== item.nodeId);
   let low = 0;
   let high = next.length;
   while (low < high) {
@@ -224,43 +258,37 @@ export function upsertRecentActivityItem(
 }
 
 export function mergeRecentActivityItems(
-  current: RecentActivityItem[],
-  incoming: RecentActivityItem[],
-): RecentActivityItem[] {
-  const byId = new Map(current.map((item) => [recentActivityItemId(item), item]));
+  current: RecentResearchQuery[],
+  incoming: RecentResearchQuery[],
+): RecentResearchQuery[] {
+  const byId = new Map(current.map((item) => [item.nodeId, item]));
   for (const item of incoming) {
-    byId.set(recentActivityItemId(item), item);
+    byId.set(item.nodeId, item);
   }
   return [...byId.values()].sort(compareRecentActivityItems);
 }
 
 export function reconcileRecentActivityHead(
-  current: RecentActivityItem[],
-  head: RecentActivityItem[],
-  nextCursor: RecentActivityCursor | null,
-): RecentActivityItem[] {
+  current: RecentResearchQuery[],
+  head: RecentResearchQuery[],
+  nextCursor: RecentResearchQueryCursor | null,
+): RecentResearchQuery[] {
   if (!nextCursor) {
     return [...head].sort(compareRecentActivityItems);
   }
   const olderTail = current.filter((item) =>
-    activityCursorIsBefore(recentActivityItemCursor(item), nextCursor),
+    activityCursorIsBefore(recentActivityCursor(item), nextCursor),
   );
   return mergeRecentActivityItems(olderTail, head);
 }
 
 export function buildRecentActivityFromItems(
-  items: RecentActivityItem[],
+  items: RecentResearchQuery[],
   trees: ResearchTreeSummary[],
 ): RecentActivityEvent[] {
   const treeById = new Map(trees.map((tree) => [tree.id, tree]));
   return items
-    .filter((item) =>
-      item.kind === "journal" || treeById.get(item.query.treeId)?.archivedAt == null,
-    )
-    .map((item) =>
-      item.kind === "journal"
-        ? activityEventFromJournalEntry(item.entry)
-        : activityEventFromResearchQuery(item.query, treeById.get(item.query.treeId)),
-    )
+    .filter((item) => treeById.get(item.treeId)?.archivedAt == null)
+    .map((item) => activityEventFromResearchQuery(item, treeById.get(item.treeId)))
     .sort((left, right) => right.occurredAt - left.occurredAt || right.id.localeCompare(left.id));
 }

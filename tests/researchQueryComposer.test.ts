@@ -12,6 +12,7 @@ const {
   askModeShowsAiControls,
   researchEffortOptionsFor,
 } = await import("../src/components/research/ResearchQueryComposer");
+const { noteBodyIsSingleUrl } = await import("../src/components/research/ResearchNote");
 
 function adapter(id: string): AgentAdapterMetadata {
   return {
@@ -48,6 +49,7 @@ function renderComposer() {
       workspaceId: "workspace",
       onOpenAgentSettings: () => {},
       onCreate: async () => {},
+      onPost: async () => {},
     }),
   );
 }
@@ -61,6 +63,17 @@ test("the composer offers both recipients and opens on Ask network", () => {
   assert.ok(html.indexOf("Ask network") < html.indexOf("Ask AI"));
   assert.doesNotMatch(html, /new-research-model-controls/);
   assert.doesNotMatch(html, /command-launcher-adapter-select/);
+  // Network mode posts a note rather than starting research.
+  assert.match(html, /placeholder="Ask your network, or paste a link to save"/);
+  assert.match(html, /aria-label="Post to network"/);
+});
+
+test("a single URL is saved as a link; anything else is asked", () => {
+  assert.equal(noteBodyIsSingleUrl(" https://example.com/page "), true);
+  assert.equal(noteBodyIsSingleUrl("https://x.com/jack/status/20"), true);
+  assert.equal(noteBodyIsSingleUrl("Is this right? https://example.com"), false);
+  assert.equal(noteBodyIsSingleUrl("ftp://example.com"), false);
+  assert.equal(noteBodyIsSingleUrl("example.com"), false);
 });
 
 test("Claude reasoning options omit the word effort", () => {

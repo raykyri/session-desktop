@@ -1,8 +1,6 @@
 /* Home activity: a research-surface page holding a narrow, left-aligned feed
-   of saved items and research queries. Link cards borrow the research
-   question card recipe (--content-card-bg on a 10px radius); tweet entries
-   drop the padding so the tweet card IS the entry — a feed of tweets, not
-   tweets framed inside content items. */
+   of research queries and notes (features/notes.css styles the note cards'
+   replies and follow-ups). */
 
 .journal-scroll {
   --journal-content-padding: clamp(20px, 4vw, 48px);
@@ -127,17 +125,6 @@
 
 .journal-setup-guide {
   padding-block: 10px;
-}
-
-/* Saved feed entries opt into the shared content-card recipe in markup. */
-.journal-entry {
-  position: relative;
-}
-
-/* Only feed entries have the hover menu that occupies the tweet header's
-   top-right corner. Embedded tweets inside research messages need no inset. */
-.journal-entry .journal-tweet-head {
-  padding-right: 22px;
 }
 
 /* Research queries use the same unboxed authored-message treatment and
@@ -285,154 +272,6 @@
   font-size: calc(11px + var(--font-ui-size-offset));
   line-height: 1.35;
   text-align: center;
-}
-
-.journal-entry.is-tweet {
-  padding: 12px 14px;
-}
-
-.journal-entry-menu-trigger {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  color: var(--text-subtle);
-  background: var(--content-card-bg);
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.journal-entry:hover .journal-entry-menu-trigger,
-.journal-entry:focus-within .journal-entry-menu-trigger,
-.journal-entry.has-open-menu .journal-entry-menu-trigger {
-  opacity: 1;
-}
-
-.journal-entry-menu-trigger:hover {
-  color: var(--text-interactive);
-  background: var(--surface-fill-hover);
-}
-
-.journal-entry.has-open-menu {
-  outline: 1px solid var(--surface-border-default);
-}
-
-.journal-entry-menu {
-  width: 180px;
-}
-
-/* Undo bar for the last removal: sits between the composer and the feed so
-   it never covers the entry that would replace it. */
-.journal-undo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px 6px 12px;
-  border: 1px dashed var(--surface-border-default);
-  border-radius: 10px;
-  color: var(--text-subtle);
-  font-size: calc(12.5px + var(--font-ui-size-offset));
-  width: calc(100% - 2 * var(--journal-content-padding));
-  margin: 0 var(--journal-content-padding) 14px;
-}
-
-.journal-undo-label {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.journal-undo-restore {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border: 1px solid var(--surface-border-default);
-  border-radius: 6px;
-  font-size: calc(12px + var(--font-ui-size-offset));
-}
-
-.journal-undo-restore .context-menu-shortcut {
-  margin-left: 2px;
-}
-
-.journal-undo-dismiss {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  color: var(--text-subtle);
-}
-
-.journal-undo-dismiss:hover {
-  color: var(--text-interactive);
-  background: var(--surface-fill-hover);
-}
-
-.journal-link-url {
-  color: var(--accent-color);
-  font-size: var(--research-body-font-size);
-  line-height: var(--research-body-line-height);
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-
-.journal-link-url:hover {
-  text-decoration: underline;
-}
-
-.journal-tweet-placeholder {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.journal-tweet-loading {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  color: var(--text-subtle);
-  font-size: calc(12.5px + var(--font-ui-size-offset));
-}
-
-.journal-tweet-loading svg {
-  animation: journal-spin 1s linear infinite;
-}
-
-@keyframes journal-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.journal-tweet-error {
-  margin: 0;
-  color: var(--text-subtle);
-  font-size: calc(12.5px + var(--font-ui-size-offset));
-  overflow-wrap: anywhere;
-}
-
-.journal-tweet-retry {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  width: fit-content;
-  padding: 3px 8px;
-  border: 1px solid var(--surface-border-default);
-  border-radius: 6px;
-  font-size: calc(12px + var(--font-ui-size-offset));
 }
 
 /* — Sidebar tab above the Research heading — */

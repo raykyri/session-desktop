@@ -1,0 +1,29 @@
+{
+  "id": "1628832338187636740",
+  "url": "https://x.com/vercel/status/1628832338187636740",
+  "author": {
+    "name": "Vercel",
+    "handle": "vercel",
+    "avatarUrl": "https://pbs.twimg.com/profile_images/1767351110228918272/3Pndc5OT_normal.png",
+    "verified": false
+  },
+  "createdAt": "2023-02-23T19:01:06.000Z",
+  "runs": [
+    {
+      "kind": "text",
+      "text": "Next.js 13.2\n\n◆ Built-in SEO with Metadata API\n◆ Route Handlers\n◆ MDX for Server Components\n◆ Rust MDX Parser\n◆ Statically Typed Links\n◆ Next.js Cache\n◆ Turbopack Improvements"
+    }
+  ],
+  "partial": false,
+  "media": [],
+  "card": {
+    "url": "https://nextjs.org/13-2",
+    "domain": "nextjs.org",
+    "title": "Next.js 13.2",
+    "description": "Next.js 13.2 introduces major improvements to the App Router in preparation for stability, including SEO support, Route Handlers, MDX for Server Components, Type-Safe Links, and more.",
+    "imageUrl": "https://pbs.twimg.com/card_img/2090955309166555136/8D7x7txB?format=png&name=800x419",
+    "large": true
+  },
+  "replies": 46,
+  "likes": 1946
+}

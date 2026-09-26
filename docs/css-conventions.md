@@ -20,7 +20,8 @@ Session uses global CSS with cascade layers. The application imports one entrypo
 - Put shared Home/research page chrome, reading typography, and content-card recipes in
   `features/research-surface.css`.
 - Keep research-thread and research-sidebar details in `features/research.css`, Home feed
-  details in `features/journal.css`, and outer application/sidebar layout in
+  details in `features/journal.css`, note replies and follow-ups (on Home cards and note
+  pages) in `features/notes.css`, and outer application/sidebar layout in
   `features/shell.css`.
 
 Feature styles should not rely on an unrelated file loading later to complete or correct
@@ -29,7 +30,7 @@ class instead of copying its declarations.
 
 ## Naming and composition
 
-- Use kebab-case classes with a feature prefix: `.research-prompt`, `.journal-entry`.
+- Use kebab-case classes with a feature prefix: `.research-prompt`, `.note-thread-item`.
 - Express state with `.is-*` and `.has-*`: `.is-selected`, `.has-open-menu`.
 - Compose a primitive or shared recipe with a feature class in markup; do not restyle bare
   elements when the behavior is local to one component.

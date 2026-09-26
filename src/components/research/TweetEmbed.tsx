@@ -6,7 +6,7 @@ import type {
   QuotedTweetSnapshot,
   TweetSnapshot,
   TweetTextRun,
-} from "../../lib/journalTweets";
+} from "../../lib/tweets";
 
 function externalLinkClick(url: string) {
   return (event: MouseEvent) => {

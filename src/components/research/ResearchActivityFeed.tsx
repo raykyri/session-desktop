@@ -8,48 +8,40 @@ import {
   useRef,
   useState,
 } from "react";
-import type { FocusEvent, MouseEvent, ReactNode } from "react";
+import type { FocusEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import {
-  ChevronDown,
-  Copy,
-  ExternalLink,
-  LoaderCircle,
-  MoreHorizontal,
-  RotateCw,
-  Trash2,
-  Undo2,
-  X,
-} from "lucide-react";
-import {
-  normalizeJournalEntry,
-  recentActivityItemId,
-  type JournalEntry,
-  type JournalTweetEntry,
-  type RecentActivityItem,
-} from "../../lib/journal";
+import { ChevronDown, LoaderCircle, RotateCw } from "lucide-react";
 import {
   buildRecentActivityFromItems,
+  topLevelReplyCount,
   type RecentActivityEvent,
 } from "../../lib/activity";
 import type {
-  RecentActivityCursor,
+  NoteReply,
   RecentResearchQuery,
+  RecentResearchQueryCursor,
   ResearchNode,
   ResearchNodeContent,
   ResearchTreeSummary,
 } from "../../types";
 import { IS_MAC, isEditableTarget } from "../../lib/appHelpers";
-import { getResearchNodeContent, openExternalUrl } from "../../lib/api";
-import { writeClipboardText } from "../../lib/clipboard";
+import { getResearchNodeContent, getResearchTree } from "../../lib/api";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import { ResearchDocumentFrame } from "./ResearchDocumentChrome";
-import ActivityMetadataLine from "../ActivityMetadataLine";
+import ActivityMetadataLine, { formatResearchModelSummary } from "../ActivityMetadataLine";
 import ResearchThreadActions from "./ResearchThreadActions";
 import { ResearchRecapLine, ResearchRecapPendingLine } from "./ResearchRecap";
 import ResearchRecapDialog from "./ResearchRecapDialog";
-import { TweetEmbed } from "./TweetEmbed";
 import { ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
+import {
+  NoteBody,
+  NoteFollowUpField,
+  NoteFollowUpGlyph,
+  NoteFollowUpStatus,
+  NoteReplyThread,
+  type NoteActions,
+  type NoteReplyTarget,
+} from "./ResearchNote";
 import type { ResearchFolderState } from "../../lib/researchFolders";
 import { isActiveResearchStatus } from "../../lib/researchThreads";
 import {
@@ -98,20 +90,16 @@ export interface ResearchActivityFeedProps {
   /** Read once, when the feed mounts. */
   initialScrollAnchor?: RecentActivityScrollAnchor | null;
   onScrollAnchorChange?: (anchor: RecentActivityScrollAnchor | null) => void;
-  items: RecentActivityItem[];
+  items: RecentResearchQuery[];
   /** Runs whose background summary job is in flight; each card holds a spinner
    * in its summary slot until the summary arrives. */
   recapPendingNodeIds?: ReadonlySet<string>;
   researchTrees: ResearchTreeSummary[];
-  nextCursor: RecentActivityCursor | null;
+  nextCursor: RecentResearchQueryCursor | null;
   loadingOlder: boolean;
   olderError: string | null;
-  /** The most recently removed entry, still restorable. */
-  pendingUndo: { entry: JournalEntry } | null;
-  onRemoveEntry: (id: string) => void;
-  onRetryTweet: (id: string) => void;
-  onUndoRemove: () => void;
-  onDismissUndo: () => void;
+  /** Replies, follow-ups, and retries on note cards. */
+  noteActions: NoteActions;
   onOpenResearchQuery: (query: RecentResearchQuery) => void;
   onResearchRecapApplied: (node: ResearchNode) => void;
   onError: (message: string) => void;
@@ -134,182 +122,8 @@ export interface ResearchActivityFeedProps {
   onForward?: () => void;
 }
 
-const JOURNAL_MENU_WIDTH = 180;
-const JOURNAL_MENU_HEIGHT_ESTIMATE = 132;
-const JOURNAL_VIEWPORT_MARGIN = 8;
-
-export type JournalMenuAction = "open" | "copy" | "retry" | "delete";
-
-export interface JournalMenuItem {
-  action: JournalMenuAction;
-  label: string;
-  /** Single-letter keycap shown in the menu; pressing it fires the item. */
-  key: string;
-  danger?: boolean;
-}
-
-/** The URL an entry stands for: the canonical tweet permalink once hydrated,
- * otherwise what the user entered. */
-export function journalEntryUrl(entry: JournalEntry): string | null {
-  if (entry.kind === "link") {
-    return entry.url;
-  }
-  return entry.tweet?.url ?? entry.url;
-}
-
-/** Context-menu items for an entry. Pure, so tests can pin the layout and
- * keycaps per entry kind without driving the portal menu. */
-export function journalEntryMenuItems(entry: JournalEntry): JournalMenuItem[] {
-  const items: JournalMenuItem[] = [];
-  if (journalEntryUrl(entry)) {
-    items.push({
-      action: "open",
-      label: entry.kind === "tweet" ? "Open on X" : "Open link",
-      key: "O",
-    });
-  }
-  items.push({
-    action: "copy",
-    label: "Copy link",
-    key: "C",
-  });
-  if (entry.kind === "tweet" && entry.hydration !== "pending") {
-    items.push({
-      action: "retry",
-      label: entry.hydration === "failed" ? "Retry tweet" : "Refresh tweet",
-      key: "R",
-    });
-  }
-  items.push({ action: "delete", label: "Delete", key: "D", danger: true });
-  return items;
-}
-
-function menuItemIcon(action: JournalMenuAction) {
-  switch (action) {
-    case "open":
-      return <ExternalLink size={13} aria-hidden="true" />;
-    case "copy":
-      return <Copy size={13} aria-hidden="true" />;
-    case "retry":
-      return <RotateCw size={13} aria-hidden="true" />;
-    case "delete":
-      return <Trash2 size={13} aria-hidden="true" />;
-  }
-}
-
-function externalLinkClick(url: string) {
-  return (event: MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    void openExternalUrl(url);
-  };
-}
-
-export function JournalTweetCard({ entry }: { entry: JournalTweetEntry }) {
-  return entry.tweet ? <TweetEmbed tweet={entry.tweet} /> : null;
-}
-
-function JournalEntryCard({
-  entry,
-  menuOpen,
-  onOpenMenu,
-  onOpenContextMenu,
-  onRetryTweet,
-}: {
-  entry: JournalEntry;
-  menuOpen: boolean;
-  onOpenMenu: (entryId: string, trigger: HTMLButtonElement) => void;
-  onOpenContextMenu: (entryId: string, clientX: number, clientY: number) => void;
-  onRetryTweet: (id: string) => void;
-}) {
-  let body;
-  let variant;
-  if (entry.kind === "link") {
-    variant = "is-link";
-    body = (
-      <a
-        className="journal-link-url"
-        href={entry.url}
-        onClick={externalLinkClick(entry.url)}
-      >
-        {entry.url}
-      </a>
-    );
-  } else if (entry.hydration === "ok" && entry.tweet) {
-    variant = "is-tweet";
-    body = <JournalTweetCard entry={entry} />;
-  } else if (entry.hydration === "failed") {
-    variant = "is-tweet-failed";
-    body = (
-      <div className="journal-tweet-placeholder">
-        <a
-          className="journal-link-url"
-          href={entry.url}
-          onClick={externalLinkClick(entry.url)}
-        >
-          {entry.url}
-        </a>
-        <p className="journal-tweet-error">
-          Couldn’t load this tweet{entry.error ? ` — ${entry.error}` : ""}.
-        </p>
-        <button
-          className="control-button journal-tweet-retry"
-          type="button"
-          onClick={() => onRetryTweet(entry.id)}
-        >
-          <RotateCw size={12} aria-hidden="true" />
-          <span>Retry</span>
-        </button>
-      </div>
-    );
-  } else {
-    variant = "is-tweet-pending";
-    body = (
-      <div className="journal-tweet-placeholder">
-        <a
-          className="journal-link-url"
-          href={entry.url}
-          onClick={externalLinkClick(entry.url)}
-        >
-          {entry.url}
-        </a>
-        <p className="journal-tweet-loading">
-          <LoaderCircle size={12} aria-hidden="true" />
-          <span>Loading tweet…</span>
-        </p>
-      </div>
-    );
-  }
-  return (
-    <article
-      className={`journal-entry research-content-card ${variant}${
-        menuOpen ? " has-open-menu" : ""
-      }`}
-      title={new Date(entry.createdAt).toLocaleString()}
-      onContextMenu={(event) => {
-        // Right-clicking a link or the quote card keeps the entry menu too —
-        // the browser menu has nothing useful to offer inside the shell.
-        event.preventDefault();
-        event.stopPropagation();
-        onOpenContextMenu(entry.id, event.clientX, event.clientY);
-      }}
-    >
-      {body}
-      <button
-        className="control-button journal-entry-menu-trigger"
-        type="button"
-        title="Entry actions"
-        aria-label="Entry actions"
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        data-journal-menu-trigger
-        onClick={(event) => onOpenMenu(entry.id, event.currentTarget)}
-      >
-        <MoreHorizontal size={13} aria-hidden="true" />
-      </button>
-    </article>
-  );
-}
+const MENU_HEIGHT_ESTIMATE = 132;
+const MENU_VIEWPORT_MARGIN = 8;
 
 function isMarkdownInteractiveTarget(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest("a, button"));
@@ -473,6 +287,235 @@ export function ResearchQueryCard({
   );
 }
 
+/** A note in Home's feed: the note, its footer, then (for network notes) the
+ * Replies group and the Follow-ups group with an inline follow-up field.
+ * `replies` is the note's loaded replies, which the feed may have expanded
+ * past the payload's first five threads. */
+export function ResearchNoteCard({
+  query,
+  metadata,
+  replies,
+  loadingReplies = false,
+  archived = false,
+  followed = false,
+  bookmarked = false,
+  actions,
+  onToggleFollow,
+  onToggleBookmark,
+  onOpen,
+  onOpenChild,
+  onContextMenu,
+  onShowAllReplies,
+}: {
+  query: RecentResearchQuery;
+  metadata?: ReactNode;
+  replies: NoteReply[];
+  loadingReplies?: boolean;
+  archived?: boolean;
+  followed?: boolean;
+  bookmarked?: boolean;
+  actions: NoteActions;
+  onToggleFollow?: () => void;
+  onToggleBookmark?: () => void;
+  onOpen: () => void;
+  onOpenChild: (query: RecentResearchQuery) => void;
+  onContextMenu: (clientX: number, clientY: number) => void;
+  onShowAllReplies?: () => void;
+}) {
+  const [target, setTarget] = useState<NoteReplyTarget | null>(null);
+  const [fieldOpen, setFieldOpen] = useState(false);
+  const network = Boolean(query.delivery);
+  const children = query.children ?? [];
+  const hiddenReplies = Math.max(0, (query.replyCount ?? 0) - topLevelReplyCount(replies));
+  const modelLabel = formatResearchModelSummary(query.adapter, query.model);
+  const showField = fieldOpen || children.length > 0 || target !== null;
+  return (
+    <div
+      className="recent-query-block note-card"
+      onContextMenu={(event) => {
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onContextMenu(event.clientX, event.clientY);
+      }}
+    >
+      <ResearchUserMessage as="article" className="recent-query-card research-prompt">
+        <NoteBody
+          prompt={query.prompt}
+          attachments={query.attachments}
+          renderPrompt={(content) => (
+            <div
+              className="recent-query-question-link"
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
+                if (!isMarkdownInteractiveTarget(event.target)) onOpen();
+              }}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                onOpen();
+              }}
+            >
+              {content}
+            </div>
+          )}
+        />
+      </ResearchUserMessage>
+      {onToggleFollow && onToggleBookmark ? (
+        <div className="recent-query-footer">
+          <ResearchThreadActions
+            followed={followed}
+            bookmarked={bookmarked}
+            onToggleFollow={onToggleFollow}
+            onToggleBookmark={onToggleBookmark}
+          />
+          {metadata ? <div className="recent-query-metadata">{metadata}</div> : null}
+        </div>
+      ) : null}
+      <div className="note-outline">
+        {network ? (
+          <section className="note-outline-group" aria-label="Replies">
+            <div className="note-outline-label">Replies</div>
+            {replies.length > 0 ? (
+              <NoteReplyThread
+                nodeId={query.nodeId}
+                replies={replies}
+                archived={archived}
+                actions={actions}
+                onAskAbout={(next) => {
+                  setTarget(next);
+                  setFieldOpen(true);
+                }}
+              />
+            ) : (
+              <p className="note-placeholder">
+                No replies yet. Replies from your network will appear here.
+              </p>
+            )}
+            {hiddenReplies > 0 && onShowAllReplies ? (
+              <button
+                type="button"
+                className="note-thread-link note-show-more"
+                disabled={loadingReplies}
+                onClick={onShowAllReplies}
+              >
+                {loadingReplies
+                  ? "Loading replies…"
+                  : `Show ${hiddenReplies} more ${hiddenReplies === 1 ? "reply" : "replies"}`}
+              </button>
+            ) : null}
+          </section>
+        ) : null}
+        <section className="note-outline-group" aria-label="Follow-ups">
+          {children.length > 0 ? <div className="note-outline-label">Follow-ups</div> : null}
+          <ol className="note-thread-list">
+            {children.map((child) => (
+              <li
+                key={child.nodeId}
+                className="note-thread-item"
+                data-type={child.kind === "note" ? "net" : "ai"}
+              >
+                <div className="note-thread-gutter">
+                  <NoteFollowUpGlyph network={child.kind === "note"} />
+                </div>
+                <div className="note-thread-body">
+                  <span
+                    className="note-followup-question"
+                    role="button"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onOpenChild(child);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onOpenChild(child);
+                    }}
+                  >
+                    {child.replyAnchorAuthor ? (
+                      <span className="note-followup-target">
+                        @{child.replyAnchorAuthor}’s reply{" "}
+                      </span>
+                    ) : null}
+                    {child.prompt}
+                  </span>
+                  {child.kind !== "note" && child.status === "complete" && child.recap?.trim() ? (
+                    <ResearchRecapLine text={child.recap} className="note-followup-recap" />
+                  ) : null}
+                  <NoteFollowUpStatus
+                    child={child}
+                    modelLabel={formatResearchModelSummary(child.adapter, child.model)}
+                    archived={archived}
+                    onRetry={actions.onRetry}
+                  />
+                  {child.kind === "note" && child.delivery?.replies?.length ? (
+                    <NoteReplyThread
+                      nodeId={child.nodeId}
+                      replies={child.delivery.replies}
+                      archived={archived}
+                      actions={actions}
+                      nested
+                    />
+                  ) : null}
+                </div>
+              </li>
+            ))}
+            {!archived ? (
+              <li className="note-thread-item" data-type="composer">
+                <div className="note-thread-gutter" />
+                <div className="note-thread-body">
+                  {showField ? (
+                    <NoteFollowUpField
+                      key={target?.id ?? "note"}
+                      networkAvailable={network}
+                      modelLabel={modelLabel}
+                      target={target}
+                      autoFocus={fieldOpen}
+                      placeholder={
+                        network
+                          ? "Ask a follow-up"
+                          : query.attachments?.some((attachment) => attachment.tweet)
+                            ? "Ask about this post"
+                            : "Ask about this page"
+                      }
+                      onClearTarget={() => setTarget(null)}
+                      onSubmit={(prompt, toNetwork) =>
+                        actions
+                          .onAskFollowUp({
+                            parentNodeId: query.nodeId,
+                            prompt,
+                            network: toNetwork,
+                            replyAnchor: toNetwork ? null : target?.id ?? null,
+                          })
+                          .then(() => setTarget(null))
+                      }
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="note-add-followup"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setFieldOpen(true);
+                      }}
+                    >
+                      + Ask a follow-up
+                    </button>
+                  )}
+                </div>
+              </li>
+            ) : null}
+          </ol>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 type VirtualActivityRow = {
   kind: "event";
   key: string;
@@ -492,19 +535,19 @@ export function buildRecentActivityVirtualRows(
 }
 
 function estimatedActivityRowHeight(row: VirtualActivityRow): number {
-  if (row.event.source.kind === "research-query") {
-    if (
-      row.event.source.query.attachments?.some(
-        (attachment) => attachment.status === "resolved" && attachment.tweet,
-      )
-    ) {
-      return row.event.source.query.recap?.trim() ? 430 : 384;
-    }
-    return row.event.source.query.recap?.trim() ? 136 : 90;
+  const query = row.event.source.query;
+  const hasTweet = query.attachments?.some(
+    (attachment) => attachment.status === "resolved" && attachment.tweet,
+  );
+  if (query.kind === "note") {
+    const replies = query.delivery?.replies?.length ?? 0;
+    const children = query.children?.length ?? 0;
+    return (hasTweet ? 384 : 90) + (query.delivery ? 40 : 0) + replies * 72 + children * 64 + 40;
   }
-  const entry = row.event.source.entry;
-  if (entry.kind === "tweet" && entry.hydration === "ok") return 326;
-  return 104;
+  if (hasTweet) {
+    return query.recap?.trim() ? 430 : 384;
+  }
+  return query.recap?.trim() ? 136 : 90;
 }
 
 export interface VirtualActivityRange {
@@ -594,11 +637,7 @@ function ResearchActivityFeed({
   nextCursor,
   loadingOlder,
   olderError,
-  pendingUndo,
-  onRemoveEntry,
-  onRetryTweet,
-  onUndoRemove,
-  onDismissUndo,
+  noteActions,
   onOpenResearchQuery,
   onResearchRecapApplied,
   onError,
@@ -619,18 +658,19 @@ function ResearchActivityFeed({
   onBack,
   onForward,
 }: ResearchActivityFeedProps) {
-  const [menu, setMenu] = useState<
-    | { kind: "journal"; entryId: string; left: number; top: number }
-    | {
-        kind: "tree";
-        treeId: string;
-        queryNodeId?: string;
-        archived: boolean;
-        left: number;
-        top: number;
-      }
-    | null
-  >(null);
+  const [menu, setMenu] = useState<{
+    kind: "tree";
+    treeId: string;
+    queryNodeId?: string;
+    archived: boolean;
+    left: number;
+    top: number;
+  } | null>(null);
+  // Full reply lists for notes the user expanded past the feed's first five
+  // threads, keyed by node id. Held here rather than in the card so they
+  // survive the virtualized row unmounting while scrolled away.
+  const [expandedReplies, setExpandedReplies] = useState<Record<string, NoteReply[]>>({});
+  const [loadingRepliesFor, setLoadingRepliesFor] = useState<string | null>(null);
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
   const [recapDialogContent, setRecapDialogContent] =
@@ -697,23 +737,44 @@ function ResearchActivityFeed({
       mouseTarget?.removeEventListener("mouseup", onMouseUp);
     };
   }, []);
-  const items = useMemo(
-    () => rawItems.flatMap((item): RecentActivityItem[] => {
-      if (item.kind === "research-query") return [item];
-      const entry = normalizeJournalEntry(item.entry);
-      return entry ? [{ ...item, entry }] : [];
-    }),
-    [rawItems],
-  );
+  const items = rawItems;
   const visibleItems = useMemo(() => {
     if (view !== "bookmarks") return items;
     const bookmarked = new Set(
       researchTrees.filter((tree) => tree.bookmarked).map((tree) => tree.id),
     );
-    return items.filter(
-      (item) => item.kind === "research-query" && bookmarked.has(item.query.treeId),
-    );
+    return items.filter((item) => bookmarked.has(item.treeId));
   }, [items, researchTrees, view]);
+  const loadAllReplies = useCallback(
+    (query: RecentResearchQuery) => {
+      setLoadingRepliesFor(query.nodeId);
+      void getResearchTree(query.treeId)
+        .then((detail) => {
+          const node = detail.nodes.find((candidate) => candidate.id === query.nodeId);
+          setExpandedReplies((current) => ({
+            ...current,
+            [query.nodeId]: node?.delivery?.replies ?? [],
+          }));
+        })
+        .catch((err: unknown) => onError(err instanceof Error ? err.message : String(err)))
+        .finally(() =>
+          setLoadingRepliesFor((current) => (current === query.nodeId ? null : current)),
+        );
+    },
+    [onError],
+  );
+  // A live update to an expanded note (a new reply, a deleted response)
+  // arrives cut to five threads; refetch the full list rather than show the
+  // stale copy.
+  const expandedDeliveryRef = useRef(new Map<string, unknown>());
+  useEffect(() => {
+    for (const item of items) {
+      if (!(item.nodeId in expandedReplies)) continue;
+      const previous = expandedDeliveryRef.current.get(item.nodeId);
+      expandedDeliveryRef.current.set(item.nodeId, item.delivery);
+      if (previous !== undefined && previous !== item.delivery) loadAllReplies(item);
+    }
+  }, [expandedReplies, items, loadAllReplies]);
   const feed = useMemo(
     () => buildRecentActivityFromItems(visibleItems, researchTrees),
     [visibleItems, researchTrees],
@@ -785,8 +846,8 @@ function ResearchActivityFeed({
   }, [focusedRowKey, metrics.indexByKey, range.end, range.start, rows]);
   const [newActivityCount, setNewActivityCount] = useState(0);
   const anchorRef = useRef<{ key: string; offset: number } | null>(null);
-  const knownItemIdsRef = useRef(new Set(items.map(recentActivityItemId)));
-  const previousTopItemIdRef = useRef(items[0] ? recentActivityItemId(items[0]) : null);
+  const knownItemIdsRef = useRef(new Set(items.map((item) => item.nodeId)));
+  const previousTopItemIdRef = useRef(items[0]?.nodeId ?? null);
 
   const captureScrollState = useCallback(() => {
     const scroller = scrollRef.current;
@@ -880,17 +941,17 @@ function ResearchActivityFeed({
   useEffect(() => {
     const previousTopId = previousTopItemIdRef.current;
     const previousTopIndex = previousTopId
-      ? items.findIndex((item) => recentActivityItemId(item) === previousTopId)
+      ? items.findIndex((item) => item.nodeId === previousTopId)
       : -1;
     const candidates = previousTopIndex >= 0 ? items.slice(0, previousTopIndex) : [];
     const addedAbove = candidates.filter(
-      (item) => !knownItemIdsRef.current.has(recentActivityItemId(item)),
+      (item) => !knownItemIdsRef.current.has(item.nodeId),
     ).length;
     if (addedAbove > 0 && (scrollRef.current?.scrollTop ?? 0) > 60) {
       setNewActivityCount((count) => count + addedAbove);
     }
-    knownItemIdsRef.current = new Set(items.map(recentActivityItemId));
-    previousTopItemIdRef.current = items[0] ? recentActivityItemId(items[0]) : null;
+    knownItemIdsRef.current = new Set(items.map((item) => item.nodeId));
+    previousTopItemIdRef.current = items[0]?.nodeId ?? null;
   }, [items]);
 
   const measureRow = useCallback((key: string, height: number) => {
@@ -943,80 +1004,25 @@ function ResearchActivityFeed({
     return () => observer.disconnect();
   }, [loadingOlder, nextCursor, olderError, onLoadOlder]);
 
-  const menuActivityItem =
-    menu?.kind === "journal"
-      ? items.find((item) => item.kind === "journal" && item.entry.id === menu.entryId)
-      : null;
-  const menuEntry = menuActivityItem?.kind === "journal" ? menuActivityItem.entry : null;
-  const menuItems = menuEntry ? journalEntryMenuItems(menuEntry) : [];
   const menuTree =
     menu?.kind === "tree" ? (treeById.get(menu.treeId) ?? null) : null;
-  const menuQueryItem =
-    menu?.kind === "tree" && menu.queryNodeId
-      ? items.find(
-          (item) =>
-            item.kind === "research-query" && item.query.nodeId === menu.queryNodeId,
-        ) ?? null
-      : null;
-  const menuQuery = menuQueryItem?.kind === "research-query" ? menuQueryItem.query : null;
+  const menuQuery =
+    menu?.queryNodeId ? items.find((item) => item.nodeId === menu.queryNodeId) ?? null : null;
 
-  function runMenuAction(entry: JournalEntry, action: JournalMenuAction) {
-    setMenu(null);
-    if (action === "open") {
-      const url = journalEntryUrl(entry);
-      if (url) {
-        void openExternalUrl(url);
-      }
-      return;
-    }
-    if (action === "copy") {
-      void writeClipboardText(
-        journalEntryUrl(entry) ?? "",
-      );
-      return;
-    }
-    if (action === "retry") {
-      onRetryTweet(entry.id);
-      return;
-    }
-    onRemoveEntry(entry.id);
-  }
-
-  function clampedMenuPosition(
-    clientX: number,
-    clientY: number,
-    width = JOURNAL_MENU_WIDTH,
-  ) {
+  function clampedMenuPosition(clientX: number, clientY: number, width: number) {
     return {
       left: Math.max(
-        JOURNAL_VIEWPORT_MARGIN,
-        Math.min(clientX, window.innerWidth - width - JOURNAL_VIEWPORT_MARGIN),
+        MENU_VIEWPORT_MARGIN,
+        Math.min(clientX, window.innerWidth - width - MENU_VIEWPORT_MARGIN),
       ),
       top: Math.max(
-        JOURNAL_VIEWPORT_MARGIN,
+        MENU_VIEWPORT_MARGIN,
         Math.min(
           clientY,
-          window.innerHeight - JOURNAL_MENU_HEIGHT_ESTIMATE - JOURNAL_VIEWPORT_MARGIN,
+          window.innerHeight - MENU_HEIGHT_ESTIMATE - MENU_VIEWPORT_MARGIN,
         ),
       ),
     };
-  }
-
-  function openMenuFromTrigger(entryId: string, trigger: HTMLButtonElement) {
-    if (menu?.kind === "journal" && menu.entryId === entryId) {
-      setMenu(null);
-      return;
-    }
-    const rect = trigger.getBoundingClientRect();
-    setMenu({
-      kind: "journal",
-      entryId,
-      ...clampedMenuPosition(rect.right - JOURNAL_MENU_WIDTH, rect.bottom + 4),
-    });
-  }
-
-  function openContextMenu(entryId: string, clientX: number, clientY: number) {
-    setMenu({ kind: "journal", entryId, ...clampedMenuPosition(clientX, clientY) });
   }
 
   function openTreeContextMenu(
@@ -1064,25 +1070,6 @@ function ResearchActivityFeed({
       if (event.metaKey || event.ctrlKey || event.altKey) {
         return;
       }
-      if (menu.kind === "journal") {
-        const activityItem = items.find(
-          (candidate) => candidate.kind === "journal" && candidate.entry.id === menu.entryId,
-        );
-        const entry = activityItem?.kind === "journal" ? activityItem.entry : null;
-        if (!entry) {
-          return;
-        }
-        const item = journalEntryMenuItems(entry).find(
-          (candidate) => candidate.key.toLowerCase() === event.key.toLowerCase(),
-        );
-        if (!item) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        runMenuAction(entry, item.action);
-        return;
-      }
       const tree = treeById.get(menu.treeId);
       if (!tree) {
         return;
@@ -1116,8 +1103,8 @@ function ResearchActivityFeed({
       window.removeEventListener("resize", closeOnReflow);
       window.removeEventListener("scroll", closeOnReflow, true);
     };
-    // runMenuAction and items are stable enough per menu lifetime; the menu
-    // closes on any entry mutation the actions cause.
+    // treeById and the handlers are stable enough per menu lifetime; the menu
+    // closes on any mutation the actions cause.
   });
 
   // The height estimate that positioned the menu is a guess (items vary per
@@ -1129,33 +1116,14 @@ function ResearchActivityFeed({
     }
     const height = element.getBoundingClientRect().height;
     const top = Math.max(
-      JOURNAL_VIEWPORT_MARGIN,
-      Math.min(menu.top, window.innerHeight - JOURNAL_VIEWPORT_MARGIN - height),
+      MENU_VIEWPORT_MARGIN,
+      Math.min(menu.top, window.innerHeight - MENU_VIEWPORT_MARGIN - height),
     );
     if (top !== menu.top) {
       element.style.top = `${top}px`;
     }
   }, [menu]);
 
-  // ⌘Z / Ctrl-Z restores the last removed entry while the undo bar shows.
-  useEffect(() => {
-    if (!pendingUndo) {
-      return;
-    }
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        !event.shiftKey &&
-        !event.altKey &&
-        event.key.toLowerCase() === "z"
-      ) {
-        event.preventDefault();
-        onUndoRemove();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onUndoRemove, pendingUndo]);
   return (
     <ResearchDocumentFrame
       title={viewTitle}
@@ -1184,31 +1152,6 @@ function ResearchActivityFeed({
         <div className="journal-column research-reading-surface">
           {view === "home" ? (
             <div className="journal-composer-container">{composer}</div>
-          ) : null}
-          {pendingUndo ? (
-            <div className="journal-undo" role="status">
-              <span className="journal-undo-label">
-                Entry removed
-              </span>
-              <button
-                className="control-button journal-undo-restore"
-                type="button"
-                onClick={onUndoRemove}
-              >
-                <Undo2 size={12} aria-hidden="true" />
-                <span>Undo</span>
-                <kbd className="context-menu-shortcut is-keycap">⌘Z</kbd>
-              </button>
-              <button
-                className="control-button journal-undo-dismiss"
-                type="button"
-                title="Dismiss"
-                aria-label="Dismiss undo"
-                onClick={onDismissUndo}
-              >
-                <X size={12} aria-hidden="true" />
-              </button>
-            </div>
           ) : null}
           {newActivityCount > 0 ? (
             <div className="recent-activity-new-status" role="status" aria-live="polite">
@@ -1242,11 +1185,17 @@ function ResearchActivityFeed({
               style={{ height: metrics.totalSize }}
             >
               {visibleRowEntries.map(({ row, index }) => {
-                const researchTreeId =
-                  row.event.source.kind === "research-query"
-                    ? row.event.source.query.treeId
-                    : null;
-                const researchTree = researchTreeId ? treeById.get(researchTreeId) : undefined;
+                const query = row.event.source.query;
+                const researchTree = treeById.get(query.treeId);
+                const toggleFollow = () =>
+                  onSetResearchFollowed(query.treeId, !researchTree?.followed);
+                const toggleBookmark = () =>
+                  onSetResearchBookmarked(query.treeId, !researchTree?.bookmarked);
+                const openContextMenu = (clientX: number, clientY: number) => {
+                  if (researchTree) {
+                    openTreeContextMenu(researchTree, clientX, clientY, query.nodeId);
+                  }
+                };
                 return (
                   <MeasuredActivityRow
                     key={row.key}
@@ -1266,57 +1215,40 @@ function ResearchActivityFeed({
                       aria-posinset={row.position}
                       aria-setsize={nextCursor ? -1 : feed.length}
                     >
-                      {row.event.source.kind === "journal" ? (
-                        <>
-                          <ActivityMetadataLine event={row.event} />
-                          <JournalEntryCard
-                            entry={row.event.source.entry}
-                            menuOpen={
-                              menu?.kind === "journal" &&
-                              menu.entryId === row.event.source.entry.id
-                            }
-                            onOpenMenu={openMenuFromTrigger}
-                            onOpenContextMenu={openContextMenu}
-                            onRetryTweet={onRetryTweet}
-                          />
-                        </>
-                      ) : (
-                        <ResearchQueryCard
-                          query={row.event.source.query}
-                          metadata={<ActivityMetadataLine event={row.event} />}
-                          recapPending={recapPendingNodeIds.has(
-                            row.event.source.query.nodeId,
-                          )}
+                      {query.kind === "note" ? (
+                        <ResearchNoteCard
+                          query={query}
+                          metadata={
+                            <ActivityMetadataLine
+                              event={row.event}
+                              onOpen={() => onOpenResearchQuery(query)}
+                            />
+                          }
+                          replies={expandedReplies[query.nodeId] ?? query.delivery?.replies ?? []}
+                          loadingReplies={loadingRepliesFor === query.nodeId}
+                          archived={researchTree?.archivedAt != null}
                           followed={Boolean(researchTree?.followed)}
                           bookmarked={Boolean(researchTree?.bookmarked)}
-                          onToggleFollow={() => {
-                            if (researchTreeId) {
-                              onSetResearchFollowed(researchTreeId, !researchTree?.followed);
-                            }
-                          }}
-                          onToggleBookmark={() => {
-                            if (researchTreeId) {
-                              onSetResearchBookmarked(researchTreeId, !researchTree?.bookmarked);
-                            }
-                          }}
+                          actions={noteActions}
+                          onToggleFollow={toggleFollow}
+                          onToggleBookmark={toggleBookmark}
+                          onOpen={() => onOpenResearchQuery(query)}
                           onOpenChild={onOpenResearchQuery}
-                          onOpen={() => {
-                            const query = row.event.source;
-                            if (query.kind === "research-query") {
-                              onOpenResearchQuery(query.query);
-                            }
-                          }}
-                          onContextMenu={(clientX, clientY) => {
-                            const source = row.event.source;
-                            if (source.kind !== "research-query") {
-                              return;
-                            }
-                            const tree = treeById.get(source.query.treeId);
-                            if (!tree) {
-                              return;
-                            }
-                            openTreeContextMenu(tree, clientX, clientY, source.query.nodeId);
-                          }}
+                          onContextMenu={openContextMenu}
+                          onShowAllReplies={() => loadAllReplies(query)}
+                        />
+                      ) : (
+                        <ResearchQueryCard
+                          query={query}
+                          metadata={<ActivityMetadataLine event={row.event} />}
+                          recapPending={recapPendingNodeIds.has(query.nodeId)}
+                          followed={Boolean(researchTree?.followed)}
+                          bookmarked={Boolean(researchTree?.bookmarked)}
+                          onToggleFollow={toggleFollow}
+                          onToggleBookmark={toggleBookmark}
+                          onOpenChild={onOpenResearchQuery}
+                          onOpen={() => onOpenResearchQuery(query)}
+                          onContextMenu={openContextMenu}
                         />
                       )}
                     </div>
@@ -1332,7 +1264,7 @@ function ResearchActivityFeed({
                   <div className="journal-setup-guide">{setupGuide}</div>
                 ) : (
                   <p className="journal-empty">
-                    Research queries and saved sources appear here, newest first.
+                    Research, notes, and saved links appear here, newest first.
                   </p>
                 )}
               </div>
@@ -1369,42 +1301,6 @@ function ResearchActivityFeed({
           </div>
         </div>
       </div>
-      {menu?.kind === "journal" && menuEntry
-        ? createPortal(
-            <div
-              ref={menuRef}
-              className="popover-surface popover-surface--context pane-context-menu journal-entry-menu"
-              role="menu"
-              aria-label="Saved entry actions"
-              style={{ left: menu.left, top: menu.top }}
-              onMouseDown={(event) => event.stopPropagation()}
-              onContextMenu={(event) => event.preventDefault()}
-            >
-              <div className="group-context-actions">
-                {menuItems.map((item, index) => (
-                  <span key={item.action} style={{ display: "contents" }}>
-                    {item.danger && index > 0 ? (
-                      <div className="context-menu-divider" role="separator" />
-                    ) : null}
-                    <button
-                      className={`control-button context-menu-has-shortcut${
-                        item.danger ? " context-menu-danger" : ""
-                      }`}
-                      type="button"
-                      role="menuitem"
-                      onClick={() => runMenuAction(menuEntry, item.action)}
-                    >
-                      {menuItemIcon(item.action)}
-                      <span>{item.label}</span>
-                      <kbd className="context-menu-shortcut is-keycap">{item.key}</kbd>
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
       {menu?.kind === "tree" && menuTree
         ? createPortal(
             <div

@@ -1,0 +1,28 @@
+{
+  "id": "463440424141459456",
+  "url": "https://x.com/Interior/status/463440424141459456",
+  "author": {
+    "name": "US Department of the Interior",
+    "handle": "Interior",
+    "avatarUrl": "https://pbs.twimg.com/profile_images/432081479/DOI_LOGO_normal.jpg",
+    "verified": true
+  },
+  "createdAt": "2014-05-05T22:09:42.000Z",
+  "runs": [
+    {
+      "kind": "text",
+      "text": "Sunsets don't get much better than this one over @GrandTetonNPS. #nature #sunset"
+    }
+  ],
+  "partial": false,
+  "media": [
+    {
+      "kind": "photo",
+      "imageUrl": "https://pbs.twimg.com/media/Bm54nBCCYAACwBi.jpg",
+      "width": 960,
+      "height": 541
+    }
+  ],
+  "replies": 2193,
+  "likes": 6280
+}

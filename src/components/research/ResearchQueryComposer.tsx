@@ -30,6 +30,7 @@ import {
   researchReadyAdaptersFirst,
   researchReadinessLabel,
 } from "../../lib/adapterReadiness";
+import { noteBodyIsSingleUrl } from "./ResearchNote";
 
 // GPT-5.4 stops at extra high; every other Codex preset (and a custom model,
 // whose ceiling is unknown here) offers the full range and lets the CLI
@@ -62,8 +63,9 @@ export function researchEffortOptionsFor(
   return null;
 }
 
-/** Who a question goes to. "network" is scaffolding: the toggle selects it and
- * the composer accepts it, but nothing is sent anywhere yet. */
+/** Who a question goes to. "network" posts a note to Home (network delivery
+ * itself is not built yet); a body that is a single URL is saved as a link or
+ * post instead of asked. */
 const ASK_MODES = [
   { value: "network", label: "Ask network" },
   { value: "ai", label: "Ask AI" },
@@ -87,6 +89,16 @@ interface ResearchQueryComposerProps {
     effort: string | null;
     workspaceId: string | null;
   }) => Promise<void>;
+  /** Ask network: creates a note. The selected agent and model are stored as
+   * the default for the note's AI follow-ups. */
+  onPost: (input: {
+    body: string;
+    adapter: string;
+    model: string | null;
+    effort: string | null;
+    workspaceId: string | null;
+    askNetwork: boolean;
+  }) => Promise<void>;
 }
 
 export default function ResearchQueryComposer({
@@ -95,6 +107,7 @@ export default function ResearchQueryComposer({
   workspaceId,
   onOpenAgentSettings,
   onCreate,
+  onPost,
 }: ResearchQueryComposerProps) {
   const [prompt, setPrompt] = useState("");
   // Recipient choice is not persisted with the rest of the draft; every new
@@ -229,28 +242,40 @@ export default function ResearchQueryComposer({
       : "";
   const resolvedEffort = selectedEffort || null;
 
+  // A note never launches an agent, so posting one needs no ready adapter.
+  const canSubmit =
+    Boolean(prompt.trim()) &&
+    !submitting &&
+    (askMode === "network" || (Boolean(adapter) && adapterReady));
+
   async function submit() {
-    if (!prompt.trim() || !adapter || !adapterReady || submitting) {
-      return;
-    }
-    if (askMode === "network") {
-      // Asking your network is not built yet. Send nothing rather than
-      // routing the question to an agent the user did not choose; this is
-      // where that path starts once there is somewhere for it to go.
+    if (!canSubmit) {
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      await onCreate({
-        prompt: prompt.trim(),
-        adapter,
-        model: resolvedModel,
-        effort: resolvedEffort,
-        workspaceId,
-      });
-      // A successful launch opens its research page. Clear the Home composer so
-      // returning to it starts with a fresh draft.
+      if (askMode === "network") {
+        const body = prompt.trim();
+        await onPost({
+          body,
+          adapter,
+          model: resolvedModel,
+          effort: resolvedEffort,
+          workspaceId,
+          askNetwork: !noteBodyIsSingleUrl(body),
+        });
+      } else {
+        await onCreate({
+          prompt: prompt.trim(),
+          adapter,
+          model: resolvedModel,
+          effort: resolvedEffort,
+          workspaceId,
+        });
+      }
+      // A successful launch opens its research page, and a note appears at the
+      // top of the feed. Clear the Home composer so the next draft starts fresh.
       setPrompt("");
       setModelChoice(null);
       setCustomModel("");
@@ -264,6 +289,17 @@ export default function ResearchQueryComposer({
       setSubmitting(false);
     }
   }
+
+  const submitLabel =
+    askMode === "network"
+      ? submitting
+        ? "Posting"
+        : noteBodyIsSingleUrl(prompt)
+          ? "Save link"
+          : "Post to network"
+      : submitting
+        ? "Starting research"
+        : "Start research";
 
   const adapterOptions: LauncherSelectOption[] = adapters.map((candidate, index) => ({
     value: candidate.id,
@@ -332,7 +368,11 @@ export default function ResearchQueryComposer({
           className="command-launcher-input"
           rows={2}
           value={prompt}
-          placeholder="What would you like to investigate?"
+          placeholder={
+            askMode === "network"
+              ? "Ask your network, or paste a link to save"
+              : "What would you like to investigate?"
+          }
           onChange={(event) => {
             sessionDraftTouchedRef.current = true;
             setPrompt(event.currentTarget.value);
@@ -422,9 +462,9 @@ export default function ResearchQueryComposer({
             <button
               type="submit"
               className="control-button command-launcher-send new-research-send"
-              disabled={!prompt.trim() || !adapter || !adapterReady || submitting}
-              aria-label={submitting ? "Starting research" : "Start research"}
-              title={submitting ? "Starting research" : "Start research"}
+              disabled={!canSubmit}
+              aria-label={submitLabel}
+              title={submitLabel}
             >
               <ComposerSubmitShortcutGlyph
                 requireCmdEnter={requireCmdEnterToSend}

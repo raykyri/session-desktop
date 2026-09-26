@@ -7,7 +7,7 @@
 //! presentation metadata used to hide a successfully embedded trailing URL.
 
 use std::collections::HashSet;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use pulldown_cmark::{Event, Parser, Tag, TagEnd};
 use regex::Regex;
@@ -19,6 +19,7 @@ const MAX_TWEET_SOURCE_URL_BYTES: usize = 8 * 1024;
 const MAX_TWEET_SNAPSHOT_BYTES: usize = 128 * 1024;
 const MAX_TWEET_REFERENCE_PROMPT_BYTES: usize = 48 * 1024;
 const MAX_COMPACT_TWEET_TEXT_BYTES: usize = 8 * 1024;
+const MAX_TWEET_RESPONSE_BYTES: u64 = 1024 * 1024;
 pub const TWEET_ATTACHMENT_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -700,13 +701,73 @@ fn classify_fetch_failure(error: &str) -> TweetAttachmentFailure {
     }
 }
 
+// The webview cannot reach X (the CSP has no connect-src for it, and the
+// syndication CDN's CORS only admits platform.twitter.com), so resolution
+// fetches here. The fetch is a narrow proxy: it accepts a numeric status id
+// plus a widget-shaped token and always constructs the
+// cdn.syndication.twimg.com URL itself.
+fn http_client() -> Result<reqwest::Client, String> {
+    crate::ensure_rustls_crypto_provider()?;
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(8))
+        .build()
+        .map_err(|error| format!("failed to build tweet HTTP client: {error}"))
+}
+
+fn validate_tweet_fetch_args(id: &str, token: &str) -> Result<(), String> {
+    if id.is_empty() || id.len() > 25 || !id.bytes().all(|b| b.is_ascii_digit()) {
+        return Err("invalid tweet id".to_string());
+    }
+    if token.is_empty() || token.len() > 32 || !token.bytes().all(|b| b.is_ascii_alphanumeric()) {
+        return Err("invalid tweet token".to_string());
+    }
+    Ok(())
+}
+
+/// Fetch a tweet's syndication payload by status id. `token` is the derived
+/// query parameter the endpoint expects; both inputs are validated to shape
+/// only — the URL is always built here, never taken from the caller.
+async fn fetch_tweet_json(id: &str, token: &str) -> Result<String, String> {
+    validate_tweet_fetch_args(id, token)?;
+    let url =
+        format!("https://cdn.syndication.twimg.com/tweet-result?id={id}&token={token}&lang=en");
+    let mut response = http_client()?
+        .get(url)
+        .header("User-Agent", "session")
+        .send()
+        .await
+        .map_err(|error| format!("tweet fetch failed: {error}"))?;
+    let status = response.status();
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_TWEET_RESPONSE_BYTES)
+    {
+        return Err("tweet response was too large".to_string());
+    }
+    if !status.is_success() {
+        return Err(format!("tweet fetch failed: HTTP {status}"));
+    }
+    let mut body = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|error| format!("failed to read tweet response: {error}"))?
+    {
+        if body.len().saturating_add(chunk.len()) > MAX_TWEET_RESPONSE_BYTES as usize {
+            return Err("tweet response was too large".to_string());
+        }
+        body.extend_from_slice(&chunk);
+    }
+    String::from_utf8(body).map_err(|_| "tweet response was not valid UTF-8".to_string())
+}
+
 async fn resolve_reference(reference: TweetReference) -> ResearchMessageAttachment {
     let attempted_at = now_millis();
     // The endpoint currently accepts any non-empty widget-shaped token. Keep
     // token derivation private to the backend so callers can never choose the
     // destination or smuggle query parameters into the fetch URL.
     let token = "x";
-    let resolved = match crate::journal::fetch_tweet_json(&reference.tweet_id, token).await {
+    let resolved = match fetch_tweet_json(&reference.tweet_id, token).await {
         Ok(body) => serde_json::from_str::<Value>(&body)
             .ok()
             .and_then(|payload| tweet_snapshot_from_syndication(&reference.tweet_id, &payload))
@@ -881,7 +942,7 @@ mod tests {
     fn fixture(id: &str) -> Value {
         serde_json::from_str(include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../tests/fixtures/journal/1599367266448994304.json"
+            "/../tests/fixtures/syndication/1599367266448994304.json"
         )))
         .map(|value: Value| {
             if id == "1599367266448994304" {
@@ -1032,5 +1093,23 @@ mod tests {
         let prompt = prompt_with_research_attachments("Question".to_string(), &[attachment]);
         assert!(prompt.len() <= "Question".len() + MAX_TWEET_REFERENCE_PROMPT_BYTES);
         assert!(prompt.ends_with("</session_reference_material>"));
+    }
+
+    #[test]
+    fn fetch_rejects_malformed_inputs() {
+        for (id, token) in [
+            ("", "abc"),
+            ("12x", "abc"),
+            ("12345678901234567890123456", "abc"),
+            ("20", ""),
+            ("20", "bad token"),
+            ("20", "../etc"),
+        ] {
+            assert!(
+                validate_tweet_fetch_args(id, token).is_err(),
+                "{id} {token}"
+            );
+        }
+        assert!(validate_tweet_fetch_args("20", "6dq1a2xwd93").is_ok());
     }
 }

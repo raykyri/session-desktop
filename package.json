@@ -26,7 +26,7 @@
     "test:research-events": "npm run test:node -- tests/researchEvents.test.ts",
     "test:research-history": "npm run test:node -- tests/researchHistory.test.ts",
     "test:research-folders": "npm run test:node -- tests/researchFolders.test.ts",
-    "test:journal": "npm run test:node -- tests/journal.test.ts",
+    "test:tweet-embed": "npm run test:node -- tests/tweetEmbed.test.ts",
     "test:research-documents": "npm run test:node -- tests/researchDocuments.test.ts",
     "test:research-conversations": "npm run test:node -- tests/researchConversations.test.ts",
     "test:research-threads": "npm run test:node -- tests/researchThreads.test.ts",
