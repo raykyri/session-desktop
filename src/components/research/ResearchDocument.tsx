@@ -14,7 +14,7 @@ import {
   removeResearchHighlights,
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
-import { formatResearchModelSummary } from "../ActivityMetadataLine";
+import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import ResearchNoteDocument from "./ResearchNoteDocument";
 import type { NoteActions } from "./ResearchNote";
 import { formatRelativeTime } from "../../lib/transcriptSessions";
@@ -4745,14 +4745,6 @@ function ResearchDocument({
   const cancellationNeedsRetry =
     displayNode.status === "cancelled" && Boolean(displayNode.paneId);
   const threadLength = chainNodes.length;
-  // The chip counts what this page shows: the thread's turns and the branch
-  // cards hanging off them — not every descendant in the whole tree. The
-  // single-node label keeps the legacy whole-tree follow-up total.
-  const branchCount = chainNodeIds.reduce(
-    (total, id) => total + (childrenBySegment.get(id)?.length ?? 0),
-    0,
-  );
-  const legacyFollowupCount = Math.max(0, detail.nodes.length - 1);
 
   // The thread composer acts on the ask segment (always branching), the
   // thread's tail (Continue thread), or — in branch mode — the last
@@ -4897,7 +4889,9 @@ function ResearchDocument({
             void submitFollowup(!dockedAsk && event.shiftKey ? "branch" : undefined);
           }
         }}
-        rows={2}
+        // The thread composer floats as a one-line bar and grows as the
+        // reader types; the rail's ask composer opens roomier.
+        rows={dockedAsk ? 2 : 1}
       />
       <div className="research-followup-footer">
         {composerHint ? (
@@ -5191,17 +5185,6 @@ function ResearchDocument({
               >
                 <Terminal size={12} aria-hidden="true" />
                 Imported conversation
-              </span>
-            ) : null}
-            {threadLength > 1 || legacyFollowupCount > 0 ? (
-              <span className="research-document-followup-count">
-                {threadLength > 1
-                  ? `${threadLength} in thread${
-                      branchCount > 0
-                        ? ` · ${branchCount} ${branchCount === 1 ? "branch" : "branches"}`
-                        : ""
-                    }`
-                  : `${legacyFollowupCount} ${legacyFollowupCount === 1 ? "follow-up" : "follow-ups"}`}
               </span>
             ) : null}
             {onShowSidebar ? (

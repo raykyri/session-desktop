@@ -1,27 +1,7 @@
-/* Notes: Ask-network questions and saved links on Home cards and on a note's
-   page. Replies and follow-ups share one outline — an avatar (or glyph)
-   gutter joined by a spine — so both surfaces read the same. */
+/* Notes: Ask-network questions and saved links, on Home posts and on a note's
+   page. A note's replies and follow-ups share one outline — an avatar (or
+   glyph) gutter joined by a spine. */
 
-.note-outline {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 4px;
-}
-
-.note-outline-group {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.note-outline-label {
-  margin-bottom: 8px;
-  color: var(--text-subtle);
-  font-size: calc(12px + var(--font-ui-size-offset));
-}
-
-.note-placeholder,
 .note-document-placeholder {
   margin: 0;
   color: var(--text-subtle);
@@ -185,11 +165,6 @@
   cursor: default;
 }
 
-.note-show-more {
-  align-self: flex-start;
-  margin: 10px 0 0 calc(var(--note-gutter, 20px) + 10px);
-}
-
 .note-thread-error {
   margin: 4px 0 0;
   color: var(--status-failed-fg);
@@ -197,34 +172,6 @@
 }
 
 /* — Follow-ups — */
-
-.note-followup-question {
-  color: var(--text-interactive);
-  font-size: var(--research-body-font-size);
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-}
-
-.note-followup-question:hover {
-  text-decoration: underline;
-  text-decoration-color: var(--text-subtle);
-  text-underline-offset: 3px;
-}
-
-.note-followup-question:focus-visible {
-  outline: 2px solid var(--accent-color);
-  outline-offset: 2px;
-  border-radius: 3px;
-}
-
-.note-followup-target {
-  color: var(--text-subtle);
-}
-
-.note-followup-recap {
-  margin: 3px 0 0;
-}
 
 .note-thread-meta {
   display: flex;
@@ -251,20 +198,6 @@
   flex: none;
   color: var(--text-muted);
   animation: spinner-spin 0.9s linear infinite;
-}
-
-.note-add-followup {
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-activity);
-  font-size: var(--research-meta-font-size);
-  cursor: pointer;
-}
-
-.note-add-followup:hover {
-  color: var(--text-secondary);
 }
 
 /* The composer row has no glyph, so no spine leads into it. */
@@ -403,23 +336,6 @@
   gap: 4px;
   color: var(--text-subtle);
   font-size: calc(12.5px + var(--font-ui-size-offset));
-}
-
-/* A feed time that links to the thread (link and post cards). */
-.activity-metadata-open {
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.activity-metadata-open:hover {
-  color: var(--text-secondary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
 /* — Note page — */

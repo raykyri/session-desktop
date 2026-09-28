@@ -48,7 +48,8 @@ export function ResearchHistoryNav({
 }
 
 interface ResearchDocumentFrameProps {
-  /** Single inert breadcrumb entry naming the page. */
+  /** Single inert breadcrumb entry naming the page; empty leaves the
+   * breadcrumb blank (a placeholder beside a column that names the page). */
   title: string;
   hidden?: boolean;
   /** Extra icon controls rendered beside the back/forward pair. */
@@ -117,11 +118,13 @@ export function ResearchDocumentFrame({
           />
           {navActions}
           <div className="research-breadcrumb" aria-label="Research path">
-            <span>
-              <button className="control-button" type="button" disabled>
-                {title}
-              </button>
-            </span>
+            {title ? (
+              <span>
+                <button className="control-button" type="button" disabled>
+                  {title}
+                </button>
+              </span>
+            ) : null}
           </div>
           {headerActions}
         </header>

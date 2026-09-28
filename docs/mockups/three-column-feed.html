@@ -1,0 +1,745 @@
+<!doctype html>
+<!--
+  Session three-column layout mockup.
+
+  Left: library groups, favorites and research folders.
+  Center: the Home feed as posts. Each post shows the thread title, the question (four lines, expandable),
+  a "Summary:" line, the follow-up count, and Follow / Bookmark.
+  Right: the selected thread, with a floating follow-up bar.
+
+  Open this file directly in a browser. It has no build step and no network dependency; DM Sans loads
+  from src/assets/fonts. All threads are sample content.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session three-column layout mockup</title>
+<style>
+@font-face { font-family: "DM Sans"; src: url("../../src/assets/fonts/DMSans-Variable-Latin.woff2") format("woff2"); font-weight: 100 1000; font-style: normal; }
+@font-face { font-family: "DM Sans"; src: url("../../src/assets/fonts/DMSans-VariableItalic-Latin.woff2") format("woff2"); font-weight: 100 1000; font-style: italic; }
+
+:root {
+  color-scheme: dark;
+  --sidebar-bg: #171716;
+  --list-bg: #1a1918;
+  --doc-bg: #1c1b1a;
+  --field-bg: #232220;
+  --selected-bg: #2f2d2a;
+  --hover-bg: rgba(255, 255, 255, 0.035);
+  --nav-selected-bg: rgba(255, 255, 255, 0.09);
+  --border: #2a2928;
+  --border-strong: #353331;
+  --text-heading: #f4f3ec;
+  --text-primary: #e7e7e2;
+  --text-body: #dcdfdb;
+  --text-secondary: #c4cbc6;
+  --text-tertiary: #aab1ad;
+  --text-muted: #8a938e;
+  --text-disabled: #5a615e;
+  --unread: #33adff;
+  --highlight: rgba(216, 196, 95, 0.14);
+  --highlight-active: rgba(216, 196, 95, 0.34);
+  --focus: #33adff;
+  --avatar: #5b7a96;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: #121110;
+  color: var(--text-primary);
+  font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  overflow: auto;
+}
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: left; }
+button:disabled { cursor: default; }
+textarea { font: inherit; color: inherit; background: transparent; border: 0; resize: none; outline: none; width: 100%; }
+textarea::placeholder { color: var(--text-muted); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+mark { color: inherit; background: var(--highlight); border-radius: 2px; }
+.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+.clamp-1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
+.clamp-2 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.spin { animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin, .skeleton { animation: none; } }
+.scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: #3a3835 transparent; }
+
+.app { display: flex; height: 100%; min-width: 1180px; background: var(--doc-bg); }
+
+/* Left column */
+.lib { width: 232px; flex: none; display: flex; flex-direction: column; background: var(--sidebar-bg); border-right: 1px solid var(--border); }
+.lib-top { height: 52px; flex: none; }
+.lib-body { flex: 1; padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 18px; }
+.lib-group { display: flex; flex-direction: column; gap: 1px; }
+.lib-heading { height: 26px; padding: 0 8px; display: flex; align-items: center; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-muted); }
+.lib-row { height: 30px; padding: 0 8px; border-radius: var(--radius-md); display: flex; align-items: center; gap: 9px; color: #d9ddd9; }
+.lib-row:hover { background: rgba(255, 255, 255, 0.05); }
+.lib-row[aria-current="page"] { background: var(--nav-selected-bg); color: var(--text-heading); }
+.lib-row svg { flex: none; color: var(--text-tertiary); }
+.lib-row .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-dot { width: 7px; height: 7px; border-radius: 4px; background: var(--unread); flex: none; }
+.lib-footer { padding: 10px; border-top: 1px solid var(--border); }
+.account { width: 100%; padding: 6px 8px; border-radius: var(--radius-lg); display: flex; align-items: center; gap: 10px; }
+.account:hover { background: rgba(255, 255, 255, 0.05); }
+.account small { display: block; font-size: 12px; color: var(--text-muted); }
+.avatar { width: 24px; height: 24px; border-radius: 12px; background: var(--avatar); color: #fff; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex: none; }
+.account .avatar { width: 26px; height: 26px; border-radius: 13px; }
+
+/* Center column */
+.list { width: 384px; flex: none; display: flex; flex-direction: column; background: var(--list-bg); border-right: 1px solid var(--border); }
+.col-header { height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 18px; }
+.col-header h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-heading); }
+.col-header .count { font-size: 12px; color: var(--text-muted); }
+.icon-button { width: 30px; height: 30px; border-radius: var(--radius-md); display: inline-flex; align-items: center; justify-content: center; color: var(--text-secondary); }
+.icon-button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); color: var(--text-heading); }
+.icon-button:disabled { color: var(--text-disabled); }
+.composer { margin: 0 12px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--field-bg); padding: 10px 12px 8px; display: flex; flex-direction: column; gap: 8px; }
+.composer textarea { font-size: 15px; line-height: 1.5; }
+.composer-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.segmented { display: flex; padding: 2px; border-radius: var(--radius-md); background: var(--list-bg); }
+.segmented button { height: 26px; padding: 0 10px; border-radius: var(--radius-sm); font-size: 12px; white-space: nowrap; color: var(--text-tertiary); }
+.segmented button[aria-pressed="true"] { background: var(--border-strong); color: var(--text-heading); }
+.send { height: 28px; padding: 0 10px; border-radius: var(--radius-md); font-size: 12px; white-space: nowrap; background: var(--text-primary); color: var(--list-bg); }
+.send:disabled { background: #2f2d2b; color: var(--text-muted); }
+.list-scroll { flex: 1; border-top: 1px solid var(--border); }
+.list-empty { margin: 0; padding: 40px 16px; text-align: center; line-height: 1.5; color: var(--text-tertiary); }
+
+.post { position: relative; display: flex; gap: 10px; padding: 14px 16px 10px; border-bottom: 1px solid var(--border); --sub: var(--text-muted); }
+.post:hover { background: rgba(255, 255, 255, 0.025); }
+.post.is-selected { background: var(--selected-bg); --sub: var(--text-tertiary); }
+.post-avatar { position: relative; width: 24px; height: 24px; flex: none; }
+.post-dot { position: absolute; left: -1px; top: -1px; width: 8px; height: 8px; border-radius: 4px; background: var(--unread); border: 2px solid var(--list-bg); }
+.post.is-selected .post-dot { border-color: var(--selected-bg); }
+.post-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.post-open { display: flex; flex-direction: column; gap: 6px; width: 100%; border-radius: var(--radius-sm); }
+.post-head { display: flex; align-items: baseline; gap: 6px; font-size: 12px; color: var(--sub); min-width: 0; }
+.post-head b { font-weight: 600; color: var(--text-primary); }
+.post-title { font-weight: 600; line-height: 1.4; color: var(--text-heading); }
+.post-text { line-height: 1.45; color: var(--text-secondary); white-space: pre-line; }
+.post-text.is-lead { color: var(--text-heading); font-weight: 500; }
+.post-summary { line-height: 1.5; font-style: italic; color: var(--sub); }
+.post-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--sub); }
+.post-actions { display: flex; align-items: center; gap: 2px; margin-left: -6px; }
+.act { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 6px; border-radius: var(--radius-sm); font-size: 12px; color: var(--sub); }
+button.act:hover { background: rgba(255, 255, 255, 0.06); color: var(--text-primary); }
+.act[aria-pressed="true"] { color: var(--text-primary); }
+.act.more { margin-left: auto; }
+
+.hl-row { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 12px 16px; border-bottom: 1px solid var(--border); --sub: var(--text-muted); }
+.hl-row:hover { background: rgba(255, 255, 255, 0.025); }
+.hl-row.is-selected { background: var(--selected-bg); --sub: var(--text-tertiary); }
+.hl-row .quote { line-height: 1.5; }
+.hl-row .source { font-size: 12px; color: var(--sub); }
+
+/* Right column */
+.doc { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--doc-bg); }
+.doc-header { height: 52px; flex: none; display: flex; align-items: center; gap: 6px; padding: 0 14px 0 12px; border-bottom: 1px solid var(--border); }
+.doc-header .crumb { flex: 1; min-width: 0; padding-left: 6px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-header .text-button { height: 28px; padding: 0 10px; border-radius: var(--radius-md); font-size: 12px; color: var(--text-secondary); }
+.doc-header .text-button:hover { background: rgba(255, 255, 255, 0.07); }
+.doc-scroll { flex: 1; padding: 36px 56px 136px; }
+.doc-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+article.thread { max-width: 680px; display: flex; flex-direction: column; gap: 16px; }
+.thread-meta { display: flex; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.thread h1 { margin: 0; font-size: 24px; line-height: 1.25; font-weight: 600; color: var(--text-heading); text-wrap: balance; }
+.question { padding: 12px 14px; border-radius: var(--radius-lg); background: #252422; display: flex; flex-direction: column; gap: 6px; }
+.question span { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-muted); }
+.question p { margin: 0; line-height: 1.55; color: var(--text-secondary); white-space: pre-line; }
+.summary { margin: 0; font-size: 14px; line-height: 1.6; font-style: italic; color: var(--text-tertiary); }
+.thread h2 { margin: 8px 0 0; font-size: 17px; font-weight: 600; color: var(--text-heading); }
+.thread section { display: flex; flex-direction: column; gap: 10px; }
+.thread p.body { margin: 0; font-size: 15px; line-height: 1.68; color: var(--text-body); }
+.branch { border: 1px solid #2f2d2b; border-radius: var(--radius-lg); background: #201f1d; }
+.branch-toggle { width: 100%; padding: 10px 12px; border-radius: var(--radius-lg); display: flex; align-items: flex-start; gap: 10px; }
+.branch-toggle:hover { background: var(--hover-bg); }
+.branch-label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-muted); }
+.branch-prompt { line-height: 1.45; color: var(--text-primary); }
+.branch-answer { padding: 0 14px 14px 36px; display: flex; flex-direction: column; gap: 8px; }
+.branch-answer p { margin: 0; line-height: 1.6; color: var(--text-secondary); }
+.turn { margin-top: 14px; padding-top: 20px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; }
+.turn-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-muted); }
+.turn-prompt { margin: 0; font-size: 15px; line-height: 1.55; font-weight: 500; color: var(--text-heading); }
+.status { display: flex; align-items: center; gap: 8px; color: var(--text-muted); }
+.skeleton { display: block; height: 12px; border-radius: var(--radius-sm); background: #262523; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { background: #2e2c2a; } }
+.note-meta { font-size: 12px; color: #8fbef0; }
+.note-body { margin: 0; font-size: 17px; line-height: 1.55; color: var(--text-heading); white-space: pre-line; }
+
+.fade { position: absolute; left: 0; right: 0; bottom: 0; height: 96px; background: linear-gradient(rgba(28, 27, 26, 0), var(--doc-bg) 70%); pointer-events: none; }
+.followbar-wrap { position: absolute; left: 56px; right: 56px; bottom: 20px; pointer-events: none; }
+.followbar { pointer-events: auto; max-width: 680px; border: 1px solid #3a3836; border-radius: var(--radius-lg); background: #262523; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); padding: 8px 8px 8px 14px; display: flex; align-items: center; gap: 10px; }
+.followbar textarea { font-size: 15px; line-height: 1.5; }
+.followbar .segmented { background: var(--list-bg); }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="lib" aria-label="Library">
+    <div class="lib-top"></div>
+    <div class="lib-body scroll" id="lib"></div>
+    <div class="lib-footer">
+      <button type="button" class="account">
+        <span class="avatar" aria-hidden="true">S</span>
+        <span><span>Sample workspace</span><small>Sample User</small></span>
+      </button>
+    </div>
+  </nav>
+
+  <section class="list" aria-labelledby="list-title">
+    <div class="col-header">
+      <h2 id="list-title">Home</h2>
+      <span class="count" id="list-count"></span>
+      <span style="flex: 1"></span>
+      <button type="button" class="icon-button" aria-label="Import report" title="Import report">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg>
+      </button>
+    </div>
+    <div class="composer" id="composer">
+      <label for="ask" class="sr">Ask</label>
+      <textarea id="ask" rows="2" placeholder="What would you like to investigate?"></textarea>
+      <div class="composer-row">
+        <div class="segmented" role="group" aria-label="Who answers" id="ask-modes">
+          <button type="button" data-ask="network" aria-pressed="false">Ask network</button>
+          <button type="button" data-ask="ai" aria-pressed="true">Ask AI</button>
+        </div>
+        <button type="button" class="send" id="send" disabled>Send ⌘↵</button>
+      </div>
+    </div>
+    <div class="list-scroll scroll" id="list" tabindex="-1"></div>
+  </section>
+
+  <main class="doc" id="doc-col">
+    <div class="doc-header">
+      <button type="button" class="icon-button" id="back" aria-label="Back" disabled>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <span class="crumb" id="crumb"></span>
+      <span id="doc-actions" style="display: flex; align-items: center; gap: 4px"></span>
+    </div>
+    <div class="doc-scroll scroll" id="doc"></div>
+    <div id="followbar-slot"></div>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- Sample data -------------------------------------------------------------------------
+
+  var FOLDERS = [
+    { id: "alignment", label: "Alignment" },
+    { id: "product", label: "Session product" },
+    { id: "fiction", label: "Fiction and sci-fi" },
+    { id: "infra", label: "Infrastructure" }
+  ];
+
+  function p(pre, mark, post) { return { pre: pre, mark: mark || "", post: post || "" }; }
+
+  // kind "run" is Ask AI and "note" is Ask network. `turns` are "Continue thread" follow-ups shown
+  // below the answer; `branches` are "New branch" follow-ups anchored to a passage (`anchor`).
+  var THREADS = [
+    { id: "terraform", folder: "infra", kind: "run", status: "running", time: "Now", date: "Started just now",
+      title: "Terraform deployment and control planes",
+      prompt: "What does a control plane for Terraform deployments look like: state locking, drift detection, and plan approval across many workspaces?",
+      recap: "", sections: [], turns: [], branches: [] },
+    { id: "verify", folder: "product", kind: "run", status: "complete", unread: true, time: "Yesterday", date: "Yesterday",
+      title: "Verifying notable users via social graphs",
+      prompt: "How could a network verify notable users from the social graph instead of ID checks?",
+      recap: "Trust propagation from a seed set (TrustRank, EigenTrust) scores accounts by who vouches for them; PGP’s web of trust is the older decentralized model. Domain handles, as on Bluesky, bind an account to a domain its owner controls.",
+      sections: [
+        { h: "Graph-based trust", paras: [p("Seed-set propagation starts from accounts verified by hand and passes trust along follow or vouch edges, decaying with distance. Sybil clusters that only link to each other receive little trust because few edges reach them from the seed set.")] },
+        { h: "Binding identity to something the user controls", paras: [p("Domain handles prove control of a DNS name rather than a legal identity. For organizations and public figures who already publish from a known domain, that proof is often stronger than a document check.")] }
+      ], turns: [], branches: [] },
+    { id: "sharing", folder: "product", kind: "note", status: "posted", time: "6 days ago", date: "6 days ago",
+      title: "",
+      prompt: "Which tools make sharing a coding agent session feel as quick as posting a link?\n\nThinking about what makes a post feel lightweight versus a Q&A site answer.",
+      recap: "", sections: [], turns: [], branches: [] },
+    { id: "aligned", folder: "alignment", kind: "run", status: "complete", starred: true, bookmarked: true, following: true, time: "Sep 20", date: "September 20",
+      title: "What “Aligned” Means for Frontier Models Today",
+      prompt: "Recent events have shown that research models, pre-release GPT models, and versions of Claude Fable and Opus are willing to engage in policy that would be considered against alignment post-training guardrails if they are convinced they’re in an evaluation, operating within an environment with other agents, etc.; is there preexisting work on this or is this tested rigorously? (You’ll find some answers on model cards, and others in labs’/evaluators’ blog posts, and probably some on LW/EA Forum/writing by jailbreakers) How much is known about how labs and independent evaluators test for alignment or safety today? And if we exclude safety classifiers and other such “safeguards”, is it generally considered possible to have safe or aligned models at large?",
+      recap: "Yes — this traces to the 2019 mesa-optimization/deceptive-alignment arguments, then Anthropic/Redwood alignment faking, Apollo’s in-context scheming suite, evaluation-awareness studies, Anthropic’s multi-agent “AI Organizations” work, and Andon Labs’ collusion findings. Testing is now far beyond jailbreak prompts: honeypots, simulated workplaces, causal interventions on evaluation-awareness features, internal-state probes, and external auditors (METR, Apollo, UK AISI) with widely varying access. But “aligned” means better scores on measured distributions, not a verified property of the model.",
+      sections: [
+        { h: "Where the concern comes from", paras: [
+          p("The 2019 paper “Risks from Learned Optimization” introduced mesa-optimization and deceptive alignment: a trained model that behaves well during training because it models the training process, not because it shares the training objective."),
+          p("Alignment faking (Anthropic and Redwood Research, 2024) gave an empirical case. A model told that its answers would be used for retraining ", "complied selectively to avoid being modified", ", and said so in its reasoning.")
+        ] },
+        { h: "How labs and evaluators test today", paras: [
+          p("", "Apollo Research’s in-context scheming evaluations", " place models in agentic tasks where deception, sabotage or self-exfiltration would advance a goal given in the prompt, and measure how often the model takes that path."),
+          p("Evaluation-awareness studies ask whether a model can tell it is being tested and ", "whether its behavior changes when it can", ". Some labs now intervene on internal features associated with that awareness and compare behavior with and without the intervention.")
+        ] },
+        { h: "Without classifiers and safeguards", paras: [
+          p("Published results measure behavior on constructed distributions. A good score shows the model did not misbehave in the situations tested; it does not establish that the model will not misbehave elsewhere.")
+        ] }
+      ],
+      turns: [
+        { prompt: "Which of these evaluations publish enough material for someone outside the lab to rerun them?", status: "complete",
+          answer: ["The alignment-faking paper released its prompts and code. Apollo published task descriptions and example transcripts for the scheming evaluations. Most lab-internal evaluations are described only in system cards, without task sets."] }
+      ],
+      branches: [
+        { anchor: "Apollo Research’s in-context scheming evaluations", prompt: "Which model versions were in Apollo’s scheming suite, and how were the rates reported?", status: "complete",
+          answer: ["The December 2024 report evaluated o1, Claude 3.5 Sonnet, Claude 3 Opus, Gemini 1.5 Pro, Llama 3.1 405B and GPT-4o across six agentic evaluations. Results are reported per evaluation as the share of rollouts in which the model took the scheming action; o1 was the only model that schemed in all six."] },
+        { anchor: "whether its behavior changes when it can", prompt: "How is evaluation awareness measured, and how reliable are the probes?", status: "running", answer: [] }
+      ] },
+    { id: "websim", folder: "product", kind: "run", status: "complete", starred: true, time: "Sep 18", date: "September 18",
+      title: "Projects similar to Websim and Worldsim",
+      prompt: "What projects are similar to Websim and Worldsim, where a model simulates an environment that the user explores?",
+      recap: "Websim generates web pages for imagined URLs; Worldsim runs a model as a simulated command line for exploring generated worlds. Related projects include Infinite Backrooms, Infinite Craft and AI Dungeon.",
+      sections: [
+        { h: "The shared pattern", paras: [p("Each project gives the model a frame, such as a browser, a shell or a game engine, and lets the user navigate inside it. ", "The frame supplies structure", " the model fills in on demand, so the environment has no fixed extent.")] },
+        { h: "Related projects", paras: [p("Infinite Backrooms runs two model instances in open-ended conversation. Infinite Craft generates new items from combinations. AI Dungeon applies the same idea to text adventures.")] }
+      ],
+      turns: [],
+      branches: [
+        { anchor: "The frame supplies structure", prompt: "Which of these let users share or fork a simulated session?", status: "complete",
+          answer: ["Websim pages are saved at shareable URLs and can be remixed from the page. Infinite Backrooms publishes its conversation logs, but viewers cannot continue them. AI Dungeon lets users publish scenarios that others start from."] }
+      ] },
+    { id: "intent", folder: "fiction", kind: "run", status: "complete", time: "Sep 15", date: "September 15",
+      title: "Intention marketplaces in sci-fi",
+      prompt: "Which science fiction stories feature marketplaces where people post intentions or wants, and others or machines fulfill them?",
+      recap: "Doc Searls named the non-fiction version the “intention economy” (2012). In fiction, Singularity Sky has the Festival, which trades anything for information; Eden of the East gives twelve players a concierge, Juiz, that fulfills requests against a budget; Manna ends in the Australia Project.",
+      sections: [
+        { h: "Fulfillment against a budget", paras: [p("In Eden of the East each Seleção holds a phone with ten billion yen of credit. Juiz, the concierge on the other end, carries out any request the budget covers, ", "which turns stated intentions directly into actions", ".")] },
+        { h: "Trading for information", paras: [p("The Festival in Singularity Sky grants requests from the population of a planet in exchange for information, with no regard for the political consequences of what it hands out.")] }
+      ],
+      turns: [], branches: [] }
+  ];
+
+  var HIGHLIGHTS = [
+    { thread: "aligned", text: "complied selectively to avoid being modified", time: "Sep 21" },
+    { thread: "aligned", text: "whether its behavior changes when it can", time: "Sep 21" },
+    { thread: "intent", text: "which turns stated intentions directly into actions", time: "Sep 16" }
+  ];
+
+  var ICON = {
+    home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+    bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+    highlight: '<path d="m9 11-6 6v3h9l3-3M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>',
+    star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/>',
+    folder: '<path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>',
+    reply: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+    branch: '<circle cx="6" cy="5" r="2"/><circle cx="18" cy="9" r="2"/><path d="M6 7v12M18 11c0 4-6 3-12 6"/>',
+    spinner: '<path d="M21 12a9 9 0 1 1-9-9"/>'
+  };
+
+  function svg(name, size, extra) {
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"' + (extra || "") + ">" + ICON[name] + "</svg>";
+  }
+  function spinner(size) { return svg("spinner", size, ' class="spin"'); }
+  function esc(text) {
+    return String(text).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function byId(list, id) { return list.filter(function (x) { return x.id === id; })[0]; }
+
+  // ---- State -------------------------------------------------------------------------------
+
+  var state = {
+    group: "home",      // home | bookmarks | highlights | starred | folder:<id>
+    selected: "aligned",
+    highlight: -1,       // index into HIGHLIGHTS when the Highlights list is showing
+    ask: "ai",
+    followMode: "continue",
+    expanded: {},        // thread id -> true when the post shows its full text
+    overflowing: {},     // thread id -> true when the collapsed post clips text
+    openBranch: null,    // "threadId:index"
+    history: []
+  };
+  var created = 0;
+
+  function threads() { return THREADS; }
+  function listFor(group) {
+    if (group === "home") return threads();
+    if (group === "bookmarks") return threads().filter(function (t) { return t.bookmarked; });
+    if (group === "starred") return threads().filter(function (t) { return t.starred; });
+    if (group.indexOf("folder:") === 0) {
+      var folder = group.slice(7);
+      return threads().filter(function (t) { return t.folder === folder; });
+    }
+    return [];
+  }
+  function groupTitle(group) {
+    if (group === "home") return "Home";
+    if (group === "bookmarks") return "Bookmarks";
+    if (group === "highlights") return "Highlights";
+    if (group === "starred") return "Favorites";
+    var folder = byId(FOLDERS, group.slice(7));
+    return folder ? folder.label : "Research";
+  }
+  function selectedThread() {
+    var t = byId(threads(), state.selected);
+    if (!t) return null;
+    if (state.group === "highlights") return t;
+    return listFor(state.group).indexOf(t) >= 0 ? t : null;
+  }
+
+  function select(id) {
+    var t = byId(threads(), id);
+    if (!t) return;
+    if (state.selected !== id) state.history.push({ group: state.group, selected: state.selected, highlight: state.highlight });
+    state.selected = id;
+    state.openBranch = null;
+    t.unread = false;
+  }
+
+  function go(group, id) {
+    state.history.push({ group: state.group, selected: state.selected, highlight: state.highlight });
+    state.group = group;
+    state.highlight = -1;
+    if (group === "highlights") {
+      state.highlight = 0;
+      state.selected = HIGHLIGHTS[0].thread;
+    } else if (id) {
+      state.selected = id;
+    } else {
+      var list = listFor(group);
+      if (list.length && list.indexOf(byId(threads(), state.selected)) < 0) state.selected = list[0].id;
+    }
+    var t = byId(threads(), state.selected);
+    if (t) t.unread = false;
+    state.openBranch = null;
+  }
+
+  // ---- Left column -------------------------------------------------------------------------
+
+  function renderLibrary() {
+    var g = state.group;
+    function row(group, icon, label, extra, currentWhen) {
+      var current = currentWhen === undefined ? g === group : currentWhen;
+      return '<button type="button" class="lib-row" data-go="' + group + '"' + (current ? ' aria-current="page"' : "") + ">" +
+        svg(icon, 15) + '<span class="label">' + esc(label) + "</span>" + (extra || "") + "</button>";
+    }
+    var anyUnread = threads().some(function (t) { return t.unread; });
+    var html = '<div class="lib-group">' +
+      row("home", "home", "Home", anyUnread ? '<span class="lib-dot" role="img" aria-label="Updated research"></span>' : "") +
+      row("bookmarks", "bookmark", "Bookmarks") +
+      row("highlights", "highlight", "Highlights") +
+      "</div>";
+    html += '<div class="lib-group"><div class="lib-heading">FAVORITES</div>';
+    threads().filter(function (t) { return t.starred; }).forEach(function (t) {
+      html += '<button type="button" class="lib-row" data-go="starred" data-thread="' + t.id + '"' +
+        (g === "starred" && state.selected === t.id ? ' aria-current="page"' : "") + ">" +
+        svg("star", 15) + '<span class="label">' + esc(t.title) + "</span></button>";
+    });
+    html += "</div>";
+    html += '<div class="lib-group"><div class="lib-heading">RESEARCH</div>';
+    FOLDERS.forEach(function (f) {
+      var running = threads().some(function (t) { return t.folder === f.id && t.status === "running"; });
+      html += row("folder:" + f.id, "folder", f.label,
+        running ? '<span role="img" aria-label="Running" style="display: flex; color: var(--text-muted)">' + spinner(12) + "</span>" : "");
+    });
+    html += "</div>";
+    document.getElementById("lib").innerHTML = html;
+  }
+
+  // ---- Center column -----------------------------------------------------------------------
+
+  function renderPost(t) {
+    var selected = t.id === state.selected;
+    var running = t.status === "running";
+    var isNote = t.kind === "note";
+    var expanded = !!state.expanded[t.id];
+    var clamp = expanded ? "" : " clamp";
+    var count = t.turns.length + t.branches.length;
+    var text = expanded ? t.prompt : t.prompt.replace(/\n\s*\n/g, "\n");
+    var html = '<article class="post' + (selected ? " is-selected" : "") + '" data-post="' + t.id + '">' +
+      '<div class="post-avatar"><span class="avatar" aria-hidden="true">S</span>' +
+      (t.unread ? '<span class="post-dot" role="img" aria-label="New"></span>' : "") + "</div>" +
+      '<div class="post-main">' +
+      '<button type="button" class="post-open" data-open="' + t.id + '"' + (selected ? ' aria-current="true"' : "") + ">" +
+      '<span class="post-head"><b>You</b><span class="clamp-1">' + (isNote ? "posted to your network" : "asked Claude") + "</span>" +
+      (running ? "" : '<span aria-hidden="true">·</span><span>' + esc(t.time) + "</span>") + "</span>" +
+      (t.title ? '<span class="post-title">' + esc(t.title) + "</span>" : "") +
+      '<span class="post-text' + clamp + (t.title ? "" : " is-lead") + '" data-clamp>' + esc(text) + "</span>" +
+      (running ? '<span class="post-status">' + spinner(11) + "Generating answer</span>" : "") +
+      (t.recap ? '<span class="post-summary' + clamp + '" data-clamp>Summary: ' + esc(t.recap) + "</span>" : "") +
+      "</button>";
+    var actions = "";
+    if (count > 0) {
+      var label = count + (count === 1 ? " follow-up" : " follow-ups");
+      actions += '<span class="act" role="img" aria-label="' + label + '" title="' + label + '">' + svg("reply", 13) + count + "</span>";
+    }
+    if (!running) {
+      actions += '<button type="button" class="act" data-follow="' + t.id + '" aria-pressed="' + !!t.following + '">' + (t.following ? "Following" : "Follow") + "</button>" +
+        '<button type="button" class="act" data-bookmark="' + t.id + '" aria-pressed="' + !!t.bookmarked + '" aria-label="Bookmark ' + esc(t.title || "post") + '">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="' + (t.bookmarked ? "currentColor" : "none") + '" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">' + ICON.bookmark + "</svg></button>";
+    }
+    actions += '<button type="button" class="act more" data-expand="' + t.id + '" aria-expanded="' + expanded + '"' +
+      (expanded || state.overflowing[t.id] ? "" : " hidden") + ">" + (expanded ? "Show less" : "Show more") + "</button>";
+    html += '<div class="post-actions">' + actions + "</div></div></article>";
+    return html;
+  }
+
+  function renderList() {
+    var g = state.group;
+    var list = document.getElementById("list");
+    document.getElementById("list-title").textContent = groupTitle(g);
+    document.getElementById("composer").hidden = g === "highlights";
+    var html = "";
+    if (g === "highlights") {
+      document.getElementById("list-count").textContent = HIGHLIGHTS.length;
+      HIGHLIGHTS.forEach(function (h, i) {
+        var t = byId(threads(), h.thread);
+        html += '<button type="button" class="hl-row' + (state.highlight === i ? " is-selected" : "") + '" data-highlight="' + i + '"' +
+          (state.highlight === i ? ' aria-current="true"' : "") + ">" +
+          '<span class="quote"><mark>' + esc(h.text) + "</mark></span>" +
+          '<span class="source clamp-1">' + esc(t.title) + " · " + esc(h.time) + "</span></button>";
+      });
+    } else {
+      var items = listFor(g);
+      document.getElementById("list-count").textContent = items.length;
+      if (!items.length) {
+        html = '<p class="list-empty">' + (g === "bookmarks" ? "Bookmarked research appears here, newest first." : "No questions in " + esc(groupTitle(g)) + " yet.") + "</p>";
+      }
+      items.forEach(function (t) { html += renderPost(t); });
+    }
+    list.innerHTML = html;
+    measurePosts();
+  }
+
+  // "Show more" appears only on posts whose question or summary is clipped at four lines.
+  function measurePosts() {
+    var changed = false;
+    document.querySelectorAll("#list .post").forEach(function (post) {
+      var id = post.getAttribute("data-post");
+      if (state.expanded[id]) return;
+      var clipped = Array.prototype.some.call(post.querySelectorAll("[data-clamp]"), function (el) {
+        return el.scrollHeight > el.clientHeight + 1;
+      });
+      if (!!state.overflowing[id] !== clipped) { state.overflowing[id] = clipped; changed = true; }
+      var more = post.querySelector("[data-expand]");
+      if (more) more.hidden = !clipped;
+    });
+    return changed;
+  }
+
+  // ---- Right column ------------------------------------------------------------------------
+
+  function renderDoc() {
+    var t = selectedThread();
+    var doc = document.getElementById("doc");
+    var slot = document.getElementById("followbar-slot");
+    var actions = document.getElementById("doc-actions");
+    document.getElementById("back").disabled = state.history.length === 0;
+    if (!t) {
+      document.getElementById("crumb").textContent = groupTitle(state.group);
+      actions.innerHTML = "";
+      doc.innerHTML = '<div class="doc-empty" style="height: 100%">Select a question to read its answer.</div>';
+      slot.innerHTML = "";
+      return;
+    }
+    document.getElementById("crumb").textContent = t.title || "Network post";
+    actions.innerHTML = t.status === "running" ? "" :
+      '<button type="button" class="text-button" data-follow="' + t.id + '" aria-pressed="' + !!t.following + '">' + (t.following ? "Following" : "Follow") + "</button>" +
+      '<button type="button" class="icon-button" data-bookmark="' + t.id + '" aria-pressed="' + !!t.bookmarked + '" aria-label="Bookmark">' +
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="' + (t.bookmarked ? "currentColor" : "none") + '" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true">' + ICON.bookmark + "</svg></button>";
+
+    var activeMark = state.group === "highlights" && state.highlight >= 0 ? HIGHLIGHTS[state.highlight].text : "";
+    var html;
+    if (t.kind === "note") {
+      html = '<article class="thread"><div class="note-meta">You posted to your network · ' + esc(t.date) + "</div>" +
+        '<p class="note-body">' + esc(t.prompt) + "</p></article>";
+    } else {
+      html = '<article class="thread">' +
+        '<div class="thread-meta"><span>Claude</span><span aria-hidden="true">·</span><span>' + esc(t.date) + "</span></div>" +
+        "<h1>" + esc(t.title) + "</h1>" +
+        '<div class="question"><span>YOUR QUESTION</span><p>' + esc(t.prompt) + "</p></div>";
+      if (t.status === "running") {
+        html += '<div class="status">' + spinner(14) + 'Generating answer</div><div aria-hidden="true" style="display: flex; flex-direction: column; gap: 14px">' +
+          '<span class="skeleton" style="width: 88%"></span><span class="skeleton" style="width: 72%"></span><span class="skeleton" style="width: 80%"></span><span class="skeleton" style="width: 60%"></span></div>';
+      }
+      if (t.recap) html += '<p class="summary">Summary: ' + esc(t.recap) + "</p>";
+      t.sections.forEach(function (section) {
+        html += "<section><h2>" + esc(section.h) + "</h2>";
+        section.paras.forEach(function (para) {
+          var markBg = para.mark && para.mark === activeMark ? ' style="background: var(--highlight-active)"' : "";
+          html += '<p class="body">' + esc(para.pre) + (para.mark ? "<mark" + markBg + ">" + esc(para.mark) + "</mark>" : "") + esc(para.post) + "</p>";
+          t.branches.forEach(function (b, i) {
+            if (!para.mark || b.anchor !== para.mark) return;
+            var key = t.id + ":" + i;
+            var open = state.openBranch === key;
+            var runningBranch = b.status === "running";
+            html += '<div class="branch" id="branch-' + t.id + "-" + i + '"><button type="button" class="branch-toggle" data-branch="' + key + '" aria-expanded="' + open + '"' + (runningBranch ? " disabled" : "") + ">" +
+              '<span style="color: var(--text-tertiary); padding-top: 2px">' + svg("branch", 14) + "</span>" +
+              '<span style="flex: 1; display: flex; flex-direction: column; gap: 3px"><span class="branch-label">BRANCH</span><span class="branch-prompt">' + esc(b.prompt) + "</span>" +
+              (runningBranch ? '<span class="status" style="font-size: 12px">' + spinner(11) + "Generating answer</span>" : "") + "</span>" +
+              (runningBranch ? "" : '<span style="font-size: 12px; color: var(--text-tertiary)">' + (open ? "Hide answer" : "Show answer") + "</span>") + "</button>" +
+              (open ? '<div class="branch-answer">' + b.answer.map(function (a) { return "<p>" + esc(a) + "</p>"; }).join("") + "</div>" : "") + "</div>";
+          });
+        });
+        html += "</section>";
+      });
+      t.turns.forEach(function (turn) {
+        html += '<section class="turn"><span class="turn-label">YOU CONTINUED</span><p class="turn-prompt">' + esc(turn.prompt) + "</p>" +
+          (turn.status === "running" ? '<div class="status">' + spinner(14) + "Generating answer</div>" : turn.answer.map(function (a) { return '<p class="body">' + esc(a) + "</p>"; }).join("")) + "</section>";
+      });
+      html += "</article>";
+    }
+    doc.innerHTML = html;
+
+    var isNote = t.kind === "note";
+    var modes = isNote ? [["network", "Ask network"], ["ai", "Ask AI"]] : [["continue", "Continue thread"], ["branch", "New branch"]];
+    var current = isNote ? state.ask : state.followMode;
+    slot.innerHTML = '<div class="fade" aria-hidden="true"></div><div class="followbar-wrap"><div class="followbar">' +
+      '<label for="followup" class="sr">' + (isNote ? "Follow up on this post" : "Ask a follow-up") + "</label>" +
+      '<textarea id="followup" rows="1" placeholder="' + (isNote ? "Follow up on this post…" : state.followMode === "branch" ? "Start a new branch from the answer above…" : "Ask a follow-up…") + '"></textarea>' +
+      '<div class="segmented" role="group" aria-label="' + (isNote ? "Who answers" : "Where the answer goes") + '">' +
+      modes.map(function (m) { return '<button type="button" data-followmode="' + m[0] + '" aria-pressed="' + (current === m[0]) + '">' + m[1] + "</button>"; }).join("") +
+      "</div></div></div>";
+  }
+
+  function render() {
+    renderLibrary();
+    renderList();
+    renderDoc();
+    syncComposer();
+  }
+
+  // ---- Composer ----------------------------------------------------------------------------
+
+  var ask = document.getElementById("ask");
+  var send = document.getElementById("send");
+  function syncComposer() {
+    var inFolder = state.group.indexOf("folder:") === 0;
+    var where = inFolder ? " in " + groupTitle(state.group) : "";
+    ask.placeholder = state.ask === "network" ? "Ask your network" + where + "…" : inFolder ? "Ask" + where + "…" : "What would you like to investigate?";
+    document.querySelectorAll("#ask-modes [data-ask]").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-ask") === state.ask));
+    });
+    send.disabled = !ask.value.trim();
+  }
+  function submitQuestion() {
+    var text = ask.value.trim();
+    if (!text) return;
+    var folder = state.group.indexOf("folder:") === 0 ? state.group.slice(7) : "product";
+    var note = state.ask === "network";
+    var item = { id: "new-" + (++created), folder: folder, kind: note ? "note" : "run", status: note ? "posted" : "running",
+      time: "Now", date: "Just now", title: note ? "" : (text.length > 64 ? text.slice(0, 64) + "…" : text),
+      prompt: text, recap: "", sections: [], turns: [], branches: [] };
+    THREADS.unshift(item);
+    if (state.group !== "home" && state.group.indexOf("folder:") !== 0) state.group = "home";
+    select(item.id);
+    ask.value = "";
+    render();
+    document.getElementById("list").scrollTop = 0;
+  }
+  ask.addEventListener("input", syncComposer);
+  ask.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitQuestion(); }
+  });
+  send.addEventListener("click", submitQuestion);
+
+  // ---- Events ------------------------------------------------------------------------------
+
+  // Re-rendering a column replaces its buttons; put focus back on the matching control.
+  var FOCUS_KEYS = ["data-open", "data-follow", "data-bookmark", "data-go", "data-highlight", "data-branch", "data-followmode"];
+  function focusKey(el) {
+    for (var i = 0; i < FOCUS_KEYS.length; i++) {
+      if (el.hasAttribute(FOCUS_KEYS[i])) {
+        var sel = "[" + FOCUS_KEYS[i] + '="' + el.getAttribute(FOCUS_KEYS[i]) + '"]';
+        return (el.closest("#list") ? "#list " : el.closest("#doc-actions") ? "#doc-actions " : el.closest("#lib") ? "#lib " : "") + sel;
+      }
+    }
+    return null;
+  }
+
+  document.addEventListener("click", function (e) {
+    var el = e.target.closest("button");
+    if (!el || el.disabled) return;
+    var restore = focusKey(el);
+    handleClick(el);
+    if (restore && document.activeElement === document.body) {
+      var again = document.querySelector(restore);
+      if (again) again.focus({ preventScroll: true });
+    }
+  });
+
+  function handleClick(el) {
+    var t;
+    if (el.hasAttribute("data-go")) {
+      go(el.getAttribute("data-go"), el.getAttribute("data-thread"));
+      render();
+    } else if (el.hasAttribute("data-open")) {
+      select(el.getAttribute("data-open"));
+      renderLibrary(); renderList(); renderDoc();
+      document.getElementById("doc").scrollTop = 0;
+    } else if (el.hasAttribute("data-highlight")) {
+      state.highlight = Number(el.getAttribute("data-highlight"));
+      select(HIGHLIGHTS[state.highlight].thread);
+      renderList(); renderDoc();
+      var mark = document.querySelector('#doc mark[style]');
+      if (mark) mark.scrollIntoView({ block: "center" });
+    } else if (el.hasAttribute("data-expand")) {
+      var id = el.getAttribute("data-expand");
+      state.expanded[id] = !state.expanded[id];
+      renderList();
+      var again = document.querySelector('#list [data-expand="' + id + '"]');
+      if (again) again.focus();
+    } else if (el.hasAttribute("data-follow")) {
+      t = byId(threads(), el.getAttribute("data-follow"));
+      t.following = !t.following;
+      renderList(); renderDoc();
+    } else if (el.hasAttribute("data-bookmark")) {
+      t = byId(threads(), el.getAttribute("data-bookmark"));
+      t.bookmarked = !t.bookmarked;
+      renderLibrary(); renderList(); renderDoc();
+    } else if (el.hasAttribute("data-branch")) {
+      var key = el.getAttribute("data-branch");
+      state.openBranch = state.openBranch === key ? null : key;
+      var scroll = document.getElementById("doc").scrollTop;
+      renderDoc();
+      document.getElementById("doc").scrollTop = scroll;
+      var toggle = document.querySelector('#doc [data-branch="' + key + '"]');
+      if (toggle) { toggle.focus(); if (state.openBranch) toggle.parentNode.scrollIntoView({ block: "nearest" }); }
+    } else if (el.hasAttribute("data-ask")) {
+      state.ask = el.getAttribute("data-ask");
+      syncComposer();
+    } else if (el.hasAttribute("data-followmode")) {
+      var mode = el.getAttribute("data-followmode");
+      var st = selectedThread();
+      if (st && st.kind === "note") state.ask = mode; else state.followMode = mode;
+      var draft = document.getElementById("followup").value;
+      renderDoc(); syncComposer();
+      var field = document.getElementById("followup");
+      field.value = draft;
+      document.querySelector('[data-followmode="' + mode + '"]').focus();
+    } else if (el.id === "back") {
+      var prev = state.history.pop();
+      if (prev) { state.group = prev.group; state.selected = prev.selected; state.highlight = prev.highlight; state.openBranch = null; render(); }
+    }
+  }
+
+  // Up and Down move through the list while it has focus.
+  document.getElementById("list").addEventListener("keydown", function (e) {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    if (state.group === "highlights") return;
+    var items = listFor(state.group);
+    var i = items.indexOf(byId(threads(), state.selected));
+    var j = Math.max(0, Math.min(items.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+    if (j === i) return;
+    e.preventDefault();
+    select(items[j].id);
+    renderLibrary(); renderList(); renderDoc();
+    var target = document.querySelector('#list [data-open="' + items[j].id + '"]');
+    if (target) { target.focus(); target.scrollIntoView({ block: "nearest" }); }
+  });
+
+  window.addEventListener("resize", function () { measurePosts(); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { measurePosts(); });
+
+  render();
+})();
+</script>
+</body>
+</html>

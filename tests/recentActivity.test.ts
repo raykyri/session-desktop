@@ -1,7 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import {
   activityEventFromResearchQuery,
   buildRecentActivityFromItems,
@@ -12,13 +10,10 @@ import {
   upsertRecentActivityItem,
   upsertRecentActivityResearchNode,
 } from "../src/lib/activity";
-import ActivityMetadataLine, {
-  formatActivityMetadataSummary,
-  formatResearchModelSummary,
-} from "../src/components/ActivityMetadataLine";
+import { formatResearchModelSummary } from "../src/lib/researchModelSummary";
 import {
   buildRecentActivityVirtualRows,
-  ResearchQueryCard,
+  feedPostAction,
   virtualActivityRange,
 } from "../src/components/research/ResearchActivityFeed";
 import type {
@@ -67,29 +62,23 @@ test("research metadata follows the shared actor/action/object grammar", () => {
   assert.equal(event.state?.label, "Running");
 });
 
-test("research metadata names thread prompts and left-aligned Home activity", () => {
+test("Home posts name the question's action and the thread a follow-up belongs to", () => {
   const followUp = activityEventFromResearchQuery(query, tree);
-  assert.equal(formatActivityMetadataSummary(followUp), "Replied in “Collective memory”");
+  assert.equal(feedPostAction(followUp), "followed up in “Collective memory”");
 
   const topLevel = activityEventFromResearchQuery(
     { ...query, parentNodeId: null, adapter: "claude", model: "fable" },
     tree,
   );
-  assert.equal(formatActivityMetadataSummary(topLevel), "");
+  // The post names the agent, not the model.
+  assert.equal(feedPostAction(topLevel), "asked Claude");
   assert.equal(formatResearchModelSummary("claude", "fable"), "Claude Fable");
   assert.equal(formatResearchModelSummary("claude", null), "Claude");
   assert.equal(formatResearchModelSummary("claude", "claude-opus-4-6"), "Claude");
   assert.equal(formatResearchModelSummary("", null), "");
-
-  const html = renderToStaticMarkup(createElement(ActivityMetadataLine, {
-    event: { ...topLevel, occurredAt: Date.now() - 2 * 60 * 60 * 1000 },
-  }));
-  assert.ok(html.includes('class="activity-metadata-summary"'));
-  assert.match(html, /activity-metadata-summary"><time/);
-  assert.match(html, />2 hr ago<\/time>/);
 });
 
-test("note metadata names delivery, reply counts, and saved sources", () => {
+test("note posts name delivery and saved sources", () => {
   const note: RecentResearchQuery = {
     ...query, nodeId: "note", parentNodeId: null, kind: "note", status: "complete",
     prompt: "Who has shipped this?", delivery: { status: "posted", postedAt: 1 }, replyCount: 3,
@@ -97,11 +86,7 @@ test("note metadata names delivery, reply counts, and saved sources", () => {
   const posted = activityEventFromResearchQuery(note, tree);
   assert.deepEqual(posted.action, { kind: "posted", label: "Posted to network" });
   assert.equal(posted.object.kind, "note");
-  assert.equal(formatActivityMetadataSummary(posted), "Posted to network · 3 replies ·");
-  assert.equal(
-    formatActivityMetadataSummary(activityEventFromResearchQuery({ ...note, replyCount: 0 })),
-    "Posted to network ·",
-  );
+  assert.equal(feedPostAction(posted), "posted to your network");
 
   const link = activityEventFromResearchQuery({
     ...note, prompt: "https://example.com/paper", delivery: null, replyCount: 0,
@@ -109,7 +94,7 @@ test("note metadata names delivery, reply counts, and saved sources", () => {
   assert.equal(link.object.kind, "link");
   assert.equal(link.context?.label, "example.com");
   assert.equal(link.state, undefined);
-  assert.equal(formatActivityMetadataSummary(link), "Saved link · example.com ·");
+  assert.equal(feedPostAction(link), "saved a link");
 
   const post = activityEventFromResearchQuery({
     ...note, prompt: "https://x.com/jack/status/20", delivery: null, replyCount: 0,
@@ -123,7 +108,7 @@ test("note metadata names delivery, reply counts, and saved sources", () => {
     }],
   });
   assert.equal(post.object.kind, "post");
-  assert.equal(formatActivityMetadataSummary(post), "Saved post · @jack ·");
+  assert.equal(feedPostAction(post), "saved a post");
 });
 
 test("Home hides archived research and shows it again when restored", () => {
@@ -245,71 +230,6 @@ test("variable-height virtualization returns a small overscanned window", () => 
   assert.ok(range.end - range.start < 50);
 });
 
-test("home-feed research prompts render markdown links", () => {
-  const html = renderToStaticMarkup(
-    createElement(ResearchQueryCard, {
-      query: {
-        ...query,
-        prompt:
-          "what would solving the alignment problem this way look like?\nhttps://x.com/OrionJohnston/status/2097801834224312595",
-      },
-      onOpen: () => {},
-      onContextMenu: () => {},
-    }),
-  );
-
-  assert.match(html, /turn-markdown/);
-  assert.match(
-    html,
-    /href="https:\/\/x\.com\/OrionJohnston\/status\/2097801834224312595"/,
-  );
-  assert.doesNotMatch(html, /recent-query-open/);
-});
-
-test("home-feed research prompts show a recap below the question", () => {
-  const withRecap = renderToStaticMarkup(
-    createElement(ResearchQueryCard, {
-      query: { ...query, recap: "The result is ready." },
-      onOpen: () => {},
-      onContextMenu: () => {},
-    }),
-  );
-  const withoutRecap = renderToStaticMarkup(
-    createElement(ResearchQueryCard, {
-      query,
-      onOpen: () => {},
-      onContextMenu: () => {},
-    }),
-  );
-
-  assert.ok(
-    withRecap.indexOf("turn-markdown") < withRecap.indexOf("Summary: The result is ready."),
-  );
-  assert.doesNotMatch(withoutRecap, /Summary:/);
-});
-
-test("home-feed cards hold the recap slot while a summary generates", () => {
-  const answered: RecentResearchQuery = { ...query, status: "complete" };
-  const card = (overrides: Record<string, unknown>) =>
-    renderToStaticMarkup(
-      createElement(ResearchQueryCard, {
-        query: answered,
-        onOpen: () => {},
-        onContextMenu: () => {},
-        ...overrides,
-      }),
-    );
-
-  assert.match(card({ recapPending: true }), /Generating summary/);
-  assert.doesNotMatch(card({}), /Generating summary/);
-  // The generated summary replaces the placeholder rather than joining it.
-  const generated = card({ query: { ...answered, recap: "Ready." }, recapPending: true });
-  assert.match(generated, /Summary: Ready\./);
-  assert.doesNotMatch(generated, /Generating summary/);
-  // A run still answering already shows its own spinner below the prompt.
-  assert.doesNotMatch(card({ query, recapPending: true }), /Generating summary/);
-});
-
 test("virtual feed rows omit day dividers and retain feed positions", () => {
   const events = buildRecentActivityFromItems(
     [{ ...query, nodeId: "link", kind: "note", prompt: "https://example.com", createdAt: 300 }, query],
@@ -334,7 +254,7 @@ test("live summary events retain imported report provenance", () => {
   const updated = upsertRecentActivityResearchNode(items, {
     ...node, recap: { text: "Summary", responseRevision: "revision" },
   });
-  assert.equal(formatActivityMetadataSummary(activityEventFromResearchQuery(updated[0])), "Imported");
+  assert.equal(feedPostAction(activityEventFromResearchQuery(updated[0])), "imported a report");
   assert.equal(updated[0].model, null);
 });
 
