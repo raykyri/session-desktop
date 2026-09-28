@@ -104,12 +104,9 @@ export interface ResearchActivityFeedProps {
   onRemoveFromFolder: (treeIds: string[]) => void;
   onLoadOlder: () => void;
   onRefresh?: () => void;
-  /** The thread open in the content column beside the feed; its post is
-   * marked selected. */
+  /** The thread open in the content column beside the feed; the post that
+   * opened it (or the thread's newest post) is marked selected. */
   selectedTreeId?: string | null;
-  /** Back/forward buttons in the feed's own header. Off when the content
-   * column beside the feed carries them. */
-  showHistoryNav?: boolean;
   canGoBack?: boolean;
   canGoForward?: boolean;
   onBack?: () => void;
@@ -272,7 +269,6 @@ function ResearchActivityFeed({
   onLoadOlder,
   onRefresh,
   selectedTreeId = null,
-  showHistoryNav = true,
   canGoBack = false,
   canGoForward = false,
   onBack,
@@ -290,6 +286,10 @@ function ResearchActivityFeed({
   // rather than in the post so they survive the virtualized row unmounting
   // while scrolled away.
   const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({});
+  // The post the reader opened. A thread can have several posts (its root and
+  // follow-ups); only the one opened is selected. A thread opened from
+  // elsewhere selects its newest post.
+  const [openedNodeId, setOpenedNodeId] = useState<string | null>(null);
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
   const [recapDialogContent, setRecapDialogContent] =
@@ -340,12 +340,11 @@ function ResearchActivityFeed({
       }
     };
     const onMouseUp = (event: globalThis.MouseEvent) => {
-      if (event.button === 3) {
+      const handler =
+        event.button === 3 ? onBackRef.current : event.button === 4 ? onForwardRef.current : undefined;
+      if (handler) {
         event.preventDefault();
-        onBackRef.current?.();
-      } else if (event.button === 4) {
-        event.preventDefault();
-        onForwardRef.current?.();
+        handler();
       }
     };
     const mouseTarget = scrollRef.current;
@@ -369,6 +368,16 @@ function ResearchActivityFeed({
     [visibleItems, researchTrees],
   );
   const viewTitle = view === "bookmarks" ? "Bookmarks" : "Home";
+  const selectedNodeId = useMemo(() => {
+    if (!selectedTreeId) return null;
+    const opened = feed.find(
+      (event) =>
+        event.source.query.nodeId === openedNodeId &&
+        event.source.query.treeId === selectedTreeId,
+    );
+    const newest = feed.find((event) => event.source.query.treeId === selectedTreeId);
+    return (opened ?? newest)?.source.query.nodeId ?? null;
+  }, [feed, openedNodeId, selectedTreeId]);
   const treeById = useMemo(() => {
     const map = new Map<string, ResearchTreeSummary>();
     for (const tree of researchTrees) {
@@ -396,6 +405,15 @@ function ResearchActivityFeed({
   const [measurementVersion, setMeasurementVersion] = useState(0);
   const measurementFrameRef = useRef(0);
   const [viewport, setViewport] = useState({ scrollTop: 0, height: 800 });
+  // Skips the render when nothing moved; the anchor effect runs on every
+  // feed render and would otherwise schedule a second one.
+  const updateViewport = useCallback((scrollTop: number, height: number) => {
+    setViewport((current) =>
+      current.scrollTop === scrollTop && current.height === height
+        ? current
+        : { scrollTop, height },
+    );
+  }, []);
   const metrics = useMemo(() => {
     const offsets: number[] = [];
     const sizes: number[] = [];
@@ -438,9 +456,29 @@ function ResearchActivityFeed({
   const knownItemIdsRef = useRef(new Set(items.map((item) => item.nodeId)));
   const previousTopItemIdRef = useRef(items[0]?.nodeId ?? null);
 
+  // The feed column hides (display: none) while a narrow stage shows a thread.
+  // A hidden scroller reads as empty, so it saves nothing; when it shows
+  // again, it returns to the row it held before hiding.
+  const scrollerHiddenRef = useRef(false);
   const captureScrollState = useCallback(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
+    if (scroller.clientHeight === 0) {
+      scrollerHiddenRef.current = true;
+      return;
+    }
+    if (scrollerHiddenRef.current) {
+      scrollerHiddenRef.current = false;
+      const anchor = anchorRef.current;
+      const index = anchor ? metricsRef.current.indexByKey.get(anchor.key) : undefined;
+      if (anchor && index !== undefined) {
+        scroller.scrollTop = recentActivityAnchorScrollTop(
+          virtualCanvasRef.current?.offsetTop ?? 0,
+          metricsRef.current.offsets[index],
+          anchor.offset,
+        );
+      }
+    }
     const geometry = metricsRef.current;
     const currentRows = rowsRef.current;
     const canvasTop = virtualCanvasRef.current?.offsetTop ?? 0;
@@ -463,7 +501,7 @@ function ResearchActivityFeed({
           ),
         }
       : null;
-    setViewport({ scrollTop: feedScrollTop, height: scroller.clientHeight });
+    updateViewport(feedScrollTop, scroller.clientHeight);
     onScrollAnchorChangeRef.current?.(anchorRef.current);
     if (scroller.scrollTop <= 60) setNewActivityCount(0);
   }, []);
@@ -504,10 +542,7 @@ function ResearchActivityFeed({
     );
     if (Math.abs(scroller.scrollTop - desired) > 0.5) {
       scroller.scrollTop = desired;
-      setViewport({
-        scrollTop: Math.max(0, desired - canvasTop),
-        height: scroller.clientHeight,
-      });
+      updateViewport(Math.max(0, desired - canvasTop), scroller.clientHeight);
     }
     captureScrollState();
   }, [captureScrollState, metrics, rows]);
@@ -716,7 +751,6 @@ function ResearchActivityFeed({
   return (
     <ResearchDocumentFrame
       title={viewTitle}
-      showHistoryNav={showHistoryNav}
       headerActions={view === "home" && onImportReport ? (
         <ResearchReportImport dropTarget={scrollRef} onImport={onImportReport} onError={onError} />
       ) : undefined}
@@ -825,21 +859,24 @@ function ResearchActivityFeed({
                               <NoteBody
                                 prompt={query.prompt}
                                 attachments={query.attachments}
+                                variant="compact"
                                 renderPrompt={clamp}
                               />
                             ) : (
                               <ResearchMessageBody
                                 prompt={query.prompt}
                                 attachments={query.attachments}
+                                variant="compact"
                                 renderPrompt={clamp}
                               />
                             )}
                           </ResearchUserMessage>
                         )}
+                        contentKey={query.prompt}
                         recap={query.kind === "note" ? null : query.recap}
                         recapPending={recapPendingNodeIds.has(query.nodeId)}
                         running={query.kind !== "note" && isActiveResearchStatus(query.status)}
-                        selected={query.treeId === selectedTreeId}
+                        selected={query.nodeId === selectedNodeId}
                         unread={
                           Boolean(researchTree?.hasUnseenUpdate) && query.treeId !== selectedTreeId
                         }
@@ -856,7 +893,10 @@ function ResearchActivityFeed({
                             [query.nodeId]: !current[query.nodeId],
                           }))
                         }
-                        onOpen={() => onOpenResearchQuery(query)}
+                        onOpen={() => {
+                          setOpenedNodeId(query.nodeId);
+                          onOpenResearchQuery(query);
+                        }}
                         onContextMenu={openContextMenu}
                       />
                     </div>

@@ -136,18 +136,20 @@
    with the follow-up count, Follow and Bookmark, and Show more. */
 .research-feed-post {
   --feed-post-secondary: var(--text-subtle);
+  --feed-post-bg: var(--research-workspace-bg);
   display: flex;
   gap: 10px;
   padding: 14px var(--journal-content-padding) 10px;
+  background: var(--feed-post-bg);
 }
 
 .research-feed-post:hover {
-  background: var(--surface-fill-faint);
+  --feed-post-bg: var(--research-sidebar-hover-bg);
 }
 
 .research-feed-post.is-selected {
   --feed-post-secondary: var(--text-tertiary);
-  background: var(--control-bg-hover);
+  --feed-post-bg: var(--control-bg-hover);
 }
 
 .research-feed-post-avatar {
@@ -177,7 +179,7 @@
   height: 8px;
   border-radius: 50%;
   background: var(--status-info-fg);
-  box-shadow: 0 0 0 2px var(--research-workspace-bg);
+  box-shadow: 0 0 0 2px var(--feed-post-bg);
 }
 
 .research-feed-post-main {
@@ -213,7 +215,19 @@
 
 .research-feed-post-time {
   flex: none;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
   white-space: nowrap;
+  background: transparent;
+}
+
+.research-feed-post-time:hover {
+  color: var(--text-interactive);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .research-feed-post-open {
@@ -240,6 +254,12 @@
 
 .research-feed-post-body {
   min-width: 0;
+}
+
+/* Under a title the question reads as secondary text; without one (notes)
+   it keeps the compact prose color and leads the post. */
+.research-feed-post-body:not(.is-lead) > .turn-markdown.research-prose {
+  color: var(--text-secondary);
 }
 
 /* Four lines of the question's prose, counted across its paragraphs; Show
@@ -291,9 +311,17 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
   color: var(--feed-post-secondary);
   font-size: var(--research-meta-font-size);
   font-variant-numeric: tabular-nums;
+  background: transparent;
+}
+
+.research-feed-post-count:hover {
+  color: var(--text-interactive);
 }
 
 .research-feed-post-more {

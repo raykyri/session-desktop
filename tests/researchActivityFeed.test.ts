@@ -73,8 +73,8 @@ test("a post's footer holds the follow-up count, then Follow and Bookmark", () =
   });
   const footer = html.indexOf('class="research-feed-post-footer"');
   assert.ok(html.indexOf("Summary: The finding is X.") < footer);
-  assert.ok(footer < html.indexOf('aria-label="1 follow-up"'));
-  assert.ok(html.indexOf('aria-label="1 follow-up"') < html.indexOf("research-thread-actions"));
+  assert.ok(footer < html.indexOf('aria-label="Open 1 follow-up"'));
+  assert.ok(html.indexOf('aria-label="Open 1 follow-up"') < html.indexOf("research-thread-actions"));
   assert.match(html, /research-thread-follow is-active"[^>]*aria-pressed="true"[^>]*>Following<\/button>/);
   assert.match(html, /research-thread-bookmark is-active"[^>]*aria-pressed="true"[^>]*aria-label="Remove bookmark"/);
   // Follow-ups are counted, not listed; only the root item is a feed row.
@@ -117,6 +117,26 @@ test("the open thread's post is selected and unread posts carry a dot", () => {
   assert.ok(other?.includes("research-feed-post-unread"));
 });
 
+test("only one post of the open thread is selected", () => {
+  // A thread's follow-up is its own post; the thread's newest post is the one
+  // selected when the thread was opened from elsewhere.
+  const followUp = {
+    ...question, nodeId: "follow", parentNodeId: "node", prompt: "A later follow-up", createdAt: 200,
+  };
+  const html = renderFeed({ items: [followUp, question], researchTrees: [tree], selectedTreeId: "tree" });
+  assert.equal((html.match(/research-feed-post is-selected/g) ?? []).length, 1);
+  const selected = html.split(/class="research-feed-post(?=[ "])/).find((post) => post.startsWith(" is-selected"));
+  assert.ok(selected?.includes("A later follow-up"));
+});
+
+test("a saved link opens from its time, and a count opens its follow-ups", () => {
+  const html = renderFeed({
+    items: [{ ...savedLink, children: [{ ...question, nodeId: "child", parentNodeId: "link", createdAt: 300 }] }],
+  });
+  assert.match(html, /<button type="button" class="control-button research-feed-post-time" title="Open"><time/);
+  assert.match(html, /<button type="button" class="control-button research-feed-post-count" aria-label="Open 1 follow-up"/);
+});
+
 test("posts render Markdown links and hold the summary slot while one generates", () => {
   const withLink = renderFeed({
     items: [{
@@ -135,12 +155,6 @@ test("posts render Markdown links and hold the summary slot while one generates"
   const generated = renderFeed({ items: [question], recapPendingNodeIds: new Set(["node"]) });
   assert.match(generated, /Summary: The finding is X\./);
   assert.doesNotMatch(generated, /Generating summary/);
-});
-
-test("the feed column can drop its own history controls", () => {
-  const html = renderFeed({ showHistoryNav: false });
-  assert.doesNotMatch(html, /aria-label="Back"/);
-  assert.match(html, /aria-label="Refresh Home"/);
 });
 
 test("the Bookmarks view lists only bookmarked threads without the composer", () => {
@@ -262,7 +276,7 @@ test("a network note is a post that counts its replies and follow-ups", () => {
   })] });
   assert.match(html, /Who ships component-model plugins\?/);
   assert.match(html, /research-feed-post-action">posted to your network</);
-  assert.match(html, /aria-label="7 replies, 1 follow-up"/);
+  assert.match(html, /aria-label="Open 7 replies, 1 follow-up"/);
   // Replies and follow-ups open with the note; the post only counts them.
   assert.doesNotMatch(html, /We moved in March\./);
   assert.doesNotMatch(html, /Does wasmtime support async\?/);

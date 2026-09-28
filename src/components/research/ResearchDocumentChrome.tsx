@@ -48,12 +48,10 @@ export function ResearchHistoryNav({
 }
 
 interface ResearchDocumentFrameProps {
-  /** Single inert breadcrumb entry naming the page. */
+  /** Single inert breadcrumb entry naming the page; empty leaves the
+   * breadcrumb blank (a placeholder beside a column that names the page). */
   title: string;
   hidden?: boolean;
-  /** Back/forward pair at the header's left edge; on unless another column's
-   * header carries it. */
-  showHistoryNav?: boolean;
   /** Extra icon controls rendered beside the back/forward pair. */
   navActions?: ReactNode;
   headerActions?: ReactNode;
@@ -96,7 +94,6 @@ export function ResearchSidebarRestoreButton({
 export function ResearchDocumentFrame({
   title,
   hidden = false,
-  showHistoryNav = true,
   navActions,
   headerActions,
   children,
@@ -111,23 +108,23 @@ export function ResearchDocumentFrame({
     <div className="research-workspace" hidden={hidden}>
       <main className="research-document">
         <header className="research-document-header">
-          {showHistoryNav ? (
-            <ResearchHistoryNav
-              canGoBack={canGoBack}
-              canGoForward={canGoForward}
-              backTitle={backTitle}
-              forwardTitle={forwardTitle}
-              onBack={onBack}
-              onForward={onForward}
-            />
-          ) : null}
+          <ResearchHistoryNav
+            canGoBack={canGoBack}
+            canGoForward={canGoForward}
+            backTitle={backTitle}
+            forwardTitle={forwardTitle}
+            onBack={onBack}
+            onForward={onForward}
+          />
           {navActions}
           <div className="research-breadcrumb" aria-label="Research path">
-            <span>
-              <button className="control-button" type="button" disabled>
-                {title}
-              </button>
-            </span>
+            {title ? (
+              <span>
+                <button className="control-button" type="button" disabled>
+                  {title}
+                </button>
+              </span>
+            ) : null}
           </div>
           {headerActions}
         </header>

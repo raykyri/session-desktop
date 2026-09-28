@@ -9723,6 +9723,48 @@ function MainApp() {
       )
     : undefined;
 
+  // The Home feed stays mounted beside an open thread, where every streamed
+  // update re-renders App; stable props let the memoized feed skip those.
+  const feedOwnsHistory = researchStageView === "journal";
+  const feedResearchTrees = useMemo(
+    () => [...researchTrees, ...archivedResearchTrees],
+    [researchTrees, archivedResearchTrees],
+  );
+  const configAdapters = config?.adapters;
+  const feedComposer = useMemo(
+    () =>
+      configAdapters ? (
+        <ResearchQueryComposer
+          adapters={configAdapters}
+          requireCmdEnterToSend={settings.requireCmdEnterToSend}
+          workspaceId={researchScope}
+          onOpenAgentSettings={() => {
+            setSettingsOpen(false);
+            setAgentsOpen(true);
+          }}
+          onCreate={submitNewResearch}
+          onPost={submitNewNote}
+        />
+      ) : null,
+    [configAdapters, settings.requireCmdEnterToSend, researchScope, submitNewResearch, submitNewNote],
+  );
+  // Show setup guide on Home only when no agents can run research.
+  const feedSetupGuide = useMemo(
+    () =>
+      !configAdapters || configAdapters.some(adapterCanLaunchResearch) ? undefined : (
+        <AgentSetupGuide
+          adapters={configAdapters}
+          loading={adapterProbeLoading}
+          error={adapterProbeError}
+          onRefresh={() => void refreshAdapterReadiness({ force: true }).catch(() => undefined)}
+          onCopied={showAppToast}
+          onError={setAdapterProbeError}
+        />
+      ),
+    [configAdapters, adapterProbeLoading, adapterProbeError, refreshAdapterReadiness, showAppToast],
+  );
+  const refreshFeed = useCallback(() => void refreshResearchNavigation(), [refreshResearchNavigation]);
+
   return (
     <main
       ref={appRef}
@@ -11718,39 +11760,12 @@ function MainApp() {
                     {...activityFeedState}
                     view={researchFeedColumnView}
                     selectedTreeId={researchStageView === "document" ? activeResearchTreeId : null}
-                    showHistoryNav={false}
                     onImportReport={importReport}
-                    composer={
-                      <ResearchQueryComposer
-                        adapters={config.adapters}
-                        requireCmdEnterToSend={settings.requireCmdEnterToSend}
-                        workspaceId={researchScope}
-                        onOpenAgentSettings={() => {
-                          setSettingsOpen(false);
-                          setAgentsOpen(true);
-                        }}
-                        onCreate={submitNewResearch}
-                        onPost={submitNewNote}
-                      />
-                    }
-                    setupGuide={
-                      // Show setup guide on Home only when no agents can run research.
-                      config.adapters.some(adapterCanLaunchResearch) ? undefined : (
-                        <AgentSetupGuide
-                          adapters={config.adapters}
-                          loading={adapterProbeLoading}
-                          error={adapterProbeError}
-                          onRefresh={() =>
-                            void refreshAdapterReadiness({ force: true }).catch(() => undefined)
-                          }
-                          onCopied={showAppToast}
-                          onError={setAdapterProbeError}
-                        />
-                      )
-                    }
+                    composer={feedComposer}
+                    setupGuide={feedSetupGuide}
                     items={recentActivityItems}
                     recapPendingNodeIds={recapPendingNodeIds}
-                    researchTrees={[...researchTrees, ...archivedResearchTrees]}
+                    researchTrees={feedResearchTrees}
                     nextCursor={recentActivityCursor}
                     loadingOlder={loadingOlderActivity}
                     olderError={olderActivityError}
@@ -11768,9 +11783,15 @@ function MainApp() {
                     onRequestCreateFolder={requestResearchFolderCreation}
                     onRemoveFromFolder={removeResearchTreesFromFolder}
                     onLoadOlder={loadOlderActivity}
-                    onRefresh={() => void refreshResearchNavigation()}
-                    onBack={researchStageView === "journal" ? goResearchWorkspaceBack : undefined}
-                    onForward={researchStageView === "journal" ? goResearchWorkspaceForward : undefined}
+                    onRefresh={refreshFeed}
+                    // History follows the column in front: the feed's while no
+                    // thread is open (its buttons show only when the stage is
+                    // too narrow for the placeholder column), the thread's once
+                    // one is.
+                    canGoBack={feedOwnsHistory && canGoWorkspaceBack(researchWorkspaceHistory)}
+                    canGoForward={feedOwnsHistory && canGoWorkspaceForward(researchWorkspaceHistory)}
+                    onBack={feedOwnsHistory ? goResearchWorkspaceBack : undefined}
+                    onForward={feedOwnsHistory ? goResearchWorkspaceForward : undefined}
                   />
                 </div>
               ) : null}
@@ -11817,7 +11838,7 @@ function MainApp() {
                   />
                 ) : (
                   <ResearchDocumentFrame
-                    title={researchFeedColumnView === "bookmarks" ? "Bookmarks" : "Home"}
+                    title=""
                     canGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
                     canGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
                     onBack={goResearchWorkspaceBack}

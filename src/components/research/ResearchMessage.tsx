@@ -5,7 +5,7 @@ import TranscriptMarkdown, {
 } from "../TranscriptMarkdown";
 import { TweetEmbed } from "./TweetEmbed";
 
-type ResearchProseVariant = "body" | "compact";
+export type ResearchProseVariant = "body" | "compact";
 
 /** Research-owned adapter around the generic transcript Markdown renderer.
  * Typography is selected on the renderer itself instead of inherited from a
@@ -85,10 +85,13 @@ export function visibleResearchPrompt(
 export function ResearchMessageBody({
   prompt,
   attachments = [],
+  variant = "body",
   renderPrompt,
 }: {
   prompt: string;
   attachments?: ResearchMessageAttachment[];
+  /** Compact for previews such as Home posts; body where the message is read. */
+  variant?: ResearchProseVariant;
   renderPrompt?: (content: ReactNode) => ReactNode;
 }) {
   const visiblePrompt = visibleResearchPrompt(prompt, attachments);
@@ -99,8 +102,8 @@ export function ResearchMessageBody({
     <>
       {visiblePrompt ? (
         renderPrompt
-          ? renderPrompt(<ResearchMarkdown text={visiblePrompt} />)
-          : <ResearchMarkdown text={visiblePrompt} />
+          ? renderPrompt(<ResearchMarkdown text={visiblePrompt} variant={variant} />)
+          : <ResearchMarkdown text={visiblePrompt} variant={variant} />
       ) : null}
       {tweets.length > 0 ? (
         <div

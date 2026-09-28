@@ -35,6 +35,19 @@
   height: 100%;
 }
 
+/* Research pages lay out against their own width, not the window's: a thread
+   beside the feed column is much narrower than the stage. */
+.main-stage.is-research,
+.research-content-column {
+  container: research-page / inline-size;
+}
+
+/* The content column's header carries back/forward; the feed's own pair shows
+   only when the stage is too narrow for that column. */
+.research-feed-column .research-history-nav {
+  display: none;
+}
+
 .research-content-placeholder {
   display: flex;
   align-items: center;
@@ -56,6 +69,15 @@
   .research-columns:not(.has-document) .research-feed-column {
     width: 100%;
     border-right: 0;
+  }
+
+  .research-columns:not(.has-document) .research-feed-column .journal-column {
+    max-width: 680px;
+    margin-inline: auto;
+  }
+
+  .research-columns:not(.has-document) .research-feed-column .research-history-nav {
+    display: flex;
   }
 }
 
@@ -170,6 +192,9 @@
   width: 100%;
   min-height: 0;
   padding: 44px clamp(24px, 5vw, 72px) 40px;
+  /* Scrolled-to matches and focused elements stop above the thread's
+     floating composer. */
+  scroll-padding-bottom: 180px;
   /* Vertical only. Wide content (tables, code blocks) scrolls inside its own
      inner scrollers, so this container never scrolls sideways legitimately.
      With plain `auto`, transient horizontal overflow — the WebKit var()-drop

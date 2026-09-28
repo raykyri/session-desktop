@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { LoaderCircle, Reply, UserRound } from "lucide-react";
 import ResearchThreadActions from "./ResearchThreadActions";
@@ -24,6 +24,9 @@ export interface ResearchFeedPostProps {
    * through `clamp`, which limits it to four lines until the post is expanded;
    * anything rendered outside it (link cards, embeds) shows in full. */
   renderBody: (clamp: (content: ReactNode) => ReactNode) => ReactNode;
+  /** Changes whenever the clamped text changes, so Show more is re-measured
+   * even when the clamped box keeps its size. */
+  contentKey: string;
   /** The answer's recap, shown as an italic "Summary:" line. */
   recap?: string | null;
   recapPending?: boolean;
@@ -53,6 +56,7 @@ export default function ResearchFeedPost({
   time,
   title,
   renderBody,
+  contentKey,
   recap,
   recapPending = false,
   running = false,
@@ -69,8 +73,10 @@ export default function ResearchFeedPost({
   onOpen,
   onContextMenu,
 }: ResearchFeedPostProps) {
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-  const summaryRef = useRef<HTMLParagraphElement | null>(null);
+  // Callback refs (state, not refs) so a clamped block that remounts — a tweet
+  // resolving, a note switching between link card and text — is re-measured.
+  const [body, setBody] = useState<HTMLDivElement | null>(null);
+  const [summaryElement, setSummaryElement] = useState<HTMLParagraphElement | null>(null);
   const [clipped, setClipped] = useState(false);
   const summary = recap?.trim() ?? "";
 
@@ -78,14 +84,14 @@ export default function ResearchFeedPost({
   // Measured rather than estimated so it follows the font, width and Markdown.
   useLayoutEffect(() => {
     if (expanded) return;
-    const measure = () => setClipped(isClipped(bodyRef.current) || isClipped(summaryRef.current));
+    const measure = () => setClipped(isClipped(body) || isClipped(summaryElement));
     measure();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
-    if (bodyRef.current) observer.observe(bodyRef.current);
-    if (summaryRef.current) observer.observe(summaryRef.current);
+    if (body) observer.observe(body);
+    if (summaryElement) observer.observe(summaryElement);
     return () => observer.disconnect();
-  }, [expanded, summary]);
+  }, [expanded, body, summaryElement, summary, contentKey]);
 
   const showActions = !running && onToggleFollow && onToggleBookmark;
   const showMore = expanded || clipped;
@@ -115,7 +121,16 @@ export default function ResearchFeedPost({
           {!running && time ? (
             <>
               <span aria-hidden="true">·</span>
-              <span className="research-feed-post-time">{time}</span>
+              {/* The time opens the item too: a saved link's only other
+                  target is the link itself. */}
+              <button
+                type="button"
+                className="control-button research-feed-post-time"
+                title="Open"
+                onClick={onOpen}
+              >
+                {time}
+              </button>
             </>
           ) : null}
         </div>
@@ -136,7 +151,10 @@ export default function ResearchFeedPost({
         >
           {title ? <div className="research-feed-post-title">{title}</div> : null}
           {renderBody((content) => (
-            <div ref={bodyRef} className={`research-feed-post-body${clampClass}`}>
+            <div
+              ref={setBody}
+              className={`research-feed-post-body${title ? "" : " is-lead"}${clampClass}`}
+            >
               {content}
             </div>
           ))}
@@ -148,7 +166,7 @@ export default function ResearchFeedPost({
           ) : null}
           {summary ? (
             <p
-              ref={summaryRef}
+              ref={setSummaryElement}
               className={`research-summary-text research-feed-post-summary${clampClass}`}
             >
               Summary: {summary}
@@ -160,15 +178,16 @@ export default function ResearchFeedPost({
         {replyCount > 0 || showActions || showMore ? (
           <div className="research-feed-post-footer">
             {replyCount > 0 ? (
-              <span
-                className="research-feed-post-count"
-                role="img"
-                aria-label={replyCountLabel}
+              <button
+                type="button"
+                className="control-button research-feed-post-count"
+                aria-label={`Open ${replyCountLabel}`}
                 title={replyCountLabel}
+                onClick={onOpen}
               >
                 <Reply size={13} aria-hidden="true" />
                 {replyCount}
-              </span>
+              </button>
             ) : null}
             {showActions ? (
               <ResearchThreadActions
