@@ -106,6 +106,7 @@ import {
   workspaceIsInResearchScope,
 } from "./lib/researchScope";
 import ResearchDocument from "./components/research/ResearchDocument";
+import { ResearchDocumentFrame } from "./components/research/ResearchDocumentChrome";
 import ResearchActivityFeed from "./components/research/ResearchActivityFeed";
 import ResearchHighlightsFeed from "./components/research/ResearchHighlightsFeed";
 import EncyclopediaSidebarSection from "./components/research/EncyclopediaSidebarSection";
@@ -6063,6 +6064,14 @@ function MainApp() {
   const [journalView, setJournalView] = useState<ResearchJournalView>("home");
   const journalViewRef = useRef(journalView);
   journalViewRef.current = journalView;
+  // Home and Bookmarks show as a feed column beside the content column, both
+  // on their own and while a thread is open beside them. A thread opened from
+  // Highlights or an encyclopedia page lists Home in that column.
+  const researchFeedColumnVisible =
+    researchStageView === "document" ||
+    (researchStageView === "journal" && (journalView === "home" || journalView === "bookmarks"));
+  const researchFeedColumnView: "home" | "bookmarks" =
+    journalView === "bookmarks" ? "bookmarks" : "home";
   const openJournal = useCallback(() => {
     setJournalView("home");
     recordResearchJournalVisit();
@@ -9714,6 +9723,48 @@ function MainApp() {
       )
     : undefined;
 
+  // The Home feed stays mounted beside an open thread, where every streamed
+  // update re-renders App; stable props let the memoized feed skip those.
+  const feedOwnsHistory = researchStageView === "journal";
+  const feedResearchTrees = useMemo(
+    () => [...researchTrees, ...archivedResearchTrees],
+    [researchTrees, archivedResearchTrees],
+  );
+  const configAdapters = config?.adapters;
+  const feedComposer = useMemo(
+    () =>
+      configAdapters ? (
+        <ResearchQueryComposer
+          adapters={configAdapters}
+          requireCmdEnterToSend={settings.requireCmdEnterToSend}
+          workspaceId={researchScope}
+          onOpenAgentSettings={() => {
+            setSettingsOpen(false);
+            setAgentsOpen(true);
+          }}
+          onCreate={submitNewResearch}
+          onPost={submitNewNote}
+        />
+      ) : null,
+    [configAdapters, settings.requireCmdEnterToSend, researchScope, submitNewResearch, submitNewNote],
+  );
+  // Show setup guide on Home only when no agents can run research.
+  const feedSetupGuide = useMemo(
+    () =>
+      !configAdapters || configAdapters.some(adapterCanLaunchResearch) ? undefined : (
+        <AgentSetupGuide
+          adapters={configAdapters}
+          loading={adapterProbeLoading}
+          error={adapterProbeError}
+          onRefresh={() => void refreshAdapterReadiness({ force: true }).catch(() => undefined)}
+          onCopied={showAppToast}
+          onError={setAdapterProbeError}
+        />
+      ),
+    [configAdapters, adapterProbeLoading, adapterProbeError, refreshAdapterReadiness, showAppToast],
+  );
+  const refreshFeed = useCallback(() => void refreshResearchNavigation(), [refreshResearchNavigation]);
+
   return (
     <main
       ref={appRef}
@@ -11693,111 +11744,113 @@ function MainApp() {
               onForward={goResearchWorkspaceForward}
             />
           ) : null}
-          {researchStageView === "journal" &&
-          config &&
-          (journalView === "home" || journalView === "bookmarks") ? (
-            <ResearchActivityFeed
-              {...activityFeedState}
-              view={journalView}
-              onImportReport={importReport}
-              composer={
-                <ResearchQueryComposer
-                  adapters={config.adapters}
-                  requireCmdEnterToSend={settings.requireCmdEnterToSend}
-                  workspaceId={researchScope}
-                  onOpenAgentSettings={() => {
-                    setSettingsOpen(false);
-                    setAgentsOpen(true);
-                  }}
-                  onCreate={submitNewResearch}
-                  onPost={submitNewNote}
-                />
-              }
-              setupGuide={
-                // Show setup guide on Home only when no agents can run research.
-                config.adapters.some(adapterCanLaunchResearch) ? undefined : (
-                  <AgentSetupGuide
-                    adapters={config.adapters}
-                    loading={adapterProbeLoading}
-                    error={adapterProbeError}
-                    onRefresh={() =>
-                      void refreshAdapterReadiness({ force: true }).catch(() => undefined)
-                    }
-                    onCopied={showAppToast}
-                    onError={setAdapterProbeError}
+          {/* Home and Bookmarks list in a feed column beside the content column,
+              which shows the open thread (or a placeholder until one is
+              picked). One wrapper for both states keeps the feed mounted, and
+              its scroll position, while threads open and close beside it. */}
+          {researchFeedColumnVisible ? (
+            <div
+              className={`research-columns${
+                researchStageView === "document" ? " has-document" : ""
+              }`}
+            >
+              {config ? (
+                <div className="research-feed-column">
+                  <ResearchActivityFeed
+                    {...activityFeedState}
+                    view={researchFeedColumnView}
+                    selectedTreeId={researchStageView === "document" ? activeResearchTreeId : null}
+                    onImportReport={importReport}
+                    composer={feedComposer}
+                    setupGuide={feedSetupGuide}
+                    items={recentActivityItems}
+                    recapPendingNodeIds={recapPendingNodeIds}
+                    researchTrees={feedResearchTrees}
+                    nextCursor={recentActivityCursor}
+                    loadingOlder={loadingOlderActivity}
+                    olderError={olderActivityError}
+                    onOpenResearchQuery={openRecentResearchQuery}
+                    onResearchRecapApplied={handleResearchRecapApplied}
+                    onError={setError}
+                    folderState={researchFolderState}
+                    onRenameResearch={renameResearchTreeTitle}
+                    onArchiveResearch={archiveResearchTreeFromSidebar}
+                    onRestoreResearch={restoreResearchTreeFromSidebar}
+                    onRemoveResearch={removeResearchTreeFromSidebar}
+                    onToggleResearchStar={toggleResearchStarFromSidebar}
+                    onSetResearchFollowed={setResearchTreeFollowedFlag}
+                    onSetResearchBookmarked={setResearchTreeBookmarkedFlag}
+                    onRequestCreateFolder={requestResearchFolderCreation}
+                    onRemoveFromFolder={removeResearchTreesFromFolder}
+                    onLoadOlder={loadOlderActivity}
+                    onRefresh={refreshFeed}
+                    // History follows the column in front: the feed's while no
+                    // thread is open (its buttons show only when the stage is
+                    // too narrow for the placeholder column), the thread's once
+                    // one is.
+                    canGoBack={feedOwnsHistory && canGoWorkspaceBack(researchWorkspaceHistory)}
+                    canGoForward={feedOwnsHistory && canGoWorkspaceForward(researchWorkspaceHistory)}
+                    onBack={feedOwnsHistory ? goResearchWorkspaceBack : undefined}
+                    onForward={feedOwnsHistory ? goResearchWorkspaceForward : undefined}
                   />
-                )
-              }
-              items={recentActivityItems}
-              recapPendingNodeIds={recapPendingNodeIds}
-              researchTrees={[...researchTrees, ...archivedResearchTrees]}
-              nextCursor={recentActivityCursor}
-              loadingOlder={loadingOlderActivity}
-              olderError={olderActivityError}
-              noteActions={noteActions}
-              onOpenResearchQuery={openRecentResearchQuery}
-              onResearchRecapApplied={handleResearchRecapApplied}
-              onError={setError}
-              folderState={researchFolderState}
-              onRenameResearch={renameResearchTreeTitle}
-              onArchiveResearch={archiveResearchTreeFromSidebar}
-              onRestoreResearch={restoreResearchTreeFromSidebar}
-              onRemoveResearch={removeResearchTreeFromSidebar}
-              onToggleResearchStar={toggleResearchStarFromSidebar}
-              onSetResearchFollowed={setResearchTreeFollowedFlag}
-              onSetResearchBookmarked={setResearchTreeBookmarkedFlag}
-              onRequestCreateFolder={requestResearchFolderCreation}
-              onRemoveFromFolder={removeResearchTreesFromFolder}
-              onLoadOlder={loadOlderActivity}
-              onRefresh={() => void refreshResearchNavigation()}
-              canGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
-              canGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
-              onBack={goResearchWorkspaceBack}
-              onForward={goResearchWorkspaceForward}
-            />
-          ) : null}
-          {/* The tree-id term repeats the selector's own condition solely to
-              narrow the id to non-null for the props below. */}
-          {researchStageView === "document" && activeResearchTreeId ? (
-            // Keyed by tree: the document's per-tree state (selection, fetched
-            // content, follow-up draft) must not survive a tree switch. Without
-            // the remount, the new tree's detail landing paints one frame of the
-            // previous tree's node (selection/content only reset in effects,
-            // after paint) and the content loader refetches the departed node.
-            <ResearchDocument
-              key={activeResearchTreeId}
-              detail={activeResearchDetail}
-              treeTitle={
-                activeResearchDetail?.tree.title ??
-                researchTrees.find((tree) => tree.id === activeResearchTreeId)?.title ??
-                archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)?.title
-              }
-              archived={Boolean(activeResearchDetail?.tree.archivedAt)}
-              recapPendingNodeIds={recapPendingNodeIds}
-              detailError={activeResearchDetailError}
-              onRetryDetail={retryActiveResearchDetail}
-              onFork={createResearchFollowup}
-              noteActions={noteActions}
-              onRemoveBranch={removeResearchBranchFromDocument}
-              onRemoveTree={removeResearchTreeAndSelectFallback}
-              onSetFollowed={setResearchTreeFollowedFlag}
-              onSetBookmarked={setResearchTreeBookmarkedFlag}
-              onUpdateDocument={editResearchDocument}
-              onCancel={cancelResearchRun}
-              onRetryNode={retryResearchRun}
-              linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}
-              wikilinkActions={wikilinkActions}
-              onError={setError}
-              onToast={handleResearchDocumentToast}
-              shortcutHintsShown={shortcutHintsShown}
-              onShowSidebar={
-                researchSidebarRestoreInHeader ? showLeftSidebarInResearch : undefined
-              }
-              workspaceCanGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
-              workspaceCanGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
-              onWorkspaceBack={goResearchWorkspaceBack}
-              onWorkspaceForward={goResearchWorkspaceForward}
-            />
+                </div>
+              ) : null}
+              <div className="research-content-column">
+                {researchStageView === "document" && activeResearchTreeId ? (
+                  // Keyed by tree: the document's per-tree state (selection, fetched
+                  // content, follow-up draft) must not survive a tree switch. Without
+                  // the remount, the new tree's detail landing paints one frame of the
+                  // previous tree's node (selection/content only reset in effects,
+                  // after paint) and the content loader refetches the departed node.
+                  <ResearchDocument
+                    key={activeResearchTreeId}
+                    detail={activeResearchDetail}
+                    treeTitle={
+                      activeResearchDetail?.tree.title ??
+                      researchTrees.find((tree) => tree.id === activeResearchTreeId)?.title ??
+                      archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)?.title
+                    }
+                    archived={Boolean(activeResearchDetail?.tree.archivedAt)}
+                    recapPendingNodeIds={recapPendingNodeIds}
+                    detailError={activeResearchDetailError}
+                    onRetryDetail={retryActiveResearchDetail}
+                    onFork={createResearchFollowup}
+                    noteActions={noteActions}
+                    onRemoveBranch={removeResearchBranchFromDocument}
+                    onRemoveTree={removeResearchTreeAndSelectFallback}
+                    onSetFollowed={setResearchTreeFollowedFlag}
+                    onSetBookmarked={setResearchTreeBookmarkedFlag}
+                    onUpdateDocument={editResearchDocument}
+                    onCancel={cancelResearchRun}
+                    onRetryNode={retryResearchRun}
+                    linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}
+                    wikilinkActions={wikilinkActions}
+                    onError={setError}
+                    onToast={handleResearchDocumentToast}
+                    shortcutHintsShown={shortcutHintsShown}
+                    onShowSidebar={
+                      researchSidebarRestoreInHeader ? showLeftSidebarInResearch : undefined
+                    }
+                    workspaceCanGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
+                    workspaceCanGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
+                    onWorkspaceBack={goResearchWorkspaceBack}
+                    onWorkspaceForward={goResearchWorkspaceForward}
+                  />
+                ) : (
+                  <ResearchDocumentFrame
+                    title=""
+                    canGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
+                    canGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
+                    onBack={goResearchWorkspaceBack}
+                    onForward={goResearchWorkspaceForward}
+                  >
+                    <div className="research-content-placeholder">
+                      Select a question to read its answer.
+                    </div>
+                  </ResearchDocumentFrame>
+                )}
+              </div>
+            </div>
           ) : null}
         </div>
       </section>

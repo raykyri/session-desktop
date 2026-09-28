@@ -10,6 +10,83 @@
   background: var(--research-workspace-bg);
 }
 
+/* Home and Bookmarks list in a feed column beside the content column, which
+   holds the open thread or a placeholder. Below the breakpoint only one column
+   shows: the thread when one is open, otherwise the feed. */
+.research-columns {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  container-type: inline-size;
+}
+
+.research-feed-column {
+  flex: none;
+  width: var(--research-feed-column-width);
+  min-width: 0;
+  height: 100%;
+  border-right: 1px solid var(--surface-border-default);
+}
+
+.research-content-column {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+/* Research pages lay out against their own width, not the window's: a thread
+   beside the feed column is much narrower than the stage. */
+.main-stage.is-research,
+.research-content-column {
+  container: research-page / inline-size;
+}
+
+/* The content column's header carries back/forward; the feed's own pair shows
+   only when the stage is too narrow for that column. */
+.research-feed-column .research-history-nav {
+  display: none;
+}
+
+/* Scrolled-to matches and focused elements stop above a thread's floating
+   composer. */
+.research-document-scroll:has(.research-thread-composer-row) {
+  scroll-padding-bottom: 140px;
+}
+
+.research-content-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--text-subtle);
+  font-size: var(--fs-base);
+}
+
+@container (max-width: 880px) {
+  .research-columns.has-document .research-feed-column {
+    display: none;
+  }
+
+  .research-columns:not(.has-document) .research-content-column {
+    display: none;
+  }
+
+  .research-columns:not(.has-document) .research-feed-column {
+    width: 100%;
+    border-right: 0;
+  }
+
+  .research-columns:not(.has-document) .research-feed-column .journal-column {
+    max-width: 680px;
+    margin-inline: auto;
+  }
+
+  .research-columns:not(.has-document) .research-feed-column .research-history-nav {
+    display: flex;
+  }
+}
+
 .research-document {
   position: relative;
   display: grid;

@@ -3,6 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ResearchActivityFeed, {
+  feedPostReplyCount,
   recentActivityAnchorOffset,
   recentActivityAnchorScrollTop,
   type ResearchActivityFeedProps,
@@ -21,10 +22,6 @@ function renderFeed(overrides: Partial<ResearchActivityFeedProps> = {}) {
   return renderToStaticMarkup(createElement(ResearchActivityFeed, {
     composer: createElement("div", null, "Query composer"),
     items: [], researchTrees: [], nextCursor: null, loadingOlder: false, olderError: null,
-    noteActions: {
-      onAskFollowUp: asyncNoop, onRespond: asyncNoop,
-      onDeleteResponse: asyncNoop, onRetry: asyncNoop,
-    },
     onOpenResearchQuery: noop,
     onResearchRecapApplied: noop, onError: noop,
     folderState: emptyResearchFolderState(),
@@ -38,73 +35,131 @@ function renderFeed(overrides: Partial<ResearchActivityFeedProps> = {}) {
   }));
 }
 
-test("Home renders the mixed feed and query composer directly in the app", () => {
-  const html = renderFeed({
-    items: [
-      savedLink,
-      { nodeId: "node", treeId: "tree", parentNodeId: null, inline: false, prompt: "Investigate this question", adapter: "codex", status: "complete", createdAt: 100, recap: "The finding is X." },
-    ],
-  });
+const tree = {
+  id: "tree", title: "Investigate", rootNodeId: "node", kind: "run" as const, workspaceId: "ws",
+  runningCount: 0, failedCount: 0, completedCount: 1, cancelledCount: 0, updatedAt: 100,
+  archivedAt: null, hasUnseenUpdate: false, hasUnseenFailure: false,
+};
+const question = {
+  nodeId: "node", treeId: "tree", parentNodeId: null, inline: false,
+  prompt: "Investigate this question", adapter: "codex", status: "complete" as const,
+  createdAt: 100, recap: "The finding is X.",
+};
+
+test("Home renders the mixed feed as posts beside the query composer", () => {
+  const html = renderFeed({ items: [savedLink, question], researchTrees: [tree] });
   assert.match(html, /Home/);
   assert.match(html, /role="feed"/);
   assert.match(html, /journal-column research-reading-surface/);
+  assert.equal((html.match(/class="research-feed-post"/g) ?? []).length, 2);
   assert.match(html, /note-link-card research-content-card/);
-  assert.match(
-    html,
-    /research-user-message recent-query-card research-prompt/,
-  );
-  assert.match(html, /research-summary-text research-recap recent-query-recap/);
+  assert.match(html, /research-user-message research-feed-post-message/);
+  assert.match(html, /research-summary-text research-feed-post-summary is-clamped/);
   assert.match(html, /Query composer/);
   assert.match(html, /example.com\/finding/);
-  assert.match(html, /Investigate this question/);
-  assert.match(html, />Saved link · example\.com · <button[^>]*activity-metadata-open[^>]*><time/);
-  assert.match(html, /activity-metadata-summary"><time/);
-  assert.doesNotMatch(html, />Asked <time/);
-  assert.match(html, /Summary: The finding is X\./);
+  assert.match(html, /research-feed-post-author">You<\/span><span class="research-feed-post-action">saved a link</);
+  assert.match(html, /research-feed-post-action">asked Codex</);
+  // The generated title leads, then the question, then the summary.
+  assert.ok(html.indexOf("research-feed-post-title\">Investigate<") < html.indexOf("Investigate this question"));
+  assert.ok(html.indexOf("Investigate this question") < html.indexOf("Summary: The finding is X."));
   assert.match(html, /aria-label="Refresh Home"/);
-  assert.match(
-    html,
-    /class="control-button research-history-button"[^>]*aria-label="Refresh Home"/,
-  );
-  assert.doesNotMatch(html, />Refresh<\/button>/);
-  assert.doesNotMatch(html, /You asked/);
   assert.doesNotMatch(html, /<iframe|View source|Connecting to/);
 });
 
-test("research cards end with Follow and Bookmark beside the time", () => {
-  const query = { nodeId: "node", treeId: "tree", parentNodeId: null, inline: false, prompt: "Investigate this question", adapter: "codex", status: "complete" as const, createdAt: 100, recap: "The finding is X." };
-  const tree = {
-    id: "tree", title: "Investigate", rootNodeId: "node", kind: "run" as const, workspaceId: "ws",
-    runningCount: 0, failedCount: 0, completedCount: 1, cancelledCount: 0, updatedAt: 100,
-    archivedAt: null, hasUnseenUpdate: false, hasUnseenFailure: false,
-  };
+test("a post's footer holds the follow-up count, then Follow and Bookmark", () => {
   const html = renderFeed({
-    items: [query],
+    items: [{ ...question, children: [{ ...question, nodeId: "child", parentNodeId: "node", prompt: "Follow up question here" }] }],
     researchTrees: [{ ...tree, followed: true, bookmarked: true }],
   });
-  const footer = html.indexOf('class="recent-query-footer"');
-  assert.ok(footer > 0);
-  // The footer is the card's last block: after the recap, with actions before the metadata.
+  const footer = html.indexOf('class="research-feed-post-footer"');
   assert.ok(html.indexOf("Summary: The finding is X.") < footer);
-  assert.ok(footer < html.indexOf("research-thread-actions"));
-  assert.ok(html.indexOf("research-thread-actions") < html.indexOf('class="recent-query-metadata"'));
+  assert.ok(footer < html.indexOf('aria-label="Open 1 follow-up"'));
+  assert.ok(html.indexOf('aria-label="Open 1 follow-up"') < html.indexOf("research-thread-actions"));
   assert.match(html, /research-thread-follow is-active"[^>]*aria-pressed="true"[^>]*>Following<\/button>/);
   assert.match(html, /research-thread-bookmark is-active"[^>]*aria-pressed="true"[^>]*aria-label="Remove bookmark"/);
-  assert.match(html, /recent-query-metadata"><div class="activity-metadata"[^>]*><span class="activity-metadata-summary"><time/);
+  // Follow-ups are counted, not listed; only the root item is a feed row.
+  assert.doesNotMatch(html, /Follow up question here/);
+  assert.equal((html.match(/aria-posinset=/g) ?? []).length, 1);
 
-  const unflagged = renderFeed({
-    items: [query],
-    researchTrees: [tree],
-  });
+  const unflagged = renderFeed({ items: [question], researchTrees: [tree] });
   assert.match(unflagged, /research-thread-follow"[^>]*aria-pressed="false"[^>]*>Follow<\/button>/);
   assert.match(unflagged, /aria-label="Bookmark"/);
-  // Saved links are threads too: the same pair follows the link card.
-  const saved = renderFeed({
-    items: [savedLink],
-    researchTrees: [{ ...tree, id: "link-tree", rootNodeId: "link", kind: "note" }],
+  assert.doesNotMatch(unflagged, /research-feed-post-count/);
+});
+
+test("a post that is still answering shows its status without time, Follow or Bookmark", () => {
+  const html = renderFeed({
+    items: [{ ...question, status: "running" as const, recap: null }],
+    researchTrees: [tree],
   });
-  assert.match(saved, /research-thread-actions/);
-  assert.ok(saved.indexOf("note-link-card") < saved.indexOf("research-thread-actions"));
+  assert.match(html, /research-feed-post-status" role="status"/);
+  assert.match(html, /Generating answer/);
+  assert.doesNotMatch(html, /research-thread-actions/);
+  assert.doesNotMatch(html, /<time/);
+});
+
+test("the open thread's post is selected and unread posts carry a dot", () => {
+  const html = renderFeed({
+    items: [question, { ...question, nodeId: "other-node", treeId: "other", prompt: "Other question" }],
+    researchTrees: [
+      { ...tree, hasUnseenUpdate: true },
+      { ...tree, id: "other", rootNodeId: "other-node", hasUnseenUpdate: true },
+    ],
+    selectedTreeId: "tree",
+  });
+  assert.equal((html.match(/research-feed-post is-selected/g) ?? []).length, 1);
+  assert.match(html, /aria-current="true"/);
+  // Selecting a thread reads it, so only the other post keeps its dot.
+  const posts = html.split(/class="research-feed-post(?=[ "])/).slice(1);
+  const selected = posts.find((post) => post.startsWith(" is-selected"));
+  const other = posts.find((post) => post.includes("Other question"));
+  assert.ok(selected && !selected.includes("research-feed-post-unread"));
+  assert.ok(other?.includes("research-feed-post-unread"));
+});
+
+test("only one post of the open thread is selected", () => {
+  // A thread's follow-up is its own post; the thread's newest post is the one
+  // selected when the thread was opened from elsewhere.
+  const followUp = {
+    ...question, nodeId: "follow", parentNodeId: "node", prompt: "A later follow-up", createdAt: 200,
+  };
+  const html = renderFeed({ items: [followUp, question], researchTrees: [tree], selectedTreeId: "tree" });
+  assert.equal((html.match(/research-feed-post is-selected/g) ?? []).length, 1);
+  const selected = html.split(/class="research-feed-post(?=[ "])/).find((post) => post.startsWith(" is-selected"));
+  assert.ok(selected?.includes("A later follow-up"));
+});
+
+test("a saved link opens from its time, and a count opens its follow-ups", () => {
+  const html = renderFeed({
+    items: [{ ...savedLink, children: [{ ...question, nodeId: "child", parentNodeId: "link", createdAt: 300 }] }],
+  });
+  // An untitled post's time is its keyboard control; a titled post uses its title.
+  assert.match(html, /class="control-button research-feed-post-time" aria-label="Open post"><time/);
+  assert.match(html, /class="control-button research-feed-post-count" tabindex="-1" aria-label="Open 1 follow-up"/);
+  const titled = renderFeed({ items: [question], researchTrees: [tree], selectedTreeId: "tree" });
+  assert.match(titled, /<button type="button" class="control-button research-feed-post-title" aria-current="true">Investigate<\/button>/);
+  assert.match(titled, /class="control-button research-feed-post-time" tabindex="-1"><time/);
+  assert.doesNotMatch(titled, /role="button"/);
+});
+
+test("posts render Markdown links and hold the summary slot while one generates", () => {
+  const withLink = renderFeed({
+    items: [{
+      ...question,
+      prompt: "what would solving it this way look like?\nhttps://x.com/example/status/2097801834224312595",
+    }],
+  });
+  assert.match(withLink, /turn-markdown/);
+  assert.match(withLink, /href="https:\/\/x\.com\/example\/status\/2097801834224312595"/);
+
+  const pending = renderFeed({
+    items: [{ ...question, recap: null }],
+    recapPendingNodeIds: new Set(["node"]),
+  });
+  assert.match(pending, /Generating summary/);
+  const generated = renderFeed({ items: [question], recapPendingNodeIds: new Set(["node"]) });
+  assert.match(generated, /Summary: The finding is X\./);
+  assert.doesNotMatch(generated, /Generating summary/);
 });
 
 test("the Bookmarks view lists only bookmarked threads without the composer", () => {
@@ -156,75 +211,6 @@ test("feed pagination errors remain visible with workspace history controls", ()
   assert.match(html, /aria-label="Forward"/);
 });
 
-test("Home renders direct children as follow-up buttons within the root item", () => {
-  const root = {
-    nodeId: "root", treeId: "tree", parentNodeId: null, inline: false,
-    prompt: "Root question", adapter: "codex", status: "complete" as const, createdAt: 100,
-  };
-  const html = renderFeed({ items: [{ ...root, children: [{
-      ...root, nodeId: "child", parentNodeId: "root", prompt: "Follow up question here",
-      children: [{ ...root, nodeId: "grandchild", parentNodeId: "child", prompt: "Nested descendant" }],
-    }] },
-  ] });
-  assert.match(html, /aria-label="Follow-up questions"/);
-  assert.match(html, /recent-query-child-question">Follow up question here<\/span>/);
-  assert.ok(html.indexOf("Root question") < html.indexOf("Follow up question here"));
-  // The footer (actions + time) closes the item, after the follow-up list.
-  assert.ok(html.indexOf("Follow up question here") < html.indexOf("activity-metadata"));
-  assert.equal((html.match(/aria-posinset=/g) ?? []).length, 1);
-  assert.doesNotMatch(html, /Nested descendant/);
-});
-
-test("Home prefixes targeted follow-ups with a muted target excerpt", () => {
-  const root = {
-    nodeId: "root", treeId: "tree", parentNodeId: null, inline: false,
-    prompt: "Root question", adapter: "codex", status: "complete" as const, createdAt: 100,
-  };
-  const target = "The selected answer passage has enough words to require a short excerpt here";
-  const html = renderFeed({ items: [{
-      ...root,
-      children: [{
-        ...root,
-        nodeId: "child",
-        parentNodeId: "root",
-        prompt: "How does this change the result?",
-        queryTarget: target,
-      }],
-    },
-  ] });
-
-  assert.match(
-    html,
-    /recent-query-child-target" title="[^"]+">@The selected answer passage has…<\/span>/,
-  );
-  assert.match(
-    html,
-    /recent-query-child-question">How does this change the result\?<\/span>/,
-  );
-  assert.ok(html.indexOf("recent-query-child-target") < html.indexOf("recent-query-child-question"));
-  assert.match(
-    html,
-    /recent-query-child-target"[^>]*>[^<]+<\/span> <span class="recent-query-child-link" role="button"/,
-  );
-});
-
-test("Home places follow-up questions below the research summary", () => {
-  const root = {
-    nodeId: "root", treeId: "tree", parentNodeId: null, inline: false,
-    prompt: "Root question", adapter: "codex", status: "complete" as const, createdAt: 100,
-  };
-  const html = renderFeed({ items: [{
-      ...root,
-      recap: "The root answer.",
-      children: [{ ...root, nodeId: "child", parentNodeId: "root", prompt: "Follow up question" }],
-    },
-  ] });
-
-  assert.ok(html.indexOf("Root question") < html.indexOf("Summary: The root answer."));
-  assert.ok(html.indexOf("Summary: The root answer.") < html.indexOf("Follow up question"));
-  assert.ok(html.indexOf("Follow up question") < html.indexOf("activity-metadata"));
-});
-
 test("the agent setup guide appears only when the Home feed is empty", () => {
   const setupGuide = createElement("div", null, "Agent setup guide");
 
@@ -260,19 +246,16 @@ test("the feed scroll anchor round-trips correctly", () => {
 });
 
 
-test("Home offers report import and imported cards identify provenance", () => {
+test("Home offers report import and imported posts identify provenance", () => {
   const html = renderFeed({ onImportReport: asyncNoop, items: [{
     nodeId: "import", treeId: "import-tree", inline: false, prompt: "Original prompt",
     adapter: "codex", model: null, origin: "imported", status: "complete", createdAt: 100,
   }] });
   assert.match(html, /Import report/);
   assert.match(html, /accept=".md,text\/markdown"/);
-  assert.match(html, /Imported <time/);
+  assert.match(html, /research-feed-post-action">imported a report</);
   assert.doesNotMatch(renderFeed({ view: "bookmarks", onImportReport: asyncNoop }), /Import report/);
 });
-
-const member = (id: string, displayName: string) =>
-  ({ kind: "member" as const, id, displayName, handle: id });
 
 function networkNote(overrides: Record<string, unknown> = {}) {
   return {
@@ -284,74 +267,30 @@ function networkNote(overrides: Record<string, unknown> = {}) {
   };
 }
 
-test("a network note with no replies shows the placeholder and a collapsed follow-up link", () => {
-  const html = renderFeed({ items: [networkNote()] });
-  assert.match(html, /Who ships component-model plugins\?/);
-  assert.match(html, />Posted to network · <button[^>]*activity-metadata-open[^>]*><time/);
-  assert.match(html, /No replies yet\. Replies from your network will appear here\./);
-  assert.match(html, /\+ Ask a follow-up/);
-  assert.doesNotMatch(html, /aria-label="Follow-up"/);
-  assert.doesNotMatch(html, />Follow-ups</);
-});
-
-test("a network note lists replies with responses, then follow-ups with their state", () => {
+test("a network note is a post that counts its replies and follow-ups", () => {
   const html = renderFeed({ items: [networkNote({
     replyCount: 7,
     delivery: {
       status: "posted", postedAt: 100,
-      replies: [
-        { id: "r1", author: member("ana", "Ana Moreau"), body: "We moved in March.", createdAt: 110 },
-        { id: "r2", author: { kind: "author" }, body: "Owned handles?", inReplyTo: "r1", createdAt: 120 },
-      ],
+      replies: [{ id: "r1", author: { kind: "member", id: "ana", displayName: "Ana Moreau", handle: "ana" }, body: "We moved in March.", createdAt: 110 }],
     },
     children: [
       { ...networkNote(), nodeId: "ai", parentNodeId: "note", kind: "run", delivery: null,
-        prompt: "Does wasmtime support async?", status: "complete", recap: "Yes, since 25.", createdAt: 130 },
-      { ...networkNote(), nodeId: "about", parentNodeId: "note", kind: "run", delivery: null,
-        prompt: "How big is the SDK?", replyAnchor: "r1", replyAnchorAuthor: "Ana Moreau",
-        status: "running", createdAt: 140 },
-      { ...networkNote(), nodeId: "failed", parentNodeId: "note", kind: "run", delivery: null,
-        prompt: "Which projects ship them?", status: "failed", error: "agent exited", createdAt: 150 },
-      { ...networkNote(), nodeId: "net", parentNodeId: "note", prompt: "Anyone measured wizer?",
-        replyCount: 1, createdAt: 160,
-        delivery: { status: "posted", postedAt: 160, replies: [
-          { id: "j1", author: member("jun", "Jun Sato"), body: "About 0.4 ms.", createdAt: 170 },
-        ] } },
+        prompt: "Does wasmtime support async?", status: "complete", createdAt: 130 },
     ],
   })] });
-  assert.match(html, />Posted to network · 7 replies · <button/);
-  // Replies come before follow-ups; a response nests under its reply.
-  assert.ok(html.indexOf("We moved in March.") < html.indexOf("Owned handles?"));
-  assert.ok(html.indexOf("Owned handles?") < html.indexOf(">Follow-ups<"));
-  assert.match(html, /note-thread-list is-nested/);
-  assert.match(html, />AM<\/span>/);
-  assert.match(html, />Respond<\/button>/);
-  assert.match(html, />Ask AI about this<\/button>/);
-  assert.match(html, />Delete<\/button>/);
-  // The payload carries one of seven threads, so six are hidden.
-  assert.match(html, /Show 6 more replies/);
-  // Follow-up rows, in order, with each state.
-  assert.ok(html.indexOf("Does wasmtime support async?") < html.indexOf("How big is the SDK?"));
-  assert.match(html, /Summary: Yes, since 25\./);
-  assert.match(html, /note-followup-target">@Ana Moreau’s reply <\/span>How big is the SDK\?/);
-  assert.match(html, />Answering</);
-  assert.match(html, /Failed: agent exited/);
-  assert.match(html, />Retry<\/button>/);
-  assert.match(html, /Posted to network<span aria-hidden="true">·<\/span>1 reply/);
-  assert.match(html, /About 0\.4 ms\./);
-  // The field is open once a note has follow-ups, with the AI / Network toggle.
-  assert.match(html, /aria-label="Follow-up"/);
-  assert.match(html, /note-field-mode-button is-active"[^>]*>AI</);
-  assert.match(html, />Network</);
-});
-
-test("saved links and posts take AI follow-ups only", () => {
-  const html = renderFeed({ items: [{ ...savedLink, children: [
-    { ...savedLink, nodeId: "child", parentNodeId: "link", kind: "run", prompt: "Summarize the page",
-      status: "complete", createdAt: 210 },
-  ] }] });
+  assert.match(html, /Who ships component-model plugins\?/);
+  assert.match(html, /research-feed-post-action">posted to your network</);
+  assert.match(html, /aria-label="Open 7 replies, 1 follow-up"/);
+  // Replies and follow-ups open with the note; the post only counts them.
+  assert.doesNotMatch(html, /We moved in March\./);
+  assert.doesNotMatch(html, /Does wasmtime support async\?/);
   assert.doesNotMatch(html, /No replies yet/);
-  assert.doesNotMatch(html, />Network</);
-  assert.match(html, /placeholder="Ask about this page"/);
-  assert.match(html, /Summarize the page/);
+  assert.doesNotMatch(html, /research-feed-post-title/);
+
+  assert.deepEqual(feedPostReplyCount(networkNote()), { count: 0, label: "" });
+  assert.deepEqual(
+    feedPostReplyCount({ ...networkNote(), kind: "run", replyCount: 4 }),
+    { count: 0, label: "" },
+  );
 });

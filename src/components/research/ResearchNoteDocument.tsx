@@ -10,7 +10,7 @@ import {
   buildTimelineItems,
   timelineItemsAfterLastToolCall,
 } from "../../lib/turnTimeline";
-import { formatResearchModelSummary } from "../ActivityMetadataLine";
+import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import { ResearchDocumentFrame, ResearchSidebarRestoreButton } from "./ResearchDocumentChrome";
 import { ResearchMarkdown, ResearchUserMessage } from "./ResearchMessage";
 import {

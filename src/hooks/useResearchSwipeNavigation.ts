@@ -126,13 +126,15 @@ export function useResearchSwipeNavigation(
       if (direction === 0) {
         return;
       }
+      // A surface without history in this direction leaves the gesture to
+      // whatever else handles it.
+      const navigate = direction < 0 ? onBackRef.current : onForwardRef.current;
+      if (!navigate) {
+        return;
+      }
       event.preventDefault();
       holdNavigatedGesture();
-      if (direction < 0) {
-        onBackRef.current?.();
-      } else {
-        onForwardRef.current?.();
-      }
+      navigate();
     };
     target.addEventListener("wheel", onWheel, { passive: false });
     return () => {

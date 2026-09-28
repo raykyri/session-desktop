@@ -313,8 +313,7 @@
 /* Live runs read as activity, not a count. Rotate a fixed, even-sized wrapper
    so the glyph stays visually stable, and center it against one- or two-line
    titles. */
-.research-sidebar-spinner,
-.recent-query-spinner {
+.research-sidebar-spinner {
   display: inline-grid;
   width: 14px;
   height: 14px;
@@ -327,8 +326,7 @@
   will-change: transform;
 }
 
-.research-sidebar-spinner svg,
-.recent-query-spinner svg {
+.research-sidebar-spinner svg {
   display: block;
 }
 
@@ -734,14 +732,6 @@
 .research-document > .pane-search {
   top: 58px;
   --pane-search-right: 16px;
-}
-
-.research-document-followup-count {
-  flex: 0 0 auto;
-  color: var(--text-subtle);
-  font-size: var(--fs-base);
-  line-height: 1.3;
-  white-space: nowrap;
 }
 
 .research-sidebar-controls {
@@ -1438,10 +1428,35 @@
   left: 0;
 }
 
-/* The thread composer: the conversation's next turn, so it sits at the end
-   of the thread in the answer column on a card surface. */
+/* The thread composer: the conversation's next turn. It floats over the
+   bottom of the document while the reader scrolls through the answer, and
+   settles at the end of the thread in the answer column. */
 .research-thread-composer-row {
+  position: sticky;
+  z-index: 4;
+  bottom: 0;
   margin-top: 30px;
+  padding-bottom: 16px;
+  /* The row spans the rail too; only the composer itself takes pointer
+     input, so follow-up cards beside it stay clickable. */
+  pointer-events: none;
+}
+
+.research-thread-composer-cell {
+  pointer-events: auto;
+}
+
+/* Fades the answer out under the floating composer. It reaches past the row
+   into the scroller's bottom padding, which sticky positioning stops short
+   of, so text never shows below the bar. */
+.research-thread-composer-row::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  /* The answer track only, so rail cards beside the bar stay visible. */
+  grid-column: 1;
+  inset: -28px 0 -44px;
+  background: linear-gradient(transparent, var(--research-workspace-bg) 36px);
 }
 
 .research-thread-composer-cell {
@@ -1456,6 +1471,9 @@
   border: 1px solid var(--surface-border-default);
   border-radius: 10px;
   background: var(--content-card-bg);
+  box-shadow: var(--shadow-md);
+  /* A one-line bar until the reader types more. */
+  --composer-min-height: 44px;
 }
 
 /* Held-⌘ badge for the follow-ups chord, on the thread composer card. The
@@ -2100,7 +2118,7 @@
   white-space: nowrap;
 }
 
-@media (max-width: 900px) {
+@container research-page (max-width: 960px) {
   .research-document-scroll {
     padding-inline: 28px;
   }

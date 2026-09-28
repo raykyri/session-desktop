@@ -9,7 +9,11 @@ import type {
 import { openExternalUrl } from "../../lib/api";
 import { noteReplyAuthorName } from "../../lib/activity";
 import { formatRelativeTime } from "../../lib/transcriptSessions";
-import { ResearchMarkdown, ResearchMessageBody } from "./ResearchMessage";
+import {
+  ResearchMarkdown,
+  ResearchMessageBody,
+  type ResearchProseVariant,
+} from "./ResearchMessage";
 
 /** Handlers shared by the Home note card and the note page. Each rejects
  * with the backend's message so the control that started it can show it. */
@@ -60,10 +64,12 @@ function stopForInteractive(event: MouseEvent) {
 export function NoteBody({
   prompt,
   attachments = [],
+  variant = "body",
   renderPrompt,
 }: {
   prompt: string;
   attachments?: ResearchMessageAttachment[];
+  variant?: ResearchProseVariant;
   renderPrompt?: (content: ReactNode) => ReactNode;
 }) {
   const resolvedTweet = attachments.some(
@@ -96,7 +102,12 @@ export function NoteBody({
     );
   }
   return (
-    <ResearchMessageBody prompt={prompt} attachments={attachments} renderPrompt={renderPrompt} />
+    <ResearchMessageBody
+      prompt={prompt}
+      attachments={attachments}
+      variant={variant}
+      renderPrompt={renderPrompt}
+    />
   );
 }
 

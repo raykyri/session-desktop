@@ -89,30 +89,6 @@
   pointer-events: auto;
 }
 
-/* Event metadata sits outside the content surface as one left-aligned phrase. */
-.activity-metadata {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 8px;
-  padding: 0;
-  color: var(--text-subtle);
-  font-size: var(--research-meta-font-size);
-  font-weight: 400;
-  line-height: var(--research-meta-line-height);
-}
-
-.activity-metadata-summary {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.activity-metadata time {
-  white-space: nowrap;
-}
-
 .journal-empty {
   margin: 6px 0 0;
   color: var(--text-subtle);
@@ -127,122 +103,246 @@
   padding-block: 10px;
 }
 
-/* Research queries use the same unboxed authored-message treatment and
-   Markdown renderer as an open thread. */
-.recent-query-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* — Feed column — */
+
+/* In the feed column the feed fills its column rather than the centered page
+   width, and each post carries its own inset. */
+.research-feed-column .journal-scroll {
+  --journal-content-padding: 16px;
 }
 
-.recent-query-question-link {
-  width: fit-content;
-  max-width: 100%;
-  cursor: pointer;
-}
-
-.recent-query-question-link:focus-visible {
-  outline: 2px solid var(--accent-color);
-  outline-offset: 2px;
-  border-radius: 10px;
-}
-
-.recent-query-card.research-prompt {
-  position: relative;
-  width: 100%;
+.research-feed-column .journal-column {
   max-width: none;
-  margin: 0;
+  border-right: 0;
 }
 
-/* Footer row: thread actions first, then the event metadata (context phrase
-   and relative time) left-aligned beside them and vertically centered. */
-.recent-query-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  min-width: 0;
-  /* Adds to the block's 8px gap above the controls. */
-  margin-top: 2px;
+.research-feed-column .journal-column::before {
+  content: none;
 }
 
-.recent-query-metadata {
-  min-width: 0;
-  margin: 0;
+.research-feed-column .journal-composer-container {
+  padding-block: 12px;
 }
 
-.recent-query-metadata .activity-metadata {
-  align-items: center;
-}
-
-.recent-query-recap {
-  margin: 0;
+.research-feed-column .recent-activity-unit {
+  gap: 0;
   padding: 0;
 }
 
-.recent-query-block > .recent-query-spinner {
-  align-self: flex-start;
+/* — Feed posts — */
+
+/* A post: avatar, "You <action> · time", the thread title, the question
+   (clamped to four lines until expanded), the answer's summary, and a footer
+   with the follow-up count, Follow and Bookmark, and Show more. */
+.research-feed-post {
+  --feed-post-secondary: var(--text-subtle);
+  --feed-post-bg: var(--research-workspace-bg);
+  display: flex;
+  gap: 10px;
+  padding: 14px var(--journal-content-padding) 10px;
+  background: var(--feed-post-bg);
 }
 
-.recent-query-children {
+.research-feed-post:hover {
+  --feed-post-bg: var(--research-sidebar-hover-bg);
+}
+
+.research-feed-post.is-selected {
+  --feed-post-secondary: var(--text-tertiary);
+  --feed-post-bg: var(--control-bg-hover);
+}
+
+.research-feed-post-avatar {
+  position: relative;
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+
+.research-feed-post-avatar-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  background: var(--surface-fill-medium);
+}
+
+/* Unread: a dot on the avatar's top-left corner, ringed in the page color. */
+.research-feed-post-unread {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-info-fg);
+  box-shadow: 0 0 0 2px var(--feed-post-bg);
+}
+
+.research-feed-post-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.research-feed-post-head {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  color: var(--feed-post-secondary);
+  font-size: var(--research-meta-font-size);
+  line-height: var(--research-meta-line-height);
+}
+
+.research-feed-post-author {
+  flex: none;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.research-feed-post-action {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.research-feed-post-time {
+  flex: none;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  background: transparent;
+}
+
+.research-feed-post-time:hover {
+  color: var(--text-interactive);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.research-feed-post-open {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 0;
-  padding: 0 0 0 10px;
-  list-style: none;
-  cursor: default;
-}
-
-.recent-query-child {
-  --recent-query-child-line-height: 1.3;
-  position: relative;
   min-width: 0;
-  padding-left: 18px;
-  line-height: var(--recent-query-child-line-height);
-}
-
-.recent-query-child::before {
-  content: "";
-  position: absolute;
-  top: calc(0.15em - 2px);
-  left: 2px;
-  width: 7px;
-  height: 0.5em;
-  border-left: 1px solid var(--text-subtle);
-  border-bottom: 1px solid var(--text-subtle);
-  border-bottom-left-radius: 2px;
-}
-
-.recent-query-child-link {
-  display: inline;
-  min-height: 0;
-  color: var(--text-interactive);
-  font-size: var(--research-body-font-size);
-  line-height: var(--recent-query-child-line-height);
-  white-space: normal;
-  overflow-wrap: anywhere;
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 
-.recent-query-child-link:hover {
-  text-decoration: none;
+.research-feed-post-title {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  text-align: left;
+  background: transparent;
+  color: var(--text-heading);
+  font-size: var(--research-body-font-size);
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
-.recent-query-child-link:hover .recent-query-child-question {
-  text-decoration: underline;
-}
-
-.recent-query-child-link:focus-visible {
+.research-feed-post-title:focus-visible {
   outline: 2px solid var(--accent-color);
   outline-offset: 2px;
-  border-radius: 3px;
 }
 
-.recent-query-child-target {
-  color: var(--text-subtle);
-  font-size: var(--research-body-font-size);
-  line-height: var(--recent-query-child-line-height);
+.research-feed-post-body {
+  min-width: 0;
+}
+
+/* Under a title the question reads as secondary text; without one (notes)
+   it keeps the compact prose color and leads the post. */
+.research-feed-post-body:not(.is-lead) > .turn-markdown.research-prose {
+  color: var(--text-secondary);
+}
+
+/* Four lines of the question's prose, counted across its paragraphs; Show
+   more lifts the limit. */
+.research-feed-post-body.is-clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.research-feed-post-summary {
+  margin: 0;
+}
+
+.research-feed-post-summary.is-clamped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.research-feed-post.is-selected .research-feed-post-summary {
+  color: var(--feed-post-secondary);
+}
+
+.research-feed-post-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--feed-post-secondary);
+  font-size: var(--research-meta-font-size);
+}
+
+.research-feed-post-status svg {
+  flex: none;
+  animation: spinner-spin 0.9s linear infinite;
+}
+
+.research-feed-post-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 24px;
+}
+
+.research-feed-post-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  color: var(--feed-post-secondary);
+  font-size: var(--research-meta-font-size);
+  font-variant-numeric: tabular-nums;
+  background: transparent;
+}
+
+.research-feed-post-count:hover {
+  color: var(--text-interactive);
+}
+
+.research-feed-post-more {
+  min-height: 0;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  color: var(--feed-post-secondary);
+  font-size: var(--research-meta-font-size);
+  background: transparent;
+}
+
+.research-feed-post-more:hover {
+  color: var(--text-interactive);
 }
 
 .recent-activity-load-older {
