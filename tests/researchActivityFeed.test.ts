@@ -133,8 +133,13 @@ test("a saved link opens from its time, and a count opens its follow-ups", () =>
   const html = renderFeed({
     items: [{ ...savedLink, children: [{ ...question, nodeId: "child", parentNodeId: "link", createdAt: 300 }] }],
   });
-  assert.match(html, /<button type="button" class="control-button research-feed-post-time" title="Open"><time/);
-  assert.match(html, /<button type="button" class="control-button research-feed-post-count" aria-label="Open 1 follow-up"/);
+  // An untitled post's time is its keyboard control; a titled post uses its title.
+  assert.match(html, /class="control-button research-feed-post-time" aria-label="Open post"><time/);
+  assert.match(html, /class="control-button research-feed-post-count" tabindex="-1" aria-label="Open 1 follow-up"/);
+  const titled = renderFeed({ items: [question], researchTrees: [tree], selectedTreeId: "tree" });
+  assert.match(titled, /<button type="button" class="control-button research-feed-post-title" aria-current="true">Investigate<\/button>/);
+  assert.match(titled, /class="control-button research-feed-post-time" tabindex="-1"><time/);
+  assert.doesNotMatch(titled, /role="button"/);
 });
 
 test("posts render Markdown links and hold the summary slot while one generates", () => {

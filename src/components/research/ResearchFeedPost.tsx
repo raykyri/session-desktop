@@ -121,12 +121,13 @@ export default function ResearchFeedPost({
           {!running && time ? (
             <>
               <span aria-hidden="true">·</span>
-              {/* The time opens the item too: a saved link's only other
-                  target is the link itself. */}
+              {/* An untitled post (a note or saved link) opens from its time;
+                  its body's only other target may be the link itself. */}
               <button
                 type="button"
                 className="control-button research-feed-post-time"
-                title="Open"
+                aria-label={title ? undefined : "Open post"}
+                tabIndex={title ? -1 : undefined}
                 onClick={onOpen}
               >
                 {time}
@@ -134,22 +135,25 @@ export default function ResearchFeedPost({
             </>
           ) : null}
         </div>
+        {/* Clicking anywhere in the body opens the post; keyboard and assistive
+            tech reach it through the title (or, untitled, the time), so the
+            links and embeds inside the body stay separate controls. */}
         <div
           className="research-feed-post-open"
-          role="button"
-          tabIndex={0}
-          aria-current={selected ? "true" : undefined}
           onClick={(event) => {
             if (!isInteractiveTarget(event.target)) onOpen();
           }}
-          onKeyDown={(event) => {
-            if (event.target !== event.currentTarget) return;
-            if (event.key !== "Enter" && event.key !== " ") return;
-            event.preventDefault();
-            onOpen();
-          }}
         >
-          {title ? <div className="research-feed-post-title">{title}</div> : null}
+          {title ? (
+            <button
+              type="button"
+              className="control-button research-feed-post-title"
+              aria-current={selected ? "true" : undefined}
+              onClick={onOpen}
+            >
+              {title}
+            </button>
+          ) : null}
           {renderBody((content) => (
             <div
               ref={setBody}
@@ -181,6 +185,7 @@ export default function ResearchFeedPost({
               <button
                 type="button"
                 className="control-button research-feed-post-count"
+                tabIndex={-1}
                 aria-label={`Open ${replyCountLabel}`}
                 title={replyCountLabel}
                 onClick={onOpen}

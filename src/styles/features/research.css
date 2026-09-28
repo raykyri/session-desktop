@@ -1453,6 +1453,8 @@
   content: "";
   position: absolute;
   z-index: -1;
+  /* The answer track only, so rail cards beside the bar stay visible. */
+  grid-column: 1;
   inset: -28px 0 -44px;
   background: linear-gradient(transparent, var(--research-workspace-bg) 36px);
 }

@@ -48,6 +48,12 @@
   display: none;
 }
 
+/* Scrolled-to matches and focused elements stop above a thread's floating
+   composer. */
+.research-document-scroll:has(.research-thread-composer-row) {
+  scroll-padding-bottom: 140px;
+}
+
 .research-content-placeholder {
   display: flex;
   align-items: center;
@@ -192,9 +198,6 @@
   width: 100%;
   min-height: 0;
   padding: 44px clamp(24px, 5vw, 72px) 40px;
-  /* Scrolled-to matches and focused elements stop above the thread's
-     floating composer. */
-  scroll-padding-bottom: 180px;
   /* Vertical only. Wide content (tables, code blocks) scrolls inside its own
      inner scrollers, so this container never scrolls sideways legitimately.
      With plain `auto`, transient horizontal overflow — the WebKit var()-drop

@@ -4889,7 +4889,9 @@ function ResearchDocument({
             void submitFollowup(!dockedAsk && event.shiftKey ? "branch" : undefined);
           }
         }}
-        rows={2}
+        // The thread composer floats as a one-line bar and grows as the
+        // reader types; the rail's ask composer opens roomier.
+        rows={dockedAsk ? 2 : 1}
       />
       <div className="research-followup-footer">
         {composerHint ? (

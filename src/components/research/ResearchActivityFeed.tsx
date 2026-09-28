@@ -290,6 +290,11 @@ function ResearchActivityFeed({
   // follow-ups); only the one opened is selected. A thread opened from
   // elsewhere selects its newest post.
   const [openedNodeId, setOpenedNodeId] = useState<string | null>(null);
+  const openingTreeIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (selectedTreeId !== openingTreeIdRef.current) setOpenedNodeId(null);
+    openingTreeIdRef.current = null;
+  }, [selectedTreeId]);
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
   const [recapDialogContent, setRecapDialogContent] =
@@ -894,6 +899,9 @@ function ResearchActivityFeed({
                           }))
                         }
                         onOpen={() => {
+                          if (query.treeId !== selectedTreeId) {
+                            openingTreeIdRef.current = query.treeId;
+                          }
                           setOpenedNodeId(query.nodeId);
                           onOpenResearchQuery(query);
                         }}
