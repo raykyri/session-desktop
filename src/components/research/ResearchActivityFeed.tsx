@@ -10,14 +10,12 @@ import {
 } from "react";
 import type { FocusEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, LoaderCircle, RotateCw } from "lucide-react";
+import { ChevronDown, RotateCw } from "lucide-react";
 import {
   buildRecentActivityFromItems,
-  topLevelReplyCount,
   type RecentActivityEvent,
 } from "../../lib/activity";
 import type {
-  NoteReply,
   RecentResearchQuery,
   RecentResearchQueryCursor,
   ResearchNode,
@@ -25,23 +23,15 @@ import type {
   ResearchTreeSummary,
 } from "../../types";
 import { IS_MAC, isEditableTarget } from "../../lib/appHelpers";
-import { getResearchNodeContent, getResearchTree } from "../../lib/api";
+import { getResearchNodeContent } from "../../lib/api";
+import { formatRelativeTime } from "../../lib/transcriptSessions";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import { ResearchDocumentFrame } from "./ResearchDocumentChrome";
-import ActivityMetadataLine, { formatResearchModelSummary } from "../ActivityMetadataLine";
-import ResearchThreadActions from "./ResearchThreadActions";
-import { ResearchRecapLine, ResearchRecapPendingLine } from "./ResearchRecap";
+import { formatResearchModelSummary } from "../../lib/researchModelSummary";
+import ResearchFeedPost from "./ResearchFeedPost";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import { ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
-import {
-  NoteBody,
-  NoteFollowUpField,
-  NoteFollowUpGlyph,
-  NoteFollowUpStatus,
-  NoteReplyThread,
-  type NoteActions,
-  type NoteReplyTarget,
-} from "./ResearchNote";
+import { NoteBody } from "./ResearchNote";
 import type { ResearchFolderState } from "../../lib/researchFolders";
 import { isActiveResearchStatus } from "../../lib/researchThreads";
 import {
@@ -98,8 +88,6 @@ export interface ResearchActivityFeedProps {
   nextCursor: RecentResearchQueryCursor | null;
   loadingOlder: boolean;
   olderError: string | null;
-  /** Replies, follow-ups, and retries on note cards. */
-  noteActions: NoteActions;
   onOpenResearchQuery: (query: RecentResearchQuery) => void;
   onResearchRecapApplied: (node: ResearchNode) => void;
   onError: (message: string) => void;
@@ -116,6 +104,12 @@ export interface ResearchActivityFeedProps {
   onRemoveFromFolder: (treeIds: string[]) => void;
   onLoadOlder: () => void;
   onRefresh?: () => void;
+  /** The thread open in the content column beside the feed; its post is
+   * marked selected. */
+  selectedTreeId?: string | null;
+  /** Back/forward buttons in the feed's own header. Off when the content
+   * column beside the feed carries them. */
+  showHistoryNav?: boolean;
   canGoBack?: boolean;
   canGoForward?: boolean;
   onBack?: () => void;
@@ -125,395 +119,27 @@ export interface ResearchActivityFeedProps {
 const MENU_HEIGHT_ESTIMATE = 132;
 const MENU_VIEWPORT_MARGIN = 8;
 
-function isMarkdownInteractiveTarget(target: EventTarget | null) {
-  return target instanceof Element && Boolean(target.closest("a, button"));
-}
-
-function recentQueryTargetExcerpt(target: string, maxWords = 5, maxChars = 40) {
-  const normalized = target.split(/\s+/).filter(Boolean).join(" ");
-  const words = normalized.split(" ").filter(Boolean);
-  if (words.length === 0) return "";
-  const wordExcerpt = words.slice(0, maxWords).join(" ");
-  const truncated = words.length > maxWords || Array.from(normalized).length > maxChars;
-  if (!truncated) return wordExcerpt;
-
-  const characterLimit = Math.max(1, maxChars - 1);
-  let excerpt = Array.from(wordExcerpt).slice(0, characterLimit).join("").trimEnd();
-  if (Array.from(wordExcerpt).length > characterLimit) {
-    excerpt = excerpt.replace(/\s+\S*$/u, "").trimEnd() || excerpt;
+/** The phrase after "You" in a feed post's header. */
+export function feedPostAction(event: RecentActivityEvent): string {
+  if (event.object.kind === "research-query") {
+    if (event.execution?.origin === "imported") return "imported a report";
+    if (event.relationship?.kind === "follow-up") {
+      return `followed up in “${event.context?.label ?? "Research"}”`;
+    }
+    return `asked ${formatResearchModelSummary(event.source.query.adapter) || "AI"}`;
   }
-  return `${excerpt}…`;
+  if (event.action.kind === "posted") return "posted to your network";
+  return event.object.kind === "post" ? "saved a post" : "saved a link";
 }
 
-export function ResearchQueryCard({
-  query,
-  metadata,
-  recapPending = false,
-  followed = false,
-  bookmarked = false,
-  onToggleFollow,
-  onToggleBookmark,
-  onOpen,
-  onContextMenu,
-  onOpenChild,
-}: {
-  query: RecentResearchQuery;
-  /** Event metadata (context phrase and relative time), shown on the card's
-   * footer row beside the thread actions. */
-  metadata?: ReactNode;
-  /** A background summary job is in flight for this run. */
-  recapPending?: boolean;
-  followed?: boolean;
-  bookmarked?: boolean;
-  onToggleFollow?: () => void;
-  onToggleBookmark?: () => void;
-  onOpen: () => void;
-  onContextMenu: (clientX: number, clientY: number) => void;
-  onOpenChild?: (query: RecentResearchQuery) => void;
-}) {
-  const recap = query.recap?.trim() ?? "";
-  const running = isActiveResearchStatus(query.status);
-  // A running question shows its spinner and nothing else below the prompt;
-  // the thread actions and metadata row appear once the answer settles.
-  const actions =
-    !running && onToggleFollow && onToggleBookmark ? (
-      <ResearchThreadActions
-        followed={followed}
-        bookmarked={bookmarked}
-        onToggleFollow={onToggleFollow}
-        onToggleBookmark={onToggleBookmark}
-      />
-    ) : null;
-  return (
-    <div
-      className="recent-query-block"
-      onContextMenu={(event) => {
-        if (event.defaultPrevented) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        onContextMenu(event.clientX, event.clientY);
-      }}
-    >
-      <ResearchUserMessage as="article" className="recent-query-card research-prompt">
-        <ResearchMessageBody
-          prompt={query.prompt}
-          attachments={query.attachments}
-          renderPrompt={(content) => (
-            <div
-              className="recent-query-question-link"
-              role="button"
-              tabIndex={0}
-              onClick={(event) => {
-                if (!isMarkdownInteractiveTarget(event.target)) onOpen();
-              }}
-              onKeyDown={(event) => {
-                if (event.target !== event.currentTarget) return;
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                onOpen();
-              }}
-            >
-              {content}
-            </div>
-          )}
-        />
-      </ResearchUserMessage>
-      {running ? (
-        <span
-          className="recent-query-spinner"
-          role="status"
-          aria-label="Generating answer"
-          title="Generating answer"
-        >
-          <LoaderCircle size={14} aria-hidden="true" />
-        </span>
-      ) : null}
-      {recap ? (
-        <ResearchRecapLine text={recap} className="recent-query-recap" />
-      ) : recapPending && !running ? (
-        <ResearchRecapPendingLine className="recent-query-recap" />
-      ) : null}
-      {query.children?.length && onOpenChild ? (
-        <ul
-          className="recent-query-children"
-          aria-label="Follow-up questions"
-          onClick={(event) => event.stopPropagation()}
-        >
-          {query.children.map((child) => {
-            const targetExcerpt = recentQueryTargetExcerpt(child.queryTarget ?? "");
-            return (
-              <li key={child.nodeId} className="recent-query-child">
-                {targetExcerpt ? (
-                  <>
-                    <span
-                      className="recent-query-child-target"
-                      title={child.queryTarget ?? undefined}
-                    >
-                      @{targetExcerpt}
-                    </span>{" "}
-                  </>
-                ) : null}
-                <span
-                  className="recent-query-child-link"
-                  role="button"
-                  tabIndex={0}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpenChild(child);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter" && event.key !== " ") return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onOpenChild(child);
-                  }}
-                >
-                  <span className="recent-query-child-question">{child.prompt}</span>
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
-      {!running && (actions || metadata) ? (
-        <div className="recent-query-footer">
-          {actions}
-          {metadata ? <div className="recent-query-metadata">{metadata}</div> : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/** A note in Home's feed: the note, its footer, then (for network notes) the
- * Replies group and the Follow-ups group with an inline follow-up field.
- * `replies` is the note's loaded replies, which the feed may have expanded
- * past the payload's first five threads. */
-export function ResearchNoteCard({
-  query,
-  metadata,
-  replies,
-  loadingReplies = false,
-  archived = false,
-  followed = false,
-  bookmarked = false,
-  actions,
-  onToggleFollow,
-  onToggleBookmark,
-  onOpen,
-  onOpenChild,
-  onContextMenu,
-  onShowAllReplies,
-}: {
-  query: RecentResearchQuery;
-  metadata?: ReactNode;
-  replies: NoteReply[];
-  loadingReplies?: boolean;
-  archived?: boolean;
-  followed?: boolean;
-  bookmarked?: boolean;
-  actions: NoteActions;
-  onToggleFollow?: () => void;
-  onToggleBookmark?: () => void;
-  onOpen: () => void;
-  onOpenChild: (query: RecentResearchQuery) => void;
-  onContextMenu: (clientX: number, clientY: number) => void;
-  onShowAllReplies?: () => void;
-}) {
-  const [target, setTarget] = useState<NoteReplyTarget | null>(null);
-  const [fieldOpen, setFieldOpen] = useState(false);
-  const network = Boolean(query.delivery);
-  const children = query.children ?? [];
-  const hiddenReplies = Math.max(0, (query.replyCount ?? 0) - topLevelReplyCount(replies));
-  const modelLabel = formatResearchModelSummary(query.adapter, query.model);
-  const showField = fieldOpen || children.length > 0 || target !== null;
-  return (
-    <div
-      className="recent-query-block note-card"
-      onContextMenu={(event) => {
-        if (event.defaultPrevented) return;
-        event.preventDefault();
-        event.stopPropagation();
-        onContextMenu(event.clientX, event.clientY);
-      }}
-    >
-      <ResearchUserMessage as="article" className="recent-query-card research-prompt">
-        <NoteBody
-          prompt={query.prompt}
-          attachments={query.attachments}
-          renderPrompt={(content) => (
-            <div
-              className="recent-query-question-link"
-              role="button"
-              tabIndex={0}
-              onClick={(event) => {
-                if (!isMarkdownInteractiveTarget(event.target)) onOpen();
-              }}
-              onKeyDown={(event) => {
-                if (event.target !== event.currentTarget) return;
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                onOpen();
-              }}
-            >
-              {content}
-            </div>
-          )}
-        />
-      </ResearchUserMessage>
-      {onToggleFollow && onToggleBookmark ? (
-        <div className="recent-query-footer">
-          <ResearchThreadActions
-            followed={followed}
-            bookmarked={bookmarked}
-            onToggleFollow={onToggleFollow}
-            onToggleBookmark={onToggleBookmark}
-          />
-          {metadata ? <div className="recent-query-metadata">{metadata}</div> : null}
-        </div>
-      ) : null}
-      <div className="note-outline">
-        {network ? (
-          <section className="note-outline-group" aria-label="Replies">
-            <div className="note-outline-label">Replies</div>
-            {replies.length > 0 ? (
-              <NoteReplyThread
-                nodeId={query.nodeId}
-                replies={replies}
-                archived={archived}
-                actions={actions}
-                onAskAbout={(next) => {
-                  setTarget(next);
-                  setFieldOpen(true);
-                }}
-              />
-            ) : (
-              <p className="note-placeholder">
-                No replies yet. Replies from your network will appear here.
-              </p>
-            )}
-            {hiddenReplies > 0 && onShowAllReplies ? (
-              <button
-                type="button"
-                className="note-thread-link note-show-more"
-                disabled={loadingReplies}
-                onClick={onShowAllReplies}
-              >
-                {loadingReplies
-                  ? "Loading replies…"
-                  : `Show ${hiddenReplies} more ${hiddenReplies === 1 ? "reply" : "replies"}`}
-              </button>
-            ) : null}
-          </section>
-        ) : null}
-        <section className="note-outline-group" aria-label="Follow-ups">
-          {children.length > 0 ? <div className="note-outline-label">Follow-ups</div> : null}
-          <ol className="note-thread-list">
-            {children.map((child) => (
-              <li
-                key={child.nodeId}
-                className="note-thread-item"
-                data-type={child.kind === "note" ? "net" : "ai"}
-              >
-                <div className="note-thread-gutter">
-                  <NoteFollowUpGlyph network={child.kind === "note"} />
-                </div>
-                <div className="note-thread-body">
-                  <span
-                    className="note-followup-question"
-                    role="button"
-                    tabIndex={0}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onOpenChild(child);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onOpenChild(child);
-                    }}
-                  >
-                    {child.replyAnchorAuthor ? (
-                      <span className="note-followup-target">
-                        @{child.replyAnchorAuthor}’s reply{" "}
-                      </span>
-                    ) : null}
-                    {child.prompt}
-                  </span>
-                  {child.kind !== "note" && child.status === "complete" && child.recap?.trim() ? (
-                    <ResearchRecapLine text={child.recap} className="note-followup-recap" />
-                  ) : null}
-                  <NoteFollowUpStatus
-                    child={child}
-                    modelLabel={formatResearchModelSummary(child.adapter, child.model)}
-                    archived={archived}
-                    onRetry={actions.onRetry}
-                  />
-                  {child.kind === "note" && child.delivery?.replies?.length ? (
-                    <NoteReplyThread
-                      nodeId={child.nodeId}
-                      replies={child.delivery.replies}
-                      archived={archived}
-                      actions={actions}
-                      nested
-                    />
-                  ) : null}
-                </div>
-              </li>
-            ))}
-            {!archived ? (
-              <li className="note-thread-item" data-type="composer">
-                <div className="note-thread-gutter" />
-                <div className="note-thread-body">
-                  {showField ? (
-                    <NoteFollowUpField
-                      key={target?.id ?? "note"}
-                      networkAvailable={network}
-                      modelLabel={modelLabel}
-                      target={target}
-                      autoFocus={fieldOpen}
-                      placeholder={
-                        network
-                          ? "Ask a follow-up"
-                          : query.attachments?.some((attachment) => attachment.tweet)
-                            ? "Ask about this post"
-                            : "Ask about this page"
-                      }
-                      onClearTarget={() => setTarget(null)}
-                      onSubmit={(prompt, toNetwork) =>
-                        actions
-                          .onAskFollowUp({
-                            parentNodeId: query.nodeId,
-                            prompt,
-                            network: toNetwork,
-                            replyAnchor: toNetwork ? null : target?.id ?? null,
-                          })
-                          .then(() => setTarget(null))
-                      }
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      className="note-add-followup"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setFieldOpen(true);
-                      }}
-                    >
-                      + Ask a follow-up
-                    </button>
-                  )}
-                </div>
-              </li>
-            ) : null}
-          </ol>
-        </section>
-      </div>
-    </div>
-  );
+/** Follow-ups under an item, plus replies for a network post. */
+export function feedPostReplyCount(query: RecentResearchQuery): { count: number; label: string } {
+  const followUps = query.children?.length ?? 0;
+  const replies = query.kind === "note" ? (query.replyCount ?? 0) : 0;
+  const parts: string[] = [];
+  if (replies > 0) parts.push(`${replies} ${replies === 1 ? "reply" : "replies"}`);
+  if (followUps > 0) parts.push(`${followUps} ${followUps === 1 ? "follow-up" : "follow-ups"}`);
+  return { count: replies + followUps, label: parts.join(", ") };
 }
 
 type VirtualActivityRow = {
@@ -539,15 +165,8 @@ function estimatedActivityRowHeight(row: VirtualActivityRow): number {
   const hasTweet = query.attachments?.some(
     (attachment) => attachment.status === "resolved" && attachment.tweet,
   );
-  if (query.kind === "note") {
-    const replies = query.delivery?.replies?.length ?? 0;
-    const children = query.children?.length ?? 0;
-    return (hasTweet ? 384 : 90) + (query.delivery ? 40 : 0) + replies * 72 + children * 64 + 40;
-  }
-  if (hasTweet) {
-    return query.recap?.trim() ? 430 : 384;
-  }
-  return query.recap?.trim() ? 136 : 90;
+  const base = hasTweet ? 400 : 124;
+  return query.kind !== "note" && query.recap?.trim() ? base + 84 : base;
 }
 
 export interface VirtualActivityRange {
@@ -637,7 +256,6 @@ function ResearchActivityFeed({
   nextCursor,
   loadingOlder,
   olderError,
-  noteActions,
   onOpenResearchQuery,
   onResearchRecapApplied,
   onError,
@@ -653,6 +271,8 @@ function ResearchActivityFeed({
   onRemoveFromFolder,
   onLoadOlder,
   onRefresh,
+  selectedTreeId = null,
+  showHistoryNav = true,
   canGoBack = false,
   canGoForward = false,
   onBack,
@@ -666,11 +286,10 @@ function ResearchActivityFeed({
     left: number;
     top: number;
   } | null>(null);
-  // Full reply lists for notes the user expanded past the feed's first five
-  // threads, keyed by node id. Held here rather than in the card so they
-  // survive the virtualized row unmounting while scrolled away.
-  const [expandedReplies, setExpandedReplies] = useState<Record<string, NoteReply[]>>({});
-  const [loadingRepliesFor, setLoadingRepliesFor] = useState<string | null>(null);
+  // Posts the reader expanded past four lines, keyed by node id. Held here
+  // rather than in the post so they survive the virtualized row unmounting
+  // while scrolled away.
+  const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({});
   const [renamingTree, setRenamingTree] = useState<ResearchTreeSummary | null>(null);
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
   const [recapDialogContent, setRecapDialogContent] =
@@ -745,36 +364,6 @@ function ResearchActivityFeed({
     );
     return items.filter((item) => bookmarked.has(item.treeId));
   }, [items, researchTrees, view]);
-  const loadAllReplies = useCallback(
-    (query: RecentResearchQuery) => {
-      setLoadingRepliesFor(query.nodeId);
-      void getResearchTree(query.treeId)
-        .then((detail) => {
-          const node = detail.nodes.find((candidate) => candidate.id === query.nodeId);
-          setExpandedReplies((current) => ({
-            ...current,
-            [query.nodeId]: node?.delivery?.replies ?? [],
-          }));
-        })
-        .catch((err: unknown) => onError(err instanceof Error ? err.message : String(err)))
-        .finally(() =>
-          setLoadingRepliesFor((current) => (current === query.nodeId ? null : current)),
-        );
-    },
-    [onError],
-  );
-  // A live update to an expanded note (a new reply, a deleted response)
-  // arrives cut to five threads; refetch the full list rather than show the
-  // stale copy.
-  const expandedDeliveryRef = useRef(new Map<string, unknown>());
-  useEffect(() => {
-    for (const item of items) {
-      if (!(item.nodeId in expandedReplies)) continue;
-      const previous = expandedDeliveryRef.current.get(item.nodeId);
-      expandedDeliveryRef.current.set(item.nodeId, item.delivery);
-      if (previous !== undefined && previous !== item.delivery) loadAllReplies(item);
-    }
-  }, [expandedReplies, items, loadAllReplies]);
   const feed = useMemo(
     () => buildRecentActivityFromItems(visibleItems, researchTrees),
     [visibleItems, researchTrees],
@@ -1127,6 +716,7 @@ function ResearchActivityFeed({
   return (
     <ResearchDocumentFrame
       title={viewTitle}
+      showHistoryNav={showHistoryNav}
       headerActions={view === "home" && onImportReport ? (
         <ResearchReportImport dropTarget={scrollRef} onImport={onImportReport} onError={onError} />
       ) : undefined}
@@ -1196,6 +786,7 @@ function ResearchActivityFeed({
                     openTreeContextMenu(researchTree, clientX, clientY, query.nodeId);
                   }
                 };
+                const replies = feedPostReplyCount(query);
                 return (
                   <MeasuredActivityRow
                     key={row.key}
@@ -1215,42 +806,59 @@ function ResearchActivityFeed({
                       aria-posinset={row.position}
                       aria-setsize={nextCursor ? -1 : feed.length}
                     >
-                      {query.kind === "note" ? (
-                        <ResearchNoteCard
-                          query={query}
-                          metadata={
-                            <ActivityMetadataLine
-                              event={row.event}
-                              onOpen={() => onOpenResearchQuery(query)}
-                            />
-                          }
-                          replies={expandedReplies[query.nodeId] ?? query.delivery?.replies ?? []}
-                          loadingReplies={loadingRepliesFor === query.nodeId}
-                          archived={researchTree?.archivedAt != null}
-                          followed={Boolean(researchTree?.followed)}
-                          bookmarked={Boolean(researchTree?.bookmarked)}
-                          actions={noteActions}
-                          onToggleFollow={toggleFollow}
-                          onToggleBookmark={toggleBookmark}
-                          onOpen={() => onOpenResearchQuery(query)}
-                          onOpenChild={onOpenResearchQuery}
-                          onContextMenu={openContextMenu}
-                          onShowAllReplies={() => loadAllReplies(query)}
-                        />
-                      ) : (
-                        <ResearchQueryCard
-                          query={query}
-                          metadata={<ActivityMetadataLine event={row.event} />}
-                          recapPending={recapPendingNodeIds.has(query.nodeId)}
-                          followed={Boolean(researchTree?.followed)}
-                          bookmarked={Boolean(researchTree?.bookmarked)}
-                          onToggleFollow={toggleFollow}
-                          onToggleBookmark={toggleBookmark}
-                          onOpenChild={onOpenResearchQuery}
-                          onOpen={() => onOpenResearchQuery(query)}
-                          onContextMenu={openContextMenu}
-                        />
-                      )}
+                      <ResearchFeedPost
+                        action={feedPostAction(row.event)}
+                        time={
+                          Number.isFinite(row.event.occurredAt) ? (
+                            <time
+                              dateTime={new Date(row.event.occurredAt).toISOString()}
+                              title={new Date(row.event.occurredAt).toLocaleString()}
+                            >
+                              {formatRelativeTime(row.event.occurredAt)}
+                            </time>
+                          ) : null
+                        }
+                        title={query.kind === "note" ? null : (researchTree?.title ?? query.title)}
+                        renderBody={(clamp) => (
+                          <ResearchUserMessage className="research-feed-post-message">
+                            {query.kind === "note" ? (
+                              <NoteBody
+                                prompt={query.prompt}
+                                attachments={query.attachments}
+                                renderPrompt={clamp}
+                              />
+                            ) : (
+                              <ResearchMessageBody
+                                prompt={query.prompt}
+                                attachments={query.attachments}
+                                renderPrompt={clamp}
+                              />
+                            )}
+                          </ResearchUserMessage>
+                        )}
+                        recap={query.kind === "note" ? null : query.recap}
+                        recapPending={recapPendingNodeIds.has(query.nodeId)}
+                        running={query.kind !== "note" && isActiveResearchStatus(query.status)}
+                        selected={query.treeId === selectedTreeId}
+                        unread={
+                          Boolean(researchTree?.hasUnseenUpdate) && query.treeId !== selectedTreeId
+                        }
+                        replyCount={replies.count}
+                        replyCountLabel={replies.label}
+                        followed={Boolean(researchTree?.followed)}
+                        bookmarked={Boolean(researchTree?.bookmarked)}
+                        onToggleFollow={toggleFollow}
+                        onToggleBookmark={toggleBookmark}
+                        expanded={Boolean(expandedPosts[query.nodeId])}
+                        onToggleExpanded={() =>
+                          setExpandedPosts((current) => ({
+                            ...current,
+                            [query.nodeId]: !current[query.nodeId],
+                          }))
+                        }
+                        onOpen={() => onOpenResearchQuery(query)}
+                        onContextMenu={openContextMenu}
+                      />
                     </div>
                   </MeasuredActivityRow>
                 );

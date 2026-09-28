@@ -51,7 +51,7 @@ test("research summaries get typography only from the shared surface recipe", ()
   assert.match(summary, /font-size:\s*var\(--research-summary-font-size\)/);
   assert.match(summary, /line-height:\s*var\(--research-summary-line-height\)/);
 
-  const homePlacement = ruleBody(journalCss, ".recent-query-recap");
+  const homePlacement = ruleBody(journalCss, ".research-feed-post-summary");
   assert.doesNotMatch(homePlacement, /font(?:-size|-style|-weight)?\s*:/);
   assert.doesNotMatch(homePlacement, /line-height\s*:/);
 

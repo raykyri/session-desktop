@@ -313,8 +313,7 @@
 /* Live runs read as activity, not a count. Rotate a fixed, even-sized wrapper
    so the glyph stays visually stable, and center it against one- or two-line
    titles. */
-.research-sidebar-spinner,
-.recent-query-spinner {
+.research-sidebar-spinner {
   display: inline-grid;
   width: 14px;
   height: 14px;
@@ -327,8 +326,7 @@
   will-change: transform;
 }
 
-.research-sidebar-spinner svg,
-.recent-query-spinner svg {
+.research-sidebar-spinner svg {
   display: block;
 }
 
@@ -1438,9 +1436,13 @@
   left: 0;
 }
 
-/* The thread composer: the conversation's next turn, so it sits at the end
-   of the thread in the answer column on a card surface. */
+/* The thread composer: the conversation's next turn. It floats over the
+   bottom of the document while the reader scrolls through the answer, and
+   settles at the end of the thread in the answer column. */
 .research-thread-composer-row {
+  position: sticky;
+  z-index: 4;
+  bottom: 20px;
   margin-top: 30px;
 }
 
@@ -1456,6 +1458,7 @@
   border: 1px solid var(--surface-border-default);
   border-radius: 10px;
   background: var(--content-card-bg);
+  box-shadow: var(--shadow-md);
 }
 
 /* Held-⌘ badge for the follow-ups chord, on the thread composer card. The

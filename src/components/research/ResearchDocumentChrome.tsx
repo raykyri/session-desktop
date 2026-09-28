@@ -51,6 +51,9 @@ interface ResearchDocumentFrameProps {
   /** Single inert breadcrumb entry naming the page. */
   title: string;
   hidden?: boolean;
+  /** Back/forward pair at the header's left edge; on unless another column's
+   * header carries it. */
+  showHistoryNav?: boolean;
   /** Extra icon controls rendered beside the back/forward pair. */
   navActions?: ReactNode;
   headerActions?: ReactNode;
@@ -93,6 +96,7 @@ export function ResearchSidebarRestoreButton({
 export function ResearchDocumentFrame({
   title,
   hidden = false,
+  showHistoryNav = true,
   navActions,
   headerActions,
   children,
@@ -107,14 +111,16 @@ export function ResearchDocumentFrame({
     <div className="research-workspace" hidden={hidden}>
       <main className="research-document">
         <header className="research-document-header">
-          <ResearchHistoryNav
-            canGoBack={canGoBack}
-            canGoForward={canGoForward}
-            backTitle={backTitle}
-            forwardTitle={forwardTitle}
-            onBack={onBack}
-            onForward={onForward}
-          />
+          {showHistoryNav ? (
+            <ResearchHistoryNav
+              canGoBack={canGoBack}
+              canGoForward={canGoForward}
+              backTitle={backTitle}
+              forwardTitle={forwardTitle}
+              onBack={onBack}
+              onForward={onForward}
+            />
+          ) : null}
           {navActions}
           <div className="research-breadcrumb" aria-label="Research path">
             <span>

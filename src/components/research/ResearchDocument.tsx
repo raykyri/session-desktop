@@ -14,7 +14,7 @@ import {
   removeResearchHighlights,
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
-import { formatResearchModelSummary } from "../ActivityMetadataLine";
+import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import ResearchNoteDocument from "./ResearchNoteDocument";
 import type { NoteActions } from "./ResearchNote";
 import { formatRelativeTime } from "../../lib/transcriptSessions";
