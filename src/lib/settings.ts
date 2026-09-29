@@ -212,7 +212,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  colorTheme: "green-blob",
+  colorTheme: "orange-blob",
   appearance: "dark",
   bodyFontId: DEFAULT_BODY_FONT_ID,
   textSize: APP_TEXT_SIZE,
