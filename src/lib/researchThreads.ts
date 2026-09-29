@@ -21,6 +21,21 @@ export function isActiveResearchStatus(status: ResearchNodeStatus): boolean {
   return ACTIVE_RESEARCH_STATUSES.includes(status);
 }
 
+/** A cancelled pane run can still need process cleanup. SDK cancellation
+ * interrupts the session without a pane binding, so it needs no retry here. */
+export function canStopResearchNode(node: ResearchNode): boolean {
+  return (
+    isActiveResearchStatus(node.status) ||
+    (node.status === "cancelled" && Boolean(node.paneId))
+  );
+}
+
+/** The header acts on the visible inline thread, even when an earlier answer
+ * is selected. Callers pass only that chain, never the tree's other branches. */
+export function researchThreadStopTarget(chain: readonly ResearchNode[]): ResearchNode | null {
+  return [...chain].reverse().find(canStopResearchNode) ?? null;
+}
+
 /** Whether a settled node can take any follow-up at all: it finished, and —
  * for run nodes, whose follow-ups fork the native session — its checkpoint
  * was recorded. Documents, conversations, and notes launch fresh runs that

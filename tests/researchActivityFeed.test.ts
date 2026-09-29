@@ -57,8 +57,8 @@ test("Home renders the mixed feed as posts beside the query composer", () => {
   assert.match(html, /research-summary-text research-feed-post-summary is-clamped/);
   assert.match(html, /Query composer/);
   assert.match(html, /example.com\/finding/);
-  assert.match(html, /research-feed-post-author">You<\/span><span class="research-feed-post-action">saved a link</);
-  assert.match(html, /research-feed-post-action">asked Codex</);
+  assert.match(html, /research-feed-post-action">You saved a link</);
+  assert.match(html, /research-feed-post-action">You asked Codex</);
   // The generated title leads, then the question, then the summary.
   assert.ok(html.indexOf("research-feed-post-title\">Investigate<") < html.indexOf("Investigate this question"));
   assert.ok(html.indexOf("Investigate this question") < html.indexOf("Summary: The finding is X."));
@@ -66,7 +66,7 @@ test("Home renders the mixed feed as posts beside the query composer", () => {
   assert.doesNotMatch(html, /<iframe|View source|Connecting to/);
 });
 
-test("a post's footer holds the follow-up count, then Follow and Bookmark", () => {
+test("a post's footer holds the follow-up count, Follow, Bookmark, then time", () => {
   const html = renderFeed({
     items: [{ ...question, children: [{ ...question, nodeId: "child", parentNodeId: "node", prompt: "Follow up question here" }] }],
     researchTrees: [{ ...tree, followed: true, bookmarked: true }],
@@ -75,6 +75,7 @@ test("a post's footer holds the follow-up count, then Follow and Bookmark", () =
   assert.ok(html.indexOf("Summary: The finding is X.") < footer);
   assert.ok(footer < html.indexOf('aria-label="Open 1 follow-up"'));
   assert.ok(html.indexOf('aria-label="Open 1 follow-up"') < html.indexOf("research-thread-actions"));
+  assert.ok(html.indexOf("research-thread-bookmark") < html.indexOf("research-feed-post-time"));
   assert.match(html, /research-thread-follow is-active"[^>]*aria-pressed="true"[^>]*>Following<\/button>/);
   assert.match(html, /research-thread-bookmark is-active"[^>]*aria-pressed="true"[^>]*aria-label="Remove bookmark"/);
   // Follow-ups are counted, not listed; only the root item is a feed row.
@@ -253,7 +254,7 @@ test("Home offers report import and imported posts identify provenance", () => {
   }] });
   assert.match(html, /Import report/);
   assert.match(html, /accept=".md,text\/markdown"/);
-  assert.match(html, /research-feed-post-action">imported a report</);
+  assert.match(html, /research-feed-post-action">You imported a report</);
   assert.doesNotMatch(renderFeed({ view: "bookmarks", onImportReport: asyncNoop }), /Import report/);
 });
 
@@ -280,7 +281,7 @@ test("a network note is a post that counts its replies and follow-ups", () => {
     ],
   })] });
   assert.match(html, /Who ships component-model plugins\?/);
-  assert.match(html, /research-feed-post-action">posted to your network</);
+  assert.match(html, /research-feed-post-action">You posted to your network</);
   assert.match(html, /aria-label="Open 7 replies, 1 follow-up"/);
   // Replies and follow-ups open with the note; the post only counts them.
   assert.doesNotMatch(html, /We moved in March\./);

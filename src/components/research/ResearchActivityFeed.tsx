@@ -282,10 +282,6 @@ function ResearchActivityFeed({
     left: number;
     top: number;
   } | null>(null);
-  // Posts the reader expanded past four lines, keyed by node id. Held here
-  // rather than in the post so they survive the virtualized row unmounting
-  // while scrolled away.
-  const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({});
   // The post the reader opened. A thread can have several posts (its root and
   // follow-ups); only the one opened is selected. A thread opened from
   // elsewhere selects its newest post.
@@ -773,7 +769,7 @@ function ResearchActivityFeed({
           aria-label={`Refresh ${viewTitle}`}
           title={`Refresh ${viewTitle}`}
         >
-          <RotateCw size={16} aria-hidden="true" />
+          <RotateCw size={14} aria-hidden="true" />
         </button>
       ) : undefined}
     >
@@ -877,7 +873,6 @@ function ResearchActivityFeed({
                             )}
                           </ResearchUserMessage>
                         )}
-                        contentKey={query.prompt}
                         recap={query.kind === "note" ? null : query.recap}
                         recapPending={recapPendingNodeIds.has(query.nodeId)}
                         running={query.kind !== "note" && isActiveResearchStatus(query.status)}
@@ -891,13 +886,6 @@ function ResearchActivityFeed({
                         bookmarked={Boolean(researchTree?.bookmarked)}
                         onToggleFollow={toggleFollow}
                         onToggleBookmark={toggleBookmark}
-                        expanded={Boolean(expandedPosts[query.nodeId])}
-                        onToggleExpanded={() =>
-                          setExpandedPosts((current) => ({
-                            ...current,
-                            [query.nodeId]: !current[query.nodeId],
-                          }))
-                        }
                         onOpen={() => {
                           if (query.treeId !== selectedTreeId) {
                             openingTreeIdRef.current = query.treeId;

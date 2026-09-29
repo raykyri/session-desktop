@@ -4,9 +4,11 @@ import {
   canContinueThread,
   canFollowUpFrom,
   canRetryResearchNode,
+  canStopResearchNode,
   inlineChainFor,
   inlineChildOf,
   isActiveResearchStatus,
+  researchThreadStopTarget,
 } from "../src/lib/researchThreads";
 import type { ResearchNode, ResearchNodeStatus } from "../src/types";
 
@@ -63,6 +65,37 @@ test("branch children start their own chains", () => {
   assert.deepEqual(inlineChainFor(nodes, "branch-f1"), ["branch", "branch-f1"]);
   // The branch's chain never merges into the parent chain.
   assert.deepEqual(inlineChainFor(nodes, "root"), ["root", "f1"]);
+});
+
+test("Stop targets the running inline follow-up while an earlier answer is selected", () => {
+  const root = node("root");
+  const followup = node("followup", { parentNodeId: "root", inline: true, status: "running" });
+  const branch = node("branch", { parentNodeId: "root", status: "running" });
+  const nodes = [root, followup, branch];
+  for (const selected of ["root", "followup"]) {
+    const chain = inlineChainFor(nodes, selected).map((id) => nodes.find((item) => item.id === id)!);
+    assert.equal(researchThreadStopTarget(chain)?.id, "followup");
+  }
+  const branchChain = inlineChainFor(nodes, "branch").map((id) => nodes.find((item) => item.id === id)!);
+  assert.equal(researchThreadStopTarget(branchChain)?.id, "branch");
+  assert.equal(researchThreadStopTarget([root]), null);
+});
+
+test("Stop is available during queuing and startup and disappears after settlement", () => {
+  for (const status of ["queued", "starting", "running"] as const) {
+    assert.equal(canStopResearchNode(node("run", { status })), true);
+  }
+  for (const status of ["complete", "failed", "cancelled"] as const) {
+    assert.equal(researchThreadStopTarget([node("run", { status })]), null);
+  }
+  assert.equal(researchThreadStopTarget([]), null);
+});
+
+test("Retry stop remains available for incomplete pane cleanup but not settled SDK runs", () => {
+  const stopping = node("run", { status: "cancelled", paneId: "pane-1" });
+  assert.equal(researchThreadStopTarget([stopping])?.id, "run");
+  assert.equal(canStopResearchNode({ ...stopping, paneId: null }), false);
+  assert.equal(canStopResearchNode(node("sdk", { status: "cancelled", runtime: "sdk" })), false);
 });
 
 test("branch children never appear as inline children", () => {

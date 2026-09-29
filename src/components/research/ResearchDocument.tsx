@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Check, ChevronDown, Copy, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, Reply, ScrollText, Terminal, Trash2, Wrench, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, Reply, ScrollText, Square, Terminal, Trash2, Wrench, X } from "lucide-react";
 import {
   IS_MAC,
   isEditableTarget,
@@ -41,8 +41,10 @@ import {
   canContinueThread,
   canFollowUpFrom,
   canRetryResearchNode,
+  canStopResearchNode,
   inlineChainFor,
   isActiveResearchStatus,
+  researchThreadStopTarget,
 } from "../../lib/researchThreads";
 import {
   countResearchDocumentWords,
@@ -1147,6 +1149,7 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
   onRootMouseMove,
   onRootMouseLeave,
 }: ResearchAnswerPaneProps) {
+  const modelSummary = formatResearchModelSummary(node.adapter, node.model, node.origin);
   // One-click relaunch beside a settled failure/cancellation. Errors surface
   // through the parent's handler (the shared global banner), matching the
   // neighboring cancel control.
@@ -1274,6 +1277,7 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
               {view.answerWordCount.toLocaleString()} {view.answerWordCount === 1 ? "word" : "words"}
             </span>
             {durationText ? <span>{durationText}</span> : null}
+            {modelSummary ? <span>{modelSummary}</span> : null}
             {hiddenHighlightCount > 0 ? (
               <span
                 className="research-hidden-highlights"
@@ -1336,10 +1340,10 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
                   onClick={() => onCancelNode(node.id)}
                 >
                   {cancelling
-                    ? "Cancelling…"
+                    ? "Stopping…"
                     : node.status === "cancelled"
-                      ? "Retry cancel"
-                      : "Cancel"}
+                      ? "Retry stop"
+                      : "Stop"}
                 </button>
               </div>
             ) : null}
@@ -1521,9 +1525,6 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   queryQuote,
   prompt,
   attachments = [],
-  adapter,
-  model,
-  origin,
   createdAt,
   running = false,
   followed = false,
@@ -1539,13 +1540,10 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   queryQuote: string | null;
   prompt: string;
   attachments?: ResearchNode["attachments"];
-  adapter: string;
-  model?: string | null;
-  origin?: ResearchNode["origin"];
   /** When the root prompt was asked; shown as relative time on its footer. */
   createdAt?: number;
-  /** The question is still being answered: the footer row (thread actions,
-   * model, time) stays hidden until the answer settles. */
+  /** The question is still being answered: the footer row (thread actions
+   * and time) stays hidden until the answer settles. */
   running?: boolean;
   followed?: boolean;
   bookmarked?: boolean;
@@ -1558,7 +1556,6 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
     return null;
   }
   const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
-  const modelSummary = index === 0 ? formatResearchModelSummary(adapter, model, origin) : "";
   const askedAt = index === 0 && createdAt != null && Number.isFinite(createdAt) ? createdAt : null;
   const showFooter = index === 0 && !running;
   return (
@@ -1601,12 +1598,6 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
             className="research-prompt-footer-meta"
             title={askedAt !== null ? new Date(askedAt).toLocaleString() : undefined}
           >
-            {modelSummary}
-            {modelSummary && askedAt !== null ? (
-              <span className="research-prompt-footer-separator" aria-hidden="true">
-                {" · "}
-              </span>
-            ) : null}
             {askedAt !== null ? (
               <time dateTime={new Date(askedAt).toISOString()}>
                 {formatRelativeTime(askedAt)}
@@ -1693,9 +1684,6 @@ const ThreadSegment = memo(function ThreadSegment({
         queryQuote={node.queryAnchor?.exact ?? replyQuote}
         prompt={node.prompt}
         attachments={node.attachments}
-        adapter={node.adapter}
-        model={node.model}
-        origin={node.origin}
         createdAt={node.createdAt}
         running={isActiveResearchStatus(node.status)}
         followed={followed}
@@ -1812,6 +1800,7 @@ function ResearchDocument({
   // that started it shows the busy state, every other retry control disables.
   const [retryingNodeId, setRetryingNodeId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const cancelRequestInFlightRef = useRef(false);
   const [followupMenu, setFollowupMenu] = useState<FollowupMenu | null>(null);
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
   const [removingBranch, setRemovingBranch] = useState(false);
@@ -4556,10 +4545,24 @@ function ResearchDocument({
     selectNodeRef.current(nodeId);
   }, []);
   const handleCancelNode = useCallback((nodeId: string) => {
+    if (cancelRequestInFlightRef.current) {
+      return;
+    }
+    cancelRequestInFlightRef.current = true;
     setCancelling(true);
     onCancelRef.current(nodeId)
-      .catch((err) => onErrorRef.current(err instanceof Error ? err.message : String(err)))
-      .finally(() => setCancelling(false));
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        // Completion can beat the click to the backend. The desired stopped
+        // state is already reached; genuine cleanup failures still surface.
+        if (message !== "research run is not active") {
+          onErrorRef.current(message);
+        }
+      })
+      .finally(() => {
+        cancelRequestInFlightRef.current = false;
+        setCancelling(false);
+      });
   }, []);
   // Relaunches a settled node in place. Ref-guarded against double entry: the
   // clicked control disables itself, but a second control for the same node
@@ -4733,12 +4736,7 @@ function ResearchDocument({
     );
   }
 
-  const activeRun = isActiveResearchStatus(displayNode.status);
-  // Pane runs keep `paneId` bound until the process is reaped; SDK runs do
-  // not, so a cancelled SDK node is immediately retryable. Treating
-  // `runtime === "sdk"` as "still stopping" would hide Retry forever.
-  const cancellationNeedsRetry =
-    displayNode.status === "cancelled" && Boolean(displayNode.paneId);
+  const stopTarget = researchThreadStopTarget(chainNodes);
   const threadLength = chainNodes.length;
 
   // The thread composer acts on the ask segment (always branching), the
@@ -4773,8 +4771,10 @@ function ResearchDocument({
         followupMode === "branch" ||
         canContinueThread(detail.nodes, composerTarget)),
   );
-  const tailActive = Boolean(tailNode && isActiveResearchStatus(tailNode.status));
-  const waitingForThreadTail = !ask && followupMode === "thread" && tailActive;
+  const composerStopTarget =
+    !ask && followupMode === "thread" && tailNode && canStopResearchNode(tailNode)
+      ? tailNode
+      : null;
   const tailUnusable = Boolean(
     tailNode && (tailNode.status === "failed" || tailNode.status === "cancelled"),
   );
@@ -4794,10 +4794,10 @@ function ResearchDocument({
     : composerAwaitingCheckpoint
       ? "Waiting for the native session checkpoint before continuing."
       : !ask && followupMode === "thread" && tailUnusable
-        ? `The last follow-up ${tailNode?.status === "failed" ? "failed" : "was cancelled"} — ${
+        ? `Last follow-up ${tailNode?.status === "failed" ? "encountered an error" : "was cancelled"}. ${
             canRetryTail
-              ? "retry it, delete it, or branch instead."
-              : "delete it to continue the thread, or branch instead."
+              ? "Retry it, delete it, or branch instead."
+              : "Delete it to continue the thread, or branch instead."
           }`
         : !ask &&
             followupMode === "branch" &&
@@ -4810,11 +4810,9 @@ function ResearchDocument({
   // "Send". Ask mode is always a branch and says so in its own placeholder.
   const submitButtonLabel = submitting
     ? "Sending…"
-    : waitingForThreadTail
-      ? "Waiting..."
-      : !ask && followupMode === "branch"
-        ? "New branch"
-        : "Send";
+    : !ask && followupMode === "branch"
+      ? "New branch"
+      : "Send";
   const composerPlaceholder = ask
     ? "Ask about the highlighted text…"
     : followupMode === "branch"
@@ -4860,34 +4858,36 @@ function ResearchDocument({
           </button>
         </div>
       ) : null}
-      {!dockedAsk && shortcutHintsShown ? (
-        <span
-          className="pane-tab-shortcut-hint research-followup-shortcut-hint"
-          aria-hidden="true"
-        >
-          ⌘J
-        </span>
-      ) : null}
-      <textarea
-        ref={followupTextareaRef}
-        value={followup}
-        placeholder={composerPlaceholder}
-        aria-label="Follow-up question"
-        disabled={composerDisabled}
-        onChange={(event) => setFollowup(event.currentTarget.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault();
-            // ⌘↵ submits in the selected mode (what the button says);
-            // ⇧⌘↵ always branches, so the mode picker is never a required
-            // detour. A targeted ask is already a branch, so it ignores it.
-            void submitFollowup(!dockedAsk && event.shiftKey ? "branch" : undefined);
-          }
-        }}
-        // The thread composer floats as a one-line bar and grows as the
-        // reader types; the rail's ask composer opens roomier.
-        rows={dockedAsk ? 2 : 1}
-      />
+      <div className="research-followup-input">
+        {!dockedAsk && shortcutHintsShown ? (
+          <span
+            className="pane-tab-shortcut-hint research-followup-shortcut-hint"
+            aria-hidden="true"
+          >
+            ⌘J
+          </span>
+        ) : null}
+        <textarea
+          ref={followupTextareaRef}
+          value={followup}
+          placeholder={composerPlaceholder}
+          aria-label="Follow-up question"
+          disabled={composerDisabled}
+          onChange={(event) => setFollowup(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              // ⌘↵ submits in the selected mode (what the button says);
+              // ⇧⌘↵ always branches, so the mode picker is never a required
+              // detour. A targeted ask is already a branch, so it ignores it.
+              void submitFollowup(!dockedAsk && event.shiftKey ? "branch" : undefined);
+            }
+          }}
+          // The thread composer floats as a one-line bar and grows as the
+          // reader types; the rail's ask composer opens roomier.
+          rows={dockedAsk ? 2 : 1}
+        />
+      </div>
       <div className="research-followup-footer">
         {composerHint ? (
           <div className="research-followup-hint-row">
@@ -4913,20 +4913,38 @@ function ResearchDocument({
         ) : null}
         <div className="native-input-submit-actions">
           <div className="research-followup-send-group">
-            <button
-              className="control-button research-followup-send"
-              type="button"
-              disabled={!canSubmitFollowup}
-              onClick={() => void submitFollowup()}
-            >
-              <span>{submitButtonLabel}</span>
-              {!submitting && !waitingForThreadTail ? (
-                <ComposerSubmitShortcutGlyph
-                  requireCmdEnter
-                  className="shortcut-hint"
-                />
-              ) : null}
-            </button>
+            {composerStopTarget ? (
+              <button
+                className="control-button research-followup-send"
+                type="button"
+                disabled={cancelling}
+                onClick={() => handleCancelNode(composerStopTarget.id)}
+              >
+                <Square size={12} aria-hidden="true" />
+                <span>
+                  {cancelling
+                    ? "Stopping…"
+                    : composerStopTarget.status === "cancelled"
+                      ? "Retry stop"
+                      : "Stop"}
+                </span>
+              </button>
+            ) : (
+              <button
+                className="control-button research-followup-send"
+                type="button"
+                disabled={!canSubmitFollowup}
+                onClick={() => void submitFollowup()}
+              >
+                <span>{submitButtonLabel}</span>
+                {!submitting ? (
+                  <ComposerSubmitShortcutGlyph
+                    requireCmdEnter
+                    className="shortcut-hint"
+                  />
+                ) : null}
+              </button>
+            )}
             {!dockedAsk ? (
               <button
                 ref={modeMenuTriggerRef}
@@ -5062,8 +5080,7 @@ function ResearchDocument({
         contentError={contentErrorByNode[node.id] ?? null}
         segmentActive={segmentActive}
         showRunControls={
-          (segmentActive || (node.status === "cancelled" && Boolean(node.paneId))) &&
-          node.id !== displayNode.id
+          canStopResearchNode(node) && node.id !== stopTarget?.id
         }
         cancelling={cancelling}
         durationText={durationText}
@@ -5211,25 +5228,19 @@ function ResearchDocument({
                 <ScrollText size={15} aria-hidden="true" />
               </button>
             ) : null}
-            {activeRun || cancellationNeedsRetry ? (
+            {stopTarget ? (
               <button
                 type="button"
                 className="control-button research-cancel-run"
                 disabled={cancelling}
-                onClick={() => {
-                  const nodeId = displayNode.id;
-                  setCancelling(true);
-                  onCancel(nodeId)
-                    .catch((err) => onError(err instanceof Error ? err.message : String(err)))
-                    .finally(() => setCancelling(false));
-                }}
+                onClick={() => handleCancelNode(stopTarget.id)}
               >
-                <X size={14} aria-hidden="true" />
+                <Square size={12} aria-hidden="true" />
                 {cancelling
-                  ? "Cancelling…"
-                  : cancellationNeedsRetry
-                    ? "Retry cancel"
-                    : "Cancel"}
+                  ? "Stopping…"
+                  : stopTarget.status === "cancelled"
+                    ? "Retry stop"
+                    : "Stop"}
               </button>
             ) : null}
           </header>

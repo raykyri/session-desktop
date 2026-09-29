@@ -1447,8 +1447,10 @@
 }
 
 .research-followup-composer.is-thread {
-  /* Anchors the held-⌘ ⌘J badge to the card's corner. */
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   margin-bottom: 0;
   padding: 10px 12px;
   border: 1px solid var(--surface-border-default);
@@ -1456,16 +1458,43 @@
   background: var(--content-card-bg);
   box-shadow: var(--shadow-md);
   /* A one-line bar until the reader types more. */
-  --composer-min-height: 44px;
+  --composer-min-height: var(--control-h-md);
 }
 
-/* Held-⌘ badge for the follow-ups chord, on the thread composer card. The
-   base hint style centers on `top`, so pin it over the field's first line
-   (transient, and the field is empty whenever the chord is worth showing)
-   rather than straddling the card's border. */
+.research-followup-input {
+  position: relative;
+  min-width: 0;
+}
+
+.research-followup-composer.is-thread .research-followup-input {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.research-followup-composer.is-thread textarea {
+  display: block;
+  padding: 4px 9px;
+  line-height: calc(var(--control-h-md) - 10px);
+}
+
+.research-followup-composer.is-thread .research-followup-footer {
+  display: contents;
+}
+
+.research-followup-composer.is-thread .native-input-submit-actions {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.research-followup-composer.is-thread .research-followup-hint-row {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+/* Keep the held-⌘ badge inside the field, clear of the adjacent Send button. */
 .research-followup-shortcut-hint {
-  top: 22px;
-  right: 20px;
+  top: calc(var(--control-h-md) / 2);
+  right: 9px;
 }
 
 /* Terminal/cancel controls carried by a run streaming in a non-selected
@@ -1524,6 +1553,11 @@
 
 .research-followup-send-group > button {
   position: relative;
+}
+
+.research-followup-send-group > button > span,
+.research-followup-send-group > button > svg {
+  translate: 0 -1px;
 }
 
 .research-followup-send-group > button:focus-visible {
@@ -1630,8 +1664,7 @@
   font-size: calc(var(--research-meta-font-size) - 1px);
 }
 
-.research-followup-composer.is-disabled textarea,
-.research-followup-composer.is-disabled .native-input-submit-actions {
+.research-followup-composer.is-disabled textarea {
   opacity: 0.55;
 }
 
