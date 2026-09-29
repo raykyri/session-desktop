@@ -29,7 +29,6 @@
   pointer-events: none;
 }
 
-.journal-composer-container,
 .recent-activity-unit,
 .journal-empty-container,
 .recent-activity-load-boundary {
@@ -37,8 +36,9 @@
   padding-inline: var(--journal-content-padding);
 }
 
+/* The composer fills its cell edge to edge; it insets its own content. */
 .journal-composer-container {
-  padding-block: 26px;
+  width: 100%;
 }
 
 .journal-feed {
@@ -118,10 +118,6 @@
 
 .research-feed-column .journal-column::before {
   content: none;
-}
-
-.research-feed-column .journal-composer-container {
-  padding-block: 12px;
 }
 
 .research-feed-column .recent-activity-unit {
