@@ -48,8 +48,6 @@ const promptProps = {
   parentNodeId: null,
   queryQuote: null,
   prompt: "> foo\n> bar",
-  adapter: "claude",
-  model: "fable",
   onSelectNode: () => {},
 } as const;
 
@@ -58,17 +56,16 @@ test("research prompts preserve Markdown blockquotes", () => {
     createElement(ResearchSegmentPrompt, { ...promptProps, index: 0 }),
   );
 
-  assert.match(html, /Claude Fable/);
+  assert.doesNotMatch(html, /Claude Fable/);
   assert.doesNotMatch(html, /You asked/);
   assert.match(html, /research-user-message research-prompt/);
   assert.doesNotMatch(html, /research-content-card/);
   assert.doesNotMatch(html, /Reply to:/);
-  assert.ok(html.indexOf("<blockquote>") < html.indexOf("Claude Fable"));
   assert.match(html, /<blockquote>/);
   assert.match(html, /foo<br\/>[\n]?bar/);
 });
 
-test("the root prompt footer pairs thread actions with the model and relative time", () => {
+test("the root prompt footer pairs thread actions with relative time", () => {
   const html = renderToStaticMarkup(
     createElement(ResearchSegmentPrompt, {
       ...promptProps,
@@ -85,7 +82,7 @@ test("the root prompt footer pairs thread actions with the model and relative ti
   assert.match(html, /research-thread-follow is-active"[^>]*aria-pressed="true"/);
   assert.match(html, />Following<\/button>/);
   assert.match(html, /aria-label="Bookmark"/);
-  assert.match(html, /research-prompt-footer-meta"[^>]*>Claude Fable<span[^>]*> · <\/span><time[^>]*>3 hr ago<\/time>/);
+  assert.match(html, /research-prompt-footer-meta"[^>]*><time[^>]*>3 hr ago<\/time>/);
   // Follow-ups keep their reply line and never render the thread footer.
   const followUp = renderToStaticMarkup(
     createElement(ResearchSegmentPrompt, {
@@ -189,7 +186,7 @@ test("follow-up research prompts omit the asked-model line", () => {
   assert.match(html, /<blockquote>/);
 });
 
-test("branch prompts place Back above the asked-model line", () => {
+test("branch prompts place Back above the quoted passage and question", () => {
   const html = renderToStaticMarkup(
     createElement(ResearchSegmentPrompt, {
       ...promptProps,
@@ -202,7 +199,6 @@ test("branch prompts place Back above the asked-model line", () => {
   assert.match(html, /research-parent-link/);
   assert.ok(html.indexOf("Back") < html.indexOf("Selected answer passage"));
   assert.ok(html.indexOf("Selected answer passage") < html.indexOf("research-user-message"));
-  assert.ok(html.indexOf("Selected answer passage") < html.indexOf("Claude Fable"));
 });
 
 test("follow-up research prompts quote a truncated previous answer", () => {
@@ -258,14 +254,6 @@ test("inline or unavailable tweet URLs remain visible", () => {
   assert.equal(visibleResearchPrompt(prompt, [unavailable]), prompt);
 });
 
-
-test("imported report metadata hides its summary agent and model", () => {
-  const html = renderToStaticMarkup(createElement(ResearchSegmentPrompt, {
-    ...promptProps, index: 0, origin: "imported", createdAt: 100,
-  }));
-  assert.match(html, />Imported<span/);
-  assert.doesNotMatch(html, /Claude|Fable/);
-});
 
 test("long imported reports retain Markdown and their final conclusion", () => {
   const html = renderToStaticMarkup(createElement(ResearchTimelineItem, {

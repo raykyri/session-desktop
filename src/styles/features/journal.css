@@ -132,8 +132,8 @@
 /* — Feed posts — */
 
 /* A post: avatar, "You <action> · time", the thread title, the question
-   (clamped to four lines until expanded), the answer's summary, and a footer
-   with the follow-up count, Follow and Bookmark, and Show more. */
+   and summary (both clamped to four lines), and a footer
+   with the follow-up count, Follow and Bookmark. */
 .research-feed-post {
   --research-summary-font-size: var(--research-compact-font-size);
   --research-summary-line-height: var(--research-compact-line-height);
@@ -202,12 +202,6 @@
   line-height: var(--research-meta-line-height);
 }
 
-.research-feed-post-author {
-  flex: none;
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
 .research-feed-post-action {
   min-width: 0;
   overflow: hidden;
@@ -271,8 +265,7 @@
   color: var(--text-secondary);
 }
 
-/* Four lines of the question's prose, counted across its paragraphs; Show
-   more lifts the limit. */
+/* Four lines of the question's prose, counted across its paragraphs. */
 .research-feed-post-body.is-clamped {
   display: -webkit-box;
   overflow: hidden;
@@ -314,6 +307,9 @@
   gap: 10px;
   min-width: 0;
   min-height: 24px;
+  color: var(--feed-post-secondary);
+  font-size: var(--research-meta-font-size);
+  line-height: var(--research-meta-line-height);
 }
 
 .research-feed-post-count {
@@ -330,20 +326,6 @@
 }
 
 .research-feed-post-count:hover {
-  color: var(--text-interactive);
-}
-
-.research-feed-post-more {
-  min-height: 0;
-  margin-left: auto;
-  padding: 0;
-  border: 0;
-  color: var(--feed-post-secondary);
-  font-size: var(--research-meta-font-size);
-  background: transparent;
-}
-
-.research-feed-post-more:hover {
   color: var(--text-interactive);
 }
 

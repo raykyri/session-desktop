@@ -1,6 +1,5 @@
-import { useLayoutEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { LoaderCircle, Reply, UserRound } from "lucide-react";
+import { LoaderCircle, MessageCircle, Reply } from "lucide-react";
 import ResearchThreadActions from "./ResearchThreadActions";
 import { ResearchRecapPendingLine } from "./ResearchRecap";
 
@@ -8,25 +7,17 @@ function isInteractiveTarget(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest("a, button"));
 }
 
-/** True when an element clips its content (a clamped block with more text). */
-function isClipped(element: HTMLElement | null) {
-  return Boolean(element && element.scrollHeight > element.clientHeight + 1);
-}
-
 export interface ResearchFeedPostProps {
   /** "asked Claude", "posted to your network", … — follows "You" in the header. */
   action: string;
-  /** Relative time (and any context) after the action; omitted while running. */
+  /** Relative time in the footer after Bookmark; omitted while running. */
   time?: ReactNode;
   /** The thread's generated title, shown above the question. */
   title?: string | null;
   /** Renders the question or note body. The body passes its prompt text
-   * through `clamp`, which limits it to four lines until the post is expanded;
+   * through `clamp`, which limits it to four lines;
    * anything rendered outside it (link cards, embeds) shows in full. */
   renderBody: (clamp: (content: ReactNode) => ReactNode) => ReactNode;
-  /** Changes whenever the clamped text changes, so Show more is re-measured
-   * even when the clamped box keeps its size. */
-  contentKey: string;
   /** The answer's recap, shown as an italic "Summary:" line. */
   recap?: string | null;
   recapPending?: boolean;
@@ -41,22 +32,19 @@ export interface ResearchFeedPostProps {
   bookmarked?: boolean;
   onToggleFollow?: () => void;
   onToggleBookmark?: () => void;
-  expanded: boolean;
-  onToggleExpanded: () => void;
   onOpen: () => void;
   onContextMenu: (clientX: number, clientY: number) => void;
 }
 
-/** One item in the Home feed column: an avatar, "You <action> · time", the
+/** One item in the Home feed column: an avatar, "You <action>", the
  * thread title, the question clamped to four lines, the answer's summary, and
- * a footer with the follow-up count, Follow and Bookmark on the left and
- * Show more on the right. Follow and Bookmark wait until the answer settles. */
+ * a footer with the follow-up count, Follow, Bookmark and time.
+ * Follow and Bookmark wait until the answer settles. */
 export default function ResearchFeedPost({
   action,
   time,
   title,
   renderBody,
-  contentKey,
   recap,
   recapPending = false,
   running = false,
@@ -68,34 +56,13 @@ export default function ResearchFeedPost({
   bookmarked = false,
   onToggleFollow,
   onToggleBookmark,
-  expanded,
-  onToggleExpanded,
   onOpen,
   onContextMenu,
 }: ResearchFeedPostProps) {
-  // Callback refs (state, not refs) so a clamped block that remounts — a tweet
-  // resolving, a note switching between link card and text — is re-measured.
-  const [body, setBody] = useState<HTMLDivElement | null>(null);
-  const [summaryElement, setSummaryElement] = useState<HTMLParagraphElement | null>(null);
-  const [clipped, setClipped] = useState(false);
   const summary = recap?.trim() ?? "";
 
-  // Show more appears only when the collapsed question or summary is cut off.
-  // Measured rather than estimated so it follows the font, width and Markdown.
-  useLayoutEffect(() => {
-    if (expanded) return;
-    const measure = () => setClipped(isClipped(body) || isClipped(summaryElement));
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    if (body) observer.observe(body);
-    if (summaryElement) observer.observe(summaryElement);
-    return () => observer.disconnect();
-  }, [expanded, body, summaryElement, summary, contentKey]);
-
   const showActions = !running && onToggleFollow && onToggleBookmark;
-  const showMore = expanded || clipped;
-  const clampClass = expanded ? "" : " is-clamped";
+  const showTime = !running && Boolean(time);
   return (
     <div
       className={`research-feed-post${selected ? " is-selected" : ""}`}
@@ -108,7 +75,7 @@ export default function ResearchFeedPost({
     >
       <div className="research-feed-post-avatar">
         <span className="research-feed-post-avatar-glyph" aria-hidden="true">
-          <UserRound size={14} />
+          <MessageCircle size={14} />
         </span>
         {unread ? (
           <span className="research-feed-post-unread" role="img" aria-label="Updated" />
@@ -116,24 +83,7 @@ export default function ResearchFeedPost({
       </div>
       <div className="research-feed-post-main">
         <div className="research-feed-post-head">
-          <span className="research-feed-post-author">You</span>
-          <span className="research-feed-post-action">{action}</span>
-          {!running && time ? (
-            <>
-              <span aria-hidden="true">·</span>
-              {/* An untitled post (a note or saved link) opens from its time;
-                  its body's only other target may be the link itself. */}
-              <button
-                type="button"
-                className="control-button research-feed-post-time"
-                aria-label={title ? undefined : "Open post"}
-                tabIndex={title ? -1 : undefined}
-                onClick={onOpen}
-              >
-                {time}
-              </button>
-            </>
-          ) : null}
+          <span className="research-feed-post-action">You {action}</span>
         </div>
         {/* Clicking anywhere in the body opens the post; keyboard and assistive
             tech reach it through the title (or, untitled, the time), so the
@@ -156,8 +106,7 @@ export default function ResearchFeedPost({
           ) : null}
           {renderBody((content) => (
             <div
-              ref={setBody}
-              className={`research-feed-post-body${title ? "" : " is-lead"}${clampClass}`}
+              className={`research-feed-post-body${title ? "" : " is-lead"} is-clamped`}
             >
               {content}
             </div>
@@ -169,17 +118,14 @@ export default function ResearchFeedPost({
             </span>
           ) : null}
           {summary ? (
-            <p
-              ref={setSummaryElement}
-              className={`research-summary-text research-feed-post-summary${clampClass}`}
-            >
+            <p className="research-summary-text research-feed-post-summary is-clamped">
               Summary: {summary}
             </p>
           ) : recapPending && !running ? (
             <ResearchRecapPendingLine className="research-feed-post-summary" />
           ) : null}
         </div>
-        {replyCount > 0 || showActions || showMore ? (
+        {replyCount > 0 || showActions || showTime ? (
           <div className="research-feed-post-footer">
             {replyCount > 0 ? (
               <button
@@ -202,14 +148,17 @@ export default function ResearchFeedPost({
                 onToggleBookmark={onToggleBookmark}
               />
             ) : null}
-            {showMore ? (
+            {showTime ? (
+              /* An untitled post (a note or saved link) opens from its time;
+                 its body's only other target may be the link itself. */
               <button
                 type="button"
-                className="control-button research-feed-post-more"
-                aria-expanded={expanded}
-                onClick={onToggleExpanded}
+                className="control-button research-feed-post-time"
+                aria-label={title ? undefined : "Open post"}
+                tabIndex={title ? -1 : undefined}
+                onClick={onOpen}
               >
-                {expanded ? "Show less" : "Show more"}
+                {time}
               </button>
             ) : null}
           </div>
