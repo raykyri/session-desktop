@@ -148,8 +148,7 @@ function estimatedActivityRowHeight(row: VirtualActivityRow): number {
   const hasTweet = query.attachments?.some(
     (attachment) => attachment.status === "resolved" && attachment.tweet,
   );
-  const base = hasTweet ? 400 : 124;
-  return query.kind !== "note" && query.recap?.trim() ? base + 84 : base;
+  return hasTweet ? 400 : 124;
 }
 
 export interface VirtualActivityRange {

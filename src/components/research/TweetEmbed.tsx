@@ -343,14 +343,13 @@ export function TweetEmbed({ tweet, compact = false }: { tweet: TweetSnapshot; c
               <span className="journal-tweet-dot" aria-hidden="true">
                 ·
               </span>
-              <a
+              <time
                 className="journal-tweet-age"
-                href={tweet.url}
+                dateTime={tweet.createdAt}
                 title={formatTweetDate(tweet.createdAt) ?? undefined}
-                onClick={externalLinkClick(tweet.url)}
               >
                 {age}
-              </a>
+              </time>
             </>
           ) : null}
         </div>

@@ -19,7 +19,7 @@ function renderTweet(tweet: TweetSnapshot): string {
   return renderToStaticMarkup(createElement(TweetEmbed, { tweet }));
 }
 
-test("tweet card renders header, text, media, and linked timestamp", () => {
+test("tweet card renders header, text, media, and plain timestamp", () => {
   const html = renderTweet(snapshot("463440424141459456"));
   assert.match(html, /aria-label="Open tweet by @Interior"/);
   assert.match(html, /role="link"/);
@@ -29,7 +29,7 @@ test("tweet card renders header, text, media, and linked timestamp", () => {
   assert.match(html, /Sunsets don(&#x27;|')t get much better/);
   assert.match(html, /journal-tweet-media/);
   assert.match(html, /pbs\.twimg\.com\/media/);
-  assert.match(html, /journal-tweet-age"[^>]*href="https:\/\/x\.com\/Interior\/status\/463440424141459456"/);
+  assert.match(html, /<time class="journal-tweet-age"[^>]*>[^<]+<\/time>/);
 });
 
 test("tweet card renders quote tweets as a nested mini-card", () => {
@@ -54,13 +54,13 @@ test("tweet card offers Show more on a long post", () => {
 test("tweet card lays out avatar, inline header, and stats like a timeline", () => {
   const html = renderTweet(snapshot("20"));
   // Avatar sits outside the content column, and the header is one line:
-  // name, badge, handle, then the age linking to the post.
+  // name, badge, handle, then the plain timestamp.
   assert.match(html, /journal-tweet-avatar-link/);
   assert.match(html, /journal-tweet-main/);
   assert.match(html, /journal-tweet-author"[^>]*>jack<\/a>/);
   assert.match(html, /journal-tweet-verified/);
   assert.match(html, /journal-tweet-handle">@jack<\/span>/);
-  assert.match(html, /journal-tweet-age"[^>]*>[^<]+<\/a>/);
+  assert.match(html, /<time class="journal-tweet-age"[^>]*>[^<]+<\/time>/);
   // Counts read as metadata, never as controls.
   assert.match(html, /journal-tweet-stat/);
   assert.match(html, /309K/);
