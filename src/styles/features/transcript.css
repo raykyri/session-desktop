@@ -1418,7 +1418,7 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
 .turn-pane.is-expanded:not(.is-split-expanded):not(.is-reader-mode)
   .turn-markdown-table-wrap {
   /* Single-pane bleed: min(1020, viewport - sidebar - timeline padding). */
-  width: min(1020px, calc(100vw - var(--sidebar-width, 268px) - 48px));
+  width: min(1020px, calc(100vw - var(--sidebar-width, 208px) - 48px));
   position: relative;
   left: 50%;
   transform: translateX(-50%);

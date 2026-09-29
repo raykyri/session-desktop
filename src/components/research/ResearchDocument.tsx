@@ -2150,7 +2150,7 @@ function ResearchDocument({
   // Match the right-pane composer: fit the textarea to its contents up to the
   // shared cap, then let it scroll. The chain dependency also sizes a newly
   // mounted empty composer after a page switch.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const textarea = followupTextareaRef.current;
     if (textarea) {
       growComposerTextarea(textarea);

@@ -475,7 +475,6 @@ import type {
 } from "./types";
 import type { ShowHideShortcutSetting } from "./lib/api";
 
-const LEFT_SIDEBAR_DEFAULT_WIDTH = 268;
 
 interface ConversationHistorySegment {
   snapshotId: string;
@@ -534,6 +533,7 @@ function savedRemoteFromSettingsDraft(draft: RemoteSettingsDraft): SavedRemote {
   };
 }
 const LEFT_SIDEBAR_MIN_WIDTH = 208;
+const LEFT_SIDEBAR_DEFAULT_WIDTH = LEFT_SIDEBAR_MIN_WIDTH;
 const LEFT_SIDEBAR_MAX_WIDTH = 420;
 // Below this width, compact the research sidebar around its content.
 const LEFT_SIDEBAR_COMPACT_WIDTH = 270;
