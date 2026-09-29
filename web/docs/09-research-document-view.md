@@ -51,7 +51,7 @@ and did embed (`visibleResearchPrompt`, ported from
 `ResearchMessage.tsx:63`). The stored prompt is never rewritten: it is what
 the run was launched with, and a post that did not resolve leaves its
 permalink readable. The card itself is `TweetEmbed`, the same component the
-Home feed and a journal entry mount (`10-home-feed-journal-encyclopedia.md`
+Home feed and a journal entry mount (`10-home-feed-journal.md`
 §2); the desktop's side-by-side treatment for several posts in one message is
 not ported, so they stack.
 

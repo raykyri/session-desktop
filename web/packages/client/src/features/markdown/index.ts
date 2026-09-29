@@ -6,4 +6,3 @@ export * from "./ResearchMarkdown.js";
 export * from "./TranscriptActivity.js";
 export * from "./mathPlugins.js";
 export * from "./policy.js";
-export * from "./wikilinks.js";

@@ -1,5 +1,5 @@
 // `journal` and `feed` (`03-api-and-events.md` §2,
-// `10-home-feed-journal-encyclopedia.md` §3).
+// `10-home-feed-journal.md` §3).
 
 import { feedItems, feeds, journal, newId } from "@session/db";
 import type { JournalEntry, JournalTweetEntry } from "@session/shared";

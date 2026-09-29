@@ -1,4 +1,4 @@
-// The workspace switcher (`10-home-feed-journal-encyclopedia.md` §7, ported
+// The workspace switcher (`10-home-feed-journal.md` §7, ported
 // from `ResearchFolderSwitcher.tsx`).
 //
 // The desktop's workspaces were directories, so creating one opened a native
@@ -195,7 +195,7 @@ export function WorkspaceSwitcher({
       <NameDialog
         open={creating}
         title="New workspace"
-        description="Each workspace has separate threads, folders, and encyclopedia pages."
+        description="Each workspace has separate threads and folders."
         label="Workspace name"
         confirmLabel="Create"
         onOpenChange={setCreating}

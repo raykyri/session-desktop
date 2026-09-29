@@ -1,6 +1,6 @@
 // Everything that happens to a thread after it finishes
 // (`12-testing-linting-ci.md` §3.6): bookmarking and the two feeds, archiving,
-// importing a report, an encyclopedia page reached from a wikilink, and the
+// importing a report, and the
 // appearance settings surviving a reload.
 
 import { expect, test } from "@playwright/test";
@@ -78,29 +78,6 @@ test("a Markdown report is imported as a thread", async ({ page }) => {
 
   await page.waitForURL(/\/r\/[^/?]+/, { timeout: 30_000 });
   await expect(responseRoot(page)).toContainText("fan-out high");
-});
-
-test("a wikilink in an answer opens an encyclopedia page for the term", async ({ page }) => {
-  await signInAndOpenHome(page, { login: "e2e-encyclopedia" });
-  await startResearch(page, "Explain bloom filters.");
-  await waitForAnswer(page);
-
-  // The recorded answer contains `[[Bloom filter]]`, which renders as a
-  // wikilink rather than an href (`features/markdown/wikilinks.tsx`).
-  const wikilink = responseRoot(page).locator('[data-wikilink="Bloom filter"]').first();
-  await expect(wikilink).toBeVisible();
-  await wikilink.click();
-  // No page yet, so the click asks first (`features/markdown/ResearchMarkdown.tsx`).
-  await page.getByRole("button", { name: "Create page" }).click();
-
-  await page.waitForURL(/\/e\/bloom-filter/);
-  await expect(page.getByRole("heading", { level: 1 })).toContainText(/Bloom filter/i, {
-    timeout: 60_000,
-  });
-  // The page the metadata model writes carries its own wikilinks.
-  await expect(page.locator(".research-prose")).toContainText("probabilistic set", {
-    timeout: 60_000,
-  });
 });
 
 test("preserves unsubmitted prompt draft text across page reload", async ({ page }) => {

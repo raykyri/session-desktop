@@ -90,7 +90,7 @@ export const MODEL_REGISTRY: readonly ModelEntry[] = [
 ];
 
 /** The composer's preselected model, and the model every metadata run (title,
- * recap, encyclopedia page) uses regardless of the thread's own model. */
+ * recap, context summary) uses regardless of the thread's own model. */
 export const DEFAULT_MODEL_ID = "gemini-flash";
 
 /** Metadata runs always use `gemini-flash` (`04-agent-runtime.md` §9). */

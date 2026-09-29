@@ -1,11 +1,9 @@
-// Wire-shaped fixtures for the Home, sidebar, highlights and encyclopedia
+// Wire-shaped fixtures for the Home, sidebar, and highlights
 // tests. Kept beside `fixtures.ts` rather than inside it because those are the
 // research shapes the cache tests share; these are the feed and workspace
 // shapes only Phase 6's views read.
 
 import type {
-  EncyclopediaPage,
-  EncyclopediaPageSummary,
   JournalEntry,
   RecentActivityItem,
   RecentActivityPage,
@@ -108,39 +106,6 @@ export function highlightItem(
     prefix: "Memory is ",
     suffix: " across a group.",
     createdAt: Date.now(),
-    ...overrides,
-  };
-}
-
-export function pageSummary(
-  overrides: Partial<EncyclopediaPageSummary> = {},
-): EncyclopediaPageSummary {
-  return {
-    slug: "collective-memory",
-    term: "Collective memory",
-    title: "Collective memory",
-    status: "ready",
-    workspaceId: WORKSPACE_ID,
-    createdAt: 1_700_000_000_000,
-    updatedAt: 1_700_000_000_000,
-    sourceCount: 1,
-    ...overrides,
-  };
-}
-
-export function encyclopediaPage(overrides: Partial<EncyclopediaPage> = {}): EncyclopediaPage {
-  return {
-    slug: "collective-memory",
-    term: "Collective memory",
-    title: "Collective memory",
-    body: "A shared store of meaning.",
-    status: "ready",
-    model: "gemini-flash",
-    workspaceId: WORKSPACE_ID,
-    createdAt: 1_700_000_000_000,
-    updatedAt: 1_700_000_000_000,
-    sources: [],
-    links: [],
     ...overrides,
   };
 }

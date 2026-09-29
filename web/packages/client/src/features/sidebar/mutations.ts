@@ -1,5 +1,5 @@
 // The two sidebar writes that reorder things, with optimistic updates and
-// rollback (`10-home-feed-journal-encyclopedia.md` §7).
+// rollback (`10-home-feed-journal.md` §7).
 //
 // The reordering is applied optimistically so a drag does not wait on the
 // server round trip. They are plain functions over a `QueryClient` rather than

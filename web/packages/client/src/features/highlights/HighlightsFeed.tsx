@@ -1,4 +1,4 @@
-// The Highlights page (`10-home-feed-journal-encyclopedia.md` §4, ported from
+// The Highlights page (`10-home-feed-journal.md` §4, ported from
 // `ResearchHighlightsFeed.tsx`).
 //
 // Every saved passage across threads, newest first under day headers in local

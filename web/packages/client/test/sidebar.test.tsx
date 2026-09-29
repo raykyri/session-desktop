@@ -1,5 +1,5 @@
 // The sidebar's writes and its two stateful controls
-// (`10-home-feed-journal-encyclopedia.md` §7).
+// (`10-home-feed-journal.md` §7).
 
 import type { ResearchFolderState } from "@session/shared";
 import { QueryClient } from "@tanstack/react-query";

@@ -14,8 +14,6 @@
 // leaving the cache stale.
 
 import type {
-  EncyclopediaPage,
-  EncyclopediaPageSummary,
   JournalEntry,
   ParsedResearchEvent,
   RecentActivityItem,
@@ -80,7 +78,7 @@ export const EVENT_COALESCE_MS = 16;
  * in a row is one call, not five (`03-api-and-events.md` §3). */
 export const INTEREST_DEBOUNCE_MS = 200;
 
-/** The first event of every connection (`routers/encyclopedia.ts`). */
+/** The first event of every connection (`routers/events.ts`). */
 export const CONNECTION_READY = "connection.ready";
 
 /* -------------------------------------------------------------------------
@@ -410,46 +408,6 @@ function applyOtherEvent(client: QueryClient, event: SessionEvent): void {
       applyFeedItemRemoved(client, payload);
       return;
 
-    case "encyclopedia.page.updated": {
-      const page = payload["page"] as EncyclopediaPage | undefined;
-      if (!page || typeof page.slug !== "string") return;
-      client.setQueryData(queryKeys.encyclopediaPage(page.workspaceId, page.slug), page);
-      client.setQueryData<EncyclopediaPageSummary[]>(
-        queryKeys.encyclopedia(page.workspaceId),
-        (pages) => {
-          if (!pages) return pages;
-          const summary: EncyclopediaPageSummary = {
-            slug: page.slug,
-            term: page.term,
-            title: page.title,
-            status: page.status,
-            workspaceId: page.workspaceId,
-            createdAt: page.createdAt,
-            updatedAt: page.updatedAt,
-            sourceCount: page.sources.length,
-          };
-          const index = pages.findIndex((existing) => existing.slug === page.slug);
-          if (index === -1) return [...pages, summary];
-          const next = [...pages];
-          next[index] = summary;
-          return next;
-        },
-      );
-      return;
-    }
-
-    case "encyclopedia.page.removed": {
-      const workspaceId = payload["workspaceId"];
-      const slug = payload["slug"];
-      if (typeof workspaceId !== "string" || typeof slug !== "string") return;
-      client.removeQueries({ queryKey: queryKeys.encyclopediaPage(workspaceId, slug) });
-      client.setQueryData<EncyclopediaPageSummary[]>(
-        queryKeys.encyclopedia(workspaceId),
-        (pages) => (pages ? pages.filter((page) => page.slug !== slug) : pages),
-      );
-      return;
-    }
-
     case "journal.entry.updated": {
       const entry = payload["entry"] as JournalEntry | undefined;
       if (!entry || typeof entry.id !== "string") return;
@@ -497,7 +455,6 @@ function applyOtherEvent(client: QueryClient, event: SessionEvent): void {
         workspaces ? workspaces.filter((workspace) => workspace.id !== workspaceId) : workspaces,
       );
       client.removeQueries({ queryKey: queryKeys.folders(workspaceId) });
-      client.removeQueries({ queryKey: queryKeys.encyclopedia(workspaceId) });
       invalidate(client, ["trees"], ["highlightsFeed"]);
       return;
     }

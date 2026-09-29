@@ -136,15 +136,6 @@ is stored on the row and on the attachment (`xSyndication | xOembed`), so a
 reduced card is recognizable as one. A resolved snapshot is stored with its
 image URLs rewritten to `/embeds/<hash>` (§5).
 
-### `encyclopedia`
-| Procedure | Kind | Input → Output | Desktop |
-| --- | --- | --- | --- |
-| `encyclopedia.listPages` | Q | `{ workspaceId }` → `EncyclopediaPageSummary[]` | `encyclopedia_list_pages` |
-| `encyclopedia.getPage` | Q | `{ workspaceId, slug }` → `EncyclopediaPage \| null` | `encyclopedia_get_page` |
-| `encyclopedia.requestPage` | M | `EncyclopediaPageRequest` (without `adapter`/`model`) → `EncyclopediaPage` | `encyclopedia_request_page` (generated on `gemini-flash`) |
-| `encyclopedia.regeneratePage` | M | `{ workspaceId, slug }` → `EncyclopediaPage` | `encyclopedia_regenerate_page` |
-| `encyclopedia.deletePage` | M | `{ workspaceId, slug }` → void | `encyclopedia_delete_page` |
-
 ### `artifacts` (Phase 7)
 | Procedure | Kind | Input → Output | Desktop |
 | --- | --- | --- | --- |
@@ -208,8 +199,6 @@ unless noted:
 | `research.highlight.removed` | `{ nodeId, highlightId }` | |
 | `research.highlights.removed` | `{ nodeId, highlightIds }` | |
 | `research.recap.pending` | `{ nodeId, pending }` | recap job start/end, every exit path |
-| `encyclopedia.page.updated` | `{ page }` | request, regenerate, completion |
-| `encyclopedia.page.removed` | `{ workspaceId, slug }` | |
 | `workspace.created` / `updated` / `removed` | `{ workspace }` / `{ workspaceId }` | replaces `group.*` |
 | `folders.updated` | `{ workspaceId, state }` | new (desktop kept folders client-side) |
 | `journal.entry.updated` | `{ entry }` | add, hydrate, update, restore |

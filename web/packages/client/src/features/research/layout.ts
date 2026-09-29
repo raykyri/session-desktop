@@ -45,7 +45,7 @@ export const TIMELINE_ITEM_RENDER_WINDOW = 100;
  * `.research-reading-surface`, `prose.css`; the desktop spelled the cap
  * literally at four sites to work around a WebKit `var()` bug the web does
  * not have — 09 §3). Every row of a segment (prompt, answer, trailing
- * composer) and an encyclopedia page's body lay out on this grid so they wrap
+ * composer) lay out on this grid so they wrap
  * at one edge whatever the viewport; under 900px the rail drops beneath and
  * the one column takes the width. */
 export const RESEARCH_COLUMNS_CLASS =

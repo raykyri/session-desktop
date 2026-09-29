@@ -24,7 +24,6 @@ interface Owned {
   highlightId: string;
   responseRevision: string;
   journalEntryId: string;
-  encyclopediaSlug: string;
 }
 
 /** Everything one account owns that another could name. */
@@ -68,11 +67,6 @@ async function seedOwner(
   });
 
   const entry = await caller.journal.add({ url: "https://example.com/an-article" });
-  const page = await caller.encyclopedia.requestPage({
-    workspaceId: workspace.id,
-    term: "Bloom filter",
-    source: { excerpt: "A bloom filter is probabilistic.", siblingTerms: [] },
-  });
 
   const owned: Owned = {
     workspaceId: workspace.id,
@@ -83,7 +77,6 @@ async function seedOwner(
     highlightId: highlight.id,
     responseRevision: committed.revision,
     journalEntryId: entry.id,
-    encyclopediaSlug: page.slug,
   };
   return owned;
 }
@@ -95,7 +88,6 @@ function ownerState(caller: Caller, owned: Owned) {
     caller.research.getNodeContent({ nodeId: owned.nodeId }),
     caller.highlights.listFeed({ workspaceId: owned.workspaceId }),
     caller.documents.list({ workspaceId: owned.workspaceId }),
-    caller.encyclopedia.listPages({ workspaceId: owned.workspaceId }),
     caller.feed.recentActivity({ scope: "workspace", workspaceId: owned.workspaceId }),
   ]);
 }
@@ -314,33 +306,6 @@ const ATTEMPTS: readonly Attempt[] = [
   {
     name: "journal.hydrateTweet",
     run: ({ caller, owned }) => caller.journal.hydrateTweet({ entryId: owned.journalEntryId }),
-  },
-
-  // ── encyclopedia ──────────────────────────────────────────────────────────
-  {
-    name: "encyclopedia.requestPage",
-    run: ({ caller, owned }) =>
-      caller.encyclopedia.requestPage({
-        workspaceId: owned.workspaceId,
-        term: "Bloom filter",
-        source: { excerpt: "A bloom filter is probabilistic.", siblingTerms: [] },
-      }),
-  },
-  {
-    name: "encyclopedia.regeneratePage",
-    run: ({ caller, owned }) =>
-      caller.encyclopedia.regeneratePage({
-        workspaceId: owned.workspaceId,
-        slug: owned.encyclopediaSlug,
-      }),
-  },
-  {
-    name: "encyclopedia.deletePage",
-    run: ({ caller, owned }) =>
-      caller.encyclopedia.deletePage({
-        workspaceId: owned.workspaceId,
-        slug: owned.encyclopediaSlug,
-      }),
   },
 
   // ── documents and workspaces ──────────────────────────────────────────────

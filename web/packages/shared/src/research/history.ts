@@ -71,10 +71,7 @@ export function researchHistoryForward(history: ResearchHistory): ResearchHistor
 /** Cross-page research visits. Recent Activity is a peer of a document, so
  * opening a query from the feed must push here — the document's own node
  * stack remounts empty and cannot remember the feed. */
-export type ResearchWorkspaceVisit =
-  | { kind: "journal" }
-  | { kind: "document"; treeId: string }
-  | { kind: "encyclopedia"; slug: string };
+export type ResearchWorkspaceVisit = { kind: "journal" } | { kind: "document"; treeId: string };
 
 export interface ResearchWorkspaceHistory {
   entries: ResearchWorkspaceVisit[];
@@ -104,8 +101,6 @@ export function sameResearchWorkspaceVisit(
   if (left.kind !== right.kind) return false;
   if (left.kind === "journal" && right.kind === "journal") return true;
   if (left.kind === "document" && right.kind === "document") return left.treeId === right.treeId;
-  if (left.kind === "encyclopedia" && right.kind === "encyclopedia")
-    return left.slug === right.slug;
   return false;
 }
 

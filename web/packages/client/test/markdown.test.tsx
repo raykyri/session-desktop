@@ -1,7 +1,7 @@
 // The one Markdown renderer (`08-design-system-and-styling.md` §5).
 //
 // What is worth pinning here is the behavior that is not react-markdown's:
-// wikilinks resolving through context, destinations passing `safeHref`, the
+// legacy markers rendering as text, destinations passing `safeHref`, the
 // oversize policy, and TeX staying readable as source until the math chunk
 // lands.
 
@@ -12,60 +12,12 @@ import {
   MARKDOWN_CHAR_LIMIT,
   OVERSIZED_MARKDOWN_POLICY,
   ResearchMarkdown,
-  WikilinkActionsProvider,
   resetMathPluginsForTests,
   sourceMayContainMath,
 } from "../src/features/markdown/index.js";
 
 test.afterEach(() => {
   cleanup();
-});
-
-test.serial("a wikilink renders as a link and activates through context", (t) => {
-  const activated: string[] = [];
-  render(
-    <WikilinkActionsProvider
-      actions={{
-        resolve: (term) => (term === "Collective memory" ? "ready" : null),
-        activate: (term) => activated.push(term),
-        interactive: true,
-      }}
-    >
-      <ResearchMarkdown markdown="Shared recall is [[Collective memory]] at scale." />
-    </WikilinkActionsProvider>,
-  );
-
-  const link = screen.getByRole("link", { name: "Collective memory" });
-  t.is(link.getAttribute("data-wikilink"), "Collective memory");
-  t.true(link.className.includes("is-ready"));
-  // No destination: a wikilink is an action, not a URL.
-  t.is(link.getAttribute("href"), null);
-  link.click();
-  t.deepEqual(activated, ["Collective memory"]);
-});
-
-test.serial("a wikilink without a page asks before creating one", async (t) => {
-  const activated: string[] = [];
-  render(
-    <WikilinkActionsProvider
-      actions={{ resolve: () => null, activate: (term) => activated.push(term), interactive: true }}
-    >
-      <ResearchMarkdown markdown="See [[Memory palace]]." />
-    </WikilinkActionsProvider>,
-  );
-
-  screen.getByRole("link", { name: "Memory palace" }).click();
-  t.deepEqual(activated, [], "a click alone does not write a page");
-  const confirm = await screen.findByRole("button", { name: "Create page" });
-  confirm.click();
-  t.deepEqual(activated, ["Memory palace"]);
-});
-
-test.serial("without a provider a wikilink is inert but still reads as linked", (t) => {
-  render(<ResearchMarkdown markdown="See [[Memory palace]]." />);
-  const link = screen.getByText("Memory palace");
-  t.is(link.getAttribute("data-wikilink"), "Memory palace");
-  t.is(link.getAttribute("title"), null);
 });
 
 test.serial("safeHref gates every destination the model wrote", (t) => {
@@ -161,4 +113,14 @@ test.serial("an aliased wikilink survives a GFM table cell", (t) => {
   // Two cells, not three: the alias pipe was escaped before parsing.
   t.is(document.querySelectorAll("tbody td").length, 2);
   t.truthy(screen.getByText("recall"));
+});
+
+test.serial("legacy wikilinks render as plain prose with no creation controls", (t) => {
+  render(
+    <ResearchMarkdown markdown="Shared recall is [[Collective memory|shared memory]] at scale." />,
+  );
+  t.true((document.body.textContent ?? "").includes("Shared recall is shared memory at scale."));
+  t.is(screen.queryByRole("link"), null);
+  t.is(screen.queryByRole("button", { name: "Create page" }), null);
+  t.is(document.querySelector("[data-wikilink]"), null);
 });

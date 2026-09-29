@@ -1,4 +1,4 @@
-// The Home feed (`10-home-feed-journal-encyclopedia.md` §2, §3).
+// The Home feed (`10-home-feed-journal.md` §2, §3).
 
 import type { RecentActivityPage } from "@session/shared";
 import type { InfiniteData } from "@tanstack/react-query";

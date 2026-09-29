@@ -39,9 +39,6 @@ export const queryKeys = {
   nodeContent: (nodeId: string) => ["nodeContent", nodeId] as const,
   activity: (scope: ActivityQueryScope) => ["activity", scope] as const,
   highlightsFeed: (workspaceId: string) => ["highlightsFeed", workspaceId] as const,
-  encyclopedia: (workspaceId: string) => ["encyclopedia", workspaceId] as const,
-  encyclopediaPage: (workspaceId: string, slug: string) =>
-    ["encyclopediaPage", workspaceId, slug] as const,
   activeNodes: () => ["activeNodes"] as const,
   adminUsers: () => ["adminUsers"] as const,
 } as const;
@@ -54,7 +51,6 @@ export const eventPatchedListKeys = [
   "activity",
   "highlightsFeed",
   "activeNodes",
-  "encyclopedia",
   "workspaces",
 ] as const;
 

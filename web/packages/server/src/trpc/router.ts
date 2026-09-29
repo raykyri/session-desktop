@@ -10,7 +10,7 @@ import {
   settingsRouter,
   usageRouter,
 } from "./routers/account.js";
-import { artifactsRouter, encyclopediaRouter, eventsRouter } from "./routers/encyclopedia.js";
+import { artifactsRouter, eventsRouter } from "./routers/events.js";
 import { highlightsRouter, recapsRouter } from "./routers/highlights.js";
 import { feedRouter, journalRouter } from "./routers/journal.js";
 import { documentsRouter, researchRouter } from "./routers/research.js";
@@ -32,7 +32,6 @@ export const appRouter = router({
   recaps: recapsRouter,
   feed: feedRouter,
   journal: journalRouter,
-  encyclopedia: encyclopediaRouter,
   artifacts: artifactsRouter,
   events: eventsRouter,
 });

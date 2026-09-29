@@ -1,5 +1,5 @@
 // The journal and the tweet proxy (`03-api-and-events.md` §2,
-// `10-home-feed-journal-encyclopedia.md` §3).
+// `10-home-feed-journal.md` §3).
 
 import { tweets } from "@session/db";
 import test from "ava";

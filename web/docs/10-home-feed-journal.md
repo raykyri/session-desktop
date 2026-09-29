@@ -1,8 +1,7 @@
-# Home feed, journal, encyclopedia, report import
+# Home feed, journal, report import
 
 Ports `src/components/research/ResearchActivityFeed.tsx` (1,483 lines),
-`ResearchHighlightsFeed.tsx`, `EncyclopediaPageView.tsx`,
-`EncyclopediaSidebarSection.tsx`, `ResearchReportImport.tsx`,
+`ResearchHighlightsFeed.tsx`, `ResearchReportImport.tsx`,
 `TweetEmbed.tsx`, `ResearchQueryComposer.tsx`, `AgentSetupGuide.tsx`, and
 the Home-related parts of `App.tsx`, onto the server API in
 `03-api-and-events.md`. Behavior reference: `docs/home.md`.
@@ -123,41 +122,6 @@ always uses `gemini-flash` for the recap); server inserts a `complete` root
 (imported reports bypass the length cutoffs), emits `research.tree.created`.
 Limits: 10,000 words / 10 MiB with the same messages as the composer.
 
-## 6. Encyclopedia
-
-Sidebar section (`EncyclopediaSidebarSection`): alphabetical
-`encyclopedia.listPages` for the scoped workspace; hidden until the first
-page exists.
-
-Page view (`/e/$slug`, `EncyclopediaPageView.tsx`): title, a `Term:` line
-when the model's title differs from the wikilink term (`split_title`,
-`encyclopedia.rs:428`), status badge
-(`generating` spinner, `failed` with error and Retry → `regeneratePage`),
-Markdown body through the shared renderer with wikilinks active (onward links
-resolve within the same workspace), "Mentioned in" backlinks from
-`sources` (question or referring page title, excerpt), header actions
-Rewrite (`regeneratePage`) and Delete (`deletePage`, confirm). Events
-`encyclopedia.page.updated` patch both the summary list and the open page.
-
-Wikilink activation (`WikilinkActionsContext`): `resolve(term)` looks the
-slug up in the cached page list → `ready | generating | failed | missing`;
-`activate(term, element)` navigates to `/e/$slug` and, when missing or
-failed, first calls `encyclopedia.requestPage` with the source context. The
-renderer only calls `activate` for a missing or failed term after the reader
-confirms in a popover on the link ("Write an encyclopedia page for X?"), so
-a stray click on linked text does not start a model call. Source context:
-`{ nodeId, treeId, question: node.prompt, excerpt: <surrounding block text>,
-siblingTerms: <other wikilink terms in that block> }` (from a page:
-`pageSlug` instead of node/tree). The block text is taken from the nearest
-block-level ancestor of the clicked link, wikilinks stripped, capped at 1,500
-chars by the client (`shared` constant); the server stores excerpts up to
-4,000 chars (`encyclopedia.rs:40-48`).
-
-Generation (server, `04-agent-runtime.md` §9): `gemini-flash` with
-`Output.object`; `PAGE_LINKING_INSTRUCTION`; `split_title` tolerance;
-`normalize_page` JSON unwrapping; `links` recomputed; `generatedBy`
-recorded. The desktop's OpenRouter path and adapter choice are dropped.
-
 ## 7. Sidebar (`features/sidebar`)
 
 Port of `ResearchSidebarSection.tsx` (1,605 lines), `ResearchFolderSwitcher.tsx`,
@@ -165,7 +129,6 @@ and the sidebar parts of `App.tsx`:
 
 - Rows: Home, Bookmarks, Highlights. Their Cmd-digit chords resolve
   (`shared/app/shortcuts.ts`) however, navigation rows no longer display shortcut badges, as the `showShortcutHints` preference and its associated modifier badges have been removed.
-- Encyclopedia section.
 - Research list: folders (collapsible, starred first), trees with status dot,
   unseen-update and unseen-failure badges, running count, star, multi-select
   (Shift/Cmd-click), drag reorder with pointer gaps (`researchFolders.ts` drag

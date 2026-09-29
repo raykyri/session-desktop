@@ -1,4 +1,4 @@
-// The feed's journal cards (`10-home-feed-journal-encyclopedia.md` §2, ported
+// The feed's journal cards (`10-home-feed-journal.md` §2, ported
 // from `ResearchActivityFeed.tsx:208-312`).
 //
 // Link entries render in URL cards. Social posts render directly as tweet cards

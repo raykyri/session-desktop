@@ -12,7 +12,6 @@ import { z } from "zod";
 
 import { queryKeys } from "../api/cache.js";
 import {
-  encyclopediaQueryOptions,
   foldersQueryOptions,
   meQueryOptions,
   runtimeConfigQueryOptions,
@@ -22,7 +21,6 @@ import {
 } from "../api/queries.js";
 import { AdminPage } from "../routes/admin.js";
 import { BookmarksPage } from "../routes/bookmarks.js";
-import { EncyclopediaPage } from "../routes/encyclopedia.$slug.js";
 import { HighlightsPage } from "../routes/highlights.js";
 import { HomePage } from "../routes/home.js";
 import { LoginPage } from "../routes/login.js";
@@ -126,7 +124,6 @@ async function warmBootQueries(client: QueryClient): Promise<void> {
   await Promise.all([
     client.prefetchQuery(treesQueryOptions({ workspaceId })),
     client.prefetchQuery(foldersQueryOptions(workspaceId)),
-    client.prefetchQuery(encyclopediaQueryOptions(workspaceId)),
   ]);
 }
 
@@ -198,13 +195,6 @@ const researchRoute = createRoute({
   component: ResearchPage,
 });
 
-const encyclopediaRoute = createRoute({
-  getParentRoute: () => shellRoute,
-  path: "/e/$slug",
-  validateSearch: workspaceScopeSearchSchema,
-  component: EncyclopediaPage,
-});
-
 const settingsRoute = createRoute({
   getParentRoute: () => shellRoute,
   path: "/settings",
@@ -244,7 +234,6 @@ export const routeTree = rootRoute.addChildren([
     bookmarksRoute,
     highlightsRoute,
     researchRoute,
-    encyclopediaRoute,
     settingsRoute,
     adminRoute,
     ...devRoutes,

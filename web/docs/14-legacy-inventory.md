@@ -86,7 +86,6 @@ Edit:
 | `tsconfig.runtime.json` | `include` | drop `"web"` |
 | `README.md` | 57–70 | remove `dev:site` mention; add "Web application" section pointing at `web/docs` |
 | `docs/session-cutover.md` | 16, 47 | `SESSION_PUBLIC_ORIGIN` now configures the web app at `https://session.dev`; the old landing-page origin and Fly app name are no longer deployment contracts |
-| `src-tauri/src/encyclopedia.rs` | 564 | OpenRouter `HTTP-Referer` header changed to `https://session.dev` (desktop attribution; optional) |
 | `.env.example` (root) | GitHub and OpenRouter lines | move to `web/.env.example` |
 
 No `.github/` workflows exist today; `web.yml` is new. `docs/ghostty-removal-plan.md:182`

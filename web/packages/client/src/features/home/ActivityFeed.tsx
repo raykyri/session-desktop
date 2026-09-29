@@ -1,4 +1,4 @@
-// The Home and Bookmarks feed (`10-home-feed-journal-encyclopedia.md` §2, §3,
+// The Home and Bookmarks feed (`10-home-feed-journal.md` §2, §3,
 // ported from `ResearchActivityFeed.tsx`).
 //
 // The desktop hand-rolled its virtual canvas — cumulative offsets, a binary

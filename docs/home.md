@@ -45,17 +45,6 @@ newest first.
   Load older/Retry control when needed. Refresh reloads the current feed head.
 - Back/Forward buttons, Cmd/Ctrl-[ and ], Alt-Left/Right, and mouse history buttons
   use the same workspace history as research documents.
-- The Encyclopedia section between the journal rows and the research list holds
-  pages grown from wikilinks. Clicking a `[[Term]]` in an answer opens the term's
-  page, creating it on first click: the surrounding block and the other linked
-  terms in that block are sent to the answering model so it writes about the
-  sense the answer meant, as a neutral reference page rather than an answer to
-  the thread's question. With an OpenRouter key set in Settings, pages are
-  written by Gemini 3.8 Flash over OpenRouter (about 6 seconds); otherwise the
-  answering agent's CLI writes them. Pages are stored per research folder
-  under `.session/encyclopedia-v1/`, list the passages that mention them, and
-  link onward to other pages through their own wikilinks. The page header offers
-  Rewrite and Delete.
 
 The feed renders directly in the application. It has no iframe, template SDK,
 external source chooser, or separate development server. Use `npm run dev`
@@ -66,3 +55,7 @@ Saved links and X posts from the former journal were not migrated to notes; a
 leftover `journal` key in `.session/state.json` is discarded on load. The
 previous browser's session envelope is read only for the feed's scroll state;
 stored template URLs and browser routes no longer control the UI.
+
+Legacy `[[Term]]` and `[[Term|label]]` markers in saved answers render as plain
+text. Encyclopedia generation and navigation have been removed. Existing
+`.session/encyclopedia-v1/` files are left on disk but are no longer used.

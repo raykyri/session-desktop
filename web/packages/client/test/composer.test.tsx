@@ -1,5 +1,5 @@
 // The Home composer (`07-client-architecture.md` §6,
-// `10-home-feed-journal-encyclopedia.md` §1, §2).
+// `10-home-feed-journal.md` §1, §2).
 
 import type { ModelInfo } from "@session/shared";
 import { fireEvent, screen } from "@testing-library/react";

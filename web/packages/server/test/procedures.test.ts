@@ -71,11 +71,6 @@ test("guests read the public catalog and cannot mutate it", async (t) => {
     turns: [answerTurn(nodeId, "Collective memory is shared.")],
     outcome: { status: "complete" },
   });
-  const page = await signedIn.encyclopedia.requestPage({
-    workspaceId: workspace.id,
-    term: "Collective memory",
-    source: { nodeId, excerpt: "Collective memory is shared.", siblingTerms: [] },
-  });
 
   const guest = harness.caller(null);
   const listed = await guest.workspaces.list();
@@ -89,10 +84,6 @@ test("guests read the public catalog and cannot mutate it", async (t) => {
   t.is(content.node.id, nodeId);
   const activity = await guest.feed.recentActivity({ scope: "all" });
   t.is(activity.items.length, 2);
-  t.is(
-    (await guest.encyclopedia.getPage({ workspaceId: workspace.id, slug: page.slug }))?.slug,
-    page.slug,
-  );
 
   const otherSeesOwner = await otherCaller.research.listTrees({ workspaceId: workspace.id });
   t.is(otherSeesOwner.length, 0);
@@ -102,10 +93,6 @@ test("guests read the public catalog and cannot mutate it", async (t) => {
   await t.throwsAsync(guest.research.getNodeContent({ nodeId: otherTree.nodes[0]?.id ?? "" }), {
     message: /not found/,
   });
-  await t.throwsAsync(
-    guest.encyclopedia.getPage({ workspaceId: otherWorkspace.id, slug: page.slug }),
-    { message: /not found/ },
-  );
   await t.throwsAsync(guest.research.listActivity(), { message: /sign in/ });
   await t.throwsAsync(
     guest.research.createTree({
@@ -214,7 +201,7 @@ test("workspaces and folders behave as the sidebar expects", async (t) => {
   t.is((await caller.workspaces.list()).length, 1);
 });
 
-test("scopes feed activity and encyclopedia pages to the workspace", async (t) => {
+test("scopes feed activity to the workspace", async (t) => {
   const harness = createHarness(t);
   const user = harness.addUser("browser");
   const caller = harness.caller(user);
@@ -239,31 +226,6 @@ test("scopes feed activity and encyclopedia pages to the workspace", async (t) =
   const queries = await caller.feed.recentQueries({ limit: 10 });
   t.is(queries.items.length, 1);
   t.is((await caller.research.listActivity()).length, 0);
-
-  const page = await caller.encyclopedia.requestPage({
-    workspaceId: workspace.id,
-    term: "Skip List",
-    source: { nodeId, excerpt: "A skip list is a layered linked list.", siblingTerms: [] },
-  });
-  t.is(page.slug, "skip-list");
-  t.is(page.status, "generating");
-  t.deepEqual(harness.runs.metadata.at(-1), {
-    kind: "encyclopedia",
-    userId: user.id,
-    workspaceId: workspace.id,
-    slug: "skip-list",
-  });
-  t.is((await caller.encyclopedia.listPages({ workspaceId: workspace.id })).length, 1);
-  t.is(
-    (await caller.encyclopedia.getPage({ workspaceId: workspace.id, slug: "skip-list" }))?.slug,
-    "skip-list",
-  );
-  t.deepEqual(
-    await caller.encyclopedia.deletePage({ workspaceId: workspace.id, slug: "skip-list" }),
-    {
-      removed: true,
-    },
-  );
 });
 
 test("boot writes the Vertex credential and re-queues interrupted runs", async (t) => {

@@ -1,18 +1,16 @@
-// Everything inside the sidebar frame (`10-home-feed-journal-encyclopedia.md`
-// §7): the three top-level rows, the workspace switcher, the encyclopedia
-// section and the research list.
+// Everything inside the sidebar frame (`10-home-feed-journal.md`
+// §7): the three top-level rows, the workspace switcher, and the research list.
 //
 // Split out of `AppShell`'s `Sidebar` so the narrow-layout drawer and the
 // resizable column render the same thing rather than two divergent copies.
 
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Bookmark, Highlighter, Home } from "lucide-react";
 
 import { useSignedIn } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
-import { EncyclopediaSection } from "../encyclopedia/EncyclopediaSection.js";
 
-import { ResearchSidebarSection, routeParam } from "./ResearchSidebarSection.js";
+import { ResearchSidebarSection } from "./ResearchSidebarSection.js";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher.js";
 import { SIDEBAR_ROW, SIDEBAR_ROW_SELECTED } from "./rows.js";
 import { useWorkspaceScope } from "./scope.js";
@@ -30,9 +28,6 @@ const NAV_ITEMS = [
 export function SidebarBody() {
   const signedIn = useSignedIn();
   const { workspaceId, setScope } = useWorkspaceScope();
-  const activeSlug = useRouterState({
-    select: (state) => routeParam(state.matches.at(-1)?.params, "slug"),
-  });
   const navItems = signedIn ? NAV_ITEMS : NAV_ITEMS.filter((item) => item.to === "/");
 
   return (
@@ -58,7 +53,6 @@ export function SidebarBody() {
 
       <WorkspaceSwitcher workspaceId={workspaceId} onSelect={setScope} />
       <ResearchSidebarSection workspaceId={workspaceId} />
-      <EncyclopediaSection workspaceId={workspaceId} activeSlug={activeSlug} />
     </div>
   );
 }

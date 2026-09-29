@@ -188,7 +188,7 @@ function delay(ms: number, signal: AbortSignal | undefined): Promise<void> {
 }
 
 /** The JSON a metadata run's `Output.object` schema asks for. Keyed by the
- * schema's single property so `{title}`, `{recap}`, and `{page}` are told
+ * schema's single property so `{title}` and `{recap}` are told
  * apart without the caller passing a scenario (`04-agent-runtime.md` §9). */
 function metadataOutput(options: LanguageModelV4CallOptions): string | null {
   const format = options.responseFormat;
@@ -206,14 +206,6 @@ function metadataOutput(options: LanguageModelV4CallOptions): string | null {
       recap:
         "The answer defines the structure, gives its space and error trade-off, and names the " +
         "cases where it is the wrong choice.",
-    });
-  }
-  if ("page" in properties) {
-    return JSON.stringify({
-      page:
-        "# Bloom filter\n\nA space-efficient probabilistic set, introduced by " +
-        "[[Burton Howard Bloom]] and used in [[LSM tree]] storage engines to skip " +
-        "lookups that cannot hit.",
     });
   }
   return null;

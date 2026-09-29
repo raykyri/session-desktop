@@ -2,9 +2,7 @@ import test from "ava";
 
 import {
   MAX_TWEET_REFERENCE_PROMPT_BYTES,
-  PAGE_LINKING_INSTRUCTION,
   RESEARCH_LAUNCH_INSTRUCTION_MAX_BYTES,
-  RESEARCH_LINKING_INSTRUCTION,
   RESEARCH_SYSTEM_PROMPT,
   clampResearchLaunchInstruction,
   documentFollowupPrompt,
@@ -16,8 +14,6 @@ import {
 } from "../src/research/prompts.js";
 import type { ResearchMessageAttachment } from "../src/types/research.js";
 import type { TweetSnapshot } from "../src/types/tweet.js";
-
-const linkingBlock = `<research-linking>\n${RESEARCH_LINKING_INSTRUCTION}\n</research-linking>`;
 
 function utf8Bytes(value: string): number {
   return new TextEncoder().encode(value).length;
@@ -50,36 +46,6 @@ function attachment(snapshot: TweetSnapshot | undefined): ResearchMessageAttachm
     : { ...base, status: "resolved", fetchedAt: 2, tweet: snapshot };
 }
 
-test("the linking instruction is copied verbatim and cannot break its wrapper", (t) => {
-  t.true(
-    RESEARCH_LINKING_INSTRUCTION.startsWith(
-      "Mark key terms in your answer as wikilinks so Session can index and cross-reference them.",
-    ),
-  );
-  t.true(
-    RESEARCH_LINKING_INSTRUCTION.includes(
-      'wrap the item\'s name or head term at the start of the item, for example "- [[Item name]]: why it matters"',
-    ),
-  );
-  t.false(RESEARCH_LINKING_INSTRUCTION.includes("<"));
-  t.true(RESEARCH_LINKING_INSTRUCTION.includes("[[Term]]"));
-  t.true(RESEARCH_LINKING_INSTRUCTION.includes("list"));
-});
-
-test("the page linking instruction is copied verbatim", (t) => {
-  t.true(
-    PAGE_LINKING_INSTRUCTION.startsWith(
-      "Mark between 4 and 12 key terms as wikilinks so Session can cross-reference pages.",
-    ),
-  );
-  t.true(
-    PAGE_LINKING_INSTRUCTION.includes(
-      'Do not link generic words or broad fields (for example "drone", "misinformation", "surveillance", "machine learning"), and do not link the page\'s own term or title.',
-    ),
-  );
-  t.false(PAGE_LINKING_INSTRUCTION.includes("<"));
-});
-
 test("the research system prompt names the grounding tools and the citation rule", (t) => {
   t.regex(RESEARCH_SYSTEM_PROMPT, /web_search/);
   t.regex(RESEARCH_SYSTEM_PROMPT, /web_fetch/);
@@ -96,22 +62,18 @@ test("launch instructions wrap prompts in leading tagged blocks", (t) => {
   );
   t.is(
     sent,
-    `${linkingBlock}\n\n<research-instructions>\nAnswer concisely,\nin a few short paragraphs.\n</research-instructions>\n\nWhy is the sky blue?`,
+    `<research-instructions>\nAnswer concisely,\nin a few short paragraphs.\n</research-instructions>\n\nWhy is the sky blue?`,
   );
 });
 
 test("launch instructions follow a slash-command prompt", (t) => {
   const sent = promptWithResearchLaunchInstruction("/deep-research Why?", "Keep it short.");
   t.true(sent.startsWith("/deep-research Why?"));
-  t.true(
-    sent.endsWith(
-      `${linkingBlock}\n\n<research-instructions>\nKeep it short.\n</research-instructions>`,
-    ),
-  );
+  t.true(sent.endsWith(`<research-instructions>\nKeep it short.\n</research-instructions>`));
 });
 
-test("only the linking block is sent when no instruction is set", (t) => {
-  const expected = `${linkingBlock}\n\nWhy is the sky blue?`;
+test("prompts are unchanged when no instruction is set", (t) => {
+  const expected = `Why is the sky blue?`;
   t.is(promptWithResearchLaunchInstruction("Why is the sky blue?"), expected);
   t.is(promptWithResearchLaunchInstruction("Why is the sky blue?", null), expected);
   t.is(promptWithResearchLaunchInstruction("Why is the sky blue?", "   \n\t "), expected);

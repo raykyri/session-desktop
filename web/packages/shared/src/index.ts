@@ -19,10 +19,6 @@ export * from "./app/shortcuts.js";
 export * from "./app/sidebarMode.js";
 export * from "./app/taggedInstructions.js";
 
-export * from "./encyclopedia/pages.js";
-export * from "./encyclopedia/slug.js";
-export * from "./encyclopedia/title.js";
-
 export * from "./journal/activity.js";
 export * from "./journal/cursor.js";
 export * from "./journal/entries.js";
@@ -57,7 +53,6 @@ export * from "./research/threads.js";
 
 export * from "./types/account.js";
 export * from "./types/activity.js";
-export * from "./types/encyclopedia.js";
 export * from "./types/events.js";
 export * from "./types/journal.js";
 export * from "./types/research.js";

@@ -28,7 +28,7 @@ For running, testing, and deploying the app, start from the repository's
 | [07-client-architecture.md](07-client-architecture.md) | Client layout, routing, state management, API client, event bridge |
 | [08-design-system-and-styling.md](08-design-system-and-styling.md) | Tailwind v4 over the token system, Base UI, reusable components |
 | [09-research-document-view.md](09-research-document-view.md) | Porting `ResearchDocument.tsx`: timeline, highlights, follow-ups, recap, branches |
-| [10-home-feed-journal-encyclopedia.md](10-home-feed-journal-encyclopedia.md) | Home feed, composer with documents, journal/X posts, encyclopedia, sidebar |
+| [10-home-feed-journal.md](10-home-feed-journal.md) | Home feed, composer with documents, journal/X posts, sidebar |
 | [11-artifacts-and-browser.md](11-artifacts-and-browser.md) | Document preview replacing the native browser overlay |
 | [12-testing-linting-ci.md](12-testing-linting-ci.md) | AVA, Playwright, fixture providers, ESLint, Prettier, CI |
 | [13-deployment-fly.md](13-deployment-fly.md) | Fly app, Dockerfile, volume, secrets, backups, operations |

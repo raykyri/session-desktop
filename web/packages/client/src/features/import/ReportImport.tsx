@@ -1,4 +1,4 @@
-// Markdown report import (`10-home-feed-journal-encyclopedia.md` §5, ported
+// Markdown report import (`10-home-feed-journal.md` §5, ported
 // from `ResearchReportImport.tsx`).
 //
 // The Tauri drag-drop branch and `readResearchReport` are gone: the browser

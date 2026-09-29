@@ -1,8 +1,6 @@
-//! Wikilink syntax for key terms in research answers. The launch prompt asks
-//! the agent to mark terms as `[[Term]]` or `[[Canonical term|text as
-//! written]]`; the frontend renders those as links, and every plain-text
-//! derivation on this side (response previews, recap sources) keeps only the
-//! display text. Mirrors `src/lib/wikilinks.ts`; keep the two grammars in step.
+//! Compatibility for saved answers containing legacy wikilink markers.
+//! Renderers, previews, and recap sources retain only the display text.
+//! New research prompts do not request these markers.
 //!
 //! Grammar: `[[` body `]]` on one line. The body is a term, optionally followed
 //! by `|` and display text. Neither part may contain `[`, `]`, `|`, or a
@@ -39,26 +37,6 @@ pub fn strip_wikilinks(text: &str) -> Cow<'_, str> {
     }
     out.push_str(rest);
     Cow::Owned(out)
-}
-
-/// Canonical terms of every wikilink in `text`, in order of first appearance
-/// and without duplicates. Malformed links contribute nothing.
-pub fn wikilink_terms(text: &str) -> Vec<String> {
-    let mut terms: Vec<String> = Vec::new();
-    let mut rest = text;
-    while let Some(open) = rest.find("[[") {
-        let after = &rest[open + 2..];
-        match wikilink_parts(after) {
-            Some((body_len, term, _)) => {
-                if !terms.iter().any(|known| known == term) {
-                    terms.push(term.to_string());
-                }
-                rest = &after[body_len + 2..];
-            }
-            None => rest = &rest[open + 1..],
-        }
-    }
-    terms
 }
 
 fn part_is_valid(part: &str) -> bool {
@@ -135,15 +113,6 @@ mod tests {
     fn extra_opening_brackets_are_literal_prefixes() {
         assert_eq!(strip_wikilinks("[[[Term]]"), "[Term");
         assert_eq!(strip_wikilinks("[[[[Term]]"), "[[Term");
-    }
-
-    #[test]
-    fn terms_are_collected_once_in_order() {
-        assert_eq!(
-            wikilink_terms("[[Rust]] and [[Tokio|tokio's]] then [[Rust]] again, [[bad|x|y]]"),
-            vec!["Rust".to_string(), "Tokio".to_string()]
-        );
-        assert!(wikilink_terms("no links").is_empty());
     }
 
     #[test]

@@ -16,8 +16,6 @@ import {
   RESEARCH_JOURNAL_TAB_IDS,
   RESEARCH_JOURNAL_VIEWS,
   researchCycleTabIds,
-  researchEncyclopediaSlugFromTabId,
-  researchEncyclopediaTabId,
   researchJournalTabId,
   researchJournalViewFromTabId,
   researchTreeIdFromTabId,
@@ -193,43 +191,6 @@ test("research cycling includes the journal pages when there is one document", (
     assert.equal(cycleTabId(ids, ids[index], 1), next);
     assert.equal(cycleTabId(ids, ids[index], -1), previous);
   }
-});
-
-test("research cycling places encyclopedia pages between the journal and the trees", () => {
-  const research = group("research", "research");
-  const other = group("other", "research");
-  const page = (slug: string, workspaceId: string) => ({
-    slug,
-    term: slug,
-    title: slug,
-    status: "ready" as const,
-    workspaceId,
-    createdAt: 1,
-    updatedAt: 1,
-    sourceCount: 1,
-  });
-  const treeTabId = researchTreeTabId("tree");
-  const ids = researchCycleTabIds(
-    [],
-    [research, other],
-    [treeSummary("tree", research.id)],
-    research.id,
-    [page("alpha", research.id), page("beta", other.id), page("gamma", research.id)],
-  );
-
-  // Pages from another folder are not stops; scoped pages keep their list order.
-  const alpha = researchEncyclopediaTabId("alpha");
-  const gamma = researchEncyclopediaTabId("gamma");
-  assert.deepEqual(ids, [...RESEARCH_JOURNAL_TAB_IDS, alpha, gamma, treeTabId]);
-  assert.equal(cycleTabId(ids, RESEARCH_JOURNAL_TAB_IDS[RESEARCH_JOURNAL_TAB_IDS.length - 1], 1), alpha);
-  assert.equal(cycleTabId(ids, gamma, 1), treeTabId);
-  assert.equal(cycleTabId(ids, treeTabId, 1), RESEARCH_JOURNAL_TAB_IDS[0]);
-  // Page ids round-trip and are never mistaken for tree tabs or bare views.
-  assert.equal(researchEncyclopediaSlugFromTabId(alpha), "alpha");
-  assert.equal(researchEncyclopediaSlugFromTabId(treeTabId), null);
-  assert.equal(researchTreeIdFromTabId(alpha), null);
-  assert.equal(researchJournalViewFromTabId(alpha), "encyclopedia");
-  assert.equal(researchEncyclopediaSlugFromTabId(researchJournalTabId("encyclopedia")), null);
 });
 
 test("journal tab ids round-trip through the journal view", () => {
