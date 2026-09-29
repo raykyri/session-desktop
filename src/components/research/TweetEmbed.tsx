@@ -71,21 +71,28 @@ function TweetAvatar({
   );
 }
 
-function TweetText({ runs, className }: { runs: TweetTextRun[]; className: string }) {
+function TweetText({ runs, className, compact }: {
+  runs: TweetTextRun[];
+  className: string;
+  compact?: boolean;
+}) {
   if (runs.length === 0) {
     return null;
   }
   return (
     <p className={className}>
-      {runs.map((run, index) =>
-        run.kind === "link" && run.url ? (
+      {runs.map((run, index) => {
+        // Feed previews keep single line breaks (including lists), but omit
+        // blank lines without changing the saved tweet or its link targets.
+        const text = compact ? run.text.replace(/\r?\n(?:[\t ]*\r?\n)+/g, "\n") : run.text;
+        return run.kind === "link" && run.url ? (
           <a key={index} href={run.url} onClick={externalLinkClick(run.url)}>
-            {run.text}
+            {text}
           </a>
         ) : (
-          <span key={index}>{run.text}</span>
-        ),
-      )}
+          <span key={index}>{text}</span>
+        );
+      })}
     </p>
   );
 }
@@ -273,13 +280,13 @@ function TweetLinkCardView({ card }: { card: NonNullable<TweetSnapshot["card"]> 
  * look (header, text, media, quote, linked timestamp) with no wrapper
  * chrome of its own, so the feed reads as tweets rather than tweets inside
  * content items. Exported for the static-markup tests. */
-export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
+export function TweetEmbed({ tweet, compact = false }: { tweet: TweetSnapshot; compact?: boolean }) {
   const quoted = tweet.quoted;
   const authorUrl = `https://x.com/${tweet.author.handle}`;
   const age = formatTweetAge(tweet.createdAt);
   return (
     <article
-      className="journal-tweet"
+      className={`journal-tweet${compact ? " is-compact" : ""}`}
       aria-label={`Open tweet by @${tweet.author.handle}`}
       role="link"
       tabIndex={0}
@@ -350,7 +357,7 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
             Replying to <span>@{tweet.replyTo.handle}</span>
           </p>
         ) : null}
-        <TweetText runs={tweet.runs} className="journal-tweet-text" />
+        <TweetText runs={tweet.runs} className="journal-tweet-text" compact={compact} />
         {tweet.partial ? (
           <a
             className="journal-tweet-more"
@@ -400,7 +407,7 @@ export function TweetEmbed({ tweet }: { tweet: TweetSnapshot }) {
               {quoted.author.verified ? <VerifiedBadge /> : null}
               <span className="journal-tweet-handle">@{quoted.author.handle}</span>
             </div>
-            <TweetText runs={quoted.runs} className="journal-tweet-text is-quote" />
+            <TweetText runs={quoted.runs} className="journal-tweet-text is-quote" compact={compact} />
             {quoted.partial ? (
               <span className="journal-tweet-more">Show more</span>
             ) : null}

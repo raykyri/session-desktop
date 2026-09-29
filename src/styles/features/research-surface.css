@@ -52,6 +52,7 @@
    composer. */
 .research-document-scroll:has(.research-thread-composer-row) {
   scroll-padding-bottom: 140px;
+  padding-bottom: 0;
 }
 
 .research-content-placeholder {
@@ -295,6 +296,11 @@
   min-width: 0;
 }
 
+.journal-tweet.is-compact {
+  --research-body-font-size: var(--research-compact-font-size);
+  --research-body-line-height: var(--research-compact-line-height);
+}
+
 .journal-tweet-head {
   display: flex;
   align-items: baseline;
@@ -360,7 +366,7 @@ a.journal-tweet-author:hover {
 .journal-tweet-handle {
   flex: 0 1 auto;
   color: var(--text-subtle);
-  font-size: calc(var(--fs-input) - 0.5px);
+  font-size: var(--research-body-font-size);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -370,7 +376,7 @@ a.journal-tweet-author:hover {
 .journal-tweet-age {
   flex: none;
   color: var(--text-subtle);
-  font-size: calc(var(--fs-input) - 0.5px);
+  font-size: var(--research-body-font-size);
   text-decoration: none;
 }
 
@@ -414,7 +420,7 @@ a.journal-tweet-author:hover {
   display: inline-block;
   margin-top: 2px;
   color: var(--accent-color);
-  font-size: calc(var(--fs-input) - 0.5px);
+  font-size: var(--research-body-font-size);
   text-decoration: none;
 }
 

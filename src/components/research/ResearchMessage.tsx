@@ -114,7 +114,7 @@ export function ResearchMessageBody({
               className="research-message-attachment"
               key={`${tweet.id}:${index}`}
             >
-              <TweetEmbed tweet={tweet} />
+              <TweetEmbed tweet={tweet} compact={variant === "compact"} />
             </div>
           ))}
         </div>

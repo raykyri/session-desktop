@@ -135,6 +135,8 @@
    (clamped to four lines until expanded), the answer's summary, and a footer
    with the follow-up count, Follow and Bookmark, and Show more. */
 .research-feed-post {
+  --research-summary-font-size: var(--research-compact-font-size);
+  --research-summary-line-height: var(--research-compact-line-height);
   --feed-post-secondary: var(--text-subtle);
   --feed-post-bg: var(--research-workspace-bg);
   display: flex;
