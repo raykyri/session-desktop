@@ -10,7 +10,10 @@ register("./svgStubLoader.mjs", import.meta.url);
 const {
   default: ResearchQueryComposer,
   askModeShowsAiControls,
+  parseResearchModelChoice,
   researchEffortOptionsFor,
+  researchModelChoiceValue,
+  researchModelOptions,
 } = await import("../src/components/research/ResearchQueryComposer");
 const { noteBodyIsSingleUrl } = await import("../src/components/research/ResearchNote");
 
@@ -54,15 +57,16 @@ function renderComposer() {
   );
 }
 
-test("the composer offers both recipients and opens on Ask network", () => {
+test("the composer offers both recipients and opens on Post", () => {
   const html = renderComposer();
 
-  assert.match(html, /aria-label="Ask"/);
-  assert.match(html, /<button[^>]*aria-pressed="true"[^>]*>Ask network<\/button>/);
-  assert.match(html, /<button[^>]*aria-pressed="false"[^>]*>Ask AI<\/button>/);
-  assert.ok(html.indexOf("Ask network") < html.indexOf("Ask AI"));
+  assert.match(html, /role="group" aria-label="Recipient"/);
+  assert.match(html, /<button[^>]*aria-pressed="true"[^>]*>Post<\/button>/);
+  assert.match(html, /<button[^>]*aria-pressed="false"[^>]*>Ask<\/button>/);
+  assert.ok(html.indexOf(">Post<") < html.indexOf(">Ask<"));
+  // The recipient row sits above the prompt.
+  assert.ok(html.indexOf("new-research-header") < html.indexOf("<textarea"));
   assert.doesNotMatch(html, /new-research-model-controls/);
-  assert.doesNotMatch(html, /command-launcher-adapter-select/);
   // Network mode posts a note rather than starting research.
   assert.match(html, /placeholder="Ask your network, or paste a link to save"/);
   assert.match(html, /aria-label="Post to network"/);
@@ -87,6 +91,33 @@ test("Claude reasoning options omit the word effort", () => {
     "Max",
     "Ultracode",
   ]);
+});
+
+test("the Ask picker lists each ready agent's models and one row per unready agent", () => {
+  const unready = { ...adapter("codex"), researchReadiness: "missing" as const };
+  const options = researchModelOptions([adapter("claude"), unready]);
+
+  assert.deepEqual(
+    options.map((option) => [option.value, option.label, Boolean(option.disabled)]),
+    [
+      ["claude:fable", "Fable", false],
+      ["claude:opus", "Opus", false],
+      ["claude:sonnet", "Sonnet", false],
+      ["claude:custom", "Custom", false],
+      ["codex:", "codex", true],
+    ],
+  );
+  // Agents are separated, and every row carries its agent's icon.
+  assert.equal(options[4].dividerBefore, true);
+  assert.ok(options.every((option) => option.iconSrc !== undefined));
+});
+
+test("a model choice value round-trips to its agent and preset", () => {
+  assert.deepEqual(parseResearchModelChoice(researchModelChoiceValue("codex", "gpt-5.6-sol")), {
+    adapter: "codex",
+    preset: "gpt-5.6-sol",
+  });
+  assert.deepEqual(parseResearchModelChoice("codex:"), { adapter: "codex", preset: "" });
 });
 
 test("network mode hides AI controls", () => {

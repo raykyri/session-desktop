@@ -67,14 +67,57 @@ export function researchEffortOptionsFor(
  * itself is not built yet); a body that is a single URL is saved as a link or
  * post instead of asked. */
 const ASK_MODES = [
-  { value: "network", label: "Ask network" },
-  { value: "ai", label: "Ask AI" },
+  { value: "network", label: "Post" },
+  { value: "ai", label: "Ask" },
 ] as const;
 
 type AskMode = (typeof ASK_MODES)[number]["value"];
 
 export function askModeShowsAiControls(askMode: AskMode) {
   return askMode === "ai";
+}
+
+/* The Ask picker lists every agent's models in one menu, so each option's
+   value carries both. Adapter ids contain no ":", so the first one splits. */
+export function researchModelChoiceValue(adapterId: string, preset: string) {
+  return `${adapterId}:${preset}`;
+}
+
+export function parseResearchModelChoice(value: string) {
+  const separator = value.indexOf(":");
+  return separator === -1
+    ? { adapter: value, preset: "" }
+    : { adapter: value.slice(0, separator), preset: value.slice(separator + 1) };
+}
+
+/** One option per model preset of each research-ready agent, grouped by agent
+ * and marked with its icon; an agent that cannot run research yet is a single
+ * disabled row naming why. */
+export function researchModelOptions(adapters: AgentAdapterMetadata[]): LauncherSelectOption[] {
+  return adapters.flatMap((candidate, adapterIndex) => {
+    const icon = {
+      iconSrc: ADAPTER_ICON_BY_ID[candidate.id],
+      iconClassName: adapterIconClassName(candidate.id),
+    };
+    if (!adapterCanLaunchResearch(candidate)) {
+      return [
+        {
+          value: researchModelChoiceValue(candidate.id, ""),
+          label: candidate.label,
+          ...icon,
+          detail: researchReadinessLabel(candidate),
+          disabled: true,
+          dividerBefore: adapterIndex > 0,
+        },
+      ];
+    }
+    return modelPresetsFor(candidate.id).map((preset, presetIndex) => ({
+      value: researchModelChoiceValue(candidate.id, preset),
+      label: formatLauncherModelLabel(candidate.id, preset),
+      ...icon,
+      dividerBefore: adapterIndex > 0 && presetIndex === 0,
+    }));
+  });
 }
 
 interface ResearchQueryComposerProps {
@@ -89,7 +132,7 @@ interface ResearchQueryComposerProps {
     effort: string | null;
     workspaceId: string | null;
   }) => Promise<void>;
-  /** Ask network: creates a note. The selected agent and model are stored as
+  /** Post: creates a note. The selected agent and model are stored as
    * the default for the note's AI follow-ups. */
   onPost: (input: {
     body: string;
@@ -228,7 +271,6 @@ export default function ResearchQueryComposer({
 
   // A stale choice (left over from another adapter) silently falls back to the
   // adapter's first preset, so the trigger always shows what will launch.
-  const modelPresets = modelPresetsFor(adapter);
   const selectedModel = selectedModelPreset(adapter, modelChoice);
   const resolvedModel =
     selectedModel === CUSTOM_MODEL ? customModel.trim() || null : selectedModel;
@@ -301,27 +343,16 @@ export default function ResearchQueryComposer({
         ? "Starting research"
         : "Start research";
 
-  const adapterOptions: LauncherSelectOption[] = adapters.map((candidate, index) => ({
-    value: candidate.id,
-    label: candidate.label,
-    iconSrc: ADAPTER_ICON_BY_ID[candidate.id],
-    iconClassName: adapterIconClassName(candidate.id),
-    detail: researchReadinessLabel(candidate),
-    disabled: !adapterCanLaunchResearch(candidate),
-    dividerBefore:
-      !adapterCanLaunchResearch(candidate) &&
-      index > 0 &&
-      adapterCanLaunchResearch(adapters[index - 1]),
-  }));
+  const modelOptions = useMemo(() => researchModelOptions(adapters), [adapters]);
 
   function cycleAdapter() {
-    if (adapterOptions.length === 0) {
+    const readyAdapters = adapters.filter(adapterCanLaunchResearch);
+    if (readyAdapters.length === 0) {
       return;
     }
-    const enabledOptions = adapterOptions.filter((option) => !option.disabled);
-    const currentIndex = enabledOptions.findIndex((option) => option.value === adapter);
-    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % enabledOptions.length;
-    const nextAdapter = enabledOptions[nextIndex]?.value;
+    const currentIndex = readyAdapters.findIndex((candidate) => candidate.id === adapter);
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % readyAdapters.length;
+    const nextAdapter = readyAdapters[nextIndex]?.id;
     if (nextAdapter && nextAdapter !== adapter) {
       sessionDraftTouchedRef.current = true;
       setAdapter(nextAdapter);
@@ -337,7 +368,7 @@ export default function ResearchQueryComposer({
 
   return (
     <form
-      className="command-launcher new-research-launcher"
+      className="new-research-launcher"
       aria-label="New research"
       onKeyDown={(event) => {
         const aiControlsVisible = askModeShowsAiControls(askMode);
@@ -362,10 +393,69 @@ export default function ResearchQueryComposer({
         void submit();
       }}
     >
+      <div className="new-research-header">
+        <div className="new-research-ask-mode" role="group" aria-label="Recipient">
+          {ASK_MODES.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`new-research-ask-mode-button${
+                askMode === option.value ? " is-active" : ""
+              }`}
+              aria-pressed={askMode === option.value}
+              onClick={() => setAskMode(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        {askModeShowsAiControls(askMode) ? (
+          <div className="new-research-model-controls">
+            {selectedModel === CUSTOM_MODEL ? (
+              <input
+                type="text"
+                value={customModel}
+                placeholder="Model name"
+                aria-label="Custom model"
+                onChange={(event) => {
+                  sessionDraftTouchedRef.current = true;
+                  setCustomModel(event.currentTarget.value);
+                }}
+              />
+            ) : null}
+            {/* One picker for agent and model; the trigger shows only the
+                agent's icon and names the model in its tooltip. */}
+            <LauncherSelect
+              iconOnly
+              value={researchModelChoiceValue(adapter, selectedModel)}
+              options={modelOptions}
+              ariaLabel="Model"
+              onChange={(choice) => {
+                const next = parseResearchModelChoice(choice);
+                sessionDraftTouchedRef.current = true;
+                setError(null);
+                setAdapter(next.adapter);
+                setModelChoice(next.preset || null);
+              }}
+              submenu={
+                effortOptions
+                  ? {
+                      label: "Effort",
+                      ariaLabel: "Effort",
+                      value: selectedEffort,
+                      options: effortOptions,
+                      onChange: setEffortChoice,
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        ) : null}
+      </div>
       <div className="new-research-composer">
         <textarea
           ref={promptRef}
-          className="command-launcher-input"
+          className="new-research-input"
           rows={2}
           value={prompt}
           placeholder={
@@ -384,95 +474,15 @@ export default function ResearchQueryComposer({
             }
           }}
         />
-        <div className="command-launcher-overlay">
-          <div className="command-launcher-overlay-group">
-            {/* A peer of the options row rather than a chip inside it: that row
-                scrolls horizontally when the controls outgrow the composer, and
-                the recipient of the question should not scroll out of view. */}
-            <div className="new-research-ask-mode" role="group" aria-label="Ask">
-              {ASK_MODES.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`new-research-ask-mode-button${
-                    askMode === option.value ? " is-active" : ""
-                  }`}
-                  aria-pressed={askMode === option.value}
-                  onClick={() => setAskMode(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-            {askModeShowsAiControls(askMode) ? (
-              <div className="command-launcher-options new-research-model-controls">
-                <LauncherSelect
-                  value={selectedModel}
-                  options={modelPresets.map((preset) => ({
-                    value: preset,
-                    label: formatLauncherModelLabel(adapter, preset),
-                  }))}
-                  ariaLabel="Model"
-                  onChange={(choice) => {
-                    sessionDraftTouchedRef.current = true;
-                    setModelChoice(choice);
-                  }}
-                  submenu={
-                    effortOptions
-                      ? {
-                          label: "Effort",
-                          ariaLabel: "Effort",
-                          value: selectedEffort,
-                          options: effortOptions,
-                          onChange: setEffortChoice,
-                        }
-                      : undefined
-                  }
-                />
-                {selectedModel === CUSTOM_MODEL ? (
-                  <input
-                    type="text"
-                    value={customModel}
-                    placeholder="Model name"
-                    aria-label="Custom model"
-                    onChange={(event) => {
-                      sessionDraftTouchedRef.current = true;
-                      setCustomModel(event.currentTarget.value);
-                    }}
-                  />
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-          <div className="command-launcher-controls">
-            {askModeShowsAiControls(askMode) ? (
-              <div className="command-launcher-adapter-select">
-                <LauncherSelect
-                  value={adapter}
-                  options={adapterOptions}
-                  ariaLabel="Agent"
-                  onChange={(nextAdapter) => {
-                    sessionDraftTouchedRef.current = true;
-                    setError(null);
-                    setAdapter(nextAdapter);
-                  }}
-                />
-              </div>
-            ) : null}
-            <button
-              type="submit"
-              className="control-button command-launcher-send new-research-send"
-              disabled={!canSubmit}
-              aria-label={submitLabel}
-              title={submitLabel}
-            >
-              <ComposerSubmitShortcutGlyph
-                requireCmdEnter={requireCmdEnterToSend}
-                ariaHidden
-              />
-            </button>
-          </div>
-        </div>
+        <button
+          type="submit"
+          className="control-button command-launcher-send new-research-send"
+          disabled={!canSubmit}
+          aria-label={submitLabel}
+          title={submitLabel}
+        >
+          <ComposerSubmitShortcutGlyph requireCmdEnter={requireCmdEnterToSend} ariaHidden />
+        </button>
       </div>
       {!adapters.some(adapterCanLaunchResearch) || error ? (
         <div className="new-research-footer">

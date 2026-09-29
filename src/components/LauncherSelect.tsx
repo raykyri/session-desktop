@@ -30,6 +30,9 @@ interface LauncherSelectProps {
   ariaLabel?: string;
   disabled?: boolean;
   submenu?: LauncherSelectSubmenu;
+  /** Show only the selected option's icon on the trigger; its label moves to
+   * the trigger's tooltip. */
+  iconOnly?: boolean;
 }
 
 const SUBMENU_GAP = 4;
@@ -49,6 +52,7 @@ export function LauncherSelect({
   ariaLabel,
   disabled = false,
   submenu,
+  iconOnly = false,
 }: LauncherSelectProps) {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
@@ -90,6 +94,23 @@ export function LauncherSelect({
       current ? { ...current, left: Math.max(8, row.left - panel.width - SUBMENU_GAP) } : current,
     );
   }, [submenuOpen]);
+  // A trigger near the viewport's right edge (the Home composer's model
+  // picker ends its row) would push a left-aligned popover off screen; end
+  // it at the trigger's right edge instead.
+  useLayoutEffect(() => {
+    if (!open || !anchor) {
+      return;
+    }
+    const panel = popoverRef.current?.getBoundingClientRect();
+    const trigger = triggerRef.current?.getBoundingClientRect();
+    if (!panel || !trigger || panel.right <= window.innerWidth - 8) {
+      return;
+    }
+    const left = Math.max(8, Math.min(trigger.right, window.innerWidth - 8) - panel.width);
+    if (left !== anchor.left) {
+      setAnchor((current) => (current ? { ...current, left } : current));
+    }
+  }, [open, anchor]);
   const match = options.find((option) => option.value === value);
   const selected = match ?? options[0];
 
@@ -154,10 +175,13 @@ export function LauncherSelect({
       <button
         ref={triggerRef}
         type="button"
-        className={`control-button launcher-select-trigger${toneClass(selected?.tone)}`}
+        className={`control-button launcher-select-trigger${toneClass(selected?.tone)}${
+          iconOnly ? " is-icon-only" : ""
+        }`}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
+        title={iconOnly ? selected?.label : undefined}
         disabled={disabled}
         onClick={() => {
           if (!open) {
@@ -175,7 +199,7 @@ export function LauncherSelect({
             aria-hidden="true"
           />
         ) : null}
-        <span className="launcher-select-value">{selected?.label}</span>
+        {iconOnly ? null : <span className="launcher-select-value">{selected?.label}</span>}
         <ChevronDown size={13} className="launcher-select-chevron" aria-hidden="true" />
       </button>
       {open && anchor
