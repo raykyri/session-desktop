@@ -959,55 +959,56 @@
   cursor: pointer;
 }
 
-/* Saved highlights use a faint gold wash. Colors are literal because
-   highlight pseudos resolve custom properties unreliably; each pair mirrors
+/* Saved highlights use an amber wash. Colors are literal because highlight
+   pseudos resolve custom properties unreliably; each pair mirrors
    --research-highlight-bg in the dark and light token blocks. */
 ::highlight(session-research-highlights) {
   color: inherit;
-  background: rgba(216, 196, 95, 0.14); /* highlight-pseudo-literal */
+  background: rgba(240, 178, 70, 0.19); /* highlight-pseudo-literal */
 }
 
 :root[data-appearance="light"] *::highlight(session-research-highlights) {
-  background: rgba(214, 178, 30, 0.22); /* highlight-pseudo-literal */
+  background: rgba(244, 184, 40, 0.28); /* highlight-pseudo-literal */
 }
 
 /* Passages that targeted follow-ups were asked about (and the passage an ask
-   is currently being composed against). Painted ~20% stronger than a plain
+   is currently being composed against). Painted clearly stronger than a plain
    saved highlight so a passage that owns a margin card reads as distinct from
-   an ordinary highlight, while staying the same gold family. */
+   an ordinary highlight, while staying in the same amber family. Mirrors
+   --research-highlight-bg-hover. */
 ::highlight(session-research-query-anchors) {
   color: inherit;
-  background: rgba(216, 196, 95, 0.17); /* highlight-pseudo-literal */
+  background: rgba(240, 178, 70, 0.32); /* highlight-pseudo-literal */
 }
 
 :root[data-appearance="light"] *::highlight(session-research-query-anchors) {
-  background: rgba(214, 178, 30, 0.3); /* highlight-pseudo-literal */
+  background: rgba(244, 184, 40, 0.46); /* highlight-pseudo-literal */
 }
 
 /* Regions where annotations stack (highlight over highlight, or a follow-up
-   anchor over a saved highlight): repainted near the text color so depth is
-   visible without deepening the gold. Above the base layers via priority. */
+   anchor over a saved highlight): repainted toward the text color so depth is
+   visible without deepening the amber. Above the base layers via priority.
+   Mirrors --research-highlight-neutral-bg. */
 ::highlight(session-research-highlight-overlaps) {
   color: inherit;
-  background: rgba(211, 216, 212, 0.16); /* highlight-pseudo-literal */
+  background: rgba(255, 244, 225, 0.1); /* highlight-pseudo-literal */
 }
 
 :root[data-appearance="light"] *::highlight(session-research-highlight-overlaps) {
-  background: rgba(60, 70, 66, 0.12); /* highlight-pseudo-literal */
+  background: rgba(120, 80, 20, 0.1); /* highlight-pseudo-literal */
 }
 
-/* Saved highlights the current selection landed on. Painted above the saved
-   gold wash (via Highlight.priority) in the same tone as ::selection, so a
-   selected annotation reads like ordinary selected text; matches
-   --status-info-fg, spelled literally because highlight pseudos resolve
-   custom properties unreliably. */
+/* Saved highlights the current selection landed on. Painted above the amber
+   wash (via Highlight.priority) as an opaque light-blue fill. The dark theme
+   switches the text to near-black because body text is light there. */
 ::highlight(session-research-selected-highlights) {
-  color: inherit;
-  background: #6da7ec; /* highlight-pseudo-literal */
+  color: #0f1413; /* highlight-pseudo-literal */
+  background: #8ab8ee; /* highlight-pseudo-literal */
 }
 
 :root[data-appearance="light"] *::highlight(session-research-selected-highlights) {
-  background: #2a6fc0; /* highlight-pseudo-literal */
+  color: inherit;
+  background: #a9cbf2; /* highlight-pseudo-literal */
 }
 
 .research-highlight-actions {
