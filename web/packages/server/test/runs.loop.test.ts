@@ -9,10 +9,12 @@ import {
   trees as treesRepo,
   usage,
 } from "@session/db";
+import { RESEARCH_SYSTEM_PROMPT } from "@session/shared";
 import type { SessionEvent, Turn } from "@session/shared";
 import test from "ava";
 
 import { setFixtureScenario } from "../src/runs/fixtureProvider.js";
+import { researchSystemPrompt } from "../src/runs/prompts.js";
 
 import { createHarness } from "./helpers.js";
 import { collectEvents, createAgentHarness, nextProcessAgent } from "./runsHelpers.js";
@@ -607,4 +609,14 @@ test.serial("a long paced answer emits a sequence with no hole in it", async (t)
   // the one-second checkpoint interval elapsed repeatedly.
   const attempts = runsRepo.listAttempts(harness.db, nodeId);
   t.is(attempts.length, 1);
+});
+
+test("research prompts omit linking guidance and retain custom instructions", (t) => {
+  t.is(researchSystemPrompt(), RESEARCH_SYSTEM_PROMPT);
+  t.is(researchSystemPrompt("  "), RESEARCH_SYSTEM_PROMPT);
+  t.is(
+    researchSystemPrompt("Be concise."),
+    `${RESEARCH_SYSTEM_PROMPT}\n\n<research-instructions>\nBe concise.\n</research-instructions>`,
+  );
+  t.false(researchSystemPrompt().includes("research-linking"));
 });

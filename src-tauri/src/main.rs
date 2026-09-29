@@ -6,7 +6,6 @@ mod config;
 mod connection_limit;
 mod control;
 mod control_socket;
-mod encyclopedia;
 mod events;
 mod file_server;
 mod github_auth;
@@ -3664,11 +3663,6 @@ fn main() {
             github_auth::github_login_poll,
             github_auth::github_login_cancel,
             github_auth::github_logout,
-            encyclopedia::encyclopedia_list_pages,
-            encyclopedia::encyclopedia_get_page,
-            encyclopedia::encyclopedia_request_page,
-            encyclopedia::encyclopedia_regenerate_page,
-            encyclopedia::encyclopedia_delete_page,
             active_tab_set,
             browser_backend::browser_automation_snapshot,
             browser_backend::browser_automation_start_screencast,

@@ -54,7 +54,6 @@ import {
   getSettings,
   getUsageSummary,
   listDocuments,
-  listEncyclopediaPages,
   listRecentActivity,
   listResearchActivity,
   listResearchFolders,
@@ -75,7 +74,6 @@ import {
   setUserLimits,
   updateSettings,
   type SettingsUpdate,
-  getEncyclopediaPage,
 } from "./api.js";
 import {
   cachedNode,
@@ -144,13 +142,6 @@ export const treesQueryOptions = (scope: { workspaceId: string; includeArchived?
   });
 };
 
-export const encyclopediaQueryOptions = (workspaceId: string) =>
-  queryOptions({
-    queryKey: queryKeys.encyclopedia(workspaceId),
-    queryFn: () => listEncyclopediaPages(workspaceId),
-    enabled: workspaceId !== "",
-  });
-
 /* -------------------------------------------------------------------------
  * Reads
  * ---------------------------------------------------------------------- */
@@ -201,18 +192,6 @@ export function useHighlightsFeed(workspaceId: string) {
     queryKey: queryKeys.highlightsFeed(workspaceId),
     queryFn: () => listResearchHighlights(workspaceId),
     enabled: workspaceId !== "",
-  });
-}
-
-export function useEncyclopediaPages(workspaceId: string) {
-  return useQuery(encyclopediaQueryOptions(workspaceId));
-}
-
-export function useEncyclopediaPage(workspaceId: string, slug: string) {
-  return useQuery({
-    queryKey: queryKeys.encyclopediaPage(workspaceId, slug),
-    queryFn: () => getEncyclopediaPage(workspaceId, slug),
-    enabled: workspaceId !== "" && slug !== "",
   });
 }
 

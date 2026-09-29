@@ -97,7 +97,7 @@ and `style` props; the two documented exceptions (image scrims,
 
 - `prose.css`: `.research-prose` (from `transcript.css` `.turn-markdown` and
   `research-surface.css`), headings, lists, code blocks, tables, blockquotes,
-  math containers, wikilink states, `--transcript-font-delta` /
+  math containers, `--transcript-font-delta` /
   `--transcript-line-height-delta`, `.research-summary-text`. Markdown output
   cannot carry utilities.
 - `tweet.css`: `.journal-tweet` recipe (`research-surface.css`), 540 px
@@ -148,7 +148,7 @@ Port of `TranscriptMarkdown.tsx`, `DiagramBlock.tsx`, `TranscriptActivity.tsx`:
   The two plugin lists are unified into one module in `shared/markdown`
   (unlike the desktop codebase, which required manually synchronizing two separate plugin lists).
 - `normalizeLatexMathDelimiters`, `escapeWikilinkTablePipes` on source.
-- `MarkdownLink` reads `WikilinkActionsContext` for resolve/activate.
+- Legacy wikilink markers render as plain text; ordinary Markdown links remain clickable.
 - Code blocks → `DiagramBlock` for mermaid/dot/graphviz, lazy, DOMPurify SVG
   profile, `MutationObserver` on `data-appearance` for theme.
 - `BlockedMarkdownImage`; the pasted-image markers a desktop transcript can

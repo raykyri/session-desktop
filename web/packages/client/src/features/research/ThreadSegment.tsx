@@ -19,8 +19,6 @@ import { useNodeContent } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { errorMessage } from "../../lib/toast.js";
 import { useLiveTurnsStore } from "../../stores/liveTurns.js";
-import { useWikilinkActions } from "../encyclopedia/wikilinkActions.js";
-import { WikilinkActionsProvider } from "../markdown/index.js";
 
 import { AnswerPane } from "./AnswerPane.js";
 import { ConnectorOverlay, FollowupRail } from "./FollowupRail.js";
@@ -211,15 +209,6 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
   const handleCopyAnswer = useCallback(() => onCopyAnswer(nodeId), [onCopyAnswer, nodeId]);
 
   const segmentActive = isActiveResearchStatus(node.status);
-  // `[[Term]]` links resolve per segment, because the page a term opens records
-  // the question it was linked from (`10-home-feed-journal-encyclopedia.md` §6).
-  const wikilinkActions = useWikilinkActions(workspaceId, {
-    kind: "node",
-    nodeId: node.id,
-    treeId: props.treeId,
-    question: node.prompt,
-  });
-
   return (
     <div
       ref={registerAnchor}
@@ -247,40 +236,38 @@ export const ThreadSegment = memo(function ThreadSegment(props: ThreadSegmentPro
         data-node-id={node.id}
       >
         <ConnectorOverlay connectors={connectors} linkedAnchorId={linkedAnchorId} />
-        <WikilinkActionsProvider actions={wikilinkActions}>
-          <AnswerPane
-            view={view}
-            node={node}
-            turns={turns}
-            contentError={contentError}
-            contentLoading={nodeContent.isLoading || content === undefined}
-            segmentActive={segmentActive}
-            queuePosition={content?.queuePosition}
-            thinking={nodeContent.status === "thinking"}
-            durationText={durationText}
-            hiddenHighlightCount={hiddenHighlightCount}
-            recapPending={recapPending}
-            cancelling={cancelling}
-            canCancel={canCancel}
-            canRetryNode={canRetryNode}
-            retryingNode={retryingNode}
-            pointerOverHighlight={pointerOverHighlight}
-            menuItems={answerMenuItems}
-            registerRoot={registerRoot}
-            onExpandTurns={props.onExpandTurns}
-            onShowFullTrace={props.onShowFullTrace}
-            onRetryContentLoad={nodeContent.refetch}
-            onCopyAnswer={handleCopyAnswer}
-            onCancelNode={props.onCancelNode}
-            onRetryNode={props.onRetryNode}
-            onRootMouseDown={props.onRootMouseDown}
-            onRootMouseUp={props.onRootMouseUp}
-            onRootKeyUp={props.onRootKeyUp}
-            onRootClick={props.onRootClick}
-            onRootMouseMove={props.onRootMouseMove}
-            onRootMouseLeave={props.onRootMouseLeave}
-          />
-        </WikilinkActionsProvider>
+        <AnswerPane
+          view={view}
+          node={node}
+          turns={turns}
+          contentError={contentError}
+          contentLoading={nodeContent.isLoading || content === undefined}
+          segmentActive={segmentActive}
+          queuePosition={content?.queuePosition}
+          thinking={nodeContent.status === "thinking"}
+          durationText={durationText}
+          hiddenHighlightCount={hiddenHighlightCount}
+          recapPending={recapPending}
+          cancelling={cancelling}
+          canCancel={canCancel}
+          canRetryNode={canRetryNode}
+          retryingNode={retryingNode}
+          pointerOverHighlight={pointerOverHighlight}
+          menuItems={answerMenuItems}
+          registerRoot={registerRoot}
+          onExpandTurns={props.onExpandTurns}
+          onShowFullTrace={props.onShowFullTrace}
+          onRetryContentLoad={nodeContent.refetch}
+          onCopyAnswer={handleCopyAnswer}
+          onCancelNode={props.onCancelNode}
+          onRetryNode={props.onRetryNode}
+          onRootMouseDown={props.onRootMouseDown}
+          onRootMouseUp={props.onRootMouseUp}
+          onRootKeyUp={props.onRootKeyUp}
+          onRootClick={props.onRootClick}
+          onRootMouseMove={props.onRootMouseMove}
+          onRootMouseLeave={props.onRootMouseLeave}
+        />
         <FollowupRail
           nodeId={node.id}
           cards={segmentChildren}

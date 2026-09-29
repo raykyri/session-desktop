@@ -1,7 +1,7 @@
 // Main Markdown renderer (`08-design-system-and-styling.md` §5).
 //
 // Everything that renders model-authored prose — a research answer, a recap, a
-// feed preview, an encyclopedia page — goes through this component, so the
+// feed preview — goes through this component, so the
 // parse is identical everywhere and typography is chosen on the renderer
 // rather than inherited from whatever layout root the text lands in.
 //
@@ -17,7 +17,6 @@
 // navigable. Inline-code file links are recognized but not promoted: the
 // artifact store they would open lands in Phase 7.
 
-import { Popover as BasePopover } from "@base-ui/react/popover";
 import {
   baseRehypePlugins,
   baseRemarkPlugins,
@@ -27,14 +26,12 @@ import {
   normalizeLatexMathDelimiters,
   safeHref,
 } from "@session/shared";
-import { isValidElement, memo, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { isValidElement, memo, useEffect, useSyncExternalStore } from "react";
 import type { ComponentPropsWithoutRef, ReactElement, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 
 import { cn } from "../../lib/cn.js";
-import { ControlButton } from "../../ui/Button.js";
-import { POPOVER_SURFACE } from "../../ui/surfaces.js";
 
 import { DiagramBlock, diagramLangFromClassName, nodeText } from "./DiagramBlock.js";
 import {
@@ -45,8 +42,6 @@ import {
 } from "./mathPlugins.js";
 import { isOversizedMarkdown, oversizedFallbackText } from "./policy.js";
 import type { OversizedMarkdownPolicy } from "./policy.js";
-import { useWikilinkActions } from "./wikilinks.js";
-import type { WikilinkActions } from "./wikilinks.js";
 
 interface TranscriptHastNode {
   type: string;
@@ -94,26 +89,14 @@ function markedValue(node: TranscriptHastNode | undefined, key: string): string 
   return typeof value === "string" ? value : undefined;
 }
 
-/**
- * Links in answer prose. A wikilink is checked first because it carries no
- * href: the remark transform marks it with `data-wikilink`, and what activating
- * it does comes from `WikilinkActionsContext`. Everything else is a
- * destination a model wrote, so it renders as a link only if `safeHref`
- * accepts it and always opens in a new tab (07 §9); a rejected destination
- * Render as plain text when the link URL is invalid or empty.
- */
+/** Safe external links in answer prose. */
 export function MarkdownLink({
   href,
   node,
   ...props
 }: ComponentPropsWithoutRef<"a"> & { node?: TranscriptHastNode }) {
-  const wikilinks = useWikilinkActions();
-  const term = node?.properties?.["dataWikilink"];
-
-  if (typeof term === "string") {
-    return <WikilinkAnchor {...props} term={term} actions={wikilinks} />;
-  }
-
+  // The renderer AST is not a DOM attribute.
+  void node;
   const { children, ...rest } = props;
   const safe = safeHref(href);
   if (!safe) return <span {...rest}>{children}</span>;
@@ -121,97 +104,6 @@ export function MarkdownLink({
     <a {...rest} href={safe} target="_blank" rel="noopener noreferrer">
       {children}
     </a>
-  );
-}
-
-/**
- * A term with a page opens it on click. A term without one asks first: writing
- * a page is a model call, and a stray click on linked text should not start
- * one. The confirmation is a small popover on the link itself, so the reader
- * keeps their place; Enter and a click both open it, and either button or
- * Escape closes it.
- */
-function WikilinkAnchor({
-  term,
-  actions,
-  ...props
-}: ComponentPropsWithoutRef<"a"> & { term: string; actions: WikilinkActions }) {
-  const [confirming, setConfirming] = useState(false);
-  const anchorRef = useRef<HTMLAnchorElement | null>(null);
-  const status = actions.resolve(term);
-  const canRequest = actions.canRequest ?? actions.interactive;
-  const activate = (element: HTMLElement) => {
-    if (!actions.interactive) return;
-    if (status === null || status === "failed") {
-      if (!canRequest) return;
-      setConfirming(true);
-      return;
-    }
-    actions.activate(term, element);
-  };
-  const create = () => {
-    setConfirming(false);
-    if (anchorRef.current) actions.activate(term, anchorRef.current);
-  };
-
-  return (
-    <BasePopover.Root open={confirming} onOpenChange={setConfirming}>
-      <a
-        {...props}
-        ref={anchorRef}
-        className={cn(props.className, status ? `is-${status}` : null)}
-        role="link"
-        tabIndex={0}
-        data-wikilink={term}
-        title={
-          !actions.interactive
-            ? undefined
-            : status
-              ? `Open encyclopedia page: ${term}`
-              : canRequest
-                ? `Create encyclopedia page: ${term}`
-                : undefined
-        }
-        onClick={(event) => {
-          event.preventDefault();
-          activate(event.currentTarget);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            activate(event.currentTarget);
-          }
-        }}
-      />
-      <BasePopover.Portal>
-        <BasePopover.Positioner
-          anchor={anchorRef}
-          side="bottom"
-          align="start"
-          sideOffset={6}
-          className="z-(--z-popover)"
-        >
-          <BasePopover.Popup
-            aria-label={`Create encyclopedia page: ${term}`}
-            className={cn(POPOVER_SURFACE, "flex max-w-72 flex-col gap-2.5 rounded-lg p-3")}
-          >
-            <p className="text-fg-primary m-0 text-sm">
-              {status === "failed"
-                ? `Couldn’t create the page for “${term}”.`
-                : `Create an encyclopedia page for “${term}”?`}
-            </p>
-            <div className="flex items-center justify-end gap-1.5">
-              <ControlButton size="sm" onClick={() => setConfirming(false)}>
-                Cancel
-              </ControlButton>
-              <ControlButton size="sm" className="text-fg-strong" onClick={create}>
-                {status === "failed" ? "Retry" : "Create page"}
-              </ControlButton>
-            </div>
-          </BasePopover.Popup>
-        </BasePopover.Positioner>
-      </BasePopover.Portal>
-    </BasePopover.Root>
   );
 }
 
@@ -341,8 +233,6 @@ const VARIANT_CLASS: Record<ResearchMarkdownVariant, string> = {
  * re-render far more often than their text changes — a streaming answer
  * delivers a fresh block object whose `markdown` is value-equal several times a
  * second. Every prop is a primitive except `oversized`, which callers hoist.
- * Wikilink behavior stays live because `MarkdownLink` reads it from context,
- * which the memo does not block.
  */
 export const ResearchMarkdown = memo(function ResearchMarkdown({
   markdown,

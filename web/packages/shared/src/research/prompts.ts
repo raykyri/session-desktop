@@ -1,10 +1,9 @@
 // Research launch prompt assembly.
 //
-// Ported from `src-tauri/src/research.rs` (the linking instruction, the
+// Ported from `src-tauri/src/research.rs` (the
 // instruction wrapper and its neutralization, the highlight-anchored and
 // imported-document follow-ups), `src-tauri/src/tweets.rs` (the tweet
-// reference-material block), `src-tauri/src/encyclopedia.rs` (the page linking
-// instruction), and `src/lib/settings.ts` (the byte clamp). The instruction
+// reference-material block), and `src/lib/settings.ts` (the byte clamp). The instruction
 // text is copied byte for byte: it is tuned prose, and `prompts.test.ts` pins
 // the sentences that matter.
 //
@@ -52,7 +51,7 @@ function truncateUtf8(value: string, maxBytes: number): string {
 /**
  * The system prompt for a research run. New on the web: each CLI shipped its
  * own system prompt, and the web drives the model directly. Kept short so the
- * linking instruction and the user's own instruction stay the specific
+ * user's own instruction stays the specific
  * guidance in the request.
  */
 export const RESEARCH_SYSTEM_PROMPT = `You are a research agent. Answer the user's question with a self-contained Markdown document: the reader sees the document, not the question, so it must state what it is about and stand on its own.
@@ -61,36 +60,8 @@ Ground every factual claim in sources you retrieved during this run. Use the web
 
 Do not ask clarifying questions. When the question is ambiguous, state the reading you chose and answer it.`;
 
-/** The tag wrapping Session's built-in linking instruction. Both wrappers
- * follow the tagged-instruction-block convention the transcript sanitizers
- * recognize, so display, copies, previews, and exports strip them as
- * session-injected machinery rather than user words. */
-export const RESEARCH_LINKING_INSTRUCTION_TAG = "research-linking";
-
 /** The tag wrapping the user's custom launch instruction in a sent prompt. */
 export const RESEARCH_LAUNCH_INSTRUCTION_TAG = "research-instructions";
-
-/**
- * Built-in instruction asking the model to mark key terms as wikilinks. The
- * client renders `[[Term]]` / `[[Term|shown text]]` as link elements;
- * previews, recap sources, and copies keep only the display text (see
- * `markdown/wikilinks.ts`). Sent with every research launch, ahead of the
- * user's own instruction block so the user's text can override it.
- */
-export const RESEARCH_LINKING_INSTRUCTION = `Mark key terms in your answer as wikilinks so Session can index and cross-reference them. Wrap a term in double square brackets: [[Term]]. When the wording in the sentence differs from the term's canonical name (plural, possessive, abbreviation, shortened form), write [[Canonical name|wording in the sentence]] so the sentence still reads naturally.
-
-Be thorough. Link every proper noun and named entity: people, organizations, companies, products, projects, papers, books, datasets, models, standards, laws, places, and events. Also link every named technique, method, algorithm, metric, and defined concept a reader might want to look up. Link at least the first occurrence of each term in every section; linking later occurrences is fine. Prefer specific terms over generic words.
-
-When the answer is a list of items, link every item: wrap the item's name or head term at the start of the item, for example "- [[Item name]]: why it matters". Do the same for table rows and numbered steps that name something.
-
-Do not put wikilinks inside code spans, code blocks, URLs, headings, or existing Markdown links, and do not nest them. Otherwise write normal Markdown; the brackets are the only addition.`;
-
-/**
- * The linking instruction for a generated Encyclopedia page
- * (`encyclopedia.rs`). Tighter than {@link RESEARCH_LINKING_INSTRUCTION}: a
- * page is short, so over-linking it produces a page of links.
- */
-export const PAGE_LINKING_INSTRUCTION = `Mark between 4 and 12 key terms as wikilinks so Session can cross-reference pages. Wrap a term in double square brackets: [[Term]]. When the wording in the sentence differs from the term's canonical name (plural, possessive, abbreviation, shortened form), write [[Canonical name|wording in the sentence]] so the sentence still reads naturally. Link only specific things a reader would look up in an encyclopedia: named works, people, organizations, products, projects, and precisely defined technical concepts. Do not link generic words or broad fields (for example "drone", "misinformation", "surveillance", "machine learning"), and do not link the page's own term or title. Link the first occurrence of a term only. Do not put wikilinks inside code spans, code blocks, URLs, headings, or existing Markdown links, and do not nest them.`;
 
 /**
  * Byte cap on the stored research launch instruction. Style guidance is a few
@@ -193,31 +164,12 @@ function userInstructionBlock(instruction: string | null | undefined): string | 
   return taggedBlock(RESEARCH_LAUNCH_INSTRUCTION_TAG, neutralizedInstructionMarkup(trimmed));
 }
 
-/**
- * Applies Session's built-in linking instruction and the user's custom launch
- * instruction to a fully assembled research launch prompt. The linking block
- * is always sent; the user block follows it when set, so user text can
- * override the built-in guidance. Both ride in tagged instruction blocks
- * *before* the prompt, matching the leading-block discipline every strip path
- * already handles; a prompt that begins with a slash command keeps it at the
- * very start of the message, so the blocks follow the prompt in that form
- * only. Either way the prompt stays a contiguous, normalized substring of the
- * sent text.
- *
- * The byte cap on the user instruction is re-enforced here (cut at a
- * code-point boundary) so a stored value that predates the cap, or one written
- * by a client that skipped validation, cannot ship an oversized prompt.
- */
 export function promptWithResearchLaunchInstruction(
   prompt: string,
   instruction?: string | null,
 ): string {
-  const blocks = [taggedBlock(RESEARCH_LINKING_INSTRUCTION_TAG, RESEARCH_LINKING_INSTRUCTION)];
-  const userBlock = userInstructionBlock(instruction);
-  if (userBlock !== undefined) {
-    blocks.push(userBlock);
-  }
-  const joined = blocks.join("\n\n");
+  const joined = userInstructionBlock(instruction);
+  if (joined === undefined) return prompt;
   return prompt.startsWith("/") ? `${prompt}\n\n${joined}` : `${joined}\n\n${prompt}`;
 }
 

@@ -1,4 +1,4 @@
-// The sidebar's research list (`10-home-feed-journal-encyclopedia.md` §7,
+// The sidebar's research list (`10-home-feed-journal.md` §7,
 // ported from `ResearchSidebarSection.tsx`).
 //
 // What the port keeps: the folder display model and its drag math (both now in

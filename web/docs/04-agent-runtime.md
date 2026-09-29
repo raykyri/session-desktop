@@ -9,10 +9,9 @@ the app owns. This document specifies that runtime; where runs execute and
 how clients observe them is `05-run-lifecycle-and-streaming.md`.
 
 What carries over from the desktop is the research *product* behavior:
-read-only tools, the linking instruction that produces wikilinks, the launch
+read-only tools, the launch
 prompt assembly, response-boundary rules, the `Turn`/`TurnBlock` durable
-format and its timeline projection, recap and title generation, encyclopedia
-pages, tweet attachments.
+format and its timeline projection, recap and title generation, and tweet attachments.
 
 ## 1. Models
 
@@ -28,7 +27,7 @@ Luna 0.20/1.20, Fable 10/50) and exposed by `system.runtimeConfig`:
 | `gpt-luna` | GPT-5.6 Luna | OpenRouter `~openai/gpt-luna-latest` (falls back to `openai/gpt-5.6-luna` if the alias is absent), `provider: { zdr: true, data_collection: "deny" }` | `@openrouter/ai-sdk-provider` | all users | owned tools |
 | `claude-fable` | Claude Fable 5.1 (`claude-fable-5-1`) | Anthropic API | `@ai-sdk/anthropic`, `@anthropic-ai/sdk` escape hatch (§7) | admin only | owned tools |
 
-Metadata runs (titles, recaps, encyclopedia pages) always use
+Metadata runs (titles and recaps) always use
 `gemini-flash` (§9). GPT-6 Astra is not included in this iteration.
 
 OpenRouter routing: both OpenRouter models require zero-data-retention,
@@ -77,7 +76,7 @@ packages/server/src/runs/
     documentRead.ts   read an attached document's text by id (for models without file input)
   prompts.ts          launch prompt assembly (uses shared/research/prompts)
   snapshots.ts        two-guard snapshot commit, revision
-  metadata.ts         title, recap, encyclopedia page via generateText + Output.object on gemini-flash
+  metadata.ts         title and recap via generateText + Output.object on gemini-flash
   usage.ts            token usage and cost recording per attempt
   fixtures/           recorded provider streams for tests (12-testing-linting-ci.md)
 ```
@@ -260,7 +259,7 @@ long turns (minutes) without client timeouts.
 
 ## 8. Documents as context
 
-Users attach files to a question (`10-home-feed-journal-encyclopedia.md`
+Users attach files to a question (`10-home-feed-journal.md`
 §1). Server side (`documents.ts`):
 
 - Accepted: PDF, Markdown, plain text, CSV, JSON, DOCX (converted to text),
@@ -280,16 +279,14 @@ Users attach files to a question (`10-home-feed-journal-encyclopedia.md`
 
 ## 9. Metadata runs (`metadata.ts`)
 
-Titles, recaps, and encyclopedia pages use `generateText` with
-`Output.object` (zod schemas `{title}`, `{recap}`, `{page}`) on
+Titles and recaps use `generateText` with
+`Output.object` (zod schemas `{title}`, `{recap}`) on
 `gemini-flash` regardless of the thread's model, with no tools and medium
 effort. Desktop rules kept: recap scheduling predicate and dedupe
 (`research_recap.rs:30-100`), `MIN_RECAP_CHARS` 800 and `MAX_SOURCE_BYTES`
 80 KB for generated runs, imported reports exempt, reject > 1200 chars,
 `research.recap.pending` on every exit path; title sanitization
-(`sanitize_research_title`, 80 chars); encyclopedia page prompt with
-`PAGE_LINKING_INSTRUCTION`, `split_title`, `normalize_page`, links recomputed
-(`encyclopedia.rs`). The OpenRouter transport and the CLI metadata path are
+(`sanitize_research_title`, 80 chars). The OpenRouter transport and the CLI metadata path are
 dropped.
 
 ## 10. Usage and limits

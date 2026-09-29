@@ -6,7 +6,7 @@ Build a web application at `https://session.dev` that mirrors the Session
 desktop application: a research workspace where a user launches long-running
 investigations with AI models, reads answers as documents, branches with
 follow-ups anchored to highlighted passages, keeps journal links and X posts
-in a Home feed, grows an encyclopedia from wikilinks, and organizes
+in a Home feed and organizes
 everything into workspaces and folders.
 
 The desktop app is a Tauri shell: a Rust backend (`src-tauri/src`) and a
@@ -31,7 +31,7 @@ Goals
 
 - Functional parity for the research product: Home / Bookmarks / Highlights,
   research documents with streaming answers, follow-ups (inline and branching),
-  highlight-anchored asks, retry/cancel, recaps, titles, encyclopedia,
+  highlight-anchored asks, retry/cancel, recaps, titles,
   journal links and X posts, workspaces and folders, report import, settings,
   keyboard shortcuts, command palette, notifications.
 - Models: Gemini 3.8 Flash (default; also a Google-Search-grounded
@@ -87,7 +87,7 @@ account), OpenRouter (zero-retention providers only), and Anthropic.
 | Streaming | Snapshot + per-node ordered deltas; durable checkpoints; `interrupted` with auto-resume on deploy |
 | Client state | TanStack Query (event-patched) + Zustand; TanStack Router |
 | Styling / components | Tailwind v4 over the preserved `tokens.css`; Base UI primitives; lucide-react; TanStack Virtual |
-| Markdown | Same pipeline: react-markdown, remark/rehype math (lazy), mermaid and viz (lazy), DOMPurify, wikilinks |
+| Markdown | Same pipeline: react-markdown, remark/rehype math (lazy), mermaid and viz (lazy), DOMPurify, legacy wikilink text |
 | Testing / lint | AVA everywhere (jsdom for client), Playwright e2e with fixture providers; ESLint 9, Prettier, `tsc -b` |
 | Deployment | One Fly machine + volume; Litestream backups; `/healthz` |
 
@@ -127,7 +127,7 @@ Spec: `02-domain-model-and-database.md` §2, `07-client-architecture.md` §7.
 Spec: `02-domain-model-and-database.md`.
 - Schema, migrations, repositories with invariants as transactions: admit
   root/child, reorder, folders, document update, highlights, recaps, feeds,
-  encyclopedia, `run_turns`/`run_seq`, `node_messages`, documents, usage,
+  `run_turns`/`run_seq`, `node_messages`, documents, usage,
   boot reconciliation.
 - Exit: repository tests cover every invariant in `02` §5.
 
@@ -151,7 +151,7 @@ Spec: `04-agent-runtime.md`, `05-run-lifecycle-and-streaming.md`.
   append-only history, long turns); decide the escape hatch.
 - Exit: Phase 3 suite passes against fixture providers; kill and restart the
   server mid-run and see it resume; a manual run on each real provider
-  produces a document with wikilinks, sources, a recap, and a title.
+  produces a document with sources, a recap, and a title.
 
 ### Phase 5 — Client foundation (medium)
 Spec: `07-client-architecture.md`, `08-design-system-and-styling.md`.
@@ -161,12 +161,12 @@ Spec: `07-client-architecture.md`, `08-design-system-and-styling.md`.
 - Exit: sign in, empty sidebar, theme switching, live connection status.
 
 ### Phase 6 — Client features (very large)
-Spec: `09-research-document-view.md`, `10-home-feed-journal-encyclopedia.md`.
-- Sidebar, folders, encyclopedia section; Home feed with composer (model
+Spec: `09-research-document-view.md`, `10-home-feed-journal.md`.
+- Sidebar, folders; Home feed with composer (model
   picker, document attach), cards, pagination, undo, import; research
   document view with streaming, `interrupted`, queue position, highlights,
   asks, inline and branch follow-ups with model choice, recap dialog, DOM
-  search, sources footer, document chips; encyclopedia page; highlights and
+  search, sources footer, document chips; highlights and
   bookmarks feeds; shortcuts and palette; admin user list.
 - Exit: parity checklist §8 green except Phase 7 items.
 
@@ -327,10 +327,10 @@ specs under `e2e/`.
       generated, sanitized, and given to the thread"; `research.spec.ts` "the
       recap dialog generates a candidate and applies it".
 - [ ] **Partial** — Node history; browser history across pages; DOM
-      search; lightboxes; math; wikilinks to encyclopedia pages.
+      search; lightboxes; math; plain-text rendering of legacy wikilinks.
       All implemented. Node and cross-page history are covered by
       `packages/shared/test/researchHistory.test.ts`; math and wikilinks by
-      `markdown.test.tsx`; the wikilink route end to end by `library.spec.ts`.
+      `markdown.test.tsx`.
       Swipe is covered only as pure logic (`researchSwipeDirection`,
       `researchSwipeTailCapturesWheel`) and not as a wheel gesture on the page;
       `ui/DomSearchBar.tsx` has only a style-contract test, not a
@@ -347,19 +347,6 @@ specs under `e2e/`.
       "displays status badges for unread updates, failures, and active runs", "a mouse press on a row menu item stays with the menu", "a
       press on the row itself still arms the drag");
       `packages/shared/test/researchFolders.test.ts`; `shortcuts.test.tsx`.
-
-### Encyclopedia
-
-- [x] **Verified** — List, page view with Term line, backlinks, rewrite,
-      delete; generated on `gemini-flash`.
-      `features/encyclopedia/*`, `server/runs/metadata.ts`;
-      `encyclopedia.test.tsx` ("the sidebar lists pages alphabetically once
-      one exists", "a page names its term when the model titled it
-      differently", the backlink labelling tests, "a failed page shows the
-      error and offers a rewrite"); `runs.metadata.test.ts` "an encyclopedia
-      page is generated, split, and linked" asserts `model: "gemini-flash"`;
-      `procedures.test.ts` covers `encyclopedia.deletePage`, which has no
-      client-side test of the confirm dialog.
 
 ### Settings and account
 

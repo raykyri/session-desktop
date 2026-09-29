@@ -1,4 +1,4 @@
-// Client-originated toasts (`10-home-feed-journal-encyclopedia.md` §8).
+// Client-originated toasts (`10-home-feed-journal.md` §8).
 //
 // Server-originated toasts arrive through the event bridge, which is also
 // where the `showNotifications` preference is enforced. A copy confirmation or

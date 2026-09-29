@@ -246,32 +246,6 @@ const LinkActionsContext = createContext<LinkActions>({
 
 const TranscriptArtifactLinksContext = createContext(false);
 
-export type WikilinkStatus = "ready" | "generating" | "failed";
-
-/** Resolves `[[Term]]` links against the encyclopedia. Absent (null) in
- * contexts with no page store, where wikilinks stay inert. */
-export interface WikilinkActions {
-  /** Status of the page the term resolves to, or null when none exists. */
-  resolve: (term: string) => WikilinkStatus | null;
-  /** Open (or create) the term's page. `anchor` is the clicked element, from
-   * which the caller gathers the surrounding block as generation context. */
-  activate: (term: string, anchor: HTMLElement) => void;
-}
-
-const WikilinkActionsContext = createContext<WikilinkActions | null>(null);
-
-export function TranscriptWikilinkActionsProvider({
-  actions,
-  children,
-}: {
-  actions: WikilinkActions | null;
-  children: ReactNode;
-}) {
-  return (
-    <WikilinkActionsContext.Provider value={actions}>{children}</WikilinkActionsContext.Provider>
-  );
-}
-
 export function TranscriptLinkActionsProvider({
   actions,
   children,
@@ -320,48 +294,6 @@ function MarkdownLink({
 }: ComponentPropsWithoutRef<"a"> & { node?: TranscriptHastNode }) {
   const { openLink, openLinkMenu } = useContext(LinkActionsContext);
   const artifactLinks = useContext(TranscriptArtifactLinksContext);
-  const wikilinks = useContext(WikilinkActionsContext);
-  // A wikilink (`[[Term]]` in the source, marked by the remark transform)
-  // resolves against the encyclopedia through context: a page's status
-  // becomes a state class, and activating the link opens or creates the page.
-  // Without a provider it renders as a focusable link that goes nowhere, so
-  // the term still reads as linked and the DOM text projection highlights
-  // anchor to is the display text alone. Checked before href handling because
-  // the node carries no href.
-  const wikilinkTerm = node?.properties?.dataWikilink;
-  if (typeof wikilinkTerm === "string") {
-    const status = wikilinks?.resolve(wikilinkTerm) ?? null;
-    const className = [props.className, status ? `is-${status}` : null]
-      .filter(Boolean)
-      .join(" ");
-    const activate = (element: HTMLElement) => wikilinks?.activate(wikilinkTerm, element);
-    return (
-      <a
-        {...props}
-        className={className}
-        role="link"
-        tabIndex={0}
-        data-wikilink={wikilinkTerm}
-        title={
-          !wikilinks
-            ? undefined
-            : status
-              ? `Open encyclopedia page: ${wikilinkTerm}`
-              : `Create encyclopedia page: ${wikilinkTerm}`
-        }
-        onClick={(event) => {
-          event.preventDefault();
-          activate(event.currentTarget);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            activate(event.currentTarget);
-          }
-        }}
-      />
-    );
-  }
   const safe = safeHref(href);
   if (!safe) {
     return <span {...props} />;

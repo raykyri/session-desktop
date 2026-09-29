@@ -6,9 +6,7 @@ import { baseRemarkPlugins } from "../src/markdown/plugins.js";
 import {
   escapeWikilinkTablePipes,
   MAX_WIKILINK_CHARS,
-  splitWikilinkText,
   stripWikilinks,
-  wikilinkTerms,
 } from "../src/markdown/wikilinks.js";
 
 // The client renders these trees with react-markdown; here they are serialized
@@ -55,11 +53,6 @@ function serialize(node: TestNode): string {
       return `<td>${serializeChildren(node)}</td>`;
     case "link":
       return `<a href="${node.url ?? ""}">${serializeChildren(node)}</a>`;
-    case "wikilink": {
-      const properties = node.data?.hProperties ?? {};
-      const className = (properties.className ?? []).join(" ");
-      return `<a class="${className}" data-wikilink="${properties.dataWikilink ?? ""}">${serializeChildren(node)}</a>`;
-    }
     default:
       return serializeChildren(node);
   }
@@ -75,39 +68,39 @@ function render(source: string): string {
   return serialize(processor.runSync(processor.parse(document), document) as unknown as TestNode);
 }
 
-const LINK = (term: string, label = term) =>
-  `<a class="research-wikilink" data-wikilink="${term}">${label}</a>`;
+const TEXT = (term: string, label = term) => label;
 
-test("a bare wikilink renders as a destination-less link", (t) => {
+test("a legacy wikilink renders as plain text without a link", (t) => {
   const html = render("See [[Rust]] today.");
-  t.true(html.includes(`See ${LINK("Rust")} today.`), html);
+  t.true(html.includes(`See ${TEXT("Rust")} today.`), html);
   t.is(html.includes("[["), false);
   t.is(html.includes("href="), false);
+  t.notRegex(html, /<a|data-wikilink|tabindex/);
 });
 
-test("an alias shows the alias and keeps the canonical term", (t) => {
+test("a legacy alias renders only its display text", (t) => {
   const html = render("Runs on [[Tokio|the tokio]] runtime.");
-  t.true(html.includes(LINK("Tokio", "the tokio")), html);
+  t.true(html.includes(TEXT("Tokio", "the tokio")), html);
 });
 
 test("terms and aliases are trimmed", (t) => {
   const html = render("[[ Rust | the Rust language ]]");
-  t.true(html.includes(LINK("Rust", "the Rust language")), html);
+  t.true(html.includes(TEXT("Rust", "the Rust language")), html);
 });
 
-test("every item in a list links independently", (t) => {
+test("legacy markers in lists become plain text", (t) => {
   const html = render("- [[Alpha]]: first\n- [[Beta|betas]]: second\n- plain");
-  t.true(html.includes(`<li>${LINK("Alpha")}: first</li>`), html);
-  t.true(html.includes(`<li>${LINK("Beta", "betas")}: second</li>`), html);
+  t.true(html.includes(`<li>${TEXT("Alpha")}: first</li>`), html);
+  t.true(html.includes(`<li>${TEXT("Beta", "betas")}: second</li>`), html);
   t.true(html.includes("<li>plain</li>"), html);
 });
 
 test("preserves wikilink syntax within formatted text and Markdown table cells", (t) => {
   const html = render("**[[Bold term]]** and _[[Italic term]]_");
-  t.true(html.includes(`<strong>${LINK("Bold term")}</strong>`), html);
-  t.true(html.includes(`<em>${LINK("Italic term")}</em>`), html);
+  t.true(html.includes(`<strong>${TEXT("Bold term")}</strong>`), html);
+  t.true(html.includes(`<em>${TEXT("Italic term")}</em>`), html);
   const table = render("| a | b |\n| - | - |\n| [[Cell]] | x |");
-  t.true(table.includes(`<td>${LINK("Cell")}</td>`), table);
+  t.true(table.includes(`<td>${TEXT("Cell")}</td>`), table);
 });
 
 // GFM splits table cells on `|` before inline parsing, so an alias wikilink
@@ -117,10 +110,10 @@ test("alias wikilinks keep their table cell intact", (t) => {
   const html = render(
     "| Network | Proof | Cost |\n|---|---|---|\n| [[X (Twitter)|X]] | Strong | Weak |\n| Plain [[Bluesky|Bsky]] and [[Trusted Verifier|Trusted Verifiers]] | a | b |",
   );
-  t.true(html.includes(`<td>${LINK("X (Twitter)", "X")}</td><td>Strong</td><td>Weak</td>`), html);
+  t.true(html.includes(`<td>${TEXT("X (Twitter)", "X")}</td><td>Strong</td><td>Weak</td>`), html);
   t.true(
     html.includes(
-      `<td>Plain ${LINK("Bluesky", "Bsky")} and ${LINK("Trusted Verifier", "Trusted Verifiers")}</td><td>a</td><td>b</td>`,
+      `<td>Plain ${TEXT("Bluesky", "Bsky")} and ${TEXT("Trusted Verifier", "Trusted Verifiers")}</td><td>a</td><td>b</td>`,
     ),
     html,
   );
@@ -130,7 +123,7 @@ test("alias wikilinks keep their table cell intact", (t) => {
 
 test("a pipe the agent already escaped on a table row is not escaped twice", (t) => {
   const html = render("| a | b |\n|---|---|\n| [[X (Twitter)\\|X]] | c |");
-  t.true(html.includes(`<td>${LINK("X (Twitter)", "X")}</td><td>c</td>`), html);
+  t.true(html.includes(`<td>${TEXT("X (Twitter)", "X")}</td><td>c</td>`), html);
 });
 
 test("escapeWikilinkTablePipes only touches table rows outside code", (t) => {
@@ -171,7 +164,7 @@ test("malformed markers stay literal text", (t) => {
     t.is(render(source).includes("research-wikilink"), false, source);
   }
   // An extra opener is a literal bracket in front of a real link.
-  t.true(render("[[[Term]]").includes(`[${LINK("Term")}`));
+  t.true(render("[[[Term]]").includes(`[${TEXT("Term")}`));
 });
 
 test("stripWikilinks keeps only display text and mirrors the parser", (t) => {
@@ -189,46 +182,5 @@ test("stripWikilinks keeps only display text and mirrors the parser", (t) => {
   }
 });
 
-test("splitWikilinkText returns null when a text node has nothing to link", (t) => {
-  t.is(splitWikilinkText("plain"), null);
-  t.is(splitWikilinkText("[[ ]]"), null);
-  const nodes = splitWikilinkText("a [[B]] c");
-  t.deepEqual(
-    nodes?.map((node) => node.type),
-    ["text", "wikilink", "text"],
-  );
-});
-
 // The cases `wikilink_terms` pins in `src-tauri/src/wikilinks.rs`; this is the
 // list that becomes a page's links and a source's co-occurring terms.
-test("wikilinkTerms collects canonical terms once, in order of appearance", (t) => {
-  t.deepEqual(wikilinkTerms("[[Rust]] and [[Tokio|tokio's]] then [[Rust]] again, [[bad|x|y]]"), [
-    "Rust",
-    "Tokio",
-  ]);
-  t.deepEqual(wikilinkTerms("no links"), []);
-  t.deepEqual(wikilinkTerms(""), []);
-});
-
-test("wikilinkTerms takes the term, not the display text, and trims it", (t) => {
-  t.deepEqual(wikilinkTerms("[[ Canonical name | as written ]]"), ["Canonical name"]);
-  // An alias that differs only in wording is still one term.
-  t.deepEqual(wikilinkTerms("[[Rust|Rust's]] and [[Rust|rust]]"), ["Rust"]);
-});
-
-test("wikilinkTerms ignores anything the grammar rejects", (t) => {
-  const long = "x".repeat(MAX_WIKILINK_CHARS + 1);
-  for (const source of [
-    "[[]]",
-    "[[ ]]",
-    "[[unclosed",
-    "[[two|pipes|here]]",
-    "[[multi\nline]]",
-    "[[a]b]]",
-    `[[${long}]]`,
-  ]) {
-    t.deepEqual(wikilinkTerms(source), [], source);
-  }
-  // An extra opener is a literal bracket in front of a real link.
-  t.deepEqual(wikilinkTerms("[[[Term]]"), ["Term"]);
-});

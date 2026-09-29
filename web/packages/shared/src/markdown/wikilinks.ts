@@ -1,18 +1,5 @@
-// Wikilink syntax for key terms in research answers. The launch prompt asks the
-// agent to mark terms as `[[Term]]` or `[[Canonical term|text as written]]`;
-// the transcript renderer turns those into link elements, and every plain-text
-// consumer (copies, exports) strips the brackets. The Rust side mirrors this
-// grammar in `src-tauri/src/wikilinks.rs` in the desktop tree for previews and recap sources; keep
-// the two in step.
-//
-// Grammar: `[[` body `]]` on one line. The body is a term, optionally followed
-// by `|` and display text. Neither part may contain `[`, `]`, `|`, or a
-// newline, and each is capped at MAX_WIKILINK_CHARS code points. A term that is
-// only whitespace is not a link. Anything that fails the grammar stays literal
-// text, so a preview cut mid-link or a stray `[[` renders exactly as written.
-//
-// Dependency-free on purpose: `turnTimeline.ts` imports the strip helper and
-// must stay loadable without the markdown packages.
+// Compatibility for saved answers containing [[Term]] or [[Term|label]].
+// Render their display text; new research does not generate these markers.
 
 import type { MarkdownFence } from "./mathDelimiters.js";
 import { closesFence, markerRunAtLineStart } from "./mathDelimiters.js";
@@ -47,34 +34,6 @@ export function stripWikilinks(text: string): string {
     const link = parseWikilinkBody(term, alias);
     return link ? link.label : match;
   });
-}
-
-/** The canonical terms of every wikilink in `text`, in order of first
- * appearance and without duplicates. A malformed link contributes nothing, and
- * an alias contributes its term rather than its display text.
- *
- * This is what indexes an answer: the terms a generated page records as its
- * links (`EncyclopediaPage.links`) and the co-occurring terms sent with a page
- * request (`EncyclopediaSource.siblingTerms`) are both this list. Kept beside
- * the grammar it reads so a caller never has to restate the pattern —
- * `wikilink_terms` in the desktop's `src-tauri/src/wikilinks.rs` is the same
- * function on the other side. */
-export function wikilinkTerms(text: string): string[] {
-  if (!text.includes("[[")) {
-    return [];
-  }
-  const terms: string[] = [];
-  const seen = new Set<string>();
-  WIKILINK_PATTERN.lastIndex = 0;
-  for (const match of text.matchAll(WIKILINK_PATTERN)) {
-    // Group 1 is not optional in the grammar, so a match always has a term.
-    const link = parseWikilinkBody(match[1] ?? "", match[2]);
-    if (link && !seen.has(link.term)) {
-      seen.add(link.term);
-      terms.push(link.term);
-    }
-  }
-  return terms;
 }
 
 // An alias wikilink whose `|` is not already escaped. Used to escape the pipe
@@ -138,12 +97,8 @@ interface MdastNode {
   data?: Record<string, unknown>;
 }
 
-export const WIKILINK_CLASS_NAME = "research-wikilink";
-
 // Contexts whose text must stay literal: code, URLs and existing links, raw
-// HTML, and TeX. The prompt tells the agent not to link inside these, and the
-// renderer must not either, so a bracketed array index in a code span or a
-// `[[` inside a URL never becomes a link.
+// HTML, and TeX. Bracketed array indices and URLs are not legacy prose markers.
 const OPAQUE_NODE_TYPES = new Set([
   "code",
   "inlineCode",
@@ -155,54 +110,7 @@ const OPAQUE_NODE_TYPES = new Set([
   "inlineMath",
 ]);
 
-function wikilinkNode(link: Wikilink): MdastNode {
-  return {
-    type: "wikilink",
-    data: {
-      hName: "a",
-      hProperties: { className: [WIKILINK_CLASS_NAME], dataWikilink: link.term },
-    },
-    children: [{ type: "text", value: link.label }],
-  };
-}
-
-/** Split one mdast text node around its wikilinks, or return null when it has
- * none so the caller leaves the original node untouched. */
-export function splitWikilinkText(value: string): MdastNode[] | null {
-  if (!value.includes("[[")) {
-    return null;
-  }
-  const nodes: MdastNode[] = [];
-  let cursor = 0;
-  WIKILINK_PATTERN.lastIndex = 0;
-  for (const match of value.matchAll(WIKILINK_PATTERN)) {
-    // Group 1 is not optional in the grammar, so a match always has a term.
-    const link = parseWikilinkBody(match[1] ?? "", match[2]);
-    if (!link) {
-      continue;
-    }
-    const start = match.index ?? 0;
-    if (start > cursor) {
-      nodes.push({ type: "text", value: value.slice(cursor, start) });
-    }
-    nodes.push(wikilinkNode(link));
-    cursor = start + match[0].length;
-  }
-  if (nodes.length === 0) {
-    return null;
-  }
-  if (cursor < value.length) {
-    nodes.push({ type: "text", value: value.slice(cursor) });
-  }
-  return nodes;
-}
-
-/** remark transform: `[[Term]]` / `[[Term|shown]]` in prose becomes an `a`
- * element carrying `class="research-wikilink"` and `data-wikilink="Term"`,
- * with no destination. The transcript link component recognizes the marker.
- * Runs as a plain tree walk (same approach as the math tweaks) rather than a
- * micromark extension: `[[…]]` is already literal text to CommonMark, so
- * there is no tokenizer conflict to resolve. */
+/** Strip legacy markers from prose while leaving code, links, and math literal. */
 export function remarkWikilinks() {
   return (tree: MdastNode) => {
     const visit = (node: MdastNode) => {
@@ -219,11 +127,7 @@ export function remarkWikilinks() {
           continue;
         }
         if (child.type === "text") {
-          const replacement = splitWikilinkText(child.value ?? "");
-          if (replacement) {
-            children.splice(i, 1, ...replacement);
-            i += replacement.length - 1;
-          }
+          child.value = stripWikilinks(child.value ?? "");
           continue;
         }
         visit(child);

@@ -1,5 +1,5 @@
-// Encyclopedia pages grown from the wikilinks in answers
-// (`docs/02-domain-model-and-database.md` §3.5, §5.10).
+// Retired tables, retained only to preserve stored data and migration history.
+// No application code reads or writes these tables. Do not drop them implicitly.
 
 import { foreignKey, index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 

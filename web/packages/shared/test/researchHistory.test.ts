@@ -131,17 +131,6 @@ test("re-opening the current workspace page does not grow the stack", (t) => {
   t.is(pushResearchWorkspaceHistory(history, { kind: "journal" }), history);
 });
 
-test("an encyclopedia page is a distinct workspace visit", (t) => {
-  let history = initResearchWorkspaceHistory({ kind: "encyclopedia", slug: "ritual" });
-  t.is(pushResearchWorkspaceHistory(history, { kind: "encyclopedia", slug: "ritual" }), history);
-  history = pushResearchWorkspaceHistory(history, { kind: "encyclopedia", slug: "memory" });
-  t.is(history.entries.length, 2);
-  t.deepEqual(researchWorkspaceHistoryBack(history)?.visit, {
-    kind: "encyclopedia",
-    slug: "ritual",
-  });
-});
-
 test("pruning removed trees from workspace history keeps the cursor on the current page", (t) => {
   const journal = { kind: "journal" } as const;
   const docA = { kind: "document", treeId: "tree-a" } as const;

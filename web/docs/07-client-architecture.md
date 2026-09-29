@@ -22,7 +22,7 @@ packages/client/
       layout/                AppShell, Sidebar
     routes/
       login.tsx  home.tsx  bookmarks.tsx  highlights.tsx
-      research.$treeId.tsx  encyclopedia.$slug.tsx  settings.tsx  admin.tsx
+      research.$treeId.tsx  settings.tsx  admin.tsx
     api/
       trpc.ts                createTRPCClient (batch + subscription links); the only
                              module that names `@session/server`, as a type
@@ -43,7 +43,7 @@ packages/client/
       connection.ts          SSE status
     ui/                      design-system wrappers (08-design-system-and-styling.md)
     features/
-      artifacts/  composer/  encyclopedia/  highlights/  home/  import/
+      artifacts/  composer/  highlights/  home/  import/
       journal/  markdown/  palette/  research/  sidebar/
     lib/                     client-only helpers (clipboard, keyboard, dom search)
     styles/
@@ -75,8 +75,7 @@ Boot sequence: settings store hydrates from localStorage → router renders →
 the shell route's `beforeLoad` resolves `auth.me` through the query cache and
 redirects to `/login` if it is null (`/login` and `/dev/ui` are outside the
 guard) → its loader warms `settings.get`, `system.runtimeConfig`,
-`workspaces.list`, `research.listTrees`, `folders.get`,
-`encyclopedia.listPages` in parallel, without blocking the first paint on them
+`workspaces.list`, `research.listTrees`, and `folders.get` in parallel, without blocking the first paint on them
 → `SessionBoot` initializes the SSE subscription, activates the draft persistence listener, and updates local settings with the authoritative server configuration. There is no "window ready" handshake because the desktop's hidden-window
 flash prevention is unnecessary in the browser.
 
@@ -96,7 +95,6 @@ parameter.
 | `/bookmarks` | `BookmarksPage` | feed with `bookmarkedOnly` |
 | `/highlights` | `HighlightsPage` | |
 | `/r/$treeId` | `ResearchPage` | search `?node=&highlight=&filter=`; `key={treeId}` remount as today |
-| `/e/$slug` | `EncyclopediaPage` | search `?ws=` |
 | `/settings` | `SettingsPage` | tabs: General (appearance, reading and composing, research instructions and default model), Usage |
 | `/admin` | `AdminPage` | admin only: user list with usage and model access |
 
@@ -129,8 +127,6 @@ Query keys (factory in `api/queries.ts`):
 ["nodeContent", nodeId]                  research.getNodeContent
 ["activity", { workspaceId, bookmarkedOnly }]  infinite: feed.recentActivity
 ["highlightsFeed", workspaceId]          highlights.listFeed
-["encyclopedia", workspaceId]            listPages
-["encyclopediaPage", workspaceId, slug]  getPage
 ["activeNodes"]                          research.listActivity
 ["adminUsers"]                           admin.listUsers
 ```
@@ -167,7 +163,7 @@ Per event type:
   `tree`, `activity`, `highlightsFeed`, `activeNodes` caches; `malformed` or
   `unsupported` → `invalidateQueries` for the affected scope.
 - `research.turn.delta|committed|run.*` → `liveTurns` store.
-- `encyclopedia.*`, `journal.*`, `workspace.*`, `folders.updated`,
+- `journal.*`, `workspace.*`, `folders.updated`,
   `settings.updated`, `models.updated` → targeted `setQueryData` or
   invalidate.
 - `research.run.thinking` → `liveTurns` thinking indicator.
@@ -269,7 +265,7 @@ duplicate any of it. Modules ported into `shared` are listed in
 (minus the Tauri branch), `transcriptSearch`, the DOM half of
 `composerTextarea` (`growComposerTextarea`; the height math is in shared),
 the `localStorage` layers of `researchNavigation` and `researchFolders`,
-`wikilinkClickContext`/`neighborText` from `encyclopedia`, `diagramLightbox`, `imageLightbox`, `windowFocus` (reduced to
+`diagramLightbox`, `imageLightbox`, `windowFocus` (reduced to
 `document.hasFocus()`), `sidebarControls`. The `humanBrowser*` modules are dropped.
 
 ## 8. Persistence keys (replacing the desktop list)

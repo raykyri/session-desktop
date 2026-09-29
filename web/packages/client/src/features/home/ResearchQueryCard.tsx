@@ -1,4 +1,4 @@
-// The feed's research card (`10-home-feed-journal-encyclopedia.md` §2, ported
+// The feed's research card (`10-home-feed-journal.md` §2, ported
 // from `ResearchActivityFeed.tsx:334-474`).
 //
 // The prompt is shown as the reader's own question, which means the launch

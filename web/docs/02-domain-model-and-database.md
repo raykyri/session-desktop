@@ -1,7 +1,7 @@
 # Domain model and database
 
 Source of truth for behavior: `src-tauri/src/research.rs`, `state.rs`,
-`persistence.rs`, `journal.rs`, `tweets.rs`, `encyclopedia.rs`, and the
+`persistence.rs`, `journal.rs`, `tweets.rs`, and the
 frontend `src/types.ts`. This document maps that model onto SQLite tables
 managed by Drizzle in `packages/db`, and lists the invariants the repository
 layer must enforce.
@@ -18,12 +18,12 @@ packages/db/
       users.ts  sessions.ts  preferences.ts
       workspaces.ts  folders.ts  trees.ts  nodes.ts  highlights.ts
       snapshots.ts  runs.ts (run_turns, run_attempts, run_queue, node_messages, node_summaries)
-      documents.ts  usage.ts  journal.ts  tweets.ts  encyclopedia.ts
+      documents.ts  usage.ts  journal.ts  tweets.ts
       feedItems.ts  drafts.ts  artifacts.ts  index.ts
     repos/
       users.ts  auth.ts  workspaces.ts  folders.ts  trees.ts  nodes.ts
       highlights.ts  snapshots.ts  documents.ts  recaps.ts  feeds.ts
-      feedItems.ts  feedgen.ts  journal.ts  encyclopedia.ts  drafts.ts  artifacts.ts
+      feedItems.ts  feedgen.ts  journal.ts  drafts.ts  artifacts.ts
     ids.ts                   # ulid(), validateId()
     time.ts                  # now(): number (ms)
     index.ts                 # public surface: openDatabase, repos, types
@@ -61,8 +61,7 @@ zod schemas alongside:
 `RecentActivityPage`, `ResearchMessageAttachment` / `ResearchTweetAttachment`,
 `TweetSnapshot` and its parts (from `src/lib/journalTweets.ts`),
 `JournalLinkEntry`, `JournalTweetEntry` (from `src/lib/journal.ts`; the
-hidden legacy `note` kind is dropped), `EncyclopediaPage`, `EncyclopediaSource`,
-`EncyclopediaPageSummary`, `EncyclopediaPageRequest`, `Turn`, `TurnBlock`,
+hidden legacy `note` kind is dropped), `Turn`, `TurnBlock`,
 `ResearchFolder`,
 `ResearchFolderState`, `SessionEvent`.
 
@@ -267,24 +266,6 @@ tree, as in `membership: HashMap<treeId, folderId>`.
   and registered at hydration rather than when the image is first served
   (`13-deployment-fly.md` §6).
 
-### 3.5 Encyclopedia
-
-`encyclopedia_pages`
-- `user_id` FK, `workspace_id` FK, `slug` text
-- `term`, `title`, `body` text; `status` text; `error` text null
-- `model` text (registry id; always `gemini-flash` today), `generated_by` text null
-- `links_json` text (slugs), `created_at`, `updated_at`
-- PK (`workspace_id`, `slug`)
-
-`encyclopedia_sources`
-- `id` PK, `workspace_id`, `slug` (FK composite to pages)
-- `node_id` null, `tree_id` null, `page_slug` null, `question` null,
-  `excerpt` text, `sibling_terms_json` text, `created_at`
-- Index (`workspace_id`, `slug`, `created_at`); cap 50 per page enforced in
-  the repo (evict oldest). Prompt-assembly caps from `encyclopedia.rs:40-48`:
-  title 160 chars, question 600, excerpt 4,000, 24 sibling terms, 5 sources
-  and 120 existing page titles in the prompt.
-
 ### 3.6 Documents and artifacts
 
 `documents`
@@ -470,17 +451,6 @@ Each item names the desktop source and the enforcing function.
   `hasUnseenFailure` (latest failed `completed_at` > `last_viewed_at`)
   (`state.rs:3770-3776`) via grouped subqueries.
 
-### 5.10 Encyclopedia
-- Slug: lowercase alphanumeric runs joined by single dashes, ≤ 80 chars,
-  valid iff `slugify(slug) === slug` (`encyclopedia.rs:185`, `:230`); shared
-  implementation mirrors `src/lib/encyclopedia.ts`.
-- `encyclopedia.requestPage`: existing page → merge source (dedupe by
-  `nodeId`, else `pageSlug`, else exact excerpt; evict beyond 50) and set
-  `generating` only if `failed`; missing → insert `generating`
-  (`encyclopedia.rs:384`, `:765`).
-- `links_json` recomputed from the body's wikilinks minus self.
-- Listing sorted by (`lower(title)`, `slug`).
-
 ### 5.11 Folders
 - `folders.setState(workspaceId, state)` applies the desktop's
   `normalize_research_folder_state`: dedupe folders, drop membership and
@@ -501,3 +471,10 @@ Each item names the desktop source and the enforcing function.
   `nodes` never embeds turns. `run_turns` holds only active attempts and is
   small at any moment.
 - `VACUUM` is not scheduled; `PRAGMA optimize` runs on close and daily.
+
+## Retired tables
+
+The encyclopedia feature has been removed. The `encyclopedia_pages` and
+`encyclopedia_sources` declarations and historical migrations remain solely
+to preserve existing data and prevent an implicit destructive migration. No
+application repositories, API procedures, or generation jobs use them.

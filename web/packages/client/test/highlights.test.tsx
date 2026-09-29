@@ -1,4 +1,4 @@
-// The Highlights page (`10-home-feed-journal-encyclopedia.md` §4).
+// The Highlights page (`10-home-feed-journal.md` §4).
 
 import { screen } from "@testing-library/react";
 import test from "ava";

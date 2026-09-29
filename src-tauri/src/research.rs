@@ -2779,24 +2779,6 @@ pub const MAX_RESEARCH_LAUNCH_INSTRUCTION_BYTES: usize = 4 * 1024;
 /// strips the block as session-injected machinery rather than user words.
 pub const RESEARCH_LAUNCH_INSTRUCTION_TAG: &str = "research-instructions";
 
-/// The tag wrapping Session's built-in linking instruction. Same tagged-block
-/// conventions as [`RESEARCH_LAUNCH_INSTRUCTION_TAG`], so display, copies,
-/// previews, and exports strip it the same way.
-pub const RESEARCH_LINKING_INSTRUCTION_TAG: &str = "research-linking";
-
-/// Built-in instruction asking the agent to mark key terms as wikilinks. The
-/// frontend renders `[[Term]]` / `[[Term|shown text]]` as link elements;
-/// previews, recap sources, and copies keep only the display text (see
-/// `crate::wikilinks`). Sent with every research launch, ahead of the user's
-/// own instruction block so the user's text can override it.
-pub const RESEARCH_LINKING_INSTRUCTION: &str = "Mark key terms in your answer as wikilinks so Session can index and cross-reference them. Wrap a term in double square brackets: [[Term]]. When the wording in the sentence differs from the term's canonical name (plural, possessive, abbreviation, shortened form), write [[Canonical name|wording in the sentence]] so the sentence still reads naturally.
-
-Be thorough. Link every proper noun and named entity: people, organizations, companies, products, projects, papers, books, datasets, models, standards, laws, places, and events. Also link every named technique, method, algorithm, metric, and defined concept a reader might want to look up. Link at least the first occurrence of each term in every section; linking later occurrences is fine. Prefer specific terms over generic words.
-
-When the answer is a list of items, link every item: wrap the item's name or head term at the start of the item, for example \"- [[Item name]]: why it matters\". Do the same for table rows and numbered steps that name something.
-
-Do not put wikilinks inside code spans, code blocks, URLs, headings, or existing Markdown links, and do not nest them. Otherwise write normal Markdown; the brackets are the only addition.";
-
 /// Validates an instruction as entered in settings: trimmed, `None` when
 /// empty (meaning "send prompts unchanged"), refused over the byte cap.
 pub fn sanitized_research_launch_instruction(raw: &str) -> Result<Option<String>, String> {
@@ -2845,32 +2827,14 @@ fn neutralized_instruction_markup(text: &str) -> String {
     result
 }
 
-/// Applies Session's built-in linking instruction and the user's custom launch
-/// instruction to a fully assembled research launch prompt. The linking block
-/// is always sent; the user block follows it when set, so user text can
-/// override the built-in guidance. Both ride in tagged instruction blocks
-/// *before* the prompt, matching the leading-block discipline every strip
-/// path already handles; a prompt that begins with a slash command must keep
-/// it at the very start of the message (the adapter will not recognize it
-/// otherwise), so the blocks follow the prompt in that form only. Either way
-/// the prompt stays a contiguous, normalized substring of the sent text, so
-/// response-boundary matching keeps working.
-///
-/// The byte cap on the user instruction is re-enforced here (cut at a char
-/// boundary) so a hand-edited preferences file cannot ship an argv-breaking
-/// prompt.
+/// Adds the user's optional instruction while preserving leading slash commands.
 pub fn prompt_with_research_launch_instruction(
     prompt: String,
     instruction: Option<&str>,
 ) -> String {
-    let mut blocks = vec![tagged_block(
-        RESEARCH_LINKING_INSTRUCTION_TAG,
-        RESEARCH_LINKING_INSTRUCTION,
-    )];
-    if let Some(user_block) = user_instruction_block(instruction) {
-        blocks.push(user_block);
-    }
-    let blocks = blocks.join("\n\n");
+    let Some(blocks) = user_instruction_block(instruction) else {
+        return prompt;
+    };
     if prompt.starts_with('/') {
         format!("{prompt}\n\n{blocks}")
     } else {
@@ -4299,78 +4263,28 @@ mod tests {
         assert_eq!(completed_exchange_boundary(&with_rollback), Some(0));
     }
 
-    fn linking_block() -> String {
-        format!("<research-linking>\n{RESEARCH_LINKING_INSTRUCTION}\n</research-linking>")
-    }
-
     #[test]
-    fn research_launch_instructions_wrap_prompts_in_leading_tagged_blocks() {
-        let sent = prompt_with_research_launch_instruction(
-            "Why is the sky blue?".to_string(),
-            Some("Answer concisely,\nin a few short paragraphs."),
-        );
-        // Built-in linking guidance first, then the user's block, so the
-        // user's text is the later (overriding) instruction.
+    fn research_launch_instructions_are_optional_and_preserve_slash_commands() {
+        for instruction in [None, Some("  \n\t")] {
+            for prompt in ["Why?", "/deep-research Why?"] {
+                assert_eq!(
+                    prompt_with_research_launch_instruction(prompt.into(), instruction),
+                    prompt
+                );
+            }
+        }
+        let block = "<research-instructions>\nKeep it short.\n</research-instructions>";
         assert_eq!(
-            sent,
-            format!(
-                "{}\n\n<research-instructions>\nAnswer concisely,\nin a few short paragraphs.\n</research-instructions>\n\nWhy is the sky blue?",
-                linking_block()
-            )
-        );
-        // The displayed prompt must stay a normalized substring of the sent
-        // prompt so response-boundary matching still finds it.
-        assert!(normalized_text(&sent).contains(&normalized_text("Why is the sky blue?")));
-        // The leading block is exactly what the transcript/export sanitizers
-        // strip as session-injected machinery.
-        assert_eq!(
-            crate::transcript::strip_leading_tagged_instruction_blocks(&sent),
-            Some("\nWhy is the sky blue?")
-        );
-    }
-
-    #[test]
-    fn research_launch_instructions_follow_slash_command_prompts() {
-        let sent = prompt_with_research_launch_instruction(
-            "/deep-research Why?".to_string(),
-            Some("Keep it short."),
-        );
-        // The slash command only registers at the very start of the message.
-        assert!(sent.starts_with("/deep-research Why?"), "{sent}");
-        assert!(
-            sent.ends_with(&format!(
-                "{}\n\n<research-instructions>\nKeep it short.\n</research-instructions>",
-                linking_block()
-            )),
-            "{sent}"
-        );
-    }
-
-    #[test]
-    fn research_launch_instructions_send_only_the_linking_block_when_unset() {
-        let prompt = "Why is the sky blue?".to_string();
-        let expected = format!("{}\n\nWhy is the sky blue?", linking_block());
-        assert_eq!(
-            prompt_with_research_launch_instruction(prompt.clone(), None),
-            expected
+            prompt_with_research_launch_instruction("Why?".into(), Some("Keep it short.")),
+            format!("{block}\n\nWhy?")
         );
         assert_eq!(
-            prompt_with_research_launch_instruction(prompt.clone(), Some("   \n\t ")),
-            expected
+            prompt_with_research_launch_instruction(
+                "/deep-research Why?".into(),
+                Some("Keep it short.")
+            ),
+            format!("/deep-research Why?\n\n{block}")
         );
-        assert!(!expected.contains("<research-instructions>"));
-        // The built-in block strips like any other injected instruction.
-        assert_eq!(
-            crate::transcript::strip_leading_tagged_instruction_blocks(&expected),
-            Some("\nWhy is the sky blue?")
-        );
-    }
-
-    #[test]
-    fn the_linking_instruction_is_plain_prose_that_cannot_break_its_wrapper() {
-        assert!(!RESEARCH_LINKING_INSTRUCTION.contains('<'));
-        assert!(RESEARCH_LINKING_INSTRUCTION.contains("[[Term]]"));
-        assert!(RESEARCH_LINKING_INSTRUCTION.contains("list"));
     }
 
     #[test]

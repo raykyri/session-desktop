@@ -1,4 +1,4 @@
-// Highlights (`10-home-feed-journal-encyclopedia.md` §4).
+// Highlights (`10-home-feed-journal.md` §4).
 
 import { HighlightsFeed } from "../features/highlights/HighlightsFeed.js";
 import { useWorkspaceScope } from "../features/sidebar/scope.js";

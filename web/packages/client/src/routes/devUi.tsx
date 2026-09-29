@@ -288,11 +288,7 @@ function Kitchen() {
             <h2>A passage</h2>
             <p>
               Body copy with <strong>emphasis</strong>, <code>inline code</code>, a{" "}
-              <a href="#top">link</a>, and a{" "}
-              <a className="research-wikilink is-ready" href="#term">
-                wikilink
-              </a>
-              .
+              <a href="#top">link</a>.
             </p>
             <ul>
               <li>An unordered item</li>

@@ -1,5 +1,5 @@
 // One shape for the three non-content states a query can be in, so the feed,
-// highlights, the answer pane, an encyclopedia page and the usage table all
+// highlights, the answer pane and the usage table all
 // say "loading", "nothing here" and "failed" the same way. A spinner is never
 // paired with a terminal message: either the data is coming, or it is not.
 

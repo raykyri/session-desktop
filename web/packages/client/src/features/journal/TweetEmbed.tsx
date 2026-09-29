@@ -1,5 +1,5 @@
 // The hydrated X post, rendered as the entry's whole content
-// (`10-home-feed-journal-encyclopedia.md` §2, ported from `TweetEmbed.tsx`).
+// (`10-home-feed-journal.md` §2, ported from `TweetEmbed.tsx`).
 //
 // Ported unchanged except for how a link opens: the desktop called
 // `openExternalUrl` through Tauri, the web uses ordinary anchors with

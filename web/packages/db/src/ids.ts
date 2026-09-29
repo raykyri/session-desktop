@@ -9,7 +9,7 @@ import { monotonicFactory } from "ulid";
 const nextUlid = monotonicFactory();
 
 /** Longest id the repositories accept. A ULID is 26 characters; the slack is
- * for ids minted elsewhere (encyclopedia slugs, invite codes). */
+ * for ids minted elsewhere (invite codes). */
 export const MAX_ID_LENGTH = 64;
 
 /** A new monotonic ULID. Uppercase Crockford base32, as the spec defines. */

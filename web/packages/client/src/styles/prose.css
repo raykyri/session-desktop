@@ -48,7 +48,7 @@
    centered column, it hugs the left edge; as the window widens it drifts right
    until the reading column is centered and the rail has the space right of
    center. `%` here is the surface's content width, so the rule is one
-   expression rather than a breakpoint. Threads and encyclopedia pages share
+   expression rather than a breakpoint. Threads share
    it, so the two kinds of document line up when switching between them. */
 .research-document-frame {
   width: 100%;
@@ -218,58 +218,6 @@
 
 .research-prose a:hover {
   text-decoration: underline;
-}
-
-/* Wikilinks: key terms the agent marked as [[Term]]. A term without an
-   encyclopedia page uses a muted tint of the base text color; the dotted
-   underline is painted but transparent so it can fade in. Hovering or
-   focusing any link in the same prose, recap, or document frame reveals
-   every wikilink — populated pages included — as that dotted hover
-   state. A page still being written pulses. */
-:is(.research-prose, .research-summary-text) a.research-wikilink {
-  cursor: pointer;
-  color: color-mix(in srgb, var(--text-strong) 90%, transparent);
-  text-decoration: underline dotted;
-  text-decoration-color: transparent;
-  text-underline-offset: 2px;
-  transition:
-    color 120ms ease,
-    text-decoration-color 120ms ease,
-    text-decoration-style 120ms ease;
-}
-
-:is(.research-prose, .research-summary-text) a.research-wikilink.is-ready {
-  text-decoration: underline solid;
-  text-decoration-color: color-mix(in srgb, var(--text-strong) 55%, transparent);
-}
-
-:is(.research-prose, .research-summary-text) a.research-wikilink.is-generating {
-  text-decoration: underline dotted;
-  text-decoration-color: color-mix(in srgb, var(--text-strong) 40%, transparent);
-  transition: none;
-  animation: research-wikilink-pulse 1.6s ease-in-out infinite;
-}
-
-:is(.research-prose, .research-summary-text) a.research-wikilink.is-failed {
-  text-decoration: underline dotted;
-  text-decoration-color: var(--status-failed-fg);
-}
-
-:is(.research-prose, .research-summary-text, .research-document-frame):has(
-    a:is(:hover, :focus-visible)
-  )
-  a.research-wikilink,
-:is(.research-prose, .research-summary-text, .research-document-frame):has(
-    a:is(:hover, :focus-visible)
-  )
-  a.research-wikilink.is-ready,
-:is(.research-prose, .research-summary-text) a.research-wikilink:hover,
-:is(.research-prose, .research-summary-text) a.research-wikilink:focus-visible,
-:is(.research-prose, .research-summary-text) a.research-wikilink.is-ready:hover,
-:is(.research-prose, .research-summary-text) a.research-wikilink.is-ready:focus-visible {
-  color: var(--text-strong);
-  text-decoration: underline dotted;
-  text-decoration-color: color-mix(in srgb, var(--text-strong) 60%, transparent);
 }
 
 .research-prose blockquote {
@@ -532,16 +480,6 @@ html.wrap-code-blocks .research-prose-code-block pre code {
   background: #2a6fc0; /* highlight-pseudo-literal */
 }
 
-@keyframes research-wikilink-pulse {
-  0%,
-  100% {
-    text-decoration-color: color-mix(in srgb, var(--text-strong) 40%, transparent);
-  }
-  50% {
-    text-decoration-color: var(--accent-color);
-  }
-}
-
 /* Progress spinners keep moving under reduced motion: they report ongoing
    work rather than decorating a state change. */
 @keyframes session-spin {
@@ -593,9 +531,5 @@ html.wrap-code-blocks .research-prose-code-block pre code {
   .session-notification {
     transform: none;
     translate: none;
-  }
-
-  .research-prose a.research-wikilink.is-generating {
-    animation: none;
   }
 }

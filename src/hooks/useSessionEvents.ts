@@ -122,7 +122,6 @@ export interface UseSessionEventsHandlers {
   onAppShortcut?: (command: AppShortcutCommand, repeat: boolean) => void;
   onBrowserEscapeRequested?: () => void;
   onResearchChanged?: (event: SessionEvent) => void;
-  onEncyclopediaChanged?: (event: SessionEvent) => void;
   onUserNotificationRequested?: (event: SessionEvent) => void;
 }
 
@@ -169,7 +168,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
     onAppShortcut,
     onBrowserEscapeRequested,
     onResearchChanged,
-    onEncyclopediaChanged,
     onUserNotificationRequested,
   } = handlers;
 
@@ -215,9 +213,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
       }
       if (event.type.startsWith("research.")) {
         onResearchChanged?.(event);
-      }
-      if (event.type.startsWith("encyclopedia.")) {
-        onEncyclopediaChanged?.(event);
       }
       if (event.type === "app.notification_requested") {
         onUserNotificationRequested?.(event);

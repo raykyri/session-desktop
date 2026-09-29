@@ -1,6 +1,6 @@
 // Launch prompt assembly (`04-agent-runtime.md` §5).
 //
-// The pieces — the system prompt, the linking instruction, the wrapper the
+// The pieces — the system prompt, the wrapper the
 // user's own instruction is neutralized into, the quoted-passage and
 // imported-document forms, the tweet reference block — are all in
 // `@session/shared`, ported from `research.rs` with their tests. This module
@@ -11,8 +11,6 @@
 import type { ResearchNode } from "@session/shared";
 import {
   RESEARCH_LAUNCH_INSTRUCTION_TAG,
-  RESEARCH_LINKING_INSTRUCTION,
-  RESEARCH_LINKING_INSTRUCTION_TAG,
   RESEARCH_SYSTEM_PROMPT,
   clampResearchLaunchInstruction,
   documentFollowupPrompt,
@@ -26,18 +24,15 @@ function taggedBlock(tag: string, body: string): string {
 }
 
 /**
- * The system prompt for one attempt: the fixed research prompt, the built-in
- * linking instruction, then the account's own research instruction.
+ * The system prompt for one attempt: the fixed research prompt followed by
+ * the account's optional research instruction.
  *
  * The user's instruction is clamped and neutralized before it is wrapped, so
  * an instruction that spells the closing tag cannot end the block early and
  * have the remainder read as Session's own words.
  */
 export function researchSystemPrompt(instruction?: string | null): string {
-  const blocks = [
-    RESEARCH_SYSTEM_PROMPT,
-    taggedBlock(RESEARCH_LINKING_INSTRUCTION_TAG, RESEARCH_LINKING_INSTRUCTION),
-  ];
+  const blocks = [RESEARCH_SYSTEM_PROMPT];
   const trimmed = (instruction ?? "").trim();
   if (trimmed !== "") {
     blocks.push(

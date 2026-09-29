@@ -1,4 +1,4 @@
-// Home (`10-home-feed-journal-encyclopedia.md` §1): the reading-surface column
+// Home (`10-home-feed-journal.md` §1): the reading-surface column
 // with the composer (which carries the report import control) and the
 // activity feed.
 

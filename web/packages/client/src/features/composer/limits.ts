@@ -1,5 +1,5 @@
 // The size ceilings a launched question or an imported report has to fit under
-// (`10-home-feed-journal-encyclopedia.md` §5).
+// (`10-home-feed-journal.md` §5).
 //
 // One module because two surfaces enforce them and the import dialog's
 // documentation says they are "the same limits the composer applies" — which is

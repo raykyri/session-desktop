@@ -13,11 +13,8 @@ use std::time::{Duration, Instant};
 const RESEARCH_TITLE_SOURCE_CHARS: usize = 4_000;
 const RESEARCH_TITLE_MAX_CHARS: usize = 80;
 const RESEARCH_METADATA_TIMEOUT: Duration = Duration::from_secs(60);
-/// Encyclopedia pages are a few hundred words rather than one line.
-const ENCYCLOPEDIA_PAGE_TIMEOUT: Duration = Duration::from_secs(180);
 const RECAP_SCHEMA: &str = r#"{"type":"object","properties":{"recap":{"type":"string"}},"required":["recap"],"additionalProperties":false}"#;
 const TITLE_SCHEMA: &str = r#"{"type":"object","properties":{"title":{"type":"string"}},"required":["title"],"additionalProperties":false}"#;
-pub(crate) const PAGE_SCHEMA: &str = r#"{"type":"object","properties":{"page":{"type":"string"}},"required":["page"],"additionalProperties":false}"#;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ResearchMetadataFlavor {
@@ -104,29 +101,6 @@ pub fn generate_research_recap_with(
         &prompt,
         "recap",
         RECAP_SCHEMA,
-    )
-}
-
-/// Runs an encyclopedia page request through the given adapter with tools
-/// disabled. `job_id` names the stderr log; the prompt is assembled by
-/// `encyclopedia.rs`. Returns the raw Markdown page.
-pub fn generate_encyclopedia_page(
-    config: &SessionConfig,
-    job_id: &str,
-    adapter: &str,
-    model: Option<&str>,
-    workspace: &GroupInfo,
-    prompt: &str,
-) -> Result<String, String> {
-    generate_research_metadata(
-        config,
-        job_id,
-        adapter,
-        model,
-        workspace,
-        prompt,
-        "page",
-        PAGE_SCHEMA,
     )
 }
 
@@ -311,12 +285,7 @@ fn run_research_metadata_process(
 ) -> Result<String, String> {
     let mut process =
         JsonlProcess::spawn_with_stdin(binary, args, cwd, stderr_log, flavor.label(), stdin)?;
-    let timeout = if field == "page" {
-        ENCYCLOPEDIA_PAGE_TIMEOUT
-    } else {
-        RESEARCH_METADATA_TIMEOUT
-    };
-    let deadline = Instant::now() + timeout;
+    let deadline = Instant::now() + RESEARCH_METADATA_TIMEOUT;
     let mut candidate = None;
     loop {
         if Instant::now() >= deadline {
@@ -351,7 +320,6 @@ fn run_research_metadata_process(
     let raw = candidate.as_deref().unwrap_or("");
     let result = match field {
         "recap" => crate::research_recap::normalize_recap(raw),
-        "page" => crate::encyclopedia::normalize_page(raw),
         _ => sanitize_research_title(raw),
     };
     result.ok_or_else(|| format!("{} returned no research {field}", flavor.label()))

@@ -108,9 +108,7 @@ import {
 } from "./ResearchMessage";
 import {
   TranscriptLinkActionsProvider,
-  TranscriptWikilinkActionsProvider,
   type LinkActions,
-  type WikilinkActions,
 } from "../TranscriptMarkdown";
 import DocumentComposer from "./DocumentComposer";
 import {
@@ -159,8 +157,6 @@ interface ResearchDocumentProps {
    * reconciliation, so the segment re-renders as Queued. */
   onRetryNode: (nodeId: string) => Promise<void>;
   linkActions: LinkActions;
-  /** Encyclopedia resolution for `[[Term]]` links in answers; null leaves them inert. */
-  wikilinkActions?: WikilinkActions | null;
   onError: (message: string) => void;
   onToast: (message: string, tone?: "normal" | "warning") => void;
   /** Reopens the application sidebar when research is using the full width. */
@@ -1781,7 +1777,6 @@ function ResearchDocument({
   onCancel,
   onRetryNode,
   linkActions,
-  wikilinkActions = null,
   onError,
   onToast,
   onShowSidebar,
@@ -5112,7 +5107,6 @@ function ResearchDocument({
   if (displayNode.kind === "note") {
     return (
       <TranscriptLinkActionsProvider actions={linkActions}>
-        <TranscriptWikilinkActionsProvider actions={wikilinkActions}>
           <ResearchNoteDocument
             detail={detail}
             note={displayNode}
@@ -5129,14 +5123,12 @@ function ResearchDocument({
             onToggleBookmark={handleToggleBookmark}
             onSelectNode={handleSelectNode}
           />
-        </TranscriptWikilinkActionsProvider>
       </TranscriptLinkActionsProvider>
     );
   }
 
   return (
     <TranscriptLinkActionsProvider actions={linkActions}>
-      <TranscriptWikilinkActionsProvider actions={wikilinkActions}>
         <div className="research-workspace">
         <main className="research-document">
           <header className="research-document-header">
@@ -5610,7 +5602,6 @@ function ResearchDocument({
               document.body,
             )
           : null}
-      </TranscriptWikilinkActionsProvider>
     </TranscriptLinkActionsProvider>
   );
 }

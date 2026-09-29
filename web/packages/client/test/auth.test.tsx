@@ -87,7 +87,6 @@ test.serial("the boot loader warms the seven queries the shell renders from", as
     "workspaces.list",
     "research.listTrees",
     "folders.get",
-    "encyclopedia.listPages",
     // Not rendered anywhere: it is the cache `cachedNode` reads, and an empty
     // one makes every node update for an unopened thread invalidate the
     // sidebar instead of patching it.

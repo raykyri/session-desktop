@@ -1,4 +1,4 @@
-// The sidebar's visibility filter (`10-home-feed-journal-encyclopedia.md` §7).
+// The sidebar's visibility filter (`10-home-feed-journal.md` §7).
 //
 // `?Syncs the active visibility filter between query parameters and global navigation state.
 

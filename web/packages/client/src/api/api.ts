@@ -12,9 +12,6 @@
 
 import type {
   DocumentInfo,
-  EncyclopediaPage,
-  EncyclopediaPageRequest,
-  EncyclopediaPageSummary,
   JournalEntry,
   RecentActivityCursor,
   RecentActivityPage,
@@ -382,38 +379,6 @@ export function fetchJournalTweet(id: string, token: string): Promise<string> {
 
 export function hydrateJournalTweet(entryId: string): Promise<JournalEntry> {
   return trpc().journal.hydrateTweet.mutate({ entryId });
-}
-
-/* -------------------------------------------------------------------------
- * encyclopedia
- * ---------------------------------------------------------------------- */
-
-export function listEncyclopediaPages(workspaceId: string): Promise<EncyclopediaPageSummary[]> {
-  return trpc().encyclopedia.listPages.query({ workspaceId });
-}
-
-export function getEncyclopediaPage(
-  workspaceId: string,
-  slug: string,
-): Promise<EncyclopediaPage | null> {
-  return trpc().encyclopedia.getPage.query({ workspaceId, slug });
-}
-
-export function requestEncyclopediaPage(
-  request: EncyclopediaPageRequest,
-): Promise<EncyclopediaPage> {
-  return trpc().encyclopedia.requestPage.mutate(request);
-}
-
-export function regenerateEncyclopediaPage(
-  workspaceId: string,
-  slug: string,
-): Promise<EncyclopediaPage> {
-  return trpc().encyclopedia.regeneratePage.mutate({ workspaceId, slug });
-}
-
-export function deleteEncyclopediaPage(workspaceId: string, slug: string) {
-  return trpc().encyclopedia.deletePage.mutate({ workspaceId, slug });
 }
 
 /* -------------------------------------------------------------------------

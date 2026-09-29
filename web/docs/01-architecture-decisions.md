@@ -348,7 +348,7 @@ The desktop's `GroupInfo` with `scope: research` is a workspace bound to a
 user-chosen folder on disk; research folders are a client-authored grouping
 over trees within a workspace. On the web, a workspace is a purely
 server-side container owned by a user: a scope for trees, folders,
-encyclopedia pages, and the feed filter. It has no associated directory, and
+and the feed filter. It has no associated directory, and
 agents have no filesystem access. Native folder pickers, "reveal in Finder",
 moving a workspace to another folder, and detached on-disk archives are
 replaced by workspace creation, renaming, removal, reordering, and default
@@ -396,4 +396,3 @@ Documents attached to a node are in context for its descendants and are
 also served through the artifact preview.
 
 Why: Local filesystem tools like Read and Grep cannot be used in a hosted web environment; user-uploaded documents provide the web equivalent for referencing local files.
-

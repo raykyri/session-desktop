@@ -1,4 +1,4 @@
-// Bookmarks (`10-home-feed-journal-encyclopedia.md` §3): the same feed with
+// Bookmarks (`10-home-feed-journal.md` §3): the same feed with
 // `bookmarkedOnly`, no composer and no import. The server filters roots by
 // `trees.bookmarked`; the desktop filtered client-side.
 

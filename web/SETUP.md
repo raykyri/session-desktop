@@ -12,7 +12,7 @@ are missing:
 
 - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` for sign-in.
 - `GOOGLE_APPLICATION_CREDENTIALS_JSON`, `GOOGLE_VERTEX_PROJECT` for
-  default model, titles, recaps, encyclopedia pages (all Gemini Flash)
+  default model, titles and recaps (all Gemini Flash)
 - `PARALLEL_API_KEY` or `TAVILY_API_KEY` for web search
 - `OPENROUTER_API_KEY` for DeepSeek and GPT-5.6 Luna
 - `ANTHROPIC_API_KEY` for Claude Fable (admin-only)

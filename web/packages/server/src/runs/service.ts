@@ -4,7 +4,7 @@
 // emits the events. Everything after that is this module — claiming the queue
 // under the concurrency caps, opening the provider stream, re-queueing a
 // rate-limited attempt, draining on `SIGTERM` — and the metadata pool that
-// titles, recaps, and encyclopedia pages run in
+// titles and recaps run in
 // (`04-agent-runtime.md` §2, §9, `05-run-lifecycle-and-streaming.md` §7, §8).
 
 import type { SessionDatabase } from "@session/db";
@@ -28,13 +28,11 @@ import { createProviders } from "./providers.js";
 import { createToolCaches } from "./tools/context.js";
 import type { RunToolContext } from "./tools/context.js";
 
-/** A run on `gemini-flash` that produces a title, a recap, or an encyclopedia
- * page rather than an answer (`04-agent-runtime.md` §9). It has no node of its
+/** A run on `gemini-flash` that produces a title or recap rather than an answer (`04-agent-runtime.md` §9). It has no node of its
  * own, so it cannot be addressed by node id like a research run. */
 export type MetadataJob =
   | { kind: "title"; userId: string; nodeId: string }
-  | { kind: "recap"; userId: string; nodeId: string; instructions?: string }
-  | { kind: "encyclopedia"; userId: string; workspaceId: string; slug: string };
+  | { kind: "recap"; userId: string; nodeId: string; instructions?: string };
 
 export interface RunsService {
   /** A node has been admitted and enqueued; wake the claim loop. */
@@ -302,9 +300,6 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
           return;
         case "recap":
           await metadata.runScheduledRecap(job.userId, job.nodeId);
-          return;
-        case "encyclopedia":
-          await metadata.generatePage(job.userId, job.workspaceId, job.slug);
           return;
       }
     } catch (error) {

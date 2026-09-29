@@ -1,5 +1,5 @@
 // The workspace scope (`07-client-architecture.md` §3): which workspace the
-// sidebar, the feeds and the encyclopedia are looking at.
+// sidebar and the feeds are looking at.
 //
 // The scope is a search param rather than a store, so a reload, a deep link
 // and a second tab all agree (ADR-7). `?ws=` absent means the account's
