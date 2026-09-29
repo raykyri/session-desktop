@@ -108,6 +108,7 @@ import {
 import ResearchDocument from "./components/research/ResearchDocument";
 import { ResearchDocumentFrame } from "./components/research/ResearchDocumentChrome";
 import ResearchActivityFeed from "./components/research/ResearchActivityFeed";
+import ResearchColumns from "./components/research/ResearchColumns";
 import ResearchHighlightsFeed from "./components/research/ResearchHighlightsFeed";
 import { useActivityFeedState } from "./hooks/useActivityFeedState";
 import ResearchQueryComposer from "./components/research/ResearchQueryComposer";
@@ -11479,11 +11480,7 @@ function MainApp() {
               picked). One wrapper for both states keeps the feed mounted, and
               its scroll position, while threads open and close beside it. */}
           {researchFeedColumnVisible ? (
-            <div
-              className={`research-columns${
-                researchStageView === "document" ? " has-document" : ""
-              }`}
-            >
+            <ResearchColumns hasDocument={researchStageView === "document"}>
               {config ? (
                 <div className="research-feed-column">
                   <ResearchActivityFeed
@@ -11579,7 +11576,7 @@ function MainApp() {
                   </ResearchDocumentFrame>
                 )}
               </div>
-            </div>
+            </ResearchColumns>
           ) : null}
         </div>
       </section>
