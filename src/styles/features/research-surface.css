@@ -334,6 +334,14 @@
 /* Shared tweet embed used both as a Home item and as a research-message
    attachment. Home-only menu clearance remains in journal.css. */
 
+.research-document {
+  --tweet-avatar-scale: 0.5;
+}
+
+.research-document .journal-tweet-verified {
+  display: none;
+}
+
 .journal-tweet {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -386,12 +394,12 @@
   display: grid;
   place-items: center;
   color: var(--lightbox-caption-fg);
-  font-size: calc(15px + var(--font-ui-size-offset));
+  font-size: calc((15px + var(--font-ui-size-offset)) * var(--tweet-avatar-scale, 1));
   font-weight: 700;
 }
 
 .journal-tweet-quote-head .journal-tweet-avatar-fallback {
-  font-size: calc(9px + var(--font-ui-size-offset));
+  font-size: calc((9px + var(--font-ui-size-offset)) * var(--tweet-avatar-scale, 1));
 }
 
 .journal-tweet-author {
