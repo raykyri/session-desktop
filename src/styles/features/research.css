@@ -1586,7 +1586,7 @@
 /* Scoped past `.research-followup-composer .native-input-submit-actions
    button`, which sets the Send button's optical padding for the whole
    group. */
-.research-followup-composer .research-followup-mode-trigger {
+.research-followup-composer .native-input-submit-actions .research-followup-mode-trigger {
   flex: 0 0 auto;
   min-width: 20px;
   margin-left: -1px;

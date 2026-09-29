@@ -129,7 +129,7 @@
      is set from App.tsx:effectiveSidebarWidth (leftSidebarCollapsed ? 0 : sidebarWidth)
      and the 48px is the timeline's 24+24 side padding at transcript.css. If either
      changes, update that calc. */
-  left: var(--sidebar-width, 268px);
+  left: var(--sidebar-width, 208px);
   z-index: 7;
   width: auto;
   box-shadow: inset 1px 0 0 var(--surface-divider);
@@ -427,7 +427,7 @@
   display: flex;
   flex-direction: column;
   width: fit-content;
-  max-width: min(480px, calc(100% - var(--sidebar-width, 268px) - 28px));
+  max-width: min(480px, calc(100% - var(--sidebar-width, 208px) - 28px));
   max-height: min(70vh, 460px);
   margin: 0;
   padding: 0;
