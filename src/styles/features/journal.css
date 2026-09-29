@@ -192,23 +192,6 @@
   min-width: 0;
 }
 
-.research-feed-post-head {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  min-width: 0;
-  color: var(--feed-post-secondary);
-  font-size: var(--research-meta-font-size);
-  line-height: var(--research-meta-line-height);
-}
-
-.research-feed-post-action {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .research-feed-post-time {
   flex: none;
   min-height: 0;
@@ -257,6 +240,10 @@
 
 .research-feed-post-body {
   min-width: 0;
+}
+
+.research-feed-post .research-message-attachments {
+  margin-bottom: 4px;
 }
 
 /* Under a title the question reads as secondary text; without one (notes)

@@ -1149,7 +1149,9 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
   onRootMouseMove,
   onRootMouseLeave,
 }: ResearchAnswerPaneProps) {
-  const modelSummary = formatResearchModelSummary(node.adapter, node.model, node.origin);
+  const modelSummary = node.origin === "imported"
+    ? ""
+    : formatResearchModelSummary(node.adapter, node.model, node.origin);
   // One-click relaunch beside a settled failure/cancellation. Errors surface
   // through the parent's handler (the shared global banner), matching the
   // neighboring cancel control.
@@ -1525,6 +1527,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   queryQuote,
   prompt,
   attachments = [],
+  origin,
   createdAt,
   running = false,
   followed = false,
@@ -1540,6 +1543,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
   queryQuote: string | null;
   prompt: string;
   attachments?: ResearchNode["attachments"];
+  origin?: ResearchNode["origin"];
   /** When the root prompt was asked; shown as relative time on its footer. */
   createdAt?: number;
   /** The question is still being answered: the footer row (thread actions
@@ -1598,6 +1602,7 @@ export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
             className="research-prompt-footer-meta"
             title={askedAt !== null ? new Date(askedAt).toLocaleString() : undefined}
           >
+            {origin === "imported" ? `Imported${askedAt !== null ? " " : ""}` : null}
             {askedAt !== null ? (
               <time dateTime={new Date(askedAt).toISOString()}>
                 {formatRelativeTime(askedAt)}
@@ -1684,6 +1689,7 @@ const ThreadSegment = memo(function ThreadSegment({
         queryQuote={node.queryAnchor?.exact ?? replyQuote}
         prompt={node.prompt}
         attachments={node.attachments}
+        origin={node.origin}
         createdAt={node.createdAt}
         running={isActiveResearchStatus(node.status)}
         followed={followed}
@@ -5258,7 +5264,9 @@ function ResearchDocument({
           >
             <div
               ref={contentContainerRef}
-              className="research-document-content research-reading-surface"
+              className={`research-document-content research-reading-surface${
+                ask || childrenBySegment.size > 0 ? " has-followup-rail" : ""
+              }`}
             >
               {renderedSegments}
               {!ask ? (

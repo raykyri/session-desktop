@@ -795,7 +795,7 @@
 }
 
 .research-document-content {
-  width: min(100%, 1160px);
+  width: min(100%, 640px);
   min-width: 0;
   margin: 0 auto;
   /* The answer-column cap is spelled literally (640px) at every use below
@@ -805,6 +805,20 @@
      update re-lays the grid out — and a dropped cap lets the answer column
      take its content width and push the follow-up rail off the right edge. */
   --research-content-column-gap: clamp(28px, 4vw, 52px);
+}
+
+/* Center the actual reading layout, including the rail only when it has
+   content. The combined cap matches the two tracks and their gap. */
+.research-document-content.has-followup-rail {
+  width: min(100%, calc(900px + clamp(28px, 4vw, 52px)));
+}
+
+.research-document-content:not(.has-followup-rail) .research-response-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.research-document-content:not(.has-followup-rail) .research-followups {
+  display: none;
 }
 
 /* Short threads still place the composer at the bottom of the viewport. */
@@ -1473,7 +1487,7 @@
 
 .research-followup-composer.is-thread textarea {
   display: block;
-  padding: 4px 9px;
+  padding: 5px 9px;
   line-height: calc(var(--control-h-md) - 10px);
 }
 
@@ -2135,6 +2149,10 @@
 }
 
 @container research-page (max-width: 960px) {
+  .research-document-content.has-followup-rail {
+    width: min(100%, 640px);
+  }
+
   .research-document-scroll {
     padding-inline: 28px;
   }
@@ -2328,13 +2346,6 @@
   .research-recap-dialog-controls {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-.research-import-button {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .confirm-dialog.research-import-dialog {

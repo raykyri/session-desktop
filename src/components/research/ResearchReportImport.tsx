@@ -111,9 +111,10 @@ export default function ResearchReportImport({ dropTarget, onImport, onError }: 
   }
 
   return <>
-    <button ref={buttonRef} type="button" className="control-button research-import-button"
-      onClick={() => inputRef.current?.click()} title="Import a Markdown report">
-      <Upload size={15} aria-hidden="true" /> Import report
+    <button ref={buttonRef} type="button" className="control-button research-history-button research-header-icon"
+      onClick={() => inputRef.current?.click()} aria-label="Import .md report">
+      <Upload size={14} aria-hidden="true" />
+      <span className="research-header-tooltip" aria-hidden="true">Import .md report</span>
     </button>
     <input ref={inputRef} type="file" accept=".md,text/markdown" hidden onChange={(event) => {
       const file = event.currentTarget.files?.[0];

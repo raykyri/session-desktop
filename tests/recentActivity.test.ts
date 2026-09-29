@@ -13,7 +13,6 @@ import {
 import { formatResearchModelSummary } from "../src/lib/researchModelSummary";
 import {
   buildRecentActivityVirtualRows,
-  feedPostAction,
   virtualActivityRange,
 } from "../src/components/research/ResearchActivityFeed";
 import type {
@@ -62,16 +61,7 @@ test("research metadata follows the shared actor/action/object grammar", () => {
   assert.equal(event.state?.label, "Running");
 });
 
-test("Home posts name the question's action and the thread a follow-up belongs to", () => {
-  const followUp = activityEventFromResearchQuery(query, tree);
-  assert.equal(feedPostAction(followUp), "followed up in “Collective memory”");
-
-  const topLevel = activityEventFromResearchQuery(
-    { ...query, parentNodeId: null, adapter: "claude", model: "fable" },
-    tree,
-  );
-  // The post names the agent, not the model.
-  assert.equal(feedPostAction(topLevel), "asked Claude");
+test("model summaries use readable model names where available", () => {
   assert.equal(formatResearchModelSummary("claude", "fable"), "Claude Fable");
   assert.equal(formatResearchModelSummary("claude", null), "Claude");
   assert.equal(formatResearchModelSummary("claude", "claude-opus-4-6"), "Claude");
@@ -86,7 +76,6 @@ test("note posts name delivery and saved sources", () => {
   const posted = activityEventFromResearchQuery(note, tree);
   assert.deepEqual(posted.action, { kind: "posted", label: "Posted to network" });
   assert.equal(posted.object.kind, "note");
-  assert.equal(feedPostAction(posted), "posted to your network");
 
   const link = activityEventFromResearchQuery({
     ...note, prompt: "https://example.com/paper", delivery: null, replyCount: 0,
@@ -94,7 +83,6 @@ test("note posts name delivery and saved sources", () => {
   assert.equal(link.object.kind, "link");
   assert.equal(link.context?.label, "example.com");
   assert.equal(link.state, undefined);
-  assert.equal(feedPostAction(link), "saved a link");
 
   const post = activityEventFromResearchQuery({
     ...note, prompt: "https://x.com/jack/status/20", delivery: null, replyCount: 0,
@@ -108,7 +96,6 @@ test("note posts name delivery and saved sources", () => {
     }],
   });
   assert.equal(post.object.kind, "post");
-  assert.equal(feedPostAction(post), "saved a post");
 });
 
 test("Home hides archived research and shows it again when restored", () => {
@@ -254,7 +241,7 @@ test("live summary events retain imported report provenance", () => {
   const updated = upsertRecentActivityResearchNode(items, {
     ...node, recap: { text: "Summary", responseRevision: "revision" },
   });
-  assert.equal(feedPostAction(activityEventFromResearchQuery(updated[0])), "imported a report");
+  assert.equal(activityEventFromResearchQuery(updated[0]).execution?.origin, "imported");
   assert.equal(updated[0].model, null);
 });
 
