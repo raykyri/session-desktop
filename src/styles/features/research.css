@@ -834,6 +834,17 @@
   --research-content-column-gap: clamp(28px, 4vw, 52px);
 }
 
+/* Short threads still place the composer at the bottom of the viewport. */
+.research-document-content:has(> .research-thread-composer-row) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.research-document-content:has(> .research-thread-composer-row) > * {
+  flex-shrink: 0;
+}
+
 /* Keep the user's prompt visually distinct from the plain-text answer below. */
 .research-prompt-block {
   display: flex;
@@ -1435,8 +1446,8 @@
   position: sticky;
   z-index: 4;
   bottom: 0;
-  margin-top: 30px;
-  padding-bottom: 16px;
+  margin-top: auto;
+  padding-block: 30px 16px;
   /* The row spans the rail too; only the composer itself takes pointer
      input, so follow-up cards beside it stay clickable. */
   pointer-events: none;
@@ -1446,16 +1457,14 @@
   pointer-events: auto;
 }
 
-/* Fades the answer out under the floating composer. It reaches past the row
-   into the scroller's bottom padding, which sticky positioning stops short
-   of, so text never shows below the bar. */
+/* Fades the answer out under the floating composer to the viewport bottom. */
 .research-thread-composer-row::before {
   content: "";
   position: absolute;
   z-index: -1;
   /* The answer track only, so rail cards beside the bar stay visible. */
   grid-column: 1;
-  inset: -28px 0 -44px;
+  inset: 2px 0 0;
   background: linear-gradient(transparent, var(--research-workspace-bg) 36px);
 }
 
@@ -1467,6 +1476,7 @@
 .research-followup-composer.is-thread {
   /* Anchors the held-⌘ ⌘J badge to the card's corner. */
   position: relative;
+  margin-bottom: 0;
   padding: 10px 12px;
   border: 1px solid var(--surface-border-default);
   border-radius: 10px;

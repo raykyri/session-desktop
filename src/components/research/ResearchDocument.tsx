@@ -5261,7 +5261,6 @@ function ResearchDocument({
               {!ask ? (
                 <div className="research-response-grid research-thread-composer-row">
                   <div className="research-thread-composer-cell">{renderComposer(null)}</div>
-                  <div aria-hidden="true" />
                 </div>
               ) : null}
             </div>
