@@ -27,7 +27,6 @@ import { getResearchNodeContent } from "../../lib/api";
 import { formatRelativeTime } from "../../lib/transcriptSessions";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import { ResearchDocumentFrame } from "./ResearchDocumentChrome";
-import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import ResearchFeedPost from "./ResearchFeedPost";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import { ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
@@ -115,19 +114,6 @@ export interface ResearchActivityFeedProps {
 
 const MENU_HEIGHT_ESTIMATE = 132;
 const MENU_VIEWPORT_MARGIN = 8;
-
-/** The phrase after "You" in a feed post's header. */
-export function feedPostAction(event: RecentActivityEvent): string {
-  if (event.object.kind === "research-query") {
-    if (event.execution?.origin === "imported") return "imported a report";
-    if (event.relationship?.kind === "follow-up") {
-      return `followed up in “${event.context?.label ?? "Research"}”`;
-    }
-    return `asked ${formatResearchModelSummary(event.source.query.adapter) || "AI"}`;
-  }
-  if (event.action.kind === "posted") return "posted to your network";
-  return event.object.kind === "post" ? "saved a post" : "saved a link";
-}
 
 /** Follow-ups under an item, plus replies for a network post. */
 export function feedPostReplyCount(query: RecentResearchQuery): { count: number; label: string } {
@@ -752,26 +738,32 @@ function ResearchActivityFeed({
   return (
     <ResearchDocumentFrame
       title={viewTitle}
-      headerActions={view === "home" && onImportReport ? (
-        <ResearchReportImport dropTarget={scrollRef} onImport={onImportReport} onError={onError} />
-      ) : undefined}
       canGoBack={canGoBack}
       canGoForward={canGoForward}
       backTitle={`Back (${IS_MAC ? "⌘[" : "Ctrl+["})`}
       forwardTitle={`Forward (${IS_MAC ? "⌘]" : "Ctrl+]"})`}
       onBack={onBack}
       onForward={onForward}
-      navActions={onRefresh ? (
-        <button
-          type="button"
-          className="control-button research-history-button"
-          onClick={onRefresh}
-          aria-label={`Refresh ${viewTitle}`}
-          title={`Refresh ${viewTitle}`}
-        >
-          <RotateCw size={14} aria-hidden="true" />
-        </button>
-      ) : undefined}
+      navActions={
+        <>
+          {onRefresh ? (
+            <button
+              type="button"
+              className="control-button research-history-button research-header-icon"
+              onClick={onRefresh}
+              aria-label={`Refresh ${viewTitle}`}
+            >
+              <RotateCw size={14} aria-hidden="true" />
+              <span className="research-header-tooltip" aria-hidden="true">
+                Refresh {viewTitle}
+              </span>
+            </button>
+          ) : null}
+          {view === "home" && onImportReport ? (
+            <ResearchReportImport dropTarget={scrollRef} onImport={onImportReport} onError={onError} />
+          ) : null}
+        </>
+      }
     >
       <div ref={scrollRef} className="research-document-scroll journal-scroll">
         <div className="journal-column research-reading-surface">
@@ -842,7 +834,7 @@ function ResearchActivityFeed({
                       aria-setsize={nextCursor ? -1 : feed.length}
                     >
                       <ResearchFeedPost
-                        action={feedPostAction(row.event)}
+                        isNote={query.kind === "note"}
                         time={
                           Number.isFinite(row.event.occurredAt) ? (
                             <time

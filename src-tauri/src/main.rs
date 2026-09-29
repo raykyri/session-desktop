@@ -1977,8 +1977,8 @@ async fn fork_research_node(
 }
 
 /// Launches the run for an admitted (Queued) research child from its parent's
-/// kind: document and conversation parents launch fresh runs that carry their
-/// content as prompt context; run parents fork the parent's native session.
+/// kind: documents, conversations, notes, and imported reports launch fresh
+/// runs with saved content as context; other runs fork the native session.
 /// Shared by the fork command and retry, which relaunches a reset child
 /// through the same dispatch. Every failure path settles the child as Failed
 /// (reclaiming any spawned pane) before returning the error, exactly as the
@@ -2032,7 +2032,7 @@ fn launch_research_child_run(
             // builder wraps it itself with the tag neutralization the
             // serialized turns get, rather than taking the verbatim
             // `question` the other kinds share.
-            let launch_prompt = state.research_conversation_followup_prompt(
+            let launch_prompt = state.research_snapshot_followup_prompt(
                 &parent.id,
                 &tweets::prompt_with_research_attachments(child.prompt.clone(), &child.attachments),
                 child.query_anchor.as_ref(),
@@ -2054,6 +2054,23 @@ fn launch_research_child_run(
             let launch_prompt = state.research_note_followup_prompt(&parent.id, child, &question);
             let launch_prompt = match launch_prompt {
                 Ok(launch_prompt) => launch_prompt,
+                Err(err) => {
+                    let _ = state.fail_research_node(&child.id, err.clone());
+                    return Err(err);
+                }
+            };
+            return launch_fresh_research_run(state, &child.id, workspace, launch_prompt);
+        }
+        research::ResearchNodeKind::Run
+            if parent.origin == Some(research::ResearchNodeOrigin::Imported) =>
+        {
+            let launch_prompt = state.research_snapshot_followup_prompt(
+                &parent.id,
+                &tweets::prompt_with_research_attachments(child.prompt.clone(), &child.attachments),
+                child.query_anchor.as_ref(),
+            );
+            let launch_prompt = match launch_prompt {
+                Ok(prompt) => prompt,
                 Err(err) => {
                     let _ = state.fail_research_node(&child.id, err.clone());
                     return Err(err);

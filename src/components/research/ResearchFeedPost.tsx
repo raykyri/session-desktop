@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { LoaderCircle, MessageCircle, Reply } from "lucide-react";
+import { LoaderCircle, MessageCircle, Reply, StickyNote } from "lucide-react";
 import ResearchThreadActions from "./ResearchThreadActions";
 import { ResearchRecapPendingLine } from "./ResearchRecap";
 
@@ -8,8 +8,8 @@ function isInteractiveTarget(target: EventTarget | null) {
 }
 
 export interface ResearchFeedPostProps {
-  /** "asked Claude", "posted to your network", … — follows "You" in the header. */
-  action: string;
+  /** Network posts and saved notes use a note glyph. */
+  isNote?: boolean;
   /** Relative time in the footer after Bookmark; omitted while running. */
   time?: ReactNode;
   /** The thread's generated title, shown above the question. */
@@ -36,12 +36,12 @@ export interface ResearchFeedPostProps {
   onContextMenu: (clientX: number, clientY: number) => void;
 }
 
-/** One item in the Home feed column: an avatar, "You <action>", the
+/** One item in the Home feed column: an avatar, the
  * thread title, the question clamped to four lines, the answer's summary, and
  * a footer with the follow-up count, Follow, Bookmark and time.
  * Follow and Bookmark wait until the answer settles. */
 export default function ResearchFeedPost({
-  action,
+  isNote = false,
   time,
   title,
   renderBody,
@@ -75,16 +75,13 @@ export default function ResearchFeedPost({
     >
       <div className="research-feed-post-avatar">
         <span className="research-feed-post-avatar-glyph" aria-hidden="true">
-          <MessageCircle size={14} />
+          {isNote ? <StickyNote size={14} /> : <MessageCircle size={14} />}
         </span>
         {unread ? (
           <span className="research-feed-post-unread" role="img" aria-label="Updated" />
         ) : null}
       </div>
       <div className="research-feed-post-main">
-        <div className="research-feed-post-head">
-          <span className="research-feed-post-action">You {action}</span>
-        </div>
         {/* Clicking anywhere in the body opens the post; keyboard and assistive
             tech reach it through the title (or, untitled, the time), so the
             links and embeds inside the body stay separate controls. */}

@@ -57,8 +57,7 @@ test("Home renders the mixed feed as posts beside the query composer", () => {
   assert.match(html, /research-summary-text research-feed-post-summary is-clamped/);
   assert.match(html, /Query composer/);
   assert.match(html, /example.com\/finding/);
-  assert.match(html, /research-feed-post-action">You saved a link</);
-  assert.match(html, /research-feed-post-action">You asked Codex</);
+  assert.doesNotMatch(html, /research-feed-post-head|You asked Codex/);
   // The generated title leads, then the question, then the summary.
   assert.ok(html.indexOf("research-feed-post-title\">Investigate<") < html.indexOf("Investigate this question"));
   assert.ok(html.indexOf("Investigate this question") < html.indexOf("Summary: The finding is X."));
@@ -247,15 +246,15 @@ test("the feed scroll anchor round-trips correctly", () => {
 });
 
 
-test("Home offers report import and imported posts identify provenance", () => {
+test("Home offers report import", () => {
   const html = renderFeed({ onImportReport: asyncNoop, items: [{
     nodeId: "import", treeId: "import-tree", inline: false, prompt: "Original prompt",
     adapter: "codex", model: null, origin: "imported", status: "complete", createdAt: 100,
   }] });
-  assert.match(html, /Import report/);
+  assert.match(html, /aria-label="Import \.md report"/);
+  assert.ok(html.indexOf('aria-label="Refresh Home"') < html.indexOf('aria-label="Import .md report"'));
   assert.match(html, /accept=".md,text\/markdown"/);
-  assert.match(html, /research-feed-post-action">You imported a report</);
-  assert.doesNotMatch(renderFeed({ view: "bookmarks", onImportReport: asyncNoop }), /Import report/);
+  assert.doesNotMatch(renderFeed({ view: "bookmarks", onImportReport: asyncNoop }), /Import \.md report/);
 });
 
 function networkNote(overrides: Record<string, unknown> = {}) {
@@ -281,7 +280,6 @@ test("a network note is a post that counts its replies and follow-ups", () => {
     ],
   })] });
   assert.match(html, /Who ships component-model plugins\?/);
-  assert.match(html, /research-feed-post-action">You posted to your network</);
   assert.match(html, /aria-label="Open 7 replies, 1 follow-up"/);
   // Replies and follow-ups open with the note; the post only counts them.
   assert.doesNotMatch(html, /We moved in March\./);

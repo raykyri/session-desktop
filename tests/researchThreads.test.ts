@@ -199,6 +199,18 @@ test("canRetryResearchNode allows settled failures without a lingering pane", ()
   }
 });
 
+test("imported reports allow follow-ups without a native session checkpoint", () => {
+  const report = node("report", { kind: "run", origin: "imported", nativeSessionId: null });
+  assert.equal(canFollowUpFrom(report), true);
+  assert.equal(canContinueThread([report], report), true);
+  const child = node("child", { parentNodeId: report.id, inline: true, nativeSessionId: null });
+  assert.equal(canContinueThread([report, child], report), false);
+  assert.equal(canFollowUpFrom(child), false);
+  for (const status of ["queued", "running", "failed", "cancelled"] as const) {
+    assert.equal(canFollowUpFrom({ ...report, status }), false);
+  }
+});
+
 test("run tails need the session checkpoint; documents and conversations do not", () => {
   const unforked = node("tail", { nativeSessionId: null });
   assert.equal(canContinueThread([unforked], unforked), false);

@@ -38,14 +38,17 @@ export function researchThreadStopTarget(chain: readonly ResearchNode[]): Resear
 
 /** Whether a settled node can take any follow-up at all: it finished, and —
  * for run nodes, whose follow-ups fork the native session — its checkpoint
- * was recorded. Documents, conversations, and notes launch fresh runs that
- * carry their content as context, so they need no checkpoint. */
+ * was recorded. Imported reports, documents, conversations, and notes launch
+ * fresh runs with their content as context, so they need no checkpoint. */
 export function canFollowUpFrom(node: ResearchNode): boolean {
   if (node.status !== "complete") {
     return false;
   }
   const launchesFresh =
-    node.kind === "document" || node.kind === "conversation" || node.kind === "note";
+    node.origin === "imported" ||
+    node.kind === "document" ||
+    node.kind === "conversation" ||
+    node.kind === "note";
   return launchesFresh || Boolean(node.nativeSessionId);
 }
 
