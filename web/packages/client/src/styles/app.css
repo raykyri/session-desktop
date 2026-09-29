@@ -203,7 +203,7 @@
   }
 
   ::selection {
-    background: var(--status-info-fg);
+    background: var(--selection-bg);
     color: var(--selection-fg);
   }
 

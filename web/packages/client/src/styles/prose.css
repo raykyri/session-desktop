@@ -440,44 +440,48 @@ html.wrap-code-blocks .research-prose-code-block pre code {
    --research-highlight-bg in the dark and light token blocks. */
 ::highlight(session-research-highlights) {
   color: inherit;
-  background: rgba(216, 196, 95, 0.14); /* highlight-pseudo-literal */
+  background: rgba(240, 178, 70, 0.19); /* highlight-pseudo-literal */
 }
 
 :root[data-appearance="light"] *::highlight(session-research-highlights) {
-  background: rgba(214, 178, 30, 0.22); /* highlight-pseudo-literal */
+  background: rgba(244, 184, 40, 0.28); /* highlight-pseudo-literal */
 }
 
-/* Passages a targeted follow-up was asked about, ~20% stronger than a plain
-   saved highlight so a passage that owns a margin card reads as distinct. */
+/* Passages a targeted follow-up was asked about, clearly stronger than a plain
+   saved highlight so a passage that owns a margin card reads as distinct.
+   Mirrors --research-highlight-bg-hover. */
 ::highlight(session-research-query-anchors) {
   color: inherit;
-  background: rgba(216, 196, 95, 0.17); /* highlight-pseudo-literal */
+  background: rgba(240, 178, 70, 0.32); /* highlight-pseudo-literal */
 }
 
 :root[data-appearance="light"] *::highlight(session-research-query-anchors) {
-  background: rgba(214, 178, 30, 0.3); /* highlight-pseudo-literal */
+  background: rgba(244, 184, 40, 0.46); /* highlight-pseudo-literal */
 }
 
-/* Regions where annotations stack: repainted near the text color so depth is
-   visible without deepening the gold. */
+/* Regions where annotations stack: repainted toward the text color so depth
+   is visible without deepening the amber. Mirrors
+   --research-highlight-neutral-bg. */
 ::highlight(session-research-highlight-overlaps) {
   color: inherit;
-  background: rgba(211, 216, 212, 0.16); /* highlight-pseudo-literal */
+  background: rgba(255, 244, 225, 0.1); /* highlight-pseudo-literal */
 }
 
 :root[data-appearance="light"] *::highlight(session-research-highlight-overlaps) {
-  background: rgba(60, 70, 66, 0.12); /* highlight-pseudo-literal */
+  background: rgba(120, 80, 20, 0.1); /* highlight-pseudo-literal */
 }
 
-/* Saved highlights the current selection landed on, painted above the gold
-   wash in the same tone as ::selection (matches --status-info-fg). */
+/* Saved highlights the current selection landed on, painted above the amber
+   wash as an opaque light-blue fill. The dark theme switches the text to
+   near-black because body text is light there. */
 ::highlight(session-research-selected-highlights) {
-  color: inherit;
-  background: #6da7ec; /* highlight-pseudo-literal */
+  color: #0f1413; /* highlight-pseudo-literal */
+  background: #8ab8ee; /* highlight-pseudo-literal */
 }
 
 :root[data-appearance="light"] *::highlight(session-research-selected-highlights) {
-  background: #2a6fc0; /* highlight-pseudo-literal */
+  color: inherit;
+  background: #a9cbf2; /* highlight-pseudo-literal */
 }
 
 /* Progress spinners keep moving under reduced motion: they report ongoing

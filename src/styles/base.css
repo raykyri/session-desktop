@@ -3,7 +3,7 @@
 }
 
 ::selection {
-  background: var(--status-info-fg);
+  background: var(--selection-bg);
 }
 
 /* lucide-react renders its icons with width/height attributes, but as a flex item an
