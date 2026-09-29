@@ -338,7 +338,8 @@
   --tweet-avatar-scale: 0.5;
 }
 
-.research-document .journal-tweet-verified {
+.research-document .journal-tweet-verified,
+.research-document .research-summary-text {
   display: none;
 }
 
@@ -443,10 +444,6 @@ a.journal-tweet-author:hover {
   color: var(--text-subtle);
   font-size: var(--research-body-font-size);
   text-decoration: none;
-}
-
-.journal-tweet-age:hover {
-  text-decoration: underline;
 }
 
 .journal-tweet-reply {
