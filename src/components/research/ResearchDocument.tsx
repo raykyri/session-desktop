@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Check, ChevronDown, Copy, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, Reply, ScrollText, Square, Terminal, Trash2, Wrench, X } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, Check, ChevronDown, Copy, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, Reply, ScrollText, Square, Terminal, Trash2, Wrench, X } from "lucide-react";
 import {
   IS_MAC,
   isEditableTarget,
@@ -19,6 +19,7 @@ import ResearchNoteDocument from "./ResearchNoteDocument";
 import type { NoteActions } from "./ResearchNote";
 import { formatRelativeTime } from "../../lib/transcriptSessions";
 import ResearchThreadActions from "./ResearchThreadActions";
+import { useFollowupBarMinimizer } from "./FollowupBarMinimizer";
 import { growComposerTextarea } from "../../lib/composerTextarea";
 import {
   EMPTY_RESEARCH_HISTORY,
@@ -1873,6 +1874,16 @@ function ResearchDocument({
   const contentContainerRef = useRef<HTMLDivElement | null>(null);
   const followupTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const followupComposerRef = useRef<HTMLDivElement | null>(null);
+  const documentPaneRef = useRef<HTMLElement | null>(null);
+  // The thread bar can be minimized into a round button at the pane's
+  // bottom-right corner; restoring it hands the textarea the caret.
+  const followupBar = useFollowupBarMinimizer({
+    paneRef: documentPaneRef,
+    barRef: followupComposerRef,
+    onRestored: () => followupTextareaRef.current?.focus({ preventScroll: true }),
+  });
+  const restoreFollowupBarRef = useRef(followupBar.restore);
+  restoreFollowupBarRef.current = followupBar.restore;
   const followupMenuRef = useRef<HTMLDivElement | null>(null);
   const modeMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const modeMenuRef = useRef<HTMLDivElement | null>(null);
@@ -2720,6 +2731,8 @@ function ResearchDocument({
   useEffect(
     () =>
       listenToResearchFollowupsFocus(() => {
+        // A minimized bar restores first; it focuses itself once it is back.
+        restoreFollowupBarRef.current();
         const textarea = followupTextareaRef.current;
         if (textarea && !textarea.disabled) {
           textarea.focus({ preventScroll: true });
@@ -4881,6 +4894,14 @@ function ResearchDocument({
           disabled={composerDisabled}
           onChange={(event) => setFollowup(event.currentTarget.value)}
           onKeyDown={(event) => {
+            if (event.key === "Escape" && !dockedAsk) {
+              // The draft stays in the minimized bar; the round button marks it.
+              event.preventDefault();
+              event.stopPropagation();
+              event.currentTarget.blur();
+              followupBar.minimize();
+              return;
+            }
             if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
               event.preventDefault();
               // ⌘↵ submits in the selected mode (what the button says);
@@ -5009,6 +5030,17 @@ function ResearchDocument({
                 )
               : null}
           </div>
+          {!dockedAsk ? (
+            <button
+              type="button"
+              className="control-button research-followup-minimize"
+              aria-label="Minimize follow-up bar"
+              title="Minimize (Esc)"
+              onClick={followupBar.minimize}
+            >
+              <ArrowDownRight size={14} aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -5153,7 +5185,7 @@ function ResearchDocument({
   return (
     <TranscriptLinkActionsProvider actions={linkActions}>
         <div className="research-workspace">
-        <main className="research-document">
+        <main ref={documentPaneRef} className="research-document">
           <header className="research-document-header">
             <ResearchHistoryNav
               canGoBack={canGoBack}
@@ -5270,12 +5302,17 @@ function ResearchDocument({
             >
               {renderedSegments}
               {!ask ? (
-                <div className="research-response-grid research-thread-composer-row">
+                <div
+                  className={`research-response-grid research-thread-composer-row${
+                    followupBar.minimized ? " is-minimized" : ""
+                  }`}
+                >
                   <div className="research-thread-composer-cell">{renderComposer(null)}</div>
                 </div>
               ) : null}
             </div>
           </article>
+          {!ask ? followupBar.renderLayer(followup.trim() !== "") : null}
         </main>
         </div>
         {followupMenu && detail
