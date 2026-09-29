@@ -45,6 +45,7 @@ function TweetAvatar({
   // A snapshot's avatar URL can go stale (profile changed, image deleted);
   // a failed load falls back to the initial disc instead of a broken image.
   const [failed, setFailed] = useState(false);
+  const scaledSize = `calc(${size}px * var(--tweet-avatar-scale, 1))`;
   if (avatarUrl && !failed) {
     return (
       <img
@@ -52,6 +53,7 @@ function TweetAvatar({
         src={avatarUrl}
         width={size}
         height={size}
+        style={{ width: scaledSize, height: scaledSize }}
         alt=""
         aria-hidden="true"
         draggable={false}
@@ -63,7 +65,7 @@ function TweetAvatar({
   return (
     <span
       className="journal-tweet-avatar journal-tweet-avatar-fallback"
-      style={{ width: size, height: size, background: fallback.color }}
+      style={{ width: scaledSize, height: scaledSize, background: fallback.color }}
       aria-hidden="true"
     >
       {fallback.initial}
