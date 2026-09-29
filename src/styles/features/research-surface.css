@@ -14,11 +14,36 @@
    holds the open thread or a placeholder. Below the breakpoint only one column
    shows: the thread when one is open, otherwise the feed. */
 .research-columns {
+  position: relative;
   display: flex;
   width: 100%;
   height: 100%;
   min-height: 0;
   container-type: inline-size;
+}
+
+.research-column-resizer {
+  position: absolute;
+  inset-block: 0;
+  left: calc(var(--research-feed-column-width) - 5px);
+  z-index: 7;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.research-column-resizer::before {
+  position: absolute;
+  inset-block: 0;
+  left: 4px;
+  width: 1px;
+  content: "";
+}
+
+.research-column-resizer:hover::before,
+.research-column-resizer:focus-visible::before,
+.research-column-resizer.is-dragging::before {
+  background: var(--split-border-hover);
 }
 
 .research-feed-column {
@@ -65,6 +90,10 @@
 }
 
 @container (max-width: 880px) {
+  .research-column-resizer {
+    display: none;
+  }
+
   .research-columns.has-document .research-feed-column {
     display: none;
   }
