@@ -5,3 +5,8 @@ export function unreachableModules(
   entrypoints: readonly string[],
   compilerOptions?: CompilerOptions,
 ): string[];
+
+export function unusedExports(
+  sourceFiles: readonly string[],
+  compilerOptions?: CompilerOptions,
+): { file: string; exportName: string; line: number }[];
