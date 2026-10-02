@@ -3918,7 +3918,8 @@ impl AppState {
                     .into_iter()
                     .map(|child| {
                         let mut child_query = RecentResearchQuery::from(child);
-                        child_query.reply_anchor_author = research::reply_anchor_author(root, child);
+                        child_query.reply_anchor_author =
+                            research::reply_anchor_author(root, child);
                         child_query
                     })
                     .collect();
@@ -4609,7 +4610,9 @@ impl AppState {
                     .find(|reply| reply.id == parent_id)
                     .ok_or_else(|| format!("reply {parent_id} was not found"))?;
                 if !matches!(target.author, research::NoteReplyAuthor::Member { .. }) {
-                    return Err("the note's author can only respond to a member's reply".to_string());
+                    return Err(
+                        "the note's author can only respond to a member's reply".to_string()
+                    );
                 }
             }
             let mut replies = delivery.replies.clone();
@@ -4711,13 +4714,12 @@ impl AppState {
             .reply_anchor
             .as_deref()
             .and_then(|reply_id| replies.iter().find(|reply| reply.id == reply_id));
-        let note_body =
-            crate::tweets::prompt_with_research_attachments(parent.prompt.clone(), &parent.attachments);
+        let note_body = crate::tweets::prompt_with_research_attachments(
+            parent.prompt.clone(),
+            &parent.attachments,
+        );
         Ok(research::note_followup_prompt(
-            &note_body,
-            replies,
-            anchored,
-            question,
+            &note_body, replies, anchored, question,
         ))
     }
 
@@ -5307,15 +5309,16 @@ impl AppState {
                 .ok_or_else(|| format!("research tree {} was not found", node.tree_id))?;
             (node, tree.title.clone())
         };
-        let imported_report = node.kind == ResearchNodeKind::Run
-            && node.origin == Some(ResearchNodeOrigin::Imported);
+        let imported_report =
+            node.kind == ResearchNodeKind::Run && node.origin == Some(ResearchNodeOrigin::Imported);
         if node.kind != ResearchNodeKind::Conversation && !imported_report {
             return Err(
                 "the research node is not an exported conversation or imported report".to_string(),
             );
         }
-        let mut turns = research::read_response_snapshot(&self.inner.config.workspace_root, node_id)?
-            .ok_or_else(|| "the saved research content is unavailable".to_string())?;
+        let mut turns =
+            research::read_response_snapshot(&self.inner.config.workspace_root, node_id)?
+                .ok_or_else(|| "the saved research content is unavailable".to_string())?;
         if imported_report {
             if research::document_markdown_from_turns(&turns)
                 .is_none_or(|markdown| markdown.trim().is_empty())
@@ -12914,7 +12917,13 @@ mod tests {
         );
         // The full node still has everything.
         assert_eq!(
-            state.research_node(&note_id).unwrap().delivery.unwrap().replies.len(),
+            state
+                .research_node(&note_id)
+                .unwrap()
+                .delivery
+                .unwrap()
+                .replies
+                .len(),
             8
         );
     }
@@ -12924,7 +12933,10 @@ mod tests {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let link = state
-            .create_research_note(note_request(" https://example.com/page ", false), Vec::new())
+            .create_research_note(
+                note_request(" https://example.com/page ", false),
+                Vec::new(),
+            )
             .unwrap();
         let link_node = &link.nodes[0];
         assert_eq!(link_node.kind, ResearchNodeKind::Note);
@@ -13001,7 +13013,9 @@ mod tests {
         assert!(reply(research::NoteReplyAuthor::Author, Some("missing")).is_err());
         // Only the author's own responses can be deleted.
         assert!(state.remove_research_note_reply(&note_id, &ana).is_err());
-        let after = state.remove_research_note_reply(&note_id, &response).unwrap();
+        let after = state
+            .remove_research_note_reply(&note_id, &response)
+            .unwrap();
         assert_eq!(
             after
                 .delivery
@@ -16018,7 +16032,11 @@ mod tests {
             .create_research_child(root_id, "/review Explain this".into(), Some(anchor), false)
             .unwrap();
         let launch_prompt = state
-            .research_snapshot_followup_prompt(root_id, &branch.prompt, branch.query_anchor.as_ref())
+            .research_snapshot_followup_prompt(
+                root_id,
+                &branch.prompt,
+                branch.query_anchor.as_ref(),
+            )
             .unwrap();
         assert!(launch_prompt.starts_with("/review Explain this"));
         assert!(launch_prompt.contains("<turn role=\"user\">\nOriginal research question"));
@@ -16103,7 +16121,9 @@ mod tests {
         // Oversized single answers retain their opening and carry an explicit
         // truncation marker, while the saved report remains complete.
         assert!(followup.contains("# Imported findings"));
-        assert!(followup.contains("[earlier turns omitted]") || followup.contains("[turn truncated]"));
+        assert!(
+            followup.contains("[earlier turns omitted]") || followup.contains("[turn truncated]")
+        );
         assert!(followup.len() <= 120 * 1024);
         assert!(followup.ends_with("Explain the conclusion"));
         assert_eq!(

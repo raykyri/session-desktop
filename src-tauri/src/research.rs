@@ -354,7 +354,11 @@ pub struct NoteReply {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum NoteReplyAuthor {
     /// The note's author (this Session's user).
     Author,
@@ -734,12 +738,18 @@ pub fn validate_note_node_shape(
         .and_then(|parent_id| node_by_id.get(parent_id))
         .map(|parent| parent.kind);
     if node.delivery.is_some() && node.kind != ResearchNodeKind::Note {
-        return Err(format!("research node {} has delivery but is not a note", node.id));
+        return Err(format!(
+            "research node {} has delivery but is not a note",
+            node.id
+        ));
     }
     if node.kind == ResearchNodeKind::Note
         && parent_kind.is_some_and(|kind| kind != ResearchNodeKind::Note)
     {
-        return Err(format!("research note {} has a parent that is not a note", node.id));
+        return Err(format!(
+            "research note {} has a parent that is not a note",
+            node.id
+        ));
     }
     if node.reply_anchor.is_some()
         && (node.kind != ResearchNodeKind::Run || parent_kind != Some(ResearchNodeKind::Note))
@@ -2731,9 +2741,13 @@ pub fn note_followup_prompt(
             let quote = normalized_text(&clean(&reply.body));
             let who = author(reply);
             if question.starts_with('/') {
-                format!("{question}\n\nThe request above refers to this reply from {who}:\n\n> {quote}")
+                format!(
+                    "{question}\n\nThe request above refers to this reply from {who}:\n\n> {quote}"
+                )
             } else {
-                format!("The user's question refers to this reply from {who}:\n\n> {quote}\n\n{question}")
+                format!(
+                    "The user's question refers to this reply from {who}:\n\n> {quote}\n\n{question}"
+                )
             }
         }
         None => question.to_string(),
@@ -2744,9 +2758,13 @@ pub fn note_followup_prompt(
         "The user posted the note below to people in their network; their replies follow it."
     };
     if question.starts_with('/') {
-        format!("{question}\n\n{preamble} It is provided as context for the request above.\n\n{context}")
+        format!(
+            "{question}\n\n{preamble} It is provided as context for the request above.\n\n{context}"
+        )
     } else {
-        format!("{preamble} Read it, then answer the question that follows.\n\n{context}\n\n{question}")
+        format!(
+            "{preamble} Read it, then answer the question that follows.\n\n{context}\n\n{question}"
+        )
     }
 }
 
@@ -3845,8 +3863,12 @@ mod tests {
         assert!(validate_note_replies(&[reply("a", None), reply("b", Some("a"))]).is_ok());
         assert!(validate_note_replies(&[reply("b", Some("a")), reply("a", None)]).is_err());
         assert!(
-            validate_note_replies(&[reply("a", None), reply("b", Some("a")), reply("c", Some("b"))])
-                .is_err()
+            validate_note_replies(&[
+                reply("a", None),
+                reply("b", Some("a")),
+                reply("c", Some("b"))
+            ])
+            .is_err()
         );
         assert!(validate_note_replies(&[reply("a", None), reply("a", None)]).is_err());
     }
