@@ -380,7 +380,7 @@ test.serial(
     });
     await waitUntil(
       t,
-      () => screen.getByLabelText(PROMPT_LABEL).value === "other workspace",
+      () => screen.getByLabelText<HTMLTextAreaElement>(PROMPT_LABEL).value === "other workspace",
       "workspace changed",
     );
     await act(async () => {

@@ -17,5 +17,5 @@ test("hidden matches do not prevent finding visible document text", (t) => {
   root.innerHTML = `<div hidden>${"x".repeat(2_000)}</div><p>${"x".repeat(2_100)}</p>`;
   const ranges = collectSearchRanges(root, "x", { caseSensitive: false, regex: false });
   t.is(ranges.length, 2_000);
-  t.is(ranges[0]?.startContainer, root.querySelector("p")?.firstChild);
+  t.is(ranges[0]?.startContainer, root.querySelector("p")?.firstChild ?? undefined);
 });
