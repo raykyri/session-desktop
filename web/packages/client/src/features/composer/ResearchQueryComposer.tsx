@@ -168,6 +168,26 @@ export function ResearchQueryComposer({
   const [dragging, setDragging] = useState(false);
   const promptRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const latestComposer = useRef({ prompt, model, attachments });
+  const uploadScope = useRef<object | null>(null);
+
+  useLayoutEffect(() => {
+    latestComposer.current = { prompt, model, attachments };
+  }, [prompt, model, attachments]);
+
+  useLayoutEffect(() => {
+    uploadScope.current = {};
+    return () => {
+      uploadScope.current = null;
+    };
+  }, [draftKey]);
+
+  const updateAttachments = useCallback((update: (current: Attachment[]) => Attachment[]) => {
+    const next = update(latestComposer.current.attachments);
+    latestComposer.current.attachments = next;
+    setAttachments(next);
+    return next;
+  }, []);
 
   const models = useMemo(
     () => composerModels(runtimeConfig.data?.models, me.data?.isAdmin === true),
@@ -215,11 +235,13 @@ export function ResearchQueryComposer({
   );
 
   const updatePrompt = (text: string) => {
+    latestComposer.current.prompt = text;
     setPrompt(text);
     persist({ text, model, documentIds });
   };
 
   const updateModel = (next: string) => {
+    latestComposer.current.model = next;
     setModel(next);
     persist({ text: prompt, model: next, documentIds });
     window.requestAnimationFrame(() => promptRef.current?.focus());
@@ -228,6 +250,7 @@ export function ResearchQueryComposer({
   const attach = useCallback(
     (files: readonly File[]) => {
       if (files.length === 0 || workspaceId === "") return;
+      const scope = uploadScope.current;
       const pending: Attachment[] = files.map((file, index) => ({
         key: `upload:${Date.now()}:${index}:${file.name}`,
         name: file.name,
@@ -236,10 +259,11 @@ export function ResearchQueryComposer({
         progress: 0,
       }));
       const keys = pending.map((attachment) => attachment.key);
-      setAttachments((current) => [...current, ...pending]);
+      updateAttachments((current) => [...current, ...pending]);
       setError(null);
       void uploadDocuments(workspaceId, files, (progress) => {
-        setAttachments((current) =>
+        if (uploadScope.current !== scope) return;
+        updateAttachments((current) =>
           current.map((attachment) =>
             keys.includes(attachment.key)
               ? { ...attachment, progress: progress.fraction }
@@ -249,23 +273,31 @@ export function ResearchQueryComposer({
       })
         .then((documents) => {
           void client.invalidateQueries({ queryKey: queryKeys.documents(workspaceId) });
-          setAttachments((current) => {
+          if (uploadScope.current !== scope) return;
+          if (
+            !latestComposer.current.attachments.some((attachment) => keys.includes(attachment.key))
+          )
+            return;
+          const merged = updateAttachments((current) => {
             const next = current.filter((attachment) => !keys.includes(attachment.key));
-            const merged = [...next, ...documents.map(attachmentFromDocument)];
-            persist({
-              text: prompt,
-              model,
-              documentIds: merged
-                .filter((attachment) => attachment.status === "ready")
-                .map((attachment) => attachment.key),
-            });
-            return merged;
+            const kept = documents.filter((_, index) =>
+              current.some((attachment) => attachment.key === keys[index]),
+            );
+            return [...next, ...kept.map(attachmentFromDocument)];
+          });
+          persist({
+            text: latestComposer.current.prompt,
+            model: latestComposer.current.model,
+            documentIds: merged
+              .filter((attachment) => attachment.status === "ready")
+              .map((attachment) => attachment.key),
           });
         })
         .catch((failure: unknown) => {
+          if (uploadScope.current !== scope) return;
           const message = errorMessage(failure);
           setError(message);
-          setAttachments((current) =>
+          updateAttachments((current) =>
             current.map((attachment) =>
               keys.includes(attachment.key)
                 ? { ...attachment, status: "failed" as const, error: message }
@@ -274,20 +306,19 @@ export function ResearchQueryComposer({
           );
         });
     },
-    [client, model, persist, prompt, workspaceId],
+    [client, persist, updateAttachments, workspaceId],
   );
 
   const removeAttachment = (key: string) => {
-    setAttachments((current) => {
-      const next = current.filter((attachment) => attachment.key !== key);
-      persist({
-        text: prompt,
-        model,
-        documentIds: next
-          .filter((attachment) => attachment.status === "ready")
-          .map((attachment) => attachment.key),
-      });
-      return next;
+    const next = updateAttachments((current) =>
+      current.filter((attachment) => attachment.key !== key),
+    );
+    persist({
+      text: latestComposer.current.prompt,
+      model: latestComposer.current.model,
+      documentIds: next
+        .filter((attachment) => attachment.status === "ready")
+        .map((attachment) => attachment.key),
     });
   };
 

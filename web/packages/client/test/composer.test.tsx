@@ -2,9 +2,10 @@
 // `10-home-feed-journal.md` §1, §2).
 
 import type { ModelInfo } from "@session/shared";
-import { fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import test from "ava";
 
+import { queryKeys } from "../src/api/cache.js";
 import {
   bareUrl,
   composerModels,
@@ -288,4 +289,127 @@ test.serial("a launch that is refused keeps every field for the retry", async (t
     "and the question is still a draft",
   );
   app.unmount();
+});
+
+function pendingUpload() {
+  let finish: () => void = () => {
+    throw new Error("upload did not start");
+  };
+  const original = globalThis.XMLHttpRequest;
+  class FakeXhr {
+    status = 201;
+    responseText = JSON.stringify([
+      { id: "d1", name: "a.txt", byteSize: 5, extractionStatus: "ok" },
+    ]);
+    withCredentials = false;
+    responseType = "";
+    upload = { addEventListener: () => undefined };
+    listeners = new Map<string, () => void>();
+    open() {}
+    setRequestHeader() {}
+    addEventListener(name: string, listener: () => void) {
+      this.listeners.set(name, listener);
+    }
+    send() {
+      finish = () => this.listeners.get("load")?.();
+    }
+  }
+  Object.assign(globalThis, { XMLHttpRequest: FakeXhr });
+  return {
+    finish: () => finish(),
+    restore: () => Object.assign(globalThis, { XMLHttpRequest: original }),
+  };
+}
+
+test.serial(
+  "upload completion preserves edits and model changes made while uploading",
+  async (t) => {
+    useDraftsStore.setState({ byKey: {} });
+    const upload = pendingUpload();
+    t.teardown(upload.restore);
+    const app = await renderApp("/", { responses: homeResponses });
+    t.teardown(() => app.unmount());
+    await waitUntil(
+      t,
+      () => screen.queryAllByLabelText(PROMPT_LABEL).length > 0,
+      "composer loaded",
+    );
+    const field = screen.getByLabelText(PROMPT_LABEL);
+    fireEvent.change(field, { target: { value: "before upload" } });
+    fireEvent.change(app.container.querySelector('input[type="file"]')!, {
+      target: { files: [new File(["hello"], "a.txt")] },
+    });
+    fireEvent.change(field, { target: { value: "edited during upload" } });
+    fireEvent.keyDown(field, { key: "Tab" });
+    const chosenModel = useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID))?.model;
+    await act(async () => {
+      await Promise.resolve();
+      upload.finish();
+    });
+    const draft = useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID));
+    t.is(draft?.text, "edited during upload");
+    t.is(draft?.model, chosenModel);
+    t.deepEqual(draft?.documentIds, ["d1"]);
+  },
+);
+
+test.serial(
+  "an upload from the previous workspace cannot change the current composer",
+  async (t) => {
+    useDraftsStore.setState({ byKey: { "home:w2": { text: "other workspace", updatedAt: 1 } } });
+    const upload = pendingUpload();
+    t.teardown(upload.restore);
+    const app = await renderApp("/?feed=all", {
+      responses: { ...homeResponses, "workspaces.list": [workspace(), workspace({ id: "w2" })] },
+    });
+    t.teardown(() => app.unmount());
+    await waitUntil(
+      t,
+      () => screen.queryAllByLabelText(PROMPT_LABEL).length > 0,
+      "composer loaded",
+    );
+    fireEvent.change(app.container.querySelector('input[type="file"]')!, {
+      target: { files: [new File(["hello"], "a.txt")] },
+    });
+    await act(async () => {
+      await Promise.resolve();
+      app.queryClient.setQueryData(
+        queryKeys.settings(),
+        serverSettings({ defaultWorkspaceId: "w2" }),
+      );
+    });
+    await waitUntil(
+      t,
+      () => screen.getByLabelText(PROMPT_LABEL).value === "other workspace",
+      "workspace changed",
+    );
+    await act(async () => {
+      await Promise.resolve();
+      upload.finish();
+    });
+    t.is(screen.queryByLabelText("Attachments"), null);
+    t.is(useDraftsStore.getState().get(homeDraftKey("w2"))?.text, "other workspace");
+    t.false(
+      useDraftsStore.getState().get(homeDraftKey("w2"))?.documentIds?.includes("d1") ?? false,
+    );
+  },
+);
+
+test.serial("removing a pending attachment prevents its upload from restoring it", async (t) => {
+  useDraftsStore.setState({ byKey: {} });
+  const upload = pendingUpload();
+  t.teardown(upload.restore);
+  const app = await renderApp("/", { responses: homeResponses });
+  t.teardown(() => app.unmount());
+  await waitUntil(t, () => screen.queryAllByLabelText(PROMPT_LABEL).length > 0, "composer loaded");
+  fireEvent.change(app.container.querySelector('input[type="file"]')!, {
+    target: { files: [new File(["hello"], "a.txt")] },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Remove a.txt" }));
+  await act(async () => {
+    await Promise.resolve();
+    upload.finish();
+  });
+  t.is(screen.queryByLabelText("Attachments"), null);
+  t.is(useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID)), undefined);
 });
