@@ -132,6 +132,9 @@ export function collectSearchRanges(
     if (!text) {
       continue;
     }
+    const textRange = document.createRange();
+    textRange.selectNodeContents(node);
+    if (textRange.getClientRects().length === 0) continue;
     for (const match of text.matchAll(pattern)) {
       if (match[0].length === 0) {
         // A zero-width regex match (e.g. `a*`) has nothing to highlight.
@@ -141,6 +144,7 @@ export function collectSearchRanges(
       const range = document.createRange();
       range.setStart(node, start);
       range.setEnd(node, start + match[0].length);
+      if (range.getClientRects().length === 0) continue;
       ranges.push(range);
       // Stop once capped: a broad term can match far more than is useful, and every
       // extra Range costs memory and (below) a forced layout read.
@@ -149,7 +153,7 @@ export function collectSearchRanges(
       }
     }
   }
-  return ranges.filter((range) => range.getClientRects().length > 0);
+  return ranges;
 }
 
 // The first match visible in (or below) the viewport, so opening the bar or
