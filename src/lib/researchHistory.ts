@@ -3,21 +3,21 @@
 // value and swaps it for the result of these transitions, so the branch/cursor
 // semantics live here (and are unit-tested) rather than inline in the view.
 
-export interface ResearchHistory {
+interface ResearchHistory {
   /** Visited node ids, oldest first. */
   entries: string[];
   /** Cursor into `entries` for the currently displayed node, or -1 when empty. */
   index: number;
 }
 
-export interface ResearchHistoryStep {
+interface ResearchHistoryStep {
   history: ResearchHistory;
   nodeId: string;
 }
 
 export const EMPTY_RESEARCH_HISTORY: ResearchHistory = { entries: [], index: -1 };
 
-export const RESEARCH_SWIPE_THRESHOLD_PX = 80;
+const RESEARCH_SWIPE_THRESHOLD_PX = 80;
 
 /**
  * Resolves an accumulated two-axis wheel gesture into browser-style history
@@ -90,17 +90,17 @@ export type ResearchWorkspaceVisit =
   | { kind: "journal" }
   | { kind: "document"; treeId: string };
 
-export interface ResearchWorkspaceHistory {
+interface ResearchWorkspaceHistory {
   entries: ResearchWorkspaceVisit[];
   index: number;
 }
 
-export interface ResearchWorkspaceHistoryStep {
+interface ResearchWorkspaceHistoryStep {
   history: ResearchWorkspaceHistory;
   visit: ResearchWorkspaceVisit;
 }
 
-export const EMPTY_RESEARCH_WORKSPACE_HISTORY: ResearchWorkspaceHistory = {
+const EMPTY_RESEARCH_WORKSPACE_HISTORY: ResearchWorkspaceHistory = {
   entries: [],
   index: -1,
 };
@@ -111,7 +111,7 @@ export function initResearchWorkspaceHistory(
   return visit ? { entries: [visit], index: 0 } : EMPTY_RESEARCH_WORKSPACE_HISTORY;
 }
 
-export function sameResearchWorkspaceVisit(
+function sameResearchWorkspaceVisit(
   left: ResearchWorkspaceVisit,
   right: ResearchWorkspaceVisit,
 ): boolean {

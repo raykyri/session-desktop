@@ -1,4 +1,4 @@
-export type LauncherTabAction = "capture" | "cycle-model" | "cycle-provider";
+type LauncherTabAction = "capture" | "cycle-model" | "cycle-provider";
 
 interface LauncherTabInput {
   key: string;

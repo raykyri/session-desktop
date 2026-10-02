@@ -1,4 +1,4 @@
-export type WindowFocusKeyboardOwner =
+type WindowFocusKeyboardOwner =
   | "current-web-editable"
   | "remembered-web-editable"
   | "current-content";

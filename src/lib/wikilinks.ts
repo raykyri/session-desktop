@@ -11,14 +11,14 @@ const WIKILINK_PATTERN = new RegExp(
   "gu",
 );
 
-export interface Wikilink {
+interface Wikilink {
   /** The canonical term, trimmed. */
   term: string;
   /** What the reader sees: the alias when given, otherwise the term. */
   label: string;
 }
 
-export function parseWikilinkBody(term: string, alias?: string): Wikilink | null {
+function parseWikilinkBody(term: string, alias?: string): Wikilink | null {
   const trimmedTerm = term.trim();
   if (!trimmedTerm) {
     return null;

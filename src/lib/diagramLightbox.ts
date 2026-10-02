@@ -3,7 +3,7 @@
 // store rather than App state so a diagram nested deep in the render tree can
 // open it with a bare import, without threading a callback through props
 // (same shape as imageLightbox).
-export interface DiagramLightboxState {
+interface DiagramLightboxState {
   lang: "mermaid" | "dot";
   label: string;
   // Already rendered and DOMPurify-sanitized by DiagramBlock before it is

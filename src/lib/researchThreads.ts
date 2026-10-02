@@ -11,7 +11,7 @@ import type { ResearchNode, ResearchNodeStatus } from "../types";
  * shared by the branch/thread math and the document view, so a future status
  * cannot fall out of sync between them. Mirrors the backend's
  * ResearchNodeStatus::is_active (src-tauri/src/research.rs). */
-export const ACTIVE_RESEARCH_STATUSES: readonly ResearchNodeStatus[] = [
+const ACTIVE_RESEARCH_STATUSES: readonly ResearchNodeStatus[] = [
   "queued",
   "starting",
   "running",

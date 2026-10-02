@@ -1,4 +1,4 @@
-export interface SnappedResearchSelection {
+interface SnappedResearchSelection {
   start: number;
   end: number;
   direction: "forward" | "backward";
@@ -9,7 +9,7 @@ export type ResearchSelectionSnapper = (
   focusOffset: number,
 ) => SnappedResearchSelection | null;
 
-export interface ResearchSelectionRect {
+interface ResearchSelectionRect {
   left: number;
   right: number;
   top: number;

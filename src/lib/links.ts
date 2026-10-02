@@ -15,7 +15,7 @@ function withoutTrailingPathDecoration(path: string): string {
   return path.replace(/(?::\d+(?:[:-]\d+)?|\.)+$/u, "");
 }
 
-export type TerminalLinkTarget =
+type TerminalLinkTarget =
   | { kind: "externalUrl"; url: string }
   | { kind: "localPath"; path: string };
 

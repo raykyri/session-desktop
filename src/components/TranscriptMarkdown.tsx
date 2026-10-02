@@ -64,7 +64,7 @@ const MAX_CODEX_VISUALIZATION_REFERENCE_CHARACTERS = 8_192;
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-z]:[\\/]/iu;
 const PATH_CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/u;
 
-export interface CodexVisualizationReference {
+interface CodexVisualizationReference {
   path: string;
   title?: string;
   /** Reserved by the Codex contract for a future wider presentation. V1

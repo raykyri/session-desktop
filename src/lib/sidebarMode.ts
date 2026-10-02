@@ -6,7 +6,7 @@ import type {
 import { type ResearchFolderScope, workspaceIsInResearchScope } from "./researchScope";
 
 export const RESEARCH_HOME_TAB_ID = "__research_home__";
-export const RESEARCH_BOOKMARKS_TAB_ID = "__research_bookmarks__";
+const RESEARCH_BOOKMARKS_TAB_ID = "__research_bookmarks__";
 export const RESEARCH_HIGHLIGHTS_TAB_ID = "__research_highlights__";
 const RESEARCH_TREE_TAB_PREFIX = "__research_tree__:";
 

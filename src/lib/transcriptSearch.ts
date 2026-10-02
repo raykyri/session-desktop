@@ -2,20 +2,20 @@
 // the CSS Custom Highlight API instead of marker elements, which would fight
 // React's reconciliation.
 
-export interface TranscriptSearchOptions {
+interface TranscriptSearchOptions {
   caseSensitive: boolean;
   regex: boolean;
 }
 
 // Highlight registry names, referenced by ::highlight() rules in terminal.css.
-export const TRANSCRIPT_SEARCH_HIGHLIGHT = "transcript-search-match";
-export const TRANSCRIPT_SEARCH_ACTIVE_HIGHLIGHT = "transcript-search-active-match";
+const TRANSCRIPT_SEARCH_HIGHLIGHT = "transcript-search-match";
+const TRANSCRIPT_SEARCH_ACTIVE_HIGHLIGHT = "transcript-search-active-match";
 
 // Upper bound on collected matches. A one-character term over a long transcript can
 // match tens of thousands of times; keeping every one as a live DOM Range (and
 // painting it) burns memory and main-thread time for no navigational benefit. Beyond
 // this cap, collection stops — the label shows the cap and the user refines the term.
-export const MAX_SEARCH_MATCHES = 2000;
+const MAX_SEARCH_MATCHES = 2000;
 
 // The Custom Highlight API may be missing from older TS DOM libs/webviews, so it
 // is reached through narrow structural types and feature-checked at runtime.

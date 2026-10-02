@@ -296,7 +296,7 @@ export function researchSidebarUnitId(unit: ResearchSidebarUnit): string {
   return unit.kind === "tree" ? unit.tree.id : unit.folder.id;
 }
 
-export function buildResearchSidebarUnits(
+function buildResearchSidebarUnits(
   trees: ResearchTreeSummary[],
   state: ResearchFolderState,
   workspaceId?: string | null,
@@ -376,7 +376,7 @@ export function visibleResearchTreeIds(
   ];
 }
 
-export interface ResearchSidebarLists {
+interface ResearchSidebarLists {
   /** Units pinned to the top, in the stored starred order. */
   starred: ResearchSidebarUnit[];
   /** Everything else, in the backend's flat order. */

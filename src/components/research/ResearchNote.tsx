@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
-import { ExternalLink, LoaderCircle, Sparkles, Users, X } from "lucide-react";
+import { ExternalLink, LoaderCircle, X } from "lucide-react";
 import type {
   NoteReply,
   RecentResearchQuery,
@@ -135,15 +135,6 @@ function ReplyAvatar({ reply }: { reply: NoteReply }) {
   return (
     <span className={`note-avatar tone-${avatarTone(reply.author.id)}`} aria-hidden="true">
       {initials(reply.author.displayName)}
-    </span>
-  );
-}
-
-/** The gutter glyph for a follow-up row: AI runs and network follow-ups. */
-export function NoteFollowUpGlyph({ network }: { network: boolean }) {
-  return (
-    <span className="note-glyph" aria-hidden="true">
-      {network ? <Users size={12} /> : <Sparkles size={12} />}
     </span>
   );
 }

@@ -1,6 +1,6 @@
 import type { GroupInfo, PaneInfo, ResearchTreeSummary } from "../types";
 
-export type WorkspaceScope = GroupInfo["scope"];
+type WorkspaceScope = GroupInfo["scope"];
 
 export function groupsForScope(groups: GroupInfo[], scope: WorkspaceScope): GroupInfo[] {
   return groups.filter((group) => group.scope === scope);

@@ -10,7 +10,7 @@ export function activeSidebarScrollRegion(
   return activeSurface === "research" ? "research" : "researchTerminals";
 }
 
-export type LeftSidebarRestorePlacement =
+type LeftSidebarRestorePlacement =
   | { kind: "hidden" }
   | { kind: "research-header" }
   | { kind: "floating" }

@@ -1,7 +1,7 @@
 import { isActiveResearchStatus } from "./researchThreads";
 import type { ResearchNode } from "../types";
 
-export interface ResearchBranchInfo {
+interface ResearchBranchInfo {
   nodeIds: string[];
   descendantCount: number;
   hasActiveRuns: boolean;

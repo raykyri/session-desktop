@@ -12,7 +12,7 @@ import type {
  * Shared activity grammar. Surfaces render these semantic slots rather than
  * hand-building slightly different metadata sentences for each source.
  */
-export interface ActivityEvent<TSource = unknown> {
+interface ActivityEvent<TSource = unknown> {
   id: string;
   actor: { kind: "user" | "agent" | "system"; label: string };
   action: { kind: "saved" | "asked" | "posted" | "created" | "completed"; label: string };
@@ -29,7 +29,7 @@ export interface ActivityEvent<TSource = unknown> {
   source: TSource;
 }
 
-export type RecentActivitySource = { kind: "research-query"; query: RecentResearchQuery };
+type RecentActivitySource = { kind: "research-query"; query: RecentResearchQuery };
 
 export type RecentActivityEvent = ActivityEvent<RecentActivitySource>;
 
@@ -41,9 +41,9 @@ export interface RecentActivityPage {
 
 /** Top-level replies Home carries per note; mirrors the backend's
  * `RECENT_ACTIVITY_NOTE_REPLY_LIMIT`. */
-export const RECENT_ACTIVITY_NOTE_REPLY_LIMIT = 5;
+const RECENT_ACTIVITY_NOTE_REPLY_LIMIT = 5;
 
-export function topLevelReplyCount(replies: NoteReply[] = []): number {
+function topLevelReplyCount(replies: NoteReply[] = []): number {
   return replies.filter((reply) => !reply.inReplyTo).length;
 }
 
@@ -84,7 +84,7 @@ export function activityCursorIsBefore(
 }
 
 /** Newest first; ties broken by descending node id, as the backend pages. */
-export function compareRecentActivityItems(
+function compareRecentActivityItems(
   left: RecentResearchQuery,
   right: RecentResearchQuery,
 ): number {
