@@ -9,11 +9,11 @@ mod mcp;
 mod public_cli;
 pub mod transcript_stream;
 
-use serde::Deserialize;
 use serde_json::{Value, json};
 use session_proto::{
     BrowserOpenFileHeader, ControlRequest, ControlResponse, MAX_REMOTE_OPEN_FILE_BYTES,
-    WorkspaceObservation, WorkspaceObservationKind,
+    PreparedAgentLaunch, REMOTE_OPEN_FILE_VERSION, TRANSCRIPT_STREAM_VERSION,
+    WORKSPACE_OBSERVATION_VERSION, WorkspaceObservation, WorkspaceObservationKind,
 };
 use std::env;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -40,23 +40,6 @@ pub fn error_report(error: &str) -> (&str, i32) {
     } else {
         (error, 1)
     }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PreparedAgentLaunch {
-    binary: String,
-    cwd: String,
-    args: Vec<String>,
-    envs: Vec<PreparedLaunchEnv>,
-    supervised: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PreparedLaunchEnv {
-    key: String,
-    value: String,
 }
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -106,15 +89,15 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
             Ok(true)
         }
         "--transcript-stream-version" => {
-            println!("4");
+            println!("{TRANSCRIPT_STREAM_VERSION}");
             Ok(true)
         }
         "--remote-open-file-version" => {
-            println!("1");
+            println!("{REMOTE_OPEN_FILE_VERSION}");
             Ok(true)
         }
         "--workspace-observation-version" => {
-            println!("2");
+            println!("{WORKSPACE_OBSERVATION_VERSION}");
             Ok(true)
         }
         "notify" => {
@@ -987,7 +970,10 @@ mod tests {
         assert!(MCP_USAGE_HINT.contains("stdio"));
     }
 
-    fn prepared_launch(supervised: bool, envs: Vec<PreparedLaunchEnv>) -> PreparedAgentLaunch {
+    fn prepared_launch(
+        supervised: bool,
+        envs: Vec<session_proto::LaunchEnv>,
+    ) -> PreparedAgentLaunch {
         PreparedAgentLaunch {
             binary: "/usr/bin/true".to_string(),
             cwd: "/tmp".to_string(),
@@ -1012,7 +998,7 @@ mod tests {
 
         let launch = prepared_launch(
             true,
-            vec![PreparedLaunchEnv {
+            vec![session_proto::LaunchEnv {
                 key: "SESSION_AGENT_ID".to_string(),
                 value: "agent-1".to_string(),
             }],

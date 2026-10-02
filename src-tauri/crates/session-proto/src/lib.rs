@@ -10,6 +10,29 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub const TRANSCRIPT_STREAM_VERSION: &str = "4";
+pub const REMOTE_OPEN_FILE_VERSION: &str = "1";
+pub const WORKSPACE_OBSERVATION_VERSION: &str = "2";
+
+/// Prepared shell-agent invocation exchanged by the desktop and standalone CLI.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedAgentLaunch {
+    pub binary: String,
+    pub cwd: String,
+    pub args: Vec<String>,
+    pub envs: Vec<LaunchEnv>,
+    /// False for utility invocations that must not create a supervised agent.
+    pub supervised: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchEnv {
+    pub key: String,
+    pub value: String,
+}
+
 /// A single control request. `token` normally scopes the request to exactly one
 /// pane: the server resolves the pane from the token and treats any pane id
 /// inside `payload` as advisory only. The notification-only public entry point
@@ -159,6 +182,24 @@ pub struct PublicControlResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prepared_launch_preserves_the_existing_wire_shape() {
+        let wire = serde_json::json!({
+            "binary": "claude", "cwd": "/work", "args": ["--resume"],
+            "envs": [{"key": "SESSION_AGENT_ID", "value": "agent-1"}],
+            "supervised": true
+        });
+        let launch: PreparedAgentLaunch = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(launch.envs[0].key, "SESSION_AGENT_ID");
+        assert_eq!(serde_json::to_value(&launch).unwrap(), wire);
+        assert!(
+            serde_json::from_value::<PreparedAgentLaunch>(serde_json::json!({
+                "binary": "claude", "cwd": "/work", "args": [], "envs": []
+            }))
+            .is_err()
+        );
+    }
 
     #[test]
     fn public_requests_reject_unknown_envelope_fields() {

@@ -30,6 +30,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub use claude::PrepareShellClaudeLaunchRequest;
+pub use session_proto::{LaunchEnv, PreparedAgentLaunch as PreparedShellAgentLaunch};
 
 /// Single-quotes a path for safe interpolation into a POSIX shell command,
 /// escaping embedded single quotes. Shared by the Claude and Codex adapters,
@@ -662,26 +663,6 @@ pub struct PrepareShellAgentLaunchRequest {
     pub supervisor_pid: Option<u32>,
     #[serde(default)]
     pub prepared_agent_id: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PreparedShellAgentLaunch {
-    pub binary: String,
-    pub cwd: String,
-    pub args: Vec<String>,
-    pub envs: Vec<LaunchEnv>,
-    /// Whether `session agent-exec` should bind and supervise this process as an
-    /// agent. Adapters can return `false` for utility invocations of a shared
-    /// CLI that must pass through the shell wrapper without creating an agent.
-    pub supervised: bool,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LaunchEnv {
-    pub key: String,
-    pub value: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]

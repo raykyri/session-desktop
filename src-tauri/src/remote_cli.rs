@@ -10,6 +10,9 @@ use crate::pty;
 use crate::state::AppState;
 use crate::workspace::RemoteRef;
 use session_cli::{VERSION, parse_version_line};
+use session_proto::{
+    REMOTE_OPEN_FILE_VERSION, TRANSCRIPT_STREAM_VERSION, WORKSPACE_OBSERVATION_VERSION,
+};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -223,17 +226,17 @@ pub fn ensure_cli(host: &Host) -> Result<EnsureCliResult, String> {
 
 fn remote_transcript_stream_supported(host: &Host, path: &str) -> bool {
     remote_stdout(host, path, vec!["--transcript-stream-version".into()])
-        .is_ok_and(|output| output.trim() == "4")
+        .is_ok_and(|output| output.trim() == TRANSCRIPT_STREAM_VERSION)
 }
 
 fn remote_open_file_supported(host: &Host, path: &str) -> bool {
     remote_stdout(host, path, vec!["--remote-open-file-version".into()])
-        .is_ok_and(|output| output.trim() == "1")
+        .is_ok_and(|output| output.trim() == REMOTE_OPEN_FILE_VERSION)
 }
 
 fn remote_workspace_observation_supported(host: &Host, path: &str) -> bool {
     remote_stdout(host, path, vec!["--workspace-observation-version".into()])
-        .is_ok_and(|output| output.trim() == "2")
+        .is_ok_and(|output| output.trim() == WORKSPACE_OBSERVATION_VERSION)
 }
 
 fn remote_cli_version(host: &Host, path: &str) -> Option<String> {
