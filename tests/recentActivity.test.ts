@@ -233,7 +233,7 @@ test("live summary events retain imported report provenance", () => {
   const node: ResearchNode = {
     id: "imported", treeId: "imported-tree", prompt: "Original prompt", adapter: "codex",
     groupId: "workspace", worktreeDir: "/workspace", status: "complete", createdAt: 100,
-    kind: "run", origin: "imported", model: null,
+    kind: "run", origin: "imported", model: null, highlights: [],
   };
   const query = recentResearchQueryFromNode(node)!;
   assert.equal(query.origin, "imported");

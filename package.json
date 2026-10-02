@@ -41,7 +41,8 @@
     "test:handoff": "npm run test:node -- tests/handoff.test.ts",
     "tauri": "tauri",
     "test:node": "TSX_TSCONFIG_PATH=tsconfig.runtime.json node --import tsx --test",
-    "check:types": "tsc",
+    "check:types": "tsc && npm run check:test-types",
+    "check:test-types": "tsc -p tsconfig.runtime.json",
     "check:unused": "node scripts/check-unused-modules.mjs",
     "check": "npm run check:types && npm run check:unused && npm run format",
     "preflight": "npm run check && npm test"
