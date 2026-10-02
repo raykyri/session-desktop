@@ -413,3 +413,58 @@ test.serial("removing a pending attachment prevents its upload from restoring it
   t.is(screen.queryByLabelText("Attachments"), null);
   t.is(useDraftsStore.getState().get(homeDraftKey(WORKSPACE_ID)), undefined);
 });
+
+test.serial("Home restores a draft from the server in a fresh scope", async (t) => {
+  const workspaceId = "remote-home";
+  const draft = {
+    text: "saved on another device",
+    model: "gemini-flash",
+    documentIds: ["remote-document"],
+    updatedAt: Date.now(),
+  };
+  const app = await renderApp("/", {
+    responses: {
+      ...homeResponses,
+      "workspaces.list": [workspace({ id: workspaceId })],
+      "settings.get": serverSettings({ defaultWorkspaceId: workspaceId }),
+      "drafts.get": { key: homeDraftKey(workspaceId), value: JSON.stringify(draft) },
+    },
+  });
+  t.teardown(() => app.unmount());
+  await waitUntil(
+    t,
+    () => screen.queryByLabelText<HTMLTextAreaElement>(PROMPT_LABEL)?.value === draft.text,
+    "server draft restored into composer",
+  );
+  t.deepEqual(useDraftsStore.getState().get(homeDraftKey(workspaceId)), draft);
+  t.truthy(screen.queryByLabelText("Attachments"));
+});
+
+test.serial("a delayed server draft does not replace typing in the composer", async (t) => {
+  const workspaceId = "remote-editing";
+  let resolveDraft: (value: { key: string; value: string }) => void = () => {
+    throw new Error("read did not start");
+  };
+  const response = new Promise<{ key: string; value: string }>((resolve) => {
+    resolveDraft = resolve;
+  });
+  const app = await renderApp("/", {
+    responses: {
+      ...homeResponses,
+      "workspaces.list": [workspace({ id: workspaceId })],
+      "settings.get": serverSettings({ defaultWorkspaceId: workspaceId }),
+      "drafts.get": () => response,
+    },
+  });
+  t.teardown(() => app.unmount());
+  await waitUntil(t, () => screen.queryAllByLabelText(PROMPT_LABEL).length > 0, "composer loaded");
+  fireEvent.change(screen.getByLabelText(PROMPT_LABEL), { target: { value: "typed here" } });
+  await act(async () => {
+    resolveDraft({
+      key: homeDraftKey(workspaceId),
+      value: JSON.stringify({ text: "stale remote", updatedAt: Date.now() + 1000 }),
+    });
+    await response;
+  });
+  t.is(screen.getByLabelText<HTMLTextAreaElement>(PROMPT_LABEL).value, "typed here");
+});
