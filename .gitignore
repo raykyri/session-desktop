@@ -5,7 +5,7 @@ web/.data/
 target/
 src-tauri/target/
 src-tauri/gen/
-packages/
+/packages/
 
 .env
 .DS_Store
