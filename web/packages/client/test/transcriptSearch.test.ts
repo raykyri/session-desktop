@@ -3,15 +3,16 @@ import test from "ava";
 import { collectSearchRanges } from "../src/lib/transcriptSearch.js";
 
 test("hidden matches do not prevent finding visible document text", (t) => {
-  const original = Range.prototype.getClientRects;
+  const original = Object.getOwnPropertyDescriptor(Range.prototype, "getClientRects");
   Range.prototype.getClientRects = function () {
     const hidden = this.startContainer.parentElement?.closest("[hidden]");
     return Object.assign(hidden ? [] : [new DOMRect(0, 0, 10, 10)], {
       item: () => null,
-    }) as DOMRectList;
+    });
   };
   t.teardown(() => {
-    Range.prototype.getClientRects = original;
+    if (original) Object.defineProperty(Range.prototype, "getClientRects", original);
+    else Reflect.deleteProperty(Range.prototype, "getClientRects");
   });
   const root = document.createElement("div");
   root.innerHTML = `<div hidden>${"x".repeat(2_000)}</div><p>${"x".repeat(2_100)}</p>`;
