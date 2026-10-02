@@ -1,3 +1,4 @@
+import { useResearchDocumentNavigation, useResearchComposerDrafts } from "../../hooks/useResearchDocumentNavigation";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDownRight, ArrowLeft, Check, ChevronDown, Copy, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, Reply, ScrollText, Square, Terminal, Trash2, Wrench, X } from "lucide-react";
@@ -64,11 +65,8 @@ import {
 import {
   isResearchNodeSelectionChange,
   pruneResearchNavigationNodes,
-  recordResearchFollowupDraft,
   recordResearchScrollPosition,
-  researchNavigationStore,
   restoreResearchScrollPosition,
-  saveResearchNavigation,
 } from "../../lib/researchNavigation";
 import {
   createResearchSelectionSnapper,
@@ -1913,8 +1911,6 @@ function ResearchDocument({
     clientX: number;
     clientY: number;
   } | null>(null);
-  const navigationRef = useRef(researchNavigationStore());
-  const navigationPersistTimerRef = useRef<number | null>(null);
   const selectedNodeIdRef = useRef(selectedNodeId);
   const treeIdRef = useRef(treeId);
   // The content-loading effect reads the tree through this ref so a routine
@@ -1925,14 +1921,6 @@ function ResearchDocument({
   const contentByNodeRef = useRef(contentByNode);
   const contentErrorByNodeRef = useRef(contentErrorByNode);
   const askRef = useRef(ask);
-  // Set while a saved ordinary follow-up is being copied into React state.
-  // The persistence effect uses it to avoid treating the one transitional
-  // render (tree id loaded, state update not committed yet) as a user clear.
-  const restoringFollowupDraftRef = useRef<{
-    treeId: string;
-    text: string;
-    mode: "thread" | "branch";
-  } | null>(null);
   // The (status, snapshot) stamp each cached content was fetched under, so
   // the loader can tell a cache hit from a stale entry without refetching
   // unchanged segments every time the chain recomputes.
@@ -1949,6 +1937,12 @@ function ResearchDocument({
   // scroll to segments instead of re-restoring, and a chain growing a new
   // tail must not yank the viewport back to a saved offset.
   const restoredChainRef = useRef<string | null>(null);
+  const navigationPersistence = useResearchDocumentNavigation((persistence) => {
+    const scroller = documentScrollRef.current;
+    if (treeId && selectedNodeId && scroller && chainContentSettledRef.current) {
+      persistence.recordScroll(treeId, selectedNodeId, scroller.scrollTop);
+    }
+  });
   // Resets scroll position to top and clears restored state for a new page visit.
   const beginPageVisit = useCallback(() => {
     restoredChainRef.current = null;
@@ -2125,39 +2119,6 @@ function ResearchDocument({
     setLinkedAnchorNodeId(null);
   }, [treeId, chainKey, revisionsKey]);
 
-  // Restore a persisted in-progress ask once its segment's content is on
-  // screen. An ask can be composed on ANY chain segment and persists under
-  // that segment's id, so the whole chain is searched (selected segment
-  // first). Never replaces a live ask — an in-chain selection change or an
-  // unrelated segment's revision landing must not retarget what the user is
-  // typing. Declared after the reset above so that when both fire in the
-  // same pass (a revision landing), the restore wins and the ask survives.
-  useEffect(() => {
-    if (!treeId || chainNodeIds.length === 0 || ask) {
-      return;
-    }
-    const askByNode = navigationRef.current[treeId]?.askByNode;
-    if (!askByNode) {
-      return;
-    }
-    const candidates = selectedNodeId
-      ? [selectedNodeId, ...chainNodeIds.filter((id) => id !== selectedNodeId)]
-      : chainNodeIds;
-    for (const nodeId of candidates) {
-      const saved = askByNode[nodeId];
-      if (!saved || !contentByNodeRef.current[nodeId]?.responseRevision) {
-        continue;
-      }
-      setAsk({ nodeId, anchor: saved.anchor });
-      // Never clobber text the user managed to type before the content
-      // loaded.
-      if (saved.text) {
-        setFollowup((current) => current || saved.text);
-      }
-      return;
-    }
-  }, [ask, treeId, chainKey, chainNodeIds, selectedNodeId, revisionsKey]);
-
   // Match the right-pane composer: fit the textarea to its contents up to the
   // shared cap, then let it scroll. The chain dependency also sizes a newly
   // mounted empty composer after a page switch.
@@ -2323,9 +2284,9 @@ function ResearchDocument({
         pruneResearchHistory(current, validNodeIds, fallbackNodeId),
       );
       if (selectedNodeId && !validNodeIds.has(selectedNodeId)) {
-        const navigation = (navigationRef.current[treeId] ??= { scrollByNode: {} });
+        const navigation = (navigationPersistence.store[treeId] ??= { scrollByNode: {} });
         navigation.selectedNodeId = fallbackNodeId;
-        saveResearchNavigation();
+        navigationPersistence.flush();
         // The fallback is a page swap that bypasses applySelection: reset the
         // same per-page state, or the new page never restores its saved
         // scroll offset (restoredChainRef would still hold the deleted
@@ -2337,7 +2298,7 @@ function ResearchDocument({
       }
       previousDetailNodesRef.current = detail.nodes;
     }
-  }, [beginPageVisit, detail, selectedNodeId, treeId]);
+  }, [beginPageVisit, detail, navigationPersistence, selectedNodeId, treeId]);
 
   useEffect(() => {
     if (!followupMenu) {
@@ -2527,7 +2488,7 @@ function ResearchDocument({
 
   useEffect(() => {
     const rootNodeId = detail?.tree.rootNodeId ?? null;
-    const savedNodeId = treeId ? navigationRef.current[treeId]?.selectedNodeId : undefined;
+    const savedNodeId = treeId ? navigationPersistence.store[treeId]?.selectedNodeId : undefined;
     const selected =
       savedNodeId && detail?.nodes.some((node) => node.id === savedNodeId)
         ? savedNodeId
@@ -2543,7 +2504,7 @@ function ResearchDocument({
     // offsets were captured against this state, and restoring one without
     // the other lands the viewport in the wrong place.
     setExpandedNodes({
-      ...(treeId ? navigationRef.current[treeId]?.expandedByNode : undefined),
+      ...(treeId ? navigationPersistence.store[treeId]?.expandedByNode : undefined),
     });
     // Full-trace is a per-visit reading choice, not a sticky session mode:
     // each page opens on its answers so revealing one node's transcript
@@ -2555,30 +2516,13 @@ function ResearchDocument({
     setFollowup("");
     setFollowupMode("thread");
     setModeMenuOpen(false);
-  }, [beginPageVisit, treeId, detail?.tree.rootNodeId]);
+  }, [beginPageVisit, navigationPersistence, treeId, detail?.tree.rootNodeId]);
 
-  // Restore the ordinary composer independently of the targeted-ask restore
-  // below. The document unmounts when a terminal tab comes forward, so its
-  // local text and mode need to be copied back from the shared navigation
-  // store when this tree mounts again. Always apply the destination tree's
-  // draft (including empty) so text from the previous tree cannot leak into
-  // the store via the persist effect below.
-  useEffect(() => {
-    if (!treeId) {
-      restoringFollowupDraftRef.current = null;
-      setFollowup("");
-      setFollowupMode("thread");
-      return;
-    }
-    const saved = navigationRef.current[treeId]?.followupDraft;
-    restoringFollowupDraftRef.current = {
-      treeId,
-      text: saved?.text ?? "",
-      mode: saved?.mode ?? "thread",
-    };
-    setFollowup(saved?.text ?? "");
-    setFollowupMode(saved?.mode ?? "thread");
-  }, [treeId]);
+  useResearchComposerDrafts({
+    persistence: navigationPersistence, treeId, followup, mode: followupMode,
+    ask, selectedNodeId, chainNodeIds, chainKey, revisionsKey,
+    contentByNode, setFollowup, setMode: setFollowupMode, setAsk,
+  });
 
   // Switches the displayed node without touching visit history: records the
   // outgoing scroll offset and applies the selection. A target inside the
@@ -2590,7 +2534,7 @@ function ResearchDocument({
       if (!treeId) {
         return;
       }
-      const navigation = (navigationRef.current[treeId] ??= { scrollByNode: {} });
+      const navigation = (navigationPersistence.store[treeId] ??= { scrollByNode: {} });
       if (
         selectedNodeId &&
         documentScrollRef.current &&
@@ -2603,7 +2547,7 @@ function ResearchDocument({
         );
       }
       navigation.selectedNodeId = nodeId;
-      saveResearchNavigation();
+      navigationPersistence.flush();
       const sameChain = chainNodeIdsRef.current.includes(nodeId);
       if (!sameChain) {
         // A page swap: reset the per-visit trace choice and the composer
@@ -2620,7 +2564,7 @@ function ResearchDocument({
         window.requestAnimationFrame(() => scrollToSegment(nodeId));
       }
     },
-    [beginPageVisit, scrollToSegment, selectedNodeId, treeId],
+    [beginPageVisit, navigationPersistence, scrollToSegment, selectedNodeId, treeId],
   );
 
   const selectNode = useCallback(
@@ -2758,12 +2702,12 @@ function ResearchDocument({
         current[nodeId] ? current : { ...current, [nodeId]: true },
       );
       if (treeId) {
-        const navigation = (navigationRef.current[treeId] ??= { scrollByNode: {} });
+        const navigation = (navigationPersistence.store[treeId] ??= { scrollByNode: {} });
         (navigation.expandedByNode ??= {})[nodeId] = true;
-        saveResearchNavigation();
+        navigationPersistence.flush();
       }
     },
-    [treeId],
+    [navigationPersistence, treeId],
   );
 
   // Bound the cache to the rendered chain: navigating to another chain drops
@@ -2890,7 +2834,7 @@ function ResearchDocument({
     }
     restoredChainRef.current = `${treeId}:${chainKey}`;
     const saved = restoreResearchScrollPosition(
-      navigationRef.current[treeId],
+      navigationPersistence.store[treeId],
       selectedNodeId,
     );
     if (saved === 0 && chainNodeIds[0] !== selectedNodeId) {
@@ -2901,44 +2845,19 @@ function ResearchDocument({
       return;
     }
     documentScrollRef.current.scrollTop = saved;
-  }, [contentByNode, contentErrorByNode, treeId, chainKey, chainNodeIds, scrollToSegment, selectedNodeId]);
+  }, [contentByNode, contentErrorByNode, navigationPersistence, treeId, chainKey, chainNodeIds, scrollToSegment, selectedNodeId]);
 
   useEffect(() => {
     if (treeId && selectedNodeId && detail?.nodes.some((node) => node.id === selectedNodeId)) {
-      const navigation = (navigationRef.current[treeId] ??= { scrollByNode: {} });
+      const navigation = (navigationPersistence.store[treeId] ??= { scrollByNode: {} });
       // `detail.nodes` is a fresh array on every research event; without the
       // guard a streaming run rewrote localStorage several times a second.
       if (navigation.selectedNodeId !== selectedNodeId) {
         navigation.selectedNodeId = selectedNodeId;
-        saveResearchNavigation();
+        navigationPersistence.flush();
       }
     }
-  }, [detail?.nodes, selectedNodeId, treeId]);
-
-  useEffect(
-    () => () => {
-      if (navigationPersistTimerRef.current !== null) {
-        window.clearTimeout(navigationPersistTimerRef.current);
-      }
-      const currentTreeId = treeIdRef.current;
-      const currentNodeId = selectedNodeIdRef.current;
-      if (
-        currentTreeId &&
-        currentNodeId &&
-        documentScrollRef.current &&
-        chainContentSettledRef.current
-      ) {
-        const navigation = (navigationRef.current[currentTreeId] ??= { scrollByNode: {} });
-        recordResearchScrollPosition(
-          navigation,
-          currentNodeId,
-          documentScrollRef.current.scrollTop,
-        );
-      }
-      saveResearchNavigation();
-    },
-    [],
-  );
+  }, [detail?.nodes, navigationPersistence, selectedNodeId, treeId]);
 
   const recordScroll = useCallback(() => {
     const scroller = documentScrollRef.current;
@@ -2966,16 +2885,8 @@ function ResearchDocument({
     if (restoredChainRef.current === null) {
       return;
     }
-    const navigation = (navigationRef.current[treeId] ??= { scrollByNode: {} });
-    recordResearchScrollPosition(navigation, selectedNodeId, scroller.scrollTop);
-    if (navigationPersistTimerRef.current !== null) {
-      window.clearTimeout(navigationPersistTimerRef.current);
-    }
-    navigationPersistTimerRef.current = window.setTimeout(() => {
-      navigationPersistTimerRef.current = null;
-      saveResearchNavigation();
-    }, 250);
-  }, [selectedNodeId, treeId]);
+    navigationPersistence.recordScroll(treeId, selectedNodeId, scroller.scrollTop);
+  }, [navigationPersistence, selectedNodeId, treeId]);
 
   const breadcrumb = useMemo(() => {
     if (!detail || !selectedNodeId) {
@@ -3271,7 +3182,7 @@ function ResearchDocument({
     // Nothing resolvable (no content yet, or no Highlight API at all) is not
     // "hidden highlights" — segments without entries keep a quiet footer.
     setHiddenHighlightsByNode((current) => (sameCardTops(current, hidden) ? current : hidden));
-    if (treeId && navigationRef.current[treeId]?.focusHighlight) {
+    if (treeId && navigationPersistence.store[treeId]?.focusHighlight) {
       setHighlightPaintVersion((version) => version + 1);
     }
     // Keyed on the revisions and highlight-id lists rather than contentByNode
@@ -3300,7 +3211,7 @@ function ResearchDocument({
     if (!treeId || restoredChainRef.current === null || !documentScrollRef.current) {
       return;
     }
-    const navigation = navigationRef.current[treeId];
+    const navigation = navigationPersistence.store[treeId];
     const focus = navigation?.focusHighlight;
     if (!navigation || !focus) {
       return;
@@ -3311,7 +3222,7 @@ function ResearchDocument({
     }
     const clear = () => {
       delete navigation.focusHighlight;
-      saveResearchNavigation();
+      navigationPersistence.flush();
     };
     const resolved = resolvedHighlightsRef.current
       .get(focus.nodeId)
@@ -3339,7 +3250,7 @@ function ResearchDocument({
     const rect = range.getBoundingClientRect();
     scroller.scrollTop += rect.top - scrollerRect.top - Math.max(72, scrollerRect.height / 3);
     clear();
-  }, [contentByNode, highlightPaintVersion, scrollToSegment, segmentRoot, treeId]);
+  }, [contentByNode, highlightPaintVersion, navigationPersistence, scrollToSegment, segmentRoot, treeId]);
 
   // Paint the passages that targeted follow-ups (and an in-progress ask) were
   // asked about, and resolve each follow-up's rail offset so its card can sit
@@ -4200,9 +4111,9 @@ function ResearchDocument({
       return;
     }
     const currentTreeId = treeIdRef.current;
-    const navigation = currentTreeId ? navigationRef.current[currentTreeId] : undefined;
-    if (navigation && recordResearchFollowupDraft(navigation, "", followupMode)) {
-      saveResearchNavigation();
+    if (currentTreeId) {
+      navigationPersistence.recordDraft(currentTreeId, "", followupMode);
+      navigationPersistence.flush();
     }
     setAsk({ nodeId: highlightAction.nodeId, anchor: highlightAction.anchor });
     setHighlightAction(null);
@@ -4214,10 +4125,10 @@ function ResearchDocument({
     window.requestAnimationFrame(() =>
       followupTextareaRef.current?.focus({ preventScroll: true }),
     );
-  }, [archived, followupMode, highlightAction]);
+  }, [archived, followupMode, highlightAction, navigationPersistence]);
 
   // Removes the persisted ask for a node. Called from the explicit exits
-  // (submit, Escape, the quote row's X) — the persist effect below never
+  // (submit, Escape, the quote row's X) — the persistence hook never
   // deletes, so a lifecycle reset of `ask` cannot wipe an ask the user still
   // wants back after a remount.
   const clearSavedAsk = useCallback((nodeId: string | null) => {
@@ -4225,44 +4136,13 @@ function ResearchDocument({
     if (!currentTreeId || !nodeId) {
       return;
     }
-    const askByNode = navigationRef.current[currentTreeId]?.askByNode;
-    if (askByNode?.[nodeId]) {
-      delete askByNode[nodeId];
-      saveResearchNavigation();
-    }
-  }, []);
+    navigationPersistence.clearAsk(currentTreeId, nodeId);
+  }, [navigationPersistence]);
 
   const dismissAsk = useCallback(() => {
     clearSavedAsk(askRef.current?.nodeId ?? null);
     setAsk(null);
   }, [clearSavedAsk]);
-
-  // Mirror the ordinary follow-up composer just like targeted asks. Store
-  // mutation is immediate so the unmount cleanup can flush it even if the
-  // 250ms localStorage debounce has not fired.
-  useEffect(() => {
-    if (!treeId || ask) {
-      return;
-    }
-    const restoring = restoringFollowupDraftRef.current;
-    if (restoring?.treeId === treeId) {
-      if (followup !== restoring.text || followupMode !== restoring.mode) {
-        return;
-      }
-      restoringFollowupDraftRef.current = null;
-    }
-    const navigation = (navigationRef.current[treeId] ??= { scrollByNode: {} });
-    if (!recordResearchFollowupDraft(navigation, followup, followupMode)) {
-      return;
-    }
-    if (navigationPersistTimerRef.current !== null) {
-      window.clearTimeout(navigationPersistTimerRef.current);
-    }
-    navigationPersistTimerRef.current = window.setTimeout(() => {
-      navigationPersistTimerRef.current = null;
-      saveResearchNavigation();
-    }, 250);
-  }, [ask, followup, followupMode, treeId]);
 
   // Ask mode paints its quoted passage with the CSS Highlight API rather than
   // retaining the browser selection. Once an empty composer is open, a click
@@ -4293,32 +4173,6 @@ function ResearchDocument({
     document.addEventListener("click", closeEmptyAskOnClickAway);
     return () => document.removeEventListener("click", closeEmptyAskOnClickAway);
   }, [dismissAsk, emptyAskOpen, followup]);
-
-  // Mirror the in-progress ask into the navigation store so tabbing away from
-  // the research surface (which unmounts this document) keeps it. The store
-  // mutation is immediate; the localStorage write shares the scroll debounce,
-  // and the unmount flush picks up anything still pending. The content guard
-  // skips the transient render after a page switch, where an old anchor could
-  // still be committed alongside a not-yet-loaded segment.
-  const askContentLoaded = ask ? Boolean(contentByNode[ask.nodeId]) : false;
-  useEffect(() => {
-    if (!ask || !treeId || !askContentLoaded) {
-      return;
-    }
-    const navigation = (navigationRef.current[treeId] ??= { scrollByNode: {} });
-    (navigation.askByNode ??= {})[ask.nodeId] = {
-      anchor: ask.anchor,
-      text: followup,
-      updatedAt: Date.now(),
-    };
-    if (navigationPersistTimerRef.current !== null) {
-      window.clearTimeout(navigationPersistTimerRef.current);
-    }
-    navigationPersistTimerRef.current = window.setTimeout(() => {
-      navigationPersistTimerRef.current = null;
-      saveResearchNavigation();
-    }, 250);
-  }, [ask, askContentLoaded, followup, treeId]);
 
   // Keyed on the bar's existence, not the action object: repositioning below
   // replaces the object on every scroll frame, and rebinding all of these
@@ -4477,10 +4331,8 @@ function ResearchDocument({
     setSubmitting(true);
     try {
       const child = await onFork(target.id, prompt, askState?.anchor ?? null, inline);
-      const navigation = navigationRef.current[detail.tree.id];
-      if (navigation) {
-        recordResearchFollowupDraft(navigation, "", followupMode);
-      }
+      navigationPersistence.recordDraft(detail.tree.id, "", followupMode);
+      navigationPersistence.flush();
       setFollowup("");
       if (askState) {
         clearSavedAsk(askState.nodeId);

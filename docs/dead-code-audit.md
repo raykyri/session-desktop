@@ -62,8 +62,14 @@ that a registered backend command or persisted field can safely be removed.
 ## Further architecture work
 
 The remaining application controller still coordinates substantial research and
-native integration logic. Future extractions should isolate startup hydration and
-browser/native-surface ownership together with their lifecycle effects. The
+native integration logic. Startup snapshot reads, detached secondary hydration,
+cancellation, and window reveal now belong to `useAppStartup` and its startup
+runner; App applies the snapshots and owns workspace selection and migration.
+Research document navigation writes now share one persistence owner, while a
+composer hook owns ordinary and targeted draft restoration and persistence.
+The owner flushes on pagehide/unmount and preserves the existing storage format.
+Future extractions can address browser/native-surface ownership together with
+its lifecycle effects. The
 legacy terminal mode branches, the New Agent launcher, and Home conversation
 history loading have since been retired. Compiler warnings from Linux alone
 are not evidence that macOS code is unused; the interface-health tracker is one
