@@ -22,8 +22,7 @@ function render(text: string, artifactLinks = true) {
   return renderToStaticMarkup(
     createElement(
       TranscriptLinkActionsProvider,
-      { actions },
-      createElement(TranscriptMarkdown, { text, artifactLinks }),
+      { actions, children: createElement(TranscriptMarkdown, { text, artifactLinks }) },
     ),
   );
 }

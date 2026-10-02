@@ -7,7 +7,6 @@ import {
 } from "../src/lib/composerSlashCommands";
 import {
   composerSlashCommandSubmitLabels,
-  planComposerSubmission,
 } from "../src/lib/composerActions";
 
 test("matches command prefixes only in the first unfinished token", () => {

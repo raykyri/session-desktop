@@ -119,8 +119,8 @@ test("the shared user-message primitive stays unboxed", () => {
   const html = renderToStaticMarkup(
     createElement(
       ResearchUserMessage,
-      { className: "research-conversation-prompt research-prompt" },
-      createElement(ResearchMessageBody, { prompt: "Conversation question" }),
+      { className: "research-conversation-prompt research-prompt", children:
+        createElement(ResearchMessageBody, { prompt: "Conversation question" }) },
     ),
   );
 

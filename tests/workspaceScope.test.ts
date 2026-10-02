@@ -10,7 +10,6 @@ import {
   replaceScopedGroupOrder,
 } from "../src/lib/workspaceScope";
 import {
-  RESEARCH_BOOKMARKS_TAB_ID,
   RESEARCH_HIGHLIGHTS_TAB_ID,
   RESEARCH_HOME_TAB_ID,
   RESEARCH_JOURNAL_TAB_IDS,
