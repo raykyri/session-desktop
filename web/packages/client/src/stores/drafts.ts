@@ -3,8 +3,8 @@
 // keeps it, and pushed to the server's `interface_drafts` on a 120 ms debounce
 // with a flush on `pagehide` so it survives a new device.
 //
-// The server half is wired in the second half of Phase 5; `setSyncTarget`
-// exists so that wiring is one call rather than an edit through this file.
+// Composers restore the server copy on entering their scope. Local edits made
+// in this tab always win over asynchronous restoration.
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
@@ -47,7 +47,41 @@ export interface DraftsState {
 
 let syncTarget: DraftSyncTarget | null = null;
 const pending = new Map<DraftKey, ComposerDraft | null>();
+const editedKeys = new Set<DraftKey>();
 let timer: ReturnType<typeof setTimeout> | null = null;
+
+/** Also marks edits such as an in-flight attachment that has no durable id yet. */
+export function markDraftEdited(key: DraftKey): void {
+  editedKeys.add(key);
+}
+
+export function restoreServerDraft(key: DraftKey, raw: string | null): ComposerDraft | null {
+  if (raw === null || editedKeys.has(key)) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const value = parsed as Record<string, unknown>;
+  if (
+    typeof value["text"] !== "string" ||
+    typeof value["updatedAt"] !== "number" ||
+    !Number.isFinite(value["updatedAt"]) ||
+    value["updatedAt"] < 0 ||
+    (value["model"] !== undefined && typeof value["model"] !== "string") ||
+    (value["documentIds"] !== undefined &&
+      (!Array.isArray(value["documentIds"]) ||
+        !value["documentIds"].every((id: unknown) => typeof id === "string")))
+  )
+    return null;
+  const draft = value as unknown as ComposerDraft;
+  const local = useDraftsStore.getState().get(key);
+  if (local && local.updatedAt >= draft.updatedAt) return null;
+  useDraftsStore.setState((state) => ({ byKey: { ...state.byKey, [key]: draft } }));
+  return draft;
+}
 
 /** Installs the server writer. Until one is set, drafts are local only. */
 export function setDraftSyncTarget(target: DraftSyncTarget | null): void {
@@ -87,11 +121,13 @@ export const useDraftsStore = create<DraftsState>()(
       byKey: {},
       get: (key) => get().byKey[key],
       setDraft: (key, draft) => {
+        markDraftEdited(key);
         const stored: ComposerDraft = { ...draft, updatedAt: Date.now() };
         set((state) => ({ byKey: { ...state.byKey, [key]: stored } }));
         schedule(key, stored);
       },
       clearDraft: (key) => {
+        markDraftEdited(key);
         set((state) => {
           if (!(key in state.byKey)) return state;
           const next = { ...state.byKey };

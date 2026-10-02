@@ -52,6 +52,7 @@ import { DomSearchBar } from "../../ui/DomSearchBar.js";
 import { MenuItem, MenuSeparator } from "../../ui/Menu.js";
 import { SidebarRestoreButton } from "../../ui/SidebarRestoreButton.js";
 import { launchableModels } from "../composer/ResearchQueryComposer.js";
+import { useRemoteComposerDraft } from "../composer/useRemoteComposerDraft.js";
 
 import { DeleteBranchDialog } from "./DeleteBranchDialog.js";
 import { DocumentEditor } from "./DocumentEditor.js";
@@ -367,6 +368,10 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   const [followup, setFollowupState] = useState(
     () => useDraftsStore.getState().byKey[draftKey]?.text ?? "",
   );
+  useRemoteComposerDraft(draftKey, (draft) => {
+    setFollowupState(draft.text);
+    if (selectedModel === null && draft.model) setSelectedModel(draft.model);
+  });
   const setFollowup = useCallback(
     (text: string) => {
       setFollowupState(text);

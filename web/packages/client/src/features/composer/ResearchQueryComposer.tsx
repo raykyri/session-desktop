@@ -30,7 +30,7 @@ import { addJournalEntry, uploadDocuments } from "../../api/api.js";
 import { queryKeys, useCreateResearchTree, useMe, useRuntimeConfig } from "../../api/queries.js";
 import { cn } from "../../lib/cn.js";
 import { errorMessage, pushToast } from "../../lib/toast.js";
-import { homeDraftKey, useDraftsStore } from "../../stores/drafts.js";
+import { homeDraftKey, markDraftEdited, useDraftsStore } from "../../stores/drafts.js";
 import { useSettingsStore } from "../../stores/settings.js";
 import { ControlButton, IconButton } from "../../ui/Button.js";
 import {
@@ -41,6 +41,7 @@ import { Menu, MenuItem } from "../../ui/Menu.js";
 import { GHOST_TRIGGER } from "../../ui/surfaces.js";
 
 import { oversizeRefusal } from "./limits.js";
+import { useRemoteComposerDraft } from "./useRemoteComposerDraft.js";
 
 /** A prompt containing only one web URL is saved as a Journal bookmark
  * (`10` §2). Additional text causes the prompt to run as a research query. */
@@ -189,6 +190,12 @@ export function ResearchQueryComposer({
     return next;
   }, []);
 
+  useRemoteComposerDraft(draftKey, (draft) => {
+    setPrompt(draft.text);
+    setModel(draft.model ?? defaultModel ?? DEFAULT_MODEL_ID);
+    updateAttachments(() => attachmentsFromDraft(draft.documentIds));
+  });
+
   const models = useMemo(
     () => composerModels(runtimeConfig.data?.models, me.data?.isAdmin === true),
     [runtimeConfig.data?.models, me.data?.isAdmin],
@@ -250,6 +257,7 @@ export function ResearchQueryComposer({
   const attach = useCallback(
     (files: readonly File[]) => {
       if (files.length === 0 || workspaceId === "") return;
+      markDraftEdited(draftKey);
       const scope = uploadScope.current;
       const pending: Attachment[] = files.map((file, index) => ({
         key: `upload:${Date.now()}:${index}:${file.name}`,
@@ -306,7 +314,7 @@ export function ResearchQueryComposer({
           );
         });
     },
-    [client, persist, updateAttachments, workspaceId],
+    [client, draftKey, persist, updateAttachments, workspaceId],
   );
 
   const removeAttachment = (key: string) => {

@@ -30,6 +30,7 @@ export function testUser(overrides: Partial<User> = {}): User {
 export function defaultResponses(user: User | null): Record<string, unknown> {
   return {
     "auth.me": user,
+    "drafts.get": (input: { key: string }) => ({ key: input.key, value: null }),
     "settings.get": {
       ...DEFAULT_USER_SETTINGS,
       researchLaunchInstruction: null,
