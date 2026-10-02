@@ -19,9 +19,21 @@ for (const name of [
   "KeyboardEvent",
   "MouseEvent",
   "PointerEvent",
+  "AbortController",
+  "AbortSignal",
 ] as const) {
   const constructor = (window as unknown as Record<string, unknown>)[name];
   if (constructor) (globalThis as Record<string, unknown>)[name] = constructor;
+}
+
+// Node can define storage globals without providing a usable storage object.
+// global-jsdom skips existing globals, so explicitly use this document's stores.
+for (const name of ["localStorage", "sessionStorage"] as const) {
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    writable: true,
+    value: window[name],
+  });
 }
 
 // React 19 refuses to run `act` without this, and Testing Library wraps every
