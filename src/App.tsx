@@ -1,3 +1,4 @@
+import { useAppStartup } from "./hooks/useAppStartup";
 import { RESEARCH_FOLDER_SCOPE_KEY, useResearchNavigationState } from "./hooks/useResearchNavigationState";
 import { useUserNotifications } from "./hooks/useUserNotifications";
 import { recordRemoteStartup, reconcileRemoteReservation } from "./lib/remoteStartup";
@@ -375,19 +376,13 @@ import {
   retryResearchNode,
   forkAgent,
   getPaneSplits,
-  getOpenRouterKey,
   setOpenRouterKey,
   openRouterChatCompletion,
-  getAgentDraft,
   getThreadGraph,
   getShowHideShortcut,
   activatePane,
-  getRuntimeConfig,
   probeRemote,
   probeAgentAdapters,
-  getUseLoginShell,
-  getResearchLaunchInstruction,
-  getWorktreeLocation,
   generateResearchAgentTitle,
   killPane,
   listGroups,
@@ -403,7 +398,6 @@ import {
   listPanes,
   listResearchActivity,
   listRecentActivity,
-  listResearchFolders,
   listResearchTrees,
   setResearchFolders,
   getResearchTree,
@@ -411,7 +405,6 @@ import {
   createResearchNoteFollowUp,
   respondToResearchNoteReply,
   removeResearchNoteReply,
-  markAppWindowReady,
   openExternalUrl,
   browserOpenCodexInlineVisualization,
   browserOpenCodexVisualizationReference,
@@ -5093,301 +5086,206 @@ function MainApp() {
     ? paneCanOpenWorktree(contextMenuAgent, groupById.get(contextMenuPane.groupId))
     : { enabled: false, reason: undefined };
 
-  useEffect(() => {
-    let cancelled = false;
-
-    // Everything the first paint doesn't need, hydrated detached after the
-    // window is revealed so startup is gated only by the pane/group/agent
-    // snapshot. Settings, per-agent queues, and drafts are small map lookups and
-    // apply within milliseconds. Turns and graphs are intentionally absent:
-    // the surface-driven hydration effect loads only the agents the user can
-    // currently see instead of copying the workspace's complete history.
-    async function hydrateSecondaryFast(existingAgents: AgentInfo[]) {
-      try {
-        const [
-          storedOpenRouterKey,
-          storedUseLoginShell,
-          storedWorktreeLocation,
-          storedResearchLaunchInstruction,
-          queueEntries,
-          draftEntries,
-        ] =
-          await Promise.all([
-            getOpenRouterKey().catch(() => ""),
-            getUseLoginShell().catch((): boolean | null => null),
-            getWorktreeLocation().catch((): AppSettings["worktreeLocation"] | null => null),
-            getResearchLaunchInstruction().catch((): string | null => null),
-            // Per-agent fetches are individually guarded so one failed
-            // draft/queue read just falls back to empty for that agent.
-            Promise.all(
-              existingAgents.map(
-                async (agent) =>
-                  [
-                    agent.id,
-                    await listAgentTurnQueue(agent.id).catch((): QueuedTurn[] => []),
-                  ] as const,
-              ),
-            ),
-            Promise.all(
-              existingAgents.map(
-                async (agent) =>
-                  [
-                    agent.id,
-                    await getAgentDraft(agent.id).catch((): string | null => null),
-                  ] as const,
-              ),
-            ),
-          ]);
-        if (cancelled) {
-          return;
+  useAppStartup({
+    applySecondary: ({ storedOpenRouterKey, storedUseLoginShell, storedWorktreeLocation,
+      storedResearchLaunchInstruction, queueEntries, draftEntries }) => {
+      // Hydrate the OpenRouter key from the backend (its durable home). If the backend
+      // has none but a key survives in an old localStorage settings blob, migrate that
+      // value into the backend once; either way the in-memory settings track the key.
+      setSettings((current) => {
+        const backendKey = storedOpenRouterKey.trim();
+        const migratedKey = current.openRouterKey.trim();
+        const effectiveKey = backendKey || migratedKey;
+        const effectiveUseLoginShell = storedUseLoginShell ?? current.useLoginShell;
+        const effectiveWorktreeLocation =
+          storedWorktreeLocation ?? current.worktreeLocation;
+        const effectiveResearchLaunchInstruction = clampResearchLaunchInstruction(
+          storedResearchLaunchInstruction ?? current.researchLaunchInstruction,
+        );
+        if (!backendKey && migratedKey) {
+          void setOpenRouterKey(migratedKey).catch(() => undefined);
         }
+        openRouterKeyHydratedRef.current = true;
+        useLoginShellHydratedRef.current = true;
+        worktreeLocationHydratedRef.current = true;
+        researchLaunchInstructionHydratedRef.current = true;
+        return current.openRouterKey === effectiveKey &&
+          current.useLoginShell === effectiveUseLoginShell &&
+          current.worktreeLocation === effectiveWorktreeLocation &&
+          current.researchLaunchInstruction === effectiveResearchLaunchInstruction
+          ? current
+          : {
+              ...current,
+              openRouterKey: effectiveKey,
+              useLoginShell: effectiveUseLoginShell,
+              worktreeLocation: effectiveWorktreeLocation,
+              researchLaunchInstruction: effectiveResearchLaunchInstruction,
+            };
+      });
 
-        // Hydrate the OpenRouter key from the backend (its durable home). If the backend
-        // has none but a key survives in an old localStorage settings blob, migrate that
-        // value into the backend once; either way the in-memory settings track the key.
-        setSettings((current) => {
-          const backendKey = storedOpenRouterKey.trim();
-          const migratedKey = current.openRouterKey.trim();
-          const effectiveKey = backendKey || migratedKey;
-          const effectiveUseLoginShell = storedUseLoginShell ?? current.useLoginShell;
-          const effectiveWorktreeLocation =
-            storedWorktreeLocation ?? current.worktreeLocation;
-          const effectiveResearchLaunchInstruction = clampResearchLaunchInstruction(
-            storedResearchLaunchInstruction ?? current.researchLaunchInstruction,
-          );
-          if (!backendKey && migratedKey) {
-            void setOpenRouterKey(migratedKey).catch(() => undefined);
-          }
-          openRouterKeyHydratedRef.current = true;
-          useLoginShellHydratedRef.current = true;
-          worktreeLocationHydratedRef.current = true;
-          researchLaunchInstructionHydratedRef.current = true;
-          return current.openRouterKey === effectiveKey &&
-            current.useLoginShell === effectiveUseLoginShell &&
-            current.worktreeLocation === effectiveWorktreeLocation &&
-            current.researchLaunchInstruction === effectiveResearchLaunchInstruction
-            ? current
-            : {
-                ...current,
-                openRouterKey: effectiveKey,
-                useLoginShell: effectiveUseLoginShell,
-                worktreeLocation: effectiveWorktreeLocation,
-                researchLaunchInstruction: effectiveResearchLaunchInstruction,
-              };
-        });
-
-        // Live entries win over the snapshot: a queue event or a draft the
-        // user already typed since the window appeared is fresher than the
-        // boot-time disk state, and clobbering a live draft would erase text
-        // mid-composition (and then persist the stale value).
-        replaceQueuedTurnsByAgent({
-          ...Object.fromEntries(queueEntries),
-          ...queuedTurnsByAgentRef.current,
-        });
-        const restoredDrafts = {
-          ...Object.fromEntries(
-            draftEntries.filter((entry): entry is [string, string] => Boolean(entry[1])),
-          ),
-          ...draftsByAgentRef.current,
-        };
-        draftsByAgentRef.current = restoredDrafts;
-        setDraftsByAgentState(restoredDrafts);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
+      // Live entries win over the snapshot: a queue event or a draft the
+      // user already typed since the window appeared is fresher than the
+      // boot-time disk state, and clobbering a live draft would erase text
+      // mid-composition (and then persist the stale value).
+      replaceQueuedTurnsByAgent({
+        ...Object.fromEntries(queueEntries),
+        ...queuedTurnsByAgentRef.current,
+      });
+      const restoredDrafts = {
+        ...Object.fromEntries(
+          draftEntries.filter((entry): entry is [string, string] => Boolean(entry[1])),
+        ),
+        ...draftsByAgentRef.current,
+      };
+      draftsByAgentRef.current = restoredDrafts;
+      setDraftsByAgentState(restoredDrafts);
+    },
+    applyInitial: async ({ runtimeConfig, existingGroups, existingPanes, existingPaneSplits,
+      existingAgents, existingResearchTrees, existingResearchActivity,
+      existingRecentActivity, existingResearchFolders }, isCancelled) => {
+      setConfig(runtimeConfig);
+      setGroups(existingGroups);
+      setPaneSplitsState(normalizePaneSplitsForPanes(existingPaneSplits, existingPanes));
+      setAgents(existingAgents);
+      setAgentsHydrated(true);
+      const partitionedResearchTrees = partitionResearchTrees(existingResearchTrees);
+      setResearchTrees(partitionedResearchTrees.active);
+      setArchivedResearchTrees(partitionedResearchTrees.archived);
+      setResearchActivity(existingResearchActivity);
+      recentActivityItemsRef.current = existingRecentActivity.items;
+      setRecentActivityItems(existingRecentActivity.items);
+      setRecentActivityCursor(existingRecentActivity.nextCursor ?? null);
+      // Adopt the backend-owned grouping. One-time migration: earlier builds
+      // kept folders in localStorage. If the backend has none yet but a
+      // localStorage copy survives, push it up once and clear the local key so
+      // the backend becomes the sole owner; otherwise adopt the backend copy
+      // and drop any now-obsolete local key.
+      const legacyResearchFolders = loadResearchFolderState();
+      if (
+        isEmptyResearchFolderState(existingResearchFolders) &&
+        !isEmptyResearchFolderState(legacyResearchFolders)
+      ) {
+        researchFolderStateRef.current = legacyResearchFolders;
+        setResearchFolderState(legacyResearchFolders);
+        researchFolderPersistChainRef.current = researchFolderPersistChainRef.current
+          .catch(() => undefined)
+          .then(() => setResearchFolders(legacyResearchFolders))
+          .then(() => localStorage.removeItem(RESEARCH_FOLDERS_STORAGE_KEY))
+          .catch((err) => {
+            console.error("failed to migrate research folders", err);
+          });
+      } else {
+        researchFolderStateRef.current = existingResearchFolders;
+        setResearchFolderState(existingResearchFolders);
+        if (!isEmptyResearchFolderState(legacyResearchFolders)) {
+          localStorage.removeItem(RESEARCH_FOLDERS_STORAGE_KEY);
         }
       }
-    }
-
-    async function boot() {
-      try {
-        const [
-          runtimeConfig,
-          existingGroups,
-          existingPanes,
-          existingPaneSplits,
-          existingAgents,
-          existingResearchTrees,
-          existingResearchActivity,
-          existingRecentActivity,
-          existingResearchFolders,
-        ] = await Promise.all([
-          getRuntimeConfig(),
-          listGroups().catch((): GroupInfo[] => []),
-          listPanes(),
-          getPaneSplits().catch((): PaneSplitInfo[] => []),
-          listAgents(),
-          listResearchTrees(true).catch((): ResearchTreeSummary[] => []),
-          listResearchActivity().catch((): ResearchNode[] => []),
-          listRecentActivity().catch(() => ({ items: [], nextCursor: null })),
-          listResearchFolders().catch(emptyResearchFolderState),
-        ]);
-        if (cancelled) {
+      const savedResearchTreeId = localStorage.getItem(ACTIVE_RESEARCH_TREE_KEY);
+      const restoredResearchScope = resolveResearchScope(
+        localStorage.getItem(RESEARCH_FOLDER_SCOPE_KEY),
+        groupsForScope(existingGroups, "research"),
+      );
+      const allResearchTrees = [
+        ...partitionedResearchTrees.active,
+        ...partitionedResearchTrees.archived,
+      ];
+      const researchTreeToRestore = savedResearchTreeId
+        ? treeForResearchScope(
+            allResearchTrees,
+            restoredResearchScope,
+            savedResearchTreeId,
+          )
+        : null;
+      const restoreResearchSelection = async () => {
+        if (isCancelled()) return;
+        if (!researchTreeToRestore) {
+          if (savedResearchTreeId) {
+            localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
+          }
+          if (!isCancelled()) {
+            activeResearchTreeIdRef.current = null;
+            setActiveResearchTreeId(null);
+            setActiveResearchDetail(null);
+            setActiveResearchDetailError(null);
+            activeResearchPaneIdRef.current = null;
+            setActiveResearchPaneId(null);
+            localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
+            showResearchSurface();
+          }
           return;
         }
-
-        setConfig(runtimeConfig);
-        setGroups(existingGroups);
-        setPaneSplitsState(normalizePaneSplitsForPanes(existingPaneSplits, existingPanes));
-        setAgents(existingAgents);
-        setAgentsHydrated(true);
-        const partitionedResearchTrees = partitionResearchTrees(existingResearchTrees);
-        setResearchTrees(partitionedResearchTrees.active);
-        setArchivedResearchTrees(partitionedResearchTrees.archived);
-        setResearchActivity(existingResearchActivity);
-        recentActivityItemsRef.current = existingRecentActivity.items;
-        setRecentActivityItems(existingRecentActivity.items);
-        setRecentActivityCursor(existingRecentActivity.nextCursor ?? null);
-        // Adopt the backend-owned grouping. One-time migration: earlier builds
-        // kept folders in localStorage. If the backend has none yet but a
-        // localStorage copy survives, push it up once and clear the local key so
-        // the backend becomes the sole owner; otherwise adopt the backend copy
-        // and drop any now-obsolete local key.
-        const legacyResearchFolders = loadResearchFolderState();
-        if (
-          isEmptyResearchFolderState(existingResearchFolders) &&
-          !isEmptyResearchFolderState(legacyResearchFolders)
-        ) {
-          researchFolderStateRef.current = legacyResearchFolders;
-          setResearchFolderState(legacyResearchFolders);
-          researchFolderPersistChainRef.current = researchFolderPersistChainRef.current
-            .catch(() => undefined)
-            .then(() => setResearchFolders(legacyResearchFolders))
-            .then(() => localStorage.removeItem(RESEARCH_FOLDERS_STORAGE_KEY))
-            .catch((err) => {
-              console.error("failed to migrate research folders", err);
-            });
-        } else {
-          researchFolderStateRef.current = existingResearchFolders;
-          setResearchFolderState(existingResearchFolders);
-          if (!isEmptyResearchFolderState(legacyResearchFolders)) {
-            localStorage.removeItem(RESEARCH_FOLDERS_STORAGE_KEY);
-          }
-        }
-        void hydrateSecondaryFast(existingAgents);
-        const savedResearchTreeId = localStorage.getItem(ACTIVE_RESEARCH_TREE_KEY);
-        const restoredResearchScope = resolveResearchScope(
-          localStorage.getItem(RESEARCH_FOLDER_SCOPE_KEY),
-          groupsForScope(existingGroups, "research"),
-        );
-        const allResearchTrees = [
-          ...partitionedResearchTrees.active,
-          ...partitionedResearchTrees.archived,
-        ];
-        const researchTreeToRestore = savedResearchTreeId
-          ? treeForResearchScope(
-              allResearchTrees,
-              restoredResearchScope,
-              savedResearchTreeId,
-            )
-          : null;
-        const restoreResearchSelection = async () => {
-          if (!researchTreeToRestore || cancelled) {
-            if (savedResearchTreeId) {
-              localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
-            }
-            if (!cancelled) {
-              activeResearchTreeIdRef.current = null;
-              setActiveResearchTreeId(null);
-              setActiveResearchDetail(null);
-              setActiveResearchDetailError(null);
-              activeResearchPaneIdRef.current = null;
-              setActiveResearchPaneId(null);
-              localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
-              showResearchSurface();
-            }
-            return;
-          }
-          try {
-            const detail = await getResearchTree(researchTreeToRestore.id);
-            if (!cancelled) {
-              setActiveResearchTreeId(researchTreeToRestore.id);
-              localStorage.setItem(ACTIVE_RESEARCH_TREE_KEY, researchTreeToRestore.id);
-              setActiveResearchDetail((current) =>
-                reconcileResearchTreeDetail(current, detail),
-              );
-              const restoredResearchPaneId = localStorage.getItem(ACTIVE_RESEARCH_PANE_KEY);
-              const restoredResearchPane = existingPanes.find(
-                (pane) =>
-                  pane.id === restoredResearchPaneId &&
-                  existingGroups.find((group) => group.id === pane.groupId)?.scope === "research" &&
-                  workspaceIsInResearchScope(pane.groupId, restoredResearchScope),
-              );
-              if (restoredResearchPane) {
-                activeResearchPaneIdRef.current = restoredResearchPane.id;
-                setActiveResearchPaneId(restoredResearchPane.id);
-                activePaneIdRef.current = restoredResearchPane.id;
-                setActivePaneIdState(restoredResearchPane.id);
-                showResearchSurface();
-              } else {
-                showResearchSurface();
-                if (
-                  researchDocumentIsVisible(
-                    researchTreeToRestore.id,
-                    "research",
-                    researchTreeToRestore.id,
-                  )
-                ) {
-                  void markResearchTreeViewed(researchTreeToRestore.id)
-                    .then(() => {
-                      setResearchTrees((current) =>
-                        current.map((tree) =>
-                          tree.id === researchTreeToRestore.id
-                            ? { ...tree, hasUnseenUpdate: false, hasUnseenFailure: false }
-                            : tree,
-                        ),
-                      );
-                    })
-                    .catch(() => undefined);
-                }
-              }
-            }
-          } catch (err) {
-            // Mirror selectResearchTree's failure path when booting into
-            // Research mode: keep the selection and surface the error inside
-            // the document (which has a working Retry) — silently dropping
-            // the key left the Research sidebar paired with a terminal pane
-            // on the stage and nothing able to recover. A later navigation
-            // refresh clears the selection if the tree is truly gone.
-            if (!cancelled) {
-              setActiveResearchTreeId(researchTreeToRestore.id);
-              localStorage.setItem(ACTIVE_RESEARCH_TREE_KEY, researchTreeToRestore.id);
-              setActiveResearchDetailError(err instanceof Error ? err.message : String(err));
+        try {
+          const detail = await getResearchTree(researchTreeToRestore.id);
+          if (!isCancelled()) {
+            setActiveResearchTreeId(researchTreeToRestore.id);
+            localStorage.setItem(ACTIVE_RESEARCH_TREE_KEY, researchTreeToRestore.id);
+            setActiveResearchDetail((current) =>
+              reconcileResearchTreeDetail(current, detail),
+            );
+            const restoredResearchPaneId = localStorage.getItem(ACTIVE_RESEARCH_PANE_KEY);
+            const restoredResearchPane = existingPanes.find(
+              (pane) =>
+                pane.id === restoredResearchPaneId &&
+                existingGroups.find((group) => group.id === pane.groupId)?.scope === "research" &&
+                workspaceIsInResearchScope(pane.groupId, restoredResearchScope),
+            );
+            if (restoredResearchPane) {
+              activeResearchPaneIdRef.current = restoredResearchPane.id;
+              setActiveResearchPaneId(restoredResearchPane.id);
+              activePaneIdRef.current = restoredResearchPane.id;
+              setActivePaneIdState(restoredResearchPane.id);
               showResearchSurface();
             } else {
-              localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
+              showResearchSurface();
+              if (
+                researchDocumentIsVisible(
+                  researchTreeToRestore.id,
+                  "research",
+                  researchTreeToRestore.id,
+                )
+              ) {
+                void markResearchTreeViewed(researchTreeToRestore.id)
+                  .then(() => {
+                    if (isCancelled()) return;
+                    setResearchTrees((current) =>
+                      current.map((tree) =>
+                        tree.id === researchTreeToRestore.id
+                          ? { ...tree, hasUnseenUpdate: false, hasUnseenFailure: false }
+                          : tree,
+                      ),
+                    );
+                  })
+                  .catch(() => undefined);
+              }
             }
           }
-        };
-
-        if (!cancelled) {
-          setPanesPreservingRecoveredDismissals(existingPanes);
-          activePaneIdRef.current = null;
-          setActivePaneIdState(null);
-          activeTabPersistenceReadyRef.current = true;
-          await restoreResearchSelection();
+        } catch (err) {
+          // Mirror selectResearchTree's failure path when booting into
+          // Research mode: keep the selection and surface the error inside
+          // the document (which has a working Retry) — silently dropping
+          // the key left the Research sidebar paired with a terminal pane
+          // on the stage and nothing able to recover. A later navigation
+          // refresh clears the selection if the tree is truly gone.
+          if (!isCancelled()) {
+            setActiveResearchTreeId(researchTreeToRestore.id);
+            localStorage.setItem(ACTIVE_RESEARCH_TREE_KEY, researchTreeToRestore.id);
+            setActiveResearchDetailError(err instanceof Error ? err.message : String(err));
+            showResearchSurface();
+          }
         }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      }
-    }
+      };
 
-    // Reveal the hidden-at-boot window whether boot succeeded or threw — the
-    // error banner is exactly what the user must see on a failed boot. The
-    // effect-cancelled rerun (StrictMode, remount) leaves showing to the run
-    // that actually completes; the backend watchdog covers a hung boot.
-    void boot().finally(() => {
-      if (!cancelled) {
-        void markAppWindowReady().catch(() => undefined);
+      if (!isCancelled()) {
+        setPanesPreservingRecoveredDismissals(existingPanes);
+        activePaneIdRef.current = null;
+        setActivePaneIdState(null);
+        activeTabPersistenceReadyRef.current = true;
+        await restoreResearchSelection();
       }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    },
+    onError: (err) => setError(err instanceof Error ? err.message : String(err)),
+  });
 
   // Persist any debounced-but-unwritten drafts when the window is hidden or the
   // app unmounts, so a quick close never drops the last second of typing.
