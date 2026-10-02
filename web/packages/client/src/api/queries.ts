@@ -204,15 +204,16 @@ export function useDocuments(workspaceId: string) {
   });
 }
 
-/** Token counts are not pushed over SSE, so usage queries poll on a 30-second stale time instead. */
+/** Token counts are not pushed over SSE; refresh mounted usage views every 30 seconds. */
 export const USAGE_STALE_MS = 30_000;
 
-export function useUsage(days?: number) {
+export function useUsage() {
   const signedIn = useSignedIn();
   return useQuery({
     queryKey: queryKeys.usage(),
-    queryFn: () => getUsageSummary(days),
+    queryFn: () => getUsageSummary(),
     staleTime: USAGE_STALE_MS,
+    refetchInterval: USAGE_STALE_MS,
     enabled: signedIn,
   });
 }
@@ -222,6 +223,7 @@ export function useAdminUsers(enabled = true) {
     queryKey: queryKeys.adminUsers(),
     queryFn: () => listUsers(),
     staleTime: USAGE_STALE_MS,
+    refetchInterval: USAGE_STALE_MS,
     enabled,
   });
 }

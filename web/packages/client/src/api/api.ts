@@ -89,8 +89,8 @@ export function setDraft(key: string, value: string) {
   return trpc().drafts.set.mutate({ key, value });
 }
 
-export function getUsageSummary(days?: number) {
-  return trpc().usage.summary.query(days === undefined ? undefined : { days });
+export function getUsageSummary() {
+  return trpc().usage.summary.query();
 }
 
 /* -------------------------------------------------------------------------
