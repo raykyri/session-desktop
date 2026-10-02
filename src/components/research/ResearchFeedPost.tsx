@@ -7,7 +7,7 @@ function isInteractiveTarget(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest("a, button"));
 }
 
-export interface ResearchFeedPostProps {
+interface ResearchFeedPostProps {
   /** Network posts and saved notes use a note glyph. */
   isNote?: boolean;
   /** Relative time in the footer after Bookmark; omitted while running. */

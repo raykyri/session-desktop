@@ -42,7 +42,7 @@ import {
 
 /** Scroll anchor tracking the row key under the top edge of the viewport
  * and its pixel offset. */
-export interface RecentActivityScrollAnchor {
+interface RecentActivityScrollAnchor {
   key: string;
   offset: number;
 }
@@ -65,7 +65,7 @@ export function recentActivityAnchorScrollTop(
   return Math.max(0, canvasTop + rowOffset - anchorOffset);
 }
 
-export type ResearchActivityFeedView = "home" | "bookmarks";
+type ResearchActivityFeedView = "home" | "bookmarks";
 
 const EMPTY_RECAP_PENDING_NODE_IDS: ReadonlySet<string> = new Set<string>();
 
@@ -151,7 +151,7 @@ function estimatedActivityRowHeight(row: VirtualActivityRow): number {
   return hasTweet ? 400 : 124;
 }
 
-export interface VirtualActivityRange {
+interface VirtualActivityRange {
   start: number;
   end: number;
 }

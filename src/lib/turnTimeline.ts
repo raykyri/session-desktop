@@ -16,10 +16,10 @@ import {
 } from "./taggedInstructions";
 import { stripWikilinks } from "./wikilinks";
 
-export type TextBlock = Extract<TurnBlock, { type: "text" }>;
-export type ToolUseBlock = Extract<TurnBlock, { type: "toolUse" }>;
-export type ToolResultBlock = Extract<TurnBlock, { type: "toolResult" }>;
-export type RawBlock = Extract<TurnBlock, { type: "raw" }>;
+type TextBlock = Extract<TurnBlock, { type: "text" }>;
+type ToolUseBlock = Extract<TurnBlock, { type: "toolUse" }>;
+type ToolResultBlock = Extract<TurnBlock, { type: "toolResult" }>;
+type RawBlock = Extract<TurnBlock, { type: "raw" }>;
 
 export type MessageBlock = TextBlock | RawBlock;
 export type TurnTimelineStatus = NonNullable<Turn["status"]>;
@@ -112,7 +112,7 @@ export interface ActivityGroupItem {
 export type ActivityLeafItem = ToolEntry | ThinkingItem;
 export type ActivityItem = ActivityLeafItem | ActivityGroupItem;
 
-export interface PlainTextTranscriptMessage {
+interface PlainTextTranscriptMessage {
   id: string;
   role: "user" | "assistant";
   label: string;
@@ -136,7 +136,7 @@ export function formatPlainTextTranscript(turns: Turn[], assistantLabel: string)
     .join("\n\n");
 }
 
-export function plainTextTranscriptMessages(
+function plainTextTranscriptMessages(
   turns: Turn[],
   assistantLabel: string,
 ): PlainTextTranscriptMessage[] {
@@ -642,7 +642,7 @@ function groupActivityItems(activities: ActivityItem[]): ActivityItem[] {
   ];
 }
 
-export function isActivityLeafItem(item: ActivityItem): item is ActivityLeafItem {
+function isActivityLeafItem(item: ActivityItem): item is ActivityLeafItem {
   return item.type === "tool" || item.type === "thinking";
 }
 
@@ -680,7 +680,7 @@ function timelineContextStatus(
 // Includes the label: the header renders participant.label when present, so
 // two participants that differ only by label must neither merge into one
 // message item nor compare equal in the memo below.
-export function participantKey(participant: ThreadParticipant | null | undefined) {
+function participantKey(participant: ThreadParticipant | null | undefined) {
   if (!participant) {
     return "";
   }

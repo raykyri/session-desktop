@@ -1,7 +1,7 @@
 // Tweet snapshots as the backend resolves them into research message
 // attachments (src-tauri/src/tweets.rs). Rendering lives in TweetEmbed.
 
-export interface TweetMedia {
+interface TweetMedia {
   kind: "photo" | "video" | "gif";
   /** Direct https image URL: the photo itself, or the video poster frame. */
   imageUrl: string;
@@ -28,7 +28,7 @@ export interface TweetTextRun {
 
 /** A link preview the tweet carries — the bordered card X renders under the
  * text for a shared URL. `large` is the wide-image variant. */
-export interface TweetLinkCard {
+interface TweetLinkCard {
   url: string;
   domain: string;
   title: string;

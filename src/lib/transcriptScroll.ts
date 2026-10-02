@@ -1,4 +1,4 @@
-export interface TranscriptScrollCaptureSlot {
+interface TranscriptScrollCaptureSlot {
   capture: () => void;
   register: (capture: () => void) => () => void;
 }
@@ -15,7 +15,7 @@ export interface TranscriptScrollPosition {
   atEnd: boolean;
 }
 
-export interface TranscriptScrollMetrics {
+interface TranscriptScrollMetrics {
   scrollTop: number;
   scrollHeight: number;
   clientHeight: number;

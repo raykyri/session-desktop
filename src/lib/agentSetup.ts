@@ -1,7 +1,7 @@
 import { adapterIsReady, adapterReadinessLabel } from "./adapterReadiness";
 import type { AgentAdapterMetadata } from "../types";
 
-export interface AgentSetupStep {
+interface AgentSetupStep {
   title: string;
   done: boolean;
   command: string | null;

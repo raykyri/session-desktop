@@ -57,7 +57,7 @@ export function timelineContextStatusClass(status: TurnTimelineContextStatus | u
   return status === "rolledBack" ? " is-context-rolled-back" : "";
 }
 
-export function serializeActivityValue(value: unknown, maxCharacters?: number) {
+function serializeActivityValue(value: unknown, maxCharacters?: number) {
   let serialized: string;
   try {
     if (typeof value === "string") {
@@ -170,7 +170,7 @@ function ActivityGroupView({
   );
 }
 
-export function uniqueToolEntries(items: ActivityLeafItem[]) {
+function uniqueToolEntries(items: ActivityLeafItem[]) {
   const seen = new Set<string>();
   const entries: ToolEntry[] = [];
   for (const item of items) {
@@ -187,7 +187,7 @@ export function uniqueToolEntries(items: ActivityLeafItem[]) {
   return entries;
 }
 
-export function activityGroupLabel(group: ActivityGroupItem) {
+function activityGroupLabel(group: ActivityGroupItem) {
   const entries = uniqueToolEntries(group.children);
   if (entries.length === 0) {
     return "Thought for a while";
@@ -195,7 +195,7 @@ export function activityGroupLabel(group: ActivityGroupItem) {
   return toolActionGroupLabel(entries) ?? calledToolsLabel(group.toolCallCount);
 }
 
-export function toolActionGroupLabel(entries: ToolEntry[]) {
+function toolActionGroupLabel(entries: ToolEntry[]) {
   const counts: Record<ToolActionKind, number> = {
     readFile: 0,
     editFile: 0,
@@ -457,7 +457,7 @@ export function RawTranscriptDisclosure({
   );
 }
 
-export function DisclosureChevron() {
+function DisclosureChevron() {
   return <ChevronRight className="disclosure-chevron" size={12} aria-hidden="true" />;
 }
 

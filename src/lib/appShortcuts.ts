@@ -10,7 +10,7 @@ export type AppShortcutCommand =
   | { type: "openFolderMenu" }
   | { type: "toggleSourceBrowser" };
 
-export interface AppShortcutInput {
+interface AppShortcutInput {
   key: string;
   metaKey: boolean;
   ctrlKey: boolean;

@@ -12,7 +12,7 @@ export interface BodyFontOption {
 const SYSTEM_BODY_FONT_STACK =
   'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
-export const BODY_FONT_OPTIONS: BodyFontOption[] = [
+const BODY_FONT_OPTIONS: BodyFontOption[] = [
   {
     id: "dm-sans",
     label: "DM Sans",
@@ -82,9 +82,9 @@ export async function detectAvailableBodyFonts(): Promise<BodyFontOption[]> {
   return BODY_FONT_OPTIONS.filter((_option, index) => availability[index]);
 }
 
-export type ColorTheme = "green-blob" | "orange-blob";
-export type Appearance = "dark" | "light";
-export type TabTitleProvider = "openRouter" | "disabled";
+type ColorTheme = "green-blob" | "orange-blob";
+type Appearance = "dark" | "light";
+type TabTitleProvider = "openRouter" | "disabled";
 export type WorktreeLocation = "global" | "localSession" | "localClaude";
 
 export const COLOR_THEME_OPTIONS: { id: ColorTheme; label: string }[] = [
@@ -102,7 +102,7 @@ export const TAB_TITLE_PROVIDER_OPTIONS: { id: TabTitleProvider; label: string }
   { id: "disabled", label: "Disable" },
 ];
 
-export const WORKTREE_LOCATION_OPTIONS: { id: WorktreeLocation; label: string }[] = [
+const WORKTREE_LOCATION_OPTIONS: { id: WorktreeLocation; label: string }[] = [
   { id: "global", label: "Global (default)" },
   { id: "localSession", label: "Local .session/" },
   { id: "localClaude", label: "Local .claude/" },
@@ -241,7 +241,7 @@ export function bodyFontStackFor(bodyFontId: string): string {
   ).stack;
 }
 
-export function clampTextSize(size: number): number {
+function clampTextSize(size: number): number {
   if (!Number.isFinite(size)) {
     return APP_TEXT_SIZE;
   }

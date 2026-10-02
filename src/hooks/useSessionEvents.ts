@@ -62,7 +62,7 @@ const MAX_TURNS_PER_AGENT = 200;
 // matching how the inline effect behaved before it was extracted. State setters
 // from useState are stable, and the three helper callbacks read through refs
 // internally, so the first-render capture stays correct.
-export interface UseSessionEventsHandlers {
+interface UseSessionEventsHandlers {
   // Records a transcript hook event for the copy-as-JSON export. Nothing renders
   // hook events, so the store lives outside React state (see App) and appending
   // must never trigger a render.

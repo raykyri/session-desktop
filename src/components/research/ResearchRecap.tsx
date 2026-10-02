@@ -1,7 +1,7 @@
 import { LoaderCircle } from "lucide-react";
 import type { ResearchNodeContent } from "../../types";
 
-export function ResearchRecapLine({
+function ResearchRecapLine({
   text,
   className,
 }: {

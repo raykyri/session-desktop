@@ -13,7 +13,7 @@ export function isComposerSubmitShortcut(
   return !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
 }
 
-export function composerSubmitShortcutAriaLabel(requireCmdEnter: boolean) {
+function composerSubmitShortcutAriaLabel(requireCmdEnter: boolean) {
   return requireCmdEnter ? "Command Enter" : "Enter";
 }
 

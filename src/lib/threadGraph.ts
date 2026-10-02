@@ -19,7 +19,7 @@ export function threadIdForAgent(agent: AgentInfo): string {
 // The branch whose turns the right pane renders for this agent — shared by
 // focusedBranchTurns and pendingGraphOverlayTurns so the overlay's acceptance
 // check can never validate a different branch than the one rendered.
-export function resolveFocusedBranchId(graph: ThreadGraph, agent: AgentInfo): string {
+function resolveFocusedBranchId(graph: ThreadGraph, agent: AgentInfo): string {
   return agent.branchId?.trim() || graph.focusedBranchId;
 }
 
@@ -274,7 +274,7 @@ function participantForTurn(agent: AgentInfo, turn: Turn): ThreadParticipant {
   };
 }
 
-export function adapterLabel(adapter: string) {
+function adapterLabel(adapter: string) {
   switch (adapter) {
     case "claude":
       return "Claude";

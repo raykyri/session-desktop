@@ -83,13 +83,6 @@ const MIN_INITIAL_COLS: u16 = 20;
 const MIN_INITIAL_ROWS: u16 = 5;
 const MAX_INITIAL_COLS: u16 = 500;
 const MAX_INITIAL_ROWS: u16 = 200;
-/// Cap on PTY output buffered before the frontend attaches. Recovered agent TUIs
-/// can repaint a large transcript before the webview replays durable scrollback
-/// and calls `pane_attach`; keeping the full repaint preserves SGR/background
-/// state that later bytes in the same draw rely on.
-#[cfg_attr(all(target_os = "macos", not(test)), allow(dead_code))]
-const BACKLOG_CAP: usize = 8 * 1024 * 1024;
-
 /// How often the per-pane child watcher checks whether the direct child (shell or
 /// agent) has exited. Cheap — a non-blocking `try_wait` under the child lock — so
 /// a couple of seconds keeps a stuck pane's "Running" state from lingering long
@@ -4070,26 +4063,6 @@ fn reap_pane_child(state: &AppState, pane_id: &str) -> Option<i32> {
     child.wait().ok().map(|status| status.exit_code() as i32)
 }
 
-/// How far below `BACKLOG_CAP` an over-cap backlog is trimmed. Draining the
-/// front of the buffer is an O(len) memmove, and trimming to the cap exactly
-/// re-ran it on every subsequent chunk of a saturated backlog — a multi-MB
-/// memmove per PTY read. The slack amortizes that to one memmove per
-/// `BACKLOG_TRIM_SLACK` bytes of overflow, at the cost of a saturated backlog
-/// retaining slightly less than the cap.
-#[cfg_attr(all(target_os = "macos", not(test)), allow(dead_code))]
-const BACKLOG_TRIM_SLACK: usize = BACKLOG_CAP / 8;
-
-/// Appends to the pre-attach backlog, dropping the oldest bytes once it exceeds
-/// the cap so a runaway pre-attach burst can't grow unbounded.
-#[cfg_attr(all(target_os = "macos", not(test)), allow(dead_code))]
-fn append_capped(buffer: &mut Vec<u8>, chunk: &[u8]) {
-    buffer.extend_from_slice(chunk);
-    if buffer.len() > BACKLOG_CAP {
-        let overflow = buffer.len() - (BACKLOG_CAP - BACKLOG_TRIM_SLACK);
-        buffer.drain(..overflow);
-    }
-}
-
 fn record_scrollback(state: &AppState, pane_id: &str, chunk: &[u8]) {
     if let Err(err) = append_pane_scrollback(&state.config().workspace_root, pane_id, chunk) {
         eprintln!("session: failed to record scrollback for pane {pane_id}: {err}");
@@ -6697,42 +6670,5 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
-    }
-
-    #[test]
-    fn append_capped_keeps_recent_bytes_under_cap() {
-        let mut buffer = Vec::new();
-        append_capped(&mut buffer, b"hello");
-        append_capped(&mut buffer, b" world");
-        assert_eq!(buffer, b"hello world");
-    }
-
-    #[test]
-    fn append_capped_keeps_large_recovered_tui_repaint() {
-        let mut buffer = Vec::new();
-        let repaint = vec![b'x'; 512 * 1024];
-        append_capped(&mut buffer, &repaint);
-
-        assert_eq!(buffer.len(), repaint.len());
-        assert_eq!(buffer[0], b'x');
-    }
-
-    #[test]
-    fn append_capped_drops_oldest_when_over_cap() {
-        let mut buffer = Vec::new();
-        let first = vec![b'a'; BACKLOG_CAP];
-        append_capped(&mut buffer, &first);
-        append_capped(&mut buffer, b"tail");
-
-        // The trim overshoots the cap by the slack so a saturated backlog pays
-        // one front-memmove per slack's worth of chunks, not one per chunk.
-        assert_eq!(buffer.len(), BACKLOG_CAP - BACKLOG_TRIM_SLACK);
-        // The oldest bytes were dropped to make room; the most recent bytes win.
-        assert_eq!(&buffer[buffer.len() - 4..], b"tail");
-        assert_eq!(buffer[0], b'a');
-
-        // Appends within the reopened slack must not re-trim.
-        append_capped(&mut buffer, b"-more");
-        assert_eq!(buffer.len(), BACKLOG_CAP - BACKLOG_TRIM_SLACK + 5);
     }
 }

@@ -99,7 +99,7 @@ export type ParsedResearchEvent =
   | TreeRemovedEvent
   | NodeRemovedEvent;
 
-export type ResearchEventParseResult =
+type ResearchEventParseResult =
   | { kind: "event"; event: ParsedResearchEvent }
   | { kind: "notResearch" }
   | { kind: "unsupported"; type: string }
@@ -351,7 +351,7 @@ export function parseResearchEvent(event: SessionEvent): ResearchEventParseResul
   }
 }
 
-export interface ResearchStatusContribution {
+interface ResearchStatusContribution {
   runningCount: number;
   failedCount: number;
   completedCount: number;

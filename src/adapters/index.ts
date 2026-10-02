@@ -6,7 +6,7 @@ import type { AgentInfo, PaneInfo, Turn, TurnBlock } from "../types";
 
 export type AgentStatus = AgentInfo["status"];
 
-export interface PermissionAction {
+interface PermissionAction {
   id: string;
   label: string;
   input: string;
@@ -31,7 +31,7 @@ export interface AgentUiAdapter {
   contextRows?: (agent: AgentInfo, pane: PaneInfo) => Array<{ label: string; value: string }>;
 }
 
-export const agentUiAdapters = [
+const agentUiAdapters = [
   claudeUiAdapter,
   codexUiAdapter,
   grokUiAdapter,

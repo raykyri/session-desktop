@@ -1,4 +1,4 @@
-export const MAX_TERMINAL_TITLE_CHARS = 160;
+const MAX_TERMINAL_TITLE_CHARS = 160;
 
 /** Normalize an OSC title while removing known CLI branding. */
 export function sanitizeTerminalTitle(rawTitle: string): string | null {

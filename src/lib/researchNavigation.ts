@@ -6,7 +6,7 @@
 
 import type { ResearchHighlightAnchor } from "../types";
 
-export interface SavedResearchScrollPosition {
+interface SavedResearchScrollPosition {
   top: number;
   updatedAt: number;
 }
@@ -15,7 +15,7 @@ export interface SavedResearchScrollPosition {
  * composed against and whatever the user has typed so far. Persisted so
  * leaving the research surface — which unmounts the document — does not
  * discard the ask; removed only by submit or an explicit dismiss. */
-export interface SavedResearchAsk {
+interface SavedResearchAsk {
   anchor: ResearchHighlightAnchor;
   text: string;
   updatedAt: number;
@@ -23,7 +23,7 @@ export interface SavedResearchAsk {
 
 /** The ordinary thread/branch composer draft. Unlike a targeted ask, this
  * belongs to the tree's currently restored page rather than a passage. */
-export interface SavedResearchFollowupDraft {
+interface SavedResearchFollowupDraft {
   text: string;
   mode: "thread" | "branch";
   updatedAt: number;

@@ -3,7 +3,7 @@
 // image here. Kept as a module-level store rather than App state so any image —
 // nested deep in the transcript or the home rails — can open it with a bare
 // import, without threading a callback through the render tree.
-export interface ImageLightboxState {
+interface ImageLightboxState {
   // A data URL (images are already loaded/encoded by the caller before opening).
   src: string;
   alt: string;

@@ -1,11 +1,11 @@
 import type { ResearchHighlight } from "../types";
 
-export interface ResearchHighlightOffsets {
+interface ResearchHighlightOffsets {
   start: number;
   end: number;
 }
 
-export interface ResolvedResearchHighlightRange extends ResearchHighlightOffsets {
+interface ResolvedResearchHighlightRange extends ResearchHighlightOffsets {
   id: string;
 }
 

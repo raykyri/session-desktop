@@ -11,28 +11,18 @@ import {
 } from "./humanBrowserLifecycleQueue";
 import type {
   AgentInfo,
-  ArtifactInfo,
-  ConversationHistorySnapshot,
   GithubAccount,
   GithubDeviceLogin,
   GithubLoginPoll,
-  GlobalDraft,
   GroupInfo,
   HomeTurnHistoryPage,
   InitialPaneSize,
   MessageAnchor,
-  MoveQueuedAgentTurnResult,
   PaneActivity,
   PaneInfo,
   PaneSplitInfo,
   SessionEvent,
-  PromptLibrary,
-  PromptScope,
   QueuedTurn,
-  QueuedTurnDelivery,
-  SavedPrompt,
-  RemoveQueuedAgentTurnResult,
-  ReorderQueuedAgentTurnResult,
   ResearchBranchRemoval,
   RecentResearchQueryCursor,
   ResearchHighlight,
@@ -51,8 +41,6 @@ import type {
   RemoteProbeResult,
   RepositoryInventory,
   SavedRemote,
-  SubmitAgentTurnMode,
-  SubmitAgentTurnResult,
   TranscriptOption,
   ThreadGraph,
   Turn,
@@ -129,55 +117,6 @@ export function openRouterChatCompletion(payload: unknown) {
   });
 }
 
-// The prompt library: reusable composer messages stored as markdown files, one
-// file per prompt, in a global (~/.session/prompts/) or per-project
-// (~/.session/projects/<basename>-<hash>/prompts/) scope. `projectDir` is the
-// active pane's project directory (group dir, or base repo for worktrees);
-// omit it when no project context exists and only the global scope is served.
-export function listSavedPrompts(projectDir?: string | null) {
-  return invoke<PromptLibrary>("prompt_library_list", { projectDir: projectDir ?? null });
-}
-
-// Creates or overwrites a saved prompt in `scope`. Passing a different
-// previousScope/previousName renames or moves that prompt instead of leaving
-// both files behind.
-// `expectedModifiedMs` is the modifiedMs the caller last loaded for the prompt
-// being updated/moved/deleted; the backend refuses the write if the file changed
-// since (optimistic concurrency). Omit it for a brand-new prompt, whose write is
-// create-only and has nothing to compare against.
-export function saveSavedPrompt(
-  scope: PromptScope,
-  name: string,
-  content: string,
-  projectDir?: string | null,
-  previous?: { scope: PromptScope; name: string } | null,
-  expectedModifiedMs?: number | null,
-) {
-  return invoke<SavedPrompt>("prompt_library_save", {
-    scope,
-    name,
-    content,
-    projectDir: projectDir ?? null,
-    previousScope: previous?.scope ?? null,
-    previousName: previous?.name ?? null,
-    expectedModifiedMs: expectedModifiedMs ?? null,
-  });
-}
-
-export function deleteSavedPrompt(
-  scope: PromptScope,
-  name: string,
-  projectDir?: string | null,
-  expectedModifiedMs?: number | null,
-) {
-  return invoke<void>("prompt_library_delete", {
-    scope,
-    name,
-    projectDir: projectDir ?? null,
-    expectedModifiedMs: expectedModifiedMs ?? null,
-  });
-}
-
 export function setActiveTab(tabId: string | null) {
   return invoke<void>("active_tab_set", { tabId });
 }
@@ -237,10 +176,6 @@ export function renameGroup(groupId: string, name: string | null) {
   return invoke<GroupInfo>("group_rename", { groupId, name });
 }
 
-export function reorderGroups(groupIds: string[]) {
-  return invoke<GroupInfo[]>("group_reorder", { groupIds });
-}
-
 export function listAgents() {
   return invoke<AgentInfo[]>("list_agents");
 }
@@ -263,12 +198,6 @@ export function listHomeTurnHistory(
 
 export function getThreadGraph(threadId: string) {
   return invoke<ThreadGraph | null>("get_thread_graph", { threadId });
-}
-
-export function getConversationHistorySnapshot(snapshotId: string) {
-  return invoke<ConversationHistorySnapshot | null>("get_conversation_history_snapshot", {
-    snapshotId,
-  });
 }
 
 export function listResearchTrees(includeArchived = false) {
@@ -389,34 +318,6 @@ export function updateResearchDocument(request: {
   return invoke<UpdateResearchDocumentResult>("update_research_document", { request });
 }
 
-/** Reads a pasted image referenced by a transcript "[Image: source: <path>]"
- * marker and returns it as a data: URL for direct use in an <img> tag. The
- * backend confines reads to the home or platform temporary directory and
- * enforces the raster extension allowlist, regular-file requirement, and byte
- * cap. */
-export function readTranscriptImage(path: string) {
-  return invoke<string>("read_transcript_image", { path });
-}
-
-/** Persists a base64-encoded image pasted into a composer/queue into the image
- * cache and returns its absolute path, for referencing in the prompt as
- * "[Image: <path>]". `extension` is the raster format (png/jpg/jpeg/gif/webp/bmp);
- * the backend enforces the allowlist and byte cap. */
-export function savePastedImage(dataBase64: string, extension: string) {
-  return invoke<string>("save_pasted_image", { dataBase64, extension });
-}
-
-/** Copies a terminal agent pane's conversation into a Research workspace as
- * a read-only conversation tree. The terminal is untouched — repeating the
- * export creates another independent tree. */
-export function exportPaneToResearch(request: {
-  paneId: string;
-  workspaceId: string;
-  title?: string | null;
-}) {
-  return invoke<ResearchTreeDetail>("export_pane_to_research", { request });
-}
-
 export function getResearchNodeContent(nodeId: string) {
   return invoke<ResearchNodeContent>("get_research_node_content", { nodeId });
 }
@@ -478,13 +379,6 @@ export function createResearchHighlight(
   });
 }
 
-export function removeResearchHighlight(nodeId: string, highlightId: string) {
-  return invoke<ResearchHighlight>("remove_research_highlight", {
-    nodeId,
-    highlightId,
-  });
-}
-
 export function removeResearchHighlights(nodeId: string, highlightIds: string[]) {
   return invoke<ResearchHighlight[]>("remove_research_highlights", {
     nodeId,
@@ -516,58 +410,8 @@ export function listAgentTurnQueue(agentId: string) {
   return invoke<QueuedTurn[]>("list_agent_turn_queue", { agentId });
 }
 
-export function createGlobalDraft(text: string) {
-  return invoke<GlobalDraft>("create_global_draft", { text });
-}
-
-export function deleteGlobalDraft(draftId: string) {
-  return invoke<GlobalDraft[]>("delete_global_draft", { draftId });
-}
-
-export interface AssignGlobalDraftResult {
-  sent: boolean;
-  drafts: GlobalDraft[];
-  queuedTurns: QueuedTurn[];
-}
-
-/** Hands a draft to an agent atomically: claim, then send-or-queue, with the
- * claim rolled back if the submit fails. */
-export function assignGlobalDraft(draftId: string, agentId: string) {
-  return invoke<AssignGlobalDraftResult>("assign_global_draft", {
-    request: { draftId, agentId },
-  });
-}
-
-/** Toggles the pause-after-send flag on one queued turn. `expectedId` is the
- * turn's stable id; the backend rejects the change if the turn at `index` is no
- * longer that turn (a duplicate-text turn shifted into place). */
-export function setQueuedTurnPause(
-  agentId: string,
-  index: number,
-  pauseAfter: boolean,
-  expectedData: string,
-  expectedId?: string | null,
-) {
-  return invoke<QueuedTurn[]>("agent_set_queued_turn_pause", {
-    agentId,
-    index,
-    pauseAfter,
-    expectedData,
-    expectedId: expectedId ?? null,
-  });
-}
-
-/** Clears an agent's paused state, draining the next queued turn if it is idle. */
-export function unpauseAgent(agentId: string) {
-  return invoke<SendNextQueuedAgentTurnResult>("agent_unpause", { agentId });
-}
-
 export function listAgentTranscripts(agentId: string) {
   return invoke<TranscriptOption[]>("list_agent_transcripts", { agentId });
-}
-
-export function setAgentTranscript(agentId: string, path: string | null) {
-  return invoke<AgentInfo>("set_agent_transcript", { agentId, path });
 }
 
 export async function spawnShell(
@@ -706,74 +550,6 @@ export function forkAgent(
   });
 }
 
-export function submitPaneInput(paneId: string, data: string) {
-  return invoke<void>("pane_write", { paneId, data, paste: true, submit: true });
-}
-
-export function submitAgentTurn(agentId: string, data: string, mode: SubmitAgentTurnMode = "auto") {
-  return invoke<SubmitAgentTurnResult>("agent_submit_turn", {
-    request: { agentId, data, mode },
-  });
-}
-
-export function queueWaitAgentTurn(
-  agentId: string,
-  data: string,
-  waitForAgentId: string,
-  waitForPaneId?: string | null,
-  waitForLabel?: string | null,
-) {
-  return invoke<SubmitAgentTurnResult>("agent_queue_wait_turn", {
-    request: {
-      agentId,
-      data,
-      waitForAgentId,
-      waitForPaneId: waitForPaneId ?? null,
-      waitForLabel: waitForLabel ?? null,
-    },
-  });
-}
-
-// Queues a turn that, when reached, is delivered to a new pane (a fork of this
-// session or a fresh session in the same directory) instead of this agent's own
-// composer.
-export function queueDeliveryAgentTurn(
-  agentId: string,
-  data: string,
-  delivery: QueuedTurnDelivery,
-) {
-  return invoke<SubmitAgentTurnResult>("agent_queue_delivery_turn", {
-    request: { agentId, data, delivery },
-  });
-}
-
-export function removeQueuedAgentTurn(
-  agentId: string,
-  index: number,
-  expectedData: string,
-  expectedId?: string | null,
-) {
-  return invoke<RemoveQueuedAgentTurnResult>("agent_remove_queued_turn", {
-    request: { agentId, index, expectedData, expectedId: expectedId ?? null },
-  });
-}
-
-export function reorderQueuedAgentTurn(
-  agentId: string,
-  fromIndex: number,
-  toIndex: number,
-  expectedData: string,
-  expectedId?: string | null,
-) {
-  return invoke<ReorderQueuedAgentTurnResult>("agent_reorder_queued_turn", {
-    request: { agentId, fromIndex, toIndex, expectedData, expectedId: expectedId ?? null },
-  });
-}
-
-export function sendNextQueuedAgentTurn(agentId: string) {
-  return invoke<SendNextQueuedAgentTurnResult>("agent_send_next_queued_turn", { agentId });
-}
-
 /** Marks/clears that the user is actively typing for an agent, so the backend holds
  *  off auto-draining its queue. Clearing drains a held turn if the agent is idle. */
 export function setAgentTyping(agentId: string, typing: boolean) {
@@ -790,7 +566,7 @@ export function browserOpenPreviewExternal(url: string) {
   return invoke<void>("browser_open_preview_external", { url });
 }
 
-export type BrowserOpenLocalPathResult = {
+type BrowserOpenLocalPathResult = {
   disposition: "preview" | "revealed";
   url: string | null;
   sandbox: boolean;
@@ -804,15 +580,6 @@ export function browserOpenLocalPath(paneId: string, path: string, artifactId?: 
     paneId,
     path,
     artifactId,
-  });
-}
-
-/** Safely open a path recognized by the native terminal. Relative paths are
- * resolved against that pane's backend-recorded live cwd. */
-export function browserOpenTerminalPath(paneId: string, path: string) {
-  return invoke<BrowserOpenLocalPathResult>("browser_open_terminal_path", {
-    paneId,
-    path,
   });
 }
 
@@ -844,36 +611,6 @@ export function browserOpenCodexVisualizationReference(paneId: string, path: str
   );
 }
 
-export function artifactList() {
-  return invoke<ArtifactInfo[]>("artifact_list");
-}
-
-/** Removes an artifact-tray entry; returns it so the tray's undo can restore it. */
-export function artifactRemove(artifactId: string) {
-  return invoke<ArtifactInfo>("artifact_remove", { artifactId });
-}
-
-export function artifactRestore(artifact: ArtifactInfo) {
-  return invoke<void>("artifact_restore", { artifact });
-}
-
-/** Opens an artifact outside session: URLs in the default browser, files with the
- * OS default app for the file type. */
-export function artifactOpenExternal(artifactId: string) {
-  return invoke<void>("artifact_open_external", { artifactId });
-}
-
-/** Reveals a file artifact in the OS file manager, selecting the file. */
-export function artifactReveal(artifactId: string) {
-  return invoke<void>("artifact_reveal", { artifactId });
-}
-
-/** Token-scoped file-server URL for a file artifact (thumbnails/previews), or
- * null when the source pane is gone or the file left the pane's roots. */
-export function artifactFileUrl(artifactId: string) {
-  return invoke<string | null>("artifact_file_url", { artifactId });
-}
-
 export type HumanBrowserSnapshot = {
   ownerId: string;
   url: string;
@@ -881,7 +618,7 @@ export type HumanBrowserSnapshot = {
   canGoForward: boolean;
 };
 
-export type HumanBrowserEvent = {
+type HumanBrowserEvent = {
   ownerId: string;
   kind: "navigation" | "title" | "newWindow";
   url: string | null;
@@ -889,7 +626,7 @@ export type HumanBrowserEvent = {
   loading: boolean | null;
 };
 
-export type HumanBrowserSync = {
+type HumanBrowserSync = {
   ownerId: string;
   url: string;
   x: number;
@@ -1012,7 +749,7 @@ export function getBrowserAutomationSnapshot(
 }
 
 /** One mirrored frame pushed by Chromium's screencast, ready for an <img>. */
-export type BrowserScreencastFrame = {
+type BrowserScreencastFrame = {
   paneId: string;
   tabId: number;
   url: string;
@@ -1112,21 +849,6 @@ export function sendBrowserAutomationKey(
   });
 }
 
-// Atomically moves a queued turn from one agent to another. The backend removes
-// from the source and hands it to the target in one call, rolling back on failure,
-// so the turn can never end up in both queues or be lost.
-export function moveQueuedAgentTurn(
-  fromAgentId: string,
-  toAgentId: string,
-  index: number,
-  expectedData: string,
-  expectedId?: string | null,
-) {
-  return invoke<MoveQueuedAgentTurnResult>("agent_move_queued_turn", {
-    request: { fromAgentId, toAgentId, index, expectedData, expectedId: expectedId ?? null },
-  });
-}
-
 export function setAgentDraft(agentId: string, draft: string) {
   return invoke<void>("agent_set_draft", { agentId, draft });
 }
@@ -1145,10 +867,6 @@ export function setInterfaceDraft(key: string, value: string | null) {
 
 export function acknowledgeAgent(agentId: string, includeFailed = false) {
   return invoke<AgentInfo>("agent_acknowledge", { agentId, includeFailed });
-}
-
-export function clearAgentWorkingStatus(agentId: string) {
-  return invoke<AgentInfo>("agent_clear_working_status", { agentId });
 }
 
 /**
@@ -1194,10 +912,6 @@ export function activatePane(paneId: string) {
   return invoke<void>("pane_activate", { paneId });
 }
 
-export function restoreLastClosedPane() {
-  return invoke<PaneInfo | null>("pane_restore_last_closed");
-}
-
 export function renamePane(paneId: string, title: string) {
   return invoke<PaneInfo>("pane_rename", { paneId, title });
 }
@@ -1205,17 +919,6 @@ export function renamePane(paneId: string, title: string) {
 /** Atomically sets the flat sidebar tab order in one call. */
 export function setPaneLayout(items: PaneLayoutItem[]) {
   return invoke<PaneInfo[]>("pane_set_layout", { items });
-}
-
-/** Moves `paneId` into `targetGroupId`, applying `items` as the resulting flat tab
- * order in the same backend mutation. Shell tabs only —
- * the backend rejects agent tabs, whose worktrees are bound to their group. */
-export function movePaneToGroup(
-  paneId: string,
-  targetGroupId: string,
-  items: PaneLayoutItem[],
-) {
-  return invoke<PaneInfo[]>("pane_move_to_group", { paneId, targetGroupId, items });
 }
 
 /** Moves `paneId` immediately after `siblingPaneId` in the flat sidebar order. */

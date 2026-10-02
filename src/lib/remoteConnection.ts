@@ -63,7 +63,7 @@ interface ConnectionError {
   text: string;
 }
 
-export interface RemoteConnectionPresentation {
+interface RemoteConnectionPresentation {
   title: string;
   lines: string[];
   lastConnection: string | null;

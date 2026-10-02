@@ -32,19 +32,6 @@ export function movePaneBy(
   return flatten(next);
 }
 
-/** Moves one pane to an insert-before gap in the current flat list. */
-export function movePaneToGap(panes: PaneInfo[], dragId: string, gap: number): PaneInfo[] {
-  const from = panes.findIndex((pane) => pane.id === dragId);
-  if (from < 0 || gap === from || gap === from + 1) {
-    return panes;
-  }
-
-  const pane = panes[from];
-  const rest = panes.filter((candidate) => candidate.id !== dragId);
-  const insertAt = Math.max(0, Math.min(gap > from ? gap - 1 : gap, rest.length));
-  return flatten([...rest.slice(0, insertAt), pane, ...rest.slice(insertAt)]);
-}
-
 /** Agent tabs are group-bound; only an ordinary shell tab may cross groups. */
 export function paneCanMoveAcrossGroups(panes: PaneInfo[], paneId: string): boolean {
   const pane = panes.find((candidate) => candidate.id === paneId);

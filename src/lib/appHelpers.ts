@@ -8,12 +8,9 @@ import type {
   RepositoryBranch,
   RuntimeConfig,
   ThreadGraph,
-  TranscriptCopyPayload,
   TranscriptHookEvent,
   Turn,
 } from "../types";
-
-const TRANSCRIPT_COPY_VERSION = 1;
 
 export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -79,22 +76,7 @@ export function firstUserTurnText(turn: Turn): string | null {
   return null;
 }
 
-/** When active context last moved: the newest included, non-superseded turn
- * that carries a native timestamp. */
-export function latestTurnTimestamp(turns: Turn[]): number | null {
-  for (let index = turns.length - 1; index >= 0; index -= 1) {
-    const turn = turns[index];
-    if (turn.status === "superseded" || turn.contextStatus === "rolledBack") {
-      continue;
-    }
-    if (typeof turn.timestamp === "number") {
-      return turn.timestamp;
-    }
-  }
-  return null;
-}
-
-export const DEFAULT_SHELL_TITLE = "Shell";
+const DEFAULT_SHELL_TITLE = "Shell";
 
 /** The title a pane is created with ("Shell" or the adapter's label). A pane
  * whose stored title differs has been renamed or auto-titled; shared by the
@@ -385,18 +367,6 @@ export function agentCanFork(agent: AgentInfo | null | undefined): boolean {
   );
 }
 
-// Forking from a chosen message additionally needs an adapter that can preserve
-// its native history at that anchor (by safe transcript synthesis or a native
-// session-tree API), plus a transcript on disk. Mirrors the backend capability;
-// the action is hidden rather than disabled where it does not apply.
-export function agentSupportsForkAtMessage(agent: AgentInfo | null | undefined): boolean {
-  return Boolean(
-    agentCanFork(agent) &&
-      agent?.transcriptPath &&
-      findAgentUiAdapter(agent?.adapter)?.supportsForkAtMessage,
-  );
-}
-
 // Applies a single updated agent to the list: replaces it in place when present,
 // otherwise appends it (e.g. a freshly spawned agent), preserving order.
 //
@@ -531,25 +501,10 @@ export function isEditableTarget(target: EventTarget | null) {
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
 }
 
-export const TERMINAL_PANE_CLASS = "terminal-pane";
+const TERMINAL_PANE_CLASS = "terminal-pane";
 
 export function isTerminalTarget(target: EventTarget | null) {
   return target instanceof HTMLElement && target.closest(`.${TERMINAL_PANE_CLASS}`) !== null;
-}
-
-export function statusLabel(status: PaneInfo["status"]) {
-  switch (status) {
-    case "running":
-      return "Running";
-    case "starting":
-      return "Starting";
-    case "exited":
-      return "Exited";
-    case "killed":
-      return "Killed";
-    case "failed":
-      return "Failed";
-  }
 }
 
 export function agentStatusLabel(status: AgentInfo["status"]) {
@@ -742,7 +697,7 @@ export function desiredPreventSleepState(
   return settingEnabled && anyAgentBusy;
 }
 
-export type AgentStatusTone = "active" | "pending" | "attention" | "done" | "error" | "idle";
+type AgentStatusTone = "active" | "pending" | "attention" | "done" | "error" | "idle";
 
 // Maps an agent status onto the status-dot tones used by the pane detail popover.
 export function agentStatusTone(status: AgentInfo["status"]): AgentStatusTone {
@@ -778,15 +733,4 @@ export function transcriptHookEvent(event: SessionEvent): TranscriptHookEvent | 
     payload: event.payload.payload ?? null,
     timestamp: event.timestamp,
   };
-}
-
-export function formatTranscriptCopyJson(
-  input: Omit<TranscriptCopyPayload, "version" | "exportedAt">,
-) {
-  const payload: TranscriptCopyPayload = {
-    version: TRANSCRIPT_COPY_VERSION,
-    exportedAt: new Date().toISOString(),
-    ...input,
-  };
-  return JSON.stringify(payload, null, 2);
 }

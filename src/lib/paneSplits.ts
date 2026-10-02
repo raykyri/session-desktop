@@ -395,7 +395,7 @@ function withNodeAtPath(
 }
 
 /** The branch holding `paneId`, with the leaf's index inside it. */
-export function splitNodeParentOfPane(
+function splitNodeParentOfPane(
   root: PaneSplitNode,
   paneId: string,
   path = "",
@@ -575,7 +575,7 @@ function normalizedSplitRoot(
  * correction, matching the `calc(F% + Ppx)` form the stage has always used.
  * Gutters are pixel-sized at every level, so they cannot be folded into the
  * fractions. */
-export interface SplitRect {
+interface SplitRect {
   leftFraction: number;
   leftPx: number;
   widthFraction: number;
@@ -589,14 +589,14 @@ export interface SplitRect {
 /** A branch's own box plus the clamped fractions it divides among its children.
  * Resize drags and the resize mask both work in these node-local offsets, which
  * are directly comparable numbers — unlike the composed fraction/pixel pairs. */
-export interface SplitBranchLayout {
+interface SplitBranchLayout {
   path: string;
   axis: PaneSplitAxis;
   rect: SplitRect;
   fractions: number[];
 }
 
-export interface SplitDivider {
+interface SplitDivider {
   /** Path of the branch this divider belongs to. */
   path: string;
   /** Index of the child before the divider. */
@@ -606,7 +606,7 @@ export interface SplitDivider {
   rect: SplitRect;
 }
 
-export interface PaneSplitLayout {
+interface PaneSplitLayout {
   panes: Map<string, SplitRect>;
   branches: Map<string, SplitBranchLayout>;
   dividers: SplitDivider[];
@@ -623,16 +623,8 @@ const FULL_STAGE_RECT: SplitRect = {
   heightPx: 0,
 };
 
-/** The full-stage rectangle, for the single-pane case where there is no split.
- * A fresh object each call: callers treat rects as their own to build styles
- * from, and handing out the shared seed invites a mutation that would corrupt
- * every later layout. */
-export function fullStageSplitRect(): SplitRect {
-  return { ...FULL_STAGE_RECT };
-}
-
 /** Cumulative child offsets, `[0, f0, f0+f1, ..., 1]`. */
-export function splitBranchOffsets(branch: SplitBranchLayout): number[] {
+function splitBranchOffsets(branch: SplitBranchLayout): number[] {
   const offsets = [0];
   for (const fraction of branch.fractions) {
     offsets.push(offsets[offsets.length - 1] + fraction);
@@ -645,7 +637,7 @@ export function splitBranchOffsets(branch: SplitBranchLayout): number[] {
  * the region a divider has swept. The branch's own extent has to give up a
  * gutter per boundary before its children divide what is left, which is why the
  * pixel term is separate from the fraction term all the way down. */
-export function splitBranchSpanRect(
+function splitBranchSpanRect(
   branch: SplitBranchLayout,
   offset: number,
   span: number,
@@ -680,7 +672,7 @@ export function splitBranchSpanRect(
 }
 
 /** Pixels available to a branch's children after its gutters, along its axis. */
-export function splitBranchContentExtent(
+function splitBranchContentExtent(
   branch: SplitBranchLayout,
   stage: { width: number; height: number },
   gutter: number,
@@ -830,7 +822,7 @@ export function resizeSplitNodeFractions(
  * sidebar. In-order leaves have to equal the tab order or normalization rejects
  * the tree, so a dragged pane dropped on a pane's leading half inserts before
  * its anchor, not after. */
-export function insertPaneIntoSplitTree(
+function insertPaneIntoSplitTree(
   root: PaneSplitBranchNode,
   anchorPaneId: string,
   insertedPaneId: string,
@@ -1320,7 +1312,7 @@ export function splitFractions(split: PaneSplitInfo): number[] {
   return clamped.map((value) => value / clampedTotal);
 }
 
-export function resizeSplitFractions(
+function resizeSplitFractions(
   split: PaneSplitInfo,
   dividerIndex: number,
   deltaFraction: number,

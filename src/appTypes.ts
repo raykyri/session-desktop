@@ -52,35 +52,6 @@ export type PaneContextMenuState = {
   y: number;
 };
 
-export type PaneTabPointerDrag = {
-  pointerId: number;
-  paneId: string;
-  startX: number;
-  startY: number;
-  active: boolean;
-};
-
-export type GroupPointerDrag = {
-  pointerId: number;
-  groupId: string;
-  startX: number;
-  startY: number;
-  active: boolean;
-};
-
-// Where a tab drag will land: a gap between rows (reorder), or into the visible
-// terminal stack (split above/below the target pane).
-export type PaneDropTarget =
-  | { kind: "gap"; groupId: string; index: number }
-  | {
-      kind: "terminal-split";
-      groupId: string;
-      targetPaneId: string;
-      position: "above" | "below";
-    };
-
-export type GroupDropTarget = { index: number };
-
 export type BrowserOverlaySize = {
   width: number;
   height: number;

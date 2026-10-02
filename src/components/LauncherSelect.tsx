@@ -15,7 +15,7 @@ export interface LauncherSelectOption {
 
 /** A secondary choice shown as one row at the bottom of the popover, below a
  * separator, that opens its own option list beside the row. */
-export interface LauncherSelectSubmenu {
+interface LauncherSelectSubmenu {
   label: string;
   value: string;
   options: LauncherSelectOption[];
