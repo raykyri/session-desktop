@@ -100,16 +100,14 @@ export const draftsRouter = router({
 });
 
 export const usageRouter = router({
-  summary: protectedProcedure
-    .input(z.object({ days: z.number().int().min(1).max(31).optional() }).optional())
-    .query(({ ctx }) =>
-      repo(() =>
-        usage.summary(ctx.db, ctx.user.id, {
-          dailyTokens: ctx.config.limits.dailyTokens,
-          dailyRuns: ctx.config.limits.dailyRuns,
-        }),
-      ),
+  summary: protectedProcedure.input(z.undefined()).query(({ ctx }) =>
+    repo(() =>
+      usage.summary(ctx.db, ctx.user.id, {
+        dailyTokens: ctx.config.limits.dailyTokens,
+        dailyRuns: ctx.config.limits.dailyRuns,
+      }),
     ),
+  ),
 });
 
 /** One UTC day of usage, restated here rather than inferred from the

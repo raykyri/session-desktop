@@ -151,6 +151,8 @@ test("usage and the admin surface are gated on is_admin", async (t) => {
   const summary = await harness.caller(user).usage.summary();
   t.is(summary.runs, 0);
   t.is(summary.dailyRunLimit, 10);
+  // @ts-expect-error Only the current UTC day is supported, including at runtime.
+  await t.throwsAsync(harness.caller(user).usage.summary({ days: 7 }));
 
   await t.throwsAsync(harness.caller(user).admin.listUsers(), { message: /administrator/ });
   const listed = await harness.caller(admin).admin.listUsers();

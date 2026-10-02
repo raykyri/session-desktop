@@ -62,7 +62,7 @@ Login start/callback are plain Hono routes (`/auth/github`,
 | `settings.get` | Q | → `UserSettings & { researchLaunchInstruction, defaultWorkspaceId, defaultModel }` | localStorage `session.settings.v1`, `research_launch_instruction_get` |
 | `settings.update` | M | partial → full | `research_launch_instruction_set` |
 | `drafts.get` / `drafts.set` | Q/M | `{ key }` / `{ key, value }` | `interface_draft_get/set` |
-| `usage.summary` | Q | `{ days? }` → `UsageSummary` (one UTC day of token counts, an estimated cost, and the account's limits; no per-model breakdown) | — (new) |
+| `usage.summary` | Q | no input → `UsageSummary` (one UTC day of token counts, an estimated cost, and the account's limits; no per-model breakdown) | — (new) |
 | `admin.listUsers` | Q (admin) | → `User[]` with usage totals and limits | — (new) |
 | `admin.setLimits` | M (admin) | `{ userId, dailyTokens?, dailyRuns? }` | — (new) |
 | `admin.createInvites` | M (admin) | `{ count }` → codes | — (new; also grants `invites_remaining` to users later) |
