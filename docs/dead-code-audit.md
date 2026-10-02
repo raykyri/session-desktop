@@ -32,13 +32,16 @@ that a registered backend command or persisted field can safely be removed.
   module reachability, Rust formatting, and the complete test suite. The release
   script now calls it instead of a nonexistent pane-split test command. Unit and
   server test discovery include every `*.test.ts` file in their directories.
-- **Unused-code checks:** TypeScript's `noUnusedLocals` and `noUnusedParameters` are
-  enabled. `check:unused` walks the desktop, website, and test
-  entrypoints, including static/type imports, re-exports, literal dynamic imports,
-  and import types. Tests cover disconnected cycles and independent entrypoints.
-  Tests are deliberate roots; a tested helper is not automatically retired because
-  the current UI no longer imports it. Unused exports inside reachable modules
-  remain outside this check's scope.
+- **Unused-code checks:** TypeScript's `noUnusedLocals` and `noUnusedParameters`
+  cover both desktop source and tests. `check:unused` reports desktop application
+  reachability separately from test reachability and resolves export consumers
+  through aliases, barrels, type references, namespaces, and literal dynamic
+  imports. A re-export alone is not a consumer. Escaping namespaces are handled
+  conservatively; computed imports and externally loaded plugins are outside the
+  static analysis. `scripts/module-contracts.json` names each retained test-only
+  module and compatibility export with a reason. New exceptions require an
+  explicit entry; stale exceptions fail. The four independently tested process
+  contracts and backend/persisted DTO mirrors remain retained deliberately.
 - **Consistent JSX execution:** test commands and website development share
   `tsconfig.runtime.json`. The website no longer needs an otherwise unused React
   import to compensate for a different test transform.

@@ -1,0 +1,91 @@
+{
+  "testOnlyModules": {
+    "src/lib/composerActions.ts": "Independent agent queue, fork, and capability contracts retained for process features even though the current research UI does not mount this composer.",
+    "src/lib/composerSlashCommands.ts": "Tested agent fork/worktree command grammar retained independently of the current composer UI.",
+    "src/lib/handoff.ts": "Tested bounded agent handoff payload formatting retained as research process infrastructure.",
+    "src/lib/imageMarkers.ts": "Tested persisted transcript image marker grammar retained for imported agent transcripts."
+  },
+  "exports": {
+    "src/lib/composerActions.ts": {
+      "reason": "Independent agent queue, fork, and capability contracts retained for process features even though the current research UI does not mount this composer.",
+      "names": [
+        "agentTabStatusDotClass",
+        "agentTabStatusPill",
+        "ComposerGating",
+        "ComposerSlashCommandSubmitLabels",
+        "ComposerSubmissionPlan",
+        "deriveComposerGating",
+        "FORK_REQUIREMENT_TITLE",
+        "planComposerSubmission",
+        "QUEUE_DELIVERY_OPTIONS",
+        "queueWaitsOnOtherAgent",
+        "waitTargetStatusDotClass",
+        "waitTargetStatusLabel"
+      ]
+    },
+    "src/lib/composerSlashCommands.ts": {
+      "reason": "Tested agent fork/worktree command grammar retained independently of the current composer UI.",
+      "names": [
+        "COMPOSER_SLASH_COMMANDS",
+        "ComposerSlashCommandKind",
+        "ComposerSlashCommandName"
+      ]
+    },
+    "src/lib/handoff.ts": {
+      "reason": "Tested bounded agent handoff payload formatting retained as research process infrastructure.",
+      "names": [
+        "DEFAULT_HANDOFF_LIMITS",
+        "HandoffContext",
+        "HandoffLimits"
+      ]
+    },
+    "src/lib/imageMarkers.ts": {
+      "reason": "Tested persisted transcript image marker grammar retained for imported agent transcripts.",
+      "names": [
+        "COLLAPSED_IMAGE_LABEL",
+        "ImageMarkerSegment"
+      ]
+    },
+    "src/types.ts": {
+      "reason": "Backend wire and persisted record mirrors remain explicit compatibility contracts even when current frontend consumers do not use every DTO.",
+      "names": [
+        "AgentReadiness",
+        "ArtifactInfo",
+        "BaseThreadNode",
+        "BranchStartNode",
+        "GlobalDraft",
+        "HandoffNode",
+        "HandoffPayload",
+        "MoveQueuedAgentTurnResult",
+        "NativeTurnRef",
+        "NoteReplyAuthor",
+        "PaneKind",
+        "PaneSplitPaneNode",
+        "PromptLibrary",
+        "PromptScope",
+        "QueuedTurnWait",
+        "RecentResearchQueryPage",
+        "RemoteConnectionState",
+        "RemoteMultiplexer",
+        "RemoteProbeCheck",
+        "RemoteRef",
+        "RemoteSessionIdentity",
+        "RemoveQueuedAgentTurnResult",
+        "ReorderQueuedAgentTurnResult",
+        "RepositoryWorktree",
+        "ResearchNodeCard",
+        "ResearchNodeKind",
+        "ResearchNodeOrigin",
+        "ResearchRecap",
+        "ResearchTweetAttachment",
+        "SavedPrompt",
+        "ShellAgentJobInfo",
+        "ShellAgentJobState",
+        "SubmitAgentTurnMode",
+        "SubmitAgentTurnResult",
+        "TranscriptAnnotation",
+        "TranscriptCopyPayload"
+      ]
+    }
+  }
+}
