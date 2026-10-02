@@ -63,7 +63,8 @@ const INTER_ROMAN_LATIN_PATH: &str = "/__session/fonts/Inter-Variable-Latin.woff
 const INTER_ROMAN_LATIN_EXT_PATH: &str = "/__session/fonts/Inter-Variable-LatinExt.woff2";
 const INTER_ITALIC_LATIN_PATH: &str = "/__session/fonts/Inter-VariableItalic-Latin.woff2";
 const INTER_ITALIC_LATIN_EXT_PATH: &str = "/__session/fonts/Inter-VariableItalic-LatinExt.woff2";
-const INTER_ROMAN_LATIN: &[u8] = include_bytes!("../../src/assets/fonts/Inter-Variable-Latin.woff2");
+const INTER_ROMAN_LATIN: &[u8] =
+    include_bytes!("../../src/assets/fonts/Inter-Variable-Latin.woff2");
 const INTER_ROMAN_LATIN_EXT: &[u8] =
     include_bytes!("../../src/assets/fonts/Inter-Variable-LatinExt.woff2");
 const INTER_ITALIC_LATIN: &[u8] =

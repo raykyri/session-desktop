@@ -1,0 +1,56 @@
+name: desktop
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "tests/**"
+      - "scripts/**"
+      - "package*.json"
+      - "tsconfig*.json"
+      - "vite.config.ts"
+      - "index.html"
+      - "session.config.json"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "tests/**"
+      - "scripts/**"
+      - "package*.json"
+      - "tsconfig*.json"
+      - "vite.config.ts"
+      - "index.html"
+      - "session.config.json"
+      - ".github/workflows/desktop.yml"
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check:types
+      - run: npm run check:unused
+      - run: npm run test:unit
+      - run: npm run build:frontend
+
+  native:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --workspace
+      - run: swift test --package-path src-tauri/swift-native-support --scratch-path "$RUNNER_TEMP/session-native-tests"
