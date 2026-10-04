@@ -3,8 +3,6 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ResearchTreeMenuItems } from "../src/components/research/ResearchTreeMenu";
-import ResearchFolderDialog from "../src/components/research/ResearchFolderDialog";
-import { emptyResearchFolderState } from "../src/lib/researchFolders";
 import type { ResearchTreeSummary } from "../src/types";
 
 const tree: ResearchTreeSummary = {
@@ -30,20 +28,16 @@ test("research tree menus omit regenerate title for every kind", () => {
       createElement(ResearchTreeMenuItems, {
         tree: { ...tree, kind },
         archived: false,
-        folderState: emptyResearchFolderState(),
         onClose: noop,
-        onToggleStar: noop,
         onRename: noop,
         onArchive: noop,
         onRestore: noop,
         onDelete: noop,
-        onRemoveFromFolder: noop,
-        onRequestCreateFolder: noop,
       }),
     );
-    assert.match(html, /Star/);
     assert.match(html, /Rename/);
-    assert.match(html, /New folder with item/);
+    assert.doesNotMatch(html, /Star/);
+    assert.doesNotMatch(html, /folder/i);
     assert.match(html, /Archive/);
     assert.match(html, /Delete/);
     assert.doesNotMatch(html, /Regenerate title/);
@@ -55,32 +49,13 @@ test("research tree menus can expose query summary regeneration", () => {
     createElement(ResearchTreeMenuItems, {
       tree,
       archived: false,
-      folderState: emptyResearchFolderState(),
       onClose: noop,
-      onToggleStar: noop,
       onRename: noop,
       onArchive: noop,
       onRestore: noop,
       onDelete: noop,
-      onRemoveFromFolder: noop,
-      onRequestCreateFolder: noop,
       onRegenerateSummary: noop,
     }),
   );
   assert.match(html, /Generate summary/);
-});
-
-test("the new-folder dialog names a single selected item", () => {
-  const html = renderToStaticMarkup(
-    createElement(ResearchFolderDialog, {
-      open: true,
-      itemCount: 1,
-      onClose: noop,
-      onCreate: noop,
-    }),
-  );
-  assert.match(html, /Create a folder with 1 item:/);
-  assert.match(html, />Create</);
-  assert.doesNotMatch(html, /Name the folder before moving/);
-  assert.doesNotMatch(html, /Create and move/);
 });

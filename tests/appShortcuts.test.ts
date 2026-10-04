@@ -28,18 +28,6 @@ test("Session resolves research navigation shortcuts", () => {
     type: "focusResearchHome",
   });
   assert.equal(resolveAppShortcut(shortcut({ key: "d", metaKey: true })), null);
-  assert.deepEqual(resolveAppShortcut(shortcut({ key: "4", metaKey: true })), {
-    type: "focusResearchTab",
-    tabIndex: 3,
-  });
-  assert.deepEqual(resolveAppShortcut(shortcut({ key: "Tab", ctrlKey: true })), {
-    type: "cycleResearchTab",
-    direction: 1,
-  });
-  assert.deepEqual(
-    resolveAppShortcut(shortcut({ key: "Tab", ctrlKey: true, shiftKey: true })),
-    { type: "cycleResearchTab", direction: -1 },
-  );
   assert.deepEqual(
     resolveAppShortcut(shortcut({ key: "ArrowUp", metaKey: true, altKey: true })),
     { type: "moveResearchItem", direction: -1 },
@@ -74,21 +62,28 @@ test("terminal-only chords no longer resolve", () => {
   }
 });
 
+test("research item jump and cycle chords no longer resolve", () => {
+  for (const input of [
+    shortcut({ key: "4", metaKey: true }),
+    shortcut({ key: "4", ctrlKey: true }),
+    shortcut({ key: "Tab", ctrlKey: true }),
+    shortcut({ key: "Tab", ctrlKey: true, shiftKey: true }),
+    shortcut({ key: "{", metaKey: true, shiftKey: true }),
+    shortcut({ key: "}", metaKey: true, shiftKey: true }),
+  ]) {
+    assert.equal(resolveAppShortcut(input), null);
+  }
+});
+
 test("native shortcut parsing accepts only research actions", () => {
-  assert.deepEqual(parseAppShortcutCommand("focusResearchTab", 2), {
-    type: "focusResearchTab",
-    tabIndex: 2,
-  });
-  assert.deepEqual(parseAppShortcutCommand("cyclePaneTabNext", null), {
-    type: "cycleResearchTab",
-    direction: 1,
-  });
-  assert.deepEqual(parseAppShortcutCommand("moveSidebarItemUp", null), {
+  assert.deepEqual(parseAppShortcutCommand("moveSidebarItemUp"), {
     type: "moveResearchItem",
     direction: -1,
   });
-  assert.equal(parseAppShortcutCommand("splitPaneRight", null), null);
-  assert.equal(parseAppShortcutCommand("focusTerminalMode", null), null);
+  assert.equal(parseAppShortcutCommand("focusResearchTab"), null);
+  assert.equal(parseAppShortcutCommand("cycleResearchTabNext"), null);
+  assert.equal(parseAppShortcutCommand("splitPaneRight"), null);
+  assert.equal(parseAppShortcutCommand("focusTerminalMode"), null);
 });
 
 test("shortcut repeat and show-hide conflicts use Session actions", () => {

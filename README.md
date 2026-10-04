@@ -11,7 +11,7 @@ The application has completed its product, storage, and integration cutover to
 
 - Run research with supported Claude Code, Codex, and Grok installations.
 - Branch from any answer while preserving the context that led to it.
-- Organize research trees into local workspaces and sidebar folders.
+- Organize research trees into local workspaces.
 - Browse recent research activity from Home.
 - Inspect source links and local artifacts in the built-in browser.
 - Save highlights and review full run activity.
@@ -131,7 +131,6 @@ Plans and specifications are in [web/docs](web/docs), starting with
 - `Cmd-O`: open or close the research workspace menu.
 - `Cmd/Ctrl-[` and `Cmd/Ctrl-]`, `Alt-Left` and `Alt-Right`: move through
   research history.
-- `Cmd-1` through `Cmd-9`: focus the corresponding research item.
 - `Cmd-Shift-G`: show or hide the sidebar.
 - `Cmd-,`: open Settings.
 

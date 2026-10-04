@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cycleTabId, selectPaneAfterClose } from "../src/lib/appHelpers";
+import { selectPaneAfterClose } from "../src/lib/appHelpers";
 import {
   movePaneAdjacentToPane,
   movePaneAfter,
@@ -473,38 +473,6 @@ test("selectPaneAfterClose falls back to collapsed groups when no visible tabs r
     ),
     "pane-collapsed-previous",
   );
-});
-
-test("cycleTabId skips other panes in the active split", () => {
-  const tabIds = ["pane-1", "pane-2", "pane-3", "pane-4"];
-  const paneSplits = [split(["pane-2", "pane-3"])];
-
-  assert.equal(cycleTabId(tabIds, "pane-2", 1, paneSplits), "pane-4");
-  assert.equal(cycleTabId(tabIds, "pane-3", -1, paneSplits), "pane-1");
-});
-
-test("cycleTabId enters split panes from the nearest edge", () => {
-  const tabIds = ["pane-1", "pane-2", "pane-3", "pane-4"];
-  const paneSplits = [split(["pane-2", "pane-3"])];
-
-  assert.equal(cycleTabId(tabIds, "pane-1", 1, paneSplits), "pane-2");
-  assert.equal(cycleTabId(tabIds, "pane-4", -1, paneSplits), "pane-3");
-});
-
-test("cycleTabId treats a split as one stop when a sentinel tab is included", () => {
-  const tabIds = ["__home__", "pane-1", "pane-2"];
-  const paneSplits = [split(["pane-1", "pane-2"])];
-
-  assert.equal(cycleTabId(tabIds, "pane-1", 1, paneSplits), "__home__");
-  assert.equal(cycleTabId(tabIds, "pane-2", -1, paneSplits), "__home__");
-});
-
-test("cycleTabId stays put when a split is the only cycle target", () => {
-  const tabIds = ["pane-1", "pane-2"];
-  const paneSplits = [split(["pane-1", "pane-2"])];
-
-  assert.equal(cycleTabId(tabIds, "pane-1", 1, paneSplits), "pane-1");
-  assert.equal(cycleTabId(tabIds, "pane-2", -1, paneSplits), "pane-2");
 });
 
 test("movePaneAdjacentToPane moves one pane below a target", () => {
