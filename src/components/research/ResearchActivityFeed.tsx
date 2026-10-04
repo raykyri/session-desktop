@@ -647,8 +647,7 @@ function ResearchActivityFeed({
       .catch((err: unknown) => onError(err instanceof Error ? err.message : String(err)));
   }
 
-  // Menu dismissal and its keycap shortcuts, mirroring the research sidebar
-  // menus: outside mousedown, Escape, viewport reflow all close; a bare
+  // Menu dismissal and its keycap shortcuts: outside mousedown, Escape, viewport reflow all close; a bare
   // keycap letter fires its item.
   useEffect(() => {
     if (!menu) {
@@ -824,7 +823,11 @@ function ResearchActivityFeed({
                       aria-setsize={nextCursor ? -1 : feed.length}
                     >
                       <ResearchFeedPost
-                        isNote={query.kind === "note"}
+                        kind={
+                          query.kind === "note" || query.kind === "conversation"
+                            ? query.kind
+                            : "question"
+                        }
                         time={
                           Number.isFinite(row.event.occurredAt) ? (
                             <time
@@ -861,6 +864,9 @@ function ResearchActivityFeed({
                         selected={query.nodeId === selectedNodeId}
                         unread={
                           Boolean(researchTree?.hasUnseenUpdate) && query.treeId !== selectedTreeId
+                        }
+                        failed={
+                          Boolean(researchTree?.hasUnseenFailure) && query.treeId !== selectedTreeId
                         }
                         replyCount={replies.count}
                         replyCountLabel={replies.label}

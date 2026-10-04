@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { LoaderCircle, MessageCircle, Reply, StickyNote } from "lucide-react";
+import { LoaderCircle, MessageCircle, Reply, StickyNote, Terminal } from "lucide-react";
 import ResearchThreadActions from "./ResearchThreadActions";
 import { ResearchRecapPendingLine } from "./ResearchRecap";
 
@@ -8,8 +8,9 @@ function isInteractiveTarget(target: EventTarget | null) {
 }
 
 interface ResearchFeedPostProps {
-  /** Network posts and saved notes use a note glyph. */
-  isNote?: boolean;
+  /** Picks the avatar glyph: a question, a note (network posts and saved
+   * links), or an exported terminal conversation. */
+  kind?: "question" | "note" | "conversation";
   /** Relative time in the footer after Bookmark; omitted while running. */
   time?: ReactNode;
   /** The thread's generated title, shown above the question. */
@@ -25,6 +26,9 @@ interface ResearchFeedPostProps {
   selected?: boolean;
   /** The thread changed since it was last viewed. */
   unread?: boolean;
+  /** A run in the thread failed since it was last viewed. Takes the unread
+   * dot's place, since a failure is also an unseen change. */
+  failed?: boolean;
   /** Follow-ups (and, for network posts, replies) under this item. */
   replyCount?: number;
   replyCountLabel?: string;
@@ -41,7 +45,7 @@ interface ResearchFeedPostProps {
  * a footer with the follow-up count, Follow, Bookmark and time.
  * Follow and Bookmark wait until the answer settles. */
 export default function ResearchFeedPost({
-  isNote = false,
+  kind = "question",
   time,
   title,
   renderBody,
@@ -50,6 +54,7 @@ export default function ResearchFeedPost({
   running = false,
   selected = false,
   unread = false,
+  failed = false,
   replyCount = 0,
   replyCountLabel,
   followed = false,
@@ -75,9 +80,24 @@ export default function ResearchFeedPost({
     >
       <div className="research-feed-post-avatar">
         <span className="research-feed-post-avatar-glyph" aria-hidden="true">
-          {isNote ? <StickyNote size={14} /> : <MessageCircle size={14} />}
+          {kind === "note" ? (
+            <StickyNote size={14} />
+          ) : kind === "conversation" ? (
+            <Terminal size={14} />
+          ) : (
+            <MessageCircle size={14} />
+          )}
         </span>
-        {unread ? (
+        {failed ? (
+          <span
+            className="research-feed-post-failed"
+            role="img"
+            aria-label="Failed since last viewed"
+            title="Failed since last viewed — open to acknowledge"
+          >
+            !
+          </span>
+        ) : unread ? (
           <span className="research-feed-post-unread" role="img" aria-label="Updated" />
         ) : null}
       </div>

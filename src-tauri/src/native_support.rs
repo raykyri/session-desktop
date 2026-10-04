@@ -16,7 +16,6 @@ fn events_listener_ready() -> bool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AppShortcutCommand {
     FocusResearchHome,
-    MoveResearchItem(i8),
     OpenSettings,
     OpenCommandPalette,
     ToggleLeftSidebar,
@@ -29,8 +28,6 @@ impl AppShortcutCommand {
     fn wire_name(self) -> &'static str {
         match self {
             Self::FocusResearchHome => "focusResearchHome",
-            Self::MoveResearchItem(-1) => "moveResearchItemUp",
-            Self::MoveResearchItem(_) => "moveResearchItemDown",
             Self::OpenSettings => "openSettings",
             Self::OpenCommandPalette => "openCommandPalette",
             Self::ToggleLeftSidebar => "toggleLeftSidebar",
@@ -52,13 +49,6 @@ fn classify_web_app_shortcut(
 ) -> Option<AppShortcutCommand> {
     let key = key.to_lowercase();
     let key = key.as_str();
-    if command && !control && option && !shift {
-        return match key {
-            "arrowup" => Some(AppShortcutCommand::MoveResearchItem(-1)),
-            "arrowdown" => Some(AppShortcutCommand::MoveResearchItem(1)),
-            _ => None,
-        };
-    }
     if (command != control) && !option && !shift && key == "," {
         return Some(AppShortcutCommand::OpenSettings);
     }
@@ -652,7 +642,6 @@ mod shortcut_tests {
             ("n", false, false, false, true, "focusResearchHome"),
             ("t", false, false, false, true, "focusResearchHome"),
             ("k", false, false, false, true, "openCommandPalette"),
-            ("ArrowUp", false, false, true, true, "moveResearchItemUp"),
             ("g", true, false, false, true, "toggleLeftSidebar"),
             ("j", false, false, false, true, "focusFollowups"),
             ("o", false, false, false, true, "openFolderMenu"),
@@ -669,7 +658,7 @@ mod shortcut_tests {
     }
 
     #[test]
-    fn retired_research_tab_shortcuts_are_not_consumed() {
+    fn retired_research_item_shortcuts_are_not_consumed() {
         for (key, shift, control, command) in [
             ("1", false, false, true),
             ("9", false, true, false),
@@ -680,6 +669,13 @@ mod shortcut_tests {
         ] {
             assert_eq!(
                 classify_web_app_shortcut(key, shift, control, false, command),
+                None,
+                "{key}"
+            );
+        }
+        for key in ["ArrowUp", "ArrowDown"] {
+            assert_eq!(
+                classify_web_app_shortcut(key, false, false, true, true),
                 None,
                 "{key}"
             );

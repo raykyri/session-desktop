@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  appShortcutAllowsRepeat,
   parseAppShortcutCommand,
   RESEARCH_HOME_SHORTCUT_LABEL,
   resolveAppShortcut,
@@ -28,10 +27,6 @@ test("Session resolves research navigation shortcuts", () => {
     type: "focusResearchHome",
   });
   assert.equal(resolveAppShortcut(shortcut({ key: "d", metaKey: true })), null);
-  assert.deepEqual(
-    resolveAppShortcut(shortcut({ key: "ArrowUp", metaKey: true, altKey: true })),
-    { type: "moveResearchItem", direction: -1 },
-  );
 });
 
 test("Session keeps research document and browser shortcuts", () => {
@@ -62,7 +57,7 @@ test("terminal-only chords no longer resolve", () => {
   }
 });
 
-test("research item jump and cycle chords no longer resolve", () => {
+test("research item jump, cycle, and move chords no longer resolve", () => {
   for (const input of [
     shortcut({ key: "4", metaKey: true }),
     shortcut({ key: "4", ctrlKey: true }),
@@ -70,25 +65,23 @@ test("research item jump and cycle chords no longer resolve", () => {
     shortcut({ key: "Tab", ctrlKey: true, shiftKey: true }),
     shortcut({ key: "{", metaKey: true, shiftKey: true }),
     shortcut({ key: "}", metaKey: true, shiftKey: true }),
+    shortcut({ key: "ArrowUp", metaKey: true, altKey: true }),
+    shortcut({ key: "ArrowDown", metaKey: true, altKey: true }),
   ]) {
     assert.equal(resolveAppShortcut(input), null);
   }
 });
 
 test("native shortcut parsing accepts only research actions", () => {
-  assert.deepEqual(parseAppShortcutCommand("moveSidebarItemUp"), {
-    type: "moveResearchItem",
-    direction: -1,
-  });
+  assert.deepEqual(parseAppShortcutCommand("openSettings"), { type: "openSettings" });
+  assert.equal(parseAppShortcutCommand("moveResearchItemUp"), null);
   assert.equal(parseAppShortcutCommand("focusResearchTab"), null);
   assert.equal(parseAppShortcutCommand("cycleResearchTabNext"), null);
   assert.equal(parseAppShortcutCommand("splitPaneRight"), null);
   assert.equal(parseAppShortcutCommand("focusTerminalMode"), null);
 });
 
-test("shortcut repeat and show-hide conflicts use Session actions", () => {
-  assert.equal(appShortcutAllowsRepeat({ type: "moveResearchItem", direction: 1 }), true);
-  assert.equal(appShortcutAllowsRepeat({ type: "focusResearchHome" }), false);
+test("show-hide conflicts use Session actions", () => {
   assert.equal(showHideShortcutConflict("Command+T"), "open Home");
   assert.equal(showHideShortcutConflict("Command+K"), "open the command palette");
   assert.equal(showHideShortcutConflict("Option+Space"), null);

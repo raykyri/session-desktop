@@ -203,14 +203,6 @@ export function listResearchTrees(includeArchived = false) {
   return invoke<ResearchTreeSummary[]>("list_research_trees", { includeArchived });
 }
 
-export function reorderResearchTrees(
-  workspaceId: string,
-  archived: boolean,
-  treeIds: string[],
-) {
-  return invoke<void>("reorder_research_trees", { workspaceId, archived, treeIds });
-}
-
 export function listResearchActivity() {
   return invoke<ResearchNode[]>("list_research_activity");
 }

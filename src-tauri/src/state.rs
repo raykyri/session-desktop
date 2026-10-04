@@ -3848,8 +3848,14 @@ impl AppState {
         limit: usize,
         before: Option<RecentResearchQueryCursor>,
     ) -> Result<research::RecentActivityPage, String> {
-        let is_feed_kind =
-            |kind: ResearchNodeKind| matches!(kind, ResearchNodeKind::Run | ResearchNodeKind::Note);
+        // Documents stay out of the feed; exported terminal conversations are
+        // listed like runs, with their run follow-ups as children.
+        let is_feed_kind = |kind: ResearchNodeKind| {
+            matches!(
+                kind,
+                ResearchNodeKind::Run | ResearchNodeKind::Note | ResearchNodeKind::Conversation
+            )
+        };
         let compare = |left: &&ResearchNode, right: &&ResearchNode| {
             right
                 .created_at
@@ -12870,6 +12876,73 @@ mod tests {
         assert_eq!(
             ids(&state.list_recent_activity(10, None).unwrap()),
             vec![note_id]
+        );
+    }
+
+    #[test]
+    fn recent_activity_lists_exported_conversations_but_not_documents() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let detail = state
+            .create_research_tree(CreateResearchTreeRequest {
+                prompt: "Root query".to_string(),
+                title: None,
+                adapter: "claude".to_string(),
+                model: Some("opus".to_string()),
+                effort: None,
+                group_id: "group-1".to_string(),
+            })
+            .unwrap();
+        let root_id = detail.tree.root_node_id.clone();
+        {
+            let mut model = state.inner.model.lock().unwrap();
+            let root = {
+                let root = model.research_nodes.get_mut(&root_id).unwrap();
+                root.created_at = 200;
+                root.clone()
+            };
+            let tree = model.research_trees.get(&detail.tree.id).unwrap().clone();
+            for (name, kind, created_at) in [
+                ("conversation", ResearchNodeKind::Conversation, 300),
+                ("document", ResearchNodeKind::Document, 400),
+            ] {
+                let mut tree = tree.clone();
+                tree.id = format!("{name}-tree");
+                tree.root_node_id = format!("{name}-node");
+                let mut node = root.clone();
+                node.id = tree.root_node_id.clone();
+                node.tree_id = tree.id.clone();
+                node.kind = kind;
+                node.created_at = created_at;
+                model.research_trees.insert(tree.id.clone(), tree);
+                model.research_nodes.insert(node.id.clone(), node);
+            }
+            let mut follow_up = root.clone();
+            follow_up.id = "conversation-follow-up".to_string();
+            follow_up.tree_id = "conversation-tree".to_string();
+            follow_up.parent_node_id = Some("conversation-node".to_string());
+            follow_up.created_at = 350;
+            model.research_nodes.insert(follow_up.id.clone(), follow_up);
+        }
+
+        let page = state.list_recent_activity(10, None).unwrap();
+        assert_eq!(
+            page.items
+                .iter()
+                .map(|query| (query.node_id.as_str(), query.kind))
+                .collect::<Vec<_>>(),
+            vec![
+                ("conversation-node", ResearchNodeKind::Conversation),
+                (root_id.as_str(), ResearchNodeKind::Run),
+            ]
+        );
+        assert_eq!(
+            page.items[0]
+                .children
+                .iter()
+                .map(|child| child.node_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["conversation-follow-up"]
         );
     }
 
