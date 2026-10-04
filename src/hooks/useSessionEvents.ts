@@ -291,10 +291,7 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
         }
       }
       if (event.type === "app.shortcut") {
-        const command = parseAppShortcutCommand(
-          event.payload.command,
-          event.payload.tabIndex,
-        );
+        const command = parseAppShortcutCommand(event.payload.command);
         if (command !== null) {
           onAppShortcut?.(command, event.payload.repeat === true);
         }

@@ -1,7 +1,5 @@
 export type AppShortcutCommand =
-  | { type: "focusResearchTab"; tabIndex: number }
   | { type: "focusResearchHome" }
-  | { type: "cycleResearchTab"; direction: -1 | 1 }
   | { type: "moveResearchItem"; direction: -1 | 1 }
   | { type: "openSettings" }
   | { type: "openCommandPalette" }
@@ -22,19 +20,8 @@ interface AppShortcutInput {
 
 export const RESEARCH_HOME_SHORTCUT_LABEL = "⌘N";
 
-function normalizedKey(key: string): string {
-  switch (key.toLowerCase()) {
-    case "{":
-      return "[";
-    case "}":
-      return "]";
-    default:
-      return key.toLowerCase();
-  }
-}
-
 export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand | null {
-  const key = normalizedKey(input.key);
+  const key = input.key.toLowerCase();
   const command = input.metaKey;
   const control = input.ctrlKey;
   const option = input.altKey;
@@ -51,21 +38,11 @@ export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand 
   ) {
     return { type: "moveResearchItem", direction: key === "arrowup" ? -1 : 1 };
   }
-  if (onePrimaryModifier && !option && !shift && /^[1-9]$/.test(key)) {
-    return { type: "focusResearchTab", tabIndex: Number(key) - 1 };
-  }
   if (command && !control && !option && !shift && (key === "n" || key === "t")) {
     return { type: "focusResearchHome" };
   }
   if (command && !control && !option && shift && key === "g") {
     return { type: "toggleLeftSidebar" };
-  }
-  if (
-    (!command && control && !option && key === "tab") ||
-    (command && !control && !option && shift && (key === "[" || key === "]"))
-  ) {
-    const previous = key === "[" || (key === "tab" && shift);
-    return { type: "cycleResearchTab", direction: previous ? -1 : 1 };
   }
   if (onePrimaryModifier && !option && !shift && key === ",") {
     return { type: "openSettings" };
@@ -87,12 +64,8 @@ export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand 
 
 function appShortcutLabel(command: AppShortcutCommand): string {
   switch (command.type) {
-    case "focusResearchTab":
-      return `focus research item ${command.tabIndex + 1}`;
     case "focusResearchHome":
       return "open Home";
-    case "cycleResearchTab":
-      return "cycle research items";
     case "moveResearchItem":
       return "move the active research item";
     case "openSettings":
@@ -151,10 +124,7 @@ export function appShortcutAllowsRepeat(command: AppShortcutCommand): boolean {
   return command.type === "moveResearchItem";
 }
 
-export function parseAppShortcutCommand(
-  command: unknown,
-  tabIndex: unknown,
-): AppShortcutCommand | null {
+export function parseAppShortcutCommand(command: unknown): AppShortcutCommand | null {
   switch (command) {
     case "focusResearchHome":
     case "openSettings":
@@ -164,16 +134,6 @@ export function parseAppShortcutCommand(
     case "openFolderMenu":
     case "toggleSourceBrowser":
       return { type: command };
-    case "focusResearchTab":
-      return typeof tabIndex === "number" && Number.isInteger(tabIndex) && tabIndex >= 0
-        ? { type: "focusResearchTab", tabIndex }
-        : null;
-    case "cyclePaneTabPrevious":
-    case "cycleResearchTabPrevious":
-      return { type: "cycleResearchTab", direction: -1 };
-    case "cyclePaneTabNext":
-    case "cycleResearchTabNext":
-      return { type: "cycleResearchTab", direction: 1 };
     case "moveSidebarItemUp":
     case "moveResearchItemUp":
       return { type: "moveResearchItem", direction: -1 };

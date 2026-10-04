@@ -20,7 +20,6 @@ import {
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
-  MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   SetStateAction,
 } from "react";
@@ -34,7 +33,6 @@ import {
   FolderGit2,
   Globe,
   GitBranch,
-  Layers,
   LoaderCircle,
   MessageSquareText,
   Minus,
@@ -91,14 +89,11 @@ import {
 import { formatTurnsTranscript } from "./lib/transcriptFormat";
 import type { TranscriptScrollPosition } from "./lib/transcriptScroll";
 import type { LinkActions } from "./components/TranscriptMarkdown";
-import ResearchSidebarSection, {
-  type ResearchVisibilityFilter,
-} from "./components/research/ResearchSidebarSection";
+import ResearchSidebarSection from "./components/research/ResearchSidebarSection";
 import ResearchFolderSwitcher from "./components/research/ResearchFolderSwitcher";
 import GithubAccountControl from "./components/GithubAccountControl";
 import memMonochromeLogoUrl from "./assets/mem-monochrome.svg";
 import memMonochromeLightLogoUrl from "./assets/mem-monochrome-light.svg";
-import ResearchFolderDialog from "./components/research/ResearchFolderDialog";
 import {
   nextTreeInResearchScope,
   resolveResearchScope,
@@ -144,24 +139,6 @@ import {
   type ParsedResearchEvent,
 } from "./lib/researchEvents";
 import {
-  addTreesToResearchFolder,
-  createResearchFolder,
-  dissolveResearchFolder,
-  emptyResearchFolderState,
-  isEmptyResearchFolderState,
-  loadResearchFolderState,
-  removeTreesFromResearchFolderMembership,
-  removeTreesFromResearchFolders,
-  renameResearchFolder,
-  replaceResearchStarOrder,
-  researchFolderMemberIds,
-  RESEARCH_FOLDERS_STORAGE_KEY,
-  setResearchFolderCollapsed,
-  toggleResearchStar,
-  visibleResearchTreeIds,
-  type ResearchFolderState,
-} from "./lib/researchFolders";
-import {
   agentStatusLabel,
   agentStatusKeepsMachineAwake,
   desiredPreventSleepState,
@@ -170,7 +147,6 @@ import {
   agentStatusTone,
   clamp,
   clampContextMenuToViewport,
-  cycleTabId,
   defaultPaneTitle,
   firstUserTurnText,
   isEditableTarget,
@@ -309,15 +285,7 @@ import {
   panesForScope,
   researchAttention,
 } from "./lib/workspaceScope";
-import {
-  RESEARCH_HOME_TAB_ID,
-  type ResearchJournalView,
-  researchCycleTabIds,
-  researchJournalTabId,
-  researchJournalViewFromTabId,
-  researchTreeIdFromTabId,
-  researchTreeTabId,
-} from "./lib/sidebarMode";
+import type { ResearchJournalView } from "./lib/sidebarMode";
 import { stripTaggedUserInstructionBlocks } from "./lib/taggedInstructions";
 import {
   clearSessionDraft,
@@ -399,7 +367,6 @@ import {
   listResearchActivity,
   listRecentActivity,
   listResearchTrees,
-  setResearchFolders,
   getResearchTree,
   createResearchNote,
   createResearchNoteFollowUp,
@@ -544,14 +511,6 @@ type ResearchViewedAckOptions = {
 // persisted last-tab id from an older build is ignored instead of restored.
 const HOME_TAB_ID = "__home__";
 const ACTIVE_RESEARCH_TREE_KEY = "session.active-research-tree.v1";
-const RESEARCH_VISIBILITY_FILTER_OPTIONS: ReadonlyArray<{
-  id: ResearchVisibilityFilter;
-  label: string;
-}> = [
-  { id: "active", label: "Show active" },
-  { id: "archived", label: "Show archived" },
-  { id: "all", label: "Show all" },
-];
 const ACTIVE_RESEARCH_PANE_KEY = "session.active-research-pane.v1";
 // Whether Home is forward on the research surface. Selection-level UI state,
 // like the active tree id; the feed contents live backend-side.
@@ -578,8 +537,7 @@ function partitionResearchTrees(trees: ResearchTreeSummary[]) {
   };
 }
 
-/** Notes live on Home and Bookmarks only; the sidebar (and the tab cycling
- * that mirrors it) lists research threads. */
+/** Notes live on Home and Bookmarks only; the sidebar lists research threads. */
 function sidebarResearchTrees(trees: ResearchTreeSummary[]): ResearchTreeSummary[] {
   return trees.some((tree) => tree.kind === "note")
     ? trees.filter((tree) => tree.kind !== "note")
@@ -691,8 +649,6 @@ const DEFAULT_INITIAL_ROWS = 24;
 const MIN_INITIAL_COLS = 20;
 const MIN_INITIAL_ROWS = 5;
 
-const SETTINGS_CONTEXT_MENU_WIDTH = 196;
-const SETTINGS_CONTEXT_MENU_RESEARCH_HEIGHT = 134;
 const MAX_FIRST_MESSAGE_TITLE_CHARS = 80;
 const MAX_OPENROUTER_TITLE_SOURCE_CHARS = 4000;
 const OPENROUTER_TITLE_MAX_COMPLETION_TOKENS = 1000;
@@ -1419,9 +1375,7 @@ function MainApp() {
   const groupsRef = useRef(groups);
   groupsRef.current = groups;
   const [lastActiveGroupId, setLastActiveGroupId] = useState<string | null>(null);
-  const [settingsMenu, setSettingsMenu] = useState<{ x: number; y: number } | null>(null);
   const paneContextMenuRef = useRef<HTMLDivElement | null>(null);
-  const settingsMenuRef = useRef<HTMLDivElement | null>(null);
   const [panes, setPanes] = useState<PaneInfo[]>([]);
   const applyRecoveredDismissals = useCallback((paneList: PaneInfo[]) => {
     const dismissed = dismissedRecoveredPaneIdsRef.current;
@@ -1564,50 +1518,12 @@ function MainApp() {
   const [loadingOlderActivity, setLoadingOlderActivity] = useState(false);
   const loadingOlderActivityRef = useRef(false);
   const [olderActivityError, setOlderActivityError] = useState<string | null>(null);
-  // Sidebar multi-selection (shift/meta click). Pruned against the scoped
-  // active list where it is consumed, so stale ids drop out on their own.
-  const [researchMultiSelectIds, setResearchMultiSelectIds] = useState<string[]>([]);
-  // Client-side folder grouping over the backend's flat research order.
-  // The grouping is owned by the backend (state.json), hydrated in boot(). It
-  // starts empty rather than reading localStorage: a stale localStorage copy is
-  // only consulted once, for the one-time migration in boot().
-  // Display building ignores memberships whose trees are absent, so this can
-  // safely lag behind deletions performed elsewhere.
-  const [researchFolderState, setResearchFolderState] =
-    useState<ResearchFolderState>(emptyResearchFolderState);
-  const [newResearchFolderRequest, setNewResearchFolderRequest] = useState<{
-    workspaceId: string;
-    treeIds: string[];
-  } | null>(null);
-  const researchFolderStateRef = useRef(researchFolderState);
-  researchFolderStateRef.current = researchFolderState;
-  // Serializes backend persists so a burst of edits lands in order and the last
-  // write wins, mirroring how tree reordering chains its persistence.
-  const researchFolderPersistChainRef = useRef<Promise<unknown>>(Promise.resolve());
-  const commitResearchFolderState = useCallback((next: ResearchFolderState) => {
-    if (next === researchFolderStateRef.current) {
-      return;
-    }
-    researchFolderStateRef.current = next;
-    setResearchFolderState(next);
-    // Optimistic locally; the durable copy lives in state.json now. A failed
-    // persist keeps the in-memory grouping (the next successful edit rewrites
-    // it) rather than reverting the user's action under them.
-    researchFolderPersistChainRef.current = researchFolderPersistChainRef.current
-      .catch(() => undefined)
-      .then(() => setResearchFolders(next))
-      .catch((err) => {
-        console.error("failed to persist research folders", err);
-      });
-  }, []);
   const {
     journalOpen,
     setJournalOpen,
     researchWorkspaceHistory,
     researchWorkspaceHistoryRef,
     setResearchWorkspaceHistory,
-    researchVisibilityFilter,
-    changeResearchVisibilityFilter,
     researchFolderScope,
     changeResearchFolderScope,
   } = useResearchNavigationState();
@@ -1761,9 +1677,6 @@ function MainApp() {
   const terminalMapOpenRef = useRef(terminalMapOpen);
   terminalMapOpenRef.current = terminalMapOpen;
   const terminalMapDialogRef = useRef<HTMLDivElement | null>(null);
-  const changeResearchMultiSelection = useCallback((ids: string[]) => {
-    setResearchMultiSelectIds(ids);
-  }, []);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   // True while a web editable (composer, rename input, search field…) holds DOM
   // focus. Native terminal panes must never claim first responder then, or they
@@ -2287,32 +2200,17 @@ function MainApp() {
     () => treesForResearchScope(sidebarResearchTrees(researchTrees), researchScope),
     [researchScope, researchTrees],
   );
-  const scopedArchivedResearchTrees = useMemo(
-    () => treesForResearchScope(sidebarResearchTrees(archivedResearchTrees), researchScope),
-    [archivedResearchTrees, researchScope],
-  );
-  // The live multi-selection: only ids that still exist in the scoped active
-  // list count, so deletions and scope changes shrink it automatically.
-  const researchMultiSelection = useMemo(
-    () =>
-      researchMultiSelectIds.filter((id) =>
-        scopedResearchTrees.some((tree) => tree.id === id),
-      ),
-    [researchMultiSelectIds, scopedResearchTrees],
-  );
   // The single source of truth for what the research surface shows. Every
   // stage branch keys off this one value, so precedence (composer page over
-  // multi-select over document over home) lives here instead of being
-  // re-derived — and kept consistent — inside each render condition. The
+  // document over home) lives here instead of being re-derived — and kept
+  // consistent — inside each render condition. The
   // composer additionally renders while this is null (another surface is
   // forward) as a hidden keep-alive for its draft.
   const researchStageView = !researchSurfaceActive
     ? null
-    : researchMultiSelection.length > 1
-      ? ("multi-select" as const)
-      : journalOpen || !activeResearchTreeId
-        ? ("journal" as const)
-        : ("document" as const);
+    : journalOpen || !activeResearchTreeId
+      ? ("journal" as const)
+      : ("document" as const);
   const researchStageViewRef = useRef(researchStageView);
   researchStageViewRef.current = researchStageView;
   // Menu badges and the folder-replace dialog both count every tree that keeps
@@ -2808,98 +2706,8 @@ function MainApp() {
       }
     }
   }, [activeResearchDetail]);
-  const cycleableResearchTrees = useMemo(() => {
-    if (researchVisibilityFilter === "archived") {
-      return sidebarResearchTrees(archivedResearchTrees);
-    }
-    const sidebarTrees = sidebarResearchTrees(researchTrees);
-    const activeById = new Map(sidebarTrees.map((tree) => [tree.id, tree]));
-    const visibleActive = visibleResearchTreeIds(sidebarTrees, researchFolderState).flatMap(
-      (id) => {
-        const tree = activeById.get(id);
-        return tree ? [tree] : [];
-      },
-    );
-    return researchVisibilityFilter === "active"
-      ? visibleActive
-      : [...visibleActive, ...sidebarResearchTrees(archivedResearchTrees)];
-  }, [
-    archivedResearchTrees,
-    researchFolderState,
-    researchTrees,
-    researchVisibilityFilter,
-  ]);
-  const cycleableResearchTabIds = useMemo(
-    () =>
-      researchCycleTabIds(panes, groups, cycleableResearchTrees, researchScope),
-    [
-      cycleableResearchTrees,
-      groups,
-      panes,
-      researchScope,
-    ],
-  );
-  const cycleableResearchTreeTabIds = useMemo(
-    () => cycleableResearchTabIds.filter((tabId) => researchTreeIdFromTabId(tabId) !== null),
-    [cycleableResearchTabIds],
-  );
-  // Shortcut number per research tree id, mirroring the terminal tabs' Cmd-1..9
-  // hints. The journal pages (Home, Bookmarks, Highlights) participate in
-  // Ctrl-Tab cycling but are not numbered (Home has its own Cmd-N shortcut),
-  // so tree numbers stay indexed over tree tabs only. The badge always names the
-  // key that selects that row; only the first nine get a number.
-  const researchShortcutIndexByTreeId = useMemo(() => {
-    const map = new Map<string, number>();
-    cycleableResearchTreeTabIds.forEach((tabId, index) => {
-      if (index >= 9) {
-        return;
-      }
-      const treeId = researchTreeIdFromTabId(tabId);
-      if (treeId) {
-        map.set(treeId, index);
-      }
-    });
-    return map;
-  }, [cycleableResearchTreeTabIds]);
   const researchAttentionState = useMemo(() => researchAttention(researchTrees), [researchTrees]);
   const runningResearchCount = researchAttentionState.runningCount;
-  const cycleableSidebarPanes = useMemo(
-    () =>
-      sidebarPanes.filter((pane) => groupById.get(pane.groupId)?.collapsed !== true),
-    [groupById, sidebarPanes],
-  );
-  // The panes that get a numbered jump shortcut (Cmd-1..9). A collapsed group hides its
-  // tabs, and a grouped split shares one tab for all its members, so those don't get a
-  // number: skip collapsed-group panes (already dropped by cycleableSidebarPanes) and
-  // keep only the first member of each split.
-  const numberedTabPanes = useMemo(
-    () =>
-      cycleableSidebarPanes.filter((pane) => {
-        const split = paneSplitForPane(paneSplits, pane.id);
-        return !split || split.paneIds[0] === pane.id;
-      }),
-    [cycleableSidebarPanes, paneSplits],
-  );
-  // Shortcut index per pane id: waitTargetsForAgent labels every pane with
-  // active work on each render, and resolving each label with a findIndex over
-  // numberedTabPanes made that O(panes²) per render while agents stream.
-  const numberedTabIndexByPaneId = useMemo(
-    () => new Map(numberedTabPanes.map((pane, index) => [pane.id, index])),
-    [numberedTabPanes],
-  );
-  const shortcutLabelForPaneId = useCallback(
-    (paneId?: string | null) => {
-      if (!paneId) {
-        return null;
-      }
-      // Number from the same list the Cmd-1..9 shortcut jumps through, so a tab's badge
-      // matches the key that reaches it (collapsed-group and non-first split members have
-      // no number).
-      const index = numberedTabIndexByPaneId.get(paneId) ?? -1;
-      return index >= 0 && index < 9 ? `⌘${index + 1}` : null;
-    },
-    [numberedTabIndexByPaneId],
-  );
   const activeBrowserOwnerId = researchSurfaceActive
     ? activeResearchTreeId
       ? researchBrowserOwnerId(activeResearchTreeId)
@@ -4093,7 +3901,6 @@ function MainApp() {
     setLeftSidebarCollapsed(collapsed);
     if (collapsed) {
       setPaneContextMenu(null);
-      setSettingsMenu(null);
     }
     focusTerminalPaneAfterChromeChange(
       activeSurfaceRef.current === "pane" ? activePaneIdRef.current : null,
@@ -4282,7 +4089,6 @@ function MainApp() {
             agentId: agent.id,
             paneId: pane.id,
             label: displayPaneTitle(pane, agent),
-            shortcutLabel: shortcutLabelForPaneId(pane.id),
             status: agent.status,
             queueCount: queuedTurns.length,
             queueBlocked: Boolean(queuedTurns[0]?.waitFor),
@@ -4479,7 +4285,6 @@ function MainApp() {
       imageLightbox !== null ||
       diagramLightbox !== null ||
       terminalMapOpen ||
-      newResearchFolderRequest !== null ||
       commandPaletteOpen ||
       repositoryBrowser ||
       worktreeCreateDialog ||
@@ -4490,8 +4295,7 @@ function MainApp() {
       renamePaneId ||
       renameGroupId ||
       linkMenu ||
-      paneContextMenu ||
-      settingsMenu,
+      paneContextMenu,
   );
   const nativeBrowserOccluded = Boolean(
     nativeModalOccluded || appToast || userNotifications.length > 0 || folderPickerStatus,
@@ -5142,7 +4946,7 @@ function MainApp() {
     },
     applyInitial: async ({ runtimeConfig, existingGroups, existingPanes, existingPaneSplits,
       existingAgents, existingResearchTrees, existingResearchActivity,
-      existingRecentActivity, existingResearchFolders }, isCancelled) => {
+      existingRecentActivity }, isCancelled) => {
       setConfig(runtimeConfig);
       setGroups(existingGroups);
       setPaneSplitsState(normalizePaneSplitsForPanes(existingPaneSplits, existingPanes));
@@ -5155,32 +4959,6 @@ function MainApp() {
       recentActivityItemsRef.current = existingRecentActivity.items;
       setRecentActivityItems(existingRecentActivity.items);
       setRecentActivityCursor(existingRecentActivity.nextCursor ?? null);
-      // Adopt the backend-owned grouping. One-time migration: earlier builds
-      // kept folders in localStorage. If the backend has none yet but a
-      // localStorage copy survives, push it up once and clear the local key so
-      // the backend becomes the sole owner; otherwise adopt the backend copy
-      // and drop any now-obsolete local key.
-      const legacyResearchFolders = loadResearchFolderState();
-      if (
-        isEmptyResearchFolderState(existingResearchFolders) &&
-        !isEmptyResearchFolderState(legacyResearchFolders)
-      ) {
-        researchFolderStateRef.current = legacyResearchFolders;
-        setResearchFolderState(legacyResearchFolders);
-        researchFolderPersistChainRef.current = researchFolderPersistChainRef.current
-          .catch(() => undefined)
-          .then(() => setResearchFolders(legacyResearchFolders))
-          .then(() => localStorage.removeItem(RESEARCH_FOLDERS_STORAGE_KEY))
-          .catch((err) => {
-            console.error("failed to migrate research folders", err);
-          });
-      } else {
-        researchFolderStateRef.current = existingResearchFolders;
-        setResearchFolderState(existingResearchFolders);
-        if (!isEmptyResearchFolderState(legacyResearchFolders)) {
-          localStorage.removeItem(RESEARCH_FOLDERS_STORAGE_KEY);
-        }
-      }
       const savedResearchTreeId = localStorage.getItem(ACTIVE_RESEARCH_TREE_KEY);
       const restoredResearchScope = resolveResearchScope(
         localStorage.getItem(RESEARCH_FOLDER_SCOPE_KEY),
@@ -5590,14 +5368,6 @@ function MainApp() {
       // Prune deleted trees from history.
       const knownTreeIds = new Set(trees.map((tree) => tree.id));
       pruneResearchWorkspaceVisits((id) => knownTreeIds.has(id));
-      // Folder membership is deliberately NOT pruned here. This list can be
-      // transiently empty or partial (a racing refresh, or a backend that
-      // recovered from a corrupt/partial state.json), and pruning against it —
-      // then persisting — is exactly how folders were being lost across
-      // refreshes and hard aborts. The backend now owns the grouping: it
-      // reconciles against the authoritative tree set at load and scrubs a
-      // tree's membership when the tree is actually removed. The sidebar already
-      // ignores memberships whose tree is absent, so nothing stale is shown.
       return trees;
     } finally {
       researchNavRefreshInFlightRef.current -= 1;
@@ -5763,9 +5533,6 @@ function MainApp() {
     researchDetailRequestSeqRef.current = requestSeq;
     showResearchSurface();
     setJournalOpen(false);
-    // A single selection always dissolves a sidebar multi-selection; leaving
-    // it standing would keep the placeholder covering the opened document.
-    setResearchMultiSelectIds([]);
     activeResearchPaneIdRef.current = null;
     setActiveResearchPaneId(null);
     localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
@@ -5829,12 +5596,9 @@ function MainApp() {
       navigation.selectedNodeId = nodeId;
       navigationStore[treeId] = navigation;
       saveResearchNavigation();
-      if (archivedResearchTreesRef.current.some((tree) => tree.id === treeId)) {
-        changeResearchVisibilityFilter("all");
-      }
       navigateToResearchDocument(treeId);
     },
-    [changeResearchVisibilityFilter, navigateToResearchDocument],
+    [navigateToResearchDocument],
   );
   const openRecentResearchQuery = useCallback(
     (query: RecentResearchQuery) => openResearchNode(query.treeId, query.nodeId),
@@ -5902,7 +5666,6 @@ function MainApp() {
     researchDetailRequestSeqRef.current += 1;
     showResearchSurface();
     setJournalOpen(true);
-    setResearchMultiSelectIds([]);
     activeResearchPaneIdRef.current = null;
     setActiveResearchPaneId(null);
     localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
@@ -5921,7 +5684,6 @@ function MainApp() {
     // never shows a selected row behind the tab that is actually forward.
     researchDetailRequestSeqRef.current += 1;
     showResearchSurface();
-    setResearchMultiSelectIds([]);
     activeResearchPaneIdRef.current = null;
     setActiveResearchPaneId(null);
     localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
@@ -6537,9 +6299,6 @@ function MainApp() {
               researchNodeEventCacheRef.current.delete(nodeId);
             }
           }
-          commitResearchFolderState(
-            removeTreesFromResearchFolders(researchFolderStateRef.current, [event.treeId]),
-          );
           pruneResearchNavigation(
             [...researchTreesRef.current, ...archivedResearchTreesRef.current]
               .filter((tree) => tree.id !== event.treeId)
@@ -6554,7 +6313,6 @@ function MainApp() {
       }
     },
     [
-      commitResearchFolderState,
       focusResearchHome,
       pruneResearchWorkspaceVisits,
       scheduleResearchRefresh,
@@ -6853,11 +6611,6 @@ function MainApp() {
     async (treeId: string) => {
       setError(null);
       await removeResearchTree(treeId);
-      // Folder membership must not outlive the tree. The folder itself remains
-      // available when its last member is deleted.
-      commitResearchFolderState(
-        removeTreesFromResearchFolders(researchFolderStateRef.current, [treeId]),
-      );
       if (activeResearchTreeIdRef.current === treeId) {
         const nextTree = nextTreeInResearchScope(
           researchTreesRef.current,
@@ -6872,12 +6625,7 @@ function MainApp() {
       }
       pruneResearchWorkspaceVisits((id) => id !== treeId);
     },
-    [
-      commitResearchFolderState,
-      focusResearchHome,
-      navigateToResearchDocument,
-      pruneResearchWorkspaceVisits,
-    ],
+    [focusResearchHome, navigateToResearchDocument, pruneResearchWorkspaceVisits],
   );
   const removeResearchTreeFromSidebar = useCallback(
     async (treeId: string) => {
@@ -6890,190 +6638,6 @@ function MainApp() {
       }
     },
     [removeResearchTreeAndSelectFallback],
-  );
-  const requestResearchFolderCreation = useCallback((treeIds: string[]) => {
-    const first = researchTreesRef.current.find((tree) => tree.id === treeIds[0]);
-    if (treeIds.length > 0 && !first) {
-      return;
-    }
-    const workspaceId = first?.workspaceId ?? researchScopeRef.current;
-    if (!workspaceId) {
-      return;
-    }
-    setNewResearchFolderRequest({
-      workspaceId,
-      treeIds: treeIds.filter((treeId) =>
-        researchTreesRef.current.some(
-          (tree) => tree.id === treeId && tree.workspaceId === workspaceId,
-        ),
-      ),
-    });
-  }, []);
-  const confirmResearchFolderCreation = useCallback(
-    (name: string) => {
-      const request = newResearchFolderRequest;
-      if (!request) {
-        return;
-      }
-      const { state } = createResearchFolder(
-        researchFolderStateRef.current,
-        request.workspaceId,
-        request.treeIds,
-        name,
-      );
-      commitResearchFolderState(state);
-      setResearchMultiSelectIds([]);
-      setNewResearchFolderRequest(null);
-    },
-    [commitResearchFolderState, newResearchFolderRequest],
-  );
-  const addResearchTreesToFolder = useCallback(
-    (folderId: string, treeIds: string[]) => {
-      commitResearchFolderState(
-        addTreesToResearchFolder(researchFolderStateRef.current, folderId, treeIds),
-      );
-      setResearchMultiSelectIds([]);
-    },
-    [commitResearchFolderState],
-  );
-  const removeResearchTreesFromFolder = useCallback(
-    (treeIds: string[]) => {
-      commitResearchFolderState(
-        removeTreesFromResearchFolderMembership(
-          researchFolderStateRef.current,
-          treeIds,
-        ),
-      );
-      setResearchMultiSelectIds([]);
-    },
-    [commitResearchFolderState],
-  );
-  const setResearchFolderCollapsedFromSidebar = useCallback(
-    (folderId: string, collapsed: boolean) => {
-      commitResearchFolderState(
-        setResearchFolderCollapsed(
-          researchFolderStateRef.current,
-          folderId,
-          collapsed,
-        ),
-      );
-    },
-    [commitResearchFolderState],
-  );
-  const renameResearchFolderFromSidebar = useCallback(
-    (folderId: string, name: string) => {
-      commitResearchFolderState(
-        renameResearchFolder(researchFolderStateRef.current, folderId, name),
-      );
-    },
-    [commitResearchFolderState],
-  );
-  const dissolveResearchFolderFromSidebar = useCallback(
-    (folderId: string) => {
-      commitResearchFolderState(
-        dissolveResearchFolder(researchFolderStateRef.current, folderId),
-      );
-    },
-    [commitResearchFolderState],
-  );
-  const toggleResearchStarFromSidebar = useCallback(
-    (id: string) => {
-      commitResearchFolderState(toggleResearchStar(researchFolderStateRef.current, id));
-    },
-    [commitResearchFolderState],
-  );
-  const reorderResearchStarsFromSidebar = useCallback(
-    (orderedIds: string[]) => {
-      commitResearchFolderState(
-        replaceResearchStarOrder(researchFolderStateRef.current, orderedIds),
-      );
-    },
-    [commitResearchFolderState],
-  );
-  // Live member trees of a client-side folder — membership entries whose tree
-  // no longer exists are skipped rather than pruned here.
-  const researchFolderLiveMembers = useCallback((folderId: string) => {
-    const memberIds = new Set(
-      researchFolderMemberIds(researchFolderStateRef.current, folderId),
-    );
-    return [
-      ...researchTreesRef.current,
-      ...archivedResearchTreesRef.current,
-    ].filter((tree) => memberIds.has(tree.id));
-  }, []);
-  const archiveResearchFolderFromSidebar = useCallback(
-    async (folderId: string) => {
-      const members = researchFolderLiveMembers(folderId).filter(
-        (tree) => !tree.archivedAt,
-      );
-      try {
-        for (const tree of members) {
-          await archiveResearchTree(tree.id);
-        }
-        if (members.some((tree) => tree.id === activeResearchTreeIdRef.current)) {
-          focusResearchHome();
-        }
-        const archivedIds = new Set(members.map((tree) => tree.id));
-        pruneResearchWorkspaceVisits((id) => !archivedIds.has(id));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    },
-    [focusResearchHome, pruneResearchWorkspaceVisits, researchFolderLiveMembers],
-  );
-  const deleteResearchFolderFromSidebar = useCallback(
-    async (folderId: string) => {
-      setError(null);
-      const members = researchFolderLiveMembers(folderId);
-      const memberIds = new Set(members.map((tree) => tree.id));
-      // Reconcile the selection up front rather than once per member: the
-      // per-tree fallback would page the document through folder members
-      // that are themselves about to be deleted, fetching each one. Land
-      // directly on the first tree that survives the whole delete.
-      const activeTreeId = activeResearchTreeIdRef.current;
-      if (activeTreeId && memberIds.has(activeTreeId)) {
-        const nextTree =
-          treesForResearchScope(
-            researchTreesRef.current,
-            researchScopeRef.current,
-          ).find((tree) => !memberIds.has(tree.id)) ?? null;
-        if (nextTree) {
-          navigateToResearchDocument(nextTree.id);
-        } else {
-          focusResearchHome();
-        }
-      }
-      pruneResearchWorkspaceVisits((id) => !memberIds.has(id));
-      const deleted: string[] = [];
-      try {
-        for (const tree of members) {
-          await removeResearchTree(tree.id);
-          deleted.push(tree.id);
-        }
-        commitResearchFolderState(
-          dissolveResearchFolder(
-            removeTreesFromResearchFolders(researchFolderStateRef.current, deleted),
-            folderId,
-          ),
-        );
-      } catch (err) {
-        // A partial failure keeps the confirmation open with the error, but
-        // the trees already gone must still leave the folder state.
-        if (deleted.length > 0) {
-          commitResearchFolderState(
-            removeTreesFromResearchFolders(researchFolderStateRef.current, deleted),
-          );
-        }
-        throw err;
-      }
-    },
-    [
-      commitResearchFolderState,
-      focusResearchHome,
-      navigateToResearchDocument,
-      pruneResearchWorkspaceVisits,
-      researchFolderLiveMembers,
-    ],
   );
   const createResearchFollowup = useCallback(
     async (
@@ -7637,7 +7201,6 @@ function MainApp() {
         title: "Open Settings",
         hint: "⌘,",
         action: () => {
-          setSettingsMenu(null);
           setAgentsOpen(false);
           setSettingsOpen(true);
         },
@@ -7647,7 +7210,6 @@ function MainApp() {
         section: "Actions",
         title: "Open Agents",
         action: () => {
-          setSettingsMenu(null);
           setSettingsOpen(false);
           setAgentsOpen(true);
         },
@@ -8561,7 +8123,6 @@ function MainApp() {
   // at event time.
   const escapeOverlayStateRef = useRef({
     paneContextMenu,
-    settingsMenu,
     remoteAddMenuOpen,
     remoteDeleteConfirm,
     remoteSettingsSaving,
@@ -8580,7 +8141,6 @@ function MainApp() {
   useEffect(() => {
     escapeOverlayStateRef.current = {
       paneContextMenu,
-      settingsMenu,
       remoteAddMenuOpen,
       remoteDeleteConfirm,
       remoteSettingsSaving,
@@ -8666,9 +8226,7 @@ function MainApp() {
 
       // The remaining overlays dismiss together on one Escape, as they did as
       // independent listeners that each observed the same keydown.
-      const menusOpen = Boolean(
-        overlays.paneContextMenu || overlays.settingsMenu,
-      );
+      const menusOpen = Boolean(overlays.paneContextMenu);
       const dialogsOpen = Boolean(
         overlays.repositoryBrowser ||
           overlays.worktreeCreateDialog ||
@@ -8679,7 +8237,6 @@ function MainApp() {
       if (menusOpen) {
         event.preventDefault();
         setPaneContextMenu(null);
-        setSettingsMenu(null);
       }
       if (dialogsOpen) {
         stopPropagation = true;
@@ -8734,12 +8291,11 @@ function MainApp() {
   }, []);
 
   useEffect(() => {
-    if (!paneContextMenu && !settingsMenu) {
+    if (!paneContextMenu) {
       return;
     }
     const handleDismiss = () => {
       setPaneContextMenu(null);
-      setSettingsMenu(null);
     };
     window.addEventListener("mousedown", handleDismiss);
     window.addEventListener("resize", handleDismiss);
@@ -8747,7 +8303,7 @@ function MainApp() {
       window.removeEventListener("mousedown", handleDismiss);
       window.removeEventListener("resize", handleDismiss);
     };
-  }, [paneContextMenu, settingsMenu]);
+  }, [paneContextMenu]);
 
   useEffect(() => {
     if (paneContextMenu && !panes.some((pane) => pane.id === paneContextMenu.paneId)) {
@@ -8776,17 +8332,6 @@ function MainApp() {
           ),
       });
     }
-    if (settingsMenu) {
-      menus.push({
-        element: settingsMenuRef.current,
-        x: settingsMenu.x,
-        y: settingsMenu.y,
-        assign: (x, y) =>
-          setSettingsMenu((current) =>
-            current && (current.x !== x || current.y !== y) ? { ...current, x, y } : current,
-          ),
-      });
-    }
     for (const menu of menus) {
       if (!menu.element) {
         continue;
@@ -8802,7 +8347,7 @@ function MainApp() {
         menu.assign(next.x, next.y);
       }
     }
-  }, [paneContextMenu, settingsMenu]);
+  }, [paneContextMenu]);
 
   // Persist application settings whenever they change, so the choice survives a
   // restart. Writing on the initial value is harmless.
@@ -8997,64 +8542,6 @@ function MainApp() {
 
   useEffect(() => {
 
-    const focusResearchTabById = (tabId: string) => {
-      switch (researchJournalViewFromTabId(tabId)) {
-        case "home":
-          openJournal();
-          return;
-        case "bookmarks":
-          openBookmarks();
-          return;
-        case "highlights":
-          openHighlights();
-          return;
-        default:
-          break;
-      }
-      const treeId = researchTreeIdFromTabId(tabId);
-      if (treeId) {
-        void selectResearchTree(treeId);
-        return;
-      }
-      // Mirror handlePaneTabClick: keep the durable document paired with the
-      // short-lived terminal, so viewing the pane clears its tree's badge and
-      // the fallback effect returns to this tree when the pane retires.
-      const researchNode = researchNodeByPaneIdRef.current.get(tabId);
-      if (
-        researchNode &&
-        researchNode.treeId !== activeResearchTreeIdRef.current
-      ) {
-        void selectResearchTree(researchNode.treeId);
-      }
-      focusPaneTab(tabId);
-    };
-
-    const cycleResearchTab = (direction: -1 | 1) => {
-      const currentResearchTreeId = activeResearchTreeIdRef.current;
-      const currentResearchSurfaceActive = activeSurfaceRef.current === "research";
-      // A forward journal page (Home, Bookmarks, Highlights) is the current
-      // tab even while a tree stays selected behind it, so the cycle steps
-      // from the page the user sees rather than from the hidden document.
-      const activeTabId = !currentResearchSurfaceActive
-        ? activePaneIdRef.current
-        : researchStageViewRef.current === "journal"
-          ? researchJournalTabId(journalViewRef.current)
-          : currentResearchTreeId
-            ? researchTreeTabId(currentResearchTreeId)
-            : RESEARCH_HOME_TAB_ID;
-      const researchTabIds = cycleableResearchTabIds;
-      const nextTabId = cycleTabId(
-        researchTabIds,
-        activeTabId,
-        direction,
-        paneSplits,
-      );
-      if (!nextTabId || nextTabId === activeTabId) {
-        return;
-      }
-      focusResearchTabById(nextTabId);
-    };
-
     const executeShortcut = (rawCommand: AppShortcutCommand, repeat: boolean) => {
       if (document.querySelector("dialog[open]")) return;
       const command = rawCommand;
@@ -9062,13 +8549,6 @@ function MainApp() {
         return;
       }
       switch (command.type) {
-        case "focusResearchTab": {
-          const tabId = cycleableResearchTreeTabIds[command.tabIndex];
-          if (tabId) {
-            focusResearchTabById(tabId);
-          }
-          return;
-        }
         case "focusResearchHome":
           focusResearchHome();
           window.requestAnimationFrame(() => {
@@ -9080,14 +8560,10 @@ function MainApp() {
         case "toggleLeftSidebar":
           setLeftSidebarCollapsedForActivePane(!leftSidebarCollapsedRef.current);
           return;
-        case "cycleResearchTab":
-          cycleResearchTab(command.direction);
-          return;
         case "moveResearchItem":
           moveActiveResearchTree(command.direction);
           return;
         case "openSettings":
-          setSettingsMenu(null);
           setAgentsOpen(false);
           setSettingsOpen(true);
           return;
@@ -9182,23 +8658,14 @@ function MainApp() {
     activePaneId,
     panes,
     sidebarPanes,
-    cycleableSidebarPanes,
-    cycleableResearchTabIds,
-    cycleableResearchTreeTabIds,
-    numberedTabPanes,
     activePane,
     lastActiveGroupId,
     groupById,
-    paneSplits,
     researchSurfaceActive,
     researchHomeActive,
     activeResearchTreeId,
     focusResearchHome,
-    openJournal,
-    openBookmarks,
-    openHighlights,
     moveActiveResearchTree,
-    selectResearchTree,
   ]);
 
   useEffect(() => {
@@ -9332,18 +8799,6 @@ function MainApp() {
     );
   }
 
-  function toggleSettingsMenuFromButton(event: ReactMouseEvent<HTMLButtonElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const menuHeight = SETTINGS_CONTEXT_MENU_RESEARCH_HEIGHT;
-    const maxX = Math.max(8, window.innerWidth - SETTINGS_CONTEXT_MENU_WIDTH - 8);
-    const maxY = Math.max(8, window.innerHeight - menuHeight - 8);
-    const x = clamp(rect.right - SETTINGS_CONTEXT_MENU_WIDTH, 8, maxX);
-    const y = clamp(rect.bottom + 6, 8, maxY);
-    setPaneContextMenu(null);
-    setSettingsMenu((current) => (current ? null : { x, y }));
-  }
   const selectResearchTreeFromSidebar = useCallback(
     (treeId: string) => {
       if (
@@ -9359,10 +8814,10 @@ function MainApp() {
     [activeResearchTreeId, navigateToResearchDocument, researchStageView, researchSurfaceActive],
   );
   const reorderResearchTreesFromSidebar = useCallback(
-    (archived: boolean, orderedTreeIds: string[]) => {
+    (orderedTreeIds: string[]) => {
       const scope = researchScopeRef.current;
       if (scope) {
-        applyResearchTreeOrder(archived, scope, orderedTreeIds);
+        applyResearchTreeOrder(false, scope, orderedTreeIds);
       }
     },
     [applyResearchTreeOrder],
@@ -9455,13 +8910,15 @@ function MainApp() {
           <div className="sidebar-header-controls is-grouped">
             <button
               type="button"
-              className={`icon-button sidebar-header-button${settingsMenu ? " is-active" : ""}`}
-              aria-label="Settings menu"
-              aria-haspopup="menu"
-              aria-expanded={settingsMenu ? true : undefined}
-              title="Settings menu (⌘,)"
+              className={`icon-button sidebar-header-button${settingsOpen ? " is-active" : ""}`}
+              aria-label="Settings"
+              title="Settings (⌘,)"
               onMouseDown={(event) => event.stopPropagation()}
-              onClick={toggleSettingsMenuFromButton}
+              onClick={() => {
+                setPaneContextMenu(null);
+                setAgentsOpen(false);
+                setSettingsOpen(true);
+              }}
             >
               <Settings size={14} aria-hidden="true" />
             </button>
@@ -9472,7 +8929,6 @@ function MainApp() {
               title="Agents"
               onMouseDown={(event) => event.stopPropagation()}
               onClick={() => {
-                setSettingsMenu(null);
                 setSettingsOpen(false);
                 setAgentsOpen(true);
               }}
@@ -9600,29 +9056,10 @@ function MainApp() {
             </div>
             <ResearchSidebarSection
               trees={scopedResearchTrees}
-              archivedTrees={scopedArchivedResearchTrees}
-              workspaceId={researchScope}
-              visibilityFilter={researchVisibilityFilter}
               activeTreeId={activeResearchTreeId}
-              multiSelectedIds={researchMultiSelection}
-              folderState={researchFolderState}
-              shortcutHintsShown={shortcutHintsShown}
-              shortcutIndexByTreeId={researchShortcutIndexByTreeId}
-              onMultiSelectChange={changeResearchMultiSelection}
-              onRequestCreateFolder={requestResearchFolderCreation}
-              onAddToFolder={addResearchTreesToFolder}
-              onRemoveFromFolder={removeResearchTreesFromFolder}
-              onFolderCollapsedChange={setResearchFolderCollapsedFromSidebar}
-              onRenameFolder={renameResearchFolderFromSidebar}
-              onDissolveFolder={dissolveResearchFolderFromSidebar}
-              onArchiveFolder={archiveResearchFolderFromSidebar}
-              onDeleteFolder={deleteResearchFolderFromSidebar}
-              onToggleStar={toggleResearchStarFromSidebar}
-              onReorderStars={reorderResearchStarsFromSidebar}
               onSelect={selectResearchTreeFromSidebar}
               onRename={renameResearchTreeTitle}
               onArchive={archiveResearchTreeFromSidebar}
-              onRestore={restoreResearchTreeFromSidebar}
               onRemove={removeResearchTreeFromSidebar}
               onReorder={reorderResearchTreesFromSidebar}
             />
@@ -9636,7 +9073,6 @@ function MainApp() {
             shortcutHintsShown={shortcutHintsShown}
             onSelectScope={(scope) => {
               changeResearchFolderScope(scope);
-              setResearchMultiSelectIds([]);
               // Keep the selection inside the new scope: an active document
               // from another folder would otherwise sit with no sidebar row.
               const allTrees = [...researchTrees, ...archivedResearchTrees];
@@ -9687,52 +9123,6 @@ function MainApp() {
           <GithubAccountControl />
         </aside>
       )}
-
-      {settingsMenu ? (
-        <div
-          ref={settingsMenuRef}
-          className="popover-surface popover-surface--context pane-context-menu settings-context-menu"
-          role="menu"
-          aria-label="Settings menu"
-          style={{ left: settingsMenu.x, top: settingsMenu.y }}
-          onMouseDown={(event) => event.stopPropagation()}
-          onContextMenu={(event) => event.preventDefault()}
-        >
-          <div className="group-context-actions">
-            {RESEARCH_VISIBILITY_FILTER_OPTIONS.map(({ id, label }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="menuitemradio"
-                    className="control-button settings-research-filter-option"
-                    aria-checked={researchVisibilityFilter === id}
-                    onClick={() => {
-                      setSettingsMenu(null);
-                      changeResearchVisibilityFilter(id);
-                    }}
-                  >
-                    {researchVisibilityFilter === id ? (
-                      <Check size={13} aria-hidden="true" />
-                    ) : null}
-                    <span>{label}</span>
-                  </button>
-                ))}
-            <div className="context-menu-divider" role="separator" />
-            <button className="control-button"
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setSettingsMenu(null);
-                setAgentsOpen(false);
-                setSettingsOpen(true);
-              }}
-            >
-              <Settings size={13} aria-hidden="true" />
-              <span>Settings</span>
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {paneContextMenu && contextMenuPane ? (
         <div
@@ -11353,12 +10743,6 @@ function MainApp() {
             !researchSurfaceActive && visibleTerminalPaneIds.length === 0 ? " is-empty" : ""
           }`}
         >
-          {researchStageView === "multi-select" ? (
-            <div className="research-multi-select-state" aria-live="polite">
-              <Layers size={48} aria-hidden="true" />
-              <span>{researchMultiSelection.length} research items selected</span>
-            </div>
-          ) : null}
           {/* Hydrate the feed before mounting so its saved scroll position can be restored. */}
           {researchStageView === "journal" && config && journalView === "highlights" ? (
             <ResearchHighlightsFeed
@@ -11397,16 +10781,12 @@ function MainApp() {
                     onOpenResearchQuery={openRecentResearchQuery}
                     onResearchRecapApplied={handleResearchRecapApplied}
                     onError={setError}
-                    folderState={researchFolderState}
                     onRenameResearch={renameResearchTreeTitle}
                     onArchiveResearch={archiveResearchTreeFromSidebar}
                     onRestoreResearch={restoreResearchTreeFromSidebar}
                     onRemoveResearch={removeResearchTreeFromSidebar}
-                    onToggleResearchStar={toggleResearchStarFromSidebar}
                     onSetResearchFollowed={setResearchTreeFollowedFlag}
                     onSetResearchBookmarked={setResearchTreeBookmarkedFlag}
-                    onRequestCreateFolder={requestResearchFolderCreation}
-                    onRemoveFromFolder={removeResearchTreesFromFolder}
                     onLoadOlder={loadOlderActivity}
                     onRefresh={refreshFeed}
                     // History follows the column in front: the feed's while no
@@ -11567,13 +10947,6 @@ function MainApp() {
           onClose={() => setLinkMenu(null)}
         />
       ) : null}
-
-      <ResearchFolderDialog
-        open={newResearchFolderRequest !== null}
-        itemCount={newResearchFolderRequest?.treeIds.length ?? 0}
-        onClose={() => setNewResearchFolderRequest(null)}
-        onCreate={confirmResearchFolderCreation}
-      />
 
       <UserNotificationStack
         notifications={userNotifications}

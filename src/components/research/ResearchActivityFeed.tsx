@@ -31,7 +31,6 @@ import ResearchFeedPost from "./ResearchFeedPost";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import { ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
 import { NoteBody } from "./ResearchNote";
-import type { ResearchFolderState } from "../../lib/researchFolders";
 import { isActiveResearchStatus } from "../../lib/researchThreads";
 import {
   RESEARCH_TREE_MENU_WIDTH,
@@ -90,17 +89,13 @@ export interface ResearchActivityFeedProps {
   onOpenResearchQuery: (query: RecentResearchQuery) => void;
   onResearchRecapApplied: (node: ResearchNode) => void;
   onError: (message: string) => void;
-  folderState: ResearchFolderState;
   onRenameResearch: (treeId: string, title: string) => Promise<void>;
   onArchiveResearch: (treeId: string) => Promise<void>;
   onRestoreResearch: (treeId: string) => Promise<void>;
   onRemoveResearch: (treeId: string) => Promise<void>;
-  onToggleResearchStar: (id: string) => void;
   /** Home's per-thread Follow and Bookmark controls; both persist on the tree. */
   onSetResearchFollowed: (treeId: string, followed: boolean) => void;
   onSetResearchBookmarked: (treeId: string, bookmarked: boolean) => void;
-  onRequestCreateFolder: (treeIds: string[]) => void;
-  onRemoveFromFolder: (treeIds: string[]) => void;
   onLoadOlder: () => void;
   onRefresh?: () => void;
   /** The thread open in the content column beside the feed; the post that
@@ -241,16 +236,12 @@ function ResearchActivityFeed({
   onOpenResearchQuery,
   onResearchRecapApplied,
   onError,
-  folderState,
   onRenameResearch,
   onArchiveResearch,
   onRestoreResearch,
   onRemoveResearch,
-  onToggleResearchStar,
   onSetResearchFollowed,
   onSetResearchBookmarked,
-  onRequestCreateFolder,
-  onRemoveFromFolder,
   onLoadOlder,
   onRefresh,
   selectedTreeId = null,
@@ -950,9 +941,7 @@ function ResearchActivityFeed({
               <ResearchTreeMenuItems
                 tree={menuTree}
                 archived={menu.archived}
-                folderState={folderState}
                 onClose={() => setMenu(null)}
-                onToggleStar={onToggleResearchStar}
                 onRename={(tree) => {
                   setMenu(null);
                   setRenamingTree(tree);
@@ -963,8 +952,6 @@ function ResearchActivityFeed({
                   setMenu(null);
                   setDeletingTree(tree);
                 }}
-                onRemoveFromFolder={onRemoveFromFolder}
-                onRequestCreateFolder={onRequestCreateFolder}
                 onRegenerateSummary={
                   menuQuery &&
                   !menu.archived &&
