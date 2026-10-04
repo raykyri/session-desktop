@@ -1,54 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  Archive,
-  ArchiveRestore,
-  FolderMinus,
-  FolderPlus,
-  Pencil,
-  RefreshCw,
-  Star,
-  StarOff,
-  Trash2,
-} from "lucide-react";
+import { Archive, ArchiveRestore, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import type { ResearchTreeSummary } from "../../types";
-import {
-  isResearchStarred,
-  type ResearchFolderState,
-} from "../../lib/researchFolders";
 
 export const RESEARCH_TREE_MENU_WIDTH = 190;
 
 export function ResearchTreeMenuItems({
   tree,
   archived,
-  folderState,
   onClose,
-  onToggleStar,
   onRename,
   onArchive,
   onRestore,
   onDelete,
-  onRemoveFromFolder,
-  onRequestCreateFolder,
   onRegenerateSummary,
 }: {
   tree: ResearchTreeSummary;
   archived: boolean;
-  folderState: ResearchFolderState;
   onClose: () => void;
-  onToggleStar: (id: string) => void;
   onRename: (tree: ResearchTreeSummary) => void;
   onArchive: (treeId: string) => void;
-  onRestore: (treeId: string) => void;
+  /** Only reached from archived rows; surfaces without archived rows omit it. */
+  onRestore?: (treeId: string) => void;
   onDelete: (tree: ResearchTreeSummary) => void;
-  onRemoveFromFolder: (treeIds: string[]) => void;
-  onRequestCreateFolder: (treeIds: string[]) => void;
   /** Query-specific action used by Home's research activity menu. */
   onRegenerateSummary?: () => void;
 }) {
-  const starred = isResearchStarred(folderState, tree.id);
-  const inFolder = Boolean(folderState.membership[tree.id]);
   const running = tree.runningCount > 0;
   return (
     <div className="group-context-actions">
@@ -70,36 +47,22 @@ export function ResearchTreeMenuItems({
         </>
       ) : null}
       {archived ? (
-        <button
-          className="control-button"
-          type="button"
-          role="menuitem"
-          onClick={() => {
-            onClose();
-            onRestore(tree.id);
-          }}
-        >
-          <ArchiveRestore size={13} aria-hidden="true" />
-          <span>Unarchive research</span>
-        </button>
-      ) : (
-        <>
+        onRestore ? (
           <button
             className="control-button"
             type="button"
             role="menuitem"
             onClick={() => {
               onClose();
-              onToggleStar(tree.id);
+              onRestore(tree.id);
             }}
           >
-            {starred ? (
-              <StarOff size={13} aria-hidden="true" />
-            ) : (
-              <Star size={13} aria-hidden="true" />
-            )}
-            <span>{starred ? "Unstar" : "Star"}</span>
+            <ArchiveRestore size={13} aria-hidden="true" />
+            <span>Unarchive research</span>
           </button>
+        ) : null
+      ) : (
+        <>
           <button
             className="control-button"
             type="button"
@@ -112,36 +75,6 @@ export function ResearchTreeMenuItems({
             <Pencil size={13} aria-hidden="true" />
             <span>Rename</span>
           </button>
-          {inFolder ? (
-            <button
-              className="control-button"
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                onClose();
-                onRemoveFromFolder([tree.id]);
-              }}
-            >
-              <FolderMinus size={13} aria-hidden="true" />
-              <span>Remove from folder</span>
-            </button>
-          ) : null}
-          <button
-            className="control-button"
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              onClose();
-              onRequestCreateFolder([tree.id]);
-            }}
-          >
-            <FolderPlus size={13} aria-hidden="true" />
-            <span>New folder with item</span>
-          </button>
-        </>
-      )}
-      {!archived ? (
-        <>
           <div className="context-menu-divider" role="separator" />
           <button
             type="button"
@@ -159,7 +92,7 @@ export function ResearchTreeMenuItems({
             <kbd className="context-menu-shortcut is-keycap">A</kbd>
           </button>
         </>
-      ) : null}
+      )}
       <button
         type="button"
         role="menuitem"

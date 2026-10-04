@@ -894,8 +894,7 @@
    They tie with .pane-context-menu on specificity and must stay after it in
    this file to win the cascade. */
 .research-sidebar-menu,
-.research-followup-menu,
-.settings-context-menu {
+.research-followup-menu {
   padding: 4px;
   user-select: none;
 }
@@ -906,16 +905,6 @@
 
 .research-followup-menu {
   width: min(200px, calc(100vw - 16px));
-}
-
-.settings-context-menu {
-  width: min(196px, calc(100vw - 16px));
-}
-
-/* Unchecked research filters intentionally have no icon; keep their labels in
-   the same text column as the checked option's label. */
-.group-context-actions button.settings-research-filter-option span {
-  grid-column: 2;
 }
 
 .group-context-actions {

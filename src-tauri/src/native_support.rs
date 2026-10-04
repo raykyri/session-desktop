@@ -15,9 +15,7 @@ fn events_listener_ready() -> bool {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AppShortcutCommand {
-    FocusResearchTab(u8),
     FocusResearchHome,
-    CycleResearchTab(i8),
     MoveResearchItem(i8),
     OpenSettings,
     OpenCommandPalette,
@@ -28,20 +26,17 @@ enum AppShortcutCommand {
 }
 
 impl AppShortcutCommand {
-    fn event_fields(self) -> (&'static str, Option<u8>) {
+    fn wire_name(self) -> &'static str {
         match self {
-            Self::FocusResearchTab(index) => ("focusResearchTab", Some(index)),
-            Self::FocusResearchHome => ("focusResearchHome", None),
-            Self::CycleResearchTab(-1) => ("cycleResearchTabPrevious", None),
-            Self::CycleResearchTab(_) => ("cycleResearchTabNext", None),
-            Self::MoveResearchItem(-1) => ("moveResearchItemUp", None),
-            Self::MoveResearchItem(_) => ("moveResearchItemDown", None),
-            Self::OpenSettings => ("openSettings", None),
-            Self::OpenCommandPalette => ("openCommandPalette", None),
-            Self::ToggleLeftSidebar => ("toggleLeftSidebar", None),
-            Self::FocusFollowups => ("focusFollowups", None),
-            Self::OpenFolderMenu => ("openFolderMenu", None),
-            Self::ToggleSourceBrowser => ("toggleSourceBrowser", None),
+            Self::FocusResearchHome => "focusResearchHome",
+            Self::MoveResearchItem(-1) => "moveResearchItemUp",
+            Self::MoveResearchItem(_) => "moveResearchItemDown",
+            Self::OpenSettings => "openSettings",
+            Self::OpenCommandPalette => "openCommandPalette",
+            Self::ToggleLeftSidebar => "toggleLeftSidebar",
+            Self::FocusFollowups => "focusFollowups",
+            Self::OpenFolderMenu => "openFolderMenu",
+            Self::ToggleSourceBrowser => "toggleSourceBrowser",
         }
     }
 }
@@ -55,12 +50,8 @@ fn classify_web_app_shortcut(
     option: bool,
     command: bool,
 ) -> Option<AppShortcutCommand> {
-    let normalized = key.to_lowercase();
-    let key = match normalized.as_str() {
-        "{" => "[",
-        "}" => "]",
-        other => other,
-    };
+    let key = key.to_lowercase();
+    let key = key.as_str();
     if command && !control && option && !shift {
         return match key {
             "arrowup" => Some(AppShortcutCommand::MoveResearchItem(-1)),
@@ -68,27 +59,13 @@ fn classify_web_app_shortcut(
             _ => None,
         };
     }
-    if (command != control) && !option && !shift {
-        if let [digit @ b'1'..=b'9'] = key.as_bytes() {
-            return Some(AppShortcutCommand::FocusResearchTab(digit - b'1'));
-        }
-        if key == "," {
-            return Some(AppShortcutCommand::OpenSettings);
-        }
-    }
-    if !command && control && !option && key == "tab" {
-        return Some(AppShortcutCommand::CycleResearchTab(if shift {
-            -1
-        } else {
-            1
-        }));
+    if (command != control) && !option && !shift && key == "," {
+        return Some(AppShortcutCommand::OpenSettings);
     }
     if command && !control && !option {
         return match (key, shift) {
             ("n" | "t", false) => Some(AppShortcutCommand::FocusResearchHome),
             ("g", true) => Some(AppShortcutCommand::ToggleLeftSidebar),
-            ("[", true) => Some(AppShortcutCommand::CycleResearchTab(-1)),
-            ("]", true) => Some(AppShortcutCommand::CycleResearchTab(1)),
             ("k", false) => Some(AppShortcutCommand::OpenCommandPalette),
             ("j", false) => Some(AppShortcutCommand::FocusFollowups),
             ("o", false) => Some(AppShortcutCommand::OpenFolderMenu),
@@ -500,7 +477,7 @@ pub extern "C" fn session_native_support_did_receive_app_shortcut(
     else {
         return 0;
     };
-    let (command, tab_index) = shortcut.event_fields();
+    let command = shortcut.wire_name();
     let mut emitted = false;
     with_app_state(|state| {
         state.emit(SessionEvent::new(
@@ -509,7 +486,6 @@ pub extern "C" fn session_native_support_did_receive_app_shortcut(
             None,
             serde_json::json!({
                 "command": command,
-                "tabIndex": tab_index,
                 "repeat": repeat == 1,
             }),
         ));
@@ -673,51 +649,38 @@ mod shortcut_tests {
     #[test]
     fn native_commands_use_the_current_research_wire_names() {
         for (key, shift, control, option, command, expected) in [
-            ("n", false, false, false, true, ("focusResearchHome", None)),
-            ("t", false, false, false, true, ("focusResearchHome", None)),
-            ("k", false, false, false, true, ("openCommandPalette", None)),
-            (
-                "4",
-                false,
-                true,
-                false,
-                false,
-                ("focusResearchTab", Some(3)),
-            ),
-            (
-                "Tab",
-                true,
-                true,
-                false,
-                false,
-                ("cycleResearchTabPrevious", None),
-            ),
-            (
-                "}",
-                true,
-                false,
-                false,
-                true,
-                ("cycleResearchTabNext", None),
-            ),
-            (
-                "ArrowUp",
-                false,
-                false,
-                true,
-                true,
-                ("moveResearchItemUp", None),
-            ),
-            ("g", true, false, false, true, ("toggleLeftSidebar", None)),
-            ("j", false, false, false, true, ("focusFollowups", None)),
-            ("o", false, false, false, true, ("openFolderMenu", None)),
-            ("e", true, false, false, true, ("toggleSourceBrowser", None)),
-            (",", false, false, false, true, ("openSettings", None)),
+            ("n", false, false, false, true, "focusResearchHome"),
+            ("t", false, false, false, true, "focusResearchHome"),
+            ("k", false, false, false, true, "openCommandPalette"),
+            ("ArrowUp", false, false, true, true, "moveResearchItemUp"),
+            ("g", true, false, false, true, "toggleLeftSidebar"),
+            ("j", false, false, false, true, "focusFollowups"),
+            ("o", false, false, false, true, "openFolderMenu"),
+            ("e", true, false, false, true, "toggleSourceBrowser"),
+            (",", false, false, false, true, "openSettings"),
         ] {
             assert_eq!(
                 classify_web_app_shortcut(key, shift, control, option, command)
-                    .map(AppShortcutCommand::event_fields),
+                    .map(AppShortcutCommand::wire_name),
                 Some(expected),
+                "{key}"
+            );
+        }
+    }
+
+    #[test]
+    fn retired_research_tab_shortcuts_are_not_consumed() {
+        for (key, shift, control, command) in [
+            ("1", false, false, true),
+            ("9", false, true, false),
+            ("Tab", false, true, false),
+            ("Tab", true, true, false),
+            ("{", true, false, true),
+            ("}", true, false, true),
+        ] {
+            assert_eq!(
+                classify_web_app_shortcut(key, shift, control, false, command),
+                None,
                 "{key}"
             );
         }

@@ -8,7 +8,6 @@ import ResearchActivityFeed, {
   recentActivityAnchorScrollTop,
   type ResearchActivityFeedProps,
 } from "../src/components/research/ResearchActivityFeed";
-import { emptyResearchFolderState } from "../src/lib/researchFolders";
 
 const noop = () => {};
 const asyncNoop = async () => {};
@@ -24,10 +23,8 @@ function renderFeed(overrides: Partial<ResearchActivityFeedProps> = {}) {
     items: [], researchTrees: [], nextCursor: null, loadingOlder: false, olderError: null,
     onOpenResearchQuery: noop,
     onResearchRecapApplied: noop, onError: noop,
-    folderState: emptyResearchFolderState(),
     onRenameResearch: asyncNoop, onArchiveResearch: asyncNoop,
     onRestoreResearch: asyncNoop, onRemoveResearch: asyncNoop,
-    onToggleResearchStar: noop, onRequestCreateFolder: noop, onRemoveFromFolder: noop,
     onSetResearchFollowed: noop, onSetResearchBookmarked: noop,
     onLoadOlder: noop,
     onRefresh: noop, onBack: noop, onForward: noop,

@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { GroupInfo, PaneInfo, ResearchTreeSummary } from "../src/types";
-import { cycleTabId } from "../src/lib/appHelpers";
 import {
   groupsForScope,
   paneCanOpenWorktree,
@@ -9,17 +8,6 @@ import {
   researchAttention,
   replaceScopedGroupOrder,
 } from "../src/lib/workspaceScope";
-import {
-  RESEARCH_HIGHLIGHTS_TAB_ID,
-  RESEARCH_HOME_TAB_ID,
-  RESEARCH_JOURNAL_TAB_IDS,
-  RESEARCH_JOURNAL_VIEWS,
-  researchCycleTabIds,
-  researchJournalTabId,
-  researchJournalViewFromTabId,
-  researchTreeIdFromTabId,
-  researchTreeTabId,
-} from "../src/lib/sidebarMode";
 import {
   nextTreeInResearchScope,
   resolveResearchScope,
@@ -168,109 +156,6 @@ test("a stale, duplicate, or cross-scope reorder is ignored", () => {
     replaceScopedGroupOrder(groups, "terminal", [terminalA, research]),
     groups,
   );
-});
-
-test("research cycling includes the journal pages when there is one document", () => {
-  const research = group("research", "research");
-  const groups = [research];
-  const treeTabId = researchTreeTabId("tree");
-  const ids = researchCycleTabIds(
-    [],
-    groups,
-    [treeSummary("tree", research.id)],
-    research.id,
-  );
-
-  // Sidebar order: the journal pages in their declared order, then the trees.
-  assert.deepEqual(ids, [...RESEARCH_JOURNAL_TAB_IDS, treeTabId]);
-  // Every stop steps to its sidebar neighbor, wrapping at both ends.
-  for (let index = 0; index < ids.length; index += 1) {
-    const next = ids[(index + 1) % ids.length];
-    const previous = ids[(index - 1 + ids.length) % ids.length];
-    assert.equal(cycleTabId(ids, ids[index], 1), next);
-    assert.equal(cycleTabId(ids, ids[index], -1), previous);
-  }
-});
-
-test("journal tab ids round-trip through the journal view", () => {
-  for (const view of RESEARCH_JOURNAL_VIEWS) {
-    assert.equal(researchJournalViewFromTabId(researchJournalTabId(view)), view);
-  }
-  assert.equal(researchJournalViewFromTabId(researchTreeTabId("tree")), null);
-  assert.equal(researchJournalViewFromTabId("pane"), null);
-  assert.deepEqual(
-    RESEARCH_JOURNAL_TAB_IDS.map(researchJournalViewFromTabId),
-    ["home", "bookmarks", "highlights"],
-  );
-  // Journal pages are never mistaken for tree tabs (tree numbering skips them).
-  assert.ok(RESEARCH_JOURNAL_TAB_IDS.every((tabId) => researchTreeIdFromTabId(tabId) === null));
-});
-
-test("research cycling wraps between documents and excludes runtime panes", () => {
-  const terminal = group("terminal", "terminal");
-  const researchA = group("research-a", "research");
-  const researchB = group("research-b", "research");
-  researchB.collapsed = true;
-  const ids = researchCycleTabIds(
-    [
-      pane("terminal-pane", terminal.id),
-      pane("research-one", researchA.id),
-      pane("research-collapsed", researchB.id),
-      pane("research-two", researchA.id),
-    ],
-    [terminal, researchA, researchB],
-    [treeSummary("tree-one", researchA.id), treeSummary("tree-two", researchA.id)],
-    researchA.id,
-  );
-
-  const treeOneTabId = researchTreeTabId("tree-one");
-  const treeTwoTabId = researchTreeTabId("tree-two");
-  assert.deepEqual(ids, [...RESEARCH_JOURNAL_TAB_IDS, treeOneTabId, treeTwoTabId]);
-  assert.equal(cycleTabId(ids, treeOneTabId, 1), treeTwoTabId);
-  assert.equal(cycleTabId(ids, treeTwoTabId, 1), RESEARCH_HOME_TAB_ID);
-  assert.equal(cycleTabId(ids, treeOneTabId, -1), RESEARCH_HIGHLIGHTS_TAB_ID);
-  assert.equal(researchTreeIdFromTabId(treeTwoTabId), "tree-two");
-  assert.equal(researchTreeIdFromTabId("research-one"), null);
-});
-
-test("research cycling honours the folder scope and excludes runtime panes", () => {
-  const researchA = group("research-a", "research");
-  const researchB = group("research-b", "research");
-  const panes = [
-    pane("pane-a", researchA.id),
-    pane("pane-b", researchB.id),
-  ];
-
-  // Runtime panes never appear in Session's research-only tab order.
-  assert.deepEqual(
-    researchCycleTabIds(
-      panes,
-      [researchA, researchB],
-      [treeSummary("tree-a", researchA.id), treeSummary("tree-b", researchB.id)],
-      researchA.id,
-    ),
-    [...RESEARCH_JOURNAL_TAB_IDS, researchTreeTabId("tree-a")],
-  );
-  assert.deepEqual(
-    researchCycleTabIds(
-      panes,
-      [researchA, researchB],
-      [treeSummary("tree-a", researchA.id), treeSummary("tree-b", researchB.id)],
-      researchB.id,
-    ),
-    [...RESEARCH_JOURNAL_TAB_IDS, researchTreeTabId("tree-b")],
-  );
-});
-
-test("research cycling keeps the journal pages as the only stops without documents", () => {
-  const ids = researchCycleTabIds([], [], [], null);
-
-  assert.deepEqual(ids, [...RESEARCH_JOURNAL_TAB_IDS]);
-  const first = RESEARCH_JOURNAL_TAB_IDS[0];
-  const last = RESEARCH_JOURNAL_TAB_IDS[RESEARCH_JOURNAL_TAB_IDS.length - 1];
-  assert.equal(cycleTabId(ids, first, 1), RESEARCH_JOURNAL_TAB_IDS[1]);
-  assert.equal(cycleTabId(ids, first, -1), last);
-  assert.equal(cycleTabId(ids, last, 1), first);
 });
 
 test("a stored folder scope resolves to itself only while the workspace is live", () => {

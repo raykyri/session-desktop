@@ -37,8 +37,7 @@ newest first.
 - The Highlights tab below Bookmarks lists every highlight saved in open
   threads, newest first under day headers, each shown inside its surrounding
   context. Opening one selects its thread and scrolls to the passage.
-- Right-click a card for its thread menu: rename, star, folders, archive, or
-  delete. Deleting a note or saved link has no undo; archive keeps it
+- Right-click a card for its thread menu: rename, archive, or delete. Deleting a note or saved link has no undo; archive keeps it
   restorable.
 - New activity appears live. When scrolled down, the new-activity button returns to
   the newest items. Older pages load as you approach the end, with a manual

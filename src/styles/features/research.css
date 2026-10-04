@@ -92,22 +92,6 @@
   text-transform: uppercase;
 }
 
-.research-sidebar-heading button {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border: 0;
-  border-radius: 5px;
-  color: inherit;
-  background: transparent;
-}
-
-.research-sidebar-heading button:hover {
-  color: var(--text-interactive);
-  background: var(--surface-fill-hover);
-}
-
 .research-sidebar-row {
   position: relative;
   display: flex;
@@ -140,13 +124,6 @@
 }
 
 .research-sidebar-row.is-selected {
-  color: var(--text-max);
-  background: var(--control-bg-hover);
-}
-
-/* Shift/meta multi-selection uses the same fill as an ordinary selection so
-   every selected research item carries the same visual weight. */
-.research-sidebar-row.is-multi-selected {
   color: var(--text-max);
   background: var(--control-bg-hover);
 }
@@ -204,35 +181,6 @@
   color: var(--text-interactive);
   background: var(--control-bg-hover);
   box-shadow: none;
-}
-
-/* Starred rows keep an outline star in the trigger's slot. Hover, focus, or
-   an open menu swaps it for the ⋯ trigger, which paints over the same box. */
-.research-sidebar-star {
-  position: absolute;
-  top: 0;
-  right: 4px;
-  bottom: 0;
-  z-index: 1;
-  display: grid;
-  width: 22px;
-  height: 22px;
-  margin-block: auto;
-  place-items: center;
-  color: var(--text-subtle);
-  pointer-events: none;
-}
-
-.research-sidebar-row:hover > .research-sidebar-star,
-.research-sidebar-row:focus-within > .research-sidebar-star,
-.research-sidebar-row.has-open-menu > .research-sidebar-star {
-  visibility: hidden;
-}
-
-/* Reserve the star's slot so the running spinner and New badge sit beside it
-   rather than underneath. */
-.research-sidebar-row.is-starred > .research-sidebar-select {
-  padding-right: 30px;
 }
 
 /* Titles are raw prompts (often with URLs); two clamped lines keep the list
@@ -318,85 +266,6 @@
   text-align: center;
   text-transform: uppercase;
   background: var(--status-info-bg-strong);
-}
-
-.research-sidebar-row.is-archived {
-  color: var(--text-muted);
-}
-
-/* Client-side folders group their member rows directly beneath the header,
-   inline with the rest of the list. */
-.research-sidebar-folder-row {
-  color: var(--control-fg-muted);
-}
-
-.research-sidebar-folder-row.is-folder-drop-target {
-  color: var(--text-interactive);
-  background: var(--research-sidebar-hover-bg);
-  border-color: var(--accent-color);
-}
-
-.research-sidebar-folder-collapse {
-  display: grid;
-  width: 20px;
-  height: 22px;
-  min-height: 0;
-  flex: none;
-  place-items: center;
-  margin-left: 2px;
-  padding: 0;
-  border: 0;
-  color: var(--text-subtle);
-  background: transparent;
-}
-
-.research-sidebar-folder-collapse svg {
-  transform-origin: center;
-  transform-box: fill-box;
-  transition: transform var(--transition-fast);
-  transform: rotate(90deg);
-}
-
-.research-sidebar-folder.is-collapsed .research-sidebar-folder-collapse svg {
-  transform: rotate(0deg);
-}
-
-/* Shares .research-sidebar-select's grid; only the tone differs. */
-.research-sidebar-folder-heading {
-  padding-left: 2px;
-  font-weight: 500;
-}
-
-.research-sidebar-folder-icon {
-  flex: none;
-  margin-top: 2px;
-  margin-right: 5px;
-  color: var(--text-activity);
-  transform: translateY(1px);
-}
-
-.research-sidebar-folder-count {
-  flex: none;
-  margin-left: 0.5em;
-  color: var(--text-faint);
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-/* Members indent past the folder header's own icon (reached at ~24px: the
-   20px collapse toggle plus its 2px margin and the heading's 2px padding),
-   so a member's icon lands clearly right of it instead of nearly underneath
-   it — matching the collapse toggle's reserved width keeps the step
-   consistent with the header's own layout. */
-.research-sidebar-row.is-folder-member {
-  width: calc(100% - 22px);
-  margin-left: 22px;
-}
-
-/* Starred items sit above the rest of the list as their own group; the extra
-   space below is the only divider. */
-.research-sidebar-starred {
-  margin-bottom: 16px;
 }
 
 /* Live research terminal panes for the scoped folder(s). Keep this lower
@@ -669,29 +538,6 @@
 .research-placeholder p {
   margin: 0;
   line-height: 1.4;
-}
-
-/* Placeholder shown while several sidebar items are multi-selected: a large
-   faint glyph with its caption, centered where the document would be. */
-.research-multi-select-state {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  color: var(--text-subtle);
-  background: var(--research-workspace-bg);
-}
-
-.research-multi-select-state svg {
-  opacity: 0.5;
-}
-
-.research-multi-select-state span {
-  font-size: calc(14px + var(--font-ui-size-offset));
-  opacity: 0.8;
 }
 
 .research-spinner {

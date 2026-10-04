@@ -13,12 +13,10 @@ import {
   listPanes,
   listRecentActivity,
   listResearchActivity,
-  listResearchFolders,
   listResearchTrees,
   markAppWindowReady,
 } from "../lib/api";
 import { startAppStartup } from "../lib/appStartup";
-import { emptyResearchFolderState } from "../lib/researchFolders";
 
 async function loadInitial() {
   const [
@@ -30,7 +28,6 @@ async function loadInitial() {
     existingResearchTrees,
     existingResearchActivity,
     existingRecentActivity,
-    existingResearchFolders,
   ] = await Promise.all([
     getRuntimeConfig(),
     listGroups().catch(() => []),
@@ -40,7 +37,6 @@ async function loadInitial() {
     listResearchTrees(true).catch(() => []),
     listResearchActivity().catch(() => []),
     listRecentActivity().catch(() => ({ items: [], nextCursor: null })),
-    listResearchFolders().catch(emptyResearchFolderState),
   ]);
   return {
     runtimeConfig,
@@ -51,7 +47,6 @@ async function loadInitial() {
     existingResearchTrees,
     existingResearchActivity,
     existingRecentActivity,
-    existingResearchFolders,
   };
 }
 
