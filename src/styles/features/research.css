@@ -31,19 +31,6 @@
   height: auto;
 }
 
-.research-sidebar-section {
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  /* Reserve the scrollbar's width whether or not it's needed, so expanding or
-     collapsing a folder never shifts the list's content (and its icons)
-     sideways when that toggle crosses the scroll threshold. */
-  scrollbar-gutter: stable;
-  flex: 1;
-  padding: 7px 7px 5px;
-}
-
 /* Native Finder drops are reported at the window level, so this overlay is
    purely presentational. It covers the complete Research sidebar without
    intercepting the drop and makes the active target unmistakable. */
@@ -79,19 +66,6 @@
   font-size: var(--fs-sm);
 }
 
-.research-sidebar-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 24px;
-  padding: 0 6px;
-  color: var(--text-subtle);
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .research-sidebar-row {
   position: relative;
   display: flex;
@@ -108,12 +82,6 @@
     color var(--transition-fast),
     background-color var(--transition-fast),
     border-color var(--transition-fast);
-}
-
-/* Thread titles use the same base reading size as questions and answers in
-   Home. Keep the shared row size on Home, folders, and surrounding chrome. */
-.research-sidebar-row[data-research-tree-id] {
-  font-size: calc(var(--fs-input) - 0.5px);
 }
 
 /* Hover/selected mirror the terminal sidebar's pane tabs so the two modes read
@@ -144,45 +112,6 @@
   background: transparent;
 }
 
-/* Overlay the row's trailing edge so the trigger never steals title width.
-   Pin with top/bottom + margin so it stays vertically centered against one-
-   or two-line titles, matching the running spinner. */
-.research-sidebar-menu-trigger {
-  position: absolute;
-  top: 0;
-  right: 4px;
-  bottom: 0;
-  z-index: 2;
-  display: none;
-  width: 22px;
-  height: 22px;
-  min-height: 0;
-  margin-block: auto;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  color: var(--text-subtle);
-  background: var(--research-sidebar-hover-bg);
-}
-
-.research-sidebar-row:hover > .research-sidebar-menu-trigger,
-.research-sidebar-row:focus-within > .research-sidebar-menu-trigger,
-.research-sidebar-row.has-open-menu > .research-sidebar-menu-trigger {
-  display: grid;
-}
-
-.research-sidebar-row.is-selected .research-sidebar-menu-trigger {
-  background: var(--control-bg-hover);
-}
-
-.research-sidebar-menu-trigger:hover,
-.research-sidebar-menu-trigger:focus-visible {
-  color: var(--text-interactive);
-  background: var(--control-bg-hover);
-  box-shadow: none;
-}
-
 /* Titles are raw prompts (often with URLs); two clamped lines keep the list
    scannable, and the row's tooltip carries the full text. */
 .research-sidebar-title {
@@ -202,70 +131,11 @@
   -webkit-line-clamp: 2;
 }
 
-/* Marks document items apart from research runs in the shared list. */
-.research-sidebar-doc-icon {
-  flex: none;
-  margin-top: 2px;
-  margin-right: 5px;
-  color: var(--text-activity);
-  transform: translateY(1px);
-}
-
 .research-sidebar-copy {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 3px;
-}
-
-.research-sidebar-failed {
-  align-self: start;
-  min-width: 18px;
-  padding: 1px 5px;
-  border-radius: 999px;
-  color: var(--status-failed-fg);
-  font-size: calc(10px + var(--font-ui-size-offset));
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  text-align: center;
-  background: var(--status-failed-bg);
-}
-
-/* Live runs read as activity, not a count. Rotate a fixed, even-sized wrapper
-   so the glyph stays visually stable, and center it against one- or two-line
-   titles. */
-.research-sidebar-spinner {
-  display: inline-grid;
-  width: 14px;
-  height: 14px;
-  align-self: center;
-  flex: none;
-  place-items: center;
-  color: var(--accent-color);
-  animation: spinner-spin 0.9s linear infinite;
-  transform-origin: center;
-  will-change: transform;
-}
-
-.research-sidebar-spinner svg {
-  display: block;
-}
-
-/* Overlaid on the row's top-right corner rather than held in the grid, so the
-   "New" tag never steals width from the research title. On hover it sits under
-   the menu trigger, which shares this corner. */
-.research-sidebar-unseen {
-  position: absolute;
-  top: 5px;
-  right: 4px;
-  padding: 1px 5px;
-  border-radius: 999px;
-  color: var(--status-info-fg-soft);
-  font-size: calc(9px + var(--font-ui-size-offset));
-  font-weight: 700;
-  text-align: center;
-  text-transform: uppercase;
-  background: var(--status-info-bg-strong);
 }
 
 /* Live research terminal panes for the scoped folder(s). Keep this lower

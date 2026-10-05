@@ -98,7 +98,8 @@ export function recentResearchQueryFromNode(
   includeFollowUps = false,
 ): RecentResearchQuery | null {
   const kind = node.kind ?? "run";
-  if ((kind !== "run" && kind !== "note") || (!includeFollowUps && node.parentNodeId)) {
+  // Documents never appear in the feed; exported conversations list like runs.
+  if (kind === "document" || (!includeFollowUps && node.parentNodeId)) {
     return null;
   }
   return {

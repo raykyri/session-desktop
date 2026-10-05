@@ -1,2 +1,2 @@
 /** Pages the journal surface can show. */
-export type ResearchJournalView = "home" | "bookmarks" | "highlights";
+export type ResearchJournalView = "home" | "bookmarks" | "archived" | "highlights";

@@ -9,7 +9,6 @@ import {
   replaceScopedGroupOrder,
 } from "../src/lib/workspaceScope";
 import {
-  nextTreeInResearchScope,
   resolveResearchScope,
   treeForResearchScope,
   treesForResearchScope,
@@ -213,20 +212,6 @@ test("research restoration never crosses the selected folder scope", () => {
   assert.equal(workspaceIsInResearchScope("research-a", "research-a"), true);
   assert.equal(workspaceIsInResearchScope("research-a", "research-b"), false);
   assert.equal(workspaceIsInResearchScope("research-a", null), false);
-});
-
-test("the next-tree fallback stays inside the scoped folder", () => {
-  const trees = [
-    treeSummary("tree-1", "research-a"),
-    treeSummary("tree-2", "research-b"),
-    treeSummary("tree-3", "research-a"),
-  ];
-
-  assert.equal(nextTreeInResearchScope(trees, "research-a", "tree-1")?.id, "tree-3");
-  // The only tree in scope going away leaves the folder empty rather than
-  // jumping to another folder's tree.
-  assert.equal(nextTreeInResearchScope(trees, "research-b", "tree-2"), null);
-  assert.equal(nextTreeInResearchScope(trees, null, "tree-1"), null);
 });
 
 test("Open worktree is disabled for Research and for non-git agent checkouts", () => {

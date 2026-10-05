@@ -1,6 +1,5 @@
 export type AppShortcutCommand =
   | { type: "focusResearchHome" }
-  | { type: "moveResearchItem"; direction: -1 | 1 }
   | { type: "openSettings" }
   | { type: "openCommandPalette" }
   | { type: "toggleLeftSidebar" }
@@ -15,7 +14,6 @@ interface AppShortcutInput {
   altKey: boolean;
   shiftKey: boolean;
   terminalTarget?: boolean;
-  editableTarget?: boolean;
 }
 
 export const RESEARCH_HOME_SHORTCUT_LABEL = "⌘N";
@@ -28,16 +26,6 @@ export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand 
   const shift = input.shiftKey;
   const onePrimaryModifier = command !== control;
 
-  if (
-    command &&
-    !control &&
-    option &&
-    !shift &&
-    !input.editableTarget &&
-    (key === "arrowup" || key === "arrowdown")
-  ) {
-    return { type: "moveResearchItem", direction: key === "arrowup" ? -1 : 1 };
-  }
   if (command && !control && !option && !shift && (key === "n" || key === "t")) {
     return { type: "focusResearchHome" };
   }
@@ -66,8 +54,6 @@ function appShortcutLabel(command: AppShortcutCommand): string {
   switch (command.type) {
     case "focusResearchHome":
       return "open Home";
-    case "moveResearchItem":
-      return "move the active research item";
     case "openSettings":
       return "open settings";
     case "openCommandPalette":
@@ -108,7 +94,6 @@ function acceleratorToShortcutInput(accelerator: string): AppShortcutInput | nul
     ctrlKey: modifiers.has("Control"),
     altKey: modifiers.has("Option"),
     shiftKey: modifiers.has("Shift"),
-    editableTarget: false,
   };
 }
 
@@ -118,10 +103,6 @@ export function showHideShortcutConflict(accelerator: string | null): string | n
   if (!input) return null;
   const command = resolveAppShortcut(input);
   return command ? appShortcutLabel(command) : null;
-}
-
-export function appShortcutAllowsRepeat(command: AppShortcutCommand): boolean {
-  return command.type === "moveResearchItem";
 }
 
 export function parseAppShortcutCommand(command: unknown): AppShortcutCommand | null {
@@ -134,12 +115,6 @@ export function parseAppShortcutCommand(command: unknown): AppShortcutCommand | 
     case "openFolderMenu":
     case "toggleSourceBrowser":
       return { type: command };
-    case "moveSidebarItemUp":
-    case "moveResearchItemUp":
-      return { type: "moveResearchItem", direction: -1 };
-    case "moveSidebarItemDown":
-    case "moveResearchItemDown":
-      return { type: "moveResearchItem", direction: 1 };
     default:
       return null;
   }

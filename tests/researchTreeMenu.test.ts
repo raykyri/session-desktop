@@ -59,3 +59,19 @@ test("research tree menus can expose query summary regeneration", () => {
   );
   assert.match(html, /Generate summary/);
 });
+
+test("archived rows offer Unarchive and Delete only", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchTreeMenuItems, {
+      tree: { ...tree, archivedAt: 300 },
+      archived: true,
+      onClose: noop,
+      onRestore: noop,
+      onDelete: noop,
+    }),
+  );
+  assert.match(html, /Unarchive research/);
+  assert.match(html, /Delete/);
+  assert.doesNotMatch(html, /Rename/);
+  assert.doesNotMatch(html, />Archive</);
+});

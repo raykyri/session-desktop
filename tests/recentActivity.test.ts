@@ -117,7 +117,7 @@ test("Home hides archived research and shows it again when restored", () => {
   );
 });
 
-test("only top-level runs and notes enter the Home feed", () => {
+test("only top-level runs, notes, and conversations enter the Home feed", () => {
   const node = {
     id: "root",
     treeId: tree.id,
@@ -133,7 +133,10 @@ test("only top-level runs and notes enter the Home feed", () => {
   assert.equal(recentResearchQueryFromNode(node)?.nodeId, "root");
   assert.equal(recentResearchQueryFromNode({ ...node, parentNodeId: "root" }), null);
   assert.equal(recentResearchQueryFromNode({ ...node, kind: "document" }), null);
-  assert.equal(recentResearchQueryFromNode({ ...node, kind: "conversation" }), null);
+  assert.equal(
+    recentResearchQueryFromNode({ ...node, kind: "conversation" })?.kind,
+    "conversation",
+  );
   assert.equal(recentResearchQueryFromNode({ ...node, kind: "note" })?.kind, "note");
 });
 

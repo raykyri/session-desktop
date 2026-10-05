@@ -60,14 +60,6 @@ test("research summaries get typography only from the shared surface recipe", ()
   assert.doesNotMatch(threadPlacement, /line-height\s*:/);
 });
 
-test("research thread titles match feed body size without resizing sidebar chrome", () => {
-  const threadRow = ruleBody(researchCss, ".research-sidebar-row[data-research-tree-id]");
-  assert.match(threadRow, /font-size:\s*calc\(var\(--fs-input\) - 0\.5px\)/);
-
-  const heading = ruleBody(researchCss, ".research-sidebar-heading");
-  assert.match(heading, /font-size:\s*var\(--fs-xs\)/);
-});
-
 test("research prose adapts transcript typography on the renderer, not layout roots", () => {
   const readingSurface = ruleBody(surfaceCss, ".research-reading-surface");
   assert.doesNotMatch(readingSurface, /--transcript-/);

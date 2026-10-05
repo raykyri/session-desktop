@@ -114,6 +114,35 @@ test("the open thread's post is selected and unread posts carry a dot", () => {
   assert.ok(other?.includes("research-feed-post-unread"));
 });
 
+test("a thread that failed since it was viewed shows the failure marker instead of the dot", () => {
+  const html = renderFeed({
+    items: [question, { ...question, nodeId: "other-node", treeId: "other", prompt: "Other question" }],
+    researchTrees: [
+      { ...tree, hasUnseenUpdate: true, hasUnseenFailure: true },
+      { ...tree, id: "other", rootNodeId: "other-node", hasUnseenUpdate: true, hasUnseenFailure: true },
+    ],
+    selectedTreeId: "tree",
+  });
+  const posts = html.split(/class="research-feed-post(?=[ "])/).slice(1);
+  const selected = posts.find((post) => post.startsWith(" is-selected"));
+  const other = posts.find((post) => post.includes("Other question"));
+  // The open thread acknowledges its failure, so only the other post is marked.
+  assert.ok(selected && !selected.includes("research-feed-post-failed"));
+  assert.ok(other?.includes('class="research-feed-post-failed"'));
+  assert.ok(other && !other.includes("research-feed-post-unread"));
+});
+
+test("an exported conversation lists as a titled post with a terminal glyph", () => {
+  const html = renderFeed({
+    items: [{ ...question, kind: "conversation" as const, recap: null, prompt: "First user message" }],
+    researchTrees: [{ ...tree, kind: "conversation" as const, title: "Terminal session" }],
+  });
+  assert.equal((html.match(/class="research-feed-post"/g) ?? []).length, 1);
+  assert.match(html, /research-feed-post-title">Terminal session</);
+  assert.match(html, /First user message/);
+  assert.match(html, /lucide-terminal/);
+});
+
 test("only one post of the open thread is selected", () => {
   // A thread's follow-up is its own post; the thread's newest post is the one
   // selected when the thread was opened from elsewhere.

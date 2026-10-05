@@ -120,6 +120,12 @@
   content: none;
 }
 
+/* Archived cards are a plain list rather than the virtualized feed, so each
+   row draws the divider the feed's row wrapper would. */
+.journal-archived-row {
+  border-bottom: 1px solid var(--surface-border-default);
+}
+
 .research-feed-column .recent-activity-unit {
   gap: 0;
   padding: 0;
@@ -177,6 +183,25 @@
   height: 8px;
   border-radius: 50%;
   background: var(--status-info-fg);
+  box-shadow: 0 0 0 2px var(--feed-post-bg);
+}
+
+/* Failed since last viewed: a solid badge in the unread dot's corner. The
+   fill is opaque so the avatar glyph does not show through it. */
+.research-feed-post-failed {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  color: var(--feed-post-bg);
+  font-size: calc(10px + var(--font-ui-size-offset));
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  background: var(--status-failed-fg);
   box-shadow: 0 0 0 2px var(--feed-post-bg);
 }
 

@@ -1,6 +1,6 @@
 import type { GroupInfo, ResearchTreeSummary } from "../types";
 
-// The research sidebar shows exactly one folder (Research workspace) at a
+// Research is scoped to exactly one folder (Research workspace) at a
 // time. A null scope is only used when no research folders exist yet.
 export type ResearchFolderScope = string | null;
 
@@ -34,16 +34,4 @@ export function treeForResearchScope(
 ): ResearchTreeSummary | null {
   const scoped = treesForResearchScope(trees, scope);
   return scoped.find((tree) => tree.id === preferredTreeId) ?? scoped[0] ?? null;
-}
-
-// The tree selection should stay inside the current folder when the active
-// tree is archived or deleted, rather than jumping to another folder's tree.
-export function nextTreeInResearchScope(
-  trees: ResearchTreeSummary[],
-  scope: ResearchFolderScope,
-  excludeTreeId: string,
-): ResearchTreeSummary | null {
-  return (
-    treesForResearchScope(trees, scope).find((tree) => tree.id !== excludeTreeId) ?? null
-  );
 }
