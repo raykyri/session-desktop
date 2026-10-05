@@ -288,34 +288,20 @@ export function noteReplyTargetFor(
   return reply ? { id: reply.id, author: noteReplyAuthorName(reply) } : null;
 }
 
-/** Status line of a follow-up: model and time once answered, a spinner while
- * running, and the error with Retry (which reruns the same node) after a
- * failure or cancellation. */
+/** Status line of an AI follow-up that has no answer to show: a spinner
+ * while it runs, and the error with Retry (which reruns the same node) after
+ * a failure or cancellation. */
 export function NoteFollowUpStatus({
   child,
-  modelLabel,
   archived,
   onRetry,
 }: {
   child: RecentResearchQuery;
-  modelLabel: string;
   archived: boolean;
   onRetry: (nodeId: string) => Promise<void>;
 }) {
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  if (child.kind === "note") {
-    const replies = child.replyCount ?? 0;
-    return (
-      <div className="note-thread-meta">
-        Posted to network
-        <span aria-hidden="true">·</span>
-        {replies === 1 ? "1 reply" : replies > 0 ? `${replies} replies` : "no replies yet"}
-        <span aria-hidden="true">·</span>
-        {formatRelativeTime(child.createdAt)}
-      </div>
-    );
-  }
   if (child.status === "queued" || child.status === "starting" || child.status === "running") {
     return (
       <div className="note-thread-meta" role="status">
@@ -356,17 +342,7 @@ export function NoteFollowUpStatus({
       </div>
     );
   }
-  return (
-    <div className="note-thread-meta">
-      {modelLabel ? (
-        <>
-          {modelLabel}
-          <span aria-hidden="true">·</span>
-        </>
-      ) : null}
-      {formatRelativeTime(child.createdAt)}
-    </div>
-  );
+  return null;
 }
 
 type NoteFollowUpMode = "network" | "ai";

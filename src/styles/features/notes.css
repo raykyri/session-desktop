@@ -117,18 +117,13 @@
   margin-top: 1px;
 }
 
-/* Row actions appear on hover or focus so a long reply list stays quiet. */
+/* Row actions stay visible in the metadata color: a hidden row still took
+   its space, which spaced replies unevenly against follow-ups, and the
+   actions were found only by hovering. */
 .note-thread-actions {
   display: flex;
   gap: 12px;
   margin-top: 3px;
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.note-thread-item:hover > .note-thread-body > .note-thread-actions,
-.note-thread-body:focus-within > .note-thread-actions {
-  opacity: 1;
 }
 
 .note-thread-link {
@@ -136,7 +131,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--text-activity);
+  color: var(--text-subtle);
   font-size: calc(12.5px + var(--font-ui-size-offset));
   cursor: pointer;
 }
@@ -455,6 +450,11 @@
   margin-top: 8px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 5;
+}
+
+/* The preview reads one step below the question it answers. */
+.note-segment-answer.research-prose--compact {
+  color: var(--text-secondary);
 }
 
 .note-segment-open {

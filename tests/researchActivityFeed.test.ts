@@ -75,8 +75,9 @@ test("a post's footer reads time and counts, then Follow and Bookmark at its tra
   assert.ok(html.indexOf("research-thread-follow") < html.indexOf("research-thread-bookmark"));
   assert.match(html, /research-thread-follow is-active"[^>]*aria-pressed="true"[^>]*>Following<\/button>/);
   assert.match(html, /research-thread-bookmark is-active"[^>]*aria-pressed="true"[^>]*aria-label="Remove bookmark"/);
-  // A question carries its glyph at the start of the footer.
-  assert.ok(html.indexOf("research-feed-post-kind") < html.indexOf("research-feed-post-time"));
+  // A question reads as one by its title and summary; only conversations
+  // carry a kind glyph.
+  assert.doesNotMatch(html, /research-feed-post-kind/);
   // Follow-ups are counted, not listed; only the root item is a feed row.
   assert.doesNotMatch(html, /Follow up question here/);
   assert.equal((html.match(/aria-posinset=/g) ?? []).length, 1);
@@ -143,7 +144,7 @@ test("an exported conversation lists as a titled post with a terminal glyph", ()
   assert.equal((html.match(/class="research-feed-post"/g) ?? []).length, 1);
   assert.match(html, /research-feed-post-title">Terminal session</);
   assert.match(html, /First user message/);
-  assert.match(html, /lucide-terminal/);
+  assert.match(html, /research-feed-post-kind"><svg[^>]*lucide-terminal/);
 });
 
 test("only one post of the open thread is selected", () => {

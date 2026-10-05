@@ -175,21 +175,22 @@
   box-shadow: 0 0 0 2px var(--feed-post-bg);
 }
 
-/* Failed since last viewed: a solid badge in the unread dot's place. */
+/* Failed since last viewed: a solid badge in the unread dot's place. Its
+   right edge matches the dot's, clear of the text inset. */
 .research-feed-post-failed.research-feed-post-marker {
-  top: 17px;
-  left: 2px;
+  top: 18px;
+  left: 1px;
 }
 
 .research-feed-post-failed {
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2px;
   border-radius: 999px;
   color: var(--feed-post-bg);
-  font-size: calc(10px + var(--font-ui-size-offset));
+  font-size: calc(9px + var(--font-ui-size-offset));
   font-weight: 700;
-  line-height: 14px;
+  line-height: 12px;
   text-align: center;
   background: var(--status-failed-fg);
   box-shadow: 0 0 0 2px var(--feed-post-bg);
@@ -298,10 +299,14 @@
   animation: spinner-spin 0.9s linear infinite;
 }
 
+/* When the meta line and Follow / Bookmark do not fit side by side, the
+   actions move to their own line at the trailing edge rather than splitting
+   the meta line. */
 .research-feed-post-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 2px 10px;
   min-width: 0;
   min-height: 24px;
   color: var(--feed-post-secondary);
@@ -311,15 +316,22 @@
 
 .research-feed-post-meta {
   display: inline-flex;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   align-items: center;
   gap: 2px 6px;
   min-width: 0;
 }
 
-.research-feed-post-meta > * {
+.research-feed-post-meta > *,
+.research-feed-post-meta-item {
   white-space: nowrap;
+}
+
+.research-feed-post-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .research-feed-post-meta-separator {
