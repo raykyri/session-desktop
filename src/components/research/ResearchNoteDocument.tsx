@@ -128,7 +128,8 @@ export default function ResearchNoteDocument({
   const children = useMemo(
     () =>
       detail.nodes
-        .filter((node) => node.parentNodeId === note.id)
+        // Documents never list as follow-ups.
+        .filter((node) => node.parentNodeId === note.id && node.kind !== "document")
         .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id)),
     [detail.nodes, note.id],
   );
@@ -223,7 +224,6 @@ export default function ResearchNoteDocument({
           ) : (
             <NoteFollowUpStatus
               child={summary}
-              modelLabel={modelLabel}
               archived={archived}
               onRetry={actions.onRetry}
             />
