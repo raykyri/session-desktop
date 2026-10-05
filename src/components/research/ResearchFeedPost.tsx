@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { LoaderCircle, MessageCircle, Reply, StickyNote, Terminal } from "lucide-react";
+import { Fragment, type ReactNode } from "react";
+import { LoaderCircle, MessageCircle, Terminal } from "lucide-react";
 import ResearchThreadActions from "./ResearchThreadActions";
 import { ResearchRecapPendingLine } from "./ResearchRecap";
 
@@ -8,8 +8,8 @@ function isInteractiveTarget(target: EventTarget | null) {
 }
 
 interface ResearchFeedPostProps {
-  /** Picks the avatar glyph: a question, a note (network posts and saved
-   * links), or an exported terminal conversation. */
+  /** A question or an exported terminal conversation carries a glyph at the
+   * start of the footer; notes (network posts and saved links) carry none. */
   kind?: "question" | "note" | "conversation";
   /** Relative time in the footer after Bookmark; omitted while running. */
   time?: ReactNode;
@@ -29,9 +29,9 @@ interface ResearchFeedPostProps {
   /** A run in the thread failed since it was last viewed. Takes the unread
    * dot's place, since a failure is also an unseen change. */
   failed?: boolean;
-  /** Follow-ups (and, for network posts, replies) under this item. */
-  replyCount?: number;
-  replyCountLabel?: string;
+  /** Labelled counts of the replies and follow-ups under this item, such as
+   * ["2 replies", "1 follow-up"]. Each opens the item. */
+  counts?: string[];
   followed?: boolean;
   bookmarked?: boolean;
   onToggleFollow?: () => void;
@@ -40,10 +40,10 @@ interface ResearchFeedPostProps {
   onContextMenu: (clientX: number, clientY: number) => void;
 }
 
-/** One item in the Home feed column: an avatar, the
- * thread title, the question clamped to four lines, the answer's summary, and
- * a footer with the follow-up count, Follow, Bookmark and time.
- * Follow and Bookmark wait until the answer settles. */
+/** One item in the Home feed column: the thread title, the question clamped
+ * to four lines, the answer's summary, and a footer with the time and counts,
+ * then Follow and Bookmark at its trailing edge. The whole item opens the
+ * thread. Follow and Bookmark wait until the answer settles. */
 export default function ResearchFeedPost({
   kind = "question",
   time,
@@ -55,8 +55,7 @@ export default function ResearchFeedPost({
   selected = false,
   unread = false,
   failed = false,
-  replyCount = 0,
-  replyCountLabel,
+  counts = [],
   followed = false,
   bookmarked = false,
   onToggleFollow,
@@ -68,9 +67,22 @@ export default function ResearchFeedPost({
 
   const showActions = !running && onToggleFollow && onToggleBookmark;
   const showTime = !running && Boolean(time);
+  const showCounts = !running && counts.length > 0;
+  const kindGlyph =
+    kind === "conversation" ? (
+      <Terminal size={12} aria-hidden="true" />
+    ) : kind === "question" ? (
+      <MessageCircle size={12} aria-hidden="true" />
+    ) : null;
   return (
     <div
       className={`research-feed-post${selected ? " is-selected" : ""}`}
+      onClick={(event) => {
+        // Clicking anywhere in the post opens it; keyboard and assistive tech
+        // reach it through the title (or, untitled, the time), so the links,
+        // embeds, Follow and Bookmark inside stay separate controls.
+        if (!isInteractiveTarget(event.target)) onOpen();
+      }}
       onContextMenu={(event) => {
         if (event.defaultPrevented) return;
         event.preventDefault();
@@ -78,39 +90,24 @@ export default function ResearchFeedPost({
         onContextMenu(event.clientX, event.clientY);
       }}
     >
-      <div className="research-feed-post-avatar">
-        <span className="research-feed-post-avatar-glyph" aria-hidden="true">
-          {kind === "note" ? (
-            <StickyNote size={14} />
-          ) : kind === "conversation" ? (
-            <Terminal size={14} />
-          ) : (
-            <MessageCircle size={14} />
-          )}
-        </span>
-        {failed ? (
-          <span
-            className="research-feed-post-failed"
-            role="img"
-            aria-label="Failed since last viewed"
-            title="Failed since last viewed — open to acknowledge"
-          >
-            !
-          </span>
-        ) : unread ? (
-          <span className="research-feed-post-unread" role="img" aria-label="Updated" />
-        ) : null}
-      </div>
-      <div className="research-feed-post-main">
-        {/* Clicking anywhere in the body opens the post; keyboard and assistive
-            tech reach it through the title (or, untitled, the time), so the
-            links and embeds inside the body stay separate controls. */}
-        <div
-          className="research-feed-post-open"
-          onClick={(event) => {
-            if (!isInteractiveTarget(event.target)) onOpen();
-          }}
+      {failed ? (
+        <span
+          className="research-feed-post-marker research-feed-post-failed"
+          role="img"
+          aria-label="Failed since last viewed"
+          title="Failed since last viewed — open to acknowledge"
         >
+          !
+        </span>
+      ) : unread ? (
+        <span
+          className="research-feed-post-marker research-feed-post-unread"
+          role="img"
+          aria-label="Updated"
+        />
+      ) : null}
+      <div className="research-feed-post-main">
+        <div className="research-feed-post-open">
           {title ? (
             <button
               type="button"
@@ -142,21 +139,46 @@ export default function ResearchFeedPost({
             <ResearchRecapPendingLine className="research-feed-post-summary" />
           ) : null}
         </div>
-        {replyCount > 0 || showActions || showTime ? (
+        {showCounts || showActions || showTime ? (
           <div className="research-feed-post-footer">
-            {replyCount > 0 ? (
-              <button
-                type="button"
-                className="control-button research-feed-post-count"
-                tabIndex={-1}
-                aria-label={`Open ${replyCountLabel}`}
-                title={replyCountLabel}
-                onClick={onOpen}
-              >
-                <Reply size={13} aria-hidden="true" />
-                {replyCount}
-              </button>
-            ) : null}
+            <span className="research-feed-post-meta">
+              {kindGlyph && (showTime || showCounts) ? (
+                <span className="research-feed-post-kind">{kindGlyph}</span>
+              ) : null}
+              {showTime ? (
+                /* An untitled post (a note or saved link) opens from its time;
+                   its body's only other target may be the link itself. */
+                <button
+                  type="button"
+                  className="control-button research-feed-post-time"
+                  aria-label={title ? undefined : "Open post"}
+                  tabIndex={title ? -1 : undefined}
+                  onClick={onOpen}
+                >
+                  {time}
+                </button>
+              ) : null}
+              {showCounts
+                ? counts.map((label, index) => (
+                    <Fragment key={label}>
+                      {showTime || index > 0 ? (
+                        <span className="research-feed-post-meta-separator" aria-hidden="true">
+                          ·
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="control-button research-feed-post-count"
+                        tabIndex={-1}
+                        aria-label={`Open ${label}`}
+                        onClick={onOpen}
+                      >
+                        {label}
+                      </button>
+                    </Fragment>
+                  ))
+                : null}
+            </span>
             {showActions ? (
               <ResearchThreadActions
                 followed={followed}
@@ -164,19 +186,6 @@ export default function ResearchFeedPost({
                 onToggleFollow={onToggleFollow}
                 onToggleBookmark={onToggleBookmark}
               />
-            ) : null}
-            {showTime ? (
-              /* An untitled post (a note or saved link) opens from its time;
-                 its body's only other target may be the link itself. */
-              <button
-                type="button"
-                className="control-button research-feed-post-time"
-                aria-label={title ? undefined : "Open post"}
-                tabIndex={title ? -1 : undefined}
-                onClick={onOpen}
-              >
-                {time}
-              </button>
             ) : null}
           </div>
         ) : null}

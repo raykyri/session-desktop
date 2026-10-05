@@ -111,13 +111,15 @@ const MENU_HEIGHT_ESTIMATE = 132;
 const MENU_VIEWPORT_MARGIN = 8;
 
 /** Follow-ups under an item, plus replies for a network post. */
-export function feedPostReplyCount(query: RecentResearchQuery): { count: number; label: string } {
+/** Labelled reply and follow-up counts for a feed post's footer, such as
+ * ["7 replies", "1 follow-up"]. Replies count only on notes. */
+export function feedPostCounts(query: RecentResearchQuery): string[] {
   const followUps = query.children?.length ?? 0;
   const replies = query.kind === "note" ? (query.replyCount ?? 0) : 0;
   const parts: string[] = [];
   if (replies > 0) parts.push(`${replies} ${replies === 1 ? "reply" : "replies"}`);
   if (followUps > 0) parts.push(`${followUps} ${followUps === 1 ? "follow-up" : "follow-ups"}`);
-  return { count: replies + followUps, label: parts.join(", ") };
+  return parts;
 }
 
 type VirtualActivityRow = {
@@ -726,6 +728,7 @@ function ResearchActivityFeed({
 
   return (
     <ResearchDocumentFrame
+      actionsAtEnd
       title={viewTitle}
       canGoBack={canGoBack}
       canGoForward={canGoForward}
@@ -802,7 +805,6 @@ function ResearchActivityFeed({
                     openTreeContextMenu(researchTree, clientX, clientY, query.nodeId);
                   }
                 };
-                const replies = feedPostReplyCount(query);
                 return (
                   <MeasuredActivityRow
                     key={row.key}
@@ -868,8 +870,7 @@ function ResearchActivityFeed({
                         failed={
                           Boolean(researchTree?.hasUnseenFailure) && query.treeId !== selectedTreeId
                         }
-                        replyCount={replies.count}
-                        replyCountLabel={replies.label}
+                        counts={feedPostCounts(query)}
                         followed={Boolean(researchTree?.followed)}
                         bookmarked={Boolean(researchTree?.bookmarked)}
                         onToggleFollow={toggleFollow}

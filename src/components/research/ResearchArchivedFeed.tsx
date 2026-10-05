@@ -135,6 +135,7 @@ function ResearchArchivedFeed({
 
   return (
     <ResearchDocumentFrame
+      actionsAtEnd
       title="Archived"
       canGoBack={canGoBack}
       canGoForward={canGoForward}

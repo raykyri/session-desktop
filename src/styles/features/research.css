@@ -1901,6 +1901,12 @@
   white-space: nowrap;
 }
 
+/* The action's name leads; the shortcut follows at reduced weight. */
+.new-research-send-shortcut {
+  font-weight: 500;
+  opacity: 0.75;
+}
+
 .new-research-send:disabled {
   color: var(--text-disabled);
   cursor: default;

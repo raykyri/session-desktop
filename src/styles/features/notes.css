@@ -1,20 +1,6 @@
 /* Notes: Ask-network questions and saved links, on Home posts and on a note's
-   page. A note's replies and follow-ups share one outline — an avatar (or
-   glyph) gutter joined by a spine. */
-
-.note-document-placeholder {
-  margin: 0;
-  color: var(--text-subtle);
-  font-size: var(--research-meta-font-size);
-  font-style: italic;
-}
-
-.note-document-placeholder {
-  padding: 12px 14px;
-  border: 1px dashed var(--surface-border-default);
-  border-radius: var(--radius-lg);
-  font-style: normal;
-}
+   page. A note's replies and follow-ups share one Activity list: an avatar
+   (or glyph) gutter joined by a spine. */
 
 /* — Outline — */
 
@@ -104,7 +90,7 @@
 
 .note-glyph {
   border: 1px solid var(--control-border);
-  border-radius: 6px;
+  border-radius: 50%;
   background: var(--control-bg);
   color: var(--text-muted);
 }
@@ -200,15 +186,6 @@
   animation: spinner-spin 0.9s linear infinite;
 }
 
-/* The composer row has no glyph, so no spine leads into it. */
-.note-thread-item[data-type="composer"] {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.note-thread-item[data-type="composer"] > .note-thread-gutter {
-  display: none;
-}
-
 /* — Fields — */
 
 .note-field-stack {
@@ -254,35 +231,6 @@
   color: var(--text-subtle);
 }
 
-.note-field-mode {
-  display: inline-flex;
-  flex: none;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--radius-md);
-  background: var(--surface-fill-subtle);
-}
-
-.note-field-mode-button {
-  min-height: 0;
-  padding: 1px 6px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: calc(11.5px + var(--font-ui-size-offset));
-  cursor: pointer;
-}
-
-.note-field-mode-button:hover {
-  color: var(--text-primary);
-}
-
-.note-field-mode-button.is-active {
-  background: var(--control-bg);
-  color: var(--text-strong);
-}
-
 .note-field-target {
   display: inline-flex;
   flex: none;
@@ -301,13 +249,6 @@
 
 .note-field-target:hover {
   color: var(--text-primary);
-}
-
-.note-field-model {
-  flex: none;
-  color: var(--text-subtle);
-  font-size: calc(12px + var(--font-ui-size-offset));
-  white-space: nowrap;
 }
 
 /* — Saved links — */
@@ -338,19 +279,81 @@
   font-size: calc(12.5px + var(--font-ui-size-offset));
 }
 
+/* — Follow-up card — */
+
+/* The thread composer's card recipe, inline at the end of a note page: the
+   text first, then a split button whose main half sends (Post on a network
+   note) and whose chevron picks the destination. */
+.note-followup-card {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--surface-border-default);
+  border-radius: 10px;
+  background: var(--content-card-bg);
+  transition: border-color var(--transition-fast);
+}
+
+.note-followup-card:focus-within {
+  border-color: var(--control-border-hover-accent);
+}
+
+.note-followup-card input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: calc(var(--research-body-font-size) - 0.5px);
+}
+
+.note-followup-card input:focus {
+  box-shadow: none;
+}
+
+.note-followup-card input::placeholder {
+  color: var(--placeholder-color);
+}
+
+.note-followup-send-group > .note-followup-send {
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: var(--research-meta-font-size);
+}
+
+.note-followup-send .shortcut-hint {
+  color: var(--text-subtle);
+}
+
+.note-followup-send:disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}
+
+.note-followup-send-group > .note-followup-mode-trigger {
+  min-width: 22px;
+  min-height: 28px;
+  margin-left: -1px;
+  padding: 0 4px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
 /* — Note page — */
 
 .note-document {
   max-width: 640px;
 }
 
-.note-document-kind,
 .note-document-parent {
   color: var(--text-subtle);
   font-size: calc(12.5px + var(--font-ui-size-offset));
-}
-
-.note-document-parent {
   align-self: flex-start;
   min-height: 0;
   padding: 0;
@@ -366,21 +369,48 @@
   text-underline-offset: 2px;
 }
 
+/* The note is the page's heading: a step above body prose. */
+.note-document-heading {
+  --research-body-font-size: calc(var(--fs-input) + 1.5px);
+  --research-body-line-height: 1.45;
+  width: auto;
+}
+
+.note-document-heading .turn-markdown.research-prose {
+  color: var(--text-heading);
+  font-weight: 500;
+}
+
+/* Delivery and time lead the meta row; Follow and Bookmark sit at its
+   trailing edge, as on a Home post. */
+.note-document-meta {
+  margin-top: 10px;
+}
+
+.note-document-meta .research-thread-actions {
+  margin-left: auto;
+}
+
 .note-document-group {
   display: flex;
   flex-direction: column;
-  margin-top: 34px;
+  margin-top: 30px;
 }
 
 .note-document-group-label {
-  margin: 0 0 18px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--surface-border-faint);
-  color: var(--text-subtle);
-  font-size: calc(12px + var(--font-ui-size-offset));
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: var(--research-meta-font-size);
   font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+}
+
+.note-document-group-count {
+  color: var(--text-subtle);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
 }
 
 .note-document-group > .note-thread-list > .note-thread-item {
@@ -391,23 +421,17 @@
   padding-bottom: 0;
 }
 
-.note-segment {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 32px;
-}
-
-.note-segment-meta {
-  color: var(--text-subtle);
-  font-size: calc(12.5px + var(--font-ui-size-offset));
+.note-document-composer {
+  margin-top: 28px;
 }
 
 .note-segment-question {
   width: fit-content;
   max-width: 100%;
+  margin-top: 1px;
   color: var(--text-strong);
   font-size: var(--research-body-font-size);
+  line-height: 1.45;
   cursor: pointer;
 }
 
@@ -423,8 +447,18 @@
   border-radius: 3px;
 }
 
+/* An AI follow-up previews five lines of its answer; Open answer reads the
+   rest on the run's own page. */
 .note-segment-answer {
-  margin-top: 10px;
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 8px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+.note-segment-open {
+  margin-top: 4px;
 }
 
 .note-segment-spinner {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle } from "lucide-react";
-import type { ResearchNode, ResearchTreeDetail } from "../../types";
+import { Globe, LoaderCircle, Sparkles } from "lucide-react";
+import type { NoteReply, ResearchNode, ResearchTreeDetail } from "../../types";
 import { getResearchNodeContent } from "../../lib/api";
 import { recentResearchQueryFromNode } from "../../lib/activity";
 import { IS_MAC } from "../../lib/appHelpers";
@@ -17,7 +17,7 @@ import {
   NoteBody,
   NoteFollowUpField,
   NoteFollowUpStatus,
-  NoteReplyThread,
+  NoteReplyItem,
   noteReplyTargetFor,
   type NoteActions,
   type NoteReplyTarget,
@@ -65,10 +65,33 @@ function useFollowUpAnswers(children: ResearchNode[]) {
   return answers;
 }
 
-/** A note's page: the note, its Replies group (network notes only), then
- * its follow-ups as stacked segments, oldest first, and a follow-up field.
- * Opening an AI follow-up selects that run's own page, where highlights and
- * branching work as for any answer. */
+/** True while `target` is in view inside its scroll container. Starts true
+ * so the first paint (and server rendering) treats the heading as visible. */
+function useInView<T extends Element>() {
+  const ref = useRef<T | null>(null);
+  const [inView, setInView] = useState(true);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element || typeof IntersectionObserver === "undefined") return;
+    const root = element.closest(".research-document-scroll");
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { root },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, inView] as const;
+}
+
+type ActivityEntry =
+  | { kind: "reply"; at: number; reply: NoteReply }
+  | { kind: "follow-up"; at: number; node: ResearchNode };
+
+/** A note's page: the note as its heading, then one Activity list of replies
+ * (network notes only) and follow-ups in the order they happened, then the
+ * follow-up field. Opening an AI follow-up selects that run's own page, where
+ * highlights and branching work as for any answer. */
 export default function ResearchNoteDocument({
   detail,
   note,
@@ -101,6 +124,7 @@ export default function ResearchNoteDocument({
   onSelectNode: (nodeId: string) => void;
 }) {
   const [target, setTarget] = useState<NoteReplyTarget | null>(null);
+  const [headingRef, headingInView] = useInView<HTMLDivElement>();
   const children = useMemo(
     () =>
       detail.nodes
@@ -114,16 +138,107 @@ export default function ResearchNoteDocument({
     : null;
   const isRoot = note.id === detail.tree.rootNodeId;
   const replies = note.delivery?.replies ?? [];
-  const topLevelReplies = replies.filter((reply) => !reply.inReplyTo).length;
+  const topLevelReplies = replies.filter((reply) => !reply.inReplyTo);
   const modelLabel = formatResearchModelSummary(note.adapter, note.model);
   const deliveryLabel = note.delivery
     ? "Posted to network"
     : note.attachments?.some((attachment) => attachment.tweet)
       ? "Saved post"
       : "Saved link";
+  const activity: ActivityEntry[] = [
+    ...topLevelReplies.map((reply) => ({ kind: "reply" as const, at: reply.createdAt, reply })),
+    ...children.map((node) => ({ kind: "follow-up" as const, at: node.createdAt, node })),
+  ].sort((left, right) => left.at - right.at);
+
+  const renderFollowUp = (child: ResearchNode) => {
+    const summary = recentResearchQueryFromNode(child, true);
+    if (!summary) return null;
+    const childIsNote = child.kind === "note";
+    const childReplies = child.delivery?.replies?.filter((reply) => !reply.inReplyTo).length ?? 0;
+    const anchored = noteReplyTargetFor(replies, child.replyAnchor);
+    const answer = answers[child.id]?.text;
+    const childModel = formatResearchModelSummary(child.adapter, child.model) || "AI";
+    return (
+      <li key={child.id} className="note-thread-item" data-type="follow-up">
+        <div className="note-thread-gutter">
+          <span className="note-glyph" aria-hidden="true">
+            {childIsNote ? <Globe size={11} /> : <Sparkles size={11} />}
+          </span>
+        </div>
+        <div className="note-thread-body">
+          <div className="note-reply-head">
+            <span className="note-reply-author">You</span>
+            <span>
+              {childIsNote
+                ? "posted to network"
+                : `asked ${childModel}${anchored ? ` about ${anchored.author}’s reply` : ""}`}
+            </span>
+            <span aria-hidden="true">·</span>
+            <time
+              dateTime={new Date(child.createdAt).toISOString()}
+              title={new Date(child.createdAt).toLocaleString()}
+            >
+              {formatRelativeTime(child.createdAt)}
+            </time>
+          </div>
+          <div
+            className="note-segment-question"
+            role="button"
+            tabIndex={0}
+            title={childIsNote ? "Open this follow-up" : "Open this answer"}
+            onClick={() => onSelectNode(child.id)}
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              onSelectNode(child.id);
+            }}
+          >
+            {child.prompt}
+          </div>
+          {childIsNote ? (
+            <div className="note-thread-meta">
+              {childReplies === 1 ? "1 reply" : childReplies > 0 ? `${childReplies} replies` : "No replies yet"}
+            </div>
+          ) : child.status === "complete" ? (
+            answer === undefined ? (
+              <LoaderCircle className="note-segment-spinner" size={14} aria-hidden="true" />
+            ) : answer ? (
+              <>
+                <ResearchMarkdown
+                  className="note-segment-answer is-clamped"
+                  text={answer}
+                  variant="compact"
+                />
+                <button
+                  type="button"
+                  className="note-thread-link note-segment-open"
+                  onClick={() => onSelectNode(child.id)}
+                >
+                  Open answer
+                </button>
+              </>
+            ) : (
+              <p className="note-thread-meta">The answer is unavailable.</p>
+            )
+          ) : (
+            <NoteFollowUpStatus
+              child={summary}
+              modelLabel={modelLabel}
+              archived={archived}
+              onRetry={actions.onRetry}
+            />
+          )}
+        </div>
+      </li>
+    );
+  };
+
   return (
     <ResearchDocumentFrame
       title={detail.tree.title}
+      // The note is the page's heading; the header names it only once the
+      // heading has scrolled out of view.
+      titleHidden={headingInView}
       canGoBack={canGoBack}
       canGoForward={canGoForward}
       backTitle={`Back (${IS_MAC ? "⌘[" : "Ctrl+["})`}
@@ -145,13 +260,17 @@ export default function ResearchNoteDocument({
               >
                 ↳ Network follow-up of “{excerpt(parent.prompt, 60)}”
               </button>
-            ) : (
-              <span className="note-document-kind">Note</span>
-            )}
-            <ResearchUserMessage className="research-prompt has-trailing-metadata">
-              <NoteBody prompt={note.prompt} attachments={note.attachments} />
-            </ResearchUserMessage>
-            <div className="research-prompt-footer">
+            ) : null}
+            <div ref={headingRef}>
+              <ResearchUserMessage className="research-prompt note-document-heading has-trailing-metadata">
+                <NoteBody prompt={note.prompt} attachments={note.attachments} />
+              </ResearchUserMessage>
+            </div>
+            <div className="research-prompt-footer note-document-meta">
+              <span className="research-prompt-metadata research-prompt-footer-meta">
+                {deliveryLabel} · {formatRelativeTime(note.createdAt)}
+                {note.delivery && topLevelReplies.length === 0 ? " · No replies yet" : ""}
+              </span>
               {isRoot ? (
                 <ResearchThreadActions
                   followed={followed}
@@ -160,95 +279,36 @@ export default function ResearchNoteDocument({
                   onToggleBookmark={onToggleBookmark}
                 />
               ) : null}
-              <span className="research-prompt-metadata research-prompt-footer-meta">
-                {deliveryLabel} · {formatRelativeTime(note.createdAt)}
-              </span>
             </div>
           </div>
 
-          {note.delivery ? (
-            <section className="note-document-group" aria-label="Replies">
+          {activity.length > 0 ? (
+            <section className="note-document-group" aria-label="Activity">
               <h2 className="note-document-group-label">
-                Replies{topLevelReplies > 0 ? ` · ${topLevelReplies}` : ""}
+                Activity <span className="note-document-group-count">{activity.length}</span>
               </h2>
-              {replies.length > 0 ? (
-                <NoteReplyThread
-                  nodeId={note.id}
-                  replies={replies}
-                  archived={archived}
-                  actions={actions}
-                  onAskAbout={setTarget}
-                />
-              ) : (
-                <p className="note-document-placeholder">
-                  No replies yet. Replies from your network will appear here.
-                </p>
-              )}
+              <ol className="note-thread-list">
+                {activity.map((entry) =>
+                  entry.kind === "reply" ? (
+                    <NoteReplyItem
+                      key={entry.reply.id}
+                      nodeId={note.id}
+                      reply={entry.reply}
+                      responses={replies.filter((reply) => reply.inReplyTo === entry.reply.id)}
+                      archived={archived}
+                      actions={actions}
+                      onAskAbout={setTarget}
+                    />
+                  ) : (
+                    renderFollowUp(entry.node)
+                  ),
+                )}
+              </ol>
             </section>
           ) : null}
 
-          <section className="note-document-group" aria-label="Follow-ups">
-            {children.length > 0 ? (
-              <h2 className="note-document-group-label">Follow-ups · {children.length}</h2>
-            ) : null}
-            {children.map((child) => {
-              const summary = recentResearchQueryFromNode(child, true);
-              if (!summary) return null;
-              const childIsNote = child.kind === "note";
-              const childReplies = child.delivery?.replies?.filter((reply) => !reply.inReplyTo).length ?? 0;
-              const anchored = noteReplyTargetFor(replies, child.replyAnchor);
-              const anchoredReply = anchored
-                ? replies.find((reply) => reply.id === anchored.id)
-                : undefined;
-              const answer = answers[child.id]?.text;
-              return (
-                <div key={child.id} className="note-segment">
-                  <div className="note-segment-meta">
-                    ↳{" "}
-                    {childIsNote
-                      ? `Posted to network · ${
-                          childReplies === 1 ? "1 reply" : `${childReplies} replies`
-                        }`
-                      : formatResearchModelSummary(child.adapter, child.model) || "Follow-up"}
-                    {anchored ? ` · about ${anchored.author}’s reply` : ""}
-                  </div>
-                  {anchoredReply ? (
-                    <div className="research-prompt-quote">{excerpt(anchoredReply.body, 240)}</div>
-                  ) : null}
-                  <div
-                    className="note-segment-question"
-                    role="button"
-                    tabIndex={0}
-                    title={childIsNote ? "Open this follow-up" : "Open this answer"}
-                    onClick={() => onSelectNode(child.id)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") return;
-                      event.preventDefault();
-                      onSelectNode(child.id);
-                    }}
-                  >
-                    {child.prompt}
-                  </div>
-                  {childIsNote ? null : child.status === "complete" ? (
-                    answer === undefined ? (
-                      <LoaderCircle className="note-segment-spinner" size={14} aria-hidden="true" />
-                    ) : answer ? (
-                      <ResearchMarkdown className="note-segment-answer" text={answer} />
-                    ) : (
-                      <p className="note-document-placeholder">The answer is unavailable.</p>
-                    )
-                  ) : (
-                    <NoteFollowUpStatus
-                      child={summary}
-                      modelLabel={modelLabel}
-                      archived={archived}
-                      onRetry={actions.onRetry}
-                    />
-                  )}
-                </div>
-              );
-            })}
-            {!archived ? (
+          {!archived ? (
+            <div className="note-document-composer">
               <NoteFollowUpField
                 key={target?.id ?? "note"}
                 networkAvailable={Boolean(note.delivery)}
@@ -268,8 +328,8 @@ export default function ResearchNoteDocument({
                     .then(() => setTarget(null))
                 }
               />
-            ) : null}
-          </section>
+            </div>
+          ) : null}
         </div>
       </article>
     </ResearchDocumentFrame>
