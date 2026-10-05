@@ -33,18 +33,24 @@ function render(nodes: ResearchNode[], selected: ResearchNode = nodes[0]) {
   }));
 }
 
-test("a note page shows the reply placeholder before any reply", () => {
+test("a note page leads with the note and posts follow-ups by default", () => {
   const html = render([note]);
-  assert.match(html, /note-document-kind">Note</);
-  assert.match(html, /Posted to network · /);
-  assert.match(html, />Replies<\/h2>/);
-  assert.match(html, /No replies yet\. Replies from your network will appear here\./);
-  assert.doesNotMatch(html, />Follow-ups/);
-  assert.match(html, /placeholder="Ask a follow-up about this note"/);
-  assert.match(html, />Network<\/button>/);
+  assert.doesNotMatch(html, /note-document-kind/);
+  assert.match(html, /note-document-heading/);
+  // An empty note says so in its meta line instead of an empty section.
+  assert.match(html, /Posted to network · [^<]* · No replies yet/);
+  assert.doesNotMatch(html, />Activity/);
+  // Delivery and time lead the meta row; Follow and Bookmark follow it.
+  assert.ok(html.indexOf("Posted to network") < html.indexOf("research-thread-actions"));
+  // The header names the page only after its heading scrolls away.
+  assert.match(html, /research-breadcrumb is-title-hidden/);
+  // Post is the default action; Ask is in the destination menu.
+  assert.match(html, /placeholder="Post a follow-up to your network"/);
+  assert.match(html, /note-followup-send"[^>]*><span>Post<\/span>/);
+  assert.match(html, /aria-label="Follow-up destination"/);
 });
 
-test("a note page groups replies, then follow-ups with the reply they ask about", () => {
+test("a note page lists replies and follow-ups as one activity list in time order", () => {
   const withReplies: ResearchNode = {
     ...note,
     delivery: {
@@ -52,6 +58,9 @@ test("a note page groups replies, then follow-ups with the reply they ask about"
       replies: [{
         id: "r1", author: { kind: "member", id: "ben", displayName: "Ben Kowalski" },
         body: "wit-bindgen doubled our SDK surface.", createdAt: 110,
+      }, {
+        id: "r2", author: { kind: "member", id: "ana", displayName: "Ana Moreau" },
+        body: "We stayed on plain WASI.", createdAt: 150,
       }],
     },
   };
@@ -63,14 +72,14 @@ test("a note page groups replies, then follow-ups with the reply they ask about"
     ...note, id: "net", parentNodeId: "note", prompt: "Anyone measured wizer?", createdAt: 140,
   };
   const html = render([withReplies, about, network]);
-  assert.match(html, />Replies · 1<\/h2>/);
-  assert.match(html, />Follow-ups · 2<\/h2>/);
-  assert.ok(html.indexOf("wit-bindgen doubled") < html.indexOf(">Follow-ups"));
-  assert.match(html, /about Ben Kowalski’s reply/);
-  assert.match(html, /research-prompt-quote">wit-bindgen doubled our SDK surface\.</);
+  assert.match(html, />Activity <span class="note-document-group-count">4<\/span><\/h2>/);
+  assert.doesNotMatch(html, />Replies|>Follow-ups| · No replies yet/);
+  const order = ["wit-bindgen doubled", "How large is the generated surface?", "Anyone measured wizer?", "We stayed on plain WASI."]
+    .map((text) => html.indexOf(text));
+  assert.ok(order.every((index, i) => index > 0 && (i === 0 || order[i - 1] < index)), String(order));
+  assert.match(html, /asked Claude Fable about Ben Kowalski’s reply/);
   assert.match(html, />Answering</);
-  assert.match(html, /↳ Posted to network · 0 replies/);
-  assert.match(html, /Anyone measured wizer\?/);
+  assert.match(html, /posted to network/);
 });
 
 test("a network follow-up's page links back to its note and omits Follow and Bookmark", () => {
@@ -87,6 +96,9 @@ test("a saved link page has no Replies group and takes AI follow-ups only", () =
   const html = render([link]);
   assert.match(html, /note-link-card/);
   assert.match(html, /Saved link · /);
-  assert.doesNotMatch(html, />Replies/);
-  assert.doesNotMatch(html, />Network<\/button>/);
+  assert.doesNotMatch(html, />Activity|No replies yet/);
+  // A saved link can only ask, so its button is Ask with no destination menu.
+  assert.match(html, /placeholder="Ask a follow-up about this note"/);
+  assert.match(html, /note-followup-send"[^>]*><span>Ask<\/span>/);
+  assert.doesNotMatch(html, /Follow-up destination/);
 });

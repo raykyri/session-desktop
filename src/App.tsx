@@ -24,6 +24,8 @@ import type {
   SetStateAction,
 } from "react";
 import {
+  Archive,
+  Bookmark,
   Check,
   ChevronDown,
   Columns2,
@@ -33,6 +35,8 @@ import {
   FolderGit2,
   Globe,
   GitBranch,
+  Highlighter,
+  House,
   LoaderCircle,
   MessageSquareText,
   Minus,
@@ -5532,6 +5536,17 @@ function MainApp() {
     (researchStageView === "journal" && journalView !== "highlights");
   const researchFeedColumnView: "home" | "bookmarks" =
     journalView === "bookmarks" ? "bookmarks" : "home";
+  // The sidebar row for the list in front: the journal page itself or, while
+  // a thread is open, the list in the feed column beside it (Highlights has
+  // no feed column, so its threads open beside Home).
+  const sidebarJournalView: ResearchJournalView | null =
+    researchStageView === "journal"
+      ? journalView
+      : researchStageView === "document"
+        ? journalView === "archived"
+          ? "archived"
+          : researchFeedColumnView
+        : null;
   const openJournal = useCallback(() => {
     setJournalView("home");
     recordResearchJournalVisit();
@@ -8773,107 +8788,44 @@ function MainApp() {
         >
           {/* The journal pages: Home, Bookmarks, Archived, and Highlights. */}
             <div className="journal-sidebar-rows">
-              <div
-                className={`research-sidebar-row journal-sidebar-row${
-                  researchStageView === "journal" && journalView === "home" ? " is-selected" : ""
-                }`}
-              >
-                <button
-                  type="button"
-                  className="control-button research-sidebar-select"
-                  aria-current={
-                    researchStageView === "journal" && journalView === "home" ? "page" : undefined
-                  }
-                  title={`Home (${RESEARCH_HOME_SHORTCUT_LABEL})`}
-                  onClick={openJournal}
-                >
-                  <span className="research-sidebar-copy">
-                    <span className="research-sidebar-title">
-                      <span className="research-sidebar-title-text">Home</span>
-                    </span>
-                  </span>
-                </button>
-                {shortcutHintsShown ? (
-                  <span className="pane-tab-shortcut-hint" aria-hidden="true">
-                    {RESEARCH_HOME_SHORTCUT_LABEL}
-                  </span>
-                ) : null}
-              </div>
-              <div
-                className={`research-sidebar-row journal-sidebar-row${
-                  researchStageView === "journal" && journalView === "bookmarks"
-                    ? " is-selected"
-                    : ""
-                }`}
-              >
-                <button
-                  type="button"
-                  className="control-button research-sidebar-select"
-                  aria-current={
-                    researchStageView === "journal" && journalView === "bookmarks"
-                      ? "page"
-                      : undefined
-                  }
-                  title="Bookmarks"
-                  onClick={openBookmarks}
-                >
-                  <span className="research-sidebar-copy">
-                    <span className="research-sidebar-title">
-                      <span className="research-sidebar-title-text">Bookmarks</span>
-                    </span>
-                  </span>
-                </button>
-              </div>
-              <div
-                className={`research-sidebar-row journal-sidebar-row${
-                  researchStageView === "journal" && journalView === "archived"
-                    ? " is-selected"
-                    : ""
-                }`}
-              >
-                <button
-                  type="button"
-                  className="control-button research-sidebar-select"
-                  aria-current={
-                    researchStageView === "journal" && journalView === "archived"
-                      ? "page"
-                      : undefined
-                  }
-                  title="Archived"
-                  onClick={openArchived}
-                >
-                  <span className="research-sidebar-copy">
-                    <span className="research-sidebar-title">
-                      <span className="research-sidebar-title-text">Archived</span>
-                    </span>
-                  </span>
-                </button>
-              </div>
-              <div
-                className={`research-sidebar-row journal-sidebar-row${
-                  researchStageView === "journal" && journalView === "highlights"
-                    ? " is-selected"
-                    : ""
-                }`}
-              >
-                <button
-                  type="button"
-                  className="control-button research-sidebar-select"
-                  aria-current={
-                    researchStageView === "journal" && journalView === "highlights"
-                      ? "page"
-                      : undefined
-                  }
-                  title="Highlights"
-                  onClick={openHighlights}
-                >
-                  <span className="research-sidebar-copy">
-                    <span className="research-sidebar-title">
-                      <span className="research-sidebar-title-text">Highlights</span>
-                    </span>
-                  </span>
-                </button>
-              </div>
+              {(
+                [
+                  { view: "home", label: "Home", Icon: House, onOpen: openJournal },
+                  { view: "bookmarks", label: "Bookmarks", Icon: Bookmark, onOpen: openBookmarks },
+                  { view: "archived", label: "Archived", Icon: Archive, onOpen: openArchived },
+                  { view: "highlights", label: "Highlights", Icon: Highlighter, onOpen: openHighlights },
+                ] as const
+              ).map(({ view, label, Icon, onOpen }) => {
+                const isPage = researchStageView === "journal" && journalView === view;
+                return (
+                  <div
+                    key={view}
+                    className={`research-sidebar-row journal-sidebar-row${
+                      sidebarJournalView === view ? " is-selected" : ""
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="control-button research-sidebar-select"
+                      aria-current={isPage ? "page" : undefined}
+                      title={view === "home" ? `Home (${RESEARCH_HOME_SHORTCUT_LABEL})` : label}
+                      onClick={onOpen}
+                    >
+                      <span className="research-sidebar-copy">
+                        <span className="research-sidebar-title">
+                          <Icon className="journal-sidebar-icon" size={14} aria-hidden="true" />
+                          <span className="research-sidebar-title-text">{label}</span>
+                        </span>
+                      </span>
+                    </button>
+                    {view === "home" && shortcutHintsShown ? (
+                      <span className="pane-tab-shortcut-hint" aria-hidden="true">
+                        {RESEARCH_HOME_SHORTCUT_LABEL}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
         </nav>
 

@@ -51,9 +51,16 @@ interface ResearchDocumentFrameProps {
   /** Single inert breadcrumb entry naming the page; empty leaves the
    * breadcrumb blank (a placeholder beside a column that names the page). */
   title: string;
+  /** Fades the breadcrumb out while keeping its space, for a page whose own
+   * heading already names it. */
+  titleHidden?: boolean;
   hidden?: boolean;
-  /** Extra icon controls rendered beside the back/forward pair. */
+  /** Extra icon controls rendered beside the back/forward pair, or at the
+   * header's trailing edge with `actionsAtEnd`. */
   navActions?: ReactNode;
+  /** A list page (Home, Bookmarks, ...) leads with its name and keeps its
+   * icon controls at the trailing edge. */
+  actionsAtEnd?: boolean;
   headerActions?: ReactNode;
   children: ReactNode;
   canGoBack?: boolean;
@@ -93,8 +100,10 @@ export function ResearchSidebarRestoreButton({
  * shares the nav component above. */
 export function ResearchDocumentFrame({
   title,
+  titleHidden = false,
   hidden = false,
   navActions,
+  actionsAtEnd = false,
   headerActions,
   children,
   canGoBack,
@@ -116,8 +125,12 @@ export function ResearchDocumentFrame({
             onBack={onBack}
             onForward={onForward}
           />
-          {navActions}
-          <div className="research-breadcrumb" aria-label="Research path">
+          {actionsAtEnd ? null : navActions}
+          <div
+            className={`research-breadcrumb${titleHidden ? " is-title-hidden" : ""}`}
+            aria-label="Research path"
+            aria-hidden={titleHidden ? "true" : undefined}
+          >
             {title ? (
               <span>
                 <button className="control-button" type="button" disabled>
@@ -126,6 +139,9 @@ export function ResearchDocumentFrame({
               </span>
             ) : null}
           </div>
+          {actionsAtEnd && navActions ? (
+            <div className="research-header-actions-end">{navActions}</div>
+          ) : null}
           {headerActions}
         </header>
         {children}

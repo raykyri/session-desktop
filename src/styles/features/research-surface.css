@@ -212,6 +212,32 @@
   white-space: nowrap;
 }
 
+/* A page that names itself in its own heading fades its breadcrumb in only
+   once that heading scrolls away. */
+.research-breadcrumb {
+  transition: opacity 160ms ease, visibility 160ms;
+}
+
+.research-breadcrumb.is-title-hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* List pages (Home, Bookmarks, Archived, Highlights) lead with their name and
+   keep refresh/import at the header's trailing edge. */
+.research-header-actions-end {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.research-header-actions-end .research-header-tooltip {
+  right: 0;
+  left: auto;
+}
+
 .research-breadcrumb > span {
   display: inline-flex;
   min-width: 0;

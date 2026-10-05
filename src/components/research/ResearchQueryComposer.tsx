@@ -343,6 +343,19 @@ export default function ResearchQueryComposer({
         ? "Starting research"
         : "Start research";
 
+  // The send button names its action; its tooltip and accessible name carry
+  // the longer form.
+  const submitShortLabel =
+    askMode === "network"
+      ? submitting
+        ? "Posting"
+        : noteBodyIsSingleUrl(prompt)
+          ? "Save link"
+          : "Post"
+      : submitting
+        ? "Starting"
+        : "Ask";
+
   const modelOptions = useMemo(() => researchModelOptions(adapters), [adapters]);
 
   function cycleAdapter() {
@@ -481,7 +494,12 @@ export default function ResearchQueryComposer({
           aria-label={submitLabel}
           title={submitLabel}
         >
-          <ComposerSubmitShortcutGlyph requireCmdEnter={requireCmdEnterToSend} ariaHidden />
+          <span>{submitShortLabel}</span>
+          <ComposerSubmitShortcutGlyph
+            requireCmdEnter={requireCmdEnterToSend}
+            className="new-research-send-shortcut"
+            ariaHidden
+          />
         </button>
       </div>
       {!adapters.some(adapterCanLaunchResearch) || error ? (

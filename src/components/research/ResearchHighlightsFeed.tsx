@@ -66,6 +66,7 @@ export default function ResearchHighlightsFeed({
   let lastDay: string | null = null;
   return (
     <ResearchDocumentFrame
+      actionsAtEnd
       title="Highlights"
       canGoBack={canGoBack}
       canGoForward={canGoForward}

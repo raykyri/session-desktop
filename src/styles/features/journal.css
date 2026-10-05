@@ -133,18 +133,20 @@
 
 /* — Feed posts — */
 
-/* A post: avatar, "You <action> · time", the thread title, the question
-   and summary (both clamped to four lines), and a footer
-   with the follow-up count, Follow and Bookmark. */
+/* A post: the thread title, the question and summary (both clamped to four
+   lines), and a footer with the time and labelled counts, then Follow and
+   Bookmark at its trailing edge. The whole post is the click target; unread
+   and failure markers sit in the left inset. */
 .research-feed-post {
   --research-summary-font-size: var(--research-compact-font-size);
   --research-summary-line-height: var(--research-compact-line-height);
   --feed-post-secondary: var(--text-subtle);
   --feed-post-bg: var(--research-workspace-bg);
+  position: relative;
   display: flex;
-  gap: 10px;
   padding: 14px var(--journal-content-padding) 10px;
   background: var(--feed-post-bg);
+  cursor: pointer;
 }
 
 .research-feed-post:hover {
@@ -156,29 +158,16 @@
   --feed-post-bg: var(--control-bg-hover);
 }
 
-.research-feed-post-avatar {
-  position: relative;
-  flex: none;
-  width: 24px;
-  height: 24px;
-}
-
-.research-feed-post-avatar-glyph {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  color: var(--text-secondary);
-  background: var(--surface-fill-medium);
-}
-
-/* Unread: a dot on the avatar's top-left corner, ringed in the page color. */
-.research-feed-post-unread {
+/* Unread and failure markers share the left inset, level with the first
+   line of the post. */
+.research-feed-post-marker {
   position: absolute;
-  top: -1px;
-  left: -1px;
+  top: 20px;
+  left: 5px;
+}
+
+/* Unread: a dot ringed in the page color. */
+.research-feed-post-unread {
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -186,12 +175,13 @@
   box-shadow: 0 0 0 2px var(--feed-post-bg);
 }
 
-/* Failed since last viewed: a solid badge in the unread dot's corner. The
-   fill is opaque so the avatar glyph does not show through it. */
+/* Failed since last viewed: a solid badge in the unread dot's place. */
+.research-feed-post-failed.research-feed-post-marker {
+  top: 17px;
+  left: 2px;
+}
+
 .research-feed-post-failed {
-  position: absolute;
-  top: -4px;
-  left: -4px;
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
@@ -236,7 +226,6 @@
   gap: 6px;
   min-width: 0;
   border-radius: var(--radius-md);
-  cursor: pointer;
 }
 
 .research-feed-post-title {
@@ -320,10 +309,35 @@
   line-height: var(--research-meta-line-height);
 }
 
+.research-feed-post-meta {
+  display: inline-flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  min-width: 0;
+}
+
+.research-feed-post-meta > * {
+  white-space: nowrap;
+}
+
+.research-feed-post-meta-separator {
+  color: var(--text-dim);
+}
+
+.research-feed-post-kind {
+  display: inline-flex;
+  color: var(--text-subtle);
+}
+
+.research-feed-post-footer .research-thread-actions {
+  margin-left: auto;
+}
+
 .research-feed-post-count {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
   min-height: 0;
   padding: 0;
   border: 0;
@@ -366,7 +380,7 @@
   text-align: center;
 }
 
-/* — Sidebar tab above the Research heading — */
+/* — Sidebar rows: Home, Bookmarks, Archived, Highlights — */
 
 /* Match the scrollable research section's horizontal padding while keeping
    Home and Bookmarks fixed above it, then leave the gap before the Research
@@ -382,6 +396,21 @@
 .journal-sidebar-row {
   width: calc(100% - 14px);
   margin-inline: 7px;
+}
+
+.journal-sidebar-row .research-sidebar-title {
+  align-items: center;
+  gap: 8px;
+}
+
+.journal-sidebar-icon {
+  color: var(--text-subtle);
+  transition: color var(--transition-fast);
+}
+
+.research-sidebar-row:hover .journal-sidebar-icon,
+.research-sidebar-row.is-selected .journal-sidebar-icon {
+  color: currentColor;
 }
 
 /* — Highlights feed — */

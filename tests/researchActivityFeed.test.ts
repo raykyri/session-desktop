@@ -3,7 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ResearchActivityFeed, {
-  feedPostReplyCount,
+  feedPostCounts,
   recentActivityAnchorOffset,
   recentActivityAnchorScrollTop,
   type ResearchActivityFeedProps,
@@ -62,18 +62,21 @@ test("Home renders the mixed feed as posts beside the query composer", () => {
   assert.doesNotMatch(html, /<iframe|View source|Connecting to/);
 });
 
-test("a post's footer holds the follow-up count, Follow, Bookmark, then time", () => {
+test("a post's footer reads time and counts, then Follow and Bookmark at its trailing edge", () => {
   const html = renderFeed({
     items: [{ ...question, children: [{ ...question, nodeId: "child", parentNodeId: "node", prompt: "Follow up question here" }] }],
     researchTrees: [{ ...tree, followed: true, bookmarked: true }],
   });
   const footer = html.indexOf('class="research-feed-post-footer"');
   assert.ok(html.indexOf("Summary: The finding is X.") < footer);
-  assert.ok(footer < html.indexOf('aria-label="Open 1 follow-up"'));
+  assert.ok(footer < html.indexOf("research-feed-post-time"));
+  assert.ok(html.indexOf("research-feed-post-time") < html.indexOf('aria-label="Open 1 follow-up">1 follow-up</button>'));
   assert.ok(html.indexOf('aria-label="Open 1 follow-up"') < html.indexOf("research-thread-actions"));
-  assert.ok(html.indexOf("research-thread-bookmark") < html.indexOf("research-feed-post-time"));
+  assert.ok(html.indexOf("research-thread-follow") < html.indexOf("research-thread-bookmark"));
   assert.match(html, /research-thread-follow is-active"[^>]*aria-pressed="true"[^>]*>Following<\/button>/);
   assert.match(html, /research-thread-bookmark is-active"[^>]*aria-pressed="true"[^>]*aria-label="Remove bookmark"/);
+  // A question carries its glyph at the start of the footer.
+  assert.ok(html.indexOf("research-feed-post-kind") < html.indexOf("research-feed-post-time"));
   // Follow-ups are counted, not listed; only the root item is a feed row.
   assert.doesNotMatch(html, /Follow up question here/);
   assert.equal((html.match(/aria-posinset=/g) ?? []).length, 1);
@@ -128,7 +131,7 @@ test("a thread that failed since it was viewed shows the failure marker instead 
   const other = posts.find((post) => post.includes("Other question"));
   // The open thread acknowledges its failure, so only the other post is marked.
   assert.ok(selected && !selected.includes("research-feed-post-failed"));
-  assert.ok(other?.includes('class="research-feed-post-failed"'));
+  assert.ok(other?.includes('class="research-feed-post-marker research-feed-post-failed"'));
   assert.ok(other && !other.includes("research-feed-post-unread"));
 });
 
@@ -306,16 +309,17 @@ test("a network note is a post that counts its replies and follow-ups", () => {
     ],
   })] });
   assert.match(html, /Who ships component-model plugins\?/);
-  assert.match(html, /aria-label="Open 7 replies, 1 follow-up"/);
+  assert.match(html, /aria-label="Open 7 replies">7 replies<\/button>/);
+  assert.match(html, /aria-label="Open 1 follow-up">1 follow-up<\/button>/);
+  // A note has no kind glyph; its footer starts with the time.
+  assert.doesNotMatch(html, /research-feed-post-kind/);
   // Replies and follow-ups open with the note; the post only counts them.
   assert.doesNotMatch(html, /We moved in March\./);
   assert.doesNotMatch(html, /Does wasmtime support async\?/);
   assert.doesNotMatch(html, /No replies yet/);
   assert.doesNotMatch(html, /research-feed-post-title/);
 
-  assert.deepEqual(feedPostReplyCount(networkNote()), { count: 0, label: "" });
-  assert.deepEqual(
-    feedPostReplyCount({ ...networkNote(), kind: "run", replyCount: 4 }),
-    { count: 0, label: "" },
-  );
+  assert.deepEqual(feedPostCounts(networkNote()), []);
+  assert.deepEqual(feedPostCounts({ ...networkNote(), kind: "run", replyCount: 4 }), []);
+  assert.deepEqual(feedPostCounts(networkNote({ replyCount: 1 })), ["1 reply"]);
 });
