@@ -25,20 +25,27 @@ newest first.
 - Opening a note shows its page: the note, a Replies group (a placeholder
   until the first reply), and the follow-ups with their answers. Opening an AI
   follow-up shows that run's own page, with highlights and branching.
-- Notes appear only in Home and Bookmarks, not in the sidebar's research list.
+- Exported terminal conversations appear in the feed like research queries,
+  with a terminal glyph, their first user message, and their follow-ups.
 - Open a research query to read it in Session's document view. That view provides
   follow-ups, branching, retry/cancel, highlights, and the normal research controls.
   Back returns to Home, restoring its composer draft and scroll position.
 - Each research query ends with Follow and Bookmark controls beside its
   timestamp. Both are stored on the thread, and the open thread shows the same
   pair beneath its root prompt next to the answering model and time.
+- A card whose thread failed since you last viewed it shows a red "!" on its
+  avatar in place of the unread dot. Opening the thread clears it.
 - The Bookmarks tab below Home in the sidebar shows the same feed limited to
   bookmarked threads, without the composer.
-- The Highlights tab below Bookmarks lists every highlight saved in open
+- The Archived tab below Bookmarks lists archived threads, most recently
+  archived first. Opening one reads it beside the list; right-click a card to
+  unarchive or delete it.
+- The Highlights tab below Archived lists every highlight saved in open
   threads, newest first under day headers, each shown inside its surrounding
   context. Opening one selects its thread and scrolls to the passage.
-- Right-click a card for its thread menu: rename, archive, or delete. Deleting a note or saved link has no undo; archive keeps it
-  restorable.
+- Right-click a card for its thread menu: rename, archive, or delete. Deleting
+  a note or saved link has no undo; archive moves it to the Archived tab.
+  Archiving or deleting the open thread closes it back to the feed.
 - New activity appears live. When scrolled down, the new-activity button returns to
   the newest items. Older pages load as you approach the end, with a manual
   Load older/Retry control when needed. Refresh reloads the current feed head.

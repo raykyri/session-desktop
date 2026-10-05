@@ -24,7 +24,7 @@ export function useResearchNavigationState() {
   );
   const researchWorkspaceHistoryRef = useRef(researchWorkspaceHistory);
   researchWorkspaceHistoryRef.current = researchWorkspaceHistory;
-  // Which single folder the Research sidebar is scoped to. The raw stored
+  // Which single folder research is scoped to. The raw stored
   // value is resolved against live research workspaces wherever it is read.
   const [researchFolderScope, setResearchFolderScope] = useState<ResearchFolderScope>(
     () => localStorage.getItem(RESEARCH_FOLDER_SCOPE_KEY),

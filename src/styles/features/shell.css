@@ -160,13 +160,11 @@
 /* Keep the left sidebar's scrollbars compact so they don't crowd its narrow
    lists. The explicit WebKit size covers the macOS app webview. */
 .sidebar .pane-list,
-.sidebar .research-sidebar-section,
 .sidebar .research-live-terminals .pane-list-body {
   scrollbar-width: thin;
 }
 
 .sidebar .pane-list::-webkit-scrollbar,
-.sidebar .research-sidebar-section::-webkit-scrollbar,
 .sidebar .research-live-terminals .pane-list-body::-webkit-scrollbar {
   width: 8px;
 }
@@ -344,8 +342,7 @@
   color: var(--text-primary);
 }
 
-.pane-tab-row.is-dragging,
-.research-sidebar-row.is-dragging {
+.pane-tab-row.is-dragging {
   opacity: 0.5;
 }
 
@@ -492,8 +489,6 @@
    the tab's rounded corners. */
 .pane-tab-row.is-drop-before::before,
 .pane-tab-row.is-drop-after::after,
-.research-sidebar-row.is-drop-before::before,
-.research-sidebar-row.is-drop-after::after,
 .pane-group.is-group-drop-before::before,
 .pane-group.is-group-drop-after::after {
   content: "";
@@ -507,13 +502,11 @@
   z-index: 2;
 }
 
-.pane-tab-row.is-drop-before::before,
-.research-sidebar-row.is-drop-before::before {
+.pane-tab-row.is-drop-before::before {
   top: -2px;
 }
 
-.pane-tab-row.is-drop-after::after,
-.research-sidebar-row.is-drop-after::after {
+.pane-tab-row.is-drop-after::after {
   bottom: -2px;
 }
 
@@ -526,9 +519,7 @@
 }
 
 .pane-list.is-dragging,
-.pane-list.is-dragging *,
-.research-sidebar-section.is-dragging,
-.research-sidebar-section.is-dragging * {
+.pane-list.is-dragging * {
   cursor: grabbing !important;
 }
 

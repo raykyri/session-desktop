@@ -18,9 +18,10 @@ export function ResearchTreeMenuItems({
   tree: ResearchTreeSummary;
   archived: boolean;
   onClose: () => void;
-  onRename: (tree: ResearchTreeSummary) => void;
-  onArchive: (treeId: string) => void;
-  /** Only reached from archived rows; surfaces without archived rows omit it. */
+  /** Each lifecycle action renders only when its handler is passed: Rename
+   * and Archive on active rows, Unarchive on archived rows. */
+  onRename?: (tree: ResearchTreeSummary) => void;
+  onArchive?: (treeId: string) => void;
   onRestore?: (treeId: string) => void;
   onDelete: (tree: ResearchTreeSummary) => void;
   /** Query-specific action used by Home's research activity menu. */
@@ -63,34 +64,40 @@ export function ResearchTreeMenuItems({
         ) : null
       ) : (
         <>
-          <button
-            className="control-button"
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              onClose();
-              onRename(tree);
-            }}
-          >
-            <Pencil size={13} aria-hidden="true" />
-            <span>Rename</span>
-          </button>
-          <div className="context-menu-divider" role="separator" />
-          <button
-            type="button"
-            role="menuitem"
-            className="control-button context-menu-has-shortcut"
-            disabled={running}
-            title={running ? "Research with active runs cannot be archived" : undefined}
-            onClick={() => {
-              onClose();
-              onArchive(tree.id);
-            }}
-          >
-            <Archive size={13} aria-hidden="true" />
-            <span>Archive</span>
-            <kbd className="context-menu-shortcut is-keycap">A</kbd>
-          </button>
+          {onRename ? (
+            <button
+              className="control-button"
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                onClose();
+                onRename(tree);
+              }}
+            >
+              <Pencil size={13} aria-hidden="true" />
+              <span>Rename</span>
+            </button>
+          ) : null}
+          {onArchive ? (
+            <>
+              <div className="context-menu-divider" role="separator" />
+              <button
+                type="button"
+                role="menuitem"
+                className="control-button context-menu-has-shortcut"
+                disabled={running}
+                title={running ? "Research with active runs cannot be archived" : undefined}
+                onClick={() => {
+                  onClose();
+                  onArchive(tree.id);
+                }}
+              >
+                <Archive size={13} aria-hidden="true" />
+                <span>Archive</span>
+                <kbd className="context-menu-shortcut is-keycap">A</kbd>
+              </button>
+            </>
+          ) : null}
         </>
       )}
       <button
