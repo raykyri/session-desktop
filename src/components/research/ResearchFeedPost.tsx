@@ -1,5 +1,5 @@
-import { Fragment, type ReactNode } from "react";
-import { LoaderCircle, MessageCircle, Terminal } from "lucide-react";
+import type { ReactNode } from "react";
+import { LoaderCircle, Terminal } from "lucide-react";
 import ResearchThreadActions from "./ResearchThreadActions";
 import { ResearchRecapPendingLine } from "./ResearchRecap";
 
@@ -8,8 +8,8 @@ function isInteractiveTarget(target: EventTarget | null) {
 }
 
 interface ResearchFeedPostProps {
-  /** A question or an exported terminal conversation carries a glyph at the
-   * start of the footer; notes (network posts and saved links) carry none. */
+  /** An exported terminal conversation carries a glyph at the start of the
+   * footer; questions and notes (network posts and saved links) carry none. */
   kind?: "question" | "note" | "conversation";
   /** Relative time in the footer after Bookmark; omitted while running. */
   time?: ReactNode;
@@ -67,13 +67,11 @@ export default function ResearchFeedPost({
 
   const showActions = !running && onToggleFollow && onToggleBookmark;
   const showTime = !running && Boolean(time);
-  const showCounts = !running && counts.length > 0;
-  const kindGlyph =
-    kind === "conversation" ? (
-      <Terminal size={12} aria-hidden="true" />
-    ) : kind === "question" ? (
-      <MessageCircle size={12} aria-hidden="true" />
-    ) : null;
+  const showCounts = counts.length > 0;
+  // Only a terminal conversation is marked: a question already reads as one
+  // by its title and summary, and a speech-bubble glyph beside the counts
+  // would read as a reply count.
+  const kindGlyph = kind === "conversation" ? <Terminal size={12} aria-hidden="true" /> : null;
   return (
     <div
       className={`research-feed-post${selected ? " is-selected" : ""}`}
@@ -160,7 +158,9 @@ export default function ResearchFeedPost({
               ) : null}
               {showCounts
                 ? counts.map((label, index) => (
-                    <Fragment key={label}>
+                    // Each count keeps its separator, so a wrapped line never
+                    // ends on a dangling "·".
+                    <span key={label} className="research-feed-post-meta-item">
                       {showTime || index > 0 ? (
                         <span className="research-feed-post-meta-separator" aria-hidden="true">
                           ·
@@ -175,7 +175,7 @@ export default function ResearchFeedPost({
                       >
                         {label}
                       </button>
-                    </Fragment>
+                    </span>
                   ))
                 : null}
             </span>
