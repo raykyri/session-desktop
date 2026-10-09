@@ -24,6 +24,8 @@ import type {
   QueuedTurn,
   ResearchBranchRemoval,
   RecentResearchQueryCursor,
+  ResearchDraft,
+  ResearchFolderState,
   ResearchHighlight,
   ResearchHighlightFeedItem,
   ResearchHighlightAnchor,
@@ -203,6 +205,43 @@ export function listResearchTrees(includeArchived = false) {
   return invoke<ResearchTreeSummary[]>("list_research_trees", { includeArchived });
 }
 
+/** Rewrites one workspace's flat tree order for its active or archived
+ * section; `treeIds` must list every tree in that section. A folder's order
+ * is the flat order filtered to its members. */
+export function reorderResearchTrees(workspaceId: string, archived: boolean, treeIds: string[]) {
+  return invoke<void>("reorder_research_trees", { workspaceId, archived, treeIds });
+}
+
+export function listResearchFolders() {
+  return invoke<ResearchFolderState>("list_research_folders");
+}
+
+/** Persists the whole folder state and returns the backend-normalized copy. */
+export function setResearchFolders(folders: ResearchFolderState) {
+  return invoke<ResearchFolderState>("set_research_folders", { folders });
+}
+
+export function listResearchDrafts(workspaceId: string) {
+  return invoke<ResearchDraft[]>("list_research_drafts", { workspaceId });
+}
+
+/** Creates a draft (first in order) without an id, or updates its prompt. */
+export function saveResearchDraft(draft: { id?: string | null; workspaceId: string; prompt: string }) {
+  return invoke<ResearchDraft>("save_research_draft", {
+    id: draft.id ?? null,
+    workspaceId: draft.workspaceId,
+    prompt: draft.prompt,
+  });
+}
+
+export function deleteResearchDraft(draftId: string) {
+  return invoke<void>("delete_research_draft", { draftId });
+}
+
+export function reorderResearchDrafts(workspaceId: string, draftIds: string[]) {
+  return invoke<ResearchDraft[]>("reorder_research_drafts", { workspaceId, draftIds });
+}
+
 export function listResearchActivity() {
   return invoke<ResearchNode[]>("list_research_activity");
 }
@@ -349,6 +388,10 @@ export function setResearchTreeBookmarked(treeId: string, bookmarked: boolean) {
 
 export function renameResearchNode(nodeId: string, title: string) {
   return invoke<ResearchNode>("rename_research_node", { nodeId, title });
+}
+
+export function setResearchNodePromoted(nodeId: string, promoted: boolean) {
+  return invoke<ResearchNode>("set_research_node_promoted", { nodeId, promoted });
 }
 
 export function createResearchHighlight(

@@ -54,23 +54,30 @@ test("archived threads list newest-archived first, without active trees or docum
   );
 });
 
-test("the Archived page renders one card per archived thread", () => {
+test("Archive renders one card per archived thread, newest archived first", () => {
   const html = renderArchived({
     trees: [
       tree("run"),
       tree("conversation", { kind: "conversation", title: "Terminal session", archivedAt: 200 }),
     ],
     selectedTreeId: "run",
+    onMenu: () => {},
   });
-  assert.match(html, /Archived/);
-  assert.equal((html.match(/class="research-feed-post(?=[ "])/g) ?? []).length, 2);
-  assert.equal((html.match(/research-feed-post is-selected/g) ?? []).length, 1);
+  assert.equal((html.match(/class="research-feed-card(?=[ "])/g) ?? []).length, 2);
+  assert.equal((html.match(/research-feed-card is-selected/g) ?? []).length, 1);
   assert.ok(html.indexOf("Terminal session") < html.indexOf("Thread run"));
-  assert.match(html, /lucide-terminal/);
-  // Archived cards carry no Follow or Bookmark controls.
+  // Archived cards are drop sources for moving out of Archive, and carry the
+  // … menu but no Follow or Bookmark controls.
+  assert.match(html, /data-research-card="run"/);
+  assert.match(html, /aria-label="Bookmark or move"/);
+  // The archive time is in the card's tooltip.
+  assert.match(html, /aria-label="Thread run"[^>]*title="Archived [^"]+"/);
   assert.doesNotMatch(html, /research-thread-actions/);
 });
 
-test("the Archived page explains itself when empty", () => {
-  assert.match(renderArchived(), /Archived research appears here/);
+test("Archive explains itself when empty", () => {
+  assert.match(
+    renderArchived(),
+    /Archive is empty\. Archived questions stop sending follow-up notifications\./,
+  );
 });

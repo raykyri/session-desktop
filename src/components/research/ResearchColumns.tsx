@@ -1,141 +1,176 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { CSSProperties, PointerEvent, ReactNode } from "react";
+import { createContext, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { listenToResearchNodeOpen } from "../../lib/researchShortcuts";
 
-const WIDTH_KEY = "session.research-feed-width.v1";
-const DEFAULT_WIDTH = 384;
-const MIN_WIDTH = 280;
-const MAX_WIDTH = 720;
-const CONTENT_MIN_WIDTH = 480;
-// Keep aligned with the single-column container query in research-surface.css.
-const SINGLE_COLUMN_WIDTH = 880;
+const FEED_MIN_WIDTH = 240;
+const FEED_MAX_WIDTH = 320;
+/** The conversation keeps at least this much before the feed grows past its minimum. */
+const CONVERSATION_MIN_WIDTH = 620;
+/** Below this column-area width one column shows at a time. */
+export const RESEARCH_SINGLE_COLUMN_BELOW = 620;
 
-export function maxResearchFeedWidth(availableWidth: number): number {
-  return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, availableWidth - CONTENT_MIN_WIDTH));
+/** The feed column's width: 240–320px, set by the width of the column area
+ * alone, so opening a conversation, the branch drawer, or pinned columns
+ * never changes it. */
+export function researchFeedColumnWidth(availableWidth: number): number {
+  const width = Number.isFinite(availableWidth) ? availableWidth - CONVERSATION_MIN_WIDTH : 0;
+  return Math.round(Math.max(FEED_MIN_WIDTH, Math.min(FEED_MAX_WIDTH, width)));
 }
 
-export function clampResearchFeedWidth(width: number, availableWidth: number): number {
-  return Math.round(Math.max(MIN_WIDTH, Math.min(
-    Number.isFinite(width) ? width : DEFAULT_WIDTH,
-    maxResearchFeedWidth(availableWidth),
-  )));
+/** The conversation column's width: the rest of the column area beside the
+ * feed, or the whole area when one column shows at a time. Pinned columns
+ * add to the row's width instead of taking from this. */
+export function researchConversationColumnWidth(availableWidth: number): number {
+  const area = Number.isFinite(availableWidth) ? Math.max(0, Math.round(availableWidth)) : 0;
+  return area < RESEARCH_SINGLE_COLUMN_BELOW ? area : area - researchFeedColumnWidth(area);
 }
 
-function loadWidth(): number {
-  try {
-    const stored = localStorage.getItem(WIDTH_KEY);
-    return stored === null ? DEFAULT_WIDTH : clampResearchFeedWidth(Number(stored), Infinity);
-  } catch {
-    return DEFAULT_WIDTH;
+interface ResearchColumnsLayout {
+  /** The column area's width, feed included. */
+  areaWidth: number;
+  conversationWidth: number;
+  singleColumn: boolean;
+  /** The horizontally scrolling row that holds the feed, the conversation,
+   * and pinned columns. */
+  row: HTMLElement | null;
+  /** A layer over the column area, outside the scrolling row, for the branch
+   * drawer and the find bar: they stay put while the row scrolls. */
+  overlay: HTMLElement | null;
+  /** The feed is column 0 for `[` and `]`, and the column shown in
+   * single-column mode after Back. */
+  feedFocused: boolean;
+  focusFeed: (options?: { moveFocus?: boolean }) => void;
+  /** A conversation column took focus. */
+  releaseFeed: () => void;
+}
+
+export const ResearchColumnsContext = createContext<ResearchColumnsLayout | null>(null);
+
+/** Scrolls the row horizontally so `column` is in view, by as little as
+ * possible (no-op when it already is). */
+export function showResearchColumn(row: HTMLElement | null, column: HTMLElement | null, behavior: ScrollBehavior) {
+  if (!row || !column) {
+    return;
+  }
+  const rect = column.getBoundingClientRect();
+  const bounds = row.getBoundingClientRect();
+  let dx = rect.right > bounds.right ? rect.right - bounds.right : 0;
+  if (rect.left - dx < bounds.left) {
+    dx = rect.left - bounds.left;
+  }
+  if (dx) {
+    row.scrollBy({ left: dx, behavior });
   }
 }
 
+/** The column area: one horizontally scrolling row with the feed column,
+ * then the content column (the open thread with its pinned branch columns, or
+ * a placeholder). Pinning a branch scrolls the feed out of view and keeps
+ * the conversation where it is. Below RESEARCH_SINGLE_COLUMN_BELOW only one
+ * column shows: the feed, or the thread once one is open (its header's Back
+ * returns to the feed). */
 export default function ResearchColumns({
   hasDocument,
+  documentKey,
+  feed,
   children,
 }: {
   hasDocument: boolean;
+  /** Changes when another thread opens; showing a thread hands it the focus. */
+  documentKey: string | null;
+  feed: ReactNode;
   children: ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const stopRef = useRef<() => void>(() => {});
-  const dragRef = useRef<{ pointerId: number; x: number; width: number } | null>(null);
-  const [preferredWidth, setPreferredWidth] = useState(loadWidth);
-  const [availableWidth, setAvailableWidth] = useState(SINGLE_COLUMN_WIDTH);
-  const [dragging, setDragging] = useState(false);
-  const width = clampResearchFeedWidth(preferredWidth, availableWidth);
+  const feedRef = useRef<HTMLDivElement>(null);
+  const [row, setRow] = useState<HTMLDivElement | null>(null);
+  const [overlay, setOverlay] = useState<HTMLDivElement | null>(null);
+  const [availableWidth, setAvailableWidth] = useState(CONVERSATION_MIN_WIDTH + FEED_MAX_WIDTH);
+  const [feedFocused, setFeedFocused] = useState(false);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    const measure = () => {
-      setAvailableWidth(root.clientWidth);
-      if (root.clientWidth <= SINGLE_COLUMN_WIDTH) stopRef.current();
-    };
+    const measure = () => setAvailableWidth(root.clientWidth);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(root);
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(WIDTH_KEY, String(preferredWidth));
-    } catch {
-      // Resizing still works when preference storage is unavailable.
-    }
-  }, [preferredWidth]);
+  // Opening a thread, or a node of the open one, shows the thread.
+  useEffect(() => setFeedFocused(false), [documentKey]);
+  useEffect(() => listenToResearchNodeOpen(() => setFeedFocused(false)), []);
 
-  useEffect(() => {
-    const stop = () => stopRef.current();
-    window.addEventListener("blur", stop);
-    return () => {
-      window.removeEventListener("blur", stop);
-      stop();
-    };
-  }, []);
+  const focusFeed = useCallback(
+    ({ moveFocus = false }: { moveFocus?: boolean } = {}) => {
+      setFeedFocused(true);
+      window.requestAnimationFrame(() => {
+        row?.scrollTo({ left: 0, behavior: "auto" });
+        if (moveFocus) {
+          feedRef.current
+            ?.querySelector<HTMLElement>(".research-feed-header-title")
+            ?.focus({ preventScroll: true });
+        }
+      });
+    },
+    [row],
+  );
+  const releaseFeed = useCallback(() => setFeedFocused(false), []);
 
-  function startResize(event: PointerEvent<HTMLDivElement>) {
-    if (event.button !== 0 || !event.isPrimary || dragRef.current) return;
-    event.preventDefault();
-    const handle = event.currentTarget;
-    const pointerId = event.pointerId;
-    handle.setPointerCapture(pointerId);
-    dragRef.current = { pointerId, x: event.clientX, width };
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    setDragging(true);
-    stopRef.current = () => {
-      stopRef.current = () => {};
-      dragRef.current = null;
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      setDragging(false);
-      if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
-    };
-  }
-
+  const single = availableWidth < RESEARCH_SINGLE_COLUMN_BELOW;
+  const conversationWidth = researchConversationColumnWidth(availableWidth);
+  const showsFeed = !hasDocument || feedFocused;
+  const layout = useMemo<ResearchColumnsLayout>(
+    () => ({
+      areaWidth: availableWidth,
+      conversationWidth,
+      singleColumn: single,
+      row,
+      overlay,
+      feedFocused: hasDocument && feedFocused,
+      focusFeed,
+      releaseFeed,
+    }),
+    [availableWidth, conversationWidth, feedFocused, focusFeed, hasDocument, overlay, releaseFeed, row, single],
+  );
   return (
-    <div
-      ref={rootRef}
-      className={`research-columns${hasDocument ? " has-document" : ""}`}
-      style={{ "--research-feed-column-width": `${width}px` } as CSSProperties}
-    >
-      {children}
+    <ResearchColumnsContext.Provider value={layout}>
       <div
-        className={`research-column-resizer${dragging ? " is-dragging" : ""}`}
-        role="separator"
-        aria-label="Resize feed column"
-        aria-orientation="vertical"
-        aria-valuemin={MIN_WIDTH}
-        aria-valuemax={maxResearchFeedWidth(availableWidth)}
-        aria-valuenow={width}
-        tabIndex={0}
-        onPointerDown={startResize}
-        onPointerMove={(event) => {
-          const drag = dragRef.current;
-          if (!drag || drag.pointerId !== event.pointerId) return;
-          setPreferredWidth(clampResearchFeedWidth(
-            drag.width + event.clientX - drag.x,
-            rootRef.current?.clientWidth ?? availableWidth,
-          ));
-        }}
-        onPointerUp={(event) => {
-          if (dragRef.current?.pointerId === event.pointerId) stopRef.current();
-        }}
-        onPointerCancel={() => stopRef.current()}
-        onLostPointerCapture={() => stopRef.current()}
-        onKeyDown={(event) => {
-          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-          event.preventDefault();
-          event.stopPropagation();
-          const step = event.shiftKey ? 40 : 16;
-          setPreferredWidth(clampResearchFeedWidth(
-            width + (event.key === "ArrowRight" ? step : -step), availableWidth,
-          ));
-        }}
-      />
-    </div>
+        ref={rootRef}
+        className={`research-columns${hasDocument ? " has-document" : ""}${single ? " is-single" : ""}${
+          single && showsFeed ? " shows-feed" : ""
+        }`}
+        style={
+          {
+            "--research-feed-column-width": `${researchFeedColumnWidth(availableWidth)}px`,
+            "--research-conversation-width": `${conversationWidth}px`,
+          } as CSSProperties
+        }
+      >
+        <div ref={setRow} className="research-columns-row">
+          {feed ? (
+            <div
+              ref={feedRef}
+              className={`research-feed-column${hasDocument && feedFocused ? " is-focused" : ""}`}
+              data-research-column="feed"
+              onClickCapture={(event) => {
+                // The open thread's own card shows the thread again.
+                if (
+                  event.target instanceof Element &&
+                  event.target.closest(".research-feed-card.is-selected .research-feed-card-hit")
+                ) {
+                  setFeedFocused(false);
+                }
+              }}
+            >
+              {feed}
+            </div>
+          ) : null}
+          <div className="research-content-column">{children}</div>
+        </div>
+        <div ref={setOverlay} className="research-columns-overlay" />
+      </div>
+    </ResearchColumnsContext.Provider>
   );
 }

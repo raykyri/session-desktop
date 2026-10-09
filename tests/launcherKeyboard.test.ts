@@ -11,19 +11,25 @@ const key = (overrides: Partial<Parameters<typeof launcherTabAction>[0]> = {}) =
   ...overrides,
 });
 
-test("Tab cycles research models and is captured by terminal launchers", () => {
-  assert.equal(launcherTabAction(key(), true), "cycle-model");
-  assert.equal(launcherTabAction(key(), false), "capture");
+test("plain Tab and Shift-Tab move focus out of the composer", () => {
+  assert.equal(launcherTabAction(key(), true), null);
+  assert.equal(launcherTabAction(key(), false), null);
+  assert.equal(launcherTabAction(key({ shiftKey: true }), true), null);
 });
 
-test("Shift-Tab cycles providers in either launcher", () => {
-  assert.equal(launcherTabAction(key({ shiftKey: true }), true), "cycle-provider");
-  assert.equal(launcherTabAction(key({ shiftKey: true }), false), "cycle-provider");
+test("Control-Tab cycles models, and is captured while no model applies", () => {
+  assert.equal(launcherTabAction(key({ ctrlKey: true }), true), "cycle-model");
+  assert.equal(launcherTabAction(key({ ctrlKey: true }), false), "capture");
 });
 
-test("modified Tab chords remain available to app shortcuts", () => {
-  assert.equal(launcherTabAction(key({ ctrlKey: true }), true), null);
+test("Control-Shift-Tab cycles agents", () => {
+  assert.equal(launcherTabAction(key({ ctrlKey: true, shiftKey: true }), true), "cycle-provider");
+  assert.equal(launcherTabAction(key({ ctrlKey: true, shiftKey: true }), false), "cycle-provider");
+});
+
+test("other Tab chords remain available to app shortcuts", () => {
+  assert.equal(launcherTabAction(key({ ctrlKey: true, metaKey: true }), true), null);
   assert.equal(launcherTabAction(key({ metaKey: true }), true), null);
-  assert.equal(launcherTabAction(key({ altKey: true }), true), null);
-  assert.equal(launcherTabAction(key({ key: "Enter" }), true), null);
+  assert.equal(launcherTabAction(key({ ctrlKey: true, altKey: true }), true), null);
+  assert.equal(launcherTabAction(key({ key: "Enter", ctrlKey: true }), true), null);
 });

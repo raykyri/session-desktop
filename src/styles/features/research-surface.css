@@ -10,142 +10,134 @@
   background: var(--research-workspace-bg);
 }
 
-/* Home and Bookmarks list in a feed column beside the content column, which
-   holds the open thread or a placeholder. Below the breakpoint only one column
-   shows: the thread when one is open, otherwise the feed. */
+/* The column area: one horizontally scrolling row with the feed column, the
+   content column (the open thread, then its pinned branch columns), and an
+   overlay layer outside the row for the branch drawer and the find bar.
+   ResearchColumns sets the widths from the column area's width alone: the
+   feed is 240–320px and the conversation takes the rest, so pinned columns
+   scroll the feed out of view instead of resizing anything. Below the
+   single-column width one column shows at a time. */
 .research-columns {
   position: relative;
   display: flex;
   width: 100%;
   height: 100%;
   min-height: 0;
-  container-type: inline-size;
+  overflow: clip;
 }
 
-.research-column-resizer {
-  position: absolute;
-  inset-block: 0;
-  left: calc(var(--research-feed-column-width) - 5px);
-  z-index: 7;
-  width: 10px;
-  cursor: col-resize;
-  touch-action: none;
-}
-
-.research-column-resizer::before {
-  position: absolute;
-  inset-block: 0;
-  left: 4px;
-  width: 1px;
-  content: "";
-}
-
-.research-column-resizer:hover::before,
-.research-column-resizer:focus-visible::before,
-.research-column-resizer.is-dragging::before {
-  background: var(--split-border-hover);
+.research-columns-row {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: auto hidden;
+  scrollbar-color: var(--surface-border-strong) transparent;
+  scrollbar-width: thin;
 }
 
 .research-feed-column {
+  position: relative;
   flex: none;
   width: var(--research-feed-column-width);
   min-width: 0;
   height: 100%;
-  border-right: 1px solid var(--surface-border-default);
+  border-right: 1px solid var(--surface-divider);
 }
 
-.research-content-column {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
+/* The feed is column 0 for [ and ]: focused, it takes the same 2px rule on
+   its top edge as a conversation column. */
+.research-feed-column.is-focused::before {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 5;
+  height: 2px;
+  background: var(--accent-color);
+  content: "";
+  opacity: 0.75;
+  pointer-events: none;
 }
 
-/* Research pages lay out against their own width, not the window's: a thread
-   beside the feed column is much narrower than the stage. */
-.main-stage.is-research,
-.research-content-column {
-  container: research-page / inline-size;
-}
-
-/* The content column's header carries back/forward; the feed's own pair shows
-   only when the stage is too narrow for that column. */
-.research-feed-column .research-history-nav {
+.research-columns.is-single .research-feed-column::before {
   display: none;
 }
 
-/* Scrolled-to matches and focused elements stop above a thread's floating
-   composer. */
-.research-document-scroll:has(.research-thread-composer-row) {
-  scroll-padding-bottom: 140px;
-  padding-bottom: 0;
+.research-content-column {
+  display: flex;
+  flex: none;
+  width: max-content;
+  min-width: var(--research-conversation-width, 100%);
+  height: 100%;
+}
+
+.research-content-column > .research-placeholder-column {
+  width: var(--research-conversation-width, 100%);
+}
+
+.research-columns-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-research-drawer);
+  pointer-events: none;
+}
+
+.research-columns-overlay > * {
+  pointer-events: auto;
+}
+
+/* Single-column mode: the feed until a thread opens, then the thread until
+   its Back shows the feed again. */
+.research-columns.is-single .research-feed-column {
+  width: 100%;
+  border-right: 0;
+}
+
+.research-columns.is-single.shows-feed .research-content-column,
+.research-columns.is-single.shows-feed .research-columns-overlay,
+.research-columns.is-single:not(.shows-feed) .research-feed-column {
+  display: none;
+}
+
+.research-placeholder-column {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.research-placeholder-column > :last-child {
+  flex: 1;
+  min-height: 0;
 }
 
 .research-content-placeholder {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  color: var(--text-subtle);
-  font-size: var(--fs-base);
-}
-
-@container (max-width: 880px) {
-  .research-column-resizer {
-    display: none;
-  }
-
-  .research-columns.has-document .research-feed-column {
-    display: none;
-  }
-
-  .research-columns:not(.has-document) .research-content-column {
-    display: none;
-  }
-
-  .research-columns:not(.has-document) .research-feed-column {
-    width: 100%;
-    border-right: 0;
-  }
-
-  .research-columns:not(.has-document) .research-feed-column .journal-column {
-    max-width: 680px;
-    margin-inline: auto;
-  }
-
-  .research-columns:not(.has-document) .research-feed-column .research-history-nav {
-    display: flex;
-  }
-}
-
-.research-document {
-  position: relative;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  /* The implicit column is an auto track, and auto tracks never shrink below
-     an item's min-content contribution — so a breadcrumb carrying a long
-     untitled prompt widened the track far past the viewport and shoved the
-     centered document column off screen (the page rendered blank). A
-     minmax(0, 1fr) column keeps the track at the container's width and lets
-     the breadcrumb's own overflow/ellipsis rules do their job. */
-  grid-template-columns: minmax(0, 1fr);
-  width: 100%;
+  gap: 6px;
   height: 100%;
-  min-width: 0;
-  min-height: 0;
+  padding: 24px;
+  text-align: center;
 }
 
-.research-document-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 8px 18px;
-  border-bottom: 1px solid var(--surface-border-subtle);
-  background: var(--chrome-header-bg);
+.research-content-placeholder h3 {
+  margin: 0;
+  color: var(--text-heading);
+  font-size: calc(15px + var(--font-ui-size-offset));
+  font-weight: 600;
 }
 
-/* Browser-style back/forward, left of the breadcrumbs. Link styling — no
-   button chrome — so they read as quiet affordances beside the path. */
+.research-content-placeholder p {
+  max-width: 36ch;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: calc(13px + var(--font-ui-size-offset));
+  line-height: 1.5;
+}
+
+/* Browser-style back/forward in the conversation header. Link styling, no
+   button chrome. */
 .research-history-nav {
   display: flex;
   flex: 0 0 auto;
@@ -201,97 +193,6 @@
 .research-header-icon:hover .research-header-tooltip,
 .research-header-icon:focus-visible .research-header-tooltip {
   visibility: visible;
-}
-
-.research-breadcrumb {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: center;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-/* A page that names itself in its own heading fades its breadcrumb in only
-   once that heading scrolls away. */
-.research-breadcrumb {
-  transition: opacity 160ms ease, visibility 160ms;
-}
-
-.research-breadcrumb.is-title-hidden {
-  opacity: 0;
-  visibility: hidden;
-}
-
-/* List pages (Home, Bookmarks, Archived, Highlights) lead with their name and
-   keep refresh/import at the header's trailing edge. */
-.research-header-actions-end {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-}
-
-.research-header-actions-end .research-header-tooltip {
-  right: 0;
-  left: auto;
-}
-
-.research-breadcrumb > span {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-}
-
-.research-breadcrumb button {
-  display: block;
-  min-width: 0;
-  min-height: 24px;
-  padding: 0 3px;
-  overflow: hidden;
-  border: 0;
-  color: var(--text-tertiary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: transparent;
-}
-
-.research-breadcrumb button:hover:not(:disabled) {
-  color: var(--text-interactive);
-}
-
-.research-breadcrumb button:disabled {
-  cursor: default;
-}
-
-.research-breadcrumb-separator {
-  margin: 0 5px;
-  color: var(--text-dim);
-}
-
-/* Stand-in for the collapsed middle of a deep path; its tooltip carries the
-   hidden step count. */
-.research-breadcrumb-ellipsis {
-  padding: 0 3px;
-  color: var(--text-subtle);
-  cursor: default;
-}
-
-.research-document-scroll {
-  width: 100%;
-  min-height: 0;
-  padding: 44px clamp(24px, 5vw, 72px) 40px;
-  /* Vertical only. Wide content (tables, code blocks) scrolls inside its own
-     inner scrollers, so this container never scrolls sideways legitimately.
-     With plain `auto`, transient horizontal overflow — the WebKit var()-drop
-     layouts documented on .research-document-content could momentarily let a
-     streaming answer overrun the right edge — made it horizontally
-     scrollable, and a trackpad deltaX then shifted scrollLeft. Nothing reset
-     it on navigation, so the left padding looked collapsed or erratic
-     between questions, follow-ups, and freshly posted replies. */
-  overflow: hidden auto;
-  overscroll-behavior: contain;
 }
 
 /* Home and a thread use the same reading scale even though their layouts differ. */
@@ -360,12 +261,12 @@
 /* Shared tweet embed used both as a Home item and as a research-message
    attachment. Home-only menu clearance remains in journal.css. */
 
-.research-document {
+.research-conversation-workspace {
   --tweet-avatar-scale: 0.5;
 }
 
-.research-document .journal-tweet-verified,
-.research-document .research-summary-text {
+.research-conversation-workspace .journal-tweet-verified,
+.research-conversation-workspace .research-summary-text {
   display: none;
 }
 
@@ -752,39 +653,3 @@ a.journal-tweet-more:hover {
   margin-top: 10px;
 }
 
-/* Follow / Bookmark pair shared by Home cards and an open thread's root
-   prompt: inline link-style text and icon, sharing the footer row with the
-   timestamp. */
-.research-thread-actions {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 10px;
-}
-
-.research-thread-action {
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  color: var(--text-activity);
-  font-size: var(--research-meta-font-size);
-  line-height: var(--research-meta-line-height);
-  background: transparent;
-  transition: color var(--transition-fast);
-}
-
-.research-thread-action:hover {
-  color: var(--text-secondary);
-}
-
-.research-thread-action.is-active {
-  color: var(--text-interactive);
-}
-
-.research-thread-bookmark svg {
-  flex: none;
-  /* Optical centering against the text baseline. */
-  position: relative;
-  top: -1px;
-}

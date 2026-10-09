@@ -18,91 +18,34 @@ interface ResearchSelectionRect {
   height: number;
 }
 
-/** Connects an anchored passage to its card with the quietest available
- * geometry. The passage midpoint is also the card endpoint whenever it falls
- * inside the card's safe vertical range, producing a horizontal leader. When
- * it falls outside, clamping to the nearest safe point produces one direct
- * diagonal instead. */
-export function researchAnchorConnectorEndpoints(input: {
-  selectionRect: ResearchSelectionRect;
-  cardRect: ResearchSelectionRect;
-  selectionGap?: number;
-  cardGap?: number;
-  cardInset?: number;
-}) {
-  const selectionGap = input.selectionGap ?? 8;
-  const cardGap = input.cardGap ?? 6;
-  const cardInset = Math.min(input.cardInset ?? 24, input.cardRect.height / 2);
-  const sy = input.selectionRect.top + input.selectionRect.height / 2;
-  const minimumCardY = input.cardRect.top + cardInset;
-  const maximumCardY = input.cardRect.bottom - cardInset;
-
-  return {
-    sx: input.selectionRect.right + selectionGap,
-    sy,
-    ex: input.cardRect.left - cardGap,
-    ey: Math.max(minimumCardY, Math.min(sy, maximumCardY)),
-  };
-}
-
-/** Positions the selection actions beside the end of the selected passage.
- * A Range bounding box starts at the first line of a multi-line selection,
- * which made the bar appear below and far to the left of the selected text.
- * The last rendered fragment is the visual end of the normalized Range, so it
- * is the useful anchor regardless of which direction the user dragged.
- *
- * When the bar cannot fit beside that fragment, it drops below it and remains
- * aligned to the fragment's right edge. */
+/** Positions the selection actions centred over the selected passage, 8px
+ * above it, so they never cover the selected text. When there is no room
+ * above (the passage starts under the column headers or above the viewport)
+ * they sit 8px below it instead. `width` and `height` are the actions' own
+ * size. */
 export function researchSelectionActionPlacement(input: {
-  fragments: readonly ResearchSelectionRect[];
   boundingRect: ResearchSelectionRect;
   viewportWidth: number;
   viewportHeight: number;
-  reservedWidth?: number;
-  reservedHeight?: number;
+  width: number;
+  height: number;
+  /** The highest the actions may sit: below the 44px column headers. */
+  minTop?: number;
 }) {
   const margin = 8;
-  const gap = 4;
-  const reservedWidth = input.reservedWidth ?? 260;
-  const reservedHeight = input.reservedHeight ?? 35;
-  const renderedFragments = input.fragments.filter(
-    (rect) => rect.width > 0 && rect.height > 0,
-  );
-  const fragment = renderedFragments[renderedFragments.length - 1] ?? input.boundingRect;
-  const maximumLeft = Math.max(margin, input.viewportWidth - reservedWidth - margin);
-  const maximumTop = Math.max(margin, input.viewportHeight - reservedHeight - margin);
-  const besideLeft = fragment.right + gap;
-  const fitsBeside = besideLeft + reservedWidth <= input.viewportWidth - margin;
-
+  const gap = 8;
+  const rect = input.boundingRect;
+  const minTop = input.minTop ?? 52;
+  const maximumLeft = Math.max(margin, input.viewportWidth - input.width - margin);
+  const maximumTop = Math.max(margin, input.viewportHeight - input.height - margin);
+  const above = rect.top - gap - input.height;
   return {
-    left: fitsBeside
-      ? besideLeft
-      : Math.max(margin, Math.min(fragment.right - reservedWidth, maximumLeft)),
-    top: fitsBeside
-      ? Math.max(
-          margin,
-          Math.min(fragment.top + (fragment.height - reservedHeight) / 2, maximumTop),
-        )
-      : Math.max(margin, Math.min(fragment.bottom + gap, maximumTop)),
-    offscreen: fragment.bottom < 0 || fragment.top > input.viewportHeight,
+    left: Math.round(
+      Math.max(margin, Math.min(rect.left + rect.width / 2 - input.width / 2, maximumLeft)),
+    ),
+    top: Math.round(above >= minTop ? above : Math.min(rect.bottom + gap, maximumTop)),
+    offscreen: rect.bottom < 0 || rect.top > input.viewportHeight,
   };
-}
-
-/** An empty targeted-ask composer follows its passage selection: clicking
- * away closes it, while composer controls, selection actions, and clicks that
- * leave a live passage selection alone do not. */
-export function shouldDismissEmptyResearchAskOnClick(input: {
-  followup: string;
-  selectionCollapsed: boolean;
-  insideComposer: boolean;
-  insideSelectionActions: boolean;
-}) {
-  return (
-    !input.followup.trim() &&
-    input.selectionCollapsed &&
-    !input.insideComposer &&
-    !input.insideSelectionActions
-  );
 }
 
 interface SelectionUnit {

@@ -13,10 +13,19 @@
 .app-shell.reduce-motion .pane-tab-dot.status-active,
 .app-shell.reduce-motion .pane-tab-dot.status-pending,
 .app-shell.reduce-motion .pane-tab-dot.status-attention,
-.app-shell.reduce-motion .turn-thinking-dot {
+.app-shell.reduce-motion .turn-thinking-dot,
+.app-shell.reduce-motion .research-pulse,
+.app-shell.reduce-motion .research-feed-status.is-running {
   animation: none;
   opacity: 1;
   transform: translateY(var(--status-dot-y, 0));
+}
+
+/* Opacity is left to the component: the feed status dot hides on card
+   hover, which a forced opacity here would override. */
+.app-shell.reduce-motion .research-feed-status.is-running,
+.app-shell.reduce-motion .research-pulse {
+  animation: none;
 }
 
 .app-shell.reduce-motion .turn-jump-to-latest,
@@ -43,10 +52,17 @@
   .pane-tab-dot.status-active,
   .pane-tab-dot.status-pending,
   .pane-tab-dot.status-attention,
-  .turn-thinking-dot {
+  .turn-thinking-dot,
+  .research-pulse,
+  .research-feed-status.is-running {
     animation: none;
     opacity: 1;
     transform: translateY(var(--status-dot-y, 0));
+  }
+
+  .research-feed-status.is-running,
+  .research-pulse {
+    animation: none;
   }
 
   .turn-jump-to-latest,

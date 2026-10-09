@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  researchAnchorConnectorEndpoints,
   researchSelectionActionPlacement,
-  shouldDismissEmptyResearchAskOnClick,
   snapResearchDragSelection,
 } from "../src/lib/researchSelection";
 
@@ -18,82 +16,40 @@ function rect(left: number, top: number, width: number, height: number) {
   };
 }
 
-test("uses a horizontal connector when the passage midpoint is inside the card", () => {
-  assert.deepEqual(
-    researchAnchorConnectorEndpoints({
-      selectionRect: rect(100, 140, 900, 160),
-      cardRect: rect(1100, 120, 320, 240),
-    }),
-    { sx: 1008, sy: 220, ex: 1094, ey: 220 },
-  );
-});
-
-test("uses a direct diagonal to the card's safe inset when the midpoint is outside", () => {
-  assert.deepEqual(
-    researchAnchorConnectorEndpoints({
-      selectionRect: rect(100, 40, 600, 40),
-      cardRect: rect(800, 120, 320, 160),
-    }),
-    { sx: 708, sy: 60, ex: 794, ey: 144 },
-  );
-});
-
-test("places selection actions beside the final line of a multi-line selection", () => {
+test("centres selection actions 8px above the selected passage", () => {
   assert.deepEqual(
     researchSelectionActionPlacement({
-      fragments: [rect(80, 40, 900, 24), rect(80, 64, 230, 24)],
-      boundingRect: rect(80, 40, 900, 48),
+      boundingRect: rect(80, 240, 400, 48),
       viewportWidth: 1200,
       viewportHeight: 800,
-      reservedWidth: 260,
+      width: 260,
+      height: 36,
     }),
-    { left: 314, top: 58.5, offscreen: false },
+    { left: 150, top: 196, offscreen: false },
   );
 });
 
-test("drops selection actions below the final line when they do not fit beside it", () => {
+test("drops selection actions below the passage when there is no room above it", () => {
   assert.deepEqual(
     researchSelectionActionPlacement({
-      fragments: [rect(80, 40, 900, 24), rect(900, 64, 230, 24)],
-      boundingRect: rect(80, 40, 1050, 48),
+      boundingRect: rect(1000, 70, 180, 24),
       viewportWidth: 1200,
       viewportHeight: 800,
-      reservedWidth: 260,
+      width: 260,
+      height: 36,
     }),
-    { left: 870, top: 92, offscreen: false },
-  );
-});
-
-test("dismisses an empty targeted ask only when a click clears the selection", () => {
-  const base = {
-    followup: "",
-    selectionCollapsed: true,
-    insideComposer: false,
-    insideSelectionActions: false,
-  };
-  assert.equal(shouldDismissEmptyResearchAskOnClick(base), true);
-  assert.equal(
-    shouldDismissEmptyResearchAskOnClick({ ...base, selectionCollapsed: false }),
-    false,
+    { left: 932, top: 102, offscreen: false },
   );
   assert.equal(
-    shouldDismissEmptyResearchAskOnClick({ ...base, insideComposer: true }),
-    false,
+    researchSelectionActionPlacement({
+      boundingRect: rect(80, 900, 100, 20),
+      viewportWidth: 1200,
+      viewportHeight: 800,
+      width: 260,
+      height: 36,
+    }).offscreen,
+    true,
   );
-  assert.equal(
-    shouldDismissEmptyResearchAskOnClick({ ...base, insideSelectionActions: true }),
-    false,
-  );
-});
-
-test("preserves targeted asks containing text", () => {
-  const base = {
-    selectionCollapsed: true,
-    insideComposer: false,
-    insideSelectionActions: false,
-  };
-  assert.equal(shouldDismissEmptyResearchAskOnClick({ ...base, followup: "question" }), false);
-  assert.equal(shouldDismissEmptyResearchAskOnClick({ ...base, followup: "  \n" }), true);
 });
 
 test("snaps forward and backward drags to whole words", () => {

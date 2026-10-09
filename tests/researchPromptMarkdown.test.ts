@@ -3,16 +3,15 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
-  formatResearchReplySnippet,
-  ResearchSegmentPrompt,
   ResearchTimelineItem,
-} from "../src/components/research/ResearchDocument";
+  ResearchTurnQuestion,
+} from "../src/components/research/ResearchTurn";
 import {
   ResearchMessageBody,
   ResearchUserMessage,
   visibleResearchPrompt,
 } from "../src/components/research/ResearchMessage";
-import type { ResearchMessageAttachment } from "../src/types";
+import type { ResearchMessageAttachment, ResearchNode } from "../src/types";
 
 const tweetAttachment: ResearchMessageAttachment = {
   kind: "tweet",
@@ -43,76 +42,110 @@ const tweetAttachment: ResearchMessageAttachment = {
   },
 };
 
-const promptProps = {
-  visible: true,
-  parentNodeId: null,
-  queryQuote: null,
-  prompt: "> foo\n> bar",
-  onSelectNode: () => {},
-} as const;
+const NOW = Date.UTC(2026, 9, 9, 12, 0, 0);
+
+function questionNode(overrides: Partial<ResearchNode> = {}): ResearchNode {
+  return {
+    id: "node",
+    treeId: "tree",
+    prompt: "> foo\n> bar",
+    adapter: "claude",
+    groupId: "ws",
+    worktreeDir: "/ws",
+    status: "complete",
+    createdAt: NOW - 2 * 24 * 60 * 60 * 1000,
+    highlights: [],
+    ...overrides,
+  };
+}
 
 test("research prompts preserve Markdown blockquotes", () => {
   const html = renderToStaticMarkup(
-    createElement(ResearchSegmentPrompt, { ...promptProps, index: 0 }),
+    createElement(ResearchTurnQuestion, { node: questionNode(), showPrompt: true, now: NOW }),
   );
 
   assert.doesNotMatch(html, /Claude Fable/);
   assert.doesNotMatch(html, /You asked/);
   assert.match(html, /research-user-message research-prompt/);
   assert.doesNotMatch(html, /research-content-card/);
-  assert.doesNotMatch(html, /Reply to:/);
   assert.match(html, /<blockquote>/);
   assert.match(html, /foo<br\/>[\n]?bar/);
 });
 
-test("the root prompt footer pairs thread actions with relative time", () => {
+test("the question meta row shows short time, star, and branch count with even spacing", () => {
   const html = renderToStaticMarkup(
-    createElement(ResearchSegmentPrompt, {
-      ...promptProps,
-      index: 0,
-      createdAt: Date.now() - 3 * 60 * 60 * 1000,
-      followed: true,
-      bookmarked: false,
-      onToggleFollow: () => {},
-      onToggleBookmark: () => {},
+    createElement(ResearchTurnQuestion, {
+      node: questionNode({ inline: true, parentNodeId: "root", promotedAt: NOW }),
+      showPrompt: true,
+      now: NOW,
+      promotable: true,
+      branchCount: 3,
+      branchOpen: true,
+      branchMenuOpen: true,
+      branchUnread: true,
+      onTogglePromoted: () => {},
+      onBranchButton: () => {},
     }),
   );
 
-  assert.match(html, /research-prompt-metadata is-after-prompt research-prompt-footer/);
-  assert.match(html, /research-thread-follow is-active"[^>]*aria-pressed="true"/);
-  assert.match(html, />Following<\/button>/);
-  assert.match(html, /aria-label="Bookmark"/);
-  assert.match(html, /research-prompt-footer-meta"[^>]*><time[^>]*>3 hr ago<\/time>/);
-  // Follow-ups keep their reply line and never render the thread footer.
-  const followUp = renderToStaticMarkup(
-    createElement(ResearchSegmentPrompt, {
-      ...promptProps,
-      index: 1,
-      createdAt: Date.now(),
-      replyToAnswer: "Earlier answer",
-      onToggleFollow: () => {},
-      onToggleBookmark: () => {},
-    }),
+  assert.match(html, /research-turn-meta"><time[^>]*>2d<\/time>/);
+  assert.match(html, /research-turn-star is-on"[^>]*aria-pressed="true"/);
+  assert.match(
+    html,
+    /research-turn-branches has-count is-open"[^>]*aria-haspopup="menu" aria-expanded="true"/,
   );
-  assert.doesNotMatch(followUp, /research-prompt-footer/);
-  assert.doesNotMatch(followUp, /research-thread-actions/);
+  // The unread dot is announced as part of the button's name.
+  assert.match(html, /aria-label="3 branches from this answer, one with a new answer"/);
+  assert.match(html, /research-turn-unread" aria-hidden="true"/);
+  assert.ok(html.indexOf("research-turn-star") < html.indexOf("research-turn-branches"));
+  // The thread-level Follow / Bookmark pair moved to the column header.
+  assert.doesNotMatch(html, /research-thread-actions/);
 });
 
-test("a running root prompt hides the footer row until the answer settles", () => {
-  const html = renderToStaticMarkup(
-    createElement(ResearchSegmentPrompt, {
-      ...promptProps,
-      index: 0,
-      running: true,
-      createdAt: Date.now(),
-      onToggleFollow: () => {},
-      onToggleBookmark: () => {},
+test("a question without branches offers to start one, or says why it cannot", () => {
+  const settled = renderToStaticMarkup(
+    createElement(ResearchTurnQuestion, {
+      node: questionNode(),
+      showPrompt: true,
+      now: NOW,
+      onBranchButton: () => {},
     }),
   );
-  assert.doesNotMatch(html, /research-prompt-footer/);
-  assert.doesNotMatch(html, /research-thread-actions/);
-  assert.doesNotMatch(html, /Claude Fable/);
-  assert.doesNotMatch(html, /has-trailing-metadata/);
+  assert.match(settled, /aria-label="Branch from this answer"/);
+  assert.doesNotMatch(settled, /aria-haspopup|aria-disabled/);
+  // The star is offered only for root-conversation follow-ups.
+  assert.doesNotMatch(settled, /research-turn-star/);
+
+  const running = renderToStaticMarkup(
+    createElement(ResearchTurnQuestion, {
+      node: questionNode({ status: "running", createdAt: NOW - 31 * 60 * 1000 }),
+      showPrompt: true,
+      now: NOW,
+      promotable: true,
+      branchBlocker: "Wait for the answer to finish",
+      onTogglePromoted: () => {},
+      onBranchButton: () => {},
+    }),
+  );
+  assert.match(running, /<time[^>]*>31 min<\/time>/);
+  assert.doesNotMatch(running, /research-turn-star/);
+  // The branch button stays, disabled with the reason as its tooltip.
+  assert.match(
+    running,
+    /research-turn-branches"[^>]*aria-disabled="true"[^>]*title="Wait for the answer to finish"/,
+  );
+});
+
+test("documents and conversations show the meta row without a question", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchTurnQuestion, {
+      node: questionNode({ kind: "document", origin: "imported" }),
+      showPrompt: false,
+      now: NOW,
+    }),
+  );
+  assert.doesNotMatch(html, /research-prompt/);
+  assert.match(html, /<time[^>]*>Imported 2d<\/time>/);
 });
 
 test("the shared user-message primitive stays unboxed", () => {
@@ -177,55 +210,18 @@ test("exported conversation assistant messages remain uncarded research prose", 
   assert.doesNotMatch(html, /research-user-message|research-content-card|research-prompt/);
 });
 
-test("follow-up research prompts omit the asked-model line", () => {
+test("a follow-up of a note reply quotes the reply above the question", () => {
   const html = renderToStaticMarkup(
-    createElement(ResearchSegmentPrompt, { ...promptProps, index: 1 }),
-  );
-
-  assert.doesNotMatch(html, /You asked/);
-  assert.match(html, /<blockquote>/);
-});
-
-test("branch prompts place Back above the quoted passage and question", () => {
-  const html = renderToStaticMarkup(
-    createElement(ResearchSegmentPrompt, {
-      ...promptProps,
-      index: 0,
-      parentNodeId: "parent",
-      queryQuote: "Selected answer passage",
+    createElement(ResearchTurnQuestion, {
+      node: questionNode({ prompt: "Why?" }),
+      showPrompt: true,
+      replyQuote: "Selected   reply\npassage",
+      now: NOW,
     }),
   );
 
-  assert.match(html, /research-parent-link/);
-  assert.ok(html.indexOf("Back") < html.indexOf("Selected answer passage"));
-  assert.ok(html.indexOf("Selected answer passage") < html.indexOf("research-user-message"));
-});
-
-test("follow-up research prompts quote a truncated previous answer", () => {
-  assert.equal(
-    formatResearchReplySnippet("Ready — what would you like to work on?"),
-    "Ready — what would you like to work on?",
-  );
-  assert.equal(
-    formatResearchReplySnippet(
-      "The workspace is not a git repository so you will need to initialize one first.",
-    ),
-    "The workspace is not a git repository so…",
-  );
-
-  const html = renderToStaticMarkup(
-    createElement(ResearchSegmentPrompt, {
-      ...promptProps,
-      index: 1,
-      replyToAnswer:
-        "The workspace is not a git repository so you will need to initialize one first.",
-    }),
-  );
-
-  assert.doesNotMatch(html, /You asked/);
-  assert.match(html, /research-prompt-reply/);
-  assert.match(html, /Reply to: The workspace is not a git repository so…/);
-  assert.doesNotMatch(html, /initialize one first/);
+  assert.match(html, /research-prompt-quote">Selected reply passage<\/blockquote>/);
+  assert.ok(html.indexOf("Selected reply passage") < html.indexOf("research-user-message"));
 });
 
 test("resolved trailing tweet URLs are presentation-only while the embed renders", () => {

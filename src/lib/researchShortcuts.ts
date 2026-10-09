@@ -35,3 +35,35 @@ export function listenToResearchFolderMenuToggle(onToggle: () => void): () => vo
   window.addEventListener(TOGGLE_FOLDER_MENU_EVENT, handler);
   return () => window.removeEventListener(TOGGLE_FOLDER_MENU_EVENT, handler);
 }
+
+const OPEN_NODE_EVENT = "session:research-open-node";
+
+interface ResearchOpenNodeRequest {
+  treeId: string;
+  nodeId: string;
+}
+
+/** Asks the mounted document for `treeId` to show `nodeId`: a branch opens in
+ * the drawer, a follow-up of the conversation scrolls into view. The app shell
+ * also records the node in the navigation store, which covers the case where
+ * no document for that tree is mounted yet. */
+export function requestResearchNodeOpen(treeId: string, nodeId: string) {
+  window.dispatchEvent(
+    new CustomEvent<ResearchOpenNodeRequest>(OPEN_NODE_EVENT, { detail: { treeId, nodeId } }),
+  );
+}
+
+/** Subscribes a research document to node-open requests; returns the
+ * unsubscribe function. */
+export function listenToResearchNodeOpen(
+  onOpen: (request: ResearchOpenNodeRequest) => void,
+): () => void {
+  const handler = (event: Event) => {
+    const detail = (event as CustomEvent<ResearchOpenNodeRequest>).detail;
+    if (detail && typeof detail.treeId === "string" && typeof detail.nodeId === "string") {
+      onOpen(detail);
+    }
+  };
+  window.addEventListener(OPEN_NODE_EVENT, handler);
+  return () => window.removeEventListener(OPEN_NODE_EVENT, handler);
+}

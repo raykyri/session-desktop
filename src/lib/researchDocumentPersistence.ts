@@ -4,30 +4,23 @@ import {
   researchNavigationStore,
   saveResearchNavigation,
 } from "./researchNavigation";
+import type { QueuedResearchFollowup } from "./researchNavigation";
 import type { ResearchHighlightAnchor } from "../types";
 
 /** Prevent transitional React state from overwriting the destination tree's draft. */
 export function createResearchComposerDraftRestoration(
   store = researchNavigationStore(),
 ) {
-  let expected: {
-    treeId: string;
-    text: string;
-    mode: "thread" | "branch";
-  } | null = null;
+  let expected: { treeId: string; text: string } | null = null;
   return {
     restore(treeId: string | null) {
-      const saved = treeId ? store[treeId]?.followupDraft : undefined;
-      const draft = { text: saved?.text ?? "", mode: saved?.mode ?? "thread" };
-      expected = treeId ? { treeId, ...draft } : null;
-      return draft;
+      const text = (treeId ? store[treeId]?.followupDraft?.text : undefined) ?? "";
+      expected = treeId ? { treeId, text } : null;
+      return text;
     },
-    finish() {
-      expected = null;
-    },
-    canPersist(treeId: string, text: string, mode: "thread" | "branch") {
+    canPersist(treeId: string, text: string) {
       if (expected?.treeId === treeId) {
-        if (text !== expected.text || mode !== expected.mode) return false;
+        if (text !== expected.text) return false;
         expected = null;
       }
       return true;
@@ -64,8 +57,8 @@ export function createResearchDocumentPersistence(
       recordResearchScrollPosition(entry(treeId), nodeId, top);
       schedule();
     },
-    recordDraft(treeId: string, text: string, mode: "thread" | "branch") {
-      if (recordResearchFollowupDraft(entry(treeId), text, mode)) schedule();
+    recordDraft(treeId: string, text: string) {
+      if (recordResearchFollowupDraft(entry(treeId), text)) schedule();
     },
     recordAsk(
       treeId: string,
@@ -79,6 +72,26 @@ export function createResearchDocumentPersistence(
         updatedAt: Date.now(),
       };
       schedule();
+    },
+    recordPinned(treeId: string, headIds: string[]) {
+      const navigation = entry(treeId);
+      if (headIds.length === 0) {
+        if (!navigation.pinnedBranches) return;
+        delete navigation.pinnedBranches;
+      } else {
+        navigation.pinnedBranches = [...headIds];
+      }
+      flush();
+    },
+    recordQueue(treeId: string, headId: string, queue: QueuedResearchFollowup[]) {
+      const navigation = entry(treeId);
+      if (queue.length === 0) {
+        if (!navigation.queuedFollowups?.[headId]) return;
+        delete navigation.queuedFollowups[headId];
+      } else {
+        (navigation.queuedFollowups ??= {})[headId] = queue;
+      }
+      flush();
     },
     clearAsk(treeId: string, nodeId: string) {
       const asks = store[treeId]?.askByNode;

@@ -2632,7 +2632,20 @@ impl AppState {
             // was off (deleted elsewhere) drop here instead of on every refresh
             // against a possibly-incomplete navigation snapshot.
             model.research_folders = persisted.research_folders;
-            model.research_drafts = persisted.research_drafts;
+            // Drop drafts whose research workspace was removed by an older
+            // build or a manual state-file edit.
+            let draft_count = persisted.research_drafts.len();
+            model.research_drafts = persisted
+                .research_drafts
+                .into_iter()
+                .filter(|draft| {
+                    model
+                        .groups
+                        .get(&draft.workspace_id)
+                        .is_some_and(|group| group.scope == WorkspaceScope::Research)
+                })
+                .collect();
+            research_reconciled |= model.research_drafts.len() != draft_count;
             model.notification_log = persisted.notification_log;
             let known_research_tree_ids =
                 model.research_trees.keys().cloned().collect::<HashSet<_>>();
@@ -3954,16 +3967,25 @@ impl AppState {
             .into_iter()
             .map(|root| {
                 let mut query = RecentResearchQuery::from(root);
-                let children = sorted_children(root);
-                query.children = children
+                query.children = sorted_children(root)
                     .iter()
                     .filter(|child| is_feed_kind(child.kind))
                     .map(|child| feed_entry(root, child, u32::from(!child.inline)))
                     .collect();
                 if trees_with_promotions.contains(root.tree_id.as_str()) {
-                    // Depth-first in sibling order: the stack holds each
-                    // level reversed so the oldest sibling pops first.
-                    let mut stack = children
+                    // Depth-first. A node's branches (oldest first) come before
+                    // its inline continuation, so each promoted branch follows
+                    // the turn it was asked from. Non-feed kinds are skipped
+                    // with their subtrees, matching `children`. The stack holds
+                    // each level reversed so the next entry pops first.
+                    let traversal_order = |parent: &ResearchNode| {
+                        let mut children = sorted_children(parent);
+                        children.retain(|child| is_feed_kind(child.kind));
+                        // Stable: keeps created_at order within each group.
+                        children.sort_by_key(|child| child.inline);
+                        children
+                    };
+                    let mut stack = traversal_order(root)
                         .into_iter()
                         .rev()
                         .map(|child| (root, child, u32::from(!child.inline)))
@@ -3973,7 +3995,7 @@ impl AppState {
                             query.promoted.push(feed_entry(parent, node, depth));
                         }
                         stack.extend(
-                            sorted_children(node)
+                            traversal_order(node)
                                 .into_iter()
                                 .rev()
                                 .map(|child| (node, child, depth + u32::from(!child.inline))),
@@ -4011,7 +4033,8 @@ impl AppState {
     /// caller that momentarily sees fewer trees is exactly the loss this work
     /// removes. Folder names are validated by
     /// [`research::validate_research_folders`]. Returns the normalized state
-    /// the frontend should adopt.
+    /// the frontend should adopt, and emits `research.folders.changed` when
+    /// the stored state changed.
     pub fn set_research_folders(
         &self,
         mut folders: research::ResearchFolderState,
@@ -4030,7 +4053,19 @@ impl AppState {
             model.research_folders = folders.clone();
         }
         self.persist();
+        self.emit_research_folders_changed();
         Ok(folders)
+    }
+
+    /// Tells other windows to refetch the folder state. The payload is empty:
+    /// the state spans every workspace and is small enough to reload whole.
+    fn emit_research_folders_changed(&self) {
+        self.emit(SessionEvent::new(
+            "research.folders.changed",
+            None,
+            None,
+            json!({}),
+        ));
     }
 
     pub fn list_research_activity(&self) -> Result<Vec<ResearchNode>, String> {
@@ -6562,9 +6597,9 @@ impl AppState {
             let node = model
                 .research_nodes
                 .get_mut(node_id)
-                .ok_or_else(|| format!("research node {node_id} was not found"))?;
+                .ok_or_else(|| format!("Research node {node_id} was not found."))?;
             if node.parent_node_id.is_none() {
-                return Err("the root of a research tree cannot be promoted".to_string());
+                return Err("The root of a research tree cannot be promoted.".to_string());
             }
             let changed = node.promoted_at.is_some() != promoted;
             if changed {
@@ -6611,7 +6646,7 @@ impl AppState {
     ) -> Result<research::ResearchDraft, String> {
         let prompt = prompt.trim().to_string();
         if prompt.is_empty() {
-            return Err("research draft prompt cannot be empty".to_string());
+            return Err("Research draft prompt cannot be empty.".to_string());
         }
         let draft = {
             let mut model = self
@@ -6624,7 +6659,7 @@ impl AppState {
                 .get(workspace_id)
                 .is_some_and(|group| group.scope == WorkspaceScope::Research)
             {
-                return Err(format!("research workspace {workspace_id} was not found"));
+                return Err(format!("Research workspace {workspace_id} was not found."));
             }
             let now = now_millis();
             match id {
@@ -6633,7 +6668,7 @@ impl AppState {
                         .research_drafts
                         .iter_mut()
                         .find(|draft| draft.id == id && draft.workspace_id == workspace_id)
-                        .ok_or_else(|| format!("research draft {id} was not found"))?;
+                        .ok_or_else(|| format!("Research draft {id} was not found."))?;
                     draft.prompt = prompt;
                     draft.updated_at = now;
                     draft.clone()
@@ -6667,7 +6702,7 @@ impl AppState {
                 .research_drafts
                 .iter()
                 .position(|draft| draft.id == draft_id)
-                .ok_or_else(|| format!("research draft {draft_id} was not found"))?;
+                .ok_or_else(|| format!("Research draft {draft_id} was not found."))?;
             model.research_drafts.remove(index)
         };
         self.persist();
@@ -6700,7 +6735,7 @@ impl AppState {
                 || requested_ids.len() != draft_ids.len()
                 || requested_ids != current_ids
             {
-                return Err("research draft order is stale; refresh before reordering".to_string());
+                return Err("Research draft order is stale. Refresh before reordering.".to_string());
             }
             let changed = draft_ids != current;
             if changed {
@@ -7403,6 +7438,8 @@ impl AppState {
             research_folders,
             research_drafts,
             reaped_thread_records,
+            folders_changed,
+            drafts_changed,
         ) = {
             let mut model = self
                 .inner
@@ -7494,10 +7531,12 @@ impl AppState {
             let research_folders = model.research_folders.clone();
             research::remove_trees_from_research_folders(&mut model.research_folders, &tree_ids);
             research::remove_research_workspace_folders(&mut model.research_folders, workspace_id);
+            let folders_changed = model.research_folders != research_folders;
             let research_drafts = model.research_drafts.clone();
             model
                 .research_drafts
                 .retain(|draft| draft.workspace_id != workspace_id);
+            let drafts_changed = model.research_drafts.len() != research_drafts.len();
             let node_ids = model
                 .research_nodes
                 .values()
@@ -7548,6 +7587,8 @@ impl AppState {
                 research_folders,
                 research_drafts,
                 reaped_thread_records,
+                folders_changed,
+                drafts_changed,
             )
         };
 
@@ -7587,6 +7628,14 @@ impl AppState {
             None,
             json!({ "groupId": workspace_id }),
         ));
+        // Notify other windows only after the detach commits. A rollback
+        // restores both folders and drafts.
+        if folders_changed {
+            self.emit_research_folders_changed();
+        }
+        if drafts_changed {
+            self.emit_research_drafts_changed(workspace_id);
+        }
         // Best-effort after the durable commit: the records are unreachable,
         // and a leftover graph file is only disk clutter.
         for (_, record, _) in reaped_thread_records {
@@ -13470,7 +13519,7 @@ mod tests {
             state
                 .set_research_node_promoted(&root_id, true)
                 .unwrap_err(),
-            "the root of a research tree cannot be promoted"
+            "The root of a research tree cannot be promoted."
         );
         assert!(state.set_research_node_promoted("missing", true).is_err());
         assert!(state.take_emitted_events().is_empty());
@@ -13524,15 +13573,29 @@ mod tests {
         }
         // root ── C (branch, 105)
         //      ├─ A (inline, 110) ── A1 (branch, 120)
-        //      └─ B (branch, 130) ┬─ B2 (inline, 135)
-        //                         └─ B1 (branch, 140)
+        //      ├─ B (branch, 130) ┬─ B2 (inline, 135)
+        //      │                  └─ B1 (branch, 140)
+        //      └─ D (document, 150) ── D1 (branch, 160)
         insert_research_test_child(&state, &root_id, "c", false, 105);
         insert_research_test_child(&state, &root_id, "a", true, 110);
         insert_research_test_child(&state, "a", "a1", false, 120);
         insert_research_test_child(&state, &root_id, "b", false, 130);
         insert_research_test_child(&state, "b", "b2", true, 135);
         insert_research_test_child(&state, "b", "b1", false, 140);
-        for id in ["b1", "a1", "c", "b2", "a"] {
+        // Documents are only ever roots; a stray one is skipped with its
+        // subtree, as `children` skips it.
+        insert_research_test_child(&state, &root_id, "d", false, 150);
+        insert_research_test_child(&state, "d", "d1", false, 160);
+        state
+            .inner
+            .model
+            .lock()
+            .unwrap()
+            .research_nodes
+            .get_mut("d")
+            .unwrap()
+            .kind = ResearchNodeKind::Document;
+        for id in ["b1", "a1", "c", "b2", "a", "d", "d1"] {
             state.set_research_node_promoted(id, true).unwrap();
         }
 
@@ -13555,14 +13618,17 @@ mod tests {
                 ("b".to_string(), 1)
             ]
         );
+        // Each node's branches precede its inline continuation: B1 (asked
+        // from B) comes before B2, and C and B (asked from the root) come
+        // before the root's continuation A.
         assert_eq!(
             entries(&root.promoted),
             vec![
                 ("c".to_string(), 1),
+                ("b1".to_string(), 2),
+                ("b2".to_string(), 1),
                 ("a".to_string(), 0),
                 ("a1".to_string(), 1),
-                ("b2".to_string(), 1),
-                ("b1".to_string(), 2),
             ]
         );
         assert!(
@@ -13570,14 +13636,15 @@ mod tests {
                 .iter()
                 .all(|entry| entry.promoted_at.is_some() && entry.promoted.is_empty())
         );
-        assert_eq!(root.promoted[2].parent_node_id.as_deref(), Some("a"));
+        assert_eq!(root.promoted[2].parent_node_id.as_deref(), Some("b"));
+        assert_eq!(root.promoted[4].parent_node_id.as_deref(), Some("a"));
 
         let json = serde_json::to_value(&page.items).unwrap();
         assert_eq!(json[0]["branchDepth"], serde_json::json!(0));
-        assert_eq!(json[0]["promoted"][4]["nodeId"], serde_json::json!("b1"));
-        assert_eq!(json[0]["promoted"][4]["branchDepth"], serde_json::json!(2));
-        assert!(json[0]["promoted"][4]["promotedAt"].is_number());
-        assert!(json[0]["promoted"][4]["status"].is_string());
+        assert_eq!(json[0]["promoted"][1]["nodeId"], serde_json::json!("b1"));
+        assert_eq!(json[0]["promoted"][1]["branchDepth"], serde_json::json!(2));
+        assert!(json[0]["promoted"][1]["promotedAt"].is_number());
+        assert!(json[0]["promoted"][1]["status"].is_string());
         assert!(json[0].get("promotedAt").is_none());
         // A tree without promotions carries no `promoted` key.
         assert_eq!(
@@ -13617,7 +13684,7 @@ mod tests {
                 state
                     .save_research_draft(None, "ws-a", "  \n ".to_string())
                     .unwrap_err(),
-                "research draft prompt cannot be empty"
+                "Research draft prompt cannot be empty."
             );
             assert!(
                 state
@@ -13730,10 +13797,115 @@ mod tests {
         assert_eq!(raw["researchDrafts"][0]["prompt"], "First, edited");
         assert_eq!(raw["researchDrafts"][0]["workspaceId"], "ws-a");
 
+        // A draft whose workspace is gone and a malformed entry: load drops
+        // both, keeps the rest, and rewrites the file without them.
+        let mut raw = raw;
+        let stored = raw["researchDrafts"].as_array_mut().unwrap();
+        stored.push(serde_json::json!({
+            "id": "research-draft-orphan",
+            "workspaceId": "ws-gone",
+            "prompt": "Orphan",
+            "createdAt": 1,
+            "updatedAt": 1,
+        }));
+        stored.push(serde_json::json!({ "id": 5 }));
+        std::fs::write(
+            persistence::state_path(&workspace),
+            serde_json::to_vec(&raw).unwrap(),
+        )
+        .unwrap();
+
         let restored = AppState::new(config);
         restored.restore_session();
         assert_eq!(restored.list_research_drafts("ws-a").unwrap(), expected);
         assert_eq!(restored.list_research_drafts("ws-b").unwrap().len(), 1);
+        assert!(restored.list_research_drafts("ws-gone").unwrap().is_empty());
+        let raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(persistence::state_path(&workspace)).unwrap())
+                .unwrap();
+        assert_eq!(raw["researchDrafts"].as_array().unwrap().len(), 2);
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn research_workspace_detach_drops_drafts_and_restores_them_on_rollback() {
+        let workspace = temp_workspace();
+        let state = AppState::new(test_config(workspace.clone()));
+        assert!(state.restore_session().is_empty());
+        let research_group = |id: &str| {
+            let mut group = sample_group_with_id(id);
+            group.scope = WorkspaceScope::Research;
+            group.dir = workspace.display().to_string();
+            group.managed_dir = workspace
+                .join(format!("managed-{id}"))
+                .display()
+                .to_string();
+            group.agents.clear();
+            group
+        };
+        state
+            .insert_group_after(research_group("ws-a"), None)
+            .unwrap();
+        state
+            .insert_group_after(research_group("ws-b"), None)
+            .unwrap();
+        state
+            .save_research_draft(None, "ws-a", "Leaves with ws-a".to_string())
+            .unwrap();
+        let kept = state
+            .save_research_draft(None, "ws-b", "Stays".to_string())
+            .unwrap();
+        let folders = research::ResearchFolderState {
+            folders: vec![research::ResearchFolder {
+                id: "f-a".to_string(),
+                name: "Reading".to_string(),
+                workspace_id: "ws-a".to_string(),
+            }],
+            ..research::ResearchFolderState::default()
+        };
+        state.set_research_folders(folders.clone()).unwrap();
+        let drafts_before = state.inner.model.lock().unwrap().research_drafts.clone();
+        let archive = state.detached_research_archive("ws-a").unwrap();
+        state.take_emitted_events();
+
+        // A non-empty directory where state.json goes makes the commit fail.
+        let state_path = persistence::state_path(&workspace);
+        std::fs::remove_file(&state_path).unwrap();
+        std::fs::create_dir_all(state_path.join("blocker")).unwrap();
+        let error = state
+            .commit_research_workspace_detach("ws-a", &archive)
+            .unwrap_err();
+        assert!(error.contains("failed to commit"), "{error}");
+        assert_eq!(
+            state.inner.model.lock().unwrap().research_drafts,
+            drafts_before
+        );
+        assert_eq!(state.list_research_drafts("ws-a").unwrap().len(), 1);
+        assert_eq!(state.research_folders().unwrap(), folders);
+        assert!(state.take_emitted_events().is_empty());
+
+        std::fs::remove_dir_all(&state_path).unwrap();
+        state
+            .commit_research_workspace_detach("ws-a", &archive)
+            .unwrap();
+        assert!(state.list_research_drafts("ws-a").unwrap().is_empty());
+        assert_eq!(state.list_research_drafts("ws-b").unwrap(), vec![kept]);
+        assert!(state.research_folders().unwrap().folders.is_empty());
+        let events = state.take_emitted_events();
+        let event = |event_type: &str| {
+            events
+                .iter()
+                .find(|event| event.event_type == event_type)
+                .unwrap_or_else(|| panic!("{event_type} was not emitted"))
+        };
+        assert_eq!(
+            event("research.drafts.changed").payload,
+            serde_json::json!({ "workspaceId": "ws-a" })
+        );
+        assert_eq!(
+            event("research.folders.changed").payload,
+            serde_json::json!({})
+        );
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
@@ -13771,10 +13943,19 @@ mod tests {
                     "ghost".to_string(),
                 ],
             };
+            state.take_emitted_events();
             let saved = state.set_research_folders(requested.clone()).unwrap();
             assert_eq!(saved.folders[0].name, "Reading");
             assert_eq!(saved.membership, requested.membership);
             assert_eq!(saved.collapsed, requested.collapsed[..3].to_vec());
+            let events = state.take_emitted_events();
+            assert_eq!(events.len(), 1);
+            assert_eq!(events[0].event_type, "research.folders.changed");
+            assert_eq!(events[0].payload, serde_json::json!({}));
+            assert!(events[0].timestamp > 0);
+            // Saving the stored state again changes nothing and emits nothing.
+            state.set_research_folders(saved.clone()).unwrap();
+            assert!(state.take_emitted_events().is_empty());
 
             requested.folders.push(folder("f2", "READING"));
             assert_eq!(
@@ -13786,7 +13967,13 @@ mod tests {
                 state.set_research_folders(requested.clone()).unwrap_err(),
                 "The name \"Drafts\" is reserved."
             );
+            requested.folders[1].name = "Highlights".to_string();
+            assert_eq!(
+                state.set_research_folders(requested.clone()).unwrap_err(),
+                "The name \"Highlights\" is reserved."
+            );
             assert_eq!(state.research_folders().unwrap(), saved);
+            assert!(state.take_emitted_events().is_empty());
             tree.tree.id
         };
 

@@ -101,15 +101,26 @@ const RESEARCH_SYSTEM_FOLDER_IDS: [&str; 3] = [
     "system:unfiled",
 ];
 const RESEARCH_SYSTEM_FOLDER_ID_PREFIX: &str = "system:";
-/// Names of the sidebar's built-in sections, compared case-insensitively.
-const RESERVED_RESEARCH_FOLDER_NAMES: [&str; 4] = ["Home", "Unfiled", "Drafts", "Archive"];
+/// Names of the sidebar's built-in sections, lowercase. Mirrors
+/// `RESERVED_FOLDER_NAMES` in src/lib/researchFolders.ts.
+const RESERVED_RESEARCH_FOLDER_NAMES: [&str; 6] = [
+    "home",
+    "unfiled",
+    "drafts",
+    "archive",
+    "bookmarks",
+    "highlights",
+];
+/// Mirrors `RESEARCH_FOLDER_NAME_MAX_LENGTH` in src/lib/researchFolders.ts.
+const RESEARCH_FOLDER_NAME_MAX_CHARS: usize = 40;
 
 fn is_research_system_folder_id(id: &str) -> bool {
     RESEARCH_SYSTEM_FOLDER_IDS.contains(&id)
 }
 
-/// Trims folder names and rejects empty, reserved, and (per workspace,
-/// case-insensitively) duplicate names, plus ids in the `system:` namespace.
+/// Trims folder names and rejects empty, overlong, reserved, and (per
+/// workspace) duplicate names, plus ids in the `system:` namespace. Reserved
+/// and duplicate checks both compare Unicode lowercase forms.
 /// A folder whose id and trimmed name match `current` is not re-checked, so a
 /// state saved before this validation existed stays writable.
 pub fn validate_research_folders(
@@ -143,13 +154,16 @@ pub fn validate_research_folders(
         if folder.name.is_empty() {
             return Err("Folder names cannot be empty.".to_string());
         }
-        if RESERVED_RESEARCH_FOLDER_NAMES
-            .iter()
-            .any(|reserved| reserved.eq_ignore_ascii_case(&folder.name))
-        {
+        if folder.name.chars().count() > RESEARCH_FOLDER_NAME_MAX_CHARS {
+            return Err(format!(
+                "Folder names can be at most {RESEARCH_FOLDER_NAME_MAX_CHARS} characters."
+            ));
+        }
+        let lowercase = folder.name.to_lowercase();
+        if RESERVED_RESEARCH_FOLDER_NAMES.contains(&lowercase.as_str()) {
             return Err(format!("The name \"{}\" is reserved.", folder.name));
         }
-        let key = (folder.workspace_id.as_str(), folder.name.to_lowercase());
+        let key = (folder.workspace_id.as_str(), lowercase);
         if names_by_workspace.get(&key).copied().unwrap_or_default() > 1 {
             return Err(format!(
                 "A folder named \"{}\" already exists.",
@@ -624,8 +638,9 @@ pub struct RecentResearchQuery {
     /// Non-inline edges on the path from the tree's root to this node: 0 for
     /// the root and its inline continuations, 1 for a branch of the root.
     pub branch_depth: u32,
-    /// Root entries only: every promoted node in the tree, depth-first with
-    /// siblings oldest first.
+    /// Root entries only: every promoted feed-kind node in the tree,
+    /// depth-first, visiting a node's branches (oldest first) before its
+    /// inline continuation.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub promoted: Vec<RecentResearchQuery>,
     /// Current answer recap, when one has been generated for this run.
@@ -3467,13 +3482,35 @@ mod tests {
             validate_research_folders(&mut duplicate, &current).unwrap_err(),
             "A folder named \"Reading\" already exists."
         );
-        for reserved in ["home", "UNFILED", " Drafts ", "archive"] {
+        // Duplicates compare Unicode lowercase forms, not just ASCII.
+        let mut duplicate = named(&[("f1", "Écoles", "ws-a"), ("f2", "écoles", "ws-a")]);
+        assert_eq!(
+            validate_research_folders(&mut duplicate, &current).unwrap_err(),
+            "A folder named \"Écoles\" already exists."
+        );
+        for reserved in [
+            "home",
+            "UNFILED",
+            " Drafts ",
+            "archive",
+            "Bookmarks",
+            "HIGHLIGHTS",
+        ] {
             let mut state = named(&[("f1", reserved, "ws-a")]);
             assert_eq!(
                 validate_research_folders(&mut state, &current).unwrap_err(),
                 format!("The name \"{}\" is reserved.", reserved.trim())
             );
         }
+        // The limit counts characters after trimming, not bytes.
+        let at_limit = format!("  {}  ", "é".repeat(40));
+        let mut state = named(&[("f1", at_limit.as_str(), "ws-a")]);
+        validate_research_folders(&mut state, &current).unwrap();
+        let mut over_limit = named(&[("f1", &"a".repeat(41), "ws-a")]);
+        assert_eq!(
+            validate_research_folders(&mut over_limit, &current).unwrap_err(),
+            "Folder names can be at most 40 characters."
+        );
         let mut empty = named(&[("f1", "   ", "ws-a")]);
         assert_eq!(
             validate_research_folders(&mut empty, &current).unwrap_err(),
@@ -3506,11 +3543,20 @@ mod tests {
             ],
             ..ResearchFolderState::default()
         };
+        let mut legacy = legacy;
+        legacy.folders.push(ResearchFolder {
+            id: "f4".to_string(),
+            name: "x".repeat(60),
+            workspace_id: "ws".to_string(),
+        });
         let mut next = legacy.clone();
         next.folders.push(folder("f3", "ws"));
         validate_research_folders(&mut next, &legacy).unwrap();
-        next.folders[2].name = "DRAFTS".to_string();
+        next.folders[3].name = "DRAFTS".to_string();
         assert!(validate_research_folders(&mut next, &legacy).is_err());
+        let mut renamed = legacy.clone();
+        renamed.folders[2].name = "y".repeat(60);
+        assert!(validate_research_folders(&mut renamed, &legacy).is_err());
     }
 
     fn temp_workspace() -> PathBuf {

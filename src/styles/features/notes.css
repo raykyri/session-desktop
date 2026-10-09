@@ -342,8 +342,10 @@
 
 /* — Note page — */
 
+/* A note page is the body of a column, inset like a conversation turn. */
 .note-document {
-  max-width: 640px;
+  max-width: 688px;
+  padding: 22px 24px 28px;
 }
 
 .note-document-parent {
@@ -376,14 +378,14 @@
   font-weight: 500;
 }
 
-/* Delivery and time lead the meta row; Follow and Bookmark sit at its
-   trailing edge, as on a Home post. */
+/* Delivery and time under the note; Follow and Bookmark are in the column
+   header. */
 .note-document-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
   margin-top: 10px;
-}
-
-.note-document-meta .research-thread-actions {
-  margin-left: auto;
 }
 
 .note-document-group {

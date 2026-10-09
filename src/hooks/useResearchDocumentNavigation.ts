@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
-import type { Dispatch, SetStateAction } from "react";
 import {
   createResearchComposerDraftRestoration,
   createResearchDocumentPersistence,
@@ -8,7 +7,7 @@ import type { ResearchHighlightAnchor, ResearchNodeContent } from "../types";
 
 type Persistence = ReturnType<typeof createResearchDocumentPersistence>;
 type DraftRestoration = ReturnType<typeof createResearchComposerDraftRestoration>;
-type Ask = { nodeId: string; anchor: ResearchHighlightAnchor };
+type Draft = { nodeId: string; anchor: ResearchHighlightAnchor };
 
 /** Own the shared store, durable writes, and final scroll capture for one document mount. */
 export function useResearchDocumentNavigation(
@@ -35,95 +34,78 @@ export function useResearchDocumentNavigation(
   return owner.current;
 }
 
-/** Call after the document's tree-reset effect so restoration wins over resets. */
+/** Persists the conversation composer's text per tree, and a new branch that
+ * is still being written (the drawer's draft: its passage and text), so
+ * leaving the research surface — which unmounts the document — loses
+ * neither. A saved draft reopens in the drawer once its passage's turn has
+ * loaded, unless the drawer is already showing something. Call after the
+ * document's tree-reset effect so restoration wins over resets. */
 export function useResearchComposerDrafts({
   persistence,
   treeId,
-  followup,
-  mode,
-  ask,
-  selectedNodeId,
+  mainText,
+  draft,
+  draftText,
+  drawerOpen,
   chainNodeIds,
-  chainKey,
-  revisionsKey,
   contentByNode,
-  setFollowup,
-  setMode,
-  setAsk,
+  setMainText,
+  restoreDraft,
 }: {
   persistence: Persistence;
   treeId: string | null;
-  followup: string;
-  mode: "thread" | "branch";
-  ask: Ask | null;
-  selectedNodeId: string | null;
+  mainText: string;
+  draft: Draft | null;
+  draftText: string;
+  drawerOpen: boolean;
   chainNodeIds: string[];
-  chainKey: string;
-  revisionsKey: string;
   contentByNode: Record<string, ResearchNodeContent>;
-  setFollowup: Dispatch<SetStateAction<string>>;
-  setMode: Dispatch<SetStateAction<"thread" | "branch">>;
-  setAsk: Dispatch<SetStateAction<Ask | null>>;
+  setMainText: (text: string) => void;
+  restoreDraft: (nodeId: string, anchor: ResearchHighlightAnchor, text: string) => void;
 }) {
   const restoring = useRef<DraftRestoration | null>(null);
   if (!restoring.current) {
     restoring.current = createResearchComposerDraftRestoration(persistence.store);
   }
-  const restoringAsk = useRef(false);
-  useEffect(() => {
-    const saved = restoring.current!.restore(treeId);
-    setFollowup(saved.text);
-    setMode(saved.mode);
-  }, [persistence, setFollowup, setMode, treeId]);
+  const setMainTextRef = useRef(setMainText);
+  setMainTextRef.current = setMainText;
+  const restoreDraftRef = useRef(restoreDraft);
+  restoreDraftRef.current = restoreDraft;
+  const draftRestoredRef = useRef(false);
 
   useEffect(() => {
-    restoringAsk.current = false;
-    if (!treeId || chainNodeIds.length === 0 || ask) return;
-    const asks = persistence.store[treeId]?.askByNode;
-    const candidates = selectedNodeId
-      ? [selectedNodeId, ...chainNodeIds.filter((id) => id !== selectedNodeId)]
-      : chainNodeIds;
-    for (const nodeId of candidates) {
-      const saved = asks?.[nodeId];
-      if (!saved || !contentByNode[nodeId]?.responseRevision) continue;
-      restoringAsk.current = true;
-      // Targeted restoration supersedes the ordinary draft; dismissing that
-      // ask later must allow ordinary edits without waiting for the old text.
-      restoring.current!.finish();
-      setAsk({ nodeId, anchor: saved.anchor });
-      if (saved.text) setFollowup((current) => current || saved.text);
+    setMainTextRef.current(restoring.current!.restore(treeId));
+    draftRestoredRef.current = false;
+  }, [persistence, treeId]);
+
+  useEffect(() => {
+    if (!treeId || draftRestoredRef.current || chainNodeIds.length === 0) return;
+    if (drawerOpen) {
+      draftRestoredRef.current = true;
       return;
     }
-  }, [
-    ask,
-    chainKey,
-    chainNodeIds,
-    contentByNode,
-    persistence,
-    revisionsKey,
-    selectedNodeId,
-    setAsk,
-    setFollowup,
-    treeId,
-  ]);
-
-  useEffect(() => {
-    if (!treeId || ask || restoringAsk.current) return;
-    if (!restoring.current!.canPersist(treeId, followup, mode)) return;
-    persistence.recordDraft(treeId, followup, mode);
-  }, [ask, followup, mode, persistence, treeId]);
-
-  const askContentLoaded = ask ? Boolean(contentByNode[ask.nodeId]) : false;
-  useEffect(() => {
-    // A tree reset commits asynchronously; an outgoing ask still present in that
-    // render must not be written under the incoming tree.
-    if (
-      ask &&
-      treeId &&
-      askContentLoaded &&
-      chainNodeIds.includes(ask.nodeId)
-    ) {
-      persistence.recordAsk(treeId, ask.nodeId, ask.anchor, followup);
+    const drafts = persistence.store[treeId]?.askByNode;
+    for (const nodeId of chainNodeIds) {
+      const saved = drafts?.[nodeId];
+      if (!saved || !contentByNode[nodeId]?.responseRevision) continue;
+      draftRestoredRef.current = true;
+      restoreDraftRef.current(nodeId, saved.anchor, saved.text);
+      return;
     }
-  }, [ask, askContentLoaded, chainNodeIds, followup, persistence, treeId]);
+  }, [chainNodeIds, contentByNode, drawerOpen, persistence, treeId]);
+
+  useEffect(() => {
+    if (!treeId) return;
+    if (!restoring.current!.canPersist(treeId, mainText)) return;
+    persistence.recordDraft(treeId, mainText);
+  }, [mainText, persistence, treeId]);
+
+  const draftContentLoaded = draft ? Boolean(contentByNode[draft.nodeId]) : false;
+  useEffect(() => {
+    // A tree reset commits asynchronously; an outgoing draft still present in
+    // that render must not be written under the incoming tree.
+    if (draft && treeId && draftContentLoaded && chainNodeIds.includes(draft.nodeId)) {
+      persistence.recordAsk(treeId, draft.nodeId, draft.anchor, draftText);
+    }
+  }, [chainNodeIds, draft, draftContentLoaded, draftText, persistence, treeId]);
 }

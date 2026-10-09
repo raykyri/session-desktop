@@ -27,14 +27,10 @@ function ResearchRecapLine({
 
 /** Placeholder in the recap's own slot while a background summary job runs, so
  * the summary lands where the spinner sat rather than shifting the answer. */
-export function ResearchRecapPendingLine({ className }: { className?: string }) {
+function ResearchRecapPendingLine() {
   return (
     <p
-      className={
-        className
-          ? `research-summary-text research-recap research-recap-pending ${className}`
-          : "research-summary-text research-recap research-recap-pending"
-      }
+      className="research-summary-text research-recap research-recap-pending"
       role="status"
       aria-label="Generating summary"
       title="Generating summary"
