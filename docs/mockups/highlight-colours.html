@@ -1,0 +1,235 @@
+<!doctype html>
+<!--
+  Session highlight colour proposals: six subtle variants for the amber highlight and
+  blue branch-passage tints, with fill/hover values and text contrast in both themes.
+  Open directly in a browser; DM Sans and JetBrains Mono load from Google Fonts.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Highlight Colour Proposals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a grid of variant panels. Each panel renders the same answer text in
+   Session's conversation styling, with its own highlight and branch-passage colours. */
+:root {
+  color-scheme: dark;
+  --page: #121110;
+  --left: #171716;
+  --feed: #1a1918;
+  --doc: #1c1b1a;
+  --spine: #181716;
+  --field: #232220;
+  --pop: #23221f;
+  --tray: #1d1c1b;
+  --sel: #2b2927;
+  --fill: rgba(255, 255, 255, 0.06);
+  --fill-2: rgba(255, 255, 255, 0.1);
+  --border: #2a2928;
+  --border-strong: #373634;
+  --win-border: #3a3836;
+  --heading: #f4f3ec;
+  --text: #e7e7e2;
+  --body: #d9ddd9;
+  --text-2: #c4cbc6;
+  --muted: #8a938e;
+  --faint: #7f8783;
+  --accent: #33adff;
+  --on-accent: #0f1413;
+  --accent-soft: rgba(51, 173, 255, 0.13);
+  --accent-soft-hover: rgba(51, 173, 255, 0.24);
+  --hl: rgba(240, 178, 70, 0.22);
+  --hl-strong: rgba(240, 178, 70, 0.42);
+  --anc: #b3a58c;
+  --run: #d7a84f;
+  --run-soft: rgba(215, 168, 79, 0.12);
+  --fail: #e59a9a;
+  --fail-soft: rgba(217, 135, 135, 0.12);
+  --fail-border: rgba(217, 135, 135, 0.35);
+  --warn: #d8b878;
+  --warn-soft: rgba(216, 184, 120, 0.12);
+  --warn-border: rgba(216, 184, 120, 0.4);
+  --drop: rgba(215, 168, 79, 0.12);
+  --drop-border: rgba(215, 168, 79, 0.74);
+  --scrim: rgba(8, 10, 12, 0.55);
+  --zone: rgba(109, 167, 236, 0.16);
+  --zone-line: rgba(109, 167, 236, 0.7);
+  --shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  --win-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(0, 0, 0, 0.8);
+  --tl-red: #ff5f57; --tl-yellow: #febc2e; --tl-green: #28c840; --tl-edge: rgba(0, 0, 0, 0.25);
+  --font: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --page: #e9e6e1; --left: #f1eeea; --feed: #f8f6f3; --doc: #fcfbf9; --spine: #f3f0ec; --field: #ffffff; --pop: #ffffff; --tray: #f3f1ed; --sel: #ebe7e1;
+    --fill: rgba(0, 0, 0, 0.05); --fill-2: rgba(0, 0, 0, 0.08); --border: #e4dfd9; --border-strong: #d2ccc5; --win-border: #cfc8c0;
+    --heading: #121617; --text: #23282a; --body: #2d3133; --text-2: #4a514f; --muted: #5c6460; --faint: #676f6b;
+    --accent: #0a6fb8; --on-accent: #ffffff; --accent-soft: rgba(11, 127, 209, 0.12); --accent-soft-hover: rgba(11, 127, 209, 0.22);
+    --hl: rgba(240, 170, 40, 0.3); --hl-strong: rgba(240, 170, 40, 0.55); --anc: #8a7d66;
+    --run: #9a6a12; --run-soft: rgba(200, 140, 30, 0.12); --fail: #b14a4a; --fail-soft: rgba(200, 80, 80, 0.09); --fail-border: rgba(177, 74, 74, 0.35);
+    --warn: #8a6414; --warn-soft: rgba(200, 150, 40, 0.12); --warn-border: rgba(160, 120, 30, 0.4);
+    --drop: rgba(215, 160, 60, 0.14); --drop-border: rgba(180, 125, 30, 0.8); --zone: rgba(11, 127, 209, 0.1); --scrim: rgba(40, 32, 24, 0.28); --zone-line: rgba(11, 127, 209, 0.6);
+    --shadow: 0 10px 28px rgba(40, 30, 20, 0.16); --win-shadow: 0 24px 60px rgba(40, 30, 20, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #e9e6e1; --left: #f1eeea; --feed: #f8f6f3; --doc: #fcfbf9; --spine: #f3f0ec; --field: #ffffff; --pop: #ffffff; --tray: #f3f1ed; --sel: #ebe7e1;
+  --fill: rgba(0, 0, 0, 0.05); --fill-2: rgba(0, 0, 0, 0.08); --border: #e4dfd9; --border-strong: #d2ccc5; --win-border: #cfc8c0;
+  --heading: #121617; --text: #23282a; --body: #2d3133; --text-2: #4a514f; --muted: #5c6460; --faint: #676f6b;
+  --accent: #0a6fb8; --on-accent: #ffffff; --accent-soft: rgba(11, 127, 209, 0.12); --accent-soft-hover: rgba(11, 127, 209, 0.22);
+  --hl: rgba(240, 170, 40, 0.3); --hl-strong: rgba(240, 170, 40, 0.55); --anc: #8a7d66;
+  --run: #9a6a12; --run-soft: rgba(200, 140, 30, 0.12); --fail: #b14a4a; --fail-soft: rgba(200, 80, 80, 0.09); --fail-border: rgba(177, 74, 74, 0.35);
+  --warn: #8a6414; --warn-soft: rgba(200, 150, 40, 0.12); --warn-border: rgba(160, 120, 30, 0.4);
+  --drop: rgba(215, 160, 60, 0.14); --drop-border: rgba(180, 125, 30, 0.8); --zone: rgba(11, 127, 209, 0.1); --scrim: rgba(40, 32, 24, 0.28); --zone-line: rgba(11, 127, 209, 0.6);
+  --shadow: 0 10px 28px rgba(40, 30, 20, 0.16); --win-shadow: 0 24px 60px rgba(40, 30, 20, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--page); color: var(--text); font-family: var(--font); font-size: 13.5px; -webkit-font-smoothing: antialiased; padding-inline: 16px; padding-block: 0 32px; margin: 0; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.wrap { max-width: 1240px; margin-inline: auto; }
+.pagehead { padding-block: 18px 8px; }
+.pagehead h1 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -0.01em; color: var(--heading); }
+.pagehead p { margin: 4px 0 0; color: var(--muted); font-size: 13px; max-width: 80ch; line-height: 1.5; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding-block: 8px 14px; font-size: 12.5px; color: var(--muted); }
+.ctl { display: flex; align-items: center; gap: 8px; }
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--left); }
+.seg button { padding: 3px 10px; border-radius: 6px; color: var(--muted); font-size: 12.5px; }
+.seg button[aria-pressed="true"] { background: var(--fill-2); color: var(--heading); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 1fr)); gap: 14px; }
+.panel { border: 1px solid var(--border); border-radius: 12px; background: var(--doc); overflow: hidden; min-width: 0; }
+.panel-h { display: flex; align-items: baseline; gap: 10px; padding: 12px 18px 0; }
+.panel-h h2 { margin: 0; font-size: 15px; line-height: 20px; font-weight: 600; color: var(--heading); }
+.tag { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding: 2px 6px; border-radius: 4px; background: var(--fill-2); }
+.panel .desc { margin: 4px 18px 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.sample { padding: 12px 18px 6px; font-size: 14.5px; line-height: 1.5; color: var(--body); }
+.sample p { margin: 0 0 10px; }
+.mk { border-radius: 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; cursor: pointer; }
+.mk.hl { background: var(--v-hl); box-shadow: var(--v-hl-edge, none); }
+.mk.hl:hover, .force .mk.hl { background: var(--v-hl-h); }
+.mk.br { background: var(--v-br); box-shadow: var(--v-br-edge, none); }
+.mk.br:hover, .force .mk.br { background: var(--v-br-h); }
+.mk.br.open { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 0 18px 12px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 22px; height: 12px; border-radius: 2px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tw { border-top: 1px solid var(--border); overflow-x: auto; }
+th, td { text-align: left; padding: 6px 18px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; background: var(--left); }
+tr:last-child td { border-bottom: 0; }
+td.mono { font-family: var(--mono); font-size: 11.5px; color: var(--text-2); }
+.ok { color: var(--text); font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="pagehead">
+    <h1>Highlight colour proposals</h1>
+    <p>Subtle variants for the two passage tints in Session's answers: your highlights (amber) and passages that have branches (blue), plus the open branch's underline. Each panel uses the same text. Hover any passage, or force hover states on to compare them. Contrast is body text on each tint, over the conversation background.</p>
+  </header>
+  <div class="controls">
+    <div class="ctl"><span>Theme</span><span class="seg"><button data-theme-set="system">System</button><button data-theme-set="dark">Dark</button><button data-theme-set="light">Light</button></span></div>
+    <div class="ctl"><span>Hover states</span><span class="seg"><button data-force="off">On hover</button><button data-force="on">Always</button></span></div>
+  </div>
+  <div class="grid" id="grid"></div>
+</div>
+<style id="vars"></style>
+<script>
+(function () {
+"use strict";
+// Each variant: dark and light values for highlight, highlight hover, branch, branch hover,
+// and an optional bottom edge drawn with an inset shadow.
+const V = [
+  { id: "half", name: "Muted blue, half as muted", tag: "In the main mockup", desc: "Halfway between Current and Muted blue: the amber slightly softer, and the branch tint halfway from the bright accent toward periwinkle.",
+    dark: { hl: "rgba(240,178,70,0.20)", hlH: "rgba(240,178,70,0.39)", br: "rgba(91,164,243,0.14)", brH: "rgba(91,164,243,0.26)" },
+    light: { hl: "rgba(240,170,40,0.27)", hlH: "rgba(240,170,40,0.50)", br: "rgba(51,119,205,0.12)", brH: "rgba(51,119,205,0.22)" } },
+  { id: "current", name: "Current", tag: "Previously", desc: "Amber highlight and accent-blue branch tint, as they were before this change.",
+    dark: { hl: "rgba(240,178,70,0.22)", hlH: "rgba(240,178,70,0.42)", br: "rgba(51,173,255,0.13)", brH: "rgba(51,173,255,0.24)" },
+    light: { hl: "rgba(240,170,40,0.30)", hlH: "rgba(240,170,40,0.55)", br: "rgba(11,127,209,0.12)", brH: "rgba(11,127,209,0.22)" } },
+  { id: "soft", name: "Softer", desc: "The same hues at about two-thirds strength. Long highlighted passages read more like body text; hover makes up the difference.",
+    dark: { hl: "rgba(240,178,70,0.15)", hlH: "rgba(240,178,70,0.30)", br: "rgba(51,173,255,0.09)", brH: "rgba(51,173,255,0.18)" },
+    light: { hl: "rgba(240,170,40,0.20)", hlH: "rgba(240,170,40,0.40)", br: "rgba(11,127,209,0.08)", brH: "rgba(11,127,209,0.16)" } },
+  { id: "periwinkle", name: "Muted blue", desc: "Keeps the amber, and moves the branch tint from the bright accent toward a desaturated periwinkle that sits better next to the warm greys.",
+    dark: { hl: "rgba(240,178,70,0.18)", hlH: "rgba(240,178,70,0.36)", br: "rgba(130,155,230,0.15)", brH: "rgba(130,155,230,0.28)" },
+    light: { hl: "rgba(240,170,40,0.24)", hlH: "rgba(240,170,40,0.46)", br: "rgba(90,110,200,0.12)", brH: "rgba(90,110,200,0.22)" } },
+  { id: "sand", name: "Sand and slate", desc: "Both tints desaturated: a sand highlight and a slate branch tint. The quietest option; the two kinds stay distinct by hue rather than strength.",
+    dark: { hl: "rgba(214,186,130,0.17)", hlH: "rgba(214,186,130,0.32)", br: "rgba(140,165,195,0.16)", brH: "rgba(140,165,195,0.30)" },
+    light: { hl: "rgba(190,150,80,0.20)", hlH: "rgba(190,150,80,0.36)", br: "rgba(100,125,160,0.14)", brH: "rgba(100,125,160,0.26)" } },
+  { id: "edge", name: "Tint with edge", desc: "A lighter fill plus a 2px bottom edge in the same hue, so passages are marked by their edge more than their fill.",
+    dark: { hl: "rgba(240,178,70,0.11)", hlH: "rgba(240,178,70,0.24)", br: "rgba(51,173,255,0.07)", brH: "rgba(51,173,255,0.16)", hlEdge: "rgba(240,178,70,0.55)", brEdge: "rgba(51,173,255,0.45)" },
+    light: { hl: "rgba(240,170,40,0.14)", hlH: "rgba(240,170,40,0.30)", br: "rgba(11,127,209,0.06)", brH: "rgba(11,127,209,0.14)", hlEdge: "rgba(200,135,20,0.7)", brEdge: "rgba(11,127,209,0.55)" } },
+  { id: "marker", name: "Lower-half marker", desc: "The tint covers the lower part of the line only, like a highlighter pen. Ascenders stay on the plain background, so text reads slightly crisper.",
+    marker: true,
+    dark: { hl: "rgba(240,178,70,0.30)", hlH: "rgba(240,178,70,0.48)", br: "rgba(51,173,255,0.20)", brH: "rgba(51,173,255,0.32)" },
+    light: { hl: "rgba(240,170,40,0.38)", hlH: "rgba(240,170,40,0.60)", br: "rgba(11,127,209,0.16)", brH: "rgba(11,127,209,0.28)" } },
+];
+
+const fill = (v, c) => (v.marker ? `linear-gradient(transparent 42%, ${c} 42%)` : c);
+function varsFor(v, t) {
+  return `--v-hl:${fill(v, t.hl)};--v-hl-h:${fill(v, t.hlH)};--v-br:${fill(v, t.br)};--v-br-h:${fill(v, t.brH)};` +
+    `--v-hl-edge:${t.hlEdge ? `inset 0 -2px 0 ${t.hlEdge}` : "none"};--v-br-edge:${t.brEdge ? `inset 0 -2px 0 ${t.brEdge}` : "none"};`;
+}
+// Variant colours follow the same three theme states as the page tokens.
+document.getElementById("vars").textContent = V.map((v) =>
+  `.v-${v.id}{${varsFor(v, v.dark)}}` +
+  `@media (prefers-color-scheme: light){:root:not([data-theme="dark"]) .v-${v.id}{${varsFor(v, v.light)}}}` +
+  `:root[data-theme="light"] .v-${v.id}{${varsFor(v, v.light)}}`).join("\n");
+
+/* ---------- contrast: body text over the tint blended onto the conversation background ---------- */
+const parse = (c) => { const m = c.match(/rgba?\(([^)]+)\)/); if (m) { const p = m[1].split(",").map((x) => +x.trim()); return { r: p[0], g: p[1], b: p[2], a: p[3] == null ? 1 : p[3] }; } const h = c.replace("#", ""); return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16), a: 1 }; };
+const blend = (top, base) => ({ r: top.r * top.a + base.r * (1 - top.a), g: top.g * top.a + base.g * (1 - top.a), b: top.b * top.a + base.b * (1 - top.a) });
+const lum = (c) => { const f = (x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b); };
+const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+function isLight() {
+  const t = document.documentElement.dataset.theme;
+  return t === "light" || (t !== "dark" && matchMedia("(prefers-color-scheme: light)").matches);
+}
+
+const SAMPLE = `<p>The original claim is a revision toward longer timelines for systems that can run open-ended research programs, while <span class="mk hl">keeping short timelines for systems that automate most software engineering</span>.</p>
+<p>The earlier argument it relies on is <span class="mk br open">the distinction between task horizon and task breadth</span>, from a 2025 post. He restated it twice under pushback, both times narrowing what counts as open-ended research.</p>
+<p>The main objections: that <span class="mk br">the distinction collapses once agents can schedule their own subtasks</span>, and that the evidence cited is mostly anecdotal.</p>`;
+
+function render() {
+  const light = isLight();
+  const cs = getComputedStyle(document.documentElement);
+  const base = parse(cs.getPropertyValue("--doc").trim());
+  const text = parse(cs.getPropertyValue("--body").trim());
+  document.getElementById("grid").innerHTML = V.map((v) => {
+    const t = light ? v.light : v.dark;
+    const rows = [["Highlight", t.hl, t.hlH], ["Branch passage", t.br, t.brH]].map(([label, c, h]) =>
+      `<tr><td>${label}</td><td class="mono">${c}</td><td class="mono">${h}</td><td class="ok">${ratio(text, blend(parse(c), base)).toFixed(1)}:1</td></tr>`).join("");
+    const sw = (c) => `<span class="sw" style="background:${fill(v, c)}"></span>`;
+    return `<section class="panel v-${v.id}" aria-label="${v.name}">
+      <div class="panel-h"><h2>${v.name}</h2>${v.tag ? `<span class="tag">${v.tag}</span>` : ""}</div>
+      <p class="desc">${v.desc}</p>
+      <div class="sample">${SAMPLE}</div>
+      <div class="legend"><span>${sw(t.hl)}Highlight</span><span>${sw(t.br)}Branch passage</span><span><span class="sw" style="background:${fill(v, t.br)};box-shadow:inset 0 -2px 0 var(--accent)"></span>Open branch</span></div>
+      <div class="tw"><table><tr><th>${light ? "Light" : "Dark"}</th><th>Fill</th><th>Hover</th><th>Text contrast</th></tr>${rows}</table></div>
+    </section>`;
+  }).join("");
+  document.querySelectorAll("[data-theme-set]").forEach((b) => b.setAttribute("aria-pressed", String((document.documentElement.dataset.theme || "system") === b.dataset.themeSet)));
+  document.querySelectorAll("[data-force]").forEach((b) => b.setAttribute("aria-pressed", String(document.getElementById("grid").classList.contains("force") === (b.dataset.force === "on"))));
+}
+document.querySelector(".controls").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.themeSet) { if (b.dataset.themeSet === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = b.dataset.themeSet; }
+  if (b.dataset.force) document.getElementById("grid").classList.toggle("force", b.dataset.force === "on");
+  render();
+});
+matchMedia("(prefers-color-scheme: light)").addEventListener("change", render);
+render();
+})();
+
+</script>
+</body>
+</html>

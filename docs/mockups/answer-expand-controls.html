@@ -1,0 +1,273 @@
+<!doctype html>
+<!--
+  Session answer expand controls: seven interactive alternatives to the "Show more" link
+  on a collapsed answer in the two-column turn layout, with trade-offs for each.
+  Open directly in a browser; DM Sans and JetBrains Mono load from Google Fonts.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Answer Expand Controls</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a stack of variant panels. Each panel is one conversation turn in Session's
+   two-column layout (question | answer) with a different way to expand the answer. */
+:root {
+  color-scheme: dark;
+  --page: #121110;
+  --left: #171716;
+  --feed: #1a1918;
+  --doc: #1c1b1a;
+  --spine: #181716;
+  --field: #232220;
+  --pop: #23221f;
+  --tray: #1d1c1b;
+  --sel: #2b2927;
+  --fill: rgba(255, 255, 255, 0.06);
+  --fill-2: rgba(255, 255, 255, 0.1);
+  --border: #2a2928;
+  --border-strong: #373634;
+  --win-border: #3a3836;
+  --heading: #f4f3ec;
+  --text: #e7e7e2;
+  --body: #d9ddd9;
+  --text-2: #c4cbc6;
+  --muted: #8a938e;
+  --faint: #7f8783;
+  --accent: #33adff;
+  --on-accent: #0f1413;
+  --accent-soft: rgba(51, 173, 255, 0.13);
+  /* Passage tints: "muted blue, half as muted" from the highlight colour proposals. */
+  --hl: rgba(240, 178, 70, 0.20);
+  --hl-strong: rgba(240, 178, 70, 0.39);
+  --br-tint: rgba(91, 164, 243, 0.14);
+  --br-tint-hover: rgba(91, 164, 243, 0.26);
+  --anc: #b3a58c;
+  --run: #d7a84f;
+  --run-soft: rgba(215, 168, 79, 0.12);
+  --fail: #e59a9a;
+  --fail-soft: rgba(217, 135, 135, 0.12);
+  --fail-border: rgba(217, 135, 135, 0.35);
+  --warn: #d8b878;
+  --warn-soft: rgba(216, 184, 120, 0.12);
+  --warn-border: rgba(216, 184, 120, 0.4);
+  --drop: rgba(215, 168, 79, 0.12);
+  --drop-border: rgba(215, 168, 79, 0.74);
+  --scrim: rgba(8, 10, 12, 0.55);
+  --zone: rgba(109, 167, 236, 0.16);
+  --zone-line: rgba(109, 167, 236, 0.7);
+  --shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  --win-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(0, 0, 0, 0.8);
+  --tl-red: #ff5f57; --tl-yellow: #febc2e; --tl-green: #28c840; --tl-edge: rgba(0, 0, 0, 0.25);
+  --font: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --page: #e9e6e1; --left: #f1eeea; --feed: #f8f6f3; --doc: #fcfbf9; --spine: #f3f0ec; --field: #ffffff; --pop: #ffffff; --tray: #f3f1ed; --sel: #ebe7e1;
+    --fill: rgba(0, 0, 0, 0.05); --fill-2: rgba(0, 0, 0, 0.08); --border: #e4dfd9; --border-strong: #d2ccc5; --win-border: #cfc8c0;
+    --heading: #121617; --text: #23282a; --body: #2d3133; --text-2: #4a514f; --muted: #5c6460; --faint: #676f6b;
+    --accent: #0a6fb8; --on-accent: #ffffff; --accent-soft: rgba(11, 127, 209, 0.12);
+    --hl: rgba(240, 170, 40, 0.27); --hl-strong: rgba(240, 170, 40, 0.5); --br-tint: rgba(51, 119, 205, 0.12); --br-tint-hover: rgba(51, 119, 205, 0.22); --anc: #8a7d66;
+    --run: #9a6a12; --run-soft: rgba(200, 140, 30, 0.12); --fail: #b14a4a; --fail-soft: rgba(200, 80, 80, 0.09); --fail-border: rgba(177, 74, 74, 0.35);
+    --warn: #8a6414; --warn-soft: rgba(200, 150, 40, 0.12); --warn-border: rgba(160, 120, 30, 0.4);
+    --drop: rgba(215, 160, 60, 0.14); --drop-border: rgba(180, 125, 30, 0.8); --zone: rgba(11, 127, 209, 0.1); --scrim: rgba(40, 32, 24, 0.28); --zone-line: rgba(11, 127, 209, 0.6);
+    --shadow: 0 10px 28px rgba(40, 30, 20, 0.16); --win-shadow: 0 24px 60px rgba(40, 30, 20, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #e9e6e1; --left: #f1eeea; --feed: #f8f6f3; --doc: #fcfbf9; --spine: #f3f0ec; --field: #ffffff; --pop: #ffffff; --tray: #f3f1ed; --sel: #ebe7e1;
+  --fill: rgba(0, 0, 0, 0.05); --fill-2: rgba(0, 0, 0, 0.08); --border: #e4dfd9; --border-strong: #d2ccc5; --win-border: #cfc8c0;
+  --heading: #121617; --text: #23282a; --body: #2d3133; --text-2: #4a514f; --muted: #5c6460; --faint: #676f6b;
+  --accent: #0a6fb8; --on-accent: #ffffff; --accent-soft: rgba(11, 127, 209, 0.12);
+  --hl: rgba(240, 170, 40, 0.27); --hl-strong: rgba(240, 170, 40, 0.5); --br-tint: rgba(51, 119, 205, 0.12); --br-tint-hover: rgba(51, 119, 205, 0.22); --anc: #8a7d66;
+  --run: #9a6a12; --run-soft: rgba(200, 140, 30, 0.12); --fail: #b14a4a; --fail-soft: rgba(200, 80, 80, 0.09); --fail-border: rgba(177, 74, 74, 0.35);
+  --warn: #8a6414; --warn-soft: rgba(200, 150, 40, 0.12); --warn-border: rgba(160, 120, 30, 0.4);
+  --drop: rgba(215, 160, 60, 0.14); --drop-border: rgba(180, 125, 30, 0.8); --zone: rgba(11, 127, 209, 0.1); --scrim: rgba(40, 32, 24, 0.28); --zone-line: rgba(11, 127, 209, 0.6);
+  --shadow: 0 10px 28px rgba(40, 30, 20, 0.16); --win-shadow: 0 24px 60px rgba(40, 30, 20, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--page); color: var(--text); font-family: var(--font); font-size: 13.5px; -webkit-font-smoothing: antialiased; padding-inline: 16px; padding-block: 0 32px; margin: 0; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.wrap { max-width: 1040px; margin-inline: auto; }
+.pagehead { padding-block: 18px 6px; }
+.pagehead h1 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -0.01em; color: var(--heading); }
+.pagehead p { margin: 4px 0 0; color: var(--muted); font-size: 13px; max-width: 80ch; line-height: 1.5; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding-block: 8px 14px; font-size: 12.5px; color: var(--muted); }
+.controls button { padding: 4px 10px; border-radius: 7px; border: 1px solid var(--border-strong); color: var(--text-2); font-size: 12.5px; }
+.controls button:hover { background: var(--fill-2); }
+.panel { border: 1px solid var(--border); border-radius: 12px; background: var(--doc); margin-bottom: 14px; overflow: hidden; }
+.panel-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 12px 18px 10px; border-bottom: 1px solid var(--border); }
+.panel-h h2 { margin: 0; font-size: 15px; line-height: 20px; font-weight: 600; color: var(--heading); }
+.tag { font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding: 2px 6px; border-radius: 4px; background: var(--fill-2); }
+.panel-h p { flex-basis: 100%; margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.pc { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; padding: 8px 18px 12px; font-size: 12.5px; line-height: 1.5; color: var(--text-2); border-top: 1px solid var(--border); }
+.pc b { color: var(--heading); font-weight: 600; }
+@media (max-width: 640px) { .pc { grid-template-columns: 1fr; } }
+
+/* ----- the turn (matches the main mockup) ----- */
+.turn { container-type: inline-size; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 20px 26px 16px 18px; }
+@container (min-width: 600px) { .grid { grid-template-columns: minmax(180px, 0.4fr) minmax(0, 1fr); gap: 36px; padding: 22px 30px 18px 24px; } }
+.q { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--text); }
+.meta { margin-top: 4px; font-size: 12px; color: var(--faint); }
+.ans { position: relative; }
+.clip { position: relative; }
+.body { font-size: 14.5px; line-height: 1.5; color: var(--body); }
+.body p { margin: 0 0 10px; max-width: 70ch; }
+.body h4 { margin: 14px 0 6px; font-size: 14.5px; font-weight: 650; color: var(--heading); }
+.ans:not(.open) .body { max-height: 196px; overflow: hidden; }
+.fade { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; background: linear-gradient(to bottom, transparent, var(--doc)); pointer-events: none; }
+.ans.open .fade { display: none; }
+.anc { background: var(--br-tint); border-radius: 2px; }
+.link { font-size: 12.5px; font-weight: 500; color: var(--text-2); padding: 4px 0; }
+.link:hover { color: var(--heading); text-decoration: underline; text-underline-offset: 3px; }
+
+/* A. Link below */
+.v-link .foot { margin-top: 6px; }
+
+/* B. Clickable fade: the faded tail is the control; a label appears over it on hover. */
+.v-fade .hit { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 4px; cursor: pointer; }
+.v-fade .hit span { font-size: 12.5px; font-weight: 500; color: var(--text-2); padding: 3px 10px; border-radius: 12px; background: var(--field); border: 1px solid var(--border-strong); opacity: 0; transition: opacity 120ms; }
+.v-fade .hit:hover span, .v-fade .hit:focus-visible span { opacity: 1; }
+.v-fade .less { margin-top: 6px; }
+
+/* C. Inline "… more" at the end of the last visible line. */
+.v-inline .more-in { position: absolute; right: 0; bottom: 0; display: flex; align-items: baseline; font-size: 14.5px; line-height: 1.5; padding-left: 48px; background: linear-gradient(to right, transparent, var(--doc) 40px); }
+.v-inline .more-in .link { font-size: 14.5px; padding: 0; color: var(--accent); font-weight: 400; }
+.v-inline .fade { height: 40px; }
+.v-inline .less { font-size: 14.5px; color: var(--accent); font-weight: 400; padding: 0; }
+
+/* D. Count pill on the fade. */
+.v-pill .pill { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; border-radius: 13px; background: var(--field); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 12.5px; font-weight: 500; color: var(--text); white-space: nowrap; }
+.v-pill .pill:hover { background: var(--fill-2); }
+.v-pill .pill .ic { width: 13px; height: 13px; }
+.v-pill .less { margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; }
+
+/* E. Length dots as the control: no text. Hover shows how much is hidden. */
+.v-dots .dots { position: absolute; right: -18px; top: 4px; width: 14px; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 3px 0; border-radius: 7px; cursor: pointer; }
+.v-dots .dots:hover { background: var(--fill-2); }
+.v-dots .dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--faint); opacity: 0.6; }
+.v-dots .dots i.on { background: var(--accent); opacity: 1; height: 10px; border-radius: 2px; }
+.v-dots .dots .tip { position: absolute; right: 20px; top: -2px; white-space: nowrap; font-size: 12px; color: var(--text); background: var(--pop); border: 1px solid var(--border-strong); border-radius: 6px; padding: 3px 8px; opacity: 0; pointer-events: none; transition: opacity 100ms; }
+.v-dots .dots:hover .tip, .v-dots .dots:focus-visible .tip { opacity: 1; }
+.v-dots .ans { cursor: default; }
+
+/* F. Peek on hover: the clamp grows by a few lines while hovered; click anywhere on the fade to expand. */
+.v-peek .ans:not(.open) .body { transition: max-height 220ms ease; }
+.v-peek .ans:not(.open) .clip:hover .body { max-height: 262px; }
+.v-peek .hit { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; cursor: pointer; }
+.v-peek .hint { position: absolute; right: 0; bottom: 6px; font-size: 12px; color: var(--muted); opacity: 0; transition: opacity 120ms; pointer-events: none; }
+.v-peek .ans:not(.open) .clip:hover .hint { opacity: 1; }
+.v-peek .less { margin-top: 6px; }
+
+/* G. Gutter chevron: a small control under the length dots, in the right gutter. */
+.v-gutter .chev { position: absolute; right: -22px; bottom: 0; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); }
+.v-gutter .chev:hover { background: var(--fill-2); color: var(--heading); }
+.v-gutter .chev .ic { width: 14px; height: 14px; transition: transform 150ms; }
+.v-gutter .ans.open .chev .ic { transform: rotate(180deg); }
+.v-gutter .ans.open .chev { position: sticky; display: grid; margin: -22px -22px 0 auto; bottom: 12px; }
+.ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="pagehead">
+    <h1>Answer expand controls</h1>
+    <p>Seven ways to expand a collapsed answer, each on the same turn from the main mockup. Every variant is a real button with <code>aria-expanded</code>, works with the keyboard, and collapses again from where you finish reading. Sample content.</p>
+  </header>
+  <div class="controls"><button id="collapse-all" type="button">Collapse all</button><button id="expand-all" type="button">Expand all</button></div>
+  <div id="panels"></div>
+</div>
+
+<script>
+(function () {
+"use strict";
+const DOWN = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+const UP = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>';
+const Q = "How does this differ from active inference? Both treat goals as a kind of belief.";
+const BODY = `<p>Active inference also casts goals as beliefs: preferred outcomes are encoded as prior expectations, and action minimises expected free energy against them.</p>
+<p>The difference in Ngo's framing is that <span class="anc">the beliefs are allowed to be inconsistent and are not unified under one generative model</span>. Conflicts are resolved by negotiation between sub-agents rather than by inference.</p>
+<h4>Where they agree</h4>
+<p>Both reject a clean split between a world model and a utility function. Both predict that changing what an agent expects changes what it does.</p>
+<h4>Where they differ</h4>
+<p>Active inference keeps a single normative principle. Ngo keeps several, and treats trust between parts of the agent as the thing that holds it together.</p>`;
+const WORDS = BODY.replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length;
+
+const V = [
+  { id: "link", name: "Link below", tag: "Current", desc: "A text link under the fade, as in the main mockup.",
+    pro: "Familiar and explicit; nothing to discover.", con: "Adds a row under every long answer, even when you never expand it.",
+    ctl: (o) => ["", `<div class="foot"><button class="link" data-x aria-expanded="${o}">${o ? "Show less" : "Show more"}</button></div>`] },
+  { id: "fade", name: "Clickable fade", desc: "The faded tail of the answer is the control. Hovering it shows a small “Show more” label; the row under the answer goes away.",
+    pro: "No extra row; the largest possible target, right where the text stops.", con: "The affordance is hidden until hover; needs the label for keyboard focus too.",
+    ctl: (o) => o ? ["", `<button class="link less" data-x aria-expanded="true">Show less</button>`] : [`<button class="hit" data-x aria-expanded="false" aria-label="Show more"><span>Show more</span></button>`, ""] },
+  { id: "inline", name: "Inline “more”", desc: "“… more” sits at the end of the last visible line, as in social feeds; “less” follows the last line when expanded.",
+    pro: "Reads as part of the text; no extra row.", con: "Accent text inside an answer can be confused with a link in the content.",
+    ctl: (o) => o ? ["", `<button class="link less" data-x aria-expanded="true">less</button>`] : [`<span class="more-in">…&nbsp;<button class="link" data-x aria-expanded="false" aria-label="Show more">more</button></span>`, ""] },
+  { id: "pill", name: "Count pill", desc: "A small pill on the fade says how much is hidden, for example “Show 46 more words”.",
+    pro: "Tells you what you get before you click.", con: "Pills on several answers in a row add visual weight.",
+    ctl: (o, hidden) => o ? ["", `<button class="link less" data-x aria-expanded="true">${UP}Show less</button>`] : [`<button class="pill" data-x aria-expanded="false">${DOWN}Show ${hidden} more words</button>`, ""] },
+  { id: "dots", name: "Length dots as the control", desc: "No text at all: the length dots in the gutter are the button. Hover shows the share that is hidden.",
+    pro: "Zero added chrome; the dots already describe the length.", con: "Least discoverable; depends on length dots being on.",
+    ctl: (o, hidden, n, pct) => [`<button class="dots" data-x aria-expanded="${o}" aria-label="${o ? "Show less" : "Show more"}">${Array.from({ length: n }, (_, i) => `<i class="${o || i === 0 ? "on" : ""}"></i>`).join("")}<span class="tip">${o ? "Show less" : `${pct}% hidden · Show more`}</span></button>`, ""] },
+  { id: "peek", name: "Peek on hover", desc: "Hovering the answer reveals three more lines; clicking the fade expands it fully.",
+    pro: "Lets you check whether it's worth expanding without committing.", con: "Content moving under the pointer can be distracting; disabled with reduced motion.",
+    ctl: (o) => o ? ["", `<button class="link less" data-x aria-expanded="true">Show less</button>`] : [`<button class="hit" data-x aria-expanded="false" aria-label="Show more"></button><span class="hint">Click to expand</span>`, ""] },
+  { id: "gutter", name: "Gutter chevron", desc: "A chevron in the right gutter, below where the length dots sit. When expanded it sticks to the bottom of the view so you can collapse from anywhere in a long answer.",
+    pro: "Collapse is always reachable while reading a long expanded answer.", con: "Small target; separated from the text.",
+    ctl: (o) => [`<button class="chev" data-x aria-expanded="${o}" aria-label="${o ? "Show less" : "Show more"}" title="${o ? "Show less" : "Show more"}">${DOWN}</button>`, ""] },
+];
+const open = new Set();
+const panels = document.getElementById("panels");
+function render() {
+  panels.innerHTML = V.map((v) => {
+    const o = open.has(v.id);
+    return `<section class="panel v-${v.id}" data-v="${v.id}">
+      <div class="panel-h"><h2>${v.name}</h2>${v.tag ? `<span class="tag">${v.tag}</span>` : ""}<p>${v.desc}</p></div>
+      <div class="turn"><div class="grid"><div><p class="q">${Q}</p><div class="meta">1d</div></div>
+        <div class="ans${o ? " open" : ""}"><div class="clip"><div class="body">${BODY}</div><div class="fade"></div><span class="ctl-over"></span></div><span class="ctl-below"></span></div></div></div>
+      <div class="pc"><div><b>Good:</b> ${v.pro}</div><div><b>Cost:</b> ${v.con}</div></div>
+    </section>`;
+  }).join("");
+  // Controls depend on how much of each answer is hidden, so they are added after layout.
+  panels.querySelectorAll(".panel").forEach((p) => {
+    const v = V.find((x) => x.id === p.dataset.v); const o = open.has(v.id);
+    const body = p.querySelector(".body");
+    const full = body.scrollHeight, vis = o ? full : body.clientHeight;
+    const shownWords = Math.round(WORDS * Math.min(1, vis / full));
+    const hidden = Math.max(1, WORDS - shownWords);
+    const n = Math.min(10, Math.ceil(full / 196));
+    const [over, below] = v.ctl(o, hidden, n, Math.round((1 - vis / full) * 100));
+    p.querySelector(".ctl-over").outerHTML = over;
+    p.querySelector(".ctl-below").outerHTML = below;
+  });
+}
+panels.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-x]"); if (!b) return;
+  const id = b.closest(".panel").dataset.v;
+  const wasOpen = open.has(id);
+  wasOpen ? open.delete(id) : open.add(id);
+  render();
+  const p = panels.querySelector(`[data-v="${id}"]`);
+  // After collapsing, scroll the turn's top into view if it is above the viewport.
+  if (wasOpen) { const r = p.getBoundingClientRect(); if (r.top < 0) p.scrollIntoView({ block: "start" }); }
+  const nb = p.querySelector("[data-x]"); if (nb) nb.focus({ preventScroll: true });
+});
+document.getElementById("collapse-all").addEventListener("click", () => { open.clear(); render(); });
+document.getElementById("expand-all").addEventListener("click", () => { V.forEach((v) => open.add(v.id)); render(); });
+render();
+})();
+
+</script>
+</body>
+</html>

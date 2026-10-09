@@ -1,0 +1,436 @@
+<!doctype html>
+<!--
+  Session feed child items mockup: starred follow-ups and starred branches shown as
+  indented rows of their own in the feed column, with toggles for indent, connectors,
+  dividers, child text, icons and collapsing. Open directly in a browser; DM Sans and
+  JetBrains Mono load from Google Fonts. All threads are sample content.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feed Child Items</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one feed column (Session's centre column) in a window frame, next to a
+   detail pane that describes the selected row. Child items are rows of the same
+   list, indented under their question. Colours are Session's Warm theme tokens. */
+:root {
+  color-scheme: dark;
+  --page: #121110;
+  --left: #171716;
+  --feed: #1a1918;
+  --doc: #1c1b1a;
+  --spine: #181716;
+  --field: #232220;
+  --pop: #23221f;
+  --tray: #1d1c1b;
+  --sel: #2b2927;
+  --fill: rgba(255, 255, 255, 0.06);
+  --fill-2: rgba(255, 255, 255, 0.1);
+  --border: #2a2928;
+  --border-strong: #373634;
+  --win-border: #3a3836;
+  --heading: #f4f3ec;
+  --text: #e7e7e2;
+  --body: #d9ddd9;
+  --text-2: #c4cbc6;
+  --muted: #8a938e;
+  --faint: #7f8783;
+  --accent: #33adff;
+  --on-accent: #0f1413;
+  --accent-soft: rgba(51, 173, 255, 0.13);
+  --accent-soft-hover: rgba(51, 173, 255, 0.24);
+  --hl: rgba(240, 178, 70, 0.22);
+  --hl-strong: rgba(240, 178, 70, 0.42);
+  --anc: #b3a58c;
+  --run: #d7a84f;
+  --run-soft: rgba(215, 168, 79, 0.12);
+  --fail: #e59a9a;
+  --fail-soft: rgba(217, 135, 135, 0.12);
+  --fail-border: rgba(217, 135, 135, 0.35);
+  --warn: #d8b878;
+  --warn-soft: rgba(216, 184, 120, 0.12);
+  --warn-border: rgba(216, 184, 120, 0.4);
+  --drop: rgba(215, 168, 79, 0.12);
+  --drop-border: rgba(215, 168, 79, 0.74);
+  --scrim: rgba(8, 10, 12, 0.55);
+  --zone: rgba(109, 167, 236, 0.16);
+  --zone-line: rgba(109, 167, 236, 0.7);
+  --shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  --win-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(0, 0, 0, 0.8);
+  --tl-red: #ff5f57; --tl-yellow: #febc2e; --tl-green: #28c840; --tl-edge: rgba(0, 0, 0, 0.25);
+  --font: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --page: #e9e6e1; --left: #f1eeea; --feed: #f8f6f3; --doc: #fcfbf9; --spine: #f3f0ec; --field: #ffffff; --pop: #ffffff; --tray: #f3f1ed; --sel: #ebe7e1;
+    --fill: rgba(0, 0, 0, 0.05); --fill-2: rgba(0, 0, 0, 0.08); --border: #e4dfd9; --border-strong: #d2ccc5; --win-border: #cfc8c0;
+    --heading: #121617; --text: #23282a; --body: #2d3133; --text-2: #4a514f; --muted: #5c6460; --faint: #676f6b;
+    --accent: #0a6fb8; --on-accent: #ffffff; --accent-soft: rgba(11, 127, 209, 0.12); --accent-soft-hover: rgba(11, 127, 209, 0.22);
+    --hl: rgba(240, 170, 40, 0.3); --hl-strong: rgba(240, 170, 40, 0.55); --anc: #8a7d66;
+    --run: #9a6a12; --run-soft: rgba(200, 140, 30, 0.12); --fail: #b14a4a; --fail-soft: rgba(200, 80, 80, 0.09); --fail-border: rgba(177, 74, 74, 0.35);
+    --warn: #8a6414; --warn-soft: rgba(200, 150, 40, 0.12); --warn-border: rgba(160, 120, 30, 0.4);
+    --drop: rgba(215, 160, 60, 0.14); --drop-border: rgba(180, 125, 30, 0.8); --zone: rgba(11, 127, 209, 0.1); --scrim: rgba(40, 32, 24, 0.28); --zone-line: rgba(11, 127, 209, 0.6);
+    --shadow: 0 10px 28px rgba(40, 30, 20, 0.16); --win-shadow: 0 24px 60px rgba(40, 30, 20, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #e9e6e1; --left: #f1eeea; --feed: #f8f6f3; --doc: #fcfbf9; --spine: #f3f0ec; --field: #ffffff; --pop: #ffffff; --tray: #f3f1ed; --sel: #ebe7e1;
+  --fill: rgba(0, 0, 0, 0.05); --fill-2: rgba(0, 0, 0, 0.08); --border: #e4dfd9; --border-strong: #d2ccc5; --win-border: #cfc8c0;
+  --heading: #121617; --text: #23282a; --body: #2d3133; --text-2: #4a514f; --muted: #5c6460; --faint: #676f6b;
+  --accent: #0a6fb8; --on-accent: #ffffff; --accent-soft: rgba(11, 127, 209, 0.12); --accent-soft-hover: rgba(11, 127, 209, 0.22);
+  --hl: rgba(240, 170, 40, 0.3); --hl-strong: rgba(240, 170, 40, 0.55); --anc: #8a7d66;
+  --run: #9a6a12; --run-soft: rgba(200, 140, 30, 0.12); --fail: #b14a4a; --fail-soft: rgba(200, 80, 80, 0.09); --fail-border: rgba(177, 74, 74, 0.35);
+  --warn: #8a6414; --warn-soft: rgba(200, 150, 40, 0.12); --warn-border: rgba(160, 120, 30, 0.4);
+  --drop: rgba(215, 160, 60, 0.14); --drop-border: rgba(180, 125, 30, 0.8); --zone: rgba(11, 127, 209, 0.1); --scrim: rgba(40, 32, 24, 0.28); --zone-line: rgba(11, 127, 209, 0.6);
+  --shadow: 0 10px 28px rgba(40, 30, 20, 0.16); --win-shadow: 0 24px 60px rgba(40, 30, 20, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { background: var(--page); color: var(--text); font-family: var(--font); font-size: 13.5px; -webkit-font-smoothing: antialiased; padding-inline: 16px; padding-block: 0 24px; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: left; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.ic.fill { fill: currentColor; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.pagehead { max-width: 1200px; margin-inline: auto; padding-block: 18px 10px; }
+.pagehead h1 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -0.01em; color: var(--heading); }
+.pagehead p { margin: 4px 0 0; color: var(--muted); font-size: 13px; max-width: 78ch; line-height: 1.5; }
+#controls { max-width: 1200px; margin-inline: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding-block: 6px 12px; font-size: 12.5px; color: var(--muted); }
+.ctl { display: flex; align-items: center; gap: 8px; }
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--left); }
+.seg button { padding: 3px 10px; border-radius: 6px; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--fill-2); color: var(--heading); }
+.presets { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.presets button { padding: 4px 10px; border-radius: 7px; border: 1px solid var(--border-strong); color: var(--text-2); font-size: 12.5px; }
+.presets button[aria-pressed="true"] { border-color: var(--accent); color: var(--heading); background: var(--accent-soft); }
+.lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); margin-right: 4px; }
+.ctl input[type="range"] { width: 120px; accent-color: var(--accent); }
+.mono { font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+
+.stage { max-width: 1200px; margin-inline: auto; display: flex; height: clamp(560px, calc(100vh - 230px), 820px); border: 1px solid var(--win-border); border-radius: 11px; overflow: hidden; background: var(--doc); box-shadow: var(--win-shadow); }
+.feed { flex: none; display: flex; flex-direction: column; min-width: 0; background: var(--feed); border-right: 1px solid var(--border); }
+.feed-h { flex: none; height: 45px; display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.feed-h h2 { margin: 0; font-size: 15px; line-height: 20px; font-weight: 600; color: var(--heading); }
+.scroll { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+.composer { margin: 12px; padding: 10px 12px 8px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--field); color: var(--faint); font-size: 14px; line-height: 1.45; }
+.composer .row { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.btn { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 6px; font-size: 12.5px; font-weight: 500; }
+.btn.tint { background: var(--fill-2); color: var(--text); }
+.btn.primary { background: var(--accent); color: var(--on-accent); }
+
+/* ----- the list ----- */
+.list { list-style: none; margin: 0; padding: 0; border-bottom: 1px solid var(--border); }
+.tray { margin: 12px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--tray); overflow: hidden; }
+.tray-h { display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px 0 20px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.tray-h .ic { width: 14px; height: 14px; }
+.tray .list { border-bottom: 0; }
+
+/* Each row: --x is where its text starts. Parents start at 20px; each child level adds --ind. */
+.item { position: relative; --x: calc(20px + var(--lvl) * var(--ind)); cursor: pointer; outline-offset: -2px; }
+.item .row { position: relative; display: flex; align-items: flex-start; gap: 8px; padding: 11px 12px 11px var(--x); }
+.item:hover { background: var(--fill); }
+.item.sel { background: var(--sel); }
+.item:focus-visible { outline: 2px solid var(--accent); }
+
+/* Dividers. full: every row starts with a full-width rule. inset: a child's rule starts at its text.
+   grouped: only top-level questions get a rule, to group each question with its children. */
+.d-full .item { border-top: 1px solid var(--border); }
+.d-inset .item.lv0 { border-top: 1px solid var(--border); }
+.d-inset .item:not(.lv0) .row::after { content: ""; position: absolute; top: 0; left: var(--x); right: 0; border-top: 1px solid var(--border); }
+.d-grouped .item.lv0 { border-top: 1px solid var(--border); }
+.d-grouped .item:not(.lv0) .row { padding-top: 7px; padding-bottom: 7px; }
+/* Rows keep equal top and bottom padding; the space after a group is a margin outside the row. */
+.d-grouped .item.group-end { margin-bottom: 5px; }
+.list > .item:first-child { border-top: 0; }
+.tray .list > .item:first-child { border-top: 1px solid var(--border); }
+
+/* Connectors: a rail runs down the parent's indent; elbows add a tick to each child. */
+.c-rail .item:not(.lv0)::before, .c-elbow .item:not(.lv0)::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(var(--x) - var(--ind) + 4px); border-left: 1.5px solid var(--border-strong); }
+.c-rail .item.last-kid::before, .c-elbow .item.last-kid::before { bottom: auto; height: calc(var(--first) + 1px); }
+.c-elbow .item:not(.lv0) .row::before { content: ""; position: absolute; left: calc(var(--x) - var(--ind) + 4px); top: var(--first); width: calc(var(--ind) - 10px); border-top: 1.5px solid var(--border-strong); }
+.c-elbow .item.last-kid .row::before { border-left: 1.5px solid var(--border-strong); border-bottom-left-radius: 6px; height: 0; }
+/* --first: vertical centre of the first text line within the row. */
+.item { --first: 22px; }
+.d-grouped .item:not(.lv0) { --first: 17px; }
+.t-compact .item:not(.lv0) { --first: 21px; }
+.d-grouped.t-compact .item:not(.lv0) { --first: 16px; }
+
+.body { flex: 1; min-width: 0; display: flex; gap: 7px; align-items: flex-start; }
+.mk { flex: none; width: 14px; height: 20px; display: grid; place-items: center; color: var(--faint); }
+.mk .ic { width: 13px; height: 13px; }
+.texts { min-width: 0; flex: 1; }
+.name { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 13.5px; font-weight: 600; line-height: 1.4; color: var(--heading); margin-bottom: 2px; }
+.q { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; overflow-wrap: anywhere; white-space: pre-line; font-size: 14px; line-height: 1.45; color: var(--text); }
+.t-compact .item:not(.lv0) .q { -webkit-line-clamp: 2; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+.t-full .item:not(.lv0) .q { color: var(--text-2); }
+.chev { position: absolute; z-index: 1; left: calc(var(--x) - 18px); top: 13px; width: 16px; height: 16px; display: grid; place-items: center; color: var(--faint); border-radius: 4px; }
+.chev .ic { width: 12px; height: 12px; transition: transform 150ms; }
+.chev:hover { color: var(--heading); background: var(--fill-2); }
+.item.closed .chev .ic { transform: rotate(-90deg); }
+.kids-n { flex: none; font-size: 12px; color: var(--faint); padding-top: 1px; }
+.acts { flex: none; display: flex; align-items: center; gap: 2px; margin-top: -3px; opacity: 0; }
+.item:hover .acts, .item:focus-within .acts, .item.sel .acts { opacity: 1; }
+.ib { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); }
+.ib:hover { background: var(--fill-2); color: var(--text); }
+.ib .ic { width: 14px; height: 14px; }
+.dot { flex: none; width: 8px; height: 8px; border-radius: 50%; margin: 6px 6px 0 0; background: var(--run); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.3; } }
+
+/* ----- detail pane ----- */
+.detail { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.detail .feed-h { border-bottom: 1px solid var(--border); }
+.detail-in { padding: 24px 28px; max-width: 560px; }
+.kind { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 11px; background: var(--fill-2); font-size: 12px; color: var(--text-2); }
+.kind .ic { width: 13px; height: 13px; }
+.detail h3 { margin: 12px 0 8px; font-size: 15px; line-height: 1.45; font-weight: 600; color: var(--heading); white-space: pre-line; }
+.detail p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; color: var(--text-2); }
+.detail dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 16px 0 0; font-size: 13px; }
+.detail dt { color: var(--muted); }
+.detail dd { margin: 0; color: var(--text); }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 14px; border-radius: 10px; background: var(--pop); border: 1px solid var(--border-strong); box-shadow: var(--shadow); font-size: 13px; z-index: 10; }
+.toast button { padding: 4px 10px; border-radius: 6px; color: var(--text-2); }
+.toast button:hover { background: var(--fill-2); }
+
+.notes { max-width: 1200px; margin: 18px auto 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 28px; }
+.notes div { font-size: 13px; line-height: 1.55; color: var(--text-2); }
+.notes b { color: var(--heading); font-weight: 600; }
+
+@media (max-width: 760px) { .detail { display: none; } .feed { flex: 1; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="pagehead">
+  <h1>Feed child items</h1>
+  <p>Starred follow-ups and starred branches as rows of their own, indented under their question, rather than a nested list inside the question's card. Each child row has its own hover, selection, keyboard focus and star button. Use the presets or the toggles to compare variants. Sample content.</p>
+</header>
+
+<div id="controls">
+  <div class="presets"><span class="lbl">Presets</span><button data-preset="outline">Outline</button><button data-preset="rail">Rail</button><button data-preset="elbow">Elbows</button><button data-preset="grouped">Grouped</button><button data-preset="chosen">Chosen (in main mockup)</button></div>
+  <div class="ctl"><span>Indent</span><span class="seg"><button data-k="ind" data-v="16">16</button><button data-k="ind" data-v="24">24</button><button data-k="ind" data-v="32">32</button></span></div>
+  <div class="ctl"><span>Connector</span><span class="seg"><button data-k="conn" data-v="none">None</button><button data-k="conn" data-v="rail">Rail</button><button data-k="conn" data-v="elbow">Elbows</button></span></div>
+  <div class="ctl"><span>Dividers</span><span class="seg"><button data-k="div" data-v="full">Full width</button><button data-k="div" data-v="inset">Inset</button><button data-k="div" data-v="grouped">Grouped</button></span></div>
+  <div class="ctl"><span>Child text</span><span class="seg"><button data-k="text" data-v="full">Full</button><button data-k="text" data-v="compact">Compact</button></span></div>
+  <div class="ctl"><span>Child icons</span><span class="seg"><button data-k="mk" data-v="none">None</button><button data-k="mk" data-v="icons">Star / branch</button></span></div>
+  <div class="ctl"><span>Collapse</span><span class="seg"><button data-k="coll" data-v="off">Off</button><button data-k="coll" data-v="chevron">Chevron</button></span></div>
+  <div class="ctl"><label for="w">Column</label><input id="w" type="range" min="260" max="480" step="10" value="340"><span class="mono" id="wl">340px</span></div>
+</div>
+
+<div class="stage">
+  <section class="feed" id="feed" aria-label="Feed">
+    <header class="feed-h"><h2>Home</h2></header>
+    <div class="scroll">
+      <div class="composer">Ask a question, or paste a link to save<div class="row"><span class="btn tint">Save draft</span><span class="btn primary">Ask</span></div></div>
+      <div id="lists"></div>
+    </div>
+  </section>
+  <section class="detail" aria-label="Selected item">
+    <header class="feed-h"><h2>Selected row</h2></header>
+    <div class="detail-in" id="detail"></div>
+  </section>
+</div>
+
+<div class="notes">
+  <div><b>Rows, not nesting.</b> A child is an item in the same list as its question, with the same hit area, hover and selection. ↑ ↓ move through questions and children alike; ← goes to the parent (or collapses it), → expands.</div>
+  <div><b>What stays with the parent.</b> Children aren't dragged or filed on their own; dragging the question moves its children with it. Each child has its own star button to unstar it, with Undo.</div>
+  <div><b>Variants.</b> Outline relies on indent alone. Rail and Elbows draw the hierarchy. Grouped removes the rule between a question and its children so the group reads as one block, with tighter child rows.</div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+"use strict";
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const P = {
+  star: '<path d="M12 2.8l2.83 5.74 6.33.92-4.58 4.47 1.08 6.3L12 17.25l-5.66 2.98 1.08-6.3-4.58-4.47 6.33-.92z"/>',
+  branch: '<path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+  more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+  down: '<path d="m6 9 6 6 6-6"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  msg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+};
+const I = (n) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${P[n]}</svg>`;
+const IF = (n) => `<svg class="ic fill" viewBox="0 0 24 24" aria-hidden="true">${P[n]}</svg>`;
+
+/* ---------- sample data: questions with starred follow-ups and starred branches ---------- */
+const DATA = [
+  { list: "Unfiled", items: [
+    { id: "c1", title: "Richard Ngo LessWrong summary", q: "can you pull richard ngo's latest work from lesswrong, plus any other available sources (eg he's active on twitter, but x api may not be available to us)", kids: [
+      { id: "c1t1", kind: "turn", q: "tell me about knightianism, developing frames, agents as web of beliefs, the two memos from 2024, aligning to virtues, on goal-models, and the new curriculum draft\nalso sharp criticism of the post \"Dear God, Please Do Not Resign In Protest\";" },
+      { id: "c1b3", kind: "branch", q: "What were the strongest objections in the replies?", kids: [
+        { id: "c1b3a", kind: "branch", q: "Did Ngo answer the second objection anywhere else?" },
+      ] },
+      { id: "c1t3", kind: "turn", q: "run me through the retrospective sequence in more detail" },
+    ] },
+    { id: "c2", q: "re: Jeff Wu's Auditing the Singularity\nhttps://www.wuthejeff.com/ai/oversight/auditing/2026/05/27/auditing-the-singularity.html" },
+    { id: "c5", q: "How do Claude Mods work?", running: true, kids: [
+      { id: "c5t1", kind: "turn", q: "Which surfaces can a mod add? List them with one example each." },
+    ] },
+    { id: "c11", title: "design-team → main", q: "Summarise what changed between design-team and main, grouped by surface." },
+  ] },
+  { list: "Permissions research", tray: true, items: [
+    { id: "c3", q: "____ says that he looks for work that follows-up to CaMeL / cites it – would be good to reach out to about permissions language, lariat" },
+    { id: "c4", q: "TAL tool access language", kids: [
+      { id: "c4t1", kind: "turn", q: "Find the repository and summarise the grammar." },
+    ] },
+  ] },
+];
+
+/* ---------- state ---------- */
+const PRESETS = {
+  outline: { ind: "24", conn: "none", div: "inset", text: "full", mk: "none", coll: "chevron" },
+  rail: { ind: "24", conn: "rail", div: "inset", text: "compact", mk: "icons", coll: "off" },
+  elbow: { ind: "24", conn: "elbow", div: "full", text: "full", mk: "icons", coll: "off" },
+  grouped: { ind: "16", conn: "none", div: "grouped", text: "compact", mk: "icons", coll: "off" },
+  chosen: { ind: "16", conn: "none", div: "grouped", text: "full", mk: "none", coll: "off" },
+};
+const KEY = "session-feed-children.v1";
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch { saved = {}; }
+const S = Object.assign({}, PRESETS.chosen, saved.v || {}, { w: saved.w || 340 });
+const closed = new Set();
+const removed = new Map(); // child id -> true while unstarred
+let sel = "c1t1";
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ v: { ind: S.ind, conn: S.conn, div: S.div, text: S.text, mk: S.mk, coll: S.coll }, w: S.w })); } catch { /* storage unavailable */ } };
+
+/* ---------- flatten the tree into visible rows ---------- */
+// Each row knows its level, whether it is the last of its siblings, which ancestor
+// rails continue past it, and whether it ends its top-level group.
+function rowsFor(items) {
+  const out = [];
+  const walk = (nodes, lvl, parent, contRails) => {
+    const vis = nodes.filter((n) => !removed.has(n.id));
+    vis.forEach((n, i) => {
+      const last = i === vis.length - 1;
+      const kids = (n.kids || []).filter((k) => !removed.has(k.id));
+      out.push({ n, lvl, parent, last, rails: contRails.slice(), kidsCount: countKids(n) });
+      if (kids.length && !closed.has(n.id)) walk(kids, lvl + 1, n, lvl >= 1 ? contRails.concat(last ? [] : [lvl]) : contRails);
+    });
+  };
+  walk(items, 0, null, []);
+  // Mark the last row of each top-level group (for grouped spacing).
+  out.forEach((r, i) => { const next = out[i + 1]; r.groupEnd = r.lvl > 0 && (!next || next.lvl === 0); });
+  return out;
+}
+function countKids(n) { return (n.kids || []).filter((k) => !removed.has(k.id)).reduce((a, k) => a + 1 + countKids(k), 0); }
+const allNodes = () => { const m = {}; const walk = (ns, parent) => ns.forEach((n) => { m[n.id] = { n, parent }; if (n.kids) walk(n.kids, n); }); DATA.forEach((l) => walk(l.items, null)); return m; };
+
+/* ---------- render ---------- */
+const lists = document.getElementById("lists");
+function rowHTML(r) {
+  const { n, lvl } = r;
+  const ind = +S.ind;
+  const child = lvl > 0;
+  // Rails of ancestors that continue below this row, drawn as background lines.
+  const bg = r.rails.map((L) => `linear-gradient(var(--border-strong), var(--border-strong)) ${20 + (L - 1) * ind + 4}px 0 / 1.5px 100% no-repeat`).join(", ");
+  const railStyle = bg && S.conn !== "none" ? ` style="background:${bg}"` : "";
+  const hasKids = (n.kids || []).some((k) => !removed.has(k.id));
+  const isClosed = closed.has(n.id);
+  const chev = S.coll === "chevron" && hasKids ? `<button class="chev" data-a="toggle" data-id="${n.id}" tabindex="-1" aria-label="${isClosed ? "Expand" : "Collapse"}">${I("down")}</button>` : "";
+  const mk = child && S.mk === "icons" ? `<span class="mk" title="${n.kind === "branch" ? "Starred branch" : "Starred follow-up"}">${n.kind === "branch" ? I("branch") : IF("star")}</span>` : "";
+  const acts = child
+    ? `<span class="acts"><button class="ib" data-a="unstar" data-id="${n.id}" tabindex="-1" title="Unstar" aria-label="Unstar">${IF("star")}</button></span>`
+    : `<span class="acts"><button class="ib" data-a="noop" tabindex="-1" title="More actions" aria-label="More actions">${I("more")}</button></span>`;
+  const count = isClosed && hasKids ? `<span class="kids-n">${r.kidsCount}</span>` : "";
+  const cls = ["item", `lv${lvl}`, n.id === sel ? "sel" : "", hasKids ? "has-kids" : "", r.last && child ? "last-kid" : "", r.groupEnd ? "group-end" : "", isClosed ? "closed" : ""].filter(Boolean).join(" ");
+  return `<li class="${cls}" role="treeitem" aria-level="${lvl + 1}" aria-selected="${n.id === sel}" ${hasKids && S.coll === "chevron" ? `aria-expanded="${!isClosed}"` : ""} tabindex="${n.id === sel ? 0 : -1}" data-id="${n.id}" style="--lvl:${lvl}">
+    ${chev}<div class="row"${railStyle}><div class="body">${mk}<div class="texts">${n.title ? `<span class="name">${esc(n.title)}</span>` : ""}<span class="q">${esc(n.q)}</span></div></div>${count}${n.running ? '<span class="dot" title="Running"></span>' : ""}${acts}</div></li>`;
+}
+function render() {
+  const focusedId = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.id : null;
+  lists.className = `c-${S.conn} d-${S.div} t-${S.text}`;
+  lists.style.setProperty("--ind", S.ind + "px");
+  lists.innerHTML = DATA.map((l) => {
+    const rows = rowsFor(l.items).map(rowHTML).join("");
+    const ul = `<ul class="list" role="tree" aria-label="${esc(l.list)}">${rows}</ul>`;
+    return l.tray ? `<section class="tray"><div class="tray-h">${I("folder")}<span>${esc(l.list)}</span></div>${ul}</section>` : ul;
+  }).join("");
+  document.getElementById("feed").style.width = S.w + "px";
+  document.getElementById("wl").textContent = S.w + "px";
+  document.getElementById("w").value = S.w;
+  document.querySelectorAll("#controls [data-k]").forEach((b) => b.setAttribute("aria-pressed", String(S[b.dataset.k] === b.dataset.v)));
+  document.querySelectorAll("#controls [data-preset]").forEach((b) => { const p = PRESETS[b.dataset.preset]; b.setAttribute("aria-pressed", String(Object.keys(p).every((k) => S[k] === p[k]))); });
+  renderDetail();
+  if (focusedId) { const el = lists.querySelector(`[data-id="${focusedId}"]`); if (el) el.focus({ preventScroll: true }); }
+}
+function renderDetail() {
+  const m = allNodes(); const e = m[sel];
+  const d = document.getElementById("detail");
+  if (!e) { d.innerHTML = `<p>Select a row in the feed.</p>`; return; }
+  const { n, parent } = e;
+  const kind = !parent ? ["msg", "Question"] : n.kind === "branch" ? ["branch", "Starred branch"] : ["star", "Starred follow-up"];
+  const opens = !parent ? "The conversation, in the next column." : n.kind === "branch" ? "The branch, as a column to the right of its conversation." : "The conversation, scrolled to this follow-up.";
+  const up = parent ? (parent.title || parent.q) : null;
+  d.innerHTML = `<span class="kind">${kind[0] === "star" ? IF("star") : I(kind[0])}${kind[1]}</span><h3>${esc(n.title || n.q)}</h3>${n.title ? `<p>${esc(n.q)}</p>` : ""}<dl>${up ? `<dt>Under</dt><dd>${esc(up.length > 90 ? up.slice(0, 90) + "…" : up)}</dd>` : ""}<dt>Opens</dt><dd>${opens}</dd>${n.kids && n.kids.length ? `<dt>Children</dt><dd>${countKids(n)}</dd>` : ""}</dl>`;
+}
+
+/* ---------- interactions ---------- */
+let toastTimer;
+function toast(html, undo) {
+  const t = document.getElementById("toast");
+  t.innerHTML = `<span>${html}</span>${undo ? '<button data-a="undo">Undo</button>' : ""}`;
+  t.hidden = false; t._undo = undo;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 5000);
+}
+document.getElementById("toast").addEventListener("click", (e) => {
+  const t = e.currentTarget;
+  if (e.target.closest('[data-a="undo"]') && t._undo) { t._undo(); t.hidden = true; render(); }
+});
+lists.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-a]");
+  const li = e.target.closest(".item");
+  if (a && a.dataset.a === "toggle") { const id = a.dataset.id; closed.has(id) ? closed.delete(id) : closed.add(id); render(); return; }
+  if (a && a.dataset.a === "unstar") {
+    const id = a.dataset.id; removed.set(id, true);
+    if (sel === id) sel = allNodes()[id].parent.id;
+    toast("Unstarred. It's no longer listed under its question.", () => removed.delete(id));
+    render(); return;
+  }
+  if (a && a.dataset.a === "noop") return;
+  if (li) { sel = li.dataset.id; render(); lists.querySelector(`[data-id="${sel}"]`).focus({ preventScroll: true }); }
+});
+lists.addEventListener("keydown", (e) => {
+  const li = e.target.closest(".item"); if (!li) return;
+  const rows = [...lists.querySelectorAll(".item")];
+  const i = rows.indexOf(li);
+  const go = (el) => { if (!el) return; e.preventDefault(); sel = el.dataset.id; render(); const x = lists.querySelector(`[data-id="${sel}"]`); x.focus(); x.scrollIntoView({ block: "nearest" }); };
+  const m = allNodes(); const id = li.dataset.id; const node = m[id];
+  if (e.key === "ArrowDown") go(rows[i + 1]);
+  else if (e.key === "ArrowUp") go(rows[i - 1]);
+  else if (e.key === "ArrowLeft") {
+    if (S.coll === "chevron" && li.classList.contains("has-kids") && !closed.has(id)) { e.preventDefault(); closed.add(id); render(); }
+    else if (node.parent) go(lists.querySelector(`[data-id="${node.parent.id}"]`));
+  } else if (e.key === "ArrowRight") {
+    if (closed.has(id)) { e.preventDefault(); closed.delete(id); render(); }
+    else if (li.classList.contains("has-kids")) go(rows[i + 1]);
+  }
+});
+
+/* ---------- controls ---------- */
+document.getElementById("controls").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.preset) Object.assign(S, PRESETS[b.dataset.preset]);
+  else if (b.dataset.k) { S[b.dataset.k] = b.dataset.v; if (b.dataset.k === "coll" && b.dataset.v === "off") closed.clear(); }
+  save(); render();
+});
+document.getElementById("w").addEventListener("input", (e) => { S.w = +e.target.value; save(); render(); });
+
+render();
+})();
+
+</script>
+</body>
+</html>
