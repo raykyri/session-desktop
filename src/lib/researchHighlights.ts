@@ -127,6 +127,10 @@ export function expandedResearchHighlightOffsets(
   return { start, end };
 }
 
+/** The most characters of context a new anchor stores on each side of its
+ * quote (fewer where the enclosing message ends). */
+export const RESEARCH_HIGHLIGHT_CONTEXT_LENGTH = 128;
+
 /** The span a new anchor's surrounding context may be taken from, or null when
  * the selection cannot be anchored at all.
  *

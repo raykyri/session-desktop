@@ -2,6 +2,18 @@
    Surface-specific layout belongs in research.css or journal.css; rules here
    should apply to both destinations without depending on import order. */
 
+/* One focus ring for every control of the research UI, as in the mock: a 2px
+   outline, in place of the app's inset 1px ring (base.css), which otherwise
+   doubles with the outlines of the feed and sidebar. The scope adds no
+   specificity and this file loads first, so a control's own :focus-visible
+   rule (offset, or a menu item's fill) takes precedence. */
+:where(.research-columns, .research-columns-overlay, .sidebar.is-research-mode, .research-strip)
+  :is(button, a, [role="button"]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
 .research-workspace {
   width: 100%;
   height: 100%;
@@ -70,7 +82,8 @@
   height: 100%;
 }
 
-.research-content-column > .research-placeholder-column {
+.research-content-column > .research-placeholder-column,
+.research-content-column > .research-draft-view {
   width: var(--research-conversation-width, 100%);
 }
 
@@ -86,16 +99,36 @@
 }
 
 /* Single-column mode: the feed until a thread opens, then the thread until
-   its Back shows the feed again. */
+   its Back shows the feed again. The other column stays laid out but
+   transparent and inert (see ResearchColumns), so both keep their scroll
+   positions. Opacity rather than visibility: with reduced motion every
+   element has a 0.01ms transition, and a descendant whose inherited
+   visibility is still transitioning can't take focus in the same frame. */
 .research-columns.is-single .research-feed-column {
   width: 100%;
   border-right: 0;
 }
 
 .research-columns.is-single.shows-feed .research-content-column,
-.research-columns.is-single.shows-feed .research-columns-overlay,
 .research-columns.is-single:not(.shows-feed) .research-feed-column {
-  display: none;
+  position: absolute;
+  inset: 0 auto 0 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.research-columns.is-single.shows-feed .research-columns-overlay {
+  opacity: 0;
+}
+
+.research-columns.is-single.shows-feed .research-columns-overlay > * {
+  pointer-events: none;
+}
+
+/* With the strip on macOS, the visible column's header starts after the
+   traffic lights and the expand button, as the feed header does. */
+.research-columns.is-single .research-column-header {
+  padding-left: calc(16px + var(--research-titlebar-inset, 0px));
 }
 
 .research-placeholder-column {
@@ -173,10 +206,14 @@
   z-index: 6;
 }
 
+/* Not rendered until shown, since a hidden tooltip still widens the
+   scrolling column row. The buttons sit at the header's end, so the tooltip
+   aligns to their end edge. */
 .research-header-tooltip {
   position: absolute;
   top: calc(100% + 6px);
-  left: 0;
+  right: 0;
+  display: none;
   padding: 5px 8px;
   border: 1px solid var(--surface-border-default);
   border-radius: var(--radius-md);
@@ -187,12 +224,11 @@
   line-height: 1.3;
   white-space: nowrap;
   pointer-events: none;
-  visibility: hidden;
 }
 
 .research-header-icon:hover .research-header-tooltip,
 .research-header-icon:focus-visible .research-header-tooltip {
-  visibility: visible;
+  display: block;
 }
 
 /* Home and a thread use the same reading scale even though their layouts differ. */

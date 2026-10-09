@@ -37,7 +37,6 @@ export function ResearchBranchHeader({
   onPin,
   onClose,
   closeLabel,
-  onFocusColumn,
 }: {
   title: string;
   titleRef?: Ref<HTMLHeadingElement>;
@@ -50,10 +49,9 @@ export function ResearchBranchHeader({
   onPin?: () => void;
   onClose?: () => void;
   closeLabel: string;
-  onFocusColumn?: () => void;
 }) {
   return (
-    <header className="research-column-header is-branch" onMouseDown={onFocusColumn}>
+    <header className="research-column-header is-branch">
       <div className="research-column-bar" data-tauri-drag-region>
         {onBack ? (
           <button
@@ -79,7 +77,7 @@ export function ResearchBranchHeader({
               aria-label="Previous sibling branch"
               onClick={() => siblings.onStep(-1)}
             >
-              <ChevronLeft size={15} aria-hidden="true" />
+              <ChevronLeft size={16} aria-hidden="true" />
             </button>
             <span className="research-tnum">
               {siblings.index + 1}/{siblings.count}
@@ -91,7 +89,7 @@ export function ResearchBranchHeader({
               aria-label="Next sibling branch"
               onClick={() => siblings.onStep(1)}
             >
-              <ChevronRight size={15} aria-hidden="true" />
+              <ChevronRight size={16} aria-hidden="true" />
             </button>
           </span>
         ) : null}
@@ -110,7 +108,7 @@ export function ResearchBranchHeader({
             }
             onClick={onTogglePromoted}
           >
-            <Star size={15} aria-hidden="true" fill={promoted ? "currentColor" : "none"} />
+            <Star size={16} aria-hidden="true" fill={promoted ? "currentColor" : "none"} />
           </button>
         ) : null}
         {onPin ? (

@@ -1,16 +1,36 @@
-import { forwardRef, useImperativeHandle, useLayoutEffect, useRef } from "react";
+import { forwardRef, useId, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { ArrowUp, LoaderCircle } from "lucide-react";
 import { growComposerTextarea } from "../../lib/composerTextarea";
+import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 
 export interface ResearchComposerHandle {
   focus: () => void;
   element: () => HTMLElement | null;
 }
 
+type EnterKeyEvent = Parameters<typeof isComposerSubmitShortcut>[0];
+
+/** What an Enter key press in a column composer does: ⇧⌘↵ starts a branch;
+ * the send shortcut of the "Require ⌘↵ to send" setting (⌘↵ when on, a bare
+ * ↵ when off) sends; any other Enter adds a line (null: left to the field).
+ * Null for every other key and during IME composition. */
+export function researchComposerEnterAction(
+  event: EnterKeyEvent,
+  requireCmdEnter: boolean,
+): "branch" | "send" | null {
+  if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+    return null;
+  }
+  if (event.shiftKey && (event.metaKey || event.ctrlKey)) {
+    return "branch";
+  }
+  return isComposerSubmitShortcut(event, requireCmdEnter) ? "send" : null;
+}
+
 /** The follow-up composer at the end of one column. It scrolls with the
- * conversation (nothing is docked or sticky). Enter sends when there is text,
- * Shift+Enter adds a line, and ⇧⌘↵ starts a branch from the column's last
- * finished answer instead of continuing the conversation. */
+ * conversation (nothing is docked or sticky). The send shortcut follows the
+ * "Require ⌘↵ to send" setting, and ⇧⌘↵ starts a branch from the column's
+ * last finished answer instead of continuing the conversation. */
 const ResearchConversationComposer = forwardRef<
   ResearchComposerHandle,
   {
@@ -23,6 +43,8 @@ const ResearchConversationComposer = forwardRef<
     note?: React.ReactNode;
     shortcutHint?: string | null;
     ariaLabel?: string;
+    /** The "Require ⌘↵ to send" setting. */
+    requireCmdEnter: boolean;
     onChange: (value: string) => void;
     onSubmit: () => void;
     onSubmitBranch?: () => void;
@@ -37,6 +59,7 @@ const ResearchConversationComposer = forwardRef<
     note,
     shortcutHint,
     ariaLabel = "Ask a follow-up",
+    requireCmdEnter,
     onChange,
     onSubmit,
     onSubmitBranch,
@@ -59,9 +82,14 @@ const ResearchConversationComposer = forwardRef<
     }
   }, [value]);
   const ready = canSubmit && value.trim().length > 0;
+  const noteId = useId();
   return (
     <div ref={wrapRef} className="research-composer-wrap">
-      {note ? <div className="research-composer-note">{note}</div> : null}
+      {note ? (
+        <div id={noteId} className="research-composer-note">
+          {note}
+        </div>
+      ) : null}
       <form
         className={`research-composer${ready ? " is-ready" : ""}${disabled ? " is-disabled" : ""}`}
         onSubmit={(event) => {
@@ -82,24 +110,20 @@ const ResearchConversationComposer = forwardRef<
           rows={1}
           placeholder={placeholder}
           aria-label={ariaLabel}
+          aria-describedby={note ? noteId : undefined}
           disabled={disabled}
           onChange={(event) => onChange(event.currentTarget.value)}
           onKeyDown={(event) => {
-            if (event.key !== "Enter" || event.nativeEvent.isComposing) {
-              return;
-            }
-            if (event.shiftKey && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              if (value.trim() && onSubmitBranch) {
-                onSubmitBranch();
-              }
-              return;
-            }
-            if (event.shiftKey) {
+            const action = researchComposerEnterAction(event, requireCmdEnter);
+            if (action === null) {
               return;
             }
             event.preventDefault();
-            if (ready) {
+            if (action === "branch") {
+              if (value.trim() && onSubmitBranch) {
+                onSubmitBranch();
+              }
+            } else if (ready) {
               onSubmit();
             }
           }}
@@ -109,16 +133,18 @@ const ResearchConversationComposer = forwardRef<
           type="submit"
           disabled={!ready || submitting}
           aria-label="Send"
-          title="Send (↵)"
+          title={requireCmdEnter ? "Send (⌘↵)" : "Send (↵)"}
         >
           {submitting ? (
             <LoaderCircle className="research-spinner" size={15} aria-hidden="true" />
           ) : (
             <ArrowUp size={15} aria-hidden="true" />
           )}
-          <span className="research-composer-enter" aria-hidden="true">
-            ↵
-          </span>
+          <ComposerSubmitShortcutGlyph
+            requireCmdEnter={requireCmdEnter}
+            className="research-composer-enter"
+            ariaHidden
+          />
         </button>
       </form>
     </div>

@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Archive, ArchiveRestore, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import type { ResearchTreeSummary } from "../../types";
+import { ResearchMenuItem, ResearchMenuSeparator } from "./ResearchMenu";
+import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
 
-export const RESEARCH_TREE_MENU_WIDTH = 190;
-
+/** The items of a feed card's context menu. A and D select Archive and
+ * Delete while the menu is open. */
 export function ResearchTreeMenuItems({
   tree,
   archived,
@@ -29,93 +31,74 @@ export function ResearchTreeMenuItems({
 }) {
   const running = tree.runningCount > 0;
   return (
-    <div className="group-context-actions">
+    <>
       {onRegenerateSummary ? (
         <>
-          <button
-            className="control-button"
-            type="button"
-            role="menuitem"
-            onClick={() => {
+          <ResearchMenuItem
+            icon={<RefreshCw size={15} aria-hidden="true" />}
+            label="Generate summary"
+            onSelect={() => {
               onClose();
               onRegenerateSummary();
             }}
-          >
-            <RefreshCw size={13} aria-hidden="true" />
-            <span>Generate summary</span>
-          </button>
-          <div className="context-menu-divider" role="separator" />
+          />
+          <ResearchMenuSeparator />
         </>
       ) : null}
       {archived ? (
         onRestore ? (
-          <button
-            className="control-button"
-            type="button"
-            role="menuitem"
-            onClick={() => {
+          <ResearchMenuItem
+            icon={<ArchiveRestore size={15} aria-hidden="true" />}
+            label="Unarchive research"
+            onSelect={() => {
               onClose();
               onRestore(tree.id);
             }}
-          >
-            <ArchiveRestore size={13} aria-hidden="true" />
-            <span>Unarchive research</span>
-          </button>
+          />
         ) : null
       ) : (
         <>
           {onRename ? (
-            <button
-              className="control-button"
-              type="button"
-              role="menuitem"
-              onClick={() => {
+            <ResearchMenuItem
+              icon={<Pencil size={15} aria-hidden="true" />}
+              label="Rename"
+              onSelect={() => {
                 onClose();
                 onRename(tree);
               }}
-            >
-              <Pencil size={13} aria-hidden="true" />
-              <span>Rename</span>
-            </button>
+            />
           ) : null}
           {onArchive ? (
             <>
-              <div className="context-menu-divider" role="separator" />
-              <button
-                type="button"
-                role="menuitem"
-                className="control-button context-menu-has-shortcut"
+              <ResearchMenuSeparator />
+              <ResearchMenuItem
+                icon={<Archive size={15} aria-hidden="true" />}
+                label="Archive"
+                shortcut="A"
                 disabled={running}
                 title={running ? "Research with active runs cannot be archived" : undefined}
-                onClick={() => {
+                onSelect={() => {
                   onClose();
                   onArchive(tree.id);
                 }}
-              >
-                <Archive size={13} aria-hidden="true" />
-                <span>Archive</span>
-                <kbd className="context-menu-shortcut is-keycap">A</kbd>
-              </button>
+              />
             </>
           ) : null}
         </>
       )}
-      <button
-        type="button"
-        role="menuitem"
-        className="control-button context-menu-danger context-menu-has-shortcut"
+      <ResearchMenuItem
+        icon={<Trash2 size={15} aria-hidden="true" />}
+        label="Delete"
+        shortcut="D"
+        danger
         disabled={running}
         title={running ? "Research with active runs cannot be deleted" : undefined}
-        onClick={() => {
+        onSelect={() => {
           onClose();
           onDelete(tree);
         }}
-      >
-        <Trash2 size={13} aria-hidden="true" />
-        <span>Delete</span>
-        <kbd className="context-menu-shortcut is-keycap">D</kbd>
-      </button>
-    </div>
+      />
+    </>
   );
 }
 
@@ -129,7 +112,10 @@ export function ResearchTreeRenameDialog({
   onRename: (treeId: string, title: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(tree.title);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  useResearchDialogReturnFocus(true);
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
@@ -140,7 +126,7 @@ export function ResearchTreeRenameDialog({
       className="confirm-dialog-backdrop"
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
+        if (event.target === event.currentTarget && !busy) {
           onClose();
         }
       }}
@@ -150,14 +136,34 @@ export function ResearchTreeRenameDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="rename-research-dialog-title"
+        aria-busy={busy}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !busy) {
+            event.preventDefault();
+            onClose();
+            return;
+          }
+          trapResearchDialogTab(event);
+        }}
         onSubmit={(event) => {
           event.preventDefault();
+          if (busy) {
+            return;
+          }
           if (!trimmed || trimmed === tree.title) {
             onClose();
             return;
           }
-          void onRename(tree.id, trimmed);
-          onClose();
+          setBusy(true);
+          setError(null);
+          // A failed rename keeps the dialog and the typed title.
+          void onRename(tree.id, trimmed)
+            .then(onClose)
+            .catch((err: unknown) => {
+              setError(err instanceof Error ? err.message : String(err));
+              inputRef.current?.focus();
+            })
+            .finally(() => setBusy(false));
         }}
       >
         <h2 id="rename-research-dialog-title">Rename research</h2>
@@ -166,20 +172,20 @@ export function ResearchTreeRenameDialog({
           className="rename-dialog-input"
           value={draft}
           aria-label="Research title"
+          disabled={busy}
           onChange={(event) => setDraft(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              onClose();
-            }
-          }}
         />
+        {error ? (
+          <p className="confirm-dialog-error" role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className="confirm-dialog-actions">
-          <button className="control-button" type="button" onClick={onClose}>
+          <button className="control-button" type="button" disabled={busy} onClick={onClose}>
             Cancel
           </button>
-          <button className="control-button" type="submit">
-            Rename
+          <button className="control-button" type="submit" disabled={busy}>
+            {busy ? "Renaming…" : "Rename"}
           </button>
         </div>
       </form>
@@ -199,6 +205,7 @@ export function ResearchTreeDeleteDialog({
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useResearchDialogReturnFocus(true);
   return createPortal(
     <div
       className="confirm-dialog-backdrop"
@@ -219,7 +226,9 @@ export function ResearchTreeDeleteDialog({
           if (event.key === "Escape" && !busy) {
             event.preventDefault();
             onClose();
+            return;
           }
+          trapResearchDialogTab(event);
         }}
       >
         <h2 id="delete-research-dialog-title">Delete “{tree.title}”?</h2>

@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
-import { Ellipsis, GitBranch, GripVertical } from "lucide-react";
+import { Ellipsis, GripVertical } from "lucide-react";
+import { ResearchBranchIcon } from "./ResearchIcons";
 import type { ResearchFeedChild } from "../../lib/researchFolders";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 
@@ -44,6 +45,52 @@ interface ResearchFeedPostProps {
   onMenu?: (anchor: HTMLElement) => void;
   onContextMenu?: (clientX: number, clientY: number) => void;
   onDragStart?: ResearchCardDragStart;
+}
+
+const cardSelector = (cardId: string) =>
+  `.research-feed-card[data-research-card="${CSS.escape(cardId)}"]`;
+
+/** A listed card's open button, or its … button; null when the card isn't
+ * listed (a collapsed tray, another view). */
+export function researchFeedCardControl(
+  cardId: string,
+  control: "open" | "menu" = "open",
+): HTMLElement | null {
+  return document.querySelector<HTMLElement>(
+    `${cardSelector(cardId)} ${control === "open" ? ".research-feed-card-hit" : ".research-feed-card-menu"}`,
+  );
+}
+
+/** The card listed after `cardId`, or before it when it is the last: where
+ * focus goes once the card is removed. */
+export function researchFeedCardNeighbour(cardId: string): string | null {
+  const cards = [...document.querySelectorAll<HTMLElement>(".research-feed-card[data-research-card]")];
+  const index = cards.findIndex((card) => card.dataset.researchCard === cardId);
+  if (index < 0) return null;
+  return (cards[index + 1] ?? cards[index - 1])?.dataset.researchCard ?? null;
+}
+
+/** The next step for focus waiting on a moved card's old … button
+ * (`anchor`): wait while that button is still listed and focused; once it is
+ * gone with focus left on the page body, focus the card in its new place;
+ * drop it once focus went anywhere else. */
+export function researchCardRefocus(
+  anchor: { isConnected: boolean },
+  active: unknown,
+  body: unknown,
+): "wait" | "focus" | "drop" {
+  if (anchor.isConnected) return active === anchor ? "wait" : "drop";
+  return active === null || active === body ? "focus" : "drop";
+}
+
+/** Focuses a card's open button, or the feed's title when the card isn't
+ * listed. */
+export function focusResearchFeedCard(cardId: string | null) {
+  const target =
+    (cardId ? researchFeedCardControl(cardId) : null) ??
+    document.querySelector<HTMLElement>(".research-feed-header-title");
+  target?.focus({ preventScroll: true });
+  target?.scrollIntoView({ block: "nearest" });
 }
 
 /** One question in the feed: the thread title (when it differs) and the
@@ -154,7 +201,7 @@ export default function ResearchFeedPost({
           >
             {child.branch ? (
               <>
-                <GitBranch className="research-feed-child-icon" size={13} aria-hidden="true" />
+                <ResearchBranchIcon className="research-feed-child-icon" size={13} />
                 <span className="research-visually-hidden">Branch: </span>
               </>
             ) : null}

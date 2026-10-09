@@ -74,6 +74,9 @@ test("folder names are unique ignoring case, not reserved, not empty, and short"
   assert.equal(researchFolderNameError("READING list", folders, "f-read"), null);
   assert.equal(researchFolderNameError("Elsewhere", folders), null);
   assert.match(researchFolderNameError("x".repeat(41), folders) ?? "", /40 characters or fewer \(this is 41\)/);
+  // Counted in code points like the backend: 40 emoji (80 UTF-16 units) fit.
+  assert.equal(researchFolderNameError("📚".repeat(40), folders), null);
+  assert.match(researchFolderNameError("📚".repeat(41), folders) ?? "", /\(this is 41\)/);
 });
 
 test("folder state edits: create, rename, delete, file, and collapse", () => {

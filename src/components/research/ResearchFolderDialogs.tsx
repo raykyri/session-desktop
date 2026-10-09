@@ -3,6 +3,7 @@ import type { KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import type { ResearchFolder } from "../../types";
 import { normalizeResearchFolderName, researchFolderNameError } from "../../lib/researchFolders";
+import { researchFeedCardControl } from "./ResearchFeedPost";
 
 /** `returnFocus` is the button that opened the dialog, often through a menu
  * that is gone by the time the dialog closes. */
@@ -38,16 +39,24 @@ export function ResearchFolderNameDialog({
   const inputId = `${id}-name`;
   const errorId = `${id}-error`;
 
+  // A card's … button is gone once Create and move has moved the card into
+  // the new folder; focus then goes to the card's … button there.
+  const movedTreeId = request.kind === "create" ? (request.moveTreeId ?? null) : null;
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
     const returnFocus = returnFocusRef.current;
     return () => {
-      if (returnFocus instanceof HTMLElement && returnFocus.isConnected) {
-        returnFocus.focus({ preventScroll: true });
-      }
+      const target =
+        returnFocus instanceof HTMLElement && returnFocus.isConnected
+          ? returnFocus
+          : movedTreeId
+            ? (researchFeedCardControl(movedTreeId, "menu") ??
+              document.querySelector<HTMLElement>(".research-feed-header-title"))
+            : null;
+      target?.focus({ preventScroll: true });
     };
-  }, []);
+  }, [movedTreeId]);
 
   const renamingId = request.kind === "rename" ? request.folderId : null;
   const moving = request.kind === "create" && Boolean(request.moveTreeId);

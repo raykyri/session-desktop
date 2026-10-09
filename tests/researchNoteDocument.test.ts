@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import ResearchNoteDocument from "../src/components/research/ResearchNoteDocument";
+import ResearchNoteDocument, { noteDeliveryText } from "../src/components/research/ResearchNoteDocument";
 import type { ResearchNode, ResearchTreeDetail } from "../src/types";
 
 const noop = () => {};
@@ -24,7 +24,7 @@ function render(nodes: ResearchNode[], selected: ResearchNode = nodes[0]) {
     nodes,
   };
   return renderToStaticMarkup(createElement(ResearchNoteDocument, {
-    detail, note: selected, archived: false,
+    detail, note: selected, archived: false, requireCmdEnterToSend: true,
     actions: {
       onAskFollowUp: asyncNoop, onRespond: asyncNoop, onDeleteResponse: asyncNoop, onRetry: asyncNoop,
     },
@@ -32,21 +32,43 @@ function render(nodes: ResearchNode[], selected: ResearchNode = nodes[0]) {
   }));
 }
 
-test("a note page leads with the note and posts follow-ups by default", () => {
+test("a note page reads as a turn and posts follow-ups by default", () => {
   const html = render([note]);
   assert.doesNotMatch(html, /note-document-kind/);
-  assert.match(html, /note-document-heading/);
-  // An empty note says so in its meta line instead of an empty section.
-  assert.match(html, /Posted to network · [^<]* · No replies yet/);
+  // Use the turn's question section for the note and answer section for delivery.
+  assert.match(html, /<article class="research-turn note-turn">/);
+  assert.match(html, /class="research-turn-question"/);
+  assert.match(html, /research-prompt research-turn-prompt"/);
+  assert.match(html, /class="research-turn-answer"/);
+  // An empty note says so where its answer would be, not as an empty section.
+  assert.match(html, /<p class="note-document-status">Posted to your network\. No replies yet\.<\/p>/);
   assert.doesNotMatch(html, />Activity/);
   // The page is a column body: the column header carries the title, Follow
   // and Bookmark, so the body repeats none of them.
   assert.doesNotMatch(html, /research-thread-actions|research-breadcrumb/);
-  assert.ok(html.indexOf("note-document-heading") < html.indexOf("Posted to network"));
-  // Post is the default action; Ask is in the destination menu.
+  assert.ok(html.indexOf("research-turn-question") < html.indexOf("Posted to your network"));
+  // The column's follow-up composer, after the turn, at full width. Post is
+  // the default action; Ask is in the destination menu.
+  assert.ok(html.indexOf("note-turn") < html.indexOf("research-composer-wrap note-composer"));
+  assert.match(html, /<form class="research-composer">/);
   assert.match(html, /placeholder="Post a follow-up to your network"/);
-  assert.match(html, /note-followup-send"[^>]*><span>Post<\/span>/);
-  assert.match(html, /aria-label="Follow-up destination"/);
+  assert.match(html, /note-composer-destination"[^>]*><span>Post<\/span>/);
+  assert.match(html, /aria-label="Follow-up destination: Post to network"/);
+  assert.match(html, /title="Post to your network \(⌘↵\)"/);
+});
+
+test("a note's delivery line says what was saved and where it went", () => {
+  const link = { prompt: "https://example.com/page", attachments: [], delivery: null };
+  assert.equal(noteDeliveryText(link, 0), "Saved the link.");
+  assert.equal(
+    noteDeliveryText({ ...link, delivery: { status: "posted", postedAt: 1 } }, 0),
+    "Saved the link and posted it to your network. No replies yet.",
+  );
+  assert.equal(
+    noteDeliveryText({ ...link, delivery: { status: "posted", postedAt: 1 } }, 2),
+    "Saved the link and posted it to your network.",
+  );
+  assert.equal(noteDeliveryText({ prompt: "Who ships it?", delivery: null }, 0), "Saved.");
 });
 
 test("a note page lists replies and follow-ups as one activity list in time order", () => {
@@ -94,10 +116,20 @@ test("a saved link page has no Replies group and takes AI follow-ups only", () =
   const link: ResearchNode = { ...note, prompt: "https://example.com/page", delivery: null };
   const html = render([link]);
   assert.match(html, /note-link-card/);
-  assert.match(html, /Saved link · /);
+  assert.match(html, />Saved the link\.</);
   assert.doesNotMatch(html, />Activity|No replies yet/);
-  // A saved link can only ask, so its button is Ask with no destination menu.
+  // A saved link can only ask, so it sends with Ask and has no destination.
   assert.match(html, /placeholder="Ask a follow-up about this note"/);
-  assert.match(html, /note-followup-send"[^>]*><span>Ask<\/span>/);
+  assert.match(html, /research-composer-send"[^>]*aria-label="Ask"/);
   assert.doesNotMatch(html, /Follow-up destination/);
+});
+
+test("a note with a comment and a link counts as a saved link", () => {
+  assert.equal(
+    noteDeliveryText(
+      { prompt: "re: an essay\nhttps://example.com/essay", delivery: { status: "posted", postedAt: 1 } },
+      0,
+    ),
+    "Saved the link and posted it to your network. No replies yet.",
+  );
 });

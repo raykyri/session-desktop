@@ -208,6 +208,92 @@ function withoutTranscriptActivities(items: MessageItem[]) {
     .filter((item) => item.blocks.length > 0);
 }
 
+function toolActivityInput(entry: ToolEntry, key: string): string | null {
+  const input = entry.input;
+  if (input === null || typeof input !== "object" || Array.isArray(input)) return null;
+  const value = (input as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function urlHost(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname.replace(/^www\./, "") || null;
+  } catch {
+    return null;
+  }
+}
+
+function pathName(path: string | null): string | null {
+  return path ? path.split(/[\\/]/).filter(Boolean).pop() ?? null : null;
+}
+
+/** A short, lower-case description of what a tool call does, for the status
+ * line of a running answer ("Working · reading lesswrong.com"). */
+export function toolActivityLabel(entry: ToolEntry): string {
+  const raw = entry.name.trim();
+  const dotted = raw.includes(".") ? (raw.split(".").pop() ?? raw) : raw;
+  const name = (dotted.includes("__") ? (dotted.split("__").pop() ?? dotted) : dotted)
+    .replace(/[\s-]+/g, "_")
+    .toLowerCase();
+  switch (name) {
+    case "webfetch":
+    case "web_fetch":
+    case "fetch": {
+      const host = urlHost(toolActivityInput(entry, "url"));
+      return host ? `reading ${host}` : "reading a page";
+    }
+    case "websearch":
+    case "web_search":
+    case "search":
+      return "searching the web";
+    case "read":
+    case "read_file": {
+      const file = pathName(toolActivityInput(entry, "file_path") ?? toolActivityInput(entry, "path"));
+      return file ? `reading ${file}` : "reading files";
+    }
+    case "grep":
+    case "glob":
+    case "ls":
+      return "searching files";
+    case "edit":
+    case "multi_edit":
+    case "multiedit":
+    case "write":
+    case "notebook_edit":
+    case "notebookedit":
+    case "apply_patch":
+      return "editing files";
+    case "bash":
+    case "exec_command":
+    case "shell":
+    case "run_command":
+      return "running a command";
+    case "task":
+    case "agent":
+      return "running a subagent";
+    default:
+      return `using ${raw}`;
+  }
+}
+
+/** The label of the last tool call in a run's timeline, or null when it has
+ * made none. */
+export function latestToolActivityLabel(items: MessageItem[]): string | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const activities = items[index].activities;
+    for (let at = activities.length - 1; at >= 0; at -= 1) {
+      const activity = activities[at];
+      const leaves = activity.type === "activityGroup" ? activity.children : [activity];
+      for (let leaf = leaves.length - 1; leaf >= 0; leaf -= 1) {
+        const entry = leaves[leaf];
+        if (entry.type === "tool") return toolActivityLabel(entry);
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * The collapsed user-facing answer begins after the final tool-bearing item
  * and never includes tool or thinking activity disclosures.

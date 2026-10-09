@@ -4,12 +4,13 @@
 // chain is always the conversation column; any other chain shows either in the
 // drawer or, once pinned, as its own column.
 
-import { canFollowUpFrom, inlineChainFor, isActiveResearchStatus } from "./researchThreads";
+import { canContinueThread, canFollowUpFrom, inlineChainFor, isActiveResearchStatus } from "./researchThreads";
+import type { QueuedResearchFollowup } from "./researchNavigation";
 import type { ResearchNode } from "../types";
 
-/** Below this content width one column shows at a time and the drawer covers
- * the whole column area. */
-const RESEARCH_SINGLE_COLUMN_BELOW = 620;
+/** Below this column-area width (feed included) one column shows at a time
+ * and the drawer covers the whole column area. */
+export const RESEARCH_SINGLE_COLUMN_BELOW = 620;
 export const RESEARCH_PINNED_COLUMN_WIDTH = 560;
 const DRAWER_SHARE = 0.46;
 const DRAWER_MIN_WIDTH = 380;
@@ -135,4 +136,72 @@ export function researchQueueStep(tail: ResearchNode | null): "send" | "wait" | 
     return "stalled";
   }
   return canFollowUpFrom(tail) ? "send" : "wait";
+}
+
+/** What a chain's client-side queue does on a pass over the current tree:
+ * drop it (its head is gone), wait, or send its first question as an inline
+ * follow-up of `tailId`.
+ *
+ * `inFlight` is the queue's last send: `true` while the fork request runs,
+ * then the new child's id until that child is in `nodes`. The request
+ * resolves before the tree detail includes the child, so until then the
+ * chain's tail in `nodes` is stale: sending against it would ask the
+ * backend for a second inline follow-up of the same node. */
+export function researchQueueAction(
+  nodes: ResearchNode[],
+  headId: string,
+  queue: readonly QueuedResearchFollowup[],
+  inFlight: string | true | undefined,
+): { kind: "clear" } | { kind: "wait" } | { kind: "send"; item: QueuedResearchFollowup; tailId: string } {
+  if (queue.length === 0) {
+    return { kind: "wait" };
+  }
+  if (!nodes.some((node) => node.id === headId)) {
+    return { kind: "clear" };
+  }
+  if (inFlight === true || (inFlight !== undefined && !nodes.some((node) => node.id === inFlight))) {
+    return { kind: "wait" };
+  }
+  // A question the backend refused waits for Retry or Remove.
+  if (queue[0].failed) {
+    return { kind: "wait" };
+  }
+  const chain = inlineChainFor(nodes, headId);
+  const tailId = chain[chain.length - 1];
+  const tail = nodes.find((node) => node.id === tailId) ?? null;
+  if (!tail || researchQueueStep(tail) !== "send" || !canContinueThread(nodes, tail)) {
+    return { kind: "wait" };
+  }
+  return { kind: "send", item: queue[0], tailId: tail.id };
+}
+
+/** Whether the conversation document renders its column (and with it the
+ * scroller that carries swipe navigation) rather than the loading
+ * placeholder. A document mounted for a new tree first renders the
+ * placeholder, so listeners on the scroller attach when this turns true. */
+export function researchDocumentHasColumn(
+  detail: unknown,
+  rootNodeId: string | null | undefined,
+  selectedNodeId: string | null | undefined,
+): boolean {
+  return Boolean(detail && rootNodeId && selectedNodeId);
+}
+
+/** The fork that sends an edited question in place of a failed (or stopped)
+ * one: same parent, passage, reply and inline slot, naming the failed node as
+ * the one it replaces. The backend admits the new node before it removes the
+ * failed one, so a send that fails leaves the failed turn and its partial
+ * answer in place. */
+export function researchEditedQuestionFork(failed: ResearchNode, prompt: string) {
+  if (!failed.parentNodeId) {
+    return null;
+  }
+  return {
+    parentNodeId: failed.parentNodeId,
+    prompt,
+    queryAnchor: failed.queryAnchor ?? null,
+    inline: Boolean(failed.inline),
+    replyAnchor: failed.replyAnchor ?? null,
+    replacesNodeId: failed.id,
+  };
 }

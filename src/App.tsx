@@ -101,6 +101,10 @@ import {
 import ResearchDocument from "./components/research/ResearchDocument";
 import ResearchMoveMenu from "./components/research/ResearchMoveMenu";
 import ResearchDraftView from "./components/research/ResearchDraftView";
+import {
+  focusResearchFeedCard,
+  researchFeedCardNeighbour,
+} from "./components/research/ResearchFeedPost";
 import { ResearchDocumentFrame } from "./components/research/ResearchDocumentChrome";
 import ResearchActivityFeed from "./components/research/ResearchActivityFeed";
 import ResearchColumns from "./components/research/ResearchColumns";
@@ -1228,7 +1232,7 @@ interface HomeTurnHistoryState {
 }
 
 function MainApp() {
-  const appRef = useRef<HTMLElement | null>(null);
+  const appRef = useRef<HTMLDivElement | null>(null);
   const mainStageRef = useRef<HTMLDivElement | null>(null);
 
   // Opening/closing either side pane resizes native terminal surfaces. Keep the
@@ -1836,6 +1840,19 @@ function MainApp() {
   }, [settings.colorTheme, settings.appearance]);
   const shortcutHintsShown = settings.showShortcutHints && shortcutHintsVisible;
   const [error, setError] = useState<string | null>(null);
+  const errorDismissRef = useRef<HTMLButtonElement | null>(null);
+  // If an error appears after its triggering control was removed (for
+  // example, a toast's Undo button), focus the error banner's Dismiss button.
+  useEffect(() => {
+    if (!error) return;
+    const frame = window.requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (!active || active === document.body || !active.isConnected) {
+        errorDismissRef.current?.focus({ preventScroll: true });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [error]);
   const [appToast, setAppToast] = useState<{
     message: string;
     tone: "normal" | "warning";
@@ -5586,12 +5603,15 @@ function MainApp() {
     folderState: researchFolderState,
     folders: researchFolders,
     moveTree: moveResearchTree,
+    moveTreeToNewFolder: moveResearchTreeToNewFolder,
     createFolder: createResearchFolder,
     renameFolder: renameResearchFolder,
     deleteFolder: deleteResearchFolder,
     setTrayCollapsed: setResearchTrayCollapsed,
     fileNewTree: fileNewResearchTree,
     refreshFolders: refreshResearchFolders,
+    foldersLoadError: researchFoldersLoadError,
+    retryFoldersLoad: retryResearchFoldersLoad,
   } = useResearchFiling({
     workspaceId: researchScope,
     activeTreesRef: researchTreesRef,
@@ -5606,6 +5626,7 @@ function MainApp() {
     refreshDrafts: refreshResearchDrafts,
     saveDraft: saveResearchDraftText,
     removeDraft: removeResearchDraft,
+    deleteDraft: deleteResearchDraftEntry,
     moveDraft: moveResearchDraft,
   } = useResearchDrafts(researchScope, setError);
   const researchFolderStateRef = useRef(researchFolderState);
@@ -5661,22 +5682,23 @@ function MainApp() {
         showResearchToast("Renamed.");
         return;
       }
+      if (request.moveTreeId) {
+        await moveResearchTreeToNewFolder(request.moveTreeId, name);
+        setResearchFolderNameRequest(null);
+        return;
+      }
       const folder = await createResearchFolder(name);
       setResearchFolderNameRequest(null);
       if (!folder) return;
-      if (request.moveTreeId) {
-        await moveResearchTree(request.moveTreeId, folder.id);
-      } else {
-        showResearchToast(
-          <span>
-            Created <b>{folder.name}</b>.
-          </span>,
-        );
-      }
+      showResearchToast(
+        <span>
+          Created <b>{folder.name}</b>.
+        </span>,
+      );
     },
     [
       createResearchFolder,
-      moveResearchTree,
+      moveResearchTreeToNewFolder,
       renameResearchFolder,
       researchFolderNameRequest,
       showResearchToast,
@@ -6377,7 +6399,7 @@ function MainApp() {
         ? groups.find((candidate) => candidate.id === workspaceId)
         : await ensureDefaultResearchWorkspace();
       if (!group || group.scope !== "research") {
-        throw new Error("The selected research folder is no longer available.");
+        throw new Error("The selected research workspace is no longer available.");
       }
       setGroups((current) =>
         current.some((candidate) => candidate.id === group.id) ? current : [...current, group],
@@ -6398,6 +6420,9 @@ function MainApp() {
       // document submit's own composer is dirty here, so it is unaffected and
       // closes itself right after this adopt.
       showResearchSurface();
+      // Clear journalOpen so the new thread is visible after closing a
+      // conversation or opening a draft.
+      setJournalOpen(false);
       activeResearchPaneIdRef.current = null;
       setActiveResearchPaneId(null);
       localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
@@ -6412,7 +6437,7 @@ function MainApp() {
         changeResearchFolderScope(detail.tree.workspaceId);
       }
     },
-    [changeResearchFolderScope],
+    [changeResearchFolderScope, setJournalOpen, showResearchSurface],
   );
   const submitNewResearch = useCallback(
     async (input: {
@@ -6539,16 +6564,11 @@ function MainApp() {
     },
     [],
   );
-  const renameResearchTreeTitle = useCallback(
-    async (treeId: string, title: string) => {
-      try {
-        await renameResearchTree(treeId, title);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    },
-    [],
-  );
+  // Rejects with the backend's message: the rename dialogs stay open with the
+  // typed title and show it.
+  const renameResearchTreeTitle = useCallback(async (treeId: string, title: string) => {
+    await renameResearchTree(treeId, title);
+  }, []);
   // Follow / Bookmark persist on the tree; the resulting tree update event
   // patches the open document and sidebar summaries, so nothing is set here.
   const setResearchTreeFollowedFlag = useCallback(
@@ -6612,6 +6632,7 @@ function MainApp() {
       queryAnchor?: ResearchHighlightAnchor | null,
       inline?: boolean,
       replyAnchor?: string | null,
+      replacesNodeId?: string | null,
     ) => {
       const node = await forkResearchNode(
         parentNodeId,
@@ -6619,6 +6640,7 @@ function MainApp() {
         queryAnchor,
         inline ?? false,
         replyAnchor,
+        replacesNodeId,
       );
       void applyGeneratedResearchNodeTitle(node.treeId, node.id);
       return node;
@@ -7122,17 +7144,16 @@ function MainApp() {
     }
     focusPaneTab(paneId);
   }
-  // ResearchDocument is memoized at its outer boundary. Route the two legacy
-  // function declarations through stable callbacks so unrelated App renders
-  // do not defeat that boundary; refs keep their behavior current.
+  // Pass a stable callback to the memoized ResearchDocument so unrelated App
+  // renders do not cause it to render again. The ref calls the current function.
   const researchDocumentOpenPaneRef = useRef(openResearchPaneTab);
   researchDocumentOpenPaneRef.current = openResearchPaneTab;
-  const researchDocumentToastRef = useRef(showAppToast);
-  researchDocumentToastRef.current = showAppToast;
+  // The conversation's toasts use the research toast: its live region is
+  // mounted before any text arrives, and it pauses under the pointer or focus.
   const handleResearchDocumentToast = useCallback(
     (message: string, tone?: "normal" | "warning") =>
-      researchDocumentToastRef.current(message, tone),
-    [],
+      showResearchToast(message, tone === "warning" ? { tone: "warning" } : {}),
+    [showResearchToast],
   );
 
   // The ⌘K palette's command list, rebuilt on each open from live state: tab
@@ -8802,6 +8823,32 @@ function MainApp() {
   const [activeResearchDrawerNodeId, setActiveResearchDrawerNodeId] = useState<string | null>(
     null,
   );
+  // The turn last opened in the conversation: a starred follow-up's row is
+  // marked while its turn is the one visited, unless a branch is open.
+  const [activeResearchNodeId, setActiveResearchNodeId] = useState<string | null>(null);
+  // The follow-up last opened from its feed row. Only that visit marks the
+  // row: a selection the conversation makes itself (closing a branch selects
+  // the turn it came from) does not. Cleared once the visit moves on.
+  const [feedChildVisit, setFeedChildVisit] = useState<{ nodeId: string; arrived: boolean } | null>(
+    null,
+  );
+  useEffect(() => {
+    setFeedChildVisit((visit) => {
+      if (!visit) return visit;
+      if (activeResearchNodeId === visit.nodeId) return visit.arrived ? visit : { ...visit, arrived: true };
+      return visit.arrived ? null : visit;
+    });
+  }, [activeResearchNodeId]);
+  const openFeedChildQuery = useCallback(
+    (query: RecentResearchQuery) => {
+      setFeedChildVisit({ nodeId: query.nodeId, arrived: false });
+      openRecentResearchQuery(query);
+    },
+    [openRecentResearchQuery],
+  );
+  const markedFeedChildNodeId =
+    activeResearchDrawerNodeId ??
+    (feedChildVisit && activeResearchNodeId === feedChildVisit.nodeId ? activeResearchNodeId : null);
   const headerMoveTree = headerMoveMenu
     ? [...researchTrees, ...archivedResearchTrees].find((tree) => tree.id === headerMoveMenu.treeId)
     : undefined;
@@ -8831,12 +8878,28 @@ function MainApp() {
     },
     [focusResearchHome, showResearchSurface],
   );
-  const closeResearchDraft = useCallback(() => setOpenResearchDraftId(null), []);
+  // Closing or deleting the open draft returns focus to the feed: its card,
+  // or the card that took its place. The frame after the view closes, since
+  // single-column mode shows the feed only then.
+  const closeResearchDraft = useCallback((draftId: string) => {
+    setOpenResearchDraftId(null);
+    window.requestAnimationFrame(() => focusResearchFeedCard(draftId));
+  }, []);
   const saveOpenResearchDraft = useCallback(
-    async (draftId: string, prompt: string) => {
-      await saveResearchDraftText(draftId, prompt);
+    async (draft: ResearchDraft, prompt: string) => {
+      await saveResearchDraftText(draft.id, prompt, draft.workspaceId);
     },
     [saveResearchDraftText],
+  );
+  const deleteOpenResearchDraft = useCallback(
+    async (draft: ResearchDraft) => {
+      const neighbour = researchFeedCardNeighbour(draft.id);
+      await deleteResearchDraftEntry(draft.id);
+      setOpenResearchDraftId((current) => (current === draft.id ? null : current));
+      showResearchToast("Draft deleted.");
+      window.requestAnimationFrame(() => focusResearchFeedCard(neighbour));
+    },
+    [deleteResearchDraftEntry, showResearchToast],
   );
   const deleteResearchDraftFromFeed = useCallback(
     (draft: ResearchDraft) => {
@@ -8906,8 +8969,9 @@ function MainApp() {
     },
     [saveResearchDraftText, setResearchTrayCollapsed, showResearchToast],
   );
-  // Sending a draft launches it with the composer's current agent and model,
-  // then removes the draft; the new question lands in Unfiled.
+  // Send the draft with the composer's current agent and model, then delete
+  // it. The new question is filed in Unfiled. If deletion fails after sending,
+  // report that error without rejecting the successful send.
   const composerLaunchChoiceRef = useRef<(() => ResearchLaunchChoice | null) | null>(null);
   const sendResearchDraft = useCallback(
     async (draft: ResearchDraft, prompt: string) => {
@@ -8917,14 +8981,23 @@ function MainApp() {
       }
       await submitNewResearch({ prompt, ...choice, workspaceId: draft.workspaceId });
       setOpenResearchDraftId((current) => (current === draft.id ? null : current));
-      await removeResearchDraft(draft.id);
+      try {
+        await deleteResearchDraftEntry(draft.id);
+      } catch (err) {
+        setError(
+          `The question was sent, but its draft couldn't be deleted. ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+        return;
+      }
       showResearchToast(
         <span>
           Sent. Moved from Drafts to <b>Unfiled</b>.
         </span>,
       );
     },
-    [removeResearchDraft, showResearchToast, submitNewResearch],
+    [deleteResearchDraftEntry, showResearchToast, submitNewResearch],
   );
   const configAdapters = config?.adapters;
   const feedComposer = useMemo(
@@ -9038,8 +9111,10 @@ function MainApp() {
   );
 
 
+  // The shell is a plain container: its sidebar (an aside) and the
+  // workspace (the main landmark) sit side by side, not nested.
   return (
-    <main
+    <div
       ref={appRef}
       className={`app-shell ${hasGlobalTurnSidebar ? "has-turn-sidebar" : ""}${
         researchSidebarStrip && IS_MAC ? " has-titlebar-strip" : ""
@@ -9177,6 +9252,8 @@ function MainApp() {
               onNewFolder={() => openNewResearchFolderDialog()}
               onRenameFolder={openRenameResearchFolderDialog}
               onDeleteFolder={requestResearchFolderDelete}
+              foldersLoadError={researchFoldersLoadError}
+              onRetryFoldersLoad={retryResearchFoldersLoad}
               homeShortcutHint={shortcutHintsShown ? RESEARCH_HOME_SHORTCUT_LABEL : null}
             />
           </div>
@@ -10487,7 +10564,7 @@ function MainApp() {
             </h2>
             {closeDialog.kind === "researchFolderRemove" ? (
               <>
-                <p>Remove this folder from Session?</p>
+                <p>Remove this workspace from Session?</p>
                 <p>The folder and its files will remain on disk, with history in the .session directory.</p>
                 {researchFolderRemovalError ? (
                   <p className="confirm-dialog-error" role="alert">
@@ -10510,7 +10587,7 @@ function MainApp() {
                     disabled={resolvingClose !== null}
                     onClick={() => void confirmResearchFolderRemoval()}
                   >
-                    {resolvingClose === "removeResearchFolder" ? "Removing…" : "Remove folder"}
+                    {resolvingClose === "removeResearchFolder" ? "Removing…" : "Remove workspace"}
                   </button>
                 </div>
               </>
@@ -10741,7 +10818,7 @@ function MainApp() {
           >
             <h2 id="rename-dialog-title">
               {renamingResearchFolder
-                ? "Rename folder"
+                ? "Rename workspace"
                 : renameGroupId
                   ? "Rename group"
                   : "Rename tab"}
@@ -10757,7 +10834,9 @@ function MainApp() {
                   closeRenameDialog();
                 }
               }}
-              aria-label={renameGroupId ? "Group name" : "Tab name"}
+              aria-label={
+                renamingResearchFolder ? "Workspace name" : renameGroupId ? "Group name" : "Tab name"
+              }
               aria-describedby={renamingResearchFolder ? "rename-folder-hint" : undefined}
             />
             {renamingResearchFolder ? (
@@ -10775,7 +10854,7 @@ function MainApp() {
         </div>
       ) : null}
 
-      <section className="workspace">
+      <main className="workspace">
         {error ? (
           <div
 
@@ -10785,6 +10864,7 @@ function MainApp() {
           >
             <span className="error-banner-message">{error}</span>
             <button
+              ref={errorDismissRef}
               type="button"
               className="control-button error-banner-dismiss"
               title="Dismiss (Esc)"
@@ -10835,7 +10915,7 @@ function MainApp() {
                       {...activityFeedState}
                       view={journalView}
                       selectedTreeId={researchStageView === "document" ? activeResearchTreeId : null}
-                      selectedChildNodeId={activeResearchDrawerNodeId}
+                      selectedChildNodeId={markedFeedChildNodeId}
                       selectedDraftId={openResearchDraft?.id ?? null}
                       onImportReport={importReport}
                       composer={feedComposer}
@@ -10848,7 +10928,7 @@ function MainApp() {
                       nextCursor={recentActivityCursor}
                       loadingOlder={loadingOlderActivity}
                       olderError={olderActivityError}
-                      onOpenResearchQuery={openRecentResearchQuery}
+                      onOpenResearchQuery={openFeedChildQuery}
                       onOpenDraft={openResearchDraftInColumn}
                       onOpenTree={openFeedResearchTree}
                       onOpenView={openFeedView}
@@ -10910,8 +10990,10 @@ function MainApp() {
                   onError={setError}
                   onToast={handleResearchDocumentToast}
                   shortcutHintsShown={shortcutHintsShown}
+                  requireCmdEnterToSend={settings.requireCmdEnterToSend}
                   onMoveTree={toggleHeaderMoveMenu}
                   onDrawerNodeChange={setActiveResearchDrawerNodeId}
+                  onSelectedNodeChange={setActiveResearchNodeId}
                   workspaceCanGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
                   workspaceCanGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
                   onWorkspaceBack={goResearchWorkspaceBack}
@@ -10922,10 +11004,10 @@ function MainApp() {
                   key={openResearchDraft.id}
                   draft={openResearchDraft}
                   requireCmdEnterToSend={settings.requireCmdEnterToSend}
-                  onSave={(prompt) => saveOpenResearchDraft(openResearchDraft.id, prompt)}
+                  onSave={(prompt) => saveOpenResearchDraft(openResearchDraft, prompt)}
                   onSend={(prompt) => sendResearchDraft(openResearchDraft, prompt)}
-                  onDelete={() => deleteResearchDraftFromFeed(openResearchDraft)}
-                  onClose={closeResearchDraft}
+                  onDelete={() => deleteOpenResearchDraft(openResearchDraft)}
+                  onClose={() => closeResearchDraft(openResearchDraft.id)}
                 />
               ) : (
                 <ResearchDocumentFrame>
@@ -10958,17 +11040,13 @@ function MainApp() {
                     setHeaderMoveMenu(null);
                     openNewResearchFolderDialog(headerMoveTree.id, anchor);
                   }}
-                  onClose={(restoreFocus) => {
-                    const { anchor } = headerMoveMenu;
-                    setHeaderMoveMenu(null);
-                    if (restoreFocus) anchor.focus();
-                  }}
+                  onClose={() => setHeaderMoveMenu(null)}
                 />
               ) : null}
             </ResearchColumns>
           ) : null}
         </div>
-      </section>
+      </main>
 
       {activeBrowserOwnerId && activeBrowserOverlay?.open ? (
         <BrowserOverlay
@@ -11097,7 +11175,7 @@ function MainApp() {
       ) : null}
       <ImageLightbox />
       <DiagramLightbox />
-    </main>
+    </div>
   );
 }
 

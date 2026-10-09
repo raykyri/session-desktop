@@ -181,8 +181,7 @@
   color: var(--danger-fg);
 }
 
-.native-input textarea,
-.research-followup-composer textarea {
+.native-input textarea {
   flex: 0 0 auto;
   min-width: 0;
   /* Auto-grows with content (JS sets the height) up to a cap, then scrolls. */
@@ -198,12 +197,7 @@
   padding: 8px 9px;
 }
 
-.research-followup-composer textarea {
-  font-size: calc(var(--research-meta-font-size) + 0.5px);
-}
-
-.native-input textarea::placeholder,
-.research-followup-composer textarea::placeholder {
+.native-input textarea::placeholder {
   color: var(--placeholder-color);
 }
 
@@ -449,17 +443,6 @@
 .folder-picker-status svg {
   flex: none;
   animation: spinner-spin 0.9s linear infinite;
-}
-
-.native-input-submit-actions {
-  display: flex;
-  /* Center the buttons in the row so their own height (shared with the sidebar
-     actions) wins instead of being stretched to the taller composer-menu trigger. */
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-  /* The composer menu now owns the margin-left:auto that pushes this group right. */
 }
 
 .queue-button {

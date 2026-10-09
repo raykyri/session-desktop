@@ -63,7 +63,7 @@ function appShortcutLabel(command: AppShortcutCommand): string {
     case "focusFollowups":
       return "jump to the follow-ups";
     case "openFolderMenu":
-      return "open the research folder menu";
+      return "open the research workspace menu";
     case "toggleSourceBrowser":
       return "toggle the source browser";
     default:

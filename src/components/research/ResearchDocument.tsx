@@ -12,12 +12,11 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   Check,
   Copy,
-  GitBranch,
+  Files,
   Highlighter,
   LoaderCircle,
   Pencil,
@@ -27,6 +26,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { ResearchBranchIcon } from "./ResearchIcons";
 import { IS_MAC, isEditableTarget } from "../../lib/appHelpers";
 import {
   createResearchHighlight,
@@ -58,10 +58,13 @@ import {
   RESEARCH_PINNED_COLUMN_WIDTH,
   researchBranchesByParent,
   researchChainHead,
+  researchDocumentHasColumn,
+  researchEditedQuestionFork,
   researchDrawerWidth,
   researchMainChainAncestor,
   researchNodePlacement,
   researchParentBranchHead,
+  researchQueueAction,
   researchQueueStep,
 } from "../../lib/researchBranchView";
 import {
@@ -74,6 +77,7 @@ import {
 import { countResearchDocumentWords } from "../../lib/researchDocuments";
 import {
   expandedResearchHighlightOffsets,
+  RESEARCH_HIGHLIGHT_CONTEXT_LENGTH,
   intersectingResearchHighlightIds,
   isResearchAskActionShortcut,
   isResearchExpandActionShortcut,
@@ -88,10 +92,13 @@ import {
   type QueuedResearchFollowup,
 } from "../../lib/researchNavigation";
 import {
+  clipResearchSelectionToParagraph,
   createResearchSelectionSnapper,
+  isLiveResearchSelection,
   researchSelectionActionPlacement,
   type ResearchSelectionSnapper,
 } from "../../lib/researchSelection";
+import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import { formatElapsedClock, formatRunDuration, shortWhen } from "../../lib/shortTime";
 import {
   assistantTextFromTimelineItems,
@@ -118,6 +125,7 @@ import {
   ResearchDocumentFrame,
 } from "./ResearchDocumentChrome";
 import { ResearchTurn, type SegmentDomKind, type SegmentView } from "./ResearchTurn";
+import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
 import ResearchConversationComposer, {
   type ResearchComposerHandle,
 } from "./ResearchConversationComposer";
@@ -128,10 +136,29 @@ import {
   ResearchBranchSource,
 } from "./ResearchBranchDrawer";
 import { ResearchColumnsContext, showResearchColumn } from "./ResearchColumns";
+import {
+  ResearchMenu,
+  ResearchMenuItem,
+  ResearchMenuMeta,
+  ResearchMenuSeparator,
+  ResearchMenuTitle,
+  researchMenuPoint,
+  type ResearchMenuAlign,
+  type ResearchMenuRect,
+} from "./ResearchMenu";
 
 const EMPTY_RECAP_PENDING_NODE_IDS: ReadonlySet<string> = new Set<string>();
 const EMPTY_BRANCHES: ResearchNode[] = [];
 const EMPTY_QUEUE: QueuedResearchFollowup[] = [];
+/** How long a sent queued follow-up keeps its chain blocked while waiting
+ * for the new node to appear in the tree detail. */
+const QUEUE_CHILD_WAIT_MS = 15_000;
+/** How long a node created a moment ago is kept in navigation state before
+ * it appears in the tree detail. */
+const PENDING_NODE_TTL_MS = 30_000;
+/** Below this much uncovered conversation width the header drops its
+ * history arrows so the title keeps its room. */
+const HISTORY_NAV_MIN_VISIBLE_WIDTH = 280;
 
 interface ResearchDocumentProps {
   detail: ResearchTreeDetail | null;
@@ -148,6 +175,8 @@ interface ResearchDocumentProps {
     prompt: string,
     queryAnchor?: ResearchHighlightAnchor | null,
     inline?: boolean,
+    replyAnchor?: string | null,
+    replacesNodeId?: string | null,
   ) => Promise<ResearchNode>;
   /** Replies and follow-ups on a note page (see ResearchNoteDocument). */
   noteActions: NoteActions;
@@ -180,6 +209,8 @@ interface ResearchDocumentProps {
   onToast: (message: string, tone?: "normal" | "warning") => void;
   /** Show held-⌘ shortcut badges (the ⌘J composer hint). */
   shortcutHintsShown: boolean;
+  /** The "Require ⌘↵ to send" setting, for every composer in the document. */
+  requireCmdEnterToSend: boolean;
   /** Runs whose background summary job is in flight; each renders a spinner in
    * its recap slot until the summary arrives. */
   recapPendingNodeIds?: ReadonlySet<string>;
@@ -192,10 +223,12 @@ interface ResearchDocumentProps {
   /** Called with the node the branch drawer shows whenever that changes, and
    * with null when the drawer closes (or shows a branch not yet created). */
   onDrawerNodeChange?: (nodeId: string | null) => void;
+  /** Called with the visited node (the turn opened or focused last) whenever
+   * that changes, and with null on unmount. */
+  onSelectedNodeChange?: (nodeId: string | null) => void;
 }
 
 const TIMELINE_ITEM_RENDER_WINDOW = 100;
-const MENU_MARGIN = 8;
 const FLASH_MS = 1600;
 
 interface HighlightAction {
@@ -243,23 +276,23 @@ type DrawerTarget =
   | { kind: "node"; nodeId: string }
   | { kind: "draft"; parentNodeId: string; anchor: ResearchHighlightAnchor | null };
 
-interface FloatingMenuAnchor {
-  left: number;
-  top: number;
-  bottom: number;
-  /** Where focus returns when Escape closes the menu. */
+interface DocumentMenuPlacement {
+  anchor: HTMLElement | ResearchMenuRect;
+  align: ResearchMenuAlign;
+  /** The button that opened the menu: a branch opened from the menu returns
+   * focus to it when it closes. */
   trigger?: HTMLElement | null;
 }
 
-type FloatingMenuState =
-  | ({ kind: "answer"; nodeId: string } & FloatingMenuAnchor)
-  | ({ kind: "branches"; nodeId: string } & FloatingMenuAnchor)
+type DocumentMenuState =
+  | ({ kind: "answer"; nodeId: string } & DocumentMenuPlacement)
+  | ({ kind: "branches"; nodeId: string } & DocumentMenuPlacement)
   | ({
       kind: "mark";
       nodeId: string;
       branchIds: string[];
       highlightId: string | null;
-    } & FloatingMenuAnchor);
+    } & DocumentMenuPlacement);
 
 interface ResearchHighlightRegistry {
   set(name: string, highlight: unknown): void;
@@ -293,7 +326,6 @@ const RESEARCH_HOVER_PRIORITY = 2;
 const RESEARCH_OPEN_PRIORITY = 3;
 const RESEARCH_FLASH_PRIORITY = 4;
 const RESEARCH_SELECTED_PRIORITY = 5;
-const RESEARCH_HIGHLIGHT_CONTEXT_LENGTH = 128;
 // Match the platform's small click-versus-drag tolerance: a click should keep
 // link, annotation, and native double-click behavior, while a deliberate drag
 // switches to live whole-word selection quickly.
@@ -692,159 +724,6 @@ function inColumnView(rect: DOMRect, element: Element) {
   return rect.top >= bounds.top + 8 && rect.bottom <= bounds.bottom - 8;
 }
 
-/** A small anchored menu: placed below its anchor (above when there is no
- * room), dismissed by an outside press, Escape, scrolling, or resizing, and
- * navigable with the arrow keys. */
-function FloatingMenu({
-  anchor,
-  label,
-  role = "menu",
-  className = "",
-  onClose,
-  children,
-}: {
-  anchor: FloatingMenuAnchor;
-  label: string;
-  role?: "menu" | "toolbar";
-  className?: string;
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  // Escape returns focus to the trigger, or to whatever had it when the menu
-  // opened (a right-click or passage click has no trigger).
-  const returnFocusRef = useRef<HTMLElement | null>(
-    anchor.trigger ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null),
-  );
-  useLayoutEffect(() => {
-    const menu = ref.current;
-    if (!menu) {
-      return;
-    }
-    const { width, height } = menu.getBoundingClientRect();
-    const below = anchor.bottom + 4;
-    const top =
-      below + height > window.innerHeight - MENU_MARGIN
-        ? Math.max(MENU_MARGIN, anchor.top - height - 4)
-        : below;
-    const left = Math.max(
-      MENU_MARGIN,
-      Math.min(anchor.left, window.innerWidth - width - MENU_MARGIN),
-    );
-    setPosition({ left, top });
-    if (role === "menu") {
-      menu.querySelector<HTMLElement>("[role='menuitem']:not(:disabled)")?.focus({ preventScroll: true });
-    }
-  }, [anchor.bottom, anchor.left, anchor.top, role]);
-  useEffect(() => {
-    const onPointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (ref.current?.contains(target)) {
-        return;
-      }
-      if (target instanceof Element && target.closest("[data-research-menu-trigger]")) {
-        return;
-      }
-      onCloseRef.current();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        // Only the menu closes: not the drawer behind it.
-        event.preventDefault();
-        event.stopPropagation();
-        onCloseRef.current();
-        const target = returnFocusRef.current;
-        if (target?.isConnected && target !== document.body) {
-          target.focus({ preventScroll: true });
-        }
-        return;
-      }
-      if ((event.key === "ArrowDown" || event.key === "ArrowUp") && ref.current?.contains(event.target as Node)) {
-        const items = [
-          ...(ref.current?.querySelectorAll<HTMLElement>("[role='menuitem']:not(:disabled)") ?? []),
-        ];
-        if (items.length === 0) {
-          return;
-        }
-        event.preventDefault();
-        const index = items.indexOf(document.activeElement as HTMLElement);
-        const next = items[(index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length];
-        next.focus();
-      }
-    };
-    const close = () => onCloseRef.current();
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown, true);
-    window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown, true);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
-    };
-  }, []);
-  return createPortal(
-    <div
-      ref={ref}
-      className={`popover-surface research-menu ${className}`}
-      role={role}
-      aria-label={label}
-      style={position ?? { left: -9999, top: -9999 }}
-      onMouseDown={(event) => event.stopPropagation()}
-      onContextMenu={(event) => event.preventDefault()}
-    >
-      {children}
-    </div>,
-    document.body,
-  );
-}
-
-function MenuItem({
-  icon,
-  label,
-  description,
-  onSelect,
-  disabled = false,
-  title,
-  danger = false,
-  current = false,
-  trailing,
-}: {
-  icon?: ReactNode;
-  label: string;
-  /** Read after the label by screen readers (what a trailing mark shows). */
-  description?: string;
-  onSelect: () => void;
-  disabled?: boolean;
-  title?: string;
-  danger?: boolean;
-  current?: boolean;
-  trailing?: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      className={`control-button research-menu-item${danger ? " is-danger" : ""}`}
-      disabled={disabled}
-      title={title}
-      aria-current={current ? "true" : undefined}
-      onClick={onSelect}
-    >
-      {icon}
-      <span className="research-menu-label">
-        {label}
-        {description ? <span className="research-visually-hidden">, {description}</span> : null}
-      </span>
-      {trailing}
-    </button>
-  );
-}
-
 function nodeLabel(node: ResearchNode | null | undefined, fallback: string) {
   return (node?.title ?? node?.prompt ?? "").trim() || fallback;
 }
@@ -871,12 +750,14 @@ function ResearchDocument({
   onError,
   onToast,
   shortcutHintsShown,
+  requireCmdEnterToSend,
   recapPendingNodeIds = EMPTY_RECAP_PENDING_NODE_IDS,
   workspaceCanGoBack = false,
   workspaceCanGoForward = false,
   onWorkspaceBack,
   onWorkspaceForward,
   onDrawerNodeChange,
+  onSelectedNodeChange,
 }: ResearchDocumentProps) {
   const columnsLayout = useContext(ResearchColumnsContext);
   const treeId = detail?.tree.id ?? null;
@@ -913,12 +794,13 @@ function ResearchDocument({
   const [retryingNodeId, setRetryingNodeId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const cancelRequestInFlightRef = useRef(false);
-  const [menu, setMenu] = useState<FloatingMenuState | null>(null);
+  const [menu, setMenu] = useState<DocumentMenuState | null>(null);
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
   const [removingBranch, setRemovingBranch] = useState(false);
   const [branchRemovalError, setBranchRemovalError] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ nodeId: string; value: string } | null>(null);
   const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [documentEditSession, setDocumentEditSession] = useState<DocumentEditSession | null>(null);
   const [recapDialogNodeId, setRecapDialogNodeId] = useState<string | null>(null);
   // Per-node reading state: which turns show their full item window
@@ -956,9 +838,11 @@ function ResearchDocument({
   const mainContentRef = useRef<HTMLDivElement | null>(null);
   const drawerScrollRef = useRef<HTMLDivElement | null>(null);
   const drawerElementRef = useRef<HTMLElement | null>(null);
-  // Branches created a moment ago that the next detail refresh delivers:
-  // until then the drawer and the selection may name a node detail lacks.
-  const pendingNodeIdsRef = useRef(new Set<string>());
+  // Branches created a moment ago that the next detail refresh delivers,
+  // with the time each was created: until then the drawer and the selection
+  // may name a node detail lacks. One that never arrives is dropped after
+  // PENDING_NODE_TTL_MS.
+  const pendingNodeIdsRef = useRef(new Map<string, number>());
   // A new branch's composer takes focus once its node arrives.
   const pendingComposerFocusRef = useRef<string | null>(null);
   // The selection actions' measured size, for centring them.
@@ -1366,6 +1250,11 @@ function ResearchDocument({
     setHistory(initResearchHistory(selected));
     const placement = researchNodePlacement(detail.nodes, main, pinned, selected);
     if (placement.kind === "drawer") {
+      // Opened from outside the document (a feed child row): closing the
+      // drawer returns focus there.
+      const active = document.activeElement;
+      drawerReturnFocusRef.current =
+        active instanceof HTMLElement && active !== document.body ? active : null;
       setDrawerAnimates(false);
       setDrawer({ kind: "node", nodeId: selected });
     } else if (placement.kind === "pinned") {
@@ -1420,8 +1309,9 @@ function ResearchDocument({
     }
     const validNodeIds = new Set(detail.nodes.map((node) => node.id));
     const pending = pendingNodeIdsRef.current;
-    for (const id of [...pending]) {
-      if (validNodeIds.has(id)) {
+    const now = Date.now();
+    for (const [id, addedAt] of [...pending]) {
+      if (validNodeIds.has(id) || now - addedAt > PENDING_NODE_TTL_MS) {
         pending.delete(id);
       } else {
         validNodeIds.add(id);
@@ -1825,7 +1715,7 @@ function ResearchDocument({
    * it cannot go through `navigate` yet. */
   const openNewBranch = useCallback(
     (nodeId: string) => {
-      pendingNodeIdsRef.current.add(nodeId);
+      pendingNodeIdsRef.current.set(nodeId, Date.now());
       pendingComposerFocusRef.current = nodeId;
       if (!drawerRef.current) {
         drawerReturnFocusRef.current =
@@ -2008,14 +1898,103 @@ function ResearchDocument({
   useEffect(
     () =>
       listenToResearchFollowupsFocus(() => {
-        const handle = composerRefs.current.get(focusedComposerKeyRef.current);
-        handle?.focus();
-        handle?.element()?.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
+        const layout = columnsLayoutRef.current;
+        const focusComposer = () => {
+          const handle = composerRefs.current.get(focusedComposerKeyRef.current);
+          handle?.focus();
+          handle?.element()?.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
+        };
+        if (layout?.singleColumn && layout.feedFocused) {
+          // The single column shows the feed: switch back to the
+          // conversation; the effect below focuses its composer once the
+          // column is no longer inert.
+          composerFocusAfterFeedRef.current = focusComposer;
+          layout.releaseFeed();
+          return;
+        }
+        focusComposer();
       }),
     [],
   );
+  const composerFocusAfterFeedRef = useRef<(() => void) | null>(null);
+  const feedShown = Boolean(columnsLayout?.feedFocused);
+  useEffect(() => {
+    const focusComposer = composerFocusAfterFeedRef.current;
+    if (feedShown || !focusComposer) return;
+    composerFocusAfterFeedRef.current = null;
+    focusComposer();
+  }, [feedShown]);
 
-  useResearchSwipeNavigation(mainScrollRef, goBack, goForward, Boolean(detail));
+  const hasColumn = researchDocumentHasColumn(detail, rootNodeId, selectedNodeId);
+  useResearchSwipeNavigation(mainScrollRef, goBack, goForward, hasColumn);
+
+  // Controls the drawer covers (a column's header actions, an answer's length
+  // dots) leave the tab order and pointer while it is open, so Tab never
+  // lands on something hidden under it. Rechecked after every render (turns
+  // and columns come and go), on horizontal scroll of the row and on resize.
+  const drawerOpen = drawer !== null;
+  useLayoutEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+    const update = () => {
+      const left = drawerOpen && !singleColumnRef.current ? drawerLeftEdge() : null;
+      const candidates = workspace.querySelectorAll<HTMLElement>(
+        ".research-conv-column .research-column-bar button, .research-conv-column .research-answer-dots, [data-drawer-covered]",
+      );
+      for (const element of candidates) {
+        const covered = left !== null && element.getBoundingClientRect().right > left;
+        if (covered && !element.inert) {
+          element.inert = true;
+          element.dataset.drawerCovered = "";
+        } else if (!covered && element.dataset.drawerCovered !== undefined) {
+          element.inert = false;
+          delete element.dataset.drawerCovered;
+        }
+      }
+    };
+    update();
+    if (!drawerOpen) return;
+    const row = columnsLayoutRef.current?.row ?? null;
+    row?.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      row?.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  });
+
+  // When the conversation appears with focus nowhere (a sent draft's view
+  // was replaced by it), its title takes focus, as moving to a column does.
+  useEffect(() => {
+    if (!hasColumn) return;
+    const active = document.activeElement;
+    if (!active || active === document.body) {
+      columnTitleRefs.current.get("main")?.focus({ preventScroll: true });
+    }
+  }, [hasColumn]);
+
+  // Dialogs return focus to the control that opened them (the … menu's
+  // button). A deleted turn takes its button along: focus then goes to the
+  // previous turn's … button, else to the composer.
+  const deletedParentIdRef = useRef<string | null>(null);
+  useResearchDialogReturnFocus(renameTarget !== null);
+  useResearchDialogReturnFocus(deletingBranchId !== null, () => {
+    const parentId = deletedParentIdRef.current;
+    const previous = parentId
+      ? document.querySelector<HTMLElement>(
+          `[data-segment-anchor="${CSS.escape(parentId)}"] .research-turn-more`,
+        )
+      : null;
+    const composer = composerRefs.current
+      .get(focusedComposerKeyRef.current)
+      ?.element()
+      ?.querySelector("textarea");
+    // Deleting the research closes the document: the feed's composer.
+    return (
+      previous ??
+      (composer?.isConnected ? composer : document.querySelector<HTMLElement>(".new-research-input"))
+    );
+  });
 
   const expandAllTurns = useCallback(
     (nodeId: string) => {
@@ -2693,7 +2672,7 @@ function ResearchDocument({
     const node = nodeId ? detailRef.current?.nodes.find((candidate) => candidate.id === nodeId) : null;
     // A streaming answer has no revision to anchor to yet; its selection can
     // still be copied.
-    const live = !revision && Boolean(node && isActiveResearchStatus(node.status));
+    const live = isLiveResearchSelection(revision, node?.status);
     if (!root || !nodeId || !segmentContent || (!revision && !live) || root.closest(".is-leaving")) {
       setHighlightAction(null);
       return;
@@ -2711,18 +2690,16 @@ function ResearchDocument({
     const copyText = projection.slice(offsets.start, offsets.end);
     // A highlight or branch passage stays within one paragraph: a selection
     // that runs into the next one is cut at the end of the first.
-    let crossed = false;
     const startBlock = passageBlockAt(root, range.startContainer);
-    if (startBlock && !startBlock.contains(range.endContainer)) {
-      let blockEnd = flatTextOffsetAt(root, startBlock, startBlock.childNodes.length) ?? offsets.end;
-      while (blockEnd > offsets.start && /\s/.test(projection[blockEnd - 1] ?? "")) {
-        blockEnd -= 1;
-      }
-      if (blockEnd < offsets.end && projection.slice(offsets.start, blockEnd).trim()) {
-        offsets.end = blockEnd;
-        crossed = true;
-      }
-    }
+    const { crossed, ...clipped } = clipResearchSelectionToParagraph(
+      projection,
+      offsets,
+      startBlock && !startBlock.contains(range.endContainer)
+        ? flatTextOffsetAt(root, startBlock, startBlock.childNodes.length)
+        : null,
+    );
+    offsets.start = clipped.start;
+    offsets.end = clipped.end;
     const exact = projection.slice(offsets.start, offsets.end);
     const resolvedRanges = (resolvedHighlightsRef.current.get(nodeId) ?? []).map(
       ({ highlight, start, end }) => ({
@@ -2995,9 +2972,13 @@ function ResearchDocument({
         nodeId,
         branchIds,
         highlightId: highlight?.highlight.id ?? null,
-        left: event.clientX - 20,
-        top: event.clientY - 10,
-        bottom: event.clientY + 10,
+        anchor: {
+          left: event.clientX - 20,
+          right: event.clientX - 20,
+          top: event.clientY - 10,
+          bottom: event.clientY + 10,
+        },
+        align: "point",
       });
     },
     [branchTriggerFor, navigate],
@@ -3407,11 +3388,12 @@ function ResearchDocument({
       setMenu(null);
       return;
     }
-    const rect = trigger.getBoundingClientRect();
-    setMenu({ kind: "answer", nodeId, left: rect.right - 240, top: rect.top, bottom: rect.bottom, trigger });
+    // Opens to the right of the button in the question's meta row, so it
+    // stays over the conversation column.
+    setMenu({ kind: "answer", nodeId, anchor: trigger, align: "start", trigger });
   }, []);
   const openContextMenu = useCallback((nodeId: string, clientX: number, clientY: number) => {
-    setMenu({ kind: "answer", nodeId, left: clientX, top: clientY, bottom: clientY });
+    setMenu({ kind: "answer", nodeId, anchor: researchMenuPoint(clientX, clientY), align: "point" });
   }, []);
 
   // The branch button: with branches it opens their menu; with none it
@@ -3420,6 +3402,7 @@ function ResearchDocument({
     (nodeId: string, trigger: HTMLButtonElement) => {
       const count = branchesByParentRef.current.get(nodeId)?.length ?? 0;
       if (count === 0) {
+        setMenu(null);
         openDraft(nodeId, null, trigger);
         return;
       }
@@ -3427,8 +3410,8 @@ function ResearchDocument({
         setMenu(null);
         return;
       }
-      const rect = trigger.getBoundingClientRect();
-      setMenu({ kind: "branches", nodeId, left: rect.left, top: rect.top, bottom: rect.bottom, trigger });
+      // Opens to the right of the button (as the … menu beside it does).
+      setMenu({ kind: "branches", nodeId, anchor: trigger, align: "start", trigger });
     },
     [openDraft],
   );
@@ -3449,8 +3432,25 @@ function ResearchDocument({
     });
   }, []);
 
-  /** Sends a column's composer. Editing a failed question removes the failed
-   * node and forks the new question from the same parent. While the tail is
+  // Per chain head, the follow-up last sent from it: `true` while the fork
+  // request runs, then the new child's id until the detail includes it. The
+  // chain's tail is stale until then, so nothing else is sent from it.
+  const queueInFlightRef = useRef(new Map<string, string | true>());
+  const [queueReleases, setQueueReleases] = useState(0);
+  const awaitChainChild = useCallback((headId: string, childId: string) => {
+    const inFlight = queueInFlightRef.current;
+    inFlight.set(headId, childId);
+    window.setTimeout(() => {
+      if (inFlight.get(headId) === childId) {
+        inFlight.delete(headId);
+        setQueueReleases((count) => count + 1);
+      }
+    }, QUEUE_CHILD_WAIT_MS);
+  }, []);
+
+  /** Sends a column's composer. Editing a failed question forks the new
+   * question from the same parent in place of the failed node (removed by the
+   * backend once the new one is admitted). While the tail is
    * running the question joins the chain's client-side queue. */
   const submitComposer = useCallback(
     async (headId: string, { branch = false }: { branch?: boolean } = {}) => {
@@ -3490,24 +3490,26 @@ function ResearchDocument({
       }
       if (editingId) {
         const failed = currentDetail.nodes.find((node) => node.id === editingId);
-        if (!failed?.parentNodeId) {
+        const request = failed ? researchEditedQuestionFork(failed, prompt) : null;
+        if (!failed || !request) {
           setEditingByHead((current) => withoutKeys(current, [headId]));
           return;
         }
         setSubmittingKey(headId);
         try {
-          await onRemoveBranch(failed.id);
           const child = await onForkRef.current(
-            failed.parentNodeId,
-            prompt,
-            failed.queryAnchor ?? null,
-            Boolean(failed.inline),
+            request.parentNodeId,
+            request.prompt,
+            request.queryAnchor,
+            request.inline,
+            request.replyAnchor,
+            request.replacesNodeId,
           );
           clearComposer();
           setEditingByHead((current) => withoutKeys(current, [headId]));
           if (failed.id === headId) {
             // The failed node headed a branch: show its replacement.
-            pendingNodeIdsRef.current.add(child.id);
+            pendingNodeIdsRef.current.set(child.id, Date.now());
             if (pinnedHeadsRef.current.includes(headId)) {
               setPinnedHeads((current) => current.map((id) => (id === headId ? child.id : id)));
             } else {
@@ -3528,7 +3530,7 @@ function ResearchDocument({
       }
       const step = researchQueueStep(tail);
       const queued = queuesRef.current[headId] ?? EMPTY_QUEUE;
-      if (step === "wait" || queued.length > 0) {
+      if (step === "wait" || queued.length > 0 || queueInFlightRef.current.has(headId)) {
         updateQueue(headId, (queue) => [
           ...queue,
           { id: `q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, prompt, createdAt: Date.now() },
@@ -3542,6 +3544,7 @@ function ResearchDocument({
       setSubmittingKey(headId);
       try {
         const child = await onForkRef.current(tail.id, prompt, null, true);
+        awaitChainChild(headId, child.id);
         clearComposer();
         pendingScrollNodeIdRef.current = child.id;
       } catch (err) {
@@ -3550,7 +3553,7 @@ function ResearchDocument({
         setSubmittingKey(null);
       }
     },
-    [archived, mainComposerKey, navigationPersistence, onRemoveBranch, openNewBranch, updateQueue],
+    [archived, awaitChainChild, mainComposerKey, navigationPersistence, openNewBranch, updateQueue],
   );
 
   /** Sends the drawer's new branch: the branch is created with its first
@@ -3583,42 +3586,62 @@ function ResearchDocument({
     }
   }, [archived, navigationPersistence, openNewBranch]);
 
-  // Send each chain's first queued follow-up once its tail completes.
-  const queueSendingRef = useRef(new Set<string>());
+  // Send each chain's first queued follow-up once its tail completes. A
+  // chain stays blocked from the send until the child it created is in the
+  // detail (see researchQueueAction); a child that never arrives releases
+  // the chain after QUEUE_CHILD_WAIT_MS.
   useEffect(() => {
     if (!detail || archived) {
       return;
     }
-    for (const [headId, queue] of Object.entries(queues)) {
-      // A question the backend refused waits for Retry or Remove.
-      if (queue.length === 0 || queue[0].failed || queueSendingRef.current.has(headId)) {
-        continue;
+    const inFlight = queueInFlightRef.current;
+    for (const [headId, pending] of [...inFlight]) {
+      if (typeof pending === "string" && nodeById.has(pending)) {
+        inFlight.delete(headId);
       }
-      const chain = inlineChainFor(detail.nodes, headId);
-      const tail = nodeById.get(chain[chain.length - 1] ?? "") ?? null;
-      if (!nodeById.has(headId)) {
+    }
+    for (const [headId, queue] of Object.entries(queues)) {
+      const action = researchQueueAction(detail.nodes, headId, queue, inFlight.get(headId));
+      if (action.kind === "clear") {
         updateQueue(headId, () => []);
         continue;
       }
-      if (researchQueueStep(tail) !== "send" || !tail || !canContinueThread(detail.nodes, tail)) {
+      if (action.kind !== "send") {
         continue;
       }
-      const [next] = queue;
-      queueSendingRef.current.add(headId);
-      onFork(tail.id, next.prompt, null, true)
+      const { item, tailId } = action;
+      inFlight.set(headId, true);
+      onFork(tailId, item.prompt, null, true)
         .then((child) => {
-          updateQueue(headId, (current) => current.filter((item) => item.id !== next.id));
+          awaitChainChild(headId, child.id);
+          updateQueue(headId, (current) => current.filter((entry) => entry.id !== item.id));
           pendingScrollNodeIdRef.current = child.id;
         })
         .catch((err) => {
+          inFlight.delete(headId);
           const message = err instanceof Error ? err.message : String(err);
           updateQueue(headId, (current) =>
-            current.map((item) => (item.id === next.id ? { ...item, failed: message } : item)),
+            current.map((entry) => (entry.id === item.id ? { ...entry, failed: message } : entry)),
           );
-        })
-        .finally(() => queueSendingRef.current.delete(headId));
+        });
     }
-  }, [archived, detail, nodeById, onFork, queues, updateQueue]);
+  }, [archived, awaitChainChild, detail, nodeById, onFork, queueReleases, queues, updateQueue]);
+
+  // After Retry on a queued question, focus that drops to the page (the
+  // question was sent and its item, with the focused button, went away)
+  // moves to the chain's composer.
+  const queueRefocusRef = useRef<{ headId: string; itemId: string } | null>(null);
+  useLayoutEffect(() => {
+    const pending = queueRefocusRef.current;
+    if (!pending || (queuesRef.current[pending.headId] ?? EMPTY_QUEUE).some((item) => item.id === pending.itemId)) {
+      return;
+    }
+    queueRefocusRef.current = null;
+    const active = document.activeElement;
+    if (!active || active === document.body || !active.isConnected) {
+      composerRefs.current.get(pending.headId)?.focus();
+    }
+  });
 
   // A new branch's composer takes focus once its node has rendered.
   useEffect(() => {
@@ -3639,6 +3662,12 @@ function ResearchDocument({
     onDrawerNodeChangeRef.current?.(drawerNodeId);
   }, [drawerNodeId]);
   useEffect(() => () => onDrawerNodeChangeRef.current?.(null), []);
+  const onSelectedNodeChangeRef = useRef(onSelectedNodeChange);
+  onSelectedNodeChangeRef.current = onSelectedNodeChange;
+  useEffect(() => {
+    onSelectedNodeChangeRef.current?.(selectedNodeId);
+  }, [selectedNodeId]);
+  useEffect(() => () => onSelectedNodeChangeRef.current?.(null), []);
 
   // Scroll to a just-submitted follow-up once the refreshed detail delivers it.
   useEffect(() => {
@@ -3745,6 +3774,7 @@ function ResearchDocument({
         setDeletingBranchId(null);
         return;
       }
+      deletedParentIdRef.current = deletingBranch.node.parentNodeId ?? null;
       const removal = await onRemoveBranch(deletingBranch.node.id);
       // The backend call and detail refresh can outlive this document's tree.
       if (treeIdRef.current !== removal.treeId) {
@@ -3776,9 +3806,7 @@ function ResearchDocument({
       }
       setDeletingBranchId(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setBranchRemovalError(message);
-      onError(message);
+      setBranchRemovalError(err instanceof Error ? err.message : String(err));
     } finally {
       setRemovingBranch(false);
     }
@@ -3801,7 +3829,8 @@ function ResearchDocument({
       }
       setRenameTarget(null);
     } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
+      // The dialog stays open with the typed title.
+      setRenameError(err instanceof Error ? err.message : String(err));
     } finally {
       setRenaming(false);
     }
@@ -3869,13 +3898,6 @@ function ResearchDocument({
       }
       const branches = branchesByParent.get(id) ?? EMPTY_BRANCHES;
       const active = isActiveResearchStatus(node.status);
-      // A cancelled turn already says how long it ran ("Stopped after").
-      const durationText =
-        view.isConversation || active || node.status === "cancelled" || !node.startedAt
-          ? null
-          : `${node.status === "complete" ? "" : "Ran for "}${formatRunDuration(
-              (node.completedAt ?? metadataNow) - node.startedAt,
-            )}`;
       const replyQuote = node.replyAnchor
         ? nodeById.get(node.parentNodeId ?? "")?.delivery?.replies?.find(
             (reply) => reply.id === node.replyAnchor,
@@ -3903,11 +3925,13 @@ function ResearchDocument({
           contentError={contentErrorByNode[id] ?? null}
           cancelling={cancelling}
           elapsedText={active && node.startedAt ? formatElapsedClock(metadataNow - node.startedAt) : null}
-          durationText={durationText}
-          hiddenHighlightCount={hiddenHighlightsByNode[id] ?? 0}
+          waitsForParent={
+            node.status === "queued" &&
+            isActiveResearchStatus(nodeById.get(node.parentNodeId ?? "")?.status ?? "complete")
+          }
           recapPending={recapPendingNodeIds.has(id)}
           pointerOverAnnotation={pointerAnnotationNodeId === id}
-          menuOpen={menu?.kind === "answer" && menu.nodeId === id}
+          answerMenuOpen={menu?.kind === "answer" && menu.nodeId === id && Boolean(menu.trigger)}
           expanded={Boolean(expandedAnswers[id])}
           canRetry={!archived && canRetryResearchNode(node)}
           retrying={retryingNodeId === id}
@@ -3915,9 +3939,7 @@ function ResearchDocument({
           registerSegmentElement={register}
           onExpandTurns={expandAllTurns}
           onRetryContentLoad={retryContentLoad}
-          onShowFullTrace={showFullTraceFor}
           onToggleFullTrace={toggleFullTrace}
-          onCopyAnswer={handleCopyAnswer}
           onOpenAnswerMenu={openAnswerMenu}
           onCancelNode={handleCancelNode}
           onRetryNode={handleRetryNode}
@@ -3943,6 +3965,32 @@ function ResearchDocument({
       const stalled = index === 0 && !item.failed && researchQueueStep(tail) === "stalled";
       const remove = () => {
         updateQueue(headId, (queue) => queue.filter((entry) => entry.id !== item.id));
+        window.requestAnimationFrame(() => composerRefs.current.get(headId)?.focus());
+      };
+      // Retry removes the Retry button: focus moves to the item's Remove
+      // button, and to the composer once the question has been sent (see
+      // queueRefocusRef).
+      const retry = (event: React.MouseEvent<HTMLButtonElement>) => {
+        const article = event.currentTarget.closest("article");
+        queueRefocusRef.current = { headId, itemId: item.id };
+        updateQueue(headId, (queue) =>
+          queue.map((entry) => (entry.id === item.id ? { ...entry, failed: undefined } : entry)),
+        );
+        window.requestAnimationFrame(() => {
+          if (article?.isConnected) {
+            article.querySelector<HTMLButtonElement>(".research-queue-remove")?.focus();
+          }
+        });
+      };
+      // Editing moves the question into the composer. Text already there is
+      // never replaced or merged into it: the reader clears it first.
+      const edit = () => {
+        if ((composerTextRef.current[headId] ?? "").trim()) {
+          onToast("Clear the composer to edit this question.");
+          return;
+        }
+        updateQueue(headId, (queue) => queue.filter((entry) => entry.id !== item.id));
+        setComposerText((current) => ({ ...current, [headId]: item.prompt }));
         window.requestAnimationFrame(() => composerRefs.current.get(headId)?.focus());
       };
       return (
@@ -3976,15 +4024,7 @@ function ResearchDocument({
             )}
             <div className="research-turn-actions">
               {item.failed ? (
-                <button
-                  type="button"
-                  className="control-button research-turn-button"
-                  onClick={() =>
-                    updateQueue(headId, (queue) =>
-                      queue.map((entry) => (entry.id === item.id ? { ...entry, failed: undefined } : entry)),
-                    )
-                  }
-                >
+                <button type="button" className="control-button research-turn-button" onClick={retry}>
                   <RefreshCw size={13} aria-hidden="true" />
                   <span>Retry</span>
                 </button>
@@ -3993,16 +4033,16 @@ function ResearchDocument({
                 <button
                   type="button"
                   className="control-button research-turn-button is-ghost"
-                  onClick={() => {
-                    updateQueue(headId, (queue) => queue.filter((entry) => entry.id !== item.id));
-                    setComposerText((current) => ({ ...current, [headId]: item.prompt }));
-                    window.requestAnimationFrame(() => composerRefs.current.get(headId)?.focus());
-                  }}
+                  onClick={edit}
                 >
                   Edit question
                 </button>
               ) : null}
-              <button type="button" className="control-button research-turn-button is-ghost" onClick={remove}>
+              <button
+                type="button"
+                className="control-button research-turn-button is-ghost research-queue-remove"
+                onClick={remove}
+              >
                 Remove
               </button>
             </div>
@@ -4080,6 +4120,7 @@ function ResearchDocument({
         submitting={submittingKey === headId}
         note={note}
         shortcutHint={shortcutHintsShown && composerFocused ? "⌘J" : null}
+        requireCmdEnter={requireCmdEnterToSend}
         onChange={(value) => setComposerText((current) => ({ ...current, [headId]: value }))}
         onSubmit={() => void submitComposer(headId)}
         onSubmitBranch={() => void submitComposer(headId, { branch: true })}
@@ -4167,6 +4208,7 @@ function ResearchDocument({
           note={head}
           archived={archived}
           actions={noteActions}
+          requireCmdEnterToSend={requireCmdEnterToSend}
           onSelectNode={(nodeId) => navigate(nodeId)}
         />
       );
@@ -4180,6 +4222,9 @@ function ResearchDocument({
     );
   };
 
+  // The part of the conversation column the drawer leaves uncovered.
+  const mainVisibleWidth =
+    (columnsLayout?.conversationWidth ?? areaWidth) - (drawer && !singleColumn ? drawerWidth : 0);
   const mainColumn = (
     <section
       key="main"
@@ -4188,6 +4233,7 @@ function ResearchDocument({
       }`}
       data-research-column="main"
       aria-label={treeTitleText}
+      inert={(singleColumn && focusedColumnKey !== "main") || undefined}
       onMouseDown={() => takeColumnFocus("main")}
     >
       <ResearchConversationHeader
@@ -4213,6 +4259,8 @@ function ResearchDocument({
         onColumnBack={
           singleColumn && columnsLayout ? () => columnsLayout.focusFeed({ moveFocus: true }) : undefined
         }
+        // Single column: Back to feed takes their place (⌘[ and ⌘] still work).
+        showHistory={!singleColumn && mainVisibleWidth >= HISTORY_NAV_MIN_VISIBLE_WIDTH}
       />
       <div
         ref={mainScrollRef}
@@ -4226,6 +4274,7 @@ function ResearchDocument({
               note={rootNode}
               archived={archived}
               actions={noteActions}
+              requireCmdEnterToSend={requireCmdEnterToSend}
               onSelectNode={(nodeId) => navigate(nodeId)}
             />
           ) : (
@@ -4255,6 +4304,7 @@ function ResearchDocument({
         style={singleColumn ? undefined : { width: RESEARCH_PINNED_COLUMN_WIDTH }}
         data-research-column={headId}
         aria-label={branchTitle(head)}
+        inert={(singleColumn && focusedColumnKey !== headId) || undefined}
         onMouseDown={() => takeColumnFocus(headId)}
       >
         <ResearchBranchHeader
@@ -4362,6 +4412,7 @@ function ResearchDocument({
                 value={composerText[key] ?? ""}
                 placeholder={quote ? "Ask about this passage" : "Ask about this answer"}
                 ariaLabel="Ask about this passage to create a new branch"
+                requireCmdEnter={requireCmdEnterToSend}
                 disabled={archived}
                 canSubmit={!archived}
                 submitting={submittingKey === key}
@@ -4456,8 +4507,14 @@ function ResearchDocument({
       const branches = branchesByParent.get(menu.nodeId) ?? EMPTY_BRANCHES;
       const blocker = branchBlockerFor(menuNode, archived);
       return (
-        <FloatingMenu anchor={menu} label="Branches from this answer" onClose={() => setMenu(null)}>
-          <div className="research-menu-title">Branches from this answer</div>
+        <ResearchMenu
+          anchor={menu.anchor}
+          align={menu.align}
+          trigger={menu.trigger}
+          label="Branches from this answer"
+          onClose={() => setMenu(null)}
+        >
+          <ResearchMenuTitle>Branches from this answer</ResearchMenuTitle>
           {branches.map((branch) => {
             const open = openBranchIds.has(branch.id);
             const unread =
@@ -4465,16 +4522,16 @@ function ResearchDocument({
               firstSeenCompleteRef.current.get(branch.id) === false &&
               !openedNodeIds.has(branch.id);
             return (
-              <MenuItem
+              <ResearchMenuItem
                 key={branch.id}
-                icon={<GitBranch size={14} aria-hidden="true" />}
+                icon={<ResearchBranchIcon size={15} />}
                 label={nodeLabel(branch, "Branch")}
                 description={unread && !open ? "New answer" : undefined}
                 current={open}
                 onSelect={() => navigate(branch.id, { returnFocus: menu.trigger ?? null })}
                 trailing={
                   open ? (
-                    <Check size={14} className="research-menu-check" aria-hidden="true" />
+                    <Check size={15} className="research-menu-check" aria-hidden="true" />
                   ) : unread ? (
                     <span className="research-turn-unread" aria-hidden="true" />
                   ) : null
@@ -4482,15 +4539,15 @@ function ResearchDocument({
               />
             );
           })}
-          <div className="research-menu-divider" role="separator" />
-          <MenuItem
-            icon={<Plus size={14} aria-hidden="true" />}
+          <ResearchMenuSeparator />
+          <ResearchMenuItem
+            icon={<Plus size={15} aria-hidden="true" />}
             label="New branch here"
             disabled={blocker !== null}
             title={blocker ?? undefined}
             onSelect={() => openDraft(menu.nodeId, null, menu.trigger ?? null)}
           />
-        </FloatingMenu>
+        </ResearchMenu>
       );
     }
     if (menu.kind === "mark") {
@@ -4499,11 +4556,17 @@ function ResearchDocument({
         : null;
       const blocker = branchBlockerFor(menuNode, archived);
       return (
-        <FloatingMenu anchor={menu} label="Passage" onClose={() => setMenu(null)}>
+        <ResearchMenu
+          anchor={menu.anchor}
+          align={menu.align}
+          trigger={menu.trigger}
+          label="Passage"
+          onClose={() => setMenu(null)}
+        >
           {menu.branchIds.map((branchId) => (
-            <MenuItem
+            <ResearchMenuItem
               key={branchId}
-              icon={<GitBranch size={14} aria-hidden="true" />}
+              icon={<ResearchBranchIcon size={15} />}
               label={nodeLabel(nodeById.get(branchId), "Branch")}
               current={openBranchIds.has(branchId)}
               onSelect={() => navigate(branchId)}
@@ -4511,15 +4574,15 @@ function ResearchDocument({
           ))}
           {highlight ? (
             <>
-              <MenuItem
-                icon={<GitBranch size={14} aria-hidden="true" />}
+              <ResearchMenuItem
+                icon={<ResearchBranchIcon size={15} />}
                 label="Branch from highlight"
                 disabled={blocker !== null}
                 title={blocker ?? undefined}
                 onSelect={() => openDraft(menu.nodeId, highlight.anchor, branchTriggerFor(menu.nodeId))}
               />
-              <MenuItem
-                icon={<X size={14} aria-hidden="true" />}
+              <ResearchMenuItem
+                icon={<X size={15} aria-hidden="true" />}
                 label="Remove highlight"
                 onSelect={() => {
                   setMenu(null);
@@ -4530,7 +4593,7 @@ function ResearchDocument({
               />
             </>
           ) : null}
-        </FloatingMenu>
+        </ResearchMenu>
       );
     }
     const node = menuNode;
@@ -4555,15 +4618,77 @@ function ResearchDocument({
       !archived && content?.responseRevision && content.node.recap?.text.trim(),
     );
     const threadReady = chainIds.every((id) => segmentViews.get(id)?.content);
+    const active = isActiveResearchStatus(node.status);
+    // A cancelled turn already says how long it ran ("Stopped after").
+    const durationText =
+      view?.isConversation || active || node.status === "cancelled" || !node.startedAt
+        ? null
+        : `${node.status === "complete" ? "" : "Ran for "}${formatRunDuration(
+            (node.completedAt ?? metadataNow) - node.startedAt,
+          )}`;
+    const stats = [
+      node.status === "complete" && view
+        ? `${view.answerWordCount.toLocaleString()} ${view.answerWordCount === 1 ? "word" : "words"}`
+        : null,
+      durationText,
+      node.origin === "imported" ? null : formatResearchModelSummary(node.adapter, node.model, node.origin) || null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const hiddenHighlights = hiddenHighlightsByNode[node.id] ?? 0;
+    // What can hide a run's passage sits behind the answer fold; a
+    // conversation has no fold and hides only windowed-off turns.
+    const revealsHighlights = hiddenHighlights > 0 && Boolean(view?.hasTranscriptActivity) && !fullTraceNodes[node.id];
+    const copyText = node.status === "complete" ? view?.conversationCopyText ?? view?.rawAnswer : null;
     return (
-      <FloatingMenu
-        anchor={menu}
+      <ResearchMenu
+        anchor={menu.anchor}
+        align={menu.align}
+        trigger={menu.trigger}
         label={`Actions for ${nodeLabel(node, treeTitleText)}`}
+        describedBy={stats || hiddenHighlights > 0 ? "research-answer-menu-meta" : undefined}
+        // Retry hides the … button (a queued run has no answer yet).
+        fallbackFocus={() =>
+          document.querySelector<HTMLElement>(
+            `[data-research-branch-trigger="${CSS.escape(node.id)}"]`,
+          )
+        }
         onClose={() => setMenu(null)}
       >
+        {stats || hiddenHighlights > 0 ? (
+          <div id="research-answer-menu-meta">
+            {stats ? <ResearchMenuMeta>{stats}</ResearchMenuMeta> : null}
+            {hiddenHighlights > 0 ? (
+              <ResearchMenuMeta title="These saved highlights couldn't be located in the current view. Their passages may sit in content that isn't rendered right now.">
+                {hiddenHighlights} {hiddenHighlights === 1 ? "highlight" : "highlights"} not visible in this view
+              </ResearchMenuMeta>
+            ) : null}
+          </div>
+        ) : null}
+        {revealsHighlights ? (
+          <ResearchMenuItem
+            icon={<ScrollText size={15} aria-hidden="true" />}
+            label="Show full transcript"
+            onSelect={() => {
+              setMenu(null);
+              showFullTraceFor(node.id);
+            }}
+          />
+        ) : null}
+        {stats || hiddenHighlights > 0 ? <ResearchMenuSeparator /> : null}
+        {copyText && view ? (
+          <ResearchMenuItem
+            icon={<Copy size={15} aria-hidden="true" />}
+            label={view.isConversation ? "Copy conversation as Markdown" : "Copy answer as Markdown"}
+            onSelect={() => {
+              setMenu(null);
+              handleCopyAnswer(view);
+            }}
+          />
+        ) : null}
         {chainIds.length > 1 ? (
-          <MenuItem
-            icon={<Copy size={14} aria-hidden="true" />}
+          <ResearchMenuItem
+            icon={<Files size={15} aria-hidden="true" />}
             label="Copy thread as Markdown"
             disabled={!threadReady}
             title={threadReady ? undefined : "The thread is still loading"}
@@ -4573,9 +4698,9 @@ function ResearchDocument({
             }}
           />
         ) : null}
-        {view?.hasTranscriptActivity ? (
-          <MenuItem
-            icon={<ScrollText size={14} aria-hidden="true" />}
+        {view?.hasTranscriptActivity && !revealsHighlights ? (
+          <ResearchMenuItem
+            icon={<ScrollText size={15} aria-hidden="true" />}
             label={fullTraceNodes[node.id] ? "Hide full transcript" : "Show full transcript"}
             onSelect={() => {
               setMenu(null);
@@ -4584,8 +4709,8 @@ function ResearchDocument({
           />
         ) : null}
         {!archived && canRetryResearchNode(node) ? (
-          <MenuItem
-            icon={<RefreshCw size={14} aria-hidden="true" />}
+          <ResearchMenuItem
+            icon={<RefreshCw size={15} aria-hidden="true" />}
             label="Retry run"
             disabled={retryingNodeId !== null}
             onSelect={() => {
@@ -4595,8 +4720,8 @@ function ResearchDocument({
           />
         ) : null}
         {canRegenerateRecap ? (
-          <MenuItem
-            icon={<RefreshCw size={14} aria-hidden="true" />}
+          <ResearchMenuItem
+            icon={<RefreshCw size={15} aria-hidden="true" />}
             label="Generate summary"
             onSelect={() => {
               setMenu(null);
@@ -4605,11 +4730,12 @@ function ResearchDocument({
           />
         ) : null}
         {isRoot || !node.inline ? (
-          <MenuItem
-            icon={<Pencil size={14} aria-hidden="true" />}
+          <ResearchMenuItem
+            icon={<Pencil size={15} aria-hidden="true" />}
             label="Rename…"
             onSelect={() => {
               setMenu(null);
+              setRenameError(null);
               setRenameTarget({
                 nodeId: node.id,
                 value: isRoot ? treeTitleText : (node.title ?? node.prompt).trim(),
@@ -4618,8 +4744,8 @@ function ResearchDocument({
           />
         ) : null}
         {isRoot && node.kind === "document" ? (
-          <MenuItem
-            icon={<Pencil size={14} aria-hidden="true" />}
+          <ResearchMenuItem
+            icon={<Pencil size={15} aria-hidden="true" />}
             label="Edit document"
             disabled={
               archived || !content?.responseRevision || view?.editableDocumentMarkdown == null
@@ -4646,9 +4772,9 @@ function ResearchDocument({
             }}
           />
         ) : null}
-        <div className="research-menu-divider" role="separator" />
-        <MenuItem
-          icon={<Trash2 size={14} aria-hidden="true" />}
+        <ResearchMenuSeparator />
+        <ResearchMenuItem
+          icon={<Trash2 size={15} aria-hidden="true" />}
           label={deleteLabel}
           danger
           disabled={info.hasActiveRuns}
@@ -4663,7 +4789,7 @@ function ResearchDocument({
             setDeletingBranchId(node.id);
           }}
         />
-      </FloatingMenu>
+      </ResearchMenu>
     );
   };
 
@@ -4703,7 +4829,10 @@ function ResearchDocument({
     <>
       {drawerElement}
       <DomSearchBar
-        active
+        active={!(singleColumn && columnsLayout?.feedFocused)}
+        // ⌘F while the single column shows the feed switches back to the
+        // conversation and searches it.
+        onActivate={columnsLayout ? columnsLayout.releaseFeed : undefined}
         placeholder="Find in research"
         rootRef={mainContentRef}
         viewportRef={mainScrollRef}
@@ -4779,7 +4908,7 @@ function ResearchDocument({
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={branchFromSelection}
                 >
-                  <GitBranch size={14} aria-hidden="true" />
+                  <ResearchBranchIcon size={14} />
                   <span>Branch</span>
                 </button>
                 <button
@@ -4828,7 +4957,9 @@ function ResearchDocument({
                   if (event.key === "Escape" && !renaming) {
                     event.preventDefault();
                     setRenameTarget(null);
+                    return;
                   }
+                  trapResearchDialogTab(event);
                 }}
               >
                 <h2 id="rename-research-dialog-title">
@@ -4843,6 +4974,11 @@ function ResearchDocument({
                     setRenameTarget({ nodeId: renameTarget.nodeId, value: event.currentTarget.value })
                   }
                 />
+                {renameError ? (
+                  <p className="confirm-dialog-error" role="alert">
+                    {renameError}
+                  </p>
+                ) : null}
                 <div className="confirm-dialog-actions">
                   <button
                     className="control-button"
@@ -4917,7 +5053,9 @@ function ResearchDocument({
                   if (event.key === "Escape" && !removingBranch) {
                     event.preventDefault();
                     setDeletingBranchId(null);
+                    return;
                   }
+                  trapResearchDialogTab(event);
                 }}
               >
                 <h2 id="delete-research-branch-dialog-title">

@@ -100,7 +100,7 @@ export function defaultPaneTitle(
 }
 
 /** Fixed-position placement for a popover anchored to a control inside a pane. */
-export type PanePopoverPlacement = {
+type PanePopoverPlacement = {
   left: number;
   top: number;
   maxHeight: number;

@@ -1,13 +1,12 @@
 import { createContext, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
+import { RESEARCH_SINGLE_COLUMN_BELOW } from "../../lib/researchBranchView";
 import { listenToResearchNodeOpen } from "../../lib/researchShortcuts";
 
 const FEED_MIN_WIDTH = 240;
 const FEED_MAX_WIDTH = 320;
 /** The conversation keeps at least this much before the feed grows past its minimum. */
 const CONVERSATION_MIN_WIDTH = 620;
-/** Below this column-area width one column shows at a time. */
-export const RESEARCH_SINGLE_COLUMN_BELOW = 620;
 
 /** The feed column's width: 240–320px, set by the width of the column area
  * alone, so opening a conversation, the branch drawer, or pinned columns
@@ -23,6 +22,22 @@ export function researchFeedColumnWidth(availableWidth: number): number {
 export function researchConversationColumnWidth(availableWidth: number): number {
   const area = Number.isFinite(availableWidth) ? Math.max(0, Math.round(availableWidth)) : 0;
   return area < RESEARCH_SINGLE_COLUMN_BELOW ? area : area - researchFeedColumnWidth(area);
+}
+
+/** Which columns show. In single-column mode the feed shows until a thread
+ * opens, and again after the thread's Back to feed; the other column is
+ * hidden (kept mounted, so it keeps its scroll position) and inert. */
+export function researchColumnsShown({
+  single,
+  hasDocument,
+  feedFocused,
+}: {
+  single: boolean;
+  hasDocument: boolean;
+  feedFocused: boolean;
+}): { showsFeed: boolean; feedHidden: boolean; contentHidden: boolean } {
+  const showsFeed = !hasDocument || feedFocused;
+  return { showsFeed, feedHidden: single && !showsFeed, contentHidden: single && showsFeed };
 }
 
 interface ResearchColumnsLayout {
@@ -82,7 +97,7 @@ export default function ResearchColumns({
   children: ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const feedRef = useRef<HTMLDivElement>(null);
+  const feedRef = useRef<HTMLElement>(null);
   const [row, setRow] = useState<HTMLDivElement | null>(null);
   const [overlay, setOverlay] = useState<HTMLDivElement | null>(null);
   const [availableWidth, setAvailableWidth] = useState(CONVERSATION_MIN_WIDTH + FEED_MAX_WIDTH);
@@ -120,7 +135,7 @@ export default function ResearchColumns({
 
   const single = availableWidth < RESEARCH_SINGLE_COLUMN_BELOW;
   const conversationWidth = researchConversationColumnWidth(availableWidth);
-  const showsFeed = !hasDocument || feedFocused;
+  const { showsFeed, feedHidden, contentHidden } = researchColumnsShown({ single, hasDocument, feedFocused });
   const layout = useMemo<ResearchColumnsLayout>(
     () => ({
       areaWidth: availableWidth,
@@ -150,26 +165,44 @@ export default function ResearchColumns({
       >
         <div ref={setRow} className="research-columns-row">
           {feed ? (
-            <div
+            <section
               ref={feedRef}
               className={`research-feed-column${hasDocument && feedFocused ? " is-focused" : ""}`}
               data-research-column="feed"
+              aria-label="Feed"
+              inert={feedHidden || undefined}
               onClickCapture={(event) => {
                 // The open thread's own card shows the thread again.
                 if (
-                  event.target instanceof Element &&
-                  event.target.closest(".research-feed-card.is-selected .research-feed-card-hit")
+                  !(event.target instanceof Element) ||
+                  !event.target.closest(".research-feed-card.is-selected .research-feed-card-hit")
                 ) {
-                  setFeedFocused(false);
+                  return;
+                }
+                setFeedFocused(false);
+                if (single) {
+                  // In single-column mode it only switches back: reopening
+                  // would scroll the thread to its first question, and the
+                  // hidden thread kept its place.
+                  event.stopPropagation();
+                  window.requestAnimationFrame(() =>
+                    rootRef.current
+                      ?.querySelector<HTMLElement>(
+                        ".research-content-column .research-conv-column:not(.is-hidden) .research-column-title",
+                      )
+                      ?.focus({ preventScroll: true }),
+                  );
                 }
               }}
             >
               {feed}
-            </div>
+            </section>
           ) : null}
-          <div className="research-content-column">{children}</div>
+          <div className="research-content-column" inert={contentHidden || undefined}>
+            {children}
+          </div>
         </div>
-        <div ref={setOverlay} className="research-columns-overlay" />
+        <div ref={setOverlay} className="research-columns-overlay" inert={contentHidden || undefined} />
       </div>
     </ResearchColumnsContext.Provider>
   );

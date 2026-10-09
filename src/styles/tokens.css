@@ -406,6 +406,10 @@
   --research-highlight-flash: rgba(240, 178, 70, 0.39);
   --research-drawer-shadow: -14px 0 32px rgba(0, 0, 0, 0.45);
   --research-failed-border: rgba(217, 135, 135, 0.35);
+  /* "Stopped with an error." on the failed alert's tint (≥4.5:1). */
+  --research-failed-text: #d98787;
+  /* The rule between turns. */
+  --research-turn-divider: rgba(255, 255, 255, 0.075);
 }
 
 :root[data-body-font="dm-sans"] {
@@ -479,7 +483,9 @@
 
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
      the card of the open thread, and the fields and popovers over the feed,
-     which sit one step above it (--field-bg sits below it). */
+     which sit one step above it (--field-bg sits below it). The
+     conversation's composers, buttons, menus, and selection actions use the
+     same field and popover colours. */
   --research-feed-bg: #131517;
   --research-tray-bg: #181b1d;
   --research-card-selected-bg: #23282b;
@@ -547,7 +553,9 @@
 
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
      the card of the open thread, and the fields and popovers over the feed,
-     which sit one step above it (--field-bg sits below it). */
+     which sit one step above it (--field-bg sits below it). The
+     conversation's composers, buttons, menus, and selection actions use the
+     same field and popover colours. */
   --research-feed-bg: #1a1918;
   --research-tray-bg: #1d1c1b;
   --research-card-selected-bg: #2b2927;
@@ -701,6 +709,8 @@
   --research-highlight-flash: rgba(240, 170, 40, 0.5);
   --research-drawer-shadow: -14px 0 32px rgba(40, 30, 20, 0.14);
   --research-failed-border: rgba(177, 74, 74, 0.35);
+  --research-failed-text: #a94446;
+  --research-turn-divider: rgba(0, 0, 0, 0.08);
 }
 
 :root[data-appearance="light"],
@@ -737,6 +747,7 @@
   --transcript-code-header-bg: #e9edeb;
   --surface-divider: #dde2df;
   --surface-border-strong: #cfd6d3;
+  --research-turn-divider: #e1e5e3;
   --dialog-border: #c6cdca;
   --chrome-control-bg: rgba(241, 243, 242, 0.9);
   --chrome-control-bg-hover: rgba(228, 232, 230, 0.95);
@@ -748,23 +759,27 @@
   --folder-picker-status-border: #b9c6c2;
   --queued-turn-border: #c2ccc8;
 
-  --accent-color: #1f8a6f;
+  /* White on the accent, and the accent as text on the light surfaces, are
+     at least 4.5:1. */
+  --accent-color: #1a7a62;
   --accent-shadow: rgba(31, 138, 111, 0.3);
   --accent-soft: rgba(31, 138, 111, 0.12);
   --accent-subtle: rgba(31, 138, 111, 0.07);
   --accent-active-bg: #dcefe9;
-  --accent-strong: #176e58;
+  --accent-strong: #135c4a;
 
   --control-bg: #eef1f0;
   --control-bg-hover: #e4e8e6;
   --control-border: #cfd5d2;
   --control-border-hover: #bcc4c0;
   --control-border-hover-accent: #9fc2b6;
-  --focus-ring: #1f8a6f;
+  --focus-ring: #1a7a62;
 
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
      the card of the open thread, and the fields and popovers over the feed,
-     which sit one step above it (--field-bg sits below it). */
+     which sit one step above it (--field-bg sits below it). The
+     conversation's composers, buttons, menus, and selection actions use the
+     same field and popover colours. */
   --research-feed-bg: #f2f4f3;
   --research-tray-bg: #eef1f0;
   --research-card-selected-bg: #e2e7e5;
@@ -805,6 +820,8 @@
   --transcript-code-header-bg: #ebe6e0;
   --surface-divider: #e0dbd5;
   --surface-border-strong: #d2ccc5;
+  /* The mock's warm divider. */
+  --research-turn-divider: #e4dfd9;
   --dialog-border: #c8c1b9;
   --chrome-control-bg: rgba(244, 242, 239, 0.9);
   --chrome-control-bg-hover: rgba(232, 228, 222, 0.95);
@@ -816,23 +833,27 @@
   --folder-picker-status-border: #cdc3b7;
   --queued-turn-border: #cdc4ba;
 
-  --accent-color: #0b7fd1;
+  /* White on the accent, and the accent as text on the light surfaces, are
+     at least 4.5:1. */
+  --accent-color: #0a6fb8;
   --accent-shadow: rgba(11, 127, 209, 0.3);
   --accent-soft: rgba(11, 127, 209, 0.12);
   --accent-subtle: rgba(11, 127, 209, 0.07);
   --accent-active-bg: #dcebf7;
-  --accent-strong: #0a68ab;
+  --accent-strong: #095c98;
 
   --control-bg: #efece8;
   --control-bg-hover: #e6e2dc;
   --control-border: #d3cdc5;
   --control-border-hover: #c1bab0;
   --control-border-hover-accent: #a9c6dc;
-  --focus-ring: #0b7fd1;
+  --focus-ring: #0a6fb8;
 
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
      the card of the open thread, and the fields and popovers over the feed,
-     which sit one step above it (--field-bg sits below it). */
+     which sit one step above it (--field-bg sits below it). The
+     conversation's composers, buttons, menus, and selection actions use the
+     same field and popover colours. */
   --research-feed-bg: #f8f6f3;
   --research-tray-bg: #f3f1ed;
   --research-card-selected-bg: #ebe7e1;

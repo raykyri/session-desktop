@@ -8,6 +8,7 @@ import {
   restoreResearchTree,
   setResearchFolders,
 } from "../lib/api";
+import { createResearchFolderStore } from "../lib/researchFolderStore";
 import {
   emptyResearchFolderState,
   RESEARCH_ARCHIVE_FOLDER_ID,
@@ -17,6 +18,7 @@ import {
   researchFolderStateWithMembership,
   researchFolderStateWithNewFolder,
   researchFolderStateWithoutFolder,
+  newResearchFolderId,
   researchPlaceIsReorderable,
   researchPlaceName,
   researchTreeOrderAfterMove,
@@ -52,35 +54,27 @@ export function useResearchFiling({
   showToast,
 }: ResearchFilingOptions) {
   const [folderState, setFolderState] = useState<ResearchFolderState>(emptyResearchFolderState);
-  const stateRef = useRef(folderState);
-  const writeChainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [store] = useState(() =>
+    createResearchFolderStore({
+      list: listResearchFolders,
+      save: setResearchFolders,
+      onState: setFolderState,
+      onLoadError: setLoadError,
+    }),
+  );
   const optionsRef = useRef({ applyTreeOrder, refreshTrees, onError, showToast });
   optionsRef.current = { applyTreeOrder, refreshTrees, onError, showToast };
 
-  // Changes wait for the stored state to load, so a write never replaces
-  // folders the frontend hasn't read. A failed load blocks writes (they
-  // reject) and is retried, by the next change or on a timer.
-  const loadRef = useRef<Promise<void> | null>(null);
-  const commitSeqRef = useRef(0);
-  const load = useCallback((): Promise<void> => {
-    loadRef.current ??= listResearchFolders().then(
-      (state) => {
-        stateRef.current = state;
-        setFolderState(state);
-      },
-      (err: unknown) => {
-        loadRef.current = null;
-        throw new Error(`Folders couldn't be loaded, so the change wasn't saved. ${errorMessage(err)}`);
-      },
-    );
-    return loadRef.current;
-  }, []);
+  // A failed load is retried on a timer, by every change, and by `retryLoad`.
+  const { commit, refresh } = store;
+  const [loadAttempt, setLoadAttempt] = useState(0);
   useEffect(() => {
     let attempt = 0;
     let timer = 0;
     let disposed = false;
     const tryLoad = () =>
-      void load().catch(() => {
+      void store.load().catch(() => {
         if (disposed || attempt >= LOAD_RETRY_MS.length) return;
         timer = window.setTimeout(tryLoad, LOAD_RETRY_MS[attempt++]);
       });
@@ -89,58 +83,8 @@ export function useResearchFiling({
       disposed = true;
       window.clearTimeout(timer);
     };
-  }, [load]);
-
-  /** Re-reads the stored state after another window (or a workspace removal)
-   * changed it. Waits for this window's own writes; a change made meanwhile
-   * wins over the fetched state. */
-  const refresh = useCallback(async () => {
-    const seq = commitSeqRef.current;
-    await writeChainRef.current.catch(() => undefined);
-    let state: ResearchFolderState;
-    try {
-      state = await listResearchFolders();
-    } catch {
-      return;
-    }
-    if (commitSeqRef.current !== seq) return;
-    loadRef.current = Promise.resolve();
-    stateRef.current = state;
-    setFolderState(state);
-  }, []);
-
-  // Local first, then persisted in order; a rejected write restores the
-  // state it replaced unless a later change already superseded it.
-  const commit = useCallback(
-    (update: (state: ResearchFolderState) => ResearchFolderState): Promise<void> =>
-      load().then(() => {
-        commitSeqRef.current += 1;
-        const previous = stateRef.current;
-        const next = update(previous);
-        if (next === previous) return;
-        stateRef.current = next;
-        setFolderState(next);
-        const write = writeChainRef.current
-          .catch(() => undefined)
-          .then(() => setResearchFolders(next))
-          .then((saved) => {
-            if (stateRef.current === next) {
-              stateRef.current = saved;
-              setFolderState(saved);
-            }
-          })
-          .catch((err: unknown) => {
-            if (stateRef.current === next) {
-              stateRef.current = previous;
-              setFolderState(previous);
-            }
-            throw err;
-          });
-        writeChainRef.current = write;
-        return write;
-      }),
-    [load],
-  );
+  }, [loadAttempt, store]);
+  const retryLoad = useCallback(() => setLoadAttempt((value) => value + 1), []);
 
   const folders = useMemo(
     () => workspaceResearchFolders(folderState, workspaceId),
@@ -178,17 +122,23 @@ export function useResearchFiling({
 
   /** Files `treeId` in `place`, before `beforeId` when the place keeps an
    * order. A move to another place shows a toast with Undo; a reorder
-   * within the same place shows none. */
+   * within the same place shows none. With `newFolderName`, `place` is the
+   * id of a folder created by the same write. A failure is reported, or
+   * with `rejects` passed to the caller. */
   const moveTree = useCallback(
     async (
       treeId: string,
       place: string,
       beforeId: string | null = null,
-      { toast = true }: { toast?: boolean } = {},
+      {
+        toast = true,
+        newFolderName = null,
+        rejects = false,
+      }: { toast?: boolean; newFolderName?: string | null; rejects?: boolean } = {},
     ) => {
       const tree = findTree(treeId);
       if (!tree) return;
-      const state = stateRef.current;
+      const state = store.getState();
       const from = researchTreePlace(tree, state);
       const reorderable = researchPlaceIsReorderable(place);
       if (from === place && (!beforeId || !reorderable)) return;
@@ -197,7 +147,16 @@ export function useResearchFiling({
       const previousOrder = workspaceOrder(tree.workspaceId);
       try {
         if (place !== RESEARCH_ARCHIVE_FOLDER_ID) {
-          await commit((current) => researchFolderStateWithMembership(current, treeId, place));
+          await commit((current) =>
+            researchFolderStateWithMembership(
+              newFolderName
+                ? researchFolderStateWithNewFolder(current, newFolderName, tree.workspaceId, place)
+                    .state
+                : current,
+              treeId,
+              place,
+            ),
+          );
         }
         if (place === RESEARCH_ARCHIVE_FOLDER_ID && !wasArchived) {
           await archiveResearchTree(treeId);
@@ -210,7 +169,7 @@ export function useResearchFiling({
             .filter(
               (candidate) =>
                 candidate.workspaceId === tree.workspaceId &&
-                researchTreePlace(candidate, stateRef.current) === place,
+                researchTreePlace(candidate, store.getState()) === place,
             )
             .map((candidate) => candidate.id);
           const order = researchTreeOrderAfterMove(flat, members, treeId, beforeId);
@@ -219,11 +178,12 @@ export function useResearchFiling({
           }
         }
       } catch (err) {
+        if (rejects) throw err;
         optionsRef.current.onError(errorMessage(err));
         return;
       }
       if (from === place || !toast) return;
-      const name = researchPlaceName(place, stateRef.current.folders);
+      const name = researchPlaceName(place, store.getState().folders);
       const stillRunning =
         place === RESEARCH_ARCHIVE_FOLDER_ID && tree.runningCount > 0
           ? " It's still running; the answer will appear there."
@@ -285,6 +245,15 @@ export function useResearchFiling({
     [commit, workspaceId],
   );
 
+  /** Creates a folder in the tree's workspace and moves the tree into it with
+   * one write, so a failure leaves neither. Rejects with the reason, which
+   * the name dialog shows inline. */
+  const moveTreeToNewFolder = useCallback(
+    (treeId: string, name: string) =>
+      moveTree(treeId, newResearchFolderId(), null, { newFolderName: name, rejects: true }),
+    [moveTree],
+  );
+
   const renameFolder = useCallback(
     (folderId: string, name: string) =>
       commit((current) => researchFolderStateRenamed(current, folderId, name)),
@@ -328,11 +297,14 @@ export function useResearchFiling({
     folderState,
     folders,
     moveTree,
+    moveTreeToNewFolder,
     createFolder,
     renameFolder,
     deleteFolder,
     setTrayCollapsed,
     fileNewTree,
     refreshFolders: refresh,
+    foldersLoadError: loadError,
+    retryFoldersLoad: retryLoad,
   };
 }

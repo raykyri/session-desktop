@@ -4,10 +4,13 @@ import {
   researchBranchesByParent,
   researchBranchesOf,
   researchChainHead,
+  researchDocumentHasColumn,
+  researchEditedQuestionFork,
   researchDrawerWidth,
   researchMainChainAncestor,
   researchNodePlacement,
   researchParentBranchHead,
+  researchQueueAction,
   researchQueueStep,
 } from "../src/lib/researchBranchView";
 import type { ResearchNode } from "../src/types";
@@ -89,4 +92,93 @@ test("a queued follow-up waits for the running tail, then sends or stalls", () =
   assert.equal(researchQueueStep(node("t", { status: "failed" })), "stalled");
   assert.equal(researchQueueStep(node("t", { status: "cancelled" })), "stalled");
   assert.equal(researchQueueStep(null), "wait");
+});
+
+const queued = (id: string, failed?: string) => ({ id, prompt: id, createdAt: 0, ...(failed ? { failed } : {}) });
+
+test("a queue sends its first question from the chain's tail once it completes", () => {
+  const chain = [node("h"), node("t", { parentNodeId: "h", inline: true, status: "running" })];
+  assert.deepEqual(researchQueueAction(chain, "h", [queued("q1"), queued("q2")], undefined), { kind: "wait" });
+  const done = [chain[0], { ...chain[1], status: "complete" as const }];
+  assert.deepEqual(researchQueueAction(done, "h", [queued("q1"), queued("q2")], undefined), {
+    kind: "send",
+    item: queued("q1"),
+    tailId: "t",
+  });
+  assert.deepEqual(researchQueueAction(done, "h", [], undefined), { kind: "wait" });
+});
+
+test("after a send the queue waits until the new child is in the tree, then follows it", () => {
+  const before = [node("h"), node("t", { parentNodeId: "h", inline: true })];
+  const rest = [queued("q2")];
+  // The fork request is running, then resolved before the detail has the
+  // child: the tail in `before` is stale, so nothing is sent from it.
+  assert.deepEqual(researchQueueAction(before, "h", rest, true), { kind: "wait" });
+  assert.deepEqual(researchQueueAction(before, "h", rest, "c"), { kind: "wait" });
+  // The child arrives running: the next question waits for it.
+  const running = [...before, node("c", { parentNodeId: "t", inline: true, status: "running" })];
+  assert.deepEqual(researchQueueAction(running, "h", rest, "c"), { kind: "wait" });
+  // It completes: the next question is sent from the child, not the old tail.
+  const complete = [...before, node("c", { parentNodeId: "t", inline: true })];
+  assert.deepEqual(researchQueueAction(complete, "h", rest, "c"), { kind: "send", item: queued("q2"), tailId: "c" });
+});
+
+test("a refused question holds the queue, a stopped tail stalls it, and a removed head clears it", () => {
+  const chain = [node("h"), node("t", { parentNodeId: "h", inline: true })];
+  assert.deepEqual(researchQueueAction(chain, "h", [queued("q1", "refused"), queued("q2")], undefined), {
+    kind: "wait",
+  });
+  const stopped = [chain[0], { ...chain[1], status: "failed" as const }];
+  assert.deepEqual(researchQueueAction(stopped, "h", [queued("q1")], undefined), { kind: "wait" });
+  // A branch from the tail does not block its inline follow-up.
+  const continued = [...chain, node("x", { parentNodeId: "t", inline: false })];
+  assert.equal(researchQueueAction(continued, "h", [queued("q1")], undefined).kind, "send");
+  assert.deepEqual(researchQueueAction([node("other")], "h", [queued("q1")], undefined), { kind: "clear" });
+});
+
+test("swipe navigation re-attaches once a newly mounted document leaves its placeholder", () => {
+  // A document keyed by tree mounts with the previous tree's detail and no
+  // selection: it renders the placeholder (no scroller) first.
+  const detail = { tree: { id: "tree" } };
+  const placeholder = researchDocumentHasColumn(detail, "root", null);
+  const column = researchDocumentHasColumn(detail, "root", "root");
+  assert.equal(placeholder, false);
+  assert.equal(column, true);
+  // The swipe hook's attachment key changes between the two renders, so its
+  // effect runs again with the scroller mounted.
+  assert.notEqual(placeholder, column);
+  assert.equal(researchDocumentHasColumn(null, "root", "root"), false);
+  assert.equal(researchDocumentHasColumn(detail, null, "root"), false);
+});
+
+test("an edited question forks in place of the failed node instead of removing it first", () => {
+  const anchor = { exact: "passage", prefix: "", suffix: "", start: 0, end: 7 } as unknown as NonNullable<
+    ResearchNode["queryAnchor"]
+  >;
+  const failed = node("failed", {
+    parentNodeId: "root",
+    inline: true,
+    status: "failed",
+    queryAnchor: anchor,
+    replyAnchor: "reply-1",
+  });
+  // One request: the backend admits the new question, then removes the
+  // failed node. A refused send leaves the failed turn and its partial answer.
+  assert.deepEqual(researchEditedQuestionFork(failed, "Edited"), {
+    parentNodeId: "root",
+    prompt: "Edited",
+    queryAnchor: anchor,
+    inline: true,
+    replyAnchor: "reply-1",
+    replacesNodeId: "failed",
+  });
+  assert.deepEqual(researchEditedQuestionFork(node("b", { parentNodeId: "root" }), "Q"), {
+    parentNodeId: "root",
+    prompt: "Q",
+    queryAnchor: null,
+    inline: false,
+    replyAnchor: null,
+    replacesNodeId: "b",
+  });
+  assert.equal(researchEditedQuestionFork(node("root"), "Q"), null);
 });

@@ -153,6 +153,20 @@ export function collectSearchRanges(
   return ranges;
 }
 
+/** Combines matches in root order and returns the selected match's index.
+ * Preserves the previous match when present, even if its index changed;
+ * otherwise selects the match chosen by `nearest`. */
+export function mergeSearchMatches<T>(
+  perRoot: readonly (readonly T[])[],
+  previous: T | undefined,
+  same: (left: T, right: T) => boolean,
+  nearest: (matches: T[]) => number,
+): { matches: T[]; index: number } {
+  const matches = perRoot.flat() as T[];
+  const kept = previous === undefined ? -1 : matches.findIndex((match) => same(match, previous));
+  return { matches, index: kept >= 0 ? kept : nearest(matches) };
+}
+
 // The first match visible in (or below) the viewport, so opening the bar or
 // retyping the term lands on a nearby match instead of jumping to the top of a
 // long transcript. Falls back to the last match when all matches sit above.
