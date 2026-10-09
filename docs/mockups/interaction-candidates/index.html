@@ -1,0 +1,150 @@
+<!doctype html>
+<!--
+  Comparison of the five layout-motion candidates, with measurements and a recommendation.
+  Open directly in a browser; fonts load from Google Fonts.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Column Motion Candidates</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400..700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; a findings list, a candidate grid with screenshots, then a comparison table. Matches the Session mockups' palette and type. */
+:root {
+  --bg: #161616; --surface: #1d1d1c; --line: #2c2c2a; --text: #e4e3dc; --muted: #9a998f; --accent: #5ba4f3;
+  --good: #6cc38a; --warn: #e0b04c; --bad: #e57a6b;
+  --font: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #f7f7f4; --surface: #ffffff; --line: #e2e1da; --text: #1f1f1d; --muted: #6b6a62; --accent: #2f6fc0;
+  --good: #2d8a4e; --warn: #9a6a00; --bad: #b8432f; color-scheme: light; } }
+:root[data-theme="light"] {
+  --bg: #f7f7f4; --surface: #ffffff; --line: #e2e1da; --text: #1f1f1d; --muted: #6b6a62; --accent: #2f6fc0;
+  --good: #2d8a4e; --warn: #9a6a00; --bad: #b8432f; color-scheme: light; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font: 15px/1.55 var(--font); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1120px; margin-inline: auto; padding-inline: 20px; padding-block: 28px 64px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 36px; }
+h1 { margin: 0; font-size: 26px; line-height: 1.2; font-weight: 650; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { margin: 0 0 12px; font-size: 18px; font-weight: 650; text-wrap: balance; }
+h3 { margin: 0; font-size: 16px; font-weight: 650; }
+p { margin: 0; max-width: 72ch; }
+.lede { color: var(--muted); margin-top: 8px; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 80ch; }
+.num { font-family: var(--mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.rec { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; background: var(--surface); padding: 16px 18px; display: grid; gap: 10px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 20px; }
+.cand { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.cand figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.cand img { display: block; width: 100%; height: auto; }
+.cand-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.tag { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.cand p { font-size: 14px; }
+.cand .open { font-size: 14px; font-weight: 600; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 13.5px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+th { font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: var(--surface); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+.y { color: var(--good); } .m { color: var(--warn); } .n { color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="label">Session column workspace</div>
+    <h1>Column motion candidates</h1>
+    <p class="lede">Five variants of the current prototype, each built as its own interactive mockup. Each one targets the layout changes measured below. Screenshots show each mockup's default state at a 1440×900 viewport.</p>
+  </header>
+
+  <section>
+    <h2>What moves in the current prototype</h2>
+    <p style="margin-bottom:10px">Measured with Playwright by recording each column's position and width after each click.</p>
+    <ul>
+      <li>Clicking a column's title to focus it swaps widths between the focused column and its neighbour (<span class="num">622 ↔ 300px</span> at 1440). Both columns switch between the two-column turn grid and the stacked layout, and the branch moves <span class="num">322px</span> sideways.</li>
+      <li>Opening a branch shrinks the feed (<span class="num">320 → 260px</span>) and the parent (<span class="num">862 → 300px</span>), which switches the parent from the grid to the stacked layout.</li>
+      <li>Opening a nested branch resizes three columns at 1900 (<span class="num">380 → 300</span>, <span class="num">890 → 310</span>, feed <span class="num">320 → 260</span>) and collapses two columns into spines at 1440.</li>
+      <li>Branch headers show the question three times (breadcrumb, title, first turn), plus a quote box. Root headers show four actions at all times.</li>
+    </ul>
+  </section>
+
+  <section class="rec" aria-labelledby="rec-h">
+    <h2 id="rec-h" style="margin:0">Recommendation</h2>
+    <p><b>Combine A and D.</b> In A, no column changes width or switches layout for any click in the test, at any viewport width. The only motion is the row scrolling to show the column you opened, and that motion is the expected result of the click. D removes six visible buttons and the duplicate titles without changing behaviour, so it applies on top of A.</p>
+    <p>Keep B's main idea as a rule for whichever layout is chosen: the turn layout (grid or stacked) is a setting of the column, not a result of its width. B's three header buttons per column add the controls this pass is trying to remove, so leave them out unless people ask for narrow columns. C still resizes columns when a nested branch opens. E keeps the parent still but covers the passage the branch came from.</p>
+  </section>
+
+  <section>
+    <h2>Candidates</h2>
+    <div class="grid">
+      <article class="cand">
+        <div class="cand-h"><span class="tag">now</span><h3>Current prototype</h3></div>
+        <figure><img src="img/orig.jpg" alt="Current prototype: feed 260px, parent 300px stacked, branch 622px in the grid." width="1392" height="710"></figure>
+        <p>Focus stack. Widths are recalculated on every open, close and focus change.</p>
+        <a class="open" href="../column-workspace.html">Open the current prototype</a>
+      </article>
+      <article class="cand">
+        <div class="cand-h"><span class="tag">A</span><h3>Stacked scroll</h3></div>
+        <figure><img src="img/a.jpg" alt="Candidate A: fixed-width columns in a horizontal row; the feed slides under the conversation with its title shown vertically." width="1392" height="710"></figure>
+        <p>Feed 320px, every conversation 620px, always the grid. The row scrolls horizontally, and earlier columns slide under later ones with a 44px strip and a vertical title. Opening a branch appends it and scrolls it into view. Clicking a strip scrolls back to that column.</p>
+        <a class="open" href="a-stacked-scroll.html">Open candidate A</a>
+      </article>
+      <article class="cand">
+        <div class="cand-h"><span class="tag">B</span><h3>Manual column modes</h3></div>
+        <figure><img src="img/b.jpg" alt="Candidate B: feed, a stacked parent and a stacked branch, each with side-by-side, stacked and collapse buttons in the header." width="1392" height="710"></figure>
+        <p>Each conversation column is side by side (720px), stacked (420px) or collapsed (44px), and only header buttons change it. New branches open stacked. Columns that don't fit scroll horizontally without overlapping.</p>
+        <a class="open" href="b-manual-modes.html">Open candidate B</a>
+      </article>
+      <article class="cand">
+        <div class="cand-h"><span class="tag">C</span><h3>One reading layout</h3></div>
+        <figure><img src="img/c.jpg" alt="Candidate C: feed at 320px, parent and branch both with questions above answers." width="1392" height="710"></figure>
+        <p>Questions are always above answers, so a width change only rewraps text. Focus no longer changes widths, and the feed stays 320px. Widths are still recalculated when columns open or close.</p>
+        <a class="open" href="c-one-layout.html">Open candidate C</a>
+      </article>
+      <article class="cand">
+        <div class="cand-h"><span class="tag">D</span><h3>Calm chrome</h3></div>
+        <figure><img src="img/d.jpg" alt="Candidate D: one-line branch header, one-line feed composer, no sidebar counts." width="1392" height="710"></figure>
+        <p>Same layout as now. Branch header is one breadcrumb row; the source passage is one line at the top of the column. Root header actions appear on hover. Marks outside the focused column are fainter. Length dots appear on hover. The feed composer is one line until focused. Sidebar counts are removed.</p>
+        <a class="open" href="d-calm-chrome.html">Open candidate D</a>
+      </article>
+      <article class="cand">
+        <div class="cand-h"><span class="tag">E</span><h3>Branch drawer</h3></div>
+        <figure><img src="img/e.jpg" alt="Candidate E: the branch in a drawer over the right side of the parent conversation, with a Pin as column button." width="1392" height="710"></figure>
+        <p>Branches open in a drawer over the right side of the conversation. The feed and parent keep their width, layout and scroll position. Nested branches replace the drawer's content. "Pin as column" turns the branch into a fixed 560px column.</p>
+        <a class="open" href="e-branch-drawer.html">Open candidate E</a>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Comparison</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Candidate</th><th>Focus a column</th><th>Open a branch</th><th>Open a nested branch</th><th>Grid ↔ stacked switch</th><th>Main cost</th></tr></thead>
+        <tbody>
+          <tr><td>Current</td><td class="n">Swaps widths</td><td class="n">Feed and parent shrink</td><td class="n">3 columns resize or collapse</td><td class="n">Automatic, by width</td><td>Hard to predict</td></tr>
+          <tr><td>A. Stacked scroll</td><td class="y">No change</td><td class="y">Row scrolls right</td><td class="y">Row scrolls right</td><td class="y">Never (always grid)</td><td>At 1440 about 520 of the parent's 620px show beside a branch; reaching earlier columns takes a scroll or a strip click</td></tr>
+          <tr><td>B. Manual modes</td><td class="y">No change</td><td class="y">Row scrolls if needed</td><td class="y">Row scrolls if needed</td><td class="y">Only by header buttons</td><td>Three more buttons per header; at the end of the row there is empty space</td></tr>
+          <tr><td>C. One layout</td><td class="y">No change</td><td class="m">Parent narrows, layout stays</td><td class="n">2–3 columns resize</td><td class="y">Never (always stacked)</td><td>Loses the side-by-side grid; long questions push answers down</td></tr>
+          <tr><td>D. Calm chrome</td><td class="n">Swaps widths</td><td class="n">As now</td><td class="n">As now</td><td class="n">As now</td><td>Follow and Move are hidden until hover; light-theme tints get very faint</td></tr>
+          <tr><td>E. Branch drawer</td><td class="y">No change</td><td class="y">Nothing moves</td><td class="y">Drawer content changes</td><td class="y">Never for the parent</td><td>Drawer covers the parent's answers, including the source passage</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>How each was checked</h2>
+    <p>Each candidate ran the prototype's regression script (no page errors, no horizontal overflow at 360px) and a click-through at viewports of 1100, 1440 and 1900px in light and dark. The click-through focuses the parent, focuses the branch, opens a nested branch and closes it, recording each column's position and width after each step. Each mockup's Design notes tab starts with a "This candidate" section, and its Review log lists the changes.</p>
+  </section>
+</div>
+</body>
+</html>
