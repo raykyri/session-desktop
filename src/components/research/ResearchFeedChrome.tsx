@@ -72,17 +72,51 @@ export function ResearchFeedToast({
   onPause: () => void;
   onResume: () => void;
 }) {
+  const regionRef = useRef<HTMLDivElement | null>(null);
+  // Track whether the toast has focus. Replacing a focused toast moves focus
+  // to the new toast's first button. Removing it with Undo or Dismiss returns
+  // focus to the previously focused element.
+  const focusedRef = useRef(false);
+  const cameFromRef = useRef<HTMLElement | null>(null);
+  const toastId = toast?.id;
+  useEffect(() => {
+    if (!focusedRef.current) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    focusedRef.current = false;
+    const next =
+      regionRef.current?.querySelector<HTMLElement>("button") ??
+      (cameFromRef.current?.isConnected ? cameFromRef.current : null);
+    next?.focus({ preventScroll: true });
+  }, [toastId]);
   return (
-    <div className="research-feed-toast-region" role="status" aria-live="polite">
+    <div ref={regionRef} className="research-feed-toast-region" role="status" aria-live="polite">
       {toast ? (
         <div
           key={toast.id}
           className={`research-feed-toast${toast.tone === "warning" ? " is-warning" : ""}`}
           onPointerEnter={onPause}
           onPointerLeave={onResume}
-          onFocus={onPause}
+          onFocus={(event) => {
+            const from = event.relatedTarget;
+            if (from instanceof HTMLElement && !event.currentTarget.contains(from)) {
+              cameFromRef.current = from;
+            }
+            focusedRef.current = true;
+            onPause();
+          }}
           onBlur={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onResume();
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              // Clear focus tracking when focus moves outside a mounted toast.
+              // If removing the toast caused the blur, the effect above
+              // restores focus.
+              const element = event.currentTarget;
+              if (event.relatedTarget) focusedRef.current = false;
+              else window.requestAnimationFrame(() => {
+                if (element.isConnected) focusedRef.current = false;
+              });
+              onResume();
+            }
           }}
         >
           <span className="research-feed-toast-message">{toast.message}</span>

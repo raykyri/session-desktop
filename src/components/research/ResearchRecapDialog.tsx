@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, X } from "lucide-react";
 import { createPortal } from "react-dom";
+import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
 import { LauncherSelect } from "../LauncherSelect";
 import {
   applyResearchRecapCandidate,
@@ -197,6 +198,7 @@ export default function ResearchRecapDialog({
   const [generating, setGenerating] = useState(false);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useResearchDialogReturnFocus(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -338,6 +340,7 @@ export default function ResearchRecapDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="research-recap-dialog-title"
+        onKeyDown={trapResearchDialogTab}
       >
         <header className="research-recap-dialog-header">
           <h2 id="research-recap-dialog-title">Generate summary</h2>

@@ -32,7 +32,7 @@ export function ResearchConversationHeader({
   onMove,
   onClose,
   onColumnBack,
-  onFocusColumn,
+  showHistory = true,
 }: {
   title: string;
   titleRef?: Ref<HTMLHeadingElement>;
@@ -51,31 +51,36 @@ export function ResearchConversationHeader({
   onToggleBookmark: () => void;
   onMove?: (trigger: HTMLButtonElement) => void;
   onClose?: () => void;
-  /** Single-column mode: back to the previous column. */
+  /** Single-column mode: show the feed. */
   onColumnBack?: () => void;
-  onFocusColumn?: () => void;
+  /** False when the drawer leaves too little of the column for the title:
+   * the history arrows give it their room (⌘[ and ⌘] still work). */
+  showHistory?: boolean;
 }) {
   return (
-    <header className="research-column-header is-root" onMouseDown={onFocusColumn}>
+    <header className="research-column-header is-root">
       <div className="research-column-bar" data-tauri-drag-region>
         {onColumnBack ? (
           <button
             type="button"
             className="control-button research-icon-button"
-            aria-label="Back"
+            aria-label="Back to feed"
+            title="Back to feed"
             onClick={onColumnBack}
           >
             <ChevronLeft size={16} aria-hidden="true" />
           </button>
         ) : null}
-        <ResearchHistoryNav
-          canGoBack={canGoBack}
-          canGoForward={canGoForward}
-          backTitle={backTitle}
-          forwardTitle={forwardTitle}
-          onBack={onBack}
-          onForward={onForward}
-        />
+        {showHistory ? (
+          <ResearchHistoryNav
+            canGoBack={canGoBack}
+            canGoForward={canGoForward}
+            backTitle={backTitle}
+            forwardTitle={forwardTitle}
+            onBack={onBack}
+            onForward={onForward}
+          />
+        ) : null}
         <h2 ref={titleRef} className="research-column-title" tabIndex={-1} title={title}>
           {title}
         </h2>
@@ -105,7 +110,7 @@ export function ResearchConversationHeader({
             }
             onClick={onToggleFollow}
           >
-            <Bell size={15} aria-hidden="true" fill={followed && !archived ? "currentColor" : "none"} />
+            <Bell size={16} aria-hidden="true" fill={followed && !archived ? "currentColor" : "none"} />
           </button>
           {onMove ? (
             <button
@@ -116,7 +121,7 @@ export function ResearchConversationHeader({
               title="Move to folder"
               onClick={(event) => onMove(event.currentTarget)}
             >
-              <Folder size={15} aria-hidden="true" />
+              <Folder size={16} aria-hidden="true" />
             </button>
           ) : null}
           <button
@@ -127,7 +132,7 @@ export function ResearchConversationHeader({
             title={bookmarked ? "Remove bookmark" : "Bookmark"}
             onClick={onToggleBookmark}
           >
-            <Bookmark size={15} aria-hidden="true" fill={bookmarked ? "currentColor" : "none"} />
+            <Bookmark size={16} aria-hidden="true" fill={bookmarked ? "currentColor" : "none"} />
           </button>
           {onClose ? (
             <button
@@ -165,7 +170,7 @@ function ResearchHistoryNav({
   onForward,
 }: ResearchHistoryNavProps) {
   return (
-    <div className="research-history-nav" aria-label="Research history">
+    <div className="research-history-nav" role="group" aria-label="Research history">
       <button
         type="button"
         className="control-button research-history-button"

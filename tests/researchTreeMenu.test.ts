@@ -75,3 +75,19 @@ test("archived rows offer Unarchive and Delete only", () => {
   assert.doesNotMatch(html, /Rename/);
   assert.doesNotMatch(html, />Archive</);
 });
+
+test("Archive and Delete carry their A and D shortcuts, disabled with a reason while running", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchTreeMenuItems, {
+      tree: { ...tree, runningCount: 1 },
+      archived: false,
+      onClose: noop,
+      onRename: noop,
+      onArchive: noop,
+      onDelete: noop,
+    }),
+  );
+  assert.match(html, /disabled="" title="Research with active runs cannot be archived" data-shortcut="a"/);
+  assert.match(html, /disabled="" title="Research with active runs cannot be deleted" data-shortcut="d"/);
+  assert.equal(html.match(/role="separator"/g)?.length, 1);
+});

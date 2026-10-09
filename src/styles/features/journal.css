@@ -70,6 +70,11 @@
   white-space: nowrap;
 }
 
+/* One step dimmer while a conversation column has the focus. */
+.research-columns.has-document .research-feed-column:not(.is-focused) .research-feed-header-title {
+  color: var(--text-secondary);
+}
+
 .research-feed-header-title:focus {
   outline: none;
 }
@@ -209,7 +214,9 @@
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* Vertical only: a horizontal swipe over the feed still scrolls the
+     column row. */
+  overscroll-behavior-y: contain;
   scrollbar-width: none;
 }
 
@@ -277,7 +284,7 @@
   min-height: 20px;
   max-height: 160px;
   margin: 0;
-  padding: 0;
+  padding: 2px;
   border: 0;
   resize: none;
   color: var(--text-strong);
@@ -862,10 +869,8 @@
   top: 0;
   left: 0;
   z-index: var(--z-context-menu);
-  display: -webkit-box;
   max-width: 240px;
   padding: 6px 10px;
-  overflow: hidden;
   border: 1px solid var(--surface-border-strong);
   border-radius: var(--radius-lg);
   color: var(--text-primary);
@@ -877,6 +882,11 @@
   opacity: 0.85;
   overflow-wrap: anywhere;
   pointer-events: none;
+}
+
+.research-drag-ghost-text {
+  display: -webkit-box;
+  overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -895,6 +905,7 @@
 /* — A draft open in the content column — */
 
 .research-draft-view {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -902,6 +913,23 @@
   color: var(--text-primary);
   background: var(--research-workspace-bg);
   font-family: var(--font-ui);
+}
+
+/* The open draft is the content column: focused (not the feed), it takes the
+   2px rule on its top edge, as a conversation column does. */
+.research-draft-view.is-focused::before {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  height: 2px;
+  background: var(--accent-color);
+  content: "";
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.research-columns.is-single .research-draft-view.is-focused::before {
+  display: none;
 }
 
 .research-column-title.research-draft-view-title {
@@ -952,74 +980,7 @@
   gap: 6px;
 }
 
-/* — Menus, dialogs, and the toast — */
-
-.research-feed-menu {
-  position: fixed;
-  z-index: var(--z-context-menu);
-  max-width: 300px;
-  padding: 6px;
-  border: 1px solid var(--surface-border-strong);
-  border-radius: 10px;
-  background: var(--research-feed-popover-bg);
-  box-shadow: var(--popover-shadow);
-}
-
-.research-feed-menu-heading {
-  padding: 6px 8px 4px;
-  color: var(--text-subtle);
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.research-feed-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 30px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  background: transparent;
-  font-family: inherit;
-  font-size: var(--fs-base);
-  text-align: left;
-  cursor: pointer;
-}
-
-.research-feed-menu-item:hover:not(:disabled),
-.research-feed-menu-item:focus-visible {
-  outline: none;
-  background: var(--surface-fill-medium);
-}
-
-.research-feed-menu-item:disabled {
-  color: var(--text-muted);
-  cursor: default;
-}
-
-.research-feed-menu-label {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.research-feed-menu-check {
-  margin-left: auto;
-  color: var(--accent-color);
-}
-
-.research-feed-menu-divider {
-  height: 1px;
-  margin: 4px 0;
-  background: var(--surface-divider);
-}
+/* — Dialogs and the toast (the menus are in research.css) — */
 
 .research-folder-dialog-layer {
   position: fixed;
@@ -1038,7 +999,8 @@
   top: 30%;
   left: 50%;
   width: min(360px, calc(100% - 32px));
-  padding: 18px;
+  /* The mock leaves more room below the buttons than above the title. */
+  padding: 18px 18px 32px;
   border: 1px solid var(--surface-border-strong);
   border-radius: 12px;
   background: var(--research-feed-popover-bg);
@@ -1197,7 +1159,7 @@
 }
 
 .research-highlight-item:hover .research-highlight-context {
-  color: var(--text-activity);
+  color: var(--text-secondary);
 }
 
 /* Use the same gold background as highlights within an answer. */

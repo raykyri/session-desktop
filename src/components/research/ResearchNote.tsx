@@ -1,15 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
-import { Check, ChevronDown, ExternalLink, LoaderCircle, X } from "lucide-react";
+import { ArrowUp, Check, ChevronDown, ExternalLink, LoaderCircle, X } from "lucide-react";
 import type {
   NoteReply,
   RecentResearchQuery,
   ResearchMessageAttachment,
 } from "../../types";
 import { openExternalUrl } from "../../lib/api";
-import { placePanePopover, type PanePopoverPlacement } from "../../lib/appHelpers";
-import { ComposerSubmitShortcutGlyph } from "../ComposerSubmitShortcut";
+import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
+import { growComposerTextarea } from "../../lib/composerTextarea";
 import { noteReplyAuthorName } from "../../lib/activity";
 import { formatRelativeTime } from "../../lib/transcriptSessions";
 import {
@@ -17,6 +16,7 @@ import {
   ResearchMessageBody,
   type ResearchProseVariant,
 } from "./ResearchMessage";
+import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
 
 /** Handlers shared by the Home note card and the note page. Each rejects
  * with the backend's message so the control that started it can show it. */
@@ -347,17 +347,20 @@ export function NoteFollowUpStatus({
 
 type NoteFollowUpMode = "network" | "ai";
 
-/** Follow-up field for a note, in the thread composer's card. Its split
- * button sends: Post (to the network) by default on a network note, with Ask
- * (the note's AI model) in the chevron menu. A saved link, or a follow-up
- * about a reply, can only ask, so it shows Ask alone. A reply target shows as
- * a removable "@Ana's reply" chip. */
+/** Follow-up composer at the end of a note page: the column's follow-up
+ * composer (research-composer), with a destination control before Send. On
+ * a network note it posts to the network by default, with Ask (the note's AI
+ * model) in the destination menu. A saved link, or a follow-up about a
+ * reply, can only ask, so it has no destination control. A reply target
+ * shows above the field as a removable "@Ana's reply" chip. The send
+ * shortcut follows the "Require ⌘↵ to send" setting. */
 export function NoteFollowUpField({
   networkAvailable,
   modelLabel,
   target,
   placeholder = "Ask a follow-up",
   autoFocus = false,
+  requireCmdEnter,
   onClearTarget,
   onSubmit,
 }: {
@@ -366,21 +369,25 @@ export function NoteFollowUpField({
   target: NoteReplyTarget | null;
   placeholder?: string;
   autoFocus?: boolean;
+  requireCmdEnter: boolean;
   onClearTarget: () => void;
   onSubmit: (prompt: string, network: boolean) => Promise<void>;
 }) {
   const [draft, setDraft] = useState("");
   const [mode, setMode] = useState<NoteFollowUpMode>("network");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<PanePopoverPlacement | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  useLayoutEffect(() => {
+    if (textareaRef.current) {
+      growComposerTextarea(textareaRef.current);
+    }
+  }, [draft]);
   const canPost = networkAvailable && !target;
   const toNetwork = canPost && mode === "network";
   const askLabel = `Ask ${modelLabel || "AI"}`;
+  const ready = Boolean(draft.trim()) && !submitting;
   const submit = () => {
     const prompt = draft.trim();
     if (!prompt || submitting) return;
@@ -391,8 +398,8 @@ export function NoteFollowUpField({
       .catch((err) => setError(errorMessage(err)))
       .finally(() => setSubmitting(false));
   };
-  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isComposerSubmitShortcut(event, requireCmdEnter)) {
       event.preventDefault();
       submit();
     } else if (event.key === "Escape" && target) {
@@ -400,59 +407,17 @@ export function NoteFollowUpField({
       onClearTarget();
     }
   };
-
-  // The mode menu closes on an outside press, Escape, or any reflow that
-  // would strand the fixed-position menu away from its trigger.
-  useEffect(() => {
-    if (!menuOpen) return;
-    const closeOnPress = (event: globalThis.MouseEvent) => {
-      const node = event.target as Node;
-      if (triggerRef.current?.contains(node) || menuRef.current?.contains(node)) return;
-      setMenuOpen(false);
-    };
-    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") setMenuOpen(false);
-    };
-    const close = () => setMenuOpen(false);
-    document.addEventListener("mousedown", closeOnPress);
-    document.addEventListener("keydown", closeOnEscape);
-    window.addEventListener("resize", close);
-    window.addEventListener("scroll", close, true);
-    return () => {
-      document.removeEventListener("mousedown", closeOnPress);
-      document.removeEventListener("keydown", closeOnEscape);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
-    };
-  }, [menuOpen]);
-
-  useLayoutEffect(() => {
-    if (!menuOpen) {
-      setMenuPos(null);
-      return;
-    }
-    const trigger = triggerRef.current;
-    const menu = menuRef.current;
-    if (!trigger || !menu) return;
-    const { width, height } = menu.getBoundingClientRect();
-    setMenuPos(
-      placePanePopover({
-        triggerRect: trigger.getBoundingClientRect(),
-        popoverSize: { width, height },
-        align: "end",
-        prefer: "below",
-      }),
-    );
-  }, [menuOpen]);
+  const sendLabel = toNetwork ? "Post to your network" : askLabel;
+  const shortcut = requireCmdEnter ? "⌘↵" : "↵";
 
   const modeOptions: { mode: NoteFollowUpMode; label: string }[] = [
     { mode: "network", label: "Post to network" },
     { mode: "ai", label: askLabel },
   ];
   return (
-    <div className="note-field-stack" onClick={stopForInteractive}>
-      <div className="note-followup-card">
-        {target ? (
+    <div className="research-composer-wrap note-composer" onClick={stopForInteractive}>
+      {target ? (
+        <div className="research-composer-note">
           <button
             type="button"
             className="note-field-target"
@@ -462,11 +427,19 @@ export function NoteFollowUpField({
             @{target.author}’s reply
             <X size={11} aria-hidden="true" />
           </button>
-        ) : null}
-        <input
-          ref={inputRef}
-          type="text"
+        </div>
+      ) : null}
+      <form
+        className={`research-composer${ready ? " is-ready" : ""}`}
+        onSubmit={(event) => {
+          event.preventDefault();
+          submit();
+        }}
+      >
+        <textarea
+          ref={textareaRef}
           value={draft}
+          rows={1}
           autoFocus={autoFocus}
           disabled={submitting}
           placeholder={
@@ -480,71 +453,67 @@ export function NoteFollowUpField({
           onChange={(event) => setDraft(event.currentTarget.value)}
           onKeyDown={onKeyDown}
         />
-        <div className="research-followup-send-group note-followup-send-group">
+        {canPost ? (
           <button
             type="button"
-            className="control-button research-followup-send note-followup-send"
-            disabled={!draft.trim() || submitting}
-            title={toNetwork ? "Post to your network (↵)" : `${askLabel} (↵)`}
-            onClick={submit}
+            className="control-button note-composer-destination"
+            aria-haspopup="menu"
+            aria-expanded={menuAnchor !== null}
+            aria-label={`Follow-up destination: ${toNetwork ? "Post to network" : askLabel}`}
+            title="Post to your network or ask AI"
+            onClick={(event) => {
+              const trigger = event.currentTarget;
+              setMenuAnchor((current) => (current ? null : trigger));
+            }}
           >
             <span>{toNetwork ? "Post" : "Ask"}</span>
-            {submitting ? (
-              <LoaderCircle className="note-field-spinner" size={12} aria-hidden="true" />
-            ) : (
-              <ComposerSubmitShortcutGlyph requireCmdEnter={false} className="shortcut-hint" ariaHidden />
-            )}
+            <ChevronDown size={13} aria-hidden="true" />
           </button>
-          {canPost ? (
-            <button
-              ref={triggerRef}
-              type="button"
-              className="control-button research-followup-mode-trigger note-followup-mode-trigger"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              aria-label="Follow-up destination"
-              title="Post to your network or ask AI"
-              onClick={() => setMenuOpen((open) => !open)}
-            >
-              <ChevronDown size={13} aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-      </div>
-      {menuOpen
-        ? createPortal(
-            <div
-              ref={menuRef}
-              className="popover-surface research-followup-mode-menu"
-              role="menu"
-              aria-label="Follow-up destination"
-              // Off-screen until measured, so the first paint cannot land at
-              // the viewport origin.
-              style={menuPos ? { left: menuPos.left, top: menuPos.top } : { left: -9999, top: -9999 }}
-            >
-              {modeOptions.map((option) => (
-                <button
-                  key={option.mode}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={mode === option.mode}
-                  className="menu-item menu-item--compact research-followup-mode-item"
-                  onClick={() => {
-                    setMode(option.mode);
-                    setMenuOpen(false);
-                    inputRef.current?.focus();
-                  }}
-                >
-                  <span className="research-followup-mode-check" aria-hidden="true">
-                    {mode === option.mode ? <Check size={12} /> : null}
-                  </span>
-                  <span className="research-followup-mode-label">{option.label}</span>
-                </button>
-              ))}
-            </div>,
-            document.body,
-          )
-        : null}
+        ) : null}
+        <button
+          className="control-button research-composer-send"
+          type="submit"
+          disabled={!ready}
+          aria-label={toNetwork ? "Post" : "Ask"}
+          title={`${sendLabel} (${shortcut})`}
+        >
+          {submitting ? (
+            <LoaderCircle className="research-spinner" size={15} aria-hidden="true" />
+          ) : (
+            <ArrowUp size={15} aria-hidden="true" />
+          )}
+          <ComposerSubmitShortcutGlyph
+            requireCmdEnter={requireCmdEnter}
+            className="research-composer-enter"
+            ariaHidden
+          />
+        </button>
+      </form>
+      {menuAnchor ? (
+        <ResearchMenu
+          anchor={menuAnchor}
+          label="Follow-up destination"
+          onClose={() => setMenuAnchor(null)}
+        >
+          {modeOptions.map((option) => (
+            <ResearchMenuItem
+              key={option.mode}
+              label={option.label}
+              checked={mode === option.mode}
+              trailing={
+                mode === option.mode ? (
+                  <Check className="research-menu-check" size={15} aria-hidden="true" />
+                ) : null
+              }
+              onSelect={() => {
+                setMode(option.mode);
+                setMenuAnchor(null);
+                textareaRef.current?.focus();
+              }}
+            />
+          ))}
+        </ResearchMenu>
+      ) : null}
       {error ? (
         <p className="note-thread-error" role="alert">
           {error}

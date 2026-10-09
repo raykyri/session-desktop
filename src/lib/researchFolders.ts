@@ -67,8 +67,10 @@ export function researchFolderNameError(
 ): string | null {
   const name = normalizeResearchFolderName(rawName);
   if (!name) return "Enter a folder name.";
-  if (name.length > RESEARCH_FOLDER_NAME_MAX_LENGTH) {
-    return `Use ${RESEARCH_FOLDER_NAME_MAX_LENGTH} characters or fewer (this is ${name.length}).`;
+  // Counted in code points, as the backend counts `chars()`: an emoji is one.
+  const length = Array.from(name).length;
+  if (length > RESEARCH_FOLDER_NAME_MAX_LENGTH) {
+    return `Use ${RESEARCH_FOLDER_NAME_MAX_LENGTH} characters or fewer (this is ${length}).`;
   }
   if (RESERVED_FOLDER_NAMES.includes(name.toLowerCase())) {
     return `“${name}” is reserved. Choose another name.`;
@@ -89,7 +91,7 @@ export function researchFolderMonogram(name: string): string {
   return match ? match[0].toUpperCase() : "?";
 }
 
-function generateResearchFolderId(): string {
+export function newResearchFolderId(): string {
   const uuid =
     typeof globalThis.crypto?.randomUUID === "function"
       ? globalThis.crypto.randomUUID()
@@ -101,9 +103,10 @@ export function researchFolderStateWithNewFolder(
   state: ResearchFolderState,
   name: string,
   workspaceId: string,
+  id: string = newResearchFolderId(),
 ): { state: ResearchFolderState; folder: ResearchFolder } {
   const folder = {
-    id: generateResearchFolderId(),
+    id,
     name: normalizeResearchFolderName(name),
     workspaceId,
   };

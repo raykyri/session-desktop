@@ -1,3 +1,6 @@
+import { isActiveResearchStatus } from "./researchThreads";
+import type { ResearchNodeStatus } from "../types";
+
 interface SnappedResearchSelection {
   start: number;
   end: number;
@@ -18,11 +21,37 @@ interface ResearchSelectionRect {
   height: number;
 }
 
-/** Positions the selection actions centred over the selected passage, 8px
- * above it, so they never cover the selected text. When there is no room
- * above (the passage starts under the column headers or above the viewport)
- * they sit 8px below it instead. `width` and `height` are the actions' own
- * size. */
+/** Clips selection offsets to the end of the starting paragraph, excluding
+ * trailing whitespace. Preserves the selection when clipping would leave
+ * only whitespace or `paragraphEnd` is null (no paragraph found). */
+export function clipResearchSelectionToParagraph(
+  projection: string,
+  offsets: { start: number; end: number },
+  paragraphEnd: number | null,
+): { start: number; end: number; crossed: boolean } {
+  if (paragraphEnd === null) {
+    return { ...offsets, crossed: false };
+  }
+  let end = paragraphEnd;
+  while (end > offsets.start && /\s/.test(projection[end - 1] ?? "")) {
+    end -= 1;
+  }
+  if (end < offsets.end && projection.slice(offsets.start, end).trim()) {
+    return { start: offsets.start, end, crossed: true };
+  }
+  return { ...offsets, crossed: false };
+}
+
+/** A selection in an answer that is still streaming: it has no response
+ * revision to anchor a highlight or branch to yet, so it can only be
+ * copied. */
+export function isLiveResearchSelection(responseRevision: string, status: ResearchNodeStatus | undefined) {
+  return !responseRevision && status !== undefined && isActiveResearchStatus(status);
+}
+
+/** Centers the selection actions 8px above the passage if their top is at
+ * or below `minTop`; otherwise places them 8px below it, constrained by the
+ * viewport's bottom edge. `width` and `height` are the actions' dimensions. */
 export function researchSelectionActionPlacement(input: {
   boundingRect: ResearchSelectionRect;
   viewportWidth: number;

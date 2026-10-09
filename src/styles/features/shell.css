@@ -101,6 +101,13 @@
   box-shadow: 0 0 0 2px var(--accent-shadow);
 }
 
+/* The research sidebar uses the research UI's 2px ring (research-surface.css). */
+.sidebar.is-research-mode .sidebar-header-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
 .sidebar-header-button.is-active {
   color: var(--text-heading);
   background: var(--surface-fill-medium);
@@ -152,7 +159,8 @@
   background: var(--surface-fill-hover);
 }
 
-.research-strip-icon.is-selected {
+.research-strip-icon.is-selected,
+.research-strip-icon[aria-expanded="true"] {
   color: var(--text-heading);
   background: var(--surface-fill-medium);
 }
@@ -1022,27 +1030,6 @@
   cursor: default;
 }
 
-/* Action menus reuse the .pane-context-menu chrome but hold buttons rather
-   than copyable details, so they tighten the padding and drop text selection.
-   They tie with .pane-context-menu on specificity and must stay after it in
-   this file to win the cascade. */
-.research-sidebar-menu,
-.research-followup-menu {
-  padding: 4px;
-  user-select: none;
-}
-
-/* The feed's card context menus sit over the feed, a step above its surface. */
-.research-sidebar-menu {
-  width: min(200px, calc(100vw - 16px));
-  border-color: var(--surface-border-strong);
-  background: var(--research-feed-popover-bg);
-}
-
-.research-followup-menu {
-  width: min(200px, calc(100vw - 16px));
-}
-
 .group-context-actions {
   margin: 0;
   padding: 0;
@@ -1184,23 +1171,6 @@
   outline-offset: 3px;
 }
 
-.native-input-submit-actions button {
-  flex-wrap: nowrap;
-  gap: 6px;
-  min-height: var(--control-h-md);
-  padding: 0 8px;
-  font-family: var(--font-ui);
-}
-
-/* Nudge labels down in fixed-height composer controls for these fonts. */
-html[data-body-font="dm-sans"] .native-input-submit-actions button > span {
-  transform: translateY(1px);
-}
-
-html[data-body-font="anthropic-sans-text"] .native-input-submit-actions button > span {
-  transform: translateY(0.5px);
-}
-
 html[data-body-font="dm-sans"] .native-input textarea {
   padding-top: 9px;
   padding-bottom: 7px;
@@ -1209,12 +1179,6 @@ html[data-body-font="dm-sans"] .native-input textarea {
 html[data-body-font="anthropic-sans-text"] .native-input textarea {
   padding-top: 8.5px;
   padding-bottom: 7.5px;
-}
-
-.native-input-submit-actions button:hover:not(:disabled) {
-  border-color: var(--control-border-hover-accent);
-  background: var(--control-bg-hover);
-  color: var(--text-heading);
 }
 
 .command-launcher {
@@ -2631,34 +2595,6 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
 .command-launcher-adapter-select {
   display: inline-flex;
   min-width: 0;
-}
-
-/* Send reads as quiet chrome that matches the picker pill, with the accent reserved
-   for the keyboard hint instead of a competing CTA fill. */
-.command-launcher-send {
-  pointer-events: auto;
-  min-height: var(--control-h-md);
-  padding: 0 13px;
-  border: 1px solid var(--control-border);
-  border-radius: 999px;
-  background: var(--control-bg);
-  color: var(--accent-color);
-  font-size: var(--fs-base);
-  font-weight: 600;
-  transition:
-    background var(--transition-fast),
-    border-color var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.command-launcher-send:hover {
-  background: var(--control-bg-hover);
-  border-color: var(--control-border-hover-accent);
-}
-
-.command-launcher-send:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--surface-border-strong-alpha);
 }
 
 /* Custom launcher dropdown (LauncherSelect), used by every agent's launcher options.

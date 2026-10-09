@@ -45,19 +45,27 @@ export function useResearchDrafts(workspaceId: string | null, onError: (message:
     void refresh();
   }, [refresh, workspaceId]);
 
-  /** Creates (no id) or updates a draft. Rejects with the backend's message,
-   * which the caller shows where the draft is being edited. */
+  /** Creates (no id) or updates a draft in `workspaceId` (default: the
+   * scoped workspace), so a save after a workspace switch still reaches the
+   * draft's own workspace. An update to a draft no longer listed (sent or
+   * deleted meanwhile) doesn't bring it back. Rejects with the backend's
+   * message, which the caller shows where the draft is being edited. */
   const saveDraft = useCallback(
-    async (id: string | null, prompt: string): Promise<ResearchDraft> => {
-      const scope = workspaceIdRef.current;
-      if (!scope) throw new Error("Choose a research workspace first.");
+    async (
+      id: string | null,
+      prompt: string,
+      workspaceId: string | null = workspaceIdRef.current,
+    ): Promise<ResearchDraft> => {
+      if (!workspaceId) throw new Error("Choose a research workspace first.");
       requestSeqRef.current += 1;
-      const saved = await saveResearchDraft({ id, workspaceId: scope, prompt });
-      if (workspaceIdRef.current === scope) {
+      const saved = await saveResearchDraft({ id, workspaceId, prompt });
+      if (workspaceIdRef.current === workspaceId) {
         setDrafts((current) =>
           current.some((draft) => draft.id === saved.id)
             ? current.map((draft) => (draft.id === saved.id ? saved : draft))
-            : [saved, ...current],
+            : id === null
+              ? [saved, ...current]
+              : current,
         );
       }
       return saved;
@@ -65,7 +73,17 @@ export function useResearchDrafts(workspaceId: string | null, onError: (message:
     [],
   );
 
-  /** Resolves true once the draft is deleted; a failure is reported. */
+  /** Deletes the draft, then drops it from the list. Rejects with the
+   * backend's message for the open draft to show, leaving the list as it
+   * was. */
+  const deleteDraft = useCallback(async (draftId: string): Promise<void> => {
+    await deleteResearchDraft(draftId);
+    requestSeqRef.current += 1;
+    setDrafts((current) => current.filter((draft) => draft.id !== draftId));
+  }, []);
+
+  /** Removes the draft from the list at once; resolves true once it is
+   * deleted. A failure is reported and the draft comes back. */
   const removeDraft = useCallback(async (draftId: string): Promise<boolean> => {
     const scope = workspaceIdRef.current;
     const previous = draftsRef.current;
@@ -102,5 +120,5 @@ export function useResearchDrafts(workspaceId: string | null, onError: (message:
     }
   }, []);
 
-  return { drafts, refreshDrafts: refresh, saveDraft, removeDraft, moveDraft };
+  return { drafts, refreshDrafts: refresh, saveDraft, removeDraft, deleteDraft, moveDraft };
 }

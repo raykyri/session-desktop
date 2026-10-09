@@ -349,6 +349,9 @@ export function forkResearchNode(
   queryAnchor?: ResearchHighlightAnchor | null,
   inline = false,
   replyAnchor?: string | null,
+  /** An edited question: the failed or stopped sibling this child replaces.
+   * The backend admits the child first and removes that node only then. */
+  replacesNodeId?: string | null,
 ) {
   return invoke<ResearchNode>("fork_research_node", {
     parentNodeId,
@@ -356,6 +359,7 @@ export function forkResearchNode(
     queryAnchor: queryAnchor ?? null,
     replyAnchor: replyAnchor ?? null,
     inline,
+    replacesNodeId: replacesNodeId ?? null,
   });
 }
 

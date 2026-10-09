@@ -1,7 +1,5 @@
 import { memo, useCallback, useLayoutEffect, useState } from "react";
 import {
-  Copy,
-  GitBranch,
   LoaderCircle,
   MoreHorizontal,
   RotateCcw,
@@ -9,14 +7,14 @@ import {
   Star,
   Wrench,
 } from "lucide-react";
+import { ResearchBranchIcon } from "./ResearchIcons";
 import {
   conversationActivityToolCalls,
   conversationToolCallLabel,
 } from "../../lib/researchConversations";
 import { stripImportedReportCitations } from "../../lib/researchDocuments";
-import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import { formatRunDuration, shortWhen } from "../../lib/shortTime";
-import type { MessageBlock, MessageItem } from "../../lib/turnTimeline";
+import { latestToolActivityLabel, type MessageBlock, type MessageItem } from "../../lib/turnTimeline";
 import type { ResearchNode, ResearchNodeContent } from "../../types";
 import {
   RawTranscriptDisclosure,
@@ -316,12 +314,10 @@ interface ResearchAnswerPaneProps {
   cancelling: boolean;
   /** Elapsed clock for an active run ("1:08"), ticking once a second. */
   elapsedText: string | null;
-  /** Settled run duration for the footer ("Ran for 1m 08s"), or null. */
-  durationText: string | null;
-  hiddenHighlightCount: number;
+  /** A queued run whose parent's answer is still running. */
+  waitsForParent: boolean;
   recapPending: boolean;
   pointerOverAnnotation: boolean;
-  menuOpen: boolean;
   expanded: boolean;
   canRetry: boolean;
   retrying: boolean;
@@ -329,10 +325,7 @@ interface ResearchAnswerPaneProps {
   registerSegmentElement: (nodeId: string, kind: SegmentDomKind, element: HTMLElement | null) => void;
   onExpandTurns: (nodeId: string) => void;
   onRetryContentLoad: () => void;
-  onShowFullTrace: (nodeId: string) => void;
   onToggleFullTrace: (nodeId: string) => void;
-  onCopyAnswer: (view: SegmentView) => void;
-  onOpenAnswerMenu: (trigger: HTMLButtonElement, nodeId: string) => void;
   onCancelNode: (nodeId: string) => void;
   onRetryNode: (nodeId: string) => void;
   onEditQuestion: (nodeId: string) => void;
@@ -345,14 +338,20 @@ interface ResearchAnswerPaneProps {
   onRootMouseLeave: () => void;
 }
 
-function runStatusText(node: ResearchNode) {
+/** The status line of an active run: "Working", with the run's latest tool
+ * activity when it has one ("Working · reading lesswrong.com"). */
+export function runStatusText(
+  node: Pick<ResearchNode, "status">,
+  waitsForParent: boolean,
+  activity: string | null = null,
+) {
   if (node.status === "running") {
-    return "Working";
+    return activity ? `Working · ${activity}` : "Working";
   }
   if (node.status === "starting") {
-    return "Starting";
+    return "Starting…";
   }
-  return "Queued";
+  return waitsForParent ? "Queued. Starts when the running answer finishes." : "Queued";
 }
 
 /** The answer side of a turn. Finished answers are clamped to nine lines with
@@ -367,11 +366,9 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
   contentError,
   cancelling,
   elapsedText,
-  durationText,
-  hiddenHighlightCount,
+  waitsForParent,
   recapPending,
   pointerOverAnnotation,
-  menuOpen,
   expanded,
   canRetry,
   retrying,
@@ -379,10 +376,7 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
   registerSegmentElement,
   onExpandTurns,
   onRetryContentLoad,
-  onShowFullTrace,
   onToggleFullTrace,
-  onCopyAnswer,
-  onOpenAnswerMenu,
   onCancelNode,
   onRetryNode,
   onEditQuestion,
@@ -411,15 +405,16 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
     },
     [nodeId, registerSegmentElement, setContentElement],
   );
-  const modelSummary =
-    node.origin === "imported" ? "" : formatResearchModelSummary(node.adapter, node.model, node.origin);
   const retryButton = (label: string) =>
     canRetry ? (
       <button
         className="control-button research-turn-button"
         type="button"
-        disabled={retrying}
-        onClick={() => onRetryNode(node.id)}
+        // Not disabled: a failed retry would otherwise drop focus.
+        aria-disabled={retrying || undefined}
+        onClick={() => {
+          if (!retrying) onRetryNode(node.id);
+        }}
       >
         {retrying ? (
           <LoaderCircle className="research-spinner" size={13} aria-hidden="true" />
@@ -441,13 +436,36 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
     </button>
   );
 
+  // A queued run (waiting for its turn on the backend) reads like a question
+  // in the client-side queue: the state as a plain line, its action (Stop,
+  // which cancels it) below, where the queue's Remove sits.
+  if (node.status === "queued") {
+    return (
+      <section className="research-response" aria-label="Research response">
+        <div className="research-turn-note is-state" role="status">
+          {runStatusText(node, waitsForParent)}
+        </div>
+        <div className="research-turn-actions">
+          <button
+            className="control-button research-turn-button is-ghost"
+            type="button"
+            disabled={cancelling}
+            onClick={() => onCancelNode(node.id)}
+          >
+            {cancelling ? "Stopping…" : "Stop"}
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   if (!view.content) {
     return (
       <section className="research-response" aria-label="Research response">
         {active ? (
           <div className="research-turn-run" role="status">
             <span className="research-pulse" aria-hidden="true" />
-            <span>{runStatusText(node)}</span>
+            <span>{runStatusText(node, waitsForParent)}</span>
             {elapsedText ? <span className="research-tnum">{elapsedText}</span> : null}
             {stopButton("Stop")}
           </div>
@@ -530,7 +548,13 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
       {active ? (
         <div className="research-turn-run">
           <span className="research-pulse" aria-hidden="true" />
-          <span role="status">{runStatusText(node)}</span>
+          <span role="status">
+            {runStatusText(
+              node,
+              waitsForParent,
+              node.status === "running" ? latestToolActivityLabel(view.timelineItems) : null,
+            )}
+          </span>
           {elapsedText ? <span className="research-tnum">{elapsedText}</span> : null}
           {view.hasTranscriptActivity ? (
             <button
@@ -636,68 +660,6 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
       )}
       {failure}
       {cancellation}
-      {active ? null : (
-        <footer className="research-answer-meta">
-          {node.status === "complete" ? (
-            <span>
-              {view.answerWordCount.toLocaleString()} {view.answerWordCount === 1 ? "word" : "words"}
-            </span>
-          ) : null}
-          {durationText ? <span>{durationText}</span> : null}
-          {modelSummary ? <span>{modelSummary}</span> : null}
-          {hiddenHighlightCount > 0 ? (
-            <span
-              className="research-hidden-highlights"
-              title="These saved highlights couldn't be located in the current view. Their passages may sit in content that isn't rendered right now."
-            >
-              {hiddenHighlightCount} {hiddenHighlightCount === 1 ? "highlight" : "highlights"} not
-              visible in this view
-              {/* What can hide a run's passage sits behind the answer fold;
-                  a conversation has no fold and hides only windowed-off
-                  turns, whose expander renders above this footer. */}
-              {view.hasTranscriptActivity && !view.showFullTrace ? (
-                <>
-                  {" · "}
-                  <button
-                    type="button"
-                    className="control-button research-hidden-highlights-reveal"
-                    onClick={() => onShowFullTrace(node.id)}
-                  >
-                    Show full transcript
-                  </button>
-                </>
-              ) : null}
-            </span>
-          ) : null}
-          <span className="research-answer-meta-actions">
-            {node.status === "complete" && (view.conversationCopyText ?? view.rawAnswer) ? (
-              <button
-                type="button"
-                className="control-button research-answer-copy"
-                title={view.isConversation ? "Copy conversation as Markdown" : "Copy answer as Markdown"}
-                aria-label={
-                  view.isConversation ? "Copy conversation as Markdown" : "Copy answer as Markdown"
-                }
-                onClick={() => onCopyAnswer(view)}
-              >
-                <Copy size={13} aria-hidden="true" />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="control-button research-answer-menu-trigger"
-              title="Answer actions"
-              aria-label="Answer actions"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              data-research-answer-menu-trigger
-              onClick={(event) => onOpenAnswerMenu(event.currentTarget, node.id)}
-            >
-              <MoreHorizontal size={15} aria-hidden="true" />
-            </button>
-          </span>
-        </footer>
-      )}
     </section>
   );
 }, propsEqualExceptNode);
@@ -717,8 +679,10 @@ export const ResearchTurnQuestion = memo(function ResearchTurnQuestion({
   branchUnread = false,
   branchMenuOpen = false,
   branchBlocker = null,
+  answerMenuOpen = false,
   onTogglePromoted,
   onBranchButton,
+  onOpenAnswerMenu,
 }: {
   node: ResearchNode;
   /** Documents and conversations carry no question; their meta row stands
@@ -736,8 +700,13 @@ export const ResearchTurnQuestion = memo(function ResearchTurnQuestion({
   branchMenuOpen?: boolean;
   /** Why no branch can start from this answer, or null when one can. */
   branchBlocker?: string | null;
+  /** The answer menu (details and actions) is open. */
+  answerMenuOpen?: boolean;
   onTogglePromoted?: (nodeId: string) => void;
   onBranchButton?: (nodeId: string, trigger: HTMLButtonElement) => void;
+  /** The … button after the branch button: the answer's length, run time
+   * and model, and its actions. A queued run has no answer yet. */
+  onOpenAnswerMenu?: (trigger: HTMLButtonElement, nodeId: string) => void;
 }) {
   const settled = node.status === "complete" || node.status === "failed" || node.status === "cancelled";
   const promoted = Boolean(node.promotedAt);
@@ -802,9 +771,22 @@ export const ResearchTurnQuestion = memo(function ResearchTurnQuestion({
               }
             }}
           >
-            <GitBranch size={13} aria-hidden="true" />
+            <ResearchBranchIcon size={13} />
             {branchCount > 0 ? <span className="research-tnum">{branchCount}</span> : null}
             {branchUnread ? <span className="research-turn-unread" aria-hidden="true" /> : null}
+          </button>
+        ) : null}
+        {onOpenAnswerMenu && node.status !== "queued" ? (
+          <button
+            type="button"
+            className="control-button research-turn-meta-button research-turn-more"
+            aria-haspopup="menu"
+            aria-expanded={answerMenuOpen}
+            aria-label="Answer actions"
+            title="Answer details and actions"
+            onClick={(event) => onOpenAnswerMenu(event.currentTarget, node.id)}
+          >
+            <MoreHorizontal size={13} aria-hidden="true" />
           </button>
         ) : null}
       </div>
@@ -821,6 +803,8 @@ interface ResearchTurnProps extends ResearchAnswerPaneProps {
   branchUnread: boolean;
   branchMenuOpen: boolean;
   branchBlocker: string | null;
+  answerMenuOpen: boolean;
+  onOpenAnswerMenu: (trigger: HTMLButtonElement, nodeId: string) => void;
   onTogglePromoted: (nodeId: string) => void;
   onBranchButton: (nodeId: string, trigger: HTMLButtonElement) => void;
   onOpenContextMenu: (nodeId: string, clientX: number, clientY: number) => void;
@@ -838,6 +822,8 @@ export const ResearchTurn = memo(function ResearchTurn({
   branchUnread,
   branchMenuOpen,
   branchBlocker,
+  answerMenuOpen,
+  onOpenAnswerMenu,
   onTogglePromoted,
   onBranchButton,
   onOpenContextMenu,
@@ -872,8 +858,10 @@ export const ResearchTurn = memo(function ResearchTurn({
         branchUnread={branchUnread}
         branchMenuOpen={branchMenuOpen}
         branchBlocker={branchBlocker}
+        answerMenuOpen={answerMenuOpen}
         onTogglePromoted={onTogglePromoted}
         onBranchButton={onBranchButton}
+        onOpenAnswerMenu={onOpenAnswerMenu}
       />
       <div className="research-turn-answer">
         <ResearchAnswerPane {...answer} />

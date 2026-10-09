@@ -393,7 +393,7 @@ form.ready .btn.primary .ent { display: inline; }
 .a-body h4 { margin: 14px 0 6px; font-size: 14.5px; font-weight: 650; color: var(--heading); }
 .a-body > :first-child { margin-top: 0; }
 /* The faded bottom edge is the expand control; its label appears on hover without moving. */
-.a-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 64px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 4px; background: linear-gradient(to bottom, transparent, var(--doc)); cursor: pointer; }
+.a-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 32px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 4px; background: linear-gradient(to bottom, transparent, var(--doc)); cursor: pointer; }
 .a-fade span { font-size: 12.5px; font-weight: 500; color: var(--text-2); padding: 3px 10px; border-radius: 12px; background: var(--field); border: 1px solid var(--border-strong); opacity: 0; transition: opacity 120ms; }
 .a-fade:hover span { opacity: 1; }
 .a-dots { position: absolute; right: -18px; top: 6px; width: 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 2px 0; opacity: 0; transition: opacity 100ms; }
@@ -519,6 +519,7 @@ form.ready .btn.primary .ent { display: inline; }
 
 /* popovers, toast */
 .pop { position: absolute; z-index: 50; min-width: 220px; max-width: 300px; padding: 6px; border-radius: 10px; background: var(--pop); border: 1px solid var(--border-strong); box-shadow: var(--shadow); }
+.pop-meta { padding: 6px 8px 5px; font-size: 12px; line-height: 1.4; color: var(--muted); font-variant-numeric: tabular-nums; }
 .pop-t { display: block; padding: 6px 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
 .mi { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px; border-radius: 6px; font-size: 13px; color: var(--text); }
 .mi:hover:not(:disabled) { background: var(--fill-2); }
@@ -717,7 +718,7 @@ form.ready .btn.primary .ent { display: inline; }
   <li><b>Questions on the left, answers on the right.</b> The question column is 40% of the turn, with a 180px minimum. Questions scroll with their answers; nothing in the turn grid is sticky.</li>
   <li><b>Answers start collapsed.</b> A finished answer is clamped to 9 lines and fades out at the bottom. Clicking the faded edge expands it; a "Show more" label appears there on hover. Answers that fit get no fade and no dots.</li>
   <li><b>Length dots are the toggle.</b> A rail beside a long answer shows one mark per clamped height of content, with the first mark filled while the answer is clamped. The rail appears when the pointer is over the answer or the rail has keyboard focus. Clicking it expands the answer; while the answer is open all marks are grey, and clicking it again collapses the answer. The rail is a button with <code>aria-expanded</code>, so it is also the keyboard control; the fade is a pointer target only.</li>
-  <li><b>Turn actions.</b> Next to each question's time are its star and branch buttons, always visible. The branch button shows how many branches the answer has and opens a menu of them with "New branch here"; with no branches it starts one. Selecting text gives Highlight, Branch, and Copy. Clicking a highlighted or anchored passage opens its branch, or a menu when there are several.</li>
+  <li><b>Turn actions.</b> Next to each question's time are its star, branch and … buttons, always visible. There is no metadata line under the answer: the … menu starts with the answer's length, run time and model, followed by its actions (copy, transcript, summary, delete). Right-clicking the turn opens the same menu. The branch button shows how many branches the answer has and opens a menu of them with "New branch here"; with no branches it starts one. Selecting text gives Highlight, Branch, and Copy. Clicking a highlighted or anchored passage opens its branch, or a menu when there are several.</li>
   <li><b>The follow-up composer belongs to its column.</b> Each conversation column has its own composer, the equivalent of today's "Continue thread", so you can ask in a parent without leaving the branch. It sits after the last turn and scrolls with the conversation; it is not pinned to the bottom.</li>
 </ul>
 
@@ -800,7 +801,7 @@ form.ready .btn.primary .ent { display: inline; }
 <tr><td>Draft</td><td>The question opens in an editable field with a Send button. Feed cards carry no draft badge; the Drafts tray already says what they are.</td><td>Drafts tray</td></tr>
 <tr><td>Empty folder, Archive, Drafts, Highlights, or Bookmarks</td><td>A line of text that says how items get there.</td><td>"Later" folder</td></tr>
 <tr><td>Nothing open</td><td>The column says where answers and branches will open.</td><td>Close the conversation column</td></tr>
-<tr><td>Branch from a running answer</td><td>Branch is disabled with the reason "Wait for the answer to finish". Highlight still works.</td><td>Select text in the running answer</td></tr>
+<tr><td>Branch from a running answer</td><td>Highlight and Branch are disabled with the reason "Wait for the answer to finish": both need the finished answer, whose text the highlight and the branch passage are stored against.</td><td>Select text in the running answer</td></tr>
 <tr><td>Selection crossing paragraphs</td><td>The highlight is clipped to the end of the first paragraph, and a toast explains why.</td><td>Select across two paragraphs</td></tr>
 <tr><td>Overlapping highlights</td><td>They merge into one.</td><td>Highlight over an existing highlight</td></tr>
 <tr><td>Folder name taken, reserved, empty, or too long</td><td>An inline error under the field names the problem. The dialog stays open with your text.</td><td>New folder → "drafts", "home"</td></tr>
@@ -1025,6 +1026,8 @@ form.ready .btn.primary .ent { display: inline; }
 </ul>
 <ul>
   <li>Drawer animation: 220ms slide-in from the right edge with the shadow fading in, 160ms slide-out, 120ms fade of the header and body when the content is replaced, 120ms fade when pinning. Re-renders during a transition continue it; reduced motion turns it off.</li>
+  <li>The fade at the bottom of a collapsed answer covers about one and a half lines (32px) instead of three.</li>
+  <li>The metadata line under answers is gone. Length, run time and model are the first row of a … menu next to the star and branch buttons, which also holds the answer actions.</li>
 </ul>
 
 </section>
@@ -1390,12 +1393,23 @@ function turnHTML(c, ti, extra = "") {
   // Starring a follow-up makes it a child of its question (listed under it in the feed).
   const pro = canPromote ? `<button class="t-pro${child ? " on" : ""}" data-a="promote" data-k="${k}" aria-pressed="${child}" aria-label="Star" title="${child ? "Unstar: stop listing this follow-up under its question" : "Star: list this follow-up under its question in the feed"}">${child ? IF("star") : I("star")}</button>` : "";
   return `<article class="turn st-${t.status}${extra}" data-k="${k}">
-    <div class="t-q"><div class="t-q-in"><p class="t-prompt">${linkify(t.prompt)}</p><div class="t-meta"><span>${esc(shortWhen(t.when))}</span>${pro}${branchBtn(c, ti)}</div></div></div>
+    <div class="t-q"><div class="t-q-in"><p class="t-prompt">${linkify(t.prompt)}</p><div class="t-meta"><span>${esc(shortWhen(t.when))}</span>${pro}${branchBtn(c, ti)}${moreBtn(t, k)}</div></div></div>
     <div class="t-a">${answerHTML(c, ti)}</div>
   </article>`;
 }
 // Branch button beside the star, shown on hover like the star: with branches it shows
 // the count and opens a menu; otherwise it starts a branch.
+// The answer's metadata (length, run time, model) and actions live in this menu, next to
+// the star and branch buttons, instead of in a line under the answer.
+function moreBtn(t, k) {
+  if (t.status === "queued" || t.status === "unsent") return "";
+  return `<button class="t-pro t-more" data-a="turn-menu" data-k="${k}" aria-haspopup="menu" title="Answer details and actions" aria-label="Answer actions">${I("more")}</button>`;
+}
+function answerStats(t) {
+  const words = (t.body || []).map(blockText).join(" ").split(/\s+/).filter(Boolean).length;
+  const secs = t.status === "cancelled" ? null : 60 + words;
+  return [`${words.toLocaleString()} ${words === 1 ? "word" : "words"}`, secs == null ? null : `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, "0")}s`, "Claude Opus"].filter(Boolean).join(" · ");
+}
 function branchBtn(c, ti) {
   const t = c.turns[ti], k = `${c.id}:${ti}`;
   if (!["done", "cancelled", "failed"].includes(t.status)) return "";
@@ -1628,10 +1642,14 @@ function popHTML() {
     const t = conv(p.conv).turns[p.turn];
     const canBranch = t.status === "done" || t.status === "cancelled" || t.status === "failed";
     role = "toolbar";
-    inner = `<div class="sel-row"><button class="mi h" data-a="sel-hl">${I("highlighter")}Highlight</button><button class="mi h" data-a="sel-branch" ${canBranch ? "" : 'disabled title="Wait for the answer to finish"'}>${I("branch")}Branch</button><button class="mi h" data-a="sel-copy">${I("copy")}Copy</button></div>${canBranch ? "" : `<div class="pop-note">Branching is available when the answer finishes.</div>`}`;
+    inner = `<div class="sel-row"><button class="mi h" data-a="sel-hl" ${canBranch ? "" : 'disabled title="Wait for the answer to finish"'}>${I("highlighter")}Highlight</button><button class="mi h" data-a="sel-branch" ${canBranch ? "" : 'disabled title="Wait for the answer to finish"'}>${I("branch")}Branch</button><button class="mi h" data-a="sel-copy">${I("copy")}Copy</button></div>${canBranch ? "" : `<div class="pop-note">Highlighting and branching are available when the answer finishes.</div>`}`;
   } else if (p.type === "mark") {
     const bs = (p.b || []).map((id) => conv(id)).filter(Boolean);
     inner = `${bs.map((b) => mi(`data-a="open-branch" data-id="${b.id}"`, I("branch"), esc(titleOf(b)))).join("")}${p.hl ? mi(`data-a="branch-hl" data-h="${p.hl}"`, I("branch"), "Branch from highlight") + mi(`data-a="rm-hl" data-h="${p.hl}"`, I("x"), "Remove highlight") : ""}`;
+  } else if (p.type === "turn") {
+    const [cid, ti] = p.k.split(":"); const t = conv(cid).turns[+ti];
+    const settled = t.status === "done";
+    inner = `<div class="pop-meta">${esc(answerStats(t))}</div><div class="mdiv"></div>${settled ? mi(`data-a="copy-answer" data-k="${p.k}"`, I("copy"), "Copy answer as Markdown") : ""}${mi('data-a="noop"', I("msg"), "Show full transcript")}${settled ? mi('data-a="noop"', I("pen"), "Generate summary") : ""}<div class="mdiv"></div>${mi('data-a="noop"', I("trash"), +ti === 0 ? "Delete question" : "Delete follow-up")}`;
   } else if (p.type === "branches") {
     const [cid, ti] = p.k.split(":");
     inner = `<div class="pop-t">Branches from this answer</div>${branchesOf(cid, +ti).map((b) => mi(`data-a="open-branch" data-id="${b.id}"${isOpen(b.id) ? ' aria-current="true"' : ""}`, I("branch"), esc(titleOf(b)), isOpen(b.id) ? I("check", "r") : "")).join("")}<div class="mdiv"></div>${mi(`data-a="branch-turn" data-k="${p.k}"`, I("plus"), "New branch here")}`;
@@ -2008,7 +2026,10 @@ win.addEventListener("keyup", (e) => { if (e.shiftKey && e.key.startsWith("Arrow
 /* ---------- clicks ---------- */
 function anchorFor(el) {
   const r = el.getBoundingClientRect(); const wr = win.getBoundingClientRect();
-  return { x: clamp(r.right - wr.left - 240, 8, wr.width - 248), y: r.bottom - wr.top + 4, ay: r.top - wr.top, ret: keyOf(el) };
+  // Buttons in a question's meta row sit at the left edge of their column, so their menus
+  // open to the right; everything else aligns the menu's right edge with the button.
+  const x = el.closest(".t-meta") ? r.left - wr.left - 4 : r.right - wr.left - 240;
+  return { x: clamp(x, 8, wr.width - 248), y: r.bottom - wr.top + 4, ay: r.top - wr.top, ret: keyOf(el) };
 }
 const FIRST_ITEM = ".pop .mi:not(:disabled)";
 function openMenu(type, el, extra) { S.pop = Object.assign({ type }, extra, anchorFor(el)); S.focusNext = FIRST_ITEM; render(); }
@@ -2099,6 +2120,8 @@ win.addEventListener("click", (e) => {
     case "fade-expand":
     case "expand": { const k = d.k; S.expanded.has(k) ? S.expanded.delete(k) : S.expanded.add(k); render(); break; }
     case "branches": openMenu("branches", a, { k: d.k }); break;
+    case "turn-menu": openMenu("turn", a, { k: d.k }); break;
+    case "copy-answer": S.pop = null; toast("Answer copied as Markdown."); render(); break;
     case "branch-turn": { const [c, ti] = K(); newBranch({ conv: c.id, turn: ti, p: null }, S.pop ? S.pop.ret : keyOf(a)); break; }
     case "open-branch": openBranch(d.id, { ret: S.pop ? S.pop.ret : keyOf(a) }); break;
     case "sel-hl": case "sel-branch": case "sel-copy": {

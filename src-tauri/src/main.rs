@@ -1982,6 +1982,7 @@ async fn fork_research_node(
     query_anchor: Option<research::ResearchHighlightAnchor>,
     reply_anchor: Option<String>,
     inline: Option<bool>,
+    replaces_node_id: Option<String>,
 ) -> Result<ResearchNode, String> {
     let state = state.inner().clone();
     let inline = inline.unwrap_or(false);
@@ -1995,14 +1996,34 @@ async fn fork_research_node(
             let parent = state.research_node(&parent_node_id)?;
             let workspace = state.research_workspace_for_node(&parent_node_id)?;
             validate_launch_workspace(&state, Some(&workspace.id), LaunchOrigin::Research)?;
-            let child = state.create_research_child_with_attachments(
-                &parent_node_id,
-                prompt,
-                query_anchor,
-                reply_anchor,
-                inline,
-                attachments,
-            )?;
+            let child = match replaces_node_id.as_deref() {
+                // Create the edited question before removing the failed node.
+                // If creation fails, preserve the failed node and partial answer.
+                Some(replaced) => {
+                    let child = state.create_research_child_replacing(
+                        &parent_node_id,
+                        prompt,
+                        query_anchor,
+                        reply_anchor,
+                        inline,
+                        attachments,
+                        replaced,
+                    )?;
+                    if let Err(err) = state.remove_research_branch(replaced) {
+                        let _ = state.remove_research_branch(&child.id);
+                        return Err(err);
+                    }
+                    child
+                }
+                None => state.create_research_child_with_attachments(
+                    &parent_node_id,
+                    prompt,
+                    query_anchor,
+                    reply_anchor,
+                    inline,
+                    attachments,
+                )?,
+            };
             (parent, workspace, child)
         };
         launch_research_child_run(&state, &parent, &workspace, &child)

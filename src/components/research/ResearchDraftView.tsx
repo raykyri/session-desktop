@@ -1,19 +1,24 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { FilePen, Trash2, X } from "lucide-react";
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ChevronLeft, FilePen, Trash2, X } from "lucide-react";
 import type { ResearchDraft } from "../../types";
+import { createResearchDraftAutosave } from "../../lib/researchDraftAutosave";
+import { isEditableTarget } from "../../lib/appHelpers";
 import {
   ComposerSubmitShortcutGlyph,
   isComposerSubmitShortcut,
 } from "../ComposerSubmitShortcut";
+import { ResearchColumnsContext } from "./ResearchColumns";
 
 const SAVE_DELAY_MS = 500;
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 /** An unsent draft, open in the content column: the "Draft · Not sent"
- * header with Delete and Close, then the question in an editable field and
- * Send. Edits save as you type and when the view closes; a deleted or sent
- * draft saves nothing more. */
+ * header with Delete and Close (and Back to feed in single-column mode), then the question in an editable field and
+ * Send. Edits save as you type and when the view closes; once a send or
+ * delete starts nothing more is saved. A failed send or delete keeps the
+ * view open with the error. `[` and `]` move between the feed and the
+ * draft, as between conversation columns. */
 export default function ResearchDraftView({
   draft,
   requireCmdEnterToSend,
@@ -26,29 +31,29 @@ export default function ResearchDraftView({
   requireCmdEnterToSend: boolean;
   onSave: (prompt: string) => Promise<void>;
   onSend: (prompt: string) => Promise<void>;
-  onDelete: () => void;
+  /** Resolves once the draft is deleted; rejects with the reason. */
+  onDelete: () => Promise<void>;
   onClose: () => void;
 }) {
   const [value, setValue] = useState(draft.prompt);
-  const [sending, setSending] = useState(false);
+  const [busy, setBusy] = useState<"sending" | "deleting" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [focused, setFocused] = useState(true);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const savedRef = useRef(draft.prompt);
-  const valueRef = useRef(value);
-  valueRef.current = value;
-  // Set before a delete or send, so the unmount flush can't recreate or
-  // touch a draft that no longer exists.
-  const finishedRef = useRef(false);
+  const titleRef = useRef<HTMLHeadingElement | null>(null);
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
-
-  const save = (prompt: string) => {
-    savedRef.current = prompt;
-    void onSaveRef.current(prompt).catch((err: unknown) => {
-      if (!finishedRef.current) setError(errorMessage(err));
-    });
-  };
+  const [autosave] = useState(() =>
+    createResearchDraftAutosave({
+      initial: draft.prompt,
+      delayMs: SAVE_DELAY_MS,
+      save: (prompt) => onSaveRef.current(prompt),
+      onError: setError,
+    }),
+  );
+  const columns = useContext(ResearchColumnsContext);
+  const columnsRef = useRef(columns);
+  columnsRef.current = columns;
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -63,40 +68,88 @@ export default function ResearchDraftView({
     textarea.style.height = `${textarea.scrollHeight}px`;
   }, [value]);
 
+  useEffect(() => autosave.edit(value), [autosave, value]);
+  useEffect(() => () => autosave.flush(), [autosave]);
+
   useEffect(() => {
-    if (!value.trim() || value === savedRef.current) return;
-    const timer = window.setTimeout(() => save(value), SAVE_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [value]);
-  useEffect(
-    () => () => {
-      const latest = valueRef.current;
-      if (!finishedRef.current && latest.trim() && latest !== savedRef.current) save(latest);
-    },
-    [],
-  );
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing || isEditableTarget(event.target)) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+      if (event.key !== "[" && event.key !== "]") return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('[role="menu"], [role="dialog"], [role="alertdialog"]')) return;
+      const layout = columnsRef.current;
+      if (!layout) return;
+      if (event.key === "[" && !layout.feedFocused) {
+        event.preventDefault();
+        layout.focusFeed({ moveFocus: true });
+      } else if (event.key === "]" && layout.feedFocused) {
+        event.preventDefault();
+        layout.releaseFeed();
+        window.requestAnimationFrame(() => titleRef.current?.focus({ preventScroll: true }));
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   async function send() {
     const prompt = value.trim();
-    if (!prompt || sending) return;
-    setSending(true);
+    if (!prompt || busy) return;
+    setBusy("sending");
     setError(null);
-    finishedRef.current = true;
+    autosave.finish();
     try {
       await onSend(prompt);
     } catch (err) {
-      finishedRef.current = false;
+      autosave.resume();
       setError(errorMessage(err));
-      setSending(false);
+      setBusy(null);
+    }
+  }
+
+  async function remove() {
+    if (busy) return;
+    setBusy("deleting");
+    setError(null);
+    autosave.finish();
+    try {
+      await onDelete();
+    } catch (err) {
+      autosave.resume();
+      autosave.edit(value);
+      setError(errorMessage(err));
+      setBusy(null);
     }
   }
 
   const ready = focused && Boolean(value.trim());
   return (
-    <section className="research-draft-view" aria-label="Draft">
+    <section
+      className={`research-draft-view${columns && !columns.feedFocused ? " is-focused" : ""}`}
+      aria-label="Draft"
+      onFocus={() => {
+        if (columnsRef.current?.feedFocused) columnsRef.current.releaseFeed();
+      }}
+    >
       <header className="research-column-header">
         <div className="research-column-bar" data-tauri-drag-region>
-          <h2 className="research-column-title is-one-line research-draft-view-title" tabIndex={-1}>
+          {columns?.singleColumn ? (
+            <button
+              type="button"
+              className="control-button research-icon-button"
+              aria-label="Back to feed"
+              title="Back to feed"
+              onClick={() => columns.focusFeed({ moveFocus: true })}
+            >
+              <ChevronLeft size={16} aria-hidden="true" />
+            </button>
+          ) : null}
+          <h2
+            ref={titleRef}
+            className="research-column-title is-one-line research-draft-view-title"
+            tabIndex={-1}
+          >
             <FilePen size={14} aria-hidden="true" />
             Draft · Not sent
           </h2>
@@ -107,12 +160,10 @@ export default function ResearchDraftView({
               className="control-button research-icon-button"
               aria-label="Delete draft"
               title="Delete draft"
-              onClick={() => {
-                finishedRef.current = true;
-                onDelete();
-              }}
+              disabled={busy !== null}
+              onClick={() => void remove()}
             >
-              <Trash2 size={15} aria-hidden="true" />
+              <Trash2 size={16} aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -139,7 +190,7 @@ export default function ResearchDraftView({
           rows={5}
           value={value}
           aria-label="Draft question"
-          disabled={sending}
+          disabled={busy !== null}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           onChange={(event) => {
@@ -149,7 +200,7 @@ export default function ResearchDraftView({
           onKeyDown={(event) => {
             if (event.key === "Escape" && !event.nativeEvent.isComposing) {
               event.preventDefault();
-              event.currentTarget.blur();
+              titleRef.current?.focus({ preventScroll: true });
               return;
             }
             if (event.key === "Enter" && !event.shiftKey && !value.trim()) {
@@ -172,9 +223,9 @@ export default function ResearchDraftView({
           <button
             type="submit"
             className="research-feed-button is-primary"
-            disabled={sending || !value.trim()}
+            disabled={busy !== null || !value.trim()}
           >
-            {sending ? "Sending…" : "Send"}
+            {busy === "sending" ? "Sending…" : "Send"}
             {ready ? (
               <ComposerSubmitShortcutGlyph
                 requireCmdEnter={requireCmdEnterToSend}

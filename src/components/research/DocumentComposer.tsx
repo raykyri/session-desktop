@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
 import {
   RESEARCH_DOCUMENT_BYTE_LIMIT,
   RESEARCH_DOCUMENT_WORD_LIMIT,
@@ -32,6 +33,7 @@ export default function DocumentComposer({
   const [markdown, setMarkdown] = useState(initialMarkdown);
   const [title, setTitle] = useState(initialTitle);
   const [submitting, setSubmitting] = useState(false);
+  useResearchDialogReturnFocus(true);
   const [error, setError] = useState<string | null>(null);
   const markdownRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -122,7 +124,9 @@ export default function DocumentComposer({
         onKeyDown={(event) => {
           if (event.key === "Escape" && pristine && !submitting) {
             close();
+            return;
           }
+          trapResearchDialogTab(event);
         }}
         onSubmit={(event) => {
           event.preventDefault();

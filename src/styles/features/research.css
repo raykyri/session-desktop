@@ -120,6 +120,17 @@
   opacity: 1;
 }
 
+/* A card dragged over a row (pointer hover included) shows the row as a drop
+   target only: no … button, and the label keeps its full width. */
+.is-research-dragging .research-nav-row .research-nav-menu {
+  opacity: 0;
+}
+
+.is-research-dragging .research-nav-row .research-nav-label {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
 .research-nav-section {
   display: flex;
   flex: none;
@@ -134,43 +145,34 @@
   text-transform: uppercase;
 }
 
-/* In the strip the switcher is an icon whose menu opens beside the strip as a
-   popover, with the account control at its bottom. */
-.research-folder-popover {
-  position: fixed;
-  z-index: var(--z-context-menu);
-  display: flex;
-  width: 264px;
-  flex-direction: column;
-  padding: 4px;
-  border: 1px solid var(--surface-border-strong);
-  border-radius: 9px;
-  background: var(--research-feed-popover-bg);
-  box-shadow: var(--context-menu-shadow);
+/* Under the Folders header while the stored folders can't be loaded. */
+.research-nav-note {
+  flex: none;
+  margin: 0 0 4px;
+  padding: 0 8px;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
 }
 
-.research-folder-menu.is-in-popover {
-  position: static;
-  max-height: min(440px, calc(100vh - 200px));
+.research-nav-note-action {
   padding: 0;
   border: 0;
-  background: transparent;
-  box-shadow: none;
+  color: var(--text-secondary);
+  background: none;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
 }
 
-.research-folder-popover-footer {
-  margin-top: 4px;
-  padding-top: 4px;
-  border-top: 1px solid var(--surface-border-subtle);
-}
-
-.research-folder-popover-footer .sidebar-account {
-  margin: 0;
+.research-nav-note-action:hover {
+  color: var(--text-heading);
 }
 
 /* Folder scope switcher: pinned beneath the research list, scoping the sidebar
    to one Research workspace. Folder management actions live at the bottom of
-   its upward-opening menu and always apply to the currently scoped folder. */
+   its menu (a ResearchMenu) and always apply to the currently scoped folder. */
 .research-folder-switcher {
   position: relative;
   flex: none;
@@ -234,14 +236,8 @@
   transform: rotate(180deg);
 }
 
-/* Plain count like the terminal sidebar's group counts, not a pill. */
-.research-folder-count {
-  flex: none;
-  color: var(--text-faint);
-  font-weight: 500;
-  white-space: nowrap;
-}
-
+/* The GitHub account control's menu, which opens above its trigger at the
+   bottom of the sidebar. */
 .research-folder-menu {
   position: absolute;
   bottom: calc(100% + 5px);
@@ -294,11 +290,6 @@
   color: var(--text-subtle);
 }
 
-.research-folder-item.is-selected,
-.research-folder-item.is-selected svg {
-  color: var(--text-interactive);
-}
-
 .research-folder-item-name {
   flex: 1;
   min-width: 0;
@@ -307,22 +298,10 @@
   white-space: nowrap;
 }
 
-.research-folder-item-copy {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.research-folder-item-copy .research-folder-item-name {
-  flex: none;
-}
-
 .research-folder-path {
   min-width: 0;
   overflow: hidden;
-  color: var(--placeholder-color);
+  color: var(--text-faint);
   font-size: calc(12px + var(--turn-font-delta, 0px) + var(--font-ui-size-offset));
   font-weight: 400;
   line-height: 1;
@@ -331,8 +310,6 @@
   white-space: nowrap;
 }
 
-.research-folder-item:hover .research-folder-path,
-.research-folder-item.is-selected .research-folder-path,
 .research-folder-trigger:hover .research-folder-path,
 .research-folder-trigger[aria-expanded="true"] .research-folder-path {
   color: var(--text-subtle);
@@ -561,11 +538,11 @@
 }
 
 :root[data-appearance="light"] *::highlight(session-research-open-branch) {
-  text-decoration: underline 2px #1f8a6f; /* highlight-pseudo-literal */
+  text-decoration: underline 2px #1a7a62; /* highlight-pseudo-literal */
 }
 
 :root[data-appearance="light"][data-color-theme="orange-blob"] *::highlight(session-research-open-branch) {
-  text-decoration: underline 2px #0b7fd1; /* highlight-pseudo-literal */
+  text-decoration: underline 2px #0a6fb8; /* highlight-pseudo-literal */
 }
 
 /* A passage flashed after a jump to a branch's source or a highlight.
@@ -652,9 +629,18 @@
   width: var(--research-conversation-width, 100%);
 }
 
-.research-conversation-workspace.is-single-column .research-conv-column.is-focused::before,
-.research-conv-column.is-hidden {
+.research-conversation-workspace.is-single-column .research-conv-column.is-focused::before {
   display: none;
+}
+
+/* Single-column mode: the columns not shown stay laid out, transparent and
+   inert, so each keeps its scroll position (see research-surface.css for
+   why not visibility). */
+.research-conv-column.is-hidden {
+  position: absolute;
+  inset: 0 auto 0 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Column headers: one 44px bar (a window drag region). The conversation's
@@ -662,21 +648,33 @@
 .research-column-header {
   flex: none;
   padding: 0 12px 0 16px;
-  border-bottom: 1px solid var(--surface-border-default);
+  border-bottom: 1px solid var(--surface-divider);
 }
 
+/* Content sits 1px below the row's centre, as in the feed's header bar
+   (journal.css), so titles and controls share one line across columns. */
 .research-column-bar {
   display: flex;
   min-width: 0;
   min-height: 44px;
   align-items: center;
   gap: 4px;
+  padding-top: 2px;
 }
 
 .research-column-header.is-root .research-column-bar {
   align-items: flex-start;
   gap: 8px;
-  padding-block: 12px 10px;
+  padding-block: 13px 9px;
+}
+
+/* With the drawer open the conversation's title keeps to one line, so its
+   header stays 44px like the feed's and the drawer's and the header rules
+   line up. */
+.research-conversation-workspace.has-drawer:not(.is-single-column)
+  .research-conv-column.is-main
+  .research-column-title {
+  -webkit-line-clamp: 1;
 }
 
 /* Controls are 26px in a 20px title line: pull them up and down by 3px so
@@ -687,6 +685,12 @@
 
 .research-column-header.is-root .research-history-nav {
   height: 26px;
+}
+
+/* The bar's padding already places its line; the arrows' own -1px nudge
+   would lift them above the title. */
+.research-column-header .research-history-button {
+  transform: none;
 }
 
 .research-column-title {
@@ -813,7 +817,9 @@
   flex: 1;
   min-height: 0;
   overflow: hidden auto;
-  overscroll-behavior: contain;
+  /* Vertical only: horizontal wheel and trackpad scrolling over a column
+     still reaches the column row. */
+  overscroll-behavior-y: contain;
   scrollbar-color: var(--surface-border-strong) transparent;
   scrollbar-width: thin;
 }
@@ -829,7 +835,7 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   padding: 18px 26px 14px 18px;
-  border-bottom: 1px solid var(--surface-border-subtle);
+  border-bottom: 1px solid var(--research-turn-divider);
 }
 
 .research-turn.is-whole {
@@ -919,10 +925,11 @@
   border-radius: 5px;
   color: var(--text-muted);
   background: transparent;
-  font-size: calc(12px + var(--font-ui-size-offset));
-  font-weight: 500;
+  font-size: calc(11.5px + var(--font-ui-size-offset));
+  font-weight: 400;
 }
 
+.research-turn-meta-button[aria-expanded="true"],
 .research-turn-meta-button:hover {
   color: var(--text-heading);
   background: var(--surface-fill-medium);
@@ -960,6 +967,11 @@
   min-width: 0;
 }
 
+/* Answers read in the body colour, one step below the question's. */
+.research-turn-answer .turn-markdown {
+  color: var(--text-body-soft);
+}
+
 /* — Answers: clamped to nine lines of body text with a fade, and length
    dots in the right gutter. ResearchTurn.tsx measures the same nine lines. — */
 .research-answer-wrap {
@@ -975,7 +987,7 @@
   position: absolute;
   inset: auto 0 0;
   display: flex;
-  height: 64px;
+  height: 32px;
   min-height: 0;
   align-items: flex-end;
   justify-content: center;
@@ -991,7 +1003,7 @@
   border: 1px solid var(--surface-border-strong);
   border-radius: 12px;
   color: var(--text-secondary);
-  background: var(--field-bg);
+  background: var(--research-feed-field-bg);
   font-size: calc(12.5px + var(--font-ui-size-offset));
   font-weight: 500;
   opacity: 0;
@@ -1063,6 +1075,46 @@
   margin-left: auto;
 }
 
+/* A running answer ends in a block caret, blinking unless motion is
+   reduced. A pseudo-element, so the answer's text (and the offsets anchors
+   are stored at) stays unchanged. */
+.research-turn.is-status-running .research-response-content-root .turn-markdown > p:last-child::after,
+.research-turn.is-status-running
+  .research-response-content-root
+  .turn-markdown
+  > :is(ul, ol):last-child
+  > li:last-child::after {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--text-muted);
+  content: "";
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .app-shell:not(.reduce-motion)
+    .research-turn.is-status-running
+    .research-response-content-root
+    .turn-markdown
+    > p:last-child::after,
+  .app-shell:not(.reduce-motion)
+    .research-turn.is-status-running
+    .research-response-content-root
+    .turn-markdown
+    > :is(ul, ol):last-child
+    > li:last-child::after {
+    animation: research-caret 1s steps(2) infinite;
+  }
+}
+
+@keyframes research-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
 .research-turn-run .research-turn-trace {
   color: var(--text-muted);
 }
@@ -1108,7 +1160,7 @@
 }
 
 .research-turn-alert.is-error b {
-  color: var(--status-failed-fg);
+  color: var(--research-failed-text);
 }
 
 .research-turn-note {
@@ -1142,10 +1194,10 @@
   align-items: center;
   gap: 6px;
   padding: 0 10px;
-  border: 1px solid var(--control-border);
+  border: 1px solid var(--surface-border-strong);
   border-radius: 6px;
   color: var(--text-strong);
-  background: var(--field-bg);
+  background: var(--research-feed-field-bg);
   font-size: calc(12.5px + var(--font-ui-size-offset));
   font-weight: 500;
   white-space: nowrap;
@@ -1247,7 +1299,7 @@
 
 .research-composer-note {
   margin: 0 0 8px;
-  color: var(--status-warning-fg);
+  color: var(--text-muted);
   font-size: calc(12px + var(--font-ui-size-offset));
 }
 
@@ -1271,9 +1323,9 @@
   align-items: flex-end;
   gap: 8px;
   padding: 7px 7px 7px 12px;
-  border: 1px solid var(--control-border);
+  border: 1px solid var(--surface-border-strong);
   border-radius: 10px;
-  background: var(--field-bg);
+  background: var(--research-feed-field-bg);
 }
 
 .research-composer:focus-within {
@@ -1413,20 +1465,53 @@
   gap: 6px;
 }
 
-/* — Menus: the branch menu, passage menu, answer menu, and selection actions — */
+/* — Menus (ResearchMenu.tsx) and the selection actions — */
+/* Every research menu, and the selection actions, use the feed's popover
+   surface. */
+.research-menu,
+.research-selection-actions {
+  border-color: var(--surface-border-strong);
+  background: var(--research-feed-popover-bg);
+}
+
 .research-menu {
+  position: fixed;
   z-index: var(--z-context-menu);
+  display: flex;
   min-width: 220px;
   max-width: 300px;
+  flex-direction: column;
   padding: 6px;
+  border-width: 1px;
+  border-style: solid;
   border-radius: 10px;
+  box-shadow: var(--popover-shadow);
+  user-select: none;
+}
+
+/* A long menu (many branches or workspaces) scrolls inside the window. */
+.research-menu-items {
+  min-height: 0;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+}
+
+/* Content under the items, such as the strip's account control. */
+.research-menu-footer {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--surface-divider);
+}
+
+.research-menu-footer .sidebar-account {
+  margin: 0;
 }
 
 .research-menu-title {
   display: block;
   padding: 6px 8px 4px;
-  color: var(--text-faint);
-  font-size: calc(11px + var(--font-ui-size-offset));
+  color: var(--text-subtle);
+  font-size: var(--fs-xs);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -1442,17 +1527,19 @@
   gap: 8px;
   padding: 0 8px;
   border: 0;
-  border-radius: 6px;
-  color: var(--text-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
   background: transparent;
-  font-size: calc(13px + var(--font-ui-size-offset));
+  font-family: inherit;
+  font-size: var(--fs-base);
   text-align: left;
+  cursor: pointer;
 }
 
 .research-menu-item:hover:not(:disabled),
 .research-menu-item:focus-visible {
-  background: var(--surface-fill-medium);
   outline: none;
+  background: var(--surface-fill-medium);
 }
 
 .research-menu-item[aria-current="true"] {
@@ -1461,9 +1548,10 @@
 
 .research-menu-item:disabled {
   color: var(--text-muted);
+  cursor: default;
 }
 
-.research-menu-item.is-danger {
+.research-menu-item.is-danger:not(:disabled) {
   color: var(--status-failed-fg);
 }
 
@@ -1479,21 +1567,68 @@
   white-space: nowrap;
 }
 
+/* An item with a second line: a workspace and its path. */
+.research-menu-item.has-detail {
+  height: auto;
+  min-height: 30px;
+  padding-block: 5px;
+}
+
+.research-menu-item.has-detail .research-menu-label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.research-menu-label-name,
+.research-menu-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.research-menu-detail {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
 .research-menu-check {
   margin-left: auto;
   color: var(--accent-color);
 }
 
+/* Plain count like the terminal sidebar's group counts, not a pill. */
+.research-menu-count {
+  flex: none;
+  color: var(--text-faint);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .research-menu-divider {
   height: 1px;
   margin: 4px 0;
-  background: var(--surface-border-subtle);
+  background: var(--surface-divider);
 }
 
 .research-menu-note {
   padding: 4px 8px;
   color: var(--text-muted);
   font-size: calc(12px + var(--font-ui-size-offset));
+}
+
+/* The answer menu's first rows: the answer's length, run time and model,
+   then any highlights this view can't show. Text, not menu items. */
+.research-menu-meta {
+  padding: 6px 8px 5px;
+  color: var(--text-muted);
+  font-size: calc(12px + var(--font-ui-size-offset));
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+.research-menu-meta + .research-menu-meta {
+  padding-top: 0;
 }
 
 .research-selection-actions {
@@ -1756,89 +1891,6 @@
   font: inherit;
   font-size: var(--fs-sm);
   cursor: pointer;
-}
-
-.research-answer-meta {
-  display: flex;
-  min-height: 22px;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 10px;
-  margin-top: 4px;
-  color: var(--text-faint);
-  font-size: calc(12px + var(--font-ui-size-offset));
-  line-height: 1.3;
-}
-
-/* The answer's word count, duration and model, with copy and the answer
-   menu, show with the turn under the pointer or focus. */
-.research-answer-meta > :not(.research-hidden-highlights) {
-  opacity: 0;
-  transition: opacity 100ms;
-}
-
-.research-turn:hover .research-answer-meta > *,
-.research-turn:focus-within .research-answer-meta > *,
-.research-answer-meta:has([aria-expanded="true"]) > * {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .research-answer-meta > * {
-    opacity: 1;
-  }
-}
-
-.research-answer-meta-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-left: auto;
-}
-
-.research-hidden-highlights-reveal {
-  display: inline;
-  padding: 0;
-  border: 0;
-  color: var(--text-subtle);
-  font: inherit;
-  text-decoration: underline;
-  background: transparent;
-  cursor: pointer;
-}
-
-.research-answer-copy {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 0;
-  border: 0;
-  color: var(--text-subtle);
-  font: inherit;
-  background: transparent;
-  cursor: pointer;
-}
-
-.research-answer-copy:hover {
-  color: var(--text-secondary);
-}
-
-.research-answer-menu-trigger {
-  display: inline-flex;
-  min-width: 22px;
-  min-height: 22px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  color: var(--text-subtle);
-  background: transparent;
-}
-
-.research-answer-menu-trigger:hover,
-.research-answer-menu-trigger:focus-visible {
-  color: var(--text-secondary);
-  background: var(--surface-fill-hover);
 }
 
 .research-plaintext {

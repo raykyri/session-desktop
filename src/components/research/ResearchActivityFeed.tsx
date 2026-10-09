@@ -42,10 +42,15 @@ import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigati
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchArchivedFeed from "./ResearchArchivedFeed";
 import { ResearchFeedHeader, ResearchFeedScrollThumb } from "./ResearchFeedChrome";
-import ResearchFeedPost, { type ResearchFeedPostStatus } from "./ResearchFeedPost";
+import ResearchFeedPost, {
+  researchCardRefocus,
+  researchFeedCardControl,
+  type ResearchFeedPostStatus,
+} from "./ResearchFeedPost";
 import ResearchFeedTray, { researchPlaceEmptyText } from "./ResearchFeedTray";
 import { ResearchFolderDeleteConfirm } from "./ResearchFolderDialogs";
-import ResearchMoveMenu, { ResearchActionMenu } from "./ResearchMoveMenu";
+import { ResearchMenu, ResearchMenuItem, researchMenuPoint } from "./ResearchMenu";
+import ResearchMoveMenu from "./ResearchMoveMenu";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import {
   ResearchMessageBody,
@@ -54,7 +59,6 @@ import {
 } from "./ResearchMessage";
 import { NoteBody } from "./ResearchNote";
 import {
-  RESEARCH_TREE_MENU_WIDTH,
   ResearchTreeDeleteDialog,
   ResearchTreeMenuItems,
   ResearchTreeRenameDialog,
@@ -142,9 +146,6 @@ export interface ResearchActivityFeedProps {
   onBack?: () => void;
   onForward?: () => void;
 }
-
-const MENU_HEIGHT_ESTIMATE = 132;
-const MENU_VIEWPORT_MARGIN = 8;
 
 type VirtualActivityRow = {
   kind: "event";
@@ -282,8 +283,8 @@ type FeedMenu =
       treeId: string;
       queryNodeId?: string;
       archived: boolean;
-      left: number;
-      top: number;
+      x: number;
+      y: number;
     };
 
 function ResearchActivityFeed({
@@ -334,7 +335,6 @@ function ResearchActivityFeed({
   const [deletingTree, setDeletingTree] = useState<ResearchTreeSummary | null>(null);
   const [recapDialogContent, setRecapDialogContent] =
     useState<ResearchNodeContent | null>(null);
-  const menuRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const initialScrollAnchorRef = useRef(initialScrollAnchor);
   const onScrollAnchorChangeRef = useRef(onScrollAnchorChange);
@@ -695,34 +695,34 @@ function ResearchActivityFeed({
   const moveTree = menu?.kind === "move" ? (treeById.get(menu.treeId) ?? null) : null;
   const menuDraft =
     menu?.kind === "draft" ? (drafts.find((draft) => draft.id === menu.draftId) ?? null) : null;
-  const closeMenu = useCallback((restoreFocus: boolean) => {
-    setMenu((current) => {
-      if (restoreFocus && current && current.kind !== "tree") {
-        current.anchor.focus({ preventScroll: true });
-      }
-      return null;
-    });
+  const menuStateRef = useRef(menu);
+  menuStateRef.current = menu;
+  // Escape returns focus itself; an item that keeps the user on the card
+  // (Bookmark, Move to) returns it to the … button.
+  const closeMenu = useCallback((restoreFocus = false) => {
+    const current = menuStateRef.current;
+    setMenu(null);
+    if (restoreFocus && current && current.kind !== "tree") {
+      current.anchor.focus({ preventScroll: true });
+    }
   }, []);
 
-  // A card moved to another place re-mounts there. Until it has, focus stays
-  // on its … button; afterwards it moves to the button in the new place.
+  // A card moved to another place re-mounts there: focus waits on its old …
+  // button, then moves to the … button in the new place (see
+  // researchCardRefocus).
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const refocusCardRef = useRef<{ cardId: string; until: number } | null>(null);
+  const refocusCardRef = useRef<{ cardId: string; anchor: HTMLElement } | null>(null);
   useLayoutEffect(() => {
     const pending = refocusCardRef.current;
     if (!pending) return;
-    if (Date.now() > pending.until) {
-      refocusCardRef.current = null;
-      return;
-    }
-    const active = document.activeElement;
-    if (active && active !== document.body && active.isConnected) return;
-    const button = rootRef.current?.querySelector<HTMLElement>(
-      `[data-research-card="${CSS.escape(pending.cardId)}"] .research-feed-card-menu`,
-    );
-    if (!button) return;
+    const step = researchCardRefocus(pending.anchor, document.activeElement, document.body);
+    if (step === "wait") return;
     refocusCardRef.current = null;
-    button.focus();
+    if (step === "drop") return;
+    const target =
+      researchFeedCardControl(pending.cardId, "menu") ??
+      rootRef.current?.querySelector<HTMLElement>(".research-feed-header-title");
+    target?.focus({ preventScroll: true });
   });
 
   // Esc on the delete confirmation returns to the header's Delete folder
@@ -733,24 +733,11 @@ function ResearchActivityFeed({
 
   function openTreeContextMenu(
     tree: ResearchTreeSummary,
-    clientX: number,
-    clientY: number,
+    x: number,
+    y: number,
     queryNodeId?: string,
   ) {
-    setMenu({
-      kind: "tree",
-      treeId: tree.id,
-      queryNodeId,
-      archived: Boolean(tree.archivedAt),
-      left: Math.max(
-        MENU_VIEWPORT_MARGIN,
-        Math.min(clientX, window.innerWidth - RESEARCH_TREE_MENU_WIDTH - MENU_VIEWPORT_MARGIN),
-      ),
-      top: Math.max(
-        MENU_VIEWPORT_MARGIN,
-        Math.min(clientY, window.innerHeight - MENU_HEIGHT_ESTIMATE - MENU_VIEWPORT_MARGIN),
-      ),
-    });
+    setMenu({ kind: "tree", treeId: tree.id, queryNodeId, archived: Boolean(tree.archivedAt), x, y });
   }
 
   function openRecapDialog(nodeId: string) {
@@ -758,71 +745,6 @@ function ResearchActivityFeed({
       .then((content) => setRecapDialogContent(content))
       .catch((err: unknown) => onError(err instanceof Error ? err.message : String(err)));
   }
-
-  // Context menu dismissal and its keycap shortcuts: outside mousedown,
-  // Escape, and viewport reflow close it; a bare keycap letter fires its item.
-  useEffect(() => {
-    if (menu?.kind !== "tree") {
-      return;
-    }
-    const closeOnOutside = (event: globalThis.MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setMenu(null);
-    };
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      // Captured and stopped, so Esc closes only the menu (not the drawer).
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        setMenu(null);
-        return;
-      }
-      if (event.metaKey || event.ctrlKey || event.altKey) {
-        return;
-      }
-      const tree = treeById.get(menu.treeId);
-      const key = event.key.toLowerCase();
-      if (!tree || (key !== "d" && (key !== "a" || menu.archived))) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      if (tree.runningCount > 0 && key === "d") {
-        return;
-      }
-      setMenu(null);
-      if (key === "d") setDeletingTree(tree);
-      else onMoveTree?.(tree.id, RESEARCH_ARCHIVE_FOLDER_ID);
-    };
-    const closeOnReflow = () => setMenu(null);
-    document.addEventListener("mousedown", closeOnOutside);
-    window.addEventListener("keydown", handleKeyDown, true);
-    window.addEventListener("resize", closeOnReflow);
-    window.addEventListener("scroll", closeOnReflow, true);
-    return () => {
-      document.removeEventListener("mousedown", closeOnOutside);
-      window.removeEventListener("keydown", handleKeyDown, true);
-      window.removeEventListener("resize", closeOnReflow);
-      window.removeEventListener("scroll", closeOnReflow, true);
-    };
-  });
-
-  // The height estimate that positioned the menu is a guess; clamp the real
-  // menu back inside the viewport once rendered.
-  useLayoutEffect(() => {
-    const element = menuRef.current;
-    if (menu?.kind !== "tree" || !element) {
-      return;
-    }
-    const height = element.getBoundingClientRect().height;
-    const top = Math.max(
-      MENU_VIEWPORT_MARGIN,
-      Math.min(menu.top, window.innerHeight - MENU_VIEWPORT_MARGIN - height),
-    );
-    if (top !== menu.top) {
-      element.style.top = `${top}px`;
-    }
-  }, [menu]);
 
   const menuTreeId = menu?.kind === "move" ? menu.treeId : null;
   const openMoveMenu = (treeId: string, anchor: HTMLElement) =>
@@ -1240,83 +1162,77 @@ function ResearchActivityFeed({
             onSetResearchBookmarked(moveTree.id, !moveTree.bookmarked);
           }}
           onMove={(place) => {
+            refocusCardRef.current = { cardId: moveTree.id, anchor: menu.anchor };
             closeMenu(true);
-            refocusCardRef.current = { cardId: moveTree.id, until: Date.now() + 3000 };
             onMoveTree?.(moveTree.id, place);
           }}
           onNewFolder={() => {
             const trigger = menu.anchor;
-            closeMenu(false);
+            closeMenu();
             onNewFolder?.(moveTree.id, trigger);
           }}
-          onClose={closeMenu}
+          onClose={() => closeMenu()}
         />
       ) : null}
       {menu?.kind === "draft" && menuDraft ? (
-        <ResearchActionMenu
+        <ResearchMenu
           anchor={menu.anchor}
           label="Draft actions"
-          onClose={closeMenu}
-          actions={[
-            {
-              icon: <FilePen size={15} aria-hidden="true" />,
-              label: "Open",
-              onSelect: () => {
-                closeMenu(false);
-                onOpenDraft?.(menuDraft);
-              },
-            },
-            {
-              icon: <Trash2 size={15} aria-hidden="true" />,
-              label: "Delete",
-              onSelect: () => {
-                closeMenu(false);
-                onDeleteDraft?.(menuDraft);
-              },
-            },
-          ]}
-        />
+          width={180}
+          onClose={() => closeMenu()}
+        >
+          <ResearchMenuItem
+            icon={<FilePen size={15} aria-hidden="true" />}
+            label="Open"
+            onSelect={() => {
+              closeMenu();
+              onOpenDraft?.(menuDraft);
+            }}
+          />
+          <ResearchMenuItem
+            icon={<Trash2 size={15} aria-hidden="true" />}
+            label="Delete"
+            onSelect={() => {
+              closeMenu();
+              onDeleteDraft?.(menuDraft);
+            }}
+          />
+        </ResearchMenu>
       ) : null}
-      {menu?.kind === "tree" && contextTree
-        ? createPortal(
-            <div
-              ref={menuRef}
-              className="popover-surface popover-surface--context pane-context-menu research-sidebar-menu"
-              role="menu"
-              aria-label={`Actions for ${contextTree.title}`}
-              style={{ left: menu.left, top: menu.top }}
-              onMouseDown={(event) => event.stopPropagation()}
-              onContextMenu={(event) => event.preventDefault()}
-            >
-              <ResearchTreeMenuItems
-                tree={contextTree}
-                archived={menu.archived}
-                onClose={() => setMenu(null)}
-                onRename={(tree) => {
-                  setMenu(null);
-                  setRenamingTree(tree);
-                }}
-                onArchive={
-                  onMoveTree ? (treeId) => onMoveTree(treeId, RESEARCH_ARCHIVE_FOLDER_ID) : undefined
-                }
-                onRestore={(treeId) => void onRestoreResearch(treeId)}
-                onDelete={(tree) => {
-                  setMenu(null);
-                  setDeletingTree(tree);
-                }}
-                onRegenerateSummary={
-                  contextQuery &&
-                  !menu.archived &&
-                  contextQuery.status === "complete" &&
-                  contextQuery.recap?.trim()
-                    ? () => openRecapDialog(contextQuery.nodeId)
-                    : undefined
-                }
-              />
-            </div>,
-            document.body,
-          )
-        : null}
+      {menu?.kind === "tree" && contextTree ? (
+        <ResearchMenu
+          anchor={researchMenuPoint(menu.x, menu.y)}
+          align="point"
+          label={`Actions for ${contextTree.title}`}
+          onClose={() => closeMenu()}
+        >
+          <ResearchTreeMenuItems
+            tree={contextTree}
+            archived={menu.archived}
+            onClose={() => setMenu(null)}
+            onRename={(tree) => {
+              setMenu(null);
+              setRenamingTree(tree);
+            }}
+            onArchive={
+              onMoveTree ? (treeId) => onMoveTree(treeId, RESEARCH_ARCHIVE_FOLDER_ID) : undefined
+            }
+            onRestore={(treeId) => void onRestoreResearch(treeId)}
+            onDelete={(tree) => {
+              setMenu(null);
+              setDeletingTree(tree);
+            }}
+            onRegenerateSummary={
+              contextQuery &&
+              !menu.archived &&
+              contextQuery.status === "complete" &&
+              contextQuery.recap?.trim()
+                ? () => openRecapDialog(contextQuery.nodeId)
+                : undefined
+            }
+          />
+        </ResearchMenu>
+      ) : null}
       {renamingTree ? (
         <ResearchTreeRenameDialog
           tree={renamingTree}

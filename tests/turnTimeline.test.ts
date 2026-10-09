@@ -9,12 +9,14 @@ import {
   formatAbsoluteMessageTimestamp,
   formatMessageTimestamp,
   formatPlainTextTranscript,
+  latestToolActivityLabel,
   messageItemCopyText,
   messageItemText,
   shouldShowAssistantGroupTimestamp,
   thinkingProseText,
   timelineItemsAfterLastToolCall,
   timelineItemsContainTranscriptActivity,
+  toolActivityLabel,
 } from "../src/lib/turnTimeline";
 import type { Turn, TurnBlock } from "../src/types";
 
@@ -817,4 +819,30 @@ test("formatMessageTimestamp falls back to absolute after 24 hours", () => {
     label,
     formatAbsoluteMessageTimestamp(earlierThisYear, now, locale),
   );
+});
+
+test("a running answer's status names its latest tool call", () => {
+  const items = buildTimelineItems([
+    turn("assistant", [toolUse("t1", "WebSearch", { query: "claude mods" })]),
+    turn("user", [{ type: "toolResult", toolUseId: "t1", content: "ok", isError: false }]),
+    turn("assistant", [toolUse("t2", "WebFetch", { url: "https://www.lesswrong.com/posts/x" })]),
+  ]);
+  assert.equal(latestToolActivityLabel(items), "reading lesswrong.com");
+  assert.equal(latestToolActivityLabel(buildTimelineItems([turn("assistant", [text("Hi")])])), null);
+});
+
+test("tool activity labels are short and plain", () => {
+  const entry = (name: string, input: unknown = {}) => ({
+    type: "tool" as const,
+    key: name,
+    name,
+    input,
+    isError: false,
+  });
+  assert.equal(toolActivityLabel(entry("WebFetch", { url: "not a url" })), "reading a page");
+  assert.equal(toolActivityLabel(entry("web_search")), "searching the web");
+  assert.equal(toolActivityLabel(entry("Read", { file_path: "/a/b/notes.md" })), "reading notes.md");
+  assert.equal(toolActivityLabel(entry("Grep")), "searching files");
+  assert.equal(toolActivityLabel(entry("functions.exec_command")), "running a command");
+  assert.equal(toolActivityLabel(entry("mcp__github__get_issue")), "using mcp__github__get_issue");
 });

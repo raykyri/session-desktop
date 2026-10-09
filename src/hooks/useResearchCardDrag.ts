@@ -168,10 +168,15 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       ghost = document.createElement("div");
       ghost.className = "research-drag-ghost";
       ghost.setAttribute("aria-hidden", "true");
-      ghost.textContent = (
+      // The clamp sits on an inner element: on the padded ghost itself a
+      // third line would show in the bottom padding.
+      const text = document.createElement("span");
+      text.className = "research-drag-ghost-text";
+      text.textContent = (
         card.querySelector(".research-feed-card-title, .research-feed-card-question")
           ?.textContent ?? ""
       ).trim();
+      ghost.appendChild(text);
       document.body.appendChild(ghost);
       card.classList.add("is-dragging");
       root.classList.add("is-research-dragging");
@@ -231,8 +236,16 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
       keyEvent.preventDefault();
       keyEvent.stopPropagation();
       cleanup();
-      // The release that follows a cancelled drag must not open the card.
-      window.addEventListener("pointerup", swallowNextClick, { capture: true, once: true });
+      // Suppress the click after a cancelled drag. If the pointer is released
+      // outside the window, remove this listener on the next press so that
+      // the next click is unaffected.
+      const onRelease = () => {
+        window.removeEventListener("pointerdown", forget, true);
+        swallowNextClick();
+      };
+      const forget = () => window.removeEventListener("pointerup", onRelease, true);
+      window.addEventListener("pointerup", onRelease, { capture: true, once: true });
+      window.addEventListener("pointerdown", forget, { capture: true, once: true });
     }
 
     window.addEventListener("pointermove", onMove);

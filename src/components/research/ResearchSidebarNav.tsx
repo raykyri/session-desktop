@@ -22,7 +22,7 @@ import {
   type ResearchJournalView,
 } from "../../lib/sidebarMode";
 import { ResearchPlaceIcon } from "./ResearchFeedChrome";
-import { ResearchActionMenu } from "./ResearchMoveMenu";
+import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
 
 interface NavEntry {
   view: ResearchJournalView;
@@ -84,6 +84,10 @@ interface ResearchSidebarNavProps {
   /** `trigger` is the row's … button, where focus returns after the dialog. */
   onRenameFolder: (folderId: string, trigger: HTMLElement) => void;
   onDeleteFolder: (folderId: string) => void;
+  /** Why the stored folders couldn't be loaded; only the system rows show
+   * meanwhile. */
+  foldersLoadError?: string | null;
+  onRetryFoldersLoad?: () => void;
   /** Shown beside Home while ⌘ is held. */
   homeShortcutHint?: string | null;
 }
@@ -99,6 +103,8 @@ export function ResearchSidebarNav({
   onNewFolder,
   onRenameFolder,
   onDeleteFolder,
+  foldersLoadError = null,
+  onRetryFoldersLoad,
   homeShortcutHint = null,
 }: ResearchSidebarNavProps) {
   const currentKey = current ? researchJournalViewKey(current) : null;
@@ -163,37 +169,44 @@ export function ResearchSidebarNav({
           <Plus size={15} aria-hidden="true" />
         </button>
       </div>
+      {foldersLoadError ? (
+        <div className="research-nav-note" role="status" title={foldersLoadError}>
+          Folders couldn't be loaded.{" "}
+          {onRetryFoldersLoad ? (
+            <button type="button" className="research-nav-note-action" onClick={onRetryFoldersLoad}>
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <nav className="research-nav is-folders" aria-label="Folders">
         {folderEntries(folders).map(renderRow)}
       </nav>
       {menu ? (
-        <ResearchActionMenu
+        <ResearchMenu
           anchor={menu.anchor}
           label={`Actions for ${folders.find((folder) => folder.id === menu.folderId)?.name ?? "folder"}`}
           align="start"
-          onClose={(restoreFocus) => {
-            setMenu(null);
-            if (restoreFocus) menu.anchor.focus();
-          }}
-          actions={[
-            {
-              icon: <Pencil size={15} aria-hidden="true" />,
-              label: "Rename…",
-              onSelect: () => {
-                setMenu(null);
-                onRenameFolder(menu.folderId, menu.anchor);
-              },
-            },
-            {
-              icon: <Trash2 size={15} aria-hidden="true" />,
-              label: "Delete…",
-              onSelect: () => {
-                setMenu(null);
-                onDeleteFolder(menu.folderId);
-              },
-            },
-          ]}
-        />
+          width={180}
+          onClose={() => setMenu(null)}
+        >
+          <ResearchMenuItem
+            icon={<Pencil size={15} aria-hidden="true" />}
+            label="Rename…"
+            onSelect={() => {
+              setMenu(null);
+              onRenameFolder(menu.folderId, menu.anchor);
+            }}
+          />
+          <ResearchMenuItem
+            icon={<Trash2 size={15} aria-hidden="true" />}
+            label="Delete…"
+            onSelect={() => {
+              setMenu(null);
+              onDeleteFolder(menu.folderId);
+            }}
+          />
+        </ResearchMenu>
       ) : null}
     </>
   );

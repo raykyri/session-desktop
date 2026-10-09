@@ -5455,6 +5455,7 @@ impl AppState {
             None,
             inline,
             Vec::new(),
+            None,
         )
     }
 
@@ -5479,9 +5480,41 @@ impl AppState {
             reply_anchor,
             inline,
             attachments,
+            None,
         )
     }
 
+    /// Creates a child to replace a failed or cancelled sibling when the user
+    /// edits its question. The sibling must have no children or active run.
+    /// Treats its inline slot as available so creation can precede removal.
+    /// The caller removes the sibling after creation succeeds; on error,
+    /// neither node is changed.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_research_child_replacing(
+        &self,
+        parent_node_id: &str,
+        prompt: String,
+        query_anchor: Option<ResearchHighlightAnchor>,
+        reply_anchor: Option<String>,
+        inline: bool,
+        attachments: Vec<crate::tweets::ResearchMessageAttachment>,
+        replaces: &str,
+    ) -> Result<ResearchNode, String> {
+        if let Some(anchor) = &query_anchor {
+            research::validate_highlight_anchor(anchor)?;
+        }
+        self.create_research_child_with_options(
+            parent_node_id,
+            prompt,
+            query_anchor,
+            reply_anchor,
+            inline,
+            attachments,
+            Some(replaces),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn create_research_child_with_options(
         &self,
         parent_node_id: &str,
@@ -5490,6 +5523,7 @@ impl AppState {
         reply_anchor: Option<String>,
         inline: bool,
         attachments: Vec<crate::tweets::ResearchMessageAttachment>,
+        replaces: Option<&str>,
     ) -> Result<ResearchNode, String> {
         let prompt = prompt.trim().to_string();
         if prompt.is_empty() {
@@ -5524,9 +5558,34 @@ impl AppState {
             // or cancelled continuation stays visible in the thread until it
             // is deliberately removed, which reopens the slot. Checked inside
             // the model lock so two concurrent submissions cannot both pass.
+            if let Some(replaced_id) = replaces {
+                let replaced = model
+                    .research_nodes
+                    .get(replaced_id)
+                    .ok_or_else(|| format!("research node {replaced_id} was not found"))?;
+                let replaceable = replaced.parent_node_id.as_deref() == Some(parent_node_id)
+                    && replaced.inline == inline
+                    && matches!(
+                        replaced.status,
+                        ResearchNodeStatus::Failed | ResearchNodeStatus::Cancelled
+                    )
+                    && !research_node_has_live_execution(replaced)
+                    && !model
+                        .research_nodes
+                        .values()
+                        .any(|node| node.parent_node_id.as_deref() == Some(replaced_id));
+                if !replaceable {
+                    return Err(
+                        "only a failed or stopped question with no follow-ups can be edited"
+                            .to_string(),
+                    );
+                }
+            }
             if inline
                 && model.research_nodes.values().any(|node| {
-                    node.parent_node_id.as_deref() == Some(parent_node_id) && node.inline
+                    node.parent_node_id.as_deref() == Some(parent_node_id)
+                        && node.inline
+                        && Some(node.id.as_str()) != replaces
                 })
             {
                 return Err("this answer already has an inline follow-up".to_string());
@@ -14143,6 +14202,65 @@ mod tests {
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(migrated["researchTreeOrder"], serde_json::json!(expected));
         std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn edited_question_is_created_before_failed_node_is_removed() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let detail = state
+            .create_research_tree(research_root_request("Root"))
+            .unwrap();
+        let root_id = detail.tree.root_node_id.clone();
+        {
+            let mut model = state.inner.model.lock().unwrap();
+            let root = model.research_nodes.get_mut(&root_id).unwrap();
+            root.status = ResearchNodeStatus::Complete;
+            root.native_session_id = Some("session-root".to_string());
+            root.completed_at = Some(now_millis());
+        }
+        let failed = state
+            .create_research_child(&root_id, "Wrong question".to_string(), None, true)
+            .unwrap();
+        state
+            .fail_research_node(&failed.id, "settled".to_string())
+            .unwrap();
+        // The failed inline follow-up holds the answer's inline slot.
+        assert!(
+            state
+                .create_research_child(&root_id, "Another".to_string(), None, true)
+                .is_err()
+        );
+        let replace = |prompt: &str, replaces: &str| {
+            state.create_research_child_replacing(
+                &root_id,
+                prompt.to_string(),
+                None,
+                None,
+                true,
+                Vec::new(),
+                replaces,
+            )
+        };
+        // A refused edit leaves the failed node in place.
+        assert!(replace("   ", &failed.id).is_err());
+        assert!(state.research_node(&failed.id).is_ok());
+        // Only a failed or stopped sibling with no active run can be replaced.
+        assert!(replace("Edited", &root_id).is_err());
+        let edited = replace("Edited question", &failed.id).unwrap();
+        assert!(edited.inline);
+        assert_eq!(edited.parent_node_id.as_deref(), Some(root_id.as_str()));
+        assert!(state.research_node(&failed.id).is_ok());
+        state.remove_research_branch(&failed.id).unwrap();
+        let nodes = state.research_tree(&detail.tree.id).unwrap().nodes;
+        let inline_children = nodes
+            .iter()
+            .filter(|node| node.parent_node_id.as_deref() == Some(root_id.as_str()) && node.inline)
+            .map(|node| node.id.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(inline_children, vec![edited.id.clone()]);
+        // A running node is not replaceable.
+        assert!(replace("Again", &edited.id).is_err());
     }
 
     #[test]

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  clipResearchSelectionToParagraph,
+  isLiveResearchSelection,
   researchSelectionActionPlacement,
   snapResearchDragSelection,
 } from "../src/lib/researchSelection";
@@ -201,4 +203,41 @@ test("rejects invalid offsets", () => {
 
 test("falls back cleanly when the locale cannot be segmented", () => {
   assert.equal(snapResearchDragSelection("answer", 1, 2, "not_a_locale"), null);
+});
+
+test("a selection that runs into the next paragraph is cut at the end of the first", () => {
+  const projection = "First paragraph text.  \nSecond paragraph.";
+  const paragraphEnd = projection.indexOf("\n");
+  // From "paragraph text." into "Second": cut before the trailing spaces.
+  assert.deepEqual(clipResearchSelectionToParagraph(projection, { start: 6, end: 30 }, paragraphEnd), {
+    start: 6,
+    end: 21,
+    crossed: true,
+  });
+  // Within one paragraph (no end given), or ending inside the first one: unchanged.
+  assert.deepEqual(clipResearchSelectionToParagraph(projection, { start: 6, end: 15 }, null), {
+    start: 6,
+    end: 15,
+    crossed: false,
+  });
+  assert.deepEqual(clipResearchSelectionToParagraph(projection, { start: 6, end: 15 }, paragraphEnd), {
+    start: 6,
+    end: 15,
+    crossed: false,
+  });
+  // Starting in the first paragraph's trailing whitespace: the cut would
+  // keep nothing, so the selection stays whole.
+  assert.deepEqual(clipResearchSelectionToParagraph(projection, { start: 21, end: 30 }, paragraphEnd), {
+    start: 21,
+    end: 30,
+    crossed: false,
+  });
+});
+
+test("only a selection in a streaming answer without a revision is live", () => {
+  assert.equal(isLiveResearchSelection("", "running"), true);
+  assert.equal(isLiveResearchSelection("", "queued"), true);
+  assert.equal(isLiveResearchSelection("rev-1", "running"), false);
+  assert.equal(isLiveResearchSelection("", "complete"), false);
+  assert.equal(isLiveResearchSelection("", undefined), false);
 });

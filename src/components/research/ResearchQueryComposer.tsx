@@ -362,30 +362,32 @@ export default function ResearchQueryComposer({
     } finally {
       setSubmitting(false);
     }
+    window.requestAnimationFrame(collapseIfFocusLeft);
   }
 
   const submitLabel =
     askMode === "network"
       ? submitting
-        ? "Posting"
+        ? "Posting…"
         : noteBodyIsSingleUrl(prompt)
           ? "Save link"
           : "Post to network"
       : submitting
-        ? "Starting research"
+        ? "Starting research…"
         : "Start research";
 
-  // The send button names its action; its tooltip and accessible name carry
-  // the longer form.
+  // The send button names its action; its tooltip carries the longer form.
+  // Its accessible name is the visible label (plus the longer form where that
+  // starts with it), so speech input can say what it shows.
   const submitShortLabel =
     askMode === "network"
       ? submitting
-        ? "Posting"
+        ? "Posting…"
         : noteBodyIsSingleUrl(prompt)
           ? "Save link"
           : "Post"
       : submitting
-        ? "Starting"
+        ? "Starting…"
         : "Ask";
 
   const modelOptions = useMemo(
@@ -451,6 +453,12 @@ export default function ResearchQueryComposer({
       { once: true },
     );
   };
+  // Ask and Save draft are disabled while they work, and a focused button
+  // that becomes disabled loses focus without a blur event; once focus has
+  // left the composer this way, it collapses as after a click elsewhere.
+  const collapseIfFocusLeft = () => {
+    if (!insideComposer(formRef.current, document.activeElement)) setFocused(false);
+  };
   useEffect(() => {
     if (!focused) return;
     const onPointerDown = (event: PointerEvent) => {
@@ -484,6 +492,7 @@ export default function ResearchQueryComposer({
     } finally {
       setSavingDraft(false);
     }
+    window.requestAnimationFrame(collapseIfFocusLeft);
   }
 
   const ready = focused && Boolean(prompt.trim()) && canSubmit;
@@ -623,7 +632,7 @@ export default function ResearchQueryComposer({
               type="submit"
               className="research-feed-button is-primary new-research-send"
               disabled={submitting || (askMode === "ai" && !launchReady)}
-              aria-label={submitLabel}
+              aria-label={submitLabel.startsWith(submitShortLabel) ? submitLabel : submitShortLabel}
               title={submitLabel}
             >
               <span>{submitShortLabel}</span>

@@ -4,6 +4,7 @@ import type { NoteReply, ResearchNode, ResearchTreeDetail } from "../../types";
 import { getResearchNodeContent } from "../../lib/api";
 import { recentResearchQueryFromNode } from "../../lib/activity";
 import { formatRelativeTime } from "../../lib/transcriptSessions";
+import { shortWhen } from "../../lib/shortTime";
 import {
   assistantTextFromTimelineItems,
   buildTimelineItems,
@@ -62,6 +63,23 @@ function useFollowUpAnswers(children: ResearchNode[]) {
   return answers;
 }
 
+/** What happened to a note, where an answer would be: "Saved the link and
+ * posted it to your network. No replies yet." */
+export function noteDeliveryText(
+  note: Pick<ResearchNode, "prompt" | "attachments" | "delivery">,
+  topLevelReplyCount: number,
+): string {
+  const post = note.attachments?.some((attachment) => attachment.tweet) ?? false;
+  // A note that carries a URL saved that link (with or without a comment).
+  const link = !post && /\bhttps?:\/\/\S/.test(note.prompt);
+  const saved = post ? "Saved the post" : link ? "Saved the link" : null;
+  if (!note.delivery) {
+    return saved ? `${saved}.` : "Saved.";
+  }
+  const posted = saved ? `${saved} and posted it to your network.` : "Posted to your network.";
+  return topLevelReplyCount === 0 ? `${posted} No replies yet.` : posted;
+}
+
 type ActivityEntry =
   | { kind: "reply"; at: number; reply: NoteReply }
   | { kind: "follow-up"; at: number; node: ResearchNode };
@@ -76,12 +94,15 @@ export default function ResearchNoteDocument({
   note,
   archived,
   actions,
+  requireCmdEnterToSend,
   onSelectNode,
 }: {
   detail: ResearchTreeDetail;
   note: ResearchNode;
   archived: boolean;
   actions: NoteActions;
+  /** The "Require ⌘↵ to send" setting, for the follow-up composer. */
+  requireCmdEnterToSend: boolean;
   onSelectNode: (nodeId: string) => void;
 }) {
   const [target, setTarget] = useState<NoteReplyTarget | null>(null);
@@ -100,11 +121,7 @@ export default function ResearchNoteDocument({
   const replies = note.delivery?.replies ?? [];
   const topLevelReplies = replies.filter((reply) => !reply.inReplyTo);
   const modelLabel = formatResearchModelSummary(note.adapter, note.model);
-  const deliveryLabel = note.delivery
-    ? "Posted to network"
-    : note.attachments?.some((attachment) => attachment.tweet)
-      ? "Saved post"
-      : "Saved link";
+  const deliveryText = noteDeliveryText(note, topLevelReplies.length);
   const activity: ActivityEntry[] = [
     ...topLevelReplies.map((reply) => ({ kind: "reply" as const, at: reply.createdAt, reply })),
     ...children.map((node) => ({ kind: "follow-up" as const, at: node.createdAt, node })),
@@ -194,74 +211,83 @@ export default function ResearchNoteDocument({
 
   return (
     <div className="note-document">
-      <div className="research-prompt-block">
-        {parent ? (
-          <button
-            type="button"
-            className="note-document-parent"
-            onClick={() => onSelectNode(parent.id)}
-          >
-            ↳ Network follow-up of “{excerpt(parent.prompt, 60)}”
-          </button>
-        ) : null}
-        <ResearchUserMessage className="research-prompt note-document-heading has-trailing-metadata">
-          <NoteBody prompt={note.prompt} attachments={note.attachments} />
-        </ResearchUserMessage>
-        <div className="note-document-meta">
-          <span className="research-prompt-metadata">
-            {deliveryLabel} · {formatRelativeTime(note.createdAt)}
-            {note.delivery && topLevelReplies.length === 0 ? " · No replies yet" : ""}
-          </span>
+      {/* The note reads as a turn: the note where a question sits, its
+          delivery and activity where an answer sits. */}
+      <article className="research-turn note-turn">
+        <div className="research-turn-question">
+          {parent ? (
+            <button
+              type="button"
+              className="note-document-parent"
+              onClick={() => onSelectNode(parent.id)}
+            >
+              ↳ Network follow-up of “{excerpt(parent.prompt, 60)}”
+            </button>
+          ) : null}
+          <ResearchUserMessage className="research-prompt research-turn-prompt">
+            <NoteBody prompt={note.prompt} attachments={note.attachments} />
+          </ResearchUserMessage>
+          <div className="research-turn-meta">
+            <time
+              dateTime={new Date(note.createdAt).toISOString()}
+              title={new Date(note.createdAt).toLocaleString()}
+            >
+              {shortWhen(note.createdAt, Date.now())}
+            </time>
+          </div>
         </div>
-      </div>
-
-      {activity.length > 0 ? (
-        <section className="note-document-group" aria-label="Activity">
-          <h2 className="note-document-group-label">
-            Activity <span className="note-document-group-count">{activity.length}</span>
-          </h2>
-          <ol className="note-thread-list">
-            {activity.map((entry) =>
-              entry.kind === "reply" ? (
-                <NoteReplyItem
-                  key={entry.reply.id}
-                  nodeId={note.id}
-                  reply={entry.reply}
-                  responses={replies.filter((reply) => reply.inReplyTo === entry.reply.id)}
-                  archived={archived}
-                  actions={actions}
-                  onAskAbout={setTarget}
-                />
-              ) : (
-                renderFollowUp(entry.node)
-              ),
-            )}
-          </ol>
-        </section>
-      ) : null}
+        <div className="research-turn-answer">
+          <section className="research-response note-response" aria-label="Delivery and activity">
+            <p className="note-document-status">{deliveryText}</p>
+            {activity.length > 0 ? (
+              <section className="note-document-group" aria-label="Activity">
+                <h2 className="note-document-group-label">
+                  Activity <span className="note-document-group-count">{activity.length}</span>
+                </h2>
+                <ol className="note-thread-list">
+                  {activity.map((entry) =>
+                    entry.kind === "reply" ? (
+                      <NoteReplyItem
+                        key={entry.reply.id}
+                        nodeId={note.id}
+                        reply={entry.reply}
+                        responses={replies.filter((reply) => reply.inReplyTo === entry.reply.id)}
+                        archived={archived}
+                        actions={actions}
+                        onAskAbout={setTarget}
+                      />
+                    ) : (
+                      renderFollowUp(entry.node)
+                    ),
+                  )}
+                </ol>
+              </section>
+            ) : null}
+          </section>
+        </div>
+      </article>
 
       {!archived ? (
-        <div className="note-document-composer">
-          <NoteFollowUpField
-            key={target?.id ?? "note"}
-            networkAvailable={Boolean(note.delivery)}
-            modelLabel={modelLabel}
-            target={target}
-            autoFocus={target !== null}
-            placeholder="Ask a follow-up about this note"
-            onClearTarget={() => setTarget(null)}
-            onSubmit={(prompt, network) =>
-              actions
-                .onAskFollowUp({
-                  parentNodeId: note.id,
-                  prompt,
-                  network,
-                  replyAnchor: network ? null : target?.id ?? null,
-                })
-                .then(() => setTarget(null))
-            }
-          />
-        </div>
+        <NoteFollowUpField
+          key={target?.id ?? "note"}
+          networkAvailable={Boolean(note.delivery)}
+          modelLabel={modelLabel}
+          target={target}
+          autoFocus={target !== null}
+          placeholder="Ask a follow-up about this note"
+          requireCmdEnter={requireCmdEnterToSend}
+          onClearTarget={() => setTarget(null)}
+          onSubmit={(prompt, network) =>
+            actions
+              .onAskFollowUp({
+                parentNodeId: note.id,
+                prompt,
+                network,
+                replyAnchor: network ? null : target?.id ?? null,
+              })
+              .then(() => setTarget(null))
+          }
+        />
       ) : null}
     </div>
   );

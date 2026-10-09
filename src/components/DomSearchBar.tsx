@@ -5,6 +5,7 @@ import {
   applySearchHighlights,
   clearSearchHighlights,
   collectSearchRanges,
+  mergeSearchMatches,
   nearestSearchRangeIndex,
   scrollSearchRangeIntoView,
 } from "../lib/transcriptSearch";
@@ -12,6 +13,10 @@ import PaneSearchBar from "./PaneSearchBar";
 
 interface DomSearchBarProps {
   active: boolean;
+  /** Called when ⌘F arrives while the bar is inactive (its pane is hidden):
+   * the host shows the pane, and the bar opens. Without it an inactive bar
+   * leaves ⌘F alone. */
+  onActivate?: () => void;
   placeholder: string;
   rootRef: RefObject<HTMLElement | null>;
   viewportRef?: RefObject<HTMLElement | null>;
@@ -45,6 +50,7 @@ function sameRange(a: Range, b: Range) {
 // collection, highlighting, navigation, and content-change rescans.
 export default function DomSearchBar({
   active,
+  onActivate,
   placeholder,
   rootRef,
   viewportRef = rootRef,
@@ -105,8 +111,11 @@ export default function DomSearchBar({
   // Cmd-F (macOS) / Ctrl-F opens the active rendered pane's find bar. A native
   // terminal keeps ownership while focused, and editables outside this pane
   // keep the chord for their own surface.
+  const onActivateRef = useRef(onActivate);
+  onActivateRef.current = onActivate;
+  const canActivate = Boolean(onActivate);
   useEffect(() => {
-    if (!active) {
+    if (!active && !canActivate) {
       return;
     }
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -132,6 +141,9 @@ export default function DomSearchBar({
       }
       event.preventDefault();
       event.stopPropagation();
+      if (!active) {
+        onActivateRef.current?.();
+      }
       setOpen(true);
       // Select even when the bar is already open, matching native terminal find.
       window.requestAnimationFrame(() => {
@@ -141,7 +153,7 @@ export default function DomSearchBar({
     };
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [active, hotkeyScopeRef]);
+  }, [active, canActivate, hotkeyScopeRef]);
 
   useEffect(() => {
     if (open) {
@@ -202,25 +214,24 @@ export default function DomSearchBar({
     if (searched.length === 0 || !viewport) {
       return;
     }
-    const ranges =
+    // Content changes (streaming text, an answer expanding to show a match)
+    // keep the current match when it is still there.
+    const { matches: ranges, index } = mergeSearchMatches(
       debouncedTerm === ""
         ? []
-        : searched.flatMap((root) =>
+        : searched.map((root) =>
             collectSearchRanges(root, debouncedTerm, {
               caseSensitive,
               regex: useRegex,
             }),
-          );
-    // Content changes (streaming text, an answer expanding to show a match)
-    // keep the current match when it is still there.
-    const current = contentDriven ? rangesRef.current[resultsRef.current.index] : undefined;
-    const kept = current ? ranges.findIndex((range) => sameRange(range, current)) : -1;
+          ),
+      contentDriven ? rangesRef.current[resultsRef.current.index] : undefined,
+      sameRange,
+      (found) => nearestSearchRangeIndex(viewport, found),
+    );
     rangesRef.current = ranges;
     suppressScrollRef.current = contentDriven;
-    setResults({
-      index: kept >= 0 ? kept : nearestSearchRangeIndex(viewport, ranges),
-      count: ranges.length,
-    });
+    setResults({ index, count: ranges.length });
   };
 
   // Term and option changes are user-driven, so update immediately after the
