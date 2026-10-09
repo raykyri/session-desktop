@@ -90,11 +90,81 @@ impl ResearchFolderState {
     }
 }
 
+/// Membership value that files a tree in the built-in Drafts folder. No
+/// `ResearchFolder` record carries this id.
+pub const RESEARCH_DRAFTS_FOLDER_ID: &str = "system:drafts";
+/// Built-in sidebar sections whose collapsed flag is stored in
+/// `ResearchFolderState::collapsed` next to user folder ids.
+const RESEARCH_SYSTEM_FOLDER_IDS: [&str; 3] = [
+    RESEARCH_DRAFTS_FOLDER_ID,
+    "system:archive",
+    "system:unfiled",
+];
+const RESEARCH_SYSTEM_FOLDER_ID_PREFIX: &str = "system:";
+/// Names of the sidebar's built-in sections, compared case-insensitively.
+const RESERVED_RESEARCH_FOLDER_NAMES: [&str; 4] = ["Home", "Unfiled", "Drafts", "Archive"];
+
+fn is_research_system_folder_id(id: &str) -> bool {
+    RESEARCH_SYSTEM_FOLDER_IDS.contains(&id)
+}
+
+/// Trims folder names and rejects empty, reserved, and (per workspace,
+/// case-insensitively) duplicate names, plus ids in the `system:` namespace.
+/// A folder whose id and trimmed name match `current` is not re-checked, so a
+/// state saved before this validation existed stays writable.
+pub fn validate_research_folders(
+    next: &mut ResearchFolderState,
+    current: &ResearchFolderState,
+) -> Result<(), String> {
+    let unchanged = current
+        .folders
+        .iter()
+        .map(|folder| (folder.id.as_str(), folder.name.trim()))
+        .collect::<HashSet<_>>();
+    for folder in &mut next.folders {
+        folder.name = folder.name.trim().to_string();
+    }
+    let mut names_by_workspace: HashMap<(&str, String), usize> = HashMap::new();
+    for folder in &next.folders {
+        *names_by_workspace
+            .entry((folder.workspace_id.as_str(), folder.name.to_lowercase()))
+            .or_default() += 1;
+    }
+    for folder in &next.folders {
+        if unchanged.contains(&(folder.id.as_str(), folder.name.as_str())) {
+            continue;
+        }
+        if folder.id.trim().is_empty() {
+            return Err("Folder ids cannot be empty.".to_string());
+        }
+        if folder.id.starts_with(RESEARCH_SYSTEM_FOLDER_ID_PREFIX) {
+            return Err(format!("The folder id \"{}\" is reserved.", folder.id));
+        }
+        if folder.name.is_empty() {
+            return Err("Folder names cannot be empty.".to_string());
+        }
+        if RESERVED_RESEARCH_FOLDER_NAMES
+            .iter()
+            .any(|reserved| reserved.eq_ignore_ascii_case(&folder.name))
+        {
+            return Err(format!("The name \"{}\" is reserved.", folder.name));
+        }
+        let key = (folder.workspace_id.as_str(), folder.name.to_lowercase());
+        if names_by_workspace.get(&key).copied().unwrap_or_default() > 1 {
+            return Err(format!(
+                "A folder named \"{}\" already exists.",
+                folder.name
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Structural normalization independent of which trees exist: dedupe folder
-/// ids, drop membership pointing at folders that are not present, and drop
-/// collapsed entries for absent folders. Stars are only deduped — they may
-/// reference trees this function has no view of. Mirrors the frontend's
-/// `loadResearchFolderState` so a value accepted there is accepted here.
+/// ids, drop membership pointing at folders that are not present (the system
+/// Drafts folder excepted), and drop collapsed entries for absent folders
+/// other than the system sections. Stars are only deduped — they may
+/// reference trees this function has no view of.
 pub fn normalize_research_folder_state(state: &mut ResearchFolderState) {
     let mut seen = HashSet::new();
     state
@@ -105,15 +175,16 @@ pub fn normalize_research_folder_state(state: &mut ResearchFolderState) {
         .iter()
         .map(|folder| folder.id.clone())
         .collect::<HashSet<_>>();
-    state
-        .membership
-        .retain(|_, folder_id| folder_ids.contains(folder_id));
+    state.membership.retain(|_, folder_id| {
+        folder_ids.contains(folder_id) || folder_id == RESEARCH_DRAFTS_FOLDER_ID
+    });
     let mut seen_star = HashSet::new();
     state.starred.retain(|id| seen_star.insert(id.clone()));
     let mut seen_collapsed = HashSet::new();
-    state
-        .collapsed
-        .retain(|id| folder_ids.contains(id) && seen_collapsed.insert(id.clone()));
+    state.collapsed.retain(|id| {
+        (folder_ids.contains(id) || is_research_system_folder_id(id))
+            && seen_collapsed.insert(id.clone())
+    });
 }
 
 /// Drops every part of the grouping that references a tree that no longer
@@ -137,7 +208,9 @@ pub fn reconcile_research_folder_state(
     state
         .starred
         .retain(|id| known_tree_ids.contains(id) || folder_ids.contains(id));
-    state.collapsed.retain(|id| folder_ids.contains(id));
+    state
+        .collapsed
+        .retain(|id| folder_ids.contains(id) || is_research_system_folder_id(id));
 }
 
 /// Drops the supplied trees out of whatever folder holds them and out of the
@@ -176,6 +249,19 @@ pub fn remove_research_workspace_folders(state: &mut ResearchFolderState, worksp
         .retain(|_, folder_id| !removed.contains(folder_id));
     state.starred.retain(|id| !removed.contains(id));
     state.collapsed.retain(|id| !removed.contains(id));
+}
+
+/// An unsent research question saved from the composer, scoped to one
+/// research workspace. Stored as one vector in `state.json`; its order is the
+/// display order within each workspace.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResearchDraft {
+    pub id: String,
+    pub workspace_id: String,
+    pub prompt: String,
+    pub created_at: u128,
+    pub updated_at: u128,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -480,6 +566,12 @@ pub struct ResearchNode {
     pub started_at: Option<u128>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<u128>,
+    /// When the user promoted this follow-up into its tree's Home feed entry.
+    /// Never set on a root. Absent when unpromoted, so state files and
+    /// archives without promotions serialize byte-identically; older builds
+    /// ignore the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub promoted_at: Option<u128>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub highlights: Vec<ResearchHighlight>,
 }
@@ -527,6 +619,15 @@ pub struct RecentResearchQuery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
     pub created_at: u128,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub promoted_at: Option<u128>,
+    /// Non-inline edges on the path from the tree's root to this node: 0 for
+    /// the root and its inline continuations, 1 for a branch of the root.
+    pub branch_depth: u32,
+    /// Root entries only: every promoted node in the tree, depth-first with
+    /// siblings oldest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub promoted: Vec<RecentResearchQuery>,
     /// Current answer recap, when one has been generated for this run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recap: Option<String>,
@@ -564,6 +665,9 @@ impl From<&ResearchNode> for RecentResearchQuery {
             status: node.status,
             error: node.error.clone(),
             created_at: node.created_at,
+            promoted_at: node.promoted_at,
+            branch_depth: 0,
+            promoted: Vec::new(),
             recap: node.recap.as_ref().and_then(|recap| {
                 let text = recap.text.trim();
                 (!text.is_empty()).then(|| text.to_string())
@@ -716,6 +820,7 @@ pub fn new_note_node(
         created_at: now,
         started_at: None,
         completed_at: Some(now),
+        promoted_at: None,
         highlights: Vec::new(),
     }
 }
@@ -3304,6 +3409,110 @@ mod tests {
         assert_eq!(state.collapsed, vec!["f1".to_string()]);
     }
 
+    #[test]
+    fn normalize_and_reconcile_keep_system_folder_ids() {
+        let mut state = folder_state(
+            &[("f1", "ws")],
+            &[("t1", RESEARCH_DRAFTS_FOLDER_ID), ("t2", "system:archive")],
+            &[],
+            &[
+                "system:drafts",
+                "system:archive",
+                "system:unfiled",
+                "system:other",
+                "system:drafts",
+            ],
+        );
+        normalize_research_folder_state(&mut state);
+        // Drafts is a membership target; Archive is not (it stays archivedAt).
+        assert_eq!(
+            state.membership,
+            HashMap::from([("t1".to_string(), RESEARCH_DRAFTS_FOLDER_ID.to_string())])
+        );
+        let system_collapsed = vec![
+            "system:drafts".to_string(),
+            "system:archive".to_string(),
+            "system:unfiled".to_string(),
+        ];
+        assert_eq!(state.collapsed, system_collapsed);
+        reconcile_research_folder_state(&mut state, &HashSet::from(["t1".to_string()]));
+        assert_eq!(
+            state.membership,
+            HashMap::from([("t1".to_string(), RESEARCH_DRAFTS_FOLDER_ID.to_string())])
+        );
+        assert_eq!(state.collapsed, system_collapsed);
+    }
+
+    #[test]
+    fn validate_research_folders_trims_and_rejects_bad_names() {
+        let current = ResearchFolderState::default();
+        let named = |entries: &[(&str, &str, &str)]| ResearchFolderState {
+            folders: entries
+                .iter()
+                .map(|(id, name, workspace)| ResearchFolder {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    workspace_id: workspace.to_string(),
+                })
+                .collect(),
+            ..ResearchFolderState::default()
+        };
+
+        let mut state = named(&[("f1", "  Reading  ", "ws-a"), ("f2", "reading", "ws-b")]);
+        validate_research_folders(&mut state, &current).unwrap();
+        assert_eq!(state.folders[0].name, "Reading");
+
+        let mut duplicate = named(&[("f1", "Reading", "ws-a"), ("f2", " reading", "ws-a")]);
+        assert_eq!(
+            validate_research_folders(&mut duplicate, &current).unwrap_err(),
+            "A folder named \"Reading\" already exists."
+        );
+        for reserved in ["home", "UNFILED", " Drafts ", "archive"] {
+            let mut state = named(&[("f1", reserved, "ws-a")]);
+            assert_eq!(
+                validate_research_folders(&mut state, &current).unwrap_err(),
+                format!("The name \"{}\" is reserved.", reserved.trim())
+            );
+        }
+        let mut empty = named(&[("f1", "   ", "ws-a")]);
+        assert_eq!(
+            validate_research_folders(&mut empty, &current).unwrap_err(),
+            "Folder names cannot be empty."
+        );
+        let mut system_id = named(&[(RESEARCH_DRAFTS_FOLDER_ID, "Mine", "ws-a")]);
+        assert!(
+            validate_research_folders(&mut system_id, &current)
+                .unwrap_err()
+                .contains("reserved")
+        );
+    }
+
+    #[test]
+    fn validate_research_folders_accepts_unchanged_legacy_names() {
+        // Folders saved before validation existed must stay writable while
+        // they are unchanged; a new or renamed folder is still checked.
+        let legacy = ResearchFolderState {
+            folders: vec![
+                ResearchFolder {
+                    id: "f1".to_string(),
+                    name: "Drafts".to_string(),
+                    workspace_id: "ws".to_string(),
+                },
+                ResearchFolder {
+                    id: "f2".to_string(),
+                    name: "drafts".to_string(),
+                    workspace_id: "ws".to_string(),
+                },
+            ],
+            ..ResearchFolderState::default()
+        };
+        let mut next = legacy.clone();
+        next.folders.push(folder("f3", "ws"));
+        validate_research_folders(&mut next, &legacy).unwrap();
+        next.folders[2].name = "DRAFTS".to_string();
+        assert!(validate_research_folders(&mut next, &legacy).is_err());
+    }
+
     fn temp_workspace() -> PathBuf {
         use std::sync::atomic::{AtomicU64, Ordering};
         static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -3383,6 +3592,7 @@ mod tests {
             created_at: 1,
             started_at: Some(1),
             completed_at: Some(2),
+            promoted_at: None,
             highlights: Vec::new(),
         };
         DetachedResearchArchive {

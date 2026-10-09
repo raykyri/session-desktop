@@ -1,4 +1,4 @@
-use crate::research::{ResearchFolderState, ResearchNode, ResearchTree};
+use crate::research::{ResearchDraft, ResearchFolderState, ResearchNode, ResearchTree};
 use crate::state::{ArtifactInfo, GlobalDraft, PaneInfo, PaneSplitInfo, QueuedTurn};
 use crate::thread_graph::ThreadRecord;
 use crate::user_notifications::NotificationLog;
@@ -120,6 +120,11 @@ pub struct PersistedState {
     /// files from builds that predate folders round-trip byte-identically.
     #[serde(default, skip_serializing_if = "ResearchFolderState::is_empty")]
     pub research_folders: ResearchFolderState,
+    /// Unsent research questions saved from the composer, in display order.
+    /// Omitted when empty so state files without drafts round-trip
+    /// byte-identically.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub research_drafts: Vec<ResearchDraft>,
     /// `session send` notification history. Optional and dropped-if-empty so
     /// older state files round-trip byte-identically.
     #[serde(default, skip_serializing_if = "NotificationLog::is_empty")]
@@ -148,6 +153,7 @@ impl Default for PersistedState {
             research_tree_order: Vec::new(),
             research_nodes: HashMap::new(),
             research_folders: ResearchFolderState::default(),
+            research_drafts: Vec::new(),
             notification_log: NotificationLog::default(),
         }
     }
@@ -696,6 +702,7 @@ fn deserialize_lenient(value: Value) -> (PersistedState, Vec<String>) {
         },
         None => ResearchFolderState::default(),
     };
+    state.research_drafts = take_vec(&mut map, "researchDrafts", "research draft", &mut dropped);
     // Home's former journal (saved links and X posts) was replaced by note
     // trees without migration; a leftover `journal` key is discarded.
     map.remove("journal");
@@ -1074,6 +1081,40 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("session-persist-{nanos}-{seq}"));
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn research_drafts_round_trip_and_are_omitted_when_empty() {
+        let root = temp_root();
+        save(&root, &PersistedState::default()).unwrap();
+        let raw: Value = serde_json::from_slice(&fs::read(state_path(&root)).unwrap()).unwrap();
+        assert!(raw.get("researchDrafts").is_none());
+
+        let drafts = vec![
+            ResearchDraft {
+                id: "research-draft-2".to_string(),
+                workspace_id: "ws-a".to_string(),
+                prompt: "Newer".to_string(),
+                created_at: 200,
+                updated_at: 250,
+            },
+            ResearchDraft {
+                id: "research-draft-1".to_string(),
+                workspace_id: "ws-a".to_string(),
+                prompt: "Older".to_string(),
+                created_at: 100,
+                updated_at: 100,
+            },
+        ];
+        let state = PersistedState {
+            research_drafts: drafts.clone(),
+            ..Default::default()
+        };
+        save(&root, &state).unwrap();
+        let outcome = load_with_diagnostics(&root);
+        assert!(outcome.warning.is_none());
+        assert_eq!(outcome.state.research_drafts, drafts);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
