@@ -316,6 +316,9 @@ struct AppStateInner {
     next_transcript_binding_candidate: AtomicU64,
     next_id: AtomicU64,
     app_handle: Mutex<Option<AppHandle>>,
+    // Tests run without an AppHandle; emitted events are kept here instead.
+    #[cfg(test)]
+    emitted_events: Mutex<Vec<SessionEvent>>,
     // Persistence stays off until restore_session() runs so constructing a state
     // (notably in tests) never touches disk. Once enabled, model mutations mark
     // the state dirty and the persister thread snapshots it to
@@ -479,6 +482,9 @@ struct Model {
     /// never drift; reconciled against the live tree set at load and scrubbed
     /// when a tree is removed.
     research_folders: research::ResearchFolderState,
+    /// Unsent research questions from the composer, all workspaces in one
+    /// vector; each workspace's subsequence is its display order.
+    research_drafts: Vec<research::ResearchDraft>,
     /// Persistent feed of `session send` notifications. Oldest first; capped by
     /// the notifications module. Distinct from the research Journal.
     notification_log: crate::user_notifications::NotificationLog,
@@ -1750,6 +1756,8 @@ impl AppState {
                 next_transcript_binding_candidate: AtomicU64::new(1),
                 next_id: AtomicU64::new(1),
                 app_handle: Mutex::new(None),
+                #[cfg(test)]
+                emitted_events: Mutex::new(Vec::new()),
                 persist_enabled: AtomicBool::new(false),
                 persist_lock: Mutex::new(()),
                 research_document_lock: Mutex::new(()),
@@ -2624,6 +2632,7 @@ impl AppState {
             // was off (deleted elsewhere) drop here instead of on every refresh
             // against a possibly-incomplete navigation snapshot.
             model.research_folders = persisted.research_folders;
+            model.research_drafts = persisted.research_drafts;
             model.notification_log = persisted.notification_log;
             let known_research_tree_ids =
                 model.research_trees.keys().cloned().collect::<HashSet<_>>();
@@ -2890,6 +2899,7 @@ impl AppState {
                 research_tree_order: ordered_research_tree_ids(&model),
                 research_nodes: model.research_nodes.clone(),
                 research_folders: model.research_folders.clone(),
+                research_drafts: model.research_drafts.clone(),
                 notification_log: model.notification_log.clone(),
             }
         };
@@ -3130,6 +3140,10 @@ impl AppState {
     }
 
     pub fn emit(&self, event: SessionEvent) {
+        #[cfg(test)]
+        if let Ok(mut events) = self.inner.emitted_events.lock() {
+            events.push(event.clone());
+        }
         // Clone the handle under the lock but emit outside it. emit() serializes
         // the payload (turn.updated events carry whole turn arrays) and enqueues
         // the IPC; holding the mutex across that serialized every event in the
@@ -3139,6 +3153,11 @@ impl AppState {
         if let Some(app_handle) = app_handle {
             let _ = app_handle.emit("session-event", event);
         }
+    }
+
+    #[cfg(test)]
+    fn take_emitted_events(&self) -> Vec<SessionEvent> {
+        std::mem::take(&mut *self.inner.emitted_events.lock().unwrap())
     }
 
     pub fn mark_exit_confirmed(&self) {
@@ -3842,7 +3861,7 @@ impl AppState {
     }
 
     /// Home's feed: research roots (runs and notes), newest first, each with
-    /// its direct follow-ups oldest first.
+    /// its direct follow-ups oldest first and every promoted node in its tree.
     pub fn list_recent_activity(
         &self,
         limit: usize,
@@ -3898,37 +3917,69 @@ impl AppState {
             }
         });
         let mut children_by_parent: HashMap<&str, Vec<&ResearchNode>> = HashMap::new();
-        for node in model
-            .research_nodes
-            .values()
-            .filter(|node| is_feed_kind(node.kind))
-        {
+        let mut trees_with_promotions = HashSet::new();
+        for node in model.research_nodes.values() {
             if let Some(parent_id) = node.parent_node_id.as_deref() {
                 children_by_parent.entry(parent_id).or_default().push(node);
             }
+            if node.promoted_at.is_some() {
+                trees_with_promotions.insert(node.tree_id.as_str());
+            }
         }
+        let sorted_children = |parent: &ResearchNode| {
+            let mut children = children_by_parent
+                .get(parent.id.as_str())
+                .map(|children| {
+                    children
+                        .iter()
+                        .copied()
+                        .filter(|child| child.tree_id == parent.tree_id)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            children.sort_by(|left, right| {
+                left.created_at
+                    .cmp(&right.created_at)
+                    .then_with(|| left.id.cmp(&right.id))
+            });
+            children
+        };
+        let feed_entry = |parent: &ResearchNode, node: &ResearchNode, branch_depth: u32| {
+            let mut entry = RecentResearchQuery::from(node);
+            entry.reply_anchor_author = research::reply_anchor_author(parent, node);
+            entry.branch_depth = branch_depth;
+            entry
+        };
         let items = roots
             .into_iter()
             .map(|root| {
                 let mut query = RecentResearchQuery::from(root);
-                let mut children = children_by_parent
-                    .remove(root.id.as_str())
-                    .unwrap_or_default();
-                children.retain(|child| child.tree_id == root.tree_id);
-                children.sort_by(|left, right| {
-                    left.created_at
-                        .cmp(&right.created_at)
-                        .then_with(|| left.id.cmp(&right.id))
-                });
+                let children = sorted_children(root);
                 query.children = children
-                    .into_iter()
-                    .map(|child| {
-                        let mut child_query = RecentResearchQuery::from(child);
-                        child_query.reply_anchor_author =
-                            research::reply_anchor_author(root, child);
-                        child_query
-                    })
+                    .iter()
+                    .filter(|child| is_feed_kind(child.kind))
+                    .map(|child| feed_entry(root, child, u32::from(!child.inline)))
                     .collect();
+                if trees_with_promotions.contains(root.tree_id.as_str()) {
+                    // Depth-first in sibling order: the stack holds each
+                    // level reversed so the oldest sibling pops first.
+                    let mut stack = children
+                        .into_iter()
+                        .rev()
+                        .map(|child| (root, child, u32::from(!child.inline)))
+                        .collect::<Vec<_>>();
+                    while let Some((parent, node, depth)) = stack.pop() {
+                        if node.promoted_at.is_some() {
+                            query.promoted.push(feed_entry(parent, node, depth));
+                        }
+                        stack.extend(
+                            sorted_children(node)
+                                .into_iter()
+                                .rev()
+                                .map(|child| (node, child, depth + u32::from(!child.inline))),
+                        );
+                    }
+                }
                 query
             })
             .collect();
@@ -3958,7 +4009,9 @@ impl AppState {
     /// existence. Tree-existence reconciliation belongs at load and at actual
     /// tree removal, under the authoritative tree set; pruning here against a
     /// caller that momentarily sees fewer trees is exactly the loss this work
-    /// removes. Returns the normalized state the frontend should adopt.
+    /// removes. Folder names are validated by
+    /// [`research::validate_research_folders`]. Returns the normalized state
+    /// the frontend should adopt.
     pub fn set_research_folders(
         &self,
         mut folders: research::ResearchFolderState,
@@ -3970,6 +4023,7 @@ impl AppState {
                 .model
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
+            research::validate_research_folders(&mut folders, &model.research_folders)?;
             if model.research_folders == folders {
                 return Ok(folders);
             }
@@ -4312,6 +4366,7 @@ impl AppState {
             created_at: now,
             started_at: None,
             completed_at: None,
+            promoted_at: None,
             highlights: Vec::new(),
         };
         self.admit_research_root(&tree, &mut node)?;
@@ -4403,6 +4458,7 @@ impl AppState {
             created_at: now,
             started_at: None,
             completed_at: Some(now),
+            promoted_at: None,
             highlights: Vec::new(),
         };
         if let Err(err) = self.admit_research_root(&tree, &mut node) {
@@ -4804,6 +4860,7 @@ impl AppState {
             created_at: now,
             started_at: None,
             completed_at: Some(now),
+            promoted_at: None,
             highlights: Vec::new(),
         };
         if let Err(err) = self.admit_research_root(&tree, &mut node) {
@@ -5054,6 +5111,7 @@ impl AppState {
             created_at: now,
             started_at: Some(prepared.agent_created_at.min(now)),
             completed_at: Some(now),
+            promoted_at: None,
             highlights: Vec::new(),
         };
         if let Err(err) = self.admit_research_root(&tree, &mut node) {
@@ -5568,6 +5626,7 @@ impl AppState {
                 created_at: now,
                 started_at: None,
                 completed_at: None,
+                promoted_at: None,
                 highlights: Vec::new(),
             };
             model.research_nodes.insert(node_id, node.clone());
@@ -6486,6 +6545,203 @@ impl AppState {
         Ok(node)
     }
 
+    /// Promotes a follow-up into its tree's Home feed entry, or clears the
+    /// promotion. Re-promoting keeps the original timestamp; a no-op persists
+    /// and emits nothing.
+    pub fn set_research_node_promoted(
+        &self,
+        node_id: &str,
+        promoted: bool,
+    ) -> Result<ResearchNode, String> {
+        let (node, changed) = {
+            let mut model = self
+                .inner
+                .model
+                .lock()
+                .map_err(|_| "model lock poisoned".to_string())?;
+            let node = model
+                .research_nodes
+                .get_mut(node_id)
+                .ok_or_else(|| format!("research node {node_id} was not found"))?;
+            if node.parent_node_id.is_none() {
+                return Err("the root of a research tree cannot be promoted".to_string());
+            }
+            let changed = node.promoted_at.is_some() != promoted;
+            if changed {
+                node.promoted_at = promoted.then(now_millis);
+            }
+            (node.clone(), changed)
+        };
+        if changed {
+            self.persist();
+            self.emit(SessionEvent::new(
+                "research.node.updated",
+                None,
+                None,
+                json!({ "node": node }),
+            ));
+        }
+        Ok(node)
+    }
+
+    pub fn list_research_drafts(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Vec<research::ResearchDraft>, String> {
+        let model = self
+            .inner
+            .model
+            .lock()
+            .map_err(|_| "model lock poisoned".to_string())?;
+        Ok(model
+            .research_drafts
+            .iter()
+            .filter(|draft| draft.workspace_id == workspace_id)
+            .cloned()
+            .collect())
+    }
+
+    /// Creates a draft at the top of its workspace's list when `id` is
+    /// absent; otherwise replaces that draft's prompt in place.
+    pub fn save_research_draft(
+        &self,
+        id: Option<String>,
+        workspace_id: &str,
+        prompt: String,
+    ) -> Result<research::ResearchDraft, String> {
+        let prompt = prompt.trim().to_string();
+        if prompt.is_empty() {
+            return Err("research draft prompt cannot be empty".to_string());
+        }
+        let draft = {
+            let mut model = self
+                .inner
+                .model
+                .lock()
+                .map_err(|_| "model lock poisoned".to_string())?;
+            if !model
+                .groups
+                .get(workspace_id)
+                .is_some_and(|group| group.scope == WorkspaceScope::Research)
+            {
+                return Err(format!("research workspace {workspace_id} was not found"));
+            }
+            let now = now_millis();
+            match id {
+                Some(id) => {
+                    let draft = model
+                        .research_drafts
+                        .iter_mut()
+                        .find(|draft| draft.id == id && draft.workspace_id == workspace_id)
+                        .ok_or_else(|| format!("research draft {id} was not found"))?;
+                    draft.prompt = prompt;
+                    draft.updated_at = now;
+                    draft.clone()
+                }
+                None => {
+                    let draft = research::ResearchDraft {
+                        id: self.next_id("research-draft"),
+                        workspace_id: workspace_id.to_string(),
+                        prompt,
+                        created_at: now,
+                        updated_at: now,
+                    };
+                    model.research_drafts.insert(0, draft.clone());
+                    draft
+                }
+            }
+        };
+        self.persist();
+        self.emit_research_drafts_changed(workspace_id);
+        Ok(draft)
+    }
+
+    pub fn delete_research_draft(&self, draft_id: &str) -> Result<(), String> {
+        let draft = {
+            let mut model = self
+                .inner
+                .model
+                .lock()
+                .map_err(|_| "model lock poisoned".to_string())?;
+            let index = model
+                .research_drafts
+                .iter()
+                .position(|draft| draft.id == draft_id)
+                .ok_or_else(|| format!("research draft {draft_id} was not found"))?;
+            model.research_drafts.remove(index)
+        };
+        self.persist();
+        self.emit_research_drafts_changed(&draft.workspace_id);
+        Ok(())
+    }
+
+    /// Reorders one workspace's drafts. `draft_ids` must name exactly that
+    /// workspace's drafts; other workspaces keep their positions.
+    pub fn reorder_research_drafts(
+        &self,
+        workspace_id: &str,
+        draft_ids: Vec<String>,
+    ) -> Result<Vec<research::ResearchDraft>, String> {
+        let (drafts, changed) = {
+            let mut model = self
+                .inner
+                .model
+                .lock()
+                .map_err(|_| "model lock poisoned".to_string())?;
+            let current = model
+                .research_drafts
+                .iter()
+                .filter(|draft| draft.workspace_id == workspace_id)
+                .map(|draft| draft.id.clone())
+                .collect::<Vec<_>>();
+            let current_ids = current.iter().collect::<HashSet<_>>();
+            let requested_ids = draft_ids.iter().collect::<HashSet<_>>();
+            if draft_ids.len() != current.len()
+                || requested_ids.len() != draft_ids.len()
+                || requested_ids != current_ids
+            {
+                return Err("research draft order is stale; refresh before reordering".to_string());
+            }
+            let changed = draft_ids != current;
+            if changed {
+                let mut by_id = model
+                    .research_drafts
+                    .iter()
+                    .filter(|draft| draft.workspace_id == workspace_id)
+                    .map(|draft| (draft.id.clone(), draft.clone()))
+                    .collect::<HashMap<_, _>>();
+                let mut replacements = draft_ids.iter();
+                for draft in &mut model.research_drafts {
+                    if draft.workspace_id == workspace_id {
+                        let id = replacements.next().expect("validated replacement count");
+                        *draft = by_id.remove(id).expect("validated draft id");
+                    }
+                }
+            }
+            let drafts = model
+                .research_drafts
+                .iter()
+                .filter(|draft| draft.workspace_id == workspace_id)
+                .cloned()
+                .collect::<Vec<_>>();
+            (drafts, changed)
+        };
+        if changed {
+            self.persist();
+            self.emit_research_drafts_changed(workspace_id);
+        }
+        Ok(drafts)
+    }
+
+    fn emit_research_drafts_changed(&self, workspace_id: &str) {
+        self.emit(SessionEvent::new(
+            "research.drafts.changed",
+            None,
+            None,
+            json!({ "workspaceId": workspace_id }),
+        ));
+    }
+
     pub fn create_research_highlight(
         &self,
         node_id: &str,
@@ -7145,6 +7401,7 @@ impl AppState {
             group_order,
             research_tree_order,
             research_folders,
+            research_drafts,
             reaped_thread_records,
         ) = {
             let mut model = self
@@ -7237,6 +7494,10 @@ impl AppState {
             let research_folders = model.research_folders.clone();
             research::remove_trees_from_research_folders(&mut model.research_folders, &tree_ids);
             research::remove_research_workspace_folders(&mut model.research_folders, workspace_id);
+            let research_drafts = model.research_drafts.clone();
+            model
+                .research_drafts
+                .retain(|draft| draft.workspace_id != workspace_id);
             let node_ids = model
                 .research_nodes
                 .values()
@@ -7285,6 +7546,7 @@ impl AppState {
                 group_order,
                 research_tree_order,
                 research_folders,
+                research_drafts,
                 reaped_thread_records,
             )
         };
@@ -7300,6 +7562,7 @@ impl AppState {
                 model.group_order = group_order;
                 model.research_tree_order = research_tree_order;
                 model.research_folders = research_folders;
+                model.research_drafts = research_drafts;
                 for (id, tree) in trees {
                     model.research_trees.insert(id, tree);
                 }
@@ -13163,6 +13426,381 @@ mod tests {
         );
     }
 
+    fn research_root_request(prompt: &str) -> CreateResearchTreeRequest {
+        CreateResearchTreeRequest {
+            prompt: prompt.to_string(),
+            title: Some(prompt.to_string()),
+            adapter: "claude".to_string(),
+            model: None,
+            effort: None,
+            group_id: "group-1".to_string(),
+        }
+    }
+
+    /// Inserts a copy of `parent` as its child without launching a run.
+    fn insert_research_test_child(
+        state: &AppState,
+        parent_id: &str,
+        id: &str,
+        inline: bool,
+        created_at: u128,
+    ) {
+        let mut model = state.inner.model.lock().unwrap();
+        let mut node = model.research_nodes[parent_id].clone();
+        node.id = id.to_string();
+        node.parent_node_id = Some(parent_id.to_string());
+        node.inline = inline;
+        node.created_at = created_at;
+        node.promoted_at = None;
+        model.research_nodes.insert(node.id.clone(), node);
+    }
+
+    #[test]
+    fn research_node_promotion_sets_clears_and_emits_node_updates() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let detail = state
+            .create_research_tree(research_root_request("Root"))
+            .unwrap();
+        let root_id = detail.tree.root_node_id.clone();
+        insert_research_test_child(&state, &root_id, "branch", false, 10);
+        state.take_emitted_events();
+
+        assert_eq!(
+            state
+                .set_research_node_promoted(&root_id, true)
+                .unwrap_err(),
+            "the root of a research tree cannot be promoted"
+        );
+        assert!(state.set_research_node_promoted("missing", true).is_err());
+        assert!(state.take_emitted_events().is_empty());
+
+        let promoted = state.set_research_node_promoted("branch", true).unwrap();
+        let promoted_at = promoted.promoted_at.expect("promotion timestamp");
+        assert_eq!(
+            state.research_node("branch").unwrap().promoted_at,
+            Some(promoted_at)
+        );
+        let events = state.take_emitted_events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, "research.node.updated");
+        assert_eq!(
+            events[0].payload["node"]["promotedAt"],
+            serde_json::json!(promoted_at)
+        );
+
+        // Re-promoting keeps the original timestamp and emits nothing.
+        let again = state.set_research_node_promoted("branch", true).unwrap();
+        assert_eq!(again.promoted_at, Some(promoted_at));
+        assert!(state.take_emitted_events().is_empty());
+
+        let cleared = state.set_research_node_promoted("branch", false).unwrap();
+        assert_eq!(cleared.promoted_at, None);
+        let events = state.take_emitted_events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, "research.node.updated");
+        assert!(events[0].payload["node"].get("promotedAt").is_none());
+    }
+
+    #[test]
+    fn recent_activity_lists_promoted_nodes_in_tree_order_with_branch_depth() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let detail = state
+            .create_research_tree(research_root_request("Root"))
+            .unwrap();
+        let other = state
+            .create_research_tree(research_root_request("Other"))
+            .unwrap();
+        let root_id = detail.tree.root_node_id.clone();
+        {
+            let mut model = state.inner.model.lock().unwrap();
+            model.research_nodes.get_mut(&root_id).unwrap().created_at = 100;
+            model
+                .research_nodes
+                .get_mut(&other.tree.root_node_id)
+                .unwrap()
+                .created_at = 50;
+        }
+        // root ── C (branch, 105)
+        //      ├─ A (inline, 110) ── A1 (branch, 120)
+        //      └─ B (branch, 130) ┬─ B2 (inline, 135)
+        //                         └─ B1 (branch, 140)
+        insert_research_test_child(&state, &root_id, "c", false, 105);
+        insert_research_test_child(&state, &root_id, "a", true, 110);
+        insert_research_test_child(&state, "a", "a1", false, 120);
+        insert_research_test_child(&state, &root_id, "b", false, 130);
+        insert_research_test_child(&state, "b", "b2", true, 135);
+        insert_research_test_child(&state, "b", "b1", false, 140);
+        for id in ["b1", "a1", "c", "b2", "a"] {
+            state.set_research_node_promoted(id, true).unwrap();
+        }
+
+        let page = state.list_recent_activity(10, None).unwrap();
+        assert_eq!(page.items.len(), 2);
+        let root = &page.items[0];
+        assert_eq!(root.node_id, root_id);
+        assert_eq!(root.branch_depth, 0);
+        let entries = |queries: &[RecentResearchQuery]| {
+            queries
+                .iter()
+                .map(|query| (query.node_id.clone(), query.branch_depth))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            entries(&root.children),
+            vec![
+                ("c".to_string(), 1),
+                ("a".to_string(), 0),
+                ("b".to_string(), 1)
+            ]
+        );
+        assert_eq!(
+            entries(&root.promoted),
+            vec![
+                ("c".to_string(), 1),
+                ("a".to_string(), 0),
+                ("a1".to_string(), 1),
+                ("b2".to_string(), 1),
+                ("b1".to_string(), 2),
+            ]
+        );
+        assert!(
+            root.promoted
+                .iter()
+                .all(|entry| entry.promoted_at.is_some() && entry.promoted.is_empty())
+        );
+        assert_eq!(root.promoted[2].parent_node_id.as_deref(), Some("a"));
+
+        let json = serde_json::to_value(&page.items).unwrap();
+        assert_eq!(json[0]["branchDepth"], serde_json::json!(0));
+        assert_eq!(json[0]["promoted"][4]["nodeId"], serde_json::json!("b1"));
+        assert_eq!(json[0]["promoted"][4]["branchDepth"], serde_json::json!(2));
+        assert!(json[0]["promoted"][4]["promotedAt"].is_number());
+        assert!(json[0]["promoted"][4]["status"].is_string());
+        assert!(json[0].get("promotedAt").is_none());
+        // A tree without promotions carries no `promoted` key.
+        assert_eq!(
+            json[1]["nodeId"],
+            serde_json::json!(other.tree.root_node_id)
+        );
+        assert!(json[1].get("promoted").is_none());
+        assert_eq!(json[1]["branchDepth"], serde_json::json!(0));
+    }
+
+    #[test]
+    fn research_drafts_crud_reorder_emit_and_persist() {
+        let workspace = temp_workspace();
+        let config = test_config(workspace.clone());
+        let research_group = |id: &str| {
+            let mut group = sample_group_with_id(id);
+            group.scope = WorkspaceScope::Research;
+            group.dir = workspace.display().to_string();
+            group.managed_dir = workspace
+                .join(format!("managed-{id}"))
+                .display()
+                .to_string();
+            group
+        };
+        let expected = {
+            let state = AppState::new(config.clone());
+            assert!(state.restore_session().is_empty());
+            state
+                .insert_group_after(research_group("ws-a"), None)
+                .unwrap();
+            state
+                .insert_group_after(research_group("ws-b"), None)
+                .unwrap();
+            state.take_emitted_events();
+
+            assert_eq!(
+                state
+                    .save_research_draft(None, "ws-a", "  \n ".to_string())
+                    .unwrap_err(),
+                "research draft prompt cannot be empty"
+            );
+            assert!(
+                state
+                    .save_research_draft(None, "missing", "Question".to_string())
+                    .is_err()
+            );
+            assert!(state.take_emitted_events().is_empty());
+
+            let first = state
+                .save_research_draft(None, "ws-a", " First question ".to_string())
+                .unwrap();
+            assert_eq!(first.prompt, "First question");
+            assert_eq!(first.workspace_id, "ws-a");
+            assert_eq!(first.created_at, first.updated_at);
+            let other = state
+                .save_research_draft(None, "ws-b", "Other workspace".to_string())
+                .unwrap();
+            let second = state
+                .save_research_draft(None, "ws-a", "Second question".to_string())
+                .unwrap();
+            let ids = |drafts: Vec<research::ResearchDraft>| {
+                drafts.into_iter().map(|draft| draft.id).collect::<Vec<_>>()
+            };
+            assert_eq!(
+                ids(state.list_research_drafts("ws-a").unwrap()),
+                vec![second.id.clone(), first.id.clone()],
+                "new drafts go first"
+            );
+            assert_eq!(
+                ids(state.list_research_drafts("ws-b").unwrap()),
+                vec![other.id.clone()]
+            );
+
+            let edited = state
+                .save_research_draft(Some(first.id.clone()), "ws-a", "First, edited".to_string())
+                .unwrap();
+            assert_eq!(edited.id, first.id);
+            assert_eq!(edited.prompt, "First, edited");
+            assert_eq!(edited.created_at, first.created_at);
+            assert!(edited.updated_at >= first.updated_at);
+            assert!(
+                state
+                    .save_research_draft(Some(first.id.clone()), "ws-b", "Moved".to_string())
+                    .is_err(),
+                "an update cannot move a draft to another workspace"
+            );
+
+            let reordered = state
+                .reorder_research_drafts("ws-a", vec![first.id.clone(), second.id.clone()])
+                .unwrap();
+            assert_eq!(ids(reordered), vec![first.id.clone(), second.id.clone()]);
+            assert_eq!(
+                ids(state.inner.model.lock().unwrap().research_drafts.clone()),
+                vec![first.id.clone(), other.id.clone(), second.id.clone()],
+                "other workspaces keep their positions"
+            );
+            for stale in [
+                vec![first.id.clone()],
+                vec![first.id.clone(), first.id.clone()],
+                vec![first.id.clone(), other.id.clone()],
+            ] {
+                assert!(
+                    state
+                        .reorder_research_drafts("ws-a", stale)
+                        .unwrap_err()
+                        .contains("stale")
+                );
+            }
+
+            let events = state.take_emitted_events();
+            assert_eq!(
+                events
+                    .iter()
+                    .map(|event| (
+                        event.event_type.as_str(),
+                        event.payload["workspaceId"].as_str().unwrap()
+                    ))
+                    .collect::<Vec<_>>(),
+                vec![
+                    ("research.drafts.changed", "ws-a"),
+                    ("research.drafts.changed", "ws-b"),
+                    ("research.drafts.changed", "ws-a"),
+                    ("research.drafts.changed", "ws-a"),
+                    ("research.drafts.changed", "ws-a"),
+                ]
+            );
+            assert!(events.iter().all(|event| event.timestamp > 0));
+
+            // An unchanged order is a no-op.
+            state
+                .reorder_research_drafts("ws-a", vec![first.id.clone(), second.id.clone()])
+                .unwrap();
+            assert!(state.take_emitted_events().is_empty());
+
+            state.delete_research_draft(&second.id).unwrap();
+            assert!(state.delete_research_draft(&second.id).is_err());
+            let events = state.take_emitted_events();
+            assert_eq!(events.len(), 1);
+            assert_eq!(
+                events[0].payload,
+                serde_json::json!({ "workspaceId": "ws-a" })
+            );
+            state.list_research_drafts("ws-a").unwrap()
+        };
+        assert_eq!(expected.len(), 1);
+
+        let raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(persistence::state_path(&workspace)).unwrap())
+                .unwrap();
+        assert_eq!(raw["researchDrafts"][0]["prompt"], "First, edited");
+        assert_eq!(raw["researchDrafts"][0]["workspaceId"], "ws-a");
+
+        let restored = AppState::new(config);
+        restored.restore_session();
+        assert_eq!(restored.list_research_drafts("ws-a").unwrap(), expected);
+        assert_eq!(restored.list_research_drafts("ws-b").unwrap().len(), 1);
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn set_research_folders_validates_names_and_keeps_system_drafts() {
+        let workspace = temp_workspace();
+        let config = test_config(workspace.clone());
+        let mut group = sample_group();
+        group.dir = workspace.display().to_string();
+        group.managed_dir = workspace.join("managed").display().to_string();
+        group.agents.clear();
+        let tree_id = {
+            let state = AppState::new(config.clone());
+            assert!(state.restore_session().is_empty());
+            state.insert_group_after(group.clone(), None).unwrap();
+            let tree = state
+                .create_research_tree(research_root_request("Draft thread"))
+                .unwrap();
+            let folder = |id: &str, name: &str| research::ResearchFolder {
+                id: id.to_string(),
+                name: name.to_string(),
+                workspace_id: group.id.clone(),
+            };
+            let mut requested = research::ResearchFolderState {
+                folders: vec![folder("f1", "  Reading ")],
+                membership: HashMap::from([(
+                    tree.tree.id.clone(),
+                    research::RESEARCH_DRAFTS_FOLDER_ID.to_string(),
+                )]),
+                starred: Vec::new(),
+                collapsed: vec![
+                    "system:drafts".to_string(),
+                    "system:archive".to_string(),
+                    "system:unfiled".to_string(),
+                    "ghost".to_string(),
+                ],
+            };
+            let saved = state.set_research_folders(requested.clone()).unwrap();
+            assert_eq!(saved.folders[0].name, "Reading");
+            assert_eq!(saved.membership, requested.membership);
+            assert_eq!(saved.collapsed, requested.collapsed[..3].to_vec());
+
+            requested.folders.push(folder("f2", "READING"));
+            assert_eq!(
+                state.set_research_folders(requested.clone()).unwrap_err(),
+                "A folder named \"READING\" already exists."
+            );
+            requested.folders[1].name = "Drafts".to_string();
+            assert_eq!(
+                state.set_research_folders(requested.clone()).unwrap_err(),
+                "The name \"Drafts\" is reserved."
+            );
+            assert_eq!(state.research_folders().unwrap(), saved);
+            tree.tree.id
+        };
+
+        let restored = AppState::new(config);
+        restored.restore_session();
+        let folders = restored.research_folders().unwrap();
+        assert_eq!(
+            folders.membership.get(&tree_id).map(String::as_str),
+            Some(research::RESEARCH_DRAFTS_FOLDER_ID)
+        );
+        assert_eq!(folders.collapsed.len(), 3);
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
     #[test]
     fn research_tree_order_is_scoped_stable_and_persisted() {
         let workspace = temp_workspace();
@@ -15327,6 +15965,7 @@ mod tests {
             created_at: 1,
             started_at: Some(1),
             completed_at: Some(2),
+            promoted_at: None,
             highlights: Vec::new(),
         };
         let persisted_tree = |id: &str, root: &str| ResearchTree {
@@ -15444,6 +16083,7 @@ mod tests {
             created_at: 1,
             started_at: Some(2),
             completed_at: None,
+            promoted_at: None,
             highlights: Vec::new(),
         };
         let mut agent = sample_agent("sdk-agent");
@@ -15543,6 +16183,7 @@ mod tests {
             created_at: 1,
             started_at: Some(1),
             completed_at: None,
+            promoted_at: None,
             highlights: Vec::new(),
         };
         let persisted = PersistedState {
@@ -15652,6 +16293,7 @@ mod tests {
             created_at: 1,
             started_at: Some(1),
             completed_at: Some(2),
+            promoted_at: None,
             highlights: Vec::new(),
         };
         let mut persisted = PersistedState {
@@ -15736,6 +16378,7 @@ mod tests {
             created_at: 1,
             started_at: Some(1),
             completed_at: Some(2),
+            promoted_at: None,
             highlights: Vec::new(),
         };
         let persisted = PersistedState {
@@ -15829,6 +16472,7 @@ mod tests {
                     created_at: 1,
                     started_at: Some(1),
                     completed_at: Some(2),
+                    promoted_at: None,
                     highlights: Vec::new(),
                 },
             );

@@ -57,9 +57,9 @@ use pty::{
 };
 use research::{
     ApplyResearchRecapCandidateRequest, CreateResearchTreeRequest, GenerateResearchRecapRequest,
-    RecentResearchQueryCursor, RecentResearchQueryPage, ResearchBranchRemoval, ResearchFolderState,
-    ResearchHighlight, ResearchHighlightAnchor, ResearchHighlightFeedItem, ResearchNode,
-    ResearchNodeContent, ResearchRecapCandidate, ResearchTree, ResearchTreeDetail,
+    RecentResearchQueryCursor, RecentResearchQueryPage, ResearchBranchRemoval, ResearchDraft,
+    ResearchFolderState, ResearchHighlight, ResearchHighlightAnchor, ResearchHighlightFeedItem,
+    ResearchNode, ResearchNodeContent, ResearchRecapCandidate, ResearchTree, ResearchTreeDetail,
     ResearchTreeSummary, UpdateResearchDocumentRequest, UpdateResearchDocumentResult,
 };
 use show_hide_shortcut::{
@@ -1567,6 +1567,41 @@ fn set_research_folders(
 }
 
 #[tauri::command]
+fn list_research_drafts(
+    state: tauri::State<'_, AppState>,
+    workspace_id: String,
+) -> Result<Vec<ResearchDraft>, String> {
+    state.list_research_drafts(&workspace_id)
+}
+
+#[tauri::command]
+fn save_research_draft(
+    state: tauri::State<'_, AppState>,
+    id: Option<String>,
+    workspace_id: String,
+    prompt: String,
+) -> Result<ResearchDraft, String> {
+    state.save_research_draft(id, &workspace_id, prompt)
+}
+
+#[tauri::command]
+fn delete_research_draft(
+    state: tauri::State<'_, AppState>,
+    draft_id: String,
+) -> Result<(), String> {
+    state.delete_research_draft(&draft_id)
+}
+
+#[tauri::command]
+fn reorder_research_drafts(
+    state: tauri::State<'_, AppState>,
+    workspace_id: String,
+    draft_ids: Vec<String>,
+) -> Result<Vec<ResearchDraft>, String> {
+    state.reorder_research_drafts(&workspace_id, draft_ids)
+}
+
+#[tauri::command]
 async fn list_research_activity(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<ResearchNode>, String> {
@@ -2248,6 +2283,15 @@ fn rename_research_node(
     title: String,
 ) -> Result<ResearchNode, String> {
     state.set_research_node_title(&node_id, title)
+}
+
+#[tauri::command]
+fn set_research_node_promoted(
+    state: tauri::State<'_, AppState>,
+    node_id: String,
+    promoted: bool,
+) -> Result<ResearchNode, String> {
+    state.set_research_node_promoted(&node_id, promoted)
 }
 
 #[tauri::command]
@@ -3735,6 +3779,10 @@ fn main() {
             reorder_research_trees,
             list_research_folders,
             set_research_folders,
+            list_research_drafts,
+            save_research_draft,
+            delete_research_draft,
+            reorder_research_drafts,
             list_research_activity,
             list_recent_research_queries,
             list_research_highlights,
@@ -3759,6 +3807,7 @@ fn main() {
             set_research_tree_followed,
             set_research_tree_bookmarked,
             rename_research_node,
+            set_research_node_promoted,
             create_research_highlight,
             remove_research_highlight,
             remove_research_highlights,
