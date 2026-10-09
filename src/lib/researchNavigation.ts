@@ -21,12 +21,22 @@ interface SavedResearchAsk {
   updatedAt: number;
 }
 
-/** The ordinary thread/branch composer draft. Unlike a targeted ask, this
- * belongs to the tree's currently restored page rather than a passage. */
+/** The conversation composer's draft. Unlike a targeted ask, this belongs
+ * to the tree rather than a passage. */
 interface SavedResearchFollowupDraft {
   text: string;
-  mode: "thread" | "branch";
   updatedAt: number;
+}
+
+/** A follow-up submitted while its chain's tail was still running. It is
+ * sent from the client when that tail completes. */
+export interface QueuedResearchFollowup {
+  id: string;
+  prompt: string;
+  createdAt: number;
+  /** Why sending it failed. A failed question is not sent again until the
+   * reader retries it; this is not restored on load, so a reload retries. */
+  failed?: string;
 }
 
 export interface SavedResearchNavigation {
@@ -38,11 +48,15 @@ export interface SavedResearchNavigation {
   expandedByNode?: Record<string, boolean>;
   /** In-progress asks, keyed by the node they were started on. */
   askByNode?: Record<string, SavedResearchAsk>;
-  /** In-progress text in the ordinary thread/branch composer. */
+  /** In-progress text in the conversation composer. */
   followupDraft?: SavedResearchFollowupDraft;
   /** A highlight to scroll into view on the next page visit (set when a
    * Highlights feed unit is opened). Cleared once the document lands on it. */
   focusHighlight?: { nodeId: string; highlightId: string };
+  /** Branch chain heads pinned as columns beside the conversation, in order. */
+  pinnedBranches?: string[];
+  /** Queued follow-ups per chain, keyed by the chain's head node. */
+  queuedFollowups?: Record<string, QueuedResearchFollowup[]>;
 }
 
 const RESEARCH_NAVIGATION_KEY = "session.research-navigation.v1";
@@ -135,17 +149,17 @@ function load(): Record<string, SavedResearchNavigation> {
               : [];
           }),
         );
+        // Drafts saved before the composer lost its thread/branch mode still
+        // carry a `mode`; only the text is kept.
         const followupDraft =
           candidate.followupDraft &&
           typeof candidate.followupDraft === "object" &&
           typeof candidate.followupDraft.text === "string" &&
-          (candidate.followupDraft.mode === "thread" ||
-            candidate.followupDraft.mode === "branch") &&
+          candidate.followupDraft.text.length > 0 &&
           typeof candidate.followupDraft.updatedAt === "number" &&
           Number.isFinite(candidate.followupDraft.updatedAt)
             ? {
                 text: candidate.followupDraft.text,
-                mode: candidate.followupDraft.mode,
                 updatedAt: candidate.followupDraft.updatedAt,
               }
             : undefined;
@@ -159,6 +173,28 @@ function load(): Record<string, SavedResearchNavigation> {
                 highlightId: candidate.focusHighlight.highlightId,
               }
             : undefined;
+        const pinnedBranches = Array.isArray(candidate.pinnedBranches)
+          ? [...new Set(candidate.pinnedBranches.filter((id): id is string => typeof id === "string"))]
+          : [];
+        const queuedFollowups = Object.fromEntries(
+          Object.entries(candidate.queuedFollowups ?? {}).flatMap(([headId, value]) => {
+            if (!Array.isArray(value)) {
+              return [];
+            }
+            const queue = value.flatMap((entry: unknown) => {
+              const item = entry as Partial<QueuedResearchFollowup> | null;
+              return item &&
+                typeof item.id === "string" &&
+                typeof item.prompt === "string" &&
+                item.prompt.trim() &&
+                typeof item.createdAt === "number" &&
+                Number.isFinite(item.createdAt)
+                ? [{ id: item.id, prompt: item.prompt, createdAt: item.createdAt }]
+                : [];
+            });
+            return queue.length > 0 ? [[headId, queue]] : [];
+          }),
+        );
         return [[treeId, {
           selectedNodeId:
             typeof candidate.selectedNodeId === "string" ? candidate.selectedNodeId : undefined,
@@ -167,6 +203,8 @@ function load(): Record<string, SavedResearchNavigation> {
           ...(Object.keys(askByNode).length > 0 ? { askByNode } : {}),
           ...(followupDraft ? { followupDraft } : {}),
           ...(focusHighlight ? { focusHighlight } : {}),
+          ...(pinnedBranches.length > 0 ? { pinnedBranches } : {}),
+          ...(Object.keys(queuedFollowups).length > 0 ? { queuedFollowups } : {}),
         } satisfies SavedResearchNavigation]];
       }),
     );
@@ -208,13 +246,12 @@ export function restoreResearchScrollPosition(
   return position.top;
 }
 
-/** Updates the ordinary composer draft and reports whether the stored value
- * changed. Empty text removes the draft so successful sends and manual clears
- * do not resurrect an empty composer mode. */
+/** Updates the conversation composer's draft and reports whether the stored
+ * value changed. Empty text removes the saved draft so it cannot be restored
+ * after sending or clearing the composer. */
 export function recordResearchFollowupDraft(
   navigation: SavedResearchNavigation,
   text: string,
-  mode: SavedResearchFollowupDraft["mode"],
   now = Date.now(),
 ): boolean {
   if (text.length === 0) {
@@ -225,10 +262,10 @@ export function recordResearchFollowupDraft(
     return true;
   }
   const existing = navigation.followupDraft;
-  if (existing && existing.text === text && existing.mode === mode) {
+  if (existing && existing.text === text) {
     return false;
   }
-  navigation.followupDraft = { text, mode, updatedAt: now };
+  navigation.followupDraft = { text, updatedAt: now };
   return true;
 }
 
@@ -271,6 +308,16 @@ export function pruneResearchNavigationNodes(treeId: string, validNodeIds: Itera
   for (const nodeId of Object.keys(navigation.askByNode ?? {})) {
     if (!valid.has(nodeId)) {
       delete navigation.askByNode?.[nodeId];
+      changed = true;
+    }
+  }
+  if (navigation.pinnedBranches?.some((nodeId) => !valid.has(nodeId))) {
+    navigation.pinnedBranches = navigation.pinnedBranches.filter((nodeId) => valid.has(nodeId));
+    changed = true;
+  }
+  for (const headId of Object.keys(navigation.queuedFollowups ?? {})) {
+    if (!valid.has(headId)) {
+      delete navigation.queuedFollowups?.[headId];
       changed = true;
     }
   }

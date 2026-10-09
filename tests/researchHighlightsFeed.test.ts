@@ -3,7 +3,8 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ResearchHighlightsFeed, {
-  formatHighlightDayLabel,
+  groupHighlightsByThread,
+  highlightExcerptContext,
   type ResearchHighlightsFeedProps,
 } from "../src/components/research/ResearchHighlightsFeed";
 
@@ -14,9 +15,10 @@ function render(overrides: Partial<ResearchHighlightsFeedProps> = {}) {
   }));
 }
 
-test("Highlights shows passages in context under day headers with their thread and time", () => {
+test("Highlights groups passages by thread, each in context under its question", () => {
   const now = Date.now();
   const html = render({
+    onRemove: noop,
     items: [
       {
         highlightId: "h-2", nodeId: "node-2", treeId: "tree", treeTitle: "Collective memory",
@@ -32,30 +34,61 @@ test("Highlights shows passages in context under day headers with their thread a
       },
     ],
   });
-  assert.match(html, /Highlights/);
+  assert.match(html, /research-feed-header-title[^>]*>Highlights</);
   assert.match(html, /aria-label="Refresh Highlights"/);
   assert.match(html, /role="feed" aria-label="Highlights"/);
-  assert.match(html, /research-highlight-excerpt"[^>]*role="button"/);
-  assert.match(html, /research-highlight-context">…The persistence of a ritual[^<]*<\/span><mark class="research-highlight-mark">Rituals encode shared expectations\.<\/mark><span class="research-highlight-context"> Once that evidence thins, defection becomes cheap\.…<\/span>/);
+  // The prefix is cut to 60 characters at a word, so it starts with "…"; the
+  // whole suffix fits, and its sentence ends without one.
+  assert.match(html, /research-highlight-context">…of a ritual has less to do with belief than with cost\. <\/span><mark class="research-highlight-mark">Rituals encode shared expectations\.<\/mark><span class="research-highlight-context"> Once that evidence thins, defection becomes cheap\.<\/span>/);
   // No context: the mark stands alone.
-  assert.match(html, /research-highlight-excerpt"[^>]*><mark class="research-highlight-mark">Body<\/mark><\/div>/);
-  // Day headers: one per distinct day, newest first (the first is today or,
-  // when the test runs just after midnight, yesterday).
-  assert.match(html, /research-highlight-day">(Today|Yesterday)<\/div>/);
-  assert.equal((html.match(/research-highlight-day"/g) ?? []).length, 2);
-  // Node label is appended only when it differs from the thread title.
-  assert.match(html, /research-highlight-source">Collective memory › Why do rituals persist\?<\/button>/);
-  assert.match(html, /research-highlight-source">Original title<\/button>/);
-  assert.match(html, /<\/button><time[^>]*>2 hr ago<\/time>/);
+  assert.match(html, /research-highlight-excerpt"><mark class="research-highlight-mark">Body<\/mark><\/span>/);
+  // One group per thread; the question line shows only when it differs from the title.
+  assert.match(html, /research-highlight-source">Collective memory<\/div>/);
+  assert.match(html, /research-highlight-turn">Why do rituals persist\?<\/span>/);
+  assert.equal((html.match(/research-highlight-turn"/g) ?? []).length, 1);
+  assert.equal((html.match(/aria-label="Remove highlight"/g) ?? []).length, 2);
   assert.ok(html.indexOf("Rituals encode") < html.indexOf(">Body<"));
 });
 
-test("day labels resolve to Today, Yesterday, or a short date", () => {
-  const now = new Date(2026, 8, 14, 15, 0, 0).getTime();
-  assert.equal(formatHighlightDayLabel(now - 60_000, now), "Today");
-  assert.equal(formatHighlightDayLabel(new Date(2026, 8, 13, 23, 59).getTime(), now), "Yesterday");
-  assert.equal(formatHighlightDayLabel(new Date(2026, 8, 1, 9, 0).getTime(), now), "Sep 1");
-  assert.equal(formatHighlightDayLabel(new Date(2025, 11, 25).getTime(), now), "Dec 25, 2025");
+test("highlights group by thread in the order threads first appear", () => {
+  const item = (id: string, treeId: string) => ({
+    highlightId: id, nodeId: id, treeId, treeTitle: treeId, nodeLabel: id,
+    exact: id, prefix: "", suffix: "", createdAt: 1,
+  });
+  const groups = groupHighlightsByThread([item("a", "t1"), item("b", "t2"), item("c", "t1")]);
+  assert.deepEqual(
+    groups.map((group) => [group.treeId, group.items.map((entry) => entry.highlightId)]),
+    [["t1", ["a", "c"]], ["t2", ["b"]]],
+  );
+});
+
+test("excerpt context stays within its paragraph and reports truncation", () => {
+  // Context from an earlier paragraph is dropped, and the paragraph start needs no "…".
+  assert.deepEqual(highlightExcerptContext("Earlier paragraph.\nStart of this one ", "prefix"), {
+    text: "Start of this one ",
+    cut: false,
+  });
+  assert.deepEqual(highlightExcerptContext(" ends here.\nNext paragraph", "suffix"), {
+    text: " ends here.",
+    cut: false,
+  });
+  // At the 128-character context limit, remove the partial word at the
+  // boundary and set cut to indicate truncation.
+  const stored = "x".repeat(10) + " " + "word ".repeat(30);
+  const prefix = highlightExcerptContext(stored.slice(-128), "prefix");
+  assert.equal(prefix.cut, true);
+  assert.match(prefix.text, /^word /);
+  assert.ok(prefix.text.length <= 60);
+  assert.deepEqual(highlightExcerptContext("", "suffix"), { text: "", cut: false });
+});
+
+test("highlights in one thread list in the order they were made", () => {
+  const item = (id: string, createdAt: number) => ({
+    highlightId: id, nodeId: id, treeId: "t", treeTitle: "t", nodeLabel: id,
+    exact: id, prefix: "", suffix: "", createdAt,
+  });
+  const [group] = groupHighlightsByThread([item("newer", 2), item("older", 1)]);
+  assert.deepEqual(group.items.map((entry) => entry.highlightId), ["older", "newer"]);
 });
 
 test("long context trims to the nearest word on the side facing the passage", () => {
@@ -77,8 +110,8 @@ test("long context trims to the nearest word on the side facing the passage", ()
 
 test("Highlights shows loading, empty, and error states", () => {
   assert.match(render({ loading: true }), /Loading highlights…/);
-  assert.match(render(), /Text you highlight in research answers appears here/);
+  assert.match(render(), /No highlights\. Select text in an answer and choose Highlight\./);
   const failed = render({ error: "Backend unavailable" });
-  assert.match(failed, /role="alert"[^>]*>Backend unavailable/);
+  assert.match(failed, /role="alert">Backend unavailable/);
   assert.match(failed, />Retry<\/button>/);
 });

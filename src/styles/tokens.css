@@ -200,8 +200,8 @@
 
   /* Shared maximum for Home activity and tweet embeds on wider surfaces. */
   --research-feed-max-width: 540px;
-  /* Width of the Home/Bookmarks feed column beside an open thread. */
-  --research-feed-column-width: 384px;
+  /* Width of the feed column; ResearchColumns sets it from the column area (240–320px). */
+  --research-feed-column-width: 320px;
 
   /* Corner radii. */
   --radius-sm: 4px;
@@ -218,6 +218,8 @@
   --z-popover: 15;
   --z-select-popover: 50;
   --z-dialog: 20;
+  /* The branch drawer and find bar over the research column area. */
+  --z-research-drawer: 20;
   --z-toast: 30;
   --z-context-menu: 1000;
 
@@ -234,12 +236,12 @@
   --text-strong: #f1f0e8;
   --text-secondary: #c4cbc6;
   --text-body-soft: #d9ddd9;
-  --text-muted: #8a938e;
+  --text-muted: #919994;
   --text-activity: #8f9994;
   --text-interactive: #edf0ec;
   --text-heading: #f4f3ec;
-  --text-subtle: #7f8884;
-  --text-faint: #6f7773;
+  --text-subtle: #8a938f;
+  --text-faint: #828b86;
   --text-disabled: #797d80;
   --placeholder-color: #6b726d;
   /* Extended text ramp. --text-max is the maximum-contrast state text used by
@@ -337,7 +339,6 @@
   --surface-border-default: rgba(255, 255, 255, 0.12);
   --surface-border-overlay-strong: rgba(255, 255, 255, 0.14);
   --sidebar-switcher-bg: rgba(0, 0, 0, 0.18);
-  --sidebar-switcher-hover-bg: rgba(255, 255, 255, 0.045);
   --sidebar-switcher-active-bg: rgba(255, 255, 255, 0.105);
   --sidebar-group-bg: rgba(255, 255, 255, 0.013);
   --surface-fill-faint: rgba(255, 255, 255, 0.03);
@@ -397,6 +398,14 @@
   font-synthesis: none;
   line-height: 1.5;
   text-rendering: optimizeLegibility;
+
+  /* Conversation column, branch drawer, and passage tints (B2). The tints
+     are mirrored as literals in research.css, where ::highlight() pseudos
+     cannot resolve custom properties reliably. */
+  --research-branch-tint: rgba(91, 164, 243, 0.14);
+  --research-highlight-flash: rgba(240, 178, 70, 0.39);
+  --research-drawer-shadow: -14px 0 32px rgba(0, 0, 0, 0.45);
+  --research-failed-border: rgba(217, 135, 135, 0.35);
 }
 
 :root[data-body-font="dm-sans"] {
@@ -429,7 +438,6 @@
   --chrome-header-bg: #14171a;
   --pane-hover-bg: #1b1f21;
   --pane-tab-hover-bg: var(--pane-hover-bg);
-  --research-sidebar-hover-bg: var(--pane-hover-bg);
   --markdown-table-header-bg: color-mix(
     in srgb,
     var(--pane-hover-bg) 75%,
@@ -451,17 +459,6 @@
   /* Component surfaces with their own contrast relationships. */
   --settings-tab-active-bg: #273034;
   --recovered-queue-divider: #2c3336;
-  --research-highlight-action-bg: #303532;
-  --research-highlight-action-bg-hover: #3a403c;
-  --research-followup-composer-bg: #303233;
-  /* Hover connector between a passage and its follow-up card: a near-neutral
-     gray with each theme's temperature (cool here, warm in orange-blob). */
-  --research-anchor-connector: #78827f;
-  --research-drop-overlay-border: rgba(111, 211, 190, 0.82);
-  --research-drop-overlay-bg: rgba(15, 25, 25, 0.92);
-  --research-drop-overlay-glow: rgba(215, 255, 246, 0.06);
-  --research-drop-overlay-fg: #dff8f1;
-  --research-drop-overlay-icon: #80d9c6;
   --pane-status-active-dot: #5fb89f;
   --folder-picker-status-border: #364245;
   --queued-turn-border: #384246;
@@ -479,6 +476,15 @@
   --control-border-hover: #474b4e;
   --control-border-hover-accent: #4a5d56;
   --focus-ring: #6cae9d;
+
+  /* Feed column (B1): the column behind the cards, the boxed folder trays,
+     the card of the open thread, and the fields and popovers over the feed,
+     which sit one step above it (--field-bg sits below it). */
+  --research-feed-bg: #131517;
+  --research-tray-bg: #181b1d;
+  --research-card-selected-bg: #23282b;
+  --research-feed-field-bg: #1b1f21;
+  --research-feed-popover-bg: #1d2224;
 }
 
 :root[data-color-theme="orange-blob"] {
@@ -501,7 +507,6 @@
   --chrome-header-bg: #171716;
   --pane-hover-bg: #23211f;
   --pane-tab-hover-bg: var(--right-pane-bg);
-  --research-sidebar-hover-bg: #222221;
   --markdown-table-header-bg: color-mix(
     in srgb,
     var(--pane-hover-bg) 75%,
@@ -522,15 +527,6 @@
 
   --settings-tab-active-bg: #322f2b;
   --recovered-queue-divider: #34312d;
-  --research-highlight-action-bg: #363636;
-  --research-highlight-action-bg-hover: #404040;
-  --research-followup-composer-bg: #343434;
-  --research-anchor-connector: #867f75;
-  --research-drop-overlay-border: rgba(210, 204, 194, 0.72);
-  --research-drop-overlay-bg: rgba(22, 21, 19, 0.92);
-  --research-drop-overlay-glow: rgba(255, 249, 240, 0.06);
-  --research-drop-overlay-fg: #eeece7;
-  --research-drop-overlay-icon: #c7c1b7;
   --pane-status-active-dot: #b3ada3;
   --folder-picker-status-border: #49423a;
   --queued-turn-border: #48413a;
@@ -548,6 +544,15 @@
   --control-border-hover: #4a4946;
   --control-border-hover-accent: #57544f;
   --focus-ring: #33adff;
+
+  /* Feed column (B1): the column behind the cards, the boxed folder trays,
+     the card of the open thread, and the fields and popovers over the feed,
+     which sit one step above it (--field-bg sits below it). */
+  --research-feed-bg: #1a1918;
+  --research-tray-bg: #1d1c1b;
+  --research-card-selected-bg: #2b2927;
+  --research-feed-field-bg: #232220;
+  --research-feed-popover-bg: #23221f;
 }
 
 /* ------------------------------------------------------------------ */
@@ -571,12 +576,12 @@
   --text-strong: #15191a;
   --text-secondary: #4a5350;
   --text-body-soft: #33393b;
-  --text-muted: #6b746f;
+  --text-muted: #5b625e;
   --text-activity: #6a736e;
   --text-interactive: #1c2123;
   --text-heading: #121617;
-  --text-subtle: #6e7772;
-  --text-faint: #7d8581;
+  --text-subtle: #606864;
+  --text-faint: #686e6b;
   --text-disabled: #8f9693;
   --placeholder-color: #8e958f;
   --text-max: #000000;
@@ -660,7 +665,6 @@
   --surface-border-default: rgba(0, 0, 0, 0.12);
   --surface-border-overlay-strong: rgba(0, 0, 0, 0.14);
   --sidebar-switcher-bg: rgba(0, 0, 0, 0.05);
-  --sidebar-switcher-hover-bg: rgba(0, 0, 0, 0.045);
   --sidebar-switcher-active-bg: rgba(0, 0, 0, 0.09);
   --sidebar-group-bg: rgba(0, 0, 0, 0.015);
   --surface-fill-faint: rgba(0, 0, 0, 0.025);
@@ -691,6 +695,12 @@
   --shadow-inset: inset 0 1px 3px rgba(20, 24, 26, 0.1);
   --shadow-ring: 0 0 0 1px rgba(20, 24, 26, 0.1);
   --shadow-glow-warm: inset 0 0 0 1px rgba(154, 107, 18, 0.16);
+
+  /* Conversation column, branch drawer, and passage tints (B2). */
+  --research-branch-tint: rgba(51, 119, 205, 0.12);
+  --research-highlight-flash: rgba(240, 170, 40, 0.5);
+  --research-drawer-shadow: -14px 0 32px rgba(40, 30, 20, 0.14);
+  --research-failed-border: rgba(177, 74, 74, 0.35);
 }
 
 :root[data-appearance="light"],
@@ -714,7 +724,6 @@
   --chrome-header-bg: #f1f3f2;
   --pane-hover-bg: #eaedec;
   --pane-tab-hover-bg: var(--pane-hover-bg);
-  --research-sidebar-hover-bg: var(--pane-hover-bg);
   --markdown-table-header-bg: color-mix(
     in srgb,
     var(--pane-hover-bg) 75%,
@@ -735,15 +744,6 @@
 
   --settings-tab-active-bg: #dfe5e2;
   --recovered-queue-divider: #d5dbd8;
-  --research-highlight-action-bg: #e2e6e3;
-  --research-highlight-action-bg-hover: #d8ddda;
-  --research-followup-composer-bg: #e6e9e7;
-  --research-anchor-connector: #8c9692;
-  --research-drop-overlay-border: rgba(43, 134, 112, 0.82);
-  --research-drop-overlay-bg: rgba(240, 248, 246, 0.92);
-  --research-drop-overlay-glow: rgba(43, 134, 112, 0.06);
-  --research-drop-overlay-fg: #123e33;
-  --research-drop-overlay-icon: #2b8670;
   --pane-status-active-dot: #2f9c7d;
   --folder-picker-status-border: #b9c6c2;
   --queued-turn-border: #c2ccc8;
@@ -761,6 +761,15 @@
   --control-border-hover: #bcc4c0;
   --control-border-hover-accent: #9fc2b6;
   --focus-ring: #1f8a6f;
+
+  /* Feed column (B1): the column behind the cards, the boxed folder trays,
+     the card of the open thread, and the fields and popovers over the feed,
+     which sit one step above it (--field-bg sits below it). */
+  --research-feed-bg: #f2f4f3;
+  --research-tray-bg: #eef1f0;
+  --research-card-selected-bg: #e2e7e5;
+  --research-feed-field-bg: #ffffff;
+  --research-feed-popover-bg: #ffffff;
 }
 
 :root[data-appearance="light"][data-color-theme="orange-blob"] {
@@ -783,7 +792,6 @@
   --chrome-header-bg: #f4f2ef;
   --pane-hover-bg: #ece8e3;
   --pane-tab-hover-bg: var(--right-pane-bg);
-  --research-sidebar-hover-bg: #eeebe6;
   --markdown-table-header-bg: color-mix(
     in srgb,
     var(--pane-hover-bg) 75%,
@@ -804,15 +812,6 @@
 
   --settings-tab-active-bg: #e6e1da;
   --recovered-queue-divider: #d8d2ca;
-  --research-highlight-action-bg: #e5e2dd;
-  --research-highlight-action-bg-hover: #dbd7d1;
-  --research-followup-composer-bg: #e8e5e0;
-  --research-anchor-connector: #948c82;
-  --research-drop-overlay-border: rgba(120, 110, 95, 0.72);
-  --research-drop-overlay-bg: rgba(248, 246, 243, 0.92);
-  --research-drop-overlay-glow: rgba(60, 50, 40, 0.06);
-  --research-drop-overlay-fg: #2c2823;
-  --research-drop-overlay-icon: #6e655a;
   --pane-status-active-dot: #7d746a;
   --folder-picker-status-border: #cdc3b7;
   --queued-turn-border: #cdc4ba;
@@ -830,4 +829,13 @@
   --control-border-hover: #c1bab0;
   --control-border-hover-accent: #a9c6dc;
   --focus-ring: #0b7fd1;
+
+  /* Feed column (B1): the column behind the cards, the boxed folder trays,
+     the card of the open thread, and the fields and popovers over the feed,
+     which sit one step above it (--field-bg sits below it). */
+  --research-feed-bg: #f8f6f3;
+  --research-tray-bg: #f3f1ed;
+  --research-card-selected-bg: #ebe7e1;
+  --research-feed-field-bg: #ffffff;
+  --research-feed-popover-bg: #ffffff;
 }

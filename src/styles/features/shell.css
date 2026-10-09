@@ -40,13 +40,9 @@
      bleeding through. Degrades to a plain dark panel if vibrancy is
      unavailable. Lower the alpha for a stronger see-through effect. */
   background: var(--left-pane-bg);
-  /* Top padding clears the macOS traffic-light buttons, which the Overlay
-     title bar draws over the top-left of the window (i.e. over the sidebar).
-     Horizontal padding is trimmed 10→6px and handed to the group cards' interior
-     padding, so groups sit closer to the edges and breathe more while tabs keep
-     their width. The action buttons re-add the 4px as margin so only the group
-     cards widen. */
-  padding: 32px 6px 12px;
+  /* The 44px title-bar row is reserved: the macOS traffic lights and the
+     collapse toggle occupy its left 116px, the header controls its right end. */
+  padding: 44px 8px 8px;
   /* System font (not monospace) so the pane list reads as a native sidebar. */
   font-family: var(--font-ui);
 }
@@ -59,60 +55,206 @@
   user-select: none;
 }
 
-.sidebar-collapsed-placeholder {
-  min-width: 0;
-}
-
-/* Draggable strip over the cleared area at the top of the sidebar so the
-   frameless window can still be moved. Sits below the resizer's stacking layer so
-   the top-right resize grab keeps working, and below the native traffic-light
-   buttons, which the OS keeps clickable on top of the webview. */
+/* Draggable title-bar row over the top of the sidebar so the frameless window
+   can still be moved. Sits below the resizer's stacking layer so the top-right
+   resize grab keeps working, and below the native traffic-light buttons, which
+   the OS keeps clickable on top of the webview. */
 .titlebar-drag {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   z-index: 1;
-  height: 30px;
+  height: 44px;
+}
+
+/* Beside the traffic lights (x 16–68), so it stays put whatever the sidebar's width. */
+.sidebar-collapse-toggle {
+  position: absolute;
+  top: 9px;
+  left: 80px;
+  z-index: 2;
 }
 
 .sidebar-header-controls {
   position: absolute;
-  top: 3px;
-  right: 10px;
+  top: 9px;
+  right: 8px;
   z-index: 2;
   display: flex;
+  gap: 2px;
 }
 
-.sidebar-header-controls .sidebar-header-button {
-  width: 24px;
-  height: 24px;
+.sidebar-header-button {
+  width: 26px;
+  height: 26px;
   color: var(--text-muted);
 }
 
-.sidebar-header-controls .sidebar-header-button:hover {
-  background: var(--sidebar-switcher-hover-bg);
+.sidebar-header-button:hover {
+  color: var(--text-primary);
+  background: var(--surface-fill-hover);
 }
 
-.sidebar-header-controls .sidebar-header-button:focus-visible {
+.sidebar-header-button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--accent-shadow);
 }
 
-.sidebar-header-controls .sidebar-header-button.is-active {
+.sidebar-header-button.is-active {
   color: var(--text-heading);
-  background: var(--sidebar-switcher-hover-bg);
+  background: var(--surface-fill-medium);
 }
 
-.sidebar-header-controls.is-grouped > .sidebar-header-button:not(:last-child) {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+/* The collapsed sidebar: a 52px icon strip. Its top cell is the 44px title
+   bar row, so Home sits at the same height as in the full sidebar. */
+.research-strip {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0 0 10px;
+  border-right: 1px solid var(--surface-divider);
+  background: var(--left-pane-bg);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-.sidebar-header-controls.is-grouped > .sidebar-header-button:not(:first-child) {
-  margin-left: -1px;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
+.research-strip-top {
+  display: grid;
+  flex: none;
+  width: 100%;
+  height: 44px;
+  margin-bottom: 2px;
+  place-items: center;
+}
+
+.research-strip-icon {
+  position: relative;
+  display: grid;
+  flex: none;
+  width: 36px;
+  height: 34px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.research-strip-icon:hover {
+  color: var(--text-primary);
+  background: var(--surface-fill-hover);
+}
+
+.research-strip-icon.is-selected {
+  color: var(--text-heading);
+  background: var(--surface-fill-medium);
+}
+
+.research-strip-icon:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -1px;
+}
+
+/* Without traffic lights the expand button sits 3px below the row's centre,
+   level with the column titles; the icons below it don't move. */
+.research-strip-top .research-strip-icon.is-expand:not(.is-beside-titlebar) {
+  top: 3px;
+}
+
+/* Beside the traffic lights, where the full sidebar's collapse button sits. */
+.research-strip-icon.is-beside-titlebar {
+  position: absolute;
+  top: 9px;
+  left: 78px;
+  width: 30px;
+  height: 28px;
+}
+
+/* With the strip on macOS the traffic lights and the expand button keep their
+   116px zone, so the column headers under it start after it. */
+.app-shell.has-titlebar-strip {
+  --research-titlebar-inset: 64px;
+}
+
+.research-strip-icon.is-expand[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.research-strip-icon.is-drop-target {
+  color: var(--text-heading);
+  background: var(--split-drop-bg);
+  box-shadow: inset 0 0 0 1.5px var(--split-drop-border);
+}
+
+.research-strip-monogram {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 1.6px solid currentColor;
+  border-radius: 5px;
+  font-size: calc(var(--fs-xs) - 1.5px);
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Fixed beside the icon so the scrolling folder group can't clip it. */
+.research-strip-tip {
+  position: fixed;
+  top: 0;
+  left: -999px;
+  z-index: var(--z-context-menu);
+  padding: 4px 8px;
+  border: 1px solid var(--surface-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  background: var(--research-feed-popover-bg);
+  box-shadow: var(--popover-shadow);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 100ms;
+}
+
+.research-strip-icon:hover .research-strip-tip,
+.research-strip-icon:focus-visible .research-strip-tip,
+.research-strip-icon.is-drop-target .research-strip-tip {
+  opacity: 1;
+}
+
+.research-strip-divider {
+  flex: none;
+  width: 22px;
+  height: 1px;
+  margin: 6px 0;
+  background: var(--surface-border-strong);
+}
+
+.research-strip-folders {
+  display: flex;
+  min-height: 0;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-bottom: 2px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.research-strip-spacer {
+  flex: 1;
+  min-height: 8px;
 }
 
 .sidebar-resizer {
@@ -337,7 +479,7 @@
 }
 
 .pane-tab-row.is-selected .pane-tab-shortcut-hint,
-.research-sidebar-row.is-selected .pane-tab-shortcut-hint {
+.research-nav-row.is-selected .pane-tab-shortcut-hint {
   border-color: var(--control-border-hover);
   color: var(--text-primary);
 }
@@ -890,8 +1032,11 @@
   user-select: none;
 }
 
+/* The feed's card context menus sit over the feed, a step above its surface. */
 .research-sidebar-menu {
   width: min(200px, calc(100vw - 16px));
+  border-color: var(--surface-border-strong);
+  background: var(--research-feed-popover-bg);
 }
 
 .research-followup-menu {
@@ -2561,6 +2706,11 @@ html[data-body-font="anthropic-sans-text"] .native-input textarea {
   width: 14px;
   height: 14px;
   object-fit: contain;
+}
+
+span.launcher-select-icon {
+  display: inline-grid;
+  place-items: center;
 }
 
 .launcher-select-icon.is-mono-light {

@@ -17,6 +17,27 @@ interface DomSearchBarProps {
   viewportRef?: RefObject<HTMLElement | null>;
   hotkeyScopeRef?: RefObject<HTMLElement | null>;
   resetKey?: unknown;
+  /** Several text roots searched in order, instead of `rootRef`. */
+  getRoots?: () => HTMLElement[];
+  /** Changes when `getRoots` would return different elements. */
+  rootsKey?: unknown;
+  /** Where ⌘F and Escape count as this pane's, instead of `hotkeyScopeRef`. */
+  scopeContains?: (node: Node) => boolean;
+  /** The scroller to bring a match into view in (default `viewportRef`). */
+  viewportFor?: (range: Range) => HTMLElement | null;
+  /** Makes a match visible before it is scrolled to (for example, expands
+   * the clamped answer it sits in). Returns true when that changed the
+   * layout, so the scroll waits for it. */
+  revealRange?: (range: Range) => boolean;
+}
+
+function sameRange(a: Range, b: Range) {
+  return (
+    a.startContainer === b.startContainer &&
+    a.startOffset === b.startOffset &&
+    a.endContainer === b.endContainer &&
+    a.endOffset === b.endOffset
+  );
 }
 
 // Shared Cmd-F search for React-rendered panes. The host supplies the rendered
@@ -29,6 +50,11 @@ export default function DomSearchBar({
   viewportRef = rootRef,
   hotkeyScopeRef = rootRef,
   resetKey,
+  getRoots,
+  rootsKey,
+  scopeContains,
+  viewportFor,
+  revealRange,
 }: DomSearchBarProps) {
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
@@ -44,6 +70,18 @@ export default function DomSearchBar({
   const contentRescanTimerRef = useRef<number | null>(null);
   const rescanRef = useRef((_contentDriven: boolean) => {});
   debouncedTermRef.current = debouncedTerm;
+  const resultsRef = useRef({ index: -1, count: 0 });
+  const getRootsRef = useRef(getRoots);
+  getRootsRef.current = getRoots;
+  const scopeContainsRef = useRef(scopeContains);
+  scopeContainsRef.current = scopeContains;
+  const viewportForRef = useRef(viewportFor);
+  viewportForRef.current = viewportFor;
+  const revealRangeRef = useRef(revealRange);
+  revealRangeRef.current = revealRange;
+  const roots = () => getRootsRef.current?.() ?? (rootRef.current ? [rootRef.current] : []);
+  const inScope = (node: Node) =>
+    scopeContainsRef.current?.(node) ?? hotkeyScopeRef.current?.contains(node) ?? false;
 
   const close = () => {
     inputRef.current?.blur();
@@ -88,7 +126,7 @@ export default function DomSearchBar({
         if (isTerminalTarget(target)) {
           return;
         }
-        if (!hotkeyScopeRef.current?.contains(target) && isEditableTarget(target)) {
+        if (!inScope(target) && isEditableTarget(target)) {
           return;
         }
       }
@@ -130,7 +168,7 @@ export default function DomSearchBar({
         if (isTerminalTarget(target) || isEditableTarget(target)) {
           return;
         }
-        if (target !== document.body && !hotkeyScopeRef.current?.contains(target)) {
+        if (target !== document.body && !inScope(target)) {
           return;
         }
       }
@@ -159,21 +197,30 @@ export default function DomSearchBar({
   }, [term]);
 
   rescanRef.current = (contentDriven: boolean) => {
-    const root = rootRef.current;
     const viewport = viewportRef.current;
-    if (!root || !viewport) {
+    const searched = roots();
+    if (searched.length === 0 || !viewport) {
       return;
     }
     const ranges =
       debouncedTerm === ""
         ? []
-        : collectSearchRanges(root, debouncedTerm, {
-            caseSensitive,
-            regex: useRegex,
-          });
+        : searched.flatMap((root) =>
+            collectSearchRanges(root, debouncedTerm, {
+              caseSensitive,
+              regex: useRegex,
+            }),
+          );
+    // Content changes (streaming text, an answer expanding to show a match)
+    // keep the current match when it is still there.
+    const current = contentDriven ? rangesRef.current[resultsRef.current.index] : undefined;
+    const kept = current ? ranges.findIndex((range) => sameRange(range, current)) : -1;
     rangesRef.current = ranges;
     suppressScrollRef.current = contentDriven;
-    setResults({ index: nearestSearchRangeIndex(viewport, ranges), count: ranges.length });
+    setResults({
+      index: kept >= 0 ? kept : nearestSearchRangeIndex(viewport, ranges),
+      count: ranges.length,
+    });
   };
 
   // Term and option changes are user-driven, so update immediately after the
@@ -191,8 +238,8 @@ export default function DomSearchBar({
     if (!open) {
       return;
     }
-    const root = rootRef.current;
-    if (!root) {
+    const observed = roots();
+    if (observed.length === 0) {
       return;
     }
     const scheduleRescan = () => {
@@ -205,19 +252,25 @@ export default function DomSearchBar({
       }, 250);
     };
     const observer = new MutationObserver(scheduleRescan);
-    observer.observe(root, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ["open"],
-    });
-    root.addEventListener("toggle", scheduleRescan, true);
+    for (const root of observed) {
+      observer.observe(root, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["open"],
+      });
+      root.addEventListener("toggle", scheduleRescan, true);
+    }
+    // A different set of roots (a drawer opening) has different matches.
+    scheduleRescan();
     return () => {
       observer.disconnect();
-      root.removeEventListener("toggle", scheduleRescan, true);
+      for (const root of observed) {
+        root.removeEventListener("toggle", scheduleRescan, true);
+      }
     };
-  }, [open, rootRef]);
+  }, [open, rootRef, rootsKey]);
 
   useEffect(() => {
     if (open) {
@@ -238,6 +291,7 @@ export default function DomSearchBar({
   );
 
   useEffect(() => {
+    resultsRef.current = results;
     const owner = ownerRef.current;
     if (!open || !active) {
       clearSearchHighlights(owner);
@@ -248,11 +302,29 @@ export default function DomSearchBar({
     const suppressScroll = suppressScrollRef.current;
     suppressScrollRef.current = false;
     const range = ranges[results.index];
-    const viewport = viewportRef.current;
-    if (range && viewport && !suppressScroll) {
-      scrollSearchRangeIntoView(viewport, range);
+    let frame: number | null = null;
+    if (range && !suppressScroll) {
+      const scroll = () => {
+        const viewport = viewportForRef.current?.(range) ?? viewportRef.current;
+        if (viewport) {
+          scrollSearchRangeIntoView(viewport, range);
+        }
+      };
+      if (revealRangeRef.current?.(range)) {
+        // Two frames: the reveal renders, then its layout settles.
+        frame = window.requestAnimationFrame(() => {
+          frame = window.requestAnimationFrame(scroll);
+        });
+      } else {
+        scroll();
+      }
     }
-    return () => clearSearchHighlights(owner);
+    return () => {
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
+      clearSearchHighlights(owner);
+    };
   }, [active, open, results, viewportRef]);
 
   const step = (delta: 1 | -1) => {

@@ -24,12 +24,11 @@ function render(nodes: ResearchNode[], selected: ResearchNode = nodes[0]) {
     nodes,
   };
   return renderToStaticMarkup(createElement(ResearchNoteDocument, {
-    detail, note: selected, archived: false, followed: false, bookmarked: false,
+    detail, note: selected, archived: false,
     actions: {
       onAskFollowUp: asyncNoop, onRespond: asyncNoop, onDeleteResponse: asyncNoop, onRetry: asyncNoop,
     },
-    canGoBack: false, canGoForward: false, onBack: noop, onForward: noop,
-    onToggleFollow: noop, onToggleBookmark: noop, onSelectNode: noop,
+    onSelectNode: noop,
   }));
 }
 
@@ -40,10 +39,10 @@ test("a note page leads with the note and posts follow-ups by default", () => {
   // An empty note says so in its meta line instead of an empty section.
   assert.match(html, /Posted to network · [^<]* · No replies yet/);
   assert.doesNotMatch(html, />Activity/);
-  // Delivery and time lead the meta row; Follow and Bookmark follow it.
-  assert.ok(html.indexOf("Posted to network") < html.indexOf("research-thread-actions"));
-  // The header names the page only after its heading scrolls away.
-  assert.match(html, /research-breadcrumb is-title-hidden/);
+  // The page is a column body: the column header carries the title, Follow
+  // and Bookmark, so the body repeats none of them.
+  assert.doesNotMatch(html, /research-thread-actions|research-breadcrumb/);
+  assert.ok(html.indexOf("note-document-heading") < html.indexOf("Posted to network"));
   // Post is the default action; Ask is in the destination menu.
   assert.match(html, /placeholder="Post a follow-up to your network"/);
   assert.match(html, /note-followup-send"[^>]*><span>Post<\/span>/);
@@ -82,7 +81,7 @@ test("a note page lists replies and follow-ups as one activity list in time orde
   assert.match(html, /posted to network/);
 });
 
-test("a network follow-up's page links back to its note and omits Follow and Bookmark", () => {
+test("a network follow-up's page links back to its note", () => {
   const child: ResearchNode = {
     ...note, id: "net", parentNodeId: "note", prompt: "Anyone measured wizer?", createdAt: 140,
   };

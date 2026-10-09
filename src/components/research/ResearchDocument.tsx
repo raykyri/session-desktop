@@ -1,27 +1,43 @@
-import { useResearchDocumentNavigation, useResearchComposerDrafts } from "../../hooks/useResearchDocumentNavigation";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { ArrowDownRight, ArrowLeft, Check, ChevronDown, Copy, LoaderCircle, MoreHorizontal, Pencil, RefreshCw, Reply, ScrollText, Square, Terminal, Trash2, Wrench, X } from "lucide-react";
 import {
-  IS_MAC,
-  isEditableTarget,
-  placePanePopover,
-  turnPaneRectFrom,
-} from "../../lib/appHelpers";
-import type { PanePopoverPlacement } from "../../lib/appHelpers";
+  useResearchComposerDrafts,
+  useResearchDocumentNavigation,
+} from "../../hooks/useResearchDocumentNavigation";
+import {
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
+import {
+  Check,
+  Copy,
+  GitBranch,
+  Highlighter,
+  LoaderCircle,
+  Pencil,
+  Plus,
+  RefreshCw,
+  ScrollText,
+  Trash2,
+  X,
+} from "lucide-react";
+import { IS_MAC, isEditableTarget } from "../../lib/appHelpers";
 import {
   createResearchHighlight,
   getResearchNodeContent,
   removeResearchHighlights,
+  renameResearchNode,
+  setResearchNodePromoted,
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
-import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import ResearchNoteDocument from "./ResearchNoteDocument";
 import type { NoteActions } from "./ResearchNote";
-import { formatRelativeTime } from "../../lib/transcriptSessions";
-import ResearchThreadActions from "./ResearchThreadActions";
-import { useFollowupBarMinimizer } from "./FollowupBarMinimizer";
-import { growComposerTextarea } from "../../lib/composerTextarea";
 import {
   EMPTY_RESEARCH_HISTORY,
   canGoBack as historyCanGoBack,
@@ -34,24 +50,28 @@ import {
 } from "../../lib/researchHistory";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import { researchBranchInfo } from "../../lib/researchBranches";
-import { listenToResearchFollowupsFocus } from "../../lib/researchShortcuts";
 import {
-  conversationActivityToolCalls,
-  conversationToolCallLabel,
-} from "../../lib/researchConversations";
+  listenToResearchFollowupsFocus,
+  listenToResearchNodeOpen,
+} from "../../lib/researchShortcuts";
+import {
+  RESEARCH_PINNED_COLUMN_WIDTH,
+  researchBranchesByParent,
+  researchChainHead,
+  researchDrawerWidth,
+  researchMainChainAncestor,
+  researchNodePlacement,
+  researchParentBranchHead,
+  researchQueueStep,
+} from "../../lib/researchBranchView";
 import {
   canContinueThread,
   canFollowUpFrom,
   canRetryResearchNode,
-  canStopResearchNode,
   inlineChainFor,
   isActiveResearchStatus,
-  researchThreadStopTarget,
 } from "../../lib/researchThreads";
-import {
-  countResearchDocumentWords,
-  stripImportedReportCitations,
-} from "../../lib/researchDocuments";
+import { countResearchDocumentWords } from "../../lib/researchDocuments";
 import {
   expandedResearchHighlightOffsets,
   intersectingResearchHighlightIds,
@@ -63,18 +83,16 @@ import {
   resolveResearchHighlightOffset,
 } from "../../lib/researchHighlights";
 import {
-  isResearchNodeSelectionChange,
   pruneResearchNavigationNodes,
-  recordResearchScrollPosition,
   restoreResearchScrollPosition,
+  type QueuedResearchFollowup,
 } from "../../lib/researchNavigation";
 import {
   createResearchSelectionSnapper,
-  researchAnchorConnectorEndpoints,
   researchSelectionActionPlacement,
-  shouldDismissEmptyResearchAskOnClick,
   type ResearchSelectionSnapper,
 } from "../../lib/researchSelection";
+import { formatElapsedClock, formatRunDuration, shortWhen } from "../../lib/shortTime";
 import {
   assistantTextFromTimelineItems,
   buildTimelineItems,
@@ -82,7 +100,6 @@ import {
   timelineItemsAfterLastToolCall,
   timelineItemsContainTranscriptActivity,
 } from "../../lib/turnTimeline";
-import type { MessageBlock, MessageItem } from "../../lib/turnTimeline";
 import type {
   ResearchBranchRemoval,
   ResearchHighlight,
@@ -92,33 +109,29 @@ import type {
   ResearchTreeDetail,
   UpdateResearchDocumentResult,
 } from "../../types";
-import { ComposerSubmitShortcutGlyph } from "../ComposerSubmitShortcut";
 import DomSearchBar from "../DomSearchBar";
-import {
-  RawTranscriptDisclosure,
-  TranscriptActivityItem,
-  timelineContextStatusClass,
-  timelineStatusClass,
-} from "../TranscriptActivity";
-import ResearchRecap from "./ResearchRecap";
 import ResearchRecapDialog from "./ResearchRecapDialog";
-import {
-  ResearchMarkdown,
-  ResearchMessageBody,
-  ResearchUserMessage,
-} from "./ResearchMessage";
-import {
-  TranscriptLinkActionsProvider,
-  type LinkActions,
-} from "../TranscriptMarkdown";
+import { TranscriptLinkActionsProvider, type LinkActions } from "../TranscriptMarkdown";
 import DocumentComposer from "./DocumentComposer";
 import {
+  ResearchConversationHeader,
   ResearchDocumentFrame,
-  ResearchHistoryNav,
-  ResearchSidebarRestoreButton,
 } from "./ResearchDocumentChrome";
+import { ResearchTurn, type SegmentDomKind, type SegmentView } from "./ResearchTurn";
+import ResearchConversationComposer, {
+  type ResearchComposerHandle,
+} from "./ResearchConversationComposer";
+import {
+  prefersReducedMotion,
+  ResearchBranchDrawer,
+  ResearchBranchHeader,
+  ResearchBranchSource,
+} from "./ResearchBranchDrawer";
+import { ResearchColumnsContext, showResearchColumn } from "./ResearchColumns";
 
 const EMPTY_RECAP_PENDING_NODE_IDS: ReadonlySet<string> = new Set<string>();
+const EMPTY_BRANCHES: ResearchNode[] = [];
+const EMPTY_QUEUE: QueuedResearchFollowup[] = [];
 
 interface ResearchDocumentProps {
   detail: ResearchTreeDetail | null;
@@ -140,10 +153,15 @@ interface ResearchDocumentProps {
   noteActions: NoteActions;
   onRemoveBranch: (nodeId: string) => Promise<ResearchBranchRemoval>;
   onRemoveTree: (treeId: string) => Promise<void>;
+  onRenameTree: (treeId: string, title: string) => Promise<void>;
   /** Persist the thread's Follow / Bookmark flags; the tree update event
    * flows back through `detail`. */
   onSetFollowed: (treeId: string, followed: boolean) => Promise<void>;
   onSetBookmarked: (treeId: string, bookmarked: boolean) => Promise<void>;
+  /** Opens the folder menu for this question (the header's Move button). */
+  onMoveTree?: (treeId: string, trigger: HTMLElement) => void;
+  /** Closes the conversation column. */
+  onClose?: () => void;
   onUpdateDocument: (input: {
     nodeId: string;
     markdown: string;
@@ -155,14 +173,12 @@ interface ResearchDocumentProps {
   onCancel: (nodeId: string) => Promise<void>;
   /** Relaunches a failed or cancelled run in place (same node id, same
    * inputs). The refreshed tree detail flows back through the caller's
-   * reconciliation, so the segment re-renders as Queued. */
+   * reconciliation, so the turn re-renders as Queued. */
   onRetryNode: (nodeId: string) => Promise<void>;
   linkActions: LinkActions;
   onError: (message: string) => void;
   onToast: (message: string, tone?: "normal" | "warning") => void;
-  /** Reopens the application sidebar when research is using the full width. */
-  onShowSidebar?: () => void;
-  /** Show held-⌘ shortcut badges (the ⌘J follow-ups hint). */
+  /** Show held-⌘ shortcut badges (the ⌘J composer hint). */
   shortcutHintsShown: boolean;
   /** Runs whose background summary job is in flight; each renders a spinner in
    * its recap slot until the summary arrives. */
@@ -173,56 +189,31 @@ interface ResearchDocumentProps {
   workspaceCanGoForward?: boolean;
   onWorkspaceBack?: () => void;
   onWorkspaceForward?: () => void;
+  /** Called with the node the branch drawer shows whenever that changes, and
+   * with null when the drawer closes (or shows a branch not yet created). */
+  onDrawerNodeChange?: (nodeId: string | null) => void;
 }
 
-// The backend caps snapshots at 64MB, which is still far beyond what markdown
-// parsing and eager React element creation can absorb without freezing the
-// interface. Blocks past this size render as plain preformatted text — itself
-// display-capped, since laying out a multi-megabyte text node freezes the interface
-// too — and long transcripts render only their tail until expanded.
-const MARKDOWN_CHAR_LIMIT = 100_000;
-const PLAINTEXT_DISPLAY_CHAR_LIMIT = 1_000_000;
-const ACTIVITY_PAYLOAD_CHAR_LIMIT = 200_000;
 const TIMELINE_ITEM_RENDER_WINDOW = 100;
-// Hoisted so the memoized markdown renderer sees a stable prop identity — an
-// inline object literal would defeat its render cache on every poll.
-const OVERSIZED_MARKDOWN_POLICY = {
-  maxCharacters: MARKDOWN_CHAR_LIMIT,
-  maxDisplayCharacters: PLAINTEXT_DISPLAY_CHAR_LIMIT,
-  fallbackClassName: "research-plaintext",
-} as const;
-
-// The composer's submit modes, in menu order. ⇧⌘↵ branches from whichever
-// mode is selected, so it is labelled on the branch row; ⌘↵ submits in the
-// selected mode and is labelled on the Send button itself.
-const FOLLOWUP_MODE_OPTIONS: {
-  mode: "thread" | "branch";
-  label: string;
-  shortcut: string | null;
-}[] = [
-  { mode: "thread", label: "Continue thread", shortcut: null },
-  { mode: "branch", label: "New branch in sidebar", shortcut: "⇧⌘↵" },
-];
-
-const FOLLOWUP_MENU_WIDTH = 230;
-const FOLLOWUP_MENU_HEIGHT = 188;
-const DOCUMENT_MENU_HEIGHT = 230;
-const FOLLOWUP_MENU_MARGIN = 8;
-
-interface FollowupMenu {
-  nodeId: string;
-  left: number;
-  top: number;
-}
+const MENU_MARGIN = 8;
+const FLASH_MS = 1600;
 
 interface HighlightAction {
-  /** The thread segment (node) the selection landed in. */
+  /** The turn (node) the selection landed in. */
   nodeId: string;
+  /** A selection in an answer that is still streaming: it can be copied, but
+   * not highlighted or branched from until the answer has a revision. */
+  live: boolean;
+  /** The selection crossed into a later paragraph; the anchor stops at the
+   * end of the first one. */
+  crossed: boolean;
+  /** The whole selection, for Copy. */
+  copyText: string;
   anchor: ResearchHighlightAnchor;
   highlightIds: string[];
-  /** The merged annotation an Expand action would save — the union of the
-   * selection and every highlight it intersects. Null when there is nothing
-   * to expand. */
+  /** The merged annotation Highlight saves when the selection overlaps
+   * existing highlights — the union of the selection and every highlight it
+   * intersects. Null when there is nothing to merge. */
   expandAnchor: ResearchHighlightAnchor | null;
   left: number;
   top: number;
@@ -246,6 +237,30 @@ interface DocumentEditSession {
   highlightCount: number;
 }
 
+/** What the drawer shows: a branch (any node of its chain), or a new branch
+ * that has no node until its first question is sent. */
+type DrawerTarget =
+  | { kind: "node"; nodeId: string }
+  | { kind: "draft"; parentNodeId: string; anchor: ResearchHighlightAnchor | null };
+
+interface FloatingMenuAnchor {
+  left: number;
+  top: number;
+  bottom: number;
+  /** Where focus returns when Escape closes the menu. */
+  trigger?: HTMLElement | null;
+}
+
+type FloatingMenuState =
+  | ({ kind: "answer"; nodeId: string } & FloatingMenuAnchor)
+  | ({ kind: "branches"; nodeId: string } & FloatingMenuAnchor)
+  | ({
+      kind: "mark";
+      nodeId: string;
+      branchIds: string[];
+      highlightId: string | null;
+    } & FloatingMenuAnchor);
+
 interface ResearchHighlightRegistry {
   set(name: string, highlight: unknown): void;
   delete(name: string): void;
@@ -263,36 +278,22 @@ interface ResearchHighlightApi {
 }
 
 const RESEARCH_HIGHLIGHT_NAME = "session-research-highlights";
-const RESEARCH_QUERY_ANCHOR_NAME = "session-research-query-anchors";
+const RESEARCH_BRANCH_NAME = "session-research-branch-passages";
+const RESEARCH_OPEN_BRANCH_NAME = "session-research-open-branch";
 const RESEARCH_OVERLAP_NAME = "session-research-highlight-overlaps";
+const RESEARCH_HOVER_HIGHLIGHT_NAME = "session-research-highlight-hover";
+const RESEARCH_HOVER_BRANCH_NAME = "session-research-branch-hover";
 const RESEARCH_SELECTED_NAME = "session-research-selected-highlights";
-// Stacking order for the highlight layers that repaint over the shared base
-// tone: overlap regions above the base paint and the selection tone above
-// everything.
+const RESEARCH_FLASH_NAME = "session-research-flash";
+// Stacking order for the layers that repaint over the shared base tones:
+// overlaps above the base paint, hover above overlaps, the underline of an
+// open branch's passage above that, and the selection tone above everything.
 const RESEARCH_OVERLAP_PRIORITY = 1;
-const RESEARCH_SELECTED_PRIORITY = 2;
+const RESEARCH_HOVER_PRIORITY = 2;
+const RESEARCH_OPEN_PRIORITY = 3;
+const RESEARCH_FLASH_PRIORITY = 4;
+const RESEARCH_SELECTED_PRIORITY = 5;
 const RESEARCH_HIGHLIGHT_CONTEXT_LENGTH = 128;
-// Clearance between the anchored composer's bottom edge and the first pushed
-// follow-up card.
-const ASK_COMPOSER_CLEARANCE = 20;
-// Minimum vertical gap between anchored cards after collision resolution.
-// Tighter than the stacked rail's 20px so a cascaded cluster stays visually
-// attached to the passage that produced it.
-const ANCHORED_CARD_GAP = 12;
-// When connector vertical runs would sit on top of one another, they fan out
-// into the gutter by one lane's worth per collision. A run may be displaced up
-// to this fraction of its own horizontal span from the centered midline.
-const CONNECTOR_STAGGER_FRACTION = 0.25;
-// Pixel separation between adjacent lanes of overlapping vertical runs. Capped
-// per-connector by CONNECTOR_STAGGER_FRACTION.
-const CONNECTOR_STAGGER_STEP = 14;
-// Treat nearly touching vertical spans as competing connector routes so the
-// later one can fall back to an elbow instead of crossing the earlier leader.
-const CONNECTOR_COLLISION_CLEARANCE = 8;
-// Wait for window/split-pane resizing to settle before remeasuring passage,
-// card, and connector geometry. A trailing debounce avoids forced layout on
-// every drag frame while still repairing the final arrangement promptly.
-const ANCHOR_LAYOUT_DEBOUNCE_MS = 140;
 // Match the platform's small click-versus-drag tolerance: a click should keep
 // link, annotation, and native double-click behavior, while a deliberate drag
 // switches to live whole-word selection quickly.
@@ -420,11 +421,9 @@ function applyDirectionalSelectionRange(
   selection.addRange(range);
 }
 
-// Rows whose text is transcript machinery rather than the assistant's prose:
-// tool calls and their payloads, the "Raw" disclosure (also a `.tool-block`,
-// and it can nest inside a message), collapsed thinking, and grouped activity.
-// Selections that touch any of these carry no meaning worth anchoring, so
-// highlight/ask is not offered on them.
+// Exclude tool calls and payloads, Raw disclosures, collapsed thinking, and
+// grouped activity from selections used for highlights or branches. Raw
+// disclosures use `.tool-block` and can be nested inside a message.
 const NON_TEXT_ROW_SELECTOR =
   ".tool-block, .thinking-block, .activity-group-block, .research-conversation-activity";
 
@@ -579,72 +578,51 @@ function quoteDisplayText(exact: string) {
   return exact.split(/\s+/).join(" ").trim();
 }
 
-const RESEARCH_REPLY_SNIPPET_WORDS = 8;
+// The paragraph-level blocks a highlight or branch passage stays within.
+const PASSAGE_BLOCK_SELECTOR =
+  "p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, td, th, dt, dd, figcaption";
 
-/** First ~8 words of the previous answer for the follow-up reply line. Punctuation
- * tokens (em dashes, heading markers) don't count, and a trailing ellipsis marks
- * a cut; CSS still ellipsizes if those words would wrap. */
-export function formatResearchReplySnippet(
-  answer: string,
-  maxWords = RESEARCH_REPLY_SNIPPET_WORDS,
-): string {
-  const tokens = quoteDisplayText(answer.replace(/^#{1,6}\s+/gm, "")).split(" ").filter(Boolean);
-  if (tokens.length === 0) {
-    return "";
-  }
-  const kept: string[] = [];
-  let wordCount = 0;
-  for (const token of tokens) {
-    if (/[\p{L}\p{N}]/u.test(token)) {
-      if (wordCount >= maxWords) {
-        return `${kept.join(" ")}…`;
-      }
-      wordCount += 1;
-    }
-    kept.push(token);
-  }
-  return kept.join(" ");
+/** The block (paragraph, list item, heading, ...) a position sits in, inside
+ * `root`, or null outside any. */
+function passageBlockAt(root: HTMLElement, node: Node) {
+  const element = node instanceof Element ? node : node.parentElement;
+  const block = element?.closest<HTMLElement>(PASSAGE_BLOCK_SELECTOR) ?? null;
+  return block && root.contains(block) ? block : null;
 }
 
-/** Where the action bar sits for a selection: beside the final rendered line,
- * with a below-the-line fallback when the remaining viewport is too narrow. */
-function highlightActionPlacement(range: Range, reservedWidth = 260) {
+// The selection actions' size before they have rendered once (three inline
+// items, plus the note line when one shows).
+const SELECTION_ACTIONS_SIZE = { width: 290, height: 40 };
+
+/** Where the action bar sits for a selection: centred 8px above it. */
+function highlightActionPlacement(range: Range, size = SELECTION_ACTIONS_SIZE) {
   return researchSelectionActionPlacement({
-    fragments: Array.from(range.getClientRects()),
     boundingRect: range.getBoundingClientRect(),
     viewportWidth: window.innerWidth,
     viewportHeight: window.innerHeight,
-    reservedWidth,
+    width: size.width,
+    height: size.height,
   });
 }
 
-// Rounded-elbow connector path: out from the passage's line into the gutter,
-// a vertical run at `midX` (defaults to the gutter's midline), then into the
-// card at the card's own height. Degenerates to a straight segment when the
-// pair is level or the gutter is too tight for the turns.
-function connectorElbowPath(
-  sx: number,
-  sy: number,
-  ex: number,
-  ey: number,
-  midX = Math.round((sx + ex) / 2),
-): string {
-  const dy = ey - sy;
-  if (Math.abs(dy) < 2 || ex - sx < 8) {
-    return `M ${sx} ${sy} L ${ex} ${ey}`;
+/** Why no branch can start from `node`, or null when one can. */
+function branchBlockerFor(node: ResearchNode | null | undefined, archived: boolean) {
+  if (archived) {
+    return "Restore this question from Archive to branch from it";
   }
-  const r = Math.min(10, Math.abs(dy) / 2, midX - sx, ex - midX);
-  const dir = dy > 0 ? 1 : -1;
-  return (
-    `M ${sx} ${sy} L ${midX - r} ${sy}` +
-    ` Q ${midX} ${sy} ${midX} ${sy + dir * r}` +
-    ` L ${midX} ${ey - dir * r}` +
-    ` Q ${midX} ${ey} ${midX + r} ${ey}` +
-    ` L ${ex} ${ey}`
-  );
+  if (!node || isActiveResearchStatus(node.status)) {
+    return "Wait for the answer to finish";
+  }
+  if (node.status === "failed") {
+    return "This answer stopped with an error. Retry it to branch from it";
+  }
+  if (node.status === "cancelled") {
+    return "This answer was stopped. Run it again to branch from it";
+  }
+  return canFollowUpFrom(node) ? null : "Waiting for the native session checkpoint";
 }
 
-function sameCardTops(a: Record<string, number>, b: Record<string, number>) {
+function sameNumberRecord(a: Record<string, number>, b: Record<string, number>) {
   const aKeys = Object.keys(a);
   return (
     aKeys.length === Object.keys(b).length &&
@@ -666,241 +644,17 @@ function withoutKeys<T>(record: Record<string, T>, keys: Iterable<string>): Reco
   return next;
 }
 
-/** Dotted connectors, grouped by the thread segment whose grid hosts them.
- * Paths are in that segment's response-grid pixel coordinates. */
-interface SegmentAnchorConnector {
-  segmentId: string;
-  id: string;
-  d: string;
-  x: number;
-  y: number;
-}
-
-/** Content-derived render state for one thread segment, cached per node (see
- * segmentViews) so the whole view identity survives detail replacements —
- * which is what lets ThreadSegment's memo and the markdown renderer's cache
- * hold. `node` is the node as of the last content/toggle change and MAY BE
- * STALE on volatile fields (status, error, timestamps); consumers needing
- * fresh metadata take the live node separately. */
-interface SegmentView {
-  node: ResearchNode;
-  content: ResearchNodeContent | null;
-  isDocument: boolean;
-  isConversation: boolean;
-  showAllTurns: boolean;
-  showFullTrace: boolean;
-  timelineItems: MessageItem[];
-  displayedTimelineItems: MessageItem[];
-  visibleTimelineItems: MessageItem[];
-  hiddenTimelineItemCount: number;
-  hasTranscriptActivity: boolean;
-  rawAnswer: string;
-  conversationCopyText: string | null;
-  answerWordCount: number;
-  editableDocumentMarkdown: string | null;
-}
-
-function statusLabel(status: ResearchNode["status"]) {
-  switch (status) {
-    case "queued":
-      return "Queued";
-    case "starting":
-      return "Starting";
-    case "running":
-      return "Working…";
-    case "complete":
-      return "Complete";
-    case "failed":
-      return "Failed";
-    case "cancelled":
-      return "Cancelled";
-  }
-}
-
-function formatDuration(durationMs: number) {
-  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
-  if (totalSeconds < 60) {
-    return `${totalSeconds}s`;
-  }
-  const minutes = Math.floor(totalSeconds / 60);
-  if (minutes < 60) {
-    return `${minutes}m ${totalSeconds % 60}s`;
-  }
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-}
-
-function unexpectedRoleLabel(role: string) {
-  if (role === "system") {
-    return "System content";
-  }
-  if (role === "user") {
-    return "Additional user content";
-  }
-  return `${role || "Unknown"} content`;
-}
-
-function ResearchMessageBlock({
-  block,
-  role,
-  conversation = false,
-  imported = false,
-}: {
-  block: MessageBlock;
-  role: string;
-  conversation?: boolean;
-  imported?: boolean;
-}) {
-  if (block.type === "text") {
-    // In a conversation node every turn is first-class content: user
-    // messages render as markdown prompts, not as unexpected-content
-    // callouts (that framing exists for run responses, where a mid-response
-    // user turn signals leakage).
-    if (role === "assistant" || conversation) {
-      return (
-        <ResearchMarkdown
-          text={imported ? stripImportedReportCitations(block.text) : block.text}
-          oversizedContent={imported ? undefined : OVERSIZED_MARKDOWN_POLICY}
-        />
-      );
-    }
-    return <p className="research-unexpected-text">{block.text}</p>;
-  }
+function sameIds(previous: readonly string[], candidate: readonly string[]) {
   return (
-    <RawTranscriptDisclosure
-      value={block.value}
-      maxPayloadCharacters={ACTIVITY_PAYLOAD_CHAR_LIMIT}
-      deferPayload
-      className="research-activity"
-    />
+    previous.length === candidate.length &&
+    previous.every((id, index) => id === candidate[index])
   );
 }
-
-// Memoized on item identity: the tree detail is replaced by every research
-// event (4×/s while any run in the tree streams), and without the memo each
-// replacement re-rendered — and re-parsed the markdown of — every visible
-// item. Item identities are stable across detail replacements because they
-// derive from `content`, which only changes when this node's own fetch lands.
-export const ResearchTimelineItem = memo(function ResearchTimelineItem({
-  item,
-  conversation = false,
-  imported = false,
-}: {
-  item: MessageItem;
-  conversation?: boolean;
-  imported?: boolean;
-}) {
-  if (conversation) {
-    return (
-      <section
-        className={`research-response-item role-${item.role} is-conversation${timelineContextStatusClass(
-          item.contextStatus,
-        )}`}
-        data-timeline-key={item.key}
-      >
-        {item.contextStatus === "rolledBack" ? (
-          <div className="turn-context-status">Excluded from active context</div>
-        ) : null}
-        {item.blocks.length > 0 && item.role === "user" ? (
-          <ResearchUserMessage
-            className={`research-response-message research-conversation-prompt research-prompt${timelineStatusClass(item.status)}`}
-          >
-            {item.blocks.map((block, index) => (
-              <ResearchMessageBlock
-                key={`${item.key}-${index}`}
-                block={block}
-                role={item.role}
-                conversation
-              />
-            ))}
-          </ResearchUserMessage>
-        ) : item.blocks.length > 0 ? (
-          <div
-            className={`research-response-message${timelineStatusClass(item.status)}`}
-          >
-            {item.blocks.map((block, index) => (
-              <ResearchMessageBlock
-                key={`${item.key}-${index}`}
-                block={block}
-                role={item.role}
-                conversation
-              />
-            ))}
-          </div>
-        ) : null}
-        {item.activities.map((activity) => {
-          // Export activity markers (collapsed tool calls) render as quiet
-          // chips; anything else — impossible in a well-formed export, but
-          // archives are only shape-validated — falls back to the ordinary
-          // activity disclosure.
-          const toolCalls = conversationActivityToolCalls(activity);
-          if (toolCalls === null) {
-            return (
-              <TranscriptActivityItem
-                key={activity.key}
-                item={activity}
-                className="research-activity"
-                isRootActivity
-                maxPayloadCharacters={ACTIVITY_PAYLOAD_CHAR_LIMIT}
-                deferPayloads
-                showResultTokenCount={false}
-              />
-            );
-          }
-          // A malformed marker count still renders a chip (labelled without
-          // a number): the marker's whole job is preserving the fact that
-          // tool activity happened.
-          return (
-            <div key={activity.key} className="research-conversation-activity">
-              <Wrench size={12} aria-hidden="true" />
-              <span>{conversationToolCallLabel(toolCalls)}</span>
-            </div>
-          );
-        })}
-      </section>
-    );
-  }
-  const hasUnexpectedContent = item.role !== "assistant" && item.blocks.length > 0;
-  return (
-    <section
-      className={`research-response-item role-${item.role}${timelineContextStatusClass(
-        item.contextStatus,
-      )}`}
-      data-timeline-key={item.key}
-    >
-      {item.contextStatus === "rolledBack" ? (
-        <div className="turn-context-status">Excluded from active context</div>
-      ) : null}
-      {item.blocks.length > 0 ? (
-        <div
-          className={`research-response-message${
-            hasUnexpectedContent ? " research-unexpected-content" : ""
-          }${timelineStatusClass(item.status)}`}
-        >
-          {hasUnexpectedContent ? <span>{unexpectedRoleLabel(item.role)}</span> : null}
-          {item.blocks.map((block, index) => (
-            <ResearchMessageBlock key={`${item.key}-${index}`} block={block} role={item.role} imported={imported} />
-          ))}
-        </div>
-      ) : null}
-      {item.activities.map((activity) => (
-        <TranscriptActivityItem
-          key={activity.key}
-          item={activity}
-          className="research-activity"
-          isRootActivity
-          maxPayloadCharacters={ACTIVITY_PAYLOAD_CHAR_LIMIT}
-          deferPayloads
-          showResultTokenCount={false}
-        />
-      ))}
-    </section>
-  );
-});
 
 /** Keeps the previous identity of a derived value while an equality check
- * says nothing changed. Chain ids and anchored entries are recomputed on
- * every research event (4×/s while any run streams); without this, each
- * recomputation's fresh identity would churn every effect keyed on them. */
+ * says nothing changed. Chain ids are recomputed on every research event
+ * (4×/s while any run streams); without this, each recomputation's fresh
+ * identity would rerun every effect that depends on them. */
 function useStableValue<T>(next: T, isEqual: (previous: T, candidate: T) => boolean): T {
   const ref = useRef(next);
   if (ref.current !== next && !isEqual(ref.current, next)) {
@@ -909,850 +663,191 @@ function useStableValue<T>(next: T, isEqual: (previous: T, candidate: T) => bool
   return ref.current;
 }
 
-const EMPTY_SEGMENT_CHILDREN: ResearchNode[] = [];
-const EMPTY_SEGMENT_CONNECTORS: SegmentAnchorConnector[] = [];
-
-type SegmentDomKind = "anchor" | "grid" | "root" | "aside";
-
-interface ThreadSegmentProps {
-  view: SegmentView;
-  /** Fresh node metadata (status, error, timestamps, pane). The comparator
-   * field-compares this, so detail replacements that change nothing the
-   * segment renders bail out of reconciliation. */
-  node: ResearchNode;
-  index: number;
-  /** Previous segment's answer, for the follow-up "Reply to:" line. */
-  replyToAnswer: string | null;
-  /** For a follow-up of a note asked about one reply: that reply's text,
-   * quoted above the question the way an anchored passage is. */
-  replyQuote?: string | null;
-  /** Thread-level Follow / Bookmark state, rendered on the root prompt's
-   * footer row. */
-  followed: boolean;
-  bookmarked: boolean;
-  onToggleFollow: () => void;
-  onToggleBookmark: () => void;
-  isSelected: boolean;
-  contentError: string | null;
-  segmentActive: boolean;
-  /** Terminal/cancel controls for a run streaming (or a cancel stuck with a
-   * lingering pane) on a non-selected segment; the header's pair follows the
-   * selection. */
-  showRunControls: boolean;
-  cancelling: boolean;
-  /** Pre-formatted duration line ("Generating for 1m 08s", "Ran for …", a
-   * bare duration, "Waiting to start"), or null to omit. Computed by the
-   * parent so the once-per-second clock tick only re-renders segments whose
-   * text actually changes. */
-  durationText: string | null;
-  hiddenHighlightCount: number;
-  /** A background summary job is in flight for this segment's run. */
-  recapPending: boolean;
-  /** Sorted, comma-joined ids of this segment's follow-up cards that finished
-   * while open and remain unopened; each gets an unread dot. */
-  unreadCardKey: string;
-  pointerOverHighlight: boolean;
-  /** The hover-linked anchored follow-up, narrowed to this segment's cards
-   * so hovering one rail does not re-render every segment. */
-  linkedAnchorId: string | null;
-  connectors: SegmentAnchorConnector[];
-  segmentChildren: ResearchNode[];
-  anchoredCardTops: Record<string, number>;
-  resolvedCardTops: Record<string, number>;
-  menuOpen: boolean;
-  /** The docked ask composer, when this segment hosts the in-progress ask.
-   * Rendered by the parent (it owns the composer state); non-null values
-   * intentionally defeat the memo so keystrokes reach the composer. */
-  askComposer: React.ReactNode;
-  registerSegmentElement: (
-    nodeId: string,
-    kind: SegmentDomKind,
-    element: HTMLElement | null,
-  ) => void;
-  onSelectNode: (nodeId: string) => void;
-  onExpandTurns: (nodeId: string) => void;
-  onRetryContentLoad: () => void;
-  onShowFullTrace: (nodeId: string) => void;
-  onCopyAnswer: (view: SegmentView) => void;
-  onOpenAnswerMenu: (trigger: HTMLButtonElement, nodeId: string) => void;
-  onOpenFollowupMenu: (nodeId: string, clientX: number, clientY: number) => void;
-  onCancelNode: (nodeId: string) => void;
-  /** Whether this segment's settled node can be retried in place (predicate
-   * plus archived gating, computed by the parent). */
-  canRetryNode: boolean;
-  /** True while this segment's retry request is in flight. */
-  retryingNode: boolean;
-  onRetryNode: (nodeId: string) => void;
-  onCardHover: (childId: string, entering: boolean) => void;
-  onRootMouseDown: (event: React.MouseEvent<HTMLDivElement>) => void;
-  onRootMouseUp: (event: React.MouseEvent<HTMLDivElement>) => void;
-  onRootKeyUp: () => void;
-  onRootClick: (event: React.MouseEvent<HTMLDivElement>) => void;
-  onRootMouseMove: (event: React.MouseEvent<HTMLDivElement>) => void;
-  onRootMouseLeave: () => void;
+function scrollBehavior(): ScrollBehavior {
+  return prefersReducedMotion() ? "auto" : "smooth";
 }
 
-function sameSegmentNode(a: ResearchNode, b: ResearchNode) {
-  return (
-    a.id === b.id &&
-    a.status === b.status &&
-    a.error === b.error &&
-    a.paneId === b.paneId &&
-    a.parentNodeId === b.parentNodeId &&
-    a.prompt === b.prompt
-  );
-}
-
-function sameSegmentChildren(a: ResearchNode[], b: ResearchNode[]) {
-  return (
-    a.length === b.length &&
-    a.every((child, index) => {
-      const other = b[index];
-      return (
-        child.id === other.id &&
-        child.status === other.status &&
-        child.prompt === other.prompt &&
-        child.responsePreview === other.responsePreview
-      );
-    })
-  );
-}
-
-function sameSegmentConnectors(
-  previous: SegmentAnchorConnector[],
-  next: SegmentAnchorConnector[],
-) {
-  return (
-    previous.length === next.length &&
-    previous.every((connector, index) => {
-      const candidate = next[index];
-      return (
-        connector.id === candidate.id &&
-        connector.segmentId === candidate.segmentId &&
-        connector.d === candidate.d &&
-        connector.x === candidate.x &&
-        connector.y === candidate.y
-      );
-    })
-  );
-}
-
-/** Everything compares by identity except the node, card, placement, and
- * connector props rebuilt on research/layout events; those compare only the
- * fields and child ids this segment actually renders.
- * The generic loop keeps future props safe by default: a new prop falls back
- * to identity comparison, which can only cost memo hits, never stale UI. */
-function threadSegmentPropsEqual(prev: ThreadSegmentProps, next: ThreadSegmentProps) {
-  for (const key of Object.keys(next) as (keyof ThreadSegmentProps)[]) {
-    if (
-      key === "node" ||
-      key === "segmentChildren" ||
-      key === "connectors" ||
-      key === "anchoredCardTops" ||
-      key === "resolvedCardTops"
-    ) {
-      continue;
-    }
-    if (!Object.is(prev[key], next[key])) {
-      return false;
-    }
+/** Scrolls `element`'s column (its nearest `.research-column-scroll`) so the
+ * element's top sits `offset` px below the column's top; a third of the way
+ * down by default. */
+function scrollColumnTo(element: Element, offset?: number, behavior = scrollBehavior()) {
+  const scroller = element.closest<HTMLElement>(".research-column-scroll");
+  if (!scroller) {
+    return;
   }
-  return (
-    sameSegmentNode(prev.node, next.node) &&
-    sameSegmentChildren(prev.segmentChildren, next.segmentChildren) &&
-    sameSegmentConnectors(prev.connectors, next.connectors) &&
-    sameRailCardTops(
-      next.segmentChildren,
-      prev.anchoredCardTops,
-      next.anchoredCardTops,
-    ) &&
-    sameRailCardTops(
-      next.segmentChildren,
-      prev.resolvedCardTops,
-      next.resolvedCardTops,
-    )
-  );
+  const top =
+    element.getBoundingClientRect().top -
+    scroller.getBoundingClientRect().top +
+    scroller.scrollTop -
+    (offset ?? scroller.clientHeight / 3);
+  scroller.scrollTo({ top: Math.max(0, top), behavior });
 }
 
-interface ResearchAnswerPaneProps {
-  view: SegmentView;
-  node: ResearchNode;
-  contentError: string | null;
-  segmentActive: boolean;
-  showRunControls: boolean;
-  cancelling: boolean;
-  durationText: string | null;
-  hiddenHighlightCount: number;
-  recapPending: boolean;
-  pointerOverHighlight: boolean;
-  menuOpen: boolean;
-  registerSegmentElement: ThreadSegmentProps["registerSegmentElement"];
-  onExpandTurns: ThreadSegmentProps["onExpandTurns"];
-  onRetryContentLoad: ThreadSegmentProps["onRetryContentLoad"];
-  onShowFullTrace: ThreadSegmentProps["onShowFullTrace"];
-  onCopyAnswer: ThreadSegmentProps["onCopyAnswer"];
-  onOpenAnswerMenu: ThreadSegmentProps["onOpenAnswerMenu"];
-  onCancelNode: ThreadSegmentProps["onCancelNode"];
-  canRetryNode: ThreadSegmentProps["canRetryNode"];
-  retryingNode: ThreadSegmentProps["retryingNode"];
-  onRetryNode: ThreadSegmentProps["onRetryNode"];
-  onRootMouseDown: ThreadSegmentProps["onRootMouseDown"];
-  onRootMouseUp: ThreadSegmentProps["onRootMouseUp"];
-  onRootKeyUp: ThreadSegmentProps["onRootKeyUp"];
-  onRootClick: ThreadSegmentProps["onRootClick"];
-  onRootMouseMove: ThreadSegmentProps["onRootMouseMove"];
-  onRootMouseLeave: ThreadSegmentProps["onRootMouseLeave"];
-}
-
-function answerPanePropsEqual(prev: ResearchAnswerPaneProps, next: ResearchAnswerPaneProps) {
-  for (const key of Object.keys(next) as (keyof ResearchAnswerPaneProps)[]) {
-    if (key === "node") {
-      continue;
-    }
-    if (!Object.is(prev[key], next[key])) {
-      return false;
-    }
+function inColumnView(rect: DOMRect, element: Element) {
+  const scroller = element.closest<HTMLElement>(".research-column-scroll");
+  if (!scroller) {
+    return true;
   }
-  return sameSegmentNode(prev.node, next.node);
+  const bounds = scroller.getBoundingClientRect();
+  return rect.top >= bounds.top + 8 && rect.bottom <= bounds.bottom - 8;
 }
 
-/** The expensive answer subtree is isolated from its segment's live card
- * previews. A follow-up can now stream in the rail without rebuilding the
- * answer's timeline element tree or walking its Markdown renderers. */
-const ResearchAnswerPane = memo(function ResearchAnswerPane({
-  view,
-  node,
-  contentError,
-  segmentActive,
-  showRunControls,
-  cancelling,
-  durationText,
-  hiddenHighlightCount,
-  recapPending,
-  pointerOverHighlight,
-  menuOpen,
-  registerSegmentElement,
-  onExpandTurns,
-  onRetryContentLoad,
-  onShowFullTrace,
-  onCopyAnswer,
-  onOpenAnswerMenu,
-  onCancelNode,
-  canRetryNode,
-  retryingNode,
-  onRetryNode,
-  onRootMouseDown,
-  onRootMouseUp,
-  onRootKeyUp,
-  onRootClick,
-  onRootMouseMove,
-  onRootMouseLeave,
-}: ResearchAnswerPaneProps) {
-  const modelSummary = node.origin === "imported"
-    ? ""
-    : formatResearchModelSummary(node.adapter, node.model, node.origin);
-  // One-click relaunch beside a settled failure/cancellation. Errors surface
-  // through the parent's handler (the shared global banner), matching the
-  // neighboring cancel control.
-  const retryButton = canRetryNode ? (
-    <button
-      className="control-button research-response-retry"
-      type="button"
-      disabled={retryingNode}
-      onClick={() => onRetryNode(node.id)}
-    >
-      {retryingNode ? (
-        <>
-          <LoaderCircle className="research-spinner" size={12} aria-hidden="true" />
-          <span>Retrying…</span>
-        </>
-      ) : (
-        <>
-          <RefreshCw size={12} aria-hidden="true" />
-          <span>Retry</span>
-        </>
-      )}
-    </button>
-  ) : null;
-  return (
-    <section className="research-response" aria-label="Research response">
-      {!view.content ? (
-        <div className="research-response-loading">
-          {contentError ? (
-            <>
-              <p role="alert">{contentError}</p>
-              <button className="control-button" type="button" onClick={onRetryContentLoad}>
-                Retry
-              </button>
-            </>
-          ) : (
-            <LoaderCircle className="research-spinner" size={18} aria-hidden="true" />
-          )}
-        </div>
-      ) : (
-        <>
-          {contentError ? (
-            <div className="research-response-stale" role="alert">
-              <p>Refreshing this response failed: {contentError}</p>
-              <button className="control-button" type="button" onClick={onRetryContentLoad}>
-                Retry
-              </button>
-            </div>
-          ) : null}
-          {node.status === "failed" && view.content.turns.length > 0 ? (
-            <div className="research-response-failure" role="alert">
-              <p className="research-response-error">
-                {node.error ?? "The research run failed."}
-              </p>
-              {retryButton}
-            </div>
-          ) : null}
-          <ResearchRecap content={view.content} pending={recapPending} />
-          {view.displayedTimelineItems.length === 0 ? (
-            <>
-              <p className="research-response-empty">
-                {node.status === "failed"
-                  ? node.error ?? "The research run failed."
-                  : node.status === "cancelled"
-                    ? "Research was cancelled."
-                    : view.content.sourceError
-                      ? `The response is no longer available: ${view.content.sourceError}`
-                      : node.status === "complete"
-                        ? "Research completed, but its response is unavailable. Open the original session transcript if it still exists."
-                        : segmentActive
-                          ? view.timelineItems.length > 0
-                            ? "Waiting for the final response…"
-                            : "Working…"
-                          : "No response is available."}
-              </p>
-              {node.status === "failed" || node.status === "cancelled" ? retryButton : null}
-            </>
-          ) : (
-            <>
-              {view.hiddenTimelineItemCount > 0 && !view.isConversation ? (
-                <button
-                  type="button"
-                  className="control-button research-show-earlier"
-                  onClick={() => onExpandTurns(node.id)}
-                >
-                  Show {view.hiddenTimelineItemCount} earlier response item
-                  {view.hiddenTimelineItemCount === 1 ? "" : "s"}
-                </button>
-              ) : null}
-              <div
-                ref={(element) => registerSegmentElement(node.id, "root", element)}
-                data-node-id={node.id}
-                className={`research-response-content-root${
-                  pointerOverHighlight ? " is-highlight-hovered" : ""
-                }`}
-                onMouseDown={onRootMouseDown}
-                onMouseUp={onRootMouseUp}
-                onKeyUp={onRootKeyUp}
-                onClick={onRootClick}
-                onMouseMove={onRootMouseMove}
-                onMouseLeave={onRootMouseLeave}
-              >
-                {view.visibleTimelineItems.map((item) => (
-                  <ResearchTimelineItem
-                    key={item.key}
-                    item={item}
-                    conversation={view.isConversation}
-                    imported={node.origin === "imported"}
-                  />
-                ))}
-              </div>
-              {view.hiddenTimelineItemCount > 0 && view.isConversation ? (
-                <button
-                  type="button"
-                  className="control-button research-show-earlier"
-                  onClick={() => onExpandTurns(node.id)}
-                >
-                  Show {view.hiddenTimelineItemCount} more turn
-                  {view.hiddenTimelineItemCount === 1 ? "" : "s"}
-                </button>
-              ) : null}
-            </>
-          )}
-          <footer className="research-answer-meta">
-            <span>
-              {view.answerWordCount.toLocaleString()} {view.answerWordCount === 1 ? "word" : "words"}
-            </span>
-            {durationText ? <span>{durationText}</span> : null}
-            {modelSummary ? <span>{modelSummary}</span> : null}
-            {hiddenHighlightCount > 0 ? (
-              <span
-                className="research-hidden-highlights"
-                title="These saved highlights couldn't be located in the current view. Their passages may sit in content that isn't rendered right now."
-              >
-                {hiddenHighlightCount} {hiddenHighlightCount === 1 ? "highlight" : "highlights"} not
-                visible in this view
-                {/* Only a run needs a reveal here, and `hasTranscriptActivity`
-                    is false on the other kinds. What can hide a run's passage
-                    sits behind the answer fold, which nothing else on screen
-                    opens. A conversation has no fold — its tool payloads never
-                    survived the export — and the only content it hides is
-                    windowed-off turns, whose expander already renders directly
-                    above this footer under the same condition. */}
-                {view.hasTranscriptActivity && !view.showFullTrace ? (
-                  <>
-                    {" · "}
-                    <button
-                      type="button"
-                      className="control-button research-hidden-highlights-reveal"
-                      onClick={() => onShowFullTrace(node.id)}
-                    >
-                      Show full transcript
-                    </button>
-                  </>
-                ) : null}
-              </span>
-            ) : null}
-            {node.status === "complete" && (view.conversationCopyText ?? view.rawAnswer) ? (
-              <button
-                type="button"
-                className="control-button research-answer-copy"
-                title={view.isConversation ? "Copy conversation as Markdown" : "Copy answer as Markdown"}
-                aria-label={
-                  view.isConversation ? "Copy conversation as Markdown" : "Copy answer as Markdown"
-                }
-                onClick={() => onCopyAnswer(view)}
-              >
-                <Copy size={14} aria-hidden="true" />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="control-button research-answer-menu-trigger"
-              title="Answer actions"
-              aria-label="Answer actions"
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              data-research-answer-menu-trigger
-              onClick={(event) => onOpenAnswerMenu(event.currentTarget, node.id)}
-            >
-              <MoreHorizontal size={15} aria-hidden="true" />
-            </button>
-            {showRunControls ? (
-              <div className="research-segment-actions">
-                <button
-                  type="button"
-                  className="control-button research-segment-action"
-                  disabled={cancelling}
-                  onClick={() => onCancelNode(node.id)}
-                >
-                  {cancelling
-                    ? "Stopping…"
-                    : node.status === "cancelled"
-                      ? "Retry stop"
-                      : "Stop"}
-                </button>
-              </div>
-            ) : null}
-          </footer>
-        </>
-      )}
-    </section>
+/** A small anchored menu: placed below its anchor (above when there is no
+ * room), dismissed by an outside press, Escape, scrolling, or resizing, and
+ * navigable with the arrow keys. */
+function FloatingMenu({
+  anchor,
+  label,
+  role = "menu",
+  className = "",
+  onClose,
+  children,
+}: {
+  anchor: FloatingMenuAnchor;
+  label: string;
+  role?: "menu" | "toolbar";
+  className?: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  // Escape returns focus to the trigger, or to whatever had it when the menu
+  // opened (a right-click or passage click has no trigger).
+  const returnFocusRef = useRef<HTMLElement | null>(
+    anchor.trigger ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null),
   );
-}, answerPanePropsEqual);
-
-interface ResearchFollowupRailProps {
-  nodeId: string;
-  unreadCardKey: string;
-  linkedAnchorId: string | null;
-  segmentChildren: ResearchNode[];
-  anchoredCardTops: Record<string, number>;
-  resolvedCardTops: Record<string, number>;
-  askComposer: React.ReactNode;
-  registerSegmentElement: ThreadSegmentProps["registerSegmentElement"];
-  onSelectNode: ThreadSegmentProps["onSelectNode"];
-  onOpenFollowupMenu: ThreadSegmentProps["onOpenFollowupMenu"];
-  onCardHover: ThreadSegmentProps["onCardHover"];
-}
-
-function sameRailCardTops(
-  children: ResearchNode[],
-  previous: Record<string, number>,
-  next: Record<string, number>,
-) {
-  return children.every((child) => previous[child.id] === next[child.id]);
-}
-
-function followupRailPropsEqual(prev: ResearchFollowupRailProps, next: ResearchFollowupRailProps) {
-  for (const key of Object.keys(next) as (keyof ResearchFollowupRailProps)[]) {
-    if (key === "segmentChildren" || key === "anchoredCardTops" || key === "resolvedCardTops") {
-      continue;
+  useLayoutEffect(() => {
+    const menu = ref.current;
+    if (!menu) {
+      return;
     }
-    if (!Object.is(prev[key], next[key])) {
-      return false;
-    }
-  }
-  return (
-    sameSegmentChildren(prev.segmentChildren, next.segmentChildren) &&
-    sameRailCardTops(next.segmentChildren, prev.anchoredCardTops, next.anchoredCardTops) &&
-    sameRailCardTops(next.segmentChildren, prev.resolvedCardTops, next.resolvedCardTops)
-  );
-}
-
-/** The rail owns card previews and anchored placement. Its comparator ignores
- * placement changes belonging to other segments, so one moving card no longer
- * invalidates every rail in the rendered thread. */
-const ResearchFollowupRail = memo(function ResearchFollowupRail({
-  nodeId,
-  unreadCardKey,
-  linkedAnchorId,
-  segmentChildren,
-  anchoredCardTops,
-  resolvedCardTops,
-  askComposer,
-  registerSegmentElement,
-  onSelectNode,
-  onOpenFollowupMenu,
-  onCardHover,
-}: ResearchFollowupRailProps) {
-  const unreadCardIds = unreadCardKey ? new Set(unreadCardKey.split(",")) : null;
-  const stackedChildren = segmentChildren.filter(
-    (child) => anchoredCardTops[child.id] === undefined,
-  );
-  const anchoredChildren = segmentChildren
-    .filter((child) => anchoredCardTops[child.id] !== undefined)
-    .map((child) => ({
-      child,
-      top: resolvedCardTops[child.id] ?? anchoredCardTops[child.id],
-    }))
-    .sort((a, b) => a.top - b.top);
-
-  // Cards keep their queryAnchor for placement and hover-linking, but the
-  // quoted passage appears only after the follow-up is opened, above its
-  // question in the main content column.
-  const renderFollowupCard = (child: ResearchNode, anchoredTop?: number) => {
-    const isUnread = unreadCardIds?.has(child.id) ?? false;
-    return (
-      <button
-        key={child.id}
-        type="button"
-        className={`control-button research-followup-card${
-          anchoredTop !== undefined ? " is-anchored" : ""
-        }${linkedAnchorId === child.id ? " is-anchor-linked" : ""}${
-          isUnread ? " has-unread" : ""
-        }`}
-        style={anchoredTop !== undefined ? { top: anchoredTop } : undefined}
-        data-node-id={child.id}
-        onClick={() => onSelectNode(child.id)}
-        onMouseEnter={child.queryAnchor ? () => onCardHover(child.id, true) : undefined}
-        onMouseLeave={child.queryAnchor ? () => onCardHover(child.id, false) : undefined}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onOpenFollowupMenu(child.id, event.clientX, event.clientY);
-        }}
-      >
-        {isUnread ? (
-          <span className="research-followup-unread" aria-label="New answer, not opened yet" />
-        ) : null}
-        <strong>{child.prompt}</strong>
-        {child.responsePreview ? (
-          <ResearchMarkdown
-            text={child.responsePreview}
-            className="research-followup-preview"
-            variant="compact"
-            inline
-          />
-        ) : null}
-        {child.status !== "complete" ? (
-          <small className={`is-${child.status}`}>
-            {child.status === "running" ? (
-              <LoaderCircle
-                className="research-spinner research-followup-status-spinner"
-                size={11}
-                aria-hidden="true"
-              />
-            ) : null}
-            {statusLabel(child.status)}
-          </small>
-        ) : null}
-      </button>
+    const { width, height } = menu.getBoundingClientRect();
+    const below = anchor.bottom + 4;
+    const top =
+      below + height > window.innerHeight - MENU_MARGIN
+        ? Math.max(MENU_MARGIN, anchor.top - height - 4)
+        : below;
+    const left = Math.max(
+      MENU_MARGIN,
+      Math.min(anchor.left, window.innerWidth - width - MENU_MARGIN),
     );
-  };
-
-  return (
-    <aside
-      ref={(element) => registerSegmentElement(nodeId, "aside", element)}
-      className="research-followups"
-      data-node-id={nodeId}
-      aria-label="Follow-ups"
-    >
-      {askComposer}
-      <div className="research-followup-cards" data-node-id={nodeId}>
-        {stackedChildren.map((child) => renderFollowupCard(child))}
-      </div>
-      {anchoredChildren.map(({ child, top }) => renderFollowupCard(child, top))}
-    </aside>
-  );
-}, followupRailPropsEqual);
-
-const ResearchConnectorOverlay = memo(function ResearchConnectorOverlay({
-  connectors,
-  linkedAnchorId,
-}: {
-  connectors: SegmentAnchorConnector[];
-  linkedAnchorId: string | null;
-}) {
-  if (connectors.length === 0) {
-    return null;
-  }
-  return (
-    <svg className="research-anchor-connector" aria-hidden="true">
-      {connectors.map((connector) => (
-        <g
-          key={connector.id}
-          className={`research-anchor-connector-pair${
-            linkedAnchorId === connector.id ? " is-anchor-linked" : ""
-          }`}
-        >
-          <path d={connector.d} />
-          <circle cx={connector.x} cy={connector.y} r={2} />
-        </g>
-      ))}
-    </svg>
-  );
-}, (previous, next) =>
-  previous.linkedAnchorId === next.linkedAnchorId &&
-  sameSegmentConnectors(previous.connectors, next.connectors));
-
-export const ResearchSegmentPrompt = memo(function ResearchSegmentPrompt({
-  visible,
-  index,
-  parentNodeId,
-  queryQuote,
-  prompt,
-  attachments = [],
-  origin,
-  createdAt,
-  running = false,
-  followed = false,
-  bookmarked = false,
-  replyToAnswer,
-  onSelectNode,
-  onToggleFollow,
-  onToggleBookmark,
-}: {
-  visible: boolean;
-  index: number;
-  parentNodeId: string | null;
-  queryQuote: string | null;
-  prompt: string;
-  attachments?: ResearchNode["attachments"];
-  origin?: ResearchNode["origin"];
-  /** When the root prompt was asked; shown as relative time on its footer. */
-  createdAt?: number;
-  /** The question is still being answered: the footer row (thread actions
-   * and time) stays hidden until the answer settles. */
-  running?: boolean;
-  followed?: boolean;
-  bookmarked?: boolean;
-  replyToAnswer?: string | null;
-  onSelectNode: (nodeId: string) => void;
-  onToggleFollow?: () => void;
-  onToggleBookmark?: () => void;
-}) {
-  if (!visible) {
-    return null;
-  }
-  const replySnippet = index > 0 ? formatResearchReplySnippet(replyToAnswer ?? "") : "";
-  const askedAt = index === 0 && createdAt != null && Number.isFinite(createdAt) ? createdAt : null;
-  const showFooter = index === 0 && !running;
-  return (
-    <div className="research-prompt-block">
-      {index === 0 && parentNodeId ? (
-        <button
-          type="button"
-          className="control-button research-parent-link"
-          onClick={() => onSelectNode(parentNodeId)}
-        >
-          <ArrowLeft size={13} aria-hidden="true" />
-          Back
-        </button>
-      ) : null}
-      {index > 0 && replySnippet ? (
-        <div className="research-prompt-metadata research-prompt-reply">
-          <Reply size={12} aria-hidden="true" />
-          <span className="research-prompt-reply-text">{`Reply to: ${replySnippet}`}</span>
-        </div>
-      ) : null}
-      {queryQuote ? (
-        <blockquote className="research-prompt-quote">{quoteDisplayText(queryQuote)}</blockquote>
-      ) : null}
-      <ResearchUserMessage
-        className={`research-prompt${showFooter ? " has-trailing-metadata" : ""}`}
-      >
-        <ResearchMessageBody prompt={prompt} attachments={attachments} />
-      </ResearchUserMessage>
-      {showFooter ? (
-        <div className="research-prompt-metadata is-after-prompt research-prompt-footer">
-          {onToggleFollow && onToggleBookmark ? (
-            <ResearchThreadActions
-              followed={followed}
-              bookmarked={bookmarked}
-              onToggleFollow={onToggleFollow}
-              onToggleBookmark={onToggleBookmark}
-            />
-          ) : null}
-          <span
-            className="research-prompt-footer-meta"
-            title={askedAt !== null ? new Date(askedAt).toLocaleString() : undefined}
-          >
-            {origin === "imported" ? `Imported${askedAt !== null ? " " : ""}` : null}
-            {askedAt !== null ? (
-              <time dateTime={new Date(askedAt).toISOString()}>
-                {formatRelativeTime(askedAt)}
-              </time>
-            ) : null}
-          </span>
-        </div>
-      ) : null}
-    </div>
-  );
-});
-
-/** Structural shell for one thread segment. It retains the shared grid and DOM
- * registration points needed by cross-column geometry, while the prompt,
- * answer, connector, and rail subtrees own independent memo boundaries. */
-const ThreadSegment = memo(function ThreadSegment({
-  view,
-  node,
-  index,
-  replyToAnswer,
-  replyQuote = null,
-  followed,
-  bookmarked,
-  onToggleFollow,
-  onToggleBookmark,
-  isSelected,
-  contentError,
-  segmentActive,
-  showRunControls,
-  cancelling,
-  durationText,
-  hiddenHighlightCount,
-  recapPending,
-  unreadCardKey,
-  pointerOverHighlight,
-  linkedAnchorId,
-  connectors,
-  segmentChildren,
-  anchoredCardTops,
-  resolvedCardTops,
-  menuOpen,
-  askComposer,
-  registerSegmentElement,
-  onSelectNode,
-  onExpandTurns,
-  onRetryContentLoad,
-  onShowFullTrace,
-  onCopyAnswer,
-  onOpenAnswerMenu,
-  onOpenFollowupMenu,
-  onCancelNode,
-  canRetryNode,
-  retryingNode,
-  onRetryNode,
-  onCardHover,
-  onRootMouseDown,
-  onRootMouseUp,
-  onRootKeyUp,
-  onRootClick,
-  onRootMouseMove,
-  onRootMouseLeave,
-}: ThreadSegmentProps) {
-  return (
-    <div
-      ref={(element) => registerSegmentElement(node.id, "anchor", element)}
-      className={`research-thread-segment${isSelected ? " is-selected" : ""}`}
-      data-segment-anchor={node.id}
-      onContextMenu={(event) => {
-        // Links and other nested controls may own a more specific context
-        // menu. Everywhere else in the question-and-answer segment opens the
-        // research item menu.
-        if (event.defaultPrevented) {
+    setPosition({ left, top });
+    if (role === "menu") {
+      menu.querySelector<HTMLElement>("[role='menuitem']:not(:disabled)")?.focus({ preventScroll: true });
+    }
+  }, [anchor.bottom, anchor.left, anchor.top, role]);
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (ref.current?.contains(target)) {
+        return;
+      }
+      if (target instanceof Element && target.closest("[data-research-menu-trigger]")) {
+        return;
+      }
+      onCloseRef.current();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        // Only the menu closes: not the drawer behind it.
+        event.preventDefault();
+        event.stopPropagation();
+        onCloseRef.current();
+        const target = returnFocusRef.current;
+        if (target?.isConnected && target !== document.body) {
+          target.focus({ preventScroll: true });
+        }
+        return;
+      }
+      if ((event.key === "ArrowDown" || event.key === "ArrowUp") && ref.current?.contains(event.target as Node)) {
+        const items = [
+          ...(ref.current?.querySelectorAll<HTMLElement>("[role='menuitem']:not(:disabled)") ?? []),
+        ];
+        if (items.length === 0) {
           return;
         }
         event.preventDefault();
-        event.stopPropagation();
-        onOpenFollowupMenu(node.id, event.clientX, event.clientY);
-      }}
+        const index = items.indexOf(document.activeElement as HTMLElement);
+        const next = items[(index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length];
+        next.focus();
+      }
+    };
+    const close = () => onCloseRef.current();
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, []);
+  return createPortal(
+    <div
+      ref={ref}
+      className={`popover-surface research-menu ${className}`}
+      role={role}
+      aria-label={label}
+      style={position ?? { left: -9999, top: -9999 }}
+      onMouseDown={(event) => event.stopPropagation()}
+      onContextMenu={(event) => event.preventDefault()}
     >
-      <ResearchSegmentPrompt
-        visible={!view.isDocument && !view.isConversation}
-        index={index}
-        parentNodeId={node.parentNodeId ?? null}
-        queryQuote={node.queryAnchor?.exact ?? replyQuote}
-        prompt={node.prompt}
-        attachments={node.attachments}
-        origin={node.origin}
-        createdAt={node.createdAt}
-        running={isActiveResearchStatus(node.status)}
-        followed={followed}
-        bookmarked={bookmarked}
-        replyToAnswer={replyToAnswer}
-        onSelectNode={onSelectNode}
-        onToggleFollow={onToggleFollow}
-        onToggleBookmark={onToggleBookmark}
-      />
-      <div
-        ref={(element) => registerSegmentElement(node.id, "grid", element)}
-        className="research-response-grid"
-        data-node-id={node.id}
-      >
-        <ResearchConnectorOverlay
-          connectors={connectors}
-          linkedAnchorId={linkedAnchorId}
-        />
-        <ResearchAnswerPane
-          view={view}
-          node={node}
-          contentError={contentError}
-          segmentActive={segmentActive}
-          showRunControls={showRunControls}
-          cancelling={cancelling}
-          durationText={durationText}
-          hiddenHighlightCount={hiddenHighlightCount}
-          recapPending={recapPending}
-          pointerOverHighlight={pointerOverHighlight}
-          menuOpen={menuOpen}
-          registerSegmentElement={registerSegmentElement}
-          onExpandTurns={onExpandTurns}
-          onRetryContentLoad={onRetryContentLoad}
-          onShowFullTrace={onShowFullTrace}
-          onCopyAnswer={onCopyAnswer}
-          onOpenAnswerMenu={onOpenAnswerMenu}
-          onCancelNode={onCancelNode}
-          canRetryNode={canRetryNode}
-          retryingNode={retryingNode}
-          onRetryNode={onRetryNode}
-          onRootMouseDown={onRootMouseDown}
-          onRootMouseUp={onRootMouseUp}
-          onRootKeyUp={onRootKeyUp}
-          onRootClick={onRootClick}
-          onRootMouseMove={onRootMouseMove}
-          onRootMouseLeave={onRootMouseLeave}
-        />
-        <ResearchFollowupRail
-          nodeId={node.id}
-          unreadCardKey={unreadCardKey}
-          linkedAnchorId={linkedAnchorId}
-          segmentChildren={segmentChildren}
-          anchoredCardTops={anchoredCardTops}
-          resolvedCardTops={resolvedCardTops}
-          askComposer={askComposer}
-          registerSegmentElement={registerSegmentElement}
-          onSelectNode={onSelectNode}
-          onOpenFollowupMenu={onOpenFollowupMenu}
-          onCardHover={onCardHover}
-        />
-      </div>
-    </div>
+      {children}
+    </div>,
+    document.body,
   );
-}, threadSegmentPropsEqual);
+}
+
+function MenuItem({
+  icon,
+  label,
+  description,
+  onSelect,
+  disabled = false,
+  title,
+  danger = false,
+  current = false,
+  trailing,
+}: {
+  icon?: ReactNode;
+  label: string;
+  /** Read after the label by screen readers (what a trailing mark shows). */
+  description?: string;
+  onSelect: () => void;
+  disabled?: boolean;
+  title?: string;
+  danger?: boolean;
+  current?: boolean;
+  trailing?: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className={`control-button research-menu-item${danger ? " is-danger" : ""}`}
+      disabled={disabled}
+      title={title}
+      aria-current={current ? "true" : undefined}
+      onClick={onSelect}
+    >
+      {icon}
+      <span className="research-menu-label">
+        {label}
+        {description ? <span className="research-visually-hidden">, {description}</span> : null}
+      </span>
+      {trailing}
+    </button>
+  );
+}
+
+function nodeLabel(node: ResearchNode | null | undefined, fallback: string) {
+  return (node?.title ?? node?.prompt ?? "").trim() || fallback;
+}
 
 function ResearchDocument({
   detail,
@@ -1764,329 +859,343 @@ function ResearchDocument({
   noteActions,
   onRemoveBranch,
   onRemoveTree,
+  onRenameTree,
   onSetFollowed,
   onSetBookmarked,
+  onMoveTree,
+  onClose,
   onUpdateDocument,
   onCancel,
   onRetryNode,
   linkActions,
   onError,
   onToast,
-  onShowSidebar,
   shortcutHintsShown,
   recapPendingNodeIds = EMPTY_RECAP_PENDING_NODE_IDS,
   workspaceCanGoBack = false,
   workspaceCanGoForward = false,
   onWorkspaceBack,
   onWorkspaceForward,
+  onDrawerNodeChange,
 }: ResearchDocumentProps) {
+  const columnsLayout = useContext(ResearchColumnsContext);
+  const treeId = detail?.tree.id ?? null;
+  const rootNodeId = detail?.tree.rootNodeId ?? null;
+  // The current visit: the node the reader last navigated to. A conversation
+  // node means the drawer is closed; a branch node is shown in the drawer (or
+  // its pinned column). Back/forward walk these visits.
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  // Browser-style visit history for the header's back/forward controls, reset
-  // per tree. Transitions live in ../../lib/researchHistory.
   const [history, setHistory] = useState(EMPTY_RESEARCH_HISTORY);
-  // Loaded contents for the rendered thread's segments, keyed by node id.
-  // Pruned to the current chain on chain switches, so memory stays bounded to
-  // one page's worth — as it was when the document rendered a single node.
+  // Loaded contents for every rendered turn, keyed by node id. Pruned to the
+  // rendered chains (conversation, drawer, pinned columns) when they change.
   const [contentByNode, setContentByNode] = useState<Record<string, ResearchNodeContent>>({});
   const [contentErrorByNode, setContentErrorByNode] = useState<Record<string, string>>({});
-  const [followup, setFollowup] = useState("");
-  // The thread composer's mode: continue the inline thread (default) or
-  // branch a card from the tail answer. Ask mode overrides both — a targeted
-  // ask is always a branch.
-  const [followupMode, setFollowupMode] = useState<"thread" | "branch">("thread");
-  // The mode picker hanging off the composer's Send button. Mode is a
-  // property of the submission, so it lives on the control that submits
-  // rather than as a tab strip above the field.
-  const [modeMenuOpen, setModeMenuOpen] = useState(false);
-  const [modeMenuPos, setModeMenuPos] = useState<PanePopoverPlacement | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  // The node whose in-place retry request is in flight (id-stable relaunch of
-  // a failed/cancelled run), or null. One at a time is plenty: the control
-  // that started it shows the busy state, every other retry control disables.
+  const [contentLoadNonce, setContentLoadNonce] = useState(0);
+  const [drawer, setDrawer] = useState<DrawerTarget | null>(null);
+  // Each drawer opened from closed is a new instance (it slides in); a swap
+  // keeps the instance (it fades). A closing drawer keeps its instance until
+  // its slide-out ends.
+  const [drawerInstance, setDrawerInstance] = useState(0);
+  const [drawerAnimates, setDrawerAnimates] = useState(true);
+  const [leavingDrawer, setLeavingDrawer] = useState<{
+    target: DrawerTarget;
+    mode: "close" | "pin";
+    instance: number;
+  } | null>(null);
+  const [pinnedHeads, setPinnedHeads] = useState<string[]>([]);
+  // "main" or a pinned column's head id. Focus only moves the accent rule.
+  const [focusedColumn, setFocusedColumn] = useState<string>("main");
+  const [composerText, setComposerText] = useState<Record<string, string>>({});
+  const [submittingKey, setSubmittingKey] = useState<string | null>(null);
+  const [queues, setQueues] = useState<Record<string, QueuedResearchFollowup[]>>({});
+  // Per chain head: the failed node whose question the composer is editing.
+  const [editingByHead, setEditingByHead] = useState<Record<string, string>>({});
   const [retryingNodeId, setRetryingNodeId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const cancelRequestInFlightRef = useRef(false);
-  const [followupMenu, setFollowupMenu] = useState<FollowupMenu | null>(null);
+  const [menu, setMenu] = useState<FloatingMenuState | null>(null);
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
   const [removingBranch, setRemovingBranch] = useState(false);
+  const [branchRemovalError, setBranchRemovalError] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ nodeId: string; value: string } | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const [documentEditSession, setDocumentEditSession] = useState<DocumentEditSession | null>(null);
   const [recapDialogNodeId, setRecapDialogNodeId] = useState<string | null>(null);
-  const [branchRemovalError, setBranchRemovalError] = useState<string | null>(null);
-  const [contentLoadNonce, setContentLoadNonce] = useState(0);
-  // Per-node reading state for the rendered thread: which segments show their
-  // full turn window (persisted per tree) and which show the full transcript
-  // (a per-visit choice, reset when the page changes).
+  // Per-node reading state: which turns show their full item window
+  // (persisted per tree), which show the full transcript (per visit), and
+  // which finished answers are expanded past the nine-line clamp.
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [fullTraceNodes, setFullTraceNodes] = useState<Record<string, boolean>>({});
+  const [expandedAnswers, setExpandedAnswers] = useState<Record<string, boolean>>({});
   const [highlightAction, setHighlightAction] = useState<HighlightAction | null>(null);
   const [savingHighlight, setSavingHighlight] = useState(false);
-  // Saved highlights whose anchors no longer locate a passage in a segment's
-  // current rendered projection (collapsed transcript content, an edited
-  // document). They still exist — surfaced in that segment's footer instead
-  // of vanishing silently.
+  // Saved highlights whose anchors no longer locate a passage in a turn's
+  // current rendered projection. They still exist — surfaced in that turn's
+  // footer instead of vanishing silently.
   const [hiddenHighlightsByNode, setHiddenHighlightsByNode] = useState<Record<string, number>>({});
-  // Follow-up cards whose answer settled while this document was open and that
-  // the reader has not opened yet carry an unread dot. `firstSeenComplete`
-  // records each card's status the first time it is observed, so a card that
-  // was already complete when the chain loaded is treated as read; only cards
-  // seen finishing under the reader's eyes light up. Opening a card (selecting
-  // it) clears its dot.
+  // Branches whose answer finished while this document was open and that
+  // the reader has not opened carry an unread dot on their branch button.
+  // `firstSeenComplete` records each branch's status the first time it is
+  // seen, so a branch that was already complete when the tree loaded is read.
   const firstSeenCompleteRef = useRef<Map<string, boolean>>(new Map());
-  const [openedFollowupIds, setOpenedFollowupIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
-  // The anchored follow-up currently hover-linked to its passage, from either
-  // side. This raises the associated card and connector without repainting
-  // the passage's stable highlight treatment.
-  const [linkedAnchorNodeId, setLinkedAnchorNodeId] = useState<string | null>(null);
-  // Dotted leaders between anchored passages and their follow-up cards, in
-  // each segment's response-grid pixel coordinates.
-  const [anchorConnectors, setAnchorConnectors] = useState<SegmentAnchorConnector[]>([]);
-  // Ask mode: the segment and selection anchor a targeted follow-up is being
-  // composed against. While set, the composer docks beside the quoted
-  // passage in that segment's rail.
-  const [ask, setAsk] = useState<{
-    nodeId: string;
-    anchor: ResearchHighlightAnchor;
-  } | null>(null);
-  // The docked ask composer's rail offset, resolved by the anchor paint
-  // effect alongside the card tops.
-  const [askComposerTop, setAskComposerTop] = useState<number | null>(null);
-  // Desired vertical offsets (px, relative to the owning segment's rail) for
-  // child nodes whose query anchor still locates a passage in that segment's
-  // rendered response. Membership in this map is what marks a card as
-  // anchored; child ids are unique across segments, so one map serves the
-  // whole thread.
-  const [anchoredCardTops, setAnchoredCardTops] = useState<Record<string, number>>({});
-  // Collision-resolved placements derived from the desired tops and the
-  // rendered card heights, resolved per segment rail: cards keep their
-  // passage alignment when there is room and cascade downward when anchors
-  // crowd together.
-  const [resolvedCardTops, setResolvedCardTops] = useState<Record<string, number>>({});
+  const [openedNodeIds, setOpenedNodeIds] = useState<ReadonlySet<string>>(() => new Set());
   const [highlightDomNonce, setHighlightDomNonce] = useState(0);
-  const [anchorLayoutNonce, setAnchorLayoutNonce] = useState(0);
-  const [pointerHighlightNodeId, setPointerHighlightNodeId] = useState<string | null>(null);
+  const [pointerAnnotationNodeId, setPointerAnnotationNodeId] = useState<string | null>(null);
+  const [hoveredAnnotation, setHoveredAnnotation] = useState<{
+    nodeId: string;
+    start: number;
+    end: number;
+    kind: "branch" | "highlight";
+  } | null>(null);
+  const [flashRange, setFlashRange] = useState<{ nodeId: string; start: number; end: number } | null>(null);
   const [metadataNow, setMetadataNow] = useState(() => Date.now());
-  const treeId = detail?.tree.id ?? null;
-  const documentScrollRef = useRef<HTMLElement | null>(null);
-  const contentContainerRef = useRef<HTMLDivElement | null>(null);
-  const followupTextareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const followupComposerRef = useRef<HTMLDivElement | null>(null);
-  const documentPaneRef = useRef<HTMLElement | null>(null);
-  // The thread bar can be minimized into a round button at the pane's
-  // bottom-right corner; restoring it hands the textarea the caret.
-  const followupBar = useFollowupBarMinimizer({
-    paneRef: documentPaneRef,
-    barRef: followupComposerRef,
-    onRestored: () => followupTextareaRef.current?.focus({ preventScroll: true }),
-  });
-  const restoreFollowupBarRef = useRef(followupBar.restore);
-  restoreFollowupBarRef.current = followupBar.restore;
-  const followupMenuRef = useRef<HTMLDivElement | null>(null);
-  const modeMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const modeMenuRef = useRef<HTMLDivElement | null>(null);
-  // Resolved highlight ranges per segment, refreshed by the paint effect.
+  const [minuteNow, setMinuteNow] = useState(() => Date.now());
+
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const mainScrollRef = useRef<HTMLDivElement | null>(null);
+  const mainContentRef = useRef<HTMLDivElement | null>(null);
+  const drawerScrollRef = useRef<HTMLDivElement | null>(null);
+  const drawerElementRef = useRef<HTMLElement | null>(null);
+  // Branches created a moment ago that the next detail refresh delivers:
+  // until then the drawer and the selection may name a node detail lacks.
+  const pendingNodeIdsRef = useRef(new Set<string>());
+  // A new branch's composer takes focus once its node arrives.
+  const pendingComposerFocusRef = useRef<string | null>(null);
+  // The selection actions' measured size, for centring them.
+  const selectionActionsSizeRef = useRef(SELECTION_ACTIONS_SIZE);
+  const drawerTitleRef = useRef<HTMLHeadingElement | null>(null);
+  const composerRefs = useRef(new Map<string, ResearchComposerHandle>());
+  const columnTitleRefs = useRef(new Map<string, HTMLHeadingElement>());
+  const drawerReturnFocusRef = useRef<HTMLElement | null>(null);
+  // Resolved highlight ranges per turn, refreshed by the paint effect.
   const resolvedHighlightsRef = useRef(new Map<string, ResolvedHighlight[]>());
   // Bumped after each highlight paint so the focus-highlight effect below
   // observes freshly resolved ranges.
   const [highlightPaintVersion, setHighlightPaintVersion] = useState(0);
-  // Flat-offset ranges of the query-anchor passages that resolved, tagged
-  // with their owning segment, refreshed by the anchor paint effect.
-  // Consulted by passage-side pointer hit-testing and connector measurement.
-  const anchoredRangeOffsetsRef = useRef<
+  // Flat-offset ranges of the branch passages that resolved, tagged with the
+  // turn they sit in. Consulted by passage clicks, hover, and reveal.
+  const branchRangeOffsetsRef = useRef<
     { segmentId: string; id: string; start: number; end: number }[]
   >([]);
-  const activeAskRangeOffsetsRef = useRef<{
-    segmentId: string;
-    start: number;
-    end: number;
-  } | null>(null);
   const savedHighlightPaintRef = useRef<ResearchNativeHighlight | null>(null);
   const selectedHighlightPaintRef = useRef<ResearchNativeHighlight | null>(null);
   const selectionDragRef = useRef<ResearchSelectionDrag | null>(null);
-  const anchorHoverFrameRef = useRef<number | null>(null);
-  const anchorHoverPointerRef = useRef<{
+  const annotationHoverFrameRef = useRef<number | null>(null);
+  const annotationHoverPointerRef = useRef<{
     root: HTMLDivElement;
     nodeId: string | null;
     clientX: number;
     clientY: number;
   } | null>(null);
-  const selectedNodeIdRef = useRef(selectedNodeId);
   const treeIdRef = useRef(treeId);
   // The content-loading effect reads the tree through this ref so a routine
   // detail replacement (every research event rebuilds the object) does not
   // restart the effect and refetch content that has not changed.
   const detailRef = useRef(detail);
-  const previousDetailNodesRef = useRef<ResearchNode[]>([]);
   const contentByNodeRef = useRef(contentByNode);
   const contentErrorByNodeRef = useRef(contentErrorByNode);
-  const askRef = useRef(ask);
+  const drawerRef = useRef(drawer);
+  const menuRef = useRef(menu);
   // The (status, snapshot) stamp each cached content was fetched under, so
   // the loader can tell a cache hit from a stale entry without refetching
-  // unchanged segments every time the chain recomputes.
+  // unchanged turns every time the rendered chains recompute.
   const fetchStampByNodeRef = useRef(new Map<string, string>());
-  // Guards scroll recording and restoration, as the old contentNodeIdRef did
-  // for the single-node view: offsets are only meaningful once the WHOLE
-  // chain has settled (content or a terminal error per segment). While any
-  // segment is still a short loading placeholder the page is not at its real
-  // height, and the browser's clamp scroll event would otherwise record —
-  // and permanently overwrite — the saved offset with the clamped value.
-  const chainContentSettledRef = useRef(false);
-  // Set once the chain page's scroll offset has been restored; cleared on
-  // tree switches and cross-chain navigation. In-chain selection changes
-  // scroll to segments instead of re-restoring, and a chain growing a new
-  // tail must not yank the viewport back to a saved offset.
-  const restoredChainRef = useRef<string | null>(null);
-  const navigationPersistence = useResearchDocumentNavigation((persistence) => {
-    const scroller = documentScrollRef.current;
-    if (treeId && selectedNodeId && scroller && chainContentSettledRef.current) {
-      persistence.recordScroll(treeId, selectedNodeId, scroller.scrollTop);
-    }
-  });
-  // Resets scroll position to top and clears restored state for a new page visit.
-  const beginPageVisit = useCallback(() => {
-    restoredChainRef.current = null;
-    if (documentScrollRef.current) {
-      documentScrollRef.current.scrollTop = 0;
-    }
-  }, []);
-  // Scroll to a segment once it appears in the chain — the just-submitted
-  // inline follow-up, delivered by the next detail refresh.
+  // Guards scroll recording and restoration: offsets are only meaningful once
+  // the whole conversation has settled (content or a terminal error per
+  // turn). While a turn is still a short loading placeholder the page is not
+  // at its real height, and the browser's clamp scroll event would otherwise
+  // record — and permanently overwrite — the saved offset.
+  const mainContentSettledRef = useRef(false);
+  // Set once the conversation's scroll offset has been restored for this tree.
+  const restoredScrollRef = useRef(false);
+  // Scroll to a turn once it appears — the just-submitted follow-up, delivered
+  // by the next detail refresh.
   const pendingScrollNodeIdRef = useRef<string | null>(null);
-  selectedNodeIdRef.current = selectedNodeId;
+  // Live mirrors for stable callbacks that must read current state.
+  const drawerInstanceRef = useRef(drawerInstance);
+  const composerTextRef = useRef(composerText);
+  const submittingKeyRef = useRef(submittingKey);
+  const editingByHeadRef = useRef(editingByHead);
+  const queuesRef = useRef(queues);
   treeIdRef.current = treeId;
   detailRef.current = detail;
   contentByNodeRef.current = contentByNode;
   contentErrorByNodeRef.current = contentErrorByNode;
-  askRef.current = ask;
+  drawerRef.current = drawer;
+  menuRef.current = menu;
+  drawerInstanceRef.current = drawerInstance;
+  composerTextRef.current = composerText;
+  submittingKeyRef.current = submittingKey;
+  editingByHeadRef.current = editingByHead;
+  queuesRef.current = queues;
 
-  // The inline chain this document renders, stabilized by id-list equality:
-  // `detail` is replaced by every research event (4×/s while any run in the
-  // tree streams), and a fresh array identity per event would churn every
-  // chain-keyed effect below.
-  const chainNodeIds = useStableValue(
-    useMemo(
-      () => (detail && selectedNodeId ? inlineChainFor(detail.nodes, selectedNodeId) : []),
-      [detail, selectedNodeId],
-    ),
-    (previous, candidate) =>
-      previous.length === candidate.length &&
-      previous.every((id, index) => id === candidate[index]),
-  );
-  // Live mirror for callbacks that must read the chain without depending on
-  // it (applySelection's same-chain check).
-  const chainNodeIdsRef = useRef(chainNodeIds);
-  chainNodeIdsRef.current = chainNodeIds;
-  const chainKey = chainNodeIds.join("\n");
-
-  // Reflow can come from the window itself or from an internal pane resize
-  // that changes the research column without firing window.resize. Observe
-  // the rendered content width as well, then issue one trailing invalidation
-  // that all passage/card/connector layout effects share.
-  useEffect(() => {
-    const target = contentContainerRef.current;
-    let debounceTimer: number | null = null;
-    let observedWidth = target?.getBoundingClientRect().width ?? null;
-    const scheduleRelayout = () => {
-      if (debounceTimer !== null) {
-        window.clearTimeout(debounceTimer);
-      }
-      debounceTimer = window.setTimeout(() => {
-        debounceTimer = null;
-        setAnchorLayoutNonce((value) => value + 1);
-      }, ANCHOR_LAYOUT_DEBOUNCE_MS);
-    };
-    const observer =
-      target && typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver((entries) => {
-            const nextWidth = entries[0]?.contentRect.width;
-            if (nextWidth === undefined || observedWidth === null) {
-              return;
-            }
-            if (Math.abs(nextWidth - observedWidth) < 0.5) {
-              return;
-            }
-            observedWidth = nextWidth;
-            scheduleRelayout();
-          })
-        : null;
-    if (target && observer) {
-      observer.observe(target);
+  const navigationPersistence = useResearchDocumentNavigation((persistence) => {
+    const scroller = mainScrollRef.current;
+    if (treeId && rootNodeId && scroller && mainContentSettledRef.current) {
+      persistence.recordScroll(treeId, rootNodeId, scroller.scrollTop);
     }
-    window.addEventListener("resize", scheduleRelayout);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", scheduleRelayout);
-      if (debounceTimer !== null) {
-        window.clearTimeout(debounceTimer);
+  });
+
+  const nodes = useMemo(() => detail?.nodes ?? [], [detail]);
+  const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+
+  // The root's inline chain: always the conversation column.
+  const mainChainIds = useStableValue(
+    useMemo(
+      () => (detail && rootNodeId ? inlineChainFor(detail.nodes, rootNodeId) : []),
+      [detail, rootNodeId],
+    ),
+    sameIds,
+  );
+  const mainChainIdsRef = useRef(mainChainIds);
+  mainChainIdsRef.current = mainChainIds;
+  const validPinnedHeads = useStableValue(
+    useMemo(
+      () => pinnedHeads.filter((id) => nodeById.has(id) && !mainChainIds.includes(id)),
+      [mainChainIds, nodeById, pinnedHeads],
+    ),
+    sameIds,
+  );
+  const pinnedHeadsRef = useRef(validPinnedHeads);
+  pinnedHeadsRef.current = validPinnedHeads;
+  const pinnedChainsKey = useMemo(
+    () =>
+      validPinnedHeads
+        .map((head) => (detail ? inlineChainFor(detail.nodes, head) : [head]).join(","))
+        .join("\n"),
+    [detail, validPinnedHeads],
+  );
+  const pinnedChains = useMemo(
+    () => (pinnedChainsKey ? pinnedChainsKey.split("\n").map((chain) => chain.split(",")) : []),
+    [pinnedChainsKey],
+  );
+  const drawerNodeId = drawer?.kind === "node" ? drawer.nodeId : null;
+  const drawerChainIds = useStableValue(
+    useMemo(
+      () => (detail && drawerNodeId ? inlineChainFor(detail.nodes, drawerNodeId) : []),
+      [detail, drawerNodeId],
+    ),
+    sameIds,
+  );
+  const drawerHeadId = drawerChainIds[0] ?? null;
+  const leavingNodeId = leavingDrawer?.target.kind === "node" ? leavingDrawer.target.nodeId : null;
+  const leavingChainIds = useStableValue(
+    useMemo(
+      () => (detail && leavingNodeId ? inlineChainFor(detail.nodes, leavingNodeId) : []),
+      [detail, leavingNodeId],
+    ),
+    sameIds,
+  );
+  // Every rendered turn, across the conversation, pinned columns, and the
+  // drawer. Chains partition the tree, so each node renders at most once
+  // (the leaving drawer renders inert, without registering its DOM).
+  const chainNodeIds = useStableValue(
+    useMemo(() => {
+      const ids = [...mainChainIds, ...pinnedChains.flat(), ...drawerChainIds];
+      for (const id of leavingChainIds) {
+        if (!ids.includes(id)) {
+          ids.push(id);
+        }
       }
-    };
-  }, [chainKey]);
+      return ids;
+    }, [drawerChainIds, leavingChainIds, mainChainIds, pinnedChains]),
+    sameIds,
+  );
+  const chainKey = chainNodeIds.join("\n");
   const chainNodes = useMemo(
     () =>
-      detail
-        ? chainNodeIds
-            .map((id) => detail.nodes.find((node) => node.id === id))
-            .filter((node): node is ResearchNode => Boolean(node))
-        : [],
-    [detail, chainNodeIds],
+      chainNodeIds
+        .map((id) => nodeById.get(id))
+        .filter((node): node is ResearchNode => Boolean(node)),
+    [chainNodeIds, nodeById],
   );
-  const tailNode = chainNodes.length > 0 ? chainNodes[chainNodes.length - 1] : null;
-  chainContentSettledRef.current =
-    chainNodeIds.length > 0 &&
-    chainNodeIds.every((id) => contentByNode[id] || contentErrorByNode[id]);
-  // Refetch when a run settles, its snapshot lands, or its recap arrives.
+  mainContentSettledRef.current =
+    mainChainIds.length > 0 &&
+    mainChainIds.every((id) => contentByNode[id] || contentErrorByNode[id]);
+  // Refetch when a run finishes, its snapshot is saved, or its recap is available.
   // Other detail updates do not need to restart the content loaders.
   const chainStatusKey = chainNodes
     .map((node) => `${node.id}:${node.status}:${node.responseSnapshotAt ?? 0}:${node.recap?.id ?? node.recap?.responseRevision ?? ""}`)
     .join("\n");
+  const branchesByParent = useMemo(() => researchBranchesByParent(nodes), [nodes]);
+  const branchesByParentRef = useRef(branchesByParent);
+  branchesByParentRef.current = branchesByParent;
 
-  // Segment-scoped DOM lookups. Each ThreadSegment registers its wrapper
-  // (scroll anchor), grid, response root, and rail as it mounts; measurement
-  // effects read the maps instead of scanning the whole scroll subtree with
-  // attribute selectors per lookup.
+  // Turn-scoped DOM lookups. Each turn registers its article (scroll anchor)
+  // and response root as it mounts; measurement effects read the maps
+  // instead of scanning the whole subtree with attribute selectors.
   const segmentDomRef = useRef({
     anchor: new Map<string, HTMLElement>(),
-    grid: new Map<string, HTMLElement>(),
     root: new Map<string, HTMLElement>(),
-    aside: new Map<string, HTMLElement>(),
   });
   const registerSegmentElement = useCallback(
     (nodeId: string, kind: SegmentDomKind, element: HTMLElement | null) => {
       const map = segmentDomRef.current[kind];
+      if ((map.get(nodeId) ?? null) === element) {
+        return;
+      }
       if (element) {
         map.set(nodeId, element);
       } else {
         map.delete(nodeId);
       }
+      // A turn's text moved to new DOM (pinning moves a branch from the
+      // drawer to its column): ranges painted into the old DOM are gone.
+      if (kind === "root") {
+        setHighlightDomNonce((value) => value + 1);
+      }
     },
     [],
   );
+  // The leaving drawer renders inert copies of turns that may also be shown
+  // in a pinned column; they never register, so lookups keep resolving to
+  // the live copy.
+  const registerNothing = useCallback(() => {}, []);
   const segmentRoot = useCallback(
     (nodeId: string) =>
       (segmentDomRef.current.root.get(nodeId) as HTMLDivElement | undefined) ?? null,
     [],
   );
-  const segmentAside = useCallback(
-    (nodeId: string) => segmentDomRef.current.aside.get(nodeId) ?? null,
+  const segmentAnchor = useCallback(
+    (nodeId: string) => segmentDomRef.current.anchor.get(nodeId) ?? null,
     [],
   );
-  const segmentGrid = useCallback(
-    (nodeId: string) => segmentDomRef.current.grid.get(nodeId) ?? null,
+  // A passage has no focusable element of its own (CSS highlights paint over
+  // text), so focus returns to its turn's branch button when the drawer it
+  // opened closes.
+  const branchTriggerFor = useCallback(
+    (nodeId: string) =>
+      segmentDomRef.current.anchor
+        .get(nodeId)
+        ?.querySelector<HTMLElement>("[data-research-branch-trigger]") ?? null,
     [],
   );
   const scrollToSegment = useCallback(
-    (nodeId: string, behavior: ScrollBehavior = "smooth") => {
-      segmentDomRef.current.anchor
-        .get(nodeId)
-        ?.scrollIntoView({ behavior, block: "start" });
+    (nodeId: string, behavior: ScrollBehavior = scrollBehavior()) => {
+      const anchor = segmentDomRef.current.anchor.get(nodeId);
+      if (anchor) {
+        scrollColumnTo(anchor, 0, behavior);
+      }
     },
     [],
   );
+  const flashTurn = useCallback((nodeId: string) => {
+    const question = segmentDomRef.current.anchor
+      .get(nodeId)
+      ?.querySelector<HTMLElement>(".research-turn-question");
+    if (!question) {
+      return;
+    }
+    question.classList.remove("is-flashing");
+    void question.offsetWidth;
+    question.classList.add("is-flashing");
+    window.setTimeout(() => question.classList.remove("is-flashing"), FLASH_MS);
+  }, []);
 
-  // Content-derived keys the annotation machinery re-runs on: a segment's
-  // durable revision landing, or a segment's transcript view toggling, both
-  // shift every flat-text offset in that segment.
+  // Content-derived keys the annotation machinery re-runs on: a turn's
+  // durable revision landing, or a turn's transcript view toggling, both
+  // shift every flat-text offset in that turn. Answer expansion changes the
+  // geometry (passages become visible) but not the offsets.
   const revisionsKey = chainNodeIds
     .map((id) => contentByNode[id]?.responseRevision ?? "")
     .join("\n");
@@ -2099,52 +1208,19 @@ function ResearchDocument({
   const fullTraceKey = chainNodeIds.map((id) => (fullTraceNodes[id] ? "1" : "0")).join("");
 
   // The floating action bar caches pixel geometry and a live selection from
-  // one rendered projection, so a transcript-visibility change (or
-  // navigation, or another segment's content landing and reflowing the page)
-  // leaves it pointing at content that has moved: drop it whenever the view
-  // changes.
+  // one rendered projection, so a transcript-visibility change (or another
+  // turn's content landing and reflowing the page) leaves it pointing at
+  // content that has moved: drop it whenever the view changes.
   useEffect(() => {
     setHighlightAction(null);
     window.getSelection()?.removeAllRanges();
   }, [treeId, chainKey, revisionsKey, expandedKey, fullTraceKey]);
 
-  // The in-progress ask and the hover-linked pair, unlike the action bar,
-  // hold no cached geometry: both re-resolve their passage against whatever
-  // projection is on screen, so a mere transcript toggle must not drop them —
-  // only a page or revision change invalidates the anchor. Declared before
-  // the restore below so that when both fire in the same pass, the restore
-  // wins.
-  useEffect(() => {
-    setAsk(null);
-    setLinkedAnchorNodeId(null);
-  }, [treeId, chainKey, revisionsKey]);
-
-  // Match the right-pane composer: fit the textarea to its contents up to the
-  // shared cap, then let it scroll. The chain dependency also sizes a newly
-  // mounted empty composer after a page switch.
-  useLayoutEffect(() => {
-    const textarea = followupTextareaRef.current;
-    if (textarea) {
-      growComposerTextarea(textarea);
-    }
-  }, [followup, chainKey, ask]);
-
-  // Event-driven node metadata; fresher than the cached contents for anything
-  // that does not require reparsing a transcript (status, checkpoint,
-  // children).
-  const selectedDetailNode = useMemo(
-    () => detail?.nodes.find((node) => node.id === selectedNodeId) ?? null,
-    [detail, selectedNodeId],
-  );
   // Highlight mutations are announced as research events but do not replace
   // the response snapshot. Mirror their refreshed node metadata into each
-  // loaded segment so another window's changes reach both the document and a
-  // subsequently opened edit warning. Bail on unchanged id lists: every
-  // research event rebuilds the highlights arrays (4×/s while any run in the
-  // tree streams), and adopting each fresh identity re-ran the paint
-  // effect's full text-node walk per event. Highlights are
-  // append/remove-only with unique ids, so id equality means the anchors are
-  // unchanged too.
+  // loaded turn so another window's changes reach the document. Bail on
+  // unchanged id lists: every research event rebuilds the highlights arrays,
+  // and adopting each fresh identity re-ran the paint effect's text walk.
   useEffect(() => {
     if (!detail) {
       return;
@@ -2175,83 +1251,75 @@ function ResearchDocument({
     });
   }, [detail]);
 
-  // Branch children per rendered segment. The chain's own members render as
-  // segments, so an inline child never doubles as a card — except a stray
-  // inline child on a corrupted store (a duplicated slot), which falls back
-  // to a card rather than vanishing from the interface.
-  const childrenBySegment = useMemo(() => {
-    const chainIds = new Set(chainNodeIds);
-    const map = new Map<string, ResearchNode[]>();
-    if (detail) {
-      for (const node of detail.nodes) {
-        if (!node.parentNodeId || !chainIds.has(node.parentNodeId)) {
-          continue;
-        }
-        if (node.inline && chainIds.has(node.id)) {
-          continue;
-        }
-        const list = map.get(node.parentNodeId);
-        if (list) {
-          list.push(node);
-        } else {
-          map.set(node.parentNodeId, [node]);
-        }
-      }
-    }
-    return map;
-  }, [detail, chainNodeIds]);
-  // Remember each follow-up's status the first time it is seen, so the unread
-  // dot can distinguish a card that finished while the reader watched from one
-  // that was already complete when the chain loaded. Recorded after commit so
-  // an aborted render never marks a card seen.
+  // Record whether each branch was complete when first displayed. This
+  // determines whether a later completion gets an unread dot. Record after
+  // commit so aborted renders do not mark branches as seen.
   useEffect(() => {
     const seen = firstSeenCompleteRef.current;
-    for (const children of childrenBySegment.values()) {
-      for (const child of children) {
+    for (const id of chainNodeIds) {
+      for (const child of branchesByParent.get(id) ?? []) {
         if (!seen.has(child.id)) {
           seen.set(child.id, child.status === "complete");
         }
       }
     }
-  }, [childrenBySegment]);
-  // Consumed only by the anchor paint effects, which read each child's id
-  // and immutable queryAnchor — so keep the previous identity while the
-  // (segment, id) list is unchanged, for the same event-churn reason as the
-  // chain ids above. Cards render from `childrenBySegment` directly and
-  // still see fresh prompts/previews/statuses.
-  const anchoredEntries = useStableValue(
+  }, [branchesByParent, chainNodeIds]);
+
+  // Branch passages per rendered turn: the anchors of each turn's branches,
+  // plus the pending new branch's passage. Immutable per id, so the stable
+  // identity only changes when the (turn, id) list does.
+  const pendingAnchor =
+    drawer?.kind === "draft" && drawer.anchor
+      ? { segmentId: drawer.parentNodeId, id: "__draft__", anchor: drawer.anchor }
+      : null;
+  const branchEntries = useStableValue(
     useMemo(() => {
       const next: { segmentId: string; id: string; anchor: ResearchHighlightAnchor }[] = [];
       for (const segmentId of chainNodeIds) {
-        for (const child of childrenBySegment.get(segmentId) ?? []) {
+        for (const child of branchesByParent.get(segmentId) ?? []) {
           if (child.queryAnchor) {
             next.push({ segmentId, id: child.id, anchor: child.queryAnchor });
           }
         }
       }
+      if (pendingAnchor) {
+        next.push(pendingAnchor);
+      }
       return next;
-    }, [chainNodeIds, childrenBySegment]),
+      // pendingAnchor is derived from `drawer`.
+    }, [branchesByParent, chainNodeIds, drawer]),
     (previous, candidate) =>
       previous.length === candidate.length &&
       previous.every(
         (entry, index) =>
           entry.id === candidate[index].id &&
-          entry.segmentId === candidate[index].segmentId,
+          entry.segmentId === candidate[index].segmentId &&
+          entry.anchor === candidate[index].anchor,
       ),
   );
-  // Height-relevant card content, for the collision measurer: preview and
-  // prompt growth changes a card's rendered height; other detail churn does
-  // not.
-  const cardsMeasureKey = chainNodeIds
-    .map((id) =>
-      (childrenBySegment.get(id) ?? [])
-        .map(
-          (child) =>
-            `${child.id}:${child.prompt.length}:${child.responsePreview?.length ?? 0}:${child.status}`,
-        )
-        .join("|"),
-    )
-    .join("\n");
+  // Branch heads that are open somewhere: in the drawer (with the branches it
+  // descends from), the pending draft, and the pinned columns. Their passages
+  // are underlined and their turns' branch buttons turn accent.
+  const openBranchIds = useMemo(() => {
+    const open = new Set<string>(validPinnedHeads);
+    if (drawer?.kind === "draft") {
+      open.add("__draft__");
+    }
+    let head = drawerHeadId;
+    const seen = new Set<string>();
+    while (head && !seen.has(head)) {
+      seen.add(head);
+      open.add(head);
+      const parentId = nodeById.get(head)?.parentNodeId;
+      if (!parentId || mainChainIds.includes(parentId) || !detail) {
+        break;
+      }
+      head = inlineChainFor(detail.nodes, parentId)[0] ?? null;
+    }
+    return open;
+  }, [detail, drawer, drawerHeadId, mainChainIds, nodeById, validPinnedHeads]);
+  const openBranchKey = [...openBranchIds].sort().join(",");
+
   const deletingBranch = useMemo(
     () =>
       deletingBranchId && detail
@@ -2263,332 +1331,556 @@ function ResearchDocument({
     [deletingBranchId, detail],
   );
 
-  // Scroll offsets and selections for deleted nodes would otherwise sit in
-  // localStorage forever (tree-level pruning happens in the app shell, which
-  // has no access to a tree's nodes).
-  useEffect(() => {
-    if (treeId && detail) {
-      const validNodeIds = new Set(detail.nodes.map((node) => node.id));
-      const previousNode = selectedNodeId
-        ? previousDetailNodesRef.current.find((node) => node.id === selectedNodeId)
-        : null;
-      const fallbackNodeId =
-        previousNode?.parentNodeId && validNodeIds.has(previousNode.parentNodeId)
-          ? previousNode.parentNodeId
-          : detail.tree.rootNodeId;
-      pruneResearchNavigationNodes(
-        treeId,
-        [...validNodeIds],
-      );
-      setHistory((current) =>
-        pruneResearchHistory(current, validNodeIds, fallbackNodeId),
-      );
-      if (selectedNodeId && !validNodeIds.has(selectedNodeId)) {
-        const navigation = (navigationPersistence.store[treeId] ??= { scrollByNode: {} });
-        navigation.selectedNodeId = fallbackNodeId;
+  const persistSelection = useCallback(
+    (nodeId: string | null) => {
+      const currentTreeId = treeIdRef.current;
+      if (!currentTreeId || !nodeId) {
+        return;
+      }
+      const navigation = (navigationPersistence.store[currentTreeId] ??= { scrollByNode: {} });
+      if (navigation.selectedNodeId !== nodeId) {
+        navigation.selectedNodeId = nodeId;
         navigationPersistence.flush();
-        // The fallback is a page swap that bypasses applySelection: reset the
-        // same per-page state, or the new page never restores its saved
-        // scroll offset (restoredChainRef would still hold the deleted
-        // page's latch).
-        beginPageVisit();
-        setFullTraceNodes({});
-        setFollowupMode("thread");
-        setSelectedNodeId(fallbackNodeId);
       }
-      previousDetailNodesRef.current = detail.nodes;
-    }
-  }, [beginPageVisit, detail, navigationPersistence, selectedNodeId, treeId]);
-
-  useEffect(() => {
-    if (!followupMenu) {
-      return;
-    }
-    const closeMenu = (event: MouseEvent) => {
-      const target = event.target as Node;
-      // Leave trigger clicks to the trigger's own handler: closing here on
-      // mousedown would clear the state its click-time toggle checks, so the
-      // ensuing click always reopens and the trigger can never dismiss.
-      if (
-        target instanceof Element &&
-        target.closest("[data-research-answer-menu-trigger]")
-      ) {
-        return;
-      }
-      if (!followupMenuRef.current?.contains(target)) {
-        setFollowupMenu(null);
-      }
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setFollowupMenu(null);
-      }
-    };
-    const closeOnReflow = () => setFollowupMenu(null);
-    document.addEventListener("mousedown", closeMenu);
-    document.addEventListener("keydown", closeOnEscape);
-    window.addEventListener("resize", closeOnReflow);
-    window.addEventListener("scroll", closeOnReflow, true);
-    return () => {
-      document.removeEventListener("mousedown", closeMenu);
-      document.removeEventListener("keydown", closeOnEscape);
-      window.removeEventListener("resize", closeOnReflow);
-      window.removeEventListener("scroll", closeOnReflow, true);
-    };
-  }, [followupMenu]);
-
-  // The Send button's mode picker: dismiss on an outside click, on Escape,
-  // and on any reflow that would leave the portaled menu stranded from its
-  // trigger. Trigger clicks are left to the trigger's own toggle.
-  useEffect(() => {
-    if (!modeMenuOpen) {
-      return;
-    }
-    const closeMenu = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        modeMenuTriggerRef.current?.contains(target) ||
-        modeMenuRef.current?.contains(target)
-      ) {
-        return;
-      }
-      setModeMenuOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setModeMenuOpen(false);
-      }
-    };
-    const closeOnReflow = () => setModeMenuOpen(false);
-    document.addEventListener("mousedown", closeMenu);
-    document.addEventListener("keydown", closeOnEscape);
-    window.addEventListener("resize", closeOnReflow);
-    window.addEventListener("scroll", closeOnReflow, true);
-    return () => {
-      document.removeEventListener("mousedown", closeMenu);
-      document.removeEventListener("keydown", closeOnEscape);
-      window.removeEventListener("resize", closeOnReflow);
-      window.removeEventListener("scroll", closeOnReflow, true);
-    };
-  }, [modeMenuOpen]);
-
-  // Measure once the menu is in the DOM so its real size drives the flip /
-  // clamp, then clear the stale placement on close so the next open cannot
-  // paint at the previous anchor for a frame.
-  useLayoutEffect(() => {
-    if (!modeMenuOpen) {
-      setModeMenuPos(null);
-      return;
-    }
-    const trigger = modeMenuTriggerRef.current;
-    const menu = modeMenuRef.current;
-    if (!trigger || !menu) {
-      return;
-    }
-    const { width, height } = menu.getBoundingClientRect();
-    setModeMenuPos(
-      placePanePopover({
-        triggerRect: trigger.getBoundingClientRect(),
-        popoverSize: { width, height },
-        paneRect: turnPaneRectFrom(trigger),
-        align: "end",
-        prefer: "above",
-      }),
-    );
-  }, [modeMenuOpen]);
-
-  // Stable (ref-routed) so the memoized segments' comparator never sees a
-  // fresh identity for them.
-  const openFollowupMenu = useCallback((nodeId: string, clientX: number, clientY: number) => {
-    const currentDetail = detailRef.current;
-    const node = currentDetail?.nodes.find((candidate) => candidate.id === nodeId);
-    const menuHeight =
-      node?.kind === "document" && node.id === currentDetail?.tree.rootNodeId
-        ? DOCUMENT_MENU_HEIGHT
-        : FOLLOWUP_MENU_HEIGHT;
-    setFollowupMenu({
-      nodeId,
-      left: Math.max(
-        FOLLOWUP_MENU_MARGIN,
-        Math.min(clientX, window.innerWidth - FOLLOWUP_MENU_WIDTH - FOLLOWUP_MENU_MARGIN),
-      ),
-      top: Math.max(
-        FOLLOWUP_MENU_MARGIN,
-        Math.min(clientY, window.innerHeight - menuHeight - FOLLOWUP_MENU_MARGIN),
-      ),
-    });
-  }, []);
-
-  const followupMenuStateRef = useRef(followupMenu);
-  followupMenuStateRef.current = followupMenu;
-  const openAnswerMenu = useCallback(
-    (trigger: HTMLButtonElement, nodeId: string) => {
-      if (followupMenuStateRef.current?.nodeId === nodeId) {
-        setFollowupMenu(null);
-        return;
-      }
-      const rect = trigger.getBoundingClientRect();
-      openFollowupMenu(nodeId, rect.right - FOLLOWUP_MENU_WIDTH, rect.bottom + 4);
     },
-    [openFollowupMenu],
+    [navigationPersistence],
   );
 
-  const openRecapDialog = useCallback((nodeId: string) => {
-    setFollowupMenu(null);
-    setRecapDialogNodeId(nodeId);
-  }, []);
-
-  async function confirmBranchRemoval() {
-    if (!deletingBranch?.node || !deletingBranch.info || deletingBranch.info.hasActiveRuns) {
+  // Tree switch (the document is keyed per tree, so this is its mount):
+  // restore the visit, pinned columns, queued follow-ups, and reading state.
+  useEffect(() => {
+    if (!treeId || !rootNodeId || !detail) {
       return;
     }
-    setBranchRemovalError(null);
-    setRemovingBranch(true);
-    try {
-      if (deletingBranch.node.id === detail?.tree.rootNodeId) {
-        await onRemoveTree(detail.tree.id);
-        setDeletingBranchId(null);
-        return;
-      }
-      const removal = await onRemoveBranch(deletingBranch.node.id);
-      // The backend call and detail refresh can outlive this document's tree.
-      // Never let a deletion started in the previous tree overwrite the new
-      // tree's history or live node selection when it eventually resolves.
-      if (treeIdRef.current !== removal.treeId) {
-        setDeletingBranchId(null);
-        return;
-      }
-      const removedNodeIds = new Set(removal.removedNodeIds);
-      const validNodeIds = new Set(
-        (detail?.nodes ?? [])
-          .filter((node) => !removedNodeIds.has(node.id))
-          .map((node) => node.id),
-      );
-      setHistory((current) => {
-        const pruned = pruneResearchHistory(current, validNodeIds, removal.parentNodeId);
-        return pruned.entries[pruned.index] === removal.parentNodeId
-          ? pruned
-          : pushResearchHistory(pruned, removal.parentNodeId);
-      });
-      // Deleting a child from a currently displayed segment's follow-up list
-      // already leaves us on the right page — including deleting an inline
-      // follow-up, where the surviving parent is a rendered segment.
-      if (isResearchNodeSelectionChange(selectedNodeIdRef.current, removal.parentNodeId)) {
-        applySelection(removal.parentNodeId);
-      }
-      setDeletingBranchId(null);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setBranchRemovalError(message);
-      onError(message);
-    } finally {
-      setRemovingBranch(false);
-    }
-  }
-
-  useEffect(() => {
-    const rootNodeId = detail?.tree.rootNodeId ?? null;
-    const savedNodeId = treeId ? navigationPersistence.store[treeId]?.selectedNodeId : undefined;
-    const selected =
-      savedNodeId && detail?.nodes.some((node) => node.id === savedNodeId)
-        ? savedNodeId
-        : rootNodeId;
+    const navigation = navigationPersistence.store[treeId];
+    const nodeIds = new Set(detail.nodes.map((node) => node.id));
+    const saved = navigation?.selectedNodeId;
+    const selected = saved && nodeIds.has(saved) ? saved : rootNodeId;
+    const main = inlineChainFor(detail.nodes, rootNodeId);
+    const pinned = (navigation?.pinnedBranches ?? []).filter(
+      (id) => nodeIds.has(id) && !main.includes(id),
+    );
+    setPinnedHeads(pinned);
+    setQueues({ ...(navigation?.queuedFollowups ?? {}) });
     setSelectedNodeId(selected);
-    // A tree switch starts a fresh visit history rooted at the restored node.
     setHistory(initResearchHistory(selected));
-    setContentByNode({});
-    setContentErrorByNode({});
-    fetchStampByNodeRef.current.clear();
-    beginPageVisit();
-    // Restore every node's expanded window with the tree: saved scroll
-    // offsets were captured against this state, and restoring one without
-    // the other lands the viewport in the wrong place.
-    setExpandedNodes({
-      ...(treeId ? navigationPersistence.store[treeId]?.expandedByNode : undefined),
-    });
-    // Full-trace is a per-visit reading choice, not a sticky session mode:
-    // each page opens on its answers so revealing one node's transcript
-    // never flips the default view for the next. The composer mode is
-    // likewise a per-answer choice.
+    const placement = researchNodePlacement(detail.nodes, main, pinned, selected);
+    if (placement.kind === "drawer") {
+      setDrawerAnimates(false);
+      setDrawer({ kind: "node", nodeId: selected });
+    } else if (placement.kind === "pinned") {
+      setFocusedColumn(placement.headId);
+    }
+    if (selected !== rootNodeId && placement.kind === "main") {
+      pendingScrollNodeIdRef.current = selected;
+    }
+    setExpandedNodes({ ...navigation?.expandedByNode });
     setFullTraceNodes({});
-    // Clear follow-up text here so a tree switch cannot keep the previous
-    // tree's composer contents for even one paint of the persist effect.
-    setFollowup("");
-    setFollowupMode("thread");
-    setModeMenuOpen(false);
-  }, [beginPageVisit, navigationPersistence, treeId, detail?.tree.rootNodeId]);
+    restoredScrollRef.current = false;
+    // Runs once per tree: the document remounts on tree switches, and the
+    // first detail to arrive carries the root and the nodes to restore.
+  }, [treeId, rootNodeId, Boolean(detail)]);
 
+  const mainComposerKey = rootNodeId ?? "main";
+  const persistedDraft = useMemo(
+    () =>
+      drawer?.kind === "draft" && drawer.anchor
+        ? { nodeId: drawer.parentNodeId, anchor: drawer.anchor }
+        : null,
+    [drawer],
+  );
+  const draftKey = drawer?.kind === "draft" ? `draft:${drawer.parentNodeId}` : null;
   useResearchComposerDrafts({
-    persistence: navigationPersistence, treeId, followup, mode: followupMode,
-    ask, selectedNodeId, chainNodeIds, chainKey, revisionsKey,
-    contentByNode, setFollowup, setMode: setFollowupMode, setAsk,
+    persistence: navigationPersistence,
+    treeId,
+    mainText: composerText[mainComposerKey] ?? "",
+    draft: persistedDraft,
+    draftText: draftKey ? composerText[draftKey] ?? "" : "",
+    drawerOpen: drawer !== null,
+    chainNodeIds,
+    contentByNode,
+    setMainText: (text) =>
+      setComposerText((current) =>
+        (current[mainComposerKey] ?? "") === text ? current : { ...current, [mainComposerKey]: text },
+      ),
+    restoreDraft: (nodeId, anchor, text) => {
+      setDrawerAnimates(false);
+      setDrawer({ kind: "draft", parentNodeId: nodeId, anchor });
+      if (text) {
+        setComposerText((current) => ({ ...current, [`draft:${nodeId}`]: text }));
+      }
+    },
   });
 
-  // Switches the displayed node without touching visit history: records the
-  // outgoing scroll offset and applies the selection. A target inside the
-  // rendered chain scrolls to its segment — the thread is one page — while
-  // anything else swaps the page. Shared by user navigation (which then
-  // extends history) and back/forward (which only moves the history cursor).
-  const applySelection = useCallback(
-    (nodeId: string) => {
-      if (!treeId) {
-        return;
+  // Deleted nodes: prune persisted state, history, pinned columns, and a
+  // drawer that showed a removed branch.
+  useEffect(() => {
+    if (!treeId || !detail) {
+      return;
+    }
+    const validNodeIds = new Set(detail.nodes.map((node) => node.id));
+    const pending = pendingNodeIdsRef.current;
+    for (const id of [...pending]) {
+      if (validNodeIds.has(id)) {
+        pending.delete(id);
+      } else {
+        validNodeIds.add(id);
       }
-      const navigation = (navigationPersistence.store[treeId] ??= { scrollByNode: {} });
-      if (
-        selectedNodeId &&
-        documentScrollRef.current &&
-        chainContentSettledRef.current
-      ) {
-        recordResearchScrollPosition(
-          navigation,
-          selectedNodeId,
-          documentScrollRef.current.scrollTop,
-        );
-      }
-      navigation.selectedNodeId = nodeId;
-      navigationPersistence.flush();
-      const sameChain = chainNodeIdsRef.current.includes(nodeId);
-      if (!sameChain) {
-        // A page swap: reset the per-visit trace choice and the composer
-        // mode (a "New branch" choice belongs to the answer it was made for,
-        // not to whatever tail comes next), and let the chain effects prune
-        // and reload content. Expanded windows are tree-wide persisted
-        // state, so they carry over.
-        setFullTraceNodes({});
-        setFollowupMode("thread");
-        beginPageVisit();
-      }
-      setSelectedNodeId(nodeId);
-      if (sameChain) {
-        window.requestAnimationFrame(() => scrollToSegment(nodeId));
+    }
+    pruneResearchNavigationNodes(treeId, [...validNodeIds]);
+    setHistory((current) => pruneResearchHistory(current, validNodeIds, detail.tree.rootNodeId));
+    setPinnedHeads((current) =>
+      current.every((id) => validNodeIds.has(id)) ? current : current.filter((id) => validNodeIds.has(id)),
+    );
+    const current = drawerRef.current;
+    if (
+      (current?.kind === "node" && !validNodeIds.has(current.nodeId)) ||
+      (current?.kind === "draft" && !validNodeIds.has(current.parentNodeId))
+    ) {
+      setDrawer(null);
+    }
+    if (selectedNodeId && !validNodeIds.has(selectedNodeId)) {
+      setSelectedNodeId(detail.tree.rootNodeId);
+      persistSelection(detail.tree.rootNodeId);
+    }
+  }, [detail, persistSelection, selectedNodeId, treeId]);
+
+  // Pinned columns and queued follow-ups persist per tree.
+  const pinnedPersistKey = validPinnedHeads.join(",");
+  const pinnedRestoredRef = useRef(false);
+  useEffect(() => {
+    if (!treeId) {
+      return;
+    }
+    // The first pass after mount carries the restored list; writing it back
+    // would only rewrite the same value.
+    if (!pinnedRestoredRef.current) {
+      pinnedRestoredRef.current = true;
+      return;
+    }
+    navigationPersistence.recordPinned(treeId, validPinnedHeads);
+  }, [navigationPersistence, pinnedPersistKey, treeId]);
+
+  const updateQueue = useCallback(
+    (headId: string, transform: (queue: QueuedResearchFollowup[]) => QueuedResearchFollowup[]) => {
+      const current = queuesRef.current;
+      const next = transform(current[headId] ?? EMPTY_QUEUE);
+      const updated = next.length === 0 ? withoutKeys(current, [headId]) : { ...current, [headId]: next };
+      queuesRef.current = updated;
+      setQueues(updated);
+      const currentTreeId = treeIdRef.current;
+      if (currentTreeId) {
+        navigationPersistence.recordQueue(currentTreeId, headId, next);
       }
     },
-    [beginPageVisit, navigationPersistence, scrollToSegment, selectedNodeId, treeId],
+    [navigationPersistence],
   );
 
-  const selectNode = useCallback(
-    (nodeId: string) => {
-      if (!treeId) {
+  // ---- columns, focus, and the drawer --------------------------------------
+
+  // The column area (ResearchColumns) sets the drawer width and the
+  // single-column mode: the drawer is 46% of the area, feed included, and
+  // never wider than the conversation column.
+  const areaWidth = columnsLayout?.areaWidth ?? 1200;
+  const singleColumn = columnsLayout?.singleColumn ?? false;
+  const drawerWidth = researchDrawerWidth(areaWidth, columnsLayout?.conversationWidth ?? areaWidth);
+  const drawerWidthRef = useRef(drawerWidth);
+  drawerWidthRef.current = drawerWidth;
+  const singleColumnRef = useRef(singleColumn);
+  singleColumnRef.current = singleColumn;
+  const columnsLayoutRef = useRef(columnsLayout);
+  columnsLayoutRef.current = columnsLayout;
+  // The feed is column 0 for `[` and `]`.
+  const focusedColumnKey = columnsLayout?.feedFocused
+    ? "feed"
+    : focusedColumn === "main" || validPinnedHeads.includes(focusedColumn)
+      ? focusedColumn
+      : "main";
+  const columnKeys = useMemo(
+    () => [...(columnsLayout ? ["feed"] : []), "main", ...validPinnedHeads],
+    [Boolean(columnsLayout), validPinnedHeads],
+  );
+
+  const showColumn = useCallback((key: string) => {
+    const row = columnsLayoutRef.current?.row ?? workspaceRef.current;
+    showResearchColumn(
+      row,
+      row?.querySelector<HTMLElement>(`[data-research-column="${CSS.escape(key)}"]`) ?? null,
+      scrollBehavior(),
+    );
+  }, []);
+
+  /** Gives a conversation column (or the feed) the focus rule. */
+  const takeColumnFocus = useCallback((key: string) => {
+    setFocusedColumn(key);
+    columnsLayoutRef.current?.releaseFeed();
+  }, []);
+
+  const focusColumn = useCallback(
+    (key: string, { moveFocus = false }: { moveFocus?: boolean } = {}) => {
+      if (key === "feed") {
+        columnsLayoutRef.current?.focusFeed({ moveFocus });
         return;
       }
-      // A current-node click is navigation-wise a no-op — except as a retry
-      // affordance when that segment's last load failed.
-      if (!isResearchNodeSelectionChange(selectedNodeId, nodeId)) {
-        if (contentErrorByNode[nodeId]) {
-          setContentLoadNonce((value) => value + 1);
+      takeColumnFocus(key);
+      window.requestAnimationFrame(() => {
+        showColumn(key);
+        if (moveFocus) {
+          columnTitleRefs.current.get(key)?.focus({ preventScroll: true });
+        }
+      });
+    },
+    [showColumn, takeColumnFocus],
+  );
+
+  const markOpened = useCallback((nodeId: string) => {
+    setOpenedNodeIds((prev) => (prev.has(nodeId) ? prev : new Set(prev).add(nodeId)));
+  }, []);
+
+  /** The viewport x of the drawer's left edge (where it is, or where it
+   * will be once it opens), from the column area's geometry. */
+  const drawerLeftEdge = () => {
+    const area = (columnsLayoutRef.current?.overlay ?? workspaceRef.current)?.getBoundingClientRect();
+    if (!area) {
+      return null;
+    }
+    return singleColumnRef.current ? area.left : area.right - drawerWidthRef.current;
+  };
+
+  // Keeps the passage a branch came from visible in its column. A passage
+  // under the drawer can't be shown, so its turn's question is scrolled to
+  // the top instead, unless it is already in view.
+  const revealPassage = useCallback(
+    (headId: string, flash: boolean) => {
+      const head = detailRef.current?.nodes.find((node) => node.id === headId);
+      const parentId = head?.parentNodeId;
+      if (!head || !parentId) {
+        return;
+      }
+      window.requestAnimationFrame(() => {
+        const turn = segmentDomRef.current.anchor.get(parentId);
+        if (!turn) {
+          return;
+        }
+        const question = turn.querySelector<HTMLElement>(".research-turn-question") ?? turn;
+        const entry = branchRangeOffsetsRef.current.find((candidate) => candidate.id === headId);
+        const root = segmentDomRef.current.root.get(parentId);
+        const range = entry && root ? rangeForTextOffsets(root, entry.start, entry.end) : null;
+        const rect = range?.getBoundingClientRect() ?? null;
+        const drawerLeft = drawerRef.current ? drawerLeftEdge() : null;
+        const under =
+          drawerLeft !== null &&
+          !turn.closest(".research-branch-drawer") &&
+          (rect ?? question.getBoundingClientRect()).right > drawerLeft + 4;
+        if (under || !rect) {
+          if (!inColumnView(question.getBoundingClientRect(), question)) {
+            scrollColumnTo(turn, 0);
+          }
+        } else if (!inColumnView(rect, turn)) {
+          const scroller = turn.closest<HTMLElement>(".research-column-scroll");
+          if (scroller) {
+            const bounds = scroller.getBoundingClientRect();
+            scroller.scrollTo({
+              top: Math.max(0, rect.top - bounds.top + scroller.scrollTop - scroller.clientHeight / 3),
+              behavior: scrollBehavior(),
+            });
+          }
+        }
+        if (flash) {
+          if (entry && !under) {
+            setFlashRange({ nodeId: parentId, start: entry.start, end: entry.end });
+          } else {
+            flashTurn(parentId);
+          }
+        }
+      });
+    },
+    [flashTurn],
+  );
+
+  // Expanding a clamped answer moves the text below it, so it happens only
+  // when the passage a branch opens from is cut off by the clamp, and not
+  // when the drawer will cover it anyway.
+  const expandToRevealPassage = useCallback((headId: string) => {
+    const head = detailRef.current?.nodes.find((node) => node.id === headId);
+    const parentId = head?.parentNodeId;
+    const entry = branchRangeOffsetsRef.current.find((candidate) => candidate.id === headId);
+    const root = parentId ? segmentDomRef.current.root.get(parentId) : null;
+    const clamp = root?.closest<HTMLElement>(".research-answer-clamp.is-clamped");
+    if (!parentId || !entry || !root || !clamp || singleColumnRef.current) {
+      return;
+    }
+    const range = rangeForTextOffsets(root, entry.start, entry.end);
+    const rect = range?.getBoundingClientRect();
+    const drawerLeft = root.closest(".research-branch-drawer") ? null : drawerLeftEdge();
+    if (
+      rect &&
+      rect.bottom > clamp.getBoundingClientRect().bottom &&
+      (drawerLeft === null || rect.right <= drawerLeft)
+    ) {
+      setExpandedAnswers((current) => (current[parentId] ? current : { ...current, [parentId]: true }));
+    }
+  }, []);
+
+  /** Opens a branch node in the drawer: slides it in when the drawer was
+   * closed, replaces its content otherwise. `returnFocus` is where focus
+   * goes when the drawer closes; replacing the content keeps the first. */
+  const openDrawerNode = useCallback(
+    (nodeId: string, returnFocus: HTMLElement | null) => {
+      if (!drawerRef.current) {
+        drawerReturnFocusRef.current =
+          returnFocus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+        setDrawerInstance((value) => value + 1);
+        setDrawerAnimates(true);
+        setLeavingDrawer(null);
+      }
+      setDrawer({ kind: "node", nodeId });
+      markOpened(nodeId);
+      const nodesNow = detailRef.current?.nodes ?? [];
+      const headId = inlineChainFor(nodesNow, nodeId)[0] ?? nodeId;
+      markOpened(headId);
+      expandToRevealPassage(headId);
+      revealPassage(headId, false);
+      window.requestAnimationFrame(() => {
+        if (nodeId !== headId) {
+          scrollToSegment(nodeId, "auto");
+        } else if (drawerScrollRef.current) {
+          drawerScrollRef.current.scrollTop = 0;
+        }
+      });
+    },
+    [expandToRevealPassage, markOpened, revealPassage, scrollToSegment],
+  );
+
+  const returnFocusAfterDrawer = useCallback((closed: DrawerTarget) => {
+    window.requestAnimationFrame(() => {
+      const saved = drawerReturnFocusRef.current;
+      drawerReturnFocusRef.current = null;
+      if (saved && saved.isConnected && !saved.closest(".research-branch-drawer")) {
+        saved.focus({ preventScroll: true });
+        return;
+      }
+      const nodesNow = detailRef.current?.nodes ?? [];
+      let parentId =
+        closed.kind === "draft"
+          ? closed.parentNodeId
+          : nodesNow.find((node) => node.id === (inlineChainFor(nodesNow, closed.nodeId)[0] ?? closed.nodeId))
+              ?.parentNodeId ?? null;
+      const seen = new Set<string>();
+      while (parentId && !seen.has(parentId)) {
+        seen.add(parentId);
+        const trigger = workspaceRef.current?.querySelector<HTMLElement>(
+          `[data-research-branch-trigger="${CSS.escape(parentId)}"]`,
+        );
+        if (trigger && !trigger.closest(".research-branch-drawer")) {
+          trigger.focus({ preventScroll: true });
+          return;
+        }
+        parentId = nodesNow.find((node) => node.id === parentId)?.parentNodeId ?? null;
+      }
+      columnTitleRefs.current.get("main")?.focus({ preventScroll: true });
+    });
+  }, []);
+
+  /** Closes the drawer: it slides out (or fades, when pinned) and focus
+   * returns to whatever opened it. Closing a new branch before its first
+   * question discards it. */
+  const closeDrawer = useCallback(
+    (mode: "close" | "pin" = "close") => {
+      const current = drawerRef.current;
+      if (!current) {
+        return;
+      }
+      setDrawer(null);
+      setLeavingDrawer(
+        prefersReducedMotion() ? null : { target: current, mode, instance: drawerInstanceRef.current },
+      );
+      if (current.kind === "draft") {
+        const currentTreeId = treeIdRef.current;
+        if (currentTreeId) {
+          navigationPersistence.clearAsk(currentTreeId, current.parentNodeId);
+        }
+        setComposerText((text) => withoutKeys(text, [`draft:${current.parentNodeId}`]));
+      }
+      if (mode === "close") {
+        returnFocusAfterDrawer(current);
+      }
+    },
+    [navigationPersistence, returnFocusAfterDrawer],
+  );
+
+  /** Moves the reader to a node without touching visit history: a node of
+   * the conversation closes the drawer (and, with `reveal`, scrolls to and
+   * flashes its turn); a pinned branch focuses its column; any other branch
+   * opens in the drawer. */
+  const applyVisit = useCallback(
+    (
+      nodeId: string,
+      { reveal = false, returnFocus = null }: { reveal?: boolean; returnFocus?: HTMLElement | null } = {},
+    ) => {
+      const currentDetail = detailRef.current;
+      if (!currentDetail || !currentDetail.nodes.some((node) => node.id === nodeId)) {
+        return;
+      }
+      const placement = researchNodePlacement(
+        currentDetail.nodes,
+        mainChainIdsRef.current,
+        pinnedHeadsRef.current,
+        nodeId,
+      );
+      setSelectedNodeId(nodeId);
+      persistSelection(nodeId);
+      setMenu(null);
+      if (placement.kind === "main") {
+        if (drawerRef.current) {
+          closeDrawer("close");
+        }
+        setFocusedColumn("main");
+        if (reveal) {
+          setExpandedAnswers((current) => (current[nodeId] ? current : { ...current, [nodeId]: true }));
+          window.requestAnimationFrame(() => {
+            scrollToSegment(nodeId);
+            flashTurn(nodeId);
+          });
         }
         return;
       }
-      applySelection(nodeId);
-      setHistory((prev) => pushResearchHistory(prev, nodeId));
+      if (placement.kind === "pinned") {
+        focusColumn(placement.headId, { moveFocus: true });
+        if (reveal || nodeId !== placement.headId) {
+          window.requestAnimationFrame(() => scrollToSegment(nodeId));
+        }
+        return;
+      }
+      openDrawerNode(nodeId, returnFocus);
+      window.requestAnimationFrame(() => drawerTitleRef.current?.focus({ preventScroll: true }));
     },
-    [applySelection, contentErrorByNode, selectedNodeId, treeId],
+    [closeDrawer, flashTurn, focusColumn, openDrawerNode, persistSelection, scrollToSegment],
   );
-  // Live mirror so the segments' stable onSelectNode wrapper always calls the
-  // current navigation closure.
-  const selectNodeRef = useRef(selectNode);
-  selectNodeRef.current = selectNode;
+
+  /** User navigation: applies the visit and extends history. */
+  const navigate = useCallback(
+    (nodeId: string, options?: { reveal?: boolean; returnFocus?: HTMLElement | null }) => {
+      applyVisit(nodeId, options);
+      setHistory((current) =>
+        current.entries[current.index] === nodeId ? current : pushResearchHistory(current, nodeId),
+      );
+    },
+    [applyVisit],
+  );
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+
+  /** Closing the drawer is a visit too: back reopens the branch. */
+  const closeDrawerToConversation = useCallback(() => {
+    const current = drawerRef.current;
+    if (!current) {
+      return;
+    }
+    closeDrawer("close");
+    const currentDetail = detailRef.current;
+    const target =
+      current.kind === "node" && currentDetail
+        ? researchMainChainAncestor(currentDetail.nodes, mainChainIdsRef.current, current.nodeId)
+        : null;
+    if (current.kind === "node" && target) {
+      setSelectedNodeId(target);
+      persistSelection(target);
+      setHistory((value) =>
+        value.entries[value.index] === target ? value : pushResearchHistory(value, target),
+      );
+    }
+  }, [closeDrawer, persistSelection]);
+
+  const openDraft = useCallback(
+    (parentNodeId: string, anchor: ResearchHighlightAnchor | null, returnFocus: HTMLElement | null) => {
+      if (archived) {
+        return;
+      }
+      if (!drawerRef.current) {
+        drawerReturnFocusRef.current =
+          returnFocus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+        setDrawerInstance((value) => value + 1);
+        setDrawerAnimates(true);
+        setLeavingDrawer(null);
+      } else if (drawerRef.current.kind === "draft") {
+        const previous = drawerRef.current.parentNodeId;
+        setComposerText((text) => withoutKeys(text, [`draft:${previous}`]));
+        const currentTreeId = treeIdRef.current;
+        if (currentTreeId) {
+          navigationPersistence.clearAsk(currentTreeId, previous);
+        }
+      }
+      setMenu(null);
+      setDrawer({ kind: "draft", parentNodeId, anchor });
+      window.requestAnimationFrame(() =>
+        composerRefs.current.get(`draft:${parentNodeId}`)?.focus(),
+      );
+    },
+    [archived, navigationPersistence],
+  );
+
+  /** Shows a branch created a moment ago in the drawer, with its composer
+   * focused once it renders. The next detail refresh delivers its node, so
+   * it cannot go through `navigate` yet. */
+  const openNewBranch = useCallback(
+    (nodeId: string) => {
+      pendingNodeIdsRef.current.add(nodeId);
+      pendingComposerFocusRef.current = nodeId;
+      if (!drawerRef.current) {
+        drawerReturnFocusRef.current =
+          document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        setDrawerInstance((value) => value + 1);
+        setDrawerAnimates(true);
+        setLeavingDrawer(null);
+      }
+      setDrawer({ kind: "node", nodeId });
+      markOpened(nodeId);
+      setSelectedNodeId(nodeId);
+      persistSelection(nodeId);
+      setHistory((value) => pushResearchHistory(value, nodeId));
+    },
+    [markOpened, persistSelection],
+  );
+
+  const pinBranch = useCallback(
+    (headId: string) => {
+      setPinnedHeads((current) => [...current.filter((id) => id !== headId), headId]);
+      closeDrawer("pin");
+      focusColumn(headId, { moveFocus: true });
+    },
+    [closeDrawer, focusColumn],
+  );
+
+  const unpinBranch = useCallback(
+    (headId: string) => {
+      setPinnedHeads((current) => {
+        const index = current.indexOf(headId);
+        const next = current.filter((id) => id !== headId);
+        setFocusedColumn((focused) =>
+          focused === headId ? (index > 0 ? current[index - 1] : "main") : focused,
+        );
+        return next;
+      });
+      window.requestAnimationFrame(() => columnTitleRefs.current.get("main")?.focus({ preventScroll: true }));
+    },
+    [],
+  );
+
+  // Node-open requests from the app shell (feed rows, child rows, the
+  // Highlights view) while this tree's document is already mounted.
+  useEffect(
+    () =>
+      listenToResearchNodeOpen((request) => {
+        if (request.treeId !== treeIdRef.current) {
+          return;
+        }
+        navigateRef.current(request.nodeId, { reveal: true });
+      }),
+    [],
+  );
+
+  // ---- history -------------------------------------------------------------
 
   const canGoBack = historyCanGoBack(history) || workspaceCanGoBack;
   const canGoForward = historyCanGoForward(history) || workspaceCanGoForward;
@@ -2596,52 +1888,95 @@ function ResearchDocument({
   const goBack = useCallback(() => {
     const step = researchHistoryBack(history);
     if (step) {
-      applySelection(step.nodeId);
+      applyVisit(step.nodeId);
       setHistory(step.history);
       return;
     }
     onWorkspaceBack?.();
-  }, [applySelection, history, onWorkspaceBack]);
+  }, [applyVisit, history, onWorkspaceBack]);
 
   const goForward = useCallback(() => {
     const step = researchHistoryForward(history);
     if (step) {
-      applySelection(step.nodeId);
+      applyVisit(step.nodeId);
       setHistory(step.history);
       return;
     }
     onWorkspaceForward?.();
-  }, [applySelection, history, onWorkspaceForward]);
-  // Browser-style navigation shortcuts, active only while the document is
-  // mounted (research surface visible). Cmd/Ctrl+[ / ] and Alt+←/→ mirror the
-  // header arrows; the dedicated mouse back/forward buttons (3/4) do too. Keys
-  // are ignored while typing so the follow-up composer keeps word-wise motion.
+  }, [applyVisit, history, onWorkspaceForward]);
+
+  // Keyboard: ⌘[ / ⌘] and Alt+←/→ (and mouse buttons 3/4) walk history;
+  // bare [ and ] move focus between columns; Esc closes the drawer when no
+  // menu, popover, or dialog is open. Keys are ignored while typing, except
+  // Esc, which also leaves a composer inside the drawer.
+  const anyOverlayOpen =
+    Boolean(menu) ||
+    Boolean(highlightAction) ||
+    Boolean(renameTarget) ||
+    Boolean(deletingBranchId) ||
+    Boolean(documentEditSession) ||
+    Boolean(recapDialogNodeId);
+  const anyOverlayOpenRef = useRef(anyOverlayOpen);
+  anyOverlayOpenRef.current = anyOverlayOpen;
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isEditableTarget(event.target)) {
+      if (event.defaultPrevented) {
+        return;
+      }
+      if (event.key === "Escape" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        // An IME composition uses Escape to cancel itself.
+        if (event.isComposing || event.keyCode === 229) {
+          return;
+        }
+        if (anyOverlayOpenRef.current || !drawerRef.current) {
+          return;
+        }
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest("[role='menu'], [role='dialog'], [role='alertdialog'], .popover-surface")) {
+          return;
+        }
+        // Escape in a field with text leaves the field and keeps the text
+        // (closing a new branch discards its question); a second Escape
+        // closes the drawer.
+        if (
+          (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) &&
+          target.value.trim()
+        ) {
+          event.preventDefault();
+          const column = target.closest(".research-branch-drawer, .research-conv-column");
+          const title = column?.querySelector<HTMLElement>(".research-column-title");
+          if (title) {
+            title.focus({ preventScroll: true });
+          } else {
+            target.blur();
+          }
+          return;
+        }
+        event.preventDefault();
+        closeDrawerToConversation();
+        return;
+      }
+      if (isEditableTarget(event.target)) {
         return;
       }
       const primary = event.metaKey || event.ctrlKey;
+      if (!primary && !event.altKey && !event.shiftKey && (event.key === "[" || event.key === "]")) {
+        const index = columnKeys.indexOf(focusedColumnKey);
+        const next = columnKeys[index + (event.key === "]" ? 1 : -1)];
+        if (next) {
+          event.preventDefault();
+          focusColumn(next, { moveFocus: true });
+        }
+        return;
+      }
       let handler: (() => void) | null = null;
       if (primary && !event.altKey && !event.shiftKey && event.code === "BracketLeft") {
         handler = goBack;
       } else if (primary && !event.altKey && !event.shiftKey && event.code === "BracketRight") {
         handler = goForward;
-      } else if (
-        event.altKey &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.shiftKey &&
-        event.key === "ArrowLeft"
-      ) {
+      } else if (event.altKey && !primary && !event.shiftKey && event.key === "ArrowLeft") {
         handler = goBack;
-      } else if (
-        event.altKey &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.shiftKey &&
-        event.key === "ArrowRight"
-      ) {
+      } else if (event.altKey && !primary && !event.shiftKey && event.key === "ArrowRight") {
         handler = goForward;
       }
       if (handler) {
@@ -2658,43 +1993,29 @@ function ResearchDocument({
         goForward();
       }
     };
-    const mouseTarget = documentScrollRef.current;
+    const mouseTarget = workspaceRef.current;
     window.addEventListener("keydown", onKeyDown);
     mouseTarget?.addEventListener("mouseup", onMouseUp);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       mouseTarget?.removeEventListener("mouseup", onMouseUp);
     };
-  }, [goBack, goForward]);
+  }, [closeDrawerToConversation, columnKeys, focusColumn, focusedColumnKey, goBack, goForward]);
 
-  // ⌘J routed from the app-level shortcut dispatcher: bring the follow-up
-  // composer into view and hand it the caret. Focus reads the live disabled
-  // state off the textarea (archived trees, running tails) rather than
-  // re-subscribing on every composer state change; scrolling still works for
-  // a disabled composer so the chord always lands on the follow-ups area.
+  // ⌘J routed from the app-level shortcut dispatcher: bring the composer of
+  // the column in front (the drawer when it is open) into view and focus it.
+  const focusedComposerKeyRef = useRef<string>(mainComposerKey);
   useEffect(
     () =>
       listenToResearchFollowupsFocus(() => {
-        // A minimized bar restores first; it focuses itself once it is back.
-        restoreFollowupBarRef.current();
-        const textarea = followupTextareaRef.current;
-        if (textarea && !textarea.disabled) {
-          textarea.focus({ preventScroll: true });
-        }
-        followupComposerRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
+        const handle = composerRefs.current.get(focusedComposerKeyRef.current);
+        handle?.focus();
+        handle?.element()?.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
       }),
     [],
   );
 
-  useResearchSwipeNavigation(
-    documentScrollRef,
-    goBack,
-    goForward,
-    Boolean(detail && selectedNodeId),
-  );
+  useResearchSwipeNavigation(mainScrollRef, goBack, goForward, Boolean(detail));
 
   const expandAllTurns = useCallback(
     (nodeId: string) => {
@@ -2710,8 +2031,9 @@ function ResearchDocument({
     [navigationPersistence, treeId],
   );
 
-  // Bound the cache to the rendered chain: navigating to another chain drops
-  // the old page's contents, matching the single-node view's memory profile.
+  // ---- content loading -----------------------------------------------------
+
+  // Bound the cache to the rendered chains.
   useEffect(() => {
     const keep = new Set(chainNodeIds);
     const prune = <T,>(current: Record<string, T>) =>
@@ -2739,8 +2061,8 @@ function ResearchDocument({
     const clearError = (nodeId: string) =>
       setContentErrorByNode((current) => withoutKeys(current, [nodeId]));
     const load = async (nodeId: string) => {
-      // Stamped before the fetch: a transition that lands mid-flight
-      // restarts this effect and refetches under the new stamp.
+      // Capture the stamp before fetching. A state transition during the fetch
+      // restarts this effect and refetches with the new stamp.
       const stamp = stampFor(nodeId);
       try {
         const next = await getResearchNodeContent(nodeId);
@@ -2778,6 +2100,10 @@ function ResearchDocument({
     };
     for (const nodeId of chainNodeIds) {
       const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
+      if (!node) {
+        // A just-created branch the next detail refresh has not delivered.
+        continue;
+      }
       const hasContent = Boolean(contentByNodeRef.current[nodeId]);
       const hasError = Boolean(contentErrorByNodeRef.current[nodeId]);
       if (
@@ -2785,18 +2111,15 @@ function ResearchDocument({
         hasError ||
         fetchStampByNodeRef.current.get(nodeId) !== stampFor(nodeId)
       ) {
-        // A restart is a fresh load for this segment (status transition,
+        // A restart is a fresh load for this turn (status transition,
         // snapshot landing, retry): a failure reported by the previous run
-        // must not sit on screen while this one is in flight. An error with
-        // a matching stamp still reloads — that is what the Retry button's
-        // nonce bump asks for.
+        // must not sit on screen while this one is in flight.
         clearError(nodeId);
         void load(nodeId);
-      } else if (node && isActiveResearchStatus(node.status)) {
-        // The cleanup above cancelled this still-streaming segment's pending
-        // poll timer (a sibling's transition, a retry, or a document edit
-        // restarted the effect). Re-arm it, or its live transcript freezes
-        // until its own status finally changes.
+      } else if (isActiveResearchStatus(node.status)) {
+        // The cleanup above cancelled this still-streaming turn's pending
+        // poll timer. Re-arm it, or its live transcript freezes until its
+        // own status finally changes.
         void load(nodeId);
       }
     }
@@ -2806,141 +2129,64 @@ function ResearchDocument({
         window.clearTimeout(timer);
       }
     };
-    // Keyed on the chain's statuses and snapshot stamps rather than the
+    // Keyed on the chains' statuses and snapshot stamps rather than the
     // detail object: streaming runs replace `detail` on every event, and
     // restarting this effect for each replacement refetched and reparsed
-    // unchanged content. A status transition still restarts it, which is
-    // what fetches the final content once a run completes — and the snapshot
-    // stamp restarts it once more if that fetch beat the adapter's final
-    // transcript flush.
+    // unchanged content.
   }, [chainKey, chainStatusKey, contentLoadNonce]);
 
-  // Restore the chain page's scroll offset once the WHOLE chain has settled
-  // (see chainContentSettledRef — restoring against a partially loaded page
-  // clamps, and the clamp destroys the saved offset). Once per page visit,
-  // so a growing chain (a new inline follow-up landing) or in-chain
-  // selection cannot yank the viewport back to a stale offset. When the
-  // selected segment sits mid-chain and no offset was saved, land on the
-  // segment itself rather than the top of the thread.
+  // Restore the conversation's scroll offset once it has fully settled (see
+  // mainContentSettledRef — restoring against a partially loaded page clamps,
+  // and the clamp destroys the saved offset). Once per tree visit. A pending
+  // turn to land on (a feed child row) wins over the saved offset.
   useLayoutEffect(() => {
     if (
       !treeId ||
-      !selectedNodeId ||
-      !chainContentSettledRef.current ||
-      !documentScrollRef.current ||
-      restoredChainRef.current !== null
+      !rootNodeId ||
+      !mainContentSettledRef.current ||
+      !mainScrollRef.current ||
+      restoredScrollRef.current
     ) {
       return;
     }
-    restoredChainRef.current = `${treeId}:${chainKey}`;
-    const saved = restoreResearchScrollPosition(
-      navigationPersistence.store[treeId],
-      selectedNodeId,
-    );
-    if (saved === 0 && chainNodeIds[0] !== selectedNodeId) {
-      // Arriving at a mid-chain segment with nothing to restore (e.g. Back
-      // from a branch page to the answer it was asked about): show that
-      // answer, not the root five screens above it.
-      scrollToSegment(selectedNodeId, "auto");
+    restoredScrollRef.current = true;
+    if (pendingScrollNodeIdRef.current && mainChainIds.includes(pendingScrollNodeIdRef.current)) {
+      const target = pendingScrollNodeIdRef.current;
+      pendingScrollNodeIdRef.current = null;
+      setExpandedAnswers((current) => (current[target] ? current : { ...current, [target]: true }));
+      window.requestAnimationFrame(() => {
+        scrollToSegment(target, "auto");
+        flashTurn(target);
+      });
       return;
     }
-    documentScrollRef.current.scrollTop = saved;
-  }, [contentByNode, contentErrorByNode, navigationPersistence, treeId, chainKey, chainNodeIds, scrollToSegment, selectedNodeId]);
-
-  useEffect(() => {
-    if (treeId && selectedNodeId && detail?.nodes.some((node) => node.id === selectedNodeId)) {
-      const navigation = (navigationPersistence.store[treeId] ??= { scrollByNode: {} });
-      // `detail.nodes` is a fresh array on every research event; without the
-      // guard a streaming run rewrote localStorage several times a second.
-      if (navigation.selectedNodeId !== selectedNodeId) {
-        navigation.selectedNodeId = selectedNodeId;
-        navigationPersistence.flush();
-      }
-    }
-  }, [detail?.nodes, navigationPersistence, selectedNodeId, treeId]);
+    mainScrollRef.current.scrollTop = restoreResearchScrollPosition(
+      navigationPersistence.store[treeId],
+      rootNodeId,
+    );
+  }, [contentByNode, contentErrorByNode, flashTurn, mainChainIds, navigationPersistence, rootNodeId, scrollToSegment, treeId]);
 
   const recordScroll = useCallback(() => {
-    const scroller = documentScrollRef.current;
+    const scroller = mainScrollRef.current;
     if (!scroller) {
       return;
     }
-    // The document never scrolls sideways legitimately (wide tables and code
-    // blocks scroll inside their own containers), and overflow-x is hidden —
-    // but programmatic scrolls (scrollIntoView, find-in-page) can still shift
-    // a hidden axis, and a stray scrollLeft reads as collapsed left padding
-    // on every page sharing this scroller. Pin it back to the left edge.
+    // The column never scrolls sideways legitimately (wide tables and code
+    // blocks scroll inside their own containers), but programmatic scrolls
+    // can still shift a hidden axis. Pin it back to the left edge.
     if (scroller.scrollLeft !== 0) {
       scroller.scrollLeft = 0;
     }
-    if (!treeId || !selectedNodeId) {
+    if (!treeId || !rootNodeId || !mainContentSettledRef.current || !restoredScrollRef.current) {
       return;
     }
-    // Loading windows are not this page's scroll state (see the ref's
-    // comment) — without this, navigating to a node wipes its saved offset,
-    // and a partially loaded chain's clamp event overwrites it.
-    if (!chainContentSettledRef.current) {
-      return;
-    }
-    // Ignore scroll events during page transitions before scroll state is restored.
-    if (restoredChainRef.current === null) {
-      return;
-    }
-    navigationPersistence.recordScroll(treeId, selectedNodeId, scroller.scrollTop);
-  }, [navigationPersistence, selectedNodeId, treeId]);
+    navigationPersistence.recordScroll(treeId, rootNodeId, scroller.scrollTop);
+  }, [navigationPersistence, rootNodeId, treeId]);
 
-  const breadcrumb = useMemo(() => {
-    if (!detail || !selectedNodeId) {
-      return [];
-    }
-    const byId = new Map(detail.nodes.map((node) => [node.id, node]));
-    const path: ResearchNode[] = [];
-    let node = byId.get(selectedNodeId);
-    const seen = new Set<string>();
-    while (node && !seen.has(node.id)) {
-      seen.add(node.id);
-      // Inline follow-ups collapse into their chain head: the thread is one
-      // page, so its members share one crumb.
-      if (!node.inline) {
-        path.unshift(node);
-      }
-      node = node.parentNodeId ? byId.get(node.parentNodeId) : undefined;
-    }
-    return path;
-  }, [detail, selectedNodeId]);
-
-  // Deep paths collapse to "root / … / parent / current": the intermediate
-  // crumbs add little wayfinding value at this depth, and rendering them all
-  // squeezes every crumb into unreadable slivers.
-  const breadcrumbDisplay = useMemo(() => {
-    type BreadcrumbEntry =
-      | { kind: "node"; node: ResearchNode; index: number }
-      | { kind: "ellipsis"; count: number };
-    if (breadcrumb.length <= 4) {
-      return breadcrumb.map(
-        (node, index): BreadcrumbEntry => ({ kind: "node", node, index }),
-      );
-    }
-    return [
-      { kind: "node", node: breadcrumb[0], index: 0 },
-      { kind: "ellipsis", count: breadcrumb.length - 3 },
-      {
-        kind: "node",
-        node: breadcrumb[breadcrumb.length - 2],
-        index: breadcrumb.length - 2,
-      },
-      {
-        kind: "node",
-        node: breadcrumb[breadcrumb.length - 1],
-        index: breadcrumb.length - 1,
-      },
-    ] satisfies BreadcrumbEntry[];
-  }, [breadcrumb]);
-
-  // Per-segment content-derived view state. Recomputed only for segments
-  // whose content or view toggles changed — node metadata stays live (it
-  // refreshes 4×/s while runs stream) while the parsed timeline keeps its
-  // identity, which is what keeps the memoized markdown renderer's cache
-  // effective.
+  // Per-turn content-derived view state. Recomputed only for turns whose
+  // content or view toggles changed — node metadata stays live while the
+  // parsed timeline keeps its identity, which is what keeps the memoized
+  // markdown renderer's cache effective.
   const segmentViewCacheRef = useRef(
     new Map<
       string,
@@ -2954,9 +2200,8 @@ function ResearchDocument({
   );
   const segmentViews = useMemo(() => {
     const cache = segmentViewCacheRef.current;
-    const seen = new Set<string>();
-    const views = chainNodes.map((node) => {
-      seen.add(node.id);
+    const views = new Map<string, SegmentView>();
+    for (const node of chainNodes) {
       const content = contentByNode[node.id] ?? null;
       const showAllTurns = Boolean(expandedNodes[node.id]);
       const showFullTrace = Boolean(fullTraceNodes[node.id]);
@@ -2967,20 +2212,14 @@ function ResearchDocument({
         cached.showAllTurns === showAllTurns &&
         cached.showFullTrace === showFullTrace
       ) {
-        // Pure hit: the cached view keeps its identity (its `node` may go
-        // stale on volatile fields — see the SegmentView contract).
-        return cached.view;
+        views.set(node.id, cached.view);
+        continue;
       }
       // A conversation node's whole timeline is the document: there is no
-      // "answer" fold to collapse to and no fuller trace to reveal (tool
-      // payloads never survived the export).
+      // "answer" fold to collapse to and no fuller trace to reveal.
       const isConversation =
         node.kind === "conversation" || content?.node.kind === "conversation";
       const isDocument = node.kind === "document";
-      // Normalize the complete response before windowing it. The resulting
-      // item boundaries keep a call and its result together and preserve
-      // text → tools → continued-text ordering across every adapter's
-      // transcript role choices.
       const timelineItems = buildTimelineItems(content?.turns ?? []);
       const answerTimelineItems = timelineItemsAfterLastToolCall(timelineItems);
       const hasTranscriptActivity =
@@ -2989,8 +2228,7 @@ function ResearchDocument({
         isConversation || showFullTrace ? timelineItems : answerTimelineItems;
       // A run trace reads bottom-up (the answer is the tail), so its window
       // keeps the newest items; a conversation reads top-down from its
-      // opening question, so its window keeps the head with the remainder
-      // behind the expander.
+      // opening question, so its window keeps the head.
       const visibleTimelineItems =
         showAllTurns || displayedTimelineItems.length <= TIMELINE_ITEM_RENDER_WINDOW
           ? displayedTimelineItems
@@ -2998,9 +2236,6 @@ function ResearchDocument({
             ? displayedTimelineItems.slice(0, TIMELINE_ITEM_RENDER_WINDOW)
             : displayedTimelineItems.slice(-TIMELINE_ITEM_RENDER_WINDOW);
       const rawAnswer = assistantTextFromTimelineItems(answerTimelineItems);
-      // The copyable form of a conversation node: the whole exchange with
-      // role labels, not the assistant-only fold (which would mash unrelated
-      // answers together with their questions dropped).
       const conversationCopyText =
         isConversation && content ? formatPlainTextTranscript(content.turns, "Assistant") : null;
       let editableDocumentMarkdown: string | null = null;
@@ -3035,30 +2270,22 @@ function ResearchDocument({
         editableDocumentMarkdown,
       };
       cache.set(node.id, { content, showAllTurns, showFullTrace, view });
-      return view;
-    });
+      views.set(node.id, view);
+    }
     for (const key of [...cache.keys()]) {
-      if (!seen.has(key)) {
+      if (!views.has(key)) {
         cache.delete(key);
       }
     }
     return views;
   }, [chainNodes, contentByNode, expandedNodes, fullTraceNodes]);
-  const selectedView =
-    segmentViews.find((view) => view.node.id === selectedNodeId) ?? null;
-  const viewForNode = (nodeId: string) =>
-    segmentViews.find((view) => view.node.id === nodeId) ?? null;
+
+  // ---- annotation painting -------------------------------------------------
 
   // Diagram rendering and other child-owned Markdown controls can replace text
   // nodes without changing the transcript items. Observe those commits so saved
-  // ranges are rebuilt against the current rendered projection. Query-anchor
-  // passages (and an in-progress ask) resolve against the same projections, so
-  // they need the observer even when a segment has no saved highlights —
-  // without it their paints and card offsets go stale after a diagram lands.
-  // Only annotated segments' response roots are observed — never the rails,
-  // whose streaming card previews mutate 4×/s and would otherwise churn the
-  // nonce (and every DOM-walking paint effect keyed on it) for content no
-  // annotation can resolve against.
+  // ranges are rebuilt against the current rendered projection. Only annotated
+  // turns' response roots are observed.
   const annotatedSegmentsKey = chainNodeIds
     .filter((id) => {
       if (!contentByNode[id]?.responseRevision) {
@@ -3066,8 +2293,7 @@ function ResearchDocument({
       }
       return (
         Boolean(contentByNode[id]?.node.highlights?.length) ||
-        ask?.nodeId === id ||
-        anchoredEntries.some((entry) => entry.segmentId === id)
+        branchEntries.some((entry) => entry.segmentId === id)
       );
     })
     .join("\n");
@@ -3105,9 +2331,6 @@ function ResearchDocument({
         window.cancelAnimationFrame(frame);
       }
     };
-    // Re-observed on view toggles as well: the roots' inner DOM is rebuilt
-    // wholesale then, and an observer bound before a rebuild keeps working,
-    // but a root remount (content refetch after an edit) needs the rebind.
   }, [annotatedSegmentsKey, revisionsKey, expandedKey, fullTraceKey, segmentRoot]);
 
   // Keep the two saved-highlight paint objects registered for this document's
@@ -3137,11 +2360,10 @@ function ResearchDocument({
   }, []);
 
   // Paint saved ranges without rewriting the markdown DOM, across every
-  // rendered segment. The CSS Custom Highlight registry is name-global, so
-  // all segments' ranges aggregate into one Highlight object per layer.
-  // Anchors retain an exact quote and nearby context so they can be
-  // relocated when transcript visibility changes shift the flat
-  // rendered-text offsets.
+  // rendered turn. The CSS Custom Highlight registry is name-global, so all
+  // turns' ranges aggregate into one Highlight object per layer. Anchors
+  // retain an exact quote and nearby context so they can be relocated when
+  // transcript visibility changes shift the flat rendered-text offsets.
   useLayoutEffect(() => {
     const painted = savedHighlightPaintRef.current;
     painted?.clear();
@@ -3179,18 +2401,14 @@ function ResearchDocument({
         }
       }
     }
-    // Nothing resolvable (no content yet, or no Highlight API at all) is not
-    // "hidden highlights" — segments without entries keep a quiet footer.
-    setHiddenHighlightsByNode((current) => (sameCardTops(current, hidden) ? current : hidden));
+    setHiddenHighlightsByNode((current) => (sameNumberRecord(current, hidden) ? current : hidden));
     if (treeId && navigationPersistence.store[treeId]?.focusHighlight) {
       setHighlightPaintVersion((version) => version + 1);
     }
     // Keyed on the revisions and highlight-id lists rather than contentByNode
-    // identity: a streaming segment's 1s poll replaces the map every second,
-    // and repainting would re-walk every settled segment's text nodes each
-    // time for content that cannot have moved. Anchors only resolve against
-    // revision-bearing (snapshot) content, and DOM swaps inside observed
-    // roots arrive via highlightDomNonce.
+    // identity: a streaming turn's 1s poll replaces the map every second, and
+    // repainting would re-walk every settled turn's text nodes each time for
+    // content that cannot have moved.
   }, [
     chainKey,
     chainNodeIds,
@@ -3203,12 +2421,11 @@ function ResearchDocument({
   ]);
 
   // Land on the highlight a Highlights feed unit was opened from: once the
-  // page visit has restored (so the saved offset cannot override us) and the
-  // passage has been painted, scroll it a third of the way down the viewport
-  // and clear the request. A highlight that no longer exists or cannot be
-  // relocated clears the request too, leaving the segment itself in view.
+  // conversation has restored (so the saved offset cannot override us) and
+  // the passage has been painted, expand its answer, scroll the passage a
+  // third of the way down its column, and clear the request.
   useLayoutEffect(() => {
-    if (!treeId || restoredChainRef.current === null || !documentScrollRef.current) {
+    if (!treeId || !restoredScrollRef.current) {
       return;
     }
     const navigation = navigationPersistence.store[treeId];
@@ -3218,6 +2435,10 @@ function ResearchDocument({
     }
     const segmentContent = contentByNode[focus.nodeId];
     if (!segmentContent?.responseRevision) {
+      return;
+    }
+    if (!expandedAnswers[focus.nodeId]) {
+      setExpandedAnswers((current) => ({ ...current, [focus.nodeId]: true }));
       return;
     }
     const clear = () => {
@@ -3233,115 +2454,98 @@ function ResearchDocument({
         (highlight) => highlight.id === focus.highlightId,
       );
       if (!stillExists || resolvedHighlightsRef.current.has(focus.nodeId)) {
-        // Removed since it was listed, or present but unresolvable here.
         clear();
         scrollToSegment(focus.nodeId, "auto");
       }
       return;
     }
     const range = rangeForTextOffsets(root, resolved.start, resolved.end);
-    if (!range) {
+    const scroller = root.closest<HTMLElement>(".research-column-scroll");
+    if (!range || !scroller) {
       clear();
       scrollToSegment(focus.nodeId, "auto");
       return;
     }
-    const scroller = documentScrollRef.current;
     const scrollerRect = scroller.getBoundingClientRect();
     const rect = range.getBoundingClientRect();
     scroller.scrollTop += rect.top - scrollerRect.top - Math.max(72, scrollerRect.height / 3);
+    setFlashRange({ nodeId: focus.nodeId, start: resolved.start, end: resolved.end });
     clear();
-  }, [contentByNode, highlightPaintVersion, navigationPersistence, scrollToSegment, segmentRoot, treeId]);
+  }, [contentByNode, expandedAnswers, highlightPaintVersion, navigationPersistence, scrollToSegment, segmentRoot, treeId]);
 
-  // Paint the passages that targeted follow-ups (and an in-progress ask) were
-  // asked about, and resolve each follow-up's rail offset so its card can sit
-  // beside its passage in its own segment. Anchors that no longer locate a
-  // passage drop out of the map — their cards fall back to the regular stack.
+  // Paint branch passages (blue) and resolve their offsets for clicks, hover,
+  // and reveal. The passages of open branches are also underlined. Anchors
+  // that no longer locate a passage simply drop out.
   useLayoutEffect(() => {
     const api = researchHighlightApi();
-    api?.registry.delete(RESEARCH_QUERY_ANCHOR_NAME);
-    const tops: Record<string, number> = {};
-    let askTop: number | null = null;
-    anchoredRangeOffsetsRef.current = [];
-    activeAskRangeOffsetsRef.current = null;
-    if (api) {
-      const painted = new api.Highlight();
-      let paintedAny = false;
-      for (const nodeId of chainNodeIds) {
-        const root = segmentRoot(nodeId);
-        const revision = contentByNode[nodeId]?.responseRevision;
-        if (!root || !revision) {
+    api?.registry.delete(RESEARCH_BRANCH_NAME);
+    api?.registry.delete(RESEARCH_OPEN_BRANCH_NAME);
+    branchRangeOffsetsRef.current = [];
+    if (!api) {
+      return;
+    }
+    const painted = new api.Highlight();
+    const open = new api.Highlight();
+    open.priority = RESEARCH_OPEN_PRIORITY;
+    let paintedAny = false;
+    let openAny = false;
+    const openIds = new Set(openBranchKey ? openBranchKey.split(",") : []);
+    for (const nodeId of chainNodeIds) {
+      const root = segmentRoot(nodeId);
+      const revision = contentByNode[nodeId]?.responseRevision;
+      if (!root || !revision) {
+        continue;
+      }
+      const projection = root.textContent ?? "";
+      for (const { id, anchor } of branchEntries.filter((entry) => entry.segmentId === nodeId)) {
+        const offsets = resolveResearchHighlightOffset(projection, revision, {
+          id,
+          anchor,
+          createdAt: 0,
+        });
+        const range = offsets ? rangeForTextOffsets(root, offsets.start, offsets.end) : null;
+        if (!range || !offsets) {
           continue;
         }
-        const projection = root.textContent ?? "";
-        const aside = segmentAside(nodeId);
-        const asideTop = aside?.getBoundingClientRect().top ?? 0;
-        const entries = anchoredEntries
-          .filter((entry) => entry.segmentId === nodeId)
-          .map((entry) => ({ id: entry.id, anchor: entry.anchor }));
-        if (ask && ask.nodeId === nodeId) {
-          entries.push({ id: "__ask__", anchor: ask.anchor });
-        }
-        for (const { id, anchor } of entries) {
-          const offsets = resolveResearchHighlightOffset(projection, revision, {
-            id,
-            anchor,
-            createdAt: 0,
-          });
-          const range = offsets
-            ? rangeForTextOffsets(root, offsets.start, offsets.end)
-            : null;
-          if (!range) {
-            continue;
-          }
-          painted.add(range);
-          paintedAny = true;
-          const top = aside
-            ? Math.max(0, Math.round(range.getBoundingClientRect().top - asideTop))
-            : null;
-          if (id === "__ask__") {
-            askTop = top;
-            activeAskRangeOffsetsRef.current = { segmentId: nodeId, ...offsets! };
-          } else {
-            anchoredRangeOffsetsRef.current.push({ segmentId: nodeId, id, ...offsets! });
-            if (top !== null) {
-              tops[id] = top;
-            }
+        painted.add(range);
+        paintedAny = true;
+        branchRangeOffsetsRef.current.push({ segmentId: nodeId, id, ...offsets });
+        if (openIds.has(id)) {
+          const underline = rangeForTextOffsets(root, offsets.start, offsets.end);
+          if (underline) {
+            open.add(underline);
+            openAny = true;
           }
         }
-      }
-      if (paintedAny) {
-        api.registry.set(RESEARCH_QUERY_ANCHOR_NAME, painted);
       }
     }
-    setAnchoredCardTops((current) => (sameCardTops(current, tops) ? current : tops));
-    setAskComposerTop((current) => (current === askTop ? current : askTop));
+    if (paintedAny) {
+      api.registry.set(RESEARCH_BRANCH_NAME, painted);
+    }
+    if (openAny) {
+      api.registry.set(RESEARCH_OPEN_BRANCH_NAME, open);
+    }
     return () => {
-      api?.registry.delete(RESEARCH_QUERY_ANCHOR_NAME);
+      api.registry.delete(RESEARCH_BRANCH_NAME);
+      api.registry.delete(RESEARCH_OPEN_BRANCH_NAME);
     };
     // revisionsKey instead of contentByNode identity for the same reason as
-    // the saved-highlight paint above: anchors are immutable and resolve
-    // only against revision-bearing content, so a streaming sibling's polls
-    // must not force whole-thread re-resolution every second.
+    // the saved-highlight paint above.
   }, [
-    anchorLayoutNonce,
-    anchoredEntries,
-    ask,
+    branchEntries,
     chainKey,
     chainNodeIds,
+    openBranchKey,
     revisionsKey,
     expandedKey,
     fullTraceKey,
     highlightDomNonce,
-    segmentAside,
     segmentRoot,
   ]);
 
-  // Repaint regions where annotations stack — saved highlights over each
-  // other, or a follow-up's query anchor over a saved highlight — in the
-  // near-text overlap tone. All base layers share one wash, so without this
-  // pass stacked coverage would be invisible. Runs
-  // after both base-paint effects in the same commit and re-runs on the
-  // union of their dependencies, so the offset refs it reads are current.
+  // Repaint regions where annotations stack — highlights over each other, or
+  // a branch passage over a highlight — in the near-text overlap tone, so
+  // stacked coverage stays visible.
   useLayoutEffect(() => {
     const api = researchHighlightApi();
     api?.registry.delete(RESEARCH_OVERLAP_NAME);
@@ -3358,9 +2562,7 @@ function ResearchDocument({
       }
       const ranges = [
         ...(resolvedHighlightsRef.current.get(nodeId) ?? []),
-        ...anchoredRangeOffsetsRef.current.filter(
-          (entry) => entry.segmentId === nodeId,
-        ),
+        ...branchRangeOffsetsRef.current.filter((entry) => entry.segmentId === nodeId),
       ].map(({ start, end }) => ({ start, end }));
       for (const region of overlappingResearchHighlightRegions(ranges)) {
         const range = rangeForTextOffsets(root, region.start, region.end);
@@ -3378,99 +2580,68 @@ function ResearchDocument({
       api.registry.delete(RESEARCH_OVERLAP_NAME);
     };
   }, [
-    anchoredEntries,
-    ask,
+    branchEntries,
     chainKey,
     chainNodeIds,
     highlightsKey,
+    openBranchKey,
     revisionsKey,
     expandedKey,
     fullTraceKey,
     highlightDomNonce,
-    segmentAside,
     segmentRoot,
   ]);
 
-  // Measure every resolved anchor's connector from the selection bounds to
-  // the left edge of its follow-up card. A card that spans the passage's
-  // midpoint gets a straight horizontal leader; otherwise the leader stays a
-  // direct diagonal. Only routes that compete with an earlier connector fall
-  // back to an elbow. Depends on resolvedCardTops so each route lands on the
-  // card's settled (collision-resolved) placement.
+  // The passage under the pointer returns to full strength (tints are dimmed
+  // outside the focused column) and darkens one step.
   useLayoutEffect(() => {
-    const next: SegmentAnchorConnector[] = [];
-    for (const nodeId of chainNodeIds) {
-      const root = segmentRoot(nodeId);
-      const grid = segmentGrid(nodeId);
-      const aside = segmentAside(nodeId);
-      if (!root || !grid || !aside) {
-        continue;
-      }
-      const gridRect = grid.getBoundingClientRect();
-      // First pass: resolve each connector's raw endpoints.
-      const geometry = anchoredRangeOffsetsRef.current
-        .filter((entry) => entry.segmentId === nodeId)
-        .flatMap((entry) => {
-          const range = rangeForTextOffsets(root, entry.start, entry.end);
-          const card = aside.querySelector<HTMLElement>(
-            `.research-followup-card.is-anchored[data-node-id="${CSS.escape(entry.id)}"]`,
-          );
-          const selectionRect = range?.getBoundingClientRect();
-          if (!card || !selectionRect || selectionRect.width <= 0 || selectionRect.height <= 0) {
-            return [];
-          }
-          const cardRect = card.getBoundingClientRect();
-          const endpoints = researchAnchorConnectorEndpoints({ selectionRect, cardRect });
-          const sx = Math.round(endpoints.sx - gridRect.left);
-          const sy = Math.round(endpoints.sy - gridRect.top);
-          const ex = Math.round(endpoints.ex - gridRect.left);
-          const ey = Math.round(endpoints.ey - gridRect.top);
-          return [{ id: entry.id, sx, sy, ex, ey }];
-        });
-      // Second pass: direct leaders normally stay in lane zero. When their
-      // vertical spans compete, assign the later route the lowest open lane
-      // (greedy interval colouring, top-to-bottom) and turn only that route
-      // into an elbow. Fan fallback lanes leftward into the gutter, capped at
-      // a fraction of the route's span so they never crowd the passage edge.
-      const lanes: number[] = [];
-      const laneByIndex = new Map<number, number>();
-      geometry
-        .map((g, index) => ({ index, top: Math.min(g.sy, g.ey), bottom: Math.max(g.sy, g.ey) }))
-        .sort((a, b) => a.top - b.top || a.index - b.index)
-        .forEach(({ index, top, bottom }) => {
-          let lane = lanes.findIndex(
-            (occupiedUntil) => occupiedUntil + CONNECTOR_COLLISION_CLEARANCE <= top,
-          );
-          if (lane === -1) {
-            lane = lanes.length;
-          }
-          lanes[lane] = bottom;
-          laneByIndex.set(index, lane);
-        });
-      for (const [index, g] of geometry.entries()) {
-        const lane = laneByIndex.get(index) ?? 0;
-        const maxOffset = CONNECTOR_STAGGER_FRACTION * (g.ex - g.sx);
-        const offset = Math.min(lane * CONNECTOR_STAGGER_STEP, maxOffset);
-        const midX = Math.round((g.sx + g.ex) / 2 - offset);
-        next.push({
-          segmentId: nodeId,
-          id: g.id,
-          d:
-            lane === 0
-              ? `M ${g.sx} ${g.sy} L ${g.ex} ${g.ey}`
-              : connectorElbowPath(g.sx, g.sy, g.ex, g.ey, midX),
-          x: g.sx,
-          y: g.sy,
-        });
-      }
+    const api = researchHighlightApi();
+    api?.registry.delete(RESEARCH_HOVER_BRANCH_NAME);
+    api?.registry.delete(RESEARCH_HOVER_HIGHLIGHT_NAME);
+    const root = hoveredAnnotation ? segmentRoot(hoveredAnnotation.nodeId) : null;
+    if (!api || !hoveredAnnotation || !root) {
+      return;
     }
-    setAnchorConnectors(next);
-  }, [anchorLayoutNonce, anchoredCardTops, chainNodeIds, highlightDomNonce, resolvedCardTops, segmentAside, segmentGrid, segmentRoot]);
+    const range = rangeForTextOffsets(root, hoveredAnnotation.start, hoveredAnnotation.end);
+    if (!range) {
+      return;
+    }
+    const painted = new api.Highlight();
+    painted.priority = RESEARCH_HOVER_PRIORITY;
+    painted.add(range);
+    const name =
+      hoveredAnnotation.kind === "branch" ? RESEARCH_HOVER_BRANCH_NAME : RESEARCH_HOVER_HIGHLIGHT_NAME;
+    api.registry.set(name, painted);
+    return () => {
+      api.registry.delete(name);
+    };
+  }, [highlightDomNonce, hoveredAnnotation, segmentRoot]);
 
-  // A selection that lands on saved highlights repaints those annotations in
-  // the standard selection tone: painted above the saved-highlight layer (via
-  // priority) so the gold annotation tone cannot win over the selection,
-  // keeping a selected highlight the same color as any other selected text.
+  // A passage flash (jumping to a branch's source, landing on a highlight).
+  useLayoutEffect(() => {
+    const api = researchHighlightApi();
+    api?.registry.delete(RESEARCH_FLASH_NAME);
+    const root = flashRange ? segmentRoot(flashRange.nodeId) : null;
+    if (!api || !flashRange || !root) {
+      return;
+    }
+    const range = rangeForTextOffsets(root, flashRange.start, flashRange.end);
+    if (!range) {
+      return;
+    }
+    const painted = new api.Highlight();
+    painted.priority = RESEARCH_FLASH_PRIORITY;
+    painted.add(range);
+    api.registry.set(RESEARCH_FLASH_NAME, painted);
+    const timer = window.setTimeout(() => setFlashRange(null), FLASH_MS);
+    return () => {
+      window.clearTimeout(timer);
+      api.registry.delete(RESEARCH_FLASH_NAME);
+    };
+  }, [flashRange, segmentRoot]);
+
+  // A selection overlapping saved highlights repaints those annotations in
+  // the standard selection tone, above the amber layer.
   const selectedHighlightKey = (highlightAction?.highlightIds ?? []).join("\n");
   const highlightActionNodeId = highlightAction?.nodeId ?? null;
   useLayoutEffect(() => {
@@ -3495,117 +2666,7 @@ function ResearchDocument({
     }
   }, [highlightActionNodeId, highlightDomNonce, segmentRoot, selectedHighlightKey]);
 
-  // One-pass collision resolution for anchored cards, per segment rail:
-  // place them in desired-top order, each no higher than the previous card's
-  // bottom plus a gap. Runs as a layout effect in the commit that rendered
-  // the cards, so their heights are measurable and the corrected placements
-  // land before paint. Heights depend only on card content — never on the
-  // tops this effect assigns — so a single pass settles the layout without
-  // feedback.
-  useLayoutEffect(() => {
-    const next: Record<string, number> = {};
-    const segmentByChild = new Map<string, string>();
-    for (const entry of anchoredEntries) {
-      segmentByChild.set(entry.id, entry.segmentId);
-    }
-    const bySegment = new Map<string, [string, number][]>();
-    for (const [childId, top] of Object.entries(anchoredCardTops)) {
-      const segmentId = segmentByChild.get(childId);
-      if (!segmentId) {
-        continue;
-      }
-      const list = bySegment.get(segmentId);
-      if (list) {
-        list.push([childId, top]);
-      } else {
-        bySegment.set(segmentId, [[childId, top]]);
-      }
-    }
-    for (const [segmentId, placements] of bySegment) {
-      const aside = segmentAside(segmentId);
-      if (!aside) {
-        continue;
-      }
-      const heights = new Map<string, number>();
-      for (const element of aside.querySelectorAll<HTMLElement>(
-        ".research-followup-card.is-anchored",
-      )) {
-        if (element.dataset.nodeId) {
-          heights.set(element.dataset.nodeId, element.offsetHeight);
-        }
-      }
-      let cursor = Number.NEGATIVE_INFINITY;
-      placements.sort(
-        // Ties break on node id so equal desired tops keep a stable order.
-        (a, b) => a[1] - b[1] || a[0].localeCompare(b[0]),
-      );
-      for (const [childId, desiredTop] of placements) {
-        const top = Math.max(desiredTop, cursor);
-        next[childId] = top;
-        cursor = top + (heights.get(childId) ?? 0) + ANCHORED_CARD_GAP;
-      }
-    }
-    setResolvedCardTops((current) => (sameCardTops(current, next) ? current : next));
-    // cardsMeasureKey remeasures when streaming previews change card
-    // heights, without re-running (and force-laying-out every rail) on the
-    // 4×/s detail replacements that change nothing height-relevant.
-  }, [anchorLayoutNonce, anchoredCardTops, anchoredEntries, cardsMeasureKey, segmentAside]);
-
-  // Ask mode: push any cards the docked composer would cover out of the way.
-  // The composer itself sits absolutely at askComposerTop inside the ask
-  // segment's rail; transforms keep the rail's flow layout untouched, so
-  // clearing them animates everything home.
-  useLayoutEffect(() => {
-    const clearTransforms = (scope: HTMLElement | null) => {
-      if (!scope) {
-        return;
-      }
-      for (const element of scope.querySelectorAll<HTMLElement>(".research-followup-card")) {
-        element.style.transform = "";
-      }
-    };
-    const composer = followupComposerRef.current;
-    const aside = ask ? segmentAside(ask.nodeId) : null;
-    if (!ask || askComposerTop === null || !composer || !aside) {
-      clearTransforms(contentContainerRef.current);
-      return;
-    }
-    clearTransforms(contentContainerRef.current);
-    const targetTop = askComposerTop;
-    const clearanceBottom = targetTop + composer.offsetHeight + ASK_COMPOSER_CLEARANCE;
-    const cards = aside.querySelector<HTMLElement>(".research-followup-cards");
-    if (cards) {
-      // The stack keeps its internal spacing: the first card the composer
-      // would cover sets one shared shift for itself and everything after it.
-      let delta = 0;
-      for (const element of Array.from(cards.children) as HTMLElement[]) {
-        if (delta === 0 && element.offsetTop + element.offsetHeight > targetTop) {
-          delta = Math.max(0, clearanceBottom - element.offsetTop);
-        }
-        element.style.transform = delta > 0 ? `translateY(${delta}px)` : "";
-      }
-    }
-    for (const element of aside.querySelectorAll<HTMLElement>(
-      ".research-followup-card.is-anchored",
-    )) {
-      const overlaps =
-        element.offsetTop < clearanceBottom &&
-        element.offsetTop + element.offsetHeight > targetTop;
-      element.style.transform = overlaps
-        ? `translateY(${clearanceBottom - element.offsetTop}px)`
-        : "";
-    }
-    return () => clearTransforms(aside);
-  }, [
-    anchorLayoutNonce,
-    anchoredCardTops,
-    ask,
-    askComposerTop,
-    followup,
-    highlightDomNonce,
-    resolvedCardTops,
-    segmentAside,
-  ]);
+  // ---- selection, highlights, and passage clicks ----------------------------
 
   const captureHighlightSelection = useCallback(() => {
     const selection = window.getSelection();
@@ -3619,8 +2680,8 @@ function ResearchDocument({
       return;
     }
     const range = selection.getRangeAt(0);
-    // Resolve which thread segment the selection landed in; a selection that
-    // spans segments anchors nowhere.
+    // Resolve which turn the selection landed in; a selection that spans
+    // turns anchors nowhere.
     const container =
       range.commonAncestorContainer instanceof Element
         ? range.commonAncestorContainer
@@ -3628,14 +2689,15 @@ function ResearchDocument({
     const root = container?.closest<HTMLElement>(".research-response-content-root") ?? null;
     const nodeId = root?.dataset.nodeId ?? null;
     const segmentContent = nodeId ? contentByNodeRef.current[nodeId] : null;
-    const revision = segmentContent?.responseRevision;
-    if (!root || !nodeId || !revision) {
+    const revision = segmentContent?.responseRevision ?? "";
+    const node = nodeId ? detailRef.current?.nodes.find((candidate) => candidate.id === nodeId) : null;
+    // A streaming answer has no revision to anchor to yet; its selection can
+    // still be copied.
+    const live = !revision && Boolean(node && isActiveResearchStatus(node.status));
+    if (!root || !nodeId || !segmentContent || (!revision && !live) || root.closest(".is-leaving")) {
       setHighlightAction(null);
       return;
     }
-    // Tool calls, thinking, and other non-text rows are transcript machinery,
-    // not answer prose: never offer highlight/ask when the selection touches
-    // one, whether it sits inside such a row or drags across it.
     if (selectionTouchesNonTextRow(root, range)) {
       setHighlightAction(null);
       return;
@@ -3646,6 +2708,21 @@ function ResearchDocument({
       return;
     }
     const projection = root.textContent ?? "";
+    const copyText = projection.slice(offsets.start, offsets.end);
+    // A highlight or branch passage stays within one paragraph: a selection
+    // that runs into the next one is cut at the end of the first.
+    let crossed = false;
+    const startBlock = passageBlockAt(root, range.startContainer);
+    if (startBlock && !startBlock.contains(range.endContainer)) {
+      let blockEnd = flatTextOffsetAt(root, startBlock, startBlock.childNodes.length) ?? offsets.end;
+      while (blockEnd > offsets.start && /\s/.test(projection[blockEnd - 1] ?? "")) {
+        blockEnd -= 1;
+      }
+      if (blockEnd < offsets.end && projection.slice(offsets.start, blockEnd).trim()) {
+        offsets.end = blockEnd;
+        crossed = true;
+      }
+    }
     const exact = projection.slice(offsets.start, offsets.end);
     const resolvedRanges = (resolvedHighlightsRef.current.get(nodeId) ?? []).map(
       ({ highlight, start, end }) => ({
@@ -3661,9 +2738,8 @@ function ResearchDocument({
       setHighlightAction(null);
       return;
     }
-    // Keep the quote's surrounding context inside the message it belongs to so
-    // the anchor resolves the same in either transcript view, and refuse the
-    // selections that leaves unanchorable (see researchAnchorContextBounds).
+    // Keep the quote's surrounding context inside the message it belongs to
+    // so the anchor resolves the same in either transcript view.
     const contextBounds = researchAnchorContextBounds({
       isConversation: segmentContent?.node.kind === "conversation",
       messageBounds: enclosingMessageFlatBounds(root, range),
@@ -3696,20 +2772,23 @@ function ResearchDocument({
         Math.min(contextCeil, span.end + RESEARCH_HIGHLIGHT_CONTEXT_LENGTH),
       ),
     });
-    const expandOffsets = expandedResearchHighlightOffsets(offsets, resolvedRanges);
+    const expandOffsets = live ? null : expandedResearchHighlightOffsets(offsets, resolvedRanges);
     setHighlightAction({
       nodeId,
+      live,
+      crossed,
+      copyText,
       anchor: anchorForOffsets(offsets),
-      highlightIds,
+      highlightIds: live ? [] : highlightIds,
       expandAnchor: expandOffsets ? anchorForOffsets(expandOffsets) : null,
-      ...highlightActionPlacement(range, expandOffsets ? 340 : 260),
+      ...highlightActionPlacement(range, selectionActionsSizeRef.current),
     });
   }, []);
 
   /** Replaces the native character-precise drag range with whole-word
    * endpoints. The raw range is checked first so snapping never makes an
    * otherwise ineligible selection (one crossing tool/thinking machinery)
-   * eligible for Highlight/Ask. */
+   * eligible for Highlight/Branch. */
   const applySnappedResearchSelection = useCallback(
     (drag: ResearchSelectionDrag, clientX: number, clientY: number) => {
       if (!drag.snapEligible || drag.anchorOffset === null) {
@@ -3751,20 +2830,16 @@ function ResearchDocument({
       if (!range) {
         return;
       }
-
-      // Keep the live focus on the pointer side. Besides making reversals feel
-      // native, this means a subsequent keyboard extension continues from the
-      // end the reader last moved.
+      // Keep the live focus on the pointer side, so a subsequent keyboard
+      // extension continues from the end the reader last moved.
       applyDirectionalSelectionRange(range, snapped.direction);
     },
     [],
   );
 
-  // A mouse selection can begin in the answer and end over the rail or other
-  // document chrome, where the response root's mouseup never fires. Remember
-  // answer-originated drags and finish them from a document-level fallback;
-  // the root handler clears the ref first on ordinary in-column releases so
-  // capture still runs exactly once.
+  // A mouse selection can begin in the answer and end over other column
+  // chrome, where the response root's mouseup never fires. Remember
+  // answer-originated drags and finish them from a document-level fallback.
   const beginHighlightSelectionDrag = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (event.button !== 0) {
@@ -3783,12 +2858,8 @@ function ResearchDocument({
         lastX: event.clientX,
         lastY: event.clientY,
         active: false,
-        // Turn membership is deliberately not part of this test: the snapper
-        // splits its word units at every message seam, so it moves each
-        // endpoint by at most a partial word *within one turn* and can neither
-        // carry a selection across a turn boundary nor pull a cross-turn one
-        // back inside a single turn. The eligibility class is preserved either
-        // way.
+        // The snapper splits its word units at every message seam, so it
+        // moves each endpoint by at most a partial word within one turn.
         snapEligible: Boolean(
           researchHighlightApi() &&
             nodeId &&
@@ -3845,9 +2916,6 @@ function ResearchDocument({
       if (!drag.active || !drag.snapEligible || drag.frame !== null) {
         return;
       }
-      // Keep a frame fallback for engines that coalesce selectionchange while
-      // dragging. The selectionchange listener below normally corrects the
-      // native character-level range before this callback is needed.
       drag.frame = window.requestAnimationFrame(() => {
         drag.frame = null;
         if (selectionDragRef.current === drag) {
@@ -3861,10 +2929,8 @@ function ResearchDocument({
         return;
       }
       // WebKit updates its native character-level range after mousemove. Fix
-      // that range in the ensuing selectionchange task, before the next paint,
-      // so a slow drag never exposes partial endpoint words. Programmatic
-      // selection changes can fire this event again; the range equality check
-      // in applyDirectionalSelectionRange makes that second pass a no-op.
+      // that range in the ensuing selectionchange task, before the next
+      // paint, so a slow drag never exposes partial endpoint words.
       if (drag.frame !== null) {
         window.cancelAnimationFrame(drag.frame);
         drag.frame = null;
@@ -3884,12 +2950,11 @@ function ResearchDocument({
     };
   }, [applySnappedResearchSelection, finishHighlightSelectionDrag]);
 
-  // A plain click on a painted highlight or ask passage selects the whole
-  // annotation, which opens the action bar through the ordinary selection flow.
-  // Runs on click, after the mouseup capture has already dismissed the bar for
-  // a collapsed selection; CSS highlights have no DOM nodes, so the click is
-  // hit-tested against the owning segment's resolved flat-offset ranges.
-  const selectAnnotationAtPoint = useCallback(
+  // A plain click on a tinted passage opens its branch; with several
+  // branches there, or a highlight, it opens a menu instead. CSS highlights
+  // have no DOM nodes, so the click is hit-tested against the turn's
+  // resolved flat-offset ranges.
+  const openAnnotationAtPoint = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       const root = event.currentTarget;
       const nodeId = root.dataset.nodeId;
@@ -3897,8 +2962,7 @@ function ResearchDocument({
       if (!root || !nodeId || !selection || !selection.isCollapsed) {
         return;
       }
-      // Links keep their own click behavior; popping the bar under a
-      // navigation would be noise.
+      // Links keep their own click behavior.
       if (event.target instanceof Element && event.target.closest("a")) {
         return;
       }
@@ -3906,50 +2970,56 @@ function ResearchDocument({
       if (offset === null) {
         return;
       }
-      const activeAsk = activeAskRangeOffsetsRef.current;
-      const resolved = [
-        ...anchoredRangeOffsetsRef.current.filter((entry) => entry.segmentId === nodeId),
-        ...(activeAsk?.segmentId === nodeId ? [activeAsk] : []),
-        ...(resolvedHighlightsRef.current.get(nodeId) ?? []),
-      ].find(
+      const branchIds = branchRangeOffsetsRef.current
+        .filter(
+          (entry) =>
+            entry.segmentId === nodeId &&
+            entry.id !== "__draft__" &&
+            offset >= entry.start &&
+            offset < entry.end,
+        )
+        .map((entry) => entry.id);
+      const highlight = (resolvedHighlightsRef.current.get(nodeId) ?? []).find(
         ({ start, end }) => offset >= start && offset < end,
       );
-      if (!resolved) {
+      if (branchIds.length === 0 && !highlight) {
         return;
       }
-      const range = rangeForTextOffsets(root, resolved.start, resolved.end);
-      if (!range) {
+      if (branchIds.length === 1 && !highlight) {
+        navigate(branchIds[0], { returnFocus: branchTriggerFor(nodeId) });
         return;
       }
-      selection.removeAllRanges();
-      selection.addRange(range);
-      captureHighlightSelection();
+      setHighlightAction(null);
+      setMenu({
+        kind: "mark",
+        nodeId,
+        branchIds,
+        highlightId: highlight?.highlight.id ?? null,
+        left: event.clientX - 20,
+        top: event.clientY - 10,
+        bottom: event.clientY + 10,
+      });
     },
-    [captureHighlightSelection],
+    [branchTriggerFor, navigate],
   );
 
-  // Passage-side hover behavior: hit-test the pointer against the segment's
-  // resolved saved-highlight and query-anchor ranges (rAF-throttled — the
-  // walk is cheap but not free). Saved highlights get a pointer cursor to
-  // advertise their click behavior; query anchors link to the follow-up card
-  // they produced.
-  const linkAnchorUnderPointer = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    // Keep replacing the queued sample while a frame is pending so the hit
-    // test observes the latest pointer position instead of lagging one frame
-    // behind at highlight boundaries.
-    anchorHoverPointerRef.current = {
+  // Passage-side hover: hit-test the pointer against the turn's resolved
+  // highlight and branch ranges (rAF-throttled), for the pointer cursor and
+  // the hover tone.
+  const trackAnnotationUnderPointer = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    annotationHoverPointerRef.current = {
       root: event.currentTarget,
       nodeId: event.currentTarget.dataset.nodeId ?? null,
       clientX: event.clientX,
       clientY: event.clientY,
     };
-    if (anchorHoverFrameRef.current !== null) {
+    if (annotationHoverFrameRef.current !== null) {
       return;
     }
-    anchorHoverFrameRef.current = window.requestAnimationFrame(() => {
-      anchorHoverFrameRef.current = null;
-      const sample = anchorHoverPointerRef.current;
-      anchorHoverPointerRef.current = null;
+    annotationHoverFrameRef.current = window.requestAnimationFrame(() => {
+      annotationHoverFrameRef.current = null;
+      const sample = annotationHoverPointerRef.current;
+      annotationHoverPointerRef.current = null;
       if (!sample) {
         return;
       }
@@ -3957,42 +3027,53 @@ function ResearchDocument({
       if (!nodeId || !root.isConnected) {
         return;
       }
-      const segmentAnchors = anchoredRangeOffsetsRef.current.filter(
+      const segmentBranches = branchRangeOffsetsRef.current.filter(
         (entry) => entry.segmentId === nodeId,
       );
       const segmentHighlights = resolvedHighlightsRef.current.get(nodeId) ?? [];
       const offset =
-        segmentAnchors.length > 0 || segmentHighlights.length > 0
+        segmentBranches.length > 0 || segmentHighlights.length > 0
           ? flatOffsetAtPoint(root, clientX, clientY)
           : null;
-      const overHighlight =
-        offset !== null &&
-        segmentHighlights.some(({ start, end }) => offset >= start && offset < end);
-      const id =
+      const branch =
         offset === null
-          ? null
-          : segmentAnchors.find(({ start, end }) => offset >= start && offset < end)?.id ??
-            null;
-      setPointerHighlightNodeId((current) => {
-        const next = overHighlight ? nodeId : null;
-        return current === next ? current : next;
+          ? undefined
+          : segmentBranches.find(({ start, end }) => offset >= start && offset < end);
+      const highlight =
+        offset === null
+          ? undefined
+          : segmentHighlights.find(({ start, end }) => offset >= start && offset < end);
+      const next = branch
+        ? { nodeId, start: branch.start, end: branch.end, kind: "branch" as const }
+        : highlight
+          ? { nodeId, start: highlight.start, end: highlight.end, kind: "highlight" as const }
+          : null;
+      setPointerAnnotationNodeId((current) => {
+        const value = next ? nodeId : null;
+        return current === value ? current : value;
       });
-      setLinkedAnchorNodeId((current) => (current === id ? current : id));
+      setHoveredAnnotation((current) =>
+        current?.nodeId === next?.nodeId &&
+        current?.start === next?.start &&
+        current?.end === next?.end &&
+        current?.kind === next?.kind
+          ? current
+          : next,
+      );
     });
   }, []);
 
-  const unlinkAnchorPointer = useCallback(() => {
-    if (anchorHoverFrameRef.current !== null) {
-      window.cancelAnimationFrame(anchorHoverFrameRef.current);
-      anchorHoverFrameRef.current = null;
+  const clearAnnotationPointer = useCallback(() => {
+    if (annotationHoverFrameRef.current !== null) {
+      window.cancelAnimationFrame(annotationHoverFrameRef.current);
+      annotationHoverFrameRef.current = null;
     }
-    anchorHoverPointerRef.current = null;
-    setPointerHighlightNodeId(null);
-    setLinkedAnchorNodeId(null);
+    annotationHoverPointerRef.current = null;
+    setPointerAnnotationNodeId(null);
+    setHoveredAnnotation(null);
   }, []);
 
-  // One updater for every optimistic highlight mutation: replaces a cached
-  // segment's highlight list, leaving unrelated segments' identities alone.
+  // One updater for every optimistic highlight mutation.
   const patchNodeHighlights = useCallback(
     (
       nodeId: string,
@@ -4018,8 +3099,23 @@ function ResearchDocument({
     [],
   );
 
+  const removeHighlights = useCallback(
+    async (nodeId: string, highlightIds: string[]) => {
+      const removed = await removeResearchHighlights(nodeId, highlightIds);
+      const removedIds = new Set(removed.map(({ id }) => id));
+      patchNodeHighlights(nodeId, (highlights) =>
+        highlights.filter(({ id }) => !removedIds.has(id)),
+      );
+    },
+    [patchNodeHighlights],
+  );
+
+  // Highlight: saves the selection, merging it with every highlight it
+  // overlaps (creation first — if removal then fails, the leftover is
+  // overlapping highlights, not a lost annotation). A selection inside one
+  // highlight, with nothing to merge, removes that highlight instead.
   const applyHighlightAction = useCallback(async () => {
-    if (!highlightAction || savingHighlight) {
+    if (!highlightAction || highlightAction.live || savingHighlight) {
       return;
     }
     const targetNodeId = highlightAction.nodeId;
@@ -4028,18 +3124,25 @@ function ResearchDocument({
     }
     setSavingHighlight(true);
     try {
-      if (highlightAction.highlightIds.length > 0) {
-        const removed = await removeResearchHighlights(
-          targetNodeId,
-          highlightAction.highlightIds,
-        );
+      if (highlightAction.expandAnchor) {
+        const created = await createResearchHighlight(targetNodeId, highlightAction.expandAnchor);
+        const removed =
+          highlightAction.highlightIds.length > 0
+            ? await removeResearchHighlights(targetNodeId, highlightAction.highlightIds)
+            : [];
         const removedIds = new Set(removed.map(({ id }) => id));
-        patchNodeHighlights(targetNodeId, (highlights) =>
-          highlights.filter(({ id }) => !removedIds.has(id)),
-        );
+        patchNodeHighlights(targetNodeId, (highlights) => [
+          ...highlights.filter(({ id }) => !removedIds.has(id)),
+          created,
+        ]);
+      } else if (highlightAction.highlightIds.length > 0) {
+        await removeHighlights(targetNodeId, highlightAction.highlightIds);
       } else {
         const created = await createResearchHighlight(targetNodeId, highlightAction.anchor);
         patchNodeHighlights(targetNodeId, (highlights) => [...highlights, created]);
+        if (highlightAction.crossed) {
+          onToast("Highlighted to the end of the paragraph. A highlight stays within one paragraph.");
+        }
       }
       selectedHighlightPaintRef.current?.clear();
       window.getSelection()?.removeAllRanges();
@@ -4049,178 +3152,104 @@ function ResearchDocument({
     } finally {
       setSavingHighlight(false);
     }
-  }, [highlightAction, onError, patchNodeHighlights, savingHighlight]);
+  }, [highlightAction, onError, onToast, patchNodeHighlights, removeHighlights, savingHighlight]);
 
-  // Expand: save the merged annotation, then retire the highlights it
-  // absorbed. Creation goes first — if removal then fails, the leftover is
-  // overlapping highlights, not a lost annotation.
-  const applyExpandHighlightAction = useCallback(async () => {
-    if (!highlightAction?.expandAnchor || savingHighlight) {
-      return;
-    }
-    const targetNodeId = highlightAction.nodeId;
-    if (!contentByNodeRef.current[targetNodeId]) {
-      return;
-    }
-    setSavingHighlight(true);
-    try {
-      const created = await createResearchHighlight(
-        targetNodeId,
-        highlightAction.expandAnchor,
-      );
-      const removed =
-        highlightAction.highlightIds.length > 0
-          ? await removeResearchHighlights(targetNodeId, highlightAction.highlightIds)
-          : [];
-      const removedIds = new Set(removed.map(({ id }) => id));
-      patchNodeHighlights(targetNodeId, (highlights) => [
-        ...highlights.filter(({ id }) => !removedIds.has(id)),
-        created,
-      ]);
-      selectedHighlightPaintRef.current?.clear();
-      window.getSelection()?.removeAllRanges();
-      setHighlightAction(null);
-    } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSavingHighlight(false);
-    }
-  }, [highlightAction, onError, patchNodeHighlights, savingHighlight]);
-
-  // The selection can back a targeted follow-up only while its segment can
-  // actually take one: that node finished, and the tree accepts branches. A
-  // targeted ask is always a branch — never an inline continuation — so the
-  // tail's inline slot is irrelevant here.
+  // The selection can start a branch only while its turn can take one: that
+  // node finished, and the tree accepts branches.
   const highlightActionNode = highlightAction
-    ? detail?.nodes.find((node) => node.id === highlightAction.nodeId) ?? null
+    ? nodeById.get(highlightAction.nodeId) ?? null
     : null;
-  const canAskSelection = Boolean(
-    highlightAction?.anchor.exact.trim() &&
-      !archived &&
-      highlightActionNode?.status === "complete",
-  );
+  const selectionBranchBlocker = !highlightAction?.anchor.exact.trim()
+    ? "Select some text first"
+    : branchBlockerFor(highlightActionNode, archived);
 
-  const enterAskMode = useCallback(() => {
-    if (!highlightAction?.anchor.exact.trim() || archived) {
+  const branchFromSelection = useCallback(() => {
+    if (!highlightAction || selectionBranchBlocker) {
       return;
     }
-    const node = detailRef.current?.nodes.find(
-      (candidate) => candidate.id === highlightAction.nodeId,
-    );
-    if (node?.status !== "complete") {
-      return;
-    }
-    const currentTreeId = treeIdRef.current;
-    if (currentTreeId) {
-      navigationPersistence.recordDraft(currentTreeId, "", followupMode);
-      navigationPersistence.flush();
-    }
-    setAsk({ nodeId: highlightAction.nodeId, anchor: highlightAction.anchor });
+    const { nodeId, anchor } = highlightAction;
     setHighlightAction(null);
     window.getSelection()?.removeAllRanges();
-    // Focus once the composer has mounted beside the quoted passage so typing
-    // can start immediately. preventScroll matters: the passage — right where
-    // the user just selected — is already in view, and a scrolling focus
-    // would jump the page.
-    window.requestAnimationFrame(() =>
-      followupTextareaRef.current?.focus({ preventScroll: true }),
-    );
-  }, [archived, followupMode, highlightAction, navigationPersistence]);
+    openDraft(nodeId, anchor, branchTriggerFor(nodeId));
+  }, [branchTriggerFor, highlightAction, openDraft, selectionBranchBlocker]);
 
-  // Removes the persisted ask for a node. Called from the explicit exits
-  // (submit, Escape, the quote row's X) — the persistence hook never
-  // deletes, so a lifecycle reset of `ask` cannot wipe an ask the user still
-  // wants back after a remount.
-  const clearSavedAsk = useCallback((nodeId: string | null) => {
-    const currentTreeId = treeIdRef.current;
-    if (!currentTreeId || !nodeId) {
+  const copySelection = useCallback(async () => {
+    if (!highlightAction) {
       return;
     }
-    navigationPersistence.clearAsk(currentTreeId, nodeId);
-  }, [navigationPersistence]);
+    const text = highlightAction.copyText;
+    setHighlightAction(null);
+    window.getSelection()?.removeAllRanges();
+    try {
+      await writeClipboardText(text);
+      onToast("Copied.");
+    } catch {
+      onToast("Couldn’t copy the selection", "warning");
+    }
+  }, [highlightAction, onToast]);
 
-  const dismissAsk = useCallback(() => {
-    clearSavedAsk(askRef.current?.nodeId ?? null);
-    setAsk(null);
-  }, [clearSavedAsk]);
-
-  // Ask mode paints its quoted passage with the CSS Highlight API rather than
-  // retaining the browser selection. Once an empty composer is open, a click
-  // that leaves no live passage selection means the reader clicked away from
-  // that transient ask and closes it. Run on `click` (after response-root
-  // handlers) so clicking the painted passage can first select it and keep the
-  // composer. Composer controls and the floating selection actions are exempt:
-  // in particular, clicking Ask there may be retargeting this composer.
-  const emptyAskOpen = Boolean(ask && !followup.trim());
-  useEffect(() => {
-    if (!emptyAskOpen) {
+  // Centring needs the bar's own size, which depends on its note line: after
+  // it renders, measure it and place it again if the size was off.
+  const selectionActionsRef = useRef<HTMLDivElement | null>(null);
+  const highlightActionLayoutKey = highlightAction
+    ? `${highlightAction.nodeId}:${highlightAction.live}:${selectionBranchBlocker ?? ""}`
+    : "";
+  useLayoutEffect(() => {
+    const bar = selectionActionsRef.current;
+    const selection = window.getSelection();
+    if (!bar || !selection || selection.rangeCount === 0 || selection.isCollapsed) {
       return;
     }
-    const closeEmptyAskOnClickAway = (event: MouseEvent) => {
-      const target = event.target instanceof Element ? event.target : null;
-      const selection = window.getSelection();
-      if (
-        shouldDismissEmptyResearchAskOnClick({
-          followup,
-          selectionCollapsed: !selection || selection.isCollapsed,
-          insideComposer: Boolean(target?.closest(".research-followup-composer")),
-          insideSelectionActions: Boolean(target?.closest(".research-highlight-actions")),
-        })
-      ) {
-        dismissAsk();
-      }
-    };
-    document.addEventListener("click", closeEmptyAskOnClickAway);
-    return () => document.removeEventListener("click", closeEmptyAskOnClickAway);
-  }, [dismissAsk, emptyAskOpen, followup]);
+    const size = { width: bar.offsetWidth, height: bar.offsetHeight };
+    const previous = selectionActionsSizeRef.current;
+    if (size.width === previous.width && size.height === previous.height) {
+      return;
+    }
+    selectionActionsSizeRef.current = size;
+    const placement = highlightActionPlacement(selection.getRangeAt(0), size);
+    setHighlightAction((current) => (current ? { ...current, ...placement } : current));
+  }, [highlightActionLayoutKey]);
 
   // Keyed on the bar's existence, not the action object: repositioning below
-  // replaces the object on every scroll frame, and rebinding all of these
-  // listeners each frame would be pure churn.
+  // replaces the object on every scroll frame.
   const hasHighlightAction = Boolean(highlightAction);
   useEffect(() => {
     if (!hasHighlightAction) {
       return;
     }
     const dismiss = (event: MouseEvent) => {
-      if (!(event.target instanceof Element) || !event.target.closest(".research-highlight-actions")) {
+      if (!(event.target instanceof Element) || !event.target.closest(".research-selection-actions")) {
         setHighlightAction(null);
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
         setHighlightAction(null);
         return;
       }
       if (savingHighlight || isEditableTarget(event.target)) {
         return;
       }
+      // H highlights (merging with what it overlaps), E is kept as the old
+      // expand/merge key, and A — formerly Ask — starts a branch.
       if (isResearchAskActionShortcut(event)) {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-        enterAskMode();
+        branchFromSelection();
         return;
       }
-      if (isResearchExpandActionShortcut(event)) {
+      if (isResearchHighlightActionShortcut(event) || isResearchExpandActionShortcut(event)) {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-        void applyExpandHighlightAction();
-        return;
+        void applyHighlightAction();
       }
-      if (!isResearchHighlightActionShortcut(event)) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      void applyHighlightAction();
     };
     // The selection stays valid across scrolls and resizes, so follow it
-    // instead of dismissing: recompute the bar's placement from the live
-    // selection rect (rAF-throttled), and drop the bar only if the selection
-    // itself has gone away.
+    // instead of dismissing (rAF-throttled), and drop the bar only if the
+    // selection itself has gone away.
     let repositionFrame: number | null = null;
     const reposition = () => {
       if (repositionFrame !== null) {
@@ -4238,10 +3267,7 @@ function ResearchDocument({
           if (!current) {
             return current;
           }
-          const placement = highlightActionPlacement(
-            range,
-            current.expandAnchor ? 340 : 260,
-          );
+          const placement = highlightActionPlacement(range, selectionActionsSizeRef.current);
           return current.left !== placement.left ||
             current.top !== placement.top ||
             current.offscreen !== placement.offscreen
@@ -4251,148 +3277,22 @@ function ResearchDocument({
       });
     };
     document.addEventListener("mousedown", dismiss);
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("resize", reposition);
     window.addEventListener("scroll", reposition, true);
     return () => {
       document.removeEventListener("mousedown", dismiss);
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
       if (repositionFrame !== null) {
         window.cancelAnimationFrame(repositionFrame);
       }
     };
-  }, [
-    applyExpandHighlightAction,
-    applyHighlightAction,
-    enterAskMode,
-    hasHighlightAction,
-    savingHighlight,
-    segmentRoot,
-  ]);
+  }, [applyHighlightAction, branchFromSelection, hasHighlightAction, savingHighlight]);
 
-  // Escape leaves ask mode from anywhere, including inside the composer's
-  // textarea, returning the composer to the thread's tail.
-  useEffect(() => {
-    if (!ask) {
-      return;
-    }
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !event.defaultPrevented) {
-        event.preventDefault();
-        dismissAsk();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [ask, dismissAsk]);
+  // ---- run controls and composers -------------------------------------------
 
-  // Scroll to a just-submitted inline follow-up once the refreshed detail
-  // delivers it into the chain.
-  useEffect(() => {
-    const target = pendingScrollNodeIdRef.current;
-    if (!target || !chainNodeIds.includes(target)) {
-      return;
-    }
-    pendingScrollNodeIdRef.current = null;
-    window.requestAnimationFrame(() => scrollToSegment(target));
-  }, [chainKey, chainNodeIds, scrollToSegment]);
-
-  // `modeOverride` serves ⇧⌘↵, which branches from whichever mode the
-  // composer is in; every other entry point submits in the selected mode.
-  async function submitFollowup(modeOverride?: "thread" | "branch") {
-    const prompt = followup.trim();
-    if (!prompt || submitting || archived || !detail) {
-      return;
-    }
-    const mode = modeOverride ?? followupMode;
-    // Ask mode targets the segment the passage was selected in and is always
-    // a branch; thread mode continues from the tail; branch mode branches
-    // from the last completed answer — the same targeting the composer's
-    // enabled state was derived from.
-    const askState = ask;
-    const target = askState
-      ? detail.nodes.find((node) => node.id === askState.nodeId) ?? null
-      : mode === "branch"
-        ? ([...chainNodes].reverse().find((node) => node.status === "complete") ?? null)
-        : tailNode;
-    // Mirrors the submit button's disabled conditions (same canFollowUpFrom
-    // / canContinueThread predicates): Cmd+Enter must not reach the backend
-    // (and bounce with an error) from a state the button presents as
-    // unavailable.
-    if (!target || !canFollowUpFrom(target)) {
-      return;
-    }
-    const inline = !askState && mode === "thread";
-    if (inline && !canContinueThread(detail.nodes, target)) {
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const child = await onFork(target.id, prompt, askState?.anchor ?? null, inline);
-      navigationPersistence.recordDraft(detail.tree.id, "", followupMode);
-      navigationPersistence.flush();
-      setFollowup("");
-      if (askState) {
-        clearSavedAsk(askState.nodeId);
-        setAsk(null);
-      }
-      if (inline) {
-        // The reader stays put — the thread is one page. The new segment
-        // appears at the tail when the refreshed detail lands; bring it into
-        // view then.
-        pendingScrollNodeIdRef.current = child.id;
-      }
-    } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  // One-click recovery for a failed (or cancelled) inline tail: relaunch the
-  // node in place — same id, same question, same slot — through the retry
-  // command. The reader stays put; the segment re-renders as Queued when the
-  // refreshed detail lands.
-  function retryInlineTail() {
-    const tail = tailNode;
-    if (
-      !detail ||
-      !tail ||
-      !tail.inline ||
-      !tail.parentNodeId ||
-      tail.paneId ||
-      retryingNodeId !== null ||
-      submitting ||
-      archived ||
-      (tail.status !== "failed" && tail.status !== "cancelled")
-    ) {
-      return;
-    }
-    handleRetryNode(tail.id);
-  }
-
-  // Prefer the event-driven node over the last content fetch for metadata:
-  // detail updates arrive without reparsing the transcript. The chrome
-  // (breadcrumb and header actions) renders from this alone, so
-  // switching pages no longer blanks the whole document while content loads —
-  // only each segment's response section waits for its fetch.
-  const displayNode = selectedDetailNode ?? null;
-
-  const anyChainRunActive = chainNodes.some((node) => isActiveResearchStatus(node.status));
-  useEffect(() => {
-    setMetadataNow(Date.now());
-    if (!anyChainRunActive) {
-      return;
-    }
-    const timer = window.setInterval(() => setMetadataNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [anyChainRunActive, chainKey]);
-
-  // Stable handler surface for the memoized segments: App-provided props and
-  // navigation-dependent callbacks route through refs so their changing
-  // identities cannot defeat the segment comparator.
   const onCancelRef = useRef(onCancel);
   onCancelRef.current = onCancel;
   const onRetryNodeRef = useRef(onRetryNode);
@@ -4401,6 +3301,8 @@ function ResearchDocument({
   onToastRef.current = onToast;
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+  const onForkRef = useRef(onFork);
+  onForkRef.current = onFork;
   const treeFollowed = Boolean(detail?.tree.followed);
   const treeBookmarked = Boolean(detail?.tree.bookmarked);
   const handleToggleFollow = useCallback(() => {
@@ -4409,12 +3311,6 @@ function ResearchDocument({
   const handleToggleBookmark = useCallback(() => {
     if (treeId) void onSetBookmarked(treeId, !treeBookmarked);
   }, [onSetBookmarked, treeBookmarked, treeId]);
-  const handleSelectNode = useCallback((nodeId: string) => {
-    setOpenedFollowupIds((prev) =>
-      prev.has(nodeId) ? prev : new Set(prev).add(nodeId),
-    );
-    selectNodeRef.current(nodeId);
-  }, []);
   const handleCancelNode = useCallback((nodeId: string) => {
     if (cancelRequestInFlightRef.current) {
       return;
@@ -4435,11 +3331,8 @@ function ResearchDocument({
         setCancelling(false);
       });
   }, []);
-  // Relaunches a settled node in place. Ref-guarded against double entry: the
-  // clicked control disables itself, but a second control for the same node
-  // (the follow-up menu beside the inline button) fires before the state
-  // lands. The backend refuses a duplicate anyway — the reset finds the node
-  // already Queued — so this only spares the user a bounced error.
+  // Relaunches a settled node in place. Ref-guarded against double entry from
+  // two controls for the same node.
   const retryRequestInFlightRef = useRef(false);
   const handleRetryNode = useCallback((nodeId: string) => {
     if (retryRequestInFlightRef.current) {
@@ -4462,10 +3355,32 @@ function ResearchDocument({
       ),
     [],
   );
-  const handleCardHover = useCallback((childId: string, entering: boolean) => {
-    setLinkedAnchorNodeId(
-      entering ? childId : (current) => (current === childId ? null : current),
-    );
+  const toggleFullTrace = useCallback(
+    (nodeId: string) => setFullTraceNodes((current) => ({ ...current, [nodeId]: !current[nodeId] })),
+    [],
+  );
+  const toggleAnswer = useCallback((nodeId: string) => {
+    setExpandedAnswers((current) => ({ ...current, [nodeId]: !current[nodeId] }));
+  }, []);
+  const togglePromoted = useCallback((nodeId: string) => {
+    const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node) {
+      return;
+    }
+    const promoted = !node.promotedAt;
+    setResearchNodePromoted(nodeId, promoted)
+      .then(() =>
+        onToastRef.current(
+          promoted
+            ? node.inline
+              ? "Starred. It's listed under its question in the feed."
+              : "Starred. The branch is listed under its question in the feed."
+            : node.inline
+              ? "Unstarred."
+              : "Branch unstarred.",
+        ),
+      )
+      .catch((err) => onErrorRef.current(err instanceof Error ? err.message : String(err)));
   }, []);
 
   const copyAnswer = useCallback(async (view: SegmentView) => {
@@ -4487,13 +3402,283 @@ function ResearchDocument({
     [copyAnswer],
   );
 
-  // The whole thread as one Markdown document: each turn's question and
-  // answer in order, separated by rules. Document and conversation heads
-  // have no question line — their content opens the document.
-  async function copyThread() {
+  const openAnswerMenu = useCallback((trigger: HTMLButtonElement, nodeId: string) => {
+    if (menuRef.current?.kind === "answer" && menuRef.current.nodeId === nodeId) {
+      setMenu(null);
+      return;
+    }
+    const rect = trigger.getBoundingClientRect();
+    setMenu({ kind: "answer", nodeId, left: rect.right - 240, top: rect.top, bottom: rect.bottom, trigger });
+  }, []);
+  const openContextMenu = useCallback((nodeId: string, clientX: number, clientY: number) => {
+    setMenu({ kind: "answer", nodeId, left: clientX, top: clientY, bottom: clientY });
+  }, []);
+
+  // The branch button: with branches it opens their menu; with none it
+  // starts a new branch from the whole answer.
+  const handleBranchButton = useCallback(
+    (nodeId: string, trigger: HTMLButtonElement) => {
+      const count = branchesByParentRef.current.get(nodeId)?.length ?? 0;
+      if (count === 0) {
+        openDraft(nodeId, null, trigger);
+        return;
+      }
+      if (menuRef.current?.kind === "branches" && menuRef.current.nodeId === nodeId) {
+        setMenu(null);
+        return;
+      }
+      const rect = trigger.getBoundingClientRect();
+      setMenu({ kind: "branches", nodeId, left: rect.left, top: rect.top, bottom: rect.bottom, trigger });
+    },
+    [openDraft],
+  );
+
+  const handleEditQuestion = useCallback((nodeId: string) => {
+    const currentDetail = detailRef.current;
+    const node = currentDetail?.nodes.find((candidate) => candidate.id === nodeId);
+    if (!currentDetail || !node) {
+      return;
+    }
+    const headId = inlineChainFor(currentDetail.nodes, nodeId)[0] ?? nodeId;
+    setEditingByHead((current) => ({ ...current, [headId]: nodeId }));
+    setComposerText((current) => ({ ...current, [headId]: node.prompt }));
+    window.requestAnimationFrame(() => {
+      const handle = composerRefs.current.get(headId);
+      handle?.focus();
+      handle?.element()?.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" });
+    });
+  }, []);
+
+  /** Sends a column's composer. Editing a failed question removes the failed
+   * node and forks the new question from the same parent. While the tail is
+   * running the question joins the chain's client-side queue. */
+  const submitComposer = useCallback(
+    async (headId: string, { branch = false }: { branch?: boolean } = {}) => {
+      const currentDetail = detailRef.current;
+      const prompt = (composerTextRef.current[headId] ?? "").trim();
+      if (!currentDetail || !prompt || archived || submittingKeyRef.current) {
+        return;
+      }
+      const chain = inlineChainFor(currentDetail.nodes, headId)
+        .map((id) => currentDetail.nodes.find((node) => node.id === id))
+        .filter((node): node is ResearchNode => Boolean(node));
+      const tail = chain[chain.length - 1] ?? null;
+      const editingId = editingByHeadRef.current[headId];
+      const clearComposer = () => {
+        setComposerText((current) => ({ ...current, [headId]: "" }));
+        if (headId === mainComposerKey && treeIdRef.current) {
+          navigationPersistence.recordDraft(treeIdRef.current, "");
+          navigationPersistence.flush();
+        }
+      };
+      if (branch) {
+        const source = [...chain].reverse().find((node) => canFollowUpFrom(node));
+        if (!source) {
+          return;
+        }
+        setSubmittingKey(headId);
+        try {
+          const child = await onForkRef.current(source.id, prompt, null, false);
+          clearComposer();
+          openNewBranch(child.id);
+        } catch (err) {
+          onErrorRef.current(err instanceof Error ? err.message : String(err));
+        } finally {
+          setSubmittingKey(null);
+        }
+        return;
+      }
+      if (editingId) {
+        const failed = currentDetail.nodes.find((node) => node.id === editingId);
+        if (!failed?.parentNodeId) {
+          setEditingByHead((current) => withoutKeys(current, [headId]));
+          return;
+        }
+        setSubmittingKey(headId);
+        try {
+          await onRemoveBranch(failed.id);
+          const child = await onForkRef.current(
+            failed.parentNodeId,
+            prompt,
+            failed.queryAnchor ?? null,
+            Boolean(failed.inline),
+          );
+          clearComposer();
+          setEditingByHead((current) => withoutKeys(current, [headId]));
+          if (failed.id === headId) {
+            // The failed node headed a branch: show its replacement.
+            pendingNodeIdsRef.current.add(child.id);
+            if (pinnedHeadsRef.current.includes(headId)) {
+              setPinnedHeads((current) => current.map((id) => (id === headId ? child.id : id)));
+            } else {
+              setDrawer({ kind: "node", nodeId: child.id });
+            }
+          } else {
+            pendingScrollNodeIdRef.current = child.id;
+          }
+        } catch (err) {
+          onErrorRef.current(err instanceof Error ? err.message : String(err));
+        } finally {
+          setSubmittingKey(null);
+        }
+        return;
+      }
+      if (!tail) {
+        return;
+      }
+      const step = researchQueueStep(tail);
+      const queued = queuesRef.current[headId] ?? EMPTY_QUEUE;
+      if (step === "wait" || queued.length > 0) {
+        updateQueue(headId, (queue) => [
+          ...queue,
+          { id: `q-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, prompt, createdAt: Date.now() },
+        ]);
+        clearComposer();
+        return;
+      }
+      if (step === "stalled" || !canContinueThread(currentDetail.nodes, tail)) {
+        return;
+      }
+      setSubmittingKey(headId);
+      try {
+        const child = await onForkRef.current(tail.id, prompt, null, true);
+        clearComposer();
+        pendingScrollNodeIdRef.current = child.id;
+      } catch (err) {
+        onErrorRef.current(err instanceof Error ? err.message : String(err));
+      } finally {
+        setSubmittingKey(null);
+      }
+    },
+    [archived, mainComposerKey, navigationPersistence, onRemoveBranch, openNewBranch, updateQueue],
+  );
+
+  /** Sends the drawer's new branch: the branch is created with its first
+   * question, then the drawer shows it. */
+  const submitDraft = useCallback(async () => {
+    const current = drawerRef.current;
+    if (current?.kind !== "draft") {
+      return;
+    }
+    const key = `draft:${current.parentNodeId}`;
+    const prompt = (composerTextRef.current[key] ?? "").trim();
+    if (!prompt || submittingKeyRef.current || archived) {
+      return;
+    }
+    setSubmittingKey(key);
+    try {
+      const child = await onForkRef.current(current.parentNodeId, prompt, current.anchor, false);
+      const currentTreeId = treeIdRef.current;
+      if (currentTreeId) {
+        navigationPersistence.clearAsk(currentTreeId, current.parentNodeId);
+      }
+      setComposerText((text) => withoutKeys(text, [key]));
+      if (drawerRef.current === current) {
+        openNewBranch(child.id);
+      }
+    } catch (err) {
+      onErrorRef.current(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmittingKey(null);
+    }
+  }, [archived, navigationPersistence, openNewBranch]);
+
+  // Send each chain's first queued follow-up once its tail completes.
+  const queueSendingRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!detail || archived) {
+      return;
+    }
+    for (const [headId, queue] of Object.entries(queues)) {
+      // A question the backend refused waits for Retry or Remove.
+      if (queue.length === 0 || queue[0].failed || queueSendingRef.current.has(headId)) {
+        continue;
+      }
+      const chain = inlineChainFor(detail.nodes, headId);
+      const tail = nodeById.get(chain[chain.length - 1] ?? "") ?? null;
+      if (!nodeById.has(headId)) {
+        updateQueue(headId, () => []);
+        continue;
+      }
+      if (researchQueueStep(tail) !== "send" || !tail || !canContinueThread(detail.nodes, tail)) {
+        continue;
+      }
+      const [next] = queue;
+      queueSendingRef.current.add(headId);
+      onFork(tail.id, next.prompt, null, true)
+        .then((child) => {
+          updateQueue(headId, (current) => current.filter((item) => item.id !== next.id));
+          pendingScrollNodeIdRef.current = child.id;
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          updateQueue(headId, (current) =>
+            current.map((item) => (item.id === next.id ? { ...item, failed: message } : item)),
+          );
+        })
+        .finally(() => queueSendingRef.current.delete(headId));
+    }
+  }, [archived, detail, nodeById, onFork, queues, updateQueue]);
+
+  // A new branch's composer takes focus once its node has rendered.
+  useEffect(() => {
+    const target = pendingComposerFocusRef.current;
+    const handle = target ? composerRefs.current.get(target) : null;
+    if (!target || !handle) {
+      return;
+    }
+    pendingComposerFocusRef.current = null;
+    if (drawerRef.current?.kind === "node" && drawerRef.current.nodeId === target) {
+      handle.focus();
+    }
+  });
+
+  const onDrawerNodeChangeRef = useRef(onDrawerNodeChange);
+  onDrawerNodeChangeRef.current = onDrawerNodeChange;
+  useEffect(() => {
+    onDrawerNodeChangeRef.current?.(drawerNodeId);
+  }, [drawerNodeId]);
+  useEffect(() => () => onDrawerNodeChangeRef.current?.(null), []);
+
+  // Scroll to a just-submitted follow-up once the refreshed detail delivers it.
+  useEffect(() => {
+    const target = pendingScrollNodeIdRef.current;
+    if (!target || !chainNodeIds.includes(target) || !restoredScrollRef.current) {
+      return;
+    }
+    pendingScrollNodeIdRef.current = null;
+    window.requestAnimationFrame(() => {
+      const anchor = segmentAnchor(target);
+      anchor?.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" });
+    });
+  }, [chainKey, chainNodeIds, segmentAnchor]);
+
+  // Running turns tick their elapsed clock once a second; relative times in
+  // the meta rows refresh once a minute.
+  const anyChainRunActive = chainNodes.some((node) => isActiveResearchStatus(node.status));
+  useEffect(() => {
+    setMetadataNow(Date.now());
+    if (!anyChainRunActive) {
+      return;
+    }
+    const timer = window.setInterval(() => setMetadataNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [anyChainRunActive, chainKey]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setMinuteNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // The whole chain as one Markdown document: each turn's question and
+  // answer in order, separated by rules.
+  async function copyThread(chainIds: string[]) {
     const parts: string[] = [];
-    for (const [index, view] of segmentViews.entries()) {
-      const chainNode = chainNodes[index];
+    for (const id of chainIds) {
+      const view = segmentViews.get(id);
+      const chainNode = nodeById.get(id);
+      if (!view) {
+        continue;
+      }
       const body = (view.conversationCopyText ?? view.rawAnswer).trim();
       const prompt =
         view.isDocument || view.isConversation ? null : chainNode?.prompt.trim() || null;
@@ -4511,9 +3696,9 @@ function ResearchDocument({
     }
     try {
       await writeClipboardText(parts.join("\n\n---\n\n"));
-      onToastRef.current("Copied thread");
+      onToast("Copied thread");
     } catch {
-      onToastRef.current("Couldn’t copy the thread", "warning");
+      onToast("Couldn’t copy the thread", "warning");
     }
   }
 
@@ -4548,44 +3733,98 @@ function ResearchDocument({
     }
   }
 
-  // Keep every hook above the loading return below. The initial detail render
-  // has no selected display node; selection is restored by an effect, so a
-  // hook below that return would appear only on the next render and violate
-  // React's hook ordering. Grouping here also preserves connector-list
-  // identities across unrelated parent renders for the memoized segments.
-  const connectorsBySegment = useMemo(() => {
-    const map = new Map<string, SegmentAnchorConnector[]>();
-    for (const connector of anchorConnectors) {
-      const list = map.get(connector.segmentId);
-      if (list) {
-        list.push(connector);
-      } else {
-        map.set(connector.segmentId, [connector]);
-      }
+  async function confirmBranchRemoval() {
+    if (!deletingBranch?.node || !deletingBranch.info || deletingBranch.info.hasActiveRuns) {
+      return;
     }
-    return map;
-  }, [anchorConnectors]);
+    setBranchRemovalError(null);
+    setRemovingBranch(true);
+    try {
+      if (deletingBranch.node.id === detail?.tree.rootNodeId) {
+        await onRemoveTree(detail.tree.id);
+        setDeletingBranchId(null);
+        return;
+      }
+      const removal = await onRemoveBranch(deletingBranch.node.id);
+      // The backend call and detail refresh can outlive this document's tree.
+      if (treeIdRef.current !== removal.treeId) {
+        setDeletingBranchId(null);
+        return;
+      }
+      const removedNodeIds = new Set(removal.removedNodeIds);
+      const validNodeIds = new Set(
+        (detail?.nodes ?? [])
+          .filter((node) => !removedNodeIds.has(node.id))
+          .map((node) => node.id),
+      );
+      setHistory((current) => pruneResearchHistory(current, validNodeIds, removal.parentNodeId));
+      setPinnedHeads((current) => current.filter((id) => !removedNodeIds.has(id)));
+      const current = drawerRef.current;
+      if (current?.kind === "node" && removedNodeIds.has(current.nodeId)) {
+        // The drawer showed the removed branch (or a later turn of it): show
+        // the surviving parent when it is itself a branch, else close.
+        const parentId = removal.parentNodeId;
+        if (parentId && !mainChainIdsRef.current.includes(parentId)) {
+          setDrawer({ kind: "node", nodeId: parentId });
+        } else {
+          closeDrawer("close");
+        }
+      }
+      if (selectedNodeId && removedNodeIds.has(selectedNodeId)) {
+        setSelectedNodeId(removal.parentNodeId);
+        persistSelection(removal.parentNodeId);
+      }
+      setDeletingBranchId(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setBranchRemovalError(message);
+      onError(message);
+    } finally {
+      setRemovingBranch(false);
+    }
+  }
 
-  if (!detail || !displayNode) {
+  async function confirmRename() {
+    if (!renameTarget || !detail || renaming) {
+      return;
+    }
+    const title = renameTarget.value.trim();
+    if (!title) {
+      return;
+    }
+    setRenaming(true);
+    try {
+      if (renameTarget.nodeId === detail.tree.rootNodeId) {
+        await onRenameTree(detail.tree.id, title);
+      } else {
+        await renameResearchNode(renameTarget.nodeId, title);
+      }
+      setRenameTarget(null);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRenaming(false);
+    }
+  }
+
+  // Which composer ⌘J focuses: the drawer's when it is open, else the
+  // focused column's.
+  focusedComposerKeyRef.current = drawer
+    ? drawer.kind === "draft"
+      ? `draft:${drawer.parentNodeId}`
+      : drawerHeadId ?? mainComposerKey
+    : focusedColumnKey === "main"
+      ? mainComposerKey
+      : focusedColumnKey;
+
+  if (!detail || !rootNodeId || !selectedNodeId) {
     // A failed *tree* fetch retries through the app shell — without detail
     // there is no node to load, so no in-document retry can recover.
-    const placeholderError = detail
-      ? (selectedNodeId ? contentErrorByNode[selectedNodeId] : null) ?? null
-      : detailError ?? null;
-    const retry = detail
-      ? () => setContentLoadNonce((value) => value + 1)
-      : onRetryDetail;
+    const placeholderError = detailError ?? null;
     const headerTitle = detail?.tree.title ?? treeTitle ?? "Loading research…";
     return (
       <ResearchDocumentFrame
         title={headerTitle}
-        headerActions={
-          onShowSidebar ? (
-            <ResearchSidebarRestoreButton
-              onClick={onShowSidebar}
-            />
-          ) : undefined
-        }
       >
         <div className="research-placeholder">
           {placeholderError ? null : (
@@ -4595,8 +3834,8 @@ function ResearchDocument({
           {placeholderError ? (
             <>
               <p role="alert">{placeholderError}</p>
-              {retry ? (
-                <button className="control-button" type="button" onClick={retry}>
+              {onRetryDetail ? (
+                <button className="control-button" type="button" onClick={onRetryDetail}>
                   Retry
                 </button>
               ) : null}
@@ -4607,909 +3846,1142 @@ function ResearchDocument({
     );
   }
 
-  const stopTarget = researchThreadStopTarget(chainNodes);
-  const threadLength = chainNodes.length;
+  const rootNode = nodeById.get(rootNodeId) ?? null;
+  const treeTitleText = detail.tree.title;
 
-  // The thread composer acts on the ask segment (always branching), the
-  // thread's tail (Continue thread), or — in branch mode — the last
-  // completed answer in the thread, so branching stays available while the
-  // tail streams or after it failed, as every complete node's own composer
-  // allowed before threads. A tail that already has an inline child cannot
-  // exist by definition — the chain would extend through it — so "slot
-  // taken" never disables the tail composer; only an unfinished or unusable
-  // tail does.
-  const lastCompleteChainNode =
-    [...chainNodes].reverse().find((node) => node.status === "complete") ?? null;
-  const composerTarget = ask
-    ? detail.nodes.find((node) => node.id === ask.nodeId) ?? null
-    : followupMode === "branch"
-      ? lastCompleteChainNode
-      : tailNode;
-  const composerAwaitingCheckpoint = Boolean(
-    composerTarget &&
-      composerTarget.status === "complete" &&
-      !canFollowUpFrom(composerTarget),
-  );
-  const composerDisabled =
-    archived || !composerTarget || composerTarget.status !== "complete";
-  const canSubmitFollowup = Boolean(
-    composerTarget &&
-      !archived &&
-      followup.trim() &&
-      !submitting &&
-      canFollowUpFrom(composerTarget) &&
-      (ask ||
-        followupMode === "branch" ||
-        canContinueThread(detail.nodes, composerTarget)),
-  );
-  const composerStopTarget =
-    !ask && followupMode === "thread" && tailNode && canStopResearchNode(tailNode)
-      ? tailNode
-      : null;
-  const tailUnusable = Boolean(
-    tailNode && (tailNode.status === "failed" || tailNode.status === "cancelled"),
-  );
-  // A settled inline tail can be retried in place: it is a deletable leaf
-  // (no pane lingering — an unfinished cancel keeps its own Retry-cancel
-  // controls) whose parent takes the relaunched question.
-  const canRetryTail = Boolean(
-    tailNode &&
-      tailNode.inline &&
-      tailNode.parentNodeId &&
-      !archived &&
-      canRetryResearchNode(tailNode),
-  );
-  const retryingTail = Boolean(tailNode && retryingNodeId === tailNode.id);
-  const composerHint = archived
-    ? null
-    : composerAwaitingCheckpoint
-      ? "Waiting for the native session checkpoint before continuing."
-      : !ask && followupMode === "thread" && tailUnusable
-        ? `Last follow-up ${tailNode?.status === "failed" ? "encountered an error" : "was cancelled"}. ${
-            canRetryTail
-              ? "Retry it, delete it, or branch instead."
-              : "Delete it to continue the thread, or branch instead."
-          }`
-        : !ask &&
-            followupMode === "branch" &&
-            composerTarget &&
-            composerTarget.id !== tailNode?.id
-          ? "Branches from the last completed answer in this thread."
-          : null;
-  // With the mode tabs gone the button is where the composer states which
-  // mode it will submit in, so branch mode names itself instead of reading
-  // "Send". Ask mode is always a branch and says so in its own placeholder.
-  const submitButtonLabel = submitting
-    ? "Sending…"
-    : !ask && followupMode === "branch"
-      ? "New branch"
-      : "Send";
-  const composerPlaceholder = ask
-    ? "Ask about the highlighted text…"
-    : followupMode === "branch"
-      ? "Start a new branch from the answer above…"
-      : composerTarget?.kind === "document"
-        ? "Ask about this document…"
-        : composerTarget?.kind === "conversation"
-          ? "Ask about this conversation…"
-          : threadLength > 1
-            ? "Continue this thread…"
-            : "Ask a follow-up…";
+  // ---- rendering -------------------------------------------------------------
 
-  // The composer, parameterized on the ask it is docked to (null for the
-  // thread-tail placement) so an anchored render cannot exist without its
-  // ask context. A docked composer whose passage currently resolves sits
-  // absolutely beside it; while the anchor cannot be located in the rendered
-  // projection (a transcript-view toggle hid the passage, an edit moved it)
-  // the composer stays in the rail's flow instead of pinning to top 0 over
-  // the card stack.
-  const renderComposer = (
-    dockedAsk: { nodeId: string; anchor: ResearchHighlightAnchor } | null,
-  ) => (
-    <div
-      ref={followupComposerRef}
-      className={`research-followup-composer${composerDisabled ? " is-disabled" : ""}${
-        dockedAsk ? " is-anchored" : " is-thread"
-      }${dockedAsk && askComposerTop !== null ? " is-docked" : ""}`}
-      style={dockedAsk && askComposerTop !== null ? { top: askComposerTop } : undefined}
-    >
-      {dockedAsk ? (
-        <div className="research-followup-quote-row">
-          <span className="research-followup-quote">
-            {quoteDisplayText(dockedAsk.anchor.exact)}
-          </span>
-          <button
-            type="button"
-            className="control-button research-followup-quote-dismiss"
-            aria-label="Cancel the targeted question"
-            title="Cancel (Esc)"
-            onClick={dismissAsk}
-          >
-            <X size={12} aria-hidden="true" />
-          </button>
-        </div>
-      ) : null}
-      <div className="research-followup-input">
-        {!dockedAsk && shortcutHintsShown ? (
-          <span
-            className="pane-tab-shortcut-hint research-followup-shortcut-hint"
-            aria-hidden="true"
-          >
-            ⌘J
-          </span>
-        ) : null}
-        <textarea
-          ref={followupTextareaRef}
-          value={followup}
-          placeholder={composerPlaceholder}
-          aria-label="Follow-up question"
-          disabled={composerDisabled}
-          onChange={(event) => setFollowup(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape" && !dockedAsk) {
-              // The draft stays in the minimized bar; the round button marks it.
-              event.preventDefault();
-              event.stopPropagation();
-              event.currentTarget.blur();
-              followupBar.minimize();
-              return;
-            }
-            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              // ⌘↵ submits in the selected mode (what the button says);
-              // ⇧⌘↵ always branches, so the mode picker is never a required
-              // detour. A targeted ask is already a branch, so it ignores it.
-              void submitFollowup(!dockedAsk && event.shiftKey ? "branch" : undefined);
-            }
-          }}
-          // The thread composer floats as a one-line bar and grows as the
-          // reader types; the rail's ask composer opens roomier.
-          rows={dockedAsk ? 2 : 1}
+  const renderTurns = (
+    chainIds: readonly string[],
+    {
+      inConversation,
+      register,
+    }: {
+      inConversation: boolean;
+      register: (nodeId: string, kind: SegmentDomKind, element: HTMLElement | null) => void;
+    },
+  ) =>
+    chainIds.map((id, index) => {
+      const node = nodeById.get(id);
+      const view = segmentViews.get(id);
+      if (!node || !view) {
+        return null;
+      }
+      const branches = branchesByParent.get(id) ?? EMPTY_BRANCHES;
+      const active = isActiveResearchStatus(node.status);
+      // A cancelled turn already says how long it ran ("Stopped after").
+      const durationText =
+        view.isConversation || active || node.status === "cancelled" || !node.startedAt
+          ? null
+          : `${node.status === "complete" ? "" : "Ran for "}${formatRunDuration(
+              (node.completedAt ?? metadataNow) - node.startedAt,
+            )}`;
+      const replyQuote = node.replyAnchor
+        ? nodeById.get(node.parentNodeId ?? "")?.delivery?.replies?.find(
+            (reply) => reply.id === node.replyAnchor,
+          )?.body ?? null
+        : null;
+      return (
+        <ResearchTurn
+          key={id}
+          view={view}
+          node={node}
+          replyQuote={replyQuote}
+          now={minuteNow}
+          promotable={inConversation && index > 0 && Boolean(node.inline)}
+          branchCount={branches.length}
+          branchOpen={branches.some((branch) => openBranchIds.has(branch.id)) ||
+            (drawer?.kind === "draft" && drawer.parentNodeId === id)}
+          branchUnread={branches.some(
+            (branch) =>
+              branch.status === "complete" &&
+              firstSeenCompleteRef.current.get(branch.id) === false &&
+              !openedNodeIds.has(branch.id),
+          )}
+          branchMenuOpen={menu?.kind === "branches" && menu.nodeId === id}
+          branchBlocker={branchBlockerFor(node, archived)}
+          contentError={contentErrorByNode[id] ?? null}
+          cancelling={cancelling}
+          elapsedText={active && node.startedAt ? formatElapsedClock(metadataNow - node.startedAt) : null}
+          durationText={durationText}
+          hiddenHighlightCount={hiddenHighlightsByNode[id] ?? 0}
+          recapPending={recapPendingNodeIds.has(id)}
+          pointerOverAnnotation={pointerAnnotationNodeId === id}
+          menuOpen={menu?.kind === "answer" && menu.nodeId === id}
+          expanded={Boolean(expandedAnswers[id])}
+          canRetry={!archived && canRetryResearchNode(node)}
+          retrying={retryingNodeId === id}
+          canEditQuestion={!archived && node.status === "failed" && Boolean(node.parentNodeId)}
+          registerSegmentElement={register}
+          onExpandTurns={expandAllTurns}
+          onRetryContentLoad={retryContentLoad}
+          onShowFullTrace={showFullTraceFor}
+          onToggleFullTrace={toggleFullTrace}
+          onCopyAnswer={handleCopyAnswer}
+          onOpenAnswerMenu={openAnswerMenu}
+          onCancelNode={handleCancelNode}
+          onRetryNode={handleRetryNode}
+          onEditQuestion={handleEditQuestion}
+          onToggleAnswer={toggleAnswer}
+          onTogglePromoted={togglePromoted}
+          onBranchButton={handleBranchButton}
+          onOpenContextMenu={openContextMenu}
+          onRootMouseDown={beginHighlightSelectionDrag}
+          onRootMouseUp={finishHighlightSelectionDrag}
+          onRootKeyUp={captureHighlightSelection}
+          onRootClick={openAnnotationAtPoint}
+          onRootMouseMove={trackAnnotationUnderPointer}
+          onRootMouseLeave={clearAnnotationPointer}
         />
-      </div>
-      <div className="research-followup-footer">
-        {composerHint ? (
-          <div className="research-followup-hint-row">
-            <small>{composerHint}</small>
-            {!dockedAsk && followupMode === "thread" && canRetryTail ? (
-              <button
-                type="button"
-                className="control-button research-followup-retry"
-                disabled={retryingNodeId !== null || submitting}
-                onClick={() => retryInlineTail()}
+      );
+    });
+
+  const renderQueue = (headId: string) =>
+    (queues[headId] ?? EMPTY_QUEUE).map((item, index) => {
+      const chain = inlineChainFor(detail.nodes, headId);
+      const tail = nodeById.get(chain[chain.length - 1] ?? "") ?? null;
+      const stalled = index === 0 && !item.failed && researchQueueStep(tail) === "stalled";
+      const remove = () => {
+        updateQueue(headId, (queue) => queue.filter((entry) => entry.id !== item.id));
+        window.requestAnimationFrame(() => composerRefs.current.get(headId)?.focus());
+      };
+      return (
+        <article key={item.id} className="research-turn is-status-queued is-client-queued">
+          <div className="research-turn-question">
+            <div className="research-user-message research-prompt research-turn-prompt is-plain">
+              {item.prompt}
+            </div>
+            <div className="research-turn-meta">
+              <time
+                dateTime={new Date(item.createdAt).toISOString()}
+                title={new Date(item.createdAt).toLocaleString()}
               >
-                {retryingTail ? (
-                  <>
-                    <LoaderCircle className="research-spinner" size={12} aria-hidden="true" />
-                    <span>Retrying…</span>
-                  </>
-                ) : (
-                  <span>Retry follow-up</span>
-                )}
-              </button>
-            ) : null}
+                {shortWhen(item.createdAt, minuteNow)}
+              </time>
+            </div>
           </div>
-        ) : null}
-        <div className="native-input-submit-actions">
-          <div className="research-followup-send-group">
-            {composerStopTarget ? (
-              <button
-                className="control-button research-followup-send"
-                type="button"
-                disabled={cancelling}
-                onClick={() => handleCancelNode(composerStopTarget.id)}
-              >
-                <Square size={12} aria-hidden="true" />
-                <span>
-                  {cancelling
-                    ? "Stopping…"
-                    : composerStopTarget.status === "cancelled"
-                      ? "Retry stop"
-                      : "Stop"}
-                </span>
-              </button>
+          <div className="research-turn-answer">
+            {item.failed ? (
+              <div className="research-turn-alert is-error" role="alert">
+                <div>
+                  <b>Not sent.</b> {item.failed}
+                </div>
+              </div>
             ) : (
-              <button
-                className="control-button research-followup-send"
-                type="button"
-                disabled={!canSubmitFollowup}
-                onClick={() => void submitFollowup()}
-              >
-                <span>{submitButtonLabel}</span>
-                {!submitting ? (
-                  <ComposerSubmitShortcutGlyph
-                    requireCmdEnter
-                    className="shortcut-hint"
-                  />
-                ) : null}
-              </button>
+              <div className="research-turn-note is-state">
+                {stalled
+                  ? "Not sent. The answer above stopped; retry it, or edit this question."
+                  : "Queued. Starts when the running answer finishes."}
+              </div>
             )}
-            {!dockedAsk ? (
-              <button
-                ref={modeMenuTriggerRef}
-                className="control-button research-followup-mode-trigger"
-                type="button"
-                disabled={archived}
-                aria-haspopup="menu"
-                aria-expanded={modeMenuOpen}
-                aria-label="Follow-up mode"
-                title="Continue this thread or start a new branch"
-                onClick={() => setModeMenuOpen((open) => !open)}
-              >
-                <ChevronDown size={13} aria-hidden="true" />
+            <div className="research-turn-actions">
+              {item.failed ? (
+                <button
+                  type="button"
+                  className="control-button research-turn-button"
+                  onClick={() =>
+                    updateQueue(headId, (queue) =>
+                      queue.map((entry) => (entry.id === item.id ? { ...entry, failed: undefined } : entry)),
+                    )
+                  }
+                >
+                  <RefreshCw size={13} aria-hidden="true" />
+                  <span>Retry</span>
+                </button>
+              ) : null}
+              {stalled || item.failed ? (
+                <button
+                  type="button"
+                  className="control-button research-turn-button is-ghost"
+                  onClick={() => {
+                    updateQueue(headId, (queue) => queue.filter((entry) => entry.id !== item.id));
+                    setComposerText((current) => ({ ...current, [headId]: item.prompt }));
+                    window.requestAnimationFrame(() => composerRefs.current.get(headId)?.focus());
+                  }}
+                >
+                  Edit question
+                </button>
+              ) : null}
+              <button type="button" className="control-button research-turn-button is-ghost" onClick={remove}>
+                Remove
               </button>
-            ) : null}
-            {!dockedAsk && modeMenuOpen
-              ? createPortal(
-                  <div
-                    ref={modeMenuRef}
-                    className="popover-surface research-followup-mode-menu"
-                    role="menu"
-                    aria-label="Follow-up mode"
-                    // Off-screen until the layout effect has measured the
-                    // menu, so the first paint cannot land at the viewport
-                    // origin.
-                    style={
-                      modeMenuPos
-                        ? { left: modeMenuPos.left, top: modeMenuPos.top }
-                        : { left: -9999, top: -9999 }
-                    }
-                  >
-                    {FOLLOWUP_MODE_OPTIONS.map((option) => (
-                      <button
-                        key={option.mode}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={followupMode === option.mode}
-                        className="menu-item menu-item--compact research-followup-mode-item"
-                        onClick={() => {
-                          setFollowupMode(option.mode);
-                          setModeMenuOpen(false);
-                          followupTextareaRef.current?.focus();
-                        }}
-                      >
-                        <span className="research-followup-mode-check" aria-hidden="true">
-                          {followupMode === option.mode ? <Check size={12} /> : null}
-                        </span>
-                        <span className="research-followup-mode-label">{option.label}</span>
-                        {option.shortcut ? (
-                          <span className="shortcut-hint">{option.shortcut}</span>
-                        ) : null}
-                      </button>
-                    ))}
-                  </div>,
-                  document.body,
-                )
-              : null}
+            </div>
           </div>
-          {!dockedAsk ? (
-            <button
-              type="button"
-              className="control-button research-followup-minimize"
-              aria-label="Minimize follow-up bar"
-              title="Minimize (Esc)"
-              onClick={followupBar.minimize}
-            >
-              <ArrowDownRight size={14} aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
+        </article>
+      );
+    });
 
-  // Sorted, comma-joined unread card ids per segment. A stable string keeps
-  // the segment memo intact while the unread set is unchanged, unlike a fresh
-  // Set identity every render.
-  const unreadKeyBySegment = new Map<string, string>();
-  for (const [segmentId, children] of childrenBySegment) {
-    const ids = children
-      .filter(
-        (child) =>
-          child.status === "complete" &&
-          firstSeenCompleteRef.current.get(child.id) === false &&
-          !openedFollowupIds.has(child.id),
-      )
-      .map((child) => child.id);
-    if (ids.length > 0) {
-      unreadKeyBySegment.set(segmentId, ids.sort().join(","));
+  const registerComposer = (key: string) => (handle: ResearchComposerHandle | null) => {
+    if (handle) {
+      composerRefs.current.set(key, handle);
+    } else {
+      composerRefs.current.delete(key);
     }
-  }
+  };
 
-  const renderedSegments = chainNodes.map((node, index) => {
-    const view = segmentViews[index];
-    if (!view) {
+  /** A column's composer: continue the chain (queueing while it runs), or
+   * replace a failed question being edited. */
+  const renderChainComposer = (headId: string, chainIds: readonly string[], live = true) => {
+    const chain = chainIds
+      .map((id) => nodeById.get(id))
+      .filter((node): node is ResearchNode => Boolean(node));
+    const tail = chain[chain.length - 1] ?? null;
+    const head = chain[0] ?? null;
+    if (!tail || !head || head.kind === "note") {
       return null;
     }
-    const segmentChildren = childrenBySegment.get(node.id) ?? EMPTY_SEGMENT_CHILDREN;
-    const segmentActive = isActiveResearchStatus(node.status);
-    const linkedForSegment =
-      linkedAnchorNodeId && segmentChildren.some((child) => child.id === linkedAnchorNodeId)
-        ? linkedAnchorNodeId
-        : null;
-    const durationText = view.isConversation
-      ? // A conversation's timestamps span the source terminal session's
-        // lifetime, not a generation — a bare duration here would read as
-        // run time.
-        null
-      : node.startedAt
-        ? `${
-            segmentActive
-              ? "Generating for "
-              : node.status !== "complete"
-                ? "Ran for "
-                : ""
-          }${formatDuration((node.completedAt ?? metadataNow) - node.startedAt)}`
-        : segmentActive
-          ? "Waiting to start"
-          : null;
-    const replyQuote = node.replyAnchor
-      ? detail.nodes
-          .find((candidate) => candidate.id === node.parentNodeId)
-          ?.delivery?.replies?.find((reply) => reply.id === node.replyAnchor)?.body ?? null
-      : null;
+    const text = composerText[headId] ?? "";
+    const editingId = editingByHead[headId];
+    const step = researchQueueStep(tail);
+    const queued = (queues[headId] ?? EMPTY_QUEUE).length > 0;
+    const awaitingCheckpoint = tail.status === "complete" && !canFollowUpFrom(tail);
+    const canSend =
+      !archived &&
+      (Boolean(editingId) || step === "wait" || queued || canContinueThread(detail.nodes, tail));
+    const note = editingId ? (
+      <>
+        Editing the failed question. Sending replaces the failed attempt.{" "}
+        <button
+          type="button"
+          className="research-link-button"
+          onClick={() => {
+            setEditingByHead((current) => withoutKeys(current, [headId]));
+            setComposerText((current) => ({ ...current, [headId]: "" }));
+          }}
+        >
+          Cancel
+        </button>
+      </>
+    ) : archived ? (
+      "Archived questions are read-only. Restore it from Archive to ask follow-ups."
+    ) : awaitingCheckpoint ? (
+      "Waiting for the native session checkpoint before continuing."
+    ) : step === "stalled" && !queued ? (
+      tail.status === "failed"
+        ? "The last answer stopped with an error. Retry it or edit its question to continue."
+        : "The last answer was stopped. Run it again to continue."
+    ) : null;
+    const placeholder = editingId
+      ? "Edit the question"
+      : head.kind === "document" && chain.length === 1
+        ? "Ask about this document"
+        : head.kind === "conversation" && chain.length === 1
+          ? "Ask about this conversation"
+          : "Ask a follow-up";
+    const composerFocused = focusedComposerKeyRef.current === headId;
     return (
-      <ThreadSegment
-        key={node.id}
-        view={view}
-        node={node}
-        index={index}
-        replyQuote={replyQuote}
-        replyToAnswer={
-          index > 0
-            ? segmentViews[index - 1]?.rawAnswer.trim() ||
-              segmentViews[index - 1]?.node.responsePreview?.trim() ||
-              null
-            : null
+      <ResearchConversationComposer
+        ref={live ? registerComposer(headId) : undefined}
+        value={text}
+        placeholder={placeholder}
+        ariaLabel={editingId ? "Edit the question" : "Ask a follow-up"}
+        disabled={archived || (step === "stalled" && !editingId && !queued)}
+        canSubmit={canSend}
+        submitting={submittingKey === headId}
+        note={note}
+        shortcutHint={shortcutHintsShown && composerFocused ? "⌘J" : null}
+        onChange={(value) => setComposerText((current) => ({ ...current, [headId]: value }))}
+        onSubmit={() => void submitComposer(headId)}
+        onSubmitBranch={() => void submitComposer(headId, { branch: true })}
+      />
+    );
+  };
+
+  const branchTitle = (head: ResearchNode | null | undefined, anchor?: ResearchHighlightAnchor | null) => {
+    if (head) {
+      return nodeLabel(head, "Branch");
+    }
+    return anchor ? `Branch: ${quoteDisplayText(anchor.exact)}` : "New branch";
+  };
+
+  const siblingSwitcher = (headId: string, onSwitch: (siblingId: string) => void) => {
+    const head = nodeById.get(headId);
+    const siblings = head?.parentNodeId ? branchesByParent.get(head.parentNodeId) ?? EMPTY_BRANCHES : EMPTY_BRANCHES;
+    const index = siblings.findIndex((sibling) => sibling.id === headId);
+    if (siblings.length < 2 || index < 0) {
+      return null;
+    }
+    return {
+      index,
+      count: siblings.length,
+      onStep: (delta: -1 | 1) => {
+        const next = siblings[index + delta];
+        if (next) {
+          onSwitch(next.id);
         }
+      },
+    };
+  };
+
+  const jumpToSource = (headId: string) => {
+    const head = nodeById.get(headId);
+    const parentId = head?.parentNodeId;
+    if (!head || !parentId) {
+      return;
+    }
+    const placement = researchNodePlacement(detail.nodes, mainChainIds, validPinnedHeads, parentId);
+    setExpandedAnswers((current) => (current[parentId] ? current : { ...current, [parentId]: true }));
+    if (placement.kind === "drawer") {
+      navigate(parentId);
+      window.setTimeout(() => revealPassage(headId, true), 0);
+      return;
+    }
+    if (singleColumn && drawer) {
+      closeDrawer("close");
+    }
+    focusColumn(placement.kind === "main" ? "main" : placement.headId);
+    window.requestAnimationFrame(() => revealPassage(headId, true));
+  };
+
+  /** The title of the conversation or branch a node is part of. */
+  const chainTitleOf = (nodeId: string) =>
+    mainChainIds.includes(nodeId)
+      ? treeTitleText
+      : nodeLabel(nodeById.get(researchChainHead(detail.nodes, nodeId)), "the parent branch");
+
+  const sourceLine = (headId: string, hasTurns: boolean) => {
+    const head = nodeById.get(headId);
+    const parent = head?.parentNodeId ? nodeById.get(head.parentNodeId) : null;
+    if (!head || !parent) {
+      return null;
+    }
+    const resolves = branchRangeOffsetsRef.current.some((entry) => entry.id === headId);
+    const quote = head.queryAnchor ? quoteDisplayText(head.queryAnchor.exact) : null;
+    return (
+      <ResearchBranchSource
+        quote={quote && (resolves || !contentByNode[parent.id]) ? quote : null}
+        previousQuote={quote && !resolves && contentByNode[parent.id] ? quote : null}
+        parentTitle={chainTitleOf(parent.id)}
+        full={!hasTurns}
+        onJump={() => jumpToSource(headId)}
+      />
+    );
+  };
+
+  const columnBody = (headId: string, chainIds: readonly string[], register: typeof registerSegmentElement) => {
+    const head = nodeById.get(headId);
+    if (head?.kind === "note") {
+      return (
+        <ResearchNoteDocument
+          detail={detail}
+          note={head}
+          archived={archived}
+          actions={noteActions}
+          onSelectNode={(nodeId) => navigate(nodeId)}
+        />
+      );
+    }
+    return (
+      <>
+        <div className="research-turns">{renderTurns(chainIds, { inConversation: false, register })}</div>
+        {renderQueue(headId)}
+        {renderChainComposer(headId, chainIds, register !== registerNothing)}
+      </>
+    );
+  };
+
+  const mainColumn = (
+    <section
+      key="main"
+      className={`research-conv-column is-main${focusedColumnKey === "main" ? " is-focused" : ""}${
+        singleColumn && focusedColumnKey !== "main" ? " is-hidden" : ""
+      }`}
+      data-research-column="main"
+      aria-label={treeTitleText}
+      onMouseDown={() => takeColumnFocus("main")}
+    >
+      <ResearchConversationHeader
+        title={treeTitleText}
+        titleRef={(element) => {
+          if (element) columnTitleRefs.current.set("main", element);
+          else columnTitleRefs.current.delete("main");
+        }}
+        canGoBack={canGoBack}
+        canGoForward={canGoForward}
+        backTitle={`Back (${IS_MAC ? "⌘[" : "Ctrl+["})`}
+        forwardTitle={`Forward (${IS_MAC ? "⌘]" : "Ctrl+]"})`}
+        onBack={goBack}
+        onForward={goForward}
+        imported={rootNode?.origin === "terminalExport"}
+        archived={archived}
         followed={treeFollowed}
         bookmarked={treeBookmarked}
         onToggleFollow={handleToggleFollow}
         onToggleBookmark={handleToggleBookmark}
-        isSelected={node.id === selectedNodeId}
-        contentError={contentErrorByNode[node.id] ?? null}
-        segmentActive={segmentActive}
-        showRunControls={
-          canStopResearchNode(node) && node.id !== stopTarget?.id
+        onMove={onMoveTree ? (trigger) => onMoveTree(detail.tree.id, trigger) : undefined}
+        onClose={onClose}
+        onColumnBack={
+          singleColumn && columnsLayout ? () => columnsLayout.focusFeed({ moveFocus: true }) : undefined
         }
-        cancelling={cancelling}
-        durationText={durationText}
-        hiddenHighlightCount={hiddenHighlightsByNode[node.id] ?? 0}
-        recapPending={recapPendingNodeIds.has(node.id)}
-        unreadCardKey={unreadKeyBySegment.get(node.id) ?? ""}
-        pointerOverHighlight={pointerHighlightNodeId === node.id}
-        linkedAnchorId={linkedForSegment}
-        connectors={connectorsBySegment.get(node.id) ?? EMPTY_SEGMENT_CONNECTORS}
-        segmentChildren={segmentChildren}
-        anchoredCardTops={anchoredCardTops}
-        resolvedCardTops={resolvedCardTops}
-        menuOpen={followupMenu?.nodeId === node.id}
-        askComposer={ask && ask.nodeId === node.id ? renderComposer(ask) : null}
-        registerSegmentElement={registerSegmentElement}
-        onSelectNode={handleSelectNode}
-        onExpandTurns={expandAllTurns}
-        onRetryContentLoad={retryContentLoad}
-        onShowFullTrace={showFullTraceFor}
-        onCopyAnswer={handleCopyAnswer}
-        onOpenAnswerMenu={openAnswerMenu}
-        onOpenFollowupMenu={openFollowupMenu}
-        onCancelNode={handleCancelNode}
-        canRetryNode={!archived && canRetryResearchNode(node)}
-        retryingNode={retryingNodeId === node.id}
-        onRetryNode={handleRetryNode}
-        onCardHover={handleCardHover}
-        onRootMouseDown={beginHighlightSelectionDrag}
-        onRootMouseUp={finishHighlightSelectionDrag}
-        onRootKeyUp={captureHighlightSelection}
-        onRootClick={selectAnnotationAtPoint}
-        onRootMouseMove={linkAnchorUnderPointer}
-        onRootMouseLeave={unlinkAnchorPointer}
       />
+      <div
+        ref={mainScrollRef}
+        className="research-column-scroll"
+        onScroll={recordScroll}
+      >
+        <div ref={mainContentRef} className="research-column-content research-reading-surface">
+          {rootNode?.kind === "note" ? (
+            <ResearchNoteDocument
+              detail={detail}
+              note={rootNode}
+              archived={archived}
+              actions={noteActions}
+              onSelectNode={(nodeId) => navigate(nodeId)}
+            />
+          ) : (
+            <>
+              <div className="research-turns">
+                {renderTurns(mainChainIds, { inConversation: true, register: registerSegmentElement })}
+              </div>
+              {renderQueue(rootNodeId)}
+              {renderChainComposer(rootNodeId, mainChainIds)}
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+
+  const pinnedColumns = validPinnedHeads.map((headId, index) => {
+    const head = nodeById.get(headId);
+    const chainIds = pinnedChains[index] ?? [headId];
+    const parentBranch = researchParentBranchHead(detail.nodes, mainChainIds, headId);
+    return (
+      <section
+        key={headId}
+        className={`research-conv-column is-pinned${focusedColumnKey === headId ? " is-focused" : ""}${
+          singleColumn && focusedColumnKey !== headId ? " is-hidden" : ""
+        }`}
+        style={singleColumn ? undefined : { width: RESEARCH_PINNED_COLUMN_WIDTH }}
+        data-research-column={headId}
+        aria-label={branchTitle(head)}
+        onMouseDown={() => takeColumnFocus(headId)}
+      >
+        <ResearchBranchHeader
+          title={branchTitle(head)}
+          titleRef={(element) => {
+            if (element) columnTitleRefs.current.set(headId, element);
+            else columnTitleRefs.current.delete(headId);
+          }}
+          backLabel={
+            singleColumn
+              ? "Back"
+              : parentBranch
+                ? `Back to “${nodeLabel(nodeById.get(parentBranch), "the parent branch")}”`
+                : undefined
+          }
+          onBack={
+            singleColumn
+              ? () => focusColumn(columnKeys[columnKeys.indexOf(headId) - 1] ?? "main", { moveFocus: true })
+              : parentBranch
+                ? () => navigate(parentBranch)
+                : undefined
+          }
+          siblings={siblingSwitcher(headId, (siblingId) => {
+            if (drawerHeadId === siblingId) {
+              closeDrawer("pin");
+            }
+            setPinnedHeads((current) =>
+              current
+                .map((id) => (id === headId ? siblingId : id))
+                .filter((id, position, all) => all.indexOf(id) === position),
+            );
+            takeColumnFocus(siblingId);
+            markOpened(siblingId);
+          })}
+          promoted={Boolean(head?.promotedAt)}
+          canPromote={Boolean(head)}
+          onTogglePromoted={() => togglePromoted(headId)}
+          onClose={() => unpinBranch(headId)}
+          closeLabel="Close this pinned column"
+        />
+        <div className="research-column-scroll">
+          <div className="research-column-content research-reading-surface is-branch">
+            {sourceLine(headId, chainIds.some((id) => nodeById.has(id)))}
+            {columnBody(headId, chainIds, registerSegmentElement)}
+          </div>
+        </div>
+      </section>
     );
   });
 
-  // A note has no answer to render, highlight, or branch from; its page lists
-  // its replies and follow-ups instead. Selection, history, and the workspace
-  // navigation around it are still this component's.
-  if (displayNode.kind === "note") {
-    return (
-      <TranscriptLinkActionsProvider actions={linkActions}>
-          <ResearchNoteDocument
-            detail={detail}
-            note={displayNode}
-            archived={archived}
-            followed={treeFollowed}
-            bookmarked={treeBookmarked}
-            actions={noteActions}
-            canGoBack={canGoBack}
-            canGoForward={canGoForward}
-            onBack={goBack}
-            onForward={goForward}
-            onShowSidebar={onShowSidebar}
-            onToggleFollow={handleToggleFollow}
-            onToggleBookmark={handleToggleBookmark}
-            onSelectNode={handleSelectNode}
+  const renderDrawerContent = (target: DrawerTarget, live: boolean) => {
+    const register = live ? registerSegmentElement : registerNothing;
+    if (target.kind === "draft") {
+      const parent = nodeById.get(target.parentNodeId);
+      const key = `draft:${target.parentNodeId}`;
+      const quote = target.anchor ? quoteDisplayText(target.anchor.exact) : null;
+      return (
+        <>
+          <ResearchBranchHeader
+            title={branchTitle(null, target.anchor)}
+            titleRef={live ? drawerTitleRef : undefined}
+            backLabel={singleColumn ? "Back" : undefined}
+            onBack={singleColumn ? closeDrawerToConversation : undefined}
+            promoted={false}
+            canPromote={false}
+            onClose={singleColumn ? undefined : closeDrawerToConversation}
+            closeLabel="Close (Esc)"
           />
-      </TranscriptLinkActionsProvider>
+          <div className="research-column-scroll" ref={live ? drawerScrollRef : undefined}>
+            <div className="research-column-content research-reading-surface is-branch">
+              {parent ? (
+                <ResearchBranchSource
+                  quote={quote}
+                  parentTitle={chainTitleOf(parent.id)}
+                  full
+                  onJump={() => {
+                    const placement = researchNodePlacement(
+                      detail.nodes,
+                      mainChainIds,
+                      validPinnedHeads,
+                      parent.id,
+                    );
+                    if (placement.kind === "drawer") {
+                      return;
+                    }
+                    focusColumn(placement.kind === "main" ? "main" : placement.headId);
+                    window.requestAnimationFrame(() => {
+                      const entry = branchRangeOffsetsRef.current.find((candidate) => candidate.id === "__draft__");
+                      if (entry) {
+                        setFlashRange({ nodeId: parent.id, start: entry.start, end: entry.end });
+                      } else {
+                        flashTurn(parent.id);
+                      }
+                    });
+                  }}
+                />
+              ) : null}
+              <div className="research-branch-empty">
+                <p>
+                  Ask about {quote ? "this passage" : "this answer"} to create a new branch.
+                </p>
+              </div>
+              <ResearchConversationComposer
+                ref={live ? registerComposer(key) : undefined}
+                value={composerText[key] ?? ""}
+                placeholder={quote ? "Ask about this passage" : "Ask about this answer"}
+                ariaLabel="Ask about this passage to create a new branch"
+                disabled={archived}
+                canSubmit={!archived}
+                submitting={submittingKey === key}
+                onChange={(value) => setComposerText((current) => ({ ...current, [key]: value }))}
+                onSubmit={() => void submitDraft()}
+              />
+            </div>
+          </div>
+        </>
+      );
+    }
+    const chainIds = live ? drawerChainIds : leavingChainIds;
+    const headId = chainIds[0] ?? target.nodeId;
+    const head = nodeById.get(headId);
+    const parentBranch = researchParentBranchHead(detail.nodes, mainChainIds, headId);
+    return (
+      <>
+        <ResearchBranchHeader
+          title={branchTitle(head)}
+          titleRef={live ? drawerTitleRef : undefined}
+          backLabel={
+            singleColumn
+              ? "Back"
+              : parentBranch
+                ? `Back to “${nodeLabel(nodeById.get(parentBranch), "the parent branch")}”`
+                : undefined
+          }
+          onBack={
+            singleColumn
+              ? closeDrawerToConversation
+              : parentBranch
+                ? () => navigate(parentBranch)
+                : undefined
+          }
+          siblings={siblingSwitcher(headId, (siblingId) => navigate(siblingId))}
+          promoted={Boolean(head?.promotedAt)}
+          canPromote={Boolean(head)}
+          onTogglePromoted={() => togglePromoted(headId)}
+          onPin={head ? () => pinBranch(headId) : undefined}
+          onClose={singleColumn ? undefined : closeDrawerToConversation}
+          closeLabel="Close (Esc)"
+        />
+        <div className="research-column-scroll" ref={live ? drawerScrollRef : undefined}>
+          <div className="research-column-content research-reading-surface is-branch">
+            {head ? (
+              <>
+                {sourceLine(headId, true)}
+                {columnBody(headId, chainIds, register)}
+              </>
+            ) : (
+              <div className="research-response-loading is-drawer">
+                <LoaderCircle className="research-spinner" size={18} aria-hidden="true" />
+              </div>
+            )}
+          </div>
+        </div>
+      </>
     );
-  }
+  };
+
+  const drawerTarget = drawer ?? leavingDrawer?.target ?? null;
+  const drawerElement = drawerTarget ? (
+    <ResearchBranchDrawer
+      key={drawer ? drawerInstance : leavingDrawer?.instance}
+      ref={drawer ? drawerElementRef : undefined}
+      width={drawerWidth}
+      full={singleColumn}
+      label={`Branch: ${
+        drawerTarget.kind === "draft"
+          ? branchTitle(null, drawerTarget.anchor)
+          : branchTitle(nodeById.get((drawer ? drawerChainIds : leavingChainIds)[0] ?? drawerTarget.nodeId))
+      }`}
+      contentKey={
+        drawerTarget.kind === "draft"
+          ? `draft:${drawerTarget.parentNodeId}`
+          : (drawer ? drawerHeadId : leavingChainIds[0]) ?? drawerTarget.nodeId
+      }
+      animateOpen={drawerAnimates}
+      leaving={drawer ? null : leavingDrawer?.mode ?? null}
+      onLeft={() => setLeavingDrawer((current) => (current && !drawerRef.current ? null : current))}
+    >
+      {renderDrawerContent(drawerTarget, Boolean(drawer))}
+    </ResearchBranchDrawer>
+  ) : null;
+
+  const menuNode = menu ? nodeById.get(menu.nodeId) ?? null : null;
+  const renderMenu = () => {
+    if (!menu || !menuNode) {
+      return null;
+    }
+    if (menu.kind === "branches") {
+      const branches = branchesByParent.get(menu.nodeId) ?? EMPTY_BRANCHES;
+      const blocker = branchBlockerFor(menuNode, archived);
+      return (
+        <FloatingMenu anchor={menu} label="Branches from this answer" onClose={() => setMenu(null)}>
+          <div className="research-menu-title">Branches from this answer</div>
+          {branches.map((branch) => {
+            const open = openBranchIds.has(branch.id);
+            const unread =
+              branch.status === "complete" &&
+              firstSeenCompleteRef.current.get(branch.id) === false &&
+              !openedNodeIds.has(branch.id);
+            return (
+              <MenuItem
+                key={branch.id}
+                icon={<GitBranch size={14} aria-hidden="true" />}
+                label={nodeLabel(branch, "Branch")}
+                description={unread && !open ? "New answer" : undefined}
+                current={open}
+                onSelect={() => navigate(branch.id, { returnFocus: menu.trigger ?? null })}
+                trailing={
+                  open ? (
+                    <Check size={14} className="research-menu-check" aria-hidden="true" />
+                  ) : unread ? (
+                    <span className="research-turn-unread" aria-hidden="true" />
+                  ) : null
+                }
+              />
+            );
+          })}
+          <div className="research-menu-divider" role="separator" />
+          <MenuItem
+            icon={<Plus size={14} aria-hidden="true" />}
+            label="New branch here"
+            disabled={blocker !== null}
+            title={blocker ?? undefined}
+            onSelect={() => openDraft(menu.nodeId, null, menu.trigger ?? null)}
+          />
+        </FloatingMenu>
+      );
+    }
+    if (menu.kind === "mark") {
+      const highlight = menu.highlightId
+        ? (contentByNode[menu.nodeId]?.node.highlights ?? []).find((item) => item.id === menu.highlightId) ?? null
+        : null;
+      const blocker = branchBlockerFor(menuNode, archived);
+      return (
+        <FloatingMenu anchor={menu} label="Passage" onClose={() => setMenu(null)}>
+          {menu.branchIds.map((branchId) => (
+            <MenuItem
+              key={branchId}
+              icon={<GitBranch size={14} aria-hidden="true" />}
+              label={nodeLabel(nodeById.get(branchId), "Branch")}
+              current={openBranchIds.has(branchId)}
+              onSelect={() => navigate(branchId)}
+            />
+          ))}
+          {highlight ? (
+            <>
+              <MenuItem
+                icon={<GitBranch size={14} aria-hidden="true" />}
+                label="Branch from highlight"
+                disabled={blocker !== null}
+                title={blocker ?? undefined}
+                onSelect={() => openDraft(menu.nodeId, highlight.anchor, branchTriggerFor(menu.nodeId))}
+              />
+              <MenuItem
+                icon={<X size={14} aria-hidden="true" />}
+                label="Remove highlight"
+                onSelect={() => {
+                  setMenu(null);
+                  removeHighlights(menu.nodeId, [highlight.id]).catch((err) =>
+                    onError(err instanceof Error ? err.message : String(err)),
+                  );
+                }}
+              />
+            </>
+          ) : null}
+        </FloatingMenu>
+      );
+    }
+    const node = menuNode;
+    const info = researchBranchInfo(detail.nodes, node.id);
+    if (!info) {
+      return null;
+    }
+    const isRoot = node.id === rootNodeId;
+    const view = segmentViews.get(node.id) ?? null;
+    const content = contentByNode[node.id] ?? null;
+    const chainIds = inlineChainFor(detail.nodes, node.id);
+    const deleteLabel = isRoot
+      ? "Delete research"
+      : node.inline
+        ? info.descendantCount > 0
+          ? "Delete from here"
+          : "Delete follow-up"
+        : info.descendantCount > 0
+          ? "Delete branch"
+          : "Delete follow-up";
+    const canRegenerateRecap = Boolean(
+      !archived && content?.responseRevision && content.node.recap?.text.trim(),
+    );
+    const threadReady = chainIds.every((id) => segmentViews.get(id)?.content);
+    return (
+      <FloatingMenu
+        anchor={menu}
+        label={`Actions for ${nodeLabel(node, treeTitleText)}`}
+        onClose={() => setMenu(null)}
+      >
+        {chainIds.length > 1 ? (
+          <MenuItem
+            icon={<Copy size={14} aria-hidden="true" />}
+            label="Copy thread as Markdown"
+            disabled={!threadReady}
+            title={threadReady ? undefined : "The thread is still loading"}
+            onSelect={() => {
+              setMenu(null);
+              void copyThread(chainIds);
+            }}
+          />
+        ) : null}
+        {view?.hasTranscriptActivity ? (
+          <MenuItem
+            icon={<ScrollText size={14} aria-hidden="true" />}
+            label={fullTraceNodes[node.id] ? "Hide full transcript" : "Show full transcript"}
+            onSelect={() => {
+              setMenu(null);
+              setFullTraceNodes((current) => ({ ...current, [node.id]: !current[node.id] }));
+            }}
+          />
+        ) : null}
+        {!archived && canRetryResearchNode(node) ? (
+          <MenuItem
+            icon={<RefreshCw size={14} aria-hidden="true" />}
+            label="Retry run"
+            disabled={retryingNodeId !== null}
+            onSelect={() => {
+              setMenu(null);
+              handleRetryNode(node.id);
+            }}
+          />
+        ) : null}
+        {canRegenerateRecap ? (
+          <MenuItem
+            icon={<RefreshCw size={14} aria-hidden="true" />}
+            label="Generate summary"
+            onSelect={() => {
+              setMenu(null);
+              setRecapDialogNodeId(node.id);
+            }}
+          />
+        ) : null}
+        {isRoot || !node.inline ? (
+          <MenuItem
+            icon={<Pencil size={14} aria-hidden="true" />}
+            label="Rename…"
+            onSelect={() => {
+              setMenu(null);
+              setRenameTarget({
+                nodeId: node.id,
+                value: isRoot ? treeTitleText : (node.title ?? node.prompt).trim(),
+              });
+            }}
+          />
+        ) : null}
+        {isRoot && node.kind === "document" ? (
+          <MenuItem
+            icon={<Pencil size={14} aria-hidden="true" />}
+            label="Edit document"
+            disabled={
+              archived || !content?.responseRevision || view?.editableDocumentMarkdown == null
+            }
+            title={
+              archived
+                ? "Unarchive this research before editing its document"
+                : !content?.responseRevision || view?.editableDocumentMarkdown == null
+                  ? "The document content is unavailable"
+                  : undefined
+            }
+            onSelect={() => {
+              setMenu(null);
+              if (content?.responseRevision && view?.editableDocumentMarkdown != null) {
+                setDocumentEditSession({
+                  nodeId: node.id,
+                  markdown: view.editableDocumentMarkdown,
+                  title: treeTitleText,
+                  responseRevision: content.responseRevision,
+                  highlightIds: content.node.highlights?.map((highlight) => highlight.id) ?? [],
+                  highlightCount: content.node.highlights?.length ?? 0,
+                });
+              }
+            }}
+          />
+        ) : null}
+        <div className="research-menu-divider" role="separator" />
+        <MenuItem
+          icon={<Trash2 size={14} aria-hidden="true" />}
+          label={deleteLabel}
+          danger
+          disabled={info.hasActiveRuns}
+          title={
+            info.hasActiveRuns
+              ? "This branch must finish or be cancelled before deletion"
+              : undefined
+          }
+          onSelect={() => {
+            setMenu(null);
+            setBranchRemovalError(null);
+            setDeletingBranchId(node.id);
+          }}
+        />
+      </FloatingMenu>
+    );
+  };
+
+  // ⌘F searches the drawer, then the conversation, then pinned columns.
+  const searchRoots = () => {
+    const roots: HTMLElement[] = [];
+    const drawerContent = drawerElementRef.current?.querySelector<HTMLElement>(".research-column-content");
+    if (drawer && drawerContent) {
+      roots.push(drawerContent);
+    }
+    roots.push(
+      ...(workspaceRef.current?.querySelectorAll<HTMLElement>(
+        ".research-conv-column:not(.is-hidden) .research-column-content",
+      ) ?? []),
+    );
+    return roots;
+  };
+  // A match inside a clamped answer expands the answer; a match in a pinned
+  // column scrolled out of view scrolls the row to it.
+  const revealSearchMatch = (range: Range) => {
+    const element =
+      range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
+    showResearchColumn(
+      columnsLayout?.row ?? null,
+      element?.closest<HTMLElement>(".research-conv-column") ?? null,
+      "auto",
+    );
+    const clamp = element?.closest<HTMLElement>(".research-answer-clamp.is-clamped");
+    const nodeId = element?.closest<HTMLElement>(".research-response-content-root")?.dataset.nodeId;
+    if (!clamp || !nodeId || range.getBoundingClientRect().bottom <= clamp.getBoundingClientRect().bottom - 2) {
+      return false;
+    }
+    setExpandedAnswers((current) => ({ ...current, [nodeId]: true }));
+    return true;
+  };
+  const overlayContent = (
+    <>
+      {drawerElement}
+      <DomSearchBar
+        active
+        placeholder="Find in research"
+        rootRef={mainContentRef}
+        viewportRef={mainScrollRef}
+        getRoots={searchRoots}
+        rootsKey={`${drawerHeadId ?? drawer?.kind ?? ""}:${validPinnedHeads.join(",")}:${focusedColumnKey}`}
+        scopeContains={(target) =>
+          Boolean(workspaceRef.current?.contains(target) || drawerElementRef.current?.contains(target))
+        }
+        viewportFor={(range) =>
+          (range.startContainer instanceof Element
+            ? range.startContainer
+            : range.startContainer.parentElement
+          )?.closest<HTMLElement>(".research-column-scroll") ?? null
+        }
+        revealRange={revealSearchMatch}
+      />
+    </>
+  );
 
   return (
     <TranscriptLinkActionsProvider actions={linkActions}>
-        <div className="research-workspace">
-        <main ref={documentPaneRef} className="research-document">
-          <header className="research-document-header">
-            <ResearchHistoryNav
-              canGoBack={canGoBack}
-              canGoForward={canGoForward}
-              backTitle={`Back (${IS_MAC ? "⌘[" : "Ctrl+["})`}
-              forwardTitle={`Forward (${IS_MAC ? "⌘]" : "Ctrl+]"})`}
-              onBack={goBack}
-              onForward={goForward}
-            />
-            <div className="research-breadcrumb" aria-label="Research path">
-              {breadcrumbDisplay.map((entry, displayIndex) =>
-                entry.kind === "ellipsis" ? (
-                  <span key="ellipsis">
-                    <span className="research-breadcrumb-separator">/</span>
-                    <span
-                      className="research-breadcrumb-ellipsis"
-                      title={`${entry.count} earlier ${entry.count === 1 ? "step" : "steps"}`}
-                    >
-                      …
-                    </span>
-                  </span>
-                ) : (
-                  <span key={entry.node.id}>
-                    {displayIndex > 0 ? (
-                      <span className="research-breadcrumb-separator">/</span>
-                    ) : null}
-                    <button
-                      className="control-button"
-                      type="button"
-                      onClick={() => selectNode(entry.node.id)}
-                    >
-                      {entry.index === 0
-                        ? detail.tree.title
-                        : entry.node.title ?? entry.node.prompt}
-                    </button>
-                  </span>
-                ),
-              )}
-            </div>
-            {displayNode.origin === "terminalExport" ? (
-              <span
-                className="research-provenance-badge"
-                title="This is a point-in-time copy of an imported conversation."
-              >
-                <Terminal size={12} aria-hidden="true" />
-                Imported conversation
-              </span>
-            ) : null}
-            {onShowSidebar ? (
-              <ResearchSidebarRestoreButton
-                onClick={onShowSidebar}
-              />
-            ) : null}
-            {selectedView?.hasTranscriptActivity && selectedNodeId ? (
-              <button
-                type="button"
-                className={`control-button research-trace-toggle${
-                  fullTraceNodes[selectedNodeId] ? " is-active" : ""
-                }`}
-                aria-pressed={Boolean(fullTraceNodes[selectedNodeId])}
-                title={
-                  fullTraceNodes[selectedNodeId]
-                    ? "Hide full transcript"
-                    : "Show full transcript"
-                }
-                aria-label={
-                  fullTraceNodes[selectedNodeId]
-                    ? "Hide full transcript"
-                    : "Show full transcript"
-                }
-                onClick={() =>
-                  setFullTraceNodes((current) => ({
-                    ...current,
-                    [selectedNodeId]: !current[selectedNodeId],
-                  }))
-                }
-              >
-                <ScrollText size={15} aria-hidden="true" />
-              </button>
-            ) : null}
-            {stopTarget ? (
-              <button
-                type="button"
-                className="control-button research-cancel-run"
-                disabled={cancelling}
-                onClick={() => handleCancelNode(stopTarget.id)}
-              >
-                <Square size={12} aria-hidden="true" />
-                {cancelling
-                  ? "Stopping…"
-                  : stopTarget.status === "cancelled"
-                    ? "Retry stop"
-                    : "Stop"}
-              </button>
-            ) : null}
-          </header>
-
-          <DomSearchBar
-            active
-            placeholder="Find in research"
-            rootRef={documentScrollRef}
-          />
-
-          <article
-            ref={documentScrollRef}
-            className="research-document-scroll"
-            onScroll={recordScroll}
-          >
+      <div
+        ref={workspaceRef}
+        className={`research-workspace research-conversation-workspace${
+          singleColumn ? " is-single-column" : ""
+        }${drawer ? " has-drawer" : ""}`}
+      >
+        {mainColumn}
+        {pinnedColumns}
+      </div>
+      {columnsLayout?.overlay ? createPortal(overlayContent, columnsLayout.overlay) : overlayContent}
+      {renderMenu()}
+      {highlightAction
+        ? createPortal(
             <div
-              ref={contentContainerRef}
-              className={`research-document-content research-reading-surface${
-                ask || childrenBySegment.size > 0 ? " has-followup-rail" : ""
-              }`}
+              ref={selectionActionsRef}
+              className="popover-surface research-selection-actions"
+              role="toolbar"
+              aria-label="Selection"
+              style={{
+                left: highlightAction.left,
+                top: highlightAction.top,
+                visibility: highlightAction.offscreen ? "hidden" : undefined,
+              }}
             >
-              {renderedSegments}
-              {!ask ? (
-                <div
-                  className={`research-response-grid research-thread-composer-row${
-                    followupBar.minimized ? " is-minimized" : ""
-                  }`}
+              <div className="research-selection-row">
+                <button
+                  type="button"
+                  className="control-button research-menu-item is-inline"
+                  disabled={savingHighlight || highlightAction.live}
+                  aria-keyshortcuts="H"
+                  title={highlightAction.live ? "Wait for the answer to finish" : "Highlight (H)"}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => void applyHighlightAction()}
                 >
-                  <div className="research-thread-composer-cell">{renderComposer(null)}</div>
-                </div>
-              ) : null}
-            </div>
-          </article>
-          {!ask ? followupBar.renderLayer(followup.trim() !== "") : null}
-        </main>
-        </div>
-        {followupMenu && detail
-          ? (() => {
-              const node = detail.nodes.find((candidate) => candidate.id === followupMenu.nodeId);
-              const info = researchBranchInfo(detail.nodes, followupMenu.nodeId);
-              if (!node || !info) {
-                return null;
-              }
-              const label = node.inline
-                ? info.descendantCount > 0
-                  ? "Delete from here"
-                  : "Delete follow-up"
-                : info.descendantCount > 0
-                  ? "Delete branch"
-                  : "Delete follow-up";
-              const rootNode = node.id === detail.tree.rootNodeId;
-              // A document root has no prompt; its identity is the tree title.
-              const nodeName = (node.title ?? node.prompt) || detail.tree.title;
-              const menuView = viewForNode(node.id);
-              const menuContent = contentByNode[node.id] ?? null;
-              const canRegenerateMenuRecap = Boolean(
-                !archived &&
-                  menuContent?.responseRevision &&
-                  menuContent.node.recap?.text.trim(),
-              );
-              return createPortal(
-                <div
-                  ref={followupMenuRef}
-                  className="popover-surface popover-surface--context pane-context-menu research-followup-menu"
-                  role="menu"
-                  aria-label={`Actions for ${nodeName}`}
-                  style={{ left: followupMenu.left, top: followupMenu.top }}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onContextMenu={(event) => event.preventDefault()}
-                >
-                  <div className="group-context-actions">
-                    {chainNodeIds.includes(node.id) && chainNodes.length > 1
-                      ? (() => {
-                          const threadReady = segmentViews.every((view) => view.content);
-                          return (
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="control-button"
-                              disabled={!threadReady}
-                              title={
-                                threadReady
-                                  ? undefined
-                                  : "The thread is still loading"
-                              }
-                              onClick={() => {
-                                setFollowupMenu(null);
-                                void copyThread();
-                              }}
-                            >
-                              <Copy size={13} aria-hidden="true" />
-                              <span>Copy thread as Markdown</span>
-                            </button>
-                          );
-                        })()
-                      : null}
-                    {!archived && canRetryResearchNode(node) ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="control-button"
-                        disabled={retryingNodeId !== null}
-                        onClick={() => {
-                          setFollowupMenu(null);
-                          handleRetryNode(node.id);
-                        }}
-                      >
-                        <RefreshCw size={13} aria-hidden="true" />
-                        <span>Retry run</span>
-                      </button>
-                    ) : null}
-                    {canRegenerateMenuRecap ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="control-button"
-                        onClick={() => openRecapDialog(node.id)}
-                      >
-                        <RefreshCw size={13} aria-hidden="true" />
-                        <span>Generate summary</span>
-                      </button>
-                    ) : null}
-                    <div className="context-menu-divider" role="separator" />
-                    {rootNode && node.kind === "document" ? (
-                      <>
-                        <button className="control-button"
-                          type="button"
-                          role="menuitem"
-                          disabled={
-                            archived ||
-                            !menuContent?.responseRevision ||
-                            menuView?.editableDocumentMarkdown == null
-                          }
-                          title={
-                            archived
-                              ? "Unarchive this research before editing its document"
-                              : !menuContent?.responseRevision ||
-                                  menuView?.editableDocumentMarkdown == null
-                                ? "The document content is unavailable"
-                                : undefined
-                          }
-                          onClick={() => {
-                            setFollowupMenu(null);
-                            if (
-                              menuContent?.responseRevision &&
-                              menuView?.editableDocumentMarkdown != null
-                            ) {
-                              setDocumentEditSession({
-                                nodeId: node.id,
-                                markdown: menuView.editableDocumentMarkdown,
-                                title: detail.tree.title,
-                                responseRevision: menuContent.responseRevision,
-                                highlightIds:
-                                  menuContent.node.highlights?.map((highlight) => highlight.id) ?? [],
-                                highlightCount: menuContent.node.highlights?.length ?? 0,
-                              });
-                            }
-                          }}
-                        >
-                          <Pencil size={13} aria-hidden="true" />
-                          <span>Edit document</span>
-                        </button>
-                        <div className="context-menu-divider" role="separator" />
-                      </>
-                    ) : null}
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="control-button context-menu-danger"
-                      disabled={info.hasActiveRuns}
-                      title={
-                        info.hasActiveRuns
-                          ? "This branch must finish or be cancelled before deletion"
-                          : undefined
-                      }
-                      onClick={() => {
-                        setFollowupMenu(null);
-                        setBranchRemovalError(null);
-                        setDeletingBranchId(node.id);
-                      }}
-                    >
-                      <Trash2 size={13} aria-hidden="true" />
-                      <span>{rootNode ? "Delete research" : label}</span>
-                    </button>
-                  </div>
-                </div>,
-                document.body,
-              );
-            })()
-          : null}
-        {documentEditSession
-          ? createPortal(
-              <DocumentComposer
-                initialMarkdown={documentEditSession.markdown}
-                initialTitle={documentEditSession.title}
-                highlightCount={documentEditSession.highlightCount}
-                resetKey={`${documentEditSession.nodeId}:${documentEditSession.responseRevision}`}
-                onClose={() => setDocumentEditSession(null)}
-                onSubmit={saveDocumentEdit}
-              />,
-              document.body,
-            )
-          : null}
-        {recapDialogNodeId && contentByNode[recapDialogNodeId]?.node.recap
-          ? createPortal(
-              <ResearchRecapDialog
-                content={contentByNode[recapDialogNodeId]}
-                onClose={() => setRecapDialogNodeId(null)}
-                onApplied={(updatedNode) => {
-                  setContentByNode((current) => {
-                    const content = current[updatedNode.id];
-                    return content
-                      ? { ...current, [updatedNode.id]: { ...content, node: updatedNode } }
-                      : current;
-                  });
-                  onToast("Summary updated");
-                }}
-              />,
-              document.body,
-            )
-          : null}
-        {highlightAction
-          ? createPortal(
-              <div
-                className="research-highlight-actions"
-                style={{
-                  left: highlightAction.left,
-                  top: highlightAction.top,
-                  visibility: highlightAction.offscreen ? "hidden" : undefined,
-                }}
-              >
-                  <button
-                    type="button"
-                    className="control-button research-highlight-action"
-                    disabled={savingHighlight}
-                    aria-keyshortcuts="H"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => void applyHighlightAction()}
-                  >
-                    {savingHighlight ? (
-                      <span>Saving…</span>
-                    ) : highlightAction.highlightIds.length > 0 ? (
-                      <span>
-                        {highlightAction.highlightIds.length > 1
+                  <Highlighter size={14} aria-hidden="true" />
+                  <span>
+                    {savingHighlight
+                      ? "Saving…"
+                      : highlightAction.expandAnchor || highlightAction.highlightIds.length === 0
+                        ? "Highlight"
+                        : highlightAction.highlightIds.length > 1
                           ? "Remove highlights"
                           : "Remove highlight"}
-                      </span>
-                    ) : (
-                      <span>Highlight</span>
-                    )}
-                    <kbd className="context-menu-shortcut is-keycap" aria-hidden="true">
-                      H
-                    </kbd>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="control-button research-menu-item is-inline"
+                  disabled={savingHighlight || selectionBranchBlocker !== null}
+                  aria-keyshortcuts="A"
+                  title={selectionBranchBlocker ?? "Branch (A)"}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={branchFromSelection}
+                >
+                  <GitBranch size={14} aria-hidden="true" />
+                  <span>Branch</span>
+                </button>
+                <button
+                  type="button"
+                  className="control-button research-menu-item is-inline"
+                  title="Copy"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => void copySelection()}
+                >
+                  <Copy size={14} aria-hidden="true" />
+                  <span>Copy</span>
+                </button>
+              </div>
+              {highlightAction.live ? (
+                <div className="research-menu-note">
+                  Highlighting and branching are available when the answer finishes.
+                </div>
+              ) : selectionBranchBlocker === "Wait for the answer to finish" ? (
+                <div className="research-menu-note">Branching is available when the answer finishes.</div>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
+      {renameTarget
+        ? createPortal(
+            <div
+              className="confirm-dialog-backdrop"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget && !renaming) {
+                  setRenameTarget(null);
+                }
+              }}
+            >
+              <form
+                className="confirm-dialog research-rename-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="rename-research-dialog-title"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void confirmRename();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && !renaming) {
+                    event.preventDefault();
+                    setRenameTarget(null);
+                  }
+                }}
+              >
+                <h2 id="rename-research-dialog-title">
+                  {renameTarget.nodeId === rootNodeId ? "Rename research" : "Rename branch"}
+                </h2>
+                <input
+                  className="research-rename-input"
+                  autoFocus
+                  aria-label="Title"
+                  value={renameTarget.value}
+                  onChange={(event) =>
+                    setRenameTarget({ nodeId: renameTarget.nodeId, value: event.currentTarget.value })
+                  }
+                />
+                <div className="confirm-dialog-actions">
+                  <button
+                    className="control-button"
+                    type="button"
+                    disabled={renaming}
+                    onClick={() => setRenameTarget(null)}
+                  >
+                    Cancel
                   </button>
-                  {highlightAction.expandAnchor ? (
-                    <button
-                      type="button"
-                      className="control-button research-highlight-action"
-                      disabled={savingHighlight}
-                      aria-keyshortcuts="E"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => void applyExpandHighlightAction()}
-                    >
-                      <span>
-                        {highlightAction.highlightIds.length > 1
-                          ? "Merge highlights"
-                          : "Expand highlight"}
-                      </span>
-                      <kbd className="context-menu-shortcut is-keycap" aria-hidden="true">
-                        E
-                      </kbd>
-                    </button>
-                  ) : null}
-                  {canAskSelection ? (
-                    <button
-                      type="button"
-                      className="control-button research-highlight-action"
-                      disabled={savingHighlight}
-                      aria-keyshortcuts="A"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={enterAskMode}
-                    >
-                      <span>Ask</span>
-                      <kbd className="context-menu-shortcut is-keycap" aria-hidden="true">
-                        A
-                      </kbd>
-                    </button>
-                  ) : null}
-              </div>,
-              document.body,
-            )
-          : null}
-        {deletingBranch?.node && deletingBranch.info
-          ? createPortal(
+                  <button
+                    className="control-button primary"
+                    type="submit"
+                    disabled={renaming || !renameTarget.value.trim()}
+                  >
+                    {renaming ? "Renaming…" : "Rename"}
+                  </button>
+                </div>
+              </form>
+            </div>,
+            document.body,
+          )
+        : null}
+      {documentEditSession
+        ? createPortal(
+            <DocumentComposer
+              initialMarkdown={documentEditSession.markdown}
+              initialTitle={documentEditSession.title}
+              highlightCount={documentEditSession.highlightCount}
+              resetKey={`${documentEditSession.nodeId}:${documentEditSession.responseRevision}`}
+              onClose={() => setDocumentEditSession(null)}
+              onSubmit={saveDocumentEdit}
+            />,
+            document.body,
+          )
+        : null}
+      {recapDialogNodeId && contentByNode[recapDialogNodeId]?.node.recap
+        ? createPortal(
+            <ResearchRecapDialog
+              content={contentByNode[recapDialogNodeId]}
+              onClose={() => setRecapDialogNodeId(null)}
+              onApplied={(updatedNode) => {
+                setContentByNode((current) => {
+                  const content = current[updatedNode.id];
+                  return content
+                    ? { ...current, [updatedNode.id]: { ...content, node: updatedNode } }
+                    : current;
+                });
+                onToast("Summary updated");
+              }}
+            />,
+            document.body,
+          )
+        : null}
+      {deletingBranch?.node && deletingBranch.info
+        ? createPortal(
+            <div
+              className="confirm-dialog-backdrop"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget && !removingBranch) {
+                  setDeletingBranchId(null);
+                }
+              }}
+            >
               <div
-                className="confirm-dialog-backdrop"
-                role="presentation"
-                onMouseDown={(event) => {
-                  if (event.target === event.currentTarget && !removingBranch) {
+                className="confirm-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-research-branch-dialog-title"
+                aria-busy={removingBranch}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && !removingBranch) {
+                    event.preventDefault();
                     setDeletingBranchId(null);
                   }
                 }}
               >
-                <div
-                  className="confirm-dialog"
-                  role="dialog"
-                  aria-modal="true"
-                  aria-labelledby="delete-research-branch-dialog-title"
-                  aria-busy={removingBranch}
-                  onKeyDown={(event) => {
-                    if (event.key === "Escape" && !removingBranch) {
-                      event.preventDefault();
-                      setDeletingBranchId(null);
-                    }
-                  }}
-                >
-                  <h2 id="delete-research-branch-dialog-title">
-                    {deletingBranch.node.id === detail.tree.rootNodeId
-                      ? "Delete research"
-                      : deletingBranch.node.inline && deletingBranch.info.descendantCount > 0
-                      ? "Delete the rest of this thread?"
-                      : deletingBranch.info.descendantCount > 0
-                      ? "Delete this research branch?"
-                      : "Delete this follow-up?"}
-                  </h2>
-                  <p>
-                    Delete "
-                    {(deletingBranch.node.title ?? deletingBranch.node.prompt) ||
-                      detail.tree.title}
-                    "?
+                <h2 id="delete-research-branch-dialog-title">
+                  {deletingBranch.node.id === rootNodeId
+                    ? "Delete research"
+                    : deletingBranch.node.inline && deletingBranch.info.descendantCount > 0
+                    ? "Delete the rest of this thread?"
+                    : deletingBranch.info.descendantCount > 0
+                    ? "Delete this research branch?"
+                    : "Delete this follow-up?"}
+                </h2>
+                <p>
+                  Delete "
+                  {(deletingBranch.node.title ?? deletingBranch.node.prompt) || treeTitleText}
+                  "?
+                </p>
+                <p>
+                  {deletingBranch.node.id === rootNodeId
+                    ? deletingBranch.info.descendantCount > 0
+                      ? `This permanently deletes the root answer and all ${deletingBranch.info.descendantCount} follow-up${deletingBranch.info.descendantCount === 1 ? "" : "s"}.`
+                      : "This permanently deletes the root answer and its research history."
+                    : deletingBranch.node.inline && deletingBranch.info.descendantCount > 0
+                    ? `This permanently deletes this follow-up and everything after it in the thread — ${deletingBranch.info.descendantCount} descendant node${deletingBranch.info.descendantCount === 1 ? "" : "s"} in total, including any branches. Its parent answer keeps the freed inline slot.`
+                    : deletingBranch.info.descendantCount > 0
+                    ? `This also permanently deletes ${deletingBranch.info.descendantCount} descendant follow-up${deletingBranch.info.descendantCount === 1 ? "" : "s"}.`
+                    : "This permanently deletes the follow-up and its response."} {" "}
+                  This can’t be undone.
+                </p>
+                {branchRemovalError ? (
+                  <p className="confirm-dialog-error" role="alert">
+                    {branchRemovalError}
                   </p>
-                  <p>
-                    {deletingBranch.node.id === detail.tree.rootNodeId
-                      ? deletingBranch.info.descendantCount > 0
-                        ? `This permanently deletes the root answer and all ${deletingBranch.info.descendantCount} follow-up${deletingBranch.info.descendantCount === 1 ? "" : "s"}.`
-                        : "This permanently deletes the root answer and its research history."
-                      : deletingBranch.node.inline && deletingBranch.info.descendantCount > 0
-                      ? `This permanently deletes this follow-up and everything after it in the thread — ${deletingBranch.info.descendantCount} descendant node${deletingBranch.info.descendantCount === 1 ? "" : "s"} in total, including any branches. Its parent answer keeps the freed inline slot.`
-                      : deletingBranch.info.descendantCount > 0
-                      ? `This also permanently deletes ${deletingBranch.info.descendantCount} descendant follow-up${deletingBranch.info.descendantCount === 1 ? "" : "s"}.`
-                      : "This permanently deletes the follow-up and its response."} {" "}
-                    This can’t be undone.
-                  </p>
-                  {branchRemovalError ? (
-                    <p className="confirm-dialog-error" role="alert">
-                      {branchRemovalError}
-                    </p>
-                  ) : null}
-                  <div className="confirm-dialog-actions">
-                    <button className="control-button"
-                      type="button"
-                      disabled={removingBranch}
-                      onClick={() => setDeletingBranchId(null)}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="control-button danger"
-                      autoFocus
-                      disabled={removingBranch || deletingBranch.info.hasActiveRuns}
-                      onClick={() => void confirmBranchRemoval()}
-                    >
-                      {removingBranch
-                        ? "Deleting…"
-                        : deletingBranch.node.id === detail.tree.rootNodeId
-                          ? "Delete research"
-                          : deletingBranch.node.inline && deletingBranch.info.descendantCount > 0
-                          ? "Delete from here"
-                          : deletingBranch.info.descendantCount > 0
-                          ? "Delete branch"
-                          : "Delete follow-up"}
-                    </button>
-                  </div>
+                ) : null}
+                <div className="confirm-dialog-actions">
+                  <button className="control-button"
+                    type="button"
+                    disabled={removingBranch}
+                    onClick={() => setDeletingBranchId(null)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="control-button danger"
+                    autoFocus
+                    disabled={removingBranch || deletingBranch.info.hasActiveRuns}
+                    onClick={() => void confirmBranchRemoval()}
+                  >
+                    {removingBranch
+                      ? "Deleting…"
+                      : deletingBranch.node.id === rootNodeId
+                        ? "Delete research"
+                        : deletingBranch.node.inline && deletingBranch.info.descendantCount > 0
+                        ? "Delete from here"
+                        : deletingBranch.info.descendantCount > 0
+                        ? "Delete branch"
+                        : "Delete follow-up"}
+                  </button>
                 </div>
-              </div>,
-              document.body,
-            )
-          : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </TranscriptLinkActionsProvider>
   );
 }

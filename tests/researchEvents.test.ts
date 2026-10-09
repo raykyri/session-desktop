@@ -126,6 +126,8 @@ test("parseResearchEvent recognizes the complete backend research taxonomy", () 
       "research.node.removed",
       { treeId: researchTree.id, parentNodeId: root.id, removedNodeIds: ["child-1"] },
     ],
+    ["research.drafts.changed", { workspaceId: "workspace-1" }],
+    ["research.folders.changed", {}],
   ];
 
   for (const [type, payload] of cases) {
@@ -153,6 +155,10 @@ test("parseResearchEvent separates unrelated, unsupported, and malformed events"
   assert.deepEqual(
     parseResearchEvent(sessionEvent("research.recap.pending", { nodeId: "node-root" })),
     { kind: "malformed", type: "research.recap.pending" },
+  );
+  assert.deepEqual(
+    parseResearchEvent(sessionEvent("research.drafts.changed", { workspaceId: 7 })),
+    { kind: "malformed", type: "research.drafts.changed" },
   );
   assert.deepEqual(
     parseResearchEvent(

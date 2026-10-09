@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
 
@@ -6,6 +7,8 @@ export interface LauncherSelectOption {
   value: string;
   label: string;
   iconSrc?: string;
+  /** A glyph component, for options without an image icon. */
+  icon?: ReactNode;
   iconClassName?: string;
   dividerBefore?: boolean;
   tone?: "danger";
@@ -40,6 +43,17 @@ const SUBMENU_GAP = 4;
 const toneClass = (tone?: string) => (tone ? ` is-${tone}` : "");
 const iconClass = (option?: LauncherSelectOption) =>
   ["launcher-select-icon", option?.iconClassName].filter(Boolean).join(" ");
+
+function OptionIcon({ option }: { option?: LauncherSelectOption }) {
+  if (option?.iconSrc) {
+    return <img className={iconClass(option)} src={option.iconSrc} alt="" aria-hidden="true" />;
+  }
+  return option?.icon ? (
+    <span className={iconClass(option)} aria-hidden="true">
+      {option.icon}
+    </span>
+  ) : null;
+}
 
 /* A native <select> can't tint a single option, so this is a custom listbox styled
    like the launcher's controls. The popover is portaled to <body> because the launcher
@@ -191,14 +205,7 @@ export function LauncherSelect({
           setOpen((prev) => !prev);
         }}
       >
-        {selected?.iconSrc ? (
-          <img
-            className={iconClass(selected)}
-            src={selected.iconSrc}
-            alt=""
-            aria-hidden="true"
-          />
-        ) : null}
+        <OptionIcon option={selected} />
         {iconOnly ? null : <span className="launcher-select-value">{selected?.label}</span>}
         <ChevronDown size={13} className="launcher-select-chevron" aria-hidden="true" />
       </button>
@@ -239,14 +246,7 @@ export function LauncherSelect({
                         }
                       }}
                     >
-                      {option.iconSrc ? (
-                        <img
-                          className={iconClass(option)}
-                          src={option.iconSrc}
-                          alt=""
-                          aria-hidden="true"
-                        />
-                      ) : null}
+                      <OptionIcon option={option} />
                       <span className="launcher-select-item-label">{option.label}</span>
                       {option.detail ? (
                         <span className="launcher-select-item-detail">{option.detail}</span>

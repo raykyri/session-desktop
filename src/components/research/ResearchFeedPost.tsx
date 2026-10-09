@@ -1,195 +1,170 @@
-import type { ReactNode } from "react";
-import { LoaderCircle, Terminal } from "lucide-react";
-import ResearchThreadActions from "./ResearchThreadActions";
-import { ResearchRecapPendingLine } from "./ResearchRecap";
+import type { CSSProperties, ReactNode } from "react";
+import { Ellipsis, GitBranch, GripVertical } from "lucide-react";
+import type { ResearchFeedChild } from "../../lib/researchFolders";
+import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 
-function isInteractiveTarget(target: EventTarget | null) {
-  return target instanceof Element && Boolean(target.closest("a, button"));
-}
+export type ResearchFeedPostStatus = "running" | "failed";
+
+const STATUS_LABELS: Record<ResearchFeedPostStatus, string> = {
+  running: "Running",
+  failed: "Failed",
+};
 
 interface ResearchFeedPostProps {
-  /** An exported terminal conversation carries a glyph at the start of the
-   * footer; questions and notes (network posts and saved links) carry none. */
-  kind?: "question" | "note" | "conversation";
-  /** Relative time in the footer after Bookmark; omitted while running. */
-  time?: ReactNode;
-  /** The thread's generated title, shown above the question. */
+  /** Tree id, or draft id for a draft card. */
+  cardId: string;
+  dragKind?: "tree" | "draft";
+  /** The place the card is listed in, for drag and drop. */
+  place: string;
+  /** The thread title, shown above the question when it differs from it. */
   title?: string | null;
   /** Renders the question or note body. The body passes its prompt text
-   * through `clamp`, which limits it to four lines;
-   * anything rendered outside it (link cards, embeds) shows in full. */
+   * through `clamp`, which limits it to four lines; anything rendered outside
+   * it (link cards, embeds) shows in full. */
   renderBody: (clamp: (content: ReactNode) => ReactNode) => ReactNode;
-  /** The answer's recap, shown as an italic "Summary:" line. */
-  recap?: string | null;
-  recapPending?: boolean;
-  running?: boolean;
+  /** The accessible name of the card's open button. */
+  label: string;
+  /** The open button's tooltip (an archived card's archive time). */
+  tooltip?: string;
+  status?: ResearchFeedPostStatus | null;
+  /** Replaces the status's name, such as "Failed since last viewed". */
+  statusLabel?: string;
   selected?: boolean;
   /** The thread changed since it was last viewed. */
   unread?: boolean;
-  /** A run in the thread failed since it was last viewed. Takes the unread
-   * dot's place, since a failure is also an unseen change. */
-  failed?: boolean;
-  /** Labelled counts of the replies and follow-ups under this item, such as
-   * ["2 replies", "1 follow-up"]. Each opens the item. */
-  counts?: string[];
-  followed?: boolean;
-  bookmarked?: boolean;
-  onToggleFollow?: () => void;
-  onToggleBookmark?: () => void;
+  /** Starred follow-ups and branches listed under the question. */
+  childRows?: ResearchFeedChild[];
+  selectedChildNodeId?: string | null;
+  menuOpen?: boolean;
+  /** The … button's name: "Bookmark or move" by default. */
+  menuLabel?: string;
   onOpen: () => void;
-  onContextMenu: (clientX: number, clientY: number) => void;
+  onOpenChild?: (child: ResearchFeedChild) => void;
+  /** Opens the card's … menu below `anchor`. */
+  onMenu?: (anchor: HTMLElement) => void;
+  onContextMenu?: (clientX: number, clientY: number) => void;
+  onDragStart?: ResearchCardDragStart;
 }
 
-/** One item in the Home feed column: the thread title, the question clamped
- * to four lines, the answer's summary, and a footer with the time and counts,
- * then Follow and Bookmark at its trailing edge. The whole item opens the
- * thread. Follow and Bookmark wait until the answer settles. */
+/** One question in the feed: the thread title (when it differs) and the
+ * question, with no metadata row. Running and failed threads show a status
+ * dot in the top-right corner, which the … menu replaces on hover. The whole
+ * card opens the thread; links and embeds inside it stay their own targets.
+ * Starred children follow as indented rows of their own. */
 export default function ResearchFeedPost({
-  kind = "question",
-  time,
+  cardId,
+  dragKind = "tree",
+  place,
   title,
   renderBody,
-  recap,
-  recapPending = false,
-  running = false,
+  label,
+  tooltip,
+  status = null,
+  statusLabel: statusLabelOverride,
   selected = false,
   unread = false,
-  failed = false,
-  counts = [],
-  followed = false,
-  bookmarked = false,
-  onToggleFollow,
-  onToggleBookmark,
+  childRows = [],
+  selectedChildNodeId = null,
+  menuOpen = false,
+  menuLabel = "Bookmark or move",
   onOpen,
+  onOpenChild,
+  onMenu,
   onContextMenu,
+  onDragStart,
 }: ResearchFeedPostProps) {
-  const summary = recap?.trim() ?? "";
-
-  const showActions = !running && onToggleFollow && onToggleBookmark;
-  const showTime = !running && Boolean(time);
-  const showCounts = counts.length > 0;
-  // Only a terminal conversation is marked: a question already reads as one
-  // by its title and summary, and a speech-bubble glyph beside the counts
-  // would read as a reply count.
-  const kindGlyph = kind === "conversation" ? <Terminal size={12} aria-hidden="true" /> : null;
+  const statusLabel = status ? (statusLabelOverride ?? STATUS_LABELS[status]) : null;
   return (
-    <div
-      className={`research-feed-post${selected ? " is-selected" : ""}`}
-      onClick={(event) => {
-        // Clicking anywhere in the post opens it; keyboard and assistive tech
-        // reach it through the title (or, untitled, the time), so the links,
-        // embeds, Follow and Bookmark inside stay separate controls.
-        if (!isInteractiveTarget(event.target)) onOpen();
-      }}
-      onContextMenu={(event) => {
-        if (event.defaultPrevented) return;
-        event.preventDefault();
-        event.stopPropagation();
-        onContextMenu(event.clientX, event.clientY);
-      }}
-    >
-      {failed ? (
-        <span
-          className="research-feed-post-marker research-feed-post-failed"
-          role="img"
-          aria-label="Failed since last viewed"
-          title="Failed since last viewed — open to acknowledge"
-        >
-          !
-        </span>
-      ) : unread ? (
-        <span
-          className="research-feed-post-marker research-feed-post-unread"
-          role="img"
-          aria-label="Updated"
+    <>
+      <div
+        className={`research-feed-card${selected ? " is-selected" : ""}${
+          menuOpen ? " has-open-menu" : ""
+        }${childRows.length > 0 ? " has-children" : ""}`}
+        data-research-card={cardId}
+        data-research-card-kind={dragKind}
+        onPointerDown={onDragStart ? (event) => onDragStart(event, { kind: dragKind, id: cardId, place }) : undefined}
+        onContextMenu={
+          onContextMenu
+            ? (event) => {
+                if (event.defaultPrevented) return;
+                event.preventDefault();
+                event.stopPropagation();
+                onContextMenu(event.clientX, event.clientY);
+              }
+            : undefined
+        }
+      >
+        <button
+          type="button"
+          className="research-feed-card-hit"
+          aria-label={statusLabel ? `${label}, ${statusLabel}` : label}
+          aria-current={selected ? "true" : undefined}
+          title={tooltip}
+          onClick={onOpen}
         />
-      ) : null}
-      <div className="research-feed-post-main">
-        <div className="research-feed-post-open">
-          {title ? (
-            <button
-              type="button"
-              className="control-button research-feed-post-title"
-              aria-current={selected ? "true" : undefined}
-              onClick={onOpen}
-            >
-              {title}
-            </button>
-          ) : null}
+        {onDragStart ? (
+          <span className="research-feed-card-grip" aria-hidden="true">
+            <GripVertical size={14} />
+          </span>
+        ) : null}
+        {unread ? (
+          <span className="research-feed-card-unread" role="img" aria-label="Updated" />
+        ) : null}
+        <div className="research-feed-card-content">
+          {title ? <span className="research-feed-card-title">{title}</span> : null}
           {renderBody((content) => (
-            <div
-              className={`research-feed-post-body${title ? "" : " is-lead"} is-clamped`}
-            >
-              {content}
-            </div>
+            <div className="research-feed-card-question">{content}</div>
           ))}
-          {running ? (
-            <span className="research-feed-post-status" role="status">
-              <LoaderCircle size={12} aria-hidden="true" />
-              Generating answer
-            </span>
-          ) : null}
-          {summary ? (
-            <p className="research-summary-text research-feed-post-summary is-clamped">
-              Summary: {summary}
-            </p>
-          ) : recapPending && !running ? (
-            <ResearchRecapPendingLine className="research-feed-post-summary" />
-          ) : null}
         </div>
-        {showCounts || showActions || showTime ? (
-          <div className="research-feed-post-footer">
-            <span className="research-feed-post-meta">
-              {kindGlyph && (showTime || showCounts) ? (
-                <span className="research-feed-post-kind">{kindGlyph}</span>
-              ) : null}
-              {showTime ? (
-                /* An untitled post (a note or saved link) opens from its time;
-                   its body's only other target may be the link itself. */
-                <button
-                  type="button"
-                  className="control-button research-feed-post-time"
-                  aria-label={title ? undefined : "Open post"}
-                  tabIndex={title ? -1 : undefined}
-                  onClick={onOpen}
-                >
-                  {time}
-                </button>
-              ) : null}
-              {showCounts
-                ? counts.map((label, index) => (
-                    // Each count keeps its separator, so a wrapped line never
-                    // ends on a dangling "·".
-                    <span key={label} className="research-feed-post-meta-item">
-                      {showTime || index > 0 ? (
-                        <span className="research-feed-post-meta-separator" aria-hidden="true">
-                          ·
-                        </span>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="control-button research-feed-post-count"
-                        tabIndex={-1}
-                        aria-label={`Open ${label}`}
-                        onClick={onOpen}
-                      >
-                        {label}
-                      </button>
-                    </span>
-                  ))
-                : null}
-            </span>
-            {showActions ? (
-              <ResearchThreadActions
-                followed={followed}
-                bookmarked={bookmarked}
-                onToggleFollow={onToggleFollow}
-                onToggleBookmark={onToggleBookmark}
-              />
-            ) : null}
-          </div>
+        {status ? (
+          <span
+            className={`research-feed-status is-${status}`}
+            title={statusLabel ?? undefined}
+            aria-hidden="true"
+          />
+        ) : null}
+        {onMenu ? (
+          <button
+            type="button"
+            className="research-feed-icon-button research-feed-card-menu"
+            title={menuLabel}
+            aria-label={menuLabel}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            data-research-no-drag
+            onClick={(event) => onMenu(event.currentTarget)}
+          >
+            <Ellipsis size={16} aria-hidden="true" />
+          </button>
         ) : null}
       </div>
-    </div>
+      {childRows.map((child, index) => (
+        <div
+          key={child.nodeId}
+          className={`research-feed-child${index === 0 ? " is-group-start" : ""}${
+            index === childRows.length - 1 ? " is-group-end" : ""
+          }${child.nodeId === selectedChildNodeId ? " is-selected" : ""}`}
+          style={{ "--research-child-level": child.level } as CSSProperties}
+        >
+          <button
+            type="button"
+            className="research-feed-child-open"
+            aria-current={child.nodeId === selectedChildNodeId ? "true" : undefined}
+            onClick={() => onOpenChild?.(child)}
+          >
+            {child.branch ? (
+              <>
+                <GitBranch className="research-feed-child-icon" size={13} aria-hidden="true" />
+                <span className="research-visually-hidden">Branch: </span>
+              </>
+            ) : null}
+            <span className="research-feed-child-text">{child.label}</span>
+          </button>
+          {child.running ? (
+            <span className="research-feed-status is-running" title="Running" aria-hidden="true" />
+          ) : null}
+        </div>
+      ))}
+    </>
   );
 }

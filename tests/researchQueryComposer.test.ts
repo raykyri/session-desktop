@@ -57,19 +57,26 @@ function renderComposer() {
   );
 }
 
-test("the composer offers both recipients and opens on Post", () => {
+test("the composer starts as one Ask a question line without its controls", () => {
   const html = renderComposer();
-
-  assert.match(html, /role="group" aria-label="Recipient"/);
-  assert.match(html, /<button[^>]*aria-pressed="true"[^>]*>Post<\/button>/);
-  assert.match(html, /<button[^>]*aria-pressed="false"[^>]*>Ask<\/button>/);
-  assert.ok(html.indexOf(">Post<") < html.indexOf(">Ask<"));
-  // The recipient row sits above the prompt.
-  assert.ok(html.indexOf("new-research-header") < html.indexOf("<textarea"));
-  assert.doesNotMatch(html, /new-research-model-controls/);
-  // Network mode posts a note rather than starting research.
-  assert.match(html, /placeholder="Ask your network, or paste a link to save"/);
-  assert.match(html, /aria-label="Post to network"/);
+  assert.match(html, /<textarea[^>]*rows="1"[^>]*placeholder="Ask a question"[^>]*aria-label="New question"/);
+  // The recipient, model, Save draft, and Ask controls show only once the
+  // field has focus or text, so the collapsed composer is the field alone.
+  assert.doesNotMatch(html, /aria-label="Recipient"|new-research-model-controls|Save draft|research-feed-enter/);
+  assert.doesNotMatch(html, /is-expanded/);
+  const inFolder = renderToStaticMarkup(
+    createElement(ResearchQueryComposer, {
+      adapters: [adapter("claude")],
+      requireCmdEnterToSend: false,
+      workspaceId: "workspace",
+      placeholder: "Ask a question in Reading list",
+      onOpenAgentSettings: () => {},
+      onCreate: async () => {},
+      onPost: async () => {},
+      onSaveDraft: async () => {},
+    }),
+  );
+  assert.match(inFolder, /placeholder="Ask a question in Reading list"/);
 });
 
 test("a single URL is saved as a link; anything else is asked", () => {

@@ -84,6 +84,19 @@ type NodeRemovedEvent = {
   timestamp: number;
 };
 
+/** A workspace's research drafts were created, edited, removed, or reordered. */
+type DraftsChangedEvent = {
+  type: "research.drafts.changed";
+  workspaceId: string;
+  timestamp: number;
+};
+
+/** The stored folder state changed (from any window, or a workspace removal). */
+type FoldersChangedEvent = {
+  type: "research.folders.changed";
+  timestamp: number;
+};
+
 /** Every research event currently emitted by the backend. Keeping this a
  * closed union makes a new backend event take the explicit recovery path
  * until its frontend state effects are intentionally implemented. */
@@ -97,7 +110,9 @@ export type ParsedResearchEvent =
   | HighlightsRemovedEvent
   | RecapPendingEvent
   | TreeRemovedEvent
-  | NodeRemovedEvent;
+  | NodeRemovedEvent
+  | DraftsChangedEvent
+  | FoldersChangedEvent;
 
 type ResearchEventParseResult =
   | { kind: "event"; event: ParsedResearchEvent }
@@ -346,6 +361,19 @@ export function parseResearchEvent(event: SessionEvent): ResearchEventParseResul
             },
           }
         : malformed();
+    case "research.drafts.changed":
+      return typeof payload.workspaceId === "string"
+        ? {
+            kind: "event",
+            event: {
+              type: event.type,
+              workspaceId: payload.workspaceId,
+              timestamp: event.timestamp,
+            },
+          }
+        : malformed();
+    case "research.folders.changed":
+      return { kind: "event", event: { type: event.type, timestamp: event.timestamp } };
     default:
       return { kind: "unsupported", type: event.type };
   }

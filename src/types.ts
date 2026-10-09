@@ -488,6 +488,9 @@ export interface ResearchNode {
   createdAt: number;
   startedAt?: number | null;
   completedAt?: number | null;
+  /** Set when the node is starred: a starred follow-up or branch is listed
+   * under its question in the feed. Never set on a root node. */
+  promotedAt?: number | null;
   highlights: ResearchHighlight[];
 }
 
@@ -543,6 +546,39 @@ export interface RecentResearchQuery {
   createdAt: number;
   /** Current answer recap, when one has been generated. */
   recap?: string | null;
+  /** When the node was starred to be listed under its question in the feed. */
+  promotedAt?: number | null;
+  /** Non-inline edges between the tree root and this node: 0 for the root and
+   * its inline follow-ups, 1 for a branch of the root, 2 for a branch of that. */
+  branchDepth?: number;
+  /** Root entries only: every starred node in the tree, in tree order. */
+  promoted?: RecentResearchQuery[];
+}
+
+/** A user folder that groups research trees within one workspace. */
+export interface ResearchFolder {
+  id: string;
+  name: string;
+  workspaceId: string;
+}
+
+/** Folder records plus the tree → folder membership. Membership values are a
+ * folder id or RESEARCH_DRAFTS_FOLDER_ID; `collapsed` holds folder ids and
+ * the system tray ids whose Home trays are collapsed. */
+export interface ResearchFolderState {
+  folders: ResearchFolder[];
+  membership: Record<string, string>;
+  starred: string[];
+  collapsed: string[];
+}
+
+/** An unsent question saved from the composer, scoped to one workspace. */
+export interface ResearchDraft {
+  id: string;
+  workspaceId: string;
+  prompt: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface RecentResearchQueryCursor {

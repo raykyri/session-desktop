@@ -1,10 +1,10 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ResearchTreeSummary } from "../../types";
-import { IS_MAC } from "../../lib/appHelpers";
-import { formatRelativeTime } from "../../lib/transcriptSessions";
-import { ResearchDocumentFrame } from "./ResearchDocumentChrome";
+import { RESEARCH_ARCHIVE_FOLDER_ID } from "../../lib/researchFolders";
+import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchFeedPost from "./ResearchFeedPost";
+import { researchPlaceEmptyText } from "./ResearchFeedTray";
 import {
   RESEARCH_TREE_MENU_WIDTH,
   ResearchTreeDeleteDialog,
@@ -15,24 +15,30 @@ const MENU_HEIGHT_ESTIMATE = 96;
 const MENU_VIEWPORT_MARGIN = 8;
 
 export interface ResearchArchivedFeedProps {
-  /** Archived trees in any order; the view sorts them newest-archived first. */
+  /** Archived trees in any order; the list sorts them newest-archived first. */
   trees: ResearchTreeSummary[];
   /** The thread open in the content column beside this list. */
   selectedTreeId?: string | null;
+  /** The tree whose … menu is open. */
+  menuTreeId?: string | null;
   onOpen: (treeId: string) => void;
   onRestore: (treeId: string) => Promise<void>;
   onRemove: (treeId: string) => Promise<void>;
-  canGoBack?: boolean;
-  canGoForward?: boolean;
-  onBack?: () => void;
-  onForward?: () => void;
+  onMenu?: (treeId: string, anchor: HTMLElement) => void;
+  onDragStart?: ResearchCardDragStart;
 }
 
 type ArchivedMenu = { treeId: string; left: number; top: number };
 
-/** Archived threads newest-archived first, for the journal's Archived page.
- * Each card opens its thread in the content column; the context menu
- * unarchives or deletes it. */
+function archivedTooltip(archivedAt: number | null | undefined): string | undefined {
+  if (archivedAt == null) return undefined;
+  return `Archived ${new Date(archivedAt).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })}`;
+}
+
+/** Archived threads newest-archived first, for Archive. */
 export function archivedFeedTrees(trees: ResearchTreeSummary[]): ResearchTreeSummary[] {
   return trees
     .filter((tree) => tree.archivedAt != null && tree.kind !== "document")
@@ -42,16 +48,18 @@ export function archivedFeedTrees(trees: ResearchTreeSummary[]): ResearchTreeSum
     );
 }
 
+/** The cards of Archive, in its Home tray and in its own view. Each card
+ * opens its thread; the … menu moves it out, and the context menu
+ * unarchives or deletes it. */
 function ResearchArchivedFeed({
   trees,
   selectedTreeId = null,
+  menuTreeId = null,
   onOpen,
   onRestore,
   onRemove,
-  canGoBack = false,
-  canGoForward = false,
-  onBack,
-  onForward,
+  onMenu,
+  onDragStart,
 }: ResearchArchivedFeedProps) {
   const sortedTrees = useMemo(() => archivedFeedTrees(trees), [trees]);
   const [menu, setMenu] = useState<ArchivedMenu | null>(null);
@@ -70,8 +78,11 @@ function ResearchArchivedFeed({
         setMenu(null);
       }
     };
+    // Captured and stopped, so Esc closes only the menu (not the drawer).
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
         setMenu(null);
         return;
       }
@@ -92,12 +103,12 @@ function ResearchArchivedFeed({
     };
     const closeOnReflow = () => setMenu(null);
     document.addEventListener("mousedown", closeMenu);
-    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("resize", closeOnReflow);
     window.addEventListener("scroll", closeOnReflow, true);
     return () => {
       document.removeEventListener("mousedown", closeMenu);
-      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("resize", closeOnReflow);
       window.removeEventListener("scroll", closeOnReflow, true);
     };
@@ -134,61 +145,28 @@ function ResearchArchivedFeed({
   }
 
   return (
-    <ResearchDocumentFrame
-      actionsAtEnd
-      title="Archived"
-      canGoBack={canGoBack}
-      canGoForward={canGoForward}
-      backTitle={`Back (${IS_MAC ? "⌘[" : "Ctrl+["})`}
-      forwardTitle={`Forward (${IS_MAC ? "⌘]" : "Ctrl+]"})`}
-      onBack={onBack}
-      onForward={onForward}
-    >
-      <div className="research-document-scroll journal-scroll">
-        <div className="journal-column research-reading-surface">
-          <div className="journal-feed" role="feed" aria-label="Archived research">
-            {sortedTrees.map((tree, index) => (
-              <div
-                key={tree.id}
-                className="recent-activity-unit journal-archived-row"
-                role="article"
-                aria-posinset={index + 1}
-                aria-setsize={sortedTrees.length}
-              >
-                <ResearchFeedPost
-                  kind={
-                    tree.kind === "note" || tree.kind === "conversation" ? tree.kind : "question"
-                  }
-                  title={tree.title}
-                  renderBody={() => null}
-                  time={
-                    tree.archivedAt != null ? (
-                      <time
-                        dateTime={new Date(tree.archivedAt).toISOString()}
-                        title={`Archived ${new Date(tree.archivedAt).toLocaleString()}`}
-                      >
-                        {formatRelativeTime(tree.archivedAt)}
-                      </time>
-                    ) : null
-                  }
-                  selected={tree.id === selectedTreeId}
-                  onOpen={() => onOpen(tree.id)}
-                  onContextMenu={(clientX, clientY) =>
-                    openContextMenu(tree.id, clientX, clientY)
-                  }
-                />
-              </div>
-            ))}
-            {sortedTrees.length === 0 ? (
-              <div className="journal-empty-container">
-                <p className="journal-empty">
-                  Archived research appears here, most recently archived first.
-                </p>
-              </div>
-            ) : null}
-          </div>
+    <>
+      {sortedTrees.map((tree) => (
+        <ResearchFeedPost
+          key={tree.id}
+          cardId={tree.id}
+          place={RESEARCH_ARCHIVE_FOLDER_ID}
+          renderBody={(clamp) => clamp(tree.title)}
+          label={tree.title}
+          tooltip={archivedTooltip(tree.archivedAt)}
+          selected={tree.id === selectedTreeId}
+          menuOpen={tree.id === menuTreeId}
+          onOpen={() => onOpen(tree.id)}
+          onMenu={onMenu ? (anchor) => onMenu(tree.id, anchor) : undefined}
+          onContextMenu={(clientX, clientY) => openContextMenu(tree.id, clientX, clientY)}
+          onDragStart={onDragStart}
+        />
+      ))}
+      {sortedTrees.length === 0 ? (
+        <div className="research-feed-empty">
+          {researchPlaceEmptyText(RESEARCH_ARCHIVE_FOLDER_ID)}
         </div>
-      </div>
+      ) : null}
       {menu && menuTree
         ? createPortal(
             <div
@@ -221,7 +199,7 @@ function ResearchArchivedFeed({
           onRemove={onRemove}
         />
       ) : null}
-    </ResearchDocumentFrame>
+    </>
   );
 }
 

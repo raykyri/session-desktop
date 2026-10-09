@@ -21,11 +21,10 @@ import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
+  ReactNode,
   SetStateAction,
 } from "react";
 import {
-  Archive,
-  Bookmark,
   Check,
   ChevronDown,
   Columns2,
@@ -35,15 +34,13 @@ import {
   FolderGit2,
   Globe,
   GitBranch,
-  Highlighter,
-  House,
   LoaderCircle,
   MessageSquareText,
   Minus,
   Moon,
   PanelBottomClose,
   PanelBottomOpen,
-  PanelLeftClose,
+  PanelLeft,
   Plus,
   RefreshCw,
   Rows2,
@@ -93,11 +90,8 @@ import {
 import { formatTurnsTranscript } from "./lib/transcriptFormat";
 import type { TranscriptScrollPosition } from "./lib/transcriptScroll";
 import type { LinkActions } from "./components/TranscriptMarkdown";
-import ResearchArchivedFeed from "./components/research/ResearchArchivedFeed";
 import ResearchFolderSwitcher from "./components/research/ResearchFolderSwitcher";
 import GithubAccountControl from "./components/GithubAccountControl";
-import memMonochromeLogoUrl from "./assets/mem-monochrome.svg";
-import memMonochromeLightLogoUrl from "./assets/mem-monochrome-light.svg";
 import {
   resolveResearchScope,
   treeForResearchScope,
@@ -105,12 +99,16 @@ import {
   workspaceIsInResearchScope,
 } from "./lib/researchScope";
 import ResearchDocument from "./components/research/ResearchDocument";
+import ResearchMoveMenu from "./components/research/ResearchMoveMenu";
+import ResearchDraftView from "./components/research/ResearchDraftView";
 import { ResearchDocumentFrame } from "./components/research/ResearchDocumentChrome";
 import ResearchActivityFeed from "./components/research/ResearchActivityFeed";
 import ResearchColumns from "./components/research/ResearchColumns";
 import ResearchHighlightsFeed from "./components/research/ResearchHighlightsFeed";
 import { useActivityFeedState } from "./hooks/useActivityFeedState";
-import ResearchQueryComposer from "./components/research/ResearchQueryComposer";
+import ResearchQueryComposer, {
+  type ResearchLaunchChoice,
+} from "./components/research/ResearchQueryComposer";
 import type { NoteActions } from "./components/research/ResearchNote";
 import {
   clearResearchTreeAttention,
@@ -201,6 +199,7 @@ import {
 import {
   requestResearchFollowupsFocus,
   requestResearchFolderMenuToggle,
+  requestResearchNodeOpen,
 } from "./lib/researchShortcuts";
 import { useSessionEvents } from "./hooks/useSessionEvents";
 import type {
@@ -268,6 +267,7 @@ import {
   mergeRecentActivityItems,
   reconcileRecentActivityHead,
   recentActivityCursor as recentActivityItemCursor,
+  patchRecentActivityPromoted,
   upsertRecentActivityResearchNode,
 } from "./lib/activity";
 import { isActiveResearchStatus } from "./lib/researchThreads";
@@ -278,7 +278,30 @@ import {
   panesForScope,
   researchAttention,
 } from "./lib/workspaceScope";
-import type { ResearchJournalView } from "./lib/sidebarMode";
+import {
+  RESEARCH_SIDEBAR_AUTO_STRIP_WIDTH,
+  type ResearchFeedView,
+  type ResearchJournalView,
+} from "./lib/sidebarMode";
+import {
+  RESEARCH_DRAFTS_FOLDER_ID,
+  researchTreePlace,
+  treesWithWorkspaceOrder,
+} from "./lib/researchFolders";
+import { useResearchToast } from "./hooks/useResearchToast";
+import { useResearchFiling } from "./hooks/useResearchFiling";
+import { useResearchDrafts } from "./hooks/useResearchDrafts";
+import { useResearchCardDrag } from "./hooks/useResearchCardDrag";
+import {
+  ResearchFolderNameDialog,
+  type ResearchFolderNameRequest,
+} from "./components/research/ResearchFolderDialogs";
+import { ResearchFeedToast } from "./components/research/ResearchFeedChrome";
+import {
+  ResearchSidebarNav,
+  ResearchSidebarStrip,
+  ResearchStripButton,
+} from "./components/research/ResearchSidebarNav";
 import { stripTaggedUserInstructionBlocks } from "./lib/taggedInstructions";
 import {
   clearSessionDraft,
@@ -318,7 +341,6 @@ import {
   removeResearchWorkspace,
   revealResearchWorkspace,
   ensureDefaultResearchWorkspace,
-  archiveResearchTree,
   cancelResearchNode,
   createResearchTree,
   importResearchReport,
@@ -327,6 +349,7 @@ import {
   markResearchTreeViewed,
   renameResearchNode,
   listResearchHighlights,
+  removeResearchHighlights,
   renameResearchTree,
   setResearchTreeBookmarked,
   setResearchTreeFollowed,
@@ -409,6 +432,7 @@ import type {
   RecentResearchQuery,
   RecentResearchQueryCursor,
   ResearchHighlightAnchor,
+  ResearchDraft,
   ResearchHighlightFeedItem,
   ResearchNode,
   ResearchTreeDetail,
@@ -488,7 +512,7 @@ const LEFT_SIDEBAR_MIN_WIDTH = 208;
 const LEFT_SIDEBAR_DEFAULT_WIDTH = LEFT_SIDEBAR_MIN_WIDTH;
 const LEFT_SIDEBAR_MAX_WIDTH = 420;
 // Below this width, compact the research sidebar around its content.
-const LEFT_SIDEBAR_COMPACT_WIDTH = 270;
+const RESEARCH_SIDEBAR_STRIP_WIDTH = 52;
 type ResearchViewedAckOptions = {
   /** A real exposure edge (selection, focus, composer close) should check the
    * backend even when the current sidebar snapshot carries no attention bit. */
@@ -1205,7 +1229,6 @@ interface HomeTurnHistoryState {
 
 function MainApp() {
   const appRef = useRef<HTMLElement | null>(null);
-  const paneListRef = useRef<HTMLElement | null>(null);
   const mainStageRef = useRef<HTMLDivElement | null>(null);
 
   // Opening/closing either side pane resizes native terminal surfaces. Keep the
@@ -1599,10 +1622,19 @@ function MainApp() {
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   const leftSidebarCollapsedRef = useRef(leftSidebarCollapsed);
   leftSidebarCollapsedRef.current = leftSidebarCollapsed;
-  const effectiveSidebarWidth = leftSidebarCollapsed ? 0 : sidebarWidth;
-  const showLeftSidebarInResearch = useCallback(() => {
-    setLeftSidebarCollapsed(false);
+  // Below 900px of window width the sidebar shows as the icon strip without
+  // changing the saved preference; collapsing also shows the strip.
+  const [windowNarrowForSidebar, setWindowNarrowForSidebar] = useState(
+    () => window.innerWidth < RESEARCH_SIDEBAR_AUTO_STRIP_WIDTH,
+  );
+  useEffect(() => {
+    const onResize = () =>
+      setWindowNarrowForSidebar(window.innerWidth < RESEARCH_SIDEBAR_AUTO_STRIP_WIDTH);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
+  const researchSidebarStrip = leftSidebarCollapsed || windowNarrowForSidebar;
+  const effectiveSidebarWidth = researchSidebarStrip ? RESEARCH_SIDEBAR_STRIP_WIDTH : sidebarWidth;
   // Application-level settings, loaded from localStorage once on mount and
   // persisted on every change. Shared by every pane. Font size is also adjustable
   // in-session with Cmd-=/Cmd--.
@@ -1864,8 +1896,6 @@ function MainApp() {
   }, [exportResearchPane, panes]);
   const [paneSplits, setPaneSplitsState] = useState<PaneSplitInfo[]>([]);
   paneSplitsRef.current = paneSplits;
-  const [draggingPaneId] = useState<string | null>(null);
-  const [draggingGroupId] = useState<string | null>(null);
   // Per-pane browser overlay state, so each tab keeps its own page and open/closed.
   const [browserOverlayByPane, setBrowserOverlayByPane] = useState<
     Record<string, BrowserOverlayState>
@@ -4134,8 +4164,6 @@ function MainApp() {
     );
   const visibleRightBarSurfaces = rightBarCollapsed ? [] : visibleTurnPaneSurfaces;
   const hasVisibleRightBar = visibleRightBarSurfaces.length > 0;
-  const researchSidebarRestoreInHeader =
-    leftSidebarCollapsed && researchStageView === "document";
   const hasGlobalTurnSidebar = hasVisibleRightBar && !splitRightPaneMode;
   const splitTranscriptExpanded = Boolean(
     activePaneSplit &&
@@ -5418,6 +5446,9 @@ function MainApp() {
     },
     [recordResearchWorkspaceVisit, selectResearchTree],
   );
+  // Opens a node of a tree: a follow-up of the conversation scrolls into view,
+  // a branch opens in the drawer. The store covers a document that mounts for
+  // this tree; the request reaches one that is already mounted.
   const openResearchNode = useCallback(
     (treeId: string, nodeId: string) => {
       const navigationStore = researchNavigationStore();
@@ -5426,6 +5457,7 @@ function MainApp() {
       navigationStore[treeId] = navigation;
       saveResearchNavigation();
       navigateToResearchDocument(treeId);
+      requestResearchNodeOpen(treeId, nodeId);
     },
     [navigateToResearchDocument],
   );
@@ -5523,50 +5555,161 @@ function MainApp() {
     localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
     setJournalOpen(true);
   }, [showResearchSurface, setJournalOpen]);
-  // Which list the journal surface shows: Home (everything), Bookmarks,
-  // Archived, or Highlights.
-  const [journalView, setJournalView] = useState<ResearchJournalView>("home");
-  const journalViewRef = useRef(journalView);
-  journalViewRef.current = journalView;
-  // Home, Bookmarks, and Archived show as a feed column beside the content
-  // column, both on their own and while a thread is open beside them. A thread
-  // opened from Highlights lists Home in that column.
-  const researchFeedColumnVisible =
-    researchStageView === "document" ||
-    (researchStageView === "journal" && journalView !== "highlights");
-  const researchFeedColumnView: "home" | "bookmarks" =
-    journalView === "bookmarks" ? "bookmarks" : "home";
-  // The sidebar row for the list in front: the journal page itself or, while
-  // a thread is open, the list in the feed column beside it (Highlights has
-  // no feed column, so its threads open beside Home).
-  const sidebarJournalView: ResearchJournalView | null =
-    researchStageView === "journal"
-      ? journalView
-      : researchStageView === "document"
-        ? journalView === "archived"
-          ? "archived"
-          : researchFeedColumnView
-        : null;
-  const openJournal = useCallback(() => {
-    setJournalView("home");
-    recordResearchJournalVisit();
-    showJournal();
-  }, [recordResearchJournalVisit, showJournal]);
-  const openBookmarks = useCallback(() => {
-    setJournalView("bookmarks");
-    recordResearchJournalVisit();
-    showJournal();
-  }, [recordResearchJournalVisit, showJournal]);
-  const openArchived = useCallback(() => {
-    setJournalView("archived");
-    recordResearchJournalVisit();
-    showJournal();
-  }, [recordResearchJournalVisit, showJournal]);
-  const openHighlights = useCallback(() => {
-    setJournalView("highlights");
-    recordResearchJournalVisit();
-    showJournal();
-  }, [recordResearchJournalVisit, showJournal]);
+  // Which list the feed column shows: Home, Bookmarks, Highlights, Drafts,
+  // Archive, or a user folder. Switching lists keeps the open thread.
+  const [journalView, setJournalView] = useState<ResearchJournalView>({ kind: "home" });
+  const researchFeedColumnVisible = researchStageView !== null;
+  const openJournalView = useCallback(
+    (view: ResearchJournalView) => {
+      setJournalView(view);
+      showResearchSurface();
+    },
+    [showResearchSurface],
+  );
+  // Folders, drafts, and moving questions between them. Toasts confirm moves
+  // with Undo; drags run on pointer events shared by feed, sidebar, and strip.
+  const {
+    toast: researchToast,
+    showToast: showResearchToast,
+    dismissToast: dismissResearchToast,
+    undoToast: undoResearchToast,
+    pauseToast: pauseResearchToast,
+    resumeToast: resumeResearchToast,
+  } = useResearchToast();
+  const applyResearchTreeOrder = useCallback((workspaceId: string, treeIds: string[]) => {
+    setResearchTrees((current) => treesWithWorkspaceOrder(current, workspaceId, treeIds));
+  }, []);
+  const refreshResearchTreesAfterFiling = useCallback(() => {
+    void refreshResearchNavigation().catch(() => undefined);
+  }, [refreshResearchNavigation]);
+  const {
+    folderState: researchFolderState,
+    folders: researchFolders,
+    moveTree: moveResearchTree,
+    createFolder: createResearchFolder,
+    renameFolder: renameResearchFolder,
+    deleteFolder: deleteResearchFolder,
+    setTrayCollapsed: setResearchTrayCollapsed,
+    fileNewTree: fileNewResearchTree,
+    refreshFolders: refreshResearchFolders,
+  } = useResearchFiling({
+    workspaceId: researchScope,
+    activeTreesRef: researchTreesRef,
+    archivedTreesRef: archivedResearchTreesRef,
+    applyTreeOrder: applyResearchTreeOrder,
+    refreshTrees: refreshResearchTreesAfterFiling,
+    onError: setError,
+    showToast: showResearchToast,
+  });
+  const {
+    drafts: researchDrafts,
+    refreshDrafts: refreshResearchDrafts,
+    saveDraft: saveResearchDraftText,
+    removeDraft: removeResearchDraft,
+    moveDraft: moveResearchDraft,
+  } = useResearchDrafts(researchScope, setError);
+  const researchFolderStateRef = useRef(researchFolderState);
+  researchFolderStateRef.current = researchFolderState;
+  const toggleResearchTray = useCallback(
+    (place: string) =>
+      setResearchTrayCollapsed(place, !researchFolderStateRef.current.collapsed.includes(place)),
+    [setResearchTrayCollapsed],
+  );
+  const startResearchCardDrag = useResearchCardDrag({
+    onMoveTree: (treeId, place, beforeId) => void moveResearchTree(treeId, place, beforeId),
+    onMoveDraft: (draftId, beforeId) => void moveResearchDraft(draftId, beforeId),
+    onSpringOpen: (place) => setResearchTrayCollapsed(place, false),
+  });
+  const [researchFolderNameRequest, setResearchFolderNameRequest] =
+    useState<ResearchFolderNameRequest | null>(null);
+  const [pendingResearchFolderDelete, setPendingResearchFolderDelete] = useState<string | null>(
+    null,
+  );
+  // `trigger` is the button that opened the dialog (through a menu that is
+  // gone by then); focus returns to it when the dialog closes.
+  const openNewResearchFolderDialog = useCallback(
+    (moveTreeId?: string, trigger?: HTMLElement) => {
+      setResearchFolderNameRequest({
+        kind: "create",
+        moveTreeId: moveTreeId ?? null,
+        returnFocus: trigger ?? null,
+      });
+    },
+    [],
+  );
+  const openRenameResearchFolderDialog = useCallback(
+    (folderId: string, trigger?: HTMLElement) => {
+      const folder = researchFolders.find((candidate) => candidate.id === folderId);
+      if (folder) {
+        setResearchFolderNameRequest({
+          kind: "rename",
+          folderId,
+          name: folder.name,
+          returnFocus: trigger ?? null,
+        });
+      }
+    },
+    [researchFolders],
+  );
+  const submitResearchFolderName = useCallback(
+    async (name: string) => {
+      const request = researchFolderNameRequest;
+      if (!request) return;
+      if (request.kind === "rename") {
+        await renameResearchFolder(request.folderId, name);
+        setResearchFolderNameRequest(null);
+        showResearchToast("Renamed.");
+        return;
+      }
+      const folder = await createResearchFolder(name);
+      setResearchFolderNameRequest(null);
+      if (!folder) return;
+      if (request.moveTreeId) {
+        await moveResearchTree(request.moveTreeId, folder.id);
+      } else {
+        showResearchToast(
+          <span>
+            Created <b>{folder.name}</b>.
+          </span>,
+        );
+      }
+    },
+    [
+      createResearchFolder,
+      moveResearchTree,
+      renameResearchFolder,
+      researchFolderNameRequest,
+      showResearchToast,
+    ],
+  );
+  // Deleting starts from the folder's own view, where the confirmation
+  // states how many questions move to Unfiled.
+  const requestResearchFolderDelete = useCallback(
+    (folderId: string) => {
+      openJournalView({ kind: "folder", folderId });
+      setPendingResearchFolderDelete(folderId);
+    },
+    [openJournalView],
+  );
+  const confirmResearchFolderDelete = useCallback(
+    (folderId: string) => {
+      const moved = [...researchTreesRef.current, ...archivedResearchTreesRef.current].filter(
+        (tree) => researchFolderStateRef.current.membership[tree.id] === folderId,
+      ).length;
+      setPendingResearchFolderDelete(null);
+      openJournalView({ kind: "home" });
+      void deleteResearchFolder(folderId).then((deleted) => {
+        if (!deleted) return;
+        showResearchToast(
+          `Deleted folder.${
+            moved ? ` ${moved} question${moved === 1 ? "" : "s"} moved to Unfiled.` : ""
+          }`,
+        );
+      });
+    },
+    [deleteResearchFolder, openJournalView, showResearchToast],
+  );
+  const cancelResearchFolderDelete = useCallback(() => setPendingResearchFolderDelete(null), []);
   // The Highlights feed is fetched whole (highlights are few and unpaged).
   // Highlight, node, and tree events bump the version so an open feed refetches.
   const [researchHighlightItems, setResearchHighlightItems] = useState<ResearchHighlightFeedItem[]>([]);
@@ -5592,7 +5735,7 @@ function MainApp() {
       }
     }
   }, []);
-  const highlightsFeedVisible = researchStageView === "journal" && journalView === "highlights";
+  const highlightsFeedVisible = researchStageView !== null && journalView.kind === "highlights";
   useEffect(() => {
     if (!highlightsFeedVisible) return;
     void refreshResearchHighlights();
@@ -5854,6 +5997,14 @@ function MainApp() {
       }
 
       const event: ParsedResearchEvent = parsed.event;
+      if (event.type === "research.drafts.changed") {
+        void refreshResearchDrafts(event.workspaceId);
+        return;
+      }
+      if (event.type === "research.folders.changed") {
+        void refreshResearchFolders();
+        return;
+      }
       const eventTreeId =
         "tree" in event
           ? event.tree.id
@@ -5920,11 +6071,13 @@ function MainApp() {
         invalidateVisibleDetailSnapshot(node.treeId);
         setActiveResearchDetail((current) => patchResearchDetailNode(current, node));
         setResearchActivity((current) => upsertResearchActivity(current, node));
-        setRecentActivityItems((current) => {
-          const next = upsertRecentActivityResearchNode(current, node);
-          recentActivityItemsRef.current = next;
-          return next;
-        });
+        const promotedPatch = patchRecentActivityPromoted(
+          upsertRecentActivityResearchNode(recentActivityItemsRef.current, node),
+          node,
+        );
+        recentActivityItemsRef.current = promotedPatch.items;
+        setRecentActivityItems(promotedPatch.items);
+        if (promotedPatch.stale) scheduleResearchRefresh();
         if (previous) {
           const patchSummary = (summary: ResearchTreeSummary) =>
             patchResearchSummaryForNode(summary, previous, node, timestamp);
@@ -6302,6 +6455,7 @@ function MainApp() {
         detail.tree.rootNodeId,
         detail.tree.title,
       );
+      return detail.tree.id;
     },
     [
       adoptCreatedResearchTree,
@@ -6332,6 +6486,7 @@ function MainApp() {
           return next;
         });
       }
+      return detail.tree.id;
     },
     [resolveResearchComposerWorkspace],
   );
@@ -6415,22 +6570,6 @@ function MainApp() {
       }
     },
     [],
-  );
-  const archiveResearchTreeFromMenu = useCallback(
-    async (treeId: string) => {
-      try {
-        await archiveResearchTree(treeId);
-        // With no thread list to step through, closing the archived thread
-        // returns to the feed it was opened from.
-        if (activeResearchTreeIdRef.current === treeId) {
-          focusResearchHome();
-        }
-        pruneResearchWorkspaceVisits((id) => id !== treeId);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    },
-    [focusResearchHome, pruneResearchWorkspaceVisits],
   );
   // Unarchiving leaves the selection alone, so several threads can be
   // restored from the Archived list in a row; an open thread stays open.
@@ -8618,9 +8757,9 @@ function MainApp() {
     );
   }
 
-  // Opening a card in Archived keeps the Archived list in the feed column
-  // beside the thread, like Home and Bookmarks do for their cards.
-  const openArchivedResearchTree = useCallback(
+  // Opening a card whose root isn't in the loaded feed (Archive, or a folder
+  // member paged out of it) keeps the list in the feed column beside the thread.
+  const openFeedResearchTree = useCallback(
     (treeId: string) => {
       if (
         isResearchTreeSelectionChange(
@@ -8633,6 +8772,88 @@ function MainApp() {
       }
     },
     [activeResearchTreeId, navigateToResearchDocument, researchStageView, researchSurfaceActive],
+  );
+  const openFeedView = useCallback(
+    (view: ResearchFeedView) => {
+      setPendingResearchFolderDelete(null);
+      openJournalView(view);
+    },
+    [openJournalView],
+  );
+  const moveResearchTreeFromFeed = useCallback(
+    (treeId: string, place: string) => void moveResearchTree(treeId, place),
+    [moveResearchTree],
+  );
+  // The conversation header's Move to folder button opens the same menu as a
+  // feed card's, anchored to the button.
+  const [headerMoveMenu, setHeaderMoveMenu] = useState<{
+    treeId: string;
+    anchor: HTMLElement;
+  } | null>(null);
+  const toggleHeaderMoveMenu = useCallback((treeId: string, anchor: HTMLElement) => {
+    setHeaderMoveMenu((current) =>
+      current?.treeId === treeId && current.anchor === anchor ? null : { treeId, anchor },
+    );
+  }, []);
+  useEffect(() => setHeaderMoveMenu(null), [activeResearchTreeId]);
+  // The branch open in the conversation's drawer, which the feed marks among
+  // the open card's starred children. Node ids are unique across trees, so a
+  // value left from another tree matches nothing.
+  const [activeResearchDrawerNodeId, setActiveResearchDrawerNodeId] = useState<string | null>(
+    null,
+  );
+  const headerMoveTree = headerMoveMenu
+    ? [...researchTrees, ...archivedResearchTrees].find((tree) => tree.id === headerMoveMenu.treeId)
+    : undefined;
+  const bookmarkResearchTreeFromFeed = useCallback(
+    (treeId: string, bookmarked: boolean) => {
+      void setResearchTreeBookmarked(treeId, bookmarked).then(
+        () => showResearchToast(bookmarked ? "Bookmarked." : "Bookmark removed."),
+        (err: unknown) => setError(err instanceof Error ? err.message : String(err)),
+      );
+    },
+    [showResearchToast],
+  );
+  // A draft opens in the content column beside the feed, which keeps its
+  // view; opening a thread replaces it.
+  const [openResearchDraftId, setOpenResearchDraftId] = useState<string | null>(null);
+  const openResearchDraft = researchSurfaceActive
+    ? (researchDrafts.find((draft) => draft.id === openResearchDraftId) ?? null)
+    : null;
+  useEffect(() => {
+    if (activeResearchTreeId) setOpenResearchDraftId(null);
+  }, [activeResearchTreeId]);
+  const openResearchDraftInColumn = useCallback(
+    (draft: ResearchDraft) => {
+      if (activeResearchTreeIdRef.current) focusResearchHome();
+      else showResearchSurface();
+      setOpenResearchDraftId(draft.id);
+    },
+    [focusResearchHome, showResearchSurface],
+  );
+  const closeResearchDraft = useCallback(() => setOpenResearchDraftId(null), []);
+  const saveOpenResearchDraft = useCallback(
+    async (draftId: string, prompt: string) => {
+      await saveResearchDraftText(draftId, prompt);
+    },
+    [saveResearchDraftText],
+  );
+  const deleteResearchDraftFromFeed = useCallback(
+    (draft: ResearchDraft) => {
+      setOpenResearchDraftId((current) => (current === draft.id ? null : current));
+      void removeResearchDraft(draft.id).then((deleted) => {
+        if (deleted) showResearchToast("Draft deleted.");
+      });
+    },
+    [removeResearchDraft, showResearchToast],
+  );
+  const removeResearchHighlightFromFeed = useCallback(
+    (item: ResearchHighlightFeedItem) => {
+      void removeResearchHighlights(item.nodeId, [item.highlightId])
+        .then(() => refreshResearchHighlights())
+        .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+    },
+    [refreshResearchHighlights],
   );
 
   const renamingGroup = renameGroupId ? groupById.get(renameGroupId) : undefined;
@@ -8653,6 +8874,58 @@ function MainApp() {
     () => [...researchTrees, ...archivedResearchTrees],
     [researchTrees, archivedResearchTrees],
   );
+  // A question asked from a user folder's view is filed in that folder; from
+  // any other list it goes to Unfiled.
+  const composerFolderId = journalView.kind === "folder" ? journalView.folderId : null;
+  const composerFolderName = composerFolderId
+    ? researchFolders.find((folder) => folder.id === composerFolderId)?.name
+    : undefined;
+  const submitFeedResearch = useCallback(
+    async (input: Parameters<typeof submitNewResearch>[0]) => {
+      const treeId = await submitNewResearch(input);
+      if (composerFolderId) fileNewResearchTree(treeId, composerFolderId);
+    },
+    [composerFolderId, fileNewResearchTree, submitNewResearch],
+  );
+  const submitFeedNote = useCallback(
+    async (input: Parameters<typeof submitNewNote>[0]) => {
+      const treeId = await submitNewNote(input);
+      if (composerFolderId) fileNewResearchTree(treeId, composerFolderId);
+    },
+    [composerFolderId, fileNewResearchTree, submitNewNote],
+  );
+  const saveComposerDraft = useCallback(
+    async (prompt: string) => {
+      await saveResearchDraftText(null, prompt);
+      setResearchTrayCollapsed(RESEARCH_DRAFTS_FOLDER_ID, false);
+      showResearchToast(
+        <span>
+          Saved to <b>Drafts</b>.
+        </span>,
+      );
+    },
+    [saveResearchDraftText, setResearchTrayCollapsed, showResearchToast],
+  );
+  // Sending a draft launches it with the composer's current agent and model,
+  // then removes the draft; the new question lands in Unfiled.
+  const composerLaunchChoiceRef = useRef<(() => ResearchLaunchChoice | null) | null>(null);
+  const sendResearchDraft = useCallback(
+    async (draft: ResearchDraft, prompt: string) => {
+      const choice = composerLaunchChoiceRef.current?.();
+      if (!choice) {
+        throw new Error("No research agent is ready. Review agents in Settings.");
+      }
+      await submitNewResearch({ prompt, ...choice, workspaceId: draft.workspaceId });
+      setOpenResearchDraftId((current) => (current === draft.id ? null : current));
+      await removeResearchDraft(draft.id);
+      showResearchToast(
+        <span>
+          Sent. Moved from Drafts to <b>Unfiled</b>.
+        </span>,
+      );
+    },
+    [removeResearchDraft, showResearchToast, submitNewResearch],
+  );
   const configAdapters = config?.adapters;
   const feedComposer = useMemo(
     () =>
@@ -8661,15 +8934,28 @@ function MainApp() {
           adapters={configAdapters}
           requireCmdEnterToSend={settings.requireCmdEnterToSend}
           workspaceId={researchScope}
+          placeholder={
+            composerFolderName ? `Ask a question in ${composerFolderName}` : "Ask a question"
+          }
+          launchChoiceRef={composerLaunchChoiceRef}
           onOpenAgentSettings={() => {
             setSettingsOpen(false);
             setAgentsOpen(true);
           }}
-          onCreate={submitNewResearch}
-          onPost={submitNewNote}
+          onCreate={submitFeedResearch}
+          onPost={submitFeedNote}
+          onSaveDraft={saveComposerDraft}
         />
       ) : null,
-    [configAdapters, settings.requireCmdEnterToSend, researchScope, submitNewResearch, submitNewNote],
+    [
+      configAdapters,
+      composerFolderName,
+      settings.requireCmdEnterToSend,
+      researchScope,
+      saveComposerDraft,
+      submitFeedResearch,
+      submitFeedNote,
+    ],
   );
   // Show setup guide on Home only when no agents can run research.
   const feedSetupGuide = useMemo(
@@ -8687,16 +8973,82 @@ function MainApp() {
     [configAdapters, adapterProbeLoading, adapterProbeError, refreshAdapterReadiness, showAppToast],
   );
   const refreshFeed = useCallback(() => void refreshResearchNavigation(), [refreshResearchNavigation]);
+  // The workspace switcher sits at the bottom of the full sidebar; in the
+  // strip it is an icon whose menu opens as a popover, with the account
+  // control inside, so both (and ⌘O) stay reachable below 900px.
+  const renderResearchFolderSwitcher = (
+    variant: "sidebar" | "strip",
+    footer?: ReactNode,
+  ) => (
+    <ResearchFolderSwitcher
+      variant={variant}
+      footer={footer}
+      folders={researchGroups}
+      scope={researchScope}
+      treeCounts={researchFolderTreeCounts}
+      folderPickerBusy={folderPickerStatus !== null}
+      shortcutHintsShown={shortcutHintsShown}
+      onSelectScope={(scope) => {
+        changeResearchFolderScope(scope);
+        // Keep the selection inside the new scope.
+        const allTrees = [...researchTrees, ...archivedResearchTrees];
+        const scopedTrees = treesForResearchScope(allTrees, scope);
+        const activeInScope = scopedTrees.some(
+          (tree) => tree.id === activeResearchTreeId,
+        );
+        const activeResearchPane = panesRef.current.find(
+          (pane) => pane.id === activeResearchPaneIdRef.current,
+        );
+        const activePaneInScope =
+          !activeResearchPane ||
+          workspaceIsInResearchScope(activeResearchPane.groupId, scope);
+        if (!activePaneInScope) {
+          activeResearchPaneIdRef.current = null;
+          setActiveResearchPaneId(null);
+          localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
+        }
+        if (researchHomeActive) {
+          return;
+        }
+        if (!activeInScope || !activePaneInScope) {
+          const tree = treeForResearchScope(allTrees, scope, activeResearchTreeId);
+          if (tree) {
+            void selectResearchTree(tree.id);
+          } else {
+            activeResearchTreeIdRef.current = null;
+            setActiveResearchTreeId(null);
+            setActiveResearchDetail(null);
+            setActiveResearchDetailError(null);
+            localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
+            // Preserve any selected research pane in the current scope.
+            // focusResearchHome would clear that selection.
+            showResearchSurface();
+          }
+        }
+      }}
+      onNewFolder={chooseResearchWorkspaceFolder}
+      onOpenFolder={openResearchWorkspaceFolder}
+      onRenameFolder={openGroupRenameDialog}
+      onMoveFolder={moveResearchWorkspaceFolder}
+      onRemoveFolder={(workspace) => {
+        setResearchFolderRemovalError(null);
+        setCloseDialog({ kind: "researchFolderRemove", workspace });
+      }}
+    />
+  );
+
 
   return (
     <main
       ref={appRef}
       className={`app-shell ${hasGlobalTurnSidebar ? "has-turn-sidebar" : ""}${
+        researchSidebarStrip && IS_MAC ? " has-titlebar-strip" : ""
+      }${
         activeTranscriptVisibleExpanded ? " has-expanded-transcript" : ""
       }${settings.reduceMotion ? " reduce-motion" : ""}`}
       style={appStyle}
     >
-      {!leftSidebarCollapsed ? (
+      {!researchSidebarStrip ? (
         <div
           className="sidebar-resizer"
           role="separator"
@@ -8710,16 +9062,68 @@ function MainApp() {
           onKeyDown={resizeSidebarWithKeyboard}
         />
       ) : null}
-      {leftSidebarCollapsed ? (
-        <div className="sidebar-collapsed-placeholder" aria-hidden="true" />
+      {researchSidebarStrip ? (
+        <ResearchSidebarStrip
+          current={journalView}
+          folders={researchFolders}
+          forced={windowNarrowForSidebar}
+          reserveTitlebar={IS_MAC}
+          expandShortcut={LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL}
+          onExpand={() => setLeftSidebarCollapsedForActivePane(false)}
+          onNavigate={openJournalView}
+          onNewFolder={() => openNewResearchFolderDialog()}
+          footer={
+            <>
+              {renderResearchFolderSwitcher("strip", <GithubAccountControl />)}
+              <ResearchStripButton
+                label="Agents"
+                selected={agentsOpen}
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setAgentsOpen(true);
+                }}
+              >
+                <Bot size={16} aria-hidden="true" />
+              </ResearchStripButton>
+              <ResearchStripButton
+                label={settings.appearance === "light" ? "Dark mode" : "Light mode"}
+                onClick={toggleAppearance}
+              >
+                {settings.appearance === "light" ? (
+                  <Moon size={16} aria-hidden="true" />
+                ) : (
+                  <Sun size={16} aria-hidden="true" />
+                )}
+              </ResearchStripButton>
+              <ResearchStripButton
+                label="Settings (⌘,)"
+                selected={settingsOpen}
+                onClick={() => {
+                  setPaneContextMenu(null);
+                  setAgentsOpen(false);
+                  setSettingsOpen(true);
+                }}
+              >
+                <Settings size={16} aria-hidden="true" />
+              </ResearchStripButton>
+            </>
+          }
+        />
       ) : (
-        <aside
-          className={`sidebar is-research-mode${
-            sidebarWidth < LEFT_SIDEBAR_COMPACT_WIDTH ? " is-narrow" : ""
-          }${settings.codeMode ? " is-code-mode" : ""}`}
-        >
+        <aside className={`sidebar is-research-mode${settings.codeMode ? " is-code-mode" : ""}`}>
           <div className="titlebar-drag" data-tauri-drag-region aria-hidden="true" />
-          <div className="sidebar-header-controls is-grouped">
+          {/* Keep the collapse and expand buttons at the same position beside
+              the traffic lights. */}
+          <button
+            type="button"
+            className="icon-button sidebar-header-button sidebar-collapse-toggle"
+            title={`Collapse sidebar to icons (${LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL})`}
+            aria-label="Collapse sidebar"
+            onClick={() => setLeftSidebarCollapsedForActivePane(true)}
+          >
+            <PanelLeft size={15} aria-hidden="true" />
+          </button>
+          <div className="sidebar-header-controls">
             <button
               type="button"
               className={`icon-button sidebar-header-button${settingsOpen ? " is-active" : ""}`}
@@ -8732,7 +9136,7 @@ function MainApp() {
                 setSettingsOpen(true);
               }}
             >
-              <Settings size={14} aria-hidden="true" />
+              <Settings size={15} aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -8745,7 +9149,7 @@ function MainApp() {
                 setAgentsOpen(true);
               }}
             >
-              <Bot size={14} aria-hidden="true" />
+              <Bot size={15} aria-hidden="true" />
             </button>
             <button
               type="button"
@@ -8759,130 +9163,24 @@ function MainApp() {
               onClick={toggleAppearance}
             >
               {settings.appearance === "light" ? (
-                <Moon size={14} aria-hidden="true" />
+                <Moon size={15} aria-hidden="true" />
               ) : (
-                <Sun size={14} aria-hidden="true" />
+                <Sun size={15} aria-hidden="true" />
               )}
             </button>
-            <button
-              type="button"
-              className="icon-button sidebar-header-button"
-              title={`Collapse left sidebar (${LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL})`}
-              aria-label="Collapse left sidebar"
-              onClick={() => setLeftSidebarCollapsedForActivePane(true)}
-            >
-              <PanelLeftClose size={14} aria-hidden="true" />
-            </button>
           </div>
-          <div className="research-sidebar-brand" aria-label="Mem">
-            <img
-              src={settings.appearance === "light" ? memMonochromeLightLogoUrl : memMonochromeLogoUrl}
-              alt=""
-              aria-hidden="true"
+          <div className="research-sidebar-body">
+            <ResearchSidebarNav
+              current={journalView}
+              folders={researchFolders}
+              onNavigate={openJournalView}
+              onNewFolder={() => openNewResearchFolderDialog()}
+              onRenameFolder={openRenameResearchFolderDialog}
+              onDeleteFolder={requestResearchFolderDelete}
+              homeShortcutHint={shortcutHintsShown ? RESEARCH_HOME_SHORTCUT_LABEL : null}
             />
           </div>
-        <nav
-          ref={paneListRef}
-          className={`pane-list${draggingPaneId || draggingGroupId ? " is-dragging" : ""}`}
-          aria-label="Research"
-        >
-          {/* The journal pages: Home, Bookmarks, Archived, and Highlights. */}
-            <div className="journal-sidebar-rows">
-              {(
-                [
-                  { view: "home", label: "Home", Icon: House, onOpen: openJournal },
-                  { view: "bookmarks", label: "Bookmarks", Icon: Bookmark, onOpen: openBookmarks },
-                  { view: "archived", label: "Archived", Icon: Archive, onOpen: openArchived },
-                  { view: "highlights", label: "Highlights", Icon: Highlighter, onOpen: openHighlights },
-                ] as const
-              ).map(({ view, label, Icon, onOpen }) => {
-                const isPage = researchStageView === "journal" && journalView === view;
-                return (
-                  <div
-                    key={view}
-                    className={`research-sidebar-row journal-sidebar-row${
-                      sidebarJournalView === view ? " is-selected" : ""
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      className="control-button research-sidebar-select"
-                      aria-current={isPage ? "page" : undefined}
-                      title={view === "home" ? `Home (${RESEARCH_HOME_SHORTCUT_LABEL})` : label}
-                      onClick={onOpen}
-                    >
-                      <span className="research-sidebar-copy">
-                        <span className="research-sidebar-title">
-                          <Icon className="journal-sidebar-icon" size={14} aria-hidden="true" />
-                          <span className="research-sidebar-title-text">{label}</span>
-                        </span>
-                      </span>
-                    </button>
-                    {view === "home" && shortcutHintsShown ? (
-                      <span className="pane-tab-shortcut-hint" aria-hidden="true">
-                        {RESEARCH_HOME_SHORTCUT_LABEL}
-                      </span>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-        </nav>
-
-          <ResearchFolderSwitcher
-            folders={researchGroups}
-            scope={researchScope}
-            treeCounts={researchFolderTreeCounts}
-            folderPickerBusy={folderPickerStatus !== null}
-            shortcutHintsShown={shortcutHintsShown}
-            onSelectScope={(scope) => {
-              changeResearchFolderScope(scope);
-              // Keep the selection inside the new scope.
-              const allTrees = [...researchTrees, ...archivedResearchTrees];
-              const scopedTrees = treesForResearchScope(allTrees, scope);
-              const activeInScope = scopedTrees.some(
-                (tree) => tree.id === activeResearchTreeId,
-              );
-              const activeResearchPane = panesRef.current.find(
-                (pane) => pane.id === activeResearchPaneIdRef.current,
-              );
-              const activePaneInScope =
-                !activeResearchPane ||
-                workspaceIsInResearchScope(activeResearchPane.groupId, scope);
-              if (!activePaneInScope) {
-                activeResearchPaneIdRef.current = null;
-                setActiveResearchPaneId(null);
-                localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
-              }
-              if (researchHomeActive) {
-                return;
-              }
-              if (!activeInScope || !activePaneInScope) {
-                const tree = treeForResearchScope(allTrees, scope, activeResearchTreeId);
-                if (tree) {
-                  void selectResearchTree(tree.id);
-                } else {
-                  activeResearchTreeIdRef.current = null;
-                  setActiveResearchTreeId(null);
-                  setActiveResearchDetail(null);
-                  setActiveResearchDetailError(null);
-                  localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
-                  // Keep the current in-scope research pane selected while
-                  // valid in-scope research pane may still be selected here, so
-                  // this can't defer to focusResearchHome, which would clear it.
-                  showResearchSurface();
-                }
-              }
-            }}
-            onNewFolder={chooseResearchWorkspaceFolder}
-            onOpenFolder={openResearchWorkspaceFolder}
-            onRenameFolder={openGroupRenameDialog}
-            onMoveFolder={moveResearchWorkspaceFolder}
-            onRemoveFolder={(workspace) => {
-              setResearchFolderRemovalError(null);
-              setCloseDialog({ kind: "researchFolderRemove", workspace });
-            }}
-          />
+          {renderResearchFolderSwitcher("sidebar")}
           <GithubAccountControl />
         </aside>
       )}
@@ -10506,132 +10804,167 @@ function MainApp() {
             !researchSurfaceActive && visibleTerminalPaneIds.length === 0 ? " is-empty" : ""
           }`}
         >
-          {/* Hydrate the feed before mounting so its saved scroll position can be restored. */}
-          {researchStageView === "journal" && config && journalView === "highlights" ? (
-            <ResearchHighlightsFeed
-              items={researchHighlightItems}
-              loading={researchHighlightsLoading}
-              error={researchHighlightsError}
-              onOpen={openResearchHighlight}
-              onRefresh={() => void refreshResearchHighlights()}
-              canGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
-              canGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
-              onBack={goResearchWorkspaceBack}
-              onForward={goResearchWorkspaceForward}
-            />
-          ) : null}
-          {/* Home, Bookmarks, and Archived list in a feed column beside the
-              content column, which shows the open thread (or a placeholder
-              until one is picked). One wrapper for both states keeps the feed
-              mounted, and its scroll position, while threads open and close
-              beside it. */}
+          {/* The feed column lists Home, a folder, Drafts, Archive, Bookmarks,
+              or Highlights beside the content column, which shows the open
+              thread (or a placeholder). One wrapper for both states keeps the
+              feed mounted, and its scroll position, while threads open and
+              close beside it. */}
           {researchFeedColumnVisible ? (
-            <ResearchColumns hasDocument={researchStageView === "document"}>
-              {config && journalView === "archived" ? (
-                <div className="research-feed-column">
-                  <ResearchArchivedFeed
-                    trees={archivedResearchTrees}
-                    selectedTreeId={researchStageView === "document" ? activeResearchTreeId : null}
-                    onOpen={openArchivedResearchTree}
-                    onRestore={restoreResearchTreeFromMenu}
-                    onRemove={removeResearchTreeFromMenu}
-                    canGoBack={feedOwnsHistory && canGoWorkspaceBack(researchWorkspaceHistory)}
-                    canGoForward={feedOwnsHistory && canGoWorkspaceForward(researchWorkspaceHistory)}
-                    onBack={feedOwnsHistory ? goResearchWorkspaceBack : undefined}
-                    onForward={feedOwnsHistory ? goResearchWorkspaceForward : undefined}
-                  />
-                </div>
-              ) : config ? (
-                <div className="research-feed-column">
-                  <ResearchActivityFeed
-                    {...activityFeedState}
-                    view={researchFeedColumnView}
-                    selectedTreeId={researchStageView === "document" ? activeResearchTreeId : null}
-                    onImportReport={importReport}
-                    composer={feedComposer}
-                    setupGuide={feedSetupGuide}
-                    items={recentActivityItems}
-                    recapPendingNodeIds={recapPendingNodeIds}
-                    researchTrees={feedResearchTrees}
-                    nextCursor={recentActivityCursor}
-                    loadingOlder={loadingOlderActivity}
-                    olderError={olderActivityError}
-                    onOpenResearchQuery={openRecentResearchQuery}
-                    onResearchRecapApplied={handleResearchRecapApplied}
-                    onError={setError}
-                    onRenameResearch={renameResearchTreeTitle}
-                    onArchiveResearch={archiveResearchTreeFromMenu}
-                    onRestoreResearch={restoreResearchTreeFromMenu}
-                    onRemoveResearch={removeResearchTreeFromMenu}
-                    onSetResearchFollowed={setResearchTreeFollowedFlag}
-                    onSetResearchBookmarked={setResearchTreeBookmarkedFlag}
-                    onLoadOlder={loadOlderActivity}
-                    onRefresh={refreshFeed}
-                    // History follows the column in front: the feed's while no
-                    // thread is open (its buttons show only when the stage is
-                    // too narrow for the placeholder column), the thread's once
-                    // one is.
-                    canGoBack={feedOwnsHistory && canGoWorkspaceBack(researchWorkspaceHistory)}
-                    canGoForward={feedOwnsHistory && canGoWorkspaceForward(researchWorkspaceHistory)}
-                    onBack={feedOwnsHistory ? goResearchWorkspaceBack : undefined}
-                    onForward={feedOwnsHistory ? goResearchWorkspaceForward : undefined}
-                  />
-                </div>
+            <ResearchColumns
+              hasDocument={researchStageView === "document" || openResearchDraft !== null}
+              documentKey={
+                researchStageView === "document"
+                  ? activeResearchTreeId
+                  : openResearchDraft
+                    ? `draft:${openResearchDraft.id}`
+                    : null
+              }
+              feed={
+                config ? (
+                  journalView.kind === "highlights" ? (
+                    <ResearchHighlightsFeed
+                      items={researchHighlightItems}
+                      loading={researchHighlightsLoading}
+                      error={researchHighlightsError}
+                      onOpen={openResearchHighlight}
+                      onRemove={removeResearchHighlightFromFeed}
+                      onRefresh={() => void refreshResearchHighlights()}
+                    />
+                  ) : (
+                    <ResearchActivityFeed
+                      {...activityFeedState}
+                      view={journalView}
+                      selectedTreeId={researchStageView === "document" ? activeResearchTreeId : null}
+                      selectedChildNodeId={activeResearchDrawerNodeId}
+                      selectedDraftId={openResearchDraft?.id ?? null}
+                      onImportReport={importReport}
+                      composer={feedComposer}
+                      setupGuide={feedSetupGuide}
+                      items={recentActivityItems}
+                      researchTrees={feedResearchTrees}
+                      folders={researchFolders}
+                      folderState={researchFolderState}
+                      drafts={researchDrafts}
+                      nextCursor={recentActivityCursor}
+                      loadingOlder={loadingOlderActivity}
+                      olderError={olderActivityError}
+                      onOpenResearchQuery={openRecentResearchQuery}
+                      onOpenDraft={openResearchDraftInColumn}
+                      onOpenTree={openFeedResearchTree}
+                      onOpenView={openFeedView}
+                      onResearchRecapApplied={handleResearchRecapApplied}
+                      onError={setError}
+                      onRenameResearch={renameResearchTreeTitle}
+                      onRestoreResearch={restoreResearchTreeFromMenu}
+                      onRemoveResearch={removeResearchTreeFromMenu}
+                      onSetResearchBookmarked={bookmarkResearchTreeFromFeed}
+                      onMoveTree={moveResearchTreeFromFeed}
+                      onNewFolder={openNewResearchFolderDialog}
+                      onRenameFolder={openRenameResearchFolderDialog}
+                      onRequestDeleteFolder={requestResearchFolderDelete}
+                      pendingDeleteFolderId={pendingResearchFolderDelete}
+                      onConfirmDeleteFolder={confirmResearchFolderDelete}
+                      onCancelDeleteFolder={cancelResearchFolderDelete}
+                      onToggleTray={toggleResearchTray}
+                      onDeleteDraft={deleteResearchDraftFromFeed}
+                      onDragStart={startResearchCardDrag}
+                      onLoadOlder={loadOlderActivity}
+                      onRefresh={refreshFeed}
+                      // Use feed history when no thread is open; otherwise use
+                      // the open thread's history.
+                      onBack={feedOwnsHistory ? goResearchWorkspaceBack : undefined}
+                      onForward={feedOwnsHistory ? goResearchWorkspaceForward : undefined}
+                    />
+                  )
+                ) : null
+              }
+            >
+              {researchStageView === "document" && activeResearchTreeId ? (
+                // Remount on tree changes to reset selection, fetched content,
+                // and the follow-up draft before paint. Resetting them in effects
+                // would briefly show and refetch the previous tree's node.
+                <ResearchDocument
+                  key={activeResearchTreeId}
+                  detail={activeResearchDetail}
+                  treeTitle={
+                    activeResearchDetail?.tree.title ??
+                    researchTrees.find((tree) => tree.id === activeResearchTreeId)?.title ??
+                    archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)?.title
+                  }
+                  archived={Boolean(activeResearchDetail?.tree.archivedAt)}
+                  recapPendingNodeIds={recapPendingNodeIds}
+                  detailError={activeResearchDetailError}
+                  onRetryDetail={retryActiveResearchDetail}
+                  onFork={createResearchFollowup}
+                  noteActions={noteActions}
+                  onRemoveBranch={removeResearchBranchFromDocument}
+                  onRemoveTree={removeResearchTreeAndSelectFallback}
+                  onRenameTree={renameResearchTreeTitle}
+                  onClose={focusResearchHome}
+                  onSetFollowed={setResearchTreeFollowedFlag}
+                  onSetBookmarked={setResearchTreeBookmarkedFlag}
+                  onUpdateDocument={editResearchDocument}
+                  onCancel={cancelResearchRun}
+                  onRetryNode={retryResearchRun}
+                  linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}
+                  onError={setError}
+                  onToast={handleResearchDocumentToast}
+                  shortcutHintsShown={shortcutHintsShown}
+                  onMoveTree={toggleHeaderMoveMenu}
+                  onDrawerNodeChange={setActiveResearchDrawerNodeId}
+                  workspaceCanGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
+                  workspaceCanGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
+                  onWorkspaceBack={goResearchWorkspaceBack}
+                  onWorkspaceForward={goResearchWorkspaceForward}
+                />
+              ) : openResearchDraft ? (
+                <ResearchDraftView
+                  key={openResearchDraft.id}
+                  draft={openResearchDraft}
+                  requireCmdEnterToSend={settings.requireCmdEnterToSend}
+                  onSave={(prompt) => saveOpenResearchDraft(openResearchDraft.id, prompt)}
+                  onSend={(prompt) => sendResearchDraft(openResearchDraft, prompt)}
+                  onDelete={() => deleteResearchDraftFromFeed(openResearchDraft)}
+                  onClose={closeResearchDraft}
+                />
+              ) : (
+                <ResearchDocumentFrame>
+                  <div className="research-content-placeholder">
+                    <h3>No question open</h3>
+                    <p>Choose a question from the feed, or ask a new one.</p>
+                  </div>
+                </ResearchDocumentFrame>
+              )}
+              {headerMoveMenu && headerMoveTree ? (
+                <ResearchMoveMenu
+                  anchor={headerMoveMenu.anchor}
+                  currentPlace={researchTreePlace(headerMoveTree, researchFolderState)}
+                  folders={researchFolders}
+                  bookmarked={Boolean(headerMoveTree.bookmarked)}
+                  onToggleBookmark={() => {
+                    const { anchor } = headerMoveMenu;
+                    setHeaderMoveMenu(null);
+                    anchor.focus();
+                    bookmarkResearchTreeFromFeed(headerMoveTree.id, !headerMoveTree.bookmarked);
+                  }}
+                  onMove={(place) => {
+                    const { anchor } = headerMoveMenu;
+                    setHeaderMoveMenu(null);
+                    anchor.focus();
+                    moveResearchTreeFromFeed(headerMoveTree.id, place);
+                  }}
+                  onNewFolder={() => {
+                    const { anchor } = headerMoveMenu;
+                    setHeaderMoveMenu(null);
+                    openNewResearchFolderDialog(headerMoveTree.id, anchor);
+                  }}
+                  onClose={(restoreFocus) => {
+                    const { anchor } = headerMoveMenu;
+                    setHeaderMoveMenu(null);
+                    if (restoreFocus) anchor.focus();
+                  }}
+                />
               ) : null}
-              <div className="research-content-column">
-                {researchStageView === "document" && activeResearchTreeId ? (
-                  // Keyed by tree: the document's per-tree state (selection, fetched
-                  // content, follow-up draft) must not survive a tree switch. Without
-                  // the remount, the new tree's detail landing paints one frame of the
-                  // previous tree's node (selection/content only reset in effects,
-                  // after paint) and the content loader refetches the departed node.
-                  <ResearchDocument
-                    key={activeResearchTreeId}
-                    detail={activeResearchDetail}
-                    treeTitle={
-                      activeResearchDetail?.tree.title ??
-                      researchTrees.find((tree) => tree.id === activeResearchTreeId)?.title ??
-                      archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)?.title
-                    }
-                    archived={Boolean(activeResearchDetail?.tree.archivedAt)}
-                    recapPendingNodeIds={recapPendingNodeIds}
-                    detailError={activeResearchDetailError}
-                    onRetryDetail={retryActiveResearchDetail}
-                    onFork={createResearchFollowup}
-                    noteActions={noteActions}
-                    onRemoveBranch={removeResearchBranchFromDocument}
-                    onRemoveTree={removeResearchTreeAndSelectFallback}
-                    onSetFollowed={setResearchTreeFollowedFlag}
-                    onSetBookmarked={setResearchTreeBookmarkedFlag}
-                    onUpdateDocument={editResearchDocument}
-                    onCancel={cancelResearchRun}
-                    onRetryNode={retryResearchRun}
-                    linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}
-                    onError={setError}
-                    onToast={handleResearchDocumentToast}
-                    shortcutHintsShown={shortcutHintsShown}
-                    onShowSidebar={
-                      researchSidebarRestoreInHeader ? showLeftSidebarInResearch : undefined
-                    }
-                    workspaceCanGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
-                    workspaceCanGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
-                    onWorkspaceBack={goResearchWorkspaceBack}
-                    onWorkspaceForward={goResearchWorkspaceForward}
-                  />
-                ) : (
-                  <ResearchDocumentFrame
-                    title=""
-                    canGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
-                    canGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
-                    onBack={goResearchWorkspaceBack}
-                    onForward={goResearchWorkspaceForward}
-                  >
-                    <div className="research-content-placeholder">
-                      Select a question to read its answer.
-                    </div>
-                  </ResearchDocumentFrame>
-                )}
-              </div>
             </ResearchColumns>
           ) : null}
         </div>
@@ -10740,6 +11073,21 @@ function MainApp() {
         >
           {appToast.message}
         </div>
+      ) : null}
+      <ResearchFeedToast
+        toast={researchToast}
+        onUndo={undoResearchToast}
+        onDismiss={dismissResearchToast}
+        onPause={pauseResearchToast}
+        onResume={resumeResearchToast}
+      />
+      {researchFolderNameRequest ? (
+        <ResearchFolderNameDialog
+          request={researchFolderNameRequest}
+          folders={researchFolders}
+          onSubmit={submitResearchFolderName}
+          onClose={() => setResearchFolderNameRequest(null)}
+        />
       ) : null}
       {folderPickerStatus ? (
         <div className="folder-picker-status" role="status" aria-live="polite">

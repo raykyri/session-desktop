@@ -166,8 +166,47 @@ export function upsertRecentActivityResearchNode(
     });
   }
   const existing = items.find((item) => item.nodeId === query.nodeId);
-  if (existing) query.children = existing.children;
+  if (existing) {
+    query.children = existing.children;
+    query.promoted = existing.promoted;
+  }
   return upsertRecentActivityItem(items, query);
+}
+
+/** Keeps a root's starred-children list in step with a node update: a
+ * listed node takes the new prompt, title, and status, and an unstarred one
+ * drops out. A newly starred node needs its depth and tree position from the
+ * backend, so `stale` asks the caller to refetch the feed. */
+export function patchRecentActivityPromoted(
+  items: RecentResearchQuery[],
+  node: ResearchNode & { promotedAt?: number | null },
+): { items: RecentResearchQuery[]; stale: boolean } {
+  const promotedAt = node.promotedAt ?? null;
+  let stale = false;
+  let changed = false;
+  const next = items.map((item) => {
+    if (item.treeId !== node.treeId || item.parentNodeId || item.nodeId === node.id) return item;
+    const promoted = item.promoted ?? [];
+    const index = promoted.findIndex((entry) => entry.nodeId === node.id);
+    if (index < 0) {
+      if (promotedAt != null) stale = true;
+      return item;
+    }
+    changed = true;
+    if (promotedAt == null) {
+      return { ...item, promoted: promoted.filter((entry) => entry.nodeId !== node.id) };
+    }
+    const entry = promoted[index];
+    return {
+      ...item,
+      promoted: promoted.map((candidate, position) =>
+        position === index
+          ? { ...entry, prompt: node.prompt, title: node.title, status: node.status, promotedAt }
+          : candidate,
+      ),
+    };
+  });
+  return { items: changed ? next : items, stale };
 }
 
 export function activityEventFromResearchQuery(

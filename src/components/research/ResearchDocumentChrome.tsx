@@ -1,5 +1,150 @@
-import type { ReactNode } from "react";
-import { ArrowLeft, ArrowRight, PanelLeftOpen } from "lucide-react";
+import type { ReactNode, Ref } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Bell,
+  Bookmark,
+  ChevronLeft,
+  Folder,
+  Terminal,
+  X,
+} from "lucide-react";
+
+/** The conversation column's header: one 44px bar (it grows when the title
+ * wraps to two or three lines) with history controls, the title, and Follow,
+ * Move to folder, Bookmark and Close, always visible. The bar is a window
+ * drag region; its buttons are not. */
+export function ResearchConversationHeader({
+  title,
+  titleRef,
+  canGoBack,
+  canGoForward,
+  backTitle,
+  forwardTitle,
+  onBack,
+  onForward,
+  imported,
+  archived,
+  followed,
+  bookmarked,
+  onToggleFollow,
+  onToggleBookmark,
+  onMove,
+  onClose,
+  onColumnBack,
+  onFocusColumn,
+}: {
+  title: string;
+  titleRef?: Ref<HTMLHeadingElement>;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  backTitle: string;
+  forwardTitle: string;
+  onBack: () => void;
+  onForward: () => void;
+  /** A point-in-time copy of a terminal conversation. */
+  imported: boolean;
+  archived: boolean;
+  followed: boolean;
+  bookmarked: boolean;
+  onToggleFollow: () => void;
+  onToggleBookmark: () => void;
+  onMove?: (trigger: HTMLButtonElement) => void;
+  onClose?: () => void;
+  /** Single-column mode: back to the previous column. */
+  onColumnBack?: () => void;
+  onFocusColumn?: () => void;
+}) {
+  return (
+    <header className="research-column-header is-root" onMouseDown={onFocusColumn}>
+      <div className="research-column-bar" data-tauri-drag-region>
+        {onColumnBack ? (
+          <button
+            type="button"
+            className="control-button research-icon-button"
+            aria-label="Back"
+            onClick={onColumnBack}
+          >
+            <ChevronLeft size={16} aria-hidden="true" />
+          </button>
+        ) : null}
+        <ResearchHistoryNav
+          canGoBack={canGoBack}
+          canGoForward={canGoForward}
+          backTitle={backTitle}
+          forwardTitle={forwardTitle}
+          onBack={onBack}
+          onForward={onForward}
+        />
+        <h2 ref={titleRef} className="research-column-title" tabIndex={-1} title={title}>
+          {title}
+        </h2>
+        <span className="research-column-actions">
+          {imported ? (
+            <span
+              className="research-provenance-badge"
+              title="This is a point-in-time copy of an imported conversation."
+            >
+              <Terminal size={12} aria-hidden="true" />
+              Imported conversation
+            </span>
+          ) : null}
+          {archived ? <span className="research-archived-label">Archived</span> : null}
+          <button
+            type="button"
+            className={`control-button research-icon-button${followed && !archived ? " is-on" : ""}`}
+            disabled={archived}
+            aria-pressed={archived ? undefined : followed}
+            aria-label={archived ? "Follow, unavailable while archived" : "Follow"}
+            title={
+              archived
+                ? "Archived questions don't send notifications"
+                : followed
+                  ? "Following: you get notified of replies"
+                  : "Follow"
+            }
+            onClick={onToggleFollow}
+          >
+            <Bell size={15} aria-hidden="true" fill={followed && !archived ? "currentColor" : "none"} />
+          </button>
+          {onMove ? (
+            <button
+              type="button"
+              className="control-button research-icon-button"
+              aria-label="Move to folder"
+              aria-haspopup="menu"
+              title="Move to folder"
+              onClick={(event) => onMove(event.currentTarget)}
+            >
+              <Folder size={15} aria-hidden="true" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className={`control-button research-icon-button${bookmarked ? " is-on" : ""}`}
+            aria-pressed={bookmarked}
+            aria-label="Bookmark"
+            title={bookmarked ? "Remove bookmark" : "Bookmark"}
+            onClick={onToggleBookmark}
+          >
+            <Bookmark size={15} aria-hidden="true" fill={bookmarked ? "currentColor" : "none"} />
+          </button>
+          {onClose ? (
+            <button
+              type="button"
+              className="control-button research-icon-button"
+              aria-label="Close"
+              title="Close"
+              onClick={onClose}
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          ) : null}
+        </span>
+      </div>
+    </header>
+  );
+}
 
 interface ResearchHistoryNavProps {
   canGoBack?: boolean;
@@ -10,10 +155,8 @@ interface ResearchHistoryNavProps {
   onForward?: () => void;
 }
 
-/** Browser-style back/forward pair at the left edge of a research document
- * header. Renders disabled when no handlers/ability are supplied, which is
- * the whole state for placeholder and composer headers. */
-export function ResearchHistoryNav({
+/** Browser-style back/forward pair in the conversation header. */
+function ResearchHistoryNav({
   canGoBack = false,
   canGoForward = false,
   backTitle,
@@ -47,105 +190,28 @@ export function ResearchHistoryNav({
   );
 }
 
-interface ResearchDocumentFrameProps {
-  /** Single inert breadcrumb entry naming the page; empty leaves the
-   * breadcrumb blank (a placeholder beside a column that names the page). */
-  title: string;
-  /** Fades the breadcrumb out while keeping its space, for a page whose own
-   * heading already names it. */
-  titleHidden?: boolean;
-  hidden?: boolean;
-  /** Extra icon controls rendered beside the back/forward pair, or at the
-   * header's trailing edge with `actionsAtEnd`. */
-  navActions?: ReactNode;
-  /** A list page (Home, Bookmarks, ...) leads with its name and keeps its
-   * icon controls at the trailing edge. */
-  actionsAtEnd?: boolean;
-  headerActions?: ReactNode;
-  children: ReactNode;
-  canGoBack?: boolean;
-  canGoForward?: boolean;
-  backTitle?: string;
-  forwardTitle?: string;
-  onBack?: () => void;
-  onForward?: () => void;
-}
-
-interface ResearchSidebarRestoreButtonProps {
-  onClick: () => void;
-}
-
-/** Reopens the app sidebar from research chrome, alongside the document's
- * transcript and run controls rather than floating over the research body. */
-export function ResearchSidebarRestoreButton({
-  onClick,
-}: ResearchSidebarRestoreButtonProps) {
-  return (
-    <button
-      type="button"
-      className="control-button research-sidebar-restore"
-      title="Show left sidebar (⇧⌘G)"
-      aria-label="Show left sidebar"
-      onClick={onClick}
-    >
-      <PanelLeftOpen size={15} aria-hidden="true" />
-    </button>
-  );
-}
-
-/** The research-surface page chrome shared by states that are not a live
- * document: the standard header with inert history controls and a one-entry
- * breadcrumb, wrapping whatever body the state renders. The live document
- * view keeps its own header (interactive breadcrumb and run controls) but
- * shares the nav component above. */
+/** A content column without a live document (the "No question open"
+ * placeholder, a thread that is loading or failed to load): the column
+ * header bar, with the title when there is one, over the given body. */
 export function ResearchDocumentFrame({
-  title,
-  titleHidden = false,
-  hidden = false,
-  navActions,
-  actionsAtEnd = false,
-  headerActions,
+  title = "",
   children,
-  canGoBack,
-  canGoForward,
-  backTitle,
-  forwardTitle,
-  onBack,
-  onForward,
-}: ResearchDocumentFrameProps) {
+}: {
+  title?: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="research-workspace" hidden={hidden}>
-      <main className="research-document">
-        <header className="research-document-header">
-          <ResearchHistoryNav
-            canGoBack={canGoBack}
-            canGoForward={canGoForward}
-            backTitle={backTitle}
-            forwardTitle={forwardTitle}
-            onBack={onBack}
-            onForward={onForward}
-          />
-          {actionsAtEnd ? null : navActions}
-          <div
-            className={`research-breadcrumb${titleHidden ? " is-title-hidden" : ""}`}
-            aria-label="Research path"
-            aria-hidden={titleHidden ? "true" : undefined}
-          >
-            {title ? (
-              <span>
-                <button className="control-button" type="button" disabled>
-                  {title}
-                </button>
-              </span>
-            ) : null}
-          </div>
-          {actionsAtEnd && navActions ? (
-            <div className="research-header-actions-end">{navActions}</div>
+    <div className="research-workspace research-placeholder-column">
+      <header className="research-column-header is-root">
+        <div className="research-column-bar" data-tauri-drag-region>
+          {title ? (
+            <h2 className="research-column-title" title={title}>
+              {title}
+            </h2>
           ) : null}
-          {headerActions}
-        </header>
-        {children}
-      </main>
+        </div>
+      </header>
+      {children}
     </div>
   );
 }

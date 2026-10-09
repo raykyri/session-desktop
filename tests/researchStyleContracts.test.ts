@@ -51,9 +51,10 @@ test("research summaries get typography only from the shared surface recipe", ()
   assert.match(summary, /font-size:\s*var\(--research-summary-font-size\)/);
   assert.match(summary, /line-height:\s*var\(--research-summary-line-height\)/);
 
-  const homePlacement = ruleBody(journalCss, ".research-feed-post-summary");
-  assert.doesNotMatch(homePlacement, /font(?:-size|-style|-weight)?\s*:/);
-  assert.doesNotMatch(homePlacement, /line-height\s*:/);
+  // Feed questions use the compact line height and a font size 1px larger.
+  const cardQuestion = ruleBody(journalCss, ".research-feed-card-question");
+  assert.match(cardQuestion, /font-size:\s*calc\(var\(--research-compact-font-size\) \+ 1px\)/);
+  assert.match(cardQuestion, /line-height:\s*var\(--research-compact-line-height\)/);
 
   const threadPlacement = ruleBody(researchCss, ".research-recap");
   assert.doesNotMatch(threadPlacement, /font(?:-size|-style|-weight)?\s*:/);
@@ -97,10 +98,7 @@ test("shared tweet and attachment recipes do not depend on Home CSS", () => {
     /border-top/,
   );
   assert.doesNotMatch(journalCss, /\.research-message-attachments\.has-prompt\s*\{/);
-  const journalColumn = ruleBody(journalCss, ".journal-column");
-  assert.match(journalColumn, /width:\s*100%/);
-  assert.match(
-    journalColumn,
-    /max-width:\s*calc\(var\(--research-feed-max-width\) \+ 2 \* var\(--journal-content-padding\)\)/,
-  );
+  // Feed cards set attachment spacing; shared styles set attachment sizes.
+  const cardAttachments = ruleBody(journalCss, ".research-feed-card .research-message-attachments");
+  assert.match(cardAttachments, /^\s*margin-top:\s*6px;\s*$/);
 });

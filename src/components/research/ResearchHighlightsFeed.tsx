@@ -1,98 +1,96 @@
-import { RotateCw } from "lucide-react";
+import { useRef } from "react";
+import { RotateCw, X } from "lucide-react";
 import type { ResearchHighlightFeedItem } from "../../types";
-import { IS_MAC } from "../../lib/appHelpers";
-import { formatRelativeTime } from "../../lib/transcriptSessions";
-import { ResearchDocumentFrame } from "./ResearchDocumentChrome";
+import { ResearchFeedHeader, ResearchFeedScrollThumb } from "./ResearchFeedChrome";
 
 export interface ResearchHighlightsFeedProps {
   items: ResearchHighlightFeedItem[];
   loading: boolean;
   error: string | null;
   onOpen: (item: ResearchHighlightFeedItem) => void;
+  onRemove?: (item: ResearchHighlightFeedItem) => void;
   onRefresh: () => void;
-  canGoBack?: boolean;
-  canGoForward?: boolean;
-  onBack?: () => void;
-  onForward?: () => void;
 }
 
-/** "Today", "Yesterday", or a calendar date for the feed's day headers. */
-export function formatHighlightDayLabel(createdAt: number, now = Date.now()): string {
-  const day = new Date(createdAt);
-  const today = new Date(now);
-  const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const days = Math.round((startOfDay(today).getTime() - startOfDay(day).getTime()) / 86_400_000);
-  if (days <= 0) return "Today";
-  if (days === 1) return "Yesterday";
-  return day.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    ...(day.getFullYear() === today.getFullYear() ? {} : { year: "numeric" }),
-  });
-}
+/** Anchors store up to this many characters of context on each side,
+ * clamped to the message (ResearchDocument's RESEARCH_HIGHLIGHT_CONTEXT_LENGTH). */
+const STORED_CONTEXT_LENGTH = 128;
+const EXCERPT_CONTEXT_LENGTH = 60;
 
-const CONTEXT_CHAR_LIMIT = 140;
-
-/** Trim stored anchor context to a readable excerpt: the tail of the prefix
- * and the head of the suffix, cut at word boundaries. */
-function excerptContext(text: string, side: "prefix" | "suffix", limit = CONTEXT_CHAR_LIMIT) {
-  const collapsed = text.replace(/\s+/g, " ");
-  if (collapsed.length <= limit) return collapsed;
-  if (side === "prefix") {
-    const tail = collapsed.slice(-limit);
-    const cut = tail.indexOf(" ");
-    return cut > 0 ? tail.slice(cut + 1) : tail;
+/** The part of a highlight's stored context shown beside it: within its
+ * paragraph, at most 60 characters, cut at a word boundary. `cut` says
+ * whether text was left out on that side, which the excerpt marks with "…". */
+export function highlightExcerptContext(
+  text: string,
+  side: "prefix" | "suffix",
+): { text: string; cut: boolean } {
+  const lines = text.split("\n");
+  let context = side === "prefix" ? lines[lines.length - 1] : lines[0];
+  let cut = lines.length === 1 && text.length >= STORED_CONTEXT_LENGTH;
+  context = context.replace(/\s+/g, " ");
+  if (context.length > EXCERPT_CONTEXT_LENGTH) {
+    cut = true;
+    context =
+      side === "prefix"
+        ? context.slice(-EXCERPT_CONTEXT_LENGTH).replace(/^\S*\s/, "")
+        : context.slice(0, EXCERPT_CONTEXT_LENGTH).replace(/\s\S*$/, "");
+  } else if (cut) {
+    context = side === "prefix" ? context.replace(/^\S*\s/, "") : context.replace(/\s\S*$/, "");
   }
-  const head = collapsed.slice(0, limit);
-  const cut = head.lastIndexOf(" ");
-  return cut > 0 ? head.slice(0, cut) : head;
+  return { text: context, cut };
 }
 
-/** Sidebar Highlights page: every saved highlight across open threads, newest
- * first under day headers. Each unit shows the passage inside its surrounding
- * sentence, with the highlighted span marked; opening it selects the thread at
- * that node and scrolls to the passage. */
+/** Groups highlights by thread, threads in the order their newest highlight
+ * appears; within a thread, highlights in the order they were made, which
+ * follows the reading order for most threads (the feed items carry no turn
+ * position). */
+export function groupHighlightsByThread(items: ResearchHighlightFeedItem[]) {
+  const groups = new Map<string, { treeId: string; title: string; items: ResearchHighlightFeedItem[] }>();
+  for (const item of items) {
+    const group = groups.get(item.treeId);
+    if (group) group.items.push(item);
+    else groups.set(item.treeId, { treeId: item.treeId, title: item.treeTitle, items: [item] });
+  }
+  return [...groups.values()].map((group) => ({
+    ...group,
+    items: [...group.items].sort((left, right) => left.createdAt - right.createdAt),
+  }));
+}
+
+/** The Highlights view in the feed column: saved passages grouped by thread,
+ * each under the question it answers and shown inside its surrounding
+ * sentence. Opening one selects the thread at that node and scrolls to the
+ * passage; the remove button deletes the highlight. */
 export default function ResearchHighlightsFeed({
   items,
   loading,
   error,
   onOpen,
+  onRemove,
   onRefresh,
-  canGoBack = false,
-  canGoForward = false,
-  onBack,
-  onForward,
 }: ResearchHighlightsFeedProps) {
-  let lastDay: string | null = null;
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   return (
-    <ResearchDocumentFrame
-      actionsAtEnd
-      title="Highlights"
-      canGoBack={canGoBack}
-      canGoForward={canGoForward}
-      backTitle={`Back (${IS_MAC ? "⌘[" : "Ctrl+["})`}
-      forwardTitle={`Forward (${IS_MAC ? "⌘]" : "Ctrl+]"})`}
-      onBack={onBack}
-      onForward={onForward}
-      navActions={
-        <button
-          type="button"
-          className="control-button research-history-button"
-          onClick={onRefresh}
-          aria-label="Refresh Highlights"
-          title="Refresh Highlights"
-        >
-          <RotateCw size={16} aria-hidden="true" />
-        </button>
-      }
-    >
-      <div className="research-document-scroll journal-scroll">
-        <div className="journal-column research-reading-surface research-highlights-column">
+    <div className="research-feed">
+      <ResearchFeedHeader
+        title="Highlights"
+        actions={
+          <button
+            type="button"
+            className="research-feed-icon-button"
+            onClick={onRefresh}
+            aria-label="Refresh Highlights"
+            title="Refresh Highlights"
+          >
+            <RotateCw size={14} aria-hidden="true" />
+          </button>
+        }
+      />
+      <div ref={scrollRef} className="research-feed-scroll" data-research-scroll>
+        <div className="research-feed-column-body research-reading-surface">
           {error ? (
-            <div className="journal-empty-container">
-              <p className="journal-empty" role="alert">
-                {error}
-              </p>
+            <div className="research-feed-empty is-padded">
+              <p role="alert">{error}</p>
               <button
                 type="button"
                 className="control-button recent-activity-load-older"
@@ -102,79 +100,70 @@ export default function ResearchHighlightsFeed({
               </button>
             </div>
           ) : items.length === 0 ? (
-            <div className="journal-empty-container">
-              <p className="journal-empty">
-                {loading
-                  ? "Loading highlights…"
-                  : "Text you highlight in research answers appears here, newest first."}
-              </p>
+            <div className="research-feed-empty is-padded">
+              {loading
+                ? "Loading highlights…"
+                : "No highlights. Select text in an answer and choose Highlight."}
             </div>
           ) : (
-            <div className="research-highlights-list" role="feed" aria-label="Highlights" aria-busy={loading}>
-              {items.map((item, index) => {
-                const finiteTime = Number.isFinite(item.createdAt);
-                const dayLabel = finiteTime ? formatHighlightDayLabel(item.createdAt) : null;
-                const showDay = dayLabel !== null && dayLabel !== lastDay;
-                if (dayLabel !== null) lastDay = dayLabel;
-                const label =
-                  item.nodeLabel && item.nodeLabel !== item.treeTitle
-                    ? `${item.treeTitle} › ${item.nodeLabel}`
-                    : item.treeTitle;
-                const prefix = excerptContext(item.prefix, "prefix");
-                const suffix = excerptContext(item.suffix, "suffix");
-                const open = () => onOpen(item);
-                return (
-                  <article
-                    key={item.highlightId}
-                    className="research-highlight-unit"
-                    aria-posinset={index + 1}
-                    aria-setsize={items.length}
-                  >
-                    {showDay ? <div className="research-highlight-day">{dayLabel}</div> : null}
-                    <div
-                      className="research-highlight-excerpt"
-                      role="button"
-                      tabIndex={0}
-                      title="Open in thread"
-                      onClick={open}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") return;
-                        event.preventDefault();
-                        open();
-                      }}
-                    >
-                      {prefix ? (
-                        <span className="research-highlight-context">{`…${prefix}`}</span>
-                      ) : null}
-                      <mark className="research-highlight-mark">{item.exact}</mark>
-                      {suffix ? (
-                        <span className="research-highlight-context">{`${suffix}…`}</span>
-                      ) : null}
-                    </div>
-                    <div
-                      className="research-highlight-footer"
-                      title={finiteTime ? new Date(item.createdAt).toLocaleString() : undefined}
-                    >
-                      <button
-                        type="button"
-                        className="control-button research-highlight-source"
-                        onClick={open}
-                      >
-                        {label}
-                      </button>
-                      {finiteTime ? (
-                        <time dateTime={new Date(item.createdAt).toISOString()}>
-                          {formatRelativeTime(item.createdAt)}
-                        </time>
-                      ) : null}
-                    </div>
-                  </article>
-                );
-              })}
+            <div role="feed" aria-label="Highlights" aria-busy={loading}>
+              {groupHighlightsByThread(items).map((group) => (
+                <section key={group.treeId} className="research-highlight-group">
+                  <div className="research-highlight-source">{group.title}</div>
+                  {group.items.map((item) => {
+                    const prefix = highlightExcerptContext(item.prefix, "prefix");
+                    const suffix = highlightExcerptContext(item.suffix, "suffix");
+                    const turn = item.nodeLabel && item.nodeLabel !== item.treeTitle ? item.nodeLabel : null;
+                    return (
+                      <article key={item.highlightId} className="research-highlight-item">
+                        <button
+                          type="button"
+                          className="research-highlight-open"
+                          title={
+                            Number.isFinite(item.createdAt)
+                              ? `Highlighted ${new Date(item.createdAt).toLocaleString()}`
+                              : undefined
+                          }
+                          onClick={() => onOpen(item)}
+                        >
+                          {turn ? (
+                            <span className="research-highlight-turn">{turn.split("\n")[0]}</span>
+                          ) : null}
+                          <span className="research-highlight-excerpt">
+                            {prefix.text || prefix.cut ? (
+                              <span className="research-highlight-context">
+                                {`${prefix.cut ? "…" : ""}${prefix.text}`}
+                              </span>
+                            ) : null}
+                            <mark className="research-highlight-mark">{item.exact}</mark>
+                            {suffix.text || suffix.cut ? (
+                              <span className="research-highlight-context">
+                                {`${suffix.text}${suffix.cut ? "…" : ""}`}
+                              </span>
+                            ) : null}
+                          </span>
+                        </button>
+                        {onRemove ? (
+                          <button
+                            type="button"
+                            className="research-feed-icon-button research-highlight-remove"
+                            title="Remove highlight"
+                            aria-label="Remove highlight"
+                            onClick={() => onRemove(item)}
+                          >
+                            <X size={14} aria-hidden="true" />
+                          </button>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </section>
+              ))}
             </div>
           )}
         </div>
       </div>
-    </ResearchDocumentFrame>
+      <ResearchFeedScrollThumb scrollRef={scrollRef} />
+    </div>
   );
 }
