@@ -130,8 +130,8 @@ Boot: validate env → write the Vertex credential file → open DB (pragmas) �
 `resume_pending` nodes (`05-run-lifecycle-and-streaming.md` §7) → probe
 provider credentials (async; missing ones mark models `unavailable`) →
 listen. `/healthz` returns 503 (`starting`) until the listen callback runs and
-503 (`draining`) from the first moment of the drain, so Fly's check follows
-the process rather than the port.
+503 (`draining`) when shutdown starts, so Fly routes requests only while
+the process can accept them.
 
 Shutdown on `SIGTERM`: stop admitting; abort open provider streams after
 persisting their last checkpoint; mark their nodes `interrupted` with
