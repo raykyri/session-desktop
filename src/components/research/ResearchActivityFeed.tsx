@@ -40,10 +40,16 @@ import {
   type ResearchFeedChild,
 } from "../../lib/researchFolders";
 import { isActiveResearchStatus } from "../../lib/researchThreads";
+import {
+  feedCycleStep,
+  type FeedCycleEntry,
+  type FeedCyclePosition,
+  type ResearchCycleRequest,
+} from "../../lib/researchSiblingCycle";
 import { researchJournalViewKey, type ResearchFeedView } from "../../lib/sidebarMode";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
-import ResearchArchivedFeed from "./ResearchArchivedFeed";
+import ResearchArchivedFeed, { archivedFeedTrees } from "./ResearchArchivedFeed";
 import { ResearchColumnsContext } from "./ResearchColumns";
 import { ResearchFeedHeader, ResearchFeedScrollThumb } from "./ResearchFeedChrome";
 import ResearchFeedPost, {
@@ -799,6 +805,13 @@ function ResearchActivityFeed({
         : { kind: "draft", draftId, anchor },
     );
 
+  /** Opens a thread's card: a question row opens its thread at the question;
+   * a row for a later node of the tree opens at that node. */
+  function openTreeCard(tree: ResearchTreeSummary | undefined, query: RecentResearchQuery | undefined) {
+    if (query && query.nodeId !== tree?.rootNodeId) onOpenResearchQuery(query);
+    else onOpenTree?.(tree?.id ?? query?.treeId ?? "");
+  }
+
   /** A thread's card: its root question when loaded, else its title. */
   function renderTreeCard(tree: ResearchTreeSummary | undefined, query: RecentResearchQuery | undefined) {
     const treeId = tree?.id ?? query?.treeId ?? "";
@@ -852,11 +865,7 @@ function ResearchActivityFeed({
         selectedChildNodeIds={selected ? selectedChildNodeIds : EMPTY_NODE_IDS}
         childMenuNodeId={menuChildNodeId}
         menuOpen={menuTreeId === treeId}
-        // A question row opens its thread at the question; a row for a later
-        // node of the tree opens at that node.
-        onOpen={() =>
-          query && query.nodeId !== tree?.rootNodeId ? onOpenResearchQuery(query) : onOpenTree?.(treeId)
-        }
+        onOpen={() => openTreeCard(tree, query)}
         onOpenChild={(child) => onOpenResearchQuery(child.query)}
         onMenu={tree && onMoveTree ? (anchor) => openMoveMenu(tree.id, anchor) : undefined}
         onChildMenu={
@@ -957,6 +966,150 @@ function ResearchActivityFeed({
     view.kind === "bookmarks"
       ? researchTrees.filter((tree) => tree.archivedAt != null && tree.bookmarked)
       : [];
+
+  // ⌃Tab / ⌃⇧Tab with the feed as the column last interacted with (see
+  // ResearchColumns): opens the next or previous card of the list that holds
+  // the current row, as clicking it would, or the next or previous child row
+  // of the same card when the current row is a child row. The lists are
+  // Home's recent activity (Bookmarks' list) and each open tray, or the
+  // view's own cards. The current row is the focused feed row, else the open
+  // card, or the child row last opened in it while that row shows selected.
+  const openedChildRef = useRef<{ cardId: string; nodeId: string } | null>(null);
+  const cycleFeedRef = useRef<(request: ResearchCycleRequest) => boolean>(() => false);
+  cycleFeedRef.current = (request) => {
+    interface FeedRowEntry extends FeedCycleEntry {
+      cardId: string;
+      childRows: ResearchFeedChild[];
+      /** The card's row in the virtualized list, which may not be rendered. */
+      virtualIndex: number | null;
+      open: () => void;
+    }
+    const treeEntry = (
+      tree: ResearchTreeSummary | undefined,
+      query: RecentResearchQuery | undefined,
+      virtualIndex: number | null = null,
+    ): FeedRowEntry => {
+      const cardId = tree?.id ?? query?.treeId ?? "";
+      const childRows = query ? researchFeedChildren(query) : [];
+      return {
+        key: `tree:${cardId}`,
+        cardId,
+        children: childRows.map((child) => child.nodeId),
+        childRows,
+        virtualIndex,
+        open: () => openTreeCard(tree, query),
+      };
+    };
+    const placeEntries = (place: string): FeedRowEntry[] => {
+      if (place === RESEARCH_ARCHIVE_FOLDER_ID) {
+        return archivedFeedTrees(researchTrees).map((tree) => treeEntry(tree, undefined));
+      }
+      const placeDrafts = place === RESEARCH_DRAFTS_FOLDER_ID ? drafts : EMPTY_DRAFTS;
+      return [
+        ...placeDrafts.map(
+          (draft): FeedRowEntry => ({
+            key: `draft:${draft.id}`,
+            cardId: draft.id,
+            children: [],
+            childRows: [],
+            virtualIndex: null,
+            open: () => onOpenDraft?.(draft),
+          }),
+        ),
+        ...treesIn(place).map((tree) => treeEntry(tree, queryByTree.get(tree.id))),
+      ];
+    };
+    const lists: FeedRowEntry[][] = [];
+    if (paginated) {
+      lists.push([
+        ...rows.map((row, index) => {
+          const query = row.event.source.query;
+          return treeEntry(treeById.get(query.treeId), query, index);
+        }),
+        ...archivedBookmarks.map((tree) => treeEntry(tree, undefined)),
+      ]);
+    }
+    if (view.kind === "home") {
+      for (const place of trayPlaces) {
+        if (!collapsed.has(place)) lists.push(placeEntries(place));
+      }
+    }
+    if (soloPlace) lists.push(placeEntries(soloPlace));
+
+    const step = feedCycleStep(lists, currentFeedPosition(), request.direction);
+    const entry = step ? lists.flat().find((candidate) => candidate.key === step.key) : undefined;
+    if (!step || !entry) return true;
+    const child = step.child ? entry.childRows.find((candidate) => candidate.nodeId === step.child) : undefined;
+    if (child) {
+      openedChildRef.current = { cardId: entry.cardId, nodeId: child.nodeId };
+      onOpenResearchQuery(child.query);
+    } else {
+      openedChildRef.current = null;
+      entry.open();
+    }
+    revealFeedRow(entry.cardId, entry.virtualIndex, child?.nodeId ?? null, request.keepFocus);
+    return true;
+  };
+  useEffect(() => columns?.registerCycle("feed", (request) => cycleFeedRef.current(request)), [columns]);
+
+  /** The feed row ⌃Tab steps from (see cycleFeedRef). */
+  function currentFeedPosition(): FeedCyclePosition | null {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && scrollRef.current?.contains(active)) {
+      const card = active.matches(".research-feed-card-hit")
+        ? active.closest<HTMLElement>(".research-feed-card")
+        : null;
+      if (card?.dataset.researchCard) {
+        return { key: `${card.dataset.researchCardKind ?? "tree"}:${card.dataset.researchCard}`, child: null };
+      }
+      const childOf = active.matches(".research-feed-child-open")
+        ? active.closest<HTMLElement>("[data-research-child-of]")?.dataset.researchChildOf
+        : undefined;
+      if (childOf) {
+        return { key: `tree:${childOf}`, child: active.dataset.nodeId ?? null };
+      }
+    }
+    if (selectedDraftId) return { key: `draft:${selectedDraftId}`, child: null };
+    if (!selectedTreeId) return null;
+    const opened = openedChildRef.current;
+    return {
+      key: `tree:${selectedTreeId}`,
+      child:
+        opened?.cardId === selectedTreeId && selectedChildNodeIds.includes(opened.nodeId) ? opened.nodeId : null,
+    };
+  }
+
+  /** Scrolls a card (or one of its child rows) into view, rendering it first
+   * when it is a virtualized row outside the rendered range, and focuses it
+   * unless focus stays in a text field. */
+  function revealFeedRow(cardId: string, virtualIndex: number | null, childNodeId: string | null, keepFocus: boolean) {
+    const scroller = scrollRef.current;
+    if (scroller && virtualIndex !== null) {
+      const geometry = metricsRef.current;
+      const top = (virtualCanvasRef.current?.offsetTop ?? 0) + (geometry.offsets[virtualIndex] ?? 0);
+      const bottom = top + (geometry.sizes[virtualIndex] ?? 0);
+      if (top < scroller.scrollTop) {
+        scroller.scrollTop = top;
+      } else if (bottom > scroller.scrollTop + scroller.clientHeight) {
+        scroller.scrollTop = Math.min(top, bottom - scroller.clientHeight);
+      }
+    }
+    const selector = childNodeId
+      ? `[data-research-child-of="${CSS.escape(cardId)}"] .research-feed-child-open[data-node-id="${CSS.escape(childNodeId)}"]`
+      : `.research-feed-card[data-research-card="${CSS.escape(cardId)}"] .research-feed-card-hit`;
+    const started = performance.now();
+    const attempt = () => {
+      const row = scrollRef.current?.querySelector<HTMLElement>(selector);
+      if (!row) {
+        if (performance.now() - started < 500) requestAnimationFrame(attempt);
+        return;
+      }
+      row.scrollIntoView({ block: "nearest" });
+      if (!keepFocus) row.focus({ preventScroll: true });
+    };
+    requestAnimationFrame(attempt);
+  }
+
   const listEmpty = feed.length === 0;
   // The first-run text (or setup guide) shows only while nothing exists yet:
   // no questions anywhere and no drafts.
@@ -1065,6 +1218,18 @@ function ResearchActivityFeed({
           if (!target.matches(FEED_ROW_SELECTOR)) return;
           rovingRowRef.current = target;
           applyFeedRoving(event.currentTarget, target);
+        }}
+        // The child row a click (or Enter) opened is the row ⌃Tab steps from
+        // while its thread is open; WebKit does not focus a clicked button.
+        onClickCapture={(event) => {
+          const target = event.target as HTMLElement;
+          const child = target.closest<HTMLElement>(".research-feed-child-open");
+          const cardId = child?.closest<HTMLElement>("[data-research-child-of]")?.dataset.researchChildOf;
+          if (child && cardId && child.dataset.nodeId) {
+            openedChildRef.current = { cardId, nodeId: child.dataset.nodeId };
+          } else if (target.closest(".research-feed-card-hit")) {
+            openedChildRef.current = null;
+          }
         }}
         onKeyDown={(event) => {
           const target = event.target as HTMLElement;

@@ -89,8 +89,16 @@ test("the composer comes first, then replies and follow-ups as rows, oldest firs
   assert.match(html, /<ol class="note-thread-list is-nested">/);
   assert.equal(html.match(/data-research-thread-row=""/g)?.length, 5);
   // The first row is the one in the tab order.
-  assert.match(html, /<li class="note-thread-item" data-type="reply" tabindex="0" data-research-thread-row="">/);
+  assert.match(
+    html,
+    /<li class="note-thread-item" data-type="reply" tabindex="0" data-research-thread-row="" data-thread-key="reply:r1">/,
+  );
   assert.equal(html.match(/tabindex="0"/g)?.length, 1);
+  // Each row names its entry, for ⌃Tab with focus kept in a text field.
+  assert.deepEqual(
+    [...html.matchAll(/data-thread-key="([^"]+)"/g)].map((match) => match[1]),
+    ["reply:r1", "about", "net", "reply:r2", "answered"],
+  );
 });
 
 test("a follow-up row shows its reply count or its answer state", () => {
@@ -113,7 +121,7 @@ test("the open follow-up's row is selected and in the tab order", () => {
   const html = render([withReplies, answered, about, network], { openNodeId: "net" });
   assert.match(
     html,
-    /<li class="note-thread-item note-thread-follow-up is-selected" data-type="follow-up"><button type="button" class="note-thread-hit" data-research-thread-row="" data-node-id="net" aria-current="true"[^>]*tabindex="0"/,
+    /<li class="note-thread-item note-thread-follow-up is-selected" data-type="follow-up"><button type="button" class="note-thread-hit" data-research-thread-row="" data-thread-key="net" data-node-id="net" aria-current="true"[^>]*tabindex="0"/,
   );
   assert.equal(html.match(/tabindex="0"/g)?.length, 1);
   assert.equal(html.match(/aria-current="true"/g)?.length, 1);
@@ -164,7 +172,7 @@ test("corrections are Thread rows ordered by time with the replies and follow-up
       onOpenFollowUp: noop,
     }),
   );
-  assert.match(html, /data-type="correction"[^>]*data-research-thread-row/);
+  assert.match(html, /data-type="correction"[^>]*data-research-thread-row="" data-thread-key="correction:/);
   assert.match(html, /note-correction-label">Correction</);
   assert.match(html, /<strong>wit-bindgen 0.30<\/strong>/);
 });

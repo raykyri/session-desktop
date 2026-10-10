@@ -37,7 +37,7 @@ import {
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
 import ResearchNoteDocument from "./ResearchNoteDocument";
-import ResearchNoteThread, { noteThreadEntries } from "./ResearchNoteThread";
+import ResearchNoteThread, { noteThreadEntries, type ResearchNoteThreadHandle } from "./ResearchNoteThread";
 import { ResearchTreeMenuItems, type ResearchTreeMenuProps } from "./ResearchMoveMenu";
 import type { NoteActions } from "./ResearchNote";
 import {
@@ -71,6 +71,7 @@ import {
   type ResearchPendingColumn,
   type ResearchEditorColumn as ResearchEditorColumnData,
 } from "../../lib/researchColumns";
+import { cycleIndex, researchCycleColumn, type ResearchCycleRequest } from "../../lib/researchSiblingCycle";
 import {
   listenToResearchFollowupsFocus,
   listenToResearchNodeOpen,
@@ -2185,6 +2186,91 @@ function ResearchDocument({
     row.addEventListener("focusin", onFocusIn);
     return () => row.removeEventListener("focusin", onFocusIn);
   }, [columnsLayout?.row]);
+
+  // ⌃Tab / ⌃⇧Tab, dispatched by ResearchColumns: the next or previous row of
+  // the column last interacted with, wrapping. Rows are what ↑/↓ move
+  // between: a messages column's messages (an answer column cycles its
+  // level's messages), selected as a click selects them; a post's thread
+  // column's rows, where a follow-up row also opens its follow-up. The cycle
+  // starts from the focused row when focus is on one, else from the selected
+  // message or the thread's current row. Focus moves to the new row unless
+  // it is in a text field. A column without rows uses the nearest one to its
+  // left. Returns false when the column to cycle is the feed, which then
+  // handles the request.
+  const threadHandleRef = useRef<ResearchNoteThreadHandle | null>(null);
+  const cycleRows = useCallback(
+    (request: ResearchCycleRequest): boolean => {
+      const workspace = workspaceRef.current;
+      if (!workspace) {
+        return false;
+      }
+      const columnElement = (id: ResearchColumnId) => workspace.querySelector<HTMLElement>(columnSelector(id));
+      const strip = stripRef.current;
+      const candidates = strip.columns.flatMap((column) =>
+        column.role === "messages" ||
+        (column.role === "thread" && columnElement(column.id)?.querySelector("[data-research-thread-row]"))
+          ? [column.id]
+          : [],
+      );
+      const targetId = researchCycleColumn(candidates, request.column);
+      const column = strip.columns.find((candidate) => candidate.id === targetId);
+      const element = targetId === "feed" ? null : columnElement(targetId);
+      if (!column || !element || (column.role !== "messages" && column.role !== "thread")) {
+        return false;
+      }
+      const level = column.level.index;
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const stripRow = columnsLayoutRef.current?.row ?? null;
+      if (column.role === "messages") {
+        const ids = column.level.chainIds;
+        const focusedId =
+          active?.matches("[data-research-row]") && element.contains(active) ? active.dataset.nodeId : undefined;
+        const nextId = ids[cycleIndex(ids.length, ids.indexOf(focusedId ?? column.level.selectedId), request.direction)];
+        if (!nextId) {
+          return true;
+        }
+        selectMessage(level, nextId);
+        if (!request.keepFocus) {
+          requestFocus({ kind: "row", level }, "reveal");
+          return true;
+        }
+        window.requestAnimationFrame(() => {
+          const current = columnElement(targetId);
+          const row = current?.querySelector<HTMLElement>(`[data-research-row][data-node-id="${CSS.escape(nextId)}"]`);
+          if (current && row) {
+            scrollIntoColumn(row);
+            revealResearchColumns(stripRow, current);
+          }
+        });
+        return true;
+      }
+      const rows = [...element.querySelectorAll<HTMLElement>("[data-research-thread-row]")];
+      const current =
+        (active && rows.includes(active) ? active : null) ?? element.querySelector<HTMLElement>(COLUMN_ROW_SELECTOR);
+      const next = rows[cycleIndex(rows.length, current ? rows.indexOf(current) : -1, request.direction)];
+      if (!next) {
+        return true;
+      }
+      const followUpId = next.dataset.nodeId;
+      if (followUpId) {
+        openBranch(level, followUpId);
+      }
+      if (request.keepFocus) {
+        threadHandleRef.current?.makeCurrent(next);
+      } else {
+        next.focus({ preventScroll: true });
+      }
+      scrollIntoColumn(next);
+      if (followUpId) {
+        window.requestAnimationFrame(() => settleResearchStrip(columnsLayoutRef.current?.row ?? null, targetId));
+      } else {
+        revealResearchColumns(stripRow, element);
+      }
+      return true;
+    },
+    [openBranch, requestFocus, selectMessage],
+  );
+  useEffect(() => columnsLayout?.registerCycle("document", cycleRows), [columnsLayout, cycleRows]);
 
   // The column (and with it the scroller that carries swipe navigation)
   // renders once there is a detail, a root and a selection. A document
@@ -4961,6 +5047,7 @@ function ResearchDocument({
                   requireCmdEnterToSend={requireCmdEnterToSend}
                   openNodeId={levels[level + 1]?.headId ?? null}
                   composerRef={registerComposer(note.id)}
+                  threadRef={threadHandleRef}
                   onOpenFollowUp={(nodeId) => {
                     openBranch(level, nodeId);
                     requestFocus({ kind: "row", level }, "settle");

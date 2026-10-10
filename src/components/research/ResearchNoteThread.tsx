@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useId, useImperativeHandle, useMemo, useState } from "react";
 import type { ReactNode, Ref } from "react";
 import { Globe, Pencil, Sparkles } from "lucide-react";
 import type { NoteCorrection, NoteReply, ResearchNode } from "../../types";
@@ -23,6 +23,12 @@ type NoteThreadEntry =
   | { kind: "reply"; key: string; at: number; reply: NoteReply }
   | { kind: "follow-up"; key: string; at: number; node: ResearchNode }
   | { kind: "correction"; key: string; at: number; correction: NoteCorrection };
+
+/** Makes `row` (a row element of this thread) the one in the tab order
+ * without focusing it, for ⌃Tab with focus kept in a text field. */
+export interface ResearchNoteThreadHandle {
+  makeCurrent: (row: HTMLElement) => void;
+}
 
 /** The rows of a note's thread, oldest first: its top-level network replies,
  * its follow-ups (child nodes other than documents) and its corrections,
@@ -52,7 +58,7 @@ export function noteThreadEntries(nodes: readonly ResearchNode[], note: Research
  * follow-up) or its answer state (an AI follow-up), and opens the follow-up
  * as the next level. One row is in the tab order: the open follow-up's, else
  * the row focused last, else the first. ResearchDocument handles the column's
- * keys. */
+ * keys. Each row carries its entry's key in `data-thread-key`. */
 export default function ResearchNoteThread({
   nodes,
   note,
@@ -61,6 +67,7 @@ export default function ResearchNoteThread({
   requireCmdEnterToSend,
   openNodeId,
   composerRef,
+  threadRef,
   onOpenFollowUp,
 }: {
   nodes: readonly ResearchNode[];
@@ -72,10 +79,21 @@ export default function ResearchNoteThread({
   /** The follow-up open as the next level, if any. */
   openNodeId: string | null;
   composerRef?: Ref<ResearchComposerHandle>;
+  threadRef?: Ref<ResearchNoteThreadHandle>;
   onOpenFollowUp: (nodeId: string) => void;
 }) {
   const [target, setTarget] = useState<NoteReplyTarget | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(openNodeId);
+  useImperativeHandle(
+    threadRef,
+    () => ({
+      makeCurrent: (row) => {
+        const key = row.dataset.threadKey;
+        if (key) setActiveKey(key);
+      },
+    }),
+    [],
+  );
   // Opening a follow-up (from the row, the feed or history) makes its row the
   // one in the tab order, so focus returns to it after the level closes.
   const [lastOpenNodeId, setLastOpenNodeId] = useState(openNodeId);
@@ -121,6 +139,7 @@ export default function ResearchNoteThread({
             entry.kind === "correction" ? (
               <NoteCorrectionRow
                 key={entry.key}
+                threadKey={entry.key}
                 correction={entry.correction}
                 tabbable={tabKey === entry.key}
                 onFocus={() => setActiveKey(entry.key)}
@@ -137,6 +156,7 @@ export default function ResearchNoteThread({
                 rowProps={{
                   tabIndex: tabKey === entry.key ? 0 : -1,
                   "data-research-thread-row": "",
+                  "data-thread-key": entry.key,
                   onFocus: (event) => {
                     if (event.target === event.currentTarget) {
                       setActiveKey(entry.key);
@@ -209,6 +229,7 @@ function NoteFollowUpRow({
         type="button"
         className="note-thread-hit"
         data-research-thread-row=""
+        data-thread-key={child.id}
         data-node-id={child.id}
         aria-current={open ? "true" : undefined}
         aria-labelledby={labelId}
@@ -242,10 +263,12 @@ function NoteFollowUpRow({
 
 /** A correction the author appended to the post, as a row in its thread. */
 function NoteCorrectionRow({
+  threadKey,
   correction,
   tabbable,
   onFocus,
 }: {
+  threadKey: string;
   correction: NoteCorrection;
   tabbable: boolean;
   onFocus: () => void;
@@ -255,6 +278,7 @@ function NoteCorrectionRow({
       className="note-thread-item note-thread-correction"
       data-type="correction"
       data-research-thread-row=""
+      data-thread-key={threadKey}
       tabIndex={tabbable ? 0 : -1}
       onFocus={(event) => {
         if (event.target === event.currentTarget) onFocus();

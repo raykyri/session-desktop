@@ -1,4 +1,4 @@
-import { createContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from "react";
 import {
   COLUMN_ROW_SELECTOR,
@@ -8,6 +8,8 @@ import {
   isMessagesColumnId,
   type ResearchColumnId,
 } from "../../lib/researchColumns";
+import { isEditableTarget } from "../../lib/appHelpers";
+import { researchCycleDirection, type ResearchCycleRequest } from "../../lib/researchSiblingCycle";
 
 const clampWidth = (value: number, min: number, max: number) =>
   Math.round(Math.max(min, Math.min(max, value)));
@@ -143,7 +145,15 @@ interface ResearchColumnsLayout {
    * selected message of its first level (`deepest`: of its deepest level)
    * once it has rendered. A draft's column keeps focus off its ask box. */
   focusOpenedThread: (deepest: boolean) => void;
+  /** Registers the handler for ⌃Tab / ⌃⇧Tab in the feed or in the open
+   * document; returns the function that removes it. A handler returns false
+   * when the request is not its own (the document's, when the column to
+   * cycle is the feed). */
+  registerCycle: (owner: ResearchCycleOwner, handler: ResearchCycleHandler) => () => void;
 }
+
+type ResearchCycleOwner = "feed" | "document";
+type ResearchCycleHandler = (request: ResearchCycleRequest) => boolean;
 
 export const ResearchColumnsContext = createContext<ResearchColumnsLayout | null>(null);
 
@@ -169,6 +179,53 @@ export default function ResearchColumns({
   const [feedWidth, setFeedWidth] = useState<number | null>(loadFeedWidth);
 
   useEffect(listenForInteraction, []);
+
+  // ⌃Tab / ⌃⇧Tab select the next or previous row of the column last
+  // interacted with: the last column in the strip that was focused, pressed
+  // or typed in. Focus moving out of the strip (a menu, the sidebar) leaves
+  // it as it was. The Home ask box handles ⌃Tab itself (it cycles the model
+  // and the agent) and stops the event before it reaches this listener.
+  const lastColumnRef = useRef<ResearchColumnId | null>(null);
+  const cycleHandlersRef = useRef<Partial<Record<ResearchCycleOwner, ResearchCycleHandler>>>({});
+  const registerCycle = useCallback((owner: ResearchCycleOwner, handler: ResearchCycleHandler) => {
+    cycleHandlersRef.current[owner] = handler;
+    return () => {
+      if (cycleHandlersRef.current[owner] === handler) delete cycleHandlersRef.current[owner];
+    };
+  }, []);
+  useEffect(() => {
+    if (!row) return;
+    const track = (event: Event) => {
+      const id = columnIdOf(event.target instanceof Element ? event.target : null);
+      if (id) lastColumnRef.current = id;
+    };
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      const direction = researchCycleDirection(event);
+      if (direction === null || event.defaultPrevented || event.isComposing) return;
+      // The strip hidden behind another surface, or focus in a dialog or menu.
+      if (!row.isConnected || row.getClientRects().length === 0) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("[role='dialog'], [role='alertdialog'], [role='menu'], .terminal-pane")) return;
+      event.preventDefault();
+      const request: ResearchCycleRequest = {
+        column: lastColumnRef.current,
+        direction,
+        keepFocus: isEditableTarget(document.activeElement),
+      };
+      const handlers = cycleHandlersRef.current;
+      if (!handlers.document?.(request)) handlers.feed?.(request);
+    };
+    row.addEventListener("pointerdown", track, true);
+    row.addEventListener("keydown", track, true);
+    row.addEventListener("focusin", track);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      row.removeEventListener("pointerdown", track, true);
+      row.removeEventListener("keydown", track, true);
+      row.removeEventListener("focusin", track);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [row]);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -357,8 +414,9 @@ export default function ResearchColumns({
         };
         requestAnimationFrame(attempt);
       },
+      registerCycle,
     }),
-    [feedCurrent, overlay, row],
+    [feedCurrent, overlay, registerCycle, row],
   );
   return (
     <ResearchColumnsContext.Provider value={layout}>

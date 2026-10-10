@@ -216,6 +216,7 @@ export default function ResearchFeedPost({
               index === childRows.length - 1 ? " is-group-end" : ""
             }${childSelected ? " is-selected" : ""}${childMenuOpen ? " has-open-menu" : ""}`}
             style={{ "--research-child-level": child.level } as CSSProperties}
+            data-research-child-of={cardId}
             onPointerDown={
               onDragStart
                 ? (event) => onDragStart(event, { kind: dragKind, id: cardId, place }, cardRef.current)
@@ -225,6 +226,7 @@ export default function ResearchFeedPost({
             <button
               type="button"
               className="research-feed-child-open"
+              data-node-id={child.nodeId}
               aria-current={childSelected ? "true" : undefined}
               onClick={() => onOpenChild?.(child)}
             >
