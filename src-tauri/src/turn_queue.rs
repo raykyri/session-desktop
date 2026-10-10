@@ -481,7 +481,7 @@ pub fn reorder_queued_agent_turn(
 /// itself, the queue empties/blocks, or a pause lands. Returns whether the agent is
 /// now running a turn of its own — delivery turns dispatched along the way go to
 /// new panes and leave it idle, so they don't count, keeping callers'
-/// `agent.running` emissions and `sent` flags truthful.
+/// `agent.running` emissions and `sent` flags accurate.
 pub fn drain_agent_turn_queue(state: &AppState, agent_id: &str) -> Result<bool, String> {
     loop {
         // Claim under the model lock so two concurrent triggers can't each pop a ready
@@ -505,9 +505,8 @@ pub fn drain_agent_turn_queue(state: &AppState, agent_id: &str) -> Result<bool, 
     }
 }
 
-/// How a claimed turn was dispatched — the single source of truth for whether the
-/// owning agent is now busy, derived from the turn's delivery directive in exactly
-/// one place (`send_claimed_turn`).
+/// How a claimed turn was dispatched and whether its agent is now busy.
+/// `send_claimed_turn` derives this from the turn's delivery directive.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DispatchOutcome {
     /// The turn was pasted into the agent's own pane; the agent is running it.
