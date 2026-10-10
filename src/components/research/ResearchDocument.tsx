@@ -92,6 +92,7 @@ import {
   canRetryResearchNode,
   inlineChainFor,
   isActiveResearchStatus,
+  threadComposerPlaceholder,
 } from "../../lib/researchThreads";
 import {
   RESEARCH_DOCUMENT_BYTE_LIMIT,
@@ -4645,13 +4646,7 @@ function ResearchDocument({
     const busy = chain.some((node) => isActiveResearchStatus(nodeStatus(node)));
     const placeholder = editingId
       ? "Edit the question"
-      : nodeMessage(head) === null && chain.length === 1
-        ? documentSource(head) === "transcript"
-          ? "Ask about this conversation"
-          : "Ask about this document"
-          : busy || queued
-            ? "Ask a follow-up (queued)"
-            : "Ask a follow-up";
+      : threadComposerPlaceholder(head, chain.length, busy || queued);
     const cancelEditing = () => {
       setEditingByHead((current) => withoutKeys(current, [headId]));
       setComposerText((current) => ({ ...current, [headId]: "" }));

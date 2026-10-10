@@ -9,6 +9,7 @@ import {
   inlineChildOf,
   isActiveResearchStatus,
   researchThreadStopTarget,
+  threadComposerPlaceholder,
 } from "../src/lib/researchThreads";
 import type { ResearchNode, ResearchNodeStatus } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
@@ -214,4 +215,18 @@ test("run tails need the session checkpoint; documents and conversations do not"
   assert.equal(canContinueThread([document], document), true);
   const conversation = node("conv", { type: "document", source: "transcript", sessionReady: false });
   assert.equal(canContinueThread([conversation], conversation), true);
+});
+
+test("every document asks about itself until its first follow-up", () => {
+  const authored = node("doc", { type: "document", source: "authored" });
+  const imported = node("report", { type: "document", source: "imported" });
+  const transcript = node("conv", { type: "document", source: "transcript" });
+  // An imported report keeps its question, but follow-ups start a fresh run
+  // with the report as context, as for any document.
+  assert.equal(threadComposerPlaceholder(authored, 1, false), "Ask about this document");
+  assert.equal(threadComposerPlaceholder(imported, 1, false), "Ask about this document");
+  assert.equal(threadComposerPlaceholder(transcript, 1, false), "Ask about this conversation");
+  assert.equal(threadComposerPlaceholder(imported, 2, false), "Ask a follow-up");
+  assert.equal(threadComposerPlaceholder(node("q"), 1, false), "Ask a follow-up");
+  assert.equal(threadComposerPlaceholder(node("q"), 1, true), "Ask a follow-up (queued)");
 });

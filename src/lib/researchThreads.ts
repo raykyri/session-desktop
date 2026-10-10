@@ -5,7 +5,7 @@
 // whatever node list they are given, so a malformed graph degrades to
 // shorter chains rather than throwing.
 
-import { followUpLaunch, nodeRun, nodeStatus } from "./researchNodeTypes";
+import { documentSource, followUpLaunch, nodeRun, nodeStatus } from "./researchNodeTypes";
 import type { ResearchNode, ResearchNodeStatus } from "../types";
 
 /** The statuses of a run that has been admitted but not settled. One list,
@@ -164,4 +164,22 @@ export function canRetryResearchNode(node: ResearchNode): boolean {
  * branch follow-ups are gated today. */
 export function canContinueThread(nodes: ResearchNode[], tail: ResearchNode): boolean {
   return canFollowUpFrom(tail) && !inlineChildOf(nodes, tail.id);
+}
+
+/** The ask box placeholder of a thread level whose chain starts at `head`.
+ * A document with no follow-up yet asks about the document (or, for a
+ * transcript, the conversation), whether or not it carries a message: an
+ * imported report's question is shown as its message row, but a follow-up
+ * starts a fresh run with the report as context rather than continuing the
+ * run that wrote it. */
+export function threadComposerPlaceholder(
+  head: ResearchNode,
+  chainLength: number,
+  waiting: boolean,
+): string {
+  const source = documentSource(head);
+  if (source !== null && chainLength === 1) {
+    return source === "transcript" ? "Ask about this conversation" : "Ask about this document";
+  }
+  return waiting ? "Ask a follow-up (queued)" : "Ask a follow-up";
 }
