@@ -254,7 +254,7 @@ export default function BrowserOverlay({
         setMirrorFrame(snapshot.imageDataUrl);
         settledAt = performance.now();
       } catch {
-        // The stream is still the source of truth; the next quiet moment retries.
+        // Keep the streamed frame and retry the snapshot after the stream settles.
       } finally {
         requestInFlight = false;
       }
