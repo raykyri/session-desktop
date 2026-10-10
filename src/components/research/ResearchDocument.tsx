@@ -4929,7 +4929,7 @@ function ResearchDocument({
                 )}
                 <ResearchPostCorrections corrections={note.corrections ?? []} now={minuteNow} />
                 {postEditing?.correction && postEditing.text.trim() && postEditing.text !== postEditing.initialText ? (
-                  <ResearchEditPreview original="" next={editorText} label="Correction preview" />
+                  <ResearchEditPreview original="" next={editorText} label="Correction preview" marksChanges={false} />
                 ) : null}
               </div>
             </div>

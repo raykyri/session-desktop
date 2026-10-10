@@ -222,6 +222,7 @@ export const ResearchEditPreview = memo(function ResearchEditPreview({
   next,
   imported = false,
   label,
+  marksChanges = true,
 }: {
   original: string;
   next: string;
@@ -229,6 +230,8 @@ export const ResearchEditPreview = memo(function ResearchEditPreview({
   imported?: boolean;
   /** Names what is previewed: "Preview", "Correction preview". */
   label: string;
+  /** Marks and counts the blocks not in `original`; off for new text. */
+  marksChanges?: boolean;
 }) {
   const blocks = useMemo(() => {
     const seen = new Map<string, number>();
@@ -244,7 +247,10 @@ export const ResearchEditPreview = memo(function ResearchEditPreview({
       <p className="research-edit-preview-bar">
         <Eye size={13} aria-hidden="true" />
         <span>
-          {label} · {changed === 0 ? "no paragraphs changed" : changed === 1 ? "1 paragraph changed" : `${changed} paragraphs changed`}
+          {label}
+          {marksChanges
+            ? ` · ${changed === 0 ? "no paragraphs changed" : changed === 1 ? "1 paragraph changed" : `${changed} paragraphs changed`}`
+            : null}
         </span>
       </p>
       {blocks.map((block) => (
@@ -253,7 +259,7 @@ export const ResearchEditPreview = memo(function ResearchEditPreview({
           // rendered Markdown while another block is typed in or inserted.
           key={block.key}
           text={imported ? stripImportedReportCitations(block.text) : block.text}
-          changed={block.changed}
+          changed={marksChanges && block.changed}
         />
       ))}
     </div>

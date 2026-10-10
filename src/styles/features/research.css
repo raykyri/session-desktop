@@ -2187,9 +2187,15 @@
   white-space: nowrap;
 }
 
+/* In the post column, the preview and the corrections take the post's
+   (a turn's) insets. */
+.research-pair-note .research-edit-preview {
+  padding: 18px 26px 14px 24px;
+}
+
 /* A post's corrections, under the post. */
 .research-post-corrections {
-  margin: 16px 0 0;
+  margin: 4px 26px 14px 24px;
   padding: 0;
   list-style: none;
 }
