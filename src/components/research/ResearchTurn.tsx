@@ -681,7 +681,6 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
         type="button"
         className="research-msg-hit"
         data-research-row
-        data-research-level={level}
         data-node-id={node.id}
         aria-current={selected ? "true" : undefined}
         aria-labelledby={labelId}

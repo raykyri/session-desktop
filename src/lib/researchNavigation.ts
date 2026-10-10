@@ -4,6 +4,7 @@
 // deleted trees) mutate the same object — pruning localStorage behind a
 // separate in-memory copy would just get resurrected by the next save.
 
+import type { ResearchScrollKind } from "./researchColumns";
 import type { ResearchHighlightAnchor } from "../types";
 
 interface SavedResearchScrollPosition {
@@ -229,17 +230,13 @@ export function saveResearchNavigation(): void {
   }
 }
 
-/** Which column a saved scroll offset belongs to: an answer column (keyed by
- * its message) or a messages column (keyed by its conversation's or branch's
- * head node). */
-type ResearchScrollColumn = "answer" | "turns";
 
 export function recordResearchScrollPosition(
   navigation: SavedResearchNavigation,
   nodeId: string,
   top: number,
   now = Date.now(),
-  column: ResearchScrollColumn = "answer",
+  column: ResearchScrollKind = "answer",
 ): void {
   const positions =
     column === "answer" ? navigation.scrollByNode : (navigation.turnsScrollByHead ??= {});
@@ -250,7 +247,7 @@ export function restoreResearchScrollPosition(
   navigation: SavedResearchNavigation | undefined,
   nodeId: string,
   now = Date.now(),
-  column: ResearchScrollColumn = "answer",
+  column: ResearchScrollKind = "answer",
 ): number {
   const positions = column === "answer" ? navigation?.scrollByNode : navigation?.turnsScrollByHead;
   const position = positions?.[nodeId];
