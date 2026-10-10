@@ -485,7 +485,7 @@ struct Model {
     /// vector; each workspace's subsequence is its display order.
     research_drafts: Vec<research::ResearchDraft>,
     /// Persistent feed of `session send` notifications. Oldest first; capped by
-    /// the notifications module. Distinct from the research Journal.
+    /// the notifications module. Distinct from the research feed.
     notification_log: crate::user_notifications::NotificationLog,
     /// Pane ids with a backend retirement worker in flight. Transient and deduplicated.
     research_retiring_panes: HashSet<String>,

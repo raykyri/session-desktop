@@ -18,14 +18,14 @@ import {
   researchFolderMonogram,
 } from "../../lib/researchFolders";
 import {
-  researchJournalViewKey,
-  type ResearchJournalView,
+  researchFeedPageKey,
+  type ResearchFeedPage,
 } from "../../lib/sidebarMode";
 import { ResearchPlaceIcon } from "./ResearchFeedChrome";
 import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
 
 interface NavEntry {
-  view: ResearchJournalView;
+  view: ResearchFeedPage;
   label: string;
   icon: ReactNode;
   /** Monogram shown in the strip instead of the icon (user folders). */
@@ -35,7 +35,7 @@ interface NavEntry {
   folderId?: string;
 }
 
-function placeView(place: string): ResearchJournalView {
+function placeView(place: string): ResearchFeedPage {
   if (place === RESEARCH_DRAFTS_FOLDER_ID) return { kind: "drafts" };
   if (place === RESEARCH_ARCHIVE_FOLDER_ID) return { kind: "archive" };
   return { kind: "folder", folderId: place };
@@ -77,9 +77,9 @@ function folderEntries(folders: ResearchFolder[]): NavEntry[] {
 }
 
 interface ResearchSidebarNavProps {
-  current: ResearchJournalView | null;
+  current: ResearchFeedPage | null;
   folders: ResearchFolder[];
-  onNavigate: (view: ResearchJournalView) => void;
+  onNavigate: (view: ResearchFeedPage) => void;
   onNewFolder: () => void;
   /** `trigger` is the row's … button, where focus returns after the dialog. */
   onRenameFolder: (folderId: string, trigger: HTMLElement) => void;
@@ -107,10 +107,10 @@ export function ResearchSidebarNav({
   onRetryFoldersLoad,
   homeShortcutHint = null,
 }: ResearchSidebarNavProps) {
-  const currentKey = current ? researchJournalViewKey(current) : null;
+  const currentKey = current ? researchFeedPageKey(current) : null;
   const [menu, setMenu] = useState<{ folderId: string; anchor: HTMLElement } | null>(null);
   const renderRow = (entry: NavEntry) => {
-    const key = researchJournalViewKey(entry.view);
+    const key = researchFeedPageKey(entry.view);
     const selected = key === currentKey;
     return (
       <div
@@ -213,7 +213,7 @@ export function ResearchSidebarNav({
 }
 
 interface ResearchSidebarStripProps {
-  current: ResearchJournalView | null;
+  current: ResearchFeedPage | null;
   folders: ResearchFolder[];
   /** The window is too narrow for the full sidebar, so it can't expand. */
   forced: boolean;
@@ -222,7 +222,7 @@ interface ResearchSidebarStripProps {
   reserveTitlebar: boolean;
   expandShortcut: string;
   onExpand: () => void;
-  onNavigate: (view: ResearchJournalView) => void;
+  onNavigate: (view: ResearchFeedPage) => void;
   onNewFolder: () => void;
   /** Settings and other controls at the bottom of the strip. */
   footer: ReactNode;
@@ -306,9 +306,9 @@ export function ResearchSidebarStrip({
   onNewFolder,
   footer,
 }: ResearchSidebarStripProps) {
-  const currentKey = current ? researchJournalViewKey(current) : null;
+  const currentKey = current ? researchFeedPageKey(current) : null;
   const entryButton = (entry: NavEntry) => {
-    const key = researchJournalViewKey(entry.view);
+    const key = researchFeedPageKey(entry.view);
     return (
       <ResearchStripButton
         key={key}

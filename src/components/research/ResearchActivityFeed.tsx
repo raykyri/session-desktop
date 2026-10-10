@@ -46,7 +46,7 @@ import {
   type FeedCyclePosition,
   type ResearchCycleRequest,
 } from "../../lib/researchSiblingCycle";
-import { researchJournalViewKey, type ResearchFeedView } from "../../lib/sidebarMode";
+import { researchFeedPageKey, type ResearchFeedView } from "../../lib/sidebarMode";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchArchivedFeed, { archivedFeedTrees } from "./ResearchArchivedFeed";
@@ -647,7 +647,7 @@ function ResearchActivityFeed({
   }, []);
 
   // A different list starts at its top.
-  const viewKey = researchJournalViewKey(view);
+  const viewKey = researchFeedPageKey(view);
   const previousViewKeyRef = useRef(viewKey);
   useLayoutEffect(() => {
     if (previousViewKeyRef.current === viewKey) return;
@@ -1335,7 +1335,7 @@ function ResearchActivityFeed({
                       No bookmarks. Choose Bookmark in a question's … menu to keep it here.
                     </div>
                   ) : homeHasNothing && setupGuide ? (
-                    <div className="journal-setup-guide">{setupGuide}</div>
+                    <div className="feed-setup-guide">{setupGuide}</div>
                   ) : homeHasNothing ? (
                     <div className="research-feed-empty">
                       Research, notes, and saved links appear here, newest first.

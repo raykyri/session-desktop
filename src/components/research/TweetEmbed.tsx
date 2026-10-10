@@ -90,7 +90,7 @@ function TweetAvatar({
   if (avatarUrl && !failed) {
     return (
       <img
-        className="journal-tweet-avatar"
+        className="tweet-embed-avatar"
         src={avatarUrl}
         width={size}
         height={size}
@@ -105,7 +105,7 @@ function TweetAvatar({
   const fallback = avatarFallback(name, handle);
   return (
     <span
-      className="journal-tweet-avatar journal-tweet-avatar-fallback"
+      className="tweet-embed-avatar tweet-embed-avatar-fallback"
       style={{ width: size, height: size, background: fallback.color }}
       aria-hidden="true"
     >
@@ -129,7 +129,7 @@ function TweetText({ runs, className, compact }: {
         // blank lines without changing the saved tweet or its link targets.
         const text = compact ? run.text.replace(/\r?\n(?:[\t ]*\r?\n)+/g, "\n") : run.text;
         return run.kind === "link" && run.url ? (
-          <TweetLink key={index} url={run.url} className="journal-tweet-link">
+          <TweetLink key={index} url={run.url} className="tweet-embed-link">
             {text}
           </TweetLink>
         ) : (
@@ -155,7 +155,7 @@ function TweetMediaStrip({
   }
   return (
     <div
-      className={`journal-tweet-media${media.length > 1 ? " is-multi" : ""}${
+      className={`tweet-embed-media${media.length > 1 ? " is-multi" : ""}${
         compact ? " is-compact" : ""
       }${sensitive && !revealed ? " is-sensitive" : ""}`}
     >
@@ -179,7 +179,7 @@ function TweetMediaStrip({
         );
         if (item.kind === "photo") {
           return (
-            <span key={index} className="journal-tweet-media-item">
+            <span key={index} className="tweet-embed-media-item">
               {image}
             </span>
           );
@@ -189,11 +189,11 @@ function TweetMediaStrip({
           <TweetLink
             key={index}
             url={watchUrl}
-            className="journal-tweet-media-item journal-tweet-video"
+            className="tweet-embed-media-item tweet-embed-video"
             title={item.kind === "gif" ? "Watch GIF on X" : "Watch video on X"}
           >
             {image}
-            <span className="journal-tweet-play" aria-hidden="true">
+            <span className="tweet-embed-play" aria-hidden="true">
               <Play size={compact ? 14 : 18} fill="currentColor" />
             </span>
           </TweetLink>
@@ -202,7 +202,7 @@ function TweetMediaStrip({
       {sensitive && !revealed ? (
         <button
           type="button"
-          className="journal-tweet-sensitive-reveal"
+          className="tweet-embed-sensitive-reveal"
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -284,7 +284,7 @@ function LikeGlyph() {
 function VerifiedBadge() {
   return (
     <svg
-      className="journal-tweet-verified"
+      className="tweet-embed-verified"
       viewBox="0 0 22 22"
       fill="currentColor"
       aria-label="Verified"
@@ -297,17 +297,17 @@ function VerifiedBadge() {
 
 function TweetLinkCardView({ card }: { card: NonNullable<TweetSnapshot["card"]> }) {
   return (
-    <TweetLink url={card.url} className={`journal-tweet-card${card.large ? " is-large" : ""}`}>
+    <TweetLink url={card.url} className={`tweet-embed-card${card.large ? " is-large" : ""}`}>
       {card.imageUrl ? (
-        <span className="journal-tweet-card-media">
+        <span className="tweet-embed-card-media">
           <img src={card.imageUrl} alt="" loading="lazy" draggable={false} />
         </span>
       ) : null}
-      <span className="journal-tweet-card-copy">
-        <span className="journal-tweet-card-domain">{card.domain}</span>
-        <span className="journal-tweet-card-title">{card.title}</span>
+      <span className="tweet-embed-card-copy">
+        <span className="tweet-embed-card-domain">{card.domain}</span>
+        <span className="tweet-embed-card-title">{card.title}</span>
         {card.description ? (
-          <span className="journal-tweet-card-desc">{card.description}</span>
+          <span className="tweet-embed-card-desc">{card.description}</span>
         ) : null}
       </span>
     </TweetLink>
@@ -345,7 +345,7 @@ function TweetEmbedBody({ tweet, compact }: { tweet: TweetSnapshot; compact: boo
   const hasStats = tweet.replies !== undefined || tweet.likes !== undefined;
   return (
     <article
-      className={`journal-tweet${compact ? " is-compact" : ""}${openable ? "" : " is-static"}`}
+      className={`tweet-embed${compact ? " is-compact" : ""}${openable ? "" : " is-static"}`}
       aria-label={`${openable ? "Open tweet" : "Tweet"} by @${tweet.author.handle}`}
       role={openable ? "link" : undefined}
       tabIndex={openable ? 0 : undefined}
@@ -376,9 +376,9 @@ function TweetEmbedBody({ tweet, compact }: { tweet: TweetSnapshot; compact: boo
           : undefined
       }
     >
-      <div className="journal-tweet-main">
-        <div className="journal-tweet-head">
-          <TweetLink url={authorUrl} className="journal-tweet-avatar-link" hidden>
+      <div className="tweet-embed-main">
+        <div className="tweet-embed-head">
+          <TweetLink url={authorUrl} className="tweet-embed-avatar-link" hidden>
             <TweetAvatar
               name={tweet.author.name}
               handle={tweet.author.handle}
@@ -386,26 +386,26 @@ function TweetEmbedBody({ tweet, compact }: { tweet: TweetSnapshot; compact: boo
               size={20}
             />
           </TweetLink>
-          <div className="journal-tweet-who">
+          <div className="tweet-embed-who">
             <TweetLink
               url={authorUrl}
-              className="journal-tweet-author"
+              className="tweet-embed-author"
               title={`${tweet.author.name} @${tweet.author.handle}`}
             >
               {tweet.author.name}
             </TweetLink>
             {tweet.author.verified ? <VerifiedBadge /> : null}
-            <span className="journal-tweet-handle">@{tweet.author.handle}</span>
+            <span className="tweet-embed-handle">@{tweet.author.handle}</span>
           </div>
         </div>
         {tweet.replyTo ? (
-          <p className="journal-tweet-reply">
+          <p className="tweet-embed-reply">
             Replying to <span>@{tweet.replyTo.handle}</span>
           </p>
         ) : null}
-        <TweetText runs={tweet.runs} className="journal-tweet-text" compact={compact} />
+        <TweetText runs={tweet.runs} className="tweet-embed-text" compact={compact} />
         {tweet.partial && openable ? (
-          <TweetLink url={tweet.url} className="journal-tweet-more">
+          <TweetLink url={tweet.url} className="tweet-embed-more">
             Show more
           </TweetLink>
         ) : null}
@@ -413,7 +413,7 @@ function TweetEmbedBody({ tweet, compact }: { tweet: TweetSnapshot; compact: boo
         {tweet.card ? <TweetLinkCardView card={tweet.card} /> : null}
         {quoted ? (
           <div
-            className="journal-tweet-quote"
+            className="tweet-embed-quote"
             role={openable ? "link" : undefined}
             tabIndex={openable ? 0 : undefined}
             onClick={
@@ -440,22 +440,22 @@ function TweetEmbedBody({ tweet, compact }: { tweet: TweetSnapshot; compact: boo
                 : undefined
             }
           >
-            <div className="journal-tweet-quote-head">
+            <div className="tweet-embed-quote-head">
               <TweetAvatar
                 name={quoted.author.name}
                 handle={quoted.author.handle}
                 avatarUrl={quoted.author.avatarUrl}
                 size={18}
               />
-              <TweetLink url={`https://x.com/${quoted.author.handle}`} className="journal-tweet-author">
+              <TweetLink url={`https://x.com/${quoted.author.handle}`} className="tweet-embed-author">
                 {quoted.author.name}
               </TweetLink>
               {quoted.author.verified ? <VerifiedBadge /> : null}
-              <span className="journal-tweet-handle">@{quoted.author.handle}</span>
+              <span className="tweet-embed-handle">@{quoted.author.handle}</span>
             </div>
-            <TweetText runs={quoted.runs} className="journal-tweet-text is-quote" compact={compact} />
+            <TweetText runs={quoted.runs} className="tweet-embed-text is-quote" compact={compact} />
             {quoted.partial ? (
-              <span className="journal-tweet-more">Show more</span>
+              <span className="tweet-embed-more">Show more</span>
             ) : null}
             <TweetMediaStrip
               media={quoted.media}
@@ -466,10 +466,10 @@ function TweetEmbedBody({ tweet, compact }: { tweet: TweetSnapshot; compact: boo
           </div>
         ) : null}
         {age || hasStats ? (
-          <div className="journal-tweet-end">
+          <div className="tweet-embed-end">
             {age ? (
               <time
-                className="journal-tweet-age"
+                className="tweet-embed-age"
                 dateTime={tweet.createdAt}
                 title={formatTweetDate(tweet.createdAt) ?? undefined}
               >
@@ -478,15 +478,15 @@ function TweetEmbedBody({ tweet, compact }: { tweet: TweetSnapshot; compact: boo
             ) : null}
             {hasStats ? (
               // Display the saved engagement counts as static metadata.
-              <div className="journal-tweet-stats">
+              <div className="tweet-embed-stats">
                 {tweet.replies !== undefined ? (
-                  <span className="journal-tweet-stat" title={`${tweet.replies} replies`}>
+                  <span className="tweet-embed-stat" title={`${tweet.replies} replies`}>
                     <ReplyGlyph />
                     {formatTweetCount(tweet.replies)}
                   </span>
                 ) : null}
                 {tweet.likes !== undefined ? (
-                  <span className="journal-tweet-stat" title={`${tweet.likes} likes`}>
+                  <span className="tweet-embed-stat" title={`${tweet.likes} likes`}>
                     <LikeGlyph />
                     {formatTweetCount(tweet.likes)}
                   </span>

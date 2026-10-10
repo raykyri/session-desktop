@@ -87,7 +87,7 @@ export function researchHistoryForward(history: ResearchHistory): ResearchHistor
  * opening a query from the feed must push here — the document's own node
  * stack remounts empty and holds no record of the feed. */
 export type ResearchWorkspaceVisit =
-  | { kind: "journal" }
+  | { kind: "feed" }
   | { kind: "document"; treeId: string };
 
 interface ResearchWorkspaceHistory {
@@ -116,7 +116,7 @@ function sameResearchWorkspaceVisit(
   right: ResearchWorkspaceVisit,
 ): boolean {
   if (left.kind !== right.kind) return false;
-  if (left.kind === "journal" && right.kind === "journal") return true;
+  if (left.kind === "feed" && right.kind === "feed") return true;
   if (left.kind === "document" && right.kind === "document") return left.treeId === right.treeId;
   return false;
 }

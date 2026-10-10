@@ -7,7 +7,7 @@ const stylesDirectory = join(import.meta.dirname, "..", "src", "styles", "featur
 const tokensCss = readFileSync(join(stylesDirectory, "..", "tokens.css"), "utf8");
 const surfaceCss = readFileSync(join(stylesDirectory, "research-surface.css"), "utf8");
 const researchCss = readFileSync(join(stylesDirectory, "research.css"), "utf8");
-const journalCss = readFileSync(join(stylesDirectory, "journal.css"), "utf8");
+const feedCss = readFileSync(join(stylesDirectory, "feed.css"), "utf8");
 const transcriptCss = readFileSync(join(stylesDirectory, "transcript.css"), "utf8");
 const turnPaneCss = readFileSync(join(stylesDirectory, "turn-pane.css"), "utf8");
 
@@ -52,7 +52,7 @@ test("research summaries get typography only from the shared surface recipe", ()
   assert.match(summary, /line-height:\s*var\(--research-summary-line-height\)/);
 
   // Feed questions use the compact line height and a font size 1px larger.
-  const cardQuestion = ruleBody(journalCss, ".research-feed-card-question");
+  const cardQuestion = ruleBody(feedCss, ".research-feed-card-question");
   assert.match(cardQuestion, /font-size:\s*calc\(var\(--research-compact-font-size\) \+ 1px\)/);
   assert.match(cardQuestion, /line-height:\s*var\(--research-compact-line-height\)/);
 
@@ -76,29 +76,29 @@ test("research prose adapts transcript typography on the renderer, not layout ro
   assert.doesNotMatch(responseRoot, /line-height\s*:/);
 
   assert.doesNotMatch(
-    `${researchCss}\n${journalCss}`,
+    `${researchCss}\n${feedCss}`,
     /--research-(?:reading-(?:body|meta)|answer-font-delta)/,
   );
 });
 
 test("shared tweet and attachment recipes do not depend on Home CSS", () => {
-  assert.match(surfaceCss, /\.journal-tweet\s*\{/);
+  assert.match(surfaceCss, /\.tweet-embed\s*\{/);
   assert.match(surfaceCss, /\.research-message-attachments\.has-prompt\s*\{/);
-  const tweet = ruleBody(surfaceCss, ".journal-tweet");
+  const tweet = ruleBody(surfaceCss, ".tweet-embed");
   assert.match(tweet, /max-width:\s*var\(--research-feed-max-width\)/);
   const attachment = ruleBody(surfaceCss, ".research-message-attachment");
   assert.match(attachment, /width:\s*min\(100%, var\(--research-feed-max-width\)\)/);
   assert.match(attachment, /border:\s*1px solid var\(--surface-border-default\)/);
   assert.match(attachment, /border-radius:\s*12px/);
-  const tweetStats = ruleBody(surfaceCss, ".journal-tweet-stats");
+  const tweetStats = ruleBody(surfaceCss, ".tweet-embed-stats");
   assert.match(tweetStats, /align-items:\s*center/);
   assert.match(tweetStats, /line-height:\s*1/);
   assert.doesNotMatch(
     ruleBody(surfaceCss, ".research-message-attachments.has-prompt"),
     /border-top/,
   );
-  assert.doesNotMatch(journalCss, /\.research-message-attachments\.has-prompt\s*\{/);
+  assert.doesNotMatch(feedCss, /\.research-message-attachments\.has-prompt\s*\{/);
   // Feed cards set attachment spacing; shared styles set attachment sizes.
-  const cardAttachments = ruleBody(journalCss, ".research-feed-card .research-message-attachments");
+  const cardAttachments = ruleBody(feedCss, ".research-feed-card .research-message-attachments");
   assert.match(cardAttachments, /^\s*margin-top:\s*6px;\s*$/);
 });

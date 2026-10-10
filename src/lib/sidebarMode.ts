@@ -7,11 +7,11 @@ export type ResearchFeedView =
   | { kind: "archive" }
   | { kind: "folder"; folderId: string };
 
-/** Pages the journal surface can show: a feed list or Highlights. */
-export type ResearchJournalView = ResearchFeedView | { kind: "highlights" };
+/** Pages the feed column can show: a feed list or Highlights. */
+export type ResearchFeedPage = ResearchFeedView | { kind: "highlights" };
 
 /** A stable key per view, for selection and scroll resets. */
-export function researchJournalViewKey(view: ResearchJournalView): string {
+export function researchFeedPageKey(view: ResearchFeedPage): string {
   return view.kind === "folder" ? `folder:${view.folderId}` : view.kind;
 }
 

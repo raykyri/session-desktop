@@ -20,7 +20,7 @@ Session uses global CSS with cascade layers. The application imports one entrypo
 - Put shared Home/research page chrome, reading typography, and content-card recipes in
   `features/research-surface.css`.
 - Keep research-thread and research-sidebar details in `features/research.css`, Home feed
-  details in `features/journal.css`, note replies and follow-ups (on Home cards and note
+  details in `features/feed.css`, note replies and follow-ups (on Home cards and note
   pages) in `features/notes.css`, and outer application/sidebar layout in
   `features/shell.css`.
 
