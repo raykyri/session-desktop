@@ -18,13 +18,16 @@ pub const MAX_RESEARCH_DOCUMENT_WORDS: usize = 10_000;
 /// Backstop for word-sparse documents (one giant token counts as one word).
 /// Imports and the composer both advertise this exact limit.
 pub const MAX_RESEARCH_DOCUMENT_BYTES: usize = 10 * 1024 * 1024;
-pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 9;
-/// Written when the newest feature in an archive is notes (note nodes,
-/// delivery records or reply anchors), with no imported report stored as a
-/// document. Builds that predate that shape (which accept versions 1–8)
-/// stored imported reports as runs; read as a document, an imported report
-/// would lose its question and its place in the feed.
-const DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_DOCUMENT_IMPORTS: u32 = 8;
+pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 10;
+/// Written when the newest feature in an archive is an imported report
+/// stored as a document, with no post, format or merged anchor (see
+/// `node_uses_post_fields`). Builds that accept versions 1–9 read a post as
+/// an unknown kind and drop it, and drop the merged `anchor` field.
+pub const DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_POSTS: u32 = 9;
+// Version 8 marked notes (note nodes, delivery records or reply anchors)
+// without imported documents. Notes are stored as posts since version 10, so
+// no archive is written at version 8 any more; version-8 archives are read
+// and migrated like every older version.
 /// Written when the newest feature in an archive is message attachments, with
 /// no note nodes, delivery records, or reply anchors. Builds that predate
 /// notes (which accept versions 1–7) cannot deserialize the `note` kind.
@@ -370,12 +373,13 @@ impl ResearchNodeStatus {
 /// document composer or imported from a report file (origin `Imported`, with
 /// the question the report answers as the prompt); `Conversation`
 /// nodes carry a terminal agent conversation exported as a point-in-time
-/// snapshot, sanitized and severed from its source session; `Note` nodes carry
-/// a user-authored question or saved link in `prompt`, with no response of
-/// their own. A note is a tree root or a child of another note; its other
-/// children are `Run` follow-ups launched with the note as context. The default keeps
-/// every pre-documents `state.json` and detached archive loading as plain
-/// runs.
+/// snapshot, sanitized and severed from its source session; `Post` nodes
+/// carry user-authored text or a saved link in `prompt`, with no response of
+/// their own. A post is a tree root or a child of another post; its other
+/// children are `Run` follow-ups launched with the post as context. Posts
+/// were stored as `note` before state version 8 and archive version 10. The
+/// default keeps every pre-documents `state.json` and detached archive
+/// loading as plain runs.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ResearchNodeKind {
@@ -383,7 +387,7 @@ pub enum ResearchNodeKind {
     Run,
     Document,
     Conversation,
-    Note,
+    Post,
 }
 
 impl ResearchNodeKind {
@@ -488,6 +492,44 @@ impl NoteReplyAuthor {
     }
 }
 
+/// How a post renders, decided when its text is written: `Link` when the
+/// whole text is one http(s) URL (a saved link, or an X post with its tweet
+/// attachment), `Text` otherwise. See [`PostFormat::of`].
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PostFormat {
+    Text,
+    Link,
+}
+
+impl PostFormat {
+    pub fn of(text: &str) -> Self {
+        if note_body_is_single_url(text) {
+            Self::Link
+        } else {
+            Self::Text
+        }
+    }
+}
+
+/// What a follow-up was asked about in its parent: a passage of the parent's
+/// answer or document, or a reply on the parent post. Stored as `queryAnchor`
+/// and `replyAnchor` before state version 8 and archive version 10.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum NodeAnchor {
+    /// The parent's answer marks the passage as the anchor of the branch; the
+    /// quoted text is also included in the launch prompt.
+    Passage { anchor: ResearchHighlightAnchor },
+    /// The id of a reply in the parent post's `delivery.replies`. A removed
+    /// reply leaves the id dangling; readers treat it as absent.
+    Reply { reply_id: String },
+}
+
 /// Byte cap for a note body and for each reply.
 pub const MAX_NOTE_TEXT_BYTES: usize = 64 * 1024;
 pub const MAX_NOTE_REPLIES: usize = 1_000;
@@ -502,11 +544,9 @@ pub struct ResearchNode {
     pub tree_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_node_id: Option<String>,
-    /// The passage of the parent's response this follow-up was asked about.
-    /// The parent's answer marks it as the anchor of the branch; the quoted
-    /// text is also included in the launch prompt.
+    /// What this follow-up was asked about in its parent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub query_anchor: Option<ResearchHighlightAnchor>,
+    pub anchor: Option<NodeAnchor>,
     /// True when this follow-up continues its parent's conversation at the
     /// same level (the same messages column) instead of opening a branch. A
     /// node has at most one existing inline child — any status holds the
@@ -561,15 +601,12 @@ pub struct ResearchNode {
     /// byte-identically to builds that predate the field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<ResearchNodeOrigin>,
-    /// Network state; only on notes posted with Ask network.
+    /// Network state; only on posts delivered with Ask network.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delivery: Option<NoteDelivery>,
-    /// On a run whose parent is a note: the id of the reply (in the parent's
-    /// `delivery.replies`) this follow-up was asked about. Parallels
-    /// `query_anchor`, which targets a passage of a parent's answer. A
-    /// removed reply leaves the id dangling; readers treat it as absent.
+    /// Only on posts, where it is required.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reply_anchor: Option<String>,
+    pub format: Option<PostFormat>,
     pub status: ResearchNodeStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
@@ -656,7 +693,7 @@ pub enum FollowUpLaunch {
 impl ResearchNode {
     pub fn node_type(&self) -> ResearchNodeType {
         match self.kind {
-            ResearchNodeKind::Note => ResearchNodeType::Post,
+            ResearchNodeKind::Post => ResearchNodeType::Post,
             ResearchNodeKind::Document | ResearchNodeKind::Conversation => {
                 ResearchNodeType::Document
             }
@@ -668,7 +705,7 @@ impl ResearchNode {
     /// launch path, including whether it needs a session checkpoint.
     pub fn follow_up_launch(&self) -> FollowUpLaunch {
         match self.kind {
-            ResearchNodeKind::Note => FollowUpLaunch::Context(FollowUpContext::Post),
+            ResearchNodeKind::Post => FollowUpLaunch::Context(FollowUpContext::Post),
             ResearchNodeKind::Conversation => FollowUpLaunch::Context(FollowUpContext::Snapshot),
             ResearchNodeKind::Document if self.origin == Some(ResearchNodeOrigin::Imported) => {
                 FollowUpLaunch::Context(FollowUpContext::Snapshot)
@@ -683,6 +720,29 @@ impl ResearchNode {
     pub fn recap_eligible(&self) -> bool {
         self.node_type() == ResearchNodeType::Exchange
             || self.origin == Some(ResearchNodeOrigin::Imported)
+    }
+
+    /// The passage of the parent's answer this follow-up was asked about.
+    pub fn passage_anchor(&self) -> Option<&ResearchHighlightAnchor> {
+        match &self.anchor {
+            Some(NodeAnchor::Passage { anchor }) => Some(anchor),
+            _ => None,
+        }
+    }
+
+    pub fn passage_anchor_mut(&mut self) -> Option<&mut ResearchHighlightAnchor> {
+        match &mut self.anchor {
+            Some(NodeAnchor::Passage { anchor }) => Some(anchor),
+            _ => None,
+        }
+    }
+
+    /// The id of the parent post's reply this follow-up was asked about.
+    pub fn reply_anchor(&self) -> Option<&str> {
+        match &self.anchor {
+            Some(NodeAnchor::Reply { reply_id }) => Some(reply_id),
+            _ => None,
+        }
     }
 }
 
@@ -711,7 +771,10 @@ pub struct RecentResearchQuery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<ResearchNodeOrigin>,
     pub kind: ResearchNodeKind,
-    /// A note's network state, with `replies` cut to the first
+    /// A post's format.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<PostFormat>,
+    /// A post's network state, with `replies` cut to the first
     /// [`RECENT_ACTIVITY_NOTE_REPLY_LIMIT`] top-level replies (each with its
     /// responses). `reply_count` is the uncut top-level count.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -753,16 +816,14 @@ impl From<&ResearchNode> for RecentResearchQuery {
             parent_node_id: node.parent_node_id.clone(),
             inline: node.inline,
             prompt: node.prompt.clone(),
-            query_target: node
-                .query_anchor
-                .as_ref()
-                .map(|anchor| anchor.exact.clone()),
+            query_target: node.passage_anchor().map(|anchor| anchor.exact.clone()),
             attachments: node.attachments.clone(),
             title: node.title.clone(),
             adapter: node.adapter.clone(),
             model: node.model.clone(),
             origin: node.origin,
             kind: node.kind,
+            format: node.format,
             delivery: node
                 .delivery
                 .as_ref()
@@ -771,7 +832,7 @@ impl From<&ResearchNode> for RecentResearchQuery {
                 .delivery
                 .as_ref()
                 .map_or(0, |delivery| top_level_reply_count(&delivery.replies)),
-            reply_anchor: node.reply_anchor.clone(),
+            reply_anchor: node.reply_anchor().map(str::to_string),
             reply_anchor_author: None,
             status: node.status,
             error: node.error.clone(),
@@ -861,10 +922,10 @@ pub struct AddNoteReplyRequest {
     pub in_reply_to: Option<String>,
 }
 
-/// Display name of the author of the reply `child.reply_anchor` names in
+/// Display name of the author of the reply `child`'s reply anchor names in
 /// `parent`'s delivery, or `None` when either is missing.
 pub fn reply_anchor_author(parent: &ResearchNode, child: &ResearchNode) -> Option<String> {
-    let reply_id = child.reply_anchor.as_deref()?;
+    let reply_id = child.reply_anchor()?;
     parent
         .delivery
         .as_ref()?
@@ -877,11 +938,12 @@ pub fn reply_anchor_author(parent: &ResearchNode, child: &ResearchNode) -> Optio
         })
 }
 
-/// A note node as its create paths admit it: settled `Complete` (a note has
-/// no run), with the follow-up agent defaults stored like a run's so its AI
-/// children inherit them. `worktree_dir` is filled in at admission.
+/// A post as its create paths admit it: settled `Complete` (a post has no
+/// run), with the follow-up agent defaults stored like a run's so its AI
+/// children inherit them, and its format decided from the text.
+/// `worktree_dir` is filled in at admission.
 #[allow(clippy::too_many_arguments)]
-pub fn new_note_node(
+pub fn new_post_node(
     id: String,
     tree_id: String,
     parent_node_id: Option<String>,
@@ -898,8 +960,9 @@ pub fn new_note_node(
         id,
         tree_id,
         parent_node_id,
-        query_anchor: None,
+        anchor: None,
         inline: false,
+        format: Some(PostFormat::of(&body)),
         prompt: body,
         attachments,
         title: None,
@@ -915,14 +978,13 @@ pub fn new_note_node(
         pane_id: None,
         runtime: ResearchRuntime::Pane,
         thread_id: None,
-        kind: ResearchNodeKind::Note,
+        kind: ResearchNodeKind::Post,
         origin: None,
         delivery: ask_network.then(|| NoteDelivery {
             status: NoteDeliveryStatus::Posted,
             posted_at: now,
             replies: Vec::new(),
         }),
-        reply_anchor: None,
         status: ResearchNodeStatus::Complete,
         error: None,
         response_snapshot_at: None,
@@ -975,17 +1037,115 @@ pub fn migrate_imported_report_node(node: &mut serde_json::Value) -> bool {
     true
 }
 
-/// True when a node carries anything a pre-notes build cannot read.
-pub fn node_uses_note_fields(node: &ResearchNode) -> bool {
-    node.kind == ResearchNodeKind::Note || node.delivery.is_some() || node.reply_anchor.is_some()
+/// Every JSON-shape migration for stored nodes, oldest first: imported
+/// reports become documents (state version 7, archive version 9), then notes
+/// become posts (state version 8, archive version 10). Shared by state loads
+/// and archive reads so both paths convert the same shapes. Returns whether
+/// any node changed.
+pub fn migrate_research_node_values(nodes: &mut [&mut serde_json::Value]) -> bool {
+    let mut changed = false;
+    for node in nodes.iter_mut() {
+        changed |= migrate_imported_report_node(node);
+    }
+    changed |= migrate_note_nodes_to_posts(nodes);
+    changed
 }
 
-/// Structural rules the note create paths maintain: only notes carry
-/// delivery, a note's parent is a note, a reply anchor sits on a run whose
-/// parent is a note, and replies nest at most one level. These check the
-/// stored kinds (state files and archives), so they do not go through
-/// `ResearchNode::node_type`.
-pub fn validate_note_node_shape(
+/// JSON-shape migration for stored nodes, used for state files before
+/// version 8 and detached archives before version 10. Runs on the whole node
+/// collection before deserialization, so no reader sees the old shape:
+///
+/// - `kind: "note"` becomes `"post"`, and a post without a `format` gets the
+///   one its text implies ([`PostFormat::of`], the rule the composer and the
+///   feed applied to the text before the format was stored).
+/// - `queryAnchor` (a passage) and `replyAnchor` (a reply id) merge into
+///   `anchor`. The create paths never write both; if a node has both, the
+///   reply wins under a post parent and the passage wins elsewhere, which is
+///   the anchor the validation rules allow there. A node that already has an
+///   `anchor` keeps it.
+///
+/// Nodes are only rewritten, never removed. Returns whether any node changed;
+/// running it again changes nothing.
+pub fn migrate_note_nodes_to_posts(nodes: &mut [&mut serde_json::Value]) -> bool {
+    use serde_json::Value;
+    let mut changed = false;
+    let mut post_ids = HashSet::new();
+    for node in nodes.iter_mut() {
+        let Some(object) = node.as_object_mut() else {
+            continue;
+        };
+        if object.get("kind").and_then(Value::as_str) == Some("note") {
+            object.insert("kind".to_string(), Value::from("post"));
+            changed = true;
+        }
+        if object.get("kind").and_then(Value::as_str) != Some("post") {
+            continue;
+        }
+        if let Some(id) = object.get("id").and_then(Value::as_str) {
+            post_ids.insert(id.to_string());
+        }
+        if object.get("format").is_none_or(Value::is_null) {
+            let text = object.get("prompt").and_then(Value::as_str).unwrap_or("");
+            let format =
+                serde_json::to_value(PostFormat::of(text)).expect("a unit variant serializes");
+            object.insert("format".to_string(), format);
+            changed = true;
+        }
+    }
+    for node in nodes.iter_mut() {
+        let Some(object) = node.as_object_mut() else {
+            continue;
+        };
+        let passage = object
+            .remove("queryAnchor")
+            .filter(|value| !value.is_null());
+        let reply = object
+            .remove("replyAnchor")
+            .filter(|value| !value.is_null());
+        if passage.is_none() && reply.is_none() {
+            continue;
+        }
+        changed = true;
+        if object.get("anchor").is_some_and(|anchor| !anchor.is_null()) {
+            continue;
+        }
+        let parent_is_post = object
+            .get("parentNodeId")
+            .and_then(Value::as_str)
+            .is_some_and(|parent_id| post_ids.contains(parent_id));
+        let reply = reply.and_then(|reply| reply.as_str().map(str::to_string));
+        let anchor = match (passage, reply) {
+            (Some(_), Some(reply_id)) if parent_is_post => {
+                serde_json::json!({ "kind": "reply", "replyId": reply_id })
+            }
+            (Some(passage), _) => serde_json::json!({ "kind": "passage", "anchor": passage }),
+            (None, Some(reply_id)) => serde_json::json!({ "kind": "reply", "replyId": reply_id }),
+            // A reply anchor that is not a string never deserialized; drop it
+            // rather than the node.
+            (None, None) => continue,
+        };
+        object.insert("anchor".to_string(), anchor);
+    }
+    changed
+}
+
+/// True when a node carries anything a build before state version 8 and
+/// archive version 10 cannot read: a post (stored as `note` before), a
+/// format, delivery, or an anchor (stored as `queryAnchor` or `replyAnchor`
+/// before; an older build would drop the merged field without an error).
+pub fn node_uses_post_fields(node: &ResearchNode) -> bool {
+    node.kind == ResearchNodeKind::Post
+        || node.format.is_some()
+        || node.delivery.is_some()
+        || node.anchor.is_some()
+}
+
+/// Structural rules the post create paths maintain: only posts carry
+/// delivery, a format and corrections, every post has a format, a post's
+/// parent is a post, a reply anchor sits on a run whose parent is a post, and
+/// replies nest at most one level. These check the stored kinds (state files
+/// and archives), so they do not go through `ResearchNode::node_type`.
+pub fn validate_post_node_shape(
     node: &ResearchNode,
     node_by_id: &HashMap<&str, &ResearchNode>,
 ) -> Result<(), String> {
@@ -994,41 +1154,47 @@ pub fn validate_note_node_shape(
         .as_deref()
         .and_then(|parent_id| node_by_id.get(parent_id))
         .map(|parent| parent.kind);
-    if node.delivery.is_some() && node.kind != ResearchNodeKind::Note {
+    let is_post = node.kind == ResearchNodeKind::Post;
+    if node.delivery.is_some() && !is_post {
         return Err(format!(
-            "research node {} has delivery but is not a note",
+            "research node {} has delivery but is not a post",
             node.id
         ));
     }
-    if node.kind == ResearchNodeKind::Note
-        && parent_kind.is_some_and(|kind| kind != ResearchNodeKind::Note)
-    {
+    if node.format.is_some() != is_post {
+        return Err(if is_post {
+            format!("research post {} has no format", node.id)
+        } else {
+            format!("research node {} has a format but is not a post", node.id)
+        });
+    }
+    if is_post && parent_kind.is_some_and(|kind| kind != ResearchNodeKind::Post) {
         return Err(format!(
-            "research note {} has a parent that is not a note",
+            "research post {} has a parent that is not a post",
             node.id
         ));
     }
-    if node.reply_anchor.is_some()
-        && (node.kind != ResearchNodeKind::Run || parent_kind != Some(ResearchNodeKind::Note))
+    if node.reply_anchor().is_some()
+        && (node.kind != ResearchNodeKind::Run || parent_kind != Some(ResearchNodeKind::Post))
     {
         return Err(format!(
-            "research node {} has a reply anchor but is not a follow-up of a note",
+            "research node {} has a reply anchor but is not a follow-up of a post",
             node.id
         ));
     }
     if let Some(delivery) = &node.delivery {
         validate_note_replies(&delivery.replies)
-            .map_err(|err| format!("research note {}: {err}", node.id))?;
+            .map_err(|err| format!("research post {}: {err}", node.id))?;
     }
     if !node.corrections.is_empty() {
-        if node.kind != ResearchNodeKind::Note {
+        if !is_post {
             return Err(format!(
-                "research node {} has corrections but is not a note",
+                "research node {} has corrections but is not a post",
                 node.id
             ));
         }
         validate_note_corrections(&node.corrections)
-            .map_err(|err| format!("research note {}: {err}", node.id))?;
+            .map_err(|err| format!("research post {}: {err}", node.id))?;
     }
     Ok(())
 }
@@ -1515,21 +1681,21 @@ fn validate_detached_archive(archive: &DetachedResearchArchive) -> Result<(), St
                 node.id, DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_NOTES
             ));
         }
-        if node_uses_note_fields(node)
-            && archive.version < DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_DOCUMENT_IMPORTS
-        {
+        if node_uses_post_fields(node) && archive.version < DETACHED_RESEARCH_ARCHIVE_VERSION {
             return Err(format!(
-                "research node {} contains note data that requires archive version {}",
-                node.id, DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_DOCUMENT_IMPORTS
-            ));
-        }
-        if is_imported_document(node) && archive.version < DETACHED_RESEARCH_ARCHIVE_VERSION {
-            return Err(format!(
-                "research node {} is an imported document that requires archive version {}",
+                "research node {} contains post data that requires archive version {}",
                 node.id, DETACHED_RESEARCH_ARCHIVE_VERSION
             ));
         }
-        validate_note_node_shape(node, &node_by_id)?;
+        if is_imported_document(node)
+            && archive.version < DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_POSTS
+        {
+            return Err(format!(
+                "research node {} is an imported document that requires archive version {}",
+                node.id, DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_POSTS
+            ));
+        }
+        validate_post_node_shape(node, &node_by_id)?;
         crate::tweets::validate_research_message_attachments(&node.attachments)?;
         validate_highlight_collection(&node.highlights)?;
         highlight_bytes_total = highlight_bytes_total
@@ -1541,9 +1707,9 @@ fn validate_detached_archive(archive: &DetachedResearchArchive) -> Result<(), St
         // create paths are the only writers and never nest them, so a nested
         // one is corruption.
         let root_only_label = match node.kind {
-            // Notes nest under notes (network follow-ups); their parent kind
-            // is checked by `validate_note_node_shape` above.
-            ResearchNodeKind::Run | ResearchNodeKind::Note => None,
+            // Posts nest under posts (network follow-ups); their parent kind
+            // is checked by `validate_post_node_shape` above.
+            ResearchNodeKind::Run | ResearchNodeKind::Post => None,
             ResearchNodeKind::Document => Some("document"),
             ResearchNodeKind::Conversation => Some("conversation"),
         };
@@ -1625,10 +1791,10 @@ fn validate_detached_archive(archive: &DetachedResearchArchive) -> Result<(), St
 /// raises. Pre-conversations builds refuse anything above 4, and
 /// pre-documents builds anything above 3, the same way.
 pub fn detached_archive_version(nodes: &[ResearchNode]) -> u32 {
-    if nodes.iter().any(is_imported_document) {
+    if nodes.iter().any(node_uses_post_fields) {
         DETACHED_RESEARCH_ARCHIVE_VERSION
-    } else if nodes.iter().any(node_uses_note_fields) {
-        DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_DOCUMENT_IMPORTS
+    } else if nodes.iter().any(is_imported_document) {
+        DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_POSTS
     } else if nodes.iter().any(|node| !node.attachments.is_empty()) {
         DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_NOTES
     } else if nodes.iter().any(|node| {
@@ -1854,16 +2020,13 @@ fn read_detached_research_from_path(
         ));
     }
     let mut raw_value = raw_value;
-    let mut migrated_imported_reports = false;
-    if raw_version < u64::from(DETACHED_RESEARCH_ARCHIVE_VERSION) {
-        if let Some(nodes) = raw_value
+    let mut migrated = false;
+    if raw_version < u64::from(DETACHED_RESEARCH_ARCHIVE_VERSION)
+        && let Some(nodes) = raw_value
             .get_mut("nodes")
             .and_then(serde_json::Value::as_array_mut)
-        {
-            for node in nodes {
-                migrated_imported_reports |= migrate_imported_report_node(node);
-            }
-        }
+    {
+        migrated = migrate_research_node_values(&mut nodes.iter_mut().collect::<Vec<_>>());
     }
     let mut archive: DetachedResearchArchive = serde_json::from_value(raw_value)
         .map_err(|err| format!("failed to decode {}: {err}", manifest_path.display()))?;
@@ -1877,11 +2040,14 @@ fn read_detached_research_from_path(
                 .collect::<String>()
         );
     }
-    // Imported documents require archive version 9. Update the version before
-    // callers rewrite the bundle, such as when moving a research folder.
-    // Do this after deriving the legacy identity, which checks for version 1.
-    if migrated_imported_reports {
-        archive.version = DETACHED_RESEARCH_ARCHIVE_VERSION;
+    // Migrated nodes may need a newer version than the archive was written
+    // with (imported documents need 9, posts and anchors 10). Restamp before
+    // callers rewrite the bundle, such as when moving a research folder, and
+    // after deriving the legacy identity, which checks for version 1.
+    if migrated {
+        archive.version = archive
+            .version
+            .max(detached_archive_version(&archive.nodes));
     }
     validate_detached_archive(&archive)?;
     let mut responses = HashMap::new();
@@ -3484,7 +3650,7 @@ mod tests {
             id: "research-node-1".to_string(),
             tree_id: tree.id.clone(),
             parent_node_id: None,
-            query_anchor: None,
+            anchor: None,
             inline: false,
             prompt: "Question".to_string(),
             attachments: Vec::new(),
@@ -3504,7 +3670,7 @@ mod tests {
             kind: ResearchNodeKind::Run,
             origin: None,
             delivery: None,
-            reply_anchor: None,
+            format: None,
             status: ResearchNodeStatus::Complete,
             error: None,
             response_snapshot_at: Some(2),
@@ -3590,7 +3756,7 @@ mod tests {
                 false,
             ),
             (
-                with(ResearchNodeKind::Note, None),
+                with(ResearchNodeKind::Post, None),
                 ResearchNodeType::Post,
                 FollowUpLaunch::Context(FollowUpContext::Post),
                 false,
@@ -4007,11 +4173,12 @@ mod tests {
     }
 
     #[test]
-    fn note_nodes_use_archive_version_eight_and_keep_their_shape() {
+    fn post_nodes_use_the_newest_archive_version_and_keep_their_shape() {
         let folder = temp_workspace();
         let mut archive = sample_detached_archive(&folder);
         let root = archive.nodes[0].clone();
-        archive.nodes[0].kind = ResearchNodeKind::Note;
+        archive.nodes[0].kind = ResearchNodeKind::Post;
+        archive.nodes[0].format = Some(PostFormat::Text);
         archive.nodes[0].delivery = Some(NoteDelivery {
             status: NoteDeliveryStatus::Posted,
             posted_at: 1,
@@ -4030,30 +4197,194 @@ mod tests {
         let mut follow_up = root.clone();
         follow_up.id = "follow-up".to_string();
         follow_up.parent_node_id = Some(root.id.clone());
-        follow_up.reply_anchor = Some("reply-1".to_string());
+        follow_up.anchor = Some(NodeAnchor::Reply {
+            reply_id: "reply-1".to_string(),
+        });
         archive.nodes.push(follow_up);
         assert_eq!(
             detached_archive_version(&archive.nodes),
-            DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_DOCUMENT_IMPORTS
+            DETACHED_RESEARCH_ARCHIVE_VERSION
         );
         archive.version = detached_archive_version(&archive.nodes);
         validate_detached_archive(&archive).unwrap();
-        archive.version = DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_NOTES;
+        archive.version = DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_POSTS;
         let error = validate_detached_archive(&archive).unwrap_err();
-        assert!(error.contains("note data that requires archive version"));
+        assert!(error.contains("post data that requires archive version"));
 
-        // A note may not sit under a run, and delivery belongs to notes only.
+        // A post may not sit under a run, and delivery belongs to posts only.
         archive.version = DETACHED_RESEARCH_ARCHIVE_VERSION;
-        archive.nodes[1].kind = ResearchNodeKind::Note;
-        archive.nodes[1].reply_anchor = None;
+        archive.nodes[1].kind = ResearchNodeKind::Post;
+        archive.nodes[1].format = Some(PostFormat::Text);
+        archive.nodes[1].anchor = None;
         archive.nodes[0].kind = ResearchNodeKind::Run;
+        archive.nodes[0].format = None;
         archive.nodes[0].delivery = None;
         assert!(
             validate_detached_archive(&archive)
                 .unwrap_err()
-                .contains("parent that is not a note")
+                .contains("parent that is not a post")
+        );
+        // Every post has a format, and only posts have one.
+        archive.nodes[1].kind = ResearchNodeKind::Run;
+        archive.nodes[1].format = Some(PostFormat::Link);
+        assert!(
+            validate_detached_archive(&archive)
+                .unwrap_err()
+                .contains("has a format but is not a post")
+        );
+        archive.nodes[1].format = None;
+        archive.nodes[0].kind = ResearchNodeKind::Post;
+        assert!(
+            validate_detached_archive(&archive)
+                .unwrap_err()
+                .contains("has no format")
         );
         std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    fn migrate_values(nodes: &mut [serde_json::Value]) -> bool {
+        migrate_research_node_values(&mut nodes.iter_mut().collect::<Vec<_>>())
+    }
+
+    #[test]
+    fn note_migration_renames_backfills_formats_and_merges_anchors() {
+        let passage = serde_json::json!({
+            "version": 1,
+            "projection": "answer-v1",
+            "responseRevision": "rev",
+            "start": 0,
+            "end": 4,
+            "exact": "Text",
+            "prefix": "",
+            "suffix": "",
+        });
+        let mut nodes = vec![
+            serde_json::json!({"id": "link", "kind": "note", "prompt": " https://x.com/a/status/1 "}),
+            serde_json::json!({"id": "text", "kind": "note", "prompt": "Who knows?",
+                "delivery": {"status": "posted", "postedAt": 1}}),
+            serde_json::json!({"id": "about-reply", "parentNodeId": "text", "replyAnchor": "reply-1"}),
+            serde_json::json!({"id": "branch", "parentNodeId": "run", "queryAnchor": passage}),
+            serde_json::json!({"id": "run", "prompt": "Q", "queryAnchor": null, "replyAnchor": null}),
+            // Both anchors cannot be created; the one the parent allows wins.
+            serde_json::json!({"id": "both-post", "parentNodeId": "text",
+                "queryAnchor": passage, "replyAnchor": "reply-2"}),
+            serde_json::json!({"id": "both-run", "parentNodeId": "run",
+                "queryAnchor": passage, "replyAnchor": "reply-3"}),
+            // A reply anchor that never deserialized is dropped, not the node.
+            serde_json::json!({"id": "corrupt", "parentNodeId": "text", "replyAnchor": 7}),
+            serde_json::json!("not a node"),
+            serde_json::json!({"id": "imported", "origin": "imported", "prompt": "Q"}),
+        ];
+        let count = nodes.len();
+        assert!(migrate_values(&mut nodes));
+        assert_eq!(nodes.len(), count, "no node is removed");
+        assert_eq!(nodes[0]["kind"], "post");
+        assert_eq!(nodes[0]["format"], "link");
+        assert_eq!(nodes[1]["kind"], "post");
+        assert_eq!(nodes[1]["format"], "text");
+        assert_eq!(
+            nodes[2]["anchor"],
+            serde_json::json!({"kind": "reply", "replyId": "reply-1"})
+        );
+        assert!(nodes[2].get("replyAnchor").is_none());
+        assert_eq!(
+            nodes[3]["anchor"],
+            serde_json::json!({"kind": "passage", "anchor": passage})
+        );
+        assert!(nodes[3].get("queryAnchor").is_none());
+        assert!(nodes[4].get("anchor").is_none());
+        assert!(nodes[4].get("queryAnchor").is_none());
+        assert!(nodes[4].get("format").is_none(), "runs get no format");
+        assert_eq!(nodes[5]["anchor"]["kind"], "reply");
+        assert_eq!(nodes[5]["anchor"]["replyId"], "reply-2");
+        assert_eq!(nodes[6]["anchor"]["kind"], "passage");
+        assert!(nodes[7].get("anchor").is_none());
+        assert!(nodes[7].get("replyAnchor").is_none());
+        assert_eq!(nodes[8], "not a node");
+        assert_eq!(nodes[9]["kind"], "document");
+
+        let typed = nodes
+            .iter()
+            .filter(|node| node.is_object())
+            .map(|node| {
+                let mut node = node.clone();
+                let object = node.as_object_mut().unwrap();
+                for (key, value) in [
+                    ("treeId", serde_json::json!("tree")),
+                    ("adapter", serde_json::json!("claude")),
+                    ("groupId", serde_json::json!("group")),
+                    ("worktreeDir", serde_json::json!("/tmp")),
+                    ("status", serde_json::json!("complete")),
+                    ("createdAt", serde_json::json!(1)),
+                ] {
+                    object.insert(key.to_string(), value);
+                }
+                object
+                    .entry("prompt")
+                    .or_insert_with(|| serde_json::json!("Q"));
+                serde_json::from_value::<ResearchNode>(node).unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(typed[0].format, Some(PostFormat::Link));
+        assert_eq!(typed[2].reply_anchor(), Some("reply-1"));
+        assert_eq!(typed[3].passage_anchor().unwrap().exact, "Text");
+
+        // Idempotent: a second pass changes nothing.
+        let migrated = nodes.clone();
+        assert!(!migrate_values(&mut nodes));
+        assert_eq!(nodes, migrated);
+        // An existing anchor wins over leftover legacy fields.
+        let mut leftover = vec![serde_json::json!({
+            "id": "n", "anchor": {"kind": "reply", "replyId": "r"}, "queryAnchor": passage,
+        })];
+        assert!(migrate_values(&mut leftover));
+        assert_eq!(leftover[0]["anchor"]["replyId"], "r");
+        assert!(leftover[0].get("queryAnchor").is_none());
+    }
+
+    #[test]
+    fn version_nine_archives_with_notes_migrate_on_read_and_restamp() {
+        let folder = temp_workspace();
+        let mut archive = sample_detached_archive(&folder);
+        archive.nodes[0].kind = ResearchNodeKind::Post;
+        archive.nodes[0].format = Some(PostFormat::Link);
+        archive.nodes[0].prompt = "https://example.com/a".to_string();
+        let mut branch = archive.nodes[0].clone();
+        branch.id = "research-node-2".to_string();
+        branch.parent_node_id = Some(archive.nodes[0].id.clone());
+        branch.kind = ResearchNodeKind::Run;
+        branch.format = None;
+        branch.prompt = "Why?".to_string();
+        archive.nodes.push(branch);
+        archive.version = DETACHED_RESEARCH_ARCHIVE_VERSION;
+        write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap();
+
+        // Rewrite the manifest in the version-9 shape: a note without a format.
+        let manifest = detached_archive_path(&folder, true).join(DETACHED_RESEARCH_MANIFEST);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+        raw["version"] = serde_json::json!(9);
+        raw["nodes"][0]["kind"] = serde_json::json!("note");
+        raw["nodes"][0].as_object_mut().unwrap().remove("format");
+        std::fs::write(&manifest, serde_json::to_vec(&raw).unwrap()).unwrap();
+
+        let bundle = read_detached_research(&folder).unwrap().unwrap();
+        assert_eq!(bundle.archive.version, DETACHED_RESEARCH_ARCHIVE_VERSION);
+        assert_eq!(bundle.archive.nodes.len(), 2);
+        assert_eq!(bundle.archive.nodes, archive.nodes);
+        // Moving the folder rewrites the bundle as read, at the new version.
+        let moved = temp_workspace();
+        write_detached_research_pending(&moved, &bundle.archive, &bundle.responses).unwrap();
+        let raw: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(detached_archive_path(&moved, true).join(DETACHED_RESEARCH_MANIFEST))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(raw["version"], DETACHED_RESEARCH_ARCHIVE_VERSION);
+        assert_eq!(raw["nodes"][0]["kind"], "post");
+        assert_eq!(raw["nodes"][0]["format"], "link");
+        std::fs::remove_dir_all(folder).unwrap();
+        std::fs::remove_dir_all(moved).unwrap();
     }
 
     #[test]

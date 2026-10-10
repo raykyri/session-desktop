@@ -1949,8 +1949,7 @@ async fn fork_research_node(
     state: tauri::State<'_, AppState>,
     parent_node_id: String,
     prompt: String,
-    query_anchor: Option<research::ResearchHighlightAnchor>,
-    reply_anchor: Option<String>,
+    anchor: Option<research::NodeAnchor>,
     inline: Option<bool>,
     replaces_node_id: Option<String>,
 ) -> Result<ResearchNode, String> {
@@ -1973,8 +1972,7 @@ async fn fork_research_node(
                     let child = state.create_research_child_replacing(
                         &parent_node_id,
                         prompt,
-                        query_anchor,
-                        reply_anchor,
+                        anchor,
                         inline,
                         attachments,
                         replaced,
@@ -1988,8 +1986,7 @@ async fn fork_research_node(
                 None => state.create_research_child_with_attachments(
                     &parent_node_id,
                     prompt,
-                    query_anchor,
-                    reply_anchor,
+                    anchor,
                     inline,
                     attachments,
                 )?,
@@ -2020,7 +2017,7 @@ fn launch_research_child_run(
     // question. Only the sent prompt carries the quote — the child's
     // displayed prompt stays the bare question, which boundary matching
     // still finds as a normalized substring of the sent prompt.
-    let question = match &child.query_anchor {
+    let question = match child.passage_anchor() {
         Some(anchor) => research::query_followup_prompt(&anchor.exact, &prompt),
         None => prompt,
     };
@@ -2039,7 +2036,7 @@ fn launch_research_child_run(
             Some(state.research_snapshot_followup_prompt(
                 &parent.id,
                 &tweets::prompt_with_research_attachments(child.prompt.clone(), &child.attachments),
-                child.query_anchor.as_ref(),
+                child.passage_anchor(),
             ))
         }
         research::FollowUpLaunch::Context(research::FollowUpContext::Post) => {
