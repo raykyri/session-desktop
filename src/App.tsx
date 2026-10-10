@@ -2570,14 +2570,6 @@ function MainApp() {
     retainedGraphHistoryThreadIds,
     retainedTurnHistoryAgentIds,
   ]);
-  // Every agent id ever spawned for a research run. Grow-only on purpose: the
-  // event hook consults it to suppress thread-graph refreshes (research runs
-  // have no graphs). A settled run's trailing turn events arrive after the
-  // agent record is gone, so pruning the set would schedule pointless graph
-  // reads. Bounded by the number of research launches in one app session.
-  // Runs that started before this window loaded are recognized by their
-  // Research-scoped workspace (isResearchRunAgent).
-  const researchAgentIdsRef = useRef<Set<string>>(new Set());
   const researchAttentionState = useMemo(() => researchAttention(researchTrees), [researchTrees]);
   const runningResearchCount = researchAttentionState.runningCount;
   const activeBrowserOwnerId = researchSurfaceActive
@@ -3244,12 +3236,6 @@ function MainApp() {
   }
 
   function handleAgentSpawned(agent: AgentInfo, paneId: string | null, source: string | null) {
-    // Recorded synchronously in the event batch, so the run's first turn
-    // events — flushed in the same coalesce window as agent.spawned — already
-    // see the id when deciding whether to skip thread-graph refreshes.
-    if (source === "research") {
-      researchAgentIdsRef.current.add(agent.id);
-    }
     registerShellCodexFirstMessageTitle(agent, paneId, source);
   }
 
@@ -6454,8 +6440,11 @@ function MainApp() {
     onAgentThreadGraphDirty: scheduleAgentThreadGraphRefresh,
     shouldRetainAgentTurns: (agentId: string) =>
       retainedTurnHistoryAgentIdsRef.current.has(agentId),
-    isResearchAgent: (agentId: string) =>
-      researchAgentIdsRef.current.has(agentId) || isResearchRunAgent(agentId),
+    // A research run's agent is in a Research-scoped workspace. An agent
+    // whose record is already gone (a settled run's trailing turn events)
+    // is not found here, but it is not bound to a visible terminal pane
+    // either, so shouldRefreshAgentThreadGraph skips it.
+    isResearchAgent: isResearchRunAgent,
     refreshAgentTurnQueue,
     refreshTranscriptOptions,
     refreshVisibleTranscriptOptions,
