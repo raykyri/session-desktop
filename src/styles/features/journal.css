@@ -279,8 +279,8 @@
   margin: 12px;
 }
 
-/* The box: the field with the send button inside it, as in a conversation's
-   ask box. */
+/* The box: the field across its full width, and under it, once focused or
+   filled, a row with the Ask/Post switcher and the send button. */
 .new-research-launcher {
   display: flex;
   flex-direction: column;
@@ -288,24 +288,22 @@
   border: 1px solid var(--surface-border-strong);
   border-radius: 10px;
   background: var(--research-feed-field-bg);
+  cursor: text;
 }
 
-.new-research-launcher:focus-within {
+/* The model menu is portaled, so focus inside it leaves the box; the ring
+   stays while it is open. */
+.new-research-launcher:focus-within,
+.new-research-launcher.is-menu-open {
   border-color: var(--accent-color);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.new-research-main {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-/* One line until focused or filled; then the field grows and the picker
+/* One line until focused or filled; then the field grows and the row
    appears under it. */
 .new-research-input {
   display: block;
-  flex: 1;
+  width: 100%;
   min-width: 0;
   min-height: 30px;
   max-height: 160px;
@@ -331,7 +329,7 @@
   box-shadow: none;
 }
 
-/* The recipient and model picker, at the leading edge under the field. */
+/* The switcher at the leading edge, the send button at the trailing edge. */
 .new-research-row {
   display: flex;
   align-items: center;
@@ -339,6 +337,59 @@
   min-width: 0;
   margin-top: 4px;
   margin-left: -5px;
+  cursor: default;
+}
+
+.new-research-row .research-composer-send {
+  margin-left: auto;
+}
+
+/* The Ask/Post switcher has two icon buttons; the selected button is raised. */
+.new-research-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--surface-fill-subtle);
+}
+
+.new-research-switch-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 30px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.new-research-switch-option:hover {
+  color: var(--text-primary);
+}
+
+.new-research-switch-option[aria-checked="true"] {
+  border-color: var(--control-border);
+  color: var(--text-strong);
+  background: var(--research-feed-switch-raised-bg);
+  box-shadow: var(--research-feed-switch-raised-shadow);
+}
+
+.new-research-switch-option:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
+}
+
+.new-research-switch-chevron {
+  flex: none;
+  margin-left: -2px;
+  opacity: 0.65;
 }
 
 /* Save draft, under the box at the trailing edge, once there is text. */
@@ -346,31 +397,6 @@
   display: flex;
   justify-content: flex-end;
   margin-top: 6px;
-}
-
-/* Recipient, agent, and model in one quiet picker: just the agent's icon. */
-.new-research-model-controls {
-  display: flex;
-  flex: 0 1 auto;
-  align-items: center;
-  min-width: 0;
-}
-
-.new-research-model-controls .launcher-select-trigger.is-icon-only {
-  height: 24px;
-  min-height: 0;
-  padding: 0 5px;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-}
-
-.new-research-model-controls .launcher-select-trigger.is-icon-only:hover {
-  background: var(--surface-fill-subtle);
-}
-
-.new-research-model-controls .launcher-select-chevron {
-  display: none;
 }
 
 .new-research-custom-model {

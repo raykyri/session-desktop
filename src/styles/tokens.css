@@ -489,6 +489,9 @@
   --research-card-selected-bg: #23282b;
   --research-feed-field-bg: #1b1f21;
   --research-feed-popover-bg: #1d2224;
+  /* The selected segment of the Home ask box's Ask/Post switcher. */
+  --research-feed-switch-raised-bg: var(--control-bg);
+  --research-feed-switch-raised-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
 }
 
 :root[data-color-theme="orange-blob"] {
@@ -560,6 +563,8 @@
   --research-card-selected-bg: #2b2927;
   --research-feed-field-bg: #232220;
   --research-feed-popover-bg: #23221f;
+  --research-feed-switch-raised-bg: var(--control-bg);
+  --research-feed-switch-raised-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
 }
 
 /* ------------------------------------------------------------------ */
@@ -781,6 +786,8 @@
   --research-card-selected-bg: #e2e7e5;
   --research-feed-field-bg: #ffffff;
   --research-feed-popover-bg: #ffffff;
+  --research-feed-switch-raised-bg: var(--research-feed-field-bg);
+  --research-feed-switch-raised-shadow: 0 1px 2px rgba(20, 24, 26, 0.12);
 }
 
 :root[data-appearance="light"][data-color-theme="orange-blob"] {
@@ -854,4 +861,6 @@
   --research-card-selected-bg: #ebe7e1;
   --research-feed-field-bg: #ffffff;
   --research-feed-popover-bg: #ffffff;
+  --research-feed-switch-raised-bg: var(--research-feed-field-bg);
+  --research-feed-switch-raised-shadow: 0 1px 2px rgba(20, 24, 26, 0.12);
 }

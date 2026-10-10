@@ -2671,6 +2671,12 @@ span.launcher-select-icon {
   opacity: 0.9;
 }
 
+/* Use the original dark icon on light backgrounds. */
+:root[data-appearance="light"] .launcher-select-icon.is-mono-light {
+  filter: none;
+  opacity: 0.85;
+}
+
 /* The chevron stays muted even when the value takes a tone, so only the label reads
    as danger. */
 .launcher-select-chevron {

@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, ChevronRight } from "lucide-react";
+import { researchMenuKeyTarget } from "./research/ResearchMenu";
 
 export interface LauncherSelectOption {
   value: string;
@@ -33,9 +34,15 @@ interface LauncherSelectProps {
   ariaLabel?: string;
   disabled?: boolean;
   submenu?: LauncherSelectSubmenu;
-  /** Show only the selected option's icon on the trigger; its label moves to
-   * the trigger's tooltip. */
-  iconOnly?: boolean;
+  /** Controlled open state. Every open and close, including Escape, Tab, a
+   * choice and a press outside, goes through `onOpenChange`. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** An element the caller renders to open the menu, instead of the built-in
+   * trigger (which is then not rendered). The popover aligns to it, a press on
+   * it does not count as a press outside, and focus returns to it when the
+   * menu closes from the keyboard or a choice. Use with `open`. */
+  anchorRef?: RefObject<HTMLElement | null>;
 }
 
 const SUBMENU_GAP = 4;
@@ -44,7 +51,8 @@ const toneClass = (tone?: string) => (tone ? ` is-${tone}` : "");
 const iconClass = (option?: LauncherSelectOption) =>
   ["launcher-select-icon", option?.iconClassName].filter(Boolean).join(" ");
 
-function OptionIcon({ option }: { option?: LauncherSelectOption }) {
+/** An option's icon: its image, or its glyph. */
+export function OptionIcon({ option }: { option?: LauncherSelectOption }) {
   if (option?.iconSrc) {
     return <img className={iconClass(option)} src={option.iconSrc} alt="" aria-hidden="true" />;
   }
@@ -53,6 +61,19 @@ function OptionIcon({ option }: { option?: LauncherSelectOption }) {
       {option.icon}
     </span>
   ) : null;
+}
+
+function enabledItems(panel: HTMLElement | null) {
+  return panel
+    ? Array.from(panel.querySelectorAll<HTMLButtonElement>(".launcher-select-item:not(:disabled)"))
+    : [];
+}
+
+/** Focus the checked item, or the first enabled one. */
+function focusCheckedItem(panel: HTMLElement | null) {
+  const items = enabledItems(panel);
+  const checked = items.find((item) => item.getAttribute("aria-selected") === "true");
+  (checked ?? items[0])?.focus({ preventScroll: true });
 }
 
 /* A native <select> can't tint a single option, so this is a custom listbox styled
@@ -66,9 +87,12 @@ export function LauncherSelect({
   ariaLabel,
   disabled = false,
   submenu,
-  iconOnly = false,
+  open: openProp,
+  onOpenChange,
+  anchorRef,
 }: LauncherSelectProps) {
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
   const [anchor, setAnchor] = useState<{ left: number; top: number; width: number } | null>(null);
   const [submenuAnchor, setSubmenuAnchor] = useState<{ left: number; top: number } | null>(
     null,
@@ -77,22 +101,48 @@ export function LauncherSelect({
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const submenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const submenuRef = useRef<HTMLDivElement | null>(null);
+  // Set when the submenu opens from the keyboard, so its checked item takes
+  // focus once it is placed.
+  const focusSubmenuRef = useRef(false);
   const submenuOpen = open && submenuAnchor !== null;
   const submenuSelected =
     submenu?.options.find((option) => option.value === submenu.value) ?? submenu?.options[0];
 
-  const closeAll = () => {
-    setOpen(false);
+  const anchorElement = () => anchorRef?.current ?? triggerRef.current;
+
+  const setOpen = (next: boolean) => {
+    if (openProp === undefined) setOpenState(next);
+    if (next !== open) onOpenChange?.(next);
+  };
+  // The document listeners below are bound once per open; they read the
+  // latest setter through this ref.
+  const setOpenRef = useRef(setOpen);
+  setOpenRef.current = setOpen;
+
+  /** Close the menu; from the keyboard or a choice, focus goes back to the
+   * control that opened it. */
+  const closeAll = (restoreFocus: boolean) => {
     setSubmenuAnchor(null);
+    setOpen(false);
+    if (restoreFocus) anchorElement()?.focus({ preventScroll: true });
   };
 
-  const openSubmenu = () => {
+  const openSubmenu = (focus: boolean) => {
     const rect = submenuTriggerRef.current?.getBoundingClientRect();
     if (rect) {
       // Beside the row, top edges aligned; the layout effect below flips it
       // to the left when the right edge would leave the viewport.
+      focusSubmenuRef.current = focus;
       setSubmenuAnchor({ left: rect.right + SUBMENU_GAP, top: rect.top - 4 });
     }
+  };
+
+  const closeSubmenu = (focusRow: boolean) => {
+    // Focus inside the submenu would be dropped with it; keep it on the row.
+    if (focusRow || submenuRef.current?.contains(document.activeElement)) {
+      submenuTriggerRef.current?.focus({ preventScroll: true });
+    }
+    setSubmenuAnchor(null);
   };
 
   useLayoutEffect(() => {
@@ -108,15 +158,20 @@ export function LauncherSelect({
       current ? { ...current, left: Math.max(8, row.left - panel.width - SUBMENU_GAP) } : current,
     );
   }, [submenuOpen]);
-  // A trigger near the viewport's right edge (the Home composer's model
-  // picker ends its row) would push a left-aligned popover off screen; end
-  // it at the trigger's right edge instead.
+  useEffect(() => {
+    if (submenuOpen && focusSubmenuRef.current) {
+      focusSubmenuRef.current = false;
+      focusCheckedItem(submenuRef.current);
+    }
+  }, [submenuOpen]);
+  // A trigger near the viewport's right edge would push a left-aligned
+  // popover off screen; end it at the trigger's right edge instead.
   useLayoutEffect(() => {
     if (!open || !anchor) {
       return;
     }
     const panel = popoverRef.current?.getBoundingClientRect();
-    const trigger = triggerRef.current?.getBoundingClientRect();
+    const trigger = anchorElement()?.getBoundingClientRect();
     if (!panel || !trigger || panel.right <= window.innerWidth - 8) {
       return;
     }
@@ -139,19 +194,35 @@ export function LauncherSelect({
   }, [match, options, value, onChange]);
 
   useEffect(() => {
-    if (disabled) {
-      setOpen(false);
+    if (disabled && open) {
+      setOpenRef.current(false);
       setSubmenuAnchor(null);
     }
-  }, [disabled]);
+  }, [disabled, open]);
 
   const measure = () => {
-    const rect = triggerRef.current?.getBoundingClientRect();
+    const rect = anchorElement()?.getBoundingClientRect();
     if (rect) {
       // Pin the popover's top just below the trigger so it opens downward, left edge aligned.
       setAnchor({ left: rect.left, top: rect.bottom + 6, width: rect.width });
     }
   };
+
+  // Placed before paint on every open, whichever control opened it.
+  useLayoutEffect(() => {
+    if (open) {
+      measure();
+    } else {
+      setAnchor(null);
+      setSubmenuAnchor(null);
+    }
+  }, [open]);
+
+  // Focus moves into the menu once it is placed, so the arrow keys work at once.
+  const shown = open && anchor !== null;
+  useEffect(() => {
+    if (shown) focusCheckedItem(popoverRef.current);
+  }, [shown]);
 
   useEffect(() => {
     if (!open) {
@@ -160,17 +231,19 @@ export function LauncherSelect({
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (
-        !triggerRef.current?.contains(target) &&
+        !anchorElement()?.contains(target) &&
         !popoverRef.current?.contains(target) &&
         !submenuRef.current?.contains(target)
       ) {
-        setOpen(false);
+        setOpenRef.current(false);
         setSubmenuAnchor(null);
       }
     };
+    // Keys pressed inside the menu are handled by menuKeyDown; these cover
+    // focus left elsewhere while it is open.
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" || event.key === "Tab") {
-        setOpen(false);
+        setOpenRef.current(false);
         setSubmenuAnchor(null);
       }
     };
@@ -184,31 +257,58 @@ export function LauncherSelect({
     };
   }, [open]);
 
+  /** ↑/↓ and Home/End move between enabled items; Escape closes this level
+   * and Tab closes the menu, both returning focus to what opened it (Tab then
+   * moves on from there). ← closes the submenu. */
+  const menuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>, isSubmenu: boolean) => {
+    const items = enabledItems(event.currentTarget);
+    const index = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next = researchMenuKeyTarget(event.key, index, items.length);
+    if (next !== null) {
+      event.preventDefault();
+      items[next]?.focus({ preventScroll: true });
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (isSubmenu) closeSubmenu(true);
+      else closeAll(true);
+    } else if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.stopPropagation();
+      closeAll(true);
+    } else if (event.key === "ArrowLeft" && isSubmenu) {
+      event.preventDefault();
+      closeSubmenu(true);
+    }
+  };
+
   return (
-    <div className="launcher-select">
-      <button
-        ref={triggerRef}
-        type="button"
-        className={`control-button launcher-select-trigger${toneClass(selected?.tone)}${
-          iconOnly ? " is-icon-only" : ""
-        }`}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={ariaLabel}
-        title={iconOnly ? selected?.label : undefined}
-        disabled={disabled}
-        onClick={() => {
-          if (!open) {
-            measure();
-          }
-          setSubmenuAnchor(null);
-          setOpen((prev) => !prev);
-        }}
-      >
-        <OptionIcon option={selected} />
-        {iconOnly ? null : <span className="launcher-select-value">{selected?.label}</span>}
-        <ChevronDown size={13} className="launcher-select-chevron" aria-hidden="true" />
-      </button>
+    <>
+      {anchorRef ? null : (
+        <div className="launcher-select">
+          <button
+            ref={triggerRef}
+            type="button"
+            className={`control-button launcher-select-trigger${toneClass(selected?.tone)}`}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            aria-label={ariaLabel}
+            disabled={disabled}
+            onClick={() => setOpen(!open)}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown" && !open) {
+                event.preventDefault();
+                setOpen(true);
+              }
+            }}
+          >
+            <OptionIcon option={selected} />
+            <span className="launcher-select-value">{selected?.label}</span>
+            <ChevronDown size={13} className="launcher-select-chevron" aria-hidden="true" />
+          </button>
+        </div>
+      )}
       {open && anchor
         ? createPortal(
             <div
@@ -217,6 +317,7 @@ export function LauncherSelect({
               role="listbox"
               aria-label={ariaLabel}
               style={{ left: anchor.left, top: anchor.top, minWidth: anchor.width }}
+              onKeyDown={(event) => menuKeyDown(event, false)}
             >
               {options.map((option) => {
                 const active = option.value === value;
@@ -238,9 +339,9 @@ export function LauncherSelect({
                       className={`menu-item launcher-select-item${toneClass(option.tone)}${
                         active ? " is-active" : ""
                       }`}
-                      onMouseEnter={() => setSubmenuAnchor(null)}
+                      onMouseEnter={() => closeSubmenu(false)}
                       onClick={() => {
-                        closeAll();
+                        closeAll(true);
                         if (option.value !== value) {
                           onChange(option.value);
                         }
@@ -269,12 +370,16 @@ export function LauncherSelect({
                     }`}
                     aria-haspopup="listbox"
                     aria-expanded={submenuOpen}
-                    onMouseEnter={openSubmenu}
-                    onClick={() => (submenuOpen ? setSubmenuAnchor(null) : openSubmenu())}
+                    onMouseEnter={() => openSubmenu(false)}
+                    // A keyboard click (Enter or Space) reports detail 0 and
+                    // moves focus into the submenu; a mouse click does not.
+                    onClick={(event) =>
+                      submenuOpen ? closeSubmenu(true) : openSubmenu(event.detail === 0)
+                    }
                     onKeyDown={(event) => {
                       if (event.key === "ArrowRight") {
                         event.preventDefault();
-                        openSubmenu();
+                        openSubmenu(true);
                       }
                     }}
                   >
@@ -300,6 +405,7 @@ export function LauncherSelect({
               role="listbox"
               aria-label={submenu.ariaLabel ?? submenu.label}
               style={{ left: submenuAnchor.left, top: submenuAnchor.top }}
+              onKeyDown={(event) => menuKeyDown(event, true)}
             >
               {submenu.options.map((option) => {
                 const active = option.value === submenu.value;
@@ -322,7 +428,7 @@ export function LauncherSelect({
                         active ? " is-active" : ""
                       }`}
                       onClick={() => {
-                        closeAll();
+                        closeAll(true);
                         if (option.value !== submenu.value) {
                           submenu.onChange(option.value);
                         }
@@ -343,6 +449,6 @@ export function LauncherSelect({
             document.body,
           )
         : null}
-    </div>
+    </>
   );
 }

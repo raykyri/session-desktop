@@ -9,13 +9,16 @@ import type { AgentAdapterMetadata } from "../src/types";
 register("./svgStubLoader.mjs", import.meta.url);
 const {
   default: ResearchQueryComposer,
+  AskPostSwitch,
   askModeShowsAiControls,
+  askSwitchKeyTarget,
   parseResearchModelChoice,
   researchEffortOptionsFor,
   researchModelChoiceValue,
   researchModelOptions,
 } = await import("../src/components/research/ResearchQueryComposer");
 const { noteBodyIsSingleUrl } = await import("../src/components/research/ResearchNote");
+const { LauncherSelect } = await import("../src/components/LauncherSelect");
 
 function adapter(id: string): AgentAdapterMetadata {
   return {
@@ -60,13 +63,12 @@ function renderComposer() {
 test("the composer starts as one Ask a question line without its controls", () => {
   const html = renderComposer();
   assert.match(html, /<textarea[^>]*rows="1"[^>]*placeholder="Ask a question"[^>]*aria-label="New question"/);
-  // The picker shows once the field has focus or text, and Save draft once
-  // it has text; at rest the box is the field and a disabled arrow send
-  // button with no label or shortcut text.
-  assert.doesNotMatch(html, /aria-label="Recipient"|new-research-model-controls|Save draft|research-feed-enter/);
-  assert.match(
+  // The row with the switcher and the send button shows once the field has
+  // focus or text, and Save draft once it has text; at rest the box is only
+  // the field.
+  assert.doesNotMatch(
     html,
-    /<button type="submit" class="control-button research-composer-send" disabled="" aria-label="Start research" title="Start research \(↵\)"><svg[^>]*lucide-arrow-up/,
+    /radiogroup|new-research-row|research-composer-send|launcher-select|Save draft/,
   );
   const inFolder = renderToStaticMarkup(
     createElement(ResearchQueryComposer, {
@@ -134,4 +136,74 @@ test("a model choice value round-trips to its agent and preset", () => {
 test("network mode hides AI controls", () => {
   assert.equal(askModeShowsAiControls("ai"), true);
   assert.equal(askModeShowsAiControls("network"), false);
+});
+
+function renderSwitch(askMode: "ai" | "network") {
+  return renderToStaticMarkup(
+    createElement(AskPostSwitch, {
+      askMode,
+      askIcon: { value: "claude", label: "Claude Code", iconSrc: "claude.svg" },
+      askLabel: "Ask with Claude Code Fable",
+      menuOpen: false,
+      askRef: { current: null },
+      onModeChange: () => {},
+      onMenuOpenChange: () => {},
+    }),
+  );
+}
+
+test("Ask and Post are two icon radios; only the selected one is a tab stop", () => {
+  const ask = renderSwitch("ai");
+  assert.match(ask, /<div class="new-research-switch" role="radiogroup" aria-label="Send to">/);
+  // Ask: the agent's icon and, while selected, a chevron and the hint that
+  // Enter opens the model menu.
+  const askRadio = ask.match(/<button[^>]*aria-label="Ask with Claude Code Fable"[^>]*>(.*?)<\/button>/);
+  assert.ok(askRadio);
+  assert.match(askRadio[0], /role="radio" aria-checked="true" tabindex="0"/);
+  assert.match(askRadio[0], /title="Ask with Claude Code Fable"/);
+  assert.match(askRadio[1], /<img class="launcher-select-icon" src="claude.svg"/);
+  assert.match(askRadio[1], /lucide-chevron-down/);
+  const describedBy = askRadio[0].match(/aria-describedby="([^"]+)"/)?.[1];
+  assert.ok(describedBy);
+  assert.match(ask, new RegExp(`<span id="${describedBy}" hidden="">Press Enter to choose a model</span>`));
+  assert.match(
+    ask,
+    /<button type="button" role="radio" aria-checked="false" tabindex="-1" class="new-research-switch-option" aria-label="Post to network" title="Post to network"><svg[^>]*lucide-users/,
+  );
+
+  const post = renderSwitch("network");
+  assert.match(post, /role="radio" aria-checked="false" tabindex="-1"[^>]*aria-label="Ask with Claude Code Fable"/);
+  assert.match(post, /role="radio" aria-checked="true" tabindex="0"[^>]*aria-label="Post to network"/);
+  // In Post the Ask segment opens no menu, so it has no chevron or hint.
+  assert.doesNotMatch(post, /lucide-chevron-down|aria-describedby/);
+});
+
+test("arrow keys switch the mode; Home is Ask and End is Post", () => {
+  assert.equal(askSwitchKeyTarget("ArrowRight", "ai"), "network");
+  assert.equal(askSwitchKeyTarget("ArrowLeft", "ai"), "network");
+  assert.equal(askSwitchKeyTarget("ArrowRight", "network"), "ai");
+  assert.equal(askSwitchKeyTarget("ArrowLeft", "network"), "ai");
+  assert.equal(askSwitchKeyTarget("Home", "network"), "ai");
+  assert.equal(askSwitchKeyTarget("End", "ai"), "network");
+  // ↓ opens the menu from Ask instead; Enter and Space click.
+  assert.equal(askSwitchKeyTarget("ArrowDown", "ai"), null);
+  assert.equal(askSwitchKeyTarget("Enter", "ai"), null);
+});
+
+test("a LauncherSelect opened from another control renders no trigger of its own", () => {
+  const props = {
+    value: "a",
+    options: [{ value: "a", label: "A" }],
+    onChange: () => {},
+    ariaLabel: "Model",
+  };
+  const own = renderToStaticMarkup(createElement(LauncherSelect, props));
+  assert.match(
+    own,
+    /<div class="launcher-select"><button type="button" class="control-button launcher-select-trigger" aria-haspopup="listbox" aria-expanded="false" aria-label="Model">/,
+  );
+  const anchored = renderToStaticMarkup(
+    createElement(LauncherSelect, { ...props, anchorRef: { current: null }, open: false, onOpenChange: () => {} }),
+  );
+  assert.equal(anchored, "");
 });
