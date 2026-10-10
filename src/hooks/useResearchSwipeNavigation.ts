@@ -26,30 +26,29 @@ function holdNavigatedGesture() {
   extendNavigatedGesture();
 }
 
-function horizontalScrollerConsumesWheel(
-  target: EventTarget | null,
-  boundary: HTMLElement,
-  deltaX: number,
-): boolean {
-  let element = target instanceof Element ? target : null;
-  while (element && element !== boundary && boundary.contains(element)) {
-    if (element instanceof HTMLElement && element.scrollWidth > element.clientWidth) {
+/** Whether the wheel target is inside an element that scrolls sideways: the
+ * column strip when its columns don't fit, a wide table or code block. A
+ * horizontal gesture there scrolls it; reaching its edge must not turn the
+ * rest of the gesture (or the next flick) into back/forward navigation. */
+function insideHorizontalScroller(target: EventTarget | null): boolean {
+  for (
+    let element = target instanceof Element ? target : null;
+    element && element !== document.body;
+    element = element.parentElement
+  ) {
+    if (element instanceof HTMLElement && element.scrollWidth - element.clientWidth > 1) {
       const overflowX = getComputedStyle(element).overflowX;
       if (overflowX === "auto" || overflowX === "scroll") {
-        const canScrollLeft = deltaX < 0 && element.scrollLeft > 0;
-        const canScrollRight =
-          deltaX > 0 && element.scrollLeft < element.scrollWidth - element.clientWidth;
-        if (canScrollLeft || canScrollRight) {
-          return true;
-        }
+        return true;
       }
     }
-    element = element.parentElement;
   }
   return false;
 }
 
-/** Adds trackpad back/forward navigation gestures to a research scroller. */
+/** Adds trackpad back/forward navigation gestures to a research scroller.
+ * Gestures over anything that scrolls sideways (see insideHorizontalScroller)
+ * scroll it instead and never navigate. */
 export function useResearchSwipeNavigation(
   targetRef: RefObject<HTMLElement | null>,
   onBack: (() => void) | undefined,
@@ -102,7 +101,7 @@ export function useResearchSwipeNavigation(
           : 1;
       const deltaX = event.deltaX * scale;
       const deltaY = event.deltaY * scale;
-      if (horizontalScrollerConsumesWheel(event.target, target, deltaX)) {
+      if (insideHorizontalScroller(event.target)) {
         blockedByScroller = true;
         scheduleReset();
         return;

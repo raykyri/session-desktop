@@ -53,7 +53,7 @@ const folders: ResearchFolderState = {
 
 const cards = (html: string) => html.split(/class="research-feed-card(?=[ "])/).slice(1);
 
-test("Home lists Unfiled cards, then the composer, then the trays; a card shows the title when it differs, then the question", () => {
+test("Home starts with the composer, then lists Unfiled cards, then the trays; a card shows the title when it differs, then the question", () => {
   const html = renderFeed({ items: [savedLink, question], researchTrees: [tree] });
   assert.match(html, /research-feed-header-title[^>]*>Home</);
   assert.match(html, /role="feed"/);
@@ -62,11 +62,12 @@ test("Home lists Unfiled cards, then the composer, then the trays; a card shows 
   assert.match(html, /note-link-card research-content-card/);
   assert.match(html, /research-user-message research-feed-card-message/);
   assert.match(html, /Query composer/);
-  // The ask box ends the Unfiled list, before the folder trays, and + Ask
-  // in the header brings it into view.
-  assert.ok(html.indexOf("research-feed-card") < html.indexOf("Query composer"));
-  assert.ok(html.indexOf("Query composer") < html.indexOf("research-feed-tray"));
-  assert.match(html, /aria-label="Go to the ask box"/);
+  // The ask box starts Home, before the Unfiled list; Home's header has no
+  // + Ask, and its header marks Home for the collapsed sidebar.
+  assert.ok(html.indexOf("Query composer") < html.indexOf("research-feed-card"));
+  assert.ok(html.indexOf("research-feed-card") < html.indexOf("research-feed-tray"));
+  assert.doesNotMatch(html, /aria-label="Go to the ask box"/);
+  assert.match(html, /class="research-feed-header is-home"/);
   assert.ok(html.indexOf("research-feed-card-title\">Collective memory<") > 0);
   assert.ok(
     html.indexOf("research-feed-card-title\">Collective memory<") <

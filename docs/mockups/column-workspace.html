@@ -528,6 +528,9 @@ form.ready .btn.primary .ent { display: inline; }
 <body>
 
 <header class="pagehead">
+
+/* What happened to a note, where an answer's text would be: secondary text. */
+.note-status { color: var(--muted); }
   <div>
     <h1>Session column workspace</h1>
   </div>
@@ -1092,14 +1095,14 @@ function seed() {
     ] }] });
 
   add({ id: "c2", title: "re: Jeff Wu's Auditing the Singularity", order: 1, bookmarked: true, when: "3 days ago",
-    turns: [{ prompt: "re: Jeff Wu's Auditing the Singularity\nhttps://www.wuthejeff.com/ai/oversight/auditing/2026/05/27/auditing-the-singularity.html", body: ["Saved the link and posted it to your network. No replies yet."], status: "done", when: "3 days ago" }] });
+    turns: [{ prompt: "re: Jeff Wu's Auditing the Singularity\nhttps://www.wuthejeff.com/ai/oversight/auditing/2026/05/27/auditing-the-singularity.html", body: ["Saved the link and posted it to your network. No replies yet."], status: "done", note: true, when: "3 days ago" }] });
   add({ id: "c5", title: "How do Claude Mods work?", order: 2, when: "4 days ago",
     turns: [{ prompt: "How do Claude Mods work?", body: ["I'm reading the documentation index and the plugin authoring guide first."], status: "running", when: "just now", elapsed: 42 }] });
   add({ id: "c11", title: "design-team → main", order: 3, when: "4 days ago",
     turns: [{ prompt: "Summarise what changed between design-team and main, grouped by surface.", body: ["Compared 46 commits. So far: the sidebar, the feed card, and the note page changed; settings did not.", "Sidebar: thread list replaced by an Archived view."], status: "cancelled", when: "4 days ago", stoppedAfter: "1m 02s" }] });
 
   add({ id: "c3", folder: "f-perm", title: "____ says that he looks for work that follows-up to CaMeL / cites it – would be good to reach out to about permissions language, lariat", order: 0, bookmarked: true,
-    turns: [{ prompt: "____ says that he looks for work that follows-up to CaMeL / cites it – would be good to reach out to about permissions language, lariat", body: ["Saved as a note. Follow-ups from your network will appear here."], status: "done", when: "4 days ago" }] });
+    turns: [{ prompt: "____ says that he looks for work that follows-up to CaMeL / cites it – would be good to reach out to about permissions language, lariat", body: ["Saved as a note. Follow-ups from your network will appear here."], status: "done", note: true, when: "4 days ago" }] });
   add({ id: "c4", folder: "f-perm", title: "TAL tool access language", order: 1, bookmarked: true,
     turns: [
       { prompt: "TAL tool access language", body: ["TAL is a small policy language for declaring which tools an agent may call, with which arguments, and under which conditions. Policies are checked before each call, not after.", "The closest prior work is CaMeL, which separates control flow from data flow so that untrusted data cannot change which tools are called."], status: "done", when: "4 days ago" },
@@ -1113,7 +1116,7 @@ function seed() {
 
   add({ id: "c10", folder: "f-read", order: 0, title: "Compare Ioskeley Mono and iA Mono for long-form reading", when: "6 days ago",
     turns: [{ prompt: "Compare Ioskeley Mono and iA Mono for long-form reading", body: ["Both are monospaced faces tuned for prose. iA Mono widens the narrow letters less than a strict monospace would, and Ioskeley Mono keeps a larger x-height.", "For long-form reading at 13–15px, the larger x-height reads faster in short sessions; the difference narrows in longer sessions."], status: "done", when: "6 days ago" }] });
-  add({ id: "c12", folder: "archive", order: 0, title: "Drafts", when: "4 days ago", turns: [{ prompt: "Drafts", body: ["Saved as a note."], status: "done", when: "4 days ago" }] });
+  add({ id: "c12", folder: "archive", order: 0, title: "Drafts", when: "4 days ago", turns: [{ prompt: "Drafts", body: ["Saved as a note."], status: "done", note: true, when: "4 days ago" }] });
   add({ id: "c13", folder: "archive", order: 1, title: "Summarise the CaMeL paper", when: "9 days ago", turns: [{ prompt: "Summarise the CaMeL paper", body: ["CaMeL wraps a language model in a protective layer that extracts control flow and data flow from the trusted query, so that data retrieved later cannot change which tools are called."], status: "done", when: "9 days ago" }] });
   add({ id: "c14", folder: "archive", order: 2, title: "What does Linear's sidebar do when collapsed?", when: "12 days ago", turns: [{ prompt: "What does Linear's sidebar do when collapsed?", body: ["It hides completely, and a hover zone at the left edge reveals it as an overlay."], status: "done", when: "12 days ago" }] });
 
@@ -1614,7 +1617,8 @@ function bodyHTML(sp) {
   branchesOf(sp.conv, sp.turn).forEach((b) => { if (b.parent.p >= 0) (byP[b.parent.p] = byP[b.parent.p] || []).push(b); });
   return (t.body || []).map((blk, p) => {
     const inner = markedText(textOf(blk), marksFor(sp, p), sp.L);
-    const el = blk.startsWith('## ') ? `<h4 data-p="${p}">${inner}</h4>` : `<p data-p="${p}">${inner}</p>`;
+    // Style the note's delivery and reply status as secondary text.
+    const el = blk.startsWith('## ') ? `<h4 data-p="${p}">${inner}</h4>` : `<p data-p="${p}"${t.note ? ' class="note-status"' : ''}>${inner}</p>`;
     return byP[p] ? `<div class="bm-row">${el}${markerHTML(byP[p], sp.L, 'p' + p)}</div>` : el;
   }).join('');
 }

@@ -78,6 +78,23 @@
   align-self: stretch;
 }
 
+/* With the sidebar collapsed to its strip, Home's title is hidden (the strip
+   marks Home); it stays in the accessibility tree and focusable. */
+.app-shell:has(.research-strip) .research-feed-header.is-home .research-feed-header-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The upload glyph's arrow sits high in its box: 1px lower centres it
+   optically among the header's other icons. */
+.research-import-icon {
+  transform: translateY(1px);
+}
+
 /* Header icons use the feed's 26px icon-button style. */
 .research-feed-header .research-history-button {
   width: 26px;
@@ -247,10 +264,15 @@
 
 /* — Composer — */
 
-/* The ask box ends the Unfiled list (or the open folder), before the trays. */
+/* The ask box starts Home; in Bookmarks and a folder it ends the list. */
 .research-feed-composer {
   flex: none;
   margin-bottom: 10px;
+}
+
+/* At the top of Home the list's own top padding follows the box. */
+.research-feed-column-body > .research-feed-composer:first-child {
+  margin-bottom: 0;
 }
 
 .new-research-composer {
@@ -689,8 +711,6 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  /* Clear of the right-hand margin's controls. */
-  padding-right: 14px;
   pointer-events: none;
 }
 
@@ -723,21 +743,25 @@
   margin-top: 6px;
 }
 
-/* The right-hand margin: the drag handle at the top, where the status dot
-   sits, and the … button at the bottom. Both show on hover and focus and
-   replace the dot. The handle is not a target of its own: a press on it
-   reaches the row, which starts the drag. */
+/* The row's controls: the drag handle and the … button in one pill inside
+   the row's top-right corner, over the status or unread dot. The pill shows
+   on hover and focus and replaces the dot; the text runs under it, so no
+   margin is reserved for it. The handle is not a target of its own: a press
+   on it reaches the row, which starts the drag. */
 .research-feed-rail {
   position: absolute;
   top: 5px;
-  right: 4px;
-  bottom: 4px;
+  right: 5px;
   z-index: 2;
   display: flex;
-  width: 20px;
-  flex-direction: column;
+  height: 24px;
   align-items: center;
-  justify-content: space-between;
+  gap: 1px;
+  padding: 0 2px;
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 7px;
+  background: var(--research-feed-popover-bg);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text-heading) 8%, transparent);
   opacity: 0;
   pointer-events: none;
 }
@@ -749,21 +773,19 @@
 
 .research-feed-card-grip {
   display: grid;
-  margin-top: 3px;
+  width: 20px;
+  height: 20px;
+  place-items: center;
   color: var(--text-faint);
-  opacity: 0.8;
   cursor: grab;
   pointer-events: auto;
 }
 
-.research-feed-child .research-feed-card-grip {
-  margin-top: 0;
-}
-
+/* Where the status dot sits (a row is never both), under the pill. */
 .research-feed-card-unread {
   position: absolute;
-  top: 19px;
-  left: 8px;
+  top: 16.5px;
+  right: 10.5px;
   z-index: 1;
   width: 7px;
   height: 7px;
@@ -771,19 +793,19 @@
   background: var(--status-info-fg);
 }
 
-.research-feed-card:hover .research-feed-card-unread {
+.research-feed-card:is(:hover, :focus-within, .has-open-menu) .research-feed-card-unread {
   opacity: 0;
 }
 
 .research-feed-icon-button.research-feed-card-menu {
-  width: 20px;
-  height: 18px;
+  width: 22px;
+  height: 20px;
   border-radius: 5px;
   pointer-events: auto;
 }
 
-/* Running (pulsing) and failed threads: a dot in the corner the drag handle
-   takes over on hover and focus. */
+/* Running and failed threads show a corner dot, replaced by the controls
+   on hover or focus. The running dot pulses. */
 .research-feed-status {
   flex: none;
   width: 8px;
@@ -828,12 +850,12 @@
 /* Rows of their own under the question, indented 16px per level, with no
    rules between them. A row is selected while it is open: a branch while its
    branch is open, a follow-up while its message is selected in the root
-   pair. A single-line row is tall enough for both margin controls. */
+   pair. */
 .research-feed-child {
   display: flex;
   min-height: 42px;
   align-items: flex-start;
-  padding: 11px 26px 11px
+  padding: 11px 12px 11px
     calc(var(--research-row-text) - var(--research-row-inset) + var(--research-child-level, 1) * 16px);
 }
 

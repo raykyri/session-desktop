@@ -8754,19 +8754,31 @@ function MainApp() {
 
   // Opening a card whose root isn't in the loaded feed (Archive, or a folder
   // member paged out of it) keeps the list in the feed column beside the thread.
+  // Opening a question selects the clicked row and replaces any saved
+  // branch selection. Clicking the already-open thread keeps its selection.
   const openFeedResearchTree = useCallback(
     (treeId: string) => {
       if (
-        isResearchTreeSelectionChange(
+        !isResearchTreeSelectionChange(
           activeResearchTreeId,
           researchSurfaceActive && researchStageView === "document",
           treeId,
         )
       ) {
-        navigateToResearchDocument(treeId);
+        return;
       }
+      const rootNodeId = researchTrees.find((tree) => tree.id === treeId)?.rootNodeId;
+      if (rootNodeId) openResearchNode(treeId, rootNodeId);
+      else navigateToResearchDocument(treeId);
     },
-    [activeResearchTreeId, navigateToResearchDocument, researchStageView, researchSurfaceActive],
+    [
+      activeResearchTreeId,
+      navigateToResearchDocument,
+      openResearchNode,
+      researchStageView,
+      researchSurfaceActive,
+      researchTrees,
+    ],
   );
   const openFeedView = useCallback(
     (view: ResearchFeedView) => {

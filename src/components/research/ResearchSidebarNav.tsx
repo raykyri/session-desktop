@@ -337,7 +337,7 @@ export function ResearchSidebarStrip({
       className={reserveTitlebar ? "is-expand is-beside-titlebar" : "is-expand"}
       onClick={onExpand}
     >
-      <PanelLeft size={16} aria-hidden="true" />
+      <PanelLeft size={15} aria-hidden="true" />
     </ResearchStripButton>
   );
   return (

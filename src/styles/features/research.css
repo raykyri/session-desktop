@@ -584,9 +584,11 @@
   background: var(--research-workspace-bg);
 }
 
+/* A single content column (a note's thread, the placeholder): 100px narrower
+   than a messages + answer pair. */
 .research-pair-note,
 .research-placeholder-column {
-  width: calc(var(--research-turns-width) + var(--research-answer-width));
+  width: calc(var(--research-turns-width) + var(--research-answer-width) - 100px);
   border-left: 1px solid var(--surface-border-strong);
   background: var(--research-workspace-bg);
 }

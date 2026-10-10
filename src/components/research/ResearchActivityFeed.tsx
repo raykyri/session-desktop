@@ -851,8 +851,8 @@ function ResearchActivityFeed({
         selectedChildNodeIds={selected ? selectedChildNodeIds : EMPTY_NODE_IDS}
         childMenuNodeId={menuChildNodeId}
         menuOpen={menuTreeId === treeId}
-        // A question row opens its thread with the levels last open in it; a
-        // row for a later node of the tree opens at that node.
+        // A question row opens its thread at the question; a row for a later
+        // node of the tree opens at that node.
         onOpen={() =>
           query && query.nodeId !== tree?.rootNodeId ? onOpenResearchQuery(query) : onOpenTree?.(treeId)
         }
@@ -965,8 +965,8 @@ function ResearchActivityFeed({
     drafts.length === 0 &&
     !researchTrees.some((tree) => tree.kind !== "document");
 
-  // The feed's ask box ends the Unfiled list (or the open folder), where new
-  // questions are added; "+ Ask" in the header brings it into view.
+  // The feed's ask box starts Home. In Bookmarks and a folder it ends the
+  // list, and "+ Ask" in the header brings it into view.
   const composerBlock = composer ? <div className="research-feed-composer">{composer}</div> : null;
   const askButton = composer ? (
     <button
@@ -1025,7 +1025,7 @@ function ResearchActivityFeed({
         {view.kind === "home" && onImportReport ? (
           <ResearchReportImport dropTarget={scrollRef} onImport={onImportReport} onError={onError} />
         ) : null}
-        {askButton}
+        {view.kind === "home" ? null : askButton}
       </>
     ) : askButton;
 
@@ -1036,6 +1036,7 @@ function ResearchActivityFeed({
         titleRef={titleRef}
         onBack={soloPlace ? () => onOpenView?.({ kind: "home" }) : undefined}
         actions={headerActions}
+        home={view.kind === "home"}
       />
       {userFolder && pendingDeleteFolderId === userFolder.id ? (
         <ResearchFolderDeleteConfirm
@@ -1091,6 +1092,7 @@ function ResearchActivityFeed({
         }}
       >
         <div className="research-feed-column-body research-reading-surface">
+          {view.kind === "home" ? composerBlock : null}
           {newActivityCount > 0 && paginated ? (
             <div className="recent-activity-new-status" role="status" aria-live="polite">
               <button
@@ -1209,7 +1211,7 @@ function ResearchActivityFeed({
               </div>
             </section>
           ) : null}
-          {paginated ? composerBlock : null}
+          {paginated && view.kind !== "home" ? composerBlock : null}
           {view.kind === "home"
             ? trayPlaces.map((place) => (
                 <ResearchFeedTray

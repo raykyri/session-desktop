@@ -1,5 +1,5 @@
 import { createContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from "react";
 
 const clampWidth = (value: number, min: number, max: number) =>
   Math.round(Math.max(min, Math.min(max, value)));
@@ -15,6 +15,35 @@ export function researchColumnWidths(stripWidth: number): { feed: number; turns:
     turns: clampWidth(width * 0.18, 220, 280),
     answer: clampWidth(width * 0.44, 340, 660),
   };
+}
+
+/** A feed width set with the feed's resize handle replaces the automatic
+ * width. It is kept per device, like other layout state. */
+const FEED_WIDTH_KEY = "session.research.feedWidth";
+const RESEARCH_FEED_MIN_WIDTH = 240;
+const RESEARCH_FEED_MAX_WIDTH = 560;
+
+/** The widest the feed may be: 560px, and at most half of the column area. */
+function researchFeedMaxWidth(stripWidth: number): number {
+  return Math.max(RESEARCH_FEED_MIN_WIDTH, Math.min(RESEARCH_FEED_MAX_WIDTH, Math.floor(stripWidth / 2)));
+}
+
+function loadFeedWidth(): number | null {
+  try {
+    const value = Number(localStorage.getItem(FEED_WIDTH_KEY));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveFeedWidth(width: number | null) {
+  try {
+    if (width == null) localStorage.removeItem(FEED_WIDTH_KEY);
+    else localStorage.setItem(FEED_WIDTH_KEY, String(width));
+  } catch {
+    // Storage unavailable: the width lasts until the window reloads.
+  }
 }
 
 /** The system setting or the app's own Reduce motion setting. */
@@ -128,6 +157,7 @@ export default function ResearchColumns({
   const [overlay, setOverlay] = useState<HTMLDivElement | null>(null);
   const [availableWidth, setAvailableWidth] = useState(1232);
   const [feedCurrent, setFeedCurrent] = useState(false);
+  const [feedWidth, setFeedWidth] = useState<number | null>(loadFeedWidth);
 
   useEffect(listenForInteraction, []);
 
@@ -233,6 +263,54 @@ export default function ResearchColumns({
   }, [row]);
 
   const widths = researchColumnWidths(availableWidth);
+  const feedMax = researchFeedMaxWidth(availableWidth);
+  const clampFeed = (width: number) => clampWidth(width, RESEARCH_FEED_MIN_WIDTH, feedMax);
+  const shownFeedWidth = feedWidth == null ? widths.feed : clampFeed(feedWidth);
+  const setFeedWidthAndSave = (width: number | null) => {
+    setFeedWidth(width);
+    saveFeedWidth(width);
+  };
+
+  // The handle on the feed's right edge works like the sidebar's: drag, or
+  // Left/Right (Shift for larger steps). A double-click returns the feed to
+  // its automatic width.
+  const startFeedResize = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    const pointerId = event.pointerId;
+    handle.setPointerCapture(pointerId);
+    const startX = event.clientX;
+    const startWidth = shownFeedWidth;
+    let lastWidth = startWidth;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const move = (moveEvent: globalThis.PointerEvent) => {
+      lastWidth = clampFeed(startWidth + moveEvent.clientX - startX);
+      setFeedWidth(lastWidth);
+    };
+    const stop = () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+      if (lastWidth !== startWidth) saveFeedWidth(lastWidth);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+  };
+  const resizeFeedWithKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    event.stopPropagation();
+    const step = event.shiftKey ? 40 : 16;
+    setFeedWidthAndSave(clampFeed(shownFeedWidth + (event.key === "ArrowRight" ? step : -step)));
+  };
   const layout = useMemo<ResearchColumnsLayout>(
     () => ({
       row,
@@ -276,7 +354,7 @@ export default function ResearchColumns({
         className={`research-columns${hasDocument ? " has-document" : ""}`}
         style={
           {
-            "--research-feed-column-width": `${widths.feed}px`,
+            "--research-feed-column-width": `${shownFeedWidth}px`,
             "--research-turns-width": `${widths.turns}px`,
             "--research-answer-width": `${widths.answer}px`,
           } as CSSProperties
@@ -291,6 +369,20 @@ export default function ResearchColumns({
               aria-label="Feed"
             >
               {feed}
+              <div
+                className="research-feed-resizer"
+                role="separator"
+                aria-label="Resize feed"
+                aria-orientation="vertical"
+                aria-valuemin={RESEARCH_FEED_MIN_WIDTH}
+                aria-valuemax={feedMax}
+                aria-valuenow={shownFeedWidth}
+                title="Drag to resize · double-click to reset"
+                tabIndex={0}
+                onPointerDown={startFeedResize}
+                onKeyDown={resizeFeedWithKeyboard}
+                onDoubleClick={() => setFeedWidthAndSave(null)}
+              />
             </section>
           ) : null}
           <div className="research-content-column">{children}</div>

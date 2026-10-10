@@ -295,7 +295,7 @@
 /* Display the note's delivery status in the turn's answer section. */
 .note-document-status {
   margin: 0;
-  color: var(--text-strong);
+  color: var(--text-muted);
   font-size: var(--research-body-font-size);
   line-height: var(--research-body-line-height);
 }
