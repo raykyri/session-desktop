@@ -9,7 +9,7 @@
 //! stored centrally at `~/.qmux/projects/<basename>-<hash>/prompts/` — one flat
 //! level per project path, so repos never grow a `.qmux` dir. The store dir name
 //! combines the project's basename (readable) with a short SHA-256 of its
-//! canonical path (collision-proof); `meta.json` alongside records the full path
+//! canonical path; `meta.json` alongside records the full path
 //! since the hash is not reversible. Moving a prompt between scopes is a save
 //! into the target directory followed by a delete from the source.
 
@@ -29,11 +29,11 @@ const META_FILE: &str = "meta.json";
 const PROMPT_EXTENSION: &str = "md";
 /// Limit filename length for display in menus and Finder.
 const MAX_NAME_CHARS: usize = 120;
-/// Store dir names stay scannable in Finder: a readable basename prefix plus the
-/// hash suffix, comfortably under filesystem name limits.
+/// Limit the basename prefix so directory names, including the hash suffix,
+/// remain readable in Finder and fit filesystem name limits.
 const MAX_BASENAME_CHARS: usize = 40;
-/// 12 hex chars (48 bits) of the canonical-path SHA-256: far beyond collision
-/// range for the number of projects one user has, while keeping names short.
+/// 12 hex chars (48 bits) of the canonical-path SHA-256 keep names short
+/// while making collisions unlikely at typical project counts.
 const HASH_CHARS: usize = 12;
 
 /// Serializes save/delete pairs (a rename's or move's write-then-remove) so two UI
@@ -69,7 +69,7 @@ pub struct PromptLibrary {
 }
 
 /// Recorded next to each project's prompts so the hashed dir name can be mapped
-/// back to the project it belongs to (by tooling, future GC, or a curious user).
+/// back to its project directory.
 #[derive(Serialize)]
 struct ProjectMeta<'a> {
     path: &'a str,
