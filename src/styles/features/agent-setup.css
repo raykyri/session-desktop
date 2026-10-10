@@ -133,8 +133,17 @@
   object-fit: contain;
 }
 
+/* Same treatment as .launcher-select-icon.is-mono-light in shell.css: the
+   dark-on-transparent mark is inverted on dark surfaces and kept as drawn on
+   light ones. */
 .agent-setup-icon.is-mono-light {
   filter: brightness(0) invert(1);
+  opacity: 0.9;
+}
+
+:root[data-appearance="light"] .agent-setup-icon.is-mono-light {
+  filter: none;
+  opacity: 0.85;
 }
 
 .agent-setup-status {
