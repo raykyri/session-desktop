@@ -140,28 +140,44 @@ test("a pending branch adds its column after the level that shows its parent", (
   assert.equal(sameResearchStrip(strip, researchStrip(nodes, "b1", null)), false);
 });
 
-test("a note root is one post column; its branches are ordinary pairs", () => {
+test("a note root is a post column and its thread column; its follow-ups open as ordinary pairs", () => {
   const nodes = [
     node("note", { kind: "note", delivery: { status: "posted", postedAt: 1, replies: [] } }),
     node("run", { parentNodeId: "note", createdAt: 1 }),
   ];
   const root = researchStrip(nodes, "note", null);
-  assert.deepEqual(ids(root), ["T0"]);
-  assert.equal(root.columns[0].role, "post");
+  assert.deepEqual(ids(root), ["N0", "T0"]);
+  assert.deepEqual(root.columns.map((column) => column.role), ["post", "thread"]);
   assert.equal(root.levels[0].kind, "post");
   assert.equal(root.endsWithAnswer, false);
+  // The post is its own kind of column; the thread is the level's
+  // messages-side ("turns") column, which focus, settling and the row
+  // selector look up as T0.
   assert.deepEqual(columnAttributes(root.columns[0]), {
+    "data-research-column": "N0",
+    "data-research-pair": "post",
+    "data-research-level": "0",
+  });
+  assert.deepEqual(columnAttributes(root.columns[1]), {
     "data-research-column": "T0",
     "data-research-pair": "turns",
     "data-research-level": "0",
   });
+  assert.deepEqual(root.columns.map(columnKey), ["N0:note", "T0:note"]);
   assert.equal(columnScrollKey(root.columns[0]), null);
+  assert.equal(columnScrollKey(root.columns[1]), null);
+  assert.equal(columnLevelIndex("N0"), 0);
+  assert.equal(isMessagesColumnId("N0"), false);
+  assert.equal(isMessagesColumnId("T0"), true);
 
   const withRun = researchStrip(nodes, "run", null);
-  assert.deepEqual(ids(withRun), ["T0", "T1", "A1"]);
-  assert.deepEqual(withRun.columns.map((column) => column.role), ["post", "messages", "answer"]);
+  assert.deepEqual(ids(withRun), ["N0", "T0", "T1", "A1"]);
+  assert.deepEqual(withRun.columns.map((column) => column.role), ["post", "thread", "messages", "answer"]);
   assert.equal(withRun.endsWithAnswer, true);
   assert.deepEqual(withRun.openNodeIds, ["note", "run"]);
+  // Closing the follow-up leaves the post and its thread.
+  assert.equal(sameResearchStrip(root, researchStrip(nodes, "note", null)), true);
+  assert.equal(sameResearchStrip(root, withRun), false);
 });
 
 test("a draft is the T0 messages column, and every column has one selector", () => {

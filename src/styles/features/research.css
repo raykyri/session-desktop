@@ -563,6 +563,7 @@
 .research-pair-turns,
 .research-pair-answer,
 .research-pair-note,
+.research-pair-thread,
 .research-placeholder-column {
   position: relative;
   display: flex;
@@ -584,9 +585,20 @@
   background: var(--research-workspace-bg);
 }
 
-/* A single content column (a note's thread, the placeholder): 100px narrower
-   than a messages + answer pair. */
-.research-pair-note,
+/* A post (a note root) is two columns: the post at answer width, then its
+   thread (notes.css) at messages width, each with its own header. */
+.research-pair-note {
+  width: var(--research-answer-width);
+  border-left: 1px solid var(--surface-border-strong);
+  background: var(--research-workspace-bg);
+}
+
+.research-pair-thread {
+  width: var(--research-turns-width);
+  background: var(--research-feed-bg);
+}
+
+/* The placeholder: 100px narrower than a messages + answer pair. */
 .research-placeholder-column {
   width: calc(var(--research-turns-width) + var(--research-answer-width) - 100px);
   border-left: 1px solid var(--surface-border-strong);
@@ -594,7 +606,7 @@
 }
 
 /* One divider where a pair starts: the column before it drops its own. */
-.research-pair-answer:has(+ :is(.research-pair-turns, .research-pair-note)) {
+:is(.research-pair-answer, .research-pair-thread):has(+ :is(.research-pair-turns, .research-pair-note)) {
   border-right-color: transparent;
 }
 
@@ -653,7 +665,7 @@
 
 /* Use the heading text color for the focused pair's header and the secondary
    text color for other headers. */
-:is(.research-pair-turns, .research-pair-note):not(.is-current) .research-column-title {
+:is(.research-pair-turns, .research-pair-note, .research-pair-thread):not(.is-current) .research-column-title {
   color: var(--text-secondary);
 }
 

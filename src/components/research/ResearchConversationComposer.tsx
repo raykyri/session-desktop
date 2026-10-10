@@ -1,5 +1,5 @@
 import { forwardRef, useId, useImperativeHandle, useLayoutEffect, useRef } from "react";
-import { ArrowUp, LoaderCircle, X } from "lucide-react";
+import { ArrowRight, LoaderCircle, X } from "lucide-react";
 import { growComposerTextarea } from "../../lib/composerTextarea";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 
@@ -172,7 +172,7 @@ const ResearchConversationComposer = forwardRef<
           {submitting ? (
             <LoaderCircle className="research-spinner" size={15} aria-hidden="true" />
           ) : (
-            <ArrowUp size={15} aria-hidden="true" />
+            <ArrowRight size={15} aria-hidden="true" />
           )}
           <ComposerSubmitShortcutGlyph
             requireCmdEnter={requireCmdEnter}

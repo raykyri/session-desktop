@@ -2,8 +2,9 @@
 // level per open conversation: level 0 is the root's inline chain, and each
 // later level is a branch asked from the previous level's selected message.
 // Each level renders as a messages column and an answer column, except a
-// post (a note root), which is one column. An unsent branch adds a pending
-// column after the level it was asked from.
+// post (a note root), which renders as the post column and its thread column
+// (replies, follow-ups and the follow-up composer). An unsent branch adds a
+// pending column after the level it was asked from.
 //
 // The strip is a pure function of the tree's nodes, the deepest selection and
 // the unsent branch, so it is computed once per render and every consumer
@@ -32,16 +33,27 @@ export interface ResearchLevel {
   sourceId: string | null;
   /** The passage of the source answer the branch was asked about. */
   anchor: ResearchHighlightAnchor | null;
-  /** A post root (a note) is one column with no answer. */
+  /** A post root (a note) is a post column and a thread column, with no
+   * answer. */
   kind: "conversation" | "branch" | "post";
 }
 
-export type ResearchColumnId = "feed" | "placeholder" | `T${number}` | `A${number}` | `P${number}`;
+/** `Tn`: level n's messages column (a post's thread column); `An`: its
+ * answer column; `Nn`: a post's own column, left of its thread; `Pn`: an
+ * unsent branch asked from level n - 1. */
+export type ResearchColumnId =
+  | "feed"
+  | "placeholder"
+  | `T${number}`
+  | `A${number}`
+  | `N${number}`
+  | `P${number}`;
 
 export type ResearchColumn =
   | { id: "feed"; role: "feed" }
   | { id: `T${number}`; role: "messages"; level: ResearchLevel }
-  | { id: `T${number}`; role: "post"; level: ResearchLevel }
+  | { id: `N${number}`; role: "post"; level: ResearchLevel }
+  | { id: `T${number}`; role: "thread"; level: ResearchLevel }
   | { id: `A${number}`; role: "answer"; level: ResearchLevel; nodeId: string }
   | {
       id: `P${number}`;
@@ -100,7 +112,8 @@ export function researchStrip(
   const columns: ResearchColumn[] = [];
   for (const level of levels) {
     if (level.kind === "post") {
-      columns.push({ id: `T${level.index}`, role: "post", level });
+      columns.push({ id: `N${level.index}`, role: "post", level });
+      columns.push({ id: `T${level.index}`, role: "thread", level });
     } else {
       columns.push({ id: `T${level.index}`, role: "messages", level });
       columns.push({ id: `A${level.index}`, role: "answer", level, nodeId: level.selectedId });
@@ -167,36 +180,40 @@ export function sameResearchStrip(previous: ResearchStrip, candidate: ResearchSt
   );
 }
 
-/** The level a column belongs to: n for Tn, An and Pn; null otherwise. */
+/** The level a column belongs to: n for Tn, An, Nn and Pn; null otherwise. */
 export function columnLevelIndex(id: string | null | undefined): number | null {
-  const match = id ? /^[TAP](\d+)$/.exec(id) : null;
+  const match = id ? /^[TANP](\d+)$/.exec(id) : null;
   return match ? Number(match[1]) : null;
 }
 
 /** The id of the column that holds `element`, or null outside the strip. */
 export function columnIdOf(element: Element | null | undefined): ResearchColumnId | null {
   const id = element?.closest<HTMLElement>(columnSelector())?.dataset.researchColumn;
-  return id && /^(feed|placeholder|[TAP]\d+)$/.test(id) ? (id as ResearchColumnId) : null;
+  return id && /^(feed|placeholder|[TANP]\d+)$/.test(id) ? (id as ResearchColumnId) : null;
 }
 
-/** Whether `id` names a messages-side column (a level's messages or post
- * column, a draft, or a pending branch). */
+/** Whether `id` names a messages-side column (a level's messages column or
+ * a post's thread column, a draft, or a pending branch). A post's own column
+ * is not one. */
 export function isMessagesColumnId(id: string | null | undefined): boolean {
   return Boolean(id && /^[TP]\d+$/.test(id));
 }
 
 /** The data attributes that identify a column in the DOM, written in one
  * place for every column kind. `data-research-pair` and
- * `data-research-level` are set on the columns of a level (messages, post,
- * draft and pending columns are the "turns" side). */
+ * `data-research-level` are set on the columns of a level: messages, thread,
+ * draft and pending columns are the "turns" side, an answer column the
+ * "answer" side, and a post's own column is "post". */
 export function columnAttributes(column: ResearchColumn): Record<string, string> {
   switch (column.role) {
     case "feed":
     case "placeholder":
       return { "data-research-column": column.id };
     case "messages":
-    case "post":
+    case "thread":
       return pairAttributes(column.id, "turns", column.level.index);
+    case "post":
+      return pairAttributes(column.id, "post", column.level.index);
     case "answer":
       return pairAttributes(column.id, "answer", column.level.index);
     case "pending":
@@ -206,13 +223,19 @@ export function columnAttributes(column: ResearchColumn): Record<string, string>
   }
 }
 
-function pairAttributes(id: ResearchColumnId, pair: "turns" | "answer", level: number) {
+function pairAttributes(id: ResearchColumnId, pair: "turns" | "answer" | "post", level: number) {
   return {
     "data-research-column": id,
     "data-research-pair": pair,
     "data-research-level": String(level),
   };
 }
+
+/** The row that keyboard focus returns to in a messages-side column: the
+ * selected message's row in a messages column, or the row in the tab order
+ * in a post's thread column (the open follow-up's, else the last focused). */
+export const COLUMN_ROW_SELECTOR =
+  ".research-msg-row.is-selected .research-msg-hit, [data-research-thread-row][tabindex='0']";
 
 /** A selector for the column `id`, or for any column. */
 export function columnSelector(id?: ResearchColumnId): string {
@@ -226,6 +249,7 @@ export function columnKey(column: ResearchColumn): string {
   switch (column.role) {
     case "messages":
     case "post":
+    case "thread":
       return `${column.id}:${column.level.headId}`;
     case "answer":
       return `${column.id}:${column.nodeId}`;

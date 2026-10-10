@@ -36,6 +36,7 @@ import {
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
 import ResearchNoteDocument from "./ResearchNoteDocument";
+import ResearchNoteThread, { noteThreadEntries } from "./ResearchNoteThread";
 import { ResearchTreeMenuItems, type ResearchTreeMenuProps } from "./ResearchMoveMenu";
 import type { NoteActions } from "./ResearchNote";
 import {
@@ -53,6 +54,7 @@ import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigati
 import { researchBranchInfo } from "../../lib/researchBranches";
 import { nodeMessage, nodeType } from "../../lib/researchNodeTypes";
 import {
+  COLUMN_ROW_SELECTOR,
   columnAttributes,
   columnIdOf,
   columnKey,
@@ -1097,9 +1099,9 @@ function ResearchDocument({
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
 
   // The open columns: one level per open conversation (its messages and its
-  // answer; a post root is one column), then the unsent branch's column. The
-  // strip, its levels and the selected path keep their identity while they
-  // show the same columns.
+  // answer; a post root is its post and its thread), then the unsent
+  // branch's column. The strip, its levels and the selected path keep their
+  // identity while they show the same columns.
   const strip = useStableValue(
     useMemo(() => researchStrip(nodes, selectedNodeId, pending), [nodes, pending, selectedNodeId]),
     sameResearchStrip,
@@ -1189,8 +1191,7 @@ function ResearchDocument({
   );
   const selectedRow = useCallback(
     (level: number) =>
-      pairColumn("turns", level)?.querySelector<HTMLElement>(".research-msg-row.is-selected .research-msg-hit") ??
-      null,
+      pairColumn("turns", level)?.querySelector<HTMLElement>(COLUMN_ROW_SELECTOR) ?? null,
     [pairColumn],
   );
 
@@ -1773,6 +1774,12 @@ function ResearchDocument({
         }
         if (levelPathRef.current.length > 0 && document.querySelector(".research-columns")?.contains(target ?? document.body)) {
           event.preventDefault();
+          // On a post, Esc also closes the open follow-up; focus returns to
+          // its row in the thread column.
+          const levelsNow = stripRef.current.levels;
+          if (levelsNow[0]?.kind === "post" && levelsNow.length > 1) {
+            closeAfter(0);
+          }
           requestFocus({ kind: "row", level: 0 }, "reveal");
         }
         return;
@@ -1812,7 +1819,7 @@ function ResearchDocument({
       window.removeEventListener("keydown", onKeyDown);
       mouseTarget?.removeEventListener("mouseup", onMouseUp);
     };
-  }, [goBack, goForward, requestFocus]);
+  }, [closeAfter, goBack, goForward, requestFocus]);
 
   /** The branches of `level`'s selected answer, in reading order. */
   const siblingsAt = useCallback((level: ResearchLevel | undefined) => {
@@ -1882,11 +1889,77 @@ function ResearchDocument({
       return;
     }
     const key = event.key;
+    // A post's thread column: ↑/↓ move between its rows, Enter or → on a
+    // follow-up opens it as the next level (focus goes to its message), → on
+    // a reply goes to the open follow-up, ← goes to the post.
+    if (target.matches("[data-research-thread-row]")) {
+      const column = target.closest<HTMLElement>(columnSelector());
+      const level = columnLevelIndex(columnIdOf(column));
+      if (level === null) {
+        return;
+      }
+      const rows = [...(column?.querySelectorAll<HTMLElement>("[data-research-thread-row]") ?? [])];
+      const index = rows.indexOf(target);
+      const followUpId = target.dataset.nodeId ?? null;
+      if (key === "ArrowDown" || key === "ArrowUp" || key === "Home" || key === "End") {
+        event.preventDefault();
+        const nextIndex =
+          key === "Home" ? 0 : key === "End" ? rows.length - 1 : index + (key === "ArrowDown" ? 1 : -1);
+        const next = rows[Math.max(0, Math.min(rows.length - 1, nextIndex))];
+        if (next) {
+          next.focus({ preventScroll: true });
+          scrollIntoColumn(next);
+        }
+        return;
+      }
+      if (followUpId && (key === "Enter" || key === " " || key === "ArrowRight")) {
+        event.preventDefault();
+        goBranch(level, followUpId);
+        return;
+      }
+      if (key === "ArrowRight") {
+        event.preventDefault();
+        if (levelPathRef.current.length > level + 1) {
+          requestFocus({ kind: "row", level: level + 1 }, "reveal");
+        }
+        return;
+      }
+      if (key === "ArrowLeft") {
+        event.preventDefault();
+        const post = workspaceRef.current?.querySelector<HTMLElement>(columnSelector(`N${level}`)) ?? null;
+        const scroller = post?.querySelector<HTMLElement>(":scope > .research-column-scroll");
+        if (scroller) {
+          scroller.focus({ preventScroll: true });
+          revealResearchColumns(columnsLayoutRef.current?.row ?? null, post);
+        }
+      }
+      return;
+    }
+    // A post's own column: → goes to its thread (the current row, or the
+    // composer of an empty thread), ← to the feed.
+    if (target.matches("[data-research-pair='post'] > .research-column-scroll")) {
+      const level = columnLevelIndex(columnIdOf(target));
+      if (level === null) {
+        return;
+      }
+      if (key === "ArrowRight") {
+        event.preventDefault();
+        const headId = stripRef.current.levels[level]?.headId;
+        requestFocus(
+          selectedRow(level) || !headId ? { kind: "row", level } : { kind: "composer", key: headId },
+          "reveal",
+        );
+      } else if (key === "ArrowLeft") {
+        event.preventDefault();
+        columnsLayoutRef.current?.focusFeed();
+      }
+      return;
+    }
     if (target.matches("[data-research-row]")) {
       const nodeId = target.dataset.nodeId ?? "";
       const levels = stripRef.current.levels;
-      const level = levels.findIndex((candidate) => candidate.chainIds.includes(nodeId));
-      if (level < 0) {
+      const level = columnLevelIndex(columnIdOf(target)) ?? -1;
+      if (!levels[level]) {
         return;
       }
       const column = target.closest<HTMLElement>(columnSelector());
@@ -4441,8 +4514,9 @@ function ResearchDocument({
     onForward: goForward,
   };
 
-  /** One column of the strip. A post root is one column; a level's messages
-   * and answer are two; the unsent branch is the pending column. */
+  /** One column of the strip. A post root is its post column and its thread
+   * column; a level's messages and answer are two; the unsent branch is the
+   * pending column. */
   const renderColumn = (column: ResearchColumn) => {
     switch (column.role) {
       case "post": {
@@ -4456,20 +4530,48 @@ function ResearchDocument({
             key={columnKey(column)}
             className={`research-pair-note${currentLevel === level ? " is-current" : ""}`}
             {...columnAttributes(column)}
-            aria-label={`Thread: ${treeTitleText}`}
+            aria-label={`Post: ${treeTitleText}`}
           >
             {/* The note itself starts the column, so the header names the
-                column ("Thread") rather than repeating the note's text. */}
-            <ResearchPairHeader title="Thread" history={historyNav} archived={archived} />
+                column ("Post") rather than repeating the note's text. */}
+            <ResearchPairHeader title="Post" history={historyNav} archived={archived} />
+            <div className="research-column-scroll" tabIndex={-1}>
+              <div className="research-column-content research-reading-surface">
+                <ResearchNoteDocument detail={detail} note={note} onSelectNode={(nodeId) => navigate(nodeId)} />
+              </div>
+            </div>
+          </section>
+        );
+      }
+      case "thread": {
+        const level = column.level.index;
+        const note = nodeById.get(column.level.headId);
+        if (!note) {
+          return null;
+        }
+        const count = noteThreadEntries(nodes, note).length;
+        return (
+          <section
+            key={columnKey(column)}
+            className={`research-pair-thread${currentLevel === level ? " is-current" : ""}`}
+            {...columnAttributes(column)}
+            aria-label="Thread"
+          >
+            <ResearchPairHeader title="Thread" count={count} />
             <div className="research-column-scroll">
               <div className="research-column-content research-reading-surface">
-                <ResearchNoteDocument
-                  detail={detail}
+                <ResearchNoteThread
+                  nodes={nodes}
                   note={note}
                   archived={archived}
                   actions={noteActions}
                   requireCmdEnterToSend={requireCmdEnterToSend}
-                  onSelectNode={(nodeId) => navigate(nodeId)}
+                  openNodeId={levels[level + 1]?.headId ?? null}
+                  composerRef={registerComposer(note.id)}
+                  onOpenFollowUp={(nodeId) => {
+                    openBranch(level, nodeId);
+                    requestFocus({ kind: "row", level }, "settle");
+                  }}
                 />
               </div>
             </div>
