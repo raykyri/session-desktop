@@ -95,8 +95,7 @@ pub struct MoveQueuedAgentTurnResult {
 /// from the source first, then handed to the target with normal send-or-queue
 /// behavior; if the handoff fails it is rolled back to its original position in the
 /// source queue. Because the removal and the add happen in one backend call, a
-/// failure can never leave the turn in both queues (the duplication the previous
-/// two-call frontend dance risked) nor silently lose it.
+/// failure cannot duplicate or lose the turn.
 pub fn move_queued_agent_turn(
     state: &AppState,
     request: MoveQueuedAgentTurnRequest,

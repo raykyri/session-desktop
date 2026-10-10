@@ -61,7 +61,7 @@ export function ptyDataFromPayload(payload: Record<string, unknown>): Uint8Array
 
 // Validates an agent payload arriving on an event before it is applied to local
 // state, mirroring isTurn. Status events now carry the updated agent so the UI can
-// apply changes surgically instead of refetching the whole list every time.
+// update that agent without refetching the whole list every time.
 export function isAgentInfo(value: unknown): value is AgentInfo {
   if (typeof value !== "object" || value === null) {
     return false;

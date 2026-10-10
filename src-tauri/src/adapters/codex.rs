@@ -418,9 +418,9 @@ impl CodexAdapter {
                 );
             }
         }
-        // Carry the updated agent so the frontend can apply this status change
-        // surgically instead of refetching the entire agent list on every hook
-        // event (which also avoids out-of-order refetches clobbering newer state).
+        // Include the updated agent so the frontend can apply the status change
+        // without refetching the entire list. This also prevents out-of-order
+        // refetches from overwriting newer state.
         if let (Value::Object(payload), Some(agent)) = (&mut event_payload, agent.as_ref()) {
             payload.insert(
                 "agent".to_string(),
