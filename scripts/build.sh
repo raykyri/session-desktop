@@ -59,7 +59,7 @@ fi
 
 # Tauri's DMG bundler runs an AppleScript step that drives Finder to lay out the
 # disk-image window. Run that normal path by default, matching Trajectories, so
-# successful local and release builds always carry the polished window and icon
+# local and release builds include the configured window layout and icon
 # placement. Headless callers can explicitly set CI=true; Tauri then passes
 # --skip-jenkins and produces the plain, non-interactive fallback instead.
 tauri build --target "$build_target"
