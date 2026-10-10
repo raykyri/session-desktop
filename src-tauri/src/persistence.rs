@@ -127,7 +127,8 @@ pub struct PersistedState {
     /// pane/agent views.
     #[serde(default)]
     pub thread_focus: HashMap<String, String>,
-    /// Durable research documents and their one-prompt native-session nodes.
+    /// Research trees by id: a tree's title, root node and workspace. The nodes
+    /// are in `research_nodes`.
     #[serde(default)]
     pub research_trees: HashMap<String, ResearchTree>,
     /// Stable sidebar order for research trees. The ids form one master order;
