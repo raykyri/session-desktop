@@ -1,7 +1,7 @@
 import { nodeAdapter, nodeAgent, nodeAttachments, nodeDelivery, nodePrompt, nodeRecap, nodeRun, nodeStatus, nodeType, passageAnchor, replyAnchorId } from "./researchNodeTypes";
 import type {
-  NoteDelivery,
-  NoteReply,
+  PostDelivery,
+  PostReply,
   RecentResearchQuery,
   RecentResearchQueryCursor,
   ResearchNode,
@@ -18,7 +18,7 @@ interface ActivityEvent<TSource = unknown> {
   actor: { kind: "user" | "agent" | "system"; label: string };
   action: { kind: "saved" | "asked" | "posted" | "created" | "completed"; label: string };
   object: {
-    kind: "link" | "post" | "note" | "research-query" | "artifact" | "task";
+    kind: "link" | "post" | "network-post" | "research-query" | "artifact" | "task";
     id: string;
     label: string;
   };
@@ -34,23 +34,23 @@ type RecentActivitySource = { kind: "research-query"; query: RecentResearchQuery
 
 export type RecentActivityEvent = ActivityEvent<RecentActivitySource>;
 
-/** One page of Home's feed: research roots (runs and notes), newest first. */
+/** One page of Home's feed: research roots (runs and posts), newest first. */
 export interface RecentActivityPage {
   items: RecentResearchQuery[];
   nextCursor?: RecentResearchQueryCursor | null;
 }
 
-/** Top-level replies Home carries per note; mirrors the backend's
- * `RECENT_ACTIVITY_NOTE_REPLY_LIMIT`. */
-const RECENT_ACTIVITY_NOTE_REPLY_LIMIT = 5;
+/** Top-level replies Home carries per post; mirrors the backend's
+ * `RECENT_ACTIVITY_POST_REPLY_LIMIT`. */
+const RECENT_ACTIVITY_POST_REPLY_LIMIT = 5;
 
-function topLevelReplyCount(replies: NoteReply[] = []): number {
+function topLevelReplyCount(replies: PostReply[] = []): number {
   return replies.filter((reply) => !reply.inReplyTo).length;
 }
 
 /** The delivery with only the first `limit` top-level replies and the
  * responses to them, matching the backend's feed payload. */
-export function cappedNoteDelivery(delivery: NoteDelivery, limit: number): NoteDelivery {
+export function cappedPostDelivery(delivery: PostDelivery, limit: number): PostDelivery {
   const kept = new Set(
     (delivery.replies ?? [])
       .filter((reply) => !reply.inReplyTo)
@@ -66,7 +66,7 @@ export function cappedNoteDelivery(delivery: NoteDelivery, limit: number): NoteD
 }
 
 /** Display name of a reply's author as follow-ups name it ("@Ana's reply"). */
-export function noteReplyAuthorName(reply: NoteReply): string {
+export function postReplyAuthorName(reply: PostReply): string {
   return reply.author.kind === "member" ? reply.author.displayName : "You";
 }
 
@@ -120,7 +120,7 @@ export function recentResearchQueryFromNode(
     ...(node.type === "post" ? { format: node.format } : {}),
     ...(delivery
       ? {
-          delivery: cappedNoteDelivery(delivery, RECENT_ACTIVITY_NOTE_REPLY_LIMIT),
+          delivery: cappedPostDelivery(delivery, RECENT_ACTIVITY_POST_REPLY_LIMIT),
           replyCount: topLevelReplyCount(delivery.replies),
         }
       : {}),
@@ -142,7 +142,7 @@ function withReplyAnchorAuthor(
 ): RecentResearchQuery {
   if (!child.replyAnchor) return child;
   const reply = parent.delivery?.replies?.find((candidate) => candidate.id === child.replyAnchor);
-  const author = reply ? noteReplyAuthorName(reply) : existing?.replyAnchorAuthor;
+  const author = reply ? postReplyAuthorName(reply) : existing?.replyAnchorAuthor;
   return author ? { ...child, replyAnchorAuthor: author } : child;
 }
 
@@ -179,7 +179,7 @@ export function upsertRecentActivityResearchNode(
  * listed node takes the new prompt, title, and status, and an unstarred one
  * drops out. A newly starred node needs its depth and tree position from the
  * backend, so `stale` asks the caller to refetch the feed. */
-export function patchRecentActivityPromoted(
+export function patchRecentActivityStarred(
   items: RecentResearchQuery[],
   node: ResearchNode & { promotedAt?: number | null },
 ): { items: RecentResearchQuery[]; stale: boolean } {
@@ -216,16 +216,16 @@ export function activityEventFromResearchQuery(
   tree?: ResearchTreeSummary,
 ): RecentActivityEvent {
   const followUp = Boolean(query.parentNodeId);
-  const note = nodeType(query) === "post";
-  const object: RecentActivityEvent["object"] = note
-    ? { kind: noteObjectKind(query), id: query.nodeId, label: "Note" }
+  const isPost = nodeType(query) === "post";
+  const object: RecentActivityEvent["object"] = isPost
+    ? { kind: postObjectKind(query), id: query.nodeId, label: "Post" }
     : { kind: "research-query", id: query.nodeId, label: "Research" };
-  const action: RecentActivityEvent["action"] = !note
+  const action: RecentActivityEvent["action"] = !isPost
     ? { kind: "asked", label: "asked" }
     : query.delivery
       ? { kind: "posted", label: "Posted to network" }
       : { kind: "saved", label: object.kind === "post" ? "Saved post" : "Saved link" };
-  const sourceLabel = note && !query.delivery ? savedSourceLabel(query) : null;
+  const sourceLabel = isPost && !query.delivery ? savedSourceLabel(query) : null;
   return {
     id: `research:${query.nodeId}`,
     actor: { kind: "user", label: "You" },
@@ -249,10 +249,10 @@ export function activityEventFromResearchQuery(
   };
 }
 
-/** A note with no delivery is a saved URL: a post when it resolved to a
+/** A post with no delivery is a saved URL: an X post when it resolved to a
  * tweet, otherwise a link. */
-function noteObjectKind(query: RecentResearchQuery): "note" | "post" | "link" {
-  if (query.delivery) return "note";
+function postObjectKind(query: RecentResearchQuery): "network-post" | "post" | "link" {
+  if (query.delivery) return "network-post";
   return query.attachments?.some((attachment) => attachment.kind === "tweet") ? "post" : "link";
 }
 

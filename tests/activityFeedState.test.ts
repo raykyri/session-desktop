@@ -27,9 +27,9 @@ test("the Home feed restores the saved scroll anchor and ignores the removed not
 
 test("saving feed scroll preserves unrelated session values", () => {
   const saved = storage(JSON.stringify({ values: { activityDraft: "Old", "followup:tree:root": "Keep this" } }));
-  saveActivityFeedState({ scroll: { key: "journal:entry-2", offset: 12 } }, saved);
+  saveActivityFeedState({ scroll: { key: "folder:f1", offset: 12 } }, saved);
   assert.deepEqual(readActivityFeedState(saved), {
-    scroll: { key: "journal:entry-2", offset: 12 },
+    scroll: { key: "folder:f1", offset: 12 },
   });
   const values = JSON.parse(saved.getItem(key)!).values;
   assert.equal(values["followup:tree:root"], "Keep this");

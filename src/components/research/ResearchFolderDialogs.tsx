@@ -3,7 +3,7 @@ import type { KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import type { ResearchFolder } from "../../types";
 import { normalizeResearchFolderName, researchFolderNameError } from "../../lib/researchFolders";
-import { researchFeedCardControl } from "./ResearchFeedPost";
+import { researchFeedCardControl } from "./ResearchFeedCard";
 
 /** `returnFocus` is the button that opened the dialog, often through a menu
  * that is gone by the time the dialog closes. */

@@ -29,7 +29,7 @@ test("Session resolves research navigation shortcuts", () => {
   assert.equal(resolveAppShortcut(shortcut({ key: "d", metaKey: true })), null);
 });
 
-test("Session keeps research document and browser shortcuts", () => {
+test("Session keeps research thread and browser shortcuts", () => {
   assert.deepEqual(resolveAppShortcut(shortcut({ key: "j", metaKey: true })), {
     type: "focusFollowups",
   });

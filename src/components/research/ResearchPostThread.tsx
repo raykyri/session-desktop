@@ -1,7 +1,7 @@
 import { useId, useImperativeHandle, useMemo, useState } from "react";
 import type { ReactNode, Ref } from "react";
 import { Globe, Pencil, Sparkles } from "lucide-react";
-import type { NoteCorrection, NoteReply, ResearchNode } from "../../types";
+import type { PostCorrection, PostReply, ResearchNode } from "../../types";
 import { nodeAdapter, nodeAgent, nodeDelivery, nodePrompt, nodeStatus, nodeType, replyAnchorId } from "../../lib/researchNodeTypes";
 import { recentResearchQueryFromNode } from "../../lib/activity";
 import { shortWhen } from "../../lib/shortTime";
@@ -9,42 +9,42 @@ import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
 import { ResearchMarkdown } from "./ResearchMessage";
 import {
-  NoteFollowUpField,
-  NoteFollowUpStatus,
-  NoteReplyItem,
-  noteReplyTargetFor,
-  type NoteActions,
-  type NoteReplyTarget,
-} from "./ResearchNote";
+  PostFollowUpField,
+  PostFollowUpStatus,
+  PostReplyItem,
+  postReplyTargetFor,
+  type PostActions,
+  type PostReplyTarget,
+} from "./ResearchPost";
 
-/** One row of a note's thread column: a top-level reply (with the author's
+/** One row of a post's thread column: a top-level reply (with the author's
  * responses to it), a follow-up, or a correction the author appended. */
-type NoteThreadEntry =
-  | { kind: "reply"; key: string; at: number; reply: NoteReply }
+type PostThreadEntry =
+  | { kind: "reply"; key: string; at: number; reply: PostReply }
   | { kind: "follow-up"; key: string; at: number; node: ResearchNode }
-  | { kind: "correction"; key: string; at: number; correction: NoteCorrection };
+  | { kind: "correction"; key: string; at: number; correction: PostCorrection };
 
 /** Makes `row` (a row element of this thread) the one in the tab order
  * without focusing it, for ⌃Tab with focus kept in a text field. The row is
  * marked (`data-current`) until a row takes focus, since no focus ring shows
  * which row the keys act on. */
-export interface ResearchNoteThreadHandle {
+export interface ResearchPostThreadHandle {
   makeCurrent: (row: HTMLElement) => void;
 }
 
-/** The rows of a note's thread, oldest first: its top-level network replies,
+/** The rows of a post's thread, oldest first: its top-level network replies,
  * its follow-ups (child nodes other than documents) and its corrections,
  * merged by time. A follow-up row's key is its node id. */
-export function noteThreadEntries(nodes: readonly ResearchNode[], note: ResearchNode): NoteThreadEntry[] {
+export function postThreadEntries(nodes: readonly ResearchNode[], post: ResearchNode): PostThreadEntry[] {
   const followUps = nodes
-    .filter((node) => node.parentNodeId === note.id && nodeType(node) !== "document")
+    .filter((node) => node.parentNodeId === post.id && nodeType(node) !== "document")
     .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
-  const replies = (nodeDelivery(note)?.replies ?? []).filter((reply) => !reply.inReplyTo);
+  const replies = (nodeDelivery(post)?.replies ?? []).filter((reply) => !reply.inReplyTo);
   return [
-    ...replies.map((reply): NoteThreadEntry => ({ kind: "reply", key: `reply:${reply.id}`, at: reply.createdAt, reply })),
-    ...followUps.map((node): NoteThreadEntry => ({ kind: "follow-up", key: node.id, at: node.createdAt, node })),
-    ...(note.type === "post" ? (note.corrections ?? []) : []).map(
-      (correction): NoteThreadEntry => ({
+    ...replies.map((reply): PostThreadEntry => ({ kind: "reply", key: `reply:${reply.id}`, at: reply.createdAt, reply })),
+    ...followUps.map((node): PostThreadEntry => ({ kind: "follow-up", key: node.id, at: node.createdAt, node })),
+    ...(post.type === "post" ? (post.corrections ?? []) : []).map(
+      (correction): PostThreadEntry => ({
         kind: "correction",
         key: `correction:${correction.id}`,
         at: correction.createdAt,
@@ -54,16 +54,16 @@ export function noteThreadEntries(nodes: readonly ResearchNode[], note: Research
   ].sort((left, right) => left.at - right.at);
 }
 
-/** A note's thread column body: the follow-up composer at the top, then one
+/** A post's thread column body: the follow-up composer at the top, then one
  * row per reply and follow-up, oldest first. A reply shows in full with its
  * responses nested under it; a follow-up row shows its reply count (a network
  * follow-up) or its answer state (an AI follow-up), and opens the follow-up
  * as the next level. One row is in the tab order: the open follow-up's, else
- * the row focused last, else the first. ResearchDocument handles the column's
+ * the row focused last, else the first. ResearchThreadPage handles the column's
  * keys. Each row carries its entry's key in `data-thread-key`. */
-export default function ResearchNoteThread({
+export default function ResearchPostThread({
   nodes,
-  note,
+  post,
   archived,
   actions,
   requireCmdEnterToSend,
@@ -73,18 +73,18 @@ export default function ResearchNoteThread({
   onOpenFollowUp,
 }: {
   nodes: readonly ResearchNode[];
-  note: ResearchNode;
+  post: ResearchNode;
   archived: boolean;
-  actions: NoteActions;
+  actions: PostActions;
   /** The "Require ⌘↵ to send" setting, for the follow-up composer. */
   requireCmdEnterToSend: boolean;
   /** The follow-up open as the next level, if any. */
   openNodeId: string | null;
   composerRef?: Ref<ResearchComposerHandle>;
-  threadRef?: Ref<ResearchNoteThreadHandle>;
+  threadRef?: Ref<ResearchPostThreadHandle>;
   onOpenFollowUp: (nodeId: string) => void;
 }) {
-  const [target, setTarget] = useState<NoteReplyTarget | null>(null);
+  const [target, setTarget] = useState<PostReplyTarget | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(openNodeId);
   // The row made current by makeCurrent, marked while focus stays elsewhere.
   const [markedKey, setMarkedKey] = useState<string | null>(null);
@@ -114,19 +114,19 @@ export default function ResearchNoteThread({
       setActiveKey(openNodeId);
     }
   }
-  const entries = useMemo(() => noteThreadEntries(nodes, note), [nodes, note]);
-  const replies = nodeDelivery(note)?.replies ?? [];
+  const entries = useMemo(() => postThreadEntries(nodes, post), [nodes, post]);
+  const replies = nodeDelivery(post)?.replies ?? [];
   const tabKey = entries.some((entry) => entry.key === activeKey) ? activeKey : (entries[0]?.key ?? null);
   const markedRowKey = markedKey === tabKey ? markedKey : null;
-  const modelLabel = formatResearchModelSummary(nodeAdapter(note), nodeAgent(note)?.model);
+  const modelLabel = formatResearchModelSummary(nodeAdapter(post), nodeAgent(post)?.model);
 
   return (
-    <div className="note-thread">
+    <div className="post-thread">
       {!archived ? (
-        <NoteFollowUpField
-          key={target?.id ?? "note"}
+        <PostFollowUpField
+          key={target?.id ?? "post"}
           composerRef={composerRef}
-          networkAvailable={Boolean(nodeDelivery(note))}
+          networkAvailable={Boolean(nodeDelivery(post))}
           modelLabel={modelLabel}
           target={target}
           autoFocus={target !== null}
@@ -136,7 +136,7 @@ export default function ResearchNoteThread({
           onSubmit={(prompt, network) =>
             actions
               .onAskFollowUp({
-                parentNodeId: note.id,
+                parentNodeId: post.id,
                 prompt,
                 network,
                 replyId: network ? null : target?.id ?? null,
@@ -146,10 +146,10 @@ export default function ResearchNoteThread({
         />
       ) : null}
       {entries.length > 0 ? (
-        <ol className="note-thread-list note-thread-rows" aria-label="Replies and follow-ups">
+        <ol className="post-thread-list post-thread-rows" aria-label="Replies and follow-ups">
           {entries.map((entry) =>
             entry.kind === "correction" ? (
-              <NoteCorrectionRow
+              <PostCorrectionRow
                 key={entry.key}
                 threadKey={entry.key}
                 correction={entry.correction}
@@ -158,9 +158,9 @@ export default function ResearchNoteThread({
                 onFocus={() => focusRow(entry.key)}
               />
             ) : entry.kind === "reply" ? (
-              <NoteReplyItem
+              <PostReplyItem
                 key={entry.key}
-                nodeId={note.id}
+                nodeId={post.id}
                 reply={entry.reply}
                 responses={replies.filter((reply) => reply.inReplyTo === entry.reply.id)}
                 archived={archived}
@@ -179,7 +179,7 @@ export default function ResearchNoteThread({
                 }}
               />
             ) : (
-              <NoteFollowUpRow
+              <PostFollowUpRow
                 key={entry.key}
                 child={entry.node}
                 replies={replies}
@@ -195,7 +195,7 @@ export default function ResearchNoteThread({
           )}
         </ol>
       ) : (
-        <p className="note-thread-empty">No replies or follow-ups yet.</p>
+        <p className="post-thread-empty">No replies or follow-ups yet.</p>
       )}
     </div>
   );
@@ -204,7 +204,7 @@ export default function ResearchNoteThread({
 /** A follow-up as a row: who asked where, the question, and the reply count
  * or answer state. One button under the row's content opens the follow-up;
  * Retry stays its own target above it. */
-function NoteFollowUpRow({
+function PostFollowUpRow({
   child,
   replies,
   archived,
@@ -216,8 +216,8 @@ function NoteFollowUpRow({
   onFocus,
 }: {
   child: ResearchNode;
-  /** The note's replies, for a follow-up asked about one of them. */
-  replies: NoteReply[];
+  /** The post's replies, for a follow-up asked about one of them. */
+  replies: PostReply[];
   archived: boolean;
   open: boolean;
   tabbable: boolean;
@@ -228,27 +228,27 @@ function NoteFollowUpRow({
 }) {
   const labelId = useId();
   const network = nodeType(child) === "post";
-  const anchored = noteReplyTargetFor(replies, replyAnchorId(child));
+  const anchored = postReplyTargetFor(replies, replyAnchorId(child));
   const model = formatResearchModelSummary(nodeAdapter(child), nodeAgent(child)?.model) || "AI";
   let state: ReactNode;
   if (network) {
     const count = nodeDelivery(child)?.replies?.filter((reply) => !reply.inReplyTo).length ?? 0;
-    state = count > 0 ? <div className="note-thread-meta">{count === 1 ? "1 reply" : `${count} replies`}</div> : null;
+    state = count > 0 ? <div className="post-thread-meta">{count === 1 ? "1 reply" : `${count} replies`}</div> : null;
   } else if (nodeStatus(child) === "complete") {
-    state = <div className="note-thread-meta">Answered</div>;
+    state = <div className="post-thread-meta">Answered</div>;
   } else {
     const summary = recentResearchQueryFromNode(child, true);
-    state = summary ? <NoteFollowUpStatus child={summary} archived={archived} onRetry={onRetry} /> : null;
+    state = summary ? <PostFollowUpStatus child={summary} archived={archived} onRetry={onRetry} /> : null;
   }
   return (
     <li
-      className={`note-thread-item note-thread-follow-up${open ? " is-selected" : ""}`}
+      className={`post-thread-item post-thread-follow-up${open ? " is-selected" : ""}`}
       data-type="follow-up"
       data-current={marked ? "" : undefined}
     >
       <button
         type="button"
-        className="note-thread-hit"
+        className="post-thread-hit"
         data-research-thread-row=""
         data-thread-key={child.id}
         data-node-id={child.id}
@@ -259,21 +259,21 @@ function NoteFollowUpRow({
         onClick={() => onOpen(child.id)}
         onFocus={onFocus}
       />
-      <div className="note-thread-gutter">
-        <span className="note-glyph" aria-hidden="true">
+      <div className="post-thread-gutter">
+        <span className="post-glyph" aria-hidden="true">
           {network ? <Globe size={10} /> : <Sparkles size={10} />}
         </span>
       </div>
-      <div className="note-thread-body">
-        <div className="note-reply-head">
-          <span className="note-reply-author">You</span>
+      <div className="post-thread-body">
+        <div className="post-reply-head">
+          <span className="post-reply-author">You</span>
           {network ? null : <span>{`asked ${model}${anchored ? ` about ${anchored.author}’s reply` : ""}`}</span>}
           <span aria-hidden="true">·</span>
           <time dateTime={new Date(child.createdAt).toISOString()} title={new Date(child.createdAt).toLocaleString()}>
             {shortWhen(child.createdAt)}
           </time>
         </div>
-        <div id={labelId} className="note-thread-question">
+        <div id={labelId} className="post-thread-question">
           {nodePrompt(child)}
         </div>
         {state}
@@ -283,7 +283,7 @@ function NoteFollowUpRow({
 }
 
 /** A correction the author appended to the post, as a row in its thread. */
-function NoteCorrectionRow({
+function PostCorrectionRow({
   threadKey,
   correction,
   tabbable,
@@ -291,14 +291,14 @@ function NoteCorrectionRow({
   onFocus,
 }: {
   threadKey: string;
-  correction: NoteCorrection;
+  correction: PostCorrection;
   tabbable: boolean;
   marked: boolean;
   onFocus: () => void;
 }) {
   return (
     <li
-      className="note-thread-item note-thread-correction"
+      className="post-thread-item post-thread-correction"
       data-type="correction"
       data-current={marked ? "" : undefined}
       data-research-thread-row=""
@@ -308,15 +308,15 @@ function NoteCorrectionRow({
         if (event.target === event.currentTarget) onFocus();
       }}
     >
-      <div className="note-thread-gutter">
-        <span className="note-glyph" aria-hidden="true">
+      <div className="post-thread-gutter">
+        <span className="post-glyph" aria-hidden="true">
           <Pencil size={10} />
         </span>
       </div>
-      <div className="note-thread-body">
-        <div className="note-reply-head">
-          <span className="note-reply-author">You</span>
-          <span className="note-correction-label">Correction</span>
+      <div className="post-thread-body">
+        <div className="post-reply-head">
+          <span className="post-reply-author">You</span>
+          <span className="post-correction-label">Correction</span>
           <span aria-hidden="true">·</span>
           <time
             dateTime={new Date(correction.createdAt).toISOString()}
@@ -325,7 +325,7 @@ function NoteCorrectionRow({
             {shortWhen(correction.createdAt)}
           </time>
         </div>
-        <ResearchMarkdown className="note-reply-text" text={correction.body} variant="compact" />
+        <ResearchMarkdown className="post-reply-text" text={correction.body} variant="compact" />
       </div>
     </li>
   );

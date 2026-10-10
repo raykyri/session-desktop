@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ResearchDraftView from "../src/components/research/ResearchDraftView";
 import { ResearchFeedToast } from "../src/components/research/ResearchFeedChrome";
-import { researchCardRefocus } from "../src/components/research/ResearchFeedPost";
+import { researchCardRefocus } from "../src/components/research/ResearchFeedCard";
 import { createResearchDraftAutosave } from "../src/lib/researchDraftAutosave";
 
 const noop = () => {};

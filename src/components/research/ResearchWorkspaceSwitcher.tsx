@@ -11,35 +11,35 @@ import {
   Trash2,
 } from "lucide-react";
 import type { GroupInfo } from "../../types";
-import type { ResearchFolderScope } from "../../lib/researchScope";
-import { listenToResearchFolderMenuToggle } from "../../lib/researchShortcuts";
+import type { ResearchWorkspaceScope } from "../../lib/researchScope";
+import { listenToResearchWorkspaceMenuToggle } from "../../lib/researchShortcuts";
 import {
   ResearchMenu,
   ResearchMenuItem,
   ResearchMenuSeparator,
   type ResearchMenuRect,
 } from "./ResearchMenu";
-import { ResearchStripButton } from "./ResearchSidebarNav";
+import { ResearchRailButton } from "./ResearchSidebarNav";
 
 const MENU_WIDTH = 264;
 
-interface ResearchFolderSwitcherProps {
+interface ResearchWorkspaceSwitcherProps {
   folders: GroupInfo[];
-  scope: ResearchFolderScope;
+  scope: ResearchWorkspaceScope;
   // Tree counts (active + archived) keyed by workspace id for the menu badges.
   treeCounts: Map<string, number>;
   folderPickerBusy: boolean;
   /** Show the held-⌘ shortcut badge on the trigger. */
   shortcutHintsShown: boolean;
-  onSelectScope: (scope: ResearchFolderScope) => void;
+  onSelectScope: (scope: ResearchWorkspaceScope) => void;
   onNewFolder: () => Promise<GroupInfo | null>;
   onOpenFolder: (folder: GroupInfo) => Promise<void>;
   onRenameFolder: (folder: GroupInfo) => void;
   onMoveFolder: (folder: GroupInfo) => Promise<void>;
   onRemoveFolder: (folder: GroupInfo) => void;
-  /** "strip": an icon in the collapsed sidebar whose menu opens beside the
-   * strip, with `footer` (the account control) at its bottom. */
-  variant?: "sidebar" | "strip";
+  /** "rail": an icon in the collapsed sidebar whose menu opens beside the
+   * rail, with `footer` (the account control) at its bottom. */
+  variant?: "sidebar" | "rail";
   footer?: ReactNode;
 }
 
@@ -47,7 +47,7 @@ interface ResearchFolderSwitcherProps {
  * scopes the sidebar and feed. The feed's "folders" file questions inside a
  * workspace, so this menu says "workspace" for the scope and "folder" only
  * for its directory on disk. */
-export default function ResearchFolderSwitcher({
+export default function ResearchWorkspaceSwitcher({
   folders,
   scope,
   treeCounts,
@@ -61,11 +61,11 @@ export default function ResearchFolderSwitcher({
   onRemoveFolder,
   variant = "sidebar",
   footer,
-}: ResearchFolderSwitcherProps) {
-  const strip = variant === "strip";
+}: ResearchWorkspaceSwitcherProps) {
+  const rail = variant === "rail";
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   /** The open menu's trigger and what it is placed against: the trigger, or
-   * in the strip, the strip's edge level with the icon. Null while closed. */
+   * in the rail, the rail's edge level with the icon. Null while closed. */
   const [placement, setPlacement] = useState<{
     trigger: HTMLElement;
     anchor: HTMLElement | ResearchMenuRect;
@@ -77,15 +77,15 @@ export default function ResearchFolderSwitcher({
   const show = () => {
     const trigger = triggerRef.current;
     if (!trigger) return;
-    if (!strip) {
+    if (!rail) {
       setPlacement({ trigger, anchor: trigger });
       return;
     }
     const rect = trigger.getBoundingClientRect();
-    const stripRight = trigger.closest(".research-strip")?.getBoundingClientRect().right ?? rect.right;
+    const railRight = trigger.closest(".research-rail")?.getBoundingClientRect().right ?? rect.right;
     setPlacement({
       trigger,
-      anchor: { left: rect.left, top: rect.top, right: stripRight, bottom: rect.bottom },
+      anchor: { left: rect.left, top: rect.top, right: railRight, bottom: rect.bottom },
     });
   };
   const close = (restoreFocus: boolean) => {
@@ -100,7 +100,7 @@ export default function ResearchFolderSwitcher({
   // Closing it returns focus to the trigger if focus was inside the menu.
   useEffect(
     () =>
-      listenToResearchFolderMenuToggle(() => {
+      listenToResearchWorkspaceMenuToggle(() => {
         if (!openRef.current) {
           actionsRef.current.show();
           return;
@@ -117,7 +117,7 @@ export default function ResearchFolderSwitcher({
   };
   const scopedName = scopedFolder ? folderName(scopedFolder) : null;
 
-  function select(next: ResearchFolderScope) {
+  function select(next: ResearchWorkspaceScope) {
     close(true);
     onSelectScope(next);
   }
@@ -125,11 +125,11 @@ export default function ResearchFolderSwitcher({
   const menu = placement ? (
     <ResearchMenu
       anchor={placement.anchor}
-      align={strip ? "side" : "start"}
+      align={rail ? "side" : "start"}
       trigger={placement.trigger}
       label="Research workspaces"
       width={MENU_WIDTH}
-      footer={strip ? footer : undefined}
+      footer={rail ? footer : undefined}
       onClose={() => close(false)}
     >
       {folders.map((folder, index) => (
@@ -209,10 +209,10 @@ export default function ResearchFolderSwitcher({
     </ResearchMenu>
   ) : null;
 
-  if (strip) {
+  if (rail) {
     return (
-      <div className="research-folder-switcher is-strip">
-        <ResearchStripButton
+      <div className="research-workspace-switcher is-rail">
+        <ResearchRailButton
           label={scopedName ? `Workspace: ${scopedName}` : "Choose a workspace"}
           description={`${scopedName ?? "Workspaces"} (⌘O)`}
           buttonRef={triggerRef}
@@ -221,14 +221,14 @@ export default function ResearchFolderSwitcher({
           onClick={toggle}
         >
           <Folder size={16} aria-hidden="true" />
-        </ResearchStripButton>
+        </ResearchRailButton>
         {menu}
       </div>
     );
   }
 
   return (
-    <div className="research-folder-switcher">
+    <div className="research-workspace-switcher">
       <button
         ref={triggerRef}
         type="button"

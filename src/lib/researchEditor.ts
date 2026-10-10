@@ -77,7 +77,7 @@ export function editedMarkdownBlocks(original: string, next: string): EditedBloc
 }
 
 /** Whether a post has replies or follow-ups, so that an edit appends a
- * correction instead of replacing its text. Mirrors update_research_note. */
+ * correction instead of replacing its text. Mirrors update_research_post. */
 export function researchPostHasReplies(nodes: readonly ResearchNode[], post: ResearchNode): boolean {
   return (
     (nodeDelivery(post)?.replies?.length ?? 0) > 0 ||

@@ -44,7 +44,7 @@ test("research tree menus omit regenerate title for every node type", () => {
   }
 });
 
-test("research tree menus can expose query summary regeneration", () => {
+test("research tree menus can expose recap regeneration", () => {
   const html = renderToStaticMarkup(
     createElement(ResearchTreeMenuItems, {
       tree,
@@ -54,10 +54,10 @@ test("research tree menus can expose query summary regeneration", () => {
       onArchive: noop,
       onRestore: noop,
       onDelete: noop,
-      onRegenerateSummary: noop,
+      onRegenerateRecap: noop,
     }),
   );
-  assert.match(html, /Generate summary/);
+  assert.match(html, /Generate recap/);
 });
 
 test("archived rows offer Unarchive and Delete only", () => {

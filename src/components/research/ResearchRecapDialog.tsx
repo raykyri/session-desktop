@@ -344,13 +344,13 @@ export default function ResearchRecapDialog({
         onKeyDown={trapResearchDialogTab}
       >
         <header className="research-recap-dialog-header">
-          <h2 id="research-recap-dialog-title">Generate summary</h2>
+          <h2 id="research-recap-dialog-title">Generate recap</h2>
           <button
             className="control-button"
             type="button"
             disabled={applying}
             onClick={onClose}
-            aria-label="Close summary generation"
+            aria-label="Close recap generation"
           >
             <X size={14} aria-hidden="true" />
           </button>
@@ -413,7 +413,7 @@ export default function ResearchRecapDialog({
           </p>
         ) : adapters.length === 0 ? (
           <p className="confirm-dialog-error" role="alert">
-            No available agent supports summary generation.
+            No available agent supports recap generation.
           </p>
         ) : null}
 
@@ -449,7 +449,7 @@ export default function ResearchRecapDialog({
             ) : candidate ? (
               <p>{candidate.text}</p>
             ) : (
-              <p>Generate a new summary first.</p>
+              <p>Generate a new recap first.</p>
             )}
           </section>
           <section>
@@ -472,7 +472,7 @@ export default function ResearchRecapDialog({
               disabled={generating || applying}
               onClick={() => void apply()}
             >
-              {applying ? "Applying…" : "Use this summary"}
+              {applying ? "Applying…" : "Use this recap"}
             </button>
           </div>
         ) : null}

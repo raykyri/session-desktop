@@ -2,7 +2,7 @@ import { memo, useMemo, useState } from "react";
 import type { ResearchTreeSummary } from "../../types";
 import { RESEARCH_ARCHIVE_FOLDER_ID } from "../../lib/researchFolders";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
-import ResearchFeedPost from "./ResearchFeedPost";
+import ResearchFeedCard from "./ResearchFeedCard";
 import { researchPlaceEmptyText } from "./ResearchFeedTray";
 import { ResearchMenu, researchMenuPoint } from "./ResearchMenu";
 import { ResearchTreeDeleteDialog, ResearchTreeMenuItems } from "./ResearchTreeMenu";
@@ -62,7 +62,7 @@ function ResearchArchivedFeed({
   return (
     <>
       {sortedTrees.map((tree) => (
-        <ResearchFeedPost
+        <ResearchFeedCard
           key={tree.id}
           cardId={tree.id}
           place={RESEARCH_ARCHIVE_FOLDER_ID}

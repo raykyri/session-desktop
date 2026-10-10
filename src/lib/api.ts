@@ -35,7 +35,7 @@ import type {
   ResearchNodeContent,
   ResearchRecapCandidate,
   UpdateResearchDocumentResult,
-  UpdateResearchNoteResult,
+  UpdateResearchPostResult,
   SendNextQueuedAgentTurnResult,
   RuntimeConfig,
   RemoteChoice,
@@ -255,11 +255,11 @@ export function listRecentActivity(
   });
 }
 
-/** Creates a note tree. `askNetwork` notes are posted to the network (no
+/** Creates a post tree. `askNetwork` posts are published to the network (no
  * transport yet); a body that is a single URL can be saved with
  * `askNetwork: false` as a link or post. The agent fields are the default
- * for the note's AI follow-ups. */
-export function createResearchNote(request: {
+ * for the post's AI follow-ups. */
+export function createResearchPost(request: {
   body: string;
   adapter: string;
   model?: string | null;
@@ -267,22 +267,22 @@ export function createResearchNote(request: {
   workspaceId: string;
   askNetwork: boolean;
 }) {
-  return invoke<ResearchTreeDetail>("create_research_note", { request });
+  return invoke<ResearchTreeDetail>("create_research_post", { request });
 }
 
-/** A network follow-up: another note under a network note. */
-export function createResearchNoteFollowUp(parentNodeId: string, body: string) {
-  return invoke<ResearchNode>("create_research_note_follow_up", { parentNodeId, body });
+/** A network follow-up: another post under a network post. */
+export function createResearchPostFollowUp(parentNodeId: string, body: string) {
+  return invoke<ResearchNode>("create_research_post_follow_up", { parentNodeId, body });
 }
 
-/** The note author's response to a member's reply. */
-export function respondToResearchNoteReply(nodeId: string, inReplyTo: string, body: string) {
-  return invoke<ResearchNode>("add_research_note_reply", { nodeId, inReplyTo, body });
+/** The post author's response to a member's reply. */
+export function respondToResearchPostReply(nodeId: string, inReplyTo: string, body: string) {
+  return invoke<ResearchNode>("add_research_post_reply", { nodeId, inReplyTo, body });
 }
 
-/** Deletes one of the note author's own responses. */
-export function removeResearchNoteReply(nodeId: string, replyId: string) {
-  return invoke<ResearchNode>("remove_research_note_reply", { nodeId, replyId });
+/** Deletes one of the post author's own responses. */
+export function removeResearchPostReply(nodeId: string, replyId: string) {
+  return invoke<ResearchNode>("remove_research_post_reply", { nodeId, replyId });
 }
 
 export function getResearchTree(treeId: string) {
@@ -340,13 +340,13 @@ export function updateResearchDocument(request: {
 
 /** Edits a thread's own post: replaces its text when it has no replies or
  * follow-ups (`correction: false`), else appends a correction. */
-export function updateResearchNote(request: {
+export function updateResearchPost(request: {
   nodeId: string;
   text: string;
   expectedText: string;
   correction: boolean;
 }) {
-  return invoke<UpdateResearchNoteResult>("update_research_note", { request });
+  return invoke<UpdateResearchPostResult>("update_research_post", { request });
 }
 
 export function getResearchNodeContent(nodeId: string) {

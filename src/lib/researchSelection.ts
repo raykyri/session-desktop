@@ -1,4 +1,4 @@
-import { isActiveResearchStatus } from "./researchThreads";
+import { isActiveResearchStatus } from "./researchChains";
 import type { ResearchNodeStatus } from "../types";
 
 interface SnappedResearchSelection {

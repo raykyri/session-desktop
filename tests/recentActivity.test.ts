@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   activityEventFromResearchQuery,
   buildRecentActivityFromItems,
-  cappedNoteDelivery,
+  cappedPostDelivery,
   mergeRecentActivityItems,
   reconcileRecentActivityHead,
   recentResearchQueryFromNode,
@@ -16,7 +16,7 @@ import {
   virtualActivityRange,
 } from "../src/components/research/ResearchActivityFeed";
 import type {
-  NoteReply,
+  PostReply,
   RecentResearchQuery,
   ResearchTreeSummary,
 } from "../src/types";
@@ -68,24 +68,24 @@ test("model summaries use readable model names where available", () => {
   assert.equal(formatResearchModelSummary("", null), "");
 });
 
-test("note posts name delivery and saved sources", () => {
-  const note: RecentResearchQuery = {
-    ...query, nodeId: "note", parentNodeId: null, type: "post", status: "complete",
+test("posts name delivery and saved sources", () => {
+  const networkPost: RecentResearchQuery = {
+    ...query, nodeId: "post", parentNodeId: null, type: "post", status: "complete",
     prompt: "Who has shipped this?", delivery: { status: "posted", postedAt: 1 }, replyCount: 3,
   };
-  const posted = activityEventFromResearchQuery(note, tree);
+  const posted = activityEventFromResearchQuery(networkPost, tree);
   assert.deepEqual(posted.action, { kind: "posted", label: "Posted to network" });
-  assert.equal(posted.object.kind, "note");
+  assert.equal(posted.object.kind, "network-post");
 
   const link = activityEventFromResearchQuery({
-    ...note, prompt: "https://example.com/paper", delivery: null, replyCount: 0,
+    ...networkPost, prompt: "https://example.com/paper", delivery: null, replyCount: 0,
   });
   assert.equal(link.object.kind, "link");
   assert.equal(link.context?.label, "example.com");
   assert.equal(link.state, undefined);
 
-  const post = activityEventFromResearchQuery({
-    ...note, prompt: "https://x.com/jack/status/20", delivery: null, replyCount: 0,
+  const xPost = activityEventFromResearchQuery({
+    ...networkPost, prompt: "https://x.com/jack/status/20", delivery: null, replyCount: 0,
     attachments: [{
       kind: "tweet", schemaVersion: 1, sourceUrl: "https://x.com/jack/status/20", tweetId: "20",
       placement: "trailing", provider: "xSyndication", status: "resolved", attemptedAt: 1,
@@ -95,7 +95,7 @@ test("note posts name delivery and saved sources", () => {
       },
     }],
   });
-  assert.equal(post.object.kind, "post");
+  assert.equal(xPost.object.kind, "post");
 });
 
 test("Home hides archived research and shows it again when restored", () => {
@@ -257,7 +257,7 @@ test("live summary events retain imported report provenance", () => {
   assert.equal(updated[0].model, null);
 });
 
-const memberReply = (id: string, createdAt: number, inReplyTo?: string): NoteReply => ({
+const memberReply = (id: string, createdAt: number, inReplyTo?: string): PostReply => ({
   id,
   author: inReplyTo ? { kind: "author" } : { kind: "member", id: `m-${id}`, displayName: `Member ${id}` },
   body: id,
@@ -265,35 +265,35 @@ const memberReply = (id: string, createdAt: number, inReplyTo?: string): NoteRep
   createdAt,
 });
 
-test("live note updates cut replies to five threads like the backend", () => {
+test("live post updates cut replies to five threads like the backend", () => {
   const replies = [
     ...Array.from({ length: 7 }, (_, index) => memberReply(`r${index}`, index)),
     memberReply("response", 10, "r1"),
     memberReply("late-response", 11, "r6"),
   ];
-  const capped = cappedNoteDelivery({ status: "posted", postedAt: 0, replies }, 5);
+  const capped = cappedPostDelivery({ status: "posted", postedAt: 0, replies }, 5);
   assert.deepEqual(capped.replies?.map((reply) => reply.id), ["r0", "r1", "r2", "r3", "r4", "response"]);
 
-  const note = researchNode({
-    id: "note", treeId: "note-tree", prompt: "Question", adapter: "claude",
+  const post = researchNode({
+    id: "post", treeId: "post-tree", prompt: "Question", adapter: "claude",
     groupId: "workspace", createdAt: 100,
     type: "post", delivery: { status: "posted", postedAt: 100, replies },
   });
-  const [item] = upsertRecentActivityResearchNode([], note);
+  const [item] = upsertRecentActivityResearchNode([], post);
   assert.equal(item.type, "post");
   assert.equal(item.replyCount, 7);
   assert.equal(item.delivery?.replies?.length, 6);
 });
 
-test("follow-ups about a reply resolve its author from the loaded note", () => {
-  const note = researchNode({
-    id: "note", treeId: "note-tree", prompt: "Question", adapter: "claude",
+test("follow-ups about a reply resolve its author from the loaded post", () => {
+  const post = researchNode({
+    id: "post", treeId: "post-tree", prompt: "Question", adapter: "claude",
     groupId: "workspace", createdAt: 100, type: "post",
     delivery: { status: "posted", postedAt: 100, replies: [memberReply("r0", 110)] },
   });
-  let items = upsertRecentActivityResearchNode([], note);
+  let items = upsertRecentActivityResearchNode([], post);
   const childFields = {
-    id: "child", treeId: "note-tree", parentNodeId: "note", prompt: "Question", groupId: "workspace",
+    id: "child", treeId: "post-tree", parentNodeId: "post", prompt: "Question", groupId: "workspace",
     anchor: { kind: "reply", replyId: "r0" }, status: "running", createdAt: 120,
   } satisfies NodeFixture;
   const child = researchNode(childFields);

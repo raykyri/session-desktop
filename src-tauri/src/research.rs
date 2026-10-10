@@ -382,26 +382,26 @@ pub fn body_millis(millis: u128) -> u64 {
 /// `replies` holds the author's own responses until member replies can arrive.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NoteDelivery {
-    pub status: NoteDeliveryStatus,
+pub struct PostDelivery {
+    pub status: PostDeliveryStatus,
     pub posted_at: u64,
     /// Chronological. A reply with `in_reply_to` set follows the reply it
     /// responds to in time, never precedes it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub replies: Vec<NoteReply>,
+    pub replies: Vec<PostReply>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum NoteDeliveryStatus {
+pub enum PostDeliveryStatus {
     Posted,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NoteReply {
+pub struct PostReply {
     pub id: String,
-    pub author: NoteReplyAuthor,
+    pub author: PostReplyAuthor,
     /// Markdown.
     pub body: String,
     /// Set on the post author's response to a member's reply. One level
@@ -417,7 +417,7 @@ pub struct NoteReply {
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
-pub enum NoteReplyAuthor {
+pub enum PostReplyAuthor {
     /// The post's author (this Session's user).
     Author,
     /// Another person in the user's network.
@@ -429,7 +429,7 @@ pub enum NoteReplyAuthor {
     },
 }
 
-impl NoteReplyAuthor {
+impl PostReplyAuthor {
     pub fn label(&self) -> &str {
         match self {
             Self::Author => "the user",
@@ -450,7 +450,7 @@ pub enum PostFormat {
 
 impl PostFormat {
     pub fn of(text: &str) -> Self {
-        if note_body_is_single_url(text) {
+        if post_body_is_single_url(text) {
             Self::Link
         } else {
             Self::Text
@@ -477,11 +477,11 @@ pub enum NodeAnchor {
 }
 
 /// Byte cap for a post's text and for each reply.
-pub const MAX_NOTE_TEXT_BYTES: usize = 64 * 1024;
-pub const MAX_NOTE_REPLIES: usize = 1_000;
+pub const MAX_POST_TEXT_BYTES: usize = 64 * 1024;
+pub const MAX_POST_REPLIES: usize = 1_000;
 /// Top-level replies the Home feed carries per post; the card fetches the
 /// rest from the full node when the user expands it.
-pub const RECENT_ACTIVITY_NOTE_REPLY_LIMIT: usize = 5;
+pub const RECENT_ACTIVITY_POST_REPLY_LIMIT: usize = 5;
 
 /// What a person wrote: a post's text, an exchange's question, or the
 /// question an imported report answers.
@@ -587,7 +587,7 @@ pub struct PostBody {
     pub message: UserMessage,
     pub format: PostFormat,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub delivery: Option<NoteDelivery>,
+    pub delivery: Option<PostDelivery>,
     /// Default agent for AI follow-ups. Not provenance: the post itself is
     /// user-authored.
     pub follow_up_agent: AgentSpec,
@@ -595,7 +595,7 @@ pub struct PostBody {
     /// or follow-ups, oldest first; the text stays as it was when those were
     /// written.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub corrections: Vec<NoteCorrection>,
+    pub corrections: Vec<PostCorrection>,
     /// When the text was last replaced by an edit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub edited_at: Option<u64>,
@@ -708,14 +708,14 @@ pub struct ResearchNode {
 /// A correction appended to a post (see `PostBody::corrections`).
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct NoteCorrection {
+pub struct PostCorrection {
     pub id: String,
     pub body: String,
     pub created_at: u64,
 }
 
 /// Corrections a post may carry.
-pub const MAX_NOTE_CORRECTIONS: usize = 100;
+pub const MAX_POST_CORRECTIONS: usize = 100;
 
 /// A node's type, the tag of its body.
 ///
@@ -941,11 +941,11 @@ impl ResearchNode {
         }
     }
 
-    pub fn delivery(&self) -> Option<&NoteDelivery> {
+    pub fn delivery(&self) -> Option<&PostDelivery> {
         self.post().and_then(|post| post.delivery.as_ref())
     }
 
-    pub fn delivery_mut(&mut self) -> Option<&mut NoteDelivery> {
+    pub fn delivery_mut(&mut self) -> Option<&mut PostDelivery> {
         self.post_mut().and_then(|post| post.delivery.as_mut())
     }
 
@@ -1126,16 +1126,16 @@ pub struct RecentResearchQuery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<PostFormat>,
     /// A post's network state, with `replies` cut to the first
-    /// [`RECENT_ACTIVITY_NOTE_REPLY_LIMIT`] top-level replies (each with its
+    /// [`RECENT_ACTIVITY_POST_REPLY_LIMIT`] top-level replies (each with its
     /// responses). `reply_count` is the uncut top-level count.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub delivery: Option<NoteDelivery>,
+    pub delivery: Option<PostDelivery>,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub reply_count: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply_anchor: Option<String>,
     /// Display name of the reply `reply_anchor` names, resolved against the
-    /// parent note; absent when the reply was removed.
+    /// parent post; absent when the reply was removed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply_anchor_author: Option<String>,
     pub status: ResearchNodeStatus,
@@ -1177,7 +1177,7 @@ impl From<&ResearchNode> for RecentResearchQuery {
             format: node.post().map(|post| post.format),
             delivery: node
                 .delivery()
-                .map(|delivery| capped_note_delivery(delivery, RECENT_ACTIVITY_NOTE_REPLY_LIMIT)),
+                .map(|delivery| capped_post_delivery(delivery, RECENT_ACTIVITY_POST_REPLY_LIMIT)),
             reply_count: node
                 .delivery()
                 .map_or(0, |delivery| top_level_reply_count(&delivery.replies)),
@@ -1201,7 +1201,7 @@ fn is_zero(value: &usize) -> bool {
     *value == 0
 }
 
-pub fn top_level_reply_count(replies: &[NoteReply]) -> usize {
+pub fn top_level_reply_count(replies: &[PostReply]) -> usize {
     replies
         .iter()
         .filter(|reply| reply.in_reply_to.is_none())
@@ -1210,7 +1210,7 @@ pub fn top_level_reply_count(replies: &[NoteReply]) -> usize {
 
 /// The delivery with only the first `limit` top-level replies and the
 /// responses to them, preserving chronological order.
-pub fn capped_note_delivery(delivery: &NoteDelivery, limit: usize) -> NoteDelivery {
+pub fn capped_post_delivery(delivery: &PostDelivery, limit: usize) -> PostDelivery {
     let kept = delivery
         .replies
         .iter()
@@ -1218,7 +1218,7 @@ pub fn capped_note_delivery(delivery: &NoteDelivery, limit: usize) -> NoteDelive
         .take(limit)
         .map(|reply| reply.id.as_str())
         .collect::<HashSet<_>>();
-    NoteDelivery {
+    PostDelivery {
         status: delivery.status,
         posted_at: delivery.posted_at,
         replies: delivery
@@ -1246,27 +1246,27 @@ pub struct RecentActivityPage {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateResearchNoteRequest {
+pub struct CreateResearchPostRequest {
     pub body: String,
-    /// Agent that answers the note's AI follow-ups by default. Not provenance:
-    /// the note itself is user-authored.
+    /// Agent that answers the post's AI follow-ups by default. Not provenance:
+    /// the post itself is user-authored.
     pub adapter: String,
     #[serde(default)]
     pub model: Option<String>,
     #[serde(default)]
     pub effort: Option<String>,
     pub workspace_id: String,
-    /// True for Ask network (the note gets a delivery record). False saves a
-    /// single-URL body as a link or post note with no network state.
+    /// True for Ask network (the post gets a delivery record). False saves a
+    /// single-URL body as a link or X post with no network state.
     pub ask_network: bool,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AddNoteReplyRequest {
+pub struct AddPostReplyRequest {
     pub node_id: String,
     pub body: String,
-    pub author: NoteReplyAuthor,
+    pub author: PostReplyAuthor,
     #[serde(default)]
     pub in_reply_to: Option<String>,
 }
@@ -1281,8 +1281,8 @@ pub fn reply_anchor_author(parent: &ResearchNode, child: &ResearchNode) -> Optio
         .iter()
         .find(|reply| reply.id == reply_id)
         .map(|reply| match &reply.author {
-            NoteReplyAuthor::Author => "You".to_string(),
-            NoteReplyAuthor::Member { display_name, .. } => display_name.clone(),
+            PostReplyAuthor::Author => "You".to_string(),
+            PostReplyAuthor::Member { display_name, .. } => display_name.clone(),
         })
 }
 
@@ -1325,8 +1325,8 @@ impl PostBody {
         Self {
             format: PostFormat::of(&message.text),
             message,
-            delivery: ask_network.then(|| NoteDelivery {
-                status: NoteDeliveryStatus::Posted,
+            delivery: ask_network.then(|| PostDelivery {
+                status: PostDeliveryStatus::Posted,
                 posted_at: body_millis(now),
                 replies: Vec::new(),
             }),
@@ -1686,25 +1686,25 @@ pub fn validate_node_shape(
     }
     if let Some(post) = node.post() {
         if let Some(delivery) = &post.delivery {
-            validate_note_replies(&delivery.replies)
+            validate_post_replies(&delivery.replies)
                 .map_err(|err| format!("research post {}: {err}", node.id))?;
         }
-        validate_note_corrections(&post.corrections)
+        validate_post_corrections(&post.corrections)
             .map_err(|err| format!("research post {}: {err}", node.id))?;
     }
     Ok(())
 }
 
-pub fn validate_note_corrections(corrections: &[NoteCorrection]) -> Result<(), String> {
-    if corrections.len() > MAX_NOTE_CORRECTIONS {
-        return Err(format!("more than {MAX_NOTE_CORRECTIONS} corrections"));
+pub fn validate_post_corrections(corrections: &[PostCorrection]) -> Result<(), String> {
+    if corrections.len() > MAX_POST_CORRECTIONS {
+        return Err(format!("more than {MAX_POST_CORRECTIONS} corrections"));
     }
     let mut seen = HashSet::new();
     for correction in corrections {
         if correction.id.is_empty() || !seen.insert(correction.id.as_str()) {
             return Err("correction ids must be unique and non-empty".to_string());
         }
-        if correction.body.trim().is_empty() || correction.body.len() > MAX_NOTE_TEXT_BYTES {
+        if correction.body.trim().is_empty() || correction.body.len() > MAX_POST_TEXT_BYTES {
             return Err(format!(
                 "correction {} has an empty or oversized body",
                 correction.id
@@ -1714,9 +1714,9 @@ pub fn validate_note_corrections(corrections: &[NoteCorrection]) -> Result<(), S
     Ok(())
 }
 
-pub fn validate_note_replies(replies: &[NoteReply]) -> Result<(), String> {
-    if replies.len() > MAX_NOTE_REPLIES {
-        return Err(format!("more than {MAX_NOTE_REPLIES} replies"));
+pub fn validate_post_replies(replies: &[PostReply]) -> Result<(), String> {
+    if replies.len() > MAX_POST_REPLIES {
+        return Err(format!("more than {MAX_POST_REPLIES} replies"));
     }
     let mut top_level = HashSet::new();
     let mut seen = HashSet::new();
@@ -1724,7 +1724,7 @@ pub fn validate_note_replies(replies: &[NoteReply]) -> Result<(), String> {
         if reply.id.is_empty() || !seen.insert(reply.id.as_str()) {
             return Err("reply ids must be unique and non-empty".to_string());
         }
-        if reply.body.trim().is_empty() || reply.body.len() > MAX_NOTE_TEXT_BYTES {
+        if reply.body.trim().is_empty() || reply.body.len() > MAX_POST_TEXT_BYTES {
             return Err(format!("reply {} has an empty or oversized body", reply.id));
         }
         match reply.in_reply_to.as_deref() {
@@ -1744,9 +1744,9 @@ pub fn validate_note_replies(replies: &[NoteReply]) -> Result<(), String> {
     Ok(())
 }
 
-/// True when the whole note body is one http(s) URL: the composer saves such
+/// True when the whole post body is one http(s) URL: the composer saves such
 /// a body as a link (or, for an X status URL, a post) rather than a question.
-pub fn note_body_is_single_url(body: &str) -> bool {
+pub fn post_body_is_single_url(body: &str) -> bool {
     let trimmed = body.trim();
     !trimmed.is_empty()
         && !trimmed.contains(char::is_whitespace)
@@ -1754,16 +1754,16 @@ pub fn note_body_is_single_url(body: &str) -> bool {
             .is_ok_and(|url| matches!(url.scheme(), "http" | "https") && url.host().is_some())
 }
 
-/// Tree title for a note: its first non-empty line, cut to a sidebar-sized
-/// label. Notes are hidden from the sidebar, but breadcrumbs, menus, and the
+/// Tree title for a post: its first non-empty line, cut to a sidebar-sized
+/// label. Posts are hidden from the sidebar, but breadcrumbs, menus, and the
 /// Highlights feed still show the tree title.
-pub fn note_default_title(body: &str) -> String {
+pub fn post_default_title(body: &str) -> String {
     const MAX_CHARS: usize = 80;
     let line = body
         .lines()
         .map(str::trim)
         .find(|line| !line.is_empty())
-        .unwrap_or("Note");
+        .unwrap_or("Post");
     if line.chars().count() <= MAX_CHARS {
         return line.to_string();
     }
@@ -1892,7 +1892,7 @@ pub struct UpdateResearchDocumentResult {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UpdateResearchNoteRequest {
+pub struct UpdateResearchPostRequest {
     pub node_id: String,
     pub text: String,
     /// The post's text when the editor opened.
@@ -1905,7 +1905,7 @@ pub struct UpdateResearchNoteRequest {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UpdateResearchNoteResult {
+pub struct UpdateResearchPostResult {
     pub tree: ResearchTree,
     #[serde(serialize_with = "serialize_node_view")]
     pub node: ResearchNode,
@@ -3525,24 +3525,24 @@ pub fn query_followup_prompt(exact: &str, question: &str) -> String {
     }
 }
 
-const NOTE_CONTEXT_TAGS: [&str; 5] = ["note", "replies", "reply", "corrections", "correction"];
+const POST_CONTEXT_TAGS: [&str; 5] = ["post", "replies", "reply", "corrections", "correction"];
 
-/// The launch prompt for an AI follow-up under a note. A note has no session
-/// to fork, so the note body and its replies ride along as context. Reply
-/// bodies are other people's words, so they (and the note body, which can
+/// The launch prompt for an AI follow-up under a post. A post has no session
+/// to fork, so the post body and its replies ride along as context. Reply
+/// bodies are other people's words, so they (and the post body, which can
 /// quote them) pass through [`neutralized_tag_markup`] for the tags this
 /// serialization uses. `anchored_reply` is the reply the question is about;
 /// it is quoted again next to the question. Slash-command ordering follows
 /// [`document_followup_prompt`].
-pub fn note_followup_prompt(
-    note_body: &str,
-    corrections: &[NoteCorrection],
-    replies: &[NoteReply],
-    anchored_reply: Option<&NoteReply>,
+pub fn post_followup_prompt(
+    post_body: &str,
+    corrections: &[PostCorrection],
+    replies: &[PostReply],
+    anchored_reply: Option<&PostReply>,
     question: &str,
 ) -> String {
-    let clean = |text: &str| neutralized_tag_markup(text, &NOTE_CONTEXT_TAGS);
-    let author = |reply: &NoteReply| {
+    let clean = |text: &str| neutralized_tag_markup(text, &POST_CONTEXT_TAGS);
+    let author = |reply: &PostReply| {
         reply
             .author
             .label()
@@ -3551,9 +3551,9 @@ pub fn note_followup_prompt(
             .collect::<Vec<_>>()
             .join(" ")
     };
-    let mut context = format!("<note>\n{}\n</note>", clean(note_body.trim()));
+    let mut context = format!("<post>\n{}\n</post>", clean(post_body.trim()));
     if !corrections.is_empty() {
-        // Appended by the author after the note was posted; the note text
+        // Appended by the author after the post was published; the post text
         // above is the version the replies refer to.
         context.push_str("\n<corrections>");
         for correction in corrections {
@@ -3602,13 +3602,13 @@ pub fn note_followup_prompt(
         None => question.to_string(),
     };
     let mut preamble = if replies.is_empty() {
-        "The user wrote the note below.".to_string()
+        "The user wrote the post below.".to_string()
     } else {
-        "The user posted the note below to people in their network; their replies follow it."
+        "The user posted the post below to people in their network; their replies follow it."
             .to_string()
     };
     if !corrections.is_empty() {
-        preamble.push_str(" Corrections the user added later follow the note.");
+        preamble.push_str(" Corrections the user added later follow the post.");
     }
     if question.starts_with('/') {
         format!(
@@ -4163,7 +4163,7 @@ mod tests {
         })
     }
 
-    fn post_body(text: &str, delivery: Option<NoteDelivery>) -> NodeBody {
+    fn post_body(text: &str, delivery: Option<PostDelivery>) -> NodeBody {
         NodeBody::Post(PostBody {
             delivery,
             ..PostBody::new(
@@ -4627,12 +4627,12 @@ mod tests {
             &root,
             post_body(
                 "Who has tried it?",
-                Some(NoteDelivery {
-                    status: NoteDeliveryStatus::Posted,
+                Some(PostDelivery {
+                    status: PostDeliveryStatus::Posted,
                     posted_at: 1,
-                    replies: vec![NoteReply {
+                    replies: vec![PostReply {
                         id: "reply-1".to_string(),
-                        author: NoteReplyAuthor::Member {
+                        author: PostReplyAuthor::Member {
                             id: "ana".to_string(),
                             display_name: "Ana".to_string(),
                             handle: None,
@@ -5020,53 +5020,79 @@ mod tests {
         std::fs::remove_dir_all(folder).unwrap();
     }
 
+    /// The stored shape of a post with every optional field set: a network
+    /// delivery with a member reply and the author's response to it, a
+    /// correction, and an edit. Field names and tags come from serde
+    /// attributes, not type names, and must not change without a migration.
+    const STORED_POST_NODE: &str = concat!(
+        r#"{"id":"post-1","treeId":"tree-1","parentNodeId":"post-0","title":"Who has tried X?","#,
+        r#""groupId":"group-1","createdAt":100,"body":{"type":"post","#,
+        r#""message":{"text":"Who has tried X?"},"format":"text","#,
+        r#""delivery":{"status":"posted","postedAt":100,"replies":["#,
+        r#"{"id":"reply-1","author":{"kind":"member","id":"m-1","displayName":"Ana","handle":"ana"},"#,
+        r#""body":"I did.","createdAt":110},"#,
+        r#"{"id":"reply-2","author":{"kind":"author"},"body":"Thanks.","inReplyTo":"reply-1","createdAt":120}]},"#,
+        r#""followUpAgent":{"adapter":"claude","model":"opus"},"#,
+        r#""corrections":[{"id":"correction-1","body":"I meant Y.","createdAt":130}],"#,
+        r#""editedAt":140}}"#
+    );
+
     #[test]
-    fn note_reply_validation_requires_earlier_top_level_targets() {
-        let reply = |id: &str, parent: Option<&str>| NoteReply {
+    fn post_nodes_round_trip_byte_identically() {
+        let node: ResearchNode = serde_json::from_str(STORED_POST_NODE).unwrap();
+        let post = node.post().unwrap();
+        assert_eq!(post.delivery.as_ref().unwrap().replies.len(), 2);
+        assert_eq!(post.corrections.len(), 1);
+        assert_eq!(serde_json::to_string(&node).unwrap(), STORED_POST_NODE);
+    }
+
+    #[test]
+    fn post_reply_validation_requires_earlier_top_level_targets() {
+        let reply = |id: &str, parent: Option<&str>| PostReply {
             id: id.to_string(),
-            author: NoteReplyAuthor::Author,
+            author: PostReplyAuthor::Author,
             body: "text".to_string(),
             in_reply_to: parent.map(str::to_string),
             created_at: 1,
         };
-        assert!(validate_note_replies(&[reply("a", None), reply("b", Some("a"))]).is_ok());
-        assert!(validate_note_replies(&[reply("b", Some("a")), reply("a", None)]).is_err());
+        assert!(validate_post_replies(&[reply("a", None), reply("b", Some("a"))]).is_ok());
+        assert!(validate_post_replies(&[reply("b", Some("a")), reply("a", None)]).is_err());
         assert!(
-            validate_note_replies(&[
+            validate_post_replies(&[
                 reply("a", None),
                 reply("b", Some("a")),
                 reply("c", Some("b"))
             ])
             .is_err()
         );
-        assert!(validate_note_replies(&[reply("a", None), reply("a", None)]).is_err());
+        assert!(validate_post_replies(&[reply("a", None), reply("a", None)]).is_err());
     }
 
     #[test]
-    fn note_bodies_are_links_only_when_they_are_one_url() {
-        assert!(note_body_is_single_url(" https://example.com/a?b=c "));
-        assert!(note_body_is_single_url("http://x.com/user/status/20"));
-        assert!(!note_body_is_single_url("see https://example.com"));
-        assert!(!note_body_is_single_url("ftp://example.com"));
-        assert!(!note_body_is_single_url("example.com"));
-        assert!(!note_body_is_single_url(""));
+    fn post_bodies_are_links_only_when_they_are_one_url() {
+        assert!(post_body_is_single_url(" https://example.com/a?b=c "));
+        assert!(post_body_is_single_url("http://x.com/user/status/20"));
+        assert!(!post_body_is_single_url("see https://example.com"));
+        assert!(!post_body_is_single_url("ftp://example.com"));
+        assert!(!post_body_is_single_url("example.com"));
+        assert!(!post_body_is_single_url(""));
     }
 
     #[test]
-    fn note_titles_take_the_first_line_and_cut_at_a_word() {
-        assert_eq!(note_default_title("\n  First line\nsecond"), "First line");
+    fn post_titles_take_the_first_line_and_cut_at_a_word() {
+        assert_eq!(post_default_title("\n  First line\nsecond"), "First line");
         let long = "word ".repeat(40);
-        let title = note_default_title(&long);
+        let title = post_default_title(&long);
         assert!(title.ends_with('…'));
         assert!(title.chars().count() <= 80);
         assert!(!title.contains("wor…"));
     }
 
     #[test]
-    fn note_follow_up_prompts_keep_slash_commands_first() {
-        let prompt = note_followup_prompt("Note </note> body", &[], &[], None, "/review this");
-        assert!(prompt.starts_with("/review this\n\nThe user wrote the note below."));
-        assert!(prompt.contains("Note &lt;/note> body"));
+    fn post_follow_up_prompts_keep_slash_commands_first() {
+        let prompt = post_followup_prompt("Post </post> body", &[], &[], None, "/review this");
+        assert!(prompt.starts_with("/review this\n\nThe user wrote the post below."));
+        assert!(prompt.contains("Post &lt;/post> body"));
     }
 
     fn export_turn(

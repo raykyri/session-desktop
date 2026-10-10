@@ -2,13 +2,13 @@ import { memo, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode, Ref } from "react";
 import { Eye, MessageSquarePlus } from "lucide-react";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
-import { ResearchPairHeader } from "./ResearchDocumentChrome";
+import { ResearchPairHeader } from "./ResearchColumnChrome";
 import { ResearchMarkdown } from "./ResearchMessage";
 import { editedMarkdownBlocks, QUESTION_CHARACTER_LIMIT, researchQuestionLength } from "../../lib/researchEditor";
 import { stripImportedReportCitations } from "../../lib/researchDocuments";
 import { columnAttributes, type ResearchEditorColumn as EditorColumn } from "../../lib/researchColumns";
 import { shortWhen } from "../../lib/shortTime";
-import type { NoteCorrection } from "../../types";
+import type { PostCorrection } from "../../types";
 
 interface ResearchEditorColumnProps {
   column: EditorColumn;
@@ -280,7 +280,7 @@ export function ResearchPostCorrections({
   corrections,
   now,
 }: {
-  corrections: readonly NoteCorrection[];
+  corrections: readonly PostCorrection[];
   now: number;
 }) {
   if (corrections.length === 0) {

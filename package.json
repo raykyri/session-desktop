@@ -28,7 +28,7 @@
     "test:tweet-embed": "npm run test:node -- tests/tweetEmbed.test.ts",
     "test:research-documents": "npm run test:node -- tests/researchDocuments.test.ts",
     "test:research-conversations": "npm run test:node -- tests/researchConversations.test.ts",
-    "test:research-threads": "npm run test:node -- tests/researchThreads.test.ts",
+    "test:research-chains": "npm run test:node -- tests/researchChains.test.ts",
     "test:image-markers": "npm run test:node -- tests/imageMarkers.test.ts",
     "test:image-lightbox": "npm run test:node -- tests/imageLightbox.test.ts",
     "test:markdown-math": "npm run test:node -- tests/markdownMath.test.ts",

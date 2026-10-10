@@ -60,7 +60,7 @@ test("Home starts with the composer, then lists Unfiled cards, then the trays; a
   assert.match(html, /role="feed"/);
   assert.match(html, /research-reading-surface/);
   assert.equal(cards(html).length, 2);
-  assert.match(html, /note-link-card research-content-card/);
+  assert.match(html, /post-link-card research-content-card/);
   assert.match(html, /research-user-message research-feed-card-message/);
   assert.match(html, /Query composer/);
   // The ask box starts Home, before the Unfiled list; Home's header has no
@@ -80,12 +80,12 @@ test("Home starts with the composer, then lists Unfiled cards, then the trays; a
   assert.doesNotMatch(html, /<iframe|View source|Connecting to/);
 });
 
-test("cards have no metadata row: no time, counts, summary, Follow or Bookmark", () => {
+test("cards have no metadata row: no time, counts, recap, Follow or Bookmark", () => {
   const html = renderFeed({
     items: [{ ...question, children: [{ ...question, nodeId: "child", parentNodeId: "node", prompt: "Follow up question here" }] }],
     researchTrees: [{ ...tree, followed: true, bookmarked: true }],
   });
-  assert.doesNotMatch(html, /<time|research-thread-actions|Summary: |follow-up<\/button>/);
+  assert.doesNotMatch(html, /<time|research-thread-actions|Recap: |follow-up<\/button>/);
   // Direct follow-ups are not rows of their own unless starred.
   assert.doesNotMatch(html, /Follow up question here/);
   // Bookmarking and moving live in the card's … menu.
@@ -156,13 +156,13 @@ test("starred follow-ups and branches are indented rows under their question", (
     .map((row) => row.slice(0, row.indexOf("</div>")));
   assert.equal(rows.length, 3);
   assert.ok(rows[0].startsWith(" is-group-start"));
-  assert.match(rows[0], /--research-child-level:1/);
+  assert.match(rows[0], /--research-child-indent:1/);
   // A follow-up has no icon; a starred branch is marked with a filled star.
   assert.doesNotMatch(rows[0], /Starred branch: |research-feed-child-icon/);
   assert.match(rows[1], /<svg(?=[^>]*lucide-star)(?=[^>]*fill="currentColor")/);
   assert.match(rows[1], /Starred branch: <\/span><span class="research-feed-child-text">Branch title</);
   // Levels cap at two; running children keep a status dot.
-  assert.match(rows[2], /--research-child-level:2/);
+  assert.match(rows[2], /--research-child-indent:2/);
   assert.ok(rows[2].startsWith(" is-group-end"));
   assert.match(rows[2], /research-feed-status is-running/);
   // Each child row has its open target and, in the right-hand margin, the
@@ -453,9 +453,9 @@ test("Home offers report import", () => {
   assert.doesNotMatch(renderFeed({ view: { kind: "bookmarks" }, onImportReport: asyncNoop }), /Import \.md report/);
 });
 
-test("a network note is an untitled card showing its body", () => {
+test("a network post is an untitled card showing its body", () => {
   const html = renderFeed({ items: [{
-    nodeId: "note", treeId: "note-tree", parentNodeId: null, inline: false,
+    nodeId: "post", treeId: "post-tree", parentNodeId: null, inline: false,
     prompt: "Who ships component-model plugins?", adapter: "claude", model: "fable",
     type: "post" as const, status: "complete" as const, createdAt: 100,
     delivery: {
@@ -466,6 +466,6 @@ test("a network note is an untitled card showing its body", () => {
   }] });
   assert.match(html, /Who ships component-model plugins\?/);
   assert.doesNotMatch(html, /research-feed-card-title/);
-  // Replies open with the note; the card shows only the question.
+  // Replies open with the post; the card shows only the question.
   assert.doesNotMatch(html, /We moved in March\.|7 replies/);
 });

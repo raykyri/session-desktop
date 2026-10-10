@@ -12,17 +12,17 @@ interface SavedResearchScrollPosition {
   updatedAt: number;
 }
 
-/** An in-progress targeted follow-up (ask mode): the passage it is being
- * composed against and whatever the user has typed so far. Persisted so
- * leaving the research surface — which unmounts the document — does not
- * discard the ask; removed only by submit or an explicit dismiss. */
-interface SavedResearchAsk {
+/** A pending branch (UI: New branch): the passage of the parent's answer it
+ * is asked about and whatever the user has typed so far. Persisted so
+ * leaving the research surface — which unmounts the thread page — does not
+ * discard it; removed only by submit or an explicit dismiss. */
+interface SavedPendingBranch {
   anchor: ResearchHighlightAnchor;
   text: string;
   updatedAt: number;
 }
 
-/** The conversation composer's draft. Unlike a targeted ask, this belongs
+/** The root follow-up composer's draft. Unlike a pending branch, this belongs
  * to the tree rather than a passage. */
 interface SavedResearchFollowupDraft {
   text: string;
@@ -50,18 +50,20 @@ export interface SavedResearchNavigation {
    * with the scroll offset — an offset captured against the expanded list
    * would land in the wrong place in the collapsed one. */
   expandedByNode?: Record<string, boolean>;
-  /** In-progress asks, keyed by the node they were started on. */
-  askByNode?: Record<string, SavedResearchAsk>;
-  /** In-progress text in the conversation composer. */
+  /** Pending branches, keyed by the parent node they were started on. The
+   * stored field keeps the earlier name, "ask". */
+  askByNode?: Record<string, SavedPendingBranch>;
+  /** In-progress text in the root follow-up composer. */
   followupDraft?: SavedResearchFollowupDraft;
   /** A highlight to scroll into view on the next page visit (set when a
-   * Highlights feed unit is opened). Cleared once the document lands on it. */
+   * Highlights feed unit is opened). Cleared once the thread page lands on it. */
   focusHighlight?: { nodeId: string; highlightId: string };
   /** Queued follow-ups per chain, keyed by the chain's head node. */
   queuedFollowups?: Record<string, QueuedResearchFollowup[]>;
   /** Each level's messages column scroll offset, keyed by the head node of
    * the conversation or branch it shows. (`scrollByNode` holds the answer
-   * columns', keyed by the message.) */
+   * columns', keyed by the message.) The stored field keeps the column's
+   * earlier name, "turns". */
   turnsScrollByHead?: Record<string, SavedResearchScrollPosition>;
 }
 
@@ -79,13 +81,13 @@ export function isResearchNodeSelectionChange(
 
 export function isResearchTreeSelectionChange(
   selectedTreeId: string | null,
-  documentVisible: boolean,
+  threadVisible: boolean,
   nextTreeId: string,
 ): boolean {
-  // Re-selecting the visible document would clear its detail while the same
+  // Re-selecting the visible thread would clear its detail while the same
   // tree is fetched again, producing a needless loading blink. The same tree
   // remains selectable when one of its terminal panes is currently visible.
-  return !documentVisible || selectedTreeId !== nextTreeId;
+  return !threadVisible || selectedTreeId !== nextTreeId;
 }
 
 function isSavedAnchor(value: unknown): value is ResearchHighlightAnchor {
@@ -148,12 +150,12 @@ function load(): Record<string, SavedResearchNavigation> {
             if (!value || typeof value !== "object") {
               return [];
             }
-            const ask = value as Partial<SavedResearchAsk>;
-            return isSavedAnchor(ask.anchor) &&
-              typeof ask.text === "string" &&
-              typeof ask.updatedAt === "number" &&
-              Number.isFinite(ask.updatedAt)
-              ? [[nodeId, { anchor: ask.anchor, text: ask.text, updatedAt: ask.updatedAt }]]
+            const branch = value as Partial<SavedPendingBranch>;
+            return isSavedAnchor(branch.anchor) &&
+              typeof branch.text === "string" &&
+              typeof branch.updatedAt === "number" &&
+              Number.isFinite(branch.updatedAt)
+              ? [[nodeId, { anchor: branch.anchor, text: branch.text, updatedAt: branch.updatedAt }]]
               : [];
           }),
         );
@@ -257,7 +259,7 @@ export function restoreResearchScrollPosition(
   return position.top;
 }
 
-/** Updates the conversation composer's draft and reports whether the stored
+/** Updates the root follow-up composer's draft and reports whether the stored
  * value changed. Empty text removes the saved draft so it cannot be restored
  * after sending or clearing the composer. */
 export function recordResearchFollowupDraft(

@@ -32,25 +32,25 @@ test("each kind's range: the feed's maximum follows the strip, the pair columns'
   assert.deepEqual(researchColumnWidthBounds("feed", 1400), { min: 240, max: 560 });
   assert.deepEqual(researchColumnWidthBounds("feed", 800), { min: 240, max: 400 });
   assert.deepEqual(researchColumnWidthBounds("feed", 300), { min: 240, max: 240 });
-  assert.deepEqual(researchColumnWidthBounds("turns", 300), { min: 220, max: 560 });
+  assert.deepEqual(researchColumnWidthBounds("messages", 300), { min: 220, max: 560 });
   assert.deepEqual(researchColumnWidthBounds("answer", 3000), { min: 340, max: 960 });
 });
 
 test("set widths replace the automatic ones, clamped to their ranges", () => {
   // Automatic at 1198px: feed 252, messages 220, answer 527.
-  assert.deepEqual(shownResearchColumnWidths({ feed: null, turns: null, answer: null }, 1198), {
+  assert.deepEqual(shownResearchColumnWidths({ feed: null, messages: null, answer: null }, 1198), {
     feed: 252,
-    turns: 220,
+    messages: 220,
     answer: 527,
   });
-  assert.deepEqual(shownResearchColumnWidths({ feed: 300, turns: 400.4, answer: 700 }, 1198), {
+  assert.deepEqual(shownResearchColumnWidths({ feed: 300, messages: 400.4, answer: 700 }, 1198), {
     feed: 300,
-    turns: 400,
+    messages: 400,
     answer: 700,
   });
-  assert.deepEqual(shownResearchColumnWidths({ feed: 900, turns: 100, answer: 5000 }, 1198), {
+  assert.deepEqual(shownResearchColumnWidths({ feed: 900, messages: 100, answer: 5000 }, 1198), {
     feed: 560,
-    turns: 220,
+    messages: 220,
     answer: 960,
   });
 });
@@ -66,25 +66,25 @@ test("widths load from and save to their own storage keys", () => {
   const previous = global.localStorage;
   global.localStorage = storage;
   try {
-    assert.deepEqual(loadResearchColumnWidths(), { feed: null, turns: null, answer: null });
-    saveResearchColumnWidth("turns", 301.6);
+    assert.deepEqual(loadResearchColumnWidths(), { feed: null, messages: null, answer: null });
+    saveResearchColumnWidth("messages", 301.6);
     saveResearchColumnWidth("answer", 720);
     store.set(RESEARCH_COLUMN_WIDTH_KEYS.feed, "garbage");
     assert.equal(store.get("session.research.turnsWidth"), "302");
     assert.equal(store.get("session.research.answerWidth"), "720");
-    assert.deepEqual(loadResearchColumnWidths(), { feed: null, turns: 302, answer: 720 });
+    assert.deepEqual(loadResearchColumnWidths(), { feed: null, messages: 302, answer: 720 });
     saveResearchColumnWidth("answer", null);
     assert.equal(store.has("session.research.answerWidth"), false);
   } finally {
     global.localStorage = previous;
   }
   // Without storage, every width is automatic and saving does nothing.
-  assert.deepEqual(loadResearchColumnWidths(), { feed: null, turns: null, answer: null });
-  assert.doesNotThrow(() => saveResearchColumnWidth("turns", 300));
+  assert.deepEqual(loadResearchColumnWidths(), { feed: null, messages: null, answer: null });
+  assert.doesNotThrow(() => saveResearchColumnWidth("messages", 300));
 });
 
 test("columns share a width by kind: messages-side columns, and answer, post and editor columns", () => {
-  assert.equal(researchColumnWidthKind("turns"), "turns");
+  assert.equal(researchColumnWidthKind("messages"), "messages");
   assert.equal(researchColumnWidthKind("answer"), "answer");
   assert.equal(researchColumnWidthKind("post"), "answer");
   assert.equal(researchColumnWidthKind("editor"), "answer");
@@ -130,11 +130,11 @@ test("the strip keeps trailing space only while its view reaches past the last c
 
 const sizing: ResearchColumnSizing = {
   row: null,
-  widths: { feed: 260, turns: 300, answer: 640 },
-  automatic: { feed: 252, turns: 220, answer: 527 },
+  widths: { feed: 260, messages: 300, answer: 640 },
+  automatic: { feed: 252, messages: 220, answer: 527 },
   bounds: {
     feed: { min: 240, max: 560 },
-    turns: { min: 220, max: 560 },
+    messages: { min: 220, max: 560 },
     answer: { min: 340, max: 960 },
   },
   setWidth: () => {},
@@ -146,26 +146,26 @@ const resizer = (props: Parameters<typeof ResearchColumnResizer>[0]) =>
   );
 
 test("a pair column's handle is a focusable vertical separator with its kind's range and width", () => {
-  const turns = resizer({ kind: "turns", label: "Resize messages column", belowHeader: true });
-  assert.match(turns, /^<div class="research-column-resizer is-below-header" role="separator"/);
-  assert.match(turns, /aria-label="Resize messages column"/);
-  assert.match(turns, /aria-orientation="vertical"/);
-  assert.match(turns, /aria-valuemin="220" aria-valuemax="560" aria-valuenow="300"/);
-  assert.match(turns, /tabindex="0"/);
+  const messages = resizer({ kind: "messages", label: "Resize messages column", belowHeader: true });
+  assert.match(messages, /^<div class="research-column-resizer is-below-header" role="separator"/);
+  assert.match(messages, /aria-label="Resize messages column"/);
+  assert.match(messages, /aria-orientation="vertical"/);
+  assert.match(messages, /aria-valuemin="220" aria-valuemax="560" aria-valuenow="300"/);
+  assert.match(messages, /tabindex="0"/);
   const answer = resizer({ kind: "answer", label: "Resize answer column" });
   assert.match(answer, /^<div class="research-column-resizer" role="separator"/);
   assert.match(answer, /aria-valuemin="340" aria-valuemax="960" aria-valuenow="640"/);
 });
 
 test("a handle outside the column area renders nothing", () => {
-  assert.equal(renderToStaticMarkup(createElement(ResearchColumnResizer, { kind: "turns", label: "Resize" })), "");
+  assert.equal(renderToStaticMarkup(createElement(ResearchColumnResizer, { kind: "messages", label: "Resize" })), "");
 });
 
 test("the feed column carries its handle, and the strip sets the three width properties", () => {
   const html = renderToStaticMarkup(
-    createElement(ResearchColumns, { hasDocument: false, feed: createElement("p", null, "Feed"), children: null }),
+    createElement(ResearchColumns, { hasThread: false, feed: createElement("p", null, "Feed"), children: null }),
   );
-  assert.match(html, /--research-feed-column-width:\d+px;--research-turns-width:\d+px;--research-answer-width:\d+px/);
+  assert.match(html, /--research-feed-column-width:\d+px;--research-messages-width:\d+px;--research-answer-width:\d+px/);
   assert.match(
     html,
     /<div class="research-column-resizer" role="separator" aria-label="Resize feed" aria-orientation="vertical" aria-valuemin="240" aria-valuemax="\d+" aria-valuenow="\d+"/,

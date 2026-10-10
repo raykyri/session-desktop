@@ -1,4 +1,4 @@
-import { isActiveResearchStatus } from "./researchThreads";
+import { isActiveResearchStatus } from "./researchChains";
 import type { ResearchNode } from "../types";
 import { nodeRun, nodeStatus } from "./researchNodeTypes";
 

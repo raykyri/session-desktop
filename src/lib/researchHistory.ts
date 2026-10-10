@@ -1,4 +1,4 @@
-// Browser-style visit history for the research document's back/forward
+// Browser-style visit history for the research thread page's back/forward
 // controls. A pure, immutable reducer: the component holds one `ResearchHistory`
 // value and swaps it for the result of these transitions, so the branch/cursor
 // semantics live here (and are unit-tested) rather than inline in the view.
@@ -83,100 +83,100 @@ export function researchHistoryForward(history: ResearchHistory): ResearchHistor
   return { history: { entries: history.entries, index }, nodeId: history.entries[index] };
 }
 
-/** Cross-page research visits. Recent Activity is a peer of a document, so
- * opening a query from the feed must push here — the document's own node
+/** Cross-page research visits. The feed is a peer page of a thread, so
+ * opening a query from the feed must push here — the thread page's own node
  * stack remounts empty and holds no record of the feed. */
-export type ResearchWorkspaceVisit =
-  | { kind: "journal" }
-  | { kind: "document"; treeId: string };
+export type ResearchPageVisit =
+  | { kind: "feed" }
+  | { kind: "thread"; treeId: string };
 
-interface ResearchWorkspaceHistory {
-  entries: ResearchWorkspaceVisit[];
+interface ResearchPageHistory {
+  entries: ResearchPageVisit[];
   index: number;
 }
 
-interface ResearchWorkspaceHistoryStep {
-  history: ResearchWorkspaceHistory;
-  visit: ResearchWorkspaceVisit;
+interface ResearchPageHistoryStep {
+  history: ResearchPageHistory;
+  visit: ResearchPageVisit;
 }
 
-const EMPTY_RESEARCH_WORKSPACE_HISTORY: ResearchWorkspaceHistory = {
+const EMPTY_RESEARCH_PAGE_HISTORY: ResearchPageHistory = {
   entries: [],
   index: -1,
 };
 
-export function initResearchWorkspaceHistory(
-  visit: ResearchWorkspaceVisit | null,
-): ResearchWorkspaceHistory {
-  return visit ? { entries: [visit], index: 0 } : EMPTY_RESEARCH_WORKSPACE_HISTORY;
+export function initResearchPageHistory(
+  visit: ResearchPageVisit | null,
+): ResearchPageHistory {
+  return visit ? { entries: [visit], index: 0 } : EMPTY_RESEARCH_PAGE_HISTORY;
 }
 
-function sameResearchWorkspaceVisit(
-  left: ResearchWorkspaceVisit,
-  right: ResearchWorkspaceVisit,
+function sameResearchPageVisit(
+  left: ResearchPageVisit,
+  right: ResearchPageVisit,
 ): boolean {
   if (left.kind !== right.kind) return false;
-  if (left.kind === "journal" && right.kind === "journal") return true;
-  if (left.kind === "document" && right.kind === "document") return left.treeId === right.treeId;
+  if (left.kind === "feed" && right.kind === "feed") return true;
+  if (left.kind === "thread" && right.kind === "thread") return left.treeId === right.treeId;
   return false;
 }
 
-export function pushResearchWorkspaceHistory(
-  history: ResearchWorkspaceHistory,
-  visit: ResearchWorkspaceVisit,
-): ResearchWorkspaceHistory {
+export function pushResearchPageHistory(
+  history: ResearchPageHistory,
+  visit: ResearchPageVisit,
+): ResearchPageHistory {
   const current = history.index >= 0 ? history.entries[history.index] : undefined;
-  if (current && sameResearchWorkspaceVisit(current, visit)) {
+  if (current && sameResearchPageVisit(current, visit)) {
     return history;
   }
   const entries = [...history.entries.slice(0, history.index + 1), visit];
   return { entries, index: entries.length - 1 };
 }
 
-export function canGoWorkspaceBack(history: ResearchWorkspaceHistory): boolean {
+export function canGoPageBack(history: ResearchPageHistory): boolean {
   return history.index > 0;
 }
 
-export function canGoWorkspaceForward(history: ResearchWorkspaceHistory): boolean {
+export function canGoPageForward(history: ResearchPageHistory): boolean {
   return history.index >= 0 && history.index < history.entries.length - 1;
 }
 
-export function researchWorkspaceHistoryBack(
-  history: ResearchWorkspaceHistory,
-): ResearchWorkspaceHistoryStep | null {
-  if (!canGoWorkspaceBack(history)) {
+export function researchPageHistoryBack(
+  history: ResearchPageHistory,
+): ResearchPageHistoryStep | null {
+  if (!canGoPageBack(history)) {
     return null;
   }
   const index = history.index - 1;
   return { history: { entries: history.entries, index }, visit: history.entries[index] };
 }
 
-export function researchWorkspaceHistoryForward(
-  history: ResearchWorkspaceHistory,
-): ResearchWorkspaceHistoryStep | null {
-  if (!canGoWorkspaceForward(history)) {
+export function researchPageHistoryForward(
+  history: ResearchPageHistory,
+): ResearchPageHistoryStep | null {
+  if (!canGoPageForward(history)) {
     return null;
   }
   const index = history.index + 1;
   return { history: { entries: history.entries, index }, visit: history.entries[index] };
 }
 
-/** Removes document visits that match the filter predicate while preserving the current visit.
+/** Removes thread visits that match the filter predicate while preserving the current visit.
  * Collapses adjacent duplicate entries and updates the active index. */
-export function pruneResearchWorkspaceHistory(
-  history: ResearchWorkspaceHistory,
+export function pruneResearchPageHistory(
+  history: ResearchPageHistory,
   keepTree: (treeId: string) => boolean,
-): ResearchWorkspaceHistory {
-  const entries: ResearchWorkspaceVisit[] = [];
+): ResearchPageHistory {
+  const entries: ResearchPageVisit[] = [];
   let index = -1;
   for (let visit = 0; visit < history.entries.length; visit += 1) {
     const entry = history.entries[visit];
     const current = visit === history.index;
-    if (entry.kind === "document" && !current && !keepTree(entry.treeId)) {
+    if (entry.kind === "thread" && !current && !keepTree(entry.treeId)) {
       continue;
     }
     const previous = entries[entries.length - 1];
-    if (previous && sameResearchWorkspaceVisit(previous, entry)) {
+    if (previous && sameResearchPageVisit(previous, entry)) {
       if (current) {
         index = entries.length - 1;
       }
@@ -224,7 +224,7 @@ export function pruneResearchHistory(
 }
 
 /** History after nodes were removed: the removed visits go, and the visit
- * the document moved to (`selection`) is current, so back and forward keep
+ * the thread page moved to (`selection`) is current, so back and forward keep
  * matching what is open. */
 export function researchHistoryAfterRemoval(
   history: ResearchHistory,

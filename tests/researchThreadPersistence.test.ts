@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createResearchComposerDraftRestoration,
-  createResearchDocumentPersistence,
-} from "../src/lib/researchDocumentPersistence";
+  createResearchThreadPersistence,
+} from "../src/lib/researchThreadPersistence";
 import type { SavedResearchNavigation } from "../src/lib/researchNavigation";
 import type { ResearchHighlightAnchor } from "../src/types";
 
@@ -22,12 +22,12 @@ test("scroll and both composers mutate immediately and share one durable debounc
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const store: Record<string, SavedResearchNavigation> = {};
   let writes = 0;
-  const owner = createResearchDocumentPersistence(store, () => {
+  const owner = createResearchThreadPersistence(store, () => {
     writes++;
   });
   owner.recordScroll("a", "node-a", 150);
   owner.recordDraft("a", "ordinary");
-  owner.recordAsk("b", "node-b", anchor, "targeted");
+  owner.recordPendingBranch("b", "node-b", anchor, "targeted");
   assert.equal(store.a.scrollByNode["node-a"].top, 150);
   assert.equal(store.a.followupDraft?.text, "ordinary");
   assert.equal(store.b.askByNode?.["node-b"].text, "targeted");
@@ -40,7 +40,7 @@ test("final flush saves pending edits once and cancels the delayed callback", (t
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const store: Record<string, SavedResearchNavigation> = {};
   const saved: string[] = [];
-  const owner = createResearchDocumentPersistence(store, () =>
+  const owner = createResearchThreadPersistence(store, () =>
     saved.push(JSON.stringify(store)),
   );
   owner.recordDraft("tree", "last keystroke");
@@ -82,17 +82,17 @@ test("a tree without a saved draft releases the guard once the composer is empty
   assert.equal(restore.canPersist("tree", "typed after restoring"), true);
 });
 
-test("clearing a draft or explicitly dismissing an ask cannot resurrect it after flush", (t) => {
+test("clearing a draft or explicitly dismissing a pending branch cannot resurrect it after flush", (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const store: Record<string, SavedResearchNavigation> = {};
   let saved = "";
-  const owner = createResearchDocumentPersistence(store, () => {
+  const owner = createResearchThreadPersistence(store, () => {
     saved = JSON.stringify(store);
   });
   owner.recordDraft("tree", "sent");
-  owner.recordAsk("tree", "node", anchor, "ask");
+  owner.recordPendingBranch("tree", "node", anchor, "ask");
   owner.recordDraft("tree", "");
-  owner.clearAsk("tree", "node");
+  owner.clearPendingBranch("tree", "node");
   assert.equal(JSON.parse(saved).tree.followupDraft, undefined);
   assert.deepEqual(JSON.parse(saved).tree.askByNode, {});
   t.mock.timers.tick(1_000);
@@ -102,7 +102,7 @@ test("clearing a draft or explicitly dismissing an ask cannot resurrect it after
 test("queued follow-ups save at once and clear when emptied", () => {
   const store: Record<string, SavedResearchNavigation> = {};
   let writes = 0;
-  const owner = createResearchDocumentPersistence(store, () => {
+  const owner = createResearchThreadPersistence(store, () => {
     writes++;
   });
   const queued = [{ id: "q1", prompt: "Next question", createdAt: 5 }];

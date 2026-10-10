@@ -1,13 +1,13 @@
 import type { GroupInfo, ResearchTreeSummary } from "../types";
 
-// Research is scoped to exactly one folder (Research workspace) at a
-// time. A null scope is only used when no research folders exist yet.
-export type ResearchFolderScope = string | null;
+// Research is scoped to exactly one research workspace (a GroupInfo) at a
+// time. A null scope is only used when no research workspaces exist yet.
+export type ResearchWorkspaceScope = string | null;
 
 export function resolveResearchScope(
   stored: string | null,
   researchGroups: GroupInfo[],
-): ResearchFolderScope {
+): ResearchWorkspaceScope {
   return researchGroups.some((group) => group.id === stored)
     ? stored
     : (researchGroups[0]?.id ?? null);
@@ -15,21 +15,21 @@ export function resolveResearchScope(
 
 export function treesForResearchScope(
   trees: ResearchTreeSummary[],
-  scope: ResearchFolderScope,
+  scope: ResearchWorkspaceScope,
 ): ResearchTreeSummary[] {
   return scope ? trees.filter((tree) => tree.workspaceId === scope) : [];
 }
 
 export function workspaceIsInResearchScope(
   workspaceId: string,
-  scope: ResearchFolderScope,
+  scope: ResearchWorkspaceScope,
 ): boolean {
   return workspaceId === scope;
 }
 
 export function treeForResearchScope(
   trees: ResearchTreeSummary[],
-  scope: ResearchFolderScope,
+  scope: ResearchWorkspaceScope,
   preferredTreeId: string | null,
 ): ResearchTreeSummary | null {
   const scoped = treesForResearchScope(trees, scope);

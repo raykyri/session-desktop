@@ -4,7 +4,7 @@ import type {
   ResearchFolderState,
   ResearchTreeSummary,
 } from "../types";
-import { isActiveResearchStatus } from "./researchThreads";
+import { isActiveResearchStatus } from "./researchChains";
 
 // Places a research tree can be filed in. Unfiled and Archive are derived
 // (no membership, and `archivedAt`); Drafts is a membership value with no
@@ -88,7 +88,7 @@ export function researchFolderNameError(
   return null;
 }
 
-/** The strip shows a user folder as the first letter or digit of its name. */
+/** The sidebar rail shows a user folder as the first letter or digit of its name. */
 export function researchFolderMonogram(name: string): string {
   const match = name.trim().match(/[\p{L}\p{N}]/u);
   return match ? match[0].toUpperCase() : "?";
@@ -221,15 +221,15 @@ export interface ResearchFeedChild {
   label: string;
   /** A non-inline child: opens as a branch pair with its ancestors. */
   branch: boolean;
-  /** Indent level: 1 under the question; 2 for a branch under another
+  /** Indent: 1 under the question; 2 for a branch under another
    * child (a branch of a branch, or a branch from a starred follow-up). */
-  level: number;
+  indent: 1 | 2;
   running: boolean;
   query: RecentResearchQuery;
 }
 
 /** Starred follow-ups and branches listed under a root question, in tree
- * order. Only follow-ups of the root conversation and branch heads can be
+ * order. Only follow-ups of the root level and branch heads can be
  * starred, so a branch head's parent is the message it was asked from. */
 export function researchFeedChildren(root: RecentResearchQuery): ResearchFeedChild[] {
   const starred = (root.promoted ?? []).filter((child) => child.nodeId !== root.nodeId);
@@ -246,7 +246,7 @@ export function researchFeedChildren(root: RecentResearchQuery): ResearchFeedChi
       treeId: child.treeId,
       label: (child.inline ? child.prompt : (child.title?.trim() || child.prompt)).trim(),
       branch: !child.inline,
-      level: underChild ? 2 : 1,
+      indent: underChild ? 2 : 1,
       running: isActiveResearchStatus(child.status),
       query: child,
     };

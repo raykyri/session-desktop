@@ -9,7 +9,7 @@ import { documentSource, followUpLaunch, nodeRun, nodeStatus } from "./researchN
 import type { ResearchNode, ResearchNodeStatus } from "../types";
 
 /** The statuses of a run that has been admitted but not settled. One list,
- * shared by the branch/thread math and the document view, so a future status
+ * shared by the branch and chain math and the thread page, so a future status
  * cannot fall out of sync between them. Mirrors the backend's
  * ResearchNodeStatus::is_active (src-tauri/src/research.rs). */
 const ACTIVE_RESEARCH_STATUSES: readonly ResearchNodeStatus[] = [
@@ -32,9 +32,9 @@ export function canStopResearchNode(node: ResearchNode): boolean {
   );
 }
 
-/** The header acts on the visible inline thread, even when an earlier answer
+/** The header acts on the visible inline chain, even when an earlier answer
  * is selected. Callers pass only that chain, never the tree's other branches. */
-export function researchThreadStopTarget(chain: readonly ResearchNode[]): ResearchNode | null {
+export function researchChainStopTarget(chain: readonly ResearchNode[]): ResearchNode | null {
   return [...chain].reverse().find(canStopResearchNode) ?? null;
 }
 
@@ -149,30 +149,30 @@ export function inlineChainFor(nodes: readonly ResearchNode[], nodeId: string): 
  * inputs, relaunched through the ordinary machinery): it failed or was
  * cancelled, and no pane from the previous run lingers — an unfinished cancel
  * keeps its own Retry-cancel controls until the pane is reclaimed.
- * Archived-tree gating stays the caller's job, matching canContinueThread. */
+ * Archived-tree gating stays the caller's job, matching canContinueChain. */
 export function canRetryResearchNode(node: ResearchNode): boolean {
   return (
     (nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled") && !nodeRun(node)?.holdsProcess
   );
 }
 
-/** Whether the thread composer can continue from this tail node: complete,
- * inline slot free, and — for run nodes, whose follow-ups fork the native
- * session — the session checkpoint recorded. Documents and conversations
+/** Whether a level's ask box can continue the chain from this tail node: complete,
+ * inline slot free, and — for exchanges, whose follow-ups fork the native
+ * session — the session checkpoint recorded. Posts and documents
  * launch fresh runs that carry their content as context, so they need no
  * checkpoint. Archived-tree gating stays the caller's job, matching how
  * branch follow-ups are gated today. */
-export function canContinueThread(nodes: ResearchNode[], tail: ResearchNode): boolean {
+export function canContinueChain(nodes: ResearchNode[], tail: ResearchNode): boolean {
   return canFollowUpFrom(tail) && !inlineChildOf(nodes, tail.id);
 }
 
-/** The ask box placeholder of a thread level whose chain starts at `head`.
+/** The ask box placeholder of a level whose chain starts at `head`.
  * A document with no follow-up yet asks about the document (or, for a
  * transcript, the conversation), whether or not it carries a message: an
  * imported report's question is shown as its message row, but a follow-up
  * starts a fresh run with the report as context rather than continuing the
  * run that wrote it. */
-export function threadComposerPlaceholder(
+export function chainComposerPlaceholder(
   head: ResearchNode,
   chainLength: number,
   waiting: boolean,

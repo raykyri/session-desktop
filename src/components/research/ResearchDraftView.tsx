@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ResearchDraft } from "../../types";
 import { createResearchDraftAutosave } from "../../lib/researchDraftAutosave";
 import { columnAttributes } from "../../lib/researchColumns";
-import { ResearchPairHeader } from "./ResearchDocumentChrome";
+import { ResearchPairHeader } from "./ResearchColumnChrome";
 import ResearchConversationComposer, { type ResearchComposerHandle } from "./ResearchConversationComposer";
 
 const SAVE_DELAY_MS = 500;
@@ -62,7 +62,7 @@ export default function ResearchDraftView({
   const title = draft.prompt.trim() || "Draft";
   return (
     <section
-      className="research-pair-turns research-draft-view is-current"
+      className="research-pair-messages research-draft-view is-current"
       {...columnAttributes({ id: "T0", role: "draft", draftId: draft.id })}
       aria-label={`Draft: ${title}`}
     >

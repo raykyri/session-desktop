@@ -18,24 +18,24 @@ import {
   researchFolderMonogram,
 } from "../../lib/researchFolders";
 import {
-  researchJournalViewKey,
-  type ResearchJournalView,
+  researchFeedPageKey,
+  type ResearchFeedPage,
 } from "../../lib/sidebarMode";
 import { ResearchPlaceIcon } from "./ResearchFeedChrome";
 import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
 
 interface NavEntry {
-  view: ResearchJournalView;
+  view: ResearchFeedPage;
   label: string;
   icon: ReactNode;
-  /** Monogram shown in the strip instead of the icon (user folders). */
+  /** Monogram shown in the rail instead of the icon (user folders). */
   monogram?: string;
   /** Drop target place: Home is Unfiled. */
   drop?: string;
   folderId?: string;
 }
 
-function placeView(place: string): ResearchJournalView {
+function placeView(place: string): ResearchFeedPage {
   if (place === RESEARCH_DRAFTS_FOLDER_ID) return { kind: "drafts" };
   if (place === RESEARCH_ARCHIVE_FOLDER_ID) return { kind: "archive" };
   return { kind: "folder", folderId: place };
@@ -77,9 +77,9 @@ function folderEntries(folders: ResearchFolder[]): NavEntry[] {
 }
 
 interface ResearchSidebarNavProps {
-  current: ResearchJournalView | null;
+  current: ResearchFeedPage | null;
   folders: ResearchFolder[];
-  onNavigate: (view: ResearchJournalView) => void;
+  onNavigate: (view: ResearchFeedPage) => void;
   onNewFolder: () => void;
   /** `trigger` is the row's … button, where focus returns after the dialog. */
   onRenameFolder: (folderId: string, trigger: HTMLElement) => void;
@@ -107,10 +107,10 @@ export function ResearchSidebarNav({
   onRetryFoldersLoad,
   homeShortcutHint = null,
 }: ResearchSidebarNavProps) {
-  const currentKey = current ? researchJournalViewKey(current) : null;
+  const currentKey = current ? researchFeedPageKey(current) : null;
   const [menu, setMenu] = useState<{ folderId: string; anchor: HTMLElement } | null>(null);
   const renderRow = (entry: NavEntry) => {
-    const key = researchJournalViewKey(entry.view);
+    const key = researchFeedPageKey(entry.view);
     const selected = key === currentKey;
     return (
       <div
@@ -212,33 +212,33 @@ export function ResearchSidebarNav({
   );
 }
 
-interface ResearchSidebarStripProps {
-  current: ResearchJournalView | null;
+interface ResearchSidebarRailProps {
+  current: ResearchFeedPage | null;
   folders: ResearchFolder[];
   /** The window is too narrow for the full sidebar, so it can't expand. */
   forced: boolean;
-  /** macOS keeps its window buttons over the strip's top cell, so the expand
+  /** macOS keeps its window buttons over the rail's top cell, so the expand
    * button sits beside them, where the full sidebar's collapse button is. */
   reserveTitlebar: boolean;
   expandShortcut: string;
   onExpand: () => void;
-  onNavigate: (view: ResearchJournalView) => void;
+  onNavigate: (view: ResearchFeedPage) => void;
   onNewFolder: () => void;
-  /** Settings and other controls at the bottom of the strip. */
+  /** Settings and other controls at the bottom of the rail. */
   footer: ReactNode;
 }
 
-/** A tooltip for strip icons, fixed beside the icon so the scrolling folder
+/** A tooltip for rail icons, fixed beside the icon so the scrolling folder
  * group can't clip it. Shown on hover, focus, and while a drag hovers it. */
 function placeStripTip(icon: HTMLElement) {
-  const tip = icon.querySelector<HTMLElement>(".research-strip-tip");
+  const tip = icon.querySelector<HTMLElement>(".research-rail-tip");
   if (!tip) return;
   const rect = icon.getBoundingClientRect();
   tip.style.left = `${rect.right + 8}px`;
   tip.style.top = `${rect.top + rect.height / 2}px`;
 }
 
-export function ResearchStripButton({
+export function ResearchRailButton({
   label,
   description,
   selected = false,
@@ -269,7 +269,7 @@ export function ResearchStripButton({
     <button
       ref={buttonRef}
       type="button"
-      className={`research-strip-icon${selected ? " is-selected" : ""}${className ? ` ${className}` : ""}`}
+      className={`research-rail-icon${selected ? " is-selected" : ""}${className ? ` ${className}` : ""}`}
       aria-label={label}
       aria-description={description}
       aria-current={selected ? "page" : undefined}
@@ -284,7 +284,7 @@ export function ResearchStripButton({
     >
       {children}
       {expanded ? null : (
-        <span className="research-strip-tip" aria-hidden="true">
+        <span className="research-rail-tip" aria-hidden="true">
           {description ?? label}
         </span>
       )}
@@ -295,7 +295,7 @@ export function ResearchStripButton({
 /** The collapsed sidebar: a 52px column of icons. Home, Bookmarks, and
  * Highlights, then one icon per folder (user folders as their first letter,
  * named in the tooltip), then New folder. Folder icons and Home accept drops. */
-export function ResearchSidebarStrip({
+export function ResearchSidebarRail({
   current,
   folders,
   forced,
@@ -305,12 +305,12 @@ export function ResearchSidebarStrip({
   onNavigate,
   onNewFolder,
   footer,
-}: ResearchSidebarStripProps) {
-  const currentKey = current ? researchJournalViewKey(current) : null;
+}: ResearchSidebarRailProps) {
+  const currentKey = current ? researchFeedPageKey(current) : null;
   const entryButton = (entry: NavEntry) => {
-    const key = researchJournalViewKey(entry.view);
+    const key = researchFeedPageKey(entry.view);
     return (
-      <ResearchStripButton
+      <ResearchRailButton
         key={key}
         label={entry.label}
         selected={key === currentKey}
@@ -318,17 +318,17 @@ export function ResearchSidebarStrip({
         onClick={() => onNavigate(entry.view)}
       >
         {entry.monogram ? (
-          <span className="research-strip-monogram" aria-hidden="true">
+          <span className="research-rail-monogram" aria-hidden="true">
             {entry.monogram}
           </span>
         ) : (
           entry.icon
         )}
-      </ResearchStripButton>
+      </ResearchRailButton>
     );
   };
   const expand = (
-    <ResearchStripButton
+    <ResearchRailButton
       label="Expand sidebar"
       description={
         forced ? "The window is too narrow for the full sidebar" : `Expand sidebar (${expandShortcut})`
@@ -338,22 +338,22 @@ export function ResearchSidebarStrip({
       onClick={onExpand}
     >
       <PanelLeft size={15} aria-hidden="true" />
-    </ResearchStripButton>
+    </ResearchRailButton>
   );
   return (
-    <aside className="research-strip" aria-label="Sidebar">
-      <div className="research-strip-top" data-tauri-drag-region>
+    <aside className="research-rail" aria-label="Sidebar">
+      <div className="research-rail-top" data-tauri-drag-region>
         {expand}
       </div>
       {primaryEntries().map(entryButton)}
-      <div className="research-strip-divider" />
-      <div className="research-strip-folders">
+      <div className="research-rail-divider" />
+      <div className="research-rail-folders">
         {folderEntries(folders).map(entryButton)}
-        <ResearchStripButton label="New folder" onClick={onNewFolder}>
+        <ResearchRailButton label="New folder" onClick={onNewFolder}>
           <Plus size={16} aria-hidden="true" />
-        </ResearchStripButton>
+        </ResearchRailButton>
       </div>
-      <span className="research-strip-spacer" />
+      <span className="research-rail-spacer" />
       {footer}
     </aside>
   );

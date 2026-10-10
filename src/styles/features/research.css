@@ -170,10 +170,10 @@
   color: var(--text-heading);
 }
 
-/* Folder scope switcher: pinned beneath the research list, scoping the sidebar
-   to one Research workspace. Folder management actions live at the bottom of
-   its menu (a ResearchMenu) and always apply to the currently scoped folder. */
-.research-folder-switcher {
+/* Workspace switcher: pinned beneath the research list, scoping the sidebar
+   to one research workspace. Workspace management actions live at the bottom
+   of its menu (a ResearchMenu) and always apply to the scoped workspace. */
+.research-workspace-switcher {
   position: relative;
   flex: none;
   margin: 0;
@@ -367,7 +367,7 @@
   color: var(--text-muted);
   font-size: var(--fs-base);
   text-align: center;
-  background: var(--research-workspace-bg);
+  background: var(--research-thread-page-bg);
 }
 
 .research-placeholder h1 {
@@ -560,9 +560,9 @@
   display: contents;
 }
 
-.research-pair-turns,
+.research-pair-messages,
 .research-pair-answer,
-.research-pair-note,
+.research-pair-post,
 .research-pair-thread,
 .research-placeholder-column {
   position: relative;
@@ -574,39 +574,39 @@
   border-right: 1px solid var(--surface-divider);
 }
 
-.research-pair-turns {
-  width: var(--research-turns-width);
+.research-pair-messages {
+  width: var(--research-messages-width);
   border-left: 1px solid var(--surface-border-strong);
   background: var(--research-feed-bg);
 }
 
 .research-pair-answer {
   width: var(--research-answer-width);
-  background: var(--research-workspace-bg);
+  background: var(--research-thread-page-bg);
 }
 
-/* A post (a note root) is two columns: the post at answer width, then its
-   thread (notes.css) at messages width, each with its own header. */
-.research-pair-note {
+/* A post (a post root) is two columns: the post at answer width, then its
+   thread (posts.css) at messages width, each with its own header. */
+.research-pair-post {
   width: var(--research-answer-width);
   border-left: 1px solid var(--surface-border-strong);
-  background: var(--research-workspace-bg);
+  background: var(--research-thread-page-bg);
 }
 
 .research-pair-thread {
-  width: var(--research-turns-width);
+  width: var(--research-messages-width);
   background: var(--research-feed-bg);
 }
 
 /* The placeholder: 100px narrower than a messages + answer pair. */
 .research-placeholder-column {
-  width: calc(var(--research-turns-width) + var(--research-answer-width) - 100px);
+  width: calc(var(--research-messages-width) + var(--research-answer-width) - 100px);
   border-left: 1px solid var(--surface-border-strong);
-  background: var(--research-workspace-bg);
+  background: var(--research-thread-page-bg);
 }
 
 /* One divider where a pair starts: the column before it drops its own. */
-:is(.research-pair-answer, .research-pair-thread):has(+ :is(.research-pair-turns, .research-pair-note)) {
+:is(.research-pair-answer, .research-pair-thread):has(+ :is(.research-pair-messages, .research-pair-post)) {
   border-right-color: transparent;
 }
 
@@ -634,9 +634,9 @@
 
 /* A pair's header spans its messages and answer columns: the messages
    column's header is widened across the answer column, over its empty one. */
-.research-pair-turns:not(.is-pending, .research-draft-view) > .research-column-header {
+.research-pair-messages:not(.is-pending, .research-draft-view) > .research-column-header {
   z-index: 1;
-  width: calc(var(--research-turns-width) + var(--research-answer-width) - 1px);
+  width: calc(var(--research-messages-width) + var(--research-answer-width) - 1px);
   background: var(--research-feed-bg);
 }
 
@@ -665,7 +665,7 @@
 
 /* Use the heading text color for the focused pair's header and the secondary
    text color for other headers. */
-:is(.research-pair-turns, .research-pair-note, .research-pair-thread):not(.is-current) .research-column-title {
+:is(.research-pair-messages, .research-pair-post, .research-pair-thread):not(.is-current) .research-column-title {
   color: var(--text-secondary);
 }
 
@@ -1191,7 +1191,7 @@
   }
 }
 
-/* — Note pages: the note and its activity, in a pair-wide column — */
+/* — Post pages: the post and its activity, in a pair-wide column — */
 .research-turn {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -2189,7 +2189,7 @@
 
 /* In the post column, the preview and the corrections take the post's
    (a turn's) insets. */
-.research-pair-note .research-edit-preview {
+.research-pair-post .research-edit-preview {
   padding: 18px 26px 14px 24px;
 }
 
@@ -2236,12 +2236,12 @@
   margin: 0 0 28px;
 }
 
-/* Holds the recap's slot while the summary generates, so the text lands in
+/* Holds the recap's slot while the recap generates, so the text lands in
    place instead of pushing the answer down when it arrives. */
 .research-recap-pending {
   display: flex;
   align-items: center;
-  min-height: calc(var(--research-summary-font-size) * var(--research-summary-line-height));
+  min-height: calc(var(--research-recap-font-size) * var(--research-recap-line-height));
   color: var(--accent-color);
 }
 

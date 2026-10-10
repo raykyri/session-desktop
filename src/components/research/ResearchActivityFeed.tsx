@@ -39,24 +39,24 @@ import {
   researchTreePlace,
   type ResearchFeedChild,
 } from "../../lib/researchFolders";
-import { isActiveResearchStatus } from "../../lib/researchThreads";
+import { isActiveResearchStatus } from "../../lib/researchChains";
 import {
   feedCycleStep,
   type FeedCycleEntry,
   type FeedCyclePosition,
   type ResearchCycleRequest,
 } from "../../lib/researchSiblingCycle";
-import { researchJournalViewKey, type ResearchFeedView } from "../../lib/sidebarMode";
+import { researchFeedPageKey, type ResearchFeedView } from "../../lib/sidebarMode";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchArchivedFeed, { archivedFeedTrees } from "./ResearchArchivedFeed";
 import { ResearchColumnsContext } from "./ResearchColumns";
 import { ResearchFeedHeader, ResearchFeedScrollThumb } from "./ResearchFeedChrome";
-import ResearchFeedPost, {
+import ResearchFeedCard, {
   researchCardRefocus,
   researchFeedCardControl,
-  type ResearchFeedPostStatus,
-} from "./ResearchFeedPost";
+  type ResearchFeedCardStatus,
+} from "./ResearchFeedCard";
 import ResearchFeedTray, { researchPlaceEmptyText } from "./ResearchFeedTray";
 import { ResearchFolderDeleteConfirm } from "./ResearchFolderDialogs";
 import { ResearchMenu, ResearchMenuItem, researchMenuPoint } from "./ResearchMenu";
@@ -67,7 +67,7 @@ import {
   ResearchUserMessage,
   visibleResearchPrompt,
 } from "./ResearchMessage";
-import { NoteBody } from "./ResearchNote";
+import { PostContent } from "./ResearchPost";
 import {
   ResearchTreeDeleteDialog,
   ResearchTreeMenuItems,
@@ -250,7 +250,7 @@ export function virtualActivityRange(
 export function researchFeedStatus(
   tree: ResearchTreeSummary | undefined,
   query: RecentResearchQuery | undefined,
-): ResearchFeedPostStatus | null {
+): ResearchFeedCardStatus | null {
   if ((tree?.runningCount ?? 0) > 0 || (query && isActiveResearchStatus(query.status))) {
     return "running";
   }
@@ -647,7 +647,7 @@ function ResearchActivityFeed({
   }, []);
 
   // A different list starts at its top.
-  const viewKey = researchJournalViewKey(view);
+  const viewKey = researchFeedPageKey(view);
   const previousViewKeyRef = useRef(viewKey);
   useLayoutEffect(() => {
     if (previousViewKeyRef.current === viewKey) return;
@@ -815,9 +815,9 @@ function ResearchActivityFeed({
   /** A thread's card: its root question when loaded, else its title. */
   function renderTreeCard(tree: ResearchTreeSummary | undefined, query: RecentResearchQuery | undefined) {
     const treeId = tree?.id ?? query?.treeId ?? "";
-    const note = query ? nodeType(query) === "post" : false;
+    const isPost = query ? nodeType(query) === "post" : false;
     const question = query?.prompt ?? tree?.title ?? "";
-    const title = note ? null : researchCardTitle(tree?.title ?? query?.title, question);
+    const title = isPost ? null : researchCardTitle(tree?.title ?? query?.title, question);
     const selected = treeId === selectedTreeId;
     const status = researchFeedStatus(tree, query);
     const childRows = query ? researchFeedChildren(query) : [];
@@ -826,7 +826,7 @@ function ResearchActivityFeed({
     const plainPrompt = (asQuestion: (content: ReactNode) => ReactNode) => () =>
       asQuestion(query ? visibleResearchPrompt(query.prompt, query.attachments).trim() : question);
     return (
-      <ResearchFeedPost
+      <ResearchFeedCard
         cardId={treeId}
         place={placeOf(tree)}
         title={title}
@@ -834,8 +834,8 @@ function ResearchActivityFeed({
         renderBody={(asQuestion) =>
           query ? (
             <ResearchUserMessage className="research-feed-card-message">
-              {note ? (
-                <NoteBody
+              {isPost ? (
+                <PostContent
                   prompt={query.prompt}
                   format={query.format ?? "text"}
                   attachments={query.attachments}
@@ -883,7 +883,7 @@ function ResearchActivityFeed({
   /** A draft opens in the content column; its … menu has Open and Delete. */
   function renderDraftCard(draft: ResearchDraft) {
     return (
-      <ResearchFeedPost
+      <ResearchFeedCard
         key={draft.id}
         cardId={draft.id}
         dragKind="draft"
@@ -1335,10 +1335,10 @@ function ResearchActivityFeed({
                       No bookmarks. Choose Bookmark in a question's … menu to keep it here.
                     </div>
                   ) : homeHasNothing && setupGuide ? (
-                    <div className="journal-setup-guide">{setupGuide}</div>
+                    <div className="feed-setup-guide">{setupGuide}</div>
                   ) : homeHasNothing ? (
                     <div className="research-feed-empty">
-                      Research, notes, and saved links appear here, newest first.
+                      Research, posts, and saved links appear here, newest first.
                     </div>
                   ) : (
                     <div className="research-feed-empty">
@@ -1505,7 +1505,7 @@ function ResearchActivityFeed({
               setMenu(null);
               setDeletingTree(tree);
             }}
-            onRegenerateSummary={
+            onRegenerateRecap={
               contextQuery &&
               !menu.archived &&
               contextQuery.status === "complete" &&

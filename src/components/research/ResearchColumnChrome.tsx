@@ -4,7 +4,7 @@ import { ResearchBranchIcon } from "./ResearchIcons";
 import { columnAttributes } from "../../lib/researchColumns";
 
 /** The header bar of one level's pair. It spans the messages and answer
- * columns: the conversation's title (or "Branch · N messages"), clamped to
+ * columns: the thread's title (or "Branch · N messages"), clamped to
  * four lines, and "+ Ask" at the right, which jumps to the level's ask box.
  * A post's two columns have a header each ("Post", "Thread · N"). The bar is
  * a window drag region; its buttons are not. */
@@ -25,7 +25,7 @@ export function ResearchPairHeader({
   /** A count after the title, set at the branch header's size
    * ("Thread · 3"); 0 shows the title alone. */
   count?: number | null;
-  /** Back and forward, in the root conversation's header. */
+  /** Back and forward, in the root level's header. */
   history?: ResearchHistoryNavProps | null;
   /** A point-in-time copy of a terminal conversation. */
   imported?: boolean;
@@ -105,7 +105,7 @@ interface ResearchHistoryNavProps {
   onForward: () => void;
 }
 
-/** Browser-style back/forward pair in the root conversation's header. */
+/** Browser-style back/forward pair in the root level's header. */
 function ResearchHistoryNav({
   canGoBack,
   canGoForward,
@@ -142,7 +142,7 @@ function ResearchHistoryNav({
 
 /** A thread that is loading or failed to load: a pair-wide column with the
  * header bar, with the title when there is one, over the given body. */
-export function ResearchDocumentFrame({
+export function ResearchThreadPlaceholder({
   title = "",
   children,
 }: {
@@ -151,7 +151,7 @@ export function ResearchDocumentFrame({
 }) {
   return (
     <section
-      className="research-workspace research-placeholder-column"
+      className="research-thread-page research-placeholder-column"
       {...columnAttributes({ id: "placeholder", role: "placeholder" })}
     >
       <header className="research-column-header">

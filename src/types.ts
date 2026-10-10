@@ -372,27 +372,27 @@ export type NodeAnchor =
   | { kind: "passage"; anchor: ResearchHighlightAnchor }
   | { kind: "reply"; replyId: string };
 
-export type NoteReplyAuthor =
+export type PostReplyAuthor =
   | { kind: "author" }
   | { kind: "member"; id: string; displayName: string; handle?: string | null };
 
-export interface NoteReply {
+export interface PostReply {
   id: string;
-  author: NoteReplyAuthor;
+  author: PostReplyAuthor;
   /** Markdown. */
   body: string;
-  /** Set on the note author's response to a member's top-level reply. */
+  /** Set on the post author's response to a member's top-level reply. */
   inReplyTo?: string | null;
   createdAt: number;
 }
 
-/** Network state of a note posted with Ask network. Nothing is transmitted
+/** Network state of a post published with Ask network. Nothing is transmitted
  * yet; `posted` records the user's intent. */
-export interface NoteDelivery {
+export interface PostDelivery {
   status: "posted";
   postedAt: number;
   /** Chronological. Omitted by the backend when empty. */
-  replies?: NoteReply[];
+  replies?: PostReply[];
 }
 
 
@@ -490,12 +490,12 @@ export interface ResearchPostNode extends ResearchNodeBase {
   message: UserMessage;
   format: PostFormat;
   /** Only on posts delivered with Ask network. */
-  delivery?: NoteDelivery | null;
+  delivery?: PostDelivery | null;
   /** Default agent for AI follow-ups; not provenance. */
   followUpAgent: AgentSpec;
   /** Corrections the author appended to a post that already had replies or
    * follow-ups, oldest first. Omitted when empty. */
-  corrections?: NoteCorrection[];
+  corrections?: PostCorrection[];
   /** When the text was last replaced by an edit. */
   editedAt?: number | null;
 }
@@ -527,7 +527,7 @@ export interface ResearchDocumentNode extends ResearchNodeBase {
 /** A research node as commands and events send it (`ResearchNodeView`). */
 export type ResearchNode = ResearchPostNode | ResearchExchangeNode | ResearchDocumentNode;
 
-export interface NoteCorrection {
+export interface PostCorrection {
   id: string;
   body: string;
   createdAt: number;
@@ -554,7 +554,7 @@ export interface ResearchRecapCandidate {
   instructions: string;
 }
 
-/** Compact research-root (run or note) history returned to Home's feed. */
+/** Compact research-root (run or post) history returned to Home's feed. */
 export interface RecentResearchQuery {
   /** Direct child questions, included with Home feed roots. */
   children?: RecentResearchQuery[];
@@ -575,9 +575,9 @@ export interface RecentResearchQuery {
   source?: DocumentSource | null;
   /** A post's format. */
   format?: PostFormat | null;
-  /** A note's network state, with replies cut to the first five top-level
+  /** A post's network state, with replies cut to the first five top-level
    * threads; `replyCount` is the full top-level count. */
-  delivery?: NoteDelivery | null;
+  delivery?: PostDelivery | null;
   replyCount?: number;
   replyAnchor?: string | null;
   /** Author of the reply `replyAnchor` names, as "Ana" or "You". */
@@ -712,7 +712,7 @@ export interface UpdateResearchDocumentResult {
   unmatchedBranchCount: number;
 }
 
-export interface UpdateResearchNoteResult {
+export interface UpdateResearchPostResult {
   tree: ResearchTree;
   node: ResearchNode;
   removedHighlightCount: number;

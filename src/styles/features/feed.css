@@ -1,7 +1,7 @@
 /* The feed column: a 44px title bar, the composer, then the list for the
    view (Home: Unfiled followed by one tray per folder). Cards carry only the
    question; status, unread, and the … menu sit in their corners
-   (features/notes.css styles note replies on note pages). */
+   (features/posts.css styles post replies on post pages). */
 
 .research-visually-hidden {
   position: absolute;
@@ -78,9 +78,9 @@
   align-self: stretch;
 }
 
-/* With the sidebar collapsed to its strip, Home's title is hidden (the strip
+/* With the sidebar collapsed to its rail, Home's title is hidden (the rail
    marks Home); it stays in the accessibility tree and focusable. */
-.app-shell:has(.research-strip) .research-feed-header.is-home .research-feed-header-title {
+.app-shell:has(.research-rail) .research-feed-header.is-home .research-feed-header-title {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -484,7 +484,7 @@
   margin: 0 0 10px;
 }
 
-.journal-setup-guide {
+.feed-setup-guide {
   padding: 10px 16px;
 }
 
@@ -892,7 +892,7 @@
   min-height: 42px;
   align-items: flex-start;
   padding: 11px 12px 11px
-    calc(var(--research-row-text) - var(--research-row-inset) + var(--research-child-level, 1) * 16px);
+    calc(var(--research-row-text) - var(--research-row-inset) + var(--research-child-indent, 1) * 16px);
 }
 
 .research-feed-child.is-group-end {

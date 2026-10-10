@@ -1,8 +1,8 @@
 // The column strip of an open research thread, as data. A thread shows one
-// level per open conversation: level 0 is the root's inline chain, and each
+// level per open chain: level 0 is the root's inline chain, and each
 // later level is a branch asked from the previous level's selected message.
 // Each level renders as a messages column and an answer column, except a
-// level whose head is a post (a note root, or a network follow-up of a post),
+// level whose head is a post (a post root, or a network follow-up of a post),
 // which renders as the post column and its thread column (replies,
 // follow-ups and the follow-up composer). An unsent branch adds a
 // pending column after the level it was asked from, and editing the root's
@@ -17,11 +17,11 @@
 
 import { nodeType, passageAnchor } from "./researchNodeTypes";
 import { researchLevelPath } from "./researchBranchView";
-import { inlineChainFor } from "./researchThreads";
+import { inlineChainFor } from "./researchChains";
 import type { ResearchHighlightAnchor, ResearchNode } from "../types";
 
 export interface ResearchLevel {
-  /** 0 is the root conversation. */
+  /** 0 is the root level. */
   index: number;
   /** The chain's first node: the key for the messages column's scroll
    * position, its follow-up queue and its ask box. */
@@ -31,13 +31,13 @@ export interface ResearchLevel {
   /** The message whose answer the level shows. */
   selectedId: string;
   /** The message in the previous level this branch was asked from; null for
-   * the root conversation. */
+   * the root level. */
   sourceId: string | null;
   /** The passage of the source answer the branch was asked about. */
   anchor: ResearchHighlightAnchor | null;
   /** A level whose head is a post (the root, or a network follow-up of a
    * post) is a post column and a thread column, with no answer. */
-  kind: "conversation" | "branch" | "post";
+  kind: "root" | "branch" | "post";
 }
 
 /** `Tn`: level n's messages column (a post's thread column); `An`: its
@@ -115,7 +115,7 @@ export function researchStrip(
       selectedId,
       sourceId: index === 0 ? null : (head?.parentNodeId ?? null),
       anchor: index === 0 || !head ? null : passageAnchor(head),
-      kind: head && nodeType(head) === "post" ? "post" : index > 0 ? "branch" : "conversation",
+      kind: head && nodeType(head) === "post" ? "post" : index > 0 ? "branch" : "root",
     };
   });
   const columns: ResearchColumn[] = [];
@@ -219,7 +219,7 @@ export function isMessagesColumnId(id: string | null | undefined): boolean {
 /** The data attributes that identify a column in the DOM, written in one
  * place for every column kind. `data-research-pair` and
  * `data-research-level` are set on the columns of a level: messages, thread,
- * draft and pending columns are the "turns" side, an answer column the
+ * draft and pending columns are the "messages" side, an answer column the
  * "answer" side, a post's own column is "post", and the editor "editor". */
 export function columnAttributes(column: ResearchColumn): Record<string, string> {
   switch (column.role) {
@@ -228,21 +228,21 @@ export function columnAttributes(column: ResearchColumn): Record<string, string>
       return { "data-research-column": column.id };
     case "messages":
     case "thread":
-      return pairAttributes(column.id, "turns", column.level.index);
+      return pairAttributes(column.id, "messages", column.level.index);
     case "post":
       return pairAttributes(column.id, "post", column.level.index);
     case "answer":
       return pairAttributes(column.id, "answer", column.level.index);
     case "pending":
-      return pairAttributes(column.id, "turns", column.levelIndex);
+      return pairAttributes(column.id, "messages", column.levelIndex);
     case "draft":
-      return pairAttributes(column.id, "turns", 0);
+      return pairAttributes(column.id, "messages", 0);
     case "editor":
       return pairAttributes(column.id, "editor", column.levelIndex);
   }
 }
 
-function pairAttributes(id: ResearchColumnId, pair: "turns" | "answer" | "post" | "editor", level: number) {
+function pairAttributes(id: ResearchColumnId, pair: "messages" | "answer" | "post" | "editor", level: number) {
   return {
     "data-research-column": id,
     "data-research-pair": pair,
@@ -285,7 +285,7 @@ export function columnKey(column: ResearchColumn): string {
 
 /** Which saved scroll offsets a column uses: an answer column's are keyed by
  * its message, a messages column's by its chain head. */
-export type ResearchScrollKind = "answer" | "turns";
+export type ResearchScrollKind = "answer" | "messages";
 
 /** The scroll persistence key of a column, or null for a column whose scroll
  * position is not kept. */
@@ -294,7 +294,7 @@ export function columnScrollKey(column: ResearchColumn): { kind: ResearchScrollK
     case "answer":
       return { kind: "answer", key: column.nodeId };
     case "messages":
-      return { kind: "turns", key: column.level.headId };
+      return { kind: "messages", key: column.level.headId };
     default:
       return null;
   }

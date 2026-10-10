@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  canContinueThread,
+  canContinueChain,
   canFollowUpFrom,
   canRetryResearchNode,
   canStopResearchNode,
   inlineChainFor,
   inlineChildOf,
   isActiveResearchStatus,
-  researchThreadStopTarget,
-  threadComposerPlaceholder,
-} from "../src/lib/researchThreads";
+  researchChainStopTarget,
+  chainComposerPlaceholder,
+} from "../src/lib/researchChains";
 import type { ResearchNode, ResearchNodeStatus } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
@@ -75,11 +75,11 @@ test("Stop targets the running inline follow-up while an earlier answer is selec
   const nodes = [root, followup, branch];
   for (const selected of ["root", "followup"]) {
     const chain = inlineChainFor(nodes, selected).map((id) => nodes.find((item) => item.id === id)!);
-    assert.equal(researchThreadStopTarget(chain)?.id, "followup");
+    assert.equal(researchChainStopTarget(chain)?.id, "followup");
   }
   const branchChain = inlineChainFor(nodes, "branch").map((id) => nodes.find((item) => item.id === id)!);
-  assert.equal(researchThreadStopTarget(branchChain)?.id, "branch");
-  assert.equal(researchThreadStopTarget([root]), null);
+  assert.equal(researchChainStopTarget(branchChain)?.id, "branch");
+  assert.equal(researchChainStopTarget([root]), null);
 });
 
 test("Stop is available during queuing and startup and disappears after settlement", () => {
@@ -87,14 +87,14 @@ test("Stop is available during queuing and startup and disappears after settleme
     assert.equal(canStopResearchNode(node("run", { status })), true);
   }
   for (const status of ["complete", "failed", "cancelled"] as const) {
-    assert.equal(researchThreadStopTarget([node("run", { status })]), null);
+    assert.equal(researchChainStopTarget([node("run", { status })]), null);
   }
-  assert.equal(researchThreadStopTarget([]), null);
+  assert.equal(researchChainStopTarget([]), null);
 });
 
 test("Retry stop remains available for incomplete pane cleanup but not settled SDK runs", () => {
   const stopping = node("run", { status: "cancelled", holdsProcess: true });
-  assert.equal(researchThreadStopTarget([stopping])?.id, "run");
+  assert.equal(researchChainStopTarget([stopping])?.id, "run");
   assert.equal(canStopResearchNode(node("sdk", { status: "cancelled", holdsProcess: false })), false);
 });
 
@@ -125,16 +125,16 @@ test("a parent-link cycle cannot hang the walk", () => {
   assert.ok(chain.length >= 1 && chain.length <= 2);
 });
 
-test("canContinueThread requires completion", () => {
+test("canContinueChain requires completion", () => {
   for (const status of ["queued", "starting", "running", "failed", "cancelled"] as const) {
     const tail = node("tail", { status });
-    assert.equal(canContinueThread([tail], tail), false);
+    assert.equal(canContinueChain([tail], tail), false);
   }
   const tail = node("tail");
-  assert.equal(canContinueThread([tail], tail), true);
+  assert.equal(canContinueChain([tail], tail), true);
 });
 
-test("canContinueThread requires a free inline slot, any child status", () => {
+test("canContinueChain requires a free inline slot, any child status", () => {
   for (const status of [
     "queued",
     "running",
@@ -144,12 +144,12 @@ test("canContinueThread requires a free inline slot, any child status", () => {
   ] as const) {
     const tail = node("tail");
     const child = node("child", { parentNodeId: "tail", inline: true, status });
-    assert.equal(canContinueThread([tail, child], tail), false);
+    assert.equal(canContinueChain([tail, child], tail), false);
   }
   // A branch child leaves the slot free.
   const tail = node("tail");
   const branch = node("branch", { parentNodeId: "tail" });
-  assert.equal(canContinueThread([tail, branch], tail), true);
+  assert.equal(canContinueChain([tail, branch], tail), true);
 });
 
 test("isActiveResearchStatus matches only unsettled statuses", () => {
@@ -202,19 +202,19 @@ test("canRetryResearchNode allows settled failures without a lingering pane", ()
 test("imported reports allow follow-ups without a native session checkpoint", () => {
   const report = node("report", { type: "document", source: "imported", sessionReady: false });
   assert.equal(canFollowUpFrom(report), true);
-  assert.equal(canContinueThread([report], report), true);
+  assert.equal(canContinueChain([report], report), true);
   const child = node("child", { parentNodeId: report.id, inline: true, sessionReady: false });
-  assert.equal(canContinueThread([report, child], report), false);
+  assert.equal(canContinueChain([report, child], report), false);
   assert.equal(canFollowUpFrom(child), false);
 });
 
 test("run tails need the session checkpoint; documents and conversations do not", () => {
   const unforked = node("tail", { sessionReady: false });
-  assert.equal(canContinueThread([unforked], unforked), false);
+  assert.equal(canContinueChain([unforked], unforked), false);
   const document = node("doc", { type: "document", sessionReady: false });
-  assert.equal(canContinueThread([document], document), true);
+  assert.equal(canContinueChain([document], document), true);
   const conversation = node("conv", { type: "document", source: "transcript", sessionReady: false });
-  assert.equal(canContinueThread([conversation], conversation), true);
+  assert.equal(canContinueChain([conversation], conversation), true);
 });
 
 test("every document asks about itself until its first follow-up", () => {
@@ -223,10 +223,10 @@ test("every document asks about itself until its first follow-up", () => {
   const transcript = node("conv", { type: "document", source: "transcript" });
   // An imported report keeps its question, but follow-ups start a fresh run
   // with the report as context, as for any document.
-  assert.equal(threadComposerPlaceholder(authored, 1, false), "Ask about this document");
-  assert.equal(threadComposerPlaceholder(imported, 1, false), "Ask about this document");
-  assert.equal(threadComposerPlaceholder(transcript, 1, false), "Ask about this conversation");
-  assert.equal(threadComposerPlaceholder(imported, 2, false), "Ask a follow-up");
-  assert.equal(threadComposerPlaceholder(node("q"), 1, false), "Ask a follow-up");
-  assert.equal(threadComposerPlaceholder(node("q"), 1, true), "Ask a follow-up (queued)");
+  assert.equal(chainComposerPlaceholder(authored, 1, false), "Ask about this document");
+  assert.equal(chainComposerPlaceholder(imported, 1, false), "Ask about this document");
+  assert.equal(chainComposerPlaceholder(transcript, 1, false), "Ask about this conversation");
+  assert.equal(chainComposerPlaceholder(imported, 2, false), "Ask a follow-up");
+  assert.equal(chainComposerPlaceholder(node("q"), 1, false), "Ask a follow-up");
+  assert.equal(chainComposerPlaceholder(node("q"), 1, true), "Ask a follow-up (queued)");
 });

@@ -6,18 +6,19 @@
 // kept per device and applies to every column of its kind, at every level.
 
 /** The kinds of column that share a width. */
-export type ResearchColumnWidthKind = "feed" | "turns" | "answer";
+export type ResearchColumnWidthKind = "feed" | "messages" | "answer";
 
 export type ResearchColumnWidths = Record<ResearchColumnWidthKind, number>;
 
 /** Widths set with the resize handles; null is the automatic width. */
 export type ResearchStoredColumnWidths = Record<ResearchColumnWidthKind, number | null>;
 
-const RESEARCH_COLUMN_WIDTH_KINDS: readonly ResearchColumnWidthKind[] = ["feed", "turns", "answer"];
+const RESEARCH_COLUMN_WIDTH_KINDS: readonly ResearchColumnWidthKind[] = ["feed", "messages", "answer"];
 
 export const RESEARCH_COLUMN_WIDTH_KEYS: Readonly<Record<ResearchColumnWidthKind, string>> = {
   feed: "session.research.feedWidth",
-  turns: "session.research.turnsWidth",
+  // The stored key keeps the column's earlier name, "turns".
+  messages: "session.research.turnsWidth",
   answer: "session.research.answerWidth",
 };
 
@@ -31,7 +32,7 @@ export function researchColumnWidths(stripWidth: number): ResearchColumnWidths {
   const width = Number.isFinite(stripWidth) ? Math.max(0, stripWidth) : 0;
   return {
     feed: clampWidth(width * 0.21, 240, 300),
-    turns: clampWidth(width * 0.18, 220, 280),
+    messages: clampWidth(width * 0.18, 220, 280),
     answer: clampWidth(width * 0.44, 340, 660),
   };
 }
@@ -50,7 +51,7 @@ export function researchColumnWidthBounds(
       const half = Number.isFinite(stripWidth) ? Math.floor(stripWidth / 2) : 0;
       return { min: 240, max: Math.max(240, Math.min(560, half)) };
     }
-    case "turns":
+    case "messages":
       return { min: 220, max: 560 };
     case "answer":
       return { min: 340, max: 960 };
@@ -91,7 +92,7 @@ export function loadResearchColumnWidths(): ResearchStoredColumnWidths {
       return null;
     }
   };
-  return { feed: read("feed"), turns: read("turns"), answer: read("answer") };
+  return { feed: read("feed"), messages: read("messages"), answer: read("answer") };
 }
 
 export function saveResearchColumnWidth(kind: ResearchColumnWidthKind, width: number | null) {
@@ -107,8 +108,8 @@ export function saveResearchColumnWidth(kind: ResearchColumnWidthKind, width: nu
  * (columnAttributes); the feed has no pair value. */
 export function researchColumnWidthKind(pair: string | undefined): ResearchColumnWidthKind | null {
   switch (pair) {
-    case "turns":
-      return "turns";
+    case "messages":
+      return "messages";
     case "answer":
     case "post":
     case "editor":

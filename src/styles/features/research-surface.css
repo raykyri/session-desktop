@@ -1,5 +1,5 @@
 /* Shared page chrome and reading recipes for Home and research threads.
-   Surface-specific layout belongs in research.css or journal.css; rules here
+   Surface-specific layout belongs in research.css or feed.css; rules here
    should apply to both destinations without depending on import order. */
 
 /* One focus ring for every control of the research UI, as in the mock: a 2px
@@ -7,19 +7,19 @@
    doubles with the outlines of the feed and sidebar. The scope adds no
    specificity and this file loads first, so a control's own :focus-visible
    rule (offset, or a menu item's fill) takes precedence. */
-:where(.research-columns, .research-columns-overlay, .sidebar.is-research-mode, .research-strip)
+:where(.research-columns, .research-columns-overlay, .sidebar.is-research-mode, .research-rail)
   :is(button, a, [role="button"]):focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
   box-shadow: none;
 }
 
-.research-workspace {
+.research-thread-page {
   width: 100%;
   height: 100%;
   min-height: 0;
   color: var(--text-body-soft);
-  background: var(--research-workspace-bg);
+  background: var(--research-thread-page-bg);
 }
 
 /* The column area: one horizontally scrolling strip with the feed column,
@@ -114,7 +114,7 @@
 }
 
 /* The first pair's divider replaces the feed's own border. */
-.research-feed-column:has(+ .research-content-column > :is(.research-pairs, .research-pair-turns, .research-placeholder-column)) {
+.research-feed-column:has(+ .research-content-column > :is(.research-pairs, .research-pair-messages, .research-placeholder-column)) {
   border-right-color: transparent;
 }
 
@@ -205,8 +205,8 @@
 .research-reading-surface {
   --research-body-font-size: calc(var(--fs-input) - 0.5px);
   --research-body-line-height: 1.5;
-  --research-summary-font-size: var(--research-body-font-size);
-  --research-summary-line-height: var(--research-body-line-height);
+  --research-recap-font-size: var(--research-body-font-size);
+  --research-recap-line-height: var(--research-body-line-height);
   --research-meta-font-size: calc(var(--fs-input) - 2px);
   --research-meta-line-height: 1.35;
   --research-compact-font-size: var(--research-meta-font-size);
@@ -222,7 +222,7 @@
 }
 
 /* Shared saved-item surface. Authored user messages deliberately remain
-   unboxed; journal entries opt into this card recipe directly. */
+   unboxed; link posts opt into this card recipe directly. */
 .research-content-card {
   padding: 10px 14px;
   border-radius: 10px;
@@ -248,12 +248,12 @@
   line-height: var(--research-compact-line-height);
 }
 
-.research-summary-text {
+.research-recap-text {
   color: var(--text-muted);
-  font-size: var(--research-summary-font-size);
+  font-size: var(--research-recap-font-size);
   font-style: italic;
   font-weight: 400;
-  line-height: var(--research-summary-line-height);
+  line-height: var(--research-recap-line-height);
   white-space: normal;
 }
 
@@ -265,15 +265,15 @@
 }
 
 /* Shared tweet embed used both as a Home item and as a research-message
-   attachment. Home-only menu clearance remains in journal.css. */
+   attachment. Home-only menu clearance remains in feed.css. */
 
-.research-pairs .journal-tweet-verified,
-.research-pairs .research-summary-text {
+.research-pairs .tweet-embed-verified,
+.research-pairs .research-recap-text {
   display: none;
 }
 
 /* Compact for narrow columns: one header line, then everything at full width. */
-.journal-tweet {
+.tweet-embed {
   display: block;
   width: 100%;
   max-width: var(--research-feed-max-width);
@@ -282,33 +282,33 @@
 }
 
 /* In Home the embed opens nothing; a click belongs to the feed row. */
-.journal-tweet.is-static,
-.journal-tweet.is-static .journal-tweet-quote {
+.tweet-embed.is-static,
+.tweet-embed.is-static .tweet-embed-quote {
   cursor: inherit;
 }
 
-.journal-tweet.is-static .journal-tweet-quote:hover,
-.journal-tweet.is-static .journal-tweet-card:hover {
+.tweet-embed.is-static .tweet-embed-quote:hover,
+.tweet-embed.is-static .tweet-embed-card:hover {
   background: none;
 }
 
-.journal-tweet-avatar-link {
+.tweet-embed-avatar-link {
   display: block;
   flex: none;
   line-height: 0;
 }
 
-.journal-tweet-main {
+.tweet-embed-main {
   min-width: 0;
 }
 
-.journal-tweet.is-compact {
+.tweet-embed.is-compact {
   --research-body-font-size: var(--research-compact-font-size);
   --research-body-line-height: var(--research-compact-line-height);
 }
 
 /* Avatar, name and badge, then the age at the right edge. */
-.journal-tweet-head {
+.tweet-embed-head {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -316,7 +316,7 @@
   margin-bottom: 6px;
 }
 
-.journal-tweet-who {
+.tweet-embed-who {
   display: flex;
   flex: 0 1 auto;
   align-items: center;
@@ -327,7 +327,7 @@
 }
 
 /* The handle is in the name's tooltip; it stays for screen readers. */
-.journal-tweet-head .journal-tweet-handle {
+.tweet-embed-head .tweet-embed-handle {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -335,14 +335,14 @@
   clip-path: inset(50%);
 }
 
-.journal-tweet-avatar {
+.tweet-embed-avatar {
   flex: none;
   border-radius: 50%;
   user-select: none;
   object-fit: cover;
 }
 
-.journal-tweet-avatar-fallback {
+.tweet-embed-avatar-fallback {
   display: grid;
   place-items: center;
   color: var(--lightbox-caption-fg);
@@ -350,11 +350,11 @@
   font-weight: 700;
 }
 
-.journal-tweet-quote-head .journal-tweet-avatar-fallback {
+.tweet-embed-quote-head .tweet-embed-avatar-fallback {
   font-size: calc(9px + var(--font-ui-size-offset));
 }
 
-.journal-tweet-author {
+.tweet-embed-author {
   color: inherit;
   text-decoration: none;
   flex: 0 1 auto;
@@ -366,11 +366,11 @@
   text-overflow: ellipsis;
 }
 
-a.journal-tweet-author:hover {
+a.tweet-embed-author:hover {
   text-decoration: underline;
 }
 
-.journal-tweet-verified {
+.tweet-embed-verified {
   flex: none;
   width: 15px;
   height: 15px;
@@ -378,7 +378,7 @@ a.journal-tweet-author:hover {
   color: var(--link-external-fg);
 }
 
-.journal-tweet-handle {
+.tweet-embed-handle {
   flex: 0 1 auto;
   color: var(--text-subtle);
   font-size: var(--research-body-font-size);
@@ -388,7 +388,7 @@ a.journal-tweet-author:hover {
 }
 
 /* Show the timestamp in the footer, before the counts; its tooltip shows the full date. */
-.journal-tweet-age {
+.tweet-embed-age {
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -398,17 +398,17 @@ a.journal-tweet-author:hover {
   text-decoration: none;
 }
 
-.journal-tweet-reply {
+.tweet-embed-reply {
   margin: -2px 0 5px;
   color: var(--text-subtle);
   font-size: calc(var(--fs-input) - 1px);
 }
 
-.journal-tweet-reply span {
+.tweet-embed-reply span {
   color: var(--accent-color);
 }
 
-.journal-tweet-text {
+.tweet-embed-text {
   margin: 0;
   font-size: var(--research-body-font-size);
   line-height: var(--research-body-line-height);
@@ -416,22 +416,22 @@ a.journal-tweet-author:hover {
   overflow-wrap: anywhere;
 }
 
-.journal-tweet-text.is-quote {
+.tweet-embed-text.is-quote {
   font-size: var(--research-body-font-size);
 }
 
-.journal-tweet-text .journal-tweet-link {
+.tweet-embed-text .tweet-embed-link {
   color: var(--accent-color);
   text-decoration: none;
 }
 
-.journal-tweet-text a.journal-tweet-link:hover {
+.tweet-embed-text a.tweet-embed-link:hover {
   text-decoration: underline;
 }
 
 /* The timeline's own affordance for a post that runs past its preview, on
    its own line under the text. */
-.journal-tweet-more {
+.tweet-embed-more {
   display: block;
   width: fit-content;
   margin-top: 2px;
@@ -441,13 +441,13 @@ a.journal-tweet-author:hover {
   text-decoration: none;
 }
 
-a.journal-tweet-more:hover {
+a.tweet-embed-more:hover {
   text-decoration: underline;
 }
 
 /* Link preview: a bordered card under the text. The large variant stacks its
    image over the copy; the small one sets a square thumbnail beside it. */
-.journal-tweet-card {
+.tweet-embed-card {
   display: flex;
   flex-direction: row;
   margin-top: 8px;
@@ -458,15 +458,15 @@ a.journal-tweet-more:hover {
   overflow: hidden;
 }
 
-.journal-tweet-card.is-large {
+.tweet-embed-card.is-large {
   flex-direction: column;
 }
 
-.journal-tweet-card:hover {
+.tweet-embed-card:hover {
   background: var(--surface-fill-hover);
 }
 
-.journal-tweet-card-media {
+.tweet-embed-card-media {
   flex: none;
   display: block;
   width: 84px;
@@ -475,21 +475,21 @@ a.journal-tweet-more:hover {
   background: var(--surface-fill-hover);
 }
 
-.journal-tweet-card.is-large .journal-tweet-card-media {
+.tweet-embed-card.is-large .tweet-embed-card-media {
   width: auto;
   aspect-ratio: 1.91 / 1;
   border-right: 0;
   border-bottom: 1px solid var(--surface-border-default);
 }
 
-.journal-tweet-card-media img {
+.tweet-embed-card-media img {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.journal-tweet-card-copy {
+.tweet-embed-card-copy {
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -497,7 +497,7 @@ a.journal-tweet-more:hover {
   padding: 8px 11px;
 }
 
-.journal-tweet-card-domain {
+.tweet-embed-card-domain {
   color: var(--text-subtle);
   font-size: calc(12.5px + var(--font-ui-size-offset));
   white-space: nowrap;
@@ -505,8 +505,8 @@ a.journal-tweet-more:hover {
   text-overflow: ellipsis;
 }
 
-.journal-tweet-card-title,
-.journal-tweet-card-desc {
+.tweet-embed-card-title,
+.tweet-embed-card-desc {
   display: -webkit-box;
   overflow: hidden;
   font-size: calc(13.5px + var(--font-ui-size-offset));
@@ -515,14 +515,14 @@ a.journal-tweet-more:hover {
   -webkit-line-clamp: 2;
 }
 
-.journal-tweet-card-desc {
+.tweet-embed-card-desc {
   color: var(--text-subtle);
   font-size: calc(13px + var(--font-ui-size-offset));
 }
 
 /* The closing row: Show more, then the counts at the right edge (on a line
    of their own when both don't fit). */
-.journal-tweet-end {
+.tweet-embed-end {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -533,7 +533,7 @@ a.journal-tweet-more:hover {
 
 /* Captured engagement, rendered as metadata: no hover, no target, nothing
    here reaches X. */
-.journal-tweet-stats {
+.tweet-embed-stats {
   display: flex;
   min-height: 14px;
   align-items: center;
@@ -545,30 +545,30 @@ a.journal-tweet-more:hover {
   line-height: 1;
 }
 
-.journal-tweet-stat {
+.tweet-embed-stat {
   display: inline-flex;
   align-items: center;
   gap: 5px;
 }
 
-.journal-tweet-stat svg {
+.tweet-embed-stat svg {
   width: 13px;
   height: 13px;
 }
 
-.journal-tweet-media {
+.tweet-embed-media {
   position: relative;
   display: grid;
   gap: 4px;
   margin-top: 8px;
 }
 
-.journal-tweet-media.is-sensitive .journal-tweet-media-item {
+.tweet-embed-media.is-sensitive .tweet-embed-media-item {
   filter: blur(18px);
   pointer-events: none;
 }
 
-.journal-tweet-sensitive-reveal {
+.tweet-embed-sensitive-reveal {
   position: absolute;
   inset: 50% auto auto 50%;
   z-index: 1;
@@ -585,16 +585,16 @@ a.journal-tweet-more:hover {
   cursor: pointer;
 }
 
-.journal-tweet-media.is-multi {
+.tweet-embed-media.is-multi {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.journal-tweet-media-item {
+.tweet-embed-media-item {
   display: block;
   min-width: 0;
 }
 
-.journal-tweet-media img {
+.tweet-embed-media img {
   display: block;
   width: 100%;
   max-height: 340px;
@@ -606,16 +606,16 @@ a.journal-tweet-more:hover {
   object-fit: cover;
 }
 
-.journal-tweet-media.is-multi img,
-.journal-tweet-media.is-compact img {
+.tweet-embed-media.is-multi img,
+.tweet-embed-media.is-compact img {
   max-height: 180px;
 }
 
-.journal-tweet-video {
+.tweet-embed-video {
   position: relative;
 }
 
-.journal-tweet-play {
+.tweet-embed-play {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -630,7 +630,7 @@ a.journal-tweet-more:hover {
   pointer-events: none;
 }
 
-.journal-tweet-quote {
+.tweet-embed-quote {
   margin-top: 8px;
   padding: 8px 10px;
   border: 1px solid var(--surface-border-default);
@@ -639,11 +639,11 @@ a.journal-tweet-more:hover {
   transition: background-color var(--transition-fast);
 }
 
-.journal-tweet-quote:hover {
+.tweet-embed-quote:hover {
   background: var(--surface-fill-hover);
 }
 
-.journal-tweet-quote-head {
+.tweet-embed-quote-head {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -651,15 +651,15 @@ a.journal-tweet-more:hover {
   margin-bottom: 3px;
 }
 
-.journal-tweet-quote-head .journal-tweet-author {
+.tweet-embed-quote-head .tweet-embed-author {
   font-size: calc(13px + var(--font-ui-size-offset));
 }
 
-.journal-tweet-quote-head .journal-tweet-handle {
+.tweet-embed-quote-head .tweet-embed-handle {
   font-size: calc(12.5px + var(--font-ui-size-offset));
 }
 
-.journal-tweet-quote-head .journal-tweet-verified {
+.tweet-embed-quote-head .tweet-embed-verified {
   width: 13px;
   height: 13px;
 }

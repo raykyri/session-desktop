@@ -1753,23 +1753,23 @@ async fn import_research_report(
 }
 
 #[tauri::command]
-async fn create_research_note(
+async fn create_research_post(
     state: tauri::State<'_, AppState>,
-    request: research::CreateResearchNoteRequest,
+    request: research::CreateResearchPostRequest,
 ) -> Result<ResearchTreeDetail, String> {
     let state = state.inner().clone();
     let attachments = tweets::resolve_research_message_attachments(&request.body).await;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = workspace::lock_research_workspace_mutations()?;
         validate_launch_workspace(&state, Some(&request.workspace_id), LaunchOrigin::Research)?;
-        state.create_research_note(request, attachments)
+        state.create_research_post(request, attachments)
     })
     .await
-    .map_err(|err| format!("create_research_note task failed: {err}"))?
+    .map_err(|err| format!("create_research_post task failed: {err}"))?
 }
 
 #[tauri::command]
-async fn create_research_note_follow_up(
+async fn create_research_post_follow_up(
     state: tauri::State<'_, AppState>,
     parent_node_id: String,
     body: String,
@@ -1777,32 +1777,32 @@ async fn create_research_note_follow_up(
     let state = state.inner().clone();
     let attachments = tweets::resolve_research_message_attachments(&body).await;
     tauri::async_runtime::spawn_blocking(move || {
-        state.create_research_note_follow_up(&parent_node_id, body, attachments)
+        state.create_research_post_follow_up(&parent_node_id, body, attachments)
     })
     .await
-    .map_err(|err| format!("create_research_note_follow_up task failed: {err}"))?
+    .map_err(|err| format!("create_research_post_follow_up task failed: {err}"))?
     .map(|node| node.view())
 }
 
-/// The note author's response to a member reply (`in_reply_to` set). There
+/// The post author's response to a member reply (`in_reply_to` set). There
 /// is no network transport, so nothing else can deliver member replies yet;
 /// debug builds accept `member` (with no `in_reply_to`) so the reply UI can
 /// be exercised from the webview. Release builds refuse it.
 #[tauri::command]
-fn add_research_note_reply(
+fn add_research_post_reply(
     state: tauri::State<'_, AppState>,
     node_id: String,
     in_reply_to: Option<String>,
     body: String,
-    member: Option<research::NoteReplyAuthor>,
+    member: Option<research::PostReplyAuthor>,
 ) -> Result<ResearchNodeView, String> {
     let author = match member {
-        Some(member @ research::NoteReplyAuthor::Member { .. }) if cfg!(debug_assertions) => member,
+        Some(member @ research::PostReplyAuthor::Member { .. }) if cfg!(debug_assertions) => member,
         Some(_) => return Err("member replies can only arrive from the network".to_string()),
-        None => research::NoteReplyAuthor::Author,
+        None => research::PostReplyAuthor::Author,
     };
     state
-        .add_research_note_reply(research::AddNoteReplyRequest {
+        .add_research_post_reply(research::AddPostReplyRequest {
             node_id,
             body,
             author,
@@ -1812,22 +1812,22 @@ fn add_research_note_reply(
 }
 
 #[tauri::command]
-fn remove_research_note_reply(
+fn remove_research_post_reply(
     state: tauri::State<'_, AppState>,
     node_id: String,
     reply_id: String,
 ) -> Result<ResearchNodeView, String> {
     state
-        .remove_research_note_reply(&node_id, &reply_id)
+        .remove_research_post_reply(&node_id, &reply_id)
         .map(|node| node.view())
 }
 
 #[tauri::command]
-fn update_research_note(
+fn update_research_post(
     state: tauri::State<'_, AppState>,
-    request: research::UpdateResearchNoteRequest,
-) -> Result<research::UpdateResearchNoteResult, String> {
-    state.update_research_note(request)
+    request: research::UpdateResearchPostRequest,
+) -> Result<research::UpdateResearchPostResult, String> {
+    state.update_research_post(request)
 }
 
 #[tauri::command]
@@ -2055,7 +2055,7 @@ fn launch_research_child_run(
         research::FollowUpLaunch::Context(research::FollowUpContext::Post) => {
             // Reply text is other people's words, so the builder neutralizes
             // it; the question (and any anchored reply) is wrapped there too.
-            Some(state.research_note_followup_prompt(&parent.id, child, &question))
+            Some(state.research_post_followup_prompt(&parent.id, child, &question))
         }
     };
     if let Some(launch_prompt) = context_prompt {
@@ -3164,19 +3164,19 @@ async fn generate_research_recap_candidate(
         if model
             .is_some_and(|value| value.chars().count() > 256 || value.chars().any(char::is_control))
         {
-            return Err("summary model name is invalid".to_string());
+            return Err("recap model name is invalid".to_string());
         }
         let adapter =
             adapters::ensure_adapter_ready_for_research(state.config(), request.adapter.trim())?;
         if !adapter.supports_recap_generation {
             return Err(format!(
-                "{} does not support summary generation",
+                "{} does not support recap generation",
                 adapter.label
             ));
         }
         let node = state.research_node(&request.node_id)?;
         if !node.recap_eligible() || node.status() != research::ResearchNodeStatus::Complete {
-            return Err("only completed research runs can generate summaries".to_string());
+            return Err("only completed research runs can generate recaps".to_string());
         }
         let snapshot = research::read_response_snapshot_with_revision(
             &state.config().workspace_root,
@@ -3184,10 +3184,10 @@ async fn generate_research_recap_candidate(
         )?
         .ok_or_else(|| "the completed research answer is unavailable".to_string())?;
         if snapshot.revision != request.expected_response_revision {
-            return Err("the answer changed; reopen summary generation and try again".to_string());
+            return Err("the answer changed; reopen recap generation and try again".to_string());
         }
         let answer = research_recap::recap_source_for_node(&node, &snapshot.turns)
-            .ok_or_else(|| "the answer is not eligible for summary generation".to_string())?;
+            .ok_or_else(|| "the answer is not eligible for recap generation".to_string())?;
         let workspace = state.research_workspace_for_node(&node.id)?;
         let text = title_generation::generate_research_recap_with(
             state.config(),
@@ -3209,7 +3209,7 @@ async fn generate_research_recap_candidate(
         })
     })
     .await
-    .map_err(|err| format!("summary generation task failed: {err}"))?
+    .map_err(|err| format!("recap generation task failed: {err}"))?
 }
 
 #[tauri::command(async)]
@@ -3551,12 +3551,12 @@ fn main() {
             create_research_tree,
             read_research_report,
             import_research_report,
-            create_research_note,
-            create_research_note_follow_up,
-            add_research_note_reply,
-            remove_research_note_reply,
+            create_research_post,
+            create_research_post_follow_up,
+            add_research_post_reply,
+            remove_research_post_reply,
             update_research_document,
-            update_research_note,
+            update_research_post,
             read_transcript_image,
             save_pasted_image,
             get_research_node_content,

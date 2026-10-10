@@ -44,7 +44,7 @@ const row = (overrides: NodeFixture = {}, retryQueued = false) =>
       answerMenuOpen: false,
       registerSegmentElement: noop,
       onSelect: noop,
-      onTogglePromoted: noop,
+      onToggleStarred: noop,
       onShowBranches: noop,
       onOpenAnswerMenu: noop,
       onOpenContextMenu: noop,

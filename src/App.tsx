@@ -1,5 +1,5 @@
 import { useAppStartup } from "./hooks/useAppStartup";
-import { RESEARCH_FOLDER_SCOPE_KEY, useResearchNavigationState } from "./hooks/useResearchNavigationState";
+import { RESEARCH_WORKSPACE_SCOPE_KEY, useResearchNavigationState } from "./hooks/useResearchNavigationState";
 import { useUserNotifications } from "./hooks/useUserNotifications";
 import { recordRemoteStartup, reconcileRemoteReservation } from "./lib/remoteStartup";
 import {
@@ -80,7 +80,7 @@ import {
 import { formatTurnsTranscript } from "./lib/transcriptFormat";
 import type { TranscriptScrollPosition } from "./lib/transcriptScroll";
 import type { LinkActions } from "./components/TranscriptMarkdown";
-import ResearchFolderSwitcher from "./components/research/ResearchFolderSwitcher";
+import ResearchWorkspaceSwitcher from "./components/research/ResearchWorkspaceSwitcher";
 import GithubAccountControl from "./components/GithubAccountControl";
 import { formatResearchModelSummary } from "./lib/researchModelSummary";
 import {
@@ -89,7 +89,7 @@ import {
   treesForResearchScope,
   workspaceIsInResearchScope,
 } from "./lib/researchScope";
-import ResearchDocument, { type ResearchDocumentTreeMenu } from "./components/research/ResearchDocument";
+import ResearchThreadPage, { type ResearchThreadTreeMenu } from "./components/research/ResearchThreadPage";
 import ResearchDraftView from "./components/research/ResearchDraftView";
 import ResearchActivityFeed from "./components/research/ResearchActivityFeed";
 import ResearchColumns from "./components/research/ResearchColumns";
@@ -98,7 +98,7 @@ import { useActivityFeedState } from "./hooks/useActivityFeedState";
 import ResearchQueryComposer, {
   type ResearchLaunchChoice,
 } from "./components/research/ResearchQueryComposer";
-import type { NoteActions } from "./components/research/ResearchNote";
+import type { PostActions } from "./components/research/ResearchPost";
 import {
   clearResearchTreeAttention,
   reconcileResearchActivity,
@@ -181,7 +181,7 @@ import {
 } from "./lib/turnTimeline";
 import {
   requestResearchFollowupsFocus,
-  requestResearchFolderMenuToggle,
+  requestResearchWorkspaceMenuToggle,
   requestResearchNodeOpen,
 } from "./lib/researchShortcuts";
 import { useSessionEvents } from "./hooks/useSessionEvents";
@@ -222,13 +222,13 @@ import {
 
 } from "./lib/links";
 import {
-  canGoWorkspaceBack,
-  canGoWorkspaceForward,
-  pruneResearchWorkspaceHistory,
-  pushResearchWorkspaceHistory,
-  researchWorkspaceHistoryBack,
-  researchWorkspaceHistoryForward,
-  type ResearchWorkspaceVisit,
+  canGoPageBack,
+  canGoPageForward,
+  pruneResearchPageHistory,
+  pushResearchPageHistory,
+  researchPageHistoryBack,
+  researchPageHistoryForward,
+  type ResearchPageVisit,
 } from "./lib/researchHistory";
 import {
   isResearchTreeSelectionChange,
@@ -242,19 +242,19 @@ import {
   mergeRecentActivityItems,
   reconcileRecentActivityHead,
   recentActivityCursor as recentActivityItemCursor,
-  patchRecentActivityPromoted,
+  patchRecentActivityStarred,
   upsertRecentActivityResearchNode,
 } from "./lib/activity";
-import { isActiveResearchStatus } from "./lib/researchThreads";
+import { isActiveResearchStatus } from "./lib/researchChains";
 import {
   groupsForScope,
   panesForScope,
   researchAttention,
 } from "./lib/workspaceScope";
 import {
-  RESEARCH_SIDEBAR_AUTO_STRIP_WIDTH,
+  RESEARCH_SIDEBAR_AUTO_RAIL_WIDTH,
   type ResearchFeedView,
-  type ResearchJournalView,
+  type ResearchFeedPage,
 } from "./lib/sidebarMode";
 import {
   RESEARCH_DRAFTS_FOLDER_ID,
@@ -273,8 +273,8 @@ import {
 import { ResearchFeedToast } from "./components/research/ResearchFeedChrome";
 import {
   ResearchSidebarNav,
-  ResearchSidebarStrip,
-  ResearchStripButton,
+  ResearchSidebarRail,
+  ResearchRailButton,
 } from "./components/research/ResearchSidebarNav";
 import { stripTaggedUserInstructionBlocks } from "./lib/taggedInstructions";
 import {
@@ -319,7 +319,7 @@ import {
   createResearchTree,
   importResearchReport,
   updateResearchDocument,
-  updateResearchNote,
+  updateResearchPost,
   forkResearchNode,
   markResearchTreeViewed,
   renameResearchNode,
@@ -357,10 +357,10 @@ import {
   listRecentActivity,
   listResearchTrees,
   getResearchTree,
-  createResearchNote,
-  createResearchNoteFollowUp,
-  respondToResearchNoteReply,
-  removeResearchNoteReply,
+  createResearchPost,
+  createResearchPostFollowUp,
+  respondToResearchPostReply,
+  removeResearchPostReply,
   openExternalUrl,
   browserOpenCodexInlineVisualization,
   browserOpenCodexVisualizationReference,
@@ -452,7 +452,7 @@ const LEFT_SIDEBAR_MIN_WIDTH = 208;
 const LEFT_SIDEBAR_DEFAULT_WIDTH = LEFT_SIDEBAR_MIN_WIDTH;
 const LEFT_SIDEBAR_MAX_WIDTH = 420;
 // Below this width, compact the research sidebar around its content.
-const RESEARCH_SIDEBAR_STRIP_WIDTH = 52;
+const RESEARCH_SIDEBAR_RAIL_WIDTH = 52;
 type ResearchViewedAckOptions = {
   /** A real exposure edge (selection, focus, composer close) should check the
    * backend even when the current sidebar snapshot carries no attention bit. */
@@ -471,10 +471,10 @@ const ACTIVE_RESEARCH_PANE_KEY = "session.active-research-pane.v1";
 // Whether Home is forward on the research surface. Selection-level UI state,
 // like the active tree id; the feed contents live backend-side.
 
-// Browser-overlay / link-action owner for a research tree's document. Keyed
+// Browser-overlay / link-action owner for a research tree's thread page. Keyed
 // per tree so an overlay opened from one tree's links doesn't follow the user
 // into another tree (each tree keeps its own overlay, like panes do).
-const RESEARCH_BROWSER_OWNER_PREFIX = "__research_document__:";
+const RESEARCH_BROWSER_OWNER_PREFIX = "__research_thread__:";
 function researchBrowserOwnerId(treeId: string) {
   return `${RESEARCH_BROWSER_OWNER_PREFIX}${treeId}`;
 }
@@ -543,7 +543,7 @@ function replaceResearchActivityForTree(
   return reconcileResearchActivity(activity, next);
 }
 
-function researchDocumentIsVisible(
+function researchThreadIsVisible(
   treeId: string,
   activeSurface: "pane" | "research",
   activeTreeId: string | null,
@@ -1417,13 +1417,13 @@ function MainApp() {
   const loadingOlderActivityRef = useRef(false);
   const [olderActivityError, setOlderActivityError] = useState<string | null>(null);
   const {
-    journalOpen,
-    setJournalOpen,
-    researchWorkspaceHistory,
-    researchWorkspaceHistoryRef,
-    setResearchWorkspaceHistory,
-    researchFolderScope,
-    changeResearchFolderScope,
+    feedOpen,
+    setFeedOpen,
+    researchPageHistory,
+    researchPageHistoryRef,
+    setResearchPageHistory,
+    researchWorkspaceScope,
+    changeResearchWorkspaceScope,
   } = useResearchNavigationState();
   // Read by mark-viewed acknowledgment (a stable callback) to decide whether
   // any attention badge was actually lit without threading the lists through
@@ -1453,8 +1453,8 @@ function MainApp() {
     researchNodeEventCacheRef.current.set(node.id, node);
   }
   // Why activeResearchDetail is null after a failed tree fetch. Without it the
-  // document shows an unexplained spinner forever: the content effect can't
-  // run (no detail-derived node id), so no in-document retry can recover.
+  // thread page shows an unexplained spinner forever: the content effect can't
+  // run (no detail-derived node id), so no in-page retry can recover.
   const [activeResearchDetailError, setActiveResearchDetailError] = useState<string | null>(null);
   const [activeSurface, setActiveSurfaceState] = useState<"pane" | "research">("research");
   const activeSurfaceRef = useRef(activeSurface);
@@ -1555,19 +1555,19 @@ function MainApp() {
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   const leftSidebarCollapsedRef = useRef(leftSidebarCollapsed);
   leftSidebarCollapsedRef.current = leftSidebarCollapsed;
-  // Below 900px of window width the sidebar shows as the icon strip without
-  // changing the saved preference; collapsing also shows the strip.
+  // Below 900px of window width the sidebar shows as the icon rail without
+  // changing the saved preference; collapsing also shows the rail.
   const [windowNarrowForSidebar, setWindowNarrowForSidebar] = useState(
-    () => window.innerWidth < RESEARCH_SIDEBAR_AUTO_STRIP_WIDTH,
+    () => window.innerWidth < RESEARCH_SIDEBAR_AUTO_RAIL_WIDTH,
   );
   useEffect(() => {
     const onResize = () =>
-      setWindowNarrowForSidebar(window.innerWidth < RESEARCH_SIDEBAR_AUTO_STRIP_WIDTH);
+      setWindowNarrowForSidebar(window.innerWidth < RESEARCH_SIDEBAR_AUTO_RAIL_WIDTH);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  const researchSidebarStrip = leftSidebarCollapsed || windowNarrowForSidebar;
-  const effectiveSidebarWidth = researchSidebarStrip ? RESEARCH_SIDEBAR_STRIP_WIDTH : sidebarWidth;
+  const researchSidebarRail = leftSidebarCollapsed || windowNarrowForSidebar;
+  const effectiveSidebarWidth = researchSidebarRail ? RESEARCH_SIDEBAR_RAIL_WIDTH : sidebarWidth;
   // Application-level settings, loaded from localStorage once on mount and
   // persisted on every change. Shared by every pane. Font size is also adjustable
   // in-session with Cmd-=/Cmd--.
@@ -1859,7 +1859,7 @@ function MainApp() {
     y: number;
     paneId: string | null;
   } | null>(null);
-  // Pane and research-document selection are independent. Switching modes restores
+  // Pane and research-thread selection are independent. Switching modes restores
   // the previous selection instead of erasing the other mode's navigation context.
   const researchSurfaceActive = activeSurface === "research";
   const researchActive = researchSurfaceActive && activeResearchTreeId !== null;
@@ -2091,22 +2091,22 @@ function MainApp() {
   const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
   const researchGroups = useMemo(() => groupsForScope(groups, "research"), [groups]);
   const researchScope = useMemo(
-    () => resolveResearchScope(researchFolderScope, researchGroups),
-    [researchFolderScope, researchGroups],
+    () => resolveResearchScope(researchWorkspaceScope, researchGroups),
+    [researchWorkspaceScope, researchGroups],
   );
   const researchScopeRef = useRef(researchScope);
   researchScopeRef.current = researchScope;
   // The single source of truth for what the research surface shows. Every
   // stage branch keys off this one value, so precedence (composer page over
-  // document over home) lives here instead of being re-derived — and kept
+  // thread over feed) lives here instead of being re-derived — and kept
   // consistent — inside each render condition. The
   // composer additionally renders while this is null (another surface is
   // forward) as a hidden keep-alive for its draft.
   const researchStageView = !researchSurfaceActive
     ? null
-    : journalOpen || !activeResearchTreeId
-      ? ("journal" as const)
-      : ("document" as const);
+    : feedOpen || !activeResearchTreeId
+      ? ("feed" as const)
+      : ("thread" as const);
   const researchStageViewRef = useRef(researchStageView);
   researchStageViewRef.current = researchStageView;
   // Menu badges and the folder-replace dialog both count every tree that keeps
@@ -2177,7 +2177,7 @@ function MainApp() {
       // view of one tree's run. Handing focus to the "nearest" research pane
       // would land on an unrelated tree's hidden terminal while the sidebar
       // still highlights the tree the user was watching. Return no successor;
-      // the surface fallback then restores the durable research document.
+      // the surface fallback then restores the durable research thread.
       if (closedScope === "research") {
         return null;
       }
@@ -3245,7 +3245,7 @@ function MainApp() {
 
   // Drop browser/UI state only when its real owner disappears. Browser owners
   // include research trees as well as terminal panes; unrelated pane metadata
-  // updates must not retire a research document's preserved browser.
+  // updates must not retire a research thread's preserved browser.
   useEffect(() => {
     panesRef.current = panes;
     const ids = new Set(panes.map((pane) => pane.id));
@@ -3836,7 +3836,7 @@ function MainApp() {
   }
 
   // One stable LinkActions object per transcript owner. TurnOverlay and the
-  // research document feed this into the shared provider. Context changes bypass
+  // research thread page feed this into the shared provider. Context changes bypass
   // memoization — a fresh object per App render re-rendered every markdown link in the
   // transcript on every unrelated state change. Actions read the opener through
   // a ref so the cached closures never go stale.
@@ -4665,7 +4665,7 @@ function MainApp() {
       setRecentActivityCursor(existingRecentActivity.nextCursor ?? null);
       const savedResearchTreeId = localStorage.getItem(ACTIVE_RESEARCH_TREE_KEY);
       const restoredResearchScope = resolveResearchScope(
-        localStorage.getItem(RESEARCH_FOLDER_SCOPE_KEY),
+        localStorage.getItem(RESEARCH_WORKSPACE_SCOPE_KEY),
         groupsForScope(existingGroups, "research"),
       );
       const allResearchTrees = [
@@ -4721,7 +4721,7 @@ function MainApp() {
             } else {
               showResearchSurface();
               if (
-                researchDocumentIsVisible(
+                researchThreadIsVisible(
                   researchTreeToRestore.id,
                   "research",
                   researchTreeToRestore.id,
@@ -4745,7 +4745,7 @@ function MainApp() {
         } catch (err) {
           // Mirror selectResearchTree's failure path when booting into
           // Research mode: keep the selection and surface the error inside
-          // the document (which has a working Retry) — silently dropping
+          // the thread page (which has a working Retry) — silently dropping
           // the key left the Research sidebar paired with a terminal pane
           // on the stage and nothing able to recover. A later navigation
           // refresh clears the selection if the tree is truly gone.
@@ -4938,23 +4938,23 @@ function MainApp() {
     setResearchTrees((current) => clearResearchTreeAttention(current, treeId));
     setArchivedResearchTrees((current) => clearResearchTreeAttention(current, treeId));
   }, []);
-  // Records a Home visit in workspace history so Back navigation returns here.
-  const recordResearchJournalVisit = useCallback(() => {
+  // Records a feed visit in page history so Back navigation returns here.
+  const recordResearchFeedVisit = useCallback(() => {
     const treeId = activeResearchTreeIdRef.current;
-    setResearchWorkspaceHistory((current) => {
-      const withDocument = treeId
-        ? pushResearchWorkspaceHistory(current, { kind: "document", treeId })
+    setResearchPageHistory((current) => {
+      const withThread = treeId
+        ? pushResearchPageHistory(current, { kind: "thread", treeId })
         : current;
-      const next = pushResearchWorkspaceHistory(withDocument, { kind: "journal" });
-      researchWorkspaceHistoryRef.current = next;
+      const next = pushResearchPageHistory(withThread, { kind: "feed" });
+      researchPageHistoryRef.current = next;
       return next;
     });
   }, []);
   // Prunes unreachable document visits while preserving the current view.
-  const pruneResearchWorkspaceVisits = useCallback((keepTree: (treeId: string) => boolean) => {
-    setResearchWorkspaceHistory((current) => {
-      const next = pruneResearchWorkspaceHistory(current, keepTree);
-      researchWorkspaceHistoryRef.current = next;
+  const pruneResearchPageVisits = useCallback((keepTree: (treeId: string) => boolean) => {
+    setResearchPageHistory((current) => {
+      const next = pruneResearchPageHistory(current, keepTree);
+      researchPageHistoryRef.current = next;
       return next;
     });
   }, []);
@@ -5020,7 +5020,7 @@ function MainApp() {
       }
       // The backend can remove the selected tree out from under the UI (a root
       // launch that failed removes its never-launched tree). Left selected, the
-      // document would spin on a tree that no longer exists with nothing able to
+      // thread page would spin on a tree that no longer exists with nothing able to
       // recover it — clear the selection so the empty state takes over.
       const activeTreeId = activeResearchTreeIdRef.current;
       if (activeTreeId && !trees.some((tree) => tree.id === activeTreeId)) {
@@ -5035,20 +5035,20 @@ function MainApp() {
       pruneResearchNavigation(trees.map((tree) => tree.id));
       // Prune deleted trees from history.
       const knownTreeIds = new Set(trees.map((tree) => tree.id));
-      pruneResearchWorkspaceVisits((id) => knownTreeIds.has(id));
+      pruneResearchPageVisits((id) => knownTreeIds.has(id));
       return trees;
     } finally {
       researchNavRefreshInFlightRef.current -= 1;
     }
-  }, [pruneResearchWorkspaceVisits]);
+  }, [pruneResearchPageVisits]);
   const markVisibleResearchTreeViewed = useCallback(
     async (treeId: string, options: ResearchViewedAckOptions = {}) => {
-      const documentVisible = researchDocumentIsVisible(
+      const threadVisible = researchThreadIsVisible(
         treeId,
         activeSurfaceRef.current,
         activeResearchTreeIdRef.current,
       );
-      if (!options.exposureConfirmed && !documentVisible) {
+      if (!options.exposureConfirmed && !threadVisible) {
         return;
       }
       const hadUnseen =
@@ -5119,7 +5119,7 @@ function MainApp() {
     const requestSeq = researchDetailRequestSeqRef.current + 1;
     researchDetailRequestSeqRef.current = requestSeq;
     showResearchSurface();
-    setJournalOpen(false);
+    setFeedOpen(false);
     activeResearchPaneIdRef.current = null;
     setActiveResearchPaneId(null);
     localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
@@ -5139,16 +5139,16 @@ function MainApp() {
         );
         // Selection can arrive from outside the scoped sidebar (archive
         // restore, a remembered tree on mode switch). Follow it with the
-        // folder scope, or the document would show a tree the sidebar
+        // workspace scope, or the thread page would show a tree the sidebar
         // doesn't list — with nothing highlighted anywhere.
         if (researchScopeRef.current !== detail.tree.workspaceId) {
-          changeResearchFolderScope(detail.tree.workspaceId);
+          changeResearchWorkspaceScope(detail.tree.workspaceId);
         }
         void markVisibleResearchTreeViewed(treeId, { force: true }).catch(() => undefined);
       }
     } catch (err) {
-      // Surfaced inside the document (with a working Retry) rather than as a
-      // global banner: without detail the document has no node to load, so
+      // Surfaced inside the thread page (with a working Retry) rather than as a
+      // global banner: without detail the thread page has no node to load, so
       // the error and its recovery belong where the user is looking.
       if (
         researchDetailRequestSeqRef.current === requestSeq &&
@@ -5158,26 +5158,26 @@ function MainApp() {
       }
     }
   }, [
-    changeResearchFolderScope,
+    changeResearchWorkspaceScope,
     markVisibleResearchTreeViewed,
-    setJournalOpen,
+    setFeedOpen,
   ]);
-  const recordResearchWorkspaceVisit = useCallback((visit: ResearchWorkspaceVisit) => {
-    setResearchWorkspaceHistory((current) => {
-      const next = pushResearchWorkspaceHistory(current, visit);
-      researchWorkspaceHistoryRef.current = next;
+  const recordResearchPageVisit = useCallback((visit: ResearchPageVisit) => {
+    setResearchPageHistory((current) => {
+      const next = pushResearchPageHistory(current, visit);
+      researchPageHistoryRef.current = next;
       return next;
     });
   }, []);
-  const navigateToResearchDocument = useCallback(
+  const navigateToResearchThread = useCallback(
     (treeId: string) => {
-      recordResearchWorkspaceVisit({ kind: "document", treeId });
+      recordResearchPageVisit({ kind: "thread", treeId });
       void selectResearchTree(treeId);
     },
-    [recordResearchWorkspaceVisit, selectResearchTree],
+    [recordResearchPageVisit, selectResearchTree],
   );
   // Opens a node of a tree: its level, and the levels before it, open as
-  // column pairs, with the node selected. The store covers a document that mounts for
+  // column pairs, with the node selected. The store covers a thread page that mounts for
   // this tree; the request reaches one that is already mounted.
   const openResearchNode = useCallback(
     (treeId: string, nodeId: string) => {
@@ -5186,10 +5186,10 @@ function MainApp() {
       navigation.selectedNodeId = nodeId;
       navigationStore[treeId] = navigation;
       saveResearchNavigation();
-      navigateToResearchDocument(treeId);
+      navigateToResearchThread(treeId);
       requestResearchNodeOpen(treeId, nodeId);
     },
-    [navigateToResearchDocument],
+    [navigateToResearchThread],
   );
   const openRecentResearchQuery = useCallback(
     (query: RecentResearchQuery) => openResearchNode(query.treeId, query.nodeId),
@@ -5197,7 +5197,7 @@ function MainApp() {
   );
   const openResearchHighlight = useCallback(
     (item: ResearchHighlightFeedItem) => {
-      // Recorded before navigation so the document's page-visit restore can
+      // Recorded before navigation so the thread page's visit restore can
       // land on the passage instead of the saved scroll offset.
       const navigationStore = researchNavigationStore();
       const navigation = (navigationStore[item.treeId] ??= { scrollByNode: {} });
@@ -5251,12 +5251,12 @@ function MainApp() {
     }
   }, [selectResearchTree]);
   const focusResearchHome = useCallback(() => {
-    recordResearchJournalVisit();
+    recordResearchFeedVisit();
     // Invalidate a tree request that may still be landing while Home is
     // selected; otherwise its detail can repaint behind the launcher.
     researchDetailRequestSeqRef.current += 1;
     showResearchSurface();
-    setJournalOpen(true);
+    setFeedOpen(true);
     activeResearchPaneIdRef.current = null;
     setActiveResearchPaneId(null);
     localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
@@ -5265,12 +5265,12 @@ function MainApp() {
     setActiveResearchDetail(null);
     setActiveResearchDetailError(null);
     localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
-  }, [recordResearchJournalVisit, showResearchSurface, setJournalOpen]);
-  // Brings the Journal page forward on the research surface. Tree selection is
-  // left standing (the journal outranks the document in the stage selector),
-  // so closing the journal by picking a tree is a plain selection.
-  const showJournal = useCallback(() => {
-    // The Journal is a peer page of a research document, not an overlay on one:
+  }, [recordResearchFeedVisit, showResearchSurface, setFeedOpen]);
+  // Brings the feed page forward on the research surface. Tree selection is
+  // left standing (the feed outranks the thread in the stage selector),
+  // so closing the feed by picking a tree is a plain selection.
+  const showFeed = useCallback(() => {
+    // The feed is a peer page of a research thread, not an overlay on one:
     // opening it drops the tree selection the way Home does, so the sidebar
     // never shows a selected row behind the tab that is actually forward.
     researchDetailRequestSeqRef.current += 1;
@@ -5283,21 +5283,21 @@ function MainApp() {
     setActiveResearchDetail(null);
     setActiveResearchDetailError(null);
     localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
-    setJournalOpen(true);
-  }, [showResearchSurface, setJournalOpen]);
+    setFeedOpen(true);
+  }, [showResearchSurface, setFeedOpen]);
   // Which list the feed column shows: Home, Bookmarks, Highlights, Drafts,
   // Archive, or a user folder. Switching lists keeps the open thread.
-  const [journalView, setJournalView] = useState<ResearchJournalView>({ kind: "home" });
+  const [feedPage, setFeedPage] = useState<ResearchFeedPage>({ kind: "home" });
   const researchFeedColumnVisible = researchStageView !== null;
-  const openJournalView = useCallback(
-    (view: ResearchJournalView) => {
-      setJournalView(view);
+  const openFeedPage = useCallback(
+    (view: ResearchFeedPage) => {
+      setFeedPage(view);
       showResearchSurface();
     },
     [showResearchSurface],
   );
   // Folders, drafts, and moving questions between them. Toasts confirm moves
-  // with Undo; drags run on pointer events shared by feed, sidebar, and strip.
+  // with Undo; drags run on pointer events shared by feed, sidebar, and rail.
   const {
     toast: researchToast,
     showToast: showResearchToast,
@@ -5421,10 +5421,10 @@ function MainApp() {
   // states how many questions move to Unfiled.
   const requestResearchFolderDelete = useCallback(
     (folderId: string) => {
-      openJournalView({ kind: "folder", folderId });
+      openFeedPage({ kind: "folder", folderId });
       setPendingResearchFolderDelete(folderId);
     },
-    [openJournalView],
+    [openFeedPage],
   );
   const confirmResearchFolderDelete = useCallback(
     (folderId: string) => {
@@ -5432,7 +5432,7 @@ function MainApp() {
         (tree) => researchFolderStateRef.current.membership[tree.id] === folderId,
       ).length;
       setPendingResearchFolderDelete(null);
-      openJournalView({ kind: "home" });
+      openFeedPage({ kind: "home" });
       void deleteResearchFolder(folderId).then((deleted) => {
         if (!deleted) return;
         showResearchToast(
@@ -5442,7 +5442,7 @@ function MainApp() {
         );
       });
     },
-    [deleteResearchFolder, openJournalView, showResearchToast],
+    [deleteResearchFolder, openFeedPage, showResearchToast],
   );
   const cancelResearchFolderDelete = useCallback(() => setPendingResearchFolderDelete(null), []);
   // The Highlights feed is fetched whole (highlights are few and unpaged).
@@ -5470,7 +5470,7 @@ function MainApp() {
       }
     }
   }, []);
-  const highlightsFeedVisible = researchStageView !== null && journalView.kind === "highlights";
+  const highlightsFeedVisible = researchStageView !== null && feedPage.kind === "highlights";
   useEffect(() => {
     if (!highlightsFeedVisible) return;
     void refreshResearchHighlights();
@@ -5478,34 +5478,34 @@ function MainApp() {
   const invalidateResearchHighlights = useCallback(() => {
     setResearchHighlightsVersion((version) => version + 1);
   }, []);
-  const applyResearchWorkspaceVisit = useCallback(
-    (visit: ResearchWorkspaceVisit) => {
-      if (visit.kind === "journal") {
-        showJournal();
+  const applyResearchPageVisit = useCallback(
+    (visit: ResearchPageVisit) => {
+      if (visit.kind === "feed") {
+        showFeed();
         return;
       }
       void selectResearchTree(visit.treeId);
     },
-    [selectResearchTree, showJournal],
+    [selectResearchTree, showFeed],
   );
-  const goResearchWorkspaceBack = useCallback(() => {
-    const step = researchWorkspaceHistoryBack(researchWorkspaceHistoryRef.current);
+  const goResearchPageBack = useCallback(() => {
+    const step = researchPageHistoryBack(researchPageHistoryRef.current);
     if (!step) {
       return;
     }
-    researchWorkspaceHistoryRef.current = step.history;
-    setResearchWorkspaceHistory(step.history);
-    applyResearchWorkspaceVisit(step.visit);
-  }, [applyResearchWorkspaceVisit]);
-  const goResearchWorkspaceForward = useCallback(() => {
-    const step = researchWorkspaceHistoryForward(researchWorkspaceHistoryRef.current);
+    researchPageHistoryRef.current = step.history;
+    setResearchPageHistory(step.history);
+    applyResearchPageVisit(step.visit);
+  }, [applyResearchPageVisit]);
+  const goResearchPageForward = useCallback(() => {
+    const step = researchPageHistoryForward(researchPageHistoryRef.current);
     if (!step) {
       return;
     }
-    researchWorkspaceHistoryRef.current = step.history;
-    setResearchWorkspaceHistory(step.history);
-    applyResearchWorkspaceVisit(step.visit);
-  }, [applyResearchWorkspaceVisit]);
+    researchPageHistoryRef.current = step.history;
+    setResearchPageHistory(step.history);
+    applyResearchPageVisit(step.visit);
+  }, [applyResearchPageVisit]);
 
   const chooseResearchWorkspaceFolder = useCallback(async (): Promise<GroupInfo | null> => {
     setError(null);
@@ -5806,13 +5806,13 @@ function MainApp() {
         invalidateVisibleDetailSnapshot(node.treeId);
         setActiveResearchDetail((current) => patchResearchDetailNode(current, node));
         setResearchActivity((current) => upsertResearchActivity(current, node));
-        const promotedPatch = patchRecentActivityPromoted(
+        const starredPatch = patchRecentActivityStarred(
           upsertRecentActivityResearchNode(recentActivityItemsRef.current, node),
           node,
         );
-        recentActivityItemsRef.current = promotedPatch.items;
-        setRecentActivityItems(promotedPatch.items);
-        if (promotedPatch.stale) scheduleResearchRefresh();
+        recentActivityItemsRef.current = starredPatch.items;
+        setRecentActivityItems(starredPatch.items);
+        if (starredPatch.stale) scheduleResearchRefresh();
         if (previous) {
           const patchSummary = (summary: ResearchTreeSummary) =>
             patchResearchSummaryForNode(summary, previous, node, timestamp);
@@ -5922,7 +5922,7 @@ function MainApp() {
             resetLoadedTail: event.type === "research.tree.restored",
           });
           if (event.type === "research.tree.archived") {
-            pruneResearchWorkspaceVisits((id) => id !== event.tree.id);
+            pruneResearchPageVisits((id) => id !== event.tree.id);
           }
           break;
         }
@@ -6035,14 +6035,14 @@ function MainApp() {
           if (activeResearchTreeIdRef.current === event.treeId) {
             focusResearchHome();
           }
-          pruneResearchWorkspaceVisits((id) => id !== event.treeId);
+          pruneResearchPageVisits((id) => id !== event.treeId);
           break;
         }
       }
     },
     [
       focusResearchHome,
-      pruneResearchWorkspaceVisits,
+      pruneResearchPageVisits,
       scheduleResearchRefresh,
       scheduleResearchNavigationRecovery,
       scheduleResearchTreeRecovery,
@@ -6127,9 +6127,9 @@ function MainApp() {
       // document submit's own composer is dirty here, so it is unaffected and
       // closes itself right after this adopt.
       showResearchSurface();
-      // Clear journalOpen so the new thread is visible after closing a
+      // Clear feedOpen so the new thread is visible after closing a
       // conversation or opening a draft.
-      setJournalOpen(false);
+      setFeedOpen(false);
       activeResearchPaneIdRef.current = null;
       setActiveResearchPaneId(null);
       localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
@@ -6141,10 +6141,10 @@ function MainApp() {
       );
       setActiveResearchDetailError(null);
       if (researchScopeRef.current !== detail.tree.workspaceId) {
-        changeResearchFolderScope(detail.tree.workspaceId);
+        changeResearchWorkspaceScope(detail.tree.workspaceId);
       }
     },
-    [changeResearchFolderScope, setJournalOpen, showResearchSurface],
+    [changeResearchWorkspaceScope, setFeedOpen, showResearchSurface],
   );
   const submitNewResearch = useCallback(
     async (input: {
@@ -6197,9 +6197,9 @@ function MainApp() {
       resolveResearchComposerWorkspace,
     ],
   );
-  // A note stays on Home: the feed shows it at the top, unlike a research
+  // A post stays on Home: the feed shows it at the top, unlike a research
   // launch, which opens its thread.
-  const submitNewNote = useCallback(
+  const submitNewPost = useCallback(
     async (input: {
       body: string;
       adapter: string;
@@ -6209,7 +6209,7 @@ function MainApp() {
       askNetwork: boolean;
     }) => {
       const group = await resolveResearchComposerWorkspace(input.workspaceId);
-      const detail = await createResearchNote({ ...input, workspaceId: group.id });
+      const detail = await createResearchPost({ ...input, workspaceId: group.id });
       const root = detail.nodes.find((node) => node.id === detail.tree.rootNodeId);
       if (root) {
         setRecentActivityItems((current) => {
@@ -6248,7 +6248,7 @@ function MainApp() {
     }) => {
       const result = await updateResearchDocument(input);
       if (activeResearchTreeIdRef.current === result.tree.id) {
-        // Apply the authoritative metadata immediately. The document component
+        // Apply the authoritative metadata immediately. The thread page
         // separately refetches the body when its snapshot revision changed.
         setActiveResearchDetail((current) =>
           current?.tree.id === result.tree.id
@@ -6265,9 +6265,9 @@ function MainApp() {
     },
     [],
   );
-  const editResearchNote = useCallback(
+  const editResearchPost = useCallback(
     async (input: { nodeId: string; text: string; expectedText: string; correction: boolean }) => {
-      const result = await updateResearchNote(input);
+      const result = await updateResearchPost(input);
       if (activeResearchTreeIdRef.current === result.tree.id) {
         setActiveResearchDetail((current) =>
           current?.tree.id === result.tree.id
@@ -6302,8 +6302,8 @@ function MainApp() {
       setError(err instanceof Error ? err.message : String(err));
     }
   }, []);
-  // Every delete entry point (document menu, feed menus) reconciles the active
-  // document the same way: the deleted thread closes back to the feed.
+  // Every delete entry point (thread menus, feed menus) reconciles the active
+  // thread the same way: the deleted thread closes back to the feed.
   const removeResearchTreeAndSelectFallback = useCallback(
     async (treeId: string) => {
       setError(null);
@@ -6311,9 +6311,9 @@ function MainApp() {
       if (activeResearchTreeIdRef.current === treeId) {
         focusResearchHome();
       }
-      pruneResearchWorkspaceVisits((id) => id !== treeId);
+      pruneResearchPageVisits((id) => id !== treeId);
     },
-    [focusResearchHome, pruneResearchWorkspaceVisits],
+    [focusResearchHome, pruneResearchPageVisits],
   );
   const removeResearchTreeFromMenu = useCallback(
     async (treeId: string) => {
@@ -6362,14 +6362,14 @@ function MainApp() {
     },
     [],
   );
-  // Replies, follow-ups, and retries under notes, shared by Home's note cards
-  // and the note page. The resulting node events update the feed and the open
-  // document, so nothing is patched here.
-  const noteActions = useMemo<NoteActions>(
+  // Replies, follow-ups, and retries under posts, shared by Home's post cards
+  // and the post page. The resulting node events update the feed and the open
+  // thread, so nothing is patched here.
+  const postActions = useMemo<PostActions>(
     () => ({
       onAskFollowUp: async ({ parentNodeId, prompt, network, replyId }) => {
         if (network) {
-          await createResearchNoteFollowUp(parentNodeId, prompt);
+          await createResearchPostFollowUp(parentNodeId, prompt);
           return;
         }
         await createResearchFollowup(
@@ -6380,16 +6380,16 @@ function MainApp() {
         );
       },
       onRespond: async (nodeId, replyId, body) => {
-        await respondToResearchNoteReply(nodeId, replyId, body);
+        await respondToResearchPostReply(nodeId, replyId, body);
       },
       onDeleteResponse: async (nodeId, replyId) => {
-        await removeResearchNoteReply(nodeId, replyId);
+        await removeResearchPostReply(nodeId, replyId);
       },
       onRetry: retryResearchRun,
     }),
     [createResearchFollowup, retryResearchRun],
   );
-  const removeResearchBranchFromDocument = useCallback(
+  const removeResearchBranchFromThread = useCallback(
     async (nodeId: string) => {
       setError(null);
       const removal = await removeResearchBranch(nodeId);
@@ -6425,7 +6425,7 @@ function MainApp() {
   useSessionEvents({
     appendHookEvent,
     setPanes: setPanesPreservingRecoveredDismissals,
-    // PTY lifecycle bookkeeping must not implicitly leave a research document when
+    // PTY lifecycle bookkeeping must not implicitly leave a research thread when
     // some unrelated terminal exits. User-driven pane activation uses the wrapper.
     setActivePaneId: setActivePaneIdState,
     setExitPreflightRequest,
@@ -6605,13 +6605,13 @@ function MainApp() {
     }
     focusPaneTab(paneId);
   }
-  // Pass a stable callback to the memoized ResearchDocument so unrelated App
+  // Pass a stable callback to the memoized ResearchThreadPage so unrelated App
   // renders do not cause it to render again. The ref calls the current function.
-  const researchDocumentOpenPaneRef = useRef(openResearchPaneTab);
-  researchDocumentOpenPaneRef.current = openResearchPaneTab;
-  // The conversation's toasts use the research toast: its live region is
+  const researchThreadOpenPaneRef = useRef(openResearchPaneTab);
+  researchThreadOpenPaneRef.current = openResearchPaneTab;
+  // The thread page's toasts use the research toast: its live region is
   // mounted before any text arrives, and it pauses under the pointer or focus.
-  const handleResearchDocumentToast = useCallback(
+  const handleResearchThreadToast = useCallback(
     (message: string, tone?: "normal" | "warning") =>
       showResearchToast(message, tone === "warning" ? { tone: "warning" } : {}),
     [showResearchToast],
@@ -6626,7 +6626,7 @@ function MainApp() {
       section: "Research",
       title: tree.title,
       hint: tree.runningCount > 0 ? `${tree.runningCount} running` : undefined,
-      action: () => navigateToResearchDocument(tree.id),
+      action: () => navigateToResearchThread(tree.id),
     }));
     commands.push(
       {
@@ -6857,13 +6857,13 @@ function MainApp() {
         )?.id ?? null)
       : researchScopeRef.current;
     if (scopeWasRemoved) {
-      changeResearchFolderScope(nextScope);
+      changeResearchWorkspaceScope(nextScope);
       activeResearchPaneIdRef.current = null;
       setActiveResearchPaneId(null);
       localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
     }
     // Removing the selected folder/tree should land on an available research
-    // item in the surviving scope, not leave an unexplained empty document.
+    // item in the surviving scope, not leave an unexplained empty thread page.
     if (scopeWasRemoved || activeTreeWasRemoved) {
       const nextTree = treeForResearchScope(
         remainingTrees,
@@ -6871,12 +6871,12 @@ function MainApp() {
         activeTreeWasRemoved ? null : activeTreeId,
       );
       if (nextTree) {
-        navigateToResearchDocument(nextTree.id);
+        navigateToResearchThread(nextTree.id);
       } else {
         focusResearchHome();
       }
     }
-    pruneResearchWorkspaceVisits((id) => !detachedTreeIds.has(id));
+    pruneResearchPageVisits((id) => !detachedTreeIds.has(id));
     void refreshResearchNavigation().catch(() => undefined);
   }
 
@@ -7827,7 +7827,7 @@ function MainApp() {
           requestResearchFollowupsFocus();
           return;
         case "openFolderMenu":
-          requestResearchFolderMenuToggle();
+          requestResearchWorkspaceMenuToggle();
           return;
         case "toggleSourceBrowser": {
           const anyBrowserOpen = anyBrowserOverlayOpen(browserOverlayByPaneRef.current);
@@ -8059,7 +8059,7 @@ function MainApp() {
       if (
         !isResearchTreeSelectionChange(
           activeResearchTreeId,
-          researchSurfaceActive && researchStageView === "document",
+          researchSurfaceActive && researchStageView === "thread",
           treeId,
         )
       ) {
@@ -8067,11 +8067,11 @@ function MainApp() {
       }
       const rootNodeId = researchTrees.find((tree) => tree.id === treeId)?.rootNodeId;
       if (rootNodeId) openResearchNode(treeId, rootNodeId);
-      else navigateToResearchDocument(treeId);
+      else navigateToResearchThread(treeId);
     },
     [
       activeResearchTreeId,
-      navigateToResearchDocument,
+      navigateToResearchThread,
       openResearchNode,
       researchStageView,
       researchSurfaceActive,
@@ -8081,9 +8081,9 @@ function MainApp() {
   const openFeedView = useCallback(
     (view: ResearchFeedView) => {
       setPendingResearchFolderDelete(null);
-      openJournalView(view);
+      openFeedPage(view);
     },
-    [openJournalView],
+    [openFeedPage],
   );
   const moveResearchTreeFromFeed = useCallback(
     (treeId: string, place: string) => void moveResearchTree(treeId, place),
@@ -8105,7 +8105,7 @@ function MainApp() {
     [showResearchToast],
   );
   // Follow persists on the tree; the resulting tree update event patches the
-  // feed and the open document, so nothing is set here.
+  // feed and the open thread, so nothing is set here.
   const followResearchTreeFromFeed = useCallback(
     (treeId: string, followed: boolean) => {
       void setResearchTreeFollowed(treeId, followed).then(
@@ -8139,7 +8139,7 @@ function MainApp() {
     activeResearchTreeSummary ??
     (activeResearchDetail?.tree.id === activeResearchTreeId ? activeResearchDetail?.tree : null) ??
     null;
-  const activeResearchTreeMenu = useMemo<ResearchDocumentTreeMenu | undefined>(() => {
+  const activeResearchTreeMenu = useMemo<ResearchThreadTreeMenu | undefined>(() => {
     const tree = activeResearchTreeState;
     if (!tree) return undefined;
     return {
@@ -8211,14 +8211,14 @@ function MainApp() {
 
   // The Home feed stays mounted beside an open thread, where every streamed
   // update re-renders App; stable props let the memoized feed skip those.
-  const feedOwnsHistory = researchStageView === "journal";
+  const feedOwnsHistory = researchStageView === "feed";
   const feedResearchTrees = useMemo(
     () => [...researchTrees, ...archivedResearchTrees],
     [researchTrees, archivedResearchTrees],
   );
   // A question asked from a user folder's view is filed in that folder; from
   // any other list it goes to Unfiled.
-  const composerFolderId = journalView.kind === "folder" ? journalView.folderId : null;
+  const composerFolderId = feedPage.kind === "folder" ? feedPage.folderId : null;
   const composerFolderName = composerFolderId
     ? researchFolders.find((folder) => folder.id === composerFolderId)?.name
     : undefined;
@@ -8229,12 +8229,12 @@ function MainApp() {
     },
     [composerFolderId, fileNewResearchTree, submitNewResearch],
   );
-  const submitFeedNote = useCallback(
-    async (input: Parameters<typeof submitNewNote>[0]) => {
-      const treeId = await submitNewNote(input);
+  const submitFeedPost = useCallback(
+    async (input: Parameters<typeof submitNewPost>[0]) => {
+      const treeId = await submitNewPost(input);
       if (composerFolderId) fileNewResearchTree(treeId, composerFolderId);
     },
-    [composerFolderId, fileNewResearchTree, submitNewNote],
+    [composerFolderId, fileNewResearchTree, submitNewPost],
   );
   const saveComposerDraft = useCallback(
     async (prompt: string) => {
@@ -8313,7 +8313,7 @@ function MainApp() {
             setAgentsOpen(true);
           }}
           onCreate={submitFeedResearch}
-          onPost={submitFeedNote}
+          onPost={submitFeedPost}
           onSaveDraft={saveComposerDraft}
         />
       ) : null,
@@ -8324,7 +8324,7 @@ function MainApp() {
       researchScope,
       saveComposerDraft,
       submitFeedResearch,
-      submitFeedNote,
+      submitFeedPost,
     ],
   );
   // Show setup guide on Home only when no agents can run research.
@@ -8344,13 +8344,13 @@ function MainApp() {
   );
   const refreshFeed = useCallback(() => void refreshResearchNavigation(), [refreshResearchNavigation]);
   // The workspace switcher sits at the bottom of the full sidebar; in the
-  // strip it is an icon whose menu opens as a popover, with the account
+  // rail it is an icon whose menu opens as a popover, with the account
   // control inside, so both (and ⌘O) stay reachable below 900px.
-  const renderResearchFolderSwitcher = (
-    variant: "sidebar" | "strip",
+  const renderResearchWorkspaceSwitcher = (
+    variant: "sidebar" | "rail",
     footer?: ReactNode,
   ) => (
-    <ResearchFolderSwitcher
+    <ResearchWorkspaceSwitcher
       variant={variant}
       footer={footer}
       folders={researchGroups}
@@ -8359,7 +8359,7 @@ function MainApp() {
       folderPickerBusy={folderPickerStatus !== null}
       shortcutHintsShown={shortcutHintsShown}
       onSelectScope={(scope) => {
-        changeResearchFolderScope(scope);
+        changeResearchWorkspaceScope(scope);
         // Keep the selection inside the new scope.
         const allTrees = [...researchTrees, ...archivedResearchTrees];
         const scopedTrees = treesForResearchScope(allTrees, scope);
@@ -8414,13 +8414,13 @@ function MainApp() {
     <div
       ref={appRef}
       className={`app-shell ${hasGlobalTurnSidebar ? "has-turn-sidebar" : ""}${
-        researchSidebarStrip && IS_MAC ? " has-titlebar-strip" : ""
+        researchSidebarRail && IS_MAC ? " has-titlebar-rail" : ""
       }${
         activeTranscriptVisibleExpanded ? " has-expanded-transcript" : ""
       }${settings.reduceMotion ? " reduce-motion" : ""}`}
       style={appStyle}
     >
-      {!researchSidebarStrip ? (
+      {!researchSidebarRail ? (
         <div
           className="sidebar-resizer"
           role="separator"
@@ -8434,20 +8434,20 @@ function MainApp() {
           onKeyDown={resizeSidebarWithKeyboard}
         />
       ) : null}
-      {researchSidebarStrip ? (
-        <ResearchSidebarStrip
-          current={journalView}
+      {researchSidebarRail ? (
+        <ResearchSidebarRail
+          current={feedPage}
           folders={researchFolders}
           forced={windowNarrowForSidebar}
           reserveTitlebar={IS_MAC}
           expandShortcut={LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL}
           onExpand={() => setLeftSidebarCollapsedForActivePane(false)}
-          onNavigate={openJournalView}
+          onNavigate={openFeedPage}
           onNewFolder={() => openNewResearchFolderDialog()}
           footer={
             <>
-              {renderResearchFolderSwitcher("strip", <GithubAccountControl />)}
-              <ResearchStripButton
+              {renderResearchWorkspaceSwitcher("rail", <GithubAccountControl />)}
+              <ResearchRailButton
                 label="Agents"
                 selected={agentsOpen}
                 onClick={() => {
@@ -8456,8 +8456,8 @@ function MainApp() {
                 }}
               >
                 <Bot size={16} aria-hidden="true" />
-              </ResearchStripButton>
-              <ResearchStripButton
+              </ResearchRailButton>
+              <ResearchRailButton
                 label={settings.appearance === "light" ? "Dark mode" : "Light mode"}
                 onClick={toggleAppearance}
               >
@@ -8466,8 +8466,8 @@ function MainApp() {
                 ) : (
                   <Sun size={16} aria-hidden="true" />
                 )}
-              </ResearchStripButton>
-              <ResearchStripButton
+              </ResearchRailButton>
+              <ResearchRailButton
                 label="Settings (⌘,)"
                 selected={settingsOpen}
                 onClick={() => {
@@ -8476,7 +8476,7 @@ function MainApp() {
                 }}
               >
                 <Settings size={16} aria-hidden="true" />
-              </ResearchStripButton>
+              </ResearchRailButton>
             </>
           }
         />
@@ -8541,9 +8541,9 @@ function MainApp() {
           </div>
           <div className="research-sidebar-body">
             <ResearchSidebarNav
-              current={journalView}
+              current={feedPage}
               folders={researchFolders}
-              onNavigate={openJournalView}
+              onNavigate={openFeedPage}
               onNewFolder={() => openNewResearchFolderDialog()}
               onRenameFolder={openRenameResearchFolderDialog}
               onDeleteFolder={requestResearchFolderDelete}
@@ -8552,7 +8552,7 @@ function MainApp() {
               homeShortcutHint={shortcutHintsShown ? RESEARCH_HOME_SHORTCUT_LABEL : null}
             />
           </div>
-          {renderResearchFolderSwitcher("sidebar")}
+          {renderResearchWorkspaceSwitcher("sidebar")}
           <GithubAccountControl />
         </aside>
       )}
@@ -9613,10 +9613,10 @@ function MainApp() {
               close beside it. */}
           {researchFeedColumnVisible ? (
             <ResearchColumns
-              hasDocument={researchStageView === "document" || openResearchDraft !== null}
+              hasThread={researchStageView === "thread" || openResearchDraft !== null}
               feed={
                 config ? (
-                  journalView.kind === "highlights" ? (
+                  feedPage.kind === "highlights" ? (
                     <ResearchHighlightsFeed
                       items={researchHighlightItems}
                       loading={researchHighlightsLoading}
@@ -9628,8 +9628,8 @@ function MainApp() {
                   ) : (
                     <ResearchActivityFeed
                       {...activityFeedState}
-                      view={journalView}
-                      selectedTreeId={researchStageView === "document" ? activeResearchTreeId : null}
+                      view={feedPage}
+                      selectedTreeId={researchStageView === "thread" ? activeResearchTreeId : null}
                       selectedChildNodeIds={openResearchNodeIds}
                       selectedDraftId={openResearchDraft?.id ?? null}
                       onImportReport={importReport}
@@ -9669,18 +9669,18 @@ function MainApp() {
                       onRefresh={refreshFeed}
                       // Use feed history when no thread is open; otherwise use
                       // the open thread's history.
-                      onBack={feedOwnsHistory ? goResearchWorkspaceBack : undefined}
-                      onForward={feedOwnsHistory ? goResearchWorkspaceForward : undefined}
+                      onBack={feedOwnsHistory ? goResearchPageBack : undefined}
+                      onForward={feedOwnsHistory ? goResearchPageForward : undefined}
                     />
                   )
                 ) : null
               }
             >
-              {researchStageView === "document" && activeResearchTreeId ? (
+              {researchStageView === "thread" && activeResearchTreeId ? (
                 // Remount on tree changes to reset selection, fetched content,
                 // and the follow-up draft before paint. Resetting them in effects
                 // would briefly show and refetch the previous tree's node.
-                <ResearchDocument
+                <ResearchThreadPage
                   key={activeResearchTreeId}
                   detail={activeResearchDetail}
                   treeTitle={
@@ -9699,27 +9699,27 @@ function MainApp() {
                   detailError={activeResearchDetailError}
                   onRetryDetail={retryActiveResearchDetail}
                   onFork={createResearchFollowup}
-                  noteActions={noteActions}
-                  onRemoveBranch={removeResearchBranchFromDocument}
+                  postActions={postActions}
+                  onRemoveBranch={removeResearchBranchFromThread}
                   onRemoveTree={removeResearchTreeAndSelectFallback}
                   onRenameTree={renameResearchTreeTitle}
                   onUpdateDocument={editResearchDocument}
-                  onUpdateNote={editResearchNote}
+                  onUpdatePost={editResearchPost}
                   onAskAsQuestion={askResearchEditorQuestion}
                   readQuestionModel={readResearchQuestionModel}
                   onCancel={cancelResearchRun}
                   onRetryNode={retryResearchRun}
                   linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}
                   onError={setError}
-                  onToast={handleResearchDocumentToast}
+                  onToast={handleResearchThreadToast}
                   shortcutHintsShown={shortcutHintsShown}
                   requireCmdEnterToSend={settings.requireCmdEnterToSend}
                   onOpenNodesChange={setOpenResearchNodeIds}
                   treeMenu={activeResearchTreeMenu}
-                  workspaceCanGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
-                  workspaceCanGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
-                  onWorkspaceBack={goResearchWorkspaceBack}
-                  onWorkspaceForward={goResearchWorkspaceForward}
+                  pageCanGoBack={canGoPageBack(researchPageHistory)}
+                  pageCanGoForward={canGoPageForward(researchPageHistory)}
+                  onPageBack={goResearchPageBack}
+                  onPageForward={goResearchPageForward}
                 />
               ) : openResearchDraft ? (
                 <ResearchDraftView

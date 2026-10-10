@@ -78,7 +78,7 @@ const row = (node: ResearchNode, overrides: Partial<RowProps> = {}) =>
       answerMenuOpen: false,
       registerSegmentElement: noop,
       onSelect: noop,
-      onTogglePromoted: noop,
+      onToggleStarred: noop,
       onShowBranches: noop,
       onOpenAnswerMenu: noop,
       onOpenContextMenu: noop,
@@ -221,7 +221,7 @@ test("exported conversation assistant messages remain uncarded research prose", 
   assert.doesNotMatch(html, /research-user-message|research-content-card|research-prompt/);
 });
 
-test("a follow-up of a note reply quotes the reply above the question", () => {
+test("a follow-up of a post reply quotes the reply above the question", () => {
   const html = row(questionNode({ prompt: "Why?" }), { replyQuote: "Selected   reply\npassage" });
 
   assert.match(html, /research-prompt-quote">Selected reply passage<\/blockquote>/);

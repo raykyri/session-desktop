@@ -46,13 +46,13 @@ test("a root alone is one messages column and its answer", () => {
   const strip = researchStrip(nodes, "root", null);
   assert.deepEqual(ids(strip), ["T0", "A0"]);
   assert.deepEqual(strip.levels, [
-    { index: 0, headId: "root", chainIds: ["root"], selectedId: "root", sourceId: null, anchor: null, kind: "conversation" },
+    { index: 0, headId: "root", chainIds: ["root"], selectedId: "root", sourceId: null, anchor: null, kind: "root" },
   ]);
   assert.equal(strip.endsWithAnswer, true);
   assert.deepEqual(strip.openNodeIds, ["root"]);
   assert.deepEqual(columnAttributes(strip.columns[0]), {
     "data-research-column": "T0",
-    "data-research-pair": "turns",
+    "data-research-pair": "messages",
     "data-research-level": "0",
   });
   assert.deepEqual(columnAttributes(strip.columns[1]), {
@@ -60,7 +60,7 @@ test("a root alone is one messages column and its answer", () => {
     "data-research-pair": "answer",
     "data-research-level": "0",
   });
-  assert.deepEqual(columnScrollKey(strip.columns[0]), { kind: "turns", key: "root" });
+  assert.deepEqual(columnScrollKey(strip.columns[0]), { kind: "messages", key: "root" });
   assert.deepEqual(columnScrollKey(strip.columns[1]), { kind: "answer", key: "root" });
   assert.deepEqual(strip.columns.map(columnKey), ["T0:root", "A0:root"]);
   // A selection the tree does not hold (yet) shows nothing.
@@ -90,7 +90,7 @@ test("a root with two levels of branches is three pairs, deepest last", () => {
       kind,
     })),
     [
-      { index: 0, headId: "root", chainIds: ["root", "c2"], selectedId: "c2", sourceId: null, kind: "conversation" },
+      { index: 0, headId: "root", chainIds: ["root", "c2"], selectedId: "c2", sourceId: null, kind: "root" },
       { index: 1, headId: "b1", chainIds: ["b1", "b1f"], selectedId: "b1f", sourceId: "c2", kind: "branch" },
       { index: 2, headId: "b2", chainIds: ["b2"], selectedId: "b2", sourceId: "b1f", kind: "branch" },
     ],
@@ -105,7 +105,7 @@ test("a root with two levels of branches is three pairs, deepest last", () => {
     "data-research-pair": "answer",
     "data-research-level": "2",
   });
-  assert.deepEqual(columnScrollKey(strip.columns[2]), { kind: "turns", key: "b1" });
+  assert.deepEqual(columnScrollKey(strip.columns[2]), { kind: "messages", key: "b1" });
   assert.deepEqual(columnScrollKey(strip.columns[3]), { kind: "answer", key: "b1f" });
   // Selecting the root closes the branches.
   assert.deepEqual(ids(researchStrip(nodes, "root", null)), ["T0", "A0"]);
@@ -121,7 +121,7 @@ test("a pending branch adds its column after the level that shows its parent", (
   assert.equal(strip.endsWithAnswer, false);
   assert.deepEqual(columnAttributes(pending), {
     "data-research-column": "P2",
-    "data-research-pair": "turns",
+    "data-research-pair": "messages",
     "data-research-level": "2",
   });
   assert.equal(columnScrollKey(pending), null);
@@ -140,18 +140,18 @@ test("a pending branch adds its column after the level that shows its parent", (
   assert.equal(sameResearchStrip(strip, researchStrip(nodes, "b1", null)), false);
 });
 
-test("a note root is a post column and its thread column; its follow-ups open as ordinary pairs", () => {
+test("a post root is a post column and its thread column; its follow-ups open as ordinary pairs", () => {
   const nodes = [
-    node("note", { type: "post", delivery: { status: "posted", postedAt: 1, replies: [] } }),
-    node("run", { parentNodeId: "note", createdAt: 1 }),
+    node("post", { type: "post", delivery: { status: "posted", postedAt: 1, replies: [] } }),
+    node("run", { parentNodeId: "post", createdAt: 1 }),
   ];
-  const root = researchStrip(nodes, "note", null);
+  const root = researchStrip(nodes, "post", null);
   assert.deepEqual(ids(root), ["N0", "T0"]);
   assert.deepEqual(root.columns.map((column) => column.role), ["post", "thread"]);
   assert.equal(root.levels[0].kind, "post");
   assert.equal(root.endsWithAnswer, false);
   // The post is its own kind of column; the thread is the level's
-  // messages-side ("turns") column, which focus, settling and the row
+  // messages-side ("messages") column, which focus, settling and the row
   // selector look up as T0.
   assert.deepEqual(columnAttributes(root.columns[0]), {
     "data-research-column": "N0",
@@ -160,10 +160,10 @@ test("a note root is a post column and its thread column; its follow-ups open as
   });
   assert.deepEqual(columnAttributes(root.columns[1]), {
     "data-research-column": "T0",
-    "data-research-pair": "turns",
+    "data-research-pair": "messages",
     "data-research-level": "0",
   });
-  assert.deepEqual(root.columns.map(columnKey), ["N0:note", "T0:note"]);
+  assert.deepEqual(root.columns.map(columnKey), ["N0:post", "T0:post"]);
   assert.equal(columnScrollKey(root.columns[0]), null);
   assert.equal(columnScrollKey(root.columns[1]), null);
   assert.equal(columnLevelIndex("N0"), 0);
@@ -174,23 +174,23 @@ test("a note root is a post column and its thread column; its follow-ups open as
   assert.deepEqual(ids(withRun), ["N0", "T0", "T1", "A1"]);
   assert.deepEqual(withRun.columns.map((column) => column.role), ["post", "thread", "messages", "answer"]);
   assert.equal(withRun.endsWithAnswer, true);
-  assert.deepEqual(withRun.openNodeIds, ["note", "run"]);
+  assert.deepEqual(withRun.openNodeIds, ["post", "run"]);
   // Closing the follow-up leaves the post and its thread.
-  assert.equal(sameResearchStrip(root, researchStrip(nodes, "note", null)), true);
+  assert.equal(sameResearchStrip(root, researchStrip(nodes, "post", null)), true);
   assert.equal(sameResearchStrip(root, withRun), false);
 });
 
 test("a network follow-up (a post under a post) opens as a post column and its thread column", () => {
   const delivery = { status: "posted" as const, postedAt: 1, replies: [] };
   const nodes = [
-    node("note", { type: "post", delivery }),
-    node("net", { type: "post", parentNodeId: "note", createdAt: 1, delivery }),
+    node("post", { type: "post", delivery }),
+    node("net", { type: "post", parentNodeId: "post", createdAt: 1, delivery }),
     node("run", { parentNodeId: "net", createdAt: 2 }),
   ];
   const opened = researchStrip(nodes, "net", null);
   assert.deepEqual(ids(opened), ["N0", "T0", "N1", "T1"]);
   assert.equal(opened.levels[1].kind, "post");
-  assert.equal(opened.levels[1].sourceId, "note");
+  assert.equal(opened.levels[1].sourceId, "post");
   assert.equal(opened.endsWithAnswer, false);
   // Its own AI follow-up is an ordinary pair after it.
   assert.deepEqual(ids(researchStrip(nodes, "run", null)), ["N0", "T0", "N1", "T1", "T2", "A2"]);
@@ -200,7 +200,7 @@ test("a draft is the T0 messages column, and every column has one selector", () 
   const draft = { id: "T0", role: "draft", draftId: "draft-1" } as const;
   assert.deepEqual(columnAttributes(draft), {
     "data-research-column": "T0",
-    "data-research-pair": "turns",
+    "data-research-pair": "messages",
     "data-research-level": "0",
   });
   assert.equal(columnKey(draft), "T0:draft-1");
@@ -249,6 +249,6 @@ test("editing the root adds the editor column after the root level's columns", (
   assert.equal(sameResearchStrip(editing, researchStrip(doc, "doc", null)), false);
 
   // A post's editor follows its thread column.
-  const post = [node("note", { type: "post", delivery: { status: "posted", postedAt: 1, replies: [] } })];
-  assert.deepEqual(ids(researchStrip(post, "note", null, "note")), ["N0", "T0", "E0"]);
+  const post = [node("post", { type: "post", delivery: { status: "posted", postedAt: 1, replies: [] } })];
+  assert.deepEqual(ids(researchStrip(post, "post", null, "post")), ["N0", "T0", "E0"]);
 });

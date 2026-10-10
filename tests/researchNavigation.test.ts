@@ -96,7 +96,7 @@ test("clicking the research tree already displayed is a no-op", () => {
   assert.equal(isResearchTreeSelectionChange("tree", true, "tree"), false);
 });
 
-test("a research tree remains selectable when its document is not displayed", () => {
+test("a research tree remains selectable when its thread is not displayed", () => {
   assert.equal(isResearchTreeSelectionChange("tree", false, "tree"), true);
   assert.equal(isResearchTreeSelectionChange("tree", true, "other-tree"), true);
 });
@@ -118,10 +118,10 @@ test("research scroll positions remain available for 15 minutes", () => {
 test("messages columns keep their own scroll offsets, keyed by the level's head node", () => {
   const navigation: SavedResearchNavigation = { scrollByNode: {} };
   recordResearchScrollPosition(navigation, "root-node", 480, 1_000);
-  recordResearchScrollPosition(navigation, "root-node", 90, 1_000, "turns");
+  recordResearchScrollPosition(navigation, "root-node", 90, 1_000, "messages");
   assert.equal(restoreResearchScrollPosition(navigation, "root-node", 2_000), 480);
-  assert.equal(restoreResearchScrollPosition(navigation, "root-node", 2_000, "turns"), 90);
-  assert.equal(restoreResearchScrollPosition(navigation, "branch-head", 2_000, "turns"), 0);
+  assert.equal(restoreResearchScrollPosition(navigation, "root-node", 2_000, "messages"), 90);
+  assert.equal(restoreResearchScrollPosition(navigation, "branch-head", 2_000, "messages"), 0);
 });
 
 test("research scroll positions expire at 15 minutes", () => {

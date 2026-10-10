@@ -29,7 +29,7 @@ export function createResearchComposerDraftRestoration(
 }
 
 /** Immediate store mutations share one durable-write debounce and final flush. */
-export function createResearchDocumentPersistence(
+export function createResearchThreadPersistence(
   store = researchNavigationStore(),
   save: () => void = saveResearchNavigation,
 ) {
@@ -53,14 +53,14 @@ export function createResearchDocumentPersistence(
   return {
     store,
     flush,
-    recordScroll(treeId: string, nodeId: string, top: number, column: "answer" | "turns" = "answer") {
+    recordScroll(treeId: string, nodeId: string, top: number, column: "answer" | "messages" = "answer") {
       recordResearchScrollPosition(entry(treeId), nodeId, top, Date.now(), column);
       schedule();
     },
     recordDraft(treeId: string, text: string) {
       if (recordResearchFollowupDraft(entry(treeId), text)) schedule();
     },
-    recordAsk(
+    recordPendingBranch(
       treeId: string,
       nodeId: string,
       anchor: ResearchHighlightAnchor,
@@ -83,10 +83,10 @@ export function createResearchDocumentPersistence(
       }
       flush();
     },
-    clearAsk(treeId: string, nodeId: string) {
-      const asks = store[treeId]?.askByNode;
-      if (asks?.[nodeId]) {
-        delete asks[nodeId];
+    clearPendingBranch(treeId: string, nodeId: string) {
+      const branches = store[treeId]?.askByNode;
+      if (branches?.[nodeId]) {
+        delete branches[nodeId];
         flush();
       }
     },

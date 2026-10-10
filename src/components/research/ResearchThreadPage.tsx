@@ -1,7 +1,7 @@
 import {
   useResearchComposerDrafts,
-  useResearchDocumentNavigation,
-} from "../../hooks/useResearchDocumentNavigation";
+  useResearchThreadNavigation,
+} from "../../hooks/useResearchThreadNavigation";
 import {
   memo,
   useCallback,
@@ -36,10 +36,10 @@ import {
   setResearchNodePromoted,
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
-import ResearchNoteDocument from "./ResearchNoteDocument";
-import ResearchNoteThread, { noteThreadEntries, type ResearchNoteThreadHandle } from "./ResearchNoteThread";
+import ResearchPostColumn from "./ResearchPostColumn";
+import ResearchPostThread, { postThreadEntries, type ResearchPostThreadHandle } from "./ResearchPostThread";
 import { ResearchTreeMenuItems, type ResearchTreeMenuProps } from "./ResearchMoveMenu";
-import type { NoteActions } from "./ResearchNote";
+import type { PostActions } from "./ResearchPost";
 import {
   EMPTY_RESEARCH_HISTORY,
   canGoBack as historyCanGoBack,
@@ -87,13 +87,13 @@ import {
   researchSurvivingAncestor,
 } from "../../lib/researchBranchView";
 import {
-  canContinueThread,
+  canContinueChain,
   canFollowUpFrom,
   canRetryResearchNode,
   inlineChainFor,
   isActiveResearchStatus,
-  threadComposerPlaceholder,
-} from "../../lib/researchThreads";
+  chainComposerPlaceholder,
+} from "../../lib/researchChains";
 import {
   RESEARCH_DOCUMENT_BYTE_LIMIT,
   RESEARCH_DOCUMENT_WORD_LIMIT,
@@ -146,13 +146,13 @@ import type {
   ResearchNodeContent,
   ResearchTreeDetail,
   UpdateResearchDocumentResult,
-  UpdateResearchNoteResult,
+  UpdateResearchPostResult,
 } from "../../types";
 import DomSearchBar from "../DomSearchBar";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import { TranscriptLinkActionsProvider, type LinkActions } from "../TranscriptMarkdown";
 import { ResearchEditorColumn, ResearchEditPreview, ResearchPostCorrections } from "./ResearchEditorColumn";
-import { ResearchDocumentFrame, ResearchPairHeader } from "./ResearchDocumentChrome";
+import { ResearchThreadPlaceholder, ResearchPairHeader } from "./ResearchColumnChrome";
 import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import {
   ResearchAnswerPane,
@@ -192,7 +192,7 @@ const PENDING_NODE_TTL_MS = 30_000;
 /** How long a focus request waits for its element to render. */
 const FOCUS_REQUEST_TTL_MS = 2_000;
 
-interface ResearchDocumentProps {
+interface ResearchThreadPageProps {
   detail: ResearchTreeDetail | null;
   /** Durable sidebar title shown in the header while tree detail is loading. */
   treeTitle?: string;
@@ -213,8 +213,8 @@ interface ResearchDocumentProps {
     inline?: boolean,
     replacesNodeId?: string | null,
   ) => Promise<ResearchNode>;
-  /** Replies and follow-ups on a note page (see ResearchNoteDocument). */
-  noteActions: NoteActions;
+  /** Replies and follow-ups on a post page (see ResearchPostColumn). */
+  postActions: PostActions;
   onRemoveBranch: (nodeId: string) => Promise<ResearchBranchRemoval>;
   onRemoveTree: (treeId: string) => Promise<void>;
   onRenameTree: (treeId: string, title: string) => Promise<void>;
@@ -227,13 +227,13 @@ interface ResearchDocumentProps {
     expectedHighlightIds: string[];
   }) => Promise<UpdateResearchDocumentResult>;
   /** Replaces a post's text, or appends a correction to a post with replies
-   * or follow-ups (update_research_note). */
-  onUpdateNote: (input: {
+   * or follow-ups (update_research_post). */
+  onUpdatePost: (input: {
     nodeId: string;
     text: string;
     expectedText: string;
     correction: boolean;
-  }) => Promise<UpdateResearchNoteResult>;
+  }) => Promise<UpdateResearchPostResult>;
   /** "Ask as a question" in the editor: starts a new thread with `prompt`
    * using the Home ask box's model, and opens it. */
   onAskAsQuestion: (prompt: string) => Promise<void>;
@@ -250,26 +250,26 @@ interface ResearchDocumentProps {
   onToast: (message: string, tone?: "normal" | "warning") => void;
   /** Show held-⌘ shortcut badges (the ⌘J composer hint). */
   shortcutHintsShown: boolean;
-  /** The "Require ⌘↵ to send" setting, for every composer in the document. */
+  /** The "Require ⌘↵ to send" setting, for every composer in the thread. */
   requireCmdEnterToSend: boolean;
-  /** Runs whose background summary job is in flight; each renders a spinner in
-   * its recap slot until the summary arrives. */
+  /** Runs whose background recap job is in flight; each renders a spinner in
+   * its recap slot until the recap arrives. */
   recapPendingNodeIds?: ReadonlySet<string>;
-  /** Workspace-level back/forward (Recent Activity ↔ documents). Used when
+  /** Page-level back/forward (the feed ↔ threads). Used when
    * this tree's own visit stack has nowhere left to go. */
-  workspaceCanGoBack?: boolean;
-  workspaceCanGoForward?: boolean;
-  onWorkspaceBack?: () => void;
-  onWorkspaceForward?: () => void;
+  pageCanGoBack?: boolean;
+  pageCanGoForward?: boolean;
+  onPageBack?: () => void;
+  onPageForward?: () => void;
   /** Called with the open nodes whenever they change: the message selected
    * in the root pair, then the head of each open branch. Empty on unmount. */
   onOpenNodesChange?: (nodeIds: string[]) => void;
   /** The whole question's Follow, Bookmark and Move to actions, which the
-   * root conversation's answer menus list below their own actions. */
-  treeMenu?: ResearchDocumentTreeMenu;
+   * root level's answer menus list below their own actions. */
+  treeMenu?: ResearchThreadTreeMenu;
 }
 
-export interface ResearchDocumentTreeMenu
+export interface ResearchThreadTreeMenu
   extends Omit<ResearchTreeMenuProps, "onToggleBookmark" | "onToggleFollow" | "onNewFolder"> {
   bookmarked: boolean;
   followed: boolean;
@@ -368,22 +368,22 @@ interface BranchMarker {
   branchIds: string[];
 }
 
-interface DocumentMenuPlacement {
+interface ThreadMenuPlacement {
   anchor: HTMLElement | ResearchMenuRect;
   align: ResearchMenuAlign;
   /** The button that opened the menu: focus returns to it when it closes. */
   trigger?: HTMLElement | null;
 }
 
-type DocumentMenuState =
-  | ({ kind: "answer"; nodeId: string } & DocumentMenuPlacement)
-  | ({ kind: "post"; nodeId: string } & DocumentMenuPlacement)
+type ThreadMenuState =
+  | ({ kind: "answer"; nodeId: string } & ThreadMenuPlacement)
+  | ({ kind: "post"; nodeId: string } & ThreadMenuPlacement)
   | ({
       kind: "mark";
       nodeId: string;
       branchIds: string[];
       highlightId: string | null;
-    } & DocumentMenuPlacement);
+    } & ThreadMenuPlacement);
 
 interface ResearchHighlightRegistry {
   set(name: string, highlight: unknown): void;
@@ -405,7 +405,7 @@ const RESEARCH_HIGHLIGHT_NAME = "session-research-highlights";
 const RESEARCH_BRANCH_NAME = "session-research-branch-passages";
 const RESEARCH_OPEN_BRANCH_NAME = "session-research-open-branch";
 const RESEARCH_PENDING_BRANCH_NAME = "session-research-pending-branch";
-const PENDING_BRANCH_ID = "__draft__";
+const PENDING_BRANCH_ID = "__pending__";
 const RESEARCH_OVERLAP_NAME = "session-research-highlight-overlaps";
 const RESEARCH_HOVER_HIGHLIGHT_NAME = "session-research-highlight-hover";
 const RESEARCH_HOVER_BRANCH_NAME = "session-research-branch-hover";
@@ -954,7 +954,7 @@ function ResearchMarkerTip({
   );
 }
 
-function ResearchDocument({
+function ResearchThreadPage({
   detail,
   treeTitle,
   treeType,
@@ -962,12 +962,12 @@ function ResearchDocument({
   detailError,
   onRetryDetail,
   onFork,
-  noteActions,
+  postActions,
   onRemoveBranch,
   onRemoveTree,
   onRenameTree,
   onUpdateDocument,
-  onUpdateNote,
+  onUpdatePost,
   onAskAsQuestion,
   readQuestionModel,
   onCancel,
@@ -978,13 +978,13 @@ function ResearchDocument({
   shortcutHintsShown,
   requireCmdEnterToSend,
   recapPendingNodeIds = EMPTY_RECAP_PENDING_NODE_IDS,
-  workspaceCanGoBack = false,
-  workspaceCanGoForward = false,
-  onWorkspaceBack,
-  onWorkspaceForward,
+  pageCanGoBack = false,
+  pageCanGoForward = false,
+  onPageBack,
+  onPageForward,
   onOpenNodesChange,
   treeMenu,
-}: ResearchDocumentProps) {
+}: ResearchThreadPageProps) {
   const columnsLayout = useContext(ResearchColumnsContext);
   const treeId = detail?.tree.id ?? null;
   const rootNodeId = detail?.tree.rootNodeId ?? null;
@@ -1016,7 +1016,7 @@ function ResearchDocument({
   const [retryingNodeId, setRetryingNodeId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const cancelRequestInFlightRef = useRef(false);
-  const [menu, setMenu] = useState<DocumentMenuState | null>(null);
+  const [menu, setMenu] = useState<ThreadMenuState | null>(null);
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
   const [removingBranch, setRemovingBranch] = useState(false);
   const [branchRemovalError, setBranchRemovalError] = useState<string | null>(null);
@@ -1076,7 +1076,7 @@ function ResearchDocument({
   // Count saved highlights whose anchors cannot be located in the rendered
   // answer. The answer's … menu reports these unresolved highlights.
   const [hiddenHighlightsByNode, setHiddenHighlightsByNode] = useState<Record<string, number>>({});
-  // Branches whose answer finished while this document was open and that
+  // Branches whose answer finished while this thread was open and that
   // the reader has not opened carry an unread dot on their branch count.
   // `firstSeenComplete` records each branch's status the first time it is
   // seen, so a branch that was already complete when the tree loaded is read.
@@ -1141,7 +1141,7 @@ function ResearchDocument({
   // Answers whose scroll offset has been restored since their column mounted.
   const restoredAnswerScrollRef = useRef(new Set<string>());
   // The same for each level's messages column, keyed by its head node.
-  const turnsScrollRef = useRef(new Map<string, number>());
+  const messagesScrollRef = useRef(new Map<string, number>());
   const restoredTurnsScrollRef = useRef(new Set<string>());
   // Live mirrors for stable callbacks that must read current state.
   const composerTextRef = useRef(composerText);
@@ -1159,7 +1159,7 @@ function ResearchDocument({
   editingByHeadRef.current = editingByHead;
   queuesRef.current = queues;
 
-  const navigationPersistence = useResearchDocumentNavigation((persistence) => {
+  const navigationPersistence = useResearchThreadNavigation((persistence) => {
     const currentTreeId = treeIdRef.current;
     if (!currentTreeId) {
       return;
@@ -1169,9 +1169,9 @@ function ResearchDocument({
         persistence.recordScroll(currentTreeId, nodeId, top);
       }
     }
-    for (const [headId, top] of turnsScrollRef.current) {
+    for (const [headId, top] of messagesScrollRef.current) {
       if (restoredTurnsScrollRef.current.has(headId)) {
-        persistence.recordScroll(currentTreeId, headId, top, "turns");
+        persistence.recordScroll(currentTreeId, headId, top, "messages");
       }
     }
   });
@@ -1211,7 +1211,7 @@ function ResearchDocument({
   const stripRef = useRef(strip);
   stripRef.current = strip;
   const levels = useStableValue(strip.levels, sameResearchLevels);
-  // The selected message of each open level, root conversation first.
+  // The selected message of each open level, root level first.
   const levelPath = useStableValue(
     useMemo(() => levels.map((level) => level.selectedId), [levels]),
     sameIds,
@@ -1285,15 +1285,15 @@ function ResearchDocument({
 
   // Columns of the open pairs, found by level.
   const pairColumn = useCallback(
-    (kind: "turns" | "answer", level: number) =>
+    (kind: "messages" | "answer", level: number) =>
       workspaceRef.current?.querySelector<HTMLElement>(
-        columnSelector(kind === "turns" ? `T${level}` : `A${level}`),
+        columnSelector(kind === "messages" ? `T${level}` : `A${level}`),
       ) ?? null,
     [],
   );
   const selectedRow = useCallback(
     (level: number) =>
-      pairColumn("turns", level)?.querySelector<HTMLElement>(COLUMN_ROW_SELECTOR) ?? null,
+      pairColumn("messages", level)?.querySelector<HTMLElement>(COLUMN_ROW_SELECTOR) ?? null,
     [pairColumn],
   );
 
@@ -1319,7 +1319,7 @@ function ResearchDocument({
 
   // Highlight mutations are announced as research events but do not replace
   // the response snapshot. Mirror their refreshed node metadata into each
-  // loaded answer so another window's changes reach the document. Bail on
+  // loaded answer so another window's changes reach the thread. Bail on
   // unchanged id lists: every research event rebuilds the highlights arrays,
   // and adopting each fresh identity re-ran the paint effect's text walk.
   useEffect(() => {
@@ -1499,7 +1499,7 @@ function ResearchDocument({
       const level = columnLevelIndex(columnId);
       revealResearchColumns(
         row,
-        level === null ? column : pairColumn("turns", level) ?? column,
+        level === null ? column : pairColumn("messages", level) ?? column,
         level === null ? column : pairColumn("answer", level) ?? column,
       );
     }
@@ -1569,9 +1569,9 @@ function ResearchDocument({
         setPending(null);
         const currentTreeId = treeIdRef.current;
         if (currentTreeId) {
-          navigationPersistence.clearAsk(currentTreeId, dropped.parentNodeId);
+          navigationPersistence.clearPendingBranch(currentTreeId, dropped.parentNodeId);
         }
-        setComposerText((text) => withoutKeys(text, [`draft:${dropped.parentNodeId}`]));
+        setComposerText((text) => withoutKeys(text, [`pending:${dropped.parentNodeId}`]));
       }
       setMenu(null);
       markOpened(nodeId);
@@ -1642,7 +1642,7 @@ function ResearchDocument({
   );
 
   // Node-open requests from the app shell (feed rows, child rows, the
-  // Highlights view) while this tree's document is already mounted. Focus
+  // Highlights view) while this tree's thread page is already mounted. Focus
   // stays where the request came from; the strip shows the opened level.
   useEffect(
     () =>
@@ -1663,7 +1663,7 @@ function ResearchDocument({
     [navigate, selectedRow],
   );
 
-  // Tree switch (the document is keyed per tree, so this is its mount):
+  // Tree switch (the thread page is keyed per tree, so this is its mount):
   // restore the open levels, queued follow-ups, and reading state.
   useEffect(() => {
     if (!treeId || !rootNodeId || !detail) {
@@ -1690,19 +1690,19 @@ function ResearchDocument({
         settleResearchStrip(row, columnLevelIndex(focused) !== null ? focused : null, "auto");
       }),
     );
-    // Runs once per tree: the document remounts on tree switches, and the
+    // Runs once per tree: the thread page remounts on tree switches, and the
     // first detail to arrive carries the root and the nodes to restore.
   }, [treeId, rootNodeId, Boolean(detail)]);
 
   const mainComposerKey = rootNodeId ?? "main";
-  const draftKey = activePending ? `draft:${activePending.parentNodeId}` : null;
+  const pendingComposerKey = activePending ? `pending:${activePending.parentNodeId}` : null;
   useResearchComposerDrafts({
     persistence: navigationPersistence,
     treeId,
     mainText: composerText[mainComposerKey] ?? "",
-    draft: activePending?.anchor ? { nodeId: activePending.parentNodeId, anchor: activePending.anchor } : null,
-    draftText: draftKey ? composerText[draftKey] ?? "" : "",
-    draftOpen: activePending !== null,
+    pendingBranch: activePending?.anchor ? { nodeId: activePending.parentNodeId, anchor: activePending.anchor } : null,
+    pendingBranchText: pendingComposerKey ? composerText[pendingComposerKey] ?? "" : "",
+    pendingBranchOpen: activePending !== null,
     // Only the deepest selection's saved new branch reopens: one saved under
     // a shallower message would close the levels the path restored.
     chainNodeIds: deepestSelection,
@@ -1711,12 +1711,12 @@ function ResearchDocument({
       setComposerText((current) =>
         (current[mainComposerKey] ?? "") === text ? current : { ...current, [mainComposerKey]: text },
       ),
-    restoreDraft: (nodeId, anchor, text) => {
+    restorePendingBranch: (nodeId, anchor, text) => {
       // A saved new branch reopens after its parent, without taking focus.
       setSelectedNodeId(nodeId);
       setPending({ parentNodeId: nodeId, anchor });
       if (text) {
-        setComposerText((current) => ({ ...current, [`draft:${nodeId}`]: text }));
+        setComposerText((current) => ({ ...current, [`pending:${nodeId}`]: text }));
       }
     },
   });
@@ -1780,17 +1780,17 @@ function ResearchDocument({
   /** Opens a new branch on `anchor` (a passage) or on the whole answer of
    * `parentNodeId`, as the pair after the parent's level. Its ask box takes
    * focus. */
-  const openDraft = useCallback(
+  const openPendingBranch = useCallback(
     (parentNodeId: string, anchor: ResearchHighlightAnchor | null) => {
       if (archived) {
         return;
       }
       const previous = pendingRef.current;
       if (previous && previous.parentNodeId !== parentNodeId) {
-        setComposerText((text) => withoutKeys(text, [`draft:${previous.parentNodeId}`]));
+        setComposerText((text) => withoutKeys(text, [`pending:${previous.parentNodeId}`]));
         const currentTreeId = treeIdRef.current;
         if (currentTreeId) {
-          navigationPersistence.clearAsk(currentTreeId, previous.parentNodeId);
+          navigationPersistence.clearPendingBranch(currentTreeId, previous.parentNodeId);
         }
       }
       setMenu(null);
@@ -1799,7 +1799,7 @@ function ResearchDocument({
         persistSelection(parentNodeId);
       }
       setPending({ parentNodeId, anchor });
-      requestFocus({ kind: "composer", key: `draft:${parentNodeId}` }, "settle");
+      requestFocus({ kind: "composer", key: `pending:${parentNodeId}` }, "settle");
     },
     [archived, navigationPersistence, persistSelection, requestFocus],
   );
@@ -1814,9 +1814,9 @@ function ResearchDocument({
     setPending(null);
     const currentTreeId = treeIdRef.current;
     if (currentTreeId) {
-      navigationPersistence.clearAsk(currentTreeId, current.parentNodeId);
+      navigationPersistence.clearPendingBranch(currentTreeId, current.parentNodeId);
     }
-    setComposerText((text) => withoutKeys(text, [`draft:${current.parentNodeId}`]));
+    setComposerText((text) => withoutKeys(text, [`pending:${current.parentNodeId}`]));
     const level = levelPathRef.current.indexOf(current.parentNodeId);
     if (level >= 0) {
       requestFocus({ kind: "answer", level }, "settle");
@@ -1825,8 +1825,8 @@ function ResearchDocument({
 
   // ---- history -------------------------------------------------------------
 
-  const canGoBack = historyCanGoBack(history) || workspaceCanGoBack;
-  const canGoForward = historyCanGoForward(history) || workspaceCanGoForward;
+  const canGoBack = historyCanGoBack(history) || pageCanGoBack;
+  const canGoForward = historyCanGoForward(history) || pageCanGoForward;
 
   const goBack = useCallback(() => {
     const step = researchHistoryBack(history);
@@ -1835,8 +1835,8 @@ function ResearchDocument({
       setHistory(step.history);
       return;
     }
-    onWorkspaceBack?.();
-  }, [applyVisit, history, onWorkspaceBack]);
+    onPageBack?.();
+  }, [applyVisit, history, onPageBack]);
 
   const goForward = useCallback(() => {
     const step = researchHistoryForward(history);
@@ -1845,11 +1845,11 @@ function ResearchDocument({
       setHistory(step.history);
       return;
     }
-    onWorkspaceForward?.();
-  }, [applyVisit, history, onWorkspaceForward]);
+    onPageForward?.();
+  }, [applyVisit, history, onPageForward]);
 
   // Keyboard: ⌘[ / ⌘] and Alt+←/→ (and mouse buttons 3/4) walk history; Esc
-  // returns to the root conversation when no menu, popover, or dialog is
+  // returns to the root level when no menu, popover, or dialog is
   // open. Keys are ignored while typing.
   const anyOverlayOpen =
     Boolean(menu) ||
@@ -2170,7 +2170,7 @@ function ResearchDocument({
         const pendingNow = pendingRef.current;
         const key =
           pendingNow && level >= levelPathRef.current.length
-            ? `draft:${pendingNow.parentNodeId}`
+            ? `pending:${pendingNow.parentNodeId}`
             : stripRef.current.levels[level]?.headId;
         if (key) {
           requestFocus({ kind: "composer", key }, "reveal");
@@ -2204,8 +2204,8 @@ function ResearchDocument({
   // left. Returns false when the column to cycle is the feed, which then
   // handles the request.
   // The thread column of each post level, by level index.
-  const threadHandlesRef = useRef(new Map<number, ResearchNoteThreadHandle>());
-  const registerThread = (level: number) => (handle: ResearchNoteThreadHandle | null) => {
+  const threadHandlesRef = useRef(new Map<number, ResearchPostThreadHandle>());
+  const registerThread = (level: number) => (handle: ResearchPostThreadHandle | null) => {
     if (handle) {
       threadHandlesRef.current.set(level, handle);
     } else {
@@ -2284,10 +2284,10 @@ function ResearchDocument({
     },
     [openBranch, requestFocus, selectMessage],
   );
-  useEffect(() => columnsLayout?.registerCycle("document", cycleRows), [columnsLayout, cycleRows]);
+  useEffect(() => columnsLayout?.registerCycle("thread", cycleRows), [columnsLayout, cycleRows]);
 
   // The column (and with it the scroller that carries swipe navigation)
-  // renders once there is a detail, a root and a selection. A document
+  // renders once there is a detail, a root and a selection. A thread page
   // mounted for a new tree first renders the placeholder, so the swipe
   // listeners attach when this turns true.
   const hasColumn = Boolean(detail && rootNodeId && selectedNodeId);
@@ -2304,7 +2304,7 @@ function ResearchDocument({
       ? document.querySelector<HTMLElement>(`[data-research-row][data-node-id="${CSS.escape(parentId)}"]`)
       : null;
     const composer = composerRefs.current.get(mainComposerKey)?.element()?.querySelector("textarea");
-    // Deleting the research closes the document: the feed's composer.
+    // Deleting the research closes the thread: the feed's composer.
     return (
       previous ??
       (composer?.isConnected ? composer : document.querySelector<HTMLElement>(".new-research-input"))
@@ -2475,15 +2475,15 @@ function ResearchDocument({
       if (restoredTurnsScrollRef.current.has(headId)) {
         return;
       }
-      const scroller = pairColumn("turns", level)?.querySelector<HTMLElement>(":scope > .research-column-scroll");
+      const scroller = pairColumn("messages", level)?.querySelector<HTMLElement>(":scope > .research-column-scroll");
       const row = selectedRow(level);
       if (!scroller || !row) {
         return;
       }
       restoredTurnsScrollRef.current.add(headId);
       scroller.scrollTop =
-        turnsScrollRef.current.get(headId) ??
-        restoreResearchScrollPosition(navigationPersistence.store[treeId], headId, Date.now(), "turns");
+        messagesScrollRef.current.get(headId) ??
+        restoreResearchScrollPosition(navigationPersistence.store[treeId], headId, Date.now(), "messages");
       scrollIntoColumn(row, "auto");
     });
   });
@@ -2493,10 +2493,10 @@ function ResearchDocument({
       if (!restoredTurnsScrollRef.current.has(headId)) {
         return;
       }
-      turnsScrollRef.current.set(headId, scroller.scrollTop);
+      messagesScrollRef.current.set(headId, scroller.scrollTop);
       const currentTreeId = treeIdRef.current;
       if (currentTreeId) {
-        navigationPersistence.recordScroll(currentTreeId, headId, scroller.scrollTop, "turns");
+        navigationPersistence.recordScroll(currentTreeId, headId, scroller.scrollTop, "messages");
       }
     },
     [navigationPersistence],
@@ -2619,7 +2619,7 @@ function ResearchDocument({
     };
   }, [annotatedSegmentsKey, revisionsKey, expandedKey, fullTraceKey, segmentRoot]);
 
-  // Keep the two saved-highlight paint objects registered for this document's
+  // Keep the two saved-highlight paint objects registered for this thread page's
   // lifetime. Mutating their range sets avoids WebKit leaving deleted registry
   // paint on screen until an unrelated selection or pointer event invalidates
   // the text layer.
@@ -3560,8 +3560,8 @@ function ResearchDocument({
     const { nodeId, anchor } = highlightAction;
     setHighlightAction(null);
     window.getSelection()?.removeAllRanges();
-    openDraft(nodeId, anchor);
-  }, [highlightAction, openDraft, selectionBranchBlocker]);
+    openPendingBranch(nodeId, anchor);
+  }, [highlightAction, openPendingBranch, selectionBranchBlocker]);
 
   const copySelection = useCallback(async () => {
     if (!highlightAction) {
@@ -3770,16 +3770,16 @@ function ResearchDocument({
     (nodeId: string) => setFullTraceNodes((current) => ({ ...current, [nodeId]: !current[nodeId] })),
     [],
   );
-  const togglePromoted = useCallback((nodeId: string) => {
+  const toggleStarred = useCallback((nodeId: string) => {
     const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
     if (!node) {
       return;
     }
-    const promoted = !node.promotedAt;
-    setResearchNodePromoted(nodeId, promoted)
+    const starred = !node.promotedAt;
+    setResearchNodePromoted(nodeId, starred)
       .then(() =>
         onToastRef.current(
-          promoted
+          starred
             ? node.inline
               ? "Starred. It's listed under its question in the feed."
               : "Starred. The branch is listed under its question in the feed."
@@ -3959,7 +3959,7 @@ function ResearchDocument({
         clearComposer();
         return;
       }
-      if (step === "stalled" || !canContinueThread(currentDetail.nodes, tail)) {
+      if (step === "stalled" || !canContinueChain(currentDetail.nodes, tail)) {
         return;
       }
       setSubmittingKey(headId);
@@ -3980,12 +3980,12 @@ function ResearchDocument({
 
   /** Sends the new branch's first question: the branch is created with it
    * and becomes the next level, with its ask box focused. */
-  const submitDraft = useCallback(async () => {
+  const submitPendingBranch = useCallback(async () => {
     const current = pendingRef.current;
     if (!current) {
       return;
     }
-    const key = `draft:${current.parentNodeId}`;
+    const key = `pending:${current.parentNodeId}`;
     const prompt = (composerTextRef.current[key] ?? "").trim();
     if (!prompt || submittingKeyRef.current || archived) {
       return;
@@ -4000,7 +4000,7 @@ function ResearchDocument({
       );
       const currentTreeId = treeIdRef.current;
       if (currentTreeId) {
-        navigationPersistence.clearAsk(currentTreeId, current.parentNodeId);
+        navigationPersistence.clearPendingBranch(currentTreeId, current.parentNodeId);
       }
       setComposerText((text) => withoutKeys(text, [key]));
       if (pendingRef.current === current) {
@@ -4302,7 +4302,7 @@ function ResearchDocument({
             : "Document saved",
         );
       } else {
-        const result = await onUpdateNote({
+        const result = await onUpdatePost({
           nodeId: session.nodeId,
           text: session.text,
           expectedText: session.initialText,
@@ -4394,7 +4394,7 @@ function ResearchDocument({
       }
       const wasOnPath = levelPathRef.current.some((id) => subtree.has(id));
       const removal = await onRemoveBranch(deletingBranch.node.id);
-      // The backend call and detail refresh can outlive this document's tree.
+      // The backend call and detail refresh can outlive this thread page's tree.
       if (treeIdRef.current !== removal.treeId) {
         setDeletingBranchId(null);
         return;
@@ -4427,7 +4427,7 @@ function ResearchDocument({
 
   if (!detail || !rootNodeId || !selectedNodeId || levelPath.length === 0) {
     // A failed *tree* fetch retries through the app shell — without detail
-    // there is no node to load, so no in-document retry can recover.
+    // there is no node to load, so no in-page retry can recover.
     const placeholderError = detailError ?? null;
     const rootKind = detail
       ? detail.nodes.find((node) => node.id === detail.tree.rootNodeId)?.type
@@ -4435,7 +4435,7 @@ function ResearchDocument({
     const headerTitle =
       rootKind === "post" ? "Post" : (detail?.tree.title ?? treeTitle ?? "Loading research…");
     return (
-      <ResearchDocumentFrame title={headerTitle}>
+      <ResearchThreadPlaceholder title={headerTitle}>
         <div className="research-placeholder">
           {placeholderError ? null : (
             <LoaderCircle className="research-spinner" size={24} aria-hidden="true" />
@@ -4452,7 +4452,7 @@ function ResearchDocument({
             </>
           ) : null}
         </div>
-      </ResearchDocumentFrame>
+      </ResearchThreadPlaceholder>
     );
   }
 
@@ -4528,7 +4528,7 @@ function ResearchDocument({
           answerMenuOpen={menu?.kind === "answer" && menu.nodeId === id && Boolean(menu.trigger)}
           registerSegmentElement={registerSegmentElement}
           onSelect={selectRow}
-          onTogglePromoted={togglePromoted}
+          onToggleStarred={toggleStarred}
           onShowBranches={showBranches}
           onOpenAnswerMenu={openAnswerMenu}
           onOpenContextMenu={openContextMenu}
@@ -4639,7 +4639,7 @@ function ResearchDocument({
     const awaitingCheckpoint = nodeStatus(tail) === "complete" && !canFollowUpFrom(tail);
     const canSend =
       !archived &&
-      (Boolean(editingId) || step === "wait" || queued || canContinueThread(nodes, tail));
+      (Boolean(editingId) || step === "wait" || queued || canContinueChain(nodes, tail));
     const note = editingId
       ? null
       : archived
@@ -4654,7 +4654,7 @@ function ResearchDocument({
     const busy = chain.some((node) => isActiveResearchStatus(nodeStatus(node)));
     const placeholder = editingId
       ? "Edit the question"
-      : threadComposerPlaceholder(head, chain.length, busy || queued);
+      : chainComposerPlaceholder(head, chain.length, busy || queued);
     const cancelEditing = () => {
       setEditingByHead((current) => withoutKeys(current, [headId]));
       setComposerText((current) => ({ ...current, [headId]: "" }));
@@ -5008,31 +5008,31 @@ function ResearchDocument({
     switch (column.role) {
       case "post": {
         const level = column.level.index;
-        const note = nodeById.get(column.level.headId);
-        if (!note) {
+        const post = nodeById.get(column.level.headId);
+        if (!post) {
           return null;
         }
-        const postEditing = editor?.kind === "post" && editor.nodeId === note.id ? editor : null;
+        const postEditing = editor?.kind === "post" && editor.nodeId === post.id ? editor : null;
         return (
           <section
             key={columnKey(column)}
-            className={`research-pair-note${currentLevel === level ? " is-current" : ""}`}
+            className={`research-pair-post${currentLevel === level ? " is-current" : ""}`}
             {...columnAttributes(column)}
-            aria-label={`Post: ${level === 0 ? treeTitleText : nodeLabel(note, "Post")}`}
+            aria-label={`Post: ${level === 0 ? treeTitleText : nodeLabel(post, "Post")}`}
           >
-            {/* The note itself starts the column, so the header names the
-                column ("Post") rather than repeating the note's text. */}
+            {/* The post itself starts the column, so the header names the
+                column ("Post") rather than repeating the post's text. */}
             <ResearchPairHeader
               title="Post"
               history={level === 0 ? historyNav : null}
               archived={archived}
               menu={
-                level === 0 && note.id === rootNodeId
+                level === 0 && post.id === rootNodeId
                   ? {
                       label: "Post actions",
                       open: menu?.kind === "post",
                       onOpen: (trigger) =>
-                        setMenu({ kind: "post", nodeId: note.id, anchor: trigger, align: "end", trigger }),
+                        setMenu({ kind: "post", nodeId: post.id, anchor: trigger, align: "end", trigger }),
                     }
                   : null
               }
@@ -5042,10 +5042,10 @@ function ResearchDocument({
                 {postEditing && !postEditing.correction && postEditing.text !== postEditing.initialText ? (
                   <ResearchEditPreview original={postEditing.initialText} next={editorText} label="Preview" />
                 ) : (
-                  <ResearchNoteDocument detail={detail} note={note} onSelectNode={(nodeId) => navigate(nodeId)} />
+                  <ResearchPostColumn detail={detail} post={post} onSelectNode={(nodeId) => navigate(nodeId)} />
                 )}
                 <ResearchPostCorrections
-                  corrections={note.type === "post" ? (note.corrections ?? []) : []}
+                  corrections={post.type === "post" ? (post.corrections ?? []) : []}
                   now={minuteNow}
                 />
                 {postEditing?.correction && postEditing.text.trim() && postEditing.text !== postEditing.initialText ? (
@@ -5059,11 +5059,11 @@ function ResearchDocument({
       }
       case "thread": {
         const level = column.level.index;
-        const note = nodeById.get(column.level.headId);
-        if (!note) {
+        const post = nodeById.get(column.level.headId);
+        if (!post) {
           return null;
         }
-        const count = noteThreadEntries(nodes, note).length;
+        const count = postThreadEntries(nodes, post).length;
         return (
           <section
             key={columnKey(column)}
@@ -5074,14 +5074,14 @@ function ResearchDocument({
             <ResearchPairHeader title="Thread" count={count} />
             <div className="research-column-scroll">
               <div className="research-column-content research-reading-surface">
-                <ResearchNoteThread
+                <ResearchPostThread
                   nodes={nodes}
-                  note={note}
+                  post={post}
                   archived={archived}
-                  actions={noteActions}
+                  actions={postActions}
                   requireCmdEnterToSend={requireCmdEnterToSend}
                   openNodeId={levels[level + 1]?.headId ?? null}
-                  composerRef={registerComposer(note.id)}
+                  composerRef={registerComposer(post.id)}
                   threadRef={registerThread(level)}
                   onOpenFollowUp={(nodeId) => {
                     openBranch(level, nodeId);
@@ -5090,7 +5090,7 @@ function ResearchDocument({
                 />
               </div>
             </div>
-            <ResearchColumnResizer kind="turns" label="Resize thread column" />
+            <ResearchColumnResizer kind="messages" label="Resize thread column" />
           </section>
         );
       }
@@ -5101,7 +5101,7 @@ function ResearchDocument({
         return (
           <section
             key={columnKey(column)}
-            className={`research-pair-turns${currentLevel === level ? " is-current" : ""}`}
+            className={`research-pair-messages${currentLevel === level ? " is-current" : ""}`}
             {...columnAttributes(column)}
             aria-label={`${level === 0 ? "Messages" : "Branch messages"}: ${title}`}
           >
@@ -5128,7 +5128,7 @@ function ResearchDocument({
                 {renderChainComposer(headId, chainIds, level)}
               </div>
             </div>
-            <ResearchColumnResizer kind="turns" label="Resize messages column" belowHeader />
+            <ResearchColumnResizer kind="messages" label="Resize messages column" belowHeader />
           </section>
         );
       }
@@ -5137,11 +5137,11 @@ function ResearchDocument({
       case "editor":
         return renderEditorColumn(column);
       case "pending": {
-        const pendingKey = `draft:${column.parentNodeId}`;
+        const pendingKey = `pending:${column.parentNodeId}`;
         return (
           <section
             key={columnKey(column)}
-            className={`research-pair-turns is-pending${currentLevel === column.levelIndex ? " is-current" : ""}`}
+            className={`research-pair-messages is-pending${currentLevel === column.levelIndex ? " is-current" : ""}`}
             {...columnAttributes(column)}
             aria-label="New branch"
           >
@@ -5161,11 +5161,11 @@ function ResearchDocument({
                   submitting={submittingKey === pendingKey}
                   shortcutHint={shortcutHintsShown && currentLevel === column.levelIndex ? "⌘J" : null}
                   onChange={(value) => setComposerText((current) => ({ ...current, [pendingKey]: value }))}
-                  onSubmit={() => void submitDraft()}
+                  onSubmit={() => void submitPendingBranch()}
                 />
               </div>
             </div>
-            <ResearchColumnResizer kind="turns" label="Resize messages column" />
+            <ResearchColumnResizer kind="messages" label="Resize messages column" />
           </section>
         );
       }
@@ -5217,7 +5217,7 @@ function ResearchDocument({
                 label="Branch from highlight"
                 disabled={blocker !== null}
                 title={blocker ?? undefined}
-                onSelect={() => openDraft(menu.nodeId, highlight.anchor)}
+                onSelect={() => openPendingBranch(menu.nodeId, highlight.anchor)}
               />
               <ResearchMenuItem
                 icon={<X size={15} aria-hidden="true" />}
@@ -5376,7 +5376,7 @@ function ResearchDocument({
           label="Branch from the whole answer"
           disabled={branchBlocker !== null}
           title={branchBlocker ?? undefined}
-          onSelect={() => openDraft(node.id, null)}
+          onSelect={() => openPendingBranch(node.id, null)}
         />
         {copyText && view ? (
           <ResearchMenuItem
@@ -5422,7 +5422,7 @@ function ResearchDocument({
         {canRegenerateRecap ? (
           <ResearchMenuItem
             icon={<RefreshCw size={15} aria-hidden="true" />}
-            label="Generate summary"
+            label="Generate recap"
             onSelect={() => {
               setMenu(null);
               setRecapDialogNodeId(node.id);
@@ -5556,7 +5556,7 @@ function ResearchDocument({
     <TranscriptLinkActionsProvider actions={linkActions}>
       <div
         ref={workspaceRef}
-        className="research-workspace research-pairs"
+        className="research-thread-page research-pairs"
         onKeyDown={onPairsKeyDown}
       >
         {strip.columns.map(renderColumn)}
@@ -5737,7 +5737,7 @@ function ResearchDocument({
                     ? { ...current, [updatedNode.id]: { ...content, node: updatedNode } }
                     : current;
                 });
-                onToast("Summary updated");
+                onToast("Recap updated");
               }}
             />,
             document.body,
@@ -5835,4 +5835,4 @@ function ResearchDocument({
   );
 }
 
-export default memo(ResearchDocument);
+export default memo(ResearchThreadPage);

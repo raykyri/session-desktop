@@ -22,7 +22,7 @@ import {
   treesWithWorkspaceOrder,
   workspaceResearchFolders,
 } from "../src/lib/researchFolders";
-import { patchRecentActivityPromoted } from "../src/lib/activity";
+import { patchRecentActivityStarred } from "../src/lib/activity";
 import { researchMoveTargets } from "../src/components/research/ResearchMoveMenu";
 import type { ResearchFolderState, ResearchTreeSummary } from "../src/types";
 import { researchNode } from "./researchNodeFixture";
@@ -163,14 +163,14 @@ test("starred children list follow-ups as text rows and branches with a level", 
     ],
   });
   assert.deepEqual(
-    children.map(({ nodeId, label, branch, level, running }) => ({ nodeId, label, branch, level, running })),
+    children.map(({ nodeId, label, branch, indent, running }) => ({ nodeId, label, branch, indent, running })),
     [
-      { nodeId: "f", label: "Follow-up", branch: false, level: 1, running: false },
-      { nodeId: "b", label: "Branch title", branch: true, level: 1, running: true },
-      { nodeId: "bb", label: "Deeper", branch: true, level: 2, running: false },
+      { nodeId: "f", label: "Follow-up", branch: false, indent: 1, running: false },
+      { nodeId: "b", label: "Branch title", branch: true, indent: 1, running: true },
+      { nodeId: "bb", label: "Deeper", branch: true, indent: 2, running: false },
       // A branch from a starred follow-up sits under it.
-      { nodeId: "fb", label: "From the starred follow-up", branch: true, level: 2, running: false },
-      { nodeId: "ub", label: "From another follow-up", branch: true, level: 1, running: false },
+      { nodeId: "fb", label: "From the starred follow-up", branch: true, indent: 2, running: false },
+      { nodeId: "ub", label: "From another follow-up", branch: true, indent: 1, running: false },
     ],
   );
 });
@@ -182,14 +182,14 @@ test("node updates keep a root's starred list current, or ask for a refetch", ()
   }];
   const node = (id: string, promotedAt: number | null, prompt = "New") =>
     researchNode({ id, treeId: "t", prompt, title: null, status: "running", promotedAt });
-  const updated = patchRecentActivityPromoted(items, node("f", 5));
+  const updated = patchRecentActivityStarred(items, node("f", 5));
   assert.equal(updated.stale, false);
   assert.equal(updated.items[0].promoted?.[0].prompt, "New");
   assert.equal(updated.items[0].promoted?.[0].status, "running");
-  const unstarred = patchRecentActivityPromoted(items, node("f", null));
+  const unstarred = patchRecentActivityStarred(items, node("f", null));
   assert.deepEqual(unstarred.items[0].promoted, []);
-  const starred = patchRecentActivityPromoted(items, node("g", 9));
+  const starred = patchRecentActivityStarred(items, node("g", 9));
   assert.equal(starred.stale, true);
   assert.equal(starred.items, items);
-  assert.equal(patchRecentActivityPromoted(items, node("g", null)).items, items);
+  assert.equal(patchRecentActivityStarred(items, node("g", null)).items, items);
 });

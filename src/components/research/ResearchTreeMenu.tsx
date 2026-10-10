@@ -15,7 +15,7 @@ export function ResearchTreeMenuItems({
   onArchive,
   onRestore,
   onDelete,
-  onRegenerateSummary,
+  onRegenerateRecap,
 }: {
   tree: ResearchTreeSummary;
   archived: boolean;
@@ -27,19 +27,19 @@ export function ResearchTreeMenuItems({
   onRestore?: (treeId: string) => void;
   onDelete: (tree: ResearchTreeSummary) => void;
   /** Query-specific action used by Home's research activity menu. */
-  onRegenerateSummary?: () => void;
+  onRegenerateRecap?: () => void;
 }) {
   const running = tree.runningCount > 0;
   return (
     <>
-      {onRegenerateSummary ? (
+      {onRegenerateRecap ? (
         <>
           <ResearchMenuItem
             icon={<RefreshCw size={15} aria-hidden="true" />}
-            label="Generate summary"
+            label="Generate recap"
             onSelect={() => {
               onClose();
-              onRegenerateSummary();
+              onRegenerateRecap();
             }}
           />
           <ResearchMenuSeparator />
