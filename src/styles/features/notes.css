@@ -292,35 +292,20 @@
   text-underline-offset: 2px;
 }
 
-/* Display the note's delivery status in the turn's answer section. */
-.note-document-status {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--research-body-font-size);
-  line-height: var(--research-body-line-height);
-}
-
-/* The follow-up destination control ("Post ⌄" or "Ask ⌄") precedes Send
-   and shows a background on hover. */
-.note-composer-destination {
-  display: inline-flex;
-  flex: none;
+/* Show the Post and Ask switch and Send on a row under the text once the
+   composer is focused or filled: the switch at the leading edge, Send at the
+   trailing edge, as in the Home ask box. */
+.note-composer-row {
+  display: flex;
+  flex-basis: 100%;
   align-items: center;
-  gap: 3px;
-  height: 30px;
-  min-height: 0;
-  padding: 0 6px 0 8px;
-  border: 0;
-  border-radius: 6px;
-  color: var(--text-muted);
-  background: transparent;
-  font-size: var(--research-meta-font-size);
+  gap: 6px;
+  min-width: 0;
+  margin-left: -5px;
 }
 
-.note-composer-destination:hover,
-.note-composer-destination[aria-expanded="true"] {
-  color: var(--text-primary);
-  background: var(--surface-fill-hover);
+.note-composer-row .research-composer-send {
+  margin-left: auto;
 }
 
 .note-composer .note-thread-error {
@@ -329,19 +314,10 @@
 
 /* — Thread column — */
 
-/* Place the follow-up composer before the thread rows. The text field uses
-   the full width; the destination control and Send align right on the row below. */
+/* Place the follow-up composer before the thread rows. */
 .note-thread > .note-composer {
   padding: 12px 12px 14px;
   border-bottom: 1px solid var(--surface-divider);
-}
-
-.note-composer.is-full-width .note-composer-destination {
-  margin-left: auto;
-}
-
-.note-composer.is-full-width .note-composer-destination + .research-composer-send {
-  margin-left: 0;
 }
 
 .note-thread-empty {

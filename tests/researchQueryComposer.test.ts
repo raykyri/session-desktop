@@ -9,16 +9,15 @@ import type { AgentAdapterMetadata } from "../src/types";
 register("./svgStubLoader.mjs", import.meta.url);
 const {
   default: ResearchQueryComposer,
-  AskPostSwitch,
   askModeShowsAiControls,
-  askSwitchKeyTarget,
   parseResearchModelChoice,
   researchEffortOptionsFor,
   researchModelChoiceValue,
   researchModelOptions,
 } = await import("../src/components/research/ResearchQueryComposer");
+const { AskPostSwitch, askSwitchKeyTarget } = await import("../src/components/research/AskPostSwitch");
 const { noteBodyIsSingleUrl } = await import("../src/components/research/ResearchNote");
-const { LauncherSelect } = await import("../src/components/LauncherSelect");
+const { LauncherSelect, OptionIcon: LauncherSelectIcon } = await import("../src/components/LauncherSelect");
 
 function adapter(id: string): AgentAdapterMetadata {
   return {
@@ -142,7 +141,9 @@ function renderSwitch(askMode: "ai" | "network") {
   return renderToStaticMarkup(
     createElement(AskPostSwitch, {
       askMode,
-      askIcon: { value: "claude", label: "Claude Code", iconSrc: "claude.svg" },
+      askIcon: createElement(LauncherSelectIcon, {
+        option: { value: "claude", label: "Claude Code", iconSrc: "claude.svg" },
+      }),
       askLabel: "Ask with Claude Code Fable",
       menuOpen: false,
       askRef: { current: null },
@@ -176,6 +177,20 @@ test("Ask and Post are two icon radios; only the selected one is a tab stop", ()
   assert.match(post, /role="radio" aria-checked="true" tabindex="0"[^>]*aria-label="Post to network"/);
   // In Post the Ask segment opens no menu, so it has no chevron or hint.
   assert.doesNotMatch(post, /lucide-chevron-down|aria-describedby/);
+});
+
+test("a switch with no model menu shows no chevron or menu hint on Ask", () => {
+  // A post's follow-up box: Ask uses the post's model.
+  const html = renderToStaticMarkup(
+    createElement(AskPostSwitch, {
+      askMode: "ai",
+      askIcon: null,
+      askLabel: "Ask Claude Fable",
+      onModeChange: () => {},
+    }),
+  );
+  assert.match(html, /role="radio" aria-checked="true" tabindex="0"[^>]*aria-label="Ask Claude Fable"/);
+  assert.doesNotMatch(html, /lucide-chevron-down|aria-describedby|Press Enter to choose a model/);
 });
 
 test("arrow keys switch the mode; Home is Ask and End is Post", () => {

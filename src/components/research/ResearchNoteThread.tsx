@@ -91,7 +91,6 @@ export default function ResearchNoteThread({
           target={target}
           autoFocus={target !== null}
           fullWidth
-          placeholder="Ask a follow-up about this note"
           requireCmdEnter={requireCmdEnterToSend}
           onClearTarget={() => setTarget(null)}
           onSubmit={(prompt, network) =>
@@ -180,11 +179,7 @@ function NoteFollowUpRow({
   let state: ReactNode;
   if (network) {
     const count = child.delivery?.replies?.filter((reply) => !reply.inReplyTo).length ?? 0;
-    state = (
-      <div className="note-thread-meta">
-        {count === 1 ? "1 reply" : count > 0 ? `${count} replies` : "No replies yet"}
-      </div>
-    );
+    state = count > 0 ? <div className="note-thread-meta">{count === 1 ? "1 reply" : `${count} replies`}</div> : null;
   } else if (child.status === "complete") {
     state = <div className="note-thread-meta">Answered</div>;
   } else {
@@ -213,9 +208,7 @@ function NoteFollowUpRow({
       <div className="note-thread-body">
         <div className="note-reply-head">
           <span className="note-reply-author">You</span>
-          <span>
-            {network ? "posted to network" : `asked ${model}${anchored ? ` about ${anchored.author}’s reply` : ""}`}
-          </span>
+          {network ? null : <span>{`asked ${model}${anchored ? ` about ${anchored.author}’s reply` : ""}`}</span>}
           <span aria-hidden="true">·</span>
           <time dateTime={new Date(child.createdAt).toISOString()} title={new Date(child.createdAt).toLocaleString()}>
             {shortWhen(child.createdAt)}

@@ -1,6 +1,6 @@
 import { useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent, LiHTMLAttributes, MouseEvent, ReactNode, Ref } from "react";
-import { ArrowRight, Check, ChevronDown, ExternalLink, LoaderCircle, X } from "lucide-react";
+import { ArrowRight, ExternalLink, LoaderCircle, Sparkles, X } from "lucide-react";
 import type {
   NoteReply,
   RecentResearchQuery,
@@ -16,7 +16,8 @@ import {
   ResearchMessageBody,
   type ResearchProseVariant,
 } from "./ResearchMessage";
-import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
+import { AskPostSwitch, type AskMode } from "./AskPostSwitch";
+import { useComposerPopOpen } from "../../hooks/useComposerPopOpen";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
 
 /** Handlers shared by the Home note card and the note page. Each rejects
@@ -349,14 +350,12 @@ export function NoteFollowUpStatus({
   return null;
 }
 
-type NoteFollowUpMode = "network" | "ai";
-
-/** Follow-up composer at the top of a note's thread column: the column's
- * follow-up composer (research-composer), with a destination control before
- * Send. With `fullWidth`, the text has its own row above the controls. On
- * a network note it posts to the network by default, with Ask (the note's AI
- * model) in the destination menu. A saved link, or a follow-up about a
- * reply, can only ask, so it has no destination control. A reply target
+/** Follow-up composer at the top of a note's thread column. Like the Home
+ * ask box it is one line until focused or filled; then the Post and Ask
+ * switch and Send appear on a row under the text. On a network note it posts
+ * to the network by default. Ask, marked with the AI follow-up rows' icon,
+ * uses the note's model, so the switch has no model menu. A saved link, or a
+ * follow-up about a reply, can only ask, so it has no switch. A reply target
  * shows above the field as a removable "@Ana's reply" chip. The send
  * shortcut follows the "Require ⌘↵ to send" setting. */
 export function NoteFollowUpField({
@@ -384,12 +383,12 @@ export function NoteFollowUpField({
   onSubmit: (prompt: string, network: boolean) => Promise<void>;
 }) {
   const [draft, setDraft] = useState("");
-  const [mode, setMode] = useState<NoteFollowUpMode>("network");
-  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [mode, setMode] = useState<AskMode>("network");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const { focused, collapseIfFocusLeft, rootProps } = useComposerPopOpen(wrapRef);
   useImperativeHandle(
     composerRef,
     () => ({ focus: () => textareaRef.current?.focus(), element: () => wrapRef.current }),
@@ -400,6 +399,7 @@ export function NoteFollowUpField({
       growComposerTextarea(textareaRef.current);
     }
   }, [draft]);
+  const expanded = focused || Boolean(draft) || target !== null || submitting;
   const canPost = networkAvailable && !target;
   const toNetwork = canPost && mode === "network";
   const askLabel = `Ask ${modelLabel || "AI"}`;
@@ -412,29 +412,34 @@ export function NoteFollowUpField({
     onSubmit(prompt, toNetwork)
       .then(() => setDraft(""))
       .catch((err) => setError(errorMessage(err)))
-      .finally(() => setSubmitting(false));
+      .finally(() => {
+        setSubmitting(false);
+        window.requestAnimationFrame(collapseIfFocusLeft);
+      });
   };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (isComposerSubmitShortcut(event, requireCmdEnter)) {
       event.preventDefault();
       submit();
-    } else if (event.key === "Escape" && target) {
+    } else if (event.key === "Escape") {
+      // Esc first drops a reply target, then leaves the field, which
+      // collapses again when it is empty.
       event.preventDefault();
-      onClearTarget();
+      if (target) onClearTarget();
+      else event.currentTarget.blur();
     }
   };
   const sendLabel = toNetwork ? "Post to your network" : askLabel;
   const shortcut = requireCmdEnter ? "⌘↵" : "↵";
 
-  const modeOptions: { mode: NoteFollowUpMode; label: string }[] = [
-    { mode: "network", label: "Post to network" },
-    { mode: "ai", label: askLabel },
-  ];
   return (
     <div
       ref={wrapRef}
-      className={`research-composer-wrap note-composer${fullWidth ? " is-full-width" : ""}`}
+      className={`research-composer-wrap note-composer${fullWidth ? " is-full-width" : ""}${
+        expanded ? " is-expanded" : ""
+      }`}
       onClick={stopForInteractive}
+      {...rootProps}
     >
       {target ? (
         <div className="research-composer-note">
@@ -464,7 +469,7 @@ export function NoteFollowUpField({
           disabled={submitting}
           placeholder={
             toNetwork
-              ? "Post a follow-up to your network"
+              ? "Post a follow-up"
               : target
                 ? `Ask about ${target.author}’s reply`
                 : placeholder
@@ -473,67 +478,40 @@ export function NoteFollowUpField({
           onChange={(event) => setDraft(event.currentTarget.value)}
           onKeyDown={onKeyDown}
         />
-        {canPost ? (
-          <button
-            type="button"
-            className="control-button note-composer-destination"
-            aria-haspopup="menu"
-            aria-expanded={menuAnchor !== null}
-            aria-label={`Follow-up destination: ${toNetwork ? "Post to network" : askLabel}`}
-            title="Post to your network or ask AI"
-            onClick={(event) => {
-              const trigger = event.currentTarget;
-              setMenuAnchor((current) => (current ? null : trigger));
-            }}
-          >
-            <span>{toNetwork ? "Post" : "Ask"}</span>
-            <ChevronDown size={13} aria-hidden="true" />
-          </button>
+        {expanded ? (
+          <div className="note-composer-row">
+            {canPost ? (
+              <AskPostSwitch
+                askMode={mode}
+                askIcon={<Sparkles size={14} aria-hidden="true" />}
+                askLabel={askLabel}
+                onModeChange={(next) => {
+                  setMode(next);
+                  setError(null);
+                }}
+              />
+            ) : null}
+            <button
+              className="control-button research-composer-send"
+              type="submit"
+              disabled={!ready}
+              aria-label={toNetwork ? "Post" : "Ask"}
+              title={`${sendLabel} (${shortcut})`}
+            >
+              {submitting ? (
+                <LoaderCircle className="research-spinner" size={15} aria-hidden="true" />
+              ) : (
+                <ArrowRight size={15} aria-hidden="true" />
+              )}
+              <ComposerSubmitShortcutGlyph
+                requireCmdEnter={requireCmdEnter}
+                className="research-composer-enter"
+                ariaHidden
+              />
+            </button>
+          </div>
         ) : null}
-        <button
-          className="control-button research-composer-send"
-          type="submit"
-          disabled={!ready}
-          aria-label={toNetwork ? "Post" : "Ask"}
-          title={`${sendLabel} (${shortcut})`}
-        >
-          {submitting ? (
-            <LoaderCircle className="research-spinner" size={15} aria-hidden="true" />
-          ) : (
-            <ArrowRight size={15} aria-hidden="true" />
-          )}
-          <ComposerSubmitShortcutGlyph
-            requireCmdEnter={requireCmdEnter}
-            className="research-composer-enter"
-            ariaHidden
-          />
-        </button>
       </form>
-      {menuAnchor ? (
-        <ResearchMenu
-          anchor={menuAnchor}
-          label="Follow-up destination"
-          onClose={() => setMenuAnchor(null)}
-        >
-          {modeOptions.map((option) => (
-            <ResearchMenuItem
-              key={option.mode}
-              label={option.label}
-              checked={mode === option.mode}
-              trailing={
-                mode === option.mode ? (
-                  <Check className="research-menu-check" size={15} aria-hidden="true" />
-                ) : null
-              }
-              onSelect={() => {
-                setMode(option.mode);
-                setMenuAnchor(null);
-                textareaRef.current?.focus();
-              }}
-            />
-          ))}
-        </ResearchMenu>
-      ) : null}
       {error ? (
         <p className="note-thread-error" role="alert">
           {error}

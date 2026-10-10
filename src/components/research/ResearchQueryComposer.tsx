@@ -1,6 +1,6 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject, RefObject } from "react";
-import { ArrowRight, ChevronDown, LoaderCircle, Users } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { MutableRefObject } from "react";
+import { ArrowRight, LoaderCircle } from "lucide-react";
 import type { AgentAdapterMetadata } from "../../types";
 import { LauncherSelect, OptionIcon, type LauncherSelectOption } from "../LauncherSelect";
 import { isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
@@ -30,6 +30,8 @@ import {
   researchReadinessLabel,
 } from "../../lib/adapterReadiness";
 import { noteBodyIsSingleUrl } from "./ResearchNote";
+import { AskPostSwitch, type AskMode } from "./AskPostSwitch";
+import { useComposerPopOpen } from "../../hooks/useComposerPopOpen";
 
 // GPT-5.4 stops at extra high; every other Codex preset (and a custom model,
 // whose ceiling is unknown here) offers the full range and lets the CLI
@@ -62,125 +64,8 @@ export function researchEffortOptionsFor(
   return null;
 }
 
-/** Who a question goes to: an agent ("ai"), or the network, which posts a
- * note to Home (network delivery itself is not built yet); a body that is a
- * single URL is saved as a link or post instead of asked. The Ask/Post
- * switcher sets it. */
-type AskMode = "network" | "ai";
-
 export function askModeShowsAiControls(askMode: AskMode) {
   return askMode === "ai";
-}
-
-/** The mode a key on the Ask/Post switcher selects, or null for any other
- * key: ← and → move to the other segment, Home to Ask, End to Post. */
-export function askSwitchKeyTarget(key: string, current: AskMode): AskMode | null {
-  switch (key) {
-    case "ArrowLeft":
-    case "ArrowRight":
-      return current === "ai" ? "network" : "ai";
-    case "Home":
-      return "ai";
-    case "End":
-      return "network";
-    default:
-      return null;
-  }
-}
-
-interface AskPostSwitchProps {
-  askMode: AskMode;
-  /** The selected agent's icon. */
-  askIcon: LauncherSelectOption;
-  /** "Ask with {agent} {model}": the Ask segment's name and tooltip. */
-  askLabel: string;
-  menuOpen: boolean;
-  askRef: RefObject<HTMLButtonElement | null>;
-  onModeChange: (mode: AskMode) => void;
-  onMenuOpenChange: (open: boolean) => void;
-}
-
-/** Ask and Post as two icon segments in a radiogroup with a roving tabindex.
- * A press on the selected Ask segment (or Enter, Space or ↓ on it) opens the
- * model menu; from Post, Ask only switches back, keeping the last model. A
- * radio cannot carry aria-haspopup, so the menu is announced through a
- * description instead. */
-export function AskPostSwitch({
-  askMode,
-  askIcon,
-  askLabel,
-  menuOpen,
-  askRef,
-  onModeChange,
-  onMenuOpenChange,
-}: AskPostSwitchProps) {
-  const hintId = useId();
-  const postRef = useRef<HTMLButtonElement | null>(null);
-  const ask = askMode === "ai";
-
-  const onKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, segment: AskMode) => {
-    if (event.metaKey || event.ctrlKey || event.altKey) return;
-    const target = askSwitchKeyTarget(event.key, segment);
-    if (target) {
-      event.preventDefault();
-      onModeChange(target);
-      (target === "ai" ? askRef : postRef).current?.focus();
-      return;
-    }
-    if (segment === "ai" && ask && event.key === "ArrowDown") {
-      event.preventDefault();
-      onMenuOpenChange(true);
-    }
-  };
-
-  return (
-    <div className="new-research-switch" role="radiogroup" aria-label="Send to">
-      <button
-        ref={askRef}
-        type="button"
-        role="radio"
-        aria-checked={ask}
-        tabIndex={ask ? 0 : -1}
-        className="new-research-switch-option"
-        aria-label={askLabel}
-        aria-describedby={ask ? hintId : undefined}
-        title={askLabel}
-        onClick={(event) => {
-          // WebKit does not focus a clicked button; focus it so the arrow
-          // keys work from here and the menu has a place to return focus to.
-          event.currentTarget.focus();
-          if (ask) onMenuOpenChange(!menuOpen);
-          else onModeChange("ai");
-        }}
-        onKeyDown={(event) => onKeyDown(event, "ai")}
-      >
-        <OptionIcon option={askIcon} />
-        {ask ? (
-          <ChevronDown size={9} className="new-research-switch-chevron" aria-hidden="true" />
-        ) : null}
-      </button>
-      <button
-        ref={postRef}
-        type="button"
-        role="radio"
-        aria-checked={!ask}
-        tabIndex={ask ? -1 : 0}
-        className="new-research-switch-option"
-        aria-label="Post to network"
-        title="Post to network"
-        onClick={(event) => {
-          event.currentTarget.focus();
-          onModeChange("network");
-        }}
-        onKeyDown={(event) => onKeyDown(event, "network")}
-      >
-        <Users size={14} aria-hidden="true" />
-      </button>
-      <span id={hintId} hidden>
-        Press Enter to choose a model
-      </span>
-    </div>
-  );
 }
 
 /* The Ask picker lists every agent's models in one menu, so each option's
@@ -280,8 +165,10 @@ export default function ResearchQueryComposer({
   // Recipient choice is not persisted with the rest of the draft; every new
   // composer opens on Ask.
   const [askMode, setAskMode] = useState<AskMode>("ai");
-  const [focused, setFocused] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // The field stays expanded while focus is inside the composer or its model
+  // menu (a portal), and collapses on a click elsewhere once it is empty.
+  const { focused, collapseIfFocusLeft, rootProps } = useComposerPopOpen(rootRef, insideComposer);
   const [adapter, setAdapter] = useState("");
   const [modelChoice, setModelChoice] = useState<string | null>(null);
   const [customModel, setCustomModel] = useState("");
@@ -537,48 +424,6 @@ export default function ResearchQueryComposer({
     };
   }, [adapter, launchChoiceRef, launchReady, resolvedEffort, resolvedModel]);
 
-  // The field stays expanded while focus is inside the composer or its model
-  // menu (a portal), and collapses on a click elsewhere once it is empty. A
-  // collapse waits for the click to finish, so the list below doesn't move
-  // between the press and the release that opens what was pressed.
-  const pointerDownOutsideRef = useRef(false);
-  // Set from a press inside the composer until it is released. WebKit does
-  // not focus a clicked button, so pressing the model picker blurs the field
-  // with no related target; collapsing then would remove the picker before
-  // its click event fires. Such a blur keeps the composer open, and the next press
-  // outside it collapses it.
-  const pointerDownInsideRef = useRef(false);
-  const collapse = () => {
-    if (!pointerDownOutsideRef.current) {
-      setFocused(false);
-      return;
-    }
-    window.addEventListener(
-      "pointerup",
-      () => {
-        pointerDownOutsideRef.current = false;
-        window.setTimeout(() => setFocused(false), 0);
-      },
-      { once: true },
-    );
-  };
-  // Ask and Save draft are disabled while they work, and a focused button
-  // that becomes disabled loses focus without a blur event; once focus has
-  // left the composer this way, it collapses as after a click elsewhere.
-  const collapseIfFocusLeft = () => {
-    if (!insideComposer(rootRef.current, document.activeElement)) setFocused(false);
-  };
-  useEffect(() => {
-    if (!focused) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (insideComposer(rootRef.current, event.target)) return;
-      pointerDownOutsideRef.current = true;
-      collapse();
-    };
-    window.addEventListener("pointerdown", onPointerDown, true);
-    return () => window.removeEventListener("pointerdown", onPointerDown, true);
-  }, [focused]);
-
   const [savingDraft, setSavingDraft] = useState(false);
   async function saveDraft() {
     const text = prompt.trim();
@@ -610,18 +455,7 @@ export default function ResearchQueryComposer({
     <div
       ref={rootRef}
       className="new-research-composer"
-      onFocus={() => setFocused(true)}
-      onPointerDownCapture={() => {
-        pointerDownInsideRef.current = true;
-        const release = () => window.setTimeout(() => (pointerDownInsideRef.current = false), 0);
-        window.addEventListener("pointerup", release, { once: true });
-        window.addEventListener("pointercancel", release, { once: true });
-      }}
-      onBlur={(event) => {
-        if (insideComposer(rootRef.current, event.relatedTarget)) return;
-        if (pointerDownInsideRef.current && !event.relatedTarget) return;
-        collapse();
-      }}
+      {...rootProps}
     >
       <form
         className={`new-research-launcher${menuOpen ? " is-menu-open" : ""}`}
@@ -710,7 +544,7 @@ export default function ResearchQueryComposer({
                 segment opens the model menu. Send ends the row. */}
             <AskPostSwitch
               askMode={askMode}
-              askIcon={askIcon}
+              askIcon={<OptionIcon option={askIcon} />}
               askLabel={askLabel}
               menuOpen={menuOpen}
               askRef={askSegmentRef}

@@ -64,13 +64,11 @@ test("an empty thread has the composer and says it has no replies or follow-ups"
   const html = render([note]);
   assert.match(html, /<p class="note-thread-empty">No replies or follow-ups yet\.<\/p>/);
   assert.doesNotMatch(html, /note-thread-rows|data-research-thread-row/);
-  // The composer posts to the network by default, with Ask in the
-  // destination menu, and gives the text its own row.
+  // The composer posts to the network by default. Empty and unfocused, it
+  // is one line: the Post and Ask switch and Send appear once it is focused.
   assert.match(html, /class="research-composer-wrap note-composer is-full-width"/);
-  assert.match(html, /placeholder="Post a follow-up to your network"/);
-  assert.match(html, /note-composer-destination"[^>]*><span>Post<\/span>/);
-  assert.match(html, /aria-label="Follow-up destination: Post to network"/);
-  assert.match(html, /title="Post to your network \(⌘↵\)"/);
+  assert.match(html, /placeholder="Post a follow-up"/);
+  assert.doesNotMatch(html, /note-composer-row|new-research-switch|research-composer-send/);
   assert.ok(html.indexOf("note-composer") < html.indexOf("note-thread-empty"));
 });
 
@@ -98,7 +96,7 @@ test("the composer comes first, then replies and follow-ups as rows, oldest firs
 test("a follow-up row shows its reply count or its answer state", () => {
   const html = render([withReplies, answered, about, network]);
   // A network follow-up: its replies.
-  assert.match(html, /posted to network/);
+  assert.doesNotMatch(html, /posted to network/);
   assert.match(html, /Anyone measured wizer\?<\/div><div class="note-thread-meta">1 reply<\/div>/);
   // An AI follow-up: answering, or answered (no preview of the answer).
   assert.match(html, /asked Claude Fable about Ben Kowalski’s reply/);
@@ -106,7 +104,9 @@ test("a follow-up row shows its reply count or its answer state", () => {
   assert.match(html, /Which runtimes support it\?<\/div><div class="note-thread-meta">Answered<\/div>/);
   assert.doesNotMatch(html, /Open answer|note-segment/);
   const empty = render([note, { ...network, delivery: { status: "posted", postedAt: 140 } }]);
-  assert.match(empty, /<div class="note-thread-meta">No replies yet<\/div>/);
+  // With no replies, the row shows no status line.
+  assert.match(empty, /Anyone measured wizer\?<\/div><\/div>/);
+  assert.doesNotMatch(empty, /No replies yet/);
 });
 
 test("the open follow-up's row is selected and in the tab order", () => {
@@ -128,9 +128,9 @@ test("an archived thread has rows but no composer", () => {
 test("a saved link's thread can only ask", () => {
   const link: ResearchNode = { ...note, prompt: "https://example.com/page", delivery: null };
   const html = render([link]);
-  assert.match(html, /placeholder="Ask a follow-up about this note"/);
-  assert.match(html, /research-composer-send"[^>]*aria-label="Ask"/);
-  assert.doesNotMatch(html, /Follow-up destination/);
+  assert.match(html, /placeholder="Ask a follow-up"/);
+  // Collapsed while empty, and with no Post option it has no switch.
+  assert.doesNotMatch(html, /new-research-switch|Post to network/);
   assert.match(html, /No replies or follow-ups yet\./);
 });
 
