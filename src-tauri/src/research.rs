@@ -2410,7 +2410,7 @@ fn read_detached_research_from_path(
         ));
     }
     // The version gate must run against the raw JSON before the typed parse:
-    // a future archive version can carry node kinds this build's enums do not
+    // a future archive version can carry node types this build's enums do not
     // know, and failing on those first would misreport "written by a newer
     // Session" as manifest corruption (with move-this-directory-aside guidance
     // that discards a valid archive).

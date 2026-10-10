@@ -819,7 +819,7 @@ function buildSegmentView(
   showAllTurns: boolean,
   showFullTrace: boolean,
 ): SegmentView {
-  // A conversation node's whole timeline is the document: there is no
+  // A transcript document's whole timeline is the document: there is no
   // "answer" fold to collapse to and no fuller trace to reveal. The document
   // source selects the transcript renderer.
   const isConversation =

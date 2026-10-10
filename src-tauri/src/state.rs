@@ -2338,9 +2338,9 @@ impl AppState {
         {
             migration_warnings.push(err);
         }
-        // The next save writes the migrated research nodes at a version the
-        // source's builds refuse (imported documents at 7, posts at 8). A
-        // version-2 source is already preserved whole as state.v2.bak.
+        // The next save writes the migrated research nodes at version 8, which
+        // the source's builds refuse. A version-2 source is already preserved
+        // whole as state.v2.bak.
         if research_nodes_migrated
             && let Some(source_version) = source_version.filter(|version| *version != 2)
             && let Err(err) = persistence::backup_research_node_state_for_migration(
@@ -5272,7 +5272,7 @@ impl AppState {
     /// carry the same tag neutralization as the serialized turns it travels
     /// with, and keeping that choice next to the serializer is what stops a
     /// caller from reaching for the verbatim [`research::query_followup_prompt`]
-    /// the other node kinds use.
+    /// the other node types use.
     pub fn research_snapshot_followup_prompt(
         &self,
         node_id: &str,

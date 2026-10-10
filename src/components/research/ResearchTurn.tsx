@@ -90,7 +90,7 @@ function ResearchMessageBlock({
   imported?: boolean;
 }) {
   if (block.type === "text") {
-    // In a conversation node every turn is first-class content: user
+    // In a transcript document every turn is first-class content: user
     // messages render as markdown prompts, not as unexpected-content
     // callouts (that framing exists for run responses, where a mid-response
     // user turn signals leakage).
