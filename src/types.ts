@@ -321,30 +321,6 @@ export interface ActiveWorkspace {
   managedBySession: boolean;
 }
 
-export interface RepositoryWorktree {
-  path: string;
-  head: string;
-  branch?: string | null;
-  isMain: boolean;
-  locked: boolean;
-  prunable: boolean;
-}
-
-export interface RepositoryBranch {
-  name: string;
-  fullRef: string;
-  head: string;
-  upstream?: string | null;
-  remote: boolean;
-  checkedOutPath?: string | null;
-}
-
-export interface RepositoryInventory {
-  repositoryRoot: string;
-  worktrees: RepositoryWorktree[];
-  branches: RepositoryBranch[];
-}
-
 /** One artifact-tray entry: a file or loopback URL opened from an agent pane via
  * `session open`. File artifacts carry `path` (canonical, absolute) and are re-opened
  * through `browserOpenLocalPath`, which mints a fresh file-server URL; URL

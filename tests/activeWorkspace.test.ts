@@ -8,9 +8,8 @@ import {
   agentEventAffectsThinkingState,
   agentShowsLaunchDirectory,
   paneBranchLocationLabel,
-  repositoryWorktreeName,
 } from "../src/lib/appHelpers";
-import type { AgentInfo, PaneInfo, RepositoryBranch } from "../src/types";
+import type { AgentInfo, PaneInfo } from "../src/types";
 
 function agent(overrides: Partial<AgentInfo> = {}): AgentInfo {
   return {
@@ -319,18 +318,4 @@ test("other checkouts still label when the first tab has no git metadata after r
     ),
     null,
   );
-});
-
-test("branch worktree names use a valid bounded leaf", () => {
-  const branch = (name: string): RepositoryBranch => ({
-    name,
-    fullRef: `refs/heads/${name}`,
-    head: "abc123",
-    remote: false,
-  });
-
-  assert.equal(repositoryWorktreeName(branch("main")), "main");
-  assert.equal(repositoryWorktreeName(branch("feature/existing-branch")), "existing-branch");
-  assert.equal(repositoryWorktreeName(branch("feature/review.topic")), "review-topic");
-  assert.equal(repositoryWorktreeName(branch(`feature/${"a".repeat(300)}`)).length, 240);
 });

@@ -15,7 +15,6 @@ import type {
   GroupInfo,
   HomeTurnHistoryPage,
   InitialPaneSize,
-  MessageAnchor,
   PaneActivity,
   PaneInfo,
   PaneSplitInfo,
@@ -475,62 +474,6 @@ export async function spawnShell(
   return pane;
 }
 
-export function openPaneWorktree(
-  paneId: string,
-  worktreeName: string,
-  initialSize?: InitialPaneSize | null,
-) {
-  return invoke<PaneInfo>("open_pane_worktree", {
-    paneId,
-    worktreeName,
-    initialSize: initialSize ?? null,
-  });
-}
-
-export async function openRepositoryWorktree(
-  paneId: string,
-  path: string,
-  initialSize?: InitialPaneSize | null,
-) {
-  const started = performance.now();
-  const pane = await invoke<PaneInfo>("open_repository_worktree", {
-    paneId,
-    path,
-    initialSize: initialSize ?? null,
-  });
-  if (pane.remoteSession) {
-    trackRemoteStartup(pane.id, started);
-    recordRemoteStartup(pane.id, "reserved");
-    const observed = reconcileRemoteReservation(pane).remoteConnection;
-    if (observed?.state === "connected") recordRemoteStartup(pane.id, "ready");
-    if (observed?.state === "failed") forgetRemoteStartup(pane.id);
-  }
-  return pane;
-}
-
-export async function openRepositoryBranch(
-  paneId: string,
-  fullRef: string,
-  worktreeName: string,
-  initialSize?: InitialPaneSize | null,
-) {
-  const started = performance.now();
-  const pane = await invoke<PaneInfo>("open_repository_branch", {
-    paneId,
-    fullRef,
-    worktreeName,
-    initialSize: initialSize ?? null,
-  });
-  if (pane.remoteSession) {
-    trackRemoteStartup(pane.id, started);
-    recordRemoteStartup(pane.id, "reserved");
-    const observed = reconcileRemoteReservation(pane).remoteConnection;
-    if (observed?.state === "connected") recordRemoteStartup(pane.id, "ready");
-    if (observed?.state === "failed") forgetRemoteStartup(pane.id);
-  }
-  return pane;
-}
-
 export function getUseLoginShell() {
   return invoke<boolean>("use_login_shell_get");
 }
@@ -553,31 +496,6 @@ export function getResearchLaunchInstruction() {
 
 export function setResearchLaunchInstruction(instruction: string) {
   return invoke<void>("research_launch_instruction_set", { instruction });
-}
-
-// Forks the session in `paneId` into a new tab immediately after it and resumes
-// the session. `prompt` is submitted as the fork's launch message.
-//
-// `anchor` forks from a chosen message instead of the session head: the backend
-// synthesizes a transcript ending just before it and resumes that. The anchor is
-// resolved against the pane's own transcript, so it can only ever address that
-// session's messages.
-export function forkAgent(
-  paneId: string,
-  options?: {
-    useWorktree?: boolean;
-    worktreeName?: string;
-    prompt?: string;
-    anchor?: MessageAnchor;
-  },
-) {
-  return invoke<PaneInfo>("agent_fork", {
-    paneId,
-    useWorktree: options?.useWorktree ?? false,
-    worktreeName: options?.worktreeName,
-    prompt: options?.prompt,
-    anchor: options?.anchor,
-  });
 }
 
 /** Marks/clears that the user is actively typing for an agent, so the backend holds

@@ -44,7 +44,6 @@ mod user_notifications;
 mod wikilinks;
 mod workspace;
 
-use adapters::{MessageAnchor, agent_fork as fork_agent_pane};
 use config::{RuntimeConfig, SessionConfig};
 use control_socket::start_control_socket;
 use native_support::{
@@ -53,8 +52,8 @@ use native_support::{
 };
 use pty::{
     InitialPaneSize, PaneActivity, PaneWriteOptions, attach_pane, close_worktree_pane,
-    pane_activity as inspect_pane_activity, resize_pane, spawn_shell_pane, spawn_shell_pane_at,
-    spawn_ssh_shell_pane, write_pane,
+    pane_activity as inspect_pane_activity, resize_pane, spawn_shell_pane, spawn_ssh_shell_pane,
+    write_pane,
 };
 use research::{
     ApplyResearchRecapCandidateRequest, CreateResearchTreeRequest, GenerateResearchRecapRequest,
@@ -86,13 +85,11 @@ use turn_queue::{
     send_next_queued_agent_turn, set_agent_typing, submit_agent_turn, unpause_agent,
 };
 use workspace::{
-    AgentInfo, AgentStatus, CreateGroupRequest, GroupInfo, LaunchOrigin, RepositoryInventory,
-    ResearchWorkspaceInfo, WorktreeStatus, acknowledge_agent, agent_worktree_status,
-    checkout_repository_branch, clear_agent_working_status, create_group,
-    create_research_workspace, create_shell_worktree, ensure_default_research_workspace,
-    group_recoverable_dir, move_research_workspace, remove_agent_worktree,
-    remove_research_workspace, rename_group, rename_research_workspace, repository_inventory,
-    suggested_shell_worktree_name, validate_launch_workspace,
+    AgentInfo, AgentStatus, CreateGroupRequest, GroupInfo, LaunchOrigin, ResearchWorkspaceInfo,
+    WorktreeStatus, acknowledge_agent, agent_worktree_status, clear_agent_working_status,
+    create_group, create_research_workspace, ensure_default_research_workspace,
+    move_research_workspace, remove_agent_worktree, remove_research_workspace, rename_group,
+    rename_research_workspace, validate_launch_workspace,
 };
 
 fn handle_global_shortcut(
@@ -2422,167 +2419,6 @@ async fn spawn_shell(
     .map_err(|err| format!("spawn_shell task failed: {err}"))?
 }
 
-fn pane_worktree_seed_cwd(
-    state: &AppState,
-    pane: &PaneInfo,
-    group: &GroupInfo,
-) -> Result<String, String> {
-    if let Some(dir) = group_recoverable_dir(group.remote.as_ref(), &pane.cwd) {
-        return Ok(dir.display().to_string());
-    }
-    if let Some(agent) = state.agent_by_pane(&pane.id)? {
-        let candidate = agent
-            .active_workspace
-            .as_ref()
-            .map(|workspace| workspace.cwd.as_str())
-            .unwrap_or(agent.worktree_dir.as_str());
-        if let Some(dir) = group_recoverable_dir(group.remote.as_ref(), candidate) {
-            return Ok(dir.display().to_string());
-        }
-    }
-    group_recoverable_dir(group.remote.as_ref(), &group.dir)
-        .map(|dir| dir.display().to_string())
-        .ok_or_else(|| "could not resolve a directory for this tab".to_string())
-}
-
-#[tauri::command]
-fn suggest_pane_worktree_name(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-) -> Result<String, String> {
-    let pane = state
-        .list_panes()?
-        .into_iter()
-        .find(|candidate| candidate.id == pane_id)
-        .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-    let group = validate_launch_workspace(&state, Some(&pane.group_id), LaunchOrigin::Terminal)?
-        .ok_or_else(|| format!("workspace {} was not found", pane.group_id))?;
-    Ok(suggested_shell_worktree_name(&group))
-}
-
-#[tauri::command]
-async fn open_pane_worktree(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-    worktree_name: String,
-    initial_size: Option<InitialPaneSize>,
-) -> Result<PaneInfo, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let pane = state
-            .list_panes()?
-            .into_iter()
-            .find(|candidate| candidate.id == pane_id)
-            .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-        let group =
-            validate_launch_workspace(&state, Some(&pane.group_id), LaunchOrigin::Terminal)?
-                .ok_or_else(|| format!("workspace {} was not found", pane.group_id))?;
-        let host = host::for_group(group.remote.as_ref());
-        let seed = pane_worktree_seed_cwd(&state, &pane, &group)?;
-        let worktree = create_shell_worktree(&state, &host, &group, &seed, &worktree_name)?;
-        let cwd = worktree
-            .to_str()
-            .ok_or_else(|| "worktree path is not valid UTF-8".to_string())?;
-        spawn_shell_pane_at(
-            &state,
-            initial_size,
-            Some(&pane.id),
-            Some(&group.id),
-            Some(cwd),
-        )
-    })
-    .await
-    .map_err(|err| format!("open_pane_worktree task failed: {err}"))?
-}
-
-fn repository_context(
-    state: &AppState,
-    pane_id: &str,
-) -> Result<(PaneInfo, GroupInfo, host::Host, String), String> {
-    let pane = state
-        .list_panes()?
-        .into_iter()
-        .find(|candidate| candidate.id == pane_id)
-        .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-    let group = validate_launch_workspace(state, Some(&pane.group_id), LaunchOrigin::Terminal)?
-        .ok_or_else(|| format!("workspace {} was not found", pane.group_id))?;
-    let host = host::for_group(group.remote.as_ref());
-    let seed = pane_worktree_seed_cwd(state, &pane, &group)?;
-    Ok((pane, group, host, seed))
-}
-
-#[tauri::command]
-async fn pane_repository_inventory(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-) -> Result<RepositoryInventory, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let (_, _, host, seed) = repository_context(&state, &pane_id)?;
-        repository_inventory(&host, &seed)
-    })
-    .await
-    .map_err(|err| format!("pane_repository_inventory task failed: {err}"))?
-}
-
-#[tauri::command]
-async fn open_repository_worktree(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-    path: String,
-    initial_size: Option<InitialPaneSize>,
-) -> Result<PaneInfo, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let (pane, group, host, seed) = repository_context(&state, &pane_id)?;
-        let inventory = repository_inventory(&host, &seed)?;
-        if !inventory
-            .worktrees
-            .iter()
-            .any(|worktree| worktree.path == path)
-        {
-            return Err("that worktree no longer exists; refresh and try again".to_string());
-        }
-        spawn_shell_pane_at(
-            &state,
-            initial_size,
-            Some(&pane.id),
-            Some(&group.id),
-            Some(&path),
-        )
-    })
-    .await
-    .map_err(|err| format!("open_repository_worktree task failed: {err}"))?
-}
-
-#[tauri::command]
-async fn open_repository_branch(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-    full_ref: String,
-    worktree_name: String,
-    initial_size: Option<InitialPaneSize>,
-) -> Result<PaneInfo, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let (pane, group, host, seed) = repository_context(&state, &pane_id)?;
-        let worktree =
-            checkout_repository_branch(&state, &host, &group, &seed, &full_ref, &worktree_name)?;
-        let cwd = worktree
-            .to_str()
-            .ok_or_else(|| "worktree path is not valid UTF-8".to_string())?;
-        spawn_shell_pane_at(
-            &state,
-            initial_size,
-            Some(&pane.id),
-            Some(&group.id),
-            Some(cwd),
-        )
-    })
-    .await
-    .map_err(|err| format!("open_repository_branch task failed: {err}"))?
-}
-
 #[tauri::command(async)]
 fn use_login_shell_get(state: tauri::State<'_, AppState>) -> Result<bool, String> {
     Ok(
@@ -2643,35 +2479,6 @@ fn research_launch_instruction_set(
     persistence::update_preferences(&state.config().workspace_root, move |preferences| {
         preferences.research_launch_instruction = instruction;
     })
-}
-
-/// Forks the session in `pane_id` into a new tab immediately after it and resumes it.
-/// When `prompt` is set, it is submitted as the fork's launch message.
-#[tauri::command]
-async fn agent_fork(
-    state: tauri::State<'_, AppState>,
-    pane_id: String,
-    use_worktree: bool,
-    worktree_name: Option<String>,
-    prompt: Option<String>,
-    anchor: Option<MessageAnchor>,
-) -> Result<PaneInfo, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        if let Some(group_id) = state.pane_group_id(&pane_id)? {
-            validate_launch_workspace(&state, Some(&group_id), LaunchOrigin::Terminal)?;
-        }
-        fork_agent_pane(
-            &state,
-            &pane_id,
-            use_worktree,
-            prompt,
-            anchor,
-            worktree_name,
-        )
-    })
-    .await
-    .map_err(|err| format!("agent_fork task failed: {err}"))?
 }
 
 // pane_write and every agent turn-queue command below are `(async)` as a
@@ -3775,18 +3582,12 @@ fn main() {
             group_rename,
             group_reorder,
             spawn_shell,
-            suggest_pane_worktree_name,
-            open_pane_worktree,
-            pane_repository_inventory,
-            open_repository_worktree,
-            open_repository_branch,
             use_login_shell_get,
             use_login_shell_set,
             research_launch_instruction_get,
             research_launch_instruction_set,
             worktree_location_get,
             worktree_location_set,
-            agent_fork,
             pane_write,
             pane_attach,
             pane_reset_terminal_modes,
