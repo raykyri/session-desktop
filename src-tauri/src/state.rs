@@ -7186,8 +7186,8 @@ impl AppState {
         Ok(model.global_drafts.clone())
     }
 
-    /// Emits the full drafts list — the store is small and global, so every
-    /// mutation broadcasts the whole truth instead of deltas.
+    /// Emits the full drafts list after each mutation. The global store is small
+    /// enough to broadcast in full.
     fn emit_global_drafts(&self, drafts: &[GlobalDraft]) {
         self.emit(QmuxEvent::new(
             "drafts.changed",
