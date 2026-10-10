@@ -29,7 +29,6 @@ test("tweet card renders header, text, media, and plain timestamp", () => {
   assert.match(html, /Sunsets don(&#x27;|')t get much better/);
   assert.match(html, /journal-tweet-media/);
   assert.match(html, /pbs\.twimg\.com\/media/);
-  assert.match(html, /<time class="journal-tweet-age"[^>]*>[^<]+<\/time>/);
 });
 
 test("tweet card renders quote tweets as a nested mini-card", () => {
@@ -46,25 +45,43 @@ test("tweet card renders quote tweets as a nested mini-card", () => {
 
 test("tweet card offers Show more on a long post", () => {
   const html = renderTweet(snapshot("1623411400545632256"));
-  assert.match(html, /journal-tweet-more/);
-  assert.match(html, /Show more/);
+  // On its own line right under the text, not in the footer.
+  assert.match(html, /<\/p><a class="journal-tweet-more" href="[^"]+">Show more<\/a>/);
+  assert.doesNotMatch(html, /journal-tweet-end">(?:(?!<\/article>).)*Show more/);
   assert.match(html, /…/);
 });
 
-test("tweet card lays out one compact header line, full-width text, and a closing row of counts", () => {
+test("tweet card in Home opens nothing on X, so a click reaches the feed row", () => {
+  const long = renderToStaticMarkup(
+    createElement(TweetEmbed, { tweet: snapshot("1623411400545632256"), compact: true, openable: false }),
+  );
+  assert.match(long, /<article class="journal-tweet is-compact is-static" aria-label="Tweet by @/);
+  assert.doesNotMatch(long, /role="link"|tabindex|<a /);
+  // A cut-off text ends at its ellipsis; Show more would open X.
+  assert.doesNotMatch(long, /Show more/);
+  assert.match(long, /…/);
+  const quote = renderToStaticMarkup(
+    createElement(TweetEmbed, { tweet: snapshot("1599367266448994304"), openable: false }),
+  );
+  assert.match(quote, /journal-tweet-quote/);
+  assert.doesNotMatch(quote, /role="link"|<a /);
+});
+
+test("tweet card lays out one compact header line, full-width text, and a footer of timestamp and counts", () => {
   const html = renderTweet(snapshot("20"));
   // The header is one line: a 20px avatar, the name (its tooltip carries the
-  // handle), the badge, the handle for screen readers, then the age.
+  // handle), the badge and the handle for screen readers. The timestamp
+  // starts the footer, before the counts.
   assert.match(html, /journal-tweet-head"><a class="journal-tweet-avatar-link"/);
   assert.match(html, /width="20"/);
   assert.match(html, /journal-tweet-main/);
   assert.match(html, /title="jack @jack"/);
   assert.doesNotMatch(html, /journal-tweet-dot/);
-  assert.match(html, /journal-tweet-end"><div class="journal-tweet-stats"/);
+  assert.match(html, /journal-tweet-end"><time class="journal-tweet-age"[^>]*>[^<]+<\/time><div class="journal-tweet-stats"/);
+  assert.doesNotMatch(html, /journal-tweet-head">(?:(?!journal-tweet-end).)*journal-tweet-age/);
   assert.match(html, /journal-tweet-author"[^>]*>jack<\/a>/);
   assert.match(html, /journal-tweet-verified/);
   assert.match(html, /journal-tweet-handle">@jack<\/span>/);
-  assert.match(html, /<time class="journal-tweet-age"[^>]*>[^<]+<\/time>/);
   // Counts read as metadata, never as controls.
   assert.match(html, /journal-tweet-stat/);
   assert.match(html, /309K/);

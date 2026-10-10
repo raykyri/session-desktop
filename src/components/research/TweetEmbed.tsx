@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { MouseEvent } from "react";
+import { createContext, useContext, useState } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { Play } from "lucide-react";
 import { openExternalUrl } from "../../lib/api";
 import type {
@@ -14,6 +14,48 @@ function externalLinkClick(url: string) {
     event.stopPropagation();
     void openExternalUrl(url);
   };
+}
+
+/** Whether the embed's parts open on X. Off in Home, where a click on a
+ * tweet belongs to its feed row. */
+const TweetLinksOpen = createContext(true);
+
+/** A link to X, or, where the embed does not open links, the same content in
+ * a span so a click falls through to what holds the embed. */
+function TweetLink({
+  url,
+  className,
+  title,
+  hidden,
+  children,
+}: {
+  url: string | undefined;
+  className?: string;
+  title?: string;
+  /** For a link that repeats a neighbouring one (the avatar's). */
+  hidden?: boolean;
+  children: ReactNode;
+}) {
+  const open = useContext(TweetLinksOpen);
+  if (!open || !url) {
+    return (
+      <span className={className} title={title} aria-hidden={hidden || undefined}>
+        {children}
+      </span>
+    );
+  }
+  return (
+    <a
+      className={className}
+      href={url}
+      title={title}
+      aria-hidden={hidden || undefined}
+      tabIndex={hidden ? -1 : undefined}
+      onClick={externalLinkClick(url)}
+    >
+      {children}
+    </a>
+  );
 }
 
 // No avatar (older snapshots, fetch-blocked images fall back via onError is
@@ -87,9 +129,9 @@ function TweetText({ runs, className, compact }: {
         // blank lines without changing the saved tweet or its link targets.
         const text = compact ? run.text.replace(/\r?\n(?:[\t ]*\r?\n)+/g, "\n") : run.text;
         return run.kind === "link" && run.url ? (
-          <a key={index} href={run.url} onClick={externalLinkClick(run.url)}>
+          <TweetLink key={index} url={run.url} className="journal-tweet-link">
             {text}
-          </a>
+          </TweetLink>
         ) : (
           <span key={index}>{text}</span>
         );
@@ -144,18 +186,17 @@ function TweetMediaStrip({
         }
         const watchUrl = item.watchUrl;
         return (
-          <a
+          <TweetLink
             key={index}
+            url={watchUrl}
             className="journal-tweet-media-item journal-tweet-video"
-            href={watchUrl}
             title={item.kind === "gif" ? "Watch GIF on X" : "Watch video on X"}
-            onClick={watchUrl ? externalLinkClick(watchUrl) : (e) => e.preventDefault()}
           >
             {image}
             <span className="journal-tweet-play" aria-hidden="true">
               <Play size={compact ? 14 : 18} fill="currentColor" />
             </span>
-          </a>
+          </TweetLink>
         );
       })}
       {sensitive && !revealed ? (
@@ -256,11 +297,7 @@ function VerifiedBadge() {
 
 function TweetLinkCardView({ card }: { card: NonNullable<TweetSnapshot["card"]> }) {
   return (
-    <a
-      className={`journal-tweet-card${card.large ? " is-large" : ""}`}
-      href={card.url}
-      onClick={externalLinkClick(card.url)}
-    >
+    <TweetLink url={card.url} className={`journal-tweet-card${card.large ? " is-large" : ""}`}>
       {card.imageUrl ? (
         <span className="journal-tweet-card-media">
           <img src={card.imageUrl} alt="" loading="lazy" draggable={false} />
@@ -273,81 +310,93 @@ function TweetLinkCardView({ card }: { card: NonNullable<TweetSnapshot["card"]> 
           <span className="journal-tweet-card-desc">{card.description}</span>
         ) : null}
       </span>
-    </a>
+    </TweetLink>
   );
 }
 
 /** Renders a hydrated tweet directly as a feed entry. The compact layout
- * uses a single header row with a 20px avatar, name, badge, and timestamp.
- * The handle is available in the name's tooltip and accessible label.
- * Full-width text, media, and the quote follow; Show more and engagement
- * counts share the footer. Exported for static-markup tests. */
-export function TweetEmbed({ tweet, compact = false }: { tweet: TweetSnapshot; compact?: boolean }) {
+ * uses a single header row with a 20px avatar, name, and badge. The handle is
+ * available in the name's tooltip and accessible label. Full-width text with
+ * Show more under it, media, and the quote follow; the timestamp and
+ * engagement counts share the footer. With `openable` off (Home), no part of
+ * the embed opens X, so a click reaches the feed row, and cut-off text ends at
+ * its ellipsis without Show more. Exported for static-markup tests. */
+export function TweetEmbed({
+  tweet,
+  compact = false,
+  openable = true,
+}: {
+  tweet: TweetSnapshot;
+  compact?: boolean;
+  openable?: boolean;
+}) {
+  return (
+    <TweetLinksOpen.Provider value={openable}>
+      <TweetEmbedBody tweet={tweet} compact={compact} />
+    </TweetLinksOpen.Provider>
+  );
+}
+
+function TweetEmbedBody({ tweet, compact }: { tweet: TweetSnapshot; compact: boolean }) {
+  const openable = useContext(TweetLinksOpen);
   const quoted = tweet.quoted;
   const authorUrl = `https://x.com/${tweet.author.handle}`;
   const age = formatTweetAge(tweet.createdAt);
+  const hasStats = tweet.replies !== undefined || tweet.likes !== undefined;
   return (
     <article
-      className={`journal-tweet${compact ? " is-compact" : ""}`}
-      aria-label={`Open tweet by @${tweet.author.handle}`}
-      role="link"
-      tabIndex={0}
-      onClick={(event) => {
-        // Descendant links and controls prevent their handled click from
-        // reaching here. Everything else on the embed opens this tweet.
-        if (event.defaultPrevented) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        void openExternalUrl(tweet.url);
-      }}
-      onKeyDown={(event) => {
-        if (event.target !== event.currentTarget || event.key !== "Enter") {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        void openExternalUrl(tweet.url);
-      }}
+      className={`journal-tweet${compact ? " is-compact" : ""}${openable ? "" : " is-static"}`}
+      aria-label={`${openable ? "Open tweet" : "Tweet"} by @${tweet.author.handle}`}
+      role={openable ? "link" : undefined}
+      tabIndex={openable ? 0 : undefined}
+      onClick={
+        openable
+          ? (event) => {
+              // Descendant links and controls prevent their handled click from
+              // reaching here. Everything else on the embed opens this tweet.
+              if (event.defaultPrevented) {
+                return;
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              void openExternalUrl(tweet.url);
+            }
+          : undefined
+      }
+      onKeyDown={
+        openable
+          ? (event) => {
+              if (event.target !== event.currentTarget || event.key !== "Enter") {
+                return;
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              void openExternalUrl(tweet.url);
+            }
+          : undefined
+      }
     >
       <div className="journal-tweet-main">
         <div className="journal-tweet-head">
-          <a
-            className="journal-tweet-avatar-link"
-            href={authorUrl}
-            aria-hidden="true"
-            tabIndex={-1}
-            onClick={externalLinkClick(authorUrl)}
-          >
+          <TweetLink url={authorUrl} className="journal-tweet-avatar-link" hidden>
             <TweetAvatar
               name={tweet.author.name}
               handle={tweet.author.handle}
               avatarUrl={tweet.author.avatarUrl}
               size={20}
             />
-          </a>
+          </TweetLink>
           <div className="journal-tweet-who">
-            <a
+            <TweetLink
+              url={authorUrl}
               className="journal-tweet-author"
-              href={authorUrl}
               title={`${tweet.author.name} @${tweet.author.handle}`}
-              onClick={externalLinkClick(authorUrl)}
             >
               {tweet.author.name}
-            </a>
+            </TweetLink>
             {tweet.author.verified ? <VerifiedBadge /> : null}
             <span className="journal-tweet-handle">@{tweet.author.handle}</span>
           </div>
-          {age ? (
-            <time
-              className="journal-tweet-age"
-              dateTime={tweet.createdAt}
-              title={formatTweetDate(tweet.createdAt) ?? undefined}
-            >
-              {age}
-            </time>
-          ) : null}
         </div>
         {tweet.replyTo ? (
           <p className="journal-tweet-reply">
@@ -355,28 +404,41 @@ export function TweetEmbed({ tweet, compact = false }: { tweet: TweetSnapshot; c
           </p>
         ) : null}
         <TweetText runs={tweet.runs} className="journal-tweet-text" compact={compact} />
+        {tweet.partial && openable ? (
+          <TweetLink url={tweet.url} className="journal-tweet-more">
+            Show more
+          </TweetLink>
+        ) : null}
         <TweetMediaStrip media={tweet.media} sensitive={tweet.possiblySensitive} />
         {tweet.card ? <TweetLinkCardView card={tweet.card} /> : null}
         {quoted ? (
           <div
             className="journal-tweet-quote"
-            role="link"
-            tabIndex={0}
-            onClick={(event) => {
-              event.stopPropagation();
-              // Links inside the quoted text keep their own targets.
-              if ((event.target as HTMLElement).closest("a")) {
-                return;
-              }
-              void openExternalUrl(quoted.url);
-            }}
-            onKeyDown={(event) => {
-              if (event.target === event.currentTarget && event.key === "Enter") {
-                event.preventDefault();
-                event.stopPropagation();
-                void openExternalUrl(quoted.url);
-              }
-            }}
+            role={openable ? "link" : undefined}
+            tabIndex={openable ? 0 : undefined}
+            onClick={
+              openable
+                ? (event) => {
+                    event.stopPropagation();
+                    // Links inside the quoted text keep their own targets.
+                    if ((event.target as HTMLElement).closest("a")) {
+                      return;
+                    }
+                    void openExternalUrl(quoted.url);
+                  }
+                : undefined
+            }
+            onKeyDown={
+              openable
+                ? (event) => {
+                    if (event.target === event.currentTarget && event.key === "Enter") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void openExternalUrl(quoted.url);
+                    }
+                  }
+                : undefined
+            }
           >
             <div className="journal-tweet-quote-head">
               <TweetAvatar
@@ -385,13 +447,9 @@ export function TweetEmbed({ tweet, compact = false }: { tweet: TweetSnapshot; c
                 avatarUrl={quoted.author.avatarUrl}
                 size={18}
               />
-              <a
-                className="journal-tweet-author"
-                href={`https://x.com/${quoted.author.handle}`}
-                onClick={externalLinkClick(`https://x.com/${quoted.author.handle}`)}
-              >
+              <TweetLink url={`https://x.com/${quoted.author.handle}`} className="journal-tweet-author">
                 {quoted.author.name}
-              </a>
+              </TweetLink>
               {quoted.author.verified ? <VerifiedBadge /> : null}
               <span className="journal-tweet-handle">@{quoted.author.handle}</span>
             </div>
@@ -407,18 +465,18 @@ export function TweetEmbed({ tweet, compact = false }: { tweet: TweetSnapshot; c
             {quoted.card ? <TweetLinkCardView card={quoted.card} /> : null}
           </div>
         ) : null}
-        {tweet.partial || tweet.replies !== undefined || tweet.likes !== undefined ? (
+        {age || hasStats ? (
           <div className="journal-tweet-end">
-            {tweet.partial ? (
-              <a
-                className="journal-tweet-more"
-                href={tweet.url}
-                onClick={externalLinkClick(tweet.url)}
+            {age ? (
+              <time
+                className="journal-tweet-age"
+                dateTime={tweet.createdAt}
+                title={formatTweetDate(tweet.createdAt) ?? undefined}
               >
-                Show more
-              </a>
+                {age}
+              </time>
             ) : null}
-            {tweet.replies !== undefined || tweet.likes !== undefined ? (
+            {hasStats ? (
               // Display the saved engagement counts as static metadata.
               <div className="journal-tweet-stats">
                 {tweet.replies !== undefined ? (

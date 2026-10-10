@@ -257,6 +257,17 @@
   cursor: pointer;
 }
 
+/* In Home the embed opens nothing; a click belongs to the feed row. */
+.journal-tweet.is-static,
+.journal-tweet.is-static .journal-tweet-quote {
+  cursor: inherit;
+}
+
+.journal-tweet.is-static .journal-tweet-quote:hover,
+.journal-tweet.is-static .journal-tweet-card:hover {
+  background: none;
+}
+
 .journal-tweet-avatar-link {
   display: block;
   flex: none;
@@ -352,11 +363,9 @@ a.journal-tweet-author:hover {
   text-overflow: ellipsis;
 }
 
-/* Shrink the timestamp before the display name; its tooltip shows the full date. */
+/* Show the timestamp in the footer, before the counts; its tooltip shows the full date. */
 .journal-tweet-age {
-  flex: 0 100 auto;
   min-width: 0;
-  margin-left: auto;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -387,19 +396,21 @@ a.journal-tweet-author:hover {
   font-size: var(--research-body-font-size);
 }
 
-.journal-tweet-text a {
+.journal-tweet-text .journal-tweet-link {
   color: var(--accent-color);
   text-decoration: none;
 }
 
-.journal-tweet-text a:hover {
+.journal-tweet-text a.journal-tweet-link:hover {
   text-decoration: underline;
 }
 
-/* The timeline's own affordance for a post that runs past its preview. */
+/* The timeline's own affordance for a post that runs past its preview, on
+   its own line under the text. */
 .journal-tweet-more {
-  display: inline-block;
-  flex: none;
+  display: block;
+  width: fit-content;
+  margin-top: 2px;
   white-space: nowrap;
   color: var(--accent-color);
   font-size: var(--research-body-font-size);

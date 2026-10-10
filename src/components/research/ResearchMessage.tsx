@@ -114,7 +114,13 @@ export function ResearchMessageBody({
               className="research-message-attachment"
               key={`${tweet.id}:${index}`}
             >
-              <TweetEmbed tweet={tweet} compact={variant === "compact"} />
+              {/* A compact preview sits in a feed row, which a click on the
+                  tweet selects, so the embed opens nothing on X there. */}
+              <TweetEmbed
+                tweet={tweet}
+                compact={variant === "compact"}
+                openable={variant !== "compact"}
+              />
             </div>
           ))}
         </div>
