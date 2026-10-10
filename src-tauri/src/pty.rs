@@ -1098,10 +1098,10 @@ pub(crate) fn materialize_support_files(files: &[SupportFile]) -> Result<(), Str
                 file.path.display()
             ));
         }
-        // `strip_prefix` is purely lexical: it happily hands back a relative
-        // path that starts with `..`, which would satisfy the containment check
-        // above while resolving outside the root. Require plain names so the
-        // path really does sit below the root it claims.
+        // `strip_prefix` is purely lexical: it can return a relative path
+        // starting with `..` that passes the containment check above but
+        // resolves outside the root. Require plain path components to keep
+        // the resolved path below the root.
         if relative
             .components()
             .any(|component| !matches!(component, Component::Normal(_)))
