@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 /// hooks from `~/.grok/hooks/*.json` (not `user-settings.json`); each entry runs a
 /// command per event with the event JSON on stdin. qMux drives the agent timeline
 /// from the same core events it uses for Claude. Grok has no pre-decision permission
-/// event, but its passive `PermissionDenied` event still keeps status/activity honest.
+/// event, but its passive `PermissionDenied` event still updates status and activity.
 const GROK_HOOK_EVENTS: &[&str] = &[
     "SessionStart",
     "UserPromptSubmit",
