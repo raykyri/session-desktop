@@ -57,9 +57,8 @@ pub enum TurnStatusReason {
 
 /// A block of one turn, as the frontend receives it.
 ///
-/// Both `rename_all` settings are load-bearing and easy to confuse: on an enum,
-/// `rename_all` renames the *variants* (so the `type` tag reads `toolResult`),
-/// while `rename_all_fields` renames the fields *inside* variants. Without the
+/// On an enum, `rename_all` renames variants (so the `type` tag reads
+/// `toolResult`), while `rename_all_fields` renames fields inside variants. Without the
 /// latter, struct-variant fields keep their Rust spelling — which is what
 /// happened here: `toolResult` shipped with `tool_use_id`/`is_error` while
 /// `TurnBlock` in `src/types.ts` had always declared `toolUseId`/`isError`. The
