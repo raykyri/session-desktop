@@ -9,10 +9,8 @@
 //! cache lives) and the platform temporary directory (where Codex stores its
 //! clipboard images). The command is reachable only from the trusted webview,
 //! but confining it keeps a compromised renderer from repurposing it as a
-//! general file-read oracle: the path is canonicalized first, so a symlink whose
-//! name merely ends in `.png` cannot smuggle out a secret — the location and
-//! (re-checked on the canonical target) extension tests both apply to the real
-//! target.
+//! general file reader. Canonicalizing the path before checking its location
+//! and extension prevents symlinks from bypassing those restrictions.
 
 use std::fs;
 use std::io::Read;
