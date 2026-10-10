@@ -378,10 +378,21 @@ export type ResearchNodeStatus =
 /** What produced a node's content: an agent run; a Markdown document (written
  * in the document composer, or an imported report, which has origin
  * "imported" and keeps the question it answers as its prompt); a terminal
- * conversation exported as an independent point-in-time snapshot; or a note (a
+ * conversation exported as an independent point-in-time snapshot; or a post (a
  * user's question to their network, or a saved link) with no response of its
  * own. The backend omits the field for runs, so absence means "run". */
-export type ResearchNodeKind = "run" | "document" | "conversation" | "note";
+export type ResearchNodeKind = "run" | "document" | "conversation" | "post";
+
+/** How a post renders, decided by the backend when its text is written:
+ * "link" when the whole text is one http(s) URL (a saved link, or an X post
+ * with its tweet attachment), "text" otherwise. */
+export type PostFormat = "text" | "link";
+
+/** What a follow-up was asked about in its parent: a passage of the parent's
+ * answer or document, or a reply on the parent post. */
+export type NodeAnchor =
+  | { kind: "passage"; anchor: ResearchHighlightAnchor }
+  | { kind: "reply"; replyId: string };
 
 export type NoteReplyAuthor =
   | { kind: "author" }
@@ -444,9 +455,9 @@ export interface ResearchNode {
   id: string;
   treeId: string;
   parentNodeId?: string | null;
-  /** The passage of the parent's answer this follow-up was asked about. The
-   * parent's answer marks it as the anchor of the branch. */
-  queryAnchor?: ResearchHighlightAnchor | null;
+  /** What this follow-up was asked about in its parent. A passage anchor is
+   * marked in the parent's answer as the anchor of the branch. */
+  anchor?: NodeAnchor | null;
   /** True when this follow-up continues its parent's conversation at the same
    * level (the same messages column) instead of opening a branch. At most one
    * existing inline child per node; absent means false. */
@@ -476,10 +487,10 @@ export interface ResearchNode {
    * conversations exported from a terminal session, and imported reports
    * (documents). */
   origin?: ResearchNodeOrigin | null;
-  /** Only on notes posted with Ask network. */
+  /** Only on posts delivered with Ask network. */
   delivery?: NoteDelivery | null;
-  /** On a follow-up of a note: the id of the reply it was asked about. */
-  replyAnchor?: string | null;
+  /** Only on posts, where the backend always sets it. */
+  format?: PostFormat | null;
   status: ResearchNodeStatus;
   error?: string | null;
   /** Set when the durable response snapshot lands — the viewer's signal to
@@ -497,7 +508,7 @@ export interface ResearchNode {
    * post's text). Absent on content that was never edited. */
   editedAt?: number | null;
   /** Corrections the author appended to a post that already had replies or
-   * follow-ups, oldest first. Only on notes; omitted when empty. */
+   * follow-ups, oldest first. Only on posts; omitted when empty. */
   corrections?: NoteCorrection[];
 }
 
@@ -546,6 +557,8 @@ export interface RecentResearchQuery {
   origin?: ResearchNodeOrigin | null;
   /** Absent in hand-built fixtures; the backend always sends it. */
   kind?: ResearchNodeKind;
+  /** A post's format. */
+  format?: PostFormat | null;
   /** A note's network state, with replies cut to the first five top-level
    * threads; `replyCount` is the full top-level count. */
   delivery?: NoteDelivery | null;

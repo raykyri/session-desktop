@@ -26,7 +26,7 @@ test("node types follow the stored kind and origin", () => {
     [{ kind: "document", origin: "imported" }, "document", "context", true],
     [{ kind: "document" }, "document", "context", false],
     [{ kind: "conversation", origin: "terminalExport" }, "document", "context", false],
-    [{ kind: "note" }, "post", "context", false],
+    [{ kind: "post" }, "post", "context", false],
   ];
   for (const [overrides, type, launch, recap] of cases) {
     const value = node(overrides);
@@ -39,7 +39,7 @@ test("node types follow the stored kind and origin", () => {
 test("only a document without a question has no user message", () => {
   const attachments = [{ kind: "tweet" }] as unknown as ResearchNode["attachments"];
   assert.deepEqual(nodeMessage(node({ attachments })), { text: "What changed?", attachments });
-  assert.deepEqual(nodeMessage(node({ kind: "note" })), { text: "What changed?", attachments: [] });
+  assert.deepEqual(nodeMessage(node({ kind: "post" })), { text: "What changed?", attachments: [] });
   assert.deepEqual(nodeMessage(node({ kind: "document", origin: "imported" })), {
     text: "What changed?",
     attachments: [],
@@ -52,6 +52,6 @@ test("follow-ups that fork need the session checkpoint; context launches do not"
   assert.equal(canFollowUpFrom(node({ nativeSessionId: null })), false);
   assert.equal(canFollowUpFrom(node({ nativeSessionId: "session" })), true);
   assert.equal(canFollowUpFrom(node({ kind: "document", origin: "imported" })), true);
-  assert.equal(canFollowUpFrom(node({ kind: "note" })), true);
-  assert.equal(canFollowUpFrom(node({ kind: "note", status: "running" })), false);
+  assert.equal(canFollowUpFrom(node({ kind: "post" })), true);
+  assert.equal(canFollowUpFrom(node({ kind: "post", status: "running" })), false);
 });

@@ -3,6 +3,7 @@ import type { KeyboardEvent, LiHTMLAttributes, MouseEvent, ReactNode, Ref } from
 import { ArrowRight, ExternalLink, LoaderCircle, Sparkles, X } from "lucide-react";
 import type {
   NoteReply,
+  PostFormat,
   RecentResearchQuery,
   ResearchMessageAttachment,
 } from "../../types";
@@ -24,12 +25,12 @@ import type { ResearchComposerHandle } from "./ResearchConversationComposer";
  * with the backend's message so the control that started it can show it. */
 export interface NoteActions {
   /** An AI follow-up (a run child) or, with `network`, a network follow-up
-   * (a note child). `replyAnchor` names the reply an AI follow-up is about. */
+   * (a post child). `replyId` names the reply an AI follow-up is about. */
   onAskFollowUp: (input: {
     parentNodeId: string;
     prompt: string;
     network: boolean;
-    replyAnchor: string | null;
+    replyId: string | null;
   }) => Promise<void>;
   onRespond: (nodeId: string, replyId: string, body: string) => Promise<void>;
   onDeleteResponse: (nodeId: string, replyId: string) => Promise<void>;
@@ -42,19 +43,6 @@ export interface NoteReplyTarget {
   author: string;
 }
 
-/** Mirrors the backend's `note_body_is_single_url`: such a body was saved as
- * a link or post rather than asked as a question. */
-export function noteBodyIsSingleUrl(body: string): boolean {
-  const trimmed = body.trim();
-  if (!trimmed || /\s/.test(trimmed)) return false;
-  try {
-    const url = new URL(trimmed);
-    return (url.protocol === "http:" || url.protocol === "https:") && Boolean(url.hostname);
-  } catch {
-    return false;
-  }
-}
-
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -63,16 +51,18 @@ function stopForInteractive(event: MouseEvent) {
   event.stopPropagation();
 }
 
-/** A note's own content. A saved link renders as a link card, a saved post
- * as its tweet embed (through the shared message body, which hides the URL
- * once the tweet resolved), and a question as Markdown. */
+/** A post's own content, by its stored format. A link post renders as a
+ * link card, or as its tweet embed once the tweet resolved (through the
+ * shared message body, which then hides the URL); a text post as Markdown. */
 export function NoteBody({
   prompt,
+  format,
   attachments = [],
   variant = "body",
   renderPrompt,
 }: {
   prompt: string;
+  format: PostFormat;
   attachments?: ResearchMessageAttachment[];
   variant?: ResearchProseVariant;
   renderPrompt?: (content: ReactNode) => ReactNode;
@@ -80,13 +70,13 @@ export function NoteBody({
   const resolvedTweet = attachments.some(
     (attachment) => attachment.status === "resolved" && attachment.tweet,
   );
-  if (noteBodyIsSingleUrl(prompt) && !resolvedTweet) {
+  if (format === "link" && !resolvedTweet) {
     const url = prompt.trim();
     let host = url;
     try {
       host = new URL(url).hostname;
     } catch {
-      // noteBodyIsSingleUrl already parsed it.
+      // A link post's text is one URL; show it whole if it does not parse.
     }
     return (
       <a

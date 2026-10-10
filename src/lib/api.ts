@@ -27,6 +27,7 @@ import type {
   ResearchFolderState,
   ResearchHighlight,
   ResearchHighlightFeedItem,
+  NodeAnchor,
   ResearchHighlightAnchor,
   ResearchTree,
   ResearchTreeDetail,
@@ -356,9 +357,8 @@ export function getResearchNodeContent(nodeId: string) {
 export function forkResearchNode(
   parentNodeId: string,
   prompt: string,
-  queryAnchor?: ResearchHighlightAnchor | null,
+  anchor?: NodeAnchor | null,
   inline = false,
-  replyAnchor?: string | null,
   /** An edited question: the failed or stopped sibling this child replaces.
    * The backend admits the child first and removes that node only then. */
   replacesNodeId?: string | null,
@@ -366,8 +366,7 @@ export function forkResearchNode(
   return invoke<ResearchNode>("fork_research_node", {
     parentNodeId,
     prompt,
-    queryAnchor: queryAnchor ?? null,
-    replyAnchor: replyAnchor ?? null,
+    anchor: anchor ?? null,
     inline,
     replacesNodeId: replacesNodeId ?? null,
   });

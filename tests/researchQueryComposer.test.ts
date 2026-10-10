@@ -16,7 +16,7 @@ const {
   researchModelOptions,
 } = await import("../src/components/research/ResearchQueryComposer");
 const { AskPostSwitch, askSwitchKeyTarget } = await import("../src/components/research/AskPostSwitch");
-const { noteBodyIsSingleUrl } = await import("../src/components/research/ResearchNote");
+const { postFormatOf } = await import("../src/lib/researchNodeTypes");
 const { LauncherSelect, OptionIcon: LauncherSelectIcon } = await import("../src/components/LauncherSelect");
 
 function adapter(id: string): AgentAdapterMetadata {
@@ -85,11 +85,12 @@ test("the composer starts as one Ask a question line without its controls", () =
 });
 
 test("a single URL is saved as a link; anything else is asked", () => {
-  assert.equal(noteBodyIsSingleUrl(" https://example.com/page "), true);
-  assert.equal(noteBodyIsSingleUrl("https://x.com/jack/status/20"), true);
-  assert.equal(noteBodyIsSingleUrl("Is this right? https://example.com"), false);
-  assert.equal(noteBodyIsSingleUrl("ftp://example.com"), false);
-  assert.equal(noteBodyIsSingleUrl("example.com"), false);
+  assert.equal(postFormatOf(" https://example.com/page "), "link");
+  assert.equal(postFormatOf("https://x.com/jack/status/20"), "link");
+  assert.equal(postFormatOf("Is this right? https://example.com"), "text");
+  assert.equal(postFormatOf("ftp://example.com"), "text");
+  assert.equal(postFormatOf("example.com"), "text");
+  assert.equal(postFormatOf(""), "text");
 });
 
 test("Claude reasoning options omit the word effort", () => {

@@ -1,4 +1,4 @@
-import { nodeType } from "./researchNodeTypes";
+import { nodeType, passageAnchor, replyAnchorId } from "./researchNodeTypes";
 import type {
   NoteDelivery,
   NoteReply,
@@ -109,20 +109,21 @@ export function recentResearchQueryFromNode(
     parentNodeId: node.parentNodeId,
     inline: Boolean(node.inline),
     prompt: node.prompt,
-    queryTarget: node.queryAnchor?.exact,
+    queryTarget: passageAnchor(node)?.exact,
     attachments: node.attachments,
     title: node.title,
     adapter: node.adapter,
     model: node.model,
     ...(node.origin ? { origin: node.origin } : {}),
     kind,
+    ...(node.format ? { format: node.format } : {}),
     ...(node.delivery
       ? {
           delivery: cappedNoteDelivery(node.delivery, RECENT_ACTIVITY_NOTE_REPLY_LIMIT),
           replyCount: topLevelReplyCount(node.delivery.replies),
         }
       : {}),
-    ...(node.replyAnchor ? { replyAnchor: node.replyAnchor } : {}),
+    ...(replyAnchorId(node) ? { replyAnchor: replyAnchorId(node) } : {}),
     status: node.status,
     ...(node.error ? { error: node.error } : {}),
     createdAt: node.createdAt,

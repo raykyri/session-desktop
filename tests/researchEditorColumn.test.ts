@@ -86,7 +86,7 @@ test("a post with replies is corrected: the button reads Add correction", () => 
 });
 
 test("a post has replies when it has reply items or follow-ups", () => {
-  const post = node("note", { kind: "note", delivery: { status: "posted", postedAt: 1 } });
+  const post = node("note", { kind: "post", delivery: { status: "posted", postedAt: 1 } });
   assert.equal(researchPostHasReplies([post], post), false);
   const replied = {
     ...post,

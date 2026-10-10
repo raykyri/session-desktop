@@ -29,7 +29,7 @@ import {
   researchReadyAdaptersFirst,
   researchReadinessLabel,
 } from "../../lib/adapterReadiness";
-import { noteBodyIsSingleUrl } from "./ResearchNote";
+import { postFormatOf } from "../../lib/researchNodeTypes";
 import { AskPostSwitch, type AskMode } from "./AskPostSwitch";
 import { useComposerPopOpen } from "../../hooks/useComposerPopOpen";
 
@@ -329,7 +329,7 @@ export default function ResearchQueryComposer({
           model: resolvedModel,
           effort: resolvedEffort,
           workspaceId,
-          askNetwork: !noteBodyIsSingleUrl(body),
+          askNetwork: postFormatOf(body) === "text",
         });
       } else {
         await onCreate({
@@ -361,7 +361,7 @@ export default function ResearchQueryComposer({
     askMode === "network"
       ? submitting
         ? "Posting…"
-        : noteBodyIsSingleUrl(prompt)
+        : postFormatOf(prompt) === "link"
           ? "Save link"
           : "Post to network"
       : submitting

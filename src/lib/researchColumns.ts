@@ -14,7 +14,7 @@
 // columnAttributes, and code that has to find a column element uses
 // columnSelector.
 
-import { nodeType } from "./researchNodeTypes";
+import { nodeType, passageAnchor } from "./researchNodeTypes";
 import { researchLevelPath } from "./researchBranchView";
 import { inlineChainFor } from "./researchThreads";
 import type { ResearchHighlightAnchor, ResearchNode } from "../types";
@@ -113,7 +113,7 @@ export function researchStrip(
       chainIds,
       selectedId,
       sourceId: index === 0 ? null : (head?.parentNodeId ?? null),
-      anchor: index === 0 ? null : (head?.queryAnchor ?? null),
+      anchor: index === 0 || !head ? null : passageAnchor(head),
       kind: index > 0 ? "branch" : head && nodeType(head) === "post" ? "post" : "conversation",
     };
   });

@@ -39,7 +39,11 @@ export default function ResearchNoteDocument({
             </button>
           ) : null}
           <ResearchUserMessage className="research-prompt research-turn-prompt">
-            <NoteBody prompt={note.prompt} attachments={note.attachments} />
+            <NoteBody
+              prompt={note.prompt}
+              format={note.format ?? "text"}
+              attachments={note.attachments}
+            />
           </ResearchUserMessage>
           <div className="research-turn-meta">
             <time

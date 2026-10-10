@@ -74,7 +74,7 @@ test("a root with two levels of branches is three pairs, deepest last", () => {
   const nodes = [
     node("root", { createdAt: 0 }),
     node("c2", { parentNodeId: "root", inline: true, createdAt: 1 }),
-    node("b1", { parentNodeId: "c2", queryAnchor: anchor, createdAt: 2 }),
+    node("b1", { parentNodeId: "c2", anchor: { kind: "passage", anchor }, createdAt: 2 }),
     node("b1f", { parentNodeId: "b1", inline: true, createdAt: 3 }),
     node("b2", { parentNodeId: "b1f", createdAt: 4 }),
   ];
@@ -142,7 +142,7 @@ test("a pending branch adds its column after the level that shows its parent", (
 
 test("a note root is a post column and its thread column; its follow-ups open as ordinary pairs", () => {
   const nodes = [
-    node("note", { kind: "note", delivery: { status: "posted", postedAt: 1, replies: [] } }),
+    node("note", { kind: "post", delivery: { status: "posted", postedAt: 1, replies: [] } }),
     node("run", { parentNodeId: "note", createdAt: 1 }),
   ];
   const root = researchStrip(nodes, "note", null);
@@ -233,6 +233,6 @@ test("editing the root adds the editor column after the root level's columns", (
   assert.equal(sameResearchStrip(editing, researchStrip(doc, "doc", null)), false);
 
   // A post's editor follows its thread column.
-  const post = [node("note", { kind: "note", delivery: { status: "posted", postedAt: 1, replies: [] } })];
+  const post = [node("note", { kind: "post", delivery: { status: "posted", postedAt: 1, replies: [] } })];
   assert.deepEqual(ids(researchStrip(post, "note", null, "note")), ["N0", "T0", "E0"]);
 });

@@ -404,7 +404,7 @@ import type {
   QueuedTurn,
   RecentResearchQuery,
   RecentResearchQueryCursor,
-  ResearchHighlightAnchor,
+  NodeAnchor,
   ResearchDraft,
   ResearchHighlightFeedItem,
   ResearchNode,
@@ -6431,17 +6431,15 @@ function MainApp() {
     async (
       parentNodeId: string,
       prompt: string,
-      queryAnchor?: ResearchHighlightAnchor | null,
+      anchor?: NodeAnchor | null,
       inline?: boolean,
-      replyAnchor?: string | null,
       replacesNodeId?: string | null,
     ) => {
       const node = await forkResearchNode(
         parentNodeId,
         prompt,
-        queryAnchor,
+        anchor,
         inline ?? false,
-        replyAnchor,
         replacesNodeId,
       );
       void applyGeneratedResearchNodeTitle(node.treeId, node.id);
@@ -6469,12 +6467,17 @@ function MainApp() {
   // document, so nothing is patched here.
   const noteActions = useMemo<NoteActions>(
     () => ({
-      onAskFollowUp: async ({ parentNodeId, prompt, network, replyAnchor }) => {
+      onAskFollowUp: async ({ parentNodeId, prompt, network, replyId }) => {
         if (network) {
           await createResearchNoteFollowUp(parentNodeId, prompt);
           return;
         }
-        await createResearchFollowup(parentNodeId, prompt, null, false, replyAnchor);
+        await createResearchFollowup(
+          parentNodeId,
+          prompt,
+          replyId ? { kind: "reply", replyId } : null,
+          false,
+        );
       },
       onRespond: async (nodeId, replyId, body) => {
         await respondToResearchNoteReply(nodeId, replyId, body);

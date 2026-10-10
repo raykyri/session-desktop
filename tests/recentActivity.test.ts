@@ -70,7 +70,7 @@ test("model summaries use readable model names where available", () => {
 
 test("note posts name delivery and saved sources", () => {
   const note: RecentResearchQuery = {
-    ...query, nodeId: "note", parentNodeId: null, kind: "note", status: "complete",
+    ...query, nodeId: "note", parentNodeId: null, kind: "post", status: "complete",
     prompt: "Who has shipped this?", delivery: { status: "posted", postedAt: 1 }, replyCount: 3,
   };
   const posted = activityEventFromResearchQuery(note, tree);
@@ -102,7 +102,7 @@ test("Home hides archived research and shows it again when restored", () => {
   const items: RecentResearchQuery[] = [
     query,
     { ...query, nodeId: "active", treeId: "active-tree", createdAt: 150 },
-    { ...query, nodeId: "saved", treeId: "active-tree", kind: "note", createdAt: 100 },
+    { ...query, nodeId: "saved", treeId: "active-tree", kind: "post", createdAt: 100 },
   ];
   const activeTree = { ...tree, id: "active-tree" };
   assert.deepEqual(
@@ -140,7 +140,7 @@ test("every top-level node enters the Home feed; follow-ups do not", () => {
     recentResearchQueryFromNode({ ...node, kind: "conversation" })?.kind,
     "conversation",
   );
-  assert.equal(recentResearchQueryFromNode({ ...node, kind: "note" })?.kind, "note");
+  assert.equal(recentResearchQueryFromNode({ ...node, kind: "post" })?.kind, "post");
 });
 
 test("live follow-ups stay under their root and survive root updates", () => {
@@ -225,7 +225,7 @@ test("variable-height virtualization returns a small overscanned window", () => 
 
 test("virtual feed rows omit day dividers and retain feed positions", () => {
   const events = buildRecentActivityFromItems(
-    [{ ...query, nodeId: "link", kind: "note", prompt: "https://example.com", createdAt: 300 }, query],
+    [{ ...query, nodeId: "link", kind: "post", prompt: "https://example.com", createdAt: 300 }, query],
     [tree],
   );
   const rows = buildRecentActivityVirtualRows(events);
@@ -271,10 +271,10 @@ test("live note updates cut replies to five threads like the backend", () => {
   const note: ResearchNode = {
     id: "note", treeId: "note-tree", prompt: "Question", adapter: "claude",
     groupId: "workspace", worktreeDir: "/workspace", status: "complete", createdAt: 100,
-    kind: "note", highlights: [], delivery: { status: "posted", postedAt: 100, replies },
+    kind: "post", highlights: [], delivery: { status: "posted", postedAt: 100, replies },
   };
   const [item] = upsertRecentActivityResearchNode([], note);
-  assert.equal(item.kind, "note");
+  assert.equal(item.kind, "post");
   assert.equal(item.replyCount, 7);
   assert.equal(item.delivery?.replies?.length, 6);
 });
@@ -283,13 +283,13 @@ test("follow-ups about a reply resolve its author from the loaded note", () => {
   const note: ResearchNode = {
     id: "note", treeId: "note-tree", prompt: "Question", adapter: "claude",
     groupId: "workspace", worktreeDir: "/workspace", status: "complete", createdAt: 100,
-    kind: "note", highlights: [],
+    kind: "post", highlights: [],
     delivery: { status: "posted", postedAt: 100, replies: [memberReply("r0", 110)] },
   };
   let items = upsertRecentActivityResearchNode([], note);
   const child: ResearchNode = {
     ...note, id: "child", parentNodeId: "note", kind: "run", delivery: null,
-    replyAnchor: "r0", status: "running", createdAt: 120,
+    anchor: { kind: "reply", replyId: "r0" }, status: "running", createdAt: 120,
   };
   items = upsertRecentActivityResearchNode(items, child);
   assert.equal(items[0].children?.[0].replyAnchorAuthor, "Member r0");

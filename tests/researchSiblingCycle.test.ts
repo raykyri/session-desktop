@@ -98,7 +98,7 @@ test("a column without rows falls back to the nearest column with rows to its le
 });
 
 test("a post's own column and an empty thread fall back to the feed", () => {
-  const nodes = [node("post", { kind: "note" })];
+  const nodes = [node("post", { kind: "post" })];
   const strip = researchStrip(nodes, "post", null, "post");
   assert.deepEqual(
     strip.columns.map((column) => column.id),

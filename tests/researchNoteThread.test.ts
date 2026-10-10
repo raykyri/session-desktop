@@ -10,7 +10,7 @@ const asyncNoop = async () => {};
 
 const note: ResearchNode = {
   id: "note", treeId: "tree", prompt: "Who ships component-model plugins?",
-  adapter: "claude", model: "fable", groupId: "ws", worktreeDir: "/ws", kind: "note",
+  adapter: "claude", model: "fable", groupId: "ws", worktreeDir: "/ws", kind: "post", format: "text",
   status: "complete", createdAt: 100, highlights: [],
   delivery: { status: "posted", postedAt: 100 },
 };
@@ -32,7 +32,8 @@ const withReplies: ResearchNode = {
   },
 };
 const about: ResearchNode = {
-  ...note, id: "about", parentNodeId: "note", kind: "run", delivery: null, replyAnchor: "r1",
+  ...note, id: "about", parentNodeId: "note", kind: "run", delivery: null,
+  anchor: { kind: "reply", replyId: "r1" },
   prompt: "How large is the generated surface?", status: "running", createdAt: 130,
 };
 const answered: ResearchNode = {
