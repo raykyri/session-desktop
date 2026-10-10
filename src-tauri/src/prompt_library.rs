@@ -20,7 +20,7 @@ use std::time::UNIX_EPOCH;
 
 const PROMPTS_DIR: &str = "prompts";
 const PROMPT_EXTENSION: &str = "md";
-/// Filenames land in menus and Finder; anything longer is a paragraph, not a name.
+/// Limit filename length for display in menus and Finder.
 const MAX_NAME_CHARS: usize = 120;
 
 /// Serializes save/delete pairs (a rename's or move's write-then-remove) so two UI
