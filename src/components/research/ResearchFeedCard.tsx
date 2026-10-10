@@ -216,7 +216,7 @@ export default function ResearchFeedCard({
             className={`research-feed-child${index === 0 ? " is-group-start" : ""}${
               index === childRows.length - 1 ? " is-group-end" : ""
             }${childSelected ? " is-selected" : ""}${childMenuOpen ? " has-open-menu" : ""}`}
-            style={{ "--research-child-level": child.level } as CSSProperties}
+            style={{ "--research-child-indent": child.indent } as CSSProperties}
             data-research-child-of={cardId}
             onPointerDown={
               onDragStart

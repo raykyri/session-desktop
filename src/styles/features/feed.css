@@ -892,7 +892,7 @@
   min-height: 42px;
   align-items: flex-start;
   padding: 11px 12px 11px
-    calc(var(--research-row-text) - var(--research-row-inset) + var(--research-child-level, 1) * 16px);
+    calc(var(--research-row-text) - var(--research-row-inset) + var(--research-child-indent, 1) * 16px);
 }
 
 .research-feed-child.is-group-end {

@@ -221,9 +221,9 @@ export interface ResearchFeedChild {
   label: string;
   /** A non-inline child: opens as a branch pair with its ancestors. */
   branch: boolean;
-  /** Indent level: 1 under the question; 2 for a branch under another
+  /** Indent: 1 under the question; 2 for a branch under another
    * child (a branch of a branch, or a branch from a starred follow-up). */
-  level: number;
+  indent: 1 | 2;
   running: boolean;
   query: RecentResearchQuery;
 }
@@ -246,7 +246,7 @@ export function researchFeedChildren(root: RecentResearchQuery): ResearchFeedChi
       treeId: child.treeId,
       label: (child.inline ? child.prompt : (child.title?.trim() || child.prompt)).trim(),
       branch: !child.inline,
-      level: underChild ? 2 : 1,
+      indent: underChild ? 2 : 1,
       running: isActiveResearchStatus(child.status),
       query: child,
     };

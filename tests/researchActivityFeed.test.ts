@@ -156,13 +156,13 @@ test("starred follow-ups and branches are indented rows under their question", (
     .map((row) => row.slice(0, row.indexOf("</div>")));
   assert.equal(rows.length, 3);
   assert.ok(rows[0].startsWith(" is-group-start"));
-  assert.match(rows[0], /--research-child-level:1/);
+  assert.match(rows[0], /--research-child-indent:1/);
   // A follow-up has no icon; a starred branch is marked with a filled star.
   assert.doesNotMatch(rows[0], /Starred branch: |research-feed-child-icon/);
   assert.match(rows[1], /<svg(?=[^>]*lucide-star)(?=[^>]*fill="currentColor")/);
   assert.match(rows[1], /Starred branch: <\/span><span class="research-feed-child-text">Branch title</);
   // Levels cap at two; running children keep a status dot.
-  assert.match(rows[2], /--research-child-level:2/);
+  assert.match(rows[2], /--research-child-indent:2/);
   assert.ok(rows[2].startsWith(" is-group-end"));
   assert.match(rows[2], /research-feed-status is-running/);
   // Each child row has its open target and, in the right-hand margin, the

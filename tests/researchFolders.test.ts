@@ -163,14 +163,14 @@ test("starred children list follow-ups as text rows and branches with a level", 
     ],
   });
   assert.deepEqual(
-    children.map(({ nodeId, label, branch, level, running }) => ({ nodeId, label, branch, level, running })),
+    children.map(({ nodeId, label, branch, indent, running }) => ({ nodeId, label, branch, indent, running })),
     [
-      { nodeId: "f", label: "Follow-up", branch: false, level: 1, running: false },
-      { nodeId: "b", label: "Branch title", branch: true, level: 1, running: true },
-      { nodeId: "bb", label: "Deeper", branch: true, level: 2, running: false },
+      { nodeId: "f", label: "Follow-up", branch: false, indent: 1, running: false },
+      { nodeId: "b", label: "Branch title", branch: true, indent: 1, running: true },
+      { nodeId: "bb", label: "Deeper", branch: true, indent: 2, running: false },
       // A branch from a starred follow-up sits under it.
-      { nodeId: "fb", label: "From the starred follow-up", branch: true, level: 2, running: false },
-      { nodeId: "ub", label: "From another follow-up", branch: true, level: 1, running: false },
+      { nodeId: "fb", label: "From the starred follow-up", branch: true, indent: 2, running: false },
+      { nodeId: "ub", label: "From another follow-up", branch: true, indent: 1, running: false },
     ],
   );
 });
