@@ -938,6 +938,15 @@ pub fn backup_research_node_state_for_migration(
     }
 }
 
+/// Copies state.json to `backup_name` before a migration's save replaces it.
+/// An existing backup is never overwritten: it holds a state an earlier
+/// migration preserved (for example, this workspace's state before a
+/// downgrade and a later upgrade). When it holds other bytes, the source is
+/// copied to a sibling `<stem>.<millis>.bak` instead (`state.v7.<millis>.bak`
+/// beside `state.v7.bak`). No copy is written when the backup or one of its
+/// timestamped siblings already holds the source's bytes, so a migration
+/// that repeats because its save did not land adds no file, and a launch
+/// without a migration never calls this.
 fn backup_state_for_migration(
     workspace_root: &Path,
     backup_name: &str,
@@ -947,21 +956,25 @@ fn backup_state_for_migration(
     if !source.is_file() {
         return Ok(None);
     }
-    let backup = source.with_file_name(backup_name);
-    if backup.exists() {
-        return Ok(Some(backup));
-    }
     let bytes = fs::read(&source).map_err(|err| {
         format!(
             "failed to read {label} state {} for backup: {err}",
             source.display()
         )
     })?;
-    // Same temp+fsync+rename discipline as `save`: the exists() short-circuit
-    // above trusts whatever bytes are at the backup path forever, so a crash
-    // mid-copy must not be able to leave a truncated backup as the only
-    // preserved snapshot. write_synced also keeps the backup owner-only,
-    // matching the file it copies.
+    let (existing, backup) = migration_backup_paths(&source, backup_name);
+    if let Some(same) = existing
+        .into_iter()
+        .find(|path| fs::read(path).is_ok_and(|backup_bytes| backup_bytes == bytes))
+    {
+        return Ok(Some(same));
+    }
+    // Same temp+fsync+rename discipline as `save`: an existing backup is
+    // trusted as preserved forever, so a crash mid-copy must not be able to
+    // leave a truncated backup as the only preserved snapshot. write_synced
+    // also keeps the backup owner-only, matching the file it copies. The
+    // scratch name uses `backup_name` even for a timestamped backup, so the
+    // stale scratch-file cleanup recognizes it.
     let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
     let tmp = source.with_file_name(format!("{backup_name}.{}.{seq}.tmp", std::process::id()));
     write_synced(&tmp, &bytes).map_err(|err| {
@@ -984,6 +997,49 @@ fn backup_state_for_migration(
         let _ = dir.sync_all();
     }
     Ok(Some(backup))
+}
+
+/// The existing backups for `backup_name` beside `source` (the backup itself
+/// and its `<stem>.<millis>.bak` siblings), and the path a new backup takes:
+/// `backup_name` when it is free, otherwise the first free timestamped name.
+fn migration_backup_paths(source: &Path, backup_name: &str) -> (Vec<PathBuf>, PathBuf) {
+    let stem = backup_name.strip_suffix(".bak").unwrap_or(backup_name);
+    let is_timestamped = |name: &str| {
+        name.strip_prefix(stem)
+            .and_then(|rest| rest.strip_prefix('.'))
+            .and_then(|rest| rest.strip_suffix(".bak"))
+            .is_some_and(|millis| !millis.is_empty() && millis.bytes().all(|b| b.is_ascii_digit()))
+    };
+    let mut existing = source
+        .parent()
+        .and_then(|dir| fs::read_dir(dir).ok())
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name == backup_name || is_timestamped(name))
+        })
+        .map(|entry| entry.path())
+        .collect::<Vec<_>>();
+    existing.sort();
+    let plain = source.with_file_name(backup_name);
+    if !plain.exists() {
+        return (existing, plain);
+    }
+    let mut millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default();
+    loop {
+        let candidate = source.with_file_name(format!("{stem}.{millis}.bak"));
+        if !candidate.exists() {
+            return (existing, candidate);
+        }
+        millis += 1;
+    }
 }
 
 fn discard_state_file(path: &Path, label: &str, reason: String) -> LoadOutcome {
@@ -1522,7 +1578,7 @@ mod tests {
     }
 
     #[test]
-    fn version_two_migration_backup_preserves_original_bytes_once() {
+    fn version_two_migration_backup_is_never_overwritten() {
         let root = temp_root();
         let path = state_path(&root);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -1532,12 +1588,17 @@ mod tests {
         let backup = backup_v2_state_for_migration(&root)
             .unwrap()
             .expect("existing state is backed up");
+        assert_eq!(backup.file_name().unwrap(), V2_BACKUP_FILE);
         assert_eq!(fs::read(&backup).unwrap(), original);
-        fs::write(&path, br#"{"version":3}"#).unwrap();
         assert_eq!(
             backup_v2_state_for_migration(&root).unwrap(),
             Some(backup.clone())
         );
+        let other = br#"{"version":2,"nextId":8}"#;
+        fs::write(&path, other).unwrap();
+        let sibling = backup_v2_state_for_migration(&root).unwrap().unwrap();
+        assert_ne!(sibling, backup);
+        assert_eq!(fs::read(&sibling).unwrap(), other);
         assert_eq!(fs::read(&backup).unwrap(), original);
         fs::remove_dir_all(root).unwrap();
     }
@@ -1763,10 +1824,24 @@ mod tests {
 
         let dead = dir.join(format!("state.json.{dead_pid}.7.tmp"));
         let dead_prefs = dir.join(format!("preferences.json.{dead_pid}.9.tmp"));
+        let dead_backups = MIGRATION_BACKUP_FILES
+            .map(|backup| dir.join(format!("{backup}.{dead_pid}.3.tmp")))
+            .to_vec();
         let live = dir.join(format!("state.json.{}.8.tmp", std::process::id()));
         let state_file = dir.join(STATE_FILE);
         let preserved = dir.join(format!("state.json.corrupt.123.{dead_pid}.0.bak"));
-        for path in [&dead, &dead_prefs, &live, &state_file, &preserved] {
+        let timestamped = dir.join("state.v8.1700000000000.bak");
+        for path in [
+            &dead,
+            &dead_prefs,
+            &live,
+            &state_file,
+            &preserved,
+            &timestamped,
+        ]
+        .into_iter()
+        .chain(&dead_backups)
+        {
             fs::write(path, b"x").unwrap();
         }
 
@@ -1774,9 +1849,77 @@ mod tests {
 
         assert!(!dead.exists());
         assert!(!dead_prefs.exists());
+        for path in &dead_backups {
+            assert!(!path.exists(), "{}", path.display());
+        }
         assert!(live.exists(), "a live writer's scratch file must survive");
         assert!(state_file.exists());
         assert!(preserved.exists(), ".bak preserves must survive");
+        assert!(timestamped.exists(), "migration backups must survive");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn migration_backup_keeps_existing_backups_and_adds_one_per_new_source() {
+        let root = temp_root();
+        let dir = root.join(STATE_DIR);
+        fs::create_dir_all(&dir).unwrap();
+        let path = state_path(&root);
+        let backups = || {
+            let mut names = fs::read_dir(&dir)
+                .unwrap()
+                .flatten()
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .filter(|name| name.starts_with("state.v7"))
+                .collect::<Vec<_>>();
+            names.sort();
+            names
+        };
+
+        // No backup yet: the plain name.
+        fs::write(&path, br#"{"version":7,"a":1}"#).unwrap();
+        let first = backup_research_node_state_for_migration(&root, 7)
+            .unwrap()
+            .unwrap();
+        assert_eq!(first, dir.join("state.v7.bak"));
+        // The same source again (its save did not land): nothing new.
+        assert_eq!(
+            backup_research_node_state_for_migration(&root, 7).unwrap(),
+            Some(first.clone())
+        );
+        assert_eq!(backups(), ["state.v7.bak"]);
+
+        // Another source while state.v7.bak holds the first: a timestamped
+        // sibling, and the first backup stays as it was.
+        fs::write(&path, br#"{"version":7,"a":2}"#).unwrap();
+        let second = backup_research_node_state_for_migration(&root, 7)
+            .unwrap()
+            .unwrap();
+        assert_ne!(second, first);
+        assert_eq!(fs::read(&second).unwrap(), br#"{"version":7,"a":2}"#);
+        assert_eq!(fs::read(&first).unwrap(), br#"{"version":7,"a":1}"#);
+        let name = second.file_name().unwrap().to_str().unwrap();
+        let millis = name
+            .strip_prefix("state.v7.")
+            .and_then(|rest| rest.strip_suffix(".bak"))
+            .unwrap();
+        assert!(millis.bytes().all(|byte| byte.is_ascii_digit()), "{name}");
+        assert_eq!(
+            backup_research_node_state_for_migration(&root, 7).unwrap(),
+            Some(second.clone())
+        );
+        // Either earlier source again: its backup is found, nothing new.
+        fs::write(&path, br#"{"version":7,"a":1}"#).unwrap();
+        assert_eq!(
+            backup_research_node_state_for_migration(&root, 7).unwrap(),
+            Some(first)
+        );
+        assert_eq!(backups().len(), 2);
+        assert!(
+            !backups().iter().any(|name| name.ends_with(".tmp")),
+            "{:?}",
+            backups()
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

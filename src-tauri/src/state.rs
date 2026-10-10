@@ -17713,6 +17713,61 @@ mod tests {
         }
     }
 
+    /// A backup left by an earlier migration (here of an older state of the
+    /// same workspace) is kept, and the state being migrated now is copied
+    /// beside it under a timestamped name.
+    #[test]
+    fn existing_migration_backup_with_other_bytes_gets_a_new_sibling() {
+        for (version, backup) in [(4, "state.v6"), (7, "state.v7"), (8, "state.v8")] {
+            let workspace = temp_workspace();
+            let state = state_with_posts_and_anchors(&workspace);
+            let original = research_nodes_by_id(&state);
+            state.finalize_persistence_for_exit();
+            drop(state);
+            let path = persistence::state_path(&workspace);
+            let mut raw: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            rewrite_as_pre_post_state(&mut raw, version);
+            std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+            let source_bytes = std::fs::read(&path).unwrap();
+            let stale = br#"{"version":6,"researchNodes":{}}"#;
+            let plain = path.with_file_name(format!("{backup}.bak"));
+            std::fs::write(&plain, stale).unwrap();
+
+            let restored = AppState::new(test_config(workspace.clone()));
+            restored.restore_session();
+            assert_eq!(research_nodes_by_id(&restored), original);
+            restored.finalize_persistence_for_exit();
+            drop(restored);
+
+            assert_eq!(std::fs::read(&plain).unwrap(), stale, "v{version}");
+            let siblings = std::fs::read_dir(path.parent().unwrap())
+                .unwrap()
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|candidate| {
+                    let name = candidate.file_name().unwrap().to_str().unwrap();
+                    name.starts_with(&format!("{backup}.")) && candidate != &plain
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(siblings.len(), 1, "v{version}: {siblings:?}");
+            assert_eq!(std::fs::read(&siblings[0]).unwrap(), source_bytes);
+
+            // The next launch reads version 9 and migrates nothing.
+            let reloaded = AppState::new(test_config(workspace.clone()));
+            reloaded.restore_session();
+            reloaded.finalize_persistence_for_exit();
+            drop(reloaded);
+            let backups = std::fs::read_dir(path.parent().unwrap())
+                .unwrap()
+                .flatten()
+                .filter(|entry| entry.file_name().to_string_lossy().ends_with(".bak"))
+                .count();
+            assert_eq!(backups, 2, "v{version}");
+            std::fs::remove_dir_all(workspace).unwrap();
+        }
+    }
+
     /// A version-9 state needs no backup: its builds read what this build
     /// writes.
     #[test]
