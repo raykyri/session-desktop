@@ -96,7 +96,7 @@ fn battery_blocks_wake() -> bool {
 
 /// Decides from `pmset -g batt` output whether the wake lock should be blocked: only
 /// when drawing from battery AND below 10%. Output we can't parse fails open (returns
-/// false) so the lock behaves as before rather than surprising the user with sleep.
+/// false), preserving the wake lock.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn wake_blocked_by_battery(pmset_output: &str) -> bool {
     // pmset prints "Now drawing from 'Battery Power'" vs "'AC Power'"; the battery
