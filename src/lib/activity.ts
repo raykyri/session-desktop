@@ -6,8 +6,7 @@ import type {
 } from "../types";
 
 /**
- * Shared activity grammar. Surfaces render these semantic slots rather than
- * hand-building slightly different metadata sentences for each source.
+ * Shared activity fields keep metadata wording consistent across views.
  */
 export interface ActivityEvent<TSource = unknown> {
   id: string;
