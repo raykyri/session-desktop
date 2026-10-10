@@ -169,9 +169,8 @@ The positional `web` is the build context and matters: without it flyctl hands
 Docker the repository root, where `package.json` belongs to the desktop app.
 
 The machine runs migrations on boot and reconciles any runs the previous
-process left behind. `/healthz` answers 503 until that finishes and again from
-the first moment of a drain, so Fly's proxy follows the boot rather than
-routing into a process that cannot finish what it accepts.
+process left behind. `/healthz` returns 503 during startup and shutdown so
+Fly's proxy routes requests only while the process can accept them.
 
 ### 5. Grant the first admin
 
