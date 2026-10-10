@@ -522,13 +522,13 @@ impl GrokAdapter {
         // The idle handler (advance_after_idle) writes status/paused straight to the
         // store without touching this local snapshot, so re-read the agent before
         // attaching it — otherwise the event ships a stale (e.g. not-yet-paused) copy
-        // and the surgical upsert below hides the change from the UI.
+        // and the frontend update hides the change from the UI.
         let agent = match agent {
             Some(agent) => state.agent(&agent.id)?.or(Some(agent)),
             None => None,
         };
         // Carry the updated agent so the frontend can apply this status change
-        // surgically instead of refetching the entire agent list on every hook event.
+        // without refetching the entire agent list on every hook event.
         if let (Value::Object(payload), Some(agent)) = (&mut event_payload, agent.as_ref()) {
             payload.insert(
                 "agent".to_string(),
