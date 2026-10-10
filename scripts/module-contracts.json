@@ -72,7 +72,6 @@
         "RemoteSessionIdentity",
         "RemoveQueuedAgentTurnResult",
         "ReorderQueuedAgentTurnResult",
-        "RepositoryWorktree",
         "ResearchDocumentNode",
         "ResearchExchangeNode",
         "ResearchPostNode",

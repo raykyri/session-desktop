@@ -134,7 +134,6 @@ import {
   IS_MAC,
   isTerminalTarget,
 
-  repositoryWorktreeName,
   selectPaneAfterClose,
   upsertThreadGraphs,
 } from "./lib/appHelpers";
@@ -334,7 +333,6 @@ import {
   removeResearchBranch,
   restoreResearchTree,
   retryResearchNode,
-  forkAgent,
   setOpenRouterKey,
   openRouterChatCompletion,
   getThreadGraph,
@@ -384,9 +382,6 @@ import {
   setResearchLaunchInstruction,
   setWorktreeLocation,
   spawnShell,
-  openPaneWorktree,
-  openRepositoryBranch,
-  openRepositoryWorktree,
   upsertRemote,
   worktreeStatus,
 } from "./lib/api";
@@ -396,7 +391,6 @@ import type {
   ConversationHistorySnapshot,
   GroupInfo,
   InitialPaneSize,
-  MessageAnchor,
   PaneInfo,
   PaneSplitAxis,
   PaneSplitInfo,
@@ -413,8 +407,6 @@ import type {
   RuntimeConfig,
   RemoteChoice,
   RemoteProbeResult,
-  RepositoryBranch,
-  RepositoryInventory,
   SavedRemote,
   ThreadGraph,
   TranscriptHookEvent,
@@ -435,32 +427,6 @@ interface OrphanedQueueGroup {
   agent: AgentInfo;
   queuedTurns: QueuedTurn[];
 }
-
-type WorktreeCreateAction =
-  | { kind: "open" }
-  | { kind: "fork"; prompt?: string; anchor?: MessageAnchor };
-
-type WorktreeCreateDialogState = {
-  pane: PaneInfo;
-  action: WorktreeCreateAction;
-  name: string;
-  suggestedName: string;
-  creating: boolean;
-  error: string | null;
-  inventory: RepositoryInventory | null;
-  inventoryLoading: boolean;
-  inventoryError: string | null;
-  startRef: string | null;
-  requestId: number;
-};
-
-type RepositoryBrowserState = {
-  pane: PaneInfo;
-  inventory: RepositoryInventory | null;
-  error: string | null;
-  opening: string | null;
-  names: Record<string, string>;
-};
 
 function remoteSettingsDraft(remote: RemoteChoice): RemoteSettingsDraft {
   return {
@@ -1834,11 +1800,6 @@ function MainApp() {
     },
   });
   const [folderPickerStatus, setFolderPickerStatus] = useState<string | null>(null);
-  const [worktreeCreateDialog, setWorktreeCreateDialog] =
-    useState<WorktreeCreateDialogState | null>(null);
-  const [repositoryBrowser, setRepositoryBrowser] = useState<RepositoryBrowserState | null>(null);
-  const worktreeDialogResolveRef = useRef<((created: boolean) => void) | null>(null);
-  const worktreeNameInputRef = useRef<HTMLInputElement | null>(null);
   const [closeDialog, setCloseDialog] = useState<CloseDialogState | null>(null);
   const [researchFolderRemovalError, setResearchFolderRemovalError] = useState<string | null>(null);
   // Monotonic id for worktree-dialog git-status probes (see closeDialogForPane).
@@ -3844,15 +3805,6 @@ function MainApp() {
     toggleTranscriptExpandedForPane(paneId);
   }
 
-  function expandNewAgentTranscriptByDefault(pane: PaneInfo) {
-    if (settingsRef.current.codeMode || pane.kind !== "agent") {
-      return;
-    }
-    setTranscriptExpandedByPane((current) =>
-      current[pane.id] ? current : { ...current, [pane.id]: true },
-    );
-  }
-
   function refreshActiveBrowserOverlay() {
     if (!activeBrowserOwnerId) {
       return;
@@ -4191,8 +4143,6 @@ function MainApp() {
       diagramLightbox !== null ||
       terminalMapOpen ||
       commandPaletteOpen ||
-      repositoryBrowser ||
-      worktreeCreateDialog ||
       closeDialog ||
       exitDialog ||
       exitPreflightRequest ||
@@ -6533,164 +6483,6 @@ function MainApp() {
     onUserNotificationRequested: handleUserNotificationRequested,
   });
 
-  function dismissWorktreeCreateDialog(created: boolean) {
-    setWorktreeCreateDialog(null);
-    const resolve = worktreeDialogResolveRef.current;
-    worktreeDialogResolveRef.current = null;
-    resolve?.(created);
-  }
-
-  async function createWorktreeFromDialog() {
-    const dialog = worktreeCreateDialog;
-    if (!dialog || dialog.creating || !dialog.name.trim()) {
-      return;
-    }
-    setWorktreeCreateDialog({ ...dialog, creating: true, error: null });
-    if (dialog.action.kind === "fork") {
-      const forked = await forkPane(dialog.pane, {
-        useWorktree: true,
-        worktreeName: dialog.name.trim(),
-        prompt: dialog.action.prompt,
-        anchor: dialog.action.anchor,
-        onError: (message) => {
-          setWorktreeCreateDialog((current) =>
-            current && current.pane.id === dialog.pane.id
-              ? { ...current, creating: false, error: message }
-              : current,
-          );
-        },
-      });
-      if (forked) {
-        dismissWorktreeCreateDialog(true);
-      }
-      return;
-    }
-
-    const selectedBranch = dialog.startRef
-      ? dialog.inventory?.branches.find((branch) => branch.fullRef === dialog.startRef)
-      : undefined;
-    if (
-      selectedBranch?.checkedOutPath &&
-      focusRepositoryPane(dialog.pane.groupId, selectedBranch.checkedOutPath)
-    ) {
-      dismissWorktreeCreateDialog(true);
-      return;
-    }
-
-    let created: PaneInfo;
-    try {
-      created = dialog.startRef
-        ? await openRepositoryBranch(
-            dialog.pane.id,
-            dialog.startRef,
-            dialog.name.trim(),
-            estimateInitialPaneSize(false),
-          )
-        : await openPaneWorktree(
-            dialog.pane.id,
-            dialog.name.trim(),
-            estimateInitialPaneSize(false),
-          );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setWorktreeCreateDialog((current) =>
-        current && current.pane.id === dialog.pane.id
-          ? { ...current, creating: false, error: message }
-          : current,
-      );
-      return;
-    }
-
-    const orderedPanes = placePaneAfterOptimistically(created, dialog.pane.id);
-    setPanesPreservingRecoveredDismissals(orderedPanes);
-    setActivePaneId(created.id);
-    setLastActiveGroupId(created.groupId);
-    dismissWorktreeCreateDialog(true);
-    try {
-      await refreshGroups();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-    requestAnimationFrame(() => {
-
-    });
-  }
-
-  function focusRepositoryPane(groupId: string, path: string): boolean {
-    const existing = panesRef.current.find(
-      (pane) =>
-        pane.groupId === groupId &&
-        (pane.activeWorkspace?.gitRoot === path || pane.cwd === path),
-    );
-    if (!existing) return false;
-    setRepositoryBrowser(null);
-    setActivePaneId(existing.id);
-    setLastActiveGroupId(existing.groupId);
-
-    return true;
-  }
-
-  async function adoptRepositoryPane(source: PaneInfo, created: PaneInfo) {
-    const orderedPanes = placePaneAfterOptimistically(created, source.id);
-    setPanesPreservingRecoveredDismissals(orderedPanes);
-    setRepositoryBrowser(null);
-    setActivePaneId(created.id);
-    setLastActiveGroupId(created.groupId);
-    try {
-      await refreshGroups();
-    } catch (err) {
-      setError(unknownErrorMessage(err));
-    }
-
-  }
-
-  async function openInventoryWorktree(path: string) {
-    const browser = repositoryBrowser;
-    if (!browser || browser.opening || focusRepositoryPane(browser.pane.groupId, path)) return;
-    setRepositoryBrowser({ ...browser, opening: path, error: null });
-    try {
-      const pane = await openRepositoryWorktree(
-        browser.pane.id,
-        path,
-        estimateInitialPaneSize(false),
-      );
-      await adoptRepositoryPane(browser.pane, pane);
-    } catch (err) {
-      setRepositoryBrowser((current) =>
-        current?.pane.id === browser.pane.id
-          ? { ...current, opening: null, error: unknownErrorMessage(err) }
-          : current,
-      );
-    }
-  }
-
-  async function openInventoryBranch(branch: RepositoryBranch) {
-    const browser = repositoryBrowser;
-    if (!browser || browser.opening) return;
-    if (branch.checkedOutPath) {
-      await openInventoryWorktree(branch.checkedOutPath);
-      return;
-    }
-    const name = browser.names[branch.fullRef]?.trim();
-    if (!name) return;
-    setRepositoryBrowser({ ...browser, opening: branch.fullRef, error: null });
-    try {
-      const pane = await openRepositoryBranch(
-        browser.pane.id,
-        branch.fullRef,
-        name,
-        estimateInitialPaneSize(false),
-      );
-      await adoptRepositoryPane(browser.pane, pane);
-    } catch (err) {
-      setRepositoryBrowser((current) =>
-        current?.pane.id === browser.pane.id
-          ? { ...current, opening: null, error: unknownErrorMessage(err) }
-          : current,
-      );
-    }
-  }
-
   /** An agent in a Research-scoped workspace: research workspaces admit only
    * research runs. */
   function isResearchRunAgent(agentId: string): boolean {
@@ -7413,64 +7205,6 @@ function MainApp() {
     }
   }
 
-  // Forks the active session into a new tab (resuming it) — as a sibling right
-  // after the current tab, nested under it when `nest` is set, or joined into a
-  // split directly below it when `splitBelow` is set — and focuses the fork. The
-  // backend also emits agent.forked, which refetches the ordered pane list, so the
-  // optimistic placement below is just to avoid a flicker.
-  async function forkPane(
-    pane: PaneInfo,
-    options: {
-      useWorktree: boolean;
-      worktreeName?: string;
-      prompt?: string;
-      anchor?: MessageAnchor;
-      splitBelow?: boolean;
-      onError?: (message: string) => void;
-    },
-  ): Promise<boolean> {
-    setError(null);
-    try {
-      const fork = await forkAgent(pane.id, options);
-      if (options.splitBelow) {
-        const orderedPanes = placePaneAfterOptimistically(fork, pane.id, false);
-        setPanesPreservingRecoveredDismissals(orderedPanes);
-        savePaneSplits(
-          joinPaneSplit(paneSplitsRef.current, orderedPanes, pane.id, fork.id, {
-            insertedPaneId: fork.id,
-            source: "command",
-          }),
-          orderedPanes,
-        );
-        setActivePaneId(fork.id);
-        setLastActiveGroupId(fork.groupId);
-        requestAnimationFrame(() => {
-
-        });
-      } else {
-        setPanesPreservingRecoveredDismissals(placePaneAfterOptimistically(fork, pane.id, false));
-        setActivePaneId(fork.id);
-      }
-      expandNewAgentTranscriptByDefault(fork);
-      if (options.prompt && fork.agentId) {
-        pendingFirstTitleByAgentRef.current.set(
-          fork.agentId,
-          createPendingFirstMessageTitle(fork.id),
-        );
-        applyPendingFirstMessageTitle(fork.agentId, options.prompt);
-      }
-      return true;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (options.onError) {
-        options.onError(message);
-      } else {
-        setError(message);
-      }
-      return false;
-    }
-  }
-
   const terminalHandlersRef = useRef({
     noteUserInput,
   });
@@ -7750,8 +7484,6 @@ function MainApp() {
     remoteAddMenuOpen,
     remoteDeleteConfirm,
     remoteSettingsSaving,
-    worktreeCreateDialog,
-    repositoryBrowser,
     closeDialog,
     exitDialog,
     renamePaneId,
@@ -7767,8 +7499,6 @@ function MainApp() {
       remoteAddMenuOpen,
       remoteDeleteConfirm,
       remoteSettingsSaving,
-      worktreeCreateDialog,
-      repositoryBrowser,
       closeDialog,
       exitDialog,
       renamePaneId,
@@ -7849,12 +7579,7 @@ function MainApp() {
 
       // The remaining overlays dismiss together on one Escape, as they did as
       // independent listeners that each observed the same keydown.
-      const dialogsOpen = Boolean(
-        overlays.repositoryBrowser ||
-          overlays.worktreeCreateDialog ||
-          overlays.closeDialog ||
-          overlays.exitDialog,
-      );
+      const dialogsOpen = Boolean(overlays.closeDialog || overlays.exitDialog);
       let stopPropagation = false;
       if (dialogsOpen) {
         stopPropagation = true;
@@ -7862,15 +7587,6 @@ function MainApp() {
         // Don't dismiss the worktree dialog while its close/delete is running.
         if (!overlays.resolvingClose) {
           setCloseDialog(null);
-        }
-        if (!overlays.repositoryBrowser?.opening) {
-          setRepositoryBrowser(null);
-        }
-        if (!overlays.worktreeCreateDialog?.creating) {
-          setWorktreeCreateDialog(null);
-          const resolve = worktreeDialogResolveRef.current;
-          worktreeDialogResolveRef.current = null;
-          resolve?.(false);
         }
         if (!overlays.quitting) {
           setExitDialog(null);
@@ -8059,14 +7775,6 @@ function MainApp() {
       input?.select();
     }
   }, [renamePaneId, renameGroupId]);
-
-  useEffect(() => {
-    if (worktreeCreateDialog) {
-      const input = worktreeNameInputRef.current;
-      input?.focus();
-      input?.select();
-    }
-  }, [worktreeCreateDialog?.pane.id]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -8511,11 +8219,6 @@ function MainApp() {
     renamingGroup?.scope === "research" ? renamingGroup : undefined;
   const linkMenuLocalPath = linkMenu ? pathFromSessionFileHref(linkMenu.url) : undefined;
   const linkMenuPaneId = linkMenu?.paneId ?? null;
-  const worktreeStartBranch = worktreeCreateDialog?.startRef
-    ? worktreeCreateDialog.inventory?.branches.find(
-        (branch) => branch.fullRef === worktreeCreateDialog.startRef,
-      )
-    : undefined;
 
   // The Home feed stays mounted beside an open thread, where every streamed
   // update re-renders App; stable props let the memoized feed skip those.
@@ -9519,283 +9222,6 @@ function MainApp() {
               </div>
             ) : null}
           </div>
-        </div>
-      ) : null}
-
-      {repositoryBrowser ? (
-        <div
-          className="confirm-dialog-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !repositoryBrowser.opening) {
-              setRepositoryBrowser(null);
-            }
-          }}
-        >
-          <div
-            className="confirm-dialog repository-browser-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="repository-browser-title"
-          >
-            <div className="repository-browser-header">
-              <div>
-                <h2 id="repository-browser-title">Branches and worktrees</h2>
-                {repositoryBrowser.inventory ? (
-                  <p title={repositoryBrowser.inventory.repositoryRoot}>
-                    {formatPaneDir(repositoryBrowser.inventory.repositoryRoot)}
-                  </p>
-                ) : null}
-              </div>
-              <button
-                className="control-button"
-                type="button"
-                disabled={Boolean(repositoryBrowser.opening)}
-                onClick={() => setRepositoryBrowser(null)}
-                aria-label="Close branches and worktrees"
-              >
-                <X size={14} aria-hidden="true" />
-              </button>
-            </div>
-            {!repositoryBrowser.inventory && !repositoryBrowser.error ? (
-              <p className="repository-browser-loading">
-                <LoaderCircle
-                  className="confirm-dialog-action-spinner"
-                  size={14}
-                  aria-hidden="true"
-                />{" "}
-                Loading repository…
-              </p>
-            ) : null}
-            {repositoryBrowser.error ? (
-              <p className="confirm-dialog-error" role="alert">
-                {repositoryBrowser.error}
-              </p>
-            ) : null}
-            {repositoryBrowser.inventory ? (
-              <div className="repository-browser-content">
-                <section>
-                  <h3>Worktrees</h3>
-                  <div className="repository-browser-list">
-                    {repositoryBrowser.inventory.worktrees.map((worktree) => (
-                      <div className="repository-browser-row" key={worktree.path}>
-                        <div className="repository-browser-row-copy">
-                          <strong>{worktree.branch ?? "Detached HEAD"}</strong>
-                          <span title={worktree.path}>{formatPaneDir(worktree.path)}</span>
-                        </div>
-                        <button
-                          className="control-button"
-                          type="button"
-                          disabled={Boolean(repositoryBrowser.opening) || worktree.prunable}
-                          onClick={() => void openInventoryWorktree(worktree.path)}
-                        >
-                          {repositoryBrowser.opening === worktree.path ? "Opening…" : "Open"}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-                <section>
-                  <h3>Branches</h3>
-                  <div className="repository-browser-list">
-                    {repositoryBrowser.inventory.branches.map((branch) => (
-                      <div className="repository-browser-row" key={branch.fullRef}>
-                        <div className="repository-browser-row-copy">
-                          <strong>{branch.name}</strong>
-                          <span>
-                            {branch.remote
-                              ? "Remote branch"
-                              : branch.checkedOutPath
-                                ? `Checked out at ${formatPaneDir(branch.checkedOutPath)}`
-                                : branch.upstream
-                                  ? `Tracks ${branch.upstream.replace(/^refs\/remotes\//, "")}`
-                                  : "Local branch"}
-                          </span>
-                        </div>
-                        {!branch.checkedOutPath ? (
-                          <input
-                            className="repository-browser-name"
-                            aria-label={`Worktree name for ${branch.name}`}
-                            value={repositoryBrowser.names[branch.fullRef] ?? ""}
-                            disabled={Boolean(repositoryBrowser.opening)}
-                            maxLength={240}
-                            spellCheck={false}
-                            onChange={(event) => {
-                              const name = event.currentTarget.value;
-                              setRepositoryBrowser((current) =>
-                                current
-                                  ? { ...current, names: { ...current.names, [branch.fullRef]: name } }
-                                  : current,
-                              );
-                            }}
-                          />
-                        ) : null}
-                        <button
-                          className="control-button"
-                          type="button"
-                          disabled={
-                            Boolean(repositoryBrowser.opening) ||
-                            (!branch.checkedOutPath &&
-                              !repositoryBrowser.names[branch.fullRef]?.trim())
-                          }
-                          onClick={() => void openInventoryBranch(branch)}
-                        >
-                          {repositoryBrowser.opening === branch.fullRef ? "Opening…" : "Open"}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      {worktreeCreateDialog ? (
-        <div
-          className="confirm-dialog-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !worktreeCreateDialog.creating) {
-              dismissWorktreeCreateDialog(false);
-            }
-          }}
-        >
-          <form
-            className="confirm-dialog rename-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="create-worktree-dialog-title"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void createWorktreeFromDialog();
-            }}
-          >
-            <h2 id="create-worktree-dialog-title">
-              {worktreeCreateDialog.action.kind === "fork"
-                ? "Fork session in worktree"
-                : "Open worktree"}
-            </h2>
-            {worktreeCreateDialog.action.kind === "open" ? (
-              <>
-                <label className="confirm-dialog-field-label" htmlFor="create-worktree-start">
-                  Start at
-                </label>
-                <select
-                  id="create-worktree-start"
-                  className="rename-dialog-input"
-                  value={worktreeCreateDialog.startRef ?? ""}
-                  disabled={worktreeCreateDialog.creating}
-                  onChange={(event) => {
-                    const startRef = event.currentTarget.value || null;
-                    setWorktreeCreateDialog((current) => {
-                      if (!current) return current;
-                      const branch = startRef
-                        ? current.inventory?.branches.find(
-                            (candidate) => candidate.fullRef === startRef,
-                          )
-                        : undefined;
-                      return {
-                        ...current,
-                        startRef,
-                        name: branch ? repositoryWorktreeName(branch) : current.suggestedName,
-                        error: null,
-                      };
-                    });
-                  }}
-                >
-                  <option value="">Current commit (new branch)</option>
-                  {worktreeCreateDialog.inventory?.branches.some((branch) => !branch.remote) ? (
-                    <optgroup label="Local branches">
-                      {worktreeCreateDialog.inventory.branches
-                        .filter((branch) => !branch.remote)
-                        .map((branch) => (
-                          <option key={branch.fullRef} value={branch.fullRef}>
-                            {branch.name}
-                            {branch.checkedOutPath ? " — checked out" : ""}
-                          </option>
-                        ))}
-                    </optgroup>
-                  ) : null}
-                  {worktreeCreateDialog.inventory?.branches.some((branch) => branch.remote) ? (
-                    <optgroup label="Remote branches">
-                      {worktreeCreateDialog.inventory.branches
-                        .filter((branch) => branch.remote)
-                        .map((branch) => (
-                          <option key={branch.fullRef} value={branch.fullRef}>
-                            {branch.name}
-                          </option>
-                        ))}
-                    </optgroup>
-                  ) : null}
-                  {worktreeCreateDialog.inventoryLoading ? (
-                    <option disabled>Loading branches…</option>
-                  ) : null}
-                </select>
-                {worktreeCreateDialog.inventoryError ? (
-                  <p className="confirm-dialog-error" role="alert">
-                    Could not load branches: {worktreeCreateDialog.inventoryError}
-                  </p>
-                ) : null}
-              </>
-            ) : null}
-            <label className="confirm-dialog-field-label" htmlFor="create-worktree-name">
-              Worktree name
-            </label>
-            <input
-              ref={worktreeNameInputRef}
-              id="create-worktree-name"
-              className="rename-dialog-input"
-              value={worktreeCreateDialog.name}
-              disabled={worktreeCreateDialog.creating}
-              spellCheck={false}
-              maxLength={240}
-              onChange={(event) => {
-                const name = event.currentTarget.value;
-                setWorktreeCreateDialog((current) =>
-                  current ? { ...current, name, error: null } : current,
-                );
-              }}
-              aria-describedby="create-worktree-name-hint"
-            />
-            <p id="create-worktree-name-hint" className="rename-dialog-hint">
-              {worktreeCreateDialog.action.kind === "fork"
-                ? "Use letters, numbers, hyphens, or underscores. The worktree and branch use this exact name and start at this tab’s current commit."
-                : worktreeStartBranch?.checkedOutPath
-                  ? `This branch is already checked out at ${formatPaneDir(worktreeStartBranch.checkedOutPath)}. Session will open that checkout.`
-                  : worktreeStartBranch?.remote
-                    ? `Use letters, numbers, hyphens, or underscores. Session creates a local branch and worktree with this name, tracking ${worktreeStartBranch.name}.`
-                    : worktreeStartBranch
-                      ? `Use letters, numbers, hyphens, or underscores. The worktree uses this name and checks out ${worktreeStartBranch.name}.`
-                      : "Use letters, numbers, hyphens, or underscores. The worktree and new branch use this exact name and start at this tab’s current commit."}
-            </p>
-            {worktreeCreateDialog.error ? (
-              <p className="confirm-dialog-error" role="alert">
-                {worktreeCreateDialog.error}
-              </p>
-            ) : null}
-            <div className="confirm-dialog-actions">
-              <button
-                className="control-button"
-                type="button"
-                disabled={worktreeCreateDialog.creating}
-                onClick={() => dismissWorktreeCreateDialog(false)}
-              >
-                Cancel
-              </button>
-              <ConfirmDialogActionButton
-                type="submit"
-                disabled={!worktreeCreateDialog.name.trim() || worktreeCreateDialog.creating}
-                pending={worktreeCreateDialog.creating}
-                pendingLabel={
-                  worktreeCreateDialog.action.kind === "fork" ? "Creating…" : "Opening…"
-                }
-              >
-                {worktreeCreateDialog.action.kind === "fork" ? "Fork session" : "Open worktree"}
-              </ConfirmDialogActionButton>
-            </div>
-          </form>
         </div>
       ) : null}
 
