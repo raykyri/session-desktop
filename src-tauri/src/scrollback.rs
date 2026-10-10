@@ -1423,9 +1423,9 @@ mod tests {
     // A dangling string control is also aborted by a bare ESC (the VT parser
     // starts a new sequence there), so the escape that follows a torn OSC/DCS
     // keeps its meaning instead of being scanned over as string payload. The
-    // alternate-screen toggles are the load-bearing case: a swallowed exit
-    // leaves the sanitizer discarding everything as phantom alt-screen
-    // content, and a swallowed enter leaks hidden repaint into history.
+    // alternate-screen toggles need this handling: ignoring an exit makes
+    // the sanitizer discard subsequent normal-screen output, while ignoring
+    // an enter saves hidden alternate-screen output in history.
     #[test]
     fn replay_sanitizer_aborts_unterminated_string_control_on_escape() {
         // Dangling OSC inside the alternate screen must not eat the exit.
