@@ -6013,7 +6013,7 @@ impl AppState {
     /// the model lock, what an agent reaching a ready state should do. Returns `Busy`
     /// when another drain already owns the agent (the caller must not touch its status),
     /// `Sent` after claiming a ready turn for the caller to send, or `Idle` after settling
-    /// the agent to `settled_status`. Crucially the typing check and status write happen
+    /// the agent to `settled_status`. The typing check and status write happen
     /// under the same lock, so a racing `set_agent_typing(false)` that clears the flag and
     /// re-reads the status observes a ready state and drains the held turn — closing the
     /// lost-wakeup where it would otherwise see stale `Running`, skip its drain, and
