@@ -731,16 +731,20 @@ pub fn remove_research_workspace(
                 || crate::research::has_active_assistant_turn(turns)
         }) {
             responses.insert(node.id.clone(), turns);
-        } else if node.status() == crate::research::ResearchNodeStatus::Complete {
-            // Only a completed answer justifies refusing the detach: it is
-            // real data the archive would silently lose. A failed or
-            // cancelled run with a transcript_path whose file is gone (the
-            // adapter owns those files and prunes them on its own schedule)
-            // has nothing durable left to lose — the node record itself,
-            // with its prompt, error, and preview, still travels in the
+        } else if node.post().is_none()
+            && node.status() == crate::research::ResearchNodeStatus::Complete
+        {
+            // Only a completed exchange's answer or a document's body
+            // justifies refusing the detach: it is real data the archive
+            // would silently lose. A post reads as complete but has no
+            // response snapshot; its text travels in the node record. A
+            // failed or cancelled run with a transcript_path whose file is
+            // gone (the adapter owns those files and prunes them on its own
+            // schedule) has nothing durable left to lose — the node record
+            // itself, with its prompt and error, still travels in the
             // archive, and import does not require responses for
-            // non-complete nodes. Refusing here made the folder permanently
-            // unremovable while protecting nothing.
+            // non-complete nodes. Refusing in either case made the folder
+            // permanently unremovable while protecting nothing.
             return Err(format!(
                 "research item '{}' has no durable response to detach",
                 node.prompt().chars().take(80).collect::<String>()
@@ -3569,6 +3573,53 @@ mod tests {
             .collect::<std::collections::HashSet<_>>();
         assert_eq!(ids.len(), 1);
         assert_eq!(state.list_research_workspaces().unwrap().len(), 1);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    /// A post has no response snapshot and no run, and reads as complete;
+    /// it must not make its folder unremovable.
+    #[test]
+    fn removing_a_research_folder_with_a_post_detaches_and_restores_it() {
+        let root = temp_workspace("remove-post-research");
+        let project = root.join("project");
+        std::fs::create_dir_all(&project).unwrap();
+        let state = test_state_with_workspace(root.join("managed"));
+        state.restore_session();
+        let workspace =
+            create_research_workspace(&state, None, project.display().to_string()).unwrap();
+        state
+            .create_research_note(
+                crate::research::CreateResearchNoteRequest {
+                    body: "Who has tried X?".to_string(),
+                    adapter: "claude".to_string(),
+                    model: None,
+                    effort: None,
+                    workspace_id: workspace.id.clone(),
+                    ask_network: true,
+                },
+                Vec::new(),
+            )
+            .unwrap();
+
+        let detached = remove_research_workspace(&state, &workspace.id).unwrap();
+
+        assert_eq!(detached.len(), 1);
+        assert!(state.group(&workspace.id).unwrap().is_none());
+        let archive = crate::research::read_detached_research(&project)
+            .unwrap()
+            .expect("detached archive");
+        assert_eq!(archive.archive.nodes.len(), 1);
+        assert!(archive.responses.is_empty());
+
+        let restored =
+            create_research_workspace(&state, None, project.display().to_string()).unwrap();
+        assert_ne!(restored.id, workspace.id);
+        let restored_trees = state.list_research_trees_with_archived(true).unwrap();
+        assert_eq!(restored_trees.len(), 1);
+        let restored_detail = state.research_tree(&restored_trees[0].id).unwrap();
+        let post = restored_detail.nodes[0].post().expect("a post");
+        assert_eq!(post.message.text, "Who has tried X?");
+        assert!(post.delivery.is_some());
         std::fs::remove_dir_all(root).unwrap();
     }
 
