@@ -374,7 +374,10 @@
   border-radius: 10px;
 }
 
-.note-thread-rows > .note-thread-item:focus {
+/* The focused row, or the row ⌃Tab made current while focus stayed in a
+   text field (data-current). */
+.note-thread-rows > .note-thread-item:focus,
+.note-thread-rows > .note-thread-item[data-current] {
   outline: none;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
 }

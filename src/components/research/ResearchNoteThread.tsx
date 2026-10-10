@@ -25,7 +25,9 @@ type NoteThreadEntry =
   | { kind: "correction"; key: string; at: number; correction: NoteCorrection };
 
 /** Makes `row` (a row element of this thread) the one in the tab order
- * without focusing it, for ⌃Tab with focus kept in a text field. */
+ * without focusing it, for ⌃Tab with focus kept in a text field. The row is
+ * marked (`data-current`) until a row takes focus, since no focus ring shows
+ * which row the keys act on. */
 export interface ResearchNoteThreadHandle {
   makeCurrent: (row: HTMLElement) => void;
 }
@@ -84,16 +86,25 @@ export default function ResearchNoteThread({
 }) {
   const [target, setTarget] = useState<NoteReplyTarget | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(openNodeId);
+  // The row made current by makeCurrent, marked while focus stays elsewhere.
+  const [markedKey, setMarkedKey] = useState<string | null>(null);
   useImperativeHandle(
     threadRef,
     () => ({
       makeCurrent: (row) => {
         const key = row.dataset.threadKey;
-        if (key) setActiveKey(key);
+        if (key) {
+          setActiveKey(key);
+          setMarkedKey(key);
+        }
       },
     }),
     [],
   );
+  const focusRow = (key: string) => {
+    setActiveKey(key);
+    setMarkedKey(null);
+  };
   // Opening a follow-up (from the row, the feed or history) makes its row the
   // one in the tab order, so focus returns to it after the level closes.
   const [lastOpenNodeId, setLastOpenNodeId] = useState(openNodeId);
@@ -106,6 +117,7 @@ export default function ResearchNoteThread({
   const entries = useMemo(() => noteThreadEntries(nodes, note), [nodes, note]);
   const replies = nodeDelivery(note)?.replies ?? [];
   const tabKey = entries.some((entry) => entry.key === activeKey) ? activeKey : (entries[0]?.key ?? null);
+  const markedRowKey = markedKey === tabKey ? markedKey : null;
   const modelLabel = formatResearchModelSummary(nodeAdapter(note), nodeAgent(note)?.model);
 
   return (
@@ -142,7 +154,8 @@ export default function ResearchNoteThread({
                 threadKey={entry.key}
                 correction={entry.correction}
                 tabbable={tabKey === entry.key}
-                onFocus={() => setActiveKey(entry.key)}
+                marked={markedRowKey === entry.key}
+                onFocus={() => focusRow(entry.key)}
               />
             ) : entry.kind === "reply" ? (
               <NoteReplyItem
@@ -157,9 +170,10 @@ export default function ResearchNoteThread({
                   tabIndex: tabKey === entry.key ? 0 : -1,
                   "data-research-thread-row": "",
                   "data-thread-key": entry.key,
+                  "data-current": markedRowKey === entry.key ? "" : undefined,
                   onFocus: (event) => {
                     if (event.target === event.currentTarget) {
-                      setActiveKey(entry.key);
+                      focusRow(entry.key);
                     }
                   },
                 }}
@@ -172,9 +186,10 @@ export default function ResearchNoteThread({
                 archived={archived}
                 open={entry.node.id === openNodeId}
                 tabbable={tabKey === entry.key}
+                marked={markedRowKey === entry.key}
                 onRetry={actions.onRetry}
                 onOpen={onOpenFollowUp}
-                onFocus={() => setActiveKey(entry.key)}
+                onFocus={() => focusRow(entry.key)}
               />
             ),
           )}
@@ -195,6 +210,7 @@ function NoteFollowUpRow({
   archived,
   open,
   tabbable,
+  marked,
   onRetry,
   onOpen,
   onFocus,
@@ -205,6 +221,7 @@ function NoteFollowUpRow({
   archived: boolean;
   open: boolean;
   tabbable: boolean;
+  marked: boolean;
   onRetry: (nodeId: string) => Promise<void>;
   onOpen: (nodeId: string) => void;
   onFocus: () => void;
@@ -224,7 +241,11 @@ function NoteFollowUpRow({
     state = summary ? <NoteFollowUpStatus child={summary} archived={archived} onRetry={onRetry} /> : null;
   }
   return (
-    <li className={`note-thread-item note-thread-follow-up${open ? " is-selected" : ""}`} data-type="follow-up">
+    <li
+      className={`note-thread-item note-thread-follow-up${open ? " is-selected" : ""}`}
+      data-type="follow-up"
+      data-current={marked ? "" : undefined}
+    >
       <button
         type="button"
         className="note-thread-hit"
@@ -266,17 +287,20 @@ function NoteCorrectionRow({
   threadKey,
   correction,
   tabbable,
+  marked,
   onFocus,
 }: {
   threadKey: string;
   correction: NoteCorrection;
   tabbable: boolean;
+  marked: boolean;
   onFocus: () => void;
 }) {
   return (
     <li
       className="note-thread-item note-thread-correction"
       data-type="correction"
+      data-current={marked ? "" : undefined}
       data-research-thread-row=""
       data-thread-key={threadKey}
       tabIndex={tabbable ? 0 : -1}
