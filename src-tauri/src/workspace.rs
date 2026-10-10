@@ -400,7 +400,7 @@ fn create_research_workspace_locked(
         // node restores with its prompt and preview and never claims a
         // durable answer it does not have.
         for node in &bundle.archive.nodes {
-            if node.status == crate::research::ResearchNodeStatus::Complete
+            if node.status() == crate::research::ResearchNodeStatus::Complete
                 && !bundle.responses.contains_key(&node.id)
             {
                 eprintln!(
@@ -727,11 +727,11 @@ pub fn remove_research_workspace(
                 }
             };
         if let Some(turns) = turns.filter(|turns| {
-            node.status != crate::research::ResearchNodeStatus::Complete
+            node.status() != crate::research::ResearchNodeStatus::Complete
                 || crate::research::has_active_assistant_turn(turns)
         }) {
             responses.insert(node.id.clone(), turns);
-        } else if node.status == crate::research::ResearchNodeStatus::Complete {
+        } else if node.status() == crate::research::ResearchNodeStatus::Complete {
             // Only a completed answer justifies refusing the detach: it is
             // real data the archive would silently lose. A failed or
             // cancelled run with a transcript_path whose file is gone (the
@@ -743,7 +743,7 @@ pub fn remove_research_workspace(
             // unremovable while protecting nothing.
             return Err(format!(
                 "research item '{}' has no durable response to detach",
-                node.prompt.chars().take(80).collect::<String>()
+                node.prompt().chars().take(80).collect::<String>()
             ));
         }
     }
@@ -4175,8 +4175,8 @@ mod tests {
             .bind_research_node_run(&detail.tree.root_node_id, &agent, "pane-never-existed")
             .unwrap();
         let node = state.research_node(&detail.tree.root_node_id).unwrap();
-        assert_eq!(node.status, crate::research::ResearchNodeStatus::Failed);
-        assert!(node.transcript_path.is_some());
+        assert_eq!(node.status(), crate::research::ResearchNodeStatus::Failed);
+        assert!(node.binding().unwrap().transcript_path.is_some());
 
         remove_research_workspace(&state, &workspace.id).unwrap();
 
@@ -4195,10 +4195,10 @@ mod tests {
         assert_eq!(restored_trees.len(), 1);
         let restored_detail = state.research_tree(&restored_trees[0].id).unwrap();
         assert_eq!(
-            restored_detail.nodes[0].status,
+            restored_detail.nodes[0].status(),
             crate::research::ResearchNodeStatus::Failed
         );
-        assert_eq!(restored_detail.nodes[0].prompt, "Doomed question");
+        assert_eq!(restored_detail.nodes[0].prompt(), "Doomed question");
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -4228,7 +4228,7 @@ mod tests {
             .unwrap();
         let node_id = detail.tree.root_node_id.clone();
         assert_eq!(
-            state.research_node(&node_id).unwrap().status,
+            state.research_node(&node_id).unwrap().status(),
             crate::research::ResearchNodeStatus::Complete
         );
         crate::research::write_response_snapshot(
@@ -4283,11 +4283,11 @@ mod tests {
         let restored_node = &restored_detail.nodes[0];
         assert_eq!(restored_node.group_id, restored.id);
         assert_eq!(
-            restored_node.status,
+            restored_node.status(),
             crate::research::ResearchNodeStatus::Complete
         );
         // The node must not claim a durable answer it no longer has.
-        assert!(restored_node.response_snapshot_at.is_none());
+        assert!(restored_node.response_snapshot_at().is_none());
         assert!(
             crate::research::read_response_snapshot(
                 &state.config().workspace_root,
@@ -4423,7 +4423,7 @@ mod tests {
         );
         let node = state.research_node(&detail.tree.root_node_id).unwrap();
         assert_eq!(
-            node.worktree_dir,
+            node.binding().unwrap().worktree_dir,
             std::fs::canonicalize(&source)
                 .unwrap()
                 .display()

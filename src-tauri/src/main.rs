@@ -1671,7 +1671,7 @@ async fn create_research_tree(
             &state,
             &root.id,
             &workspace,
-            tweets::prompt_with_research_attachments(root.prompt.clone(), &root.attachments),
+            tweets::prompt_with_research_attachments(root.prompt().to_string(), root.attachments()),
         ) {
             Ok(_) => state.research_tree(&detail.tree.id),
             Err(err) => {
@@ -1906,9 +1906,12 @@ async fn get_research_node_content(
                 Some(err)
             }
         };
-        if content.node.transcript_path.is_some()
+        if content
+            .node
+            .binding()
+            .is_some_and(|binding| binding.transcript_path.is_some())
             && matches!(
-                content.node.status,
+                content.node.status(),
                 research::ResearchNodeStatus::Complete
                     | research::ResearchNodeStatus::Failed
                     | research::ResearchNodeStatus::Cancelled
@@ -2000,8 +2003,8 @@ async fn fork_research_node(
 }
 
 /// Launches the run for an admitted (Queued) research child from its parent's
-/// kind: documents, conversations, notes, and imported reports launch fresh
-/// runs with saved content as context; other runs fork the native session.
+/// type: posts and documents (authored, imported, transcripts) launch fresh
+/// runs with saved content as context; exchanges fork the native session.
 /// Shared by the fork command and retry, which relaunches a reset child
 /// through the same dispatch. Every failure path settles the child as Failed
 /// (reclaiming any spawned pane) before returning the error, exactly as the
@@ -2012,7 +2015,8 @@ fn launch_research_child_run(
     workspace: &GroupInfo,
     child: &ResearchNode,
 ) -> Result<ResearchNode, String> {
-    let prompt = tweets::prompt_with_research_attachments(child.prompt.clone(), &child.attachments);
+    let prompt =
+        tweets::prompt_with_research_attachments(child.prompt().to_string(), child.attachments());
     // A highlight-targeted follow-up sends the quoted passage with the
     // question. Only the sent prompt carries the quote — the child's
     // displayed prompt stays the bare question, which boundary matching
@@ -2035,7 +2039,10 @@ fn launch_research_child_run(
             // quoted passage as it does for serialized turns, then wraps it.
             Some(state.research_snapshot_followup_prompt(
                 &parent.id,
-                &tweets::prompt_with_research_attachments(child.prompt.clone(), &child.attachments),
+                &tweets::prompt_with_research_attachments(
+                    child.prompt().to_string(),
+                    child.attachments(),
+                ),
                 child.passage_anchor(),
             ))
         }
@@ -2055,14 +2062,16 @@ fn launch_research_child_run(
         };
         return launch_fresh_research_run(state, &child.id, workspace, launch_prompt);
     }
-    let live_source = parent
+    // A forked parent is an exchange; its binding names the session.
+    let binding = parent.binding().cloned().unwrap_or_default();
+    let live_source = binding
         .agent_id
         .as_deref()
         .and_then(|agent_id| state.agent(agent_id).ok().flatten());
     let mut source = match live_source {
         Some(source) => source,
         None => {
-            let session_id = match parent.native_session_id.clone() {
+            let session_id = match binding.native_session_id.clone() {
                 Some(session_id) => session_id,
                 None => {
                     let err =
@@ -2072,22 +2081,22 @@ fn launch_research_child_run(
                 }
             };
             AgentInfo {
-                id: parent
+                id: binding
                     .agent_id
                     .clone()
                     .unwrap_or_else(|| format!("research-source-{}", parent.id)),
                 group_id: parent.group_id.clone(),
-                adapter: parent.adapter.clone(),
-                worktree_dir: parent.worktree_dir.clone(),
+                adapter: parent.adapter().to_string(),
+                worktree_dir: binding.worktree_dir.clone(),
                 branch: None,
                 active_workspace: None,
                 pane_id: None,
                 orphaned_queue_pane_id: None,
                 session_id: Some(session_id.clone()),
-                transcript_path: parent.transcript_path.clone(),
+                transcript_path: binding.transcript_path.clone(),
                 status: AgentStatus::Done,
-                model: parent.model.clone(),
-                effort: parent.effort.clone(),
+                model: parent.model().map(str::to_string),
+                effort: parent.effort().map(str::to_string),
                 approval_mode: None,
                 parent_id: None,
                 fork_point: None,
@@ -2106,7 +2115,7 @@ fn launch_research_child_run(
     source.worktree_dir = workspace.dir.clone();
     // The follow-up runs at the child's (inherited) effort, applied by the
     // adapter's fork path the same way `model` is re-applied.
-    source.effort = child.effort.clone();
+    source.effort = child.effort().map(str::to_string);
     launch_research_execution(state, child, workspace, question, Some(&source))
 }
 
@@ -2149,7 +2158,10 @@ async fn retry_research_node(
                 &state,
                 &node.id,
                 &workspace,
-                tweets::prompt_with_research_attachments(node.prompt.clone(), &node.attachments),
+                tweets::prompt_with_research_attachments(
+                    node.prompt().to_string(),
+                    node.attachments(),
+                ),
             ),
             Some(parent_id) => {
                 let parent = match state.research_node(parent_id) {
@@ -2162,7 +2174,7 @@ async fn retry_research_node(
                 // The original fork required a completed parent; a parent that
                 // has since been re-run (or whose checkpoint regressed) cannot
                 // anchor the relaunch.
-                if parent.status != research::ResearchNodeStatus::Complete {
+                if parent.status() != research::ResearchNodeStatus::Complete {
                     let err = "research follow-ups require a completed parent response".to_string();
                     let _ = state.fail_research_node(&node.id, err.clone());
                     return Err(err);
@@ -3342,7 +3354,7 @@ async fn generate_research_recap_candidate(
             ));
         }
         let node = state.research_node(&request.node_id)?;
-        if !node.recap_eligible() || node.status != research::ResearchNodeStatus::Complete {
+        if !node.recap_eligible() || node.status() != research::ResearchNodeStatus::Complete {
             return Err("only completed research runs can generate summaries".to_string());
         }
         let snapshot = research::read_response_snapshot_with_revision(

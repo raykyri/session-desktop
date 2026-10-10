@@ -36,10 +36,10 @@ pub fn schedule(state: &AppState, node_id: &str) {
         return;
     };
     if !node.recap_eligible()
-        || node.status != ResearchNodeStatus::Complete
-        || node.response_snapshot_at.is_none()
-        || node.recap.is_some()
-        || !matches!(node.adapter.as_str(), "claude" | "codex" | "grok")
+        || node.status() != ResearchNodeStatus::Complete
+        || node.response_snapshot_at().is_none()
+        || node.recap().is_some()
+        || !matches!(node.adapter(), "claude" | "codex" | "grok")
     {
         return;
     }
@@ -47,7 +47,7 @@ pub fn schedule(state: &AppState, node_id: &str) {
         "{}:{}:{:?}",
         state.config().workspace_root.display(),
         node.id,
-        node.response_snapshot_at
+        node.response_snapshot_at()
     );
     let Ok(mut jobs) = JOBS.get_or_init(Default::default).lock() else {
         return;
@@ -73,8 +73,8 @@ pub fn schedule(state: &AppState, node_id: &str) {
             let Some(answer) = recap_source_for_node(&node, &snapshot.turns) else {
                 return Ok(());
             };
-            if node.origin != Some(research::ResearchNodeOrigin::Imported)
-                && answer.len() + node.prompt.len() > MAX_SOURCE_BYTES
+            if !research::is_imported_document(&node)
+                && answer.len() + node.prompt().len() > MAX_SOURCE_BYTES
             {
                 return Ok(());
             }
@@ -107,10 +107,7 @@ fn emit_pending(state: &AppState, node_id: &str, pending: bool) {
 /// text group as a fallback for a trailing housekeeping tool, like the UI fold.
 /// Raw reasoning blocks and user/tool payloads never enter the summarizer.
 pub fn recap_source_for_node(node: &research::ResearchNode, turns: &[Turn]) -> Option<String> {
-    extract_recap_source(
-        turns,
-        node.origin == Some(research::ResearchNodeOrigin::Imported),
-    )
+    extract_recap_source(turns, research::is_imported_document(node))
 }
 
 #[cfg(test)]

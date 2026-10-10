@@ -34,26 +34,18 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 
 /// Bumped whenever the on-disk shape changes incompatibly. A file written by a
 /// newer or unknown version is treated as empty rather than misinterpreted.
+///
+/// Version 8 stores research nodes as an envelope with a tagged body (see
+/// `research::ResearchNode`); builds that accept up to version 7 read flat
+/// records and would drop every node. Versions 5 to 7 were tiers for the
+/// newest research feature a state held (terminal conversations, message
+/// attachments, imported documents) so older builds kept reading states
+/// without those features; with every node in the new shape, a state holds
+/// either no research nodes or version-8 nodes.
 pub const STATE_VERSION: u32 = 8;
-/// Written when an imported report is stored as a document but no node uses
-/// the post shape (`research::node_uses_post_fields`: posts, formats and
-/// merged anchors). Builds that accept up to version 7 read notes, not posts,
-/// and would drop post nodes and merged anchors.
-pub const STATE_VERSION_PRE_POSTS: u32 = 7;
-/// Written when research-message attachments exist but no imported report is
-/// stored as a document. Builds that accept up to version 6 stored imported
-/// reports as runs, and would treat an imported document as an authored one.
-pub const STATE_VERSION_PRE_DOCUMENT_IMPORTS: u32 = 6;
-/// Written when conversation nodes exist but research-message attachments do
-/// not, preserving compatibility with builds that understand conversations.
-pub const STATE_VERSION_PRE_ATTACHMENTS: u32 = 5;
-/// Written when the state contains no conversation nodes, so sessions that
-/// never used terminal export stay loadable by pre-conversations builds
-/// (which accept versions 2–4). Version 5 marks conversation nodes being
-/// present: a pre-conversations build then refuses the file with its
-/// newer-version guidance instead of silently dropping those nodes and
-/// erasing them on its next save. Mirrors the detached-archive tiering.
-pub const STATE_VERSION_PRE_CONVERSATIONS: u32 = 4;
+/// Written when the state contains no research nodes, so it stays loadable by
+/// builds that accept versions 2 to 4.
+pub const STATE_VERSION_WITHOUT_RESEARCH_NODES: u32 = 4;
 const MIN_MIGRATABLE_STATE_VERSION: u32 = 2;
 const STATE_FILE: &str = "state.json";
 const PREFERENCES_FILE: &str = "preferences.json";
@@ -62,8 +54,8 @@ const V2_BACKUP_FILE: &str = "state.v2.bak";
 /// written at versions 3 to 6. Builds that accept up to version 6 cannot read
 /// the converted file; this backup allows restoring it for those builds.
 const PRE_DOCUMENT_IMPORTS_BACKUP_FILE: &str = "state.v6.bak";
-/// The state file as it was before the version-8 migration converted notes to
-/// posts, when it was written at version 7.
+/// The state file as it was before the version-8 migration converted its
+/// research nodes, when it was written at version 7.
 const PRE_POSTS_BACKUP_FILE: &str = "state.v7.bak";
 pub(crate) const STATE_DIR: &str = ".session";
 
@@ -599,11 +591,13 @@ pub fn load_with_diagnostics_from(workspace_root: &Path, preread: Option<Vec<u8>
     if version == 2 {
         migrate_v2_to_v3(&mut value);
     }
-    // Version 7 stores imported reports as documents and version 8 stores
-    // notes as posts with merged anchors. Convert the older records here,
-    // before lenient deserialization, so every reader sees one shape and no
-    // node is dropped for having the old one.
-    let research_nodes_migrated = version < STATE_VERSION && migrate_research_nodes(&mut value);
+    // Version 8 stores research nodes as an envelope with a tagged body (with
+    // imported reports as documents and notes as posts). Convert older
+    // records here, before lenient deserialization, so every reader sees one
+    // shape and no node is dropped for having the old one. The migration is
+    // shape-based and idempotent, so it also runs on version-8 files: builds
+    // of this branch wrote flat posts at version 8 before the body existed.
+    let research_nodes_migrated = migrate_research_nodes(&mut value);
 
     // Deserialize collections element-by-element so a single malformed record
     // (partial corruption, a hand-edit, an unforeseen schema drift in one entry)
@@ -913,19 +907,21 @@ pub fn backup_v2_state_for_migration(workspace_root: &Path) -> Result<Option<Pat
 /// before a save rewrites state.json with migrated research nodes, the way
 /// `backup_v2_state_for_migration` does for version 2: versions 3 to 6 as
 /// `state.v6.bak`, version 7 as `state.v7.bak`. Each backup is readable by
-/// the builds its name gives.
+/// the builds its name gives. A version-8 source needs none: the migration
+/// only rewrites flat records that builds of this branch wrote before the
+/// body existed, and this build reads both shapes.
 pub fn backup_research_node_state_for_migration(
     workspace_root: &Path,
     source_version: u32,
 ) -> Result<Option<PathBuf>, String> {
-    if source_version >= STATE_VERSION_PRE_POSTS {
-        backup_state_for_migration(workspace_root, PRE_POSTS_BACKUP_FILE, "version-7")
-    } else {
-        backup_state_for_migration(
+    match source_version {
+        3..=6 => backup_state_for_migration(
             workspace_root,
             PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
             "pre-version-7",
-        )
+        ),
+        7 => backup_state_for_migration(workspace_root, PRE_POSTS_BACKUP_FILE, "version-7"),
+        _ => Ok(None),
     }
 }
 
