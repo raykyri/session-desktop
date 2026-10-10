@@ -2203,7 +2203,7 @@ fn codex_user_text_is_turn_boundary(text: &str) -> bool {
 /// for old rollouts that lack `EventMsg::UserMessage`. Do not classify arbitrary
 /// XML-looking text as context: a user's whole prompt can legitimately be
 /// wrapped in `<request>` (or any other application-specific tag), and treating
-/// it as plumbing makes a later rollback consume one extra real turn.
+/// it as context makes a later rollback consume one extra user turn.
 fn codex_user_text_is_contextual(text: &str) -> bool {
     const PREFIXES: &[&str] = &[
         "# agents.md instructions",

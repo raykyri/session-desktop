@@ -237,8 +237,8 @@ function closingInstruction(assistantAnchor: boolean) {
 /**
  * Last item of the assistant run beginning at `start`. Mirrors the run grouping
  * behind "Copy response": a real user message closes the run, while tagged
- * instructions and system messages are plumbing the reader never sees as a
- * boundary. Superseded and rolled-back items belong to abandoned context, so
+ * instructions and system messages do not create a visible boundary.
+ * Superseded and rolled-back items belong to abandoned context, so
  * they neither extend the run nor end it.
  */
 function assistantRunEnd(items: MessageItem[], start: number) {
