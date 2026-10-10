@@ -2171,8 +2171,8 @@ fn local_git_path(cwd: &Path, args: &[&str]) -> Option<PathBuf> {
     fs::canonicalize(path).ok()
 }
 
-/// Applies an adapter observation only for local agents and emits a surgical
-/// update when the normalized workspace actually changes. The launch workspace
+/// Applies an adapter observation only for local agents and emits an agent
+/// update when the normalized workspace changes. The launch workspace
 /// remains authoritative for lifecycle operations.
 pub fn record_agent_active_workspace(
     state: &AppState,
