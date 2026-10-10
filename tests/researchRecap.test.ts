@@ -13,7 +13,7 @@ function content(): ResearchNodeContent {
       groupId: "group", worktreeDir: "/tmp", status: "complete", createdAt: 1,
       highlights: [], recap: { text: "The result is ready.", responseRevision: "revision" },
     },
-    turns: [], children: [], responseRevision: "revision",
+    turns: [], responseRevision: "revision",
   };
 }
 const render = (value: ResearchNodeContent) => renderToStaticMarkup(createElement(ResearchRecap, { content: value }));

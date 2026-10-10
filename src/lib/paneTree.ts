@@ -1,19 +1,5 @@
 import type { PaneInfo } from "../types";
 
-/**
- * The backend layout command still accepts `depth` while older app versions may
- * be running during an upgrade. New layouts are deliberately flat and always
- * send zero so persisted nested tabs are cut over without a separate schema.
- */
-export interface PaneLayoutItem {
-  paneId: string;
-  depth: 0;
-}
-
-export function toLayout(panes: PaneInfo[]): PaneLayoutItem[] {
-  return panes.map((pane) => ({ paneId: pane.id, depth: 0 }));
-}
-
 const flatten = (panes: PaneInfo[]): PaneInfo[] =>
   panes.map((pane) => ((pane.depth ?? 0) === 0 ? pane : { ...pane, depth: 0 }));
 

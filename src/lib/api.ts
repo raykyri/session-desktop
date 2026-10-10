@@ -2,7 +2,6 @@ import { trackRemoteStartup, recordRemoteStartup, reconcileRemoteReservation, fo
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { RecentActivityPage } from "./activity";
-import type { PaneLayoutItem } from "./paneTree";
 import type { WorktreeLocation } from "./settings";
 import {
   HumanBrowserLifecycleQueue,
@@ -40,7 +39,6 @@ import type {
   RuntimeConfig,
   RemoteChoice,
   RemoteProbeResult,
-  RepositoryInventory,
   SavedRemote,
   TranscriptOption,
   ThreadGraph,
@@ -476,14 +474,6 @@ export function openPaneWorktree(
     worktreeName,
     initialSize: initialSize ?? null,
   });
-}
-
-export function suggestPaneWorktreeName(paneId: string) {
-  return invoke<string>("suggest_pane_worktree_name", { paneId });
-}
-
-export function paneRepositoryInventory(paneId: string) {
-  return invoke<RepositoryInventory>("pane_repository_inventory", { paneId });
 }
 
 export async function openRepositoryWorktree(
@@ -945,11 +935,6 @@ export function renamePane(paneId: string, title: string) {
   return invoke<PaneInfo>("pane_rename", { paneId, title });
 }
 
-/** Atomically sets the flat sidebar tab order in one call. */
-export function setPaneLayout(items: PaneLayoutItem[]) {
-  return invoke<PaneInfo[]>("pane_set_layout", { items });
-}
-
 /** Moves `paneId` immediately after `siblingPaneId` in the flat sidebar order. */
 export function placePaneAfter(paneId: string, siblingPaneId: string) {
   return invoke<PaneInfo[]>("pane_place_after", { paneId, siblingPaneId });
@@ -997,11 +982,6 @@ export function markEventsListenerReady() {
 /** Acknowledges the native post-wake document event-loop health probe. */
 export function acknowledgeInterfaceHealthProbe(generation: number) {
   return invoke<void>("acknowledge_interface_health_probe", { generation });
-}
-
-/** Verify and reattach the existing remote session; never starts another shell. */
-export function reconnectPane(paneId: string) {
-  return invoke<void>("pane_reconnect", { paneId });
 }
 
 export function readResearchReport(path: string): Promise<string> {

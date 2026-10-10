@@ -150,18 +150,6 @@ export function researchQueueAction(
   return { kind: "send", item: queue[0], tailId: tail.id };
 }
 
-/** Whether the conversation document renders its column (and with it the
- * scroller that carries swipe navigation) rather than the loading
- * placeholder. A document mounted for a new tree first renders the
- * placeholder, so listeners on the scroller attach when this turns true. */
-export function researchDocumentHasColumn(
-  detail: unknown,
-  rootNodeId: string | null | undefined,
-  selectedNodeId: string | null | undefined,
-): boolean {
-  return Boolean(detail && rootNodeId && selectedNodeId);
-}
-
 /** The fork that sends an edited question in place of a failed (or stopped)
  * one: same parent, passage, reply and inline slot, naming the failed node as
  * the one it replaces. The backend admits the new node before it removes the

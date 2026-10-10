@@ -8,11 +8,10 @@ use crate::remote_terminal::{RemoteAttachmentController, RemoteHistoryCheckpoint
 use crate::research::CreateResearchDocumentRequest;
 use crate::research::{
     self, CreateResearchTreeRequest, RecentResearchQuery, RecentResearchQueryCursor,
-    RecentResearchQueryPage, ResearchBranchRemoval, ResearchHighlight, ResearchHighlightAnchor,
-    ResearchHighlightFeedItem, ResearchNode, ResearchNodeCard, ResearchNodeContent,
-    ResearchNodeKind, ResearchNodeOrigin, ResearchNodeStatus, ResearchRuntime, ResearchTree,
-    ResearchTreeDetail, ResearchTreeSummary, UpdateResearchDocumentRequest,
-    UpdateResearchDocumentResult,
+    ResearchBranchRemoval, ResearchHighlight, ResearchHighlightAnchor, ResearchHighlightFeedItem,
+    ResearchNode, ResearchNodeContent, ResearchNodeKind, ResearchNodeOrigin, ResearchNodeStatus,
+    ResearchRuntime, ResearchTree, ResearchTreeDetail, ResearchTreeSummary,
+    UpdateResearchDocumentRequest, UpdateResearchDocumentResult,
 };
 use crate::scrollback::{bounded_undo_scrollback, read_pane_scrollback, remove_pane_scrollback};
 use crate::thread_graph;
@@ -4086,51 +4085,6 @@ impl AppState {
         Ok(nodes)
     }
 
-    pub fn list_recent_research_queries(
-        &self,
-        limit: usize,
-        before: Option<RecentResearchQueryCursor>,
-    ) -> Result<RecentResearchQueryPage, String> {
-        let model = self
-            .inner
-            .model
-            .lock()
-            .map_err(|_| "model lock poisoned".to_string())?;
-        let mut nodes = model
-            .research_nodes
-            .values()
-            .filter(|node| {
-                node.kind.is_run()
-                    && model.research_trees.contains_key(&node.tree_id)
-                    && before.as_ref().is_none_or(|cursor| {
-                        node.created_at < cursor.created_at
-                            || (node.created_at == cursor.created_at && node.id < cursor.node_id)
-                    })
-            })
-            .collect::<Vec<_>>();
-        nodes.sort_by(|left, right| {
-            right
-                .created_at
-                .cmp(&left.created_at)
-                .then_with(|| right.id.cmp(&left.id))
-        });
-        let page_size = limit.clamp(1, 100);
-        let has_more = nodes.len() > page_size;
-        nodes.truncate(page_size);
-        let items = nodes
-            .into_iter()
-            .map(RecentResearchQuery::from)
-            .collect::<Vec<_>>();
-        let next_cursor = has_more.then(|| {
-            let last = items.last().expect("a non-empty limited page");
-            RecentResearchQueryCursor {
-                created_at: last.created_at,
-                node_id: last.node_id.clone(),
-            }
-        });
-        Ok(RecentResearchQueryPage { items, next_cursor })
-    }
-
     /// Every highlight on a non-archived thread, newest first, for the
     /// sidebar's Highlights feed.
     pub fn list_research_highlights(&self) -> Result<Vec<ResearchHighlightFeedItem>, String> {
@@ -4255,23 +4209,9 @@ impl AppState {
                 )
             })
             .unwrap_or_default();
-        let mut children = model
-            .research_nodes
-            .values()
-            .filter(|child| child.parent_node_id.as_deref() == Some(node_id))
-            .map(|child| ResearchNodeCard {
-                id: child.id.clone(),
-                prompt: child.prompt.clone(),
-                response_preview: child.response_preview.clone(),
-                status: child.status,
-                created_at: child.created_at,
-            })
-            .collect::<Vec<_>>();
-        children.sort_by_key(|child| (child.created_at, child.id.clone()));
         Ok(ResearchNodeContent {
             node,
             turns,
-            children,
             source_error: None,
             response_revision: None,
         })
@@ -4377,7 +4317,6 @@ impl AppState {
             prompt,
             attachments,
             title: None,
-            response_preview: None,
             adapter: request.adapter,
             model: request.model,
             effort: request.effort,
@@ -4469,7 +4408,6 @@ impl AppState {
             prompt: String::new(),
             attachments: Vec::new(),
             title: None,
-            response_preview: research::response_preview(&turns, None, "", &[]),
             adapter: String::new(),
             model: None,
             effort: None,
@@ -4871,7 +4809,6 @@ impl AppState {
             prompt: request.prompt,
             attachments: Vec::new(),
             title: None,
-            response_preview: research::response_preview(&turns, None, "", &[]),
             adapter: request.adapter,
             model: None,
             effort: None,
@@ -4912,264 +4849,6 @@ impl AppState {
             json!({ "tree": tree, "node": node }),
         ));
         self.research_tree(&tree_id)
-    }
-
-    /// Stage one of exporting a terminal pane's conversation to research:
-    /// read and sanitize the source and make the verified snapshot durable,
-    /// all without the research workspace-mutation guard — the transcript
-    /// read and snapshot write are the slow parts and need no exclusion
-    /// against folder mutations. The terminal is left untouched; this is a
-    /// copy, not a move, so repeating the export creates another independent
-    /// tree. A prepared export whose commit never happens strands only an
-    /// orphan snapshot, which prune_response_snapshots reclaims.
-    pub fn prepare_pane_export(
-        &self,
-        pane_id: &str,
-    ) -> Result<research::PreparedPaneExport, String> {
-        let agent = {
-            let model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let pane = model
-                .panes
-                .get(pane_id)
-                .ok_or_else(|| format!("pane {pane_id} was not found"))?;
-            // Research runs live in Research-scoped groups, and their hidden
-            // panes must not round-trip back into a conversation node. The
-            // scope check runs under the same lock as the pane lookup, so it
-            // also covers the launch-to-bind window in which a research
-            // run's node does not yet name its agent.
-            let scope = model
-                .groups
-                .get(&pane.info.group_id)
-                .map(|group| group.scope);
-            if scope != Some(WorkspaceScope::Terminal) {
-                return Err("only terminal panes can be exported to research".to_string());
-            }
-            // A pane owns an agent either by launch (pane.info.agent_id, set
-            // when the pane spawned as an agent pane) or by adoption (a
-            // shell pane whose `claude`/`codex` process was recovered — only
-            // agent.pane_id records that binding). The frontend offers the
-            // export for both, so both must resolve here.
-            let agent = pane
-                .info
-                .agent_id
-                .as_deref()
-                .and_then(|agent_id| model.agents.get(agent_id))
-                .or_else(|| {
-                    model
-                        .agents
-                        .values()
-                        .find(|agent| agent.pane_id.as_deref() == Some(pane_id))
-                })
-                .cloned()
-                .ok_or_else(|| "only agent panes can be exported to research".to_string())?;
-            agent
-        };
-        // Transcript-preferred source: the file is the complete native
-        // record, while the in-memory timeline can be a truncated live view.
-        // Only a file that has vanished falls back to that view — read
-        // failures, including the too-large-to-snapshot guard, surface
-        // instead of silently exporting a partial conversation as complete.
-        let (mut source_turns, source_stable) = match agent.transcript_path.as_deref() {
-            Some(path) if std::path::Path::new(path).exists() => {
-                self.transcript_turns_with_stability(&agent, path)?
-            }
-            _ => {
-                let model = self
-                    .inner
-                    .model
-                    .lock()
-                    .map_err(|_| "model lock poisoned".to_string())?;
-                (
-                    model.turns.get(&agent.id).cloned().unwrap_or_default(),
-                    true,
-                )
-            }
-        };
-        // The busy check runs after the (slow) source read so the status is
-        // as fresh as it can be: a stale Running would silently drop a
-        // delivered final exchange, a stale settled status would export a
-        // half-streamed one.
-        let status = {
-            let model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            model
-                .agents
-                .get(&agent.id)
-                .map(|agent| agent.status)
-                .ok_or_else(|| "the pane closed while the export was running".to_string())?
-        };
-        if status.is_at_rest() {
-            // An at-rest agent's transcript must parse identically twice —
-            // the adapter may still be flushing its final records (the same
-            // reason snapshot_research_response demands a stable read).
-            if !source_stable {
-                return Err(
-                    "the conversation is still being written; try the export again in a moment"
-                        .to_string(),
-                );
-            }
-        } else {
-            // A busy agent's in-flight exchange is half-streamed and must not
-            // persist as delivered content; instability in the trailing
-            // records is cut away with it.
-            match research::completed_exchange_boundary(&source_turns) {
-                Some(0) => {
-                    return Err(
-                        "the conversation's only exchange is still in progress; wait for the answer to finish before exporting"
-                            .to_string(),
-                    );
-                }
-                Some(boundary) => source_turns.truncate(boundary),
-                None => {}
-            }
-        }
-        let tree_id = self.next_id("research");
-        let node_id = self.next_id("research-node");
-        let turns = research::conversation_export_turns(&node_id, &source_turns)?;
-        drop(source_turns);
-        let prompt = research::conversation_prompt(&turns);
-        let response_preview = research::conversation_preview(&turns);
-        // Durable content lands before the records that point at it, same as
-        // create_research_document; the verified write keeps the records from
-        // ever pointing at a snapshot that did not round-trip.
-        research::write_response_snapshot_verified(
-            &self.inner.config.workspace_root,
-            &node_id,
-            &turns,
-        )?;
-        Ok(research::PreparedPaneExport {
-            tree_id,
-            node_id,
-            prompt,
-            response_preview,
-            adapter: agent.adapter,
-            model: agent.model,
-            effort: agent.effort,
-            agent_created_at: agent.created_at,
-        })
-    }
-
-    /// Reads the transcript until two consecutive parses agree, reporting
-    /// whether they did. Bounded: a source that keeps changing (a streaming
-    /// agent) comes back unstable rather than looping, and the caller
-    /// decides — an at-rest agent must retry, a busy one truncates the
-    /// unstable tail with the in-flight exchange.
-    fn transcript_turns_with_stability(
-        &self,
-        agent: &AgentInfo,
-        path: &str,
-    ) -> Result<(Vec<Turn>, bool), String> {
-        let mut previous =
-            research::load_transcript_turns(&self.inner.config, &agent.adapter, &agent.id, path)?;
-        for _ in 0..3 {
-            std::thread::sleep(std::time::Duration::from_millis(150));
-            let current = research::load_transcript_turns(
-                &self.inner.config,
-                &agent.adapter,
-                &agent.id,
-                path,
-            )?;
-            if current == previous {
-                return Ok((current, true));
-            }
-            previous = current;
-        }
-        Ok((previous, false))
-    }
-
-    /// Stage two: admits the prepared export as a Complete conversation tree.
-    /// The caller must hold the research workspace-mutation guard, matching
-    /// `create_research_document`. On admission failure the prepared snapshot
-    /// is reclaimed.
-    pub fn commit_pane_export(
-        &self,
-        prepared: &research::PreparedPaneExport,
-        group_id: String,
-        title: Option<String>,
-    ) -> Result<ResearchTreeDetail, String> {
-        if group_id.trim().is_empty() {
-            self.discard_pane_export(prepared);
-            return Err("research workspace cannot be empty".to_string());
-        }
-        let now = now_millis();
-        let title =
-            Self::resolved_research_title(title, || research::default_title(&prepared.prompt));
-        let tree = ResearchTree {
-            id: prepared.tree_id.clone(),
-            title,
-            root_node_id: prepared.node_id.clone(),
-            workspace_id: group_id.clone(),
-            created_at: now,
-            updated_at: now,
-            archived_at: None,
-            followed: false,
-            bookmarked: false,
-            last_viewed_at: Some(now),
-        };
-        let mut node = ResearchNode {
-            id: prepared.node_id.clone(),
-            tree_id: prepared.tree_id.clone(),
-            parent_node_id: None,
-            query_anchor: None,
-            inline: false,
-            prompt: prepared.prompt.clone(),
-            attachments: Vec::new(),
-            title: None,
-            response_preview: prepared.response_preview.clone(),
-            adapter: prepared.adapter.clone(),
-            model: prepared.model.clone(),
-            effort: prepared.effort.clone(),
-            group_id,
-            worktree_dir: String::new(),
-            native_session_id: None,
-            transcript_path: None,
-            prompt_native_id: None,
-            agent_id: None,
-            pane_id: None,
-            runtime: crate::research::ResearchRuntime::Pane,
-            thread_id: None,
-            kind: ResearchNodeKind::Conversation,
-            origin: Some(ResearchNodeOrigin::TerminalExport),
-            delivery: None,
-            reply_anchor: None,
-            status: ResearchNodeStatus::Complete,
-            error: None,
-            response_snapshot_at: Some(now),
-            recap: None,
-            created_at: now,
-            started_at: Some(prepared.agent_created_at.min(now)),
-            completed_at: Some(now),
-            promoted_at: None,
-            highlights: Vec::new(),
-        };
-        if let Err(err) = self.admit_research_root(&tree, &mut node) {
-            self.discard_pane_export(prepared);
-            return Err(err);
-        }
-        self.persist();
-        self.emit(SessionEvent::new(
-            "research.tree.created",
-            None,
-            None,
-            json!({ "tree": tree, "node": node }),
-        ));
-        self.research_tree(&tree.id)
-    }
-
-    /// Reclaims a prepared export whose records never committed (validation
-    /// or admission failed after the snapshot landed).
-    pub fn discard_pane_export(&self, prepared: &research::PreparedPaneExport) {
-        let _ = research::remove_response_snapshot(
-            &self.inner.config.workspace_root,
-            &prepared.node_id,
-        );
     }
 
     /// Replaces a root document's durable Markdown in place. Existing child
@@ -5286,10 +4965,9 @@ impl AppState {
                 .research_nodes
                 .get_mut(&current_node.id)
                 .ok_or_else(|| format!("research node {} was not found", current_node.id))?;
-            let removed = if let Some(turns) = turns.as_deref() {
+            let removed = if turns.is_some() {
                 let removed = node.highlights.len();
                 node.highlights.clear();
-                node.response_preview = research::response_preview(turns, None, "", &[]);
                 node.response_snapshot_at = Some(
                     node.response_snapshot_at
                         .map_or(now, |previous| now.max(previous.saturating_add(1))),
@@ -5696,7 +5374,6 @@ impl AppState {
                 prompt,
                 attachments,
                 title: None,
-                response_preview: None,
                 adapter,
                 model: parent_model,
                 effort: parent_effort,
@@ -6378,7 +6055,6 @@ impl AppState {
             node.native_session_id = None;
             node.transcript_path = None;
             node.prompt_native_id = None;
-            node.response_preview = None;
             node.response_snapshot_at = None;
             node.recap = None;
             node.runtime = ResearchRuntime::Pane;
@@ -6907,43 +6583,6 @@ impl AppState {
             json!({ "nodeId": node_id, "highlight": highlight }),
         ));
         Ok(highlight)
-    }
-
-    pub fn remove_research_highlight(
-        &self,
-        node_id: &str,
-        highlight_id: &str,
-    ) -> Result<ResearchHighlight, String> {
-        let _document_guard = self
-            .inner
-            .research_document_lock
-            .lock()
-            .map_err(|_| "research document lock poisoned".to_string())?;
-        let removed = {
-            let mut model = self
-                .inner
-                .model
-                .lock()
-                .map_err(|_| "model lock poisoned".to_string())?;
-            let node = model
-                .research_nodes
-                .get_mut(node_id)
-                .ok_or_else(|| format!("research node {node_id} was not found"))?;
-            let index = node
-                .highlights
-                .iter()
-                .position(|highlight| highlight.id == highlight_id)
-                .ok_or_else(|| format!("research highlight {highlight_id} was not found"))?;
-            node.highlights.remove(index)
-        };
-        self.persist();
-        self.emit(SessionEvent::new(
-            "research.highlight.removed",
-            None,
-            None,
-            json!({ "nodeId": node_id, "highlightId": highlight_id }),
-        ));
-        Ok(removed)
     }
 
     pub fn remove_research_highlights(
@@ -9224,26 +8863,15 @@ impl AppState {
             let Some(node_id) = node_id else {
                 return Ok(false);
             };
-            let (node_prompt, existing_prompt_id) = model
+            let node_prompt = model
                 .research_nodes
                 .get(&node_id)
-                .map(|node| (node.prompt.clone(), node.prompt_native_id.clone()))
+                .map(|node| node.prompt.clone())
                 .expect("node exists");
-            let ancestor_prompts = model
-                .research_nodes
-                .get(&node_id)
-                .map(|node| research::ancestor_prompts(node, |id| model.research_nodes.get(id)))
-                .unwrap_or_default();
-            let (prompt_id, preview) = model.turns.get(&agent.id).map_or((None, None), |turns| {
-                let prompt_id = research::prompt_native_id(turns, &node_prompt);
-                let preview = research::response_preview(
-                    turns,
-                    prompt_id.as_deref().or(existing_prompt_id.as_deref()),
-                    &node_prompt,
-                    &ancestor_prompts,
-                );
-                (prompt_id, preview)
-            });
+            let prompt_id = model
+                .turns
+                .get(&agent.id)
+                .and_then(|turns| research::prompt_native_id(turns, &node_prompt));
             let has_active_subagents = model
                 .agent_active_subagents
                 .get(&agent.id)
@@ -9270,9 +8898,6 @@ impl AppState {
             }
             if prompt_id.is_some() {
                 node.prompt_native_id = prompt_id;
-            }
-            if preview.is_some() {
-                node.response_preview = preview;
             }
             // Hooks and transcript tailing deliver agent events asynchronously,
             // so a generic Running/Idle update can arrive after the run has
@@ -13040,58 +12665,6 @@ mod tests {
         assert!(state.research_tree(&detail.tree.id).is_err());
     }
 
-    #[test]
-    fn recent_research_queries_page_runs_at_every_depth_with_a_stable_cursor() {
-        let state = AppState::new(test_config(temp_workspace()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        let detail = state
-            .create_research_tree(CreateResearchTreeRequest {
-                prompt: "Root query".to_string(),
-                title: None,
-                adapter: "claude".to_string(),
-                model: Some("opus".to_string()),
-                effort: None,
-                group_id: "group-1".to_string(),
-            })
-            .unwrap();
-        let root = detail.nodes[0].clone();
-        {
-            let mut model = state.inner.model.lock().unwrap();
-            let mut child = root.clone();
-            child.id = "nested-query".to_string();
-            child.parent_node_id = Some(root.id.clone());
-            child.prompt = "Nested query".to_string();
-            child.created_at += 1;
-            model.research_nodes.insert(child.id.clone(), child);
-
-            let mut document = root.clone();
-            document.id = "document-node".to_string();
-            document.kind = ResearchNodeKind::Document;
-            document.created_at += 2;
-            model.research_nodes.insert(document.id.clone(), document);
-        }
-
-        let first = state.list_recent_research_queries(1, None).unwrap();
-        assert_eq!(first.items[0].node_id, "nested-query");
-        assert_eq!(
-            first.items[0].parent_node_id.as_deref(),
-            Some(root.id.as_str())
-        );
-        let second = state
-            .list_recent_research_queries(1, first.next_cursor)
-            .unwrap();
-        assert_eq!(second.items[0].node_id, root.id);
-        assert!(second.next_cursor.is_none());
-        assert!(
-            state
-                .list_recent_research_queries(100, None)
-                .unwrap()
-                .items
-                .iter()
-                .all(|query| query.node_id != "document-node")
-        );
-    }
-
     fn note_request(body: &str, ask_network: bool) -> research::CreateResearchNoteRequest {
         research::CreateResearchNoteRequest {
             body: body.to_string(),
@@ -14644,7 +14217,7 @@ mod tests {
     }
 
     #[test]
-    fn research_node_tracks_agent_status_and_response_preview() {
+    fn research_node_tracks_agent_status_and_response() {
         let state = AppState::new(test_config(PathBuf::from(
             "/tmp/session-state-research-run",
         )));
@@ -14681,16 +14254,12 @@ mod tests {
 
         let content = state.research_node_content(&root_id).unwrap();
         assert_eq!(content.node.status, ResearchNodeStatus::Complete);
-        assert_eq!(
-            content.node.response_preview.as_deref(),
-            Some("A concise answer")
-        );
         assert_eq!(content.turns.len(), 1);
         assert_eq!(content.turns[0].role, "assistant");
     }
 
     #[test]
-    fn generating_followup_never_previews_the_parent_answer() {
+    fn generating_followup_never_shows_the_parent_answer() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
@@ -14743,14 +14312,13 @@ mod tests {
         replayed.source_index = 1;
         state.append_turn(replayed).unwrap();
 
-        // The parent's answer must not stand in as the child's preview or
-        // response; the card and pane keep their generating placeholders.
+        // Exclude the parent's answer from the child's response so the pane
+        // continues to show its generating placeholder.
         let content = state.research_node_content(&child.id).unwrap();
-        assert_eq!(content.node.response_preview, None);
         assert!(content.turns.is_empty());
 
-        // Once the child's own (adapter-rewritten) prompt and answer land,
-        // the preview follows the child's response as before.
+        // Include the child's response after its adapter-rewritten prompt
+        // and answer are appended.
         let mut child_prompt = sample_user_turn("child-agent", "[wrapped] follow-up (rewritten)");
         child_prompt.id = "child-agent-prompt".to_string();
         child_prompt.source_index = 2;
@@ -14761,10 +14329,6 @@ mod tests {
         child_answer.source_index = 3;
         state.append_turn(child_answer).unwrap();
         let content = state.research_node_content(&child.id).unwrap();
-        assert_eq!(
-            content.node.response_preview.as_deref(),
-            Some("Child answer")
-        );
         assert_eq!(content.turns.len(), 1);
         assert_eq!(content.turns[0].role, "assistant");
     }
@@ -15102,7 +14666,7 @@ mod tests {
     }
 
     #[test]
-    fn transcript_updates_persist_research_preview_without_a_status_change() {
+    fn streaming_transcript_updates_do_not_resort_or_raise_attention() {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace.clone()));
         assert!(state.restore_session().is_empty());
@@ -15126,28 +14690,23 @@ mod tests {
         state
             .append_turn(sample_user_turn("research-agent", "Question"))
             .unwrap();
-        let updated_at_before_preview = state.list_research_trees().unwrap()[0].updated_at;
+        let updated_at_before_answer = state.list_research_trees().unwrap()[0].updated_at;
         std::thread::sleep(std::time::Duration::from_millis(2));
-        let mut answer = sample_user_turn("research-agent", "Persisted preview");
+        let mut answer = sample_user_turn("research-agent", "Streaming answer");
         answer.id = "research-agent-1".to_string();
         answer.role = "assistant".to_string();
         answer.source_index = 1;
         state.append_turn(answer).unwrap();
         assert!(
             !state.list_research_trees().unwrap()[0].has_unseen_update,
-            "streaming preview churn must not raise settlement attention"
+            "streaming transcript churn must not raise settlement attention"
         );
         assert_eq!(
             state.list_research_trees().unwrap()[0].updated_at,
-            updated_at_before_preview,
-            "streaming preview churn must not resort the sidebar"
+            updated_at_before_answer,
+            "streaming transcript churn must not resort the sidebar"
         );
-        state.finalize_persistence_for_exit();
-
-        let restored = AppState::new(test_config(workspace));
-        restored.restore_session();
-        let node = restored.research_node(&detail.tree.root_node_id).unwrap();
-        assert_eq!(node.response_preview.as_deref(), Some("Persisted preview"));
+        std::fs::remove_dir_all(workspace).ok();
     }
 
     #[test]
@@ -15246,279 +14805,87 @@ mod tests {
         );
     }
 
-    fn exportable_terminal_setup(state: &AppState, agent_status: AgentStatus) {
-        let mut terminal_group = sample_group_with_id("term-1");
-        terminal_group.scope = WorkspaceScope::Terminal;
-        state.insert_group_after(terminal_group, None).unwrap();
+    /// Creates a Complete conversation root matching the legacy terminal
+    /// export format for tests of existing conversation readers.
+    fn insert_conversation_tree(state: &AppState, question: &str, answer: &str) -> String {
         state.insert_group_after(sample_group(), None).unwrap();
-        let mut pane = sample_pane_runtime("pane-1");
-        pane.info.agent_id = Some("term-agent".to_string());
-        pane.info.group_id = "term-1".to_string();
-        state.insert_pane(pane).unwrap();
-        let mut agent = sample_agent("term-agent");
-        agent.group_id = "term-1".to_string();
-        agent.pane_id = Some("pane-1".to_string());
-        agent.transcript_path = None;
-        agent.status = agent_status;
-        state.insert_agent(agent).unwrap();
-    }
-
-    fn append_terminal_exchange(state: &AppState, index: usize, question: &str, answer: &str) {
-        let mut user = sample_user_turn("term-agent", question);
-        user.id = format!("term-agent-{}", index * 2);
-        user.source_index = index * 2;
-        state.append_turn(user).unwrap();
-        let mut assistant = sample_user_turn("term-agent", answer);
-        assistant.id = format!("term-agent-{}", index * 2 + 1);
-        assistant.source_index = index * 2 + 1;
+        let tree_id = state.next_id("research");
+        let node_id = state.next_id("research-node");
+        let mut user = sample_user_turn(&node_id, question);
+        user.id = format!("{node_id}-0");
+        let mut assistant = sample_user_turn(&node_id, answer);
+        assistant.id = format!("{node_id}-1");
+        assistant.source_index = 1;
         assistant.role = "assistant".to_string();
-        state.append_turn(assistant).unwrap();
-    }
-
-    fn export_pane(
-        state: &AppState,
-        pane_id: &str,
-        group_id: &str,
-        title: Option<&str>,
-    ) -> Result<ResearchTreeDetail, String> {
-        let prepared = state.prepare_pane_export(pane_id)?;
-        state.commit_pane_export(&prepared, group_id.to_string(), title.map(str::to_string))
-    }
-
-    #[test]
-    fn export_pane_to_research_creates_a_severed_conversation_tree() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
-        assert!(state.restore_session().is_empty());
-        exportable_terminal_setup(&state, AgentStatus::Idle);
-        append_terminal_exchange(&state, 0, "Question", "Answer");
-        // No conversation nodes yet: the state file keeps the widest
-        // downgrade compatibility.
-        let version_of = |workspace: &PathBuf| {
-            let raw = std::fs::read(persistence::state_path(workspace)).unwrap();
-            serde_json::from_slice::<serde_json::Value>(&raw).unwrap()["version"]
-                .as_u64()
-                .unwrap()
+        research::write_response_snapshot_verified(
+            &state.inner.config.workspace_root,
+            &node_id,
+            &[user, assistant],
+        )
+        .unwrap();
+        let now = now_millis();
+        let tree = ResearchTree {
+            id: tree_id.clone(),
+            title: "Conversation".to_string(),
+            root_node_id: node_id.clone(),
+            workspace_id: "group-1".to_string(),
+            created_at: now,
+            updated_at: now,
+            archived_at: None,
+            followed: false,
+            bookmarked: false,
+            last_viewed_at: Some(now),
         };
-        assert_eq!(version_of(&workspace), 4);
-
-        let detail = export_pane(&state, "pane-1", "group-1", None).unwrap();
-        assert_eq!(detail.tree.workspace_id, "group-1");
-        let node = &detail.nodes[0];
-        assert_eq!(node.kind, ResearchNodeKind::Conversation);
-        assert_eq!(node.origin, Some(ResearchNodeOrigin::TerminalExport));
-        assert_eq!(node.status, ResearchNodeStatus::Complete);
-        assert_eq!(node.prompt, "Question");
-        assert_eq!(node.response_preview.as_deref(), Some("Answer"));
-        assert_eq!(node.adapter, "claude");
-        // Severed: no pointer back to the source session, pane, or thread.
-        assert!(node.native_session_id.is_none());
-        assert!(node.transcript_path.is_none());
-        assert!(node.agent_id.is_none());
-        assert!(node.pane_id.is_none());
-        assert!(node.thread_id.is_none());
-        // The sidebar surfaces the new kind.
-        let summary = &state.list_research_trees().unwrap()[0];
-        assert_eq!(summary.kind, ResearchNodeKind::Conversation);
-
-        // The snapshot is durable, reissued under the node's identity.
-        let turns = research::read_response_snapshot(&state.config().workspace_root, &node.id)
-            .unwrap()
-            .unwrap();
-        assert_eq!(turns.len(), 2);
-        assert!(turns.iter().all(|turn| {
-            turn.agent_id == node.id && turn.session_id.is_none() && turn.native_id.is_none()
-        }));
-
-        // The terminal is untouched: this was a copy, not a move.
-        assert!(state.agent("term-agent").unwrap().is_some());
-        assert!(state.pane_exists("pane-1").unwrap());
-
-        // The exported records and snapshot survive a restart unchanged, and
-        // the state file now marks the conversation for older builds.
-        state.finalize_persistence_for_exit();
-        assert_eq!(version_of(&workspace), 5);
-        let restored = AppState::new(test_config(workspace));
-        restored.restore_session();
-        let restored_node = restored.research_node(&node.id).unwrap();
-        assert_eq!(restored_node.kind, ResearchNodeKind::Conversation);
-        assert_eq!(
-            restored_node.origin,
-            Some(ResearchNodeOrigin::TerminalExport)
-        );
-        assert_eq!(restored_node.status, ResearchNodeStatus::Complete);
-    }
-
-    #[test]
-    fn export_pane_to_research_mid_turn_keeps_completed_exchanges_only() {
-        let state = AppState::new(test_config(temp_workspace()));
-        exportable_terminal_setup(&state, AgentStatus::Running);
-        append_terminal_exchange(&state, 0, "First question", "First answer");
-        append_terminal_exchange(&state, 1, "Second question", "Half-streamed answer");
-
-        let detail = export_pane(&state, "pane-1", "group-1", Some("Mid-turn export")).unwrap();
-        assert_eq!(detail.tree.title, "Mid-turn export");
-        let node = &detail.nodes[0];
-        let turns = research::read_response_snapshot(&state.config().workspace_root, &node.id)
-            .unwrap()
-            .unwrap();
-        let encoded = serde_json::to_string(&turns).unwrap();
-        assert_eq!(turns.len(), 2, "{encoded}");
-        assert!(!encoded.contains("Second question"), "{encoded}");
-        assert!(!encoded.contains("Half-streamed"), "{encoded}");
-    }
-
-    #[test]
-    fn export_pane_to_research_awaiting_input_exports_delivered_content() {
-        // AwaitingInput is an at-rest status (adapters assign it after
-        // notifications and interruptions); treating it as busy would
-        // silently drop the final delivered exchange.
-        let state = AppState::new(test_config(temp_workspace()));
-        exportable_terminal_setup(&state, AgentStatus::AwaitingInput);
-        append_terminal_exchange(&state, 0, "First question", "First answer");
-        append_terminal_exchange(&state, 1, "Second question", "Second answer");
-
-        let detail = export_pane(&state, "pane-1", "group-1", None).unwrap();
-        let node = &detail.nodes[0];
-        let turns = research::read_response_snapshot(&state.config().workspace_root, &node.id)
-            .unwrap()
-            .unwrap();
-        assert_eq!(turns.len(), 4);
-        assert_eq!(node.response_preview.as_deref(), Some("Second answer"));
-    }
-
-    #[test]
-    fn export_pane_to_research_reports_an_in_flight_only_exchange() {
-        let state = AppState::new(test_config(temp_workspace()));
-        exportable_terminal_setup(&state, AgentStatus::Running);
-        append_terminal_exchange(&state, 0, "Only question", "Streaming answer");
-
-        // The prompt is visibly on screen, so the error must say the answer
-        // is in progress — not that there is no prompt.
-        let err = export_pane(&state, "pane-1", "group-1", None).unwrap_err();
-        assert!(err.contains("still in progress"), "{err}");
-    }
-
-    #[test]
-    fn export_pane_to_research_prefers_the_transcript_file() {
-        let workspace = temp_workspace();
-        let state = AppState::new(test_config(workspace.clone()));
-        exportable_terminal_setup(&state, AgentStatus::Idle);
-        // The live timeline is a decoy; the file is the complete record.
-        append_terminal_exchange(&state, 0, "Live question", "Live answer");
-        let transcript_path = workspace.join("terminal-transcript.jsonl");
-        let lines = [
-            serde_json::json!({
-                "type": "user",
-                "uuid": "u1",
-                "sessionId": "session-abc",
-                "message": { "role": "user", "content": "File question" },
-            }),
-            serde_json::json!({
-                "type": "assistant",
-                "uuid": "a1",
-                "parentUuid": "u1",
-                "sessionId": "session-abc",
-                "message": {
-                    "id": "m1",
-                    "role": "assistant",
-                    "content": [{ "type": "text", "text": "File answer" }],
-                },
-            }),
-        ]
-        .map(|line| line.to_string())
-        .join("\n");
-        std::fs::write(&transcript_path, format!("{lines}\n")).unwrap();
-        let mut agent = sample_agent("term-agent");
-        agent.group_id = "term-1".to_string();
-        agent.pane_id = Some("pane-1".to_string());
-        agent.status = AgentStatus::Idle;
-        agent.transcript_path = Some(transcript_path.display().to_string());
-        state.insert_agent(agent).unwrap();
-
-        let detail = export_pane(&state, "pane-1", "group-1", None).unwrap();
-        let node = &detail.nodes[0];
-        assert_eq!(node.prompt, "File question");
-        let turns = research::read_response_snapshot(&state.config().workspace_root, &node.id)
-            .unwrap()
-            .unwrap();
-        let encoded = serde_json::to_string(&turns).unwrap();
-        assert!(encoded.contains("File answer"), "{encoded}");
-        assert!(!encoded.contains("Live answer"), "{encoded}");
-    }
-
-    #[test]
-    fn export_pane_to_research_rejects_shells_research_panes_and_empty_timelines() {
-        let state = AppState::new(test_config(temp_workspace()));
-        state.insert_group_after(sample_group(), None).unwrap();
-        let mut terminal_group = sample_group_with_id("term-1");
-        terminal_group.scope = WorkspaceScope::Terminal;
-        state.insert_group_after(terminal_group, None).unwrap();
-
-        // A shell pane in a terminal workspace has no agent to export.
-        let mut shell = sample_pane_runtime("pane-9");
-        shell.info.group_id = "term-1".to_string();
-        state.insert_pane(shell).unwrap();
-        let err = export_pane(&state, "pane-9", "group-1", None).unwrap_err();
-        assert!(err.contains("only agent panes"), "{err}");
-
-        // A research run's hidden pane is rejected by workspace scope — in
-        // production order (pane inserted before the node binds its agent),
-        // both before and after the bind, so the launch-to-bind window is
-        // covered.
-        let mut research_pane = sample_pane_runtime("pane-7");
-        research_pane.info.agent_id = Some("research-agent".to_string());
-        state.insert_pane(research_pane).unwrap();
-        let detail = state
-            .create_research_tree(CreateResearchTreeRequest {
-                prompt: "Root".to_string(),
-                title: None,
-                adapter: "claude".to_string(),
-                model: None,
-                effort: None,
-                group_id: "group-1".to_string(),
-            })
-            .unwrap();
-        let mut research_agent = sample_agent("research-agent");
-        research_agent.transcript_path = None;
-        state.insert_agent(research_agent.clone()).unwrap();
-        let err = export_pane(&state, "pane-7", "group-1", None).unwrap_err();
-        assert!(err.contains("only terminal panes"), "{err}");
-        state
-            .bind_research_node_run(&detail.tree.root_node_id, &research_agent, "pane-7")
-            .unwrap();
-        let err = export_pane(&state, "pane-7", "group-1", None).unwrap_err();
-        assert!(err.contains("only terminal panes"), "{err}");
-
-        // An agent that never produced an exchange has nothing to export.
-        let mut pane = sample_pane_runtime("pane-1");
-        pane.info.agent_id = Some("term-agent".to_string());
-        pane.info.group_id = "term-1".to_string();
-        state.insert_pane(pane).unwrap();
-        let mut agent = sample_agent("term-agent");
-        agent.group_id = "term-1".to_string();
-        agent.pane_id = Some("pane-1".to_string());
-        agent.transcript_path = None;
-        agent.status = AgentStatus::Idle;
-        state.insert_agent(agent).unwrap();
-        let err = export_pane(&state, "pane-1", "group-1", None).unwrap_err();
-        assert!(err.contains("user prompt"), "{err}");
+        let mut node = ResearchNode {
+            id: node_id.clone(),
+            tree_id: tree_id.clone(),
+            parent_node_id: None,
+            query_anchor: None,
+            inline: false,
+            prompt: question.to_string(),
+            attachments: Vec::new(),
+            title: None,
+            adapter: "claude".to_string(),
+            model: None,
+            effort: None,
+            group_id: "group-1".to_string(),
+            worktree_dir: String::new(),
+            native_session_id: None,
+            transcript_path: None,
+            prompt_native_id: None,
+            agent_id: None,
+            pane_id: None,
+            runtime: crate::research::ResearchRuntime::Pane,
+            thread_id: None,
+            kind: ResearchNodeKind::Conversation,
+            origin: Some(ResearchNodeOrigin::TerminalExport),
+            delivery: None,
+            reply_anchor: None,
+            status: ResearchNodeStatus::Complete,
+            error: None,
+            response_snapshot_at: Some(now),
+            recap: None,
+            created_at: now,
+            started_at: Some(now),
+            completed_at: Some(now),
+            promoted_at: None,
+            highlights: Vec::new(),
+        };
+        state.admit_research_root(&tree, &mut node).unwrap();
+        node_id
     }
 
     #[test]
     fn conversation_followups_admit_children_with_serialized_context() {
         let state = AppState::new(test_config(temp_workspace()));
-        exportable_terminal_setup(&state, AgentStatus::Idle);
-        append_terminal_exchange(&state, 0, "Question", "Answer");
-        let detail = export_pane(&state, "pane-1", "group-1", None).unwrap();
-        let root_id = detail.tree.root_node_id.clone();
+        let root_id = insert_conversation_tree(&state, "Question", "Answer");
 
         let child = state
             .create_research_child(&root_id, "Follow-up question".to_string(), None, false)
             .unwrap();
         assert_eq!(child.kind, ResearchNodeKind::Run);
         assert_eq!(child.parent_node_id.as_deref(), Some(root_id.as_str()));
-        // The source terminal's adapter carries over (claude can fork, which
+        // The conversation's adapter carries over (claude can fork, which
         // the run child's own follow-ups will need).
         assert_eq!(child.adapter, "claude");
         assert_eq!(child.status, ResearchNodeStatus::Queued);
@@ -15678,7 +15045,6 @@ mod tests {
         assert!(reset.native_session_id.is_none());
         assert!(reset.transcript_path.is_none());
         assert!(reset.prompt_native_id.is_none());
-        assert!(reset.response_preview.is_none());
         assert!(reset.response_snapshot_at.is_none());
         assert!(reset.started_at.is_none());
         assert!(reset.completed_at.is_none());
@@ -16246,7 +15612,6 @@ mod tests {
             prompt: "Q".to_string(),
             attachments: Vec::new(),
             title: None,
-            response_preview: None,
             adapter: "claude".to_string(),
             model: None,
             effort: None,
@@ -16364,7 +15729,6 @@ mod tests {
             prompt: "Question".to_string(),
             attachments: Vec::new(),
             title: None,
-            response_preview: None,
             adapter: "claude".to_string(),
             model: None,
             effort: None,
@@ -16464,7 +15828,6 @@ mod tests {
             prompt: "Question".to_string(),
             attachments: Vec::new(),
             title: None,
-            response_preview: None,
             adapter: "claude".to_string(),
             model: None,
             effort: None,
@@ -16574,7 +15937,6 @@ mod tests {
             prompt: "Question".to_string(),
             attachments: Vec::new(),
             title: None,
-            response_preview: None,
             adapter: "claude".to_string(),
             model: None,
             effort: None,
@@ -16659,7 +16021,6 @@ mod tests {
             prompt: "Question".to_string(),
             attachments: Vec::new(),
             title: None,
-            response_preview: Some("Answer".to_string()),
             adapter: "claude".to_string(),
             model: None,
             effort: None,
@@ -16753,7 +16114,6 @@ mod tests {
                     prompt: "Question".to_string(),
                     attachments: Vec::new(),
                     title: None,
-                    response_preview: None,
                     adapter: "claude".to_string(),
                     model: None,
                     effort: None,
@@ -16992,7 +16352,7 @@ mod tests {
         assert_eq!(items[0].created_at, second.created_at);
 
         state
-            .remove_research_highlight(&node_id, &second.id)
+            .remove_research_highlights(&node_id, &[second.id.clone()])
             .unwrap();
         let items = state.list_research_highlights().unwrap();
         assert_eq!(items.len(), 1);
@@ -17149,7 +16509,7 @@ mod tests {
         assert!(followup.len() <= 120 * 1024);
         assert!(followup.ends_with("Explain the conclusion"));
         assert_eq!(
-            state.list_recent_research_queries(10, None).unwrap().items[0].origin,
+            state.list_recent_activity(10, None).unwrap().items[0].origin,
             Some(ResearchNodeOrigin::Imported)
         );
         state
@@ -17188,7 +16548,7 @@ mod tests {
         }
         assert!(
             state
-                .list_recent_research_queries(10, None)
+                .list_recent_activity(10, None)
                 .unwrap()
                 .items
                 .is_empty()
@@ -17366,7 +16726,7 @@ mod tests {
             revised_snapshot.revision
         );
         state
-            .remove_research_highlight(&node_id, &concurrent_highlight.id)
+            .remove_research_highlights(&node_id, &[concurrent_highlight.id.clone()])
             .unwrap();
 
         state.cancel_research_node(&child.id).unwrap();
@@ -17506,9 +16866,9 @@ mod tests {
             vec![preserved.clone()]
         );
         let removed = reloaded
-            .remove_research_highlight(&node_id, &preserved.id)
+            .remove_research_highlights(&node_id, &[preserved.id.clone()])
             .unwrap();
-        assert_eq!(removed, preserved);
+        assert_eq!(removed, vec![preserved]);
 
         std::fs::remove_dir_all(workspace).unwrap();
     }

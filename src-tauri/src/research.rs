@@ -495,12 +495,12 @@ pub struct ResearchNode {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_node_id: Option<String>,
     /// The passage of the parent's response this follow-up was asked about.
-    /// Anchors the node's card beside that passage in the parent's document
-    /// view; the quoted text also rides along in the launch prompt.
+    /// The parent's answer marks it as the anchor of the branch; the quoted
+    /// text is also included in the launch prompt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub query_anchor: Option<ResearchHighlightAnchor>,
-    /// True when this follow-up continues its parent's answer inside the same
-    /// document (the thread spine) instead of branching into a rail card. A
+    /// True when this follow-up continues its parent's conversation at the
+    /// same level (the same messages column) instead of opening a branch. A
     /// node has at most one existing inline child — any status holds the
     /// slot, and removing the child reopens it. Absent when false, so trees
     /// without inline follow-ups serialize byte-identically to builds that
@@ -516,8 +516,6 @@ pub struct ResearchNode {
     /// the document's displayed user query.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub response_preview: Option<String>,
     pub adapter: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
@@ -807,7 +805,6 @@ pub fn new_note_node(
         prompt: body,
         attachments,
         title: None,
-        response_preview: None,
         adapter,
         model,
         effort,
@@ -954,13 +951,6 @@ pub struct RecentResearchQueryCursor {
     pub node_id: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RecentResearchQueryPage {
-    pub items: Vec<RecentResearchQuery>,
-    pub next_cursor: Option<RecentResearchQueryCursor>,
-}
-
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResearchHighlight {
@@ -1012,7 +1002,7 @@ pub struct CreateResearchTreeRequest {
     /// accepted from the caller: the group is the workspace the user actually
     /// picked, and a stale or fabricated directory would silently run the
     /// research agent somewhere else.
-    #[serde(rename = "workspaceId", alias = "groupId")]
+    #[serde(rename = "workspaceId")]
     pub group_id: String,
 }
 
@@ -1034,38 +1024,8 @@ pub struct CreateResearchDocumentRequest {
     pub title: Option<String>,
     /// Same contract as [`CreateResearchTreeRequest::group_id`]: identity only,
     /// never a directory.
-    #[serde(rename = "workspaceId", alias = "groupId")]
+    #[serde(rename = "workspaceId")]
     pub group_id: String,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ExportPaneToResearchRequest {
-    pub pane_id: String,
-    /// Same contract as [`CreateResearchTreeRequest::group_id`]: identity only,
-    /// never a directory.
-    #[serde(rename = "workspaceId", alias = "groupId")]
-    pub group_id: String,
-    pub title: Option<String>,
-}
-
-/// Everything a conversation export computes before its records are
-/// admitted: identity for the new tree and node, display fields, and the
-/// already-durable verified snapshot. Produced by `prepare_pane_export`
-/// outside the research workspace-mutation guard (the transcript read and
-/// snapshot write are the slow parts), consumed by `commit_pane_export`
-/// under it; a crash in between strands only an orphan snapshot, which
-/// `prune_response_snapshots` reclaims.
-#[derive(Clone, Debug)]
-pub struct PreparedPaneExport {
-    pub tree_id: String,
-    pub node_id: String,
-    pub prompt: String,
-    pub response_preview: Option<String>,
-    pub adapter: String,
-    pub model: Option<String>,
-    pub effort: Option<String>,
-    pub agent_created_at: u128,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -1137,20 +1097,9 @@ pub struct ResearchBranchRemoval {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ResearchNodeCard {
-    pub id: String,
-    pub prompt: String,
-    pub response_preview: Option<String>,
-    pub status: ResearchNodeStatus,
-    pub created_at: u128,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ResearchNodeContent {
     pub node: ResearchNode,
     pub turns: Vec<crate::transcript::Turn>,
-    pub children: Vec<ResearchNodeCard>,
     /// Why `turns` is empty for a finished node (snapshot missing and the
     /// adapter transcript unreadable). Lets the UI explain the gap instead of
     /// failing the whole request, which would leave nothing viewable at all.
@@ -2413,54 +2362,6 @@ pub fn response_turns(
         .collect()
 }
 
-pub fn response_preview(
-    turns: &[crate::transcript::Turn],
-    prompt_native_id: Option<&str>,
-    prompt: &str,
-    ancestor_prompts: &[String],
-) -> Option<String> {
-    // Borrows rather than going through response_turns: this runs on every
-    // hook-driven agent event under the model lock, and cloning the whole
-    // response tail (tool-result payloads included) to extract a 220-char
-    // preview added lock-hold latency for the lifetime of a streaming run.
-    let start = response_boundary(turns, prompt_native_id, prompt, ancestor_prompts)
-        .map_or(0, |index| index + 1);
-    let mut fallback_text = None;
-    let mut text_after_last_activity = None;
-    for turn in &turns[start..] {
-        if !turn_is_in_active_context(turn) {
-            continue;
-        }
-        for block in &turn.blocks {
-            match block {
-                crate::transcript::TurnBlock::Text { text }
-                    if turn.role != "user" && !text.trim().is_empty() =>
-                {
-                    fallback_text.get_or_insert(text.as_str());
-                    text_after_last_activity.get_or_insert(text.as_str());
-                }
-                crate::transcript::TurnBlock::ToolUse { .. }
-                | crate::transcript::TurnBlock::ToolResult { .. } => {
-                    text_after_last_activity = None;
-                }
-                crate::transcript::TurnBlock::Raw { .. } if turn.role == "assistant" => {
-                    text_after_last_activity = None;
-                }
-                _ => {}
-            }
-        }
-    }
-    let text = text_after_last_activity.or(fallback_text)?;
-    // Strip before cutting so a `[[Term]]` marker never straddles the cut.
-    let text = crate::wikilinks::strip_wikilinks(text);
-    let (preview, truncated) = normalized_prefix(&text, 220);
-    Some(if truncated {
-        format!("{}…", preview.trim_end())
-    } else {
-        preview
-    })
-}
-
 pub fn default_title(prompt: &str) -> String {
     const MAX_CHARS: usize = 72;
     let (title, truncated) = normalized_prefix(prompt, MAX_CHARS);
@@ -2909,12 +2810,11 @@ pub fn conversation_query_followup_prompt(exact: &str, question: &str) -> String
 /// [`MAX_CONVERSATION_FOLLOWUP_BYTES`]).
 pub const MAX_RESEARCH_LAUNCH_INSTRUCTION_BYTES: usize = 4 * 1024;
 
-/// The tag wrapping the user's custom launch instruction in a sent research
-/// prompt. It follows the tagged-instruction-block conventions
-/// (`transcript::strip_leading_tagged_instruction_blocks`, the frontend's
-/// `taggedInstructions` module), so every existing sanitizer — transcript
-/// display, copy, previews, conversation exports — already recognizes and
-/// strips the block as session-injected machinery rather than user words.
+/// Wraps the user's custom launch instruction in a sent research prompt.
+/// Uses the tagged-instruction format recognized by
+/// `transcript::strip_leading_tagged_instruction_blocks` and the frontend's
+/// `taggedInstructions` module, which remove the block from transcript
+/// display, copied text, and previews.
 pub const RESEARCH_LAUNCH_INSTRUCTION_TAG: &str = "research-instructions";
 
 /// Validates an instruction as entered in settings: trimmed, `None` when
@@ -3025,281 +2925,11 @@ pub fn document_turn(node_id: &str, markdown: &str) -> crate::transcript::Turn {
     }
 }
 
-/// Marker block standing in for a collapsed run of tool activity in an
-/// exported conversation. Tool inputs and outputs from a terminal session are
-/// the most likely place for secrets and injected text to hide, so exports
-/// keep only the fact that activity happened — the call count — never the
-/// payloads.
-pub const CONVERSATION_TOOL_ACTIVITY_TYPE: &str = "sessionToolActivity";
-
-fn conversation_tool_activity_turn(
-    node_id: &str,
-    index: usize,
-    tool_calls: usize,
-) -> crate::transcript::Turn {
-    crate::transcript::Turn {
-        id: format!("{node_id}-{index}"),
-        agent_id: node_id.to_string(),
-        session_id: None,
-        role: "assistant".to_string(),
-        blocks: vec![crate::transcript::TurnBlock::Raw {
-            value: serde_json::json!({
-                "type": CONVERSATION_TOOL_ACTIVITY_TYPE,
-                "toolCalls": tool_calls,
-            }),
-        }],
-        source_index: index,
-        timestamp: None,
-        status: None,
-        status_reason: None,
-        context_status: None,
-        native_id: None,
-        parent_native_id: None,
-        native_message_id: None,
-    }
-}
-
-/// User text a conversation export keeps: the message with any session-injected
-/// leading instruction blocks stripped away, mirroring the frontend's
-/// copy/export sanitizers. `None` for text that is entirely injected
-/// machinery — instruction blocks, adapter interruption markers — or empty
-/// once stripped.
-fn exportable_user_text(text: &str) -> Option<String> {
-    let remainder = crate::transcript::strip_leading_tagged_instruction_blocks(text)?;
-    if remainder.trim().is_empty() || crate::adapters::is_claude_interruption_marker(remainder) {
-        return None;
-    }
-    // Blank lines left behind by a stripped block are not content.
-    Some(remainder.trim_start().to_string())
-}
-
-/// Whether a Raw block carries a user attachment (an image pasted into the
-/// prompt). Attachments must keep their place in the exchange structure even
-/// though their payloads never leave the terminal.
-fn is_user_attachment_block(block: &crate::transcript::TurnBlock) -> bool {
-    matches!(block, crate::transcript::TurnBlock::Raw { value }
-        if value.get("type").and_then(serde_json::Value::as_str) == Some("image"))
-}
-
-/// Whether a Raw block records tool activity that adapters do not surface as
-/// a `ToolUse` block — Claude server-side tools (`server_tool_use`,
-/// `mcp_tool_use`) and the like. Counted so collapsed activity markers do not
-/// silently omit that work happened.
-fn is_raw_tool_call_block(block: &crate::transcript::TurnBlock) -> bool {
-    matches!(block, crate::transcript::TurnBlock::Raw { value }
-        if value
-            .get("type")
-            .and_then(serde_json::Value::as_str)
-            .is_some_and(|block_type| block_type.ends_with("tool_use")))
-}
-
-/// Whether a user turn carries a prompt the export would keep: exportable
-/// text (the user's own words) or an attachment. This is the same notion of
-/// "prompt" the sanitizer applies, so the mid-turn boundary and the export
-/// filter can never disagree about where an exchange starts.
-fn turn_has_exportable_prompt(turn: &crate::transcript::Turn) -> bool {
-    turn.role == "user"
-        && turn_is_in_active_context(turn)
-        && turn.blocks.iter().any(|block| {
-            is_user_attachment_block(block)
-                || matches!(block, crate::transcript::TurnBlock::Text { text }
-                    if exportable_user_text(text).is_some())
-        })
-}
-
-/// The index where the exchange currently in flight begins: the last user
-/// turn carrying an exportable prompt. Exporting a busy agent must not
-/// persist a half-streamed answer as delivered content, so everything from
-/// this boundary on is dropped. A mid-turn steering message moves the
-/// boundary to itself, which can retain the delivered part of the steered
-/// exchange — acceptable, since everything kept preceded a message the user
-/// actually sent.
-pub fn completed_exchange_boundary(turns: &[crate::transcript::Turn]) -> Option<usize> {
-    turns.iter().rposition(turn_has_exportable_prompt)
-}
-
-/// The marker text standing in for a user image attachment. The payload never
-/// leaves the terminal, but the turn must keep its place or the following
-/// answer reads as a reply to the wrong prompt.
-pub const CONVERSATION_ATTACHMENT_MARKER: &str = "[image attachment]";
-
-/// Sanitizes a terminal agent's timeline into the durable turns of an
-/// exported conversation node. The export is a content copy, never a
-/// capability copy:
-///
-/// - Only user and assistant turns survive; system and other roles are
-///   dropped.
-/// - Tool inputs and outputs are removed entirely; each contiguous run of
-///   tool activity collapses into one [`CONVERSATION_TOOL_ACTIVITY_TYPE`]
-///   marker turn so readers still see that work happened, without its
-///   payloads. Server-side tool calls that adapters record as Raw blocks are
-///   counted into the same markers; other Raw blocks (thinking, protocol
-///   frames) are dropped uncounted.
-/// - User image attachments become [`CONVERSATION_ATTACHMENT_MARKER`] text so
-///   exchange structure survives without the payload.
-/// - session-injected tagged-instruction blocks are stripped from user text
-///   (whole-message and leading-block forms); adapter interruption markers
-///   and records outside active context are dropped — none of that belongs in
-///   the conversation the exported node will continue.
-/// - Turn ids are reissued from the node id and native session/message ids
-///   are cleared: the exported node must hold no pointer back to the source
-///   session.
-pub fn conversation_export_turns(
-    node_id: &str,
-    turns: &[crate::transcript::Turn],
-) -> Result<Vec<crate::transcript::Turn>, String> {
-    use crate::transcript::{Turn, TurnBlock};
-    fn flush_tool_activity(node_id: &str, out: &mut Vec<Turn>, pending: &mut usize) {
-        if *pending > 0 {
-            let turn = conversation_tool_activity_turn(node_id, out.len(), *pending);
-            out.push(turn);
-            *pending = 0;
-        }
-    }
-    let mut out: Vec<Turn> = Vec::new();
-    let mut pending_tool_calls = 0usize;
-    let mut has_prompt = false;
-    let mut has_answer = false;
-    for turn in turns {
-        if turn.status == Some(crate::transcript::TurnStatus::Superseded)
-            || turn.context_status == Some(crate::transcript::TurnContextStatus::RolledBack)
-        {
-            continue;
-        }
-        let role = turn.role.as_str();
-        if role != "user" && role != "assistant" {
-            continue;
-        }
-        let mut texts: Vec<String> = Vec::new();
-        let mut turn_tool_calls = 0usize;
-        let mut attachments = 0usize;
-        for block in &turn.blocks {
-            match block {
-                TurnBlock::Text { text } => {
-                    if role == "user" {
-                        if let Some(text) = exportable_user_text(text) {
-                            texts.push(text);
-                        }
-                    } else if !text.trim().is_empty() {
-                        texts.push(text.clone());
-                    }
-                }
-                TurnBlock::ToolUse { .. } => {
-                    if role == "assistant" {
-                        turn_tool_calls += 1;
-                    }
-                }
-                TurnBlock::Raw { .. } if role == "user" && is_user_attachment_block(block) => {
-                    attachments += 1;
-                }
-                TurnBlock::Raw { .. } if role == "assistant" && is_raw_tool_call_block(block) => {
-                    turn_tool_calls += 1;
-                }
-                // Results answer calls already counted on the assistant side;
-                // remaining Raw blocks are adapter internals with no place in
-                // a durable export.
-                TurnBlock::ToolResult { .. } | TurnBlock::Raw { .. } => {}
-            }
-        }
-        if attachments > 0 {
-            texts.push(CONVERSATION_ATTACHMENT_MARKER.to_string());
-        }
-        if !texts.is_empty() {
-            // Adapters emit an assistant message's text before its tool
-            // calls, so activity pending from earlier turns lands ahead of
-            // this text and this turn's own calls join the next marker.
-            flush_tool_activity(node_id, &mut out, &mut pending_tool_calls);
-            let index = out.len();
-            out.push(Turn {
-                id: format!("{node_id}-{index}"),
-                agent_id: node_id.to_string(),
-                session_id: None,
-                role: role.to_string(),
-                blocks: texts
-                    .into_iter()
-                    .map(|text| TurnBlock::Text { text })
-                    .collect(),
-                source_index: index,
-                timestamp: turn.timestamp,
-                status: turn.status,
-                status_reason: turn.status_reason,
-                context_status: turn.context_status,
-                native_id: None,
-                parent_native_id: None,
-                native_message_id: None,
-            });
-            if role == "user" {
-                has_prompt = true;
-            } else {
-                has_answer = true;
-            }
-        }
-        pending_tool_calls += turn_tool_calls;
-    }
-    flush_tool_activity(node_id, &mut out, &mut pending_tool_calls);
-    if !has_prompt {
-        return Err("this terminal has no completed user prompt to export".to_string());
-    }
-    if !has_answer {
-        return Err("this terminal has no completed assistant response to export".to_string());
-    }
-    Ok(out)
-}
-
-/// The stored prompt for a conversation node: the first user message's text
-/// blocks joined, normalized, and bounded. Display-only — the full text lives
-/// in the node's snapshot turns, and nothing ever derives a response boundary
-/// from it.
-pub fn conversation_prompt(turns: &[crate::transcript::Turn]) -> String {
-    const MAX_CHARS: usize = 2000;
-    let text = turns
-        .iter()
-        .find(|turn| turn.role == "user")
-        .map(|turn| {
-            turn.blocks
-                .iter()
-                .filter_map(|block| match block {
-                    crate::transcript::TurnBlock::Text { text } => Some(text.as_str()),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-                .join("\n\n")
-        })
-        .unwrap_or_default();
-    let (prompt, truncated) = normalized_prefix(&text, MAX_CHARS);
-    if truncated {
-        format!("{}…", prompt.trim_end())
-    } else {
-        prompt
-    }
-}
-
-/// The sidebar preview for a conversation node: the last assistant message
-/// with text, wherever it sits relative to trailing tool activity. Unlike
-/// [`response_preview`], this never goes empty just because the conversation
-/// ended in tool calls or an unanswered prompt — any delivered answer beats
-/// no preview.
-pub fn conversation_preview(turns: &[crate::transcript::Turn]) -> Option<String> {
-    let text = turns
-        .iter()
-        .rev()
-        .filter(|turn| turn.role == "assistant")
-        .find_map(|turn| {
-            turn.blocks.iter().find_map(|block| match block {
-                crate::transcript::TurnBlock::Text { text } if !text.trim().is_empty() => {
-                    Some(text.as_str())
-                }
-                _ => None,
-            })
-        })?;
-    let text = crate::wikilinks::strip_wikilinks(text);
-    let (preview, truncated) = normalized_prefix(&text, 220);
-    Some(if truncated {
-        format!("{}…", preview.trim_end())
-    } else {
-        preview
-    })
-}
+/// Raw block type that the removed terminal export wrote into conversation
+/// snapshots for a collapsed run of tool activity. Existing snapshots still
+/// carry it; the frontend renders it and follow-up prompts skip it.
+#[cfg(test)]
+const CONVERSATION_TOOL_ACTIVITY_TYPE: &str = "sessionToolActivity";
 
 #[cfg(test)]
 mod tests {
@@ -3614,7 +3244,6 @@ mod tests {
             prompt: "Question".to_string(),
             attachments: Vec::new(),
             title: None,
-            response_preview: Some("Answer".to_string()),
             adapter: "claude".to_string(),
             model: None,
             effort: None,
@@ -4185,363 +3814,6 @@ mod tests {
     }
 
     #[test]
-    fn conversation_export_collapses_tool_activity_and_severs_native_identity() {
-        use crate::transcript::TurnBlock;
-        let turns = vec![
-            export_turn("u1", "user", vec![text_block("First question")]),
-            export_turn(
-                "a1",
-                "assistant",
-                vec![
-                    text_block("Let me check."),
-                    TurnBlock::ToolUse {
-                        id: Some("tool-1".to_string()),
-                        name: "Bash".to_string(),
-                        input: serde_json::json!({ "command": "env" }),
-                    },
-                ],
-            ),
-            export_turn(
-                "r1",
-                "user",
-                vec![TurnBlock::ToolResult {
-                    tool_use_id: Some("tool-1".to_string()),
-                    content: serde_json::json!("SECRET=hunter2"),
-                    is_error: false,
-                }],
-            ),
-            export_turn(
-                "a2",
-                "assistant",
-                vec![TurnBlock::ToolUse {
-                    id: Some("tool-2".to_string()),
-                    name: "Read".to_string(),
-                    input: serde_json::json!({ "path": "/etc/passwd" }),
-                }],
-            ),
-            export_turn("a3", "assistant", vec![text_block("First answer")]),
-            export_turn("u2", "user", vec![text_block("Second question")]),
-            export_turn("a4", "assistant", vec![text_block("Second answer")]),
-        ];
-        let exported = conversation_export_turns("node-1", &turns).unwrap();
-        let roles = exported
-            .iter()
-            .map(|turn| turn.role.as_str())
-            .collect::<Vec<_>>();
-        assert_eq!(
-            roles,
-            vec![
-                "user",
-                "assistant",
-                "assistant",
-                "assistant",
-                "user",
-                "assistant"
-            ]
-        );
-        // The contiguous Bash+Read activity collapses into one marker between
-        // "Let me check." and "First answer".
-        let marker = &exported[2];
-        assert_eq!(
-            marker.blocks,
-            vec![TurnBlock::Raw {
-                value: serde_json::json!({
-                    "type": CONVERSATION_TOOL_ACTIVITY_TYPE,
-                    "toolCalls": 2,
-                }),
-            }]
-        );
-        let encoded = serde_json::to_string(&exported).unwrap();
-        assert!(
-            !encoded.contains("hunter2"),
-            "tool payload leaked: {encoded}"
-        );
-        assert!(
-            !encoded.contains("/etc/passwd"),
-            "tool input leaked: {encoded}"
-        );
-        for (index, turn) in exported.iter().enumerate() {
-            assert_eq!(turn.id, format!("node-1-{index}"));
-            assert_eq!(turn.agent_id, "node-1");
-            assert_eq!(turn.source_index, index);
-            assert!(turn.session_id.is_none());
-            assert!(turn.native_id.is_none());
-            assert!(turn.parent_native_id.is_none());
-            assert!(turn.native_message_id.is_none());
-        }
-        assert_eq!(conversation_prompt(&exported), "First question");
-        assert_eq!(
-            response_preview(&exported, None, "", &[]).as_deref(),
-            Some("Second answer")
-        );
-    }
-
-    #[test]
-    fn conversation_export_drops_instructions_excluded_context_and_foreign_roles() {
-        let mut superseded = export_turn("a0", "assistant", vec![text_block("Rewound answer")]);
-        superseded.status = Some(crate::transcript::TurnStatus::Superseded);
-        let mut rolled_back =
-            export_turn("a00", "assistant", vec![text_block("Rolled-back answer")]);
-        rolled_back.context_status = Some(crate::transcript::TurnContextStatus::RolledBack);
-        let turns = vec![
-            export_turn(
-                "i1",
-                "user",
-                vec![text_block(
-                    "<system-reminder>\ninjected\n</system-reminder>",
-                )],
-            ),
-            export_turn("u1", "user", vec![text_block("Real question")]),
-            superseded,
-            rolled_back,
-            export_turn("s1", "system", vec![text_block("system chatter")]),
-            export_turn(
-                "t1",
-                "assistant",
-                vec![crate::transcript::TurnBlock::Raw {
-                    value: serde_json::json!({ "type": "thinking", "text": "hidden" }),
-                }],
-            ),
-            export_turn("a1", "assistant", vec![text_block("Real answer")]),
-        ];
-        let exported = conversation_export_turns("node-1", &turns).unwrap();
-        assert_eq!(exported.len(), 2);
-        assert_eq!(exported[0].role, "user");
-        assert_eq!(exported[1].role, "assistant");
-        let encoded = serde_json::to_string(&exported).unwrap();
-        assert!(!encoded.contains("injected"), "{encoded}");
-        assert!(!encoded.contains("Rewound"), "{encoded}");
-        assert!(!encoded.contains("Rolled-back"), "{encoded}");
-        assert!(!encoded.contains("hidden"), "{encoded}");
-        assert!(!encoded.contains("system chatter"), "{encoded}");
-    }
-
-    #[test]
-    fn conversation_export_requires_a_prompt_and_a_response() {
-        let error = conversation_export_turns(
-            "node-1",
-            &[export_turn("a1", "assistant", vec![text_block("Answer")])],
-        )
-        .unwrap_err();
-        assert!(error.contains("user prompt"), "{error}");
-
-        let error = conversation_export_turns(
-            "node-1",
-            &[export_turn("u1", "user", vec![text_block("Question")])],
-        )
-        .unwrap_err();
-        assert!(error.contains("assistant response"), "{error}");
-    }
-
-    #[test]
-    fn conversation_export_strips_leading_instruction_blocks_from_mixed_messages() {
-        // The common injected shape shares one text block with the real
-        // question; the block must lose the injection, not the question.
-        let turns = vec![
-            export_turn(
-                "u1",
-                "user",
-                vec![text_block(
-                    "<system-reminder>\ninjected hook payload\n</system-reminder>\n\nReal question",
-                )],
-            ),
-            export_turn("a1", "assistant", vec![text_block("Real answer")]),
-        ];
-        let exported = conversation_export_turns("node-1", &turns).unwrap();
-        assert_eq!(exported.len(), 2);
-        assert_eq!(
-            exported[0].blocks,
-            vec![text_block("Real question")],
-            "leading instruction block must be stripped"
-        );
-        assert_eq!(conversation_prompt(&exported), "Real question");
-    }
-
-    #[test]
-    fn conversation_export_drops_interruption_markers() {
-        let turns = vec![
-            export_turn("u1", "user", vec![text_block("Question")]),
-            export_turn("a1", "assistant", vec![text_block("Partial answer")]),
-            export_turn(
-                "i1",
-                "user",
-                vec![text_block("[Request interrupted by user]")],
-            ),
-        ];
-        let exported = conversation_export_turns("node-1", &turns).unwrap();
-        assert_eq!(exported.len(), 2);
-        let encoded = serde_json::to_string(&exported).unwrap();
-        assert!(!encoded.contains("interrupted"), "{encoded}");
-        // The marker is not a prompt: the mid-turn boundary must fall on the
-        // real question before it, not on the marker.
-        assert_eq!(completed_exchange_boundary(&turns), Some(0));
-    }
-
-    #[test]
-    fn conversation_export_counts_raw_server_tool_calls_and_keeps_attachments() {
-        use crate::transcript::TurnBlock;
-        let turns = vec![
-            export_turn(
-                "u1",
-                "user",
-                vec![TurnBlock::Raw {
-                    value: serde_json::json!({ "type": "image", "source": { "data": "AAAA" } }),
-                }],
-            ),
-            export_turn(
-                "a1",
-                "assistant",
-                vec![
-                    TurnBlock::Raw {
-                        value: serde_json::json!({ "type": "server_tool_use", "name": "web_search" }),
-                    },
-                    text_block("Looked it up."),
-                ],
-            ),
-        ];
-        let exported = conversation_export_turns("node-1", &turns).unwrap();
-        // The image-only prompt keeps its place as a marker (no payload), so
-        // the answer is not misattributed to an earlier prompt; the
-        // server-side tool call lands in an activity marker.
-        assert_eq!(exported.len(), 3);
-        assert_eq!(
-            exported[0].blocks,
-            vec![text_block(CONVERSATION_ATTACHMENT_MARKER)]
-        );
-        assert_eq!(exported[0].role, "user");
-        assert_eq!(
-            exported[2].blocks,
-            vec![TurnBlock::Raw {
-                value: serde_json::json!({
-                    "type": CONVERSATION_TOOL_ACTIVITY_TYPE,
-                    "toolCalls": 1,
-                }),
-            }]
-        );
-        let encoded = serde_json::to_string(&exported).unwrap();
-        assert!(!encoded.contains("AAAA"), "image payload leaked: {encoded}");
-        // An image-only prompt also anchors the mid-turn boundary.
-        assert_eq!(completed_exchange_boundary(&turns), Some(0));
-    }
-
-    #[test]
-    fn conversation_preview_survives_trailing_tool_activity() {
-        use crate::transcript::TurnBlock;
-        let turns = vec![
-            export_turn("u1", "user", vec![text_block("Question")]),
-            export_turn("a1", "assistant", vec![text_block("Delivered answer")]),
-            export_turn("u2", "user", vec![text_block("Follow-up")]),
-            export_turn(
-                "a2",
-                "assistant",
-                vec![TurnBlock::ToolUse {
-                    id: Some("tool-1".to_string()),
-                    name: "Bash".to_string(),
-                    input: serde_json::json!({}),
-                }],
-            ),
-        ];
-        let exported = conversation_export_turns("node-1", &turns).unwrap();
-        // The last exchange produced only tool activity; the preview must
-        // still surface the delivered answer instead of going empty.
-        assert_eq!(
-            conversation_preview(&exported).as_deref(),
-            Some("Delivered answer")
-        );
-    }
-
-    #[test]
-    fn previews_keep_only_wikilink_display_text() {
-        let turns = vec![
-            export_turn("u1", "user", vec![text_block("Question")]),
-            export_turn(
-                "a1",
-                "assistant",
-                vec![text_block("Use [[Rust]] with [[Tokio|tokio's]] runtime.")],
-            ),
-        ];
-        assert_eq!(
-            response_preview(&turns, None, "Question", &[]).as_deref(),
-            Some("Use Rust with tokio's runtime.")
-        );
-        let exported = conversation_export_turns("node-1", &turns).unwrap();
-        assert_eq!(
-            conversation_preview(&exported).as_deref(),
-            Some("Use Rust with tokio's runtime.")
-        );
-        // Stripping happens before the cut, so a marker near the limit is
-        // never split into a dangling `[[`: the raw `[[Linked term]]` would
-        // straddle the 220-char cut, while its display text fits inside it.
-        let long_lead = format!("{}ab ", "word ".repeat(41));
-        let turns = vec![
-            export_turn("u1", "user", vec![text_block("Question")]),
-            export_turn(
-                "a1",
-                "assistant",
-                vec![text_block(&format!(
-                    "{long_lead}[[Linked term]] continues here"
-                ))],
-            ),
-        ];
-        let preview = response_preview(&turns, None, "Question", &[]).unwrap();
-        assert!(!preview.contains("[["), "{preview}");
-        assert!(preview.contains("Linked term"), "{preview}");
-    }
-
-    #[test]
-    fn conversation_prompt_joins_the_first_user_turn_text_blocks() {
-        let turns = vec![export_turn(
-            "u1",
-            "user",
-            vec![text_block("Pasted context"), text_block("Actual question")],
-        )];
-        assert_eq!(
-            conversation_prompt(&turns),
-            "Pasted context Actual question"
-        );
-    }
-
-    #[test]
-    fn completed_exchange_boundary_finds_the_in_flight_exchange() {
-        let turns = vec![
-            export_turn("u1", "user", vec![text_block("First question")]),
-            export_turn("a1", "assistant", vec![text_block("First answer")]),
-            export_turn("u2", "user", vec![text_block("Second question")]),
-            export_turn("a2", "assistant", vec![text_block("Half-streamed")]),
-        ];
-        assert_eq!(completed_exchange_boundary(&turns), Some(2));
-
-        // A trailing injected instruction is not the user's prompt; the
-        // boundary must fall on the real question before it.
-        let with_instruction = vec![
-            export_turn("u1", "user", vec![text_block("Only question")]),
-            export_turn(
-                "i1",
-                "user",
-                vec![text_block(
-                    "<system-reminder>\ninjected\n</system-reminder>",
-                )],
-            ),
-        ];
-        assert_eq!(completed_exchange_boundary(&with_instruction), Some(0));
-
-        // Nothing prompt-like at all: nothing in flight to drop.
-        let assistant_only = vec![export_turn("a1", "assistant", vec![text_block("Answer")])];
-        assert_eq!(completed_exchange_boundary(&assistant_only), None);
-
-        // A rolled-back prompt is visible history, not the exchange currently
-        // in model context.
-        let mut rolled_back = export_turn("u2", "user", vec![text_block("Discarded prompt")]);
-        rolled_back.context_status = Some(crate::transcript::TurnContextStatus::RolledBack);
-        let with_rollback = vec![
-            export_turn("u1", "user", vec![text_block("Active question")]),
-            export_turn("a1", "assistant", vec![text_block("Delivered answer")]),
-            rolled_back,
-        ];
-        assert_eq!(completed_exchange_boundary(&with_rollback), Some(0));
-    }
-
-    #[test]
     fn research_launch_instructions_are_optional_and_preserve_slash_commands() {
         for instruction in [None, Some("  \n\t")] {
             for prompt in ["Why?", "/deep-research Why?"] {
@@ -4959,10 +4231,6 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(turns, vec![turn]);
-        assert_eq!(
-            response_preview(&turns, None, "", &[]).as_deref(),
-            Some("# Title Body **bold**.")
-        );
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
@@ -5004,38 +4272,9 @@ mod tests {
         assert_eq!(visible.len(), 3);
         assert_eq!(visible[0].id, "working");
         assert_eq!(visible[1].id, "tool-result");
-        assert_eq!(
-            response_preview(&turns, None, "New question", &[]).as_deref(),
-            Some("New answer")
-        );
-
-        let mut thinking = turn("thinking", "assistant", "");
-        thinking.blocks = vec![TurnBlock::Raw {
-            value: serde_json::json!({ "type": "thinking", "text": "Reasoning" }),
-        }];
-        let turns_with_thinking = vec![
-            turn("user", "user", "Question"),
-            turn("draft", "assistant", "Draft answer"),
-            thinking.clone(),
-            turn("final", "assistant", "Final answer"),
-        ];
-        assert_eq!(
-            response_preview(&turns_with_thinking, None, "Question", &[]).as_deref(),
-            Some("Final answer")
-        );
-
-        let turns_with_trailing_thinking = vec![
-            turn("user", "user", "Question"),
-            turn("draft", "assistant", "Draft answer"),
-            thinking,
-        ];
-        assert_eq!(
-            response_preview(&turns_with_trailing_thinking, None, "Question", &[]).as_deref(),
-            Some("Draft answer")
-        );
 
         // A later rolled-back copy of the prompt must not steal the response
-        // boundary or sidebar preview from the surviving exchange.
+        // boundary from the surviving exchange.
         let mut rolled_back_prompt = turn("discarded-user", "user", "New question");
         rolled_back_prompt.context_status = Some(crate::transcript::TurnContextStatus::RolledBack);
         let mut rolled_back_answer = turn("discarded-answer", "assistant", "Discarded answer");
@@ -5049,10 +4288,6 @@ mod tests {
         ];
         let visible = response_turns(&with_rollback, None, "New question", &[]);
         assert_eq!(visible[0].id, "new-answer");
-        assert_eq!(
-            response_preview(&with_rollback, None, "New question", &[]).as_deref(),
-            Some("Surviving answer")
-        );
         assert!(has_active_assistant_turn(&with_rollback));
     }
 
@@ -5090,10 +4325,6 @@ mod tests {
         let visible = response_turns(&turns, None, "Original follow-up", &[]);
         assert_eq!(visible.len(), 1);
         assert_eq!(visible[0].id, "child-answer");
-        assert_eq!(
-            response_preview(&turns, None, "Original follow-up", &[]).as_deref(),
-            Some("Child answer")
-        );
 
         // A transcript with no user prompt at all has nothing inherited to
         // leak; the whole transcript remains visible.
@@ -5105,7 +4336,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_followup_never_previews_the_ancestor_answer() {
+    fn pending_followup_never_shows_the_ancestor_answer() {
         use crate::transcript::{Turn, TurnBlock};
         let turn = |id: &str, role: &str, text: &str| Turn {
             id: id.to_string(),
@@ -5128,7 +4359,7 @@ mod tests {
         // transcript can hold only the replayed ancestor exchange — the
         // node's own prompt has not reached it yet. The positional fallback
         // then lands on the ancestor's prompt, which used to surface the
-        // ancestor's (main query's) answer as this node's preview. With the
+        // ancestor's (main query's) answer as this node's response. With the
         // ancestor prompts supplied, the response must stay empty instead.
         let ancestors = vec!["Ancestor question".to_string()];
         let replayed_only = vec![
@@ -5136,10 +4367,6 @@ mod tests {
             turn("ancestor-answer", "assistant", "Ancestor answer"),
         ];
         assert!(response_turns(&replayed_only, None, "Follow-up question", &ancestors).is_empty());
-        assert_eq!(
-            response_preview(&replayed_only, None, "Follow-up question", &ancestors),
-            None
-        );
 
         // The replayed ancestor turn carries the wrapped launch prompt, not
         // the bare question stored on the node; the substring match must
@@ -5155,10 +4382,6 @@ mod tests {
         assert!(
             response_turns(&replayed_wrapped, None, "Follow-up question", &ancestors).is_empty()
         );
-        assert_eq!(
-            response_preview(&replayed_wrapped, None, "Follow-up question", &ancestors),
-            None
-        );
 
         // Once the node's own prompt lands — even rewritten beyond both text
         // matches — the positional fallback works as before: the response is
@@ -5172,9 +4395,5 @@ mod tests {
         let visible = response_turns(&with_child, None, "Original follow-up", &ancestors);
         assert_eq!(visible.len(), 1);
         assert_eq!(visible[0].id, "child-answer");
-        assert_eq!(
-            response_preview(&with_child, None, "Original follow-up", &ancestors).as_deref(),
-            Some("Child answer")
-        );
     }
 }

@@ -58,7 +58,6 @@ import {
 import {
   researchBranchesByParent,
   researchBranchesInReadingOrder,
-  researchDocumentHasColumn,
   researchEditedQuestionFork,
   researchLevelPath,
   researchPairLabel,
@@ -2006,7 +2005,11 @@ function ResearchDocument({
     return () => row.removeEventListener("focusin", onFocusIn);
   }, [columnsLayout?.row]);
 
-  const hasColumn = researchDocumentHasColumn(detail, rootNodeId, selectedNodeId);
+  // The column (and with it the scroller that carries swipe navigation)
+  // renders once there is a detail, a root and a selection. A document
+  // mounted for a new tree first renders the placeholder, so the swipe
+  // listeners attach when this turns true.
+  const hasColumn = Boolean(detail && rootNodeId && selectedNodeId);
   useResearchSwipeNavigation(workspaceRef, goBack, goForward, hasColumn);
 
   // Dialogs return focus to the control that opened them (the … menu's

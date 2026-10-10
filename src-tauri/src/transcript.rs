@@ -1390,7 +1390,9 @@ fn truncate_preview(text: &str) -> String {
 /// real content is reached. Returns `None` when nothing but instruction
 /// blocks remain. Narrower than the frontend on purpose — only whole-line
 /// tags are recognized, so a message merely *containing* markup is kept
-/// rather than over-stripped.
+/// rather than over-stripped. Tests use it to check that injected blocks,
+/// such as the research launch instruction, strip as one leading block.
+#[cfg(test)]
 pub(crate) fn strip_leading_tagged_instruction_blocks(text: &str) -> Option<&str> {
     let mut current = text;
     let mut removed = false;

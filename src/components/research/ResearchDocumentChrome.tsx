@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from "react";
+import type { ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Plus, Terminal } from "lucide-react";
 import { ResearchBranchIcon } from "./ResearchIcons";
 
@@ -9,7 +9,6 @@ import { ResearchBranchIcon } from "./ResearchIcons";
 export function ResearchPairHeader({
   title,
   branch = null,
-  titleRef,
   history,
   imported = false,
   archived = false,
@@ -19,7 +18,6 @@ export function ResearchPairHeader({
   /** A branch: its number of messages ("Branch · 2 messages"), or "new" for
    * a branch not yet sent ("New branch"). */
   branch?: number | "new" | null;
-  titleRef?: Ref<HTMLHeadingElement>;
   /** Back and forward, in the root conversation's header. */
   history?: ResearchHistoryNavProps | null;
   /** A point-in-time copy of a terminal conversation. */
@@ -31,7 +29,7 @@ export function ResearchPairHeader({
     <header className={`research-column-header${branch !== null ? " is-branch" : ""}`}>
       <div className="research-column-bar" data-tauri-drag-region data-research-header-bar>
         {history ? <ResearchHistoryNav {...history} /> : null}
-        <h2 ref={titleRef} className="research-column-title" tabIndex={-1} title={title}>
+        <h2 className="research-column-title" tabIndex={-1} title={title}>
           {branch !== null ? (
             <>
               <ResearchBranchIcon size={13} className="research-column-title-icon" />

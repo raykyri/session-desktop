@@ -714,6 +714,16 @@
   pointer-events: none;
 }
 
+/* A row with a status or unread dot keeps its text clear of the dot, which
+   sits at the top-right corner while the controls' pill is hidden. */
+.research-feed-card:has(> .research-feed-status, > .research-feed-card-unread) .research-feed-card-content {
+  padding-right: 12px;
+}
+
+.research-feed-child:has(> .research-feed-status) {
+  padding-right: 24px;
+}
+
 .research-feed-card-content a,
 .research-feed-card-content button,
 .research-feed-card-content .research-message-attachments {

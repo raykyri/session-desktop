@@ -4,7 +4,6 @@ import {
   researchBranchesByParent,
   researchBranchesInReadingOrder,
   researchBranchesOf,
-  researchDocumentHasColumn,
   researchEditedQuestionFork,
   researchLevelPath,
   researchQueueAction,
@@ -127,21 +126,6 @@ test("a refused question holds the queue, a stopped tail stalls it, and a remove
   const continued = [...chain, node("x", { parentNodeId: "t", inline: false })];
   assert.equal(researchQueueAction(continued, "h", [queued("q1")], undefined).kind, "send");
   assert.deepEqual(researchQueueAction([node("other")], "h", [queued("q1")], undefined), { kind: "clear" });
-});
-
-test("swipe navigation re-attaches once a newly mounted document leaves its placeholder", () => {
-  // A document keyed by tree mounts with the previous tree's detail and no
-  // selection: it renders the placeholder (no scroller) first.
-  const detail = { tree: { id: "tree" } };
-  const placeholder = researchDocumentHasColumn(detail, "root", null);
-  const column = researchDocumentHasColumn(detail, "root", "root");
-  assert.equal(placeholder, false);
-  assert.equal(column, true);
-  // The swipe hook's attachment key changes between the two renders, so its
-  // effect runs again with the scroller mounted.
-  assert.notEqual(placeholder, column);
-  assert.equal(researchDocumentHasColumn(null, "root", "root"), false);
-  assert.equal(researchDocumentHasColumn(detail, null, "root"), false);
 });
 
 test("an edited question forks in place of the failed node instead of removing it first", () => {

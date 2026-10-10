@@ -1156,15 +1156,6 @@ export function paneSnapshotForPersistedPaneSplits(
     : currentPanes;
 }
 
-export function adjacentPaneBelow(panes: PaneInfo[], pane: PaneInfo | null | undefined) {
-  if (!pane) {
-    return null;
-  }
-  const groupPanes = panes.filter((candidate) => candidate.groupId === pane.groupId);
-  const index = groupPanes.findIndex((candidate) => candidate.id === pane.id);
-  return index >= 0 ? (groupPanes[index + 1] ?? null) : null;
-}
-
 export function joinPaneSplit(
   splits: PaneSplitInfo[],
   panes: PaneInfo[],
