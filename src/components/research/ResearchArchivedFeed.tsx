@@ -34,7 +34,7 @@ function archivedTooltip(archivedAt: number | null | undefined): string | undefi
 /** Archived threads newest-archived first, for Archive. */
 export function archivedFeedTrees(trees: ResearchTreeSummary[]): ResearchTreeSummary[] {
   return trees
-    .filter((tree) => tree.archivedAt != null && tree.kind !== "document")
+    .filter((tree) => tree.archivedAt != null)
     .sort(
       (left, right) =>
         (right.archivedAt ?? 0) - (left.archivedAt ?? 0) || left.id.localeCompare(right.id),

@@ -23,7 +23,6 @@ test("node types follow the stored kind and origin", () => {
   const cases: [Partial<ResearchNode>, ReturnType<typeof nodeType>, "fork" | "context", boolean][] = [
     [{}, "exchange", "fork", true],
     [{ kind: "run" }, "exchange", "fork", true],
-    [{ kind: "run", origin: "imported" }, "document", "context", true],
     [{ kind: "document", origin: "imported" }, "document", "context", true],
     [{ kind: "document" }, "document", "context", false],
     [{ kind: "conversation", origin: "terminalExport" }, "document", "context", false],

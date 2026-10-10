@@ -152,6 +152,12 @@ test("documents and conversations show their title in place of a question", () =
   assert.match(html, /<time[^>]*>Imported 2d<\/time>/);
 });
 
+test("an imported report's row shows the question it answers and the Imported time", () => {
+  const html = row(questionNode({ kind: "document", origin: "imported", prompt: "What did the survey find?" }));
+  assert.match(html, /What did the survey find\?/);
+  assert.match(html, /<time[^>]*>Imported 2d<\/time>/);
+});
+
 test("the shared user-message primitive stays unboxed", () => {
   const html = renderToStaticMarkup(
     createElement(

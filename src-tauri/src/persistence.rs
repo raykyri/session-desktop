@@ -34,7 +34,11 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 
 /// Bumped whenever the on-disk shape changes incompatibly. A file written by a
 /// newer or unknown version is treated as empty rather than misinterpreted.
-pub const STATE_VERSION: u32 = 6;
+pub const STATE_VERSION: u32 = 7;
+/// Written when research-message attachments exist but no imported report is
+/// stored as a document. Builds that accept up to version 6 stored imported
+/// reports as runs, and would treat an imported document as an authored one.
+pub const STATE_VERSION_PRE_DOCUMENT_IMPORTS: u32 = 6;
 /// Written when conversation nodes exist but research-message attachments do
 /// not, preserving compatibility with builds that understand conversations.
 pub const STATE_VERSION_PRE_ATTACHMENTS: u32 = 5;
@@ -49,6 +53,10 @@ const MIN_MIGRATABLE_STATE_VERSION: u32 = 2;
 const STATE_FILE: &str = "state.json";
 const PREFERENCES_FILE: &str = "preferences.json";
 const V2_BACKUP_FILE: &str = "state.v2.bak";
+/// The state file as it was before the version-7 migration converted imported
+/// reports to documents. Builds that accept up to version 6 cannot read the
+/// converted file; this backup allows restoring it for those builds.
+const PRE_DOCUMENT_IMPORTS_BACKUP_FILE: &str = "state.v6.bak";
 pub(crate) const STATE_DIR: &str = ".session";
 
 /// Snapshot of everything a Session restart needs to recreate panes, agents,
@@ -364,6 +372,9 @@ pub struct LoadOutcome {
     pub state: PersistedState,
     pub warning: Option<LoadWarning>,
     pub source_version: Option<u32>,
+    /// Whether loading converted at least one imported report from the
+    /// pre-version-7 run shape to a document.
+    pub imported_reports_migrated: bool,
 }
 
 /// True when the user asked to force startup past an *unreadable* state file,
@@ -580,6 +591,11 @@ pub fn load_with_diagnostics_from(workspace_root: &Path, preread: Option<Vec<u8>
     if version == 2 {
         migrate_v2_to_v3(&mut value);
     }
+    // Version 7 stores imported reports as documents. Convert the run-shaped
+    // records here, before lenient deserialization, so every reader sees one
+    // shape.
+    let imported_reports_migrated =
+        version < STATE_VERSION && migrate_imported_reports_to_documents(&mut value);
 
     // Deserialize collections element-by-element so a single malformed record
     // (partial corruption, a hand-edit, an unforeseen schema drift in one entry)
@@ -588,7 +604,10 @@ pub fn load_with_diagnostics_from(workspace_root: &Path, preread: Option<Vec<u8>
     // state over it; the dropped entries are surfaced as a warning.
     let (state, dropped) = deserialize_lenient(value);
     if dropped.is_empty() {
-        load_ok_version(state, Some(version))
+        LoadOutcome {
+            imported_reports_migrated,
+            ..load_ok_version(state, Some(version))
+        }
     } else {
         LoadOutcome {
             state,
@@ -604,6 +623,7 @@ pub fn load_with_diagnostics_from(workspace_root: &Path, preread: Option<Vec<u8>
                 backup_path: None,
             }),
             source_version: Some(version),
+            imported_reports_migrated,
         }
     }
 }
@@ -653,6 +673,19 @@ fn migrate_v2_to_v3(value: &mut Value) {
     }
 
     map.insert("version".to_string(), Value::from(STATE_VERSION));
+}
+
+/// Pure JSON-shape migration to version 7: imported reports stored as runs
+/// become documents (see `research::migrate_imported_report_node`). Returns
+/// whether any node changed.
+fn migrate_imported_reports_to_documents(value: &mut Value) -> bool {
+    let mut changed = false;
+    if let Some(Value::Object(nodes)) = value.get_mut("researchNodes") {
+        for node in nodes.values_mut() {
+            changed |= crate::research::migrate_imported_report_node(node);
+        }
+    }
+    changed
 }
 
 /// Rebuilds a `PersistedState` from an already-validated JSON object, converting
@@ -845,6 +878,7 @@ fn load_ok_version(state: PersistedState, source_version: Option<u32>) -> LoadOu
         state,
         warning: None,
         source_version,
+        imported_reports_migrated: false,
     }
 }
 
@@ -857,6 +891,7 @@ fn load_warning(path: PathBuf, message: String, backup_path: Option<PathBuf>) ->
             backup_path,
         }),
         source_version: None,
+        imported_reports_migrated: false,
     }
 }
 
@@ -864,30 +899,51 @@ fn load_warning(path: PathBuf, message: String, backup_path: Option<PathBuf>) ->
 /// state.json. Unlike rejected-state handling this copies rather than renames:
 /// recovery continues from the valid source in the same boot.
 pub fn backup_v2_state_for_migration(workspace_root: &Path) -> Result<Option<PathBuf>, String> {
+    backup_state_for_migration(workspace_root, V2_BACKUP_FILE, "version-2")
+}
+
+/// Preserves the pre-version-7 bytes (versions 3 to 6) as `state.v6.bak`
+/// before a save rewrites state.json with imported reports as documents, the
+/// way `backup_v2_state_for_migration` does for version 2.
+pub fn backup_pre_document_imports_state_for_migration(
+    workspace_root: &Path,
+) -> Result<Option<PathBuf>, String> {
+    backup_state_for_migration(
+        workspace_root,
+        PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
+        "pre-version-7",
+    )
+}
+
+fn backup_state_for_migration(
+    workspace_root: &Path,
+    backup_name: &str,
+    label: &str,
+) -> Result<Option<PathBuf>, String> {
     let source = state_path(workspace_root);
     if !source.is_file() {
         return Ok(None);
     }
-    let backup = source.with_file_name(V2_BACKUP_FILE);
+    let backup = source.with_file_name(backup_name);
     if backup.exists() {
         return Ok(Some(backup));
     }
     let bytes = fs::read(&source).map_err(|err| {
         format!(
-            "failed to read version-2 state {} for backup: {err}",
+            "failed to read {label} state {} for backup: {err}",
             source.display()
         )
     })?;
     // Same temp+fsync+rename discipline as `save`: the exists() short-circuit
     // above trusts whatever bytes are at the backup path forever, so a crash
-    // mid-copy must not be able to leave a truncated state.v2.bak as the only
-    // preserved v2 snapshot. write_synced also keeps the backup owner-only,
+    // mid-copy must not be able to leave a truncated backup as the only
+    // preserved snapshot. write_synced also keeps the backup owner-only,
     // matching the file it copies.
     let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
-    let tmp = source.with_file_name(format!("{V2_BACKUP_FILE}.{}.{seq}.tmp", std::process::id()));
+    let tmp = source.with_file_name(format!("{backup_name}.{}.{seq}.tmp", std::process::id()));
     write_synced(&tmp, &bytes).map_err(|err| {
         format!(
-            "failed to preserve version-2 state {} at {}: {err}",
+            "failed to preserve {label} state {} at {}: {err}",
             source.display(),
             tmp.display()
         )
@@ -895,7 +951,7 @@ pub fn backup_v2_state_for_migration(workspace_root: &Path) -> Result<Option<Pat
     fs::rename(&tmp, &backup).map_err(|err| {
         let _ = fs::remove_file(&tmp);
         format!(
-            "failed to commit version-2 state backup {}: {err}",
+            "failed to commit {label} state backup {}: {err}",
             backup.display()
         )
     })?;
@@ -1023,7 +1079,7 @@ pub fn remove_stale_tmp_files(workspace_root: &Path) {
     }
 }
 
-/// Parses the writer pid out of a `<state, preferences, or v2-backup
+/// Parses the writer pid out of a `<state, preferences, or migration-backup
 /// file>.<pid>.<seq>.tmp` scratch name. Returns `None` for anything else (the
 /// live files themselves, `.bak` preserves, foreign files), which the cleanup
 /// then leaves alone.
@@ -1032,7 +1088,14 @@ fn scratch_writer_pid(name: &str) -> Option<u32> {
     let (rest, seq) = rest.rsplit_once('.')?;
     seq.parse::<u64>().ok()?;
     let (base, pid) = rest.rsplit_once('.')?;
-    if base != STATE_FILE && base != PREFERENCES_FILE && base != V2_BACKUP_FILE {
+    if ![
+        STATE_FILE,
+        PREFERENCES_FILE,
+        V2_BACKUP_FILE,
+        PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
+    ]
+    .contains(&base)
+    {
         return None;
     }
     pid.parse().ok()

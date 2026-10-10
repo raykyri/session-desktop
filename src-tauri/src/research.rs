@@ -18,7 +18,13 @@ pub const MAX_RESEARCH_DOCUMENT_WORDS: usize = 10_000;
 /// Backstop for word-sparse documents (one giant token counts as one word).
 /// Imports and the composer both advertise this exact limit.
 pub const MAX_RESEARCH_DOCUMENT_BYTES: usize = 10 * 1024 * 1024;
-pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 8;
+pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 9;
+/// Written when the newest feature in an archive is notes (note nodes,
+/// delivery records or reply anchors), with no imported report stored as a
+/// document. Builds that predate that shape (which accept versions 1–8)
+/// stored imported reports as runs; read as a document, an imported report
+/// would lose its question and its place in the feed.
+const DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_DOCUMENT_IMPORTS: u32 = 8;
 /// Written when the newest feature in an archive is message attachments, with
 /// no note nodes, delivery records, or reply anchors. Builds that predate
 /// notes (which accept versions 1–7) cannot deserialize the `note` kind.
@@ -408,9 +414,9 @@ fn is_false(value: &bool) -> bool {
 
 /// Where a node's content came from when it was not produced by a research
 /// launch or the document composer. Exported terminal conversations are
-/// marked so viewers and archives can surface their provenance:
-/// that content was produced under a terminal agent's full permissions, not a
-/// research run.
+/// marked so viewers and archives can surface their provenance: that content
+/// was produced under a terminal agent's full permissions, not a research
+/// run. Imported reports are documents marked `Imported`.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ResearchNodeOrigin {
@@ -549,7 +555,7 @@ pub struct ResearchNode {
     #[serde(default, skip_serializing_if = "ResearchNodeKind::is_run")]
     pub kind: ResearchNodeKind,
     /// Provenance for content that did not come from a research launch.
-    /// Absent on every run and document node, so those serialize
+    /// Absent on runs and authored documents, so those serialize
     /// byte-identically to builds that predate the field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origin: Option<ResearchNodeOrigin>,
@@ -588,8 +594,7 @@ pub struct ResearchNode {
     pub highlights: Vec<ResearchHighlight>,
 }
 
-/// What a node is, derived from its stored kind and origin. The stored shape
-/// is unchanged; this is the one place that interprets it.
+/// Node type derived from its stored kind and origin.
 ///
 /// - `Post`: a note, written by the user (a saved link or tweet, or a post
 ///   delivered to the network).
@@ -632,9 +637,6 @@ impl ResearchNode {
             ResearchNodeKind::Document | ResearchNodeKind::Conversation => {
                 ResearchNodeType::Document
             }
-            ResearchNodeKind::Run if self.origin == Some(ResearchNodeOrigin::Imported) => {
-                ResearchNodeType::Document
-            }
             ResearchNodeKind::Run => ResearchNodeType::Exchange,
         }
     }
@@ -642,11 +644,10 @@ impl ResearchNode {
     /// Matches every stored kind so adding a kind requires an explicit
     /// launch path, including whether it needs a session checkpoint.
     pub fn follow_up_launch(&self) -> FollowUpLaunch {
-        let imported = self.origin == Some(ResearchNodeOrigin::Imported);
         match self.kind {
             ResearchNodeKind::Note => FollowUpLaunch::Context(FollowUpContext::Post),
             ResearchNodeKind::Conversation => FollowUpLaunch::Context(FollowUpContext::Snapshot),
-            ResearchNodeKind::Document | ResearchNodeKind::Run if imported => {
+            ResearchNodeKind::Document if self.origin == Some(ResearchNodeOrigin::Imported) => {
                 FollowUpLaunch::Context(FollowUpContext::Snapshot)
             }
             ResearchNodeKind::Document => FollowUpLaunch::Context(FollowUpContext::Document),
@@ -802,7 +803,7 @@ pub fn capped_note_delivery(delivery: &NoteDelivery, limit: usize) -> NoteDelive
     }
 }
 
-/// The feed's page shape; research roots (runs and notes) are its only source.
+/// The feed's page shape; research roots are its only source.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecentActivityPage {
@@ -909,6 +910,44 @@ pub fn new_note_node(
         promoted_at: None,
         highlights: Vec::new(),
     }
+}
+
+/// An imported Markdown report, stored as a document since state version 7
+/// and detached archive version 9.
+pub fn is_imported_document(node: &ResearchNode) -> bool {
+    node.kind == ResearchNodeKind::Document && node.origin == Some(ResearchNodeOrigin::Imported)
+}
+
+/// JSON-shape migration for one stored node, used for state files before
+/// version 7 and detached archives before version 9: an imported report was
+/// stored as a root run (`kind` absent or `"run"`, no `parentNodeId`) with
+/// `origin: "imported"`; it becomes a document with the same origin. The
+/// prompt stays the question the report answers, and the response snapshot
+/// (keyed by node id) is unchanged. Runs before deserialization, so no reader
+/// sees the old shape. Returns whether the node changed.
+///
+/// The import path creates root nodes. Preserve any nested imported runs:
+/// documents must be roots (the feed skips nested documents and detaching
+/// rejects them).
+pub fn migrate_imported_report_node(node: &mut serde_json::Value) -> bool {
+    let Some(object) = node.as_object_mut() else {
+        return false;
+    };
+    let imported = object.get("origin").and_then(serde_json::Value::as_str) == Some("imported");
+    let stored_as_run = object
+        .get("kind")
+        .is_none_or(|kind| kind.as_str() == Some("run"));
+    let root = object
+        .get("parentNodeId")
+        .is_none_or(serde_json::Value::is_null);
+    if !imported || !stored_as_run || !root {
+        return false;
+    }
+    object.insert(
+        "kind".to_string(),
+        serde_json::Value::String("document".to_string()),
+    );
+    true
 }
 
 /// True when a node carries anything a pre-notes build cannot read.
@@ -1252,6 +1291,13 @@ fn detached_archive_path(folder: &Path, pending: bool) -> PathBuf {
     })
 }
 
+/// The committed archive's manifest, for tests that write an older archive
+/// shape by hand.
+#[cfg(test)]
+pub(crate) fn detached_research_manifest_path(folder: &Path) -> PathBuf {
+    detached_archive_path(folder, false).join(DETACHED_RESEARCH_MANIFEST)
+}
+
 fn reject_symlink(path: &Path) -> Result<(), String> {
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_symlink() => Err(format!(
@@ -1391,9 +1437,17 @@ fn validate_detached_archive(archive: &DetachedResearchArchive) -> Result<(), St
                 node.id, DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_NOTES
             ));
         }
-        if node_uses_note_fields(node) && archive.version < DETACHED_RESEARCH_ARCHIVE_VERSION {
+        if node_uses_note_fields(node)
+            && archive.version < DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_DOCUMENT_IMPORTS
+        {
             return Err(format!(
                 "research node {} contains note data that requires archive version {}",
+                node.id, DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_DOCUMENT_IMPORTS
+            ));
+        }
+        if is_imported_document(node) && archive.version < DETACHED_RESEARCH_ARCHIVE_VERSION {
+            return Err(format!(
+                "research node {} is an imported document that requires archive version {}",
                 node.id, DETACHED_RESEARCH_ARCHIVE_VERSION
             ));
         }
@@ -1493,8 +1547,10 @@ fn validate_detached_archive(archive: &DetachedResearchArchive) -> Result<(), St
 /// raises. Pre-conversations builds refuse anything above 4, and
 /// pre-documents builds anything above 3, the same way.
 pub fn detached_archive_version(nodes: &[ResearchNode]) -> u32 {
-    if nodes.iter().any(node_uses_note_fields) {
+    if nodes.iter().any(is_imported_document) {
         DETACHED_RESEARCH_ARCHIVE_VERSION
+    } else if nodes.iter().any(node_uses_note_fields) {
+        DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_DOCUMENT_IMPORTS
     } else if nodes.iter().any(|node| !node.attachments.is_empty()) {
         DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_NOTES
     } else if nodes.iter().any(|node| {
@@ -1719,6 +1775,18 @@ fn read_detached_research_from_path(
             "unsupported detached research archive version {raw_version} (it may have been written by a newer session; upgrade this installation to restore it)"
         ));
     }
+    let mut raw_value = raw_value;
+    let mut migrated_imported_reports = false;
+    if raw_version < u64::from(DETACHED_RESEARCH_ARCHIVE_VERSION) {
+        if let Some(nodes) = raw_value
+            .get_mut("nodes")
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            for node in nodes {
+                migrated_imported_reports |= migrate_imported_report_node(node);
+            }
+        }
+    }
     let mut archive: DetachedResearchArchive = serde_json::from_value(raw_value)
         .map_err(|err| format!("failed to decode {}: {err}", manifest_path.display()))?;
     if archive.version == 1 && archive.archive_id.is_empty() {
@@ -1730,6 +1798,12 @@ fn read_detached_research_from_path(
                 .map(|byte| format!("{byte:02x}"))
                 .collect::<String>()
         );
+    }
+    // Imported documents require archive version 9. Update the version before
+    // callers rewrite the bundle, such as when moving a research folder.
+    // Do this after deriving the legacy identity, which checks for version 1.
+    if migrated_imported_reports {
+        archive.version = DETACHED_RESEARCH_ARCHIVE_VERSION;
     }
     validate_detached_archive(&archive)?;
     let mut responses = HashMap::new();
@@ -3395,12 +3469,6 @@ mod tests {
                 true,
             ),
             (
-                with(ResearchNodeKind::Run, Some(ResearchNodeOrigin::Imported)),
-                ResearchNodeType::Document,
-                FollowUpLaunch::Context(FollowUpContext::Snapshot),
-                true,
-            ),
-            (
                 with(
                     ResearchNodeKind::Document,
                     Some(ResearchNodeOrigin::Imported),
@@ -3824,7 +3892,25 @@ mod tests {
     }
 
     #[test]
-    fn note_nodes_use_the_newest_archive_version_and_keep_their_shape() {
+    fn imported_report_migration_converts_only_root_runs() {
+        let mut root = serde_json::json!({"origin": "imported"});
+        assert!(migrate_imported_report_node(&mut root));
+        assert_eq!(root["kind"], "document");
+        assert!(!migrate_imported_report_node(&mut root));
+        let mut explicit_run =
+            serde_json::json!({"origin": "imported", "kind": "run", "parentNodeId": null});
+        assert!(migrate_imported_report_node(&mut explicit_run));
+        let mut nested = serde_json::json!({"origin": "imported", "parentNodeId": "parent"});
+        assert!(!migrate_imported_report_node(&mut nested));
+        assert!(nested.get("kind").is_none());
+        let mut null_kind = serde_json::json!({"origin": "imported", "kind": null});
+        assert!(!migrate_imported_report_node(&mut null_kind));
+        let mut authored = serde_json::json!({"kind": "run"});
+        assert!(!migrate_imported_report_node(&mut authored));
+    }
+
+    #[test]
+    fn note_nodes_use_archive_version_eight_and_keep_their_shape() {
         let folder = temp_workspace();
         let mut archive = sample_detached_archive(&folder);
         let root = archive.nodes[0].clone();
@@ -3851,7 +3937,7 @@ mod tests {
         archive.nodes.push(follow_up);
         assert_eq!(
             detached_archive_version(&archive.nodes),
-            DETACHED_RESEARCH_ARCHIVE_VERSION
+            DETACHED_RESEARCH_ARCHIVE_VERSION_PRE_DOCUMENT_IMPORTS
         );
         archive.version = detached_archive_version(&archive.nodes);
         validate_detached_archive(&archive).unwrap();

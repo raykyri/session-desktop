@@ -41,7 +41,7 @@ function renderArchived(overrides: Partial<ResearchArchivedFeedProps> = {}) {
   );
 }
 
-test("archived threads list newest-archived first, without active trees or documents", () => {
+test("archived threads list newest-archived first, documents included, without active trees", () => {
   const ordered = archivedFeedTrees([
     tree("older", { archivedAt: 100 }),
     tree("active", { archivedAt: null }),
@@ -50,7 +50,7 @@ test("archived threads list newest-archived first, without active trees or docum
   ]);
   assert.deepEqual(
     ordered.map((item) => item.id),
-    ["newer", "older"],
+    ["document", "newer", "older"],
   );
 });
 

@@ -200,7 +200,7 @@ test("canRetryResearchNode allows settled failures without a lingering pane", ()
 });
 
 test("imported reports allow follow-ups without a native session checkpoint", () => {
-  const report = node("report", { kind: "run", origin: "imported", nativeSessionId: null });
+  const report = node("report", { kind: "document", origin: "imported", nativeSessionId: null });
   assert.equal(canFollowUpFrom(report), true);
   assert.equal(canContinueThread([report], report), true);
   const child = node("child", { parentNodeId: report.id, inline: true, nativeSessionId: null });
