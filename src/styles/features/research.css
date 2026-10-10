@@ -367,7 +367,7 @@
   color: var(--text-muted);
   font-size: var(--fs-base);
   text-align: center;
-  background: var(--research-workspace-bg);
+  background: var(--research-thread-page-bg);
 }
 
 .research-placeholder h1 {
@@ -582,7 +582,7 @@
 
 .research-pair-answer {
   width: var(--research-answer-width);
-  background: var(--research-workspace-bg);
+  background: var(--research-thread-page-bg);
 }
 
 /* A post (a note root) is two columns: the post at answer width, then its
@@ -590,7 +590,7 @@
 .research-pair-note {
   width: var(--research-answer-width);
   border-left: 1px solid var(--surface-border-strong);
-  background: var(--research-workspace-bg);
+  background: var(--research-thread-page-bg);
 }
 
 .research-pair-thread {
@@ -602,7 +602,7 @@
 .research-placeholder-column {
   width: calc(var(--research-messages-width) + var(--research-answer-width) - 100px);
   border-left: 1px solid var(--surface-border-strong);
-  background: var(--research-workspace-bg);
+  background: var(--research-thread-page-bg);
 }
 
 /* One divider where a pair starts: the column before it drops its own. */

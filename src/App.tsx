@@ -222,13 +222,13 @@ import {
 
 } from "./lib/links";
 import {
-  canGoWorkspaceBack,
-  canGoWorkspaceForward,
-  pruneResearchWorkspaceHistory,
-  pushResearchWorkspaceHistory,
-  researchWorkspaceHistoryBack,
-  researchWorkspaceHistoryForward,
-  type ResearchWorkspaceVisit,
+  canGoPageBack,
+  canGoPageForward,
+  pruneResearchPageHistory,
+  pushResearchPageHistory,
+  researchPageHistoryBack,
+  researchPageHistoryForward,
+  type ResearchPageVisit,
 } from "./lib/researchHistory";
 import {
   isResearchTreeSelectionChange,
@@ -1419,9 +1419,9 @@ function MainApp() {
   const {
     feedOpen,
     setFeedOpen,
-    researchWorkspaceHistory,
-    researchWorkspaceHistoryRef,
-    setResearchWorkspaceHistory,
+    researchPageHistory,
+    researchPageHistoryRef,
+    setResearchPageHistory,
     researchWorkspaceScope,
     changeResearchWorkspaceScope,
   } = useResearchNavigationState();
@@ -4938,23 +4938,23 @@ function MainApp() {
     setResearchTrees((current) => clearResearchTreeAttention(current, treeId));
     setArchivedResearchTrees((current) => clearResearchTreeAttention(current, treeId));
   }, []);
-  // Records a Home visit in workspace history so Back navigation returns here.
+  // Records a feed visit in page history so Back navigation returns here.
   const recordResearchFeedVisit = useCallback(() => {
     const treeId = activeResearchTreeIdRef.current;
-    setResearchWorkspaceHistory((current) => {
+    setResearchPageHistory((current) => {
       const withThread = treeId
-        ? pushResearchWorkspaceHistory(current, { kind: "thread", treeId })
+        ? pushResearchPageHistory(current, { kind: "thread", treeId })
         : current;
-      const next = pushResearchWorkspaceHistory(withThread, { kind: "feed" });
-      researchWorkspaceHistoryRef.current = next;
+      const next = pushResearchPageHistory(withThread, { kind: "feed" });
+      researchPageHistoryRef.current = next;
       return next;
     });
   }, []);
   // Prunes unreachable document visits while preserving the current view.
-  const pruneResearchWorkspaceVisits = useCallback((keepTree: (treeId: string) => boolean) => {
-    setResearchWorkspaceHistory((current) => {
-      const next = pruneResearchWorkspaceHistory(current, keepTree);
-      researchWorkspaceHistoryRef.current = next;
+  const pruneResearchPageVisits = useCallback((keepTree: (treeId: string) => boolean) => {
+    setResearchPageHistory((current) => {
+      const next = pruneResearchPageHistory(current, keepTree);
+      researchPageHistoryRef.current = next;
       return next;
     });
   }, []);
@@ -5035,12 +5035,12 @@ function MainApp() {
       pruneResearchNavigation(trees.map((tree) => tree.id));
       // Prune deleted trees from history.
       const knownTreeIds = new Set(trees.map((tree) => tree.id));
-      pruneResearchWorkspaceVisits((id) => knownTreeIds.has(id));
+      pruneResearchPageVisits((id) => knownTreeIds.has(id));
       return trees;
     } finally {
       researchNavRefreshInFlightRef.current -= 1;
     }
-  }, [pruneResearchWorkspaceVisits]);
+  }, [pruneResearchPageVisits]);
   const markVisibleResearchTreeViewed = useCallback(
     async (treeId: string, options: ResearchViewedAckOptions = {}) => {
       const threadVisible = researchThreadIsVisible(
@@ -5162,19 +5162,19 @@ function MainApp() {
     markVisibleResearchTreeViewed,
     setFeedOpen,
   ]);
-  const recordResearchWorkspaceVisit = useCallback((visit: ResearchWorkspaceVisit) => {
-    setResearchWorkspaceHistory((current) => {
-      const next = pushResearchWorkspaceHistory(current, visit);
-      researchWorkspaceHistoryRef.current = next;
+  const recordResearchPageVisit = useCallback((visit: ResearchPageVisit) => {
+    setResearchPageHistory((current) => {
+      const next = pushResearchPageHistory(current, visit);
+      researchPageHistoryRef.current = next;
       return next;
     });
   }, []);
   const navigateToResearchThread = useCallback(
     (treeId: string) => {
-      recordResearchWorkspaceVisit({ kind: "thread", treeId });
+      recordResearchPageVisit({ kind: "thread", treeId });
       void selectResearchTree(treeId);
     },
-    [recordResearchWorkspaceVisit, selectResearchTree],
+    [recordResearchPageVisit, selectResearchTree],
   );
   // Opens a node of a tree: its level, and the levels before it, open as
   // column pairs, with the node selected. The store covers a thread page that mounts for
@@ -5478,8 +5478,8 @@ function MainApp() {
   const invalidateResearchHighlights = useCallback(() => {
     setResearchHighlightsVersion((version) => version + 1);
   }, []);
-  const applyResearchWorkspaceVisit = useCallback(
-    (visit: ResearchWorkspaceVisit) => {
+  const applyResearchPageVisit = useCallback(
+    (visit: ResearchPageVisit) => {
       if (visit.kind === "feed") {
         showFeed();
         return;
@@ -5488,24 +5488,24 @@ function MainApp() {
     },
     [selectResearchTree, showFeed],
   );
-  const goResearchWorkspaceBack = useCallback(() => {
-    const step = researchWorkspaceHistoryBack(researchWorkspaceHistoryRef.current);
+  const goResearchPageBack = useCallback(() => {
+    const step = researchPageHistoryBack(researchPageHistoryRef.current);
     if (!step) {
       return;
     }
-    researchWorkspaceHistoryRef.current = step.history;
-    setResearchWorkspaceHistory(step.history);
-    applyResearchWorkspaceVisit(step.visit);
-  }, [applyResearchWorkspaceVisit]);
-  const goResearchWorkspaceForward = useCallback(() => {
-    const step = researchWorkspaceHistoryForward(researchWorkspaceHistoryRef.current);
+    researchPageHistoryRef.current = step.history;
+    setResearchPageHistory(step.history);
+    applyResearchPageVisit(step.visit);
+  }, [applyResearchPageVisit]);
+  const goResearchPageForward = useCallback(() => {
+    const step = researchPageHistoryForward(researchPageHistoryRef.current);
     if (!step) {
       return;
     }
-    researchWorkspaceHistoryRef.current = step.history;
-    setResearchWorkspaceHistory(step.history);
-    applyResearchWorkspaceVisit(step.visit);
-  }, [applyResearchWorkspaceVisit]);
+    researchPageHistoryRef.current = step.history;
+    setResearchPageHistory(step.history);
+    applyResearchPageVisit(step.visit);
+  }, [applyResearchPageVisit]);
 
   const chooseResearchWorkspaceFolder = useCallback(async (): Promise<GroupInfo | null> => {
     setError(null);
@@ -5922,7 +5922,7 @@ function MainApp() {
             resetLoadedTail: event.type === "research.tree.restored",
           });
           if (event.type === "research.tree.archived") {
-            pruneResearchWorkspaceVisits((id) => id !== event.tree.id);
+            pruneResearchPageVisits((id) => id !== event.tree.id);
           }
           break;
         }
@@ -6035,14 +6035,14 @@ function MainApp() {
           if (activeResearchTreeIdRef.current === event.treeId) {
             focusResearchHome();
           }
-          pruneResearchWorkspaceVisits((id) => id !== event.treeId);
+          pruneResearchPageVisits((id) => id !== event.treeId);
           break;
         }
       }
     },
     [
       focusResearchHome,
-      pruneResearchWorkspaceVisits,
+      pruneResearchPageVisits,
       scheduleResearchRefresh,
       scheduleResearchNavigationRecovery,
       scheduleResearchTreeRecovery,
@@ -6311,9 +6311,9 @@ function MainApp() {
       if (activeResearchTreeIdRef.current === treeId) {
         focusResearchHome();
       }
-      pruneResearchWorkspaceVisits((id) => id !== treeId);
+      pruneResearchPageVisits((id) => id !== treeId);
     },
-    [focusResearchHome, pruneResearchWorkspaceVisits],
+    [focusResearchHome, pruneResearchPageVisits],
   );
   const removeResearchTreeFromMenu = useCallback(
     async (treeId: string) => {
@@ -6876,7 +6876,7 @@ function MainApp() {
         focusResearchHome();
       }
     }
-    pruneResearchWorkspaceVisits((id) => !detachedTreeIds.has(id));
+    pruneResearchPageVisits((id) => !detachedTreeIds.has(id));
     void refreshResearchNavigation().catch(() => undefined);
   }
 
@@ -9669,8 +9669,8 @@ function MainApp() {
                       onRefresh={refreshFeed}
                       // Use feed history when no thread is open; otherwise use
                       // the open thread's history.
-                      onBack={feedOwnsHistory ? goResearchWorkspaceBack : undefined}
-                      onForward={feedOwnsHistory ? goResearchWorkspaceForward : undefined}
+                      onBack={feedOwnsHistory ? goResearchPageBack : undefined}
+                      onForward={feedOwnsHistory ? goResearchPageForward : undefined}
                     />
                   )
                 ) : null
@@ -9716,10 +9716,10 @@ function MainApp() {
                   requireCmdEnterToSend={settings.requireCmdEnterToSend}
                   onOpenNodesChange={setOpenResearchNodeIds}
                   treeMenu={activeResearchTreeMenu}
-                  workspaceCanGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
-                  workspaceCanGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
-                  onWorkspaceBack={goResearchWorkspaceBack}
-                  onWorkspaceForward={goResearchWorkspaceForward}
+                  pageCanGoBack={canGoPageBack(researchPageHistory)}
+                  pageCanGoForward={canGoPageForward(researchPageHistory)}
+                  onPageBack={goResearchPageBack}
+                  onPageForward={goResearchPageForward}
                 />
               ) : openResearchDraft ? (
                 <ResearchDraftView

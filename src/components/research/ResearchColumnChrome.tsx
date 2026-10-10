@@ -151,7 +151,7 @@ export function ResearchThreadPlaceholder({
 }) {
   return (
     <section
-      className="research-workspace research-placeholder-column"
+      className="research-thread-page research-placeholder-column"
       {...columnAttributes({ id: "placeholder", role: "placeholder" })}
     >
       <header className="research-column-header">

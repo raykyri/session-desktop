@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { initResearchWorkspaceHistory } from "../lib/researchHistory";
+import { initResearchPageHistory } from "../lib/researchHistory";
 import type { ResearchWorkspaceScope } from "../lib/researchScope";
 
 // The stored key keeps the scope's earlier name, "folder scope".
@@ -18,13 +18,13 @@ export function useResearchNavigationState() {
     setFeedOpenState(open);
     localStorage.setItem(FEED_OPEN_KEY, open ? "true" : "false");
   }, []);
-  const [researchWorkspaceHistory, setResearchWorkspaceHistory] = useState(() =>
-    initResearchWorkspaceHistory(
+  const [researchPageHistory, setResearchPageHistory] = useState(() =>
+    initResearchPageHistory(
       localStorage.getItem(FEED_OPEN_KEY) === "true" ? { kind: "feed" } : null,
     ),
   );
-  const researchWorkspaceHistoryRef = useRef(researchWorkspaceHistory);
-  researchWorkspaceHistoryRef.current = researchWorkspaceHistory;
+  const researchPageHistoryRef = useRef(researchPageHistory);
+  researchPageHistoryRef.current = researchPageHistory;
   // The research workspace the sidebar and feed show. The raw stored
   // value is resolved against live research workspaces wherever it is read.
   const [researchWorkspaceScope, setResearchWorkspaceScope] = useState<ResearchWorkspaceScope>(
@@ -42,9 +42,9 @@ export function useResearchNavigationState() {
     feedOpen,
     feedOpenRef,
     setFeedOpen,
-    researchWorkspaceHistory,
-    researchWorkspaceHistoryRef,
-    setResearchWorkspaceHistory,
+    researchPageHistory,
+    researchPageHistoryRef,
+    setResearchPageHistory,
     researchWorkspaceScope,
     changeResearchWorkspaceScope,
   };

@@ -255,12 +255,12 @@ interface ResearchThreadPageProps {
   /** Runs whose background summary job is in flight; each renders a spinner in
    * its recap slot until the summary arrives. */
   recapPendingNodeIds?: ReadonlySet<string>;
-  /** Workspace-level back/forward (the feed ↔ threads). Used when
+  /** Page-level back/forward (the feed ↔ threads). Used when
    * this tree's own visit stack has nowhere left to go. */
-  workspaceCanGoBack?: boolean;
-  workspaceCanGoForward?: boolean;
-  onWorkspaceBack?: () => void;
-  onWorkspaceForward?: () => void;
+  pageCanGoBack?: boolean;
+  pageCanGoForward?: boolean;
+  onPageBack?: () => void;
+  onPageForward?: () => void;
   /** Called with the open nodes whenever they change: the message selected
    * in the root pair, then the head of each open branch. Empty on unmount. */
   onOpenNodesChange?: (nodeIds: string[]) => void;
@@ -978,10 +978,10 @@ function ResearchThreadPage({
   shortcutHintsShown,
   requireCmdEnterToSend,
   recapPendingNodeIds = EMPTY_RECAP_PENDING_NODE_IDS,
-  workspaceCanGoBack = false,
-  workspaceCanGoForward = false,
-  onWorkspaceBack,
-  onWorkspaceForward,
+  pageCanGoBack = false,
+  pageCanGoForward = false,
+  onPageBack,
+  onPageForward,
   onOpenNodesChange,
   treeMenu,
 }: ResearchThreadPageProps) {
@@ -1825,8 +1825,8 @@ function ResearchThreadPage({
 
   // ---- history -------------------------------------------------------------
 
-  const canGoBack = historyCanGoBack(history) || workspaceCanGoBack;
-  const canGoForward = historyCanGoForward(history) || workspaceCanGoForward;
+  const canGoBack = historyCanGoBack(history) || pageCanGoBack;
+  const canGoForward = historyCanGoForward(history) || pageCanGoForward;
 
   const goBack = useCallback(() => {
     const step = researchHistoryBack(history);
@@ -1835,8 +1835,8 @@ function ResearchThreadPage({
       setHistory(step.history);
       return;
     }
-    onWorkspaceBack?.();
-  }, [applyVisit, history, onWorkspaceBack]);
+    onPageBack?.();
+  }, [applyVisit, history, onPageBack]);
 
   const goForward = useCallback(() => {
     const step = researchHistoryForward(history);
@@ -1845,8 +1845,8 @@ function ResearchThreadPage({
       setHistory(step.history);
       return;
     }
-    onWorkspaceForward?.();
-  }, [applyVisit, history, onWorkspaceForward]);
+    onPageForward?.();
+  }, [applyVisit, history, onPageForward]);
 
   // Keyboard: ⌘[ / ⌘] and Alt+←/→ (and mouse buttons 3/4) walk history; Esc
   // returns to the root level when no menu, popover, or dialog is
@@ -5556,7 +5556,7 @@ function ResearchThreadPage({
     <TranscriptLinkActionsProvider actions={linkActions}>
       <div
         ref={workspaceRef}
-        className="research-workspace research-pairs"
+        className="research-thread-page research-pairs"
         onKeyDown={onPairsKeyDown}
       >
         {strip.columns.map(renderColumn)}
