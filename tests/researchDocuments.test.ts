@@ -1,8 +1,5 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import DocumentComposer from "../src/components/research/DocumentComposer";
 import {
   RESEARCH_DOCUMENT_BYTE_LIMIT,
   RESEARCH_DOCUMENT_WORD_LIMIT,
@@ -112,18 +109,4 @@ test("document size limits apply when the body changes", () => {
       .limitNotice,
     "The content is over the 10 MB limit. Shorten it to 10 MB or less to save.",
   );
-});
-
-test("the edit dialog says when a document is over the word limit", () => {
-  const long = Array(RESEARCH_DOCUMENT_WORD_LIMIT + 1).fill("w").join(" ");
-  const html = renderToStaticMarkup(
-    createElement(DocumentComposer, {
-      initialMarkdown: long,
-      initialTitle: "Report",
-      onClose: () => {},
-      onSubmit: async () => {},
-    }),
-  );
-  assert.match(html, /only the title can be changed/);
-  assert.match(html, /Over 10,000 words/);
 });

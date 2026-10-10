@@ -82,6 +82,7 @@ import type { TranscriptScrollPosition } from "./lib/transcriptScroll";
 import type { LinkActions } from "./components/TranscriptMarkdown";
 import ResearchFolderSwitcher from "./components/research/ResearchFolderSwitcher";
 import GithubAccountControl from "./components/GithubAccountControl";
+import { formatResearchModelSummary } from "./lib/researchModelSummary";
 import {
   resolveResearchScope,
   treeForResearchScope,
@@ -319,6 +320,7 @@ import {
   createResearchTree,
   importResearchReport,
   updateResearchDocument,
+  updateResearchNote,
   forkResearchNode,
   markResearchTreeViewed,
   renameResearchNode,
@@ -6363,6 +6365,23 @@ function MainApp() {
     },
     [],
   );
+  const editResearchNote = useCallback(
+    async (input: { nodeId: string; text: string; expectedText: string; correction: boolean }) => {
+      const result = await updateResearchNote(input);
+      if (activeResearchTreeIdRef.current === result.tree.id) {
+        setActiveResearchDetail((current) =>
+          current?.tree.id === result.tree.id
+            ? {
+                tree: result.tree,
+                nodes: current.nodes.map((node) => (node.id === result.node.id ? result.node : node)),
+              }
+            : current,
+        );
+      }
+      return result;
+    },
+    [],
+  );
   const cancelResearchRun = useCallback(
     async (nodeId: string) => {
       await cancelResearchNode(nodeId);
@@ -8618,6 +8637,24 @@ function MainApp() {
     },
     [deleteResearchDraftEntry, showResearchToast, submitNewResearch],
   );
+  // "Ask as a question" in the editor column: a new thread with the edited
+  // text, asked with the Home ask box's selected agent and model (as a draft
+  // sent from Drafts is), in the edited thread's folder. It opens selected.
+  const askResearchEditorQuestion = useCallback(
+    async (prompt: string) => {
+      const choice = composerLaunchChoiceRef.current?.();
+      if (!choice) {
+        throw new Error("No research agent is ready. Review agents in Settings.");
+      }
+      const workspaceId = activeResearchDetailRef.current?.tree.workspaceId ?? researchScopeRef.current;
+      await submitNewResearch({ prompt, ...choice, workspaceId });
+    },
+    [submitNewResearch],
+  );
+  const readResearchQuestionModel = useCallback(() => {
+    const choice = composerLaunchChoiceRef.current?.();
+    return choice ? formatResearchModelSummary(choice.adapter, choice.model) || choice.adapter : null;
+  }, []);
   const configAdapters = config?.adapters;
   const feedComposer = useMemo(
     () =>
@@ -10297,6 +10334,9 @@ function MainApp() {
                   onRemoveTree={removeResearchTreeAndSelectFallback}
                   onRenameTree={renameResearchTreeTitle}
                   onUpdateDocument={editResearchDocument}
+                  onUpdateNote={editResearchNote}
+                  onAskAsQuestion={askResearchEditorQuestion}
+                  readQuestionModel={readResearchQuestionModel}
                   onCancel={cancelResearchRun}
                   onRetryNode={retryResearchRun}
                   linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}

@@ -205,3 +205,34 @@ test("a draft is the T0 messages column, and every column has one selector", () 
   assert.equal(isMessagesColumnId("A1"), false);
   assert.equal(isMessagesColumnId("feed"), false);
 });
+
+test("editing the root adds the editor column after the root level's columns", () => {
+  const doc = [
+    node("doc", { kind: "document" }),
+    node("b1", { parentNodeId: "doc", createdAt: 1 }),
+  ];
+  const editing = researchStrip(doc, "doc", null, "doc");
+  assert.deepEqual(ids(editing), ["T0", "A0", "E0"]);
+  const editor = editing.columns[2];
+  assert.deepEqual(editor, { id: "E0", role: "editor", levelIndex: 0, nodeId: "doc" });
+  assert.equal(editing.endsWithAnswer, false);
+  assert.deepEqual(columnAttributes(editor), {
+    "data-research-column": "E0",
+    "data-research-pair": "editor",
+    "data-research-level": "0",
+  });
+  assert.equal(columnKey(editor), "E0:doc");
+  assert.equal(columnScrollKey(editor), null);
+  assert.equal(columnLevelIndex("E0"), 0);
+  assert.equal(isMessagesColumnId("E0"), false);
+  // A branch level opens after the editor; the editor stays with the root.
+  assert.deepEqual(ids(researchStrip(doc, "b1", null, "doc")), ["T0", "A0", "E0", "T1", "A1"]);
+  // Only the root can be edited.
+  assert.deepEqual(ids(researchStrip(doc, "b1", null, "b1")), ["T0", "A0", "T1", "A1"]);
+  assert.equal(sameResearchStrip(editing, researchStrip(doc, "doc", null, "doc")), true);
+  assert.equal(sameResearchStrip(editing, researchStrip(doc, "doc", null)), false);
+
+  // A post's editor follows its thread column.
+  const post = [node("note", { kind: "note", delivery: { status: "posted", postedAt: 1, replies: [] } })];
+  assert.deepEqual(ids(researchStrip(post, "note", null, "note")), ["N0", "T0", "E0"]);
+});

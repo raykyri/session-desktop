@@ -4,7 +4,8 @@
 // Each level renders as a messages column and an answer column, except a
 // post (a note root), which renders as the post column and its thread column
 // (replies, follow-ups and the follow-up composer). An unsent branch adds a
-// pending column after the level it was asked from.
+// pending column after the level it was asked from, and editing the root's
+// document or post adds an editor column after the root level's columns.
 //
 // The strip is a pure function of the tree's nodes, the deepest selection and
 // the unsent branch, so it is computed once per render and every consumer
@@ -40,14 +41,16 @@ export interface ResearchLevel {
 
 /** `Tn`: level n's messages column (a post's thread column); `An`: its
  * answer column; `Nn`: a post's own column, left of its thread; `Pn`: an
- * unsent branch asked from level n - 1. */
+ * unsent branch asked from level n - 1; `En`: the editor of the document or
+ * post that level n shows. */
 export type ResearchColumnId =
   | "feed"
   | "placeholder"
   | `T${number}`
   | `A${number}`
   | `N${number}`
-  | `P${number}`;
+  | `P${number}`
+  | `E${number}`;
 
 export type ResearchColumn =
   | { id: "feed"; role: "feed" }
@@ -62,10 +65,12 @@ export type ResearchColumn =
       parentNodeId: string;
       anchor: ResearchHighlightAnchor | null;
     }
+  | { id: `E${number}`; role: "editor"; levelIndex: number; nodeId: string }
   | { id: "T0"; role: "draft"; draftId: string }
   | { id: "placeholder"; role: "placeholder" };
 
 export type ResearchPendingColumn = Extract<ResearchColumn, { role: "pending" }>;
+export type ResearchEditorColumn = Extract<ResearchColumn, { role: "editor" }>;
 
 interface ResearchStrip {
   levels: readonly ResearchLevel[];
@@ -87,11 +92,14 @@ interface ResearchPendingBranch {
 /** The columns for `selectedNodeId` (the deepest level's selected message)
  * and the unsent branch. A selection that is not in `nodes` yields an empty
  * strip. The pending branch opens a column only after the level that shows
- * its parent selected. */
+ * its parent selected. `editingNodeId`, the root being edited, adds the
+ * editor column right after the root level's columns, before any branch
+ * level. */
 export function researchStrip(
   nodes: readonly ResearchNode[],
   selectedNodeId: string | null,
   pending: ResearchPendingBranch | null,
+  editingNodeId: string | null = null,
 ): ResearchStrip {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const path = selectedNodeId && byId.has(selectedNodeId) ? researchLevelPath(nodes, selectedNodeId) : [];
@@ -117,6 +125,9 @@ export function researchStrip(
     } else {
       columns.push({ id: `T${level.index}`, role: "messages", level });
       columns.push({ id: `A${level.index}`, role: "answer", level, nodeId: level.selectedId });
+    }
+    if (level.index === 0 && editingNodeId !== null && level.headId === editingNodeId) {
+      columns.push({ id: "E0", role: "editor", levelIndex: 0, nodeId: editingNodeId });
     }
   }
   if (pending && path.length > 0 && path[path.length - 1] === pending.parentNodeId) {
@@ -168,6 +179,10 @@ export function sameResearchStrip(previous: ResearchStrip, candidate: ResearchSt
   ) {
     return false;
   }
+  const editorOf = (strip: ResearchStrip) => strip.columns.find((column) => column.role === "editor");
+  if (editorOf(previous)?.id !== editorOf(candidate)?.id) {
+    return false;
+  }
   const pendingOf = (strip: ResearchStrip) => strip.columns.find((column) => column.role === "pending");
   const before = pendingOf(previous);
   const after = pendingOf(candidate);
@@ -180,16 +195,17 @@ export function sameResearchStrip(previous: ResearchStrip, candidate: ResearchSt
   );
 }
 
-/** The level a column belongs to: n for Tn, An, Nn and Pn; null otherwise. */
+/** The level a column belongs to: n for Tn, An, Nn, Pn and En; null
+ * otherwise. */
 export function columnLevelIndex(id: string | null | undefined): number | null {
-  const match = id ? /^[TANP](\d+)$/.exec(id) : null;
+  const match = id ? /^[TANPE](\d+)$/.exec(id) : null;
   return match ? Number(match[1]) : null;
 }
 
 /** The id of the column that holds `element`, or null outside the strip. */
 export function columnIdOf(element: Element | null | undefined): ResearchColumnId | null {
   const id = element?.closest<HTMLElement>(columnSelector())?.dataset.researchColumn;
-  return id && /^(feed|placeholder|[TANP]\d+)$/.test(id) ? (id as ResearchColumnId) : null;
+  return id && /^(feed|placeholder|[TANPE]\d+)$/.test(id) ? (id as ResearchColumnId) : null;
 }
 
 /** Whether `id` names a messages-side column (a level's messages column or
@@ -203,7 +219,7 @@ export function isMessagesColumnId(id: string | null | undefined): boolean {
  * place for every column kind. `data-research-pair` and
  * `data-research-level` are set on the columns of a level: messages, thread,
  * draft and pending columns are the "turns" side, an answer column the
- * "answer" side, and a post's own column is "post". */
+ * "answer" side, a post's own column is "post", and the editor "editor". */
 export function columnAttributes(column: ResearchColumn): Record<string, string> {
   switch (column.role) {
     case "feed":
@@ -220,10 +236,12 @@ export function columnAttributes(column: ResearchColumn): Record<string, string>
       return pairAttributes(column.id, "turns", column.levelIndex);
     case "draft":
       return pairAttributes(column.id, "turns", 0);
+    case "editor":
+      return pairAttributes(column.id, "editor", column.levelIndex);
   }
 }
 
-function pairAttributes(id: ResearchColumnId, pair: "turns" | "answer" | "post", level: number) {
+function pairAttributes(id: ResearchColumnId, pair: "turns" | "answer" | "post" | "editor", level: number) {
   return {
     "data-research-column": id,
     "data-research-pair": pair,
@@ -252,6 +270,7 @@ export function columnKey(column: ResearchColumn): string {
     case "thread":
       return `${column.id}:${column.level.headId}`;
     case "answer":
+    case "editor":
       return `${column.id}:${column.nodeId}`;
     case "pending":
       return `${column.id}:${column.parentNodeId}`;

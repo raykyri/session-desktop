@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ArrowLeft, ArrowRight, Plus, Terminal } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ellipsis, Plus, Terminal } from "lucide-react";
 import { ResearchBranchIcon } from "./ResearchIcons";
 import { columnAttributes } from "../../lib/researchColumns";
 
@@ -16,6 +16,7 @@ export function ResearchPairHeader({
   imported = false,
   archived = false,
   onAsk,
+  menu = null,
 }: {
   title: string;
   /** A branch: its number of messages ("Branch · 2 messages"), or "new" for
@@ -30,6 +31,8 @@ export function ResearchPairHeader({
   imported?: boolean;
   archived?: boolean;
   onAsk?: () => void;
+  /** A … button at the right of the bar that opens the column's menu. */
+  menu?: { label: string; open: boolean; onOpen: (trigger: HTMLButtonElement) => void } | null;
 }) {
   return (
     <header className={`research-column-header${branch !== null || count !== null ? " is-branch" : ""}`}>
@@ -73,6 +76,19 @@ export function ResearchPairHeader({
           >
             <Plus size={13} aria-hidden="true" />
             Ask
+          </button>
+        ) : null}
+        {menu ? (
+          <button
+            type="button"
+            className="control-button research-head-button research-head-menu"
+            aria-label={menu.label}
+            title={menu.label}
+            aria-haspopup="menu"
+            aria-expanded={menu.open}
+            onClick={(event) => menu.onOpen(event.currentTarget)}
+          >
+            <Ellipsis size={15} aria-hidden="true" />
           </button>
         ) : null}
       </div>

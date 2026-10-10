@@ -16,9 +16,9 @@
 import type { ResearchHighlightAnchor } from "../types";
 
 /** Characters of normalized context compared on each side of a quote. */
-export const RESEARCH_ANCHOR_CONTEXT_CHARS = 32;
+const RESEARCH_ANCHOR_CONTEXT_CHARS = 32;
 
-export type ResearchAnchorOutcome =
+type ResearchAnchorOutcome =
   | { kind: "unchanged" }
   | { kind: "moved"; start: number; end: number }
   | { kind: "unmatched" };

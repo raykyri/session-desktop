@@ -7,6 +7,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useDeferredValue,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -68,6 +69,7 @@ import {
   type ResearchColumnId,
   type ResearchLevel,
   type ResearchPendingColumn,
+  type ResearchEditorColumn as ResearchEditorColumnData,
 } from "../../lib/researchColumns";
 import {
   listenToResearchFollowupsFocus,
@@ -90,7 +92,16 @@ import {
   inlineChainFor,
   isActiveResearchStatus,
 } from "../../lib/researchThreads";
-import { countResearchDocumentWords } from "../../lib/researchDocuments";
+import {
+  RESEARCH_DOCUMENT_BYTE_LIMIT,
+  RESEARCH_DOCUMENT_WORD_LIMIT,
+  ResearchDocumentWordLimitExceeded,
+  countResearchDocumentWords,
+  deriveResearchDocumentTitle,
+  researchDocumentEditGate,
+} from "../../lib/researchDocuments";
+import { countUnmatchedResearchAnchors } from "../../lib/researchAnchors";
+import { researchPostHasReplies } from "../../lib/researchEditor";
 import {
   expandedResearchHighlightOffsets,
   RESEARCH_HIGHLIGHT_CONTEXT_LENGTH,
@@ -131,11 +142,12 @@ import type {
   ResearchNodeContent,
   ResearchTreeDetail,
   UpdateResearchDocumentResult,
+  UpdateResearchNoteResult,
 } from "../../types";
 import DomSearchBar from "../DomSearchBar";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import { TranscriptLinkActionsProvider, type LinkActions } from "../TranscriptMarkdown";
-import DocumentComposer from "./DocumentComposer";
+import { ResearchEditorColumn, ResearchEditPreview, ResearchPostCorrections } from "./ResearchEditorColumn";
 import { ResearchDocumentFrame, ResearchPairHeader } from "./ResearchDocumentChrome";
 import {
   ResearchAnswerPane,
@@ -206,6 +218,20 @@ interface ResearchDocumentProps {
     expectedTitle: string;
     expectedHighlightIds: string[];
   }) => Promise<UpdateResearchDocumentResult>;
+  /** Replaces a post's text, or appends a correction to a post with replies
+   * or follow-ups (update_research_note). */
+  onUpdateNote: (input: {
+    nodeId: string;
+    text: string;
+    expectedText: string;
+    correction: boolean;
+  }) => Promise<UpdateResearchNoteResult>;
+  /** "Ask as a question" in the editor: starts a new thread with `prompt`
+   * using the Home ask box's model, and opens it. */
+  onAskAsQuestion: (prompt: string) => Promise<void>;
+  /** The model a question is asked with ("Claude Opus"), or null when no
+   * research agent is ready. Read when the editor renders. */
+  readQuestionModel: () => string | null;
   onCancel: (nodeId: string) => Promise<void>;
   /** Relaunches a failed or cancelled run in place (same node id, same
    * inputs). The refreshed tree detail flows back through the caller's
@@ -278,13 +304,27 @@ interface ResolvedHighlight {
   end: number;
 }
 
-interface DocumentEditSession {
+/** The root's document or post open in the editor column (E0). */
+interface EditorSession {
   nodeId: string;
-  markdown: string;
+  kind: "document" | "post";
+  /** The saved text when the editor opened, and the text in the field. */
+  initialText: string;
+  text: string;
+  /** Documents: the thread title when the editor opened, and in the field. */
+  initialTitle: string;
   title: string;
-  responseRevision: string;
+  /** Documents: the snapshot revision and highlight ids the save expects. */
+  responseRevision: string | null;
   highlightIds: string[];
-  highlightCount: number;
+  /** Highlights and branch anchors the edit may leave without a match. */
+  highlightAnchors: ResearchHighlightAnchor[];
+  branchAnchors: ResearchHighlightAnchor[];
+  /** Posts: the post has replies or follow-ups, so Save adds a correction. */
+  correction: boolean;
+  imported: boolean;
+  /** Where focus returns when the column closes. */
+  returnFocus: HTMLElement | null;
 }
 
 
@@ -304,7 +344,8 @@ type FocusRequest = {
     | { kind: "row"; level: number }
     | { kind: "answer"; level: number }
     | { kind: "marker"; level: number; key: string }
-    | { kind: "composer"; key: string };
+    | { kind: "composer"; key: string }
+    | { kind: "editor" };
   strip: "reveal" | "settle" | "none";
   /** Only when focus was lost (it sat in a column that went away). */
   onlyIfLost: boolean;
@@ -328,6 +369,7 @@ interface DocumentMenuPlacement {
 
 type DocumentMenuState =
   | ({ kind: "answer"; nodeId: string } & DocumentMenuPlacement)
+  | ({ kind: "post"; nodeId: string } & DocumentMenuPlacement)
   | ({
       kind: "mark";
       nodeId: string;
@@ -913,6 +955,9 @@ function ResearchDocument({
   onRemoveTree,
   onRenameTree,
   onUpdateDocument,
+  onUpdateNote,
+  onAskAsQuestion,
+  readQuestionModel,
   onCancel,
   onRetryNode,
   linkActions,
@@ -966,7 +1011,49 @@ function ResearchDocument({
   const [renameTarget, setRenameTarget] = useState<{ nodeId: string; value: string } | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
-  const [documentEditSession, setDocumentEditSession] = useState<DocumentEditSession | null>(null);
+  const [editor, setEditor] = useState<EditorSession | null>(null);
+  const editorRef = useRef(editor);
+  editorRef.current = editor;
+  const [editorSaving, setEditorSaving] = useState(false);
+  const [editorAsking, setEditorAsking] = useState(false);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const editorFieldRef = useRef<HTMLTextAreaElement | null>(null);
+  // Counting and matching scan the whole text (up to the 10 MB document
+  // cap), so they follow the field at a lower priority than typing.
+  const editorText = useDeferredValue(editor?.text ?? "");
+  const editorStats = useMemo(() => {
+    if (!editor) {
+      return null;
+    }
+    let wordCount = 0;
+    let overWordLimit = false;
+    if (editor.kind === "document") {
+      try {
+        wordCount = countResearchDocumentWords(editorText, RESEARCH_DOCUMENT_WORD_LIMIT);
+      } catch (caught) {
+        if (!(caught instanceof ResearchDocumentWordLimitExceeded)) {
+          throw caught;
+        }
+        wordCount = caught.count;
+        overWordLimit = true;
+      }
+    }
+    const replaces = editor.kind === "document" || !editor.correction;
+    return {
+      wordCount,
+      overWordLimit,
+      overByteLimit:
+        editor.kind === "document" && new TextEncoder().encode(editorText).length > RESEARCH_DOCUMENT_BYTE_LIMIT,
+      removedHighlights: replaces
+        ? countUnmatchedResearchAnchors(editor.highlightAnchors, editor.initialText, editorText)
+        : 0,
+      unmatchedBranches: editor.kind === "document"
+        ? countUnmatchedResearchAnchors(editor.branchAnchors, editor.initialText, editorText)
+        : 0,
+    };
+    // Only the text and the session's fixed inputs count; the title does not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor?.nodeId, editor?.kind, editor?.correction, editor?.initialText, editorText]);
   const [recapDialogNodeId, setRecapDialogNodeId] = useState<string | null>(null);
   // Per-node reading state: which answers show their full item window
   // (persisted per tree) and which show the full transcript (per visit).
@@ -1103,7 +1190,10 @@ function ResearchDocument({
   // branch's column. The strip, its levels and the selected path keep their
   // identity while they show the same columns.
   const strip = useStableValue(
-    useMemo(() => researchStrip(nodes, selectedNodeId, pending), [nodes, pending, selectedNodeId]),
+    useMemo(
+      () => researchStrip(nodes, selectedNodeId, pending, editor?.nodeId ?? null),
+      [editor?.nodeId, nodes, pending, selectedNodeId],
+    ),
     sameResearchStrip,
   );
   const stripRef = useRef(strip);
@@ -1358,6 +1448,8 @@ function ResearchDocument({
           );
         case "composer":
           return composerRefs.current.get(target.key)?.element()?.querySelector("textarea") ?? null;
+        case "editor":
+          return editorFieldRef.current?.isConnected ? editorFieldRef.current : null;
       }
     },
     [pairColumn, selectedRow],
@@ -1382,7 +1474,7 @@ function ResearchDocument({
     }
     focusRequestRef.current = null;
     element.focus({ preventScroll: true });
-    if (request.target.kind !== "answer") {
+    if (request.target.kind !== "answer" && request.target.kind !== "editor") {
       scrollIntoColumn(element, request.target.kind === "composer" ? researchScrollBehavior() : "auto");
     }
     const row = columnsLayoutRef.current?.row ?? null;
@@ -1751,7 +1843,6 @@ function ResearchDocument({
     Boolean(highlightAction) ||
     Boolean(renameTarget) ||
     Boolean(deletingBranchId) ||
-    Boolean(documentEditSession) ||
     Boolean(recapDialogNodeId);
   const anyOverlayOpenRef = useRef(anyOverlayOpen);
   anyOverlayOpenRef.current = anyOverlayOpen;
@@ -1919,7 +2010,9 @@ function ResearchDocument({
       }
       if (key === "ArrowRight") {
         event.preventDefault();
-        if (levelPathRef.current.length > level + 1) {
+        if (level === 0 && editorRef.current) {
+          requestFocus({ kind: "editor" }, "settle");
+        } else if (levelPathRef.current.length > level + 1) {
           requestFocus({ kind: "row", level: level + 1 }, "reveal");
         }
         return;
@@ -2036,7 +2129,12 @@ function ResearchDocument({
       }
       if (key === "ArrowRight") {
         event.preventDefault();
-        rightFrom(level);
+        // The editor column sits right of the root's answer.
+        if (level === 0 && editorRef.current) {
+          requestFocus({ kind: "editor" }, "settle");
+        } else {
+          rightFrom(level);
+        }
       } else if (key === "ArrowLeft") {
         event.preventDefault();
         requestFocus({ kind: "row", level }, "reveal");
@@ -3952,34 +4050,179 @@ function ResearchDocument({
     }
   }
 
-  async function saveDocumentEdit(input: { markdown: string; title: string | null }) {
-    if (!documentEditSession) {
-      throw new Error("The document is not available for editing.");
+  /** Opens the editor column for the root's document or post. The strip
+   * closes any branch level and shows the root, so the editor is the last
+   * column; focus moves into the field. */
+  function startEditing(nodeId: string, returnFocus: HTMLElement | null) {
+    const node = nodeById.get(nodeId);
+    if (!node || nodeId !== rootNodeId || archived) {
+      return;
     }
-    const result = await onUpdateDocument({
-      nodeId: documentEditSession.nodeId,
-      markdown: input.markdown,
-      title: input.title,
-      expectedResponseRevision: documentEditSession.responseRevision,
-      expectedTitle: documentEditSession.title,
-      expectedHighlightIds: documentEditSession.highlightIds,
-    });
-    if (treeIdRef.current === result.tree.id && result.markdownChanged) {
-      // Do not leave the old revision visible after the modal closes. The
-      // existing loader refetches the atomically replaced snapshot.
-      const editedNodeId = documentEditSession.nodeId;
-      setContentByNode((current) => withoutKeys(current, [editedNodeId]));
-      fetchStampByNodeRef.current.delete(editedNodeId);
-      setContentLoadNonce((value) => value + 1);
-    }
-    if (result.removedHighlightCount > 0) {
-      onToast(
-        `Document updated · ${result.removedHighlightCount.toLocaleString()} highlight${
-          result.removedHighlightCount === 1 ? "" : "s"
-        } removed`,
-      );
+    let session: EditorSession;
+    if (node.kind === "document") {
+      const content = contentByNode[nodeId];
+      const markdown = segmentViews.get(nodeId)?.editableDocumentMarkdown ?? null;
+      if (!content?.responseRevision || markdown == null) {
+        onError("The document content is unavailable.");
+        return;
+      }
+      const highlights = content.node.highlights ?? [];
+      session = {
+        nodeId,
+        kind: "document",
+        initialText: markdown,
+        text: markdown,
+        initialTitle: detail?.tree.title ?? "",
+        title: detail?.tree.title ?? "",
+        responseRevision: content.responseRevision,
+        highlightIds: highlights.map((highlight) => highlight.id),
+        highlightAnchors: highlights.map((highlight) => highlight.anchor),
+        branchAnchors: nodes.flatMap((child) =>
+          child.parentNodeId === nodeId && child.queryAnchor ? [child.queryAnchor] : [],
+        ),
+        correction: false,
+        imported: node.origin === "imported",
+        returnFocus,
+      };
+    } else if (nodeType(node) === "post") {
+      const correction = researchPostHasReplies(nodes, node);
+      session = {
+        nodeId,
+        kind: "post",
+        initialText: node.prompt,
+        text: node.prompt,
+        initialTitle: "",
+        title: "",
+        responseRevision: null,
+        highlightIds: [],
+        highlightAnchors: node.highlights.map((highlight) => highlight.anchor),
+        branchAnchors: [],
+        correction,
+        imported: false,
+        returnFocus,
+      };
     } else {
-      onToast("Document updated");
+      return;
+    }
+    cancelPending();
+    setMenu(null);
+    setEditorError(null);
+    setEditor(session);
+    if (levelPathRef.current.length !== 1 || levelPathRef.current[0] !== nodeId) {
+      navigate(nodeId);
+    }
+    requestFocus({ kind: "editor" }, "settle");
+  }
+
+  /** Closes the editor column; focus returns to the control that opened it,
+   * else to the root's row (a document) or the post's column. */
+  function closeEditor() {
+    const session = editorRef.current;
+    setEditor(null);
+    setEditorError(null);
+    setEditorSaving(false);
+    const target = session?.returnFocus;
+    window.requestAnimationFrame(() => {
+      if (target?.isConnected) {
+        target.focus({ preventScroll: true });
+        settleResearchStrip(columnsLayoutRef.current?.row ?? null, columnIdOf(target));
+        return;
+      }
+      const post = workspaceRef.current?.querySelector<HTMLElement>(
+        `${columnSelector("N0")} > .research-column-scroll`,
+      );
+      if (post) {
+        post.focus({ preventScroll: true });
+        settleResearchStrip(columnsLayoutRef.current?.row ?? null, "N0");
+      } else {
+        requestFocus({ kind: "row", level: 0 }, "settle");
+      }
+    });
+  }
+
+  function editorCanSave(session: EditorSession) {
+    if (session.kind === "post") {
+      return Boolean(session.text.trim()) && session.text.trim() !== session.initialText.trim();
+    }
+    return researchDocumentEditGate({
+      markdown: session.text,
+      initialMarkdown: session.initialText,
+      title: session.title,
+      initialTitle: session.initialTitle,
+      overWordLimit: editorStats?.overWordLimit ?? false,
+      overByteLimit: editorStats?.overByteLimit ?? false,
+    }).canSave;
+  }
+
+  async function saveEditor() {
+    const session = editorRef.current;
+    if (!session || editorSaving || !editorCanSave(session)) {
+      return;
+    }
+    setEditorSaving(true);
+    setEditorError(null);
+    try {
+      if (session.kind === "document") {
+        const result = await onUpdateDocument({
+          nodeId: session.nodeId,
+          markdown: session.text,
+          title: session.title.trim() || null,
+          expectedResponseRevision: session.responseRevision ?? "",
+          expectedTitle: session.initialTitle,
+          expectedHighlightIds: session.highlightIds,
+        });
+        if (treeIdRef.current === result.tree.id && result.markdownChanged) {
+          // The loader refetches the replaced snapshot; the old revision is
+          // not shown once the editor closes.
+          setContentByNode((current) => withoutKeys(current, [session.nodeId]));
+          fetchStampByNodeRef.current.delete(session.nodeId);
+          setContentLoadNonce((value) => value + 1);
+        }
+        const removed = result.removedHighlightCount;
+        onToast(
+          removed > 0
+            ? `Document saved · ${removed.toLocaleString()} highlight${removed === 1 ? "" : "s"} removed`
+            : "Document saved",
+        );
+      } else {
+        const result = await onUpdateNote({
+          nodeId: session.nodeId,
+          text: session.text,
+          expectedText: session.initialText,
+          correction: session.correction,
+        });
+        const removed = result.removedHighlightCount;
+        onToast(
+          session.correction
+            ? "Correction added"
+            : removed > 0
+              ? `Post saved · ${removed.toLocaleString()} highlight${removed === 1 ? "" : "s"} removed`
+              : "Post saved",
+        );
+      }
+      closeEditor();
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : String(err));
+      setEditorSaving(false);
+    }
+  }
+
+  /** Starts a new question thread with the editor's text. The edited
+   * document or post is not changed: the editor closes without saving. */
+  async function askEditorAsQuestion() {
+    const session = editorRef.current;
+    if (!session || editorAsking) {
+      return;
+    }
+    setEditorAsking(true);
+    setEditorError(null);
+    try {
+      await onAskAsQuestion(session.text.trim());
+      setEditor(null);
+    } catch (err) {
+      setEditorError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setEditorAsking(false);
     }
   }
 
@@ -4439,6 +4682,8 @@ function ResearchDocument({
     const markers = markersByNode[nodeId] ?? [];
     const endMarker = markers.find((marker) => marker.top === null) ?? null;
     const footTime = node.status === "complete" ? (node.completedAt ?? node.createdAt) : null;
+    const documentEditing = editor?.kind === "document" && editor.nodeId === nodeId ? editor : null;
+    const previewing = documentEditing !== null && documentEditing.text !== documentEditing.initialText;
     return (
       <section
         key={columnKey(column)}
@@ -4451,10 +4696,19 @@ function ResearchDocument({
         </header>
         <div
           className="research-column-scroll"
-          tabIndex={-1}
+          // While the editor is open, Shift+Tab from it reaches the preview.
+          tabIndex={documentEditing ? 0 : -1}
           onScroll={onColumnScroll(column)}
         >
           <article className="research-answer research-reading-surface">
+            {previewing ? (
+              <ResearchEditPreview
+                original={documentEditing.initialText}
+                next={editorText}
+                imported={documentEditing.imported}
+                label="Preview"
+              />
+            ) : (
             <ResearchAnswerPane
               view={view}
               node={node}
@@ -4486,14 +4740,23 @@ function ResearchDocument({
               onRootMouseMove={trackAnnotationUnderPointer}
               onRootMouseLeave={clearAnnotationPointer}
             />
-            {markers.filter((marker) => marker.top !== null).map((marker) => renderMarker(level, marker))}
-            {footTime !== null || endMarker ? (
+            )}
+            {previewing ? null : markers.filter((marker) => marker.top !== null).map((marker) => renderMarker(level, marker))}
+            {previewing ? null : footTime !== null || endMarker ? (
               <div className={`research-answer-foot${footTime === null ? " is-bare" : ""}`}>
                 {footTime !== null ? (
                   <div className="research-answer-foot-meta">
                     <time dateTime={new Date(footTime).toISOString()} title={new Date(footTime).toLocaleString()}>
                       {shortWhen(footTime, minuteNow)}
                     </time>
+                    {node.editedAt ? (
+                      <>
+                        <span aria-hidden="true"> · </span>
+                        <span title={new Date(node.editedAt).toLocaleString()}>
+                          Edited {shortWhen(node.editedAt, minuteNow)}
+                        </span>
+                      </>
+                    ) : null}
                   </div>
                 ) : null}
                 {endMarker ? renderMarker(level, endMarker) : null}
@@ -4502,6 +4765,103 @@ function ResearchDocument({
           </article>
         </div>
       </section>
+    );
+  };
+
+  const renderEditorColumn = (column: ResearchEditorColumnData) => {
+    if (!editor || editor.nodeId !== column.nodeId) {
+      return null;
+    }
+    const session = editor;
+    const update = (patch: Partial<EditorSession>) =>
+      setEditor((current) => (current && current.nodeId === session.nodeId ? { ...current, ...patch } : current));
+    const stats = editorStats;
+    const notices: React.ReactNode[] = [];
+    if (session.kind === "document") {
+      const gate = researchDocumentEditGate({
+        markdown: session.text,
+        initialMarkdown: session.initialText,
+        title: session.title,
+        initialTitle: session.initialTitle,
+        overWordLimit: stats?.overWordLimit ?? false,
+        overByteLimit: stats?.overByteLimit ?? false,
+      });
+      if (gate.limitNotice) {
+        notices.push(
+          <p key="limit" className="research-editor-note is-error" role="alert">
+            {gate.limitNotice}
+          </p>,
+        );
+      }
+    } else {
+      notices.push(
+        <p key="mode" className={`research-editor-note${session.correction ? " is-warning" : ""}`}>
+          {session.correction
+            ? "This post has replies or follow-ups, which refer to its current text. Saving adds this text as a correction under the post; the original text stays."
+            : "This post has no replies or follow-ups. Saving replaces its text and marks it Edited."}
+        </p>,
+      );
+    }
+    const removed = session.text !== session.initialText ? (stats?.removedHighlights ?? 0) : 0;
+    if (removed > 0) {
+      notices.push(
+        <p key="highlights" className="research-editor-note is-warning">
+          {removed === 1
+            ? "1 highlight no longer matches the text and will be removed."
+            : `${removed.toLocaleString()} highlights no longer match the text and will be removed.`}
+        </p>,
+      );
+    }
+    const unmatchedBranches = session.text !== session.initialText ? (stats?.unmatchedBranches ?? 0) : 0;
+    if (unmatchedBranches > 0) {
+      notices.push(
+        <p key="branches" className="research-editor-note">
+          {unmatchedBranches === 1
+            ? "1 branch was asked about a passage that is no longer in the text. The branch keeps its quote."
+            : `${unmatchedBranches.toLocaleString()} branches were asked about passages that are no longer in the text. The branches keep their quotes.`}
+        </p>,
+      );
+    }
+    return (
+      <ResearchEditorColumn
+        key={columnKey(column)}
+        column={column}
+        current={currentLevel === column.levelIndex}
+        kind={session.kind}
+        correction={session.correction}
+        value={session.text}
+        onChange={(text) => update({ text })}
+        title={
+          session.kind === "document"
+            ? {
+                value: session.title,
+                placeholder: session.text.trim()
+                  ? deriveResearchDocumentTitle(session.text)
+                  : "Title (uses the first line if left blank)",
+                onChange: (title) => update({ title }),
+              }
+            : undefined
+        }
+        dirty={session.text !== session.initialText || session.title !== session.initialTitle}
+        canSave={editorCanSave(session)}
+        saving={editorSaving}
+        notices={notices}
+        countText={
+          session.kind === "document" && stats
+            ? {
+                text: `${stats.overWordLimit ? `Over ${RESEARCH_DOCUMENT_WORD_LIMIT.toLocaleString()}` : `${stats.wordCount.toLocaleString()} / ${RESEARCH_DOCUMENT_WORD_LIMIT.toLocaleString()}`} words${stats.overByteLimit ? " · over 10 MB" : ""}`,
+                over: stats.overWordLimit || stats.overByteLimit,
+              }
+            : null
+        }
+        error={editorError}
+        questionModel={readQuestionModel()}
+        asking={editorAsking}
+        textareaRef={editorFieldRef}
+        onCancel={closeEditor}
+        onSave={() => void saveEditor()}
+        onAskAsQuestion={() => void askEditorAsQuestion()}
+      />
     );
   };
 
@@ -4525,6 +4885,7 @@ function ResearchDocument({
         if (!note) {
           return null;
         }
+        const postEditing = editor?.kind === "post" && editor.nodeId === note.id ? editor : null;
         return (
           <section
             key={columnKey(column)}
@@ -4534,10 +4895,32 @@ function ResearchDocument({
           >
             {/* The note itself starts the column, so the header names the
                 column ("Post") rather than repeating the note's text. */}
-            <ResearchPairHeader title="Post" history={historyNav} archived={archived} />
-            <div className="research-column-scroll" tabIndex={-1}>
+            <ResearchPairHeader
+              title="Post"
+              history={historyNav}
+              archived={archived}
+              menu={
+                level === 0 && note.id === rootNodeId
+                  ? {
+                      label: "Post actions",
+                      open: menu?.kind === "post",
+                      onOpen: (trigger) =>
+                        setMenu({ kind: "post", nodeId: note.id, anchor: trigger, align: "end", trigger }),
+                    }
+                  : null
+              }
+            />
+            <div className="research-column-scroll" tabIndex={postEditing ? 0 : -1}>
               <div className="research-column-content research-reading-surface">
-                <ResearchNoteDocument detail={detail} note={note} onSelectNode={(nodeId) => navigate(nodeId)} />
+                {postEditing && !postEditing.correction && postEditing.text !== postEditing.initialText ? (
+                  <ResearchEditPreview original={postEditing.initialText} next={editorText} label="Preview" />
+                ) : (
+                  <ResearchNoteDocument detail={detail} note={note} onSelectNode={(nodeId) => navigate(nodeId)} />
+                )}
+                <ResearchPostCorrections corrections={note.corrections ?? []} now={minuteNow} />
+                {postEditing?.correction && postEditing.text.trim() && postEditing.text !== postEditing.initialText ? (
+                  <ResearchEditPreview original="" next={editorText} label="Correction preview" />
+                ) : null}
               </div>
             </div>
           </section>
@@ -4617,6 +5000,8 @@ function ResearchDocument({
       }
       case "answer":
         return renderAnswerColumn(column);
+      case "editor":
+        return renderEditorColumn(column);
       case "pending": {
         const pendingKey = `draft:${column.parentNodeId}`;
         return (
@@ -4707,6 +5092,59 @@ function ResearchDocument({
                   removeHighlights(menu.nodeId, [highlight.id]).catch((err) =>
                     onError(err instanceof Error ? err.message : String(err)),
                   );
+                }}
+              />
+            </>
+          ) : null}
+        </ResearchMenu>
+      );
+    }
+    if (menu.kind === "post") {
+      const post = menuNode;
+      const correction = researchPostHasReplies(nodes, post);
+      return (
+        <ResearchMenu
+          anchor={menu.anchor}
+          align={menu.align}
+          trigger={menu.trigger}
+          label="Post actions"
+          onClose={() => setMenu(null)}
+        >
+          <ResearchMenuItem
+            icon={<Pencil size={15} aria-hidden="true" />}
+            label={correction ? "Correct post" : "Edit post"}
+            disabled={archived}
+            title={archived ? "Move this post out of Archive to edit it" : undefined}
+            onSelect={() => {
+              const trigger = menu.trigger ?? null;
+              setMenu(null);
+              startEditing(post.id, trigger);
+            }}
+          />
+          {treeMenu ? (
+            <>
+              <ResearchMenuSeparator />
+              <ResearchTreeMenuItems
+                currentPlace={treeMenu.currentPlace}
+                folders={treeMenu.folders}
+                bookmarked={treeMenu.bookmarked}
+                onToggleBookmark={() => {
+                  setMenu(null);
+                  treeMenu.onSetBookmarked(!treeMenu.bookmarked);
+                }}
+                followed={treeMenu.followed}
+                followDisabledReason={treeMenu.followDisabledReason}
+                onToggleFollow={() => {
+                  setMenu(null);
+                  treeMenu.onSetFollowed(!treeMenu.followed);
+                }}
+                onMove={(place) => {
+                  setMenu(null);
+                  treeMenu.onMove(place);
+                }}
+                onNewFolder={() => {
+                  setMenu(null);
+                  treeMenu.onNewFolder(menu.trigger ?? undefined);
                 }}
               />
             </>
@@ -4883,17 +5321,9 @@ function ResearchDocument({
                   : undefined
             }
             onSelect={() => {
+              const trigger = menu.trigger ?? null;
               setMenu(null);
-              if (content?.responseRevision && view?.editableDocumentMarkdown != null) {
-                setDocumentEditSession({
-                  nodeId: node.id,
-                  markdown: view.editableDocumentMarkdown,
-                  title: treeTitleText,
-                  responseRevision: content.responseRevision,
-                  highlightIds: content.node.highlights?.map((highlight) => highlight.id) ?? [],
-                  highlightCount: content.node.highlights?.length ?? 0,
-                });
-              }
+              startEditing(node.id, trigger);
             }}
           />
         ) : null}
@@ -5154,19 +5584,6 @@ function ResearchDocument({
                 </div>
               </form>
             </div>,
-            document.body,
-          )
-        : null}
-      {documentEditSession
-        ? createPortal(
-            <DocumentComposer
-              initialMarkdown={documentEditSession.markdown}
-              initialTitle={documentEditSession.title}
-              highlightCount={documentEditSession.highlightCount}
-              resetKey={`${documentEditSession.nodeId}:${documentEditSession.responseRevision}`}
-              onClose={() => setDocumentEditSession(null)}
-              onSubmit={saveDocumentEdit}
-            />,
             document.body,
           )
         : null}
