@@ -1226,7 +1226,7 @@ fn headless_shell_from_path(path_value: &std::ffi::OsStr) -> Option<PathBuf> {
 
 /// Playwright cache roots qmux may scan. Only explicitly configured roots are
 /// searched; the default per-user cache (`~/Library/Caches/ms-playwright`) is
-/// deliberately absent because it exists precisely to be user-writable.
+/// excluded because it is user-writable.
 fn playwright_cache_roots() -> Vec<PathBuf> {
     std::env::var_os("PLAYWRIGHT_BROWSERS_PATH")
         .filter(|path| path != "0")
