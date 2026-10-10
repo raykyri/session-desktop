@@ -3,7 +3,8 @@
     "src/lib/composerActions.ts": "Independent agent queue, fork, and capability contracts retained for process features even though the current research UI does not mount this composer.",
     "src/lib/composerSlashCommands.ts": "Tested agent fork/worktree command grammar retained independently of the current composer UI.",
     "src/lib/handoff.ts": "Tested bounded agent handoff payload formatting retained as research process infrastructure.",
-    "src/lib/imageMarkers.ts": "Tested persisted transcript image marker grammar retained for imported agent transcripts."
+    "src/lib/imageMarkers.ts": "Tested persisted transcript image marker grammar retained for imported agent transcripts.",
+    "src/lib/paneTree.ts": "Tested flat pane-order helpers retained for terminal pane infrastructure; the app consumer was the removed pane context menu."
   },
   "exports": {
     "src/lib/composerActions.ts": {
@@ -64,7 +65,6 @@
         "PromptLibrary",
         "PromptScope",
         "QueuedTurnWait",
-        "RecentResearchQueryPage",
         "RemoteConnectionState",
         "RemoteMultiplexer",
         "RemoteProbeCheck",
@@ -73,7 +73,6 @@
         "RemoveQueuedAgentTurnResult",
         "ReorderQueuedAgentTurnResult",
         "RepositoryWorktree",
-        "ResearchNodeCard",
         "ResearchNodeKind",
         "ResearchNodeOrigin",
         "ResearchRecap",

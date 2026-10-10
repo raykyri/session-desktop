@@ -19,7 +19,7 @@ export function paneCanOpenWorktree(
   return { enabled: true };
 }
 
-export function paneScope(
+function paneScope(
   pane: PaneInfo,
   groupById: ReadonlyMap<string, GroupInfo>,
 ): WorkspaceScope {

@@ -321,19 +321,6 @@ export function isQueuedTurn(value: unknown): value is QueuedTurn {
   );
 }
 
-// Forking needs an adapter with a native fork command and a recorded session id to
-// resume. Single owner of the gate used by context/launcher actions, the
-// selection "Ask in new thread" button, and the composer's queue-and-fork options.
-export function agentCanFork(agent: AgentInfo | null | undefined): boolean {
-  if (!agent?.sessionId) {
-    return false;
-  }
-  const adapter = findAgentUiAdapter(agent.adapter);
-  return Boolean(
-    adapter?.supportsFork && (adapter.canFork ? adapter.canFork(agent) : true),
-  );
-}
-
 // Applies a single updated agent to the list: replaces it in place when present,
 // otherwise appends it (e.g. a freshly spawned agent), preserving order.
 //

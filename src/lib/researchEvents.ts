@@ -47,13 +47,6 @@ type HighlightCreatedEvent = {
   timestamp: number;
 };
 
-type HighlightRemovedEvent = {
-  type: "research.highlight.removed";
-  nodeId: string;
-  highlightId: string;
-  timestamp: number;
-};
-
 type HighlightsRemovedEvent = {
   type: "research.highlights.removed";
   nodeId: string;
@@ -106,7 +99,6 @@ export type ParsedResearchEvent =
   | NodeEvent
   | TreeEvent
   | HighlightCreatedEvent
-  | HighlightRemovedEvent
   | HighlightsRemovedEvent
   | RecapPendingEvent
   | TreeRemovedEvent
@@ -218,7 +210,6 @@ function isResearchNode(value: unknown): value is ResearchNode {
         isOptionalString(value.recap.instructions))) &&
     isOptionalString(value.parentNodeId) &&
     isOptionalString(value.title) &&
-    isOptionalString(value.responsePreview) &&
     isOptionalString(value.paneId) &&
     isOptionalString(value.agentId) &&
     Array.isArray(value.highlights) &&
@@ -299,18 +290,6 @@ export function parseResearchEvent(event: SessionEvent): ResearchEventParseResul
               type: event.type,
               nodeId: payload.nodeId,
               highlight: payload.highlight,
-              timestamp: event.timestamp,
-            },
-          }
-        : malformed();
-    case "research.highlight.removed":
-      return typeof payload.nodeId === "string" && typeof payload.highlightId === "string"
-        ? {
-            kind: "event",
-            event: {
-              type: event.type,
-              nodeId: payload.nodeId,
-              highlightId: payload.highlightId,
               timestamp: event.timestamp,
             },
           }

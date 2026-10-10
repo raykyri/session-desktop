@@ -2,12 +2,9 @@ import { useAppStartup } from "./hooks/useAppStartup";
 import { RESEARCH_FOLDER_SCOPE_KEY, useResearchNavigationState } from "./hooks/useResearchNavigationState";
 import { useUserNotifications } from "./hooks/useUserNotifications";
 import { recordRemoteStartup, reconcileRemoteReservation } from "./lib/remoteStartup";
-import RemoteConnectionDetailsText from "./components/RemoteConnectionDetailsText";
 import {
-  remoteConnectionLabel,
   shouldCloseRemotePaneOnControlD,
 } from "./lib/remoteConnection";
-import { reconnectPane } from "./lib/api";
 import {
   useCallback,
   useEffect,
@@ -27,23 +24,16 @@ import type {
 import {
   Check,
   ChevronDown,
-  Columns2,
   Bot,
   Eye,
   EyeOff,
-  FolderGit2,
   Globe,
-  GitBranch,
   LoaderCircle,
   MessageSquareText,
   Minus,
   Moon,
-  PanelBottomClose,
-  PanelBottomOpen,
   PanelLeft,
   Plus,
-  RefreshCw,
-  Rows2,
   Settings,
   Sun,
   X,
@@ -134,14 +124,9 @@ import {
   type ParsedResearchEvent,
 } from "./lib/researchEvents";
 import {
-  agentStatusLabel,
   agentStatusKeepsMachineAwake,
   desiredPreventSleepState,
-  agentCanFork,
-  agentDisplayBranch,
-  agentStatusTone,
   clamp,
-  clampContextMenuToViewport,
   defaultPaneTitle,
   firstUserTurnText,
   isEditableTarget,
@@ -207,17 +192,10 @@ import type {
   CloseDialogState,
   ExitDialogState,
   ExitPreflightRequest,
-  PaneContextMenuState,
 } from "./appTypes";
 import {
-  movePaneAfter,
-  toLayout,
-} from "./lib/paneTree";
-import {
-  adjacentPaneBelow,
   canSplitPaneInTree,
   canToggleTurnSidebar,
-  detachPaneFromSplitMemberships,
   joinPaneSplit,
   normalizePaneSplitsForPanes,
   paneSplitAxis,
@@ -231,7 +209,6 @@ import {
   splitAxisForPane,
   splitBranchChildCountForPane,
   splitFractions,
-  togglePaneSplitAxis,
 } from "./lib/paneSplits";
 import {
   APP_TEXT_SIZE,
@@ -271,8 +248,6 @@ import {
 import { isActiveResearchStatus } from "./lib/researchThreads";
 import {
   groupsForScope,
-  paneCanOpenWorktree,
-  paneScope,
   panesForScope,
   researchAttention,
 } from "./lib/workspaceScope";
@@ -358,7 +333,6 @@ import {
   restoreResearchTree,
   retryResearchNode,
   forkAgent,
-  getPaneSplits,
   setOpenRouterKey,
   openRouterChatCompletion,
   getThreadGraph,
@@ -398,7 +372,6 @@ import {
   setActiveTab,
   setNativeBrowserBackground,
   setNativeBrowserOverlayOpen,
-  setPaneLayout,
   setPaneSplits as persistPaneSplits,
   setAgentDraft as persistAgentDraft,
   setAgentTyping,
@@ -412,8 +385,6 @@ import {
   openPaneWorktree,
   openRepositoryBranch,
   openRepositoryWorktree,
-  paneRepositoryInventory,
-  suggestPaneWorktreeName,
   upsertRemote,
   worktreeStatus,
 } from "./lib/api";
@@ -1282,8 +1253,6 @@ function MainApp() {
   // Debounced "user is typing" hold per agent: while active the backend won't
   // auto-drain that agent's queue. Holds the agent id + the pending release timer.
   const agentTypingRef = useRef<{ agentId: string; timer: number } | null>(null);
-  const paneReorderPersistChainRef = useRef<Promise<void>>(Promise.resolve());
-  const paneReorderRequestSeqRef = useRef(0);
   const pendingFirstTitleByAgentRef = useRef<Map<string, PendingFirstMessageTitle>>(new Map());
   const titleRegenerationSeqByPaneRef = useRef<Record<string, number>>({});
   // Per-agent write generation for the queued-turns list. Bumped on every write (a
@@ -1340,7 +1309,6 @@ function MainApp() {
   const groupsRef = useRef(groups);
   groupsRef.current = groups;
   const [lastActiveGroupId, setLastActiveGroupId] = useState<string | null>(null);
-  const paneContextMenuRef = useRef<HTMLDivElement | null>(null);
   const [panes, setPanes] = useState<PaneInfo[]>([]);
   const applyRecoveredDismissals = useCallback((paneList: PaneInfo[]) => {
     const dismissed = dismissedRecoveredPaneIdsRef.current;
@@ -1871,7 +1839,6 @@ function MainApp() {
     useState<WorktreeCreateDialogState | null>(null);
   const [repositoryBrowser, setRepositoryBrowser] = useState<RepositoryBrowserState | null>(null);
   const worktreeDialogResolveRef = useRef<((created: boolean) => void) | null>(null);
-  const worktreeDialogRequestIdRef = useRef(0);
   const worktreeNameInputRef = useRef<HTMLInputElement | null>(null);
   const [closeDialog, setCloseDialog] = useState<CloseDialogState | null>(null);
   const [researchFolderRemovalError, setResearchFolderRemovalError] = useState<string | null>(null);
@@ -1895,18 +1862,6 @@ function MainApp() {
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const [titleGenerationTest, setTitleGenerationTest] =
     useState<TitleGenerationTestState | null>(null);
-  const [paneContextMenu, setPaneContextMenu] = useState<PaneContextMenuState | null>(null);
-  // The agent pane whose conversation the "Export to Research…" dialog is
-  // offering to copy; null when the dialog is closed.
-  const [exportResearchPane, setExportResearchPane] = useState<PaneInfo | null>(null);
-  useEffect(() => {
-    // The dialog holds a snapshot of the pane; if the pane dies while the
-    // dialog is open, close it rather than let Export target a pane that no
-    // longer exists (or, worse, a recycled id).
-    if (exportResearchPane && !panes.some((pane) => pane.id === exportResearchPane.id)) {
-      setExportResearchPane(null);
-    }
-  }, [exportResearchPane, panes]);
   const [paneSplits, setPaneSplitsState] = useState<PaneSplitInfo[]>([]);
   paneSplitsRef.current = paneSplits;
   // Per-pane browser overlay state, so each tab keeps its own page and open/closed.
@@ -3878,7 +3833,6 @@ function MainApp() {
   function setLeftSidebarCollapsedForActivePane(collapsed: boolean) {
     setLeftSidebarCollapsed(collapsed);
     if (collapsed) {
-      setPaneContextMenu(null);
     }
     focusTerminalPaneAfterChromeChange(
       activeSurfaceRef.current === "pane" ? activePaneIdRef.current : null,
@@ -4266,12 +4220,10 @@ function MainApp() {
       worktreeCreateDialog ||
       closeDialog ||
       exitDialog ||
-      exportResearchPane ||
       exitPreflightRequest ||
       renamePaneId ||
       renameGroupId ||
-      linkMenu ||
-      paneContextMenu,
+      linkMenu,
   );
   const nativeBrowserOccluded = Boolean(
     nativeModalOccluded || appToast || userNotifications.length > 0 || folderPickerStatus,
@@ -4512,7 +4464,6 @@ function MainApp() {
         : 1;
     const scale = siblingCount > 1 ? siblingCount / (siblingCount + 1) : 0.5;
     setError(null);
-    setPaneContextMenu(null);
     try {
       const pane = await spawnShell(
         estimateSplitPaneSize(sourcePane, requestedAxis, scale),
@@ -4540,92 +4491,6 @@ function MainApp() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }
-
-  function joinPaneBelow(sourcePane: PaneInfo, belowPane: PaneInfo) {
-    setPaneContextMenu(null);
-    savePaneSplits(
-      joinPaneSplit(paneSplits, panes, sourcePane.id, belowPane.id, {
-        insertedPaneId: belowPane.id,
-        source: "join",
-      }),
-    );
-    setActivePaneId(sourcePane.id);
-  }
-
-  function toggleSplitAxisForPane(pane: PaneInfo) {
-    setPaneContextMenu(null);
-    const split = paneSplitForPane(paneSplits, pane.id);
-    if (!split || split.paneIds.length < 2) {
-      return;
-    }
-    savePaneSplits(
-      paneSplits.map((candidate) =>
-        candidate.id === split.id ? togglePaneSplitAxis(candidate) : candidate,
-      ),
-    );
-  }
-
-  // Detach a single tab from its split while keeping the remaining members grouped.
-  function removePaneFromSplit(pane: PaneInfo) {
-    setPaneContextMenu(null);
-    setError(null);
-    const split = paneSplitForPane(paneSplits, pane.id);
-    if (!split || split.paneIds.length < 2) {
-      return;
-    }
-    const nextSplits = detachPaneFromSplitMemberships(paneSplits, pane.id);
-    const memberIndex = split.paneIds.indexOf(pane.id);
-    const isEdgeMember = memberIndex === 0 || memberIndex === split.paneIds.length - 1;
-    if (isEdgeMember) {
-      // An edge member leaves the remaining members contiguous, so the tab can stay
-      // put — only the split membership changes.
-      savePaneSplits(nextSplits);
-      setActivePaneId(pane.id);
-      return;
-    }
-
-    // A middle member can't stay between the others without re-forming the split, so
-    // lift it just below the remaining block before persisting.
-    const lastRemainingId = split.paneIds[split.paneIds.length - 1];
-    const groupPanes = panes.filter((candidate) => candidate.groupId === pane.groupId);
-    const nextGroupPanes = movePaneAfter(groupPanes, pane.id, lastRemainingId);
-    const nextPanes = panesWithGroupOrder(pane.groupId, nextGroupPanes);
-    const nextLayout = toLayout(nextPanes);
-    const requestSeq = paneReorderRequestSeqRef.current + 1;
-    paneReorderRequestSeqRef.current = requestSeq;
-    // Apply panes and splits together so the pane-change normalization effect doesn't
-    // briefly persist the pre-detach split shape.
-    setPanesPreservingRecoveredDismissals(nextPanes);
-    setPaneSplitsState(nextSplits);
-
-    const persist = paneReorderPersistChainRef.current
-      .catch(() => undefined)
-      .then(() => setPaneLayout(nextLayout));
-
-    paneReorderPersistChainRef.current = persist
-      .then((orderedPanes) => {
-        if (paneReorderRequestSeqRef.current !== requestSeq) {
-          return;
-        }
-        setPanesPreservingRecoveredDismissals(orderedPanes);
-        savePaneSplits(nextSplits, orderedPanes);
-        setActivePaneId(pane.id);
-      })
-      .catch((err) => {
-        if (paneReorderRequestSeqRef.current !== requestSeq) {
-          return;
-        }
-        setError(err instanceof Error ? err.message : String(err));
-        void Promise.all([listPanes(), getPaneSplits().catch(() => paneSplits)])
-          .then(([latestPanes, latestSplits]) => {
-            if (paneReorderRequestSeqRef.current === requestSeq) {
-              setPanesPreservingRecoveredDismissals(latestPanes);
-              setPaneSplitsState(normalizePaneSplitsForPanes(latestSplits, latestPanes));
-            }
-          })
-          .catch(() => undefined);
-      });
   }
 
   async function refreshAgentTurnQueue(agentId: string) {
@@ -4815,56 +4680,8 @@ function MainApp() {
       : {}),
   } as CSSProperties;
 
-  const contextMenuPane = paneContextMenu
-    ? panes.find((pane) => pane.id === paneContextMenu.paneId)
-    : undefined;
-  const contextMenuAgent = contextMenuPane
-    ? agents.find((agent) => agent.paneId === contextMenuPane.id)
-    : undefined;
-  const contextMenuDisplayTitle = contextMenuPane
-    ? displayPaneTitle(contextMenuPane, contextMenuAgent)
-    : "";
-  const contextMenuTerminalTitle = contextMenuPane
-    ? Object.prototype.hasOwnProperty.call(terminalTitleByPane, contextMenuPane.id)
-      ? sanitizeTerminalTitle(terminalTitleByPane[contextMenuPane.id] ?? "")
-      : sanitizeTerminalTitle(contextMenuPane.lastOscTitle ?? "")
-    : null;
   const titleGenerationTestVisible = settings.tabTitleProvider === "openRouter";
   const titleGenerationTestRunning = titleGenerationTest?.status === "running";
-  const contextMenuPaneSplit = paneSplitForPane(paneSplits, contextMenuPane?.id);
-  const contextMenuPaneHasSplit = Boolean(
-    contextMenuPaneSplit && contextMenuPaneSplit.paneIds.length >= 2,
-  );
-  // Whether a join or an append acting on *this* pane would run left-to-right.
-  // In a nested layout that is the pane's own branch axis, not the split's root
-  // axis: a stacked pair inside a column split still joins "below".
-  const contextMenuSplitIsColumns =
-    contextMenuPaneSplit && contextMenuPane
-      ? (splitAxisForPane(contextMenuPaneSplit, contextMenuPane.id) ??
-          paneSplitAxis(contextMenuPaneSplit)) === "horizontal"
-      : false;
-  const canSplitContextMenuPaneBelow = contextMenuPane
-    ? canSplitTerminal(contextMenuPane, "vertical")
-    : false;
-  const canSplitContextMenuPaneRight = contextMenuPane
-    ? canSplitTerminal(contextMenuPane, "horizontal")
-    : false;
-  const contextMenuAdjacentBelow = adjacentPaneBelow(panes, contextMenuPane);
-  const contextMenuAdjacentBelowSplit = paneSplitForPane(
-    paneSplits,
-    contextMenuAdjacentBelow?.id,
-  );
-  const canJoinContextMenuBelow = Boolean(
-    contextMenuPane &&
-      contextMenuAdjacentBelow &&
-      (!contextMenuPaneSplit ||
-        !contextMenuAdjacentBelowSplit ||
-        contextMenuPaneSplit.id !== contextMenuAdjacentBelowSplit.id),
-  );
-  const canForkContextMenuPane = agentCanFork(contextMenuAgent);
-  const contextMenuWorktreeAction = contextMenuPane
-    ? paneCanOpenWorktree(contextMenuAgent, groupById.get(contextMenuPane.groupId))
-    : { enabled: false, reason: undefined };
 
   useAppStartup({
     applySecondary: ({ storedOpenRouterKey, storedUseLoginShell, storedWorktreeLocation,
@@ -6226,12 +6043,8 @@ function MainApp() {
           invalidateResearchHighlights();
           break;
         }
-        case "research.highlight.removed":
         case "research.highlights.removed": {
-          const highlightIds =
-            event.type === "research.highlight.removed"
-              ? [event.highlightId]
-              : event.highlightIds;
+          const highlightIds = event.highlightIds;
           const cachedNode = researchNodeEventCacheRef.current.get(event.nodeId);
           if (cachedNode) {
             const node = removeResearchNodeHighlights(cachedNode, highlightIds);
@@ -6697,7 +6510,6 @@ function MainApp() {
     // PTY lifecycle bookkeeping must not implicitly leave a research document when
     // some unrelated terminal exits. User-driven pane activation uses the wrapper.
     setActivePaneId: setActivePaneIdState,
-    setPaneContextMenu,
     setExitPreflightRequest,
     setAgents,
     setGroups,
@@ -6743,71 +6555,6 @@ function MainApp() {
     const resolve = worktreeDialogResolveRef.current;
     worktreeDialogResolveRef.current = null;
     resolve?.(created);
-  }
-
-  async function openWorktreeDialog(
-    pane: PaneInfo,
-    action: WorktreeCreateAction,
-  ): Promise<boolean> {
-    setError(null);
-    setPaneContextMenu(null);
-    try {
-      const name = await suggestPaneWorktreeName(pane.id);
-      const requestId = ++worktreeDialogRequestIdRef.current;
-      worktreeDialogResolveRef.current?.(false);
-      const result = new Promise<boolean>((resolve) => {
-        worktreeDialogResolveRef.current = resolve;
-        setWorktreeCreateDialog({
-          pane,
-          action,
-          name,
-          suggestedName: name,
-          creating: false,
-          error: null,
-          inventory: null,
-          inventoryLoading: action.kind === "open",
-          inventoryError: null,
-          startRef: null,
-          requestId,
-        });
-      });
-      if (action.kind === "open") {
-        void paneRepositoryInventory(pane.id)
-          .then((inventory) => {
-            setWorktreeCreateDialog((current) =>
-              current?.requestId === requestId
-                ? { ...current, inventory, inventoryLoading: false }
-                : current,
-            );
-          })
-          .catch((err) => {
-            setWorktreeCreateDialog((current) =>
-              current?.requestId === requestId
-                ? {
-                    ...current,
-                    inventoryLoading: false,
-                    inventoryError: unknownErrorMessage(err),
-                  }
-                : current,
-            );
-          });
-      }
-      return await result;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      return false;
-    }
-  }
-
-  async function openWorktreeFromPane(pane: PaneInfo) {
-    await openWorktreeDialog(pane, { kind: "open" });
-  }
-
-  function forkPaneInWorktree(
-    pane: PaneInfo,
-    options?: { prompt?: string; anchor?: MessageAnchor },
-  ): Promise<boolean> {
-    return openWorktreeDialog(pane, { kind: "fork", ...options });
   }
 
   async function createWorktreeFromDialog() {
@@ -6884,26 +6631,6 @@ function MainApp() {
     requestAnimationFrame(() => {
 
     });
-  }
-
-  async function showRepositoryBrowser(pane: PaneInfo) {
-    setPaneContextMenu(null);
-    setError(null);
-    setRepositoryBrowser({ pane, inventory: null, error: null, opening: null, names: {} });
-    try {
-      const inventory = await paneRepositoryInventory(pane.id);
-      const names = Object.fromEntries(
-        inventory.branches.map((branch) => [branch.fullRef, repositoryWorktreeName(branch)]),
-      );
-      setRepositoryBrowser((current) =>
-        current?.pane.id === pane.id ? { ...current, inventory, names } : current,
-      );
-    } catch (err) {
-      const message = unknownErrorMessage(err);
-      setRepositoryBrowser((current) =>
-        current?.pane.id === pane.id ? { ...current, error: message } : current,
-      );
-    }
   }
 
   function focusRepositoryPane(groupId: string, path: string): boolean {
@@ -7179,28 +6906,6 @@ function MainApp() {
     return commands;
   }
 
-  function panesWithGroupOrder(
-    groupId: string,
-    nextGroupPanes: PaneInfo[],
-    paneSnapshot = panes,
-  ) {
-    return panesWithGroupOrders(new Map([[groupId, nextGroupPanes]]), paneSnapshot);
-  }
-
-  function panesWithGroupOrders(
-    nextByGroupId: Map<string, PaneInfo[]>,
-    paneSnapshot = panes,
-  ) {
-    const next = groups.flatMap(
-      (group) =>
-        nextByGroupId.get(group.id) ??
-        paneSnapshot.filter((pane) => pane.groupId === group.id),
-    );
-    const groupedIds = new Set(next.map((pane) => pane.id));
-    next.push(...paneSnapshot.filter((pane) => !groupedIds.has(pane.id)));
-    return next;
-  }
-
   // The "Restored" badge is a one-time, post-restart hint, cleared automatically
   // when its pane or split group is selected (see the activePaneId effect). Clearing
   // the flag locally and recording the pane ids keeps later backend pane refetches
@@ -7351,7 +7056,6 @@ function MainApp() {
       });
       return nextPanes;
     });
-    setPaneContextMenu((current) => (current?.paneId === paneToClose.id ? null : current));
   }
 
   async function closePane(paneToClose: PaneInfo): Promise<boolean> {
@@ -8079,7 +7783,6 @@ function MainApp() {
   // below, which is registered exactly once. Mirrored every render, read only
   // at event time.
   const escapeOverlayStateRef = useRef({
-    paneContextMenu,
     remoteAddMenuOpen,
     remoteDeleteConfirm,
     remoteSettingsSaving,
@@ -8097,7 +7800,6 @@ function MainApp() {
   });
   useEffect(() => {
     escapeOverlayStateRef.current = {
-      paneContextMenu,
       remoteAddMenuOpen,
       remoteDeleteConfirm,
       remoteSettingsSaving,
@@ -8183,7 +7885,6 @@ function MainApp() {
 
       // The remaining overlays dismiss together on one Escape, as they did as
       // independent listeners that each observed the same keydown.
-      const menusOpen = Boolean(overlays.paneContextMenu);
       const dialogsOpen = Boolean(
         overlays.repositoryBrowser ||
           overlays.worktreeCreateDialog ||
@@ -8191,10 +7892,6 @@ function MainApp() {
           overlays.exitDialog,
       );
       let stopPropagation = false;
-      if (menusOpen) {
-        event.preventDefault();
-        setPaneContextMenu(null);
-      }
       if (dialogsOpen) {
         stopPropagation = true;
         event.preventDefault();
@@ -8225,11 +7922,10 @@ function MainApp() {
         event.preventDefault();
         setAgentsOpen(false);
       }
-      // The workspace error banner is lowest priority: it only takes Escape
-      // when nothing above it (menus, dialogs, a rename editor) wanted it.
+      // Dismiss the workspace error banner with Escape only when no dialog or
+      // rename editor is handling the key.
       if (
         overlays.error &&
-        !menusOpen &&
         !dialogsOpen &&
         !overlays.renamePaneId &&
         !overlays.renameGroupId
@@ -8246,65 +7942,6 @@ function MainApp() {
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, []);
-
-  useEffect(() => {
-    if (!paneContextMenu) {
-      return;
-    }
-    const handleDismiss = () => {
-      setPaneContextMenu(null);
-    };
-    window.addEventListener("mousedown", handleDismiss);
-    window.addEventListener("resize", handleDismiss);
-    return () => {
-      window.removeEventListener("mousedown", handleDismiss);
-      window.removeEventListener("resize", handleDismiss);
-    };
-  }, [paneContextMenu]);
-
-  useEffect(() => {
-    if (paneContextMenu && !panes.some((pane) => pane.id === paneContextMenu.paneId)) {
-      setPaneContextMenu(null);
-    }
-  }, [paneContextMenu, panes]);
-
-  // Estimates used at click time can undershoot a tab menu that grew extra
-  // rows (cwd, fork actions, join). After the real menu paints, shift it up so
-  // it stays inside the window instead of running off the bottom.
-  useLayoutEffect(() => {
-    const menus: Array<{
-      element: HTMLElement | null;
-      x: number;
-      y: number;
-      assign: (x: number, y: number) => void;
-    }> = [];
-    if (paneContextMenu) {
-      menus.push({
-        element: paneContextMenuRef.current,
-        x: paneContextMenu.x,
-        y: paneContextMenu.y,
-        assign: (x, y) =>
-          setPaneContextMenu((current) =>
-            current && (current.x !== x || current.y !== y) ? { ...current, x, y } : current,
-          ),
-      });
-    }
-    for (const menu of menus) {
-      if (!menu.element) {
-        continue;
-      }
-      const rect = menu.element.getBoundingClientRect();
-      const next = clampContextMenuToViewport({
-        x: menu.x,
-        y: menu.y,
-        width: rect.width,
-        height: rect.height,
-      });
-      if (next.x !== menu.x || next.y !== menu.y) {
-        menu.assign(next.x, next.y);
-      }
-    }
-  }, [paneContextMenu]);
 
   // Persist application settings whenever they change, so the choice survives a
   // restart. Writing on the initial value is harmless.
@@ -9160,7 +8797,6 @@ function MainApp() {
                 label="Settings (⌘,)"
                 selected={settingsOpen}
                 onClick={() => {
-                  setPaneContextMenu(null);
                   setAgentsOpen(false);
                   setSettingsOpen(true);
                 }}
@@ -9192,7 +8828,6 @@ function MainApp() {
               title="Settings (⌘,)"
               onMouseDown={(event) => event.stopPropagation()}
               onClick={() => {
-                setPaneContextMenu(null);
                 setAgentsOpen(false);
                 setSettingsOpen(true);
               }}
@@ -9247,302 +8882,6 @@ function MainApp() {
           <GithubAccountControl />
         </aside>
       )}
-
-      {paneContextMenu && contextMenuPane ? (
-        <div
-          ref={paneContextMenuRef}
-          className="popover-surface popover-surface--context pane-context-menu"
-          role="dialog"
-          aria-label={`${contextMenuDisplayTitle} details`}
-          style={{ left: paneContextMenu.x, top: paneContextMenu.y }}
-          onMouseDown={(event) => event.stopPropagation()}
-          onContextMenu={(event) => event.preventDefault()}
-        >
-          <dl className="pane-context-details">
-            {contextMenuAgent ? (
-              <div
-                className={`pane-context-status-row status-${agentStatusTone(contextMenuAgent.status)}`}
-              >
-                <dt>Agent</dt>
-                <dd>
-                  {agentStatusLabel(contextMenuAgent.status) ?? "Idle"}
-                </dd>
-              </div>
-            ) : null}
-            {contextMenuPane.remoteSession ? (
-              <div>
-                <dt>Connection</dt>
-                <dd className="pane-connection-details">
-                  {remoteConnectionLabel(contextMenuPane.remoteConnection)}
-                  <RemoteConnectionDetailsText connection={contextMenuPane.remoteConnection} />
-                </dd>
-              </div>
-            ) : null}
-            <div>
-              <dt>Directory</dt>
-              <dd>{contextMenuAgent?.activeWorkspace?.cwd ?? contextMenuPane.cwd}</dd>
-            </div>
-            {agentDisplayBranch(contextMenuAgent) ? (
-              <div>
-                <dt>Branch</dt>
-                <dd>{agentDisplayBranch(contextMenuAgent)}</dd>
-              </div>
-            ) : null}
-            {contextMenuTerminalTitle && contextMenuTerminalTitle !== contextMenuDisplayTitle ? (
-              <div>
-                <dt>Terminal title</dt>
-                <dd>{contextMenuTerminalTitle}</dd>
-              </div>
-            ) : null}
-          </dl>
-          <div className="pane-context-actions" role="menu" aria-label="Tab actions">
-            {contextMenuPane.remoteSession ? (
-              <button
-                type="button"
-                role="menuitem"
-                className="control-button"
-                onClick={() => {
-                  void reconnectPane(contextMenuPane.id).catch((error) => setError(String(error)));
-                  setPaneContextMenu(null);
-                }}
-              >
-                <RefreshCw size={13} aria-hidden="true" />
-                <span>Reconnect now</span>
-              </button>
-            ) : null}
-            <button
-              type="button"
-              role="menuitem"
-              className="control-button context-menu-has-shortcut"
-              disabled={!canSplitContextMenuPaneBelow}
-              title={
-                canSplitContextMenuPaneBelow
-                  ? "Create a new shell split below this tab"
-                  : "Not enough room to stack another split here"
-              }
-              onClick={() => {
-                setPaneContextMenu(null);
-                void splitPaneBelow(contextMenuPane);
-              }}
-            >
-              <PanelBottomClose size={13} aria-hidden="true" />
-              <span>
-                {contextMenuPaneHasSplit ? "Add split below" : "Split terminal"}
-              </span>
-              <kbd className="context-menu-shortcut">⌘D</kbd>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="control-button context-menu-has-shortcut"
-              disabled={!canSplitContextMenuPaneRight}
-              title={
-                canSplitContextMenuPaneRight
-                  ? "Create a new shell split to the right of this tab"
-                  : "Not enough room for another column here"
-              }
-              onClick={() => {
-                setPaneContextMenu(null);
-                void splitPaneRight(contextMenuPane);
-              }}
-            >
-              <Columns2 size={13} aria-hidden="true" />
-              <span>
-                {contextMenuPaneHasSplit
-                  ? "Add split to the right"
-                  : "Split terminal to the right"}
-              </span>
-              <kbd className="context-menu-shortcut">⌘⇧D</kbd>
-            </button>
-            {contextMenuPaneHasSplit ? (
-              <button
-                className="control-button"
-                type="button"
-                role="menuitem"
-                title={
-                  paneSplitIsNested(contextMenuPaneSplit)
-                    ? "Rotate every level of this nested split"
-                    : paneSplitAxis(contextMenuPaneSplit) === "horizontal"
-                      ? "Stack this split top to bottom"
-                      : "Arrange this split left to right and hide transcripts"
-                }
-                onClick={() => {
-                  setPaneContextMenu(null);
-                  toggleSplitAxisForPane(contextMenuPane);
-                }}
-              >
-                {paneSplitAxis(contextMenuPaneSplit) === "horizontal" ? (
-                  <Rows2 size={13} aria-hidden="true" />
-                ) : (
-                  <Columns2 size={13} aria-hidden="true" />
-                )}
-                <span>
-                  {paneSplitIsNested(contextMenuPaneSplit)
-                    ? "Rotate split"
-                    : paneSplitAxis(contextMenuPaneSplit) === "horizontal"
-                      ? "Split top and bottom"
-                      : "Split left and right"}
-                </span>
-              </button>
-            ) : null}
-            {canJoinContextMenuBelow && contextMenuAdjacentBelow ? (
-              <button className="control-button"
-                type="button"
-                role="menuitem"
-                title="Show this tab and the next tab in one split"
-                onClick={() => {
-                  setPaneContextMenu(null);
-                  joinPaneBelow(contextMenuPane, contextMenuAdjacentBelow);
-                }}
-              >
-                <PanelBottomClose size={13} aria-hidden="true" />
-                <span>
-                  {contextMenuSplitIsColumns ? "Join with next tab" : "Join with terminal below"}
-                </span>
-              </button>
-            ) : null}
-            {contextMenuPaneSplit ? (
-              <button className="control-button"
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setPaneContextMenu(null);
-                  removePaneFromSplit(contextMenuPane);
-                }}
-              >
-                <PanelBottomOpen size={13} aria-hidden="true" />
-                <span>Detach from split</span>
-              </button>
-            ) : null}
-            {canForkContextMenuPane ? (
-              <>
-                <div className="context-menu-divider" role="separator" />
-                <button className="control-button"
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setPaneContextMenu(null);
-                    void forkPane(contextMenuPane, { useWorktree: false });
-                  }}
-                >
-                  <GitBranch size={13} aria-hidden="true" />
-                  <span>Fork session</span>
-                </button>
-                <button className="control-button"
-                  type="button"
-                  role="menuitem"
-                  title={
-                    contextMenuSplitIsColumns
-                      ? "Fork this session into a split pane to the right of this tab"
-                      : "Fork this session into a split pane below this tab"
-                  }
-                  onClick={() => {
-                    setPaneContextMenu(null);
-                    void forkPane(contextMenuPane, {
-                      useWorktree: false,
-                      splitBelow: true,
-                    });
-                  }}
-                >
-                  {contextMenuSplitIsColumns ? (
-                    <Columns2 size={13} aria-hidden="true" />
-                  ) : (
-                    <PanelBottomClose size={13} aria-hidden="true" />
-                  )}
-                  <span>Fork session in split</span>
-                </button>
-              </>
-            ) : null}
-            <div className="context-menu-divider" role="separator" />
-            <button
-              className="control-button"
-              type="button"
-              role="menuitem"
-              disabled={!contextMenuWorktreeAction.enabled}
-              title={
-                contextMenuWorktreeAction.enabled
-                  ? "List this repository's branches and worktrees"
-                  : contextMenuWorktreeAction.reason
-              }
-              onClick={() => {
-                if (contextMenuWorktreeAction.enabled) {
-                  void showRepositoryBrowser(contextMenuPane);
-                }
-              }}
-            >
-              <GitBranch size={13} aria-hidden="true" />
-              <span>Branches and worktrees…</span>
-            </button>
-            <button
-              className="control-button"
-              type="button"
-              role="menuitem"
-              disabled={!contextMenuWorktreeAction.enabled}
-              title={
-                contextMenuWorktreeAction.enabled
-                  ? "Create a git worktree from this tab's checkout and open a shell there"
-                  : contextMenuWorktreeAction.reason
-              }
-              onClick={() => {
-                if (!contextMenuWorktreeAction.enabled) {
-                  return;
-                }
-                void openWorktreeFromPane(contextMenuPane);
-              }}
-            >
-              <FolderGit2 size={13} aria-hidden="true" />
-              <span>Open worktree</span>
-            </button>
-            {canForkContextMenuPane ? (
-              <button className="control-button"
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setPaneContextMenu(null);
-                  void forkPaneInWorktree(contextMenuPane);
-                }}
-              >
-                <FolderGit2 size={13} aria-hidden="true" />
-                <span>Fork session in worktree</span>
-              </button>
-            ) : null}
-            {contextMenuAgent && paneScope(contextMenuPane, groupById) === "terminal" ? (
-              <>
-                {!canForkContextMenuPane ? (
-                  <div className="context-menu-divider" role="separator" />
-                ) : null}
-                <button
-                  className="control-button"
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setPaneContextMenu(null);
-                    setExportResearchPane(contextMenuPane);
-                  }}
-                >
-                  <MessageSquareText size={13} aria-hidden="true" />
-                  <span>Export to Research…</span>
-                </button>
-              </>
-            ) : null}
-            <div className="context-menu-divider" role="separator" />
-            <button
-              type="button"
-              role="menuitem"
-              className="control-button context-menu-danger"
-              aria-label={`Close ${contextMenuDisplayTitle}`}
-              title={`Close ${contextMenuDisplayTitle}`}
-              onClick={() => {
-                setPaneContextMenu(null);
-                void requestClosePane(contextMenuPane, { confirmAlways: true });
-              }}
-            >
-              <X size={13} aria-hidden="true" />
-              <span>Close tab</span>
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       <CommandPalette
         open={commandPaletteOpen}

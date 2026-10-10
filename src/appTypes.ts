@@ -46,12 +46,6 @@ export type ExitPreflightRequest = {
   nonce: number;
 };
 
-export type PaneContextMenuState = {
-  paneId: string;
-  x: number;
-  y: number;
-};
-
 export type BrowserOverlaySize = {
   width: number;
   height: number;

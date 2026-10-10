@@ -21,7 +21,7 @@ import {
 } from "../lib/appHelpers";
 import { parseAppShortcutCommand, type AppShortcutCommand } from "../lib/appShortcuts";
 import { sessionPickerTopologyChanged } from "../lib/transcriptSessions";
-import type { ExitPreflightRequest, PaneContextMenuState } from "../appTypes";
+import type { ExitPreflightRequest } from "../appTypes";
 import type {
   ActiveWorkspace,
   AgentInfo,
@@ -69,7 +69,6 @@ interface UseSessionEventsHandlers {
   appendHookEvent: (event: TranscriptHookEvent) => void;
   setPanes: Dispatch<SetStateAction<PaneInfo[]>>;
   setActivePaneId: Dispatch<SetStateAction<string | null>>;
-  setPaneContextMenu: Dispatch<SetStateAction<PaneContextMenuState | null>>;
   setExitPreflightRequest: Dispatch<SetStateAction<ExitPreflightRequest | null>>;
   setAgents: Dispatch<SetStateAction<AgentInfo[]>>;
   setGroups: Dispatch<SetStateAction<GroupInfo[]>>;
@@ -143,7 +142,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
     appendHookEvent,
     setPanes,
     setActivePaneId,
-    setPaneContextMenu,
     setExitPreflightRequest,
     setAgents,
     setGroups,
@@ -234,7 +232,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
           });
           return nextPanes;
         });
-        setPaneContextMenu((current) => (current?.paneId === exitedPaneId ? null : current));
       }
       if (sessionPickerTopologyChanged(event.type)) {
         refreshVisibleTranscriptOptions();

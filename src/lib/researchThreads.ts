@@ -1,6 +1,6 @@
-// Chain math for inline follow-ups: the linear "thread spine" a research
-// document renders when follow-ups continue an answer in place instead of
-// branching into rail cards. A node has at most one existing inline child
+// Chain math for inline follow-ups: the linear chain of messages that one
+// level of a research thread shows when follow-ups continue the conversation
+// instead of opening a branch. A node has at most one existing inline child
 // (enforced by the backend under its model lock); these helpers only read
 // whatever node list they are given, so a malformed graph degrades to
 // shorter chains rather than throwing.
@@ -52,8 +52,8 @@ export function canFollowUpFrom(node: ResearchNode): boolean {
   return launchesFresh || Boolean(node.nativeSessionId);
 }
 
-/** Whether `candidate` should win the inline slot over the current best: the
- * oldest child wins, ties broken by id, so the spine is stable across renders. */
+/** Selects the oldest inline child, breaking ties by id so the chain
+ * remains stable across renders. */
 function inlineChildWins(candidate: ResearchNode, current: ResearchNode | null): boolean {
   return (
     !current ||
@@ -62,9 +62,8 @@ function inlineChildWins(candidate: ResearchNode, current: ResearchNode | null):
   );
 }
 
-/** The unique inline child of a node, or null. Duplicate inline children
- * cannot be created, but a corrupted store could hold them; the oldest wins
- * (stable across renders) so the thread never flickers between spines. */
+/** Returns a node's inline child, or null. If a corrupted store contains
+ * duplicates, selects the oldest child consistently across renders. */
 export function inlineChildOf(nodes: ResearchNode[], nodeId: string): ResearchNode | null {
   let child: ResearchNode | null = null;
   for (const node of nodes) {
@@ -128,7 +127,7 @@ export function inlineChainFor(nodes: ResearchNode[], nodeId: string): string[] 
     current = next;
   }
   if (!chain.includes(nodeId)) {
-    // A stray inline node the spine does not reach — the losing duplicate of
+    // A stray inline node the chain does not reach — the losing duplicate of
     // an occupied slot on a corrupted store. It must still be viewable, so it
     // heads its own chain (like a branch child) instead of resolving to a
     // page that never renders it.

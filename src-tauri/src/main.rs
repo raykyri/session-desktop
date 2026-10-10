@@ -57,9 +57,9 @@ use pty::{
 };
 use research::{
     ApplyResearchRecapCandidateRequest, CreateResearchTreeRequest, GenerateResearchRecapRequest,
-    RecentResearchQueryCursor, RecentResearchQueryPage, ResearchBranchRemoval, ResearchDraft,
-    ResearchFolderState, ResearchHighlight, ResearchHighlightAnchor, ResearchHighlightFeedItem,
-    ResearchNode, ResearchNodeContent, ResearchRecapCandidate, ResearchTree, ResearchTreeDetail,
+    RecentResearchQueryCursor, ResearchBranchRemoval, ResearchDraft, ResearchFolderState,
+    ResearchHighlight, ResearchHighlightAnchor, ResearchHighlightFeedItem, ResearchNode,
+    ResearchNodeContent, ResearchRecapCandidate, ResearchTree, ResearchTreeDetail,
     ResearchTreeSummary, UpdateResearchDocumentRequest, UpdateResearchDocumentResult,
 };
 use show_hide_shortcut::{
@@ -1609,15 +1609,6 @@ async fn list_research_activity(
 }
 
 #[tauri::command]
-async fn list_recent_research_queries(
-    state: tauri::State<'_, AppState>,
-    limit: Option<usize>,
-    before: Option<RecentResearchQueryCursor>,
-) -> Result<RecentResearchQueryPage, String> {
-    state.list_recent_research_queries(limit.unwrap_or(50), before)
-}
-
-#[tauri::command]
 fn list_research_highlights(
     state: tauri::State<'_, AppState>,
 ) -> Result<Vec<ResearchHighlightFeedItem>, String> {
@@ -1823,36 +1814,6 @@ fn remove_research_note_reply(
     reply_id: String,
 ) -> Result<ResearchNode, String> {
     state.remove_research_note_reply(&node_id, &reply_id)
-}
-
-#[tauri::command]
-async fn export_pane_to_research(
-    state: tauri::State<'_, AppState>,
-    request: research::ExportPaneToResearchRequest,
-) -> Result<ResearchTreeDetail, String> {
-    let state = state.inner().clone();
-    // Blocking: the export reads the source transcript (twice, for a stable
-    // parse) and fsyncs the conversation snapshot.
-    tauri::async_runtime::spawn_blocking(move || {
-        // The slow work — transcript reads, sanitization, the snapshot write
-        // — runs unguarded, like create_research_tree's spawn: only
-        // admission needs atomicity with workspace mutations, and a failure
-        // after prepare strands at most an orphan snapshot.
-        let prepared = state.prepare_pane_export(&request.pane_id)?;
-        let committed = {
-            let _guard = workspace::lock_research_workspace_mutations()?;
-            validate_launch_workspace(&state, Some(&request.group_id), LaunchOrigin::Research)
-                .and_then(|_| state.commit_pane_export(&prepared, request.group_id, request.title))
-        };
-        if committed.is_err() {
-            // Redundant after a commit-side admission failure (the removal is
-            // idempotent), but validation failures never reach commit.
-            state.discard_pane_export(&prepared);
-        }
-        committed
-    })
-    .await
-    .map_err(|err| format!("export_pane_to_research task failed: {err}"))?
 }
 
 #[tauri::command]
@@ -2325,20 +2286,6 @@ async fn create_research_highlight(
     tauri::async_runtime::spawn_blocking(move || state.create_research_highlight(&node_id, anchor))
         .await
         .map_err(|err| format!("research highlight task failed: {err}"))?
-}
-
-#[tauri::command]
-async fn remove_research_highlight(
-    state: tauri::State<'_, AppState>,
-    node_id: String,
-    highlight_id: String,
-) -> Result<ResearchHighlight, String> {
-    let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        state.remove_research_highlight(&node_id, &highlight_id)
-    })
-    .await
-    .map_err(|err| format!("research highlight task failed: {err}"))?
 }
 
 #[tauri::command]
@@ -3805,12 +3752,10 @@ fn main() {
             delete_research_draft,
             reorder_research_drafts,
             list_research_activity,
-            list_recent_research_queries,
             list_research_highlights,
             list_recent_activity,
             get_research_tree,
             create_research_tree,
-            export_pane_to_research,
             read_research_report,
             import_research_report,
             create_research_note,
@@ -3830,7 +3775,6 @@ fn main() {
             rename_research_node,
             set_research_node_promoted,
             create_research_highlight,
-            remove_research_highlight,
             remove_research_highlights,
             mark_research_tree_viewed,
             archive_research_tree,

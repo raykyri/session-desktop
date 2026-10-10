@@ -66,7 +66,6 @@ function node(overrides: Partial<ResearchNode> = {}): ResearchNode {
     treeId: "tree-1",
     parentNodeId: null,
     prompt: "Investigate",
-    responsePreview: null,
     adapter: "codex",
     model: null,
     groupId: "workspace-1",
@@ -118,7 +117,6 @@ test("parseResearchEvent recognizes the complete backend research taxonomy", () 
     ["research.tree.archived", { tree: researchTree }],
     ["research.tree.restored", { tree: researchTree }],
     ["research.highlight.created", { nodeId: root.id, highlight: highlightA }],
-    ["research.highlight.removed", { nodeId: root.id, highlightId: highlightA.id }],
     ["research.highlights.removed", { nodeId: root.id, highlightIds: [highlightA.id] }],
     ["research.recap.pending", { nodeId: root.id, pending: true }],
     ["research.tree.removed", { treeId: researchTree.id }],
@@ -224,7 +222,7 @@ test("node collection helpers upsert in backend order and remove without no-op c
   assert.deepEqual(inserted.map((entry) => entry.id), ["node-a", "node-z"]);
   assert.equal(upsertResearchNode(inserted, earlier), inserted);
 
-  const updated = { ...earlier, responsePreview: "Live preview" };
+  const updated = { ...earlier, title: "Live title" };
   const replaced = upsertResearchNode(inserted, updated);
   assert.equal(replaced[0], updated);
   assert.equal(replaced[1], later);

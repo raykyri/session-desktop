@@ -443,19 +443,18 @@ export interface ResearchNode {
   id: string;
   treeId: string;
   parentNodeId?: string | null;
-  /** The passage of the parent's response this follow-up was asked about.
-   * Anchors the node's card beside that passage in the parent's view. */
+  /** The passage of the parent's answer this follow-up was asked about. The
+   * parent's answer marks it as the anchor of the branch. */
   queryAnchor?: ResearchHighlightAnchor | null;
-  /** True when this follow-up continues its parent's answer inside the same
-   * document (the thread spine) instead of branching into a rail card. At
-   * most one existing inline child per node; absent means false. */
+  /** True when this follow-up continues its parent's conversation at the same
+   * level (the same messages column) instead of opening a branch. At most one
+   * existing inline child per node; absent means false. */
   inline?: boolean;
   prompt: string;
   attachments?: ResearchMessageAttachment[];
   /** Short generated title for breadcrumbs and menus; the document body still
    * shows the full prompt. */
   title?: string | null;
-  responsePreview?: string | null;
   adapter: string;
   model?: string | null;
   /** Reasoning effort the run launches with; inherited by follow-ups. */
@@ -586,11 +585,6 @@ export interface RecentResearchQueryCursor {
   nodeId: string;
 }
 
-export interface RecentResearchQueryPage {
-  items: RecentResearchQuery[];
-  nextCursor?: RecentResearchQueryCursor | null;
-}
-
 export interface ResearchHighlight {
   id: string;
   anchor: ResearchHighlightAnchor;
@@ -655,18 +649,9 @@ export interface ResearchBranchRemoval {
   removedNodeIds: string[];
 }
 
-export interface ResearchNodeCard {
-  id: string;
-  prompt: string;
-  responsePreview?: string | null;
-  status: ResearchNodeStatus;
-  createdAt: number;
-}
-
 export interface ResearchNodeContent {
   node: ResearchNode;
   turns: Turn[];
-  children: ResearchNodeCard[];
   /** Why turns is empty for a finished node (snapshot and transcript both unavailable). */
   sourceError?: string;
   /** Present only when the displayed turns came from a durable full snapshot. */

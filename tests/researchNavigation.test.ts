@@ -361,7 +361,7 @@ test("research detail reconciliation preserves unchanged node identities", () =>
   };
   const reconciled = reconcileResearchTreeDetail(detail, {
     tree: { ...detail.tree },
-    nodes: [{ ...root }, { ...child, responsePreview: "New preview" }],
+    nodes: [{ ...root }, { ...child, title: "New title" }],
   });
 
   assert.notEqual(reconciled, detail);
