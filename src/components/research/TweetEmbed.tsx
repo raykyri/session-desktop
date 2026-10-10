@@ -45,7 +45,6 @@ function TweetAvatar({
   // A snapshot's avatar URL can go stale (profile changed, image deleted);
   // a failed load falls back to the initial disc instead of a broken image.
   const [failed, setFailed] = useState(false);
-  const scaledSize = `calc(${size}px * var(--tweet-avatar-scale, 1))`;
   if (avatarUrl && !failed) {
     return (
       <img
@@ -53,7 +52,7 @@ function TweetAvatar({
         src={avatarUrl}
         width={size}
         height={size}
-        style={{ width: scaledSize, height: scaledSize }}
+        style={{ width: size, height: size }}
         alt=""
         aria-hidden="true"
         draggable={false}
@@ -65,7 +64,7 @@ function TweetAvatar({
   return (
     <span
       className="journal-tweet-avatar journal-tweet-avatar-fallback"
-      style={{ width: scaledSize, height: scaledSize, background: fallback.color }}
+      style={{ width: size, height: size, background: fallback.color }}
       aria-hidden="true"
     >
       {fallback.initial}
@@ -176,8 +175,9 @@ function TweetMediaStrip({
   );
 }
 
-/** The timeline's age stamp: "29m" and "5h" inside a day, "Jul 27" inside the
- * year, "Mar 21, 2006" beyond it. */
+/** The age stamp: "29m" and "5h" inside a day, "Jul 27" inside the year, and
+ * the short numeric date ("3/21/06") beyond it, so the stamp leaves the header
+ * line to the display name. */
 function formatTweetAge(iso: string | undefined, now = Date.now()): string | null {
   if (!iso) {
     return null;
@@ -197,11 +197,10 @@ function formatTweetAge(iso: string | undefined, now = Date.now()): string | nul
     return `${Math.floor(seconds / 3600)}h`;
   }
   const sameYear = parsed.getFullYear() === new Date(now).getFullYear();
-  return parsed.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
+  return parsed.toLocaleDateString(
+    undefined,
+    sameYear ? { month: "short", day: "numeric" } : { month: "numeric", day: "numeric", year: "2-digit" },
+  );
 }
 
 /** The full stamp behind the age, for the title tooltip. */
@@ -278,10 +277,11 @@ function TweetLinkCardView({ card }: { card: NonNullable<TweetSnapshot["card"]> 
   );
 }
 
-/** The hydrated tweet, rendered as the entry's whole content — an X-embed
- * look (header, text, media, quote, linked timestamp) with no wrapper
- * chrome of its own, so the feed reads as tweets rather than tweets inside
- * content items. Exported for the static-markup tests. */
+/** Renders a hydrated tweet directly as a feed entry. The compact layout
+ * uses a single header row with a 20px avatar, name, badge, and timestamp.
+ * The handle is available in the name's tooltip and accessible label.
+ * Full-width text, media, and the quote follow; Show more and engagement
+ * counts share the footer. Exported for static-markup tests. */
 export function TweetEmbed({ tweet, compact = false }: { tweet: TweetSnapshot; compact?: boolean }) {
   const quoted = tweet.quoted;
   const authorUrl = `https://x.com/${tweet.author.handle}`;
@@ -311,26 +311,27 @@ export function TweetEmbed({ tweet, compact = false }: { tweet: TweetSnapshot; c
         void openExternalUrl(tweet.url);
       }}
     >
-      <a
-        className="journal-tweet-avatar-link"
-        href={authorUrl}
-        aria-hidden="true"
-        tabIndex={-1}
-        onClick={externalLinkClick(authorUrl)}
-      >
-        <TweetAvatar
-          name={tweet.author.name}
-          handle={tweet.author.handle}
-          avatarUrl={tweet.author.avatarUrl}
-          size={40}
-        />
-      </a>
       <div className="journal-tweet-main">
         <div className="journal-tweet-head">
+          <a
+            className="journal-tweet-avatar-link"
+            href={authorUrl}
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={externalLinkClick(authorUrl)}
+          >
+            <TweetAvatar
+              name={tweet.author.name}
+              handle={tweet.author.handle}
+              avatarUrl={tweet.author.avatarUrl}
+              size={20}
+            />
+          </a>
           <div className="journal-tweet-who">
             <a
               className="journal-tweet-author"
               href={authorUrl}
+              title={`${tweet.author.name} @${tweet.author.handle}`}
               onClick={externalLinkClick(authorUrl)}
             >
               {tweet.author.name}
@@ -339,18 +340,13 @@ export function TweetEmbed({ tweet, compact = false }: { tweet: TweetSnapshot; c
             <span className="journal-tweet-handle">@{tweet.author.handle}</span>
           </div>
           {age ? (
-            <>
-              <span className="journal-tweet-dot" aria-hidden="true">
-                ·
-              </span>
-              <time
-                className="journal-tweet-age"
-                dateTime={tweet.createdAt}
-                title={formatTweetDate(tweet.createdAt) ?? undefined}
-              >
-                {age}
-              </time>
-            </>
+            <time
+              className="journal-tweet-age"
+              dateTime={tweet.createdAt}
+              title={formatTweetDate(tweet.createdAt) ?? undefined}
+            >
+              {age}
+            </time>
           ) : null}
         </div>
         {tweet.replyTo ? (
@@ -359,15 +355,6 @@ export function TweetEmbed({ tweet, compact = false }: { tweet: TweetSnapshot; c
           </p>
         ) : null}
         <TweetText runs={tweet.runs} className="journal-tweet-text" compact={compact} />
-        {tweet.partial ? (
-          <a
-            className="journal-tweet-more"
-            href={tweet.url}
-            onClick={externalLinkClick(tweet.url)}
-          >
-            Show more
-          </a>
-        ) : null}
         <TweetMediaStrip media={tweet.media} sensitive={tweet.possiblySensitive} />
         {tweet.card ? <TweetLinkCardView card={tweet.card} /> : null}
         {quoted ? (
@@ -420,21 +407,33 @@ export function TweetEmbed({ tweet, compact = false }: { tweet: TweetSnapshot; c
             {quoted.card ? <TweetLinkCardView card={quoted.card} /> : null}
           </div>
         ) : null}
-        {tweet.replies !== undefined || tweet.likes !== undefined ? (
-          // Counts as captured, not controls: this is a journal entry, so the
-          // engagement reads as metadata and nothing here acts on X.
-          <div className="journal-tweet-stats">
-            {tweet.replies !== undefined ? (
-              <span className="journal-tweet-stat" title={`${tweet.replies} replies`}>
-                <ReplyGlyph />
-                {formatTweetCount(tweet.replies)}
-              </span>
+        {tweet.partial || tweet.replies !== undefined || tweet.likes !== undefined ? (
+          <div className="journal-tweet-end">
+            {tweet.partial ? (
+              <a
+                className="journal-tweet-more"
+                href={tweet.url}
+                onClick={externalLinkClick(tweet.url)}
+              >
+                Show more
+              </a>
             ) : null}
-            {tweet.likes !== undefined ? (
-              <span className="journal-tweet-stat" title={`${tweet.likes} likes`}>
-                <LikeGlyph />
-                {formatTweetCount(tweet.likes)}
-              </span>
+            {tweet.replies !== undefined || tweet.likes !== undefined ? (
+              // Display the saved engagement counts as static metadata.
+              <div className="journal-tweet-stats">
+                {tweet.replies !== undefined ? (
+                  <span className="journal-tweet-stat" title={`${tweet.replies} replies`}>
+                    <ReplyGlyph />
+                    {formatTweetCount(tweet.replies)}
+                  </span>
+                ) : null}
+                {tweet.likes !== undefined ? (
+                  <span className="journal-tweet-stat" title={`${tweet.likes} likes`}>
+                    <LikeGlyph />
+                    {formatTweetCount(tweet.likes)}
+                  </span>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ) : null}

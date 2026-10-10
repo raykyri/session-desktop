@@ -15,20 +15,24 @@ export function ResearchPlaceIcon({ place, size = 14 }: { place: string; size?: 
 }
 
 /** The feed column's 44px title bar: an optional back button, the view's
- * name, and trailing actions. The bar (not its buttons) moves the window. */
+ * name, and trailing actions. The bar (not its buttons) moves the window.
+ * With `home`, the title is hidden (still read by screen readers) while the
+ * sidebar is collapsed to its icon strip, which already marks Home. */
 export function ResearchFeedHeader({
   title,
   titleRef,
   onBack,
   actions,
+  home = false,
 }: {
   title: string;
   titleRef?: Ref<HTMLHeadingElement>;
   onBack?: () => void;
   actions?: ReactNode;
+  home?: boolean;
 }) {
   return (
-    <header className="research-feed-header">
+    <header className={`research-feed-header${home ? " is-home" : ""}`}>
       <div className="research-feed-header-bar" data-tauri-drag-region data-research-header-bar>
         {onBack ? (
           <button

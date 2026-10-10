@@ -55,6 +55,40 @@
   border-right: 1px solid var(--surface-divider);
 }
 
+/* The feed's resize handle: a 10px drag target centred on its right edge,
+   above the next column's header (z-index 1) and below the strip's overlay.
+   Like the sidebar's, it paints the divider in the hover color on hover,
+   focus and while dragging. */
+.research-feed-resizer {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  z-index: 3;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.research-feed-resizer::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 1px;
+  content: "";
+}
+
+.research-feed-resizer:hover::before,
+.research-feed-resizer:focus-visible::before,
+.research-feed-resizer:active::before {
+  background: var(--split-border-hover);
+}
+
+.research-feed-resizer:focus-visible {
+  outline: none;
+}
+
 /* The first pair's divider replaces the feed's own border. */
 .research-feed-column:has(+ .research-content-column > :is(.research-pairs, .research-pair-turns, .research-placeholder-column)) {
   border-right-color: transparent;
@@ -209,27 +243,23 @@
 /* Shared tweet embed used both as a Home item and as a research-message
    attachment. Home-only menu clearance remains in journal.css. */
 
-.research-pairs {
-  --tweet-avatar-scale: 0.5;
-}
-
 .research-pairs .journal-tweet-verified,
 .research-pairs .research-summary-text {
   display: none;
 }
 
+/* Compact for narrow columns: one header line, then everything at full width. */
 .journal-tweet {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  display: block;
   width: 100%;
   max-width: var(--research-feed-max-width);
   min-width: 0;
-  column-gap: 10px;
   cursor: pointer;
 }
 
 .journal-tweet-avatar-link {
   display: block;
+  flex: none;
   line-height: 0;
 }
 
@@ -242,21 +272,32 @@
   --research-body-line-height: var(--research-compact-line-height);
 }
 
+/* Avatar, name and badge, then the age at the right edge. */
 .journal-tweet-head {
   display: flex;
-  align-items: baseline;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  margin-bottom: 2px;
+  margin-bottom: 6px;
 }
 
 .journal-tweet-who {
   display: flex;
-  align-items: baseline;
+  flex: 0 1 auto;
+  align-items: center;
   gap: 4px;
   min-width: 0;
   color: inherit;
   text-decoration: none;
+}
+
+/* The handle is in the name's tooltip; it stays for screen readers. */
+.journal-tweet-head .journal-tweet-handle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 
 .journal-tweet-avatar {
@@ -270,20 +311,18 @@
   display: grid;
   place-items: center;
   color: var(--lightbox-caption-fg);
-  font-size: calc((15px + var(--font-ui-size-offset)) * var(--tweet-avatar-scale, 1));
+  font-size: calc(10px + var(--font-ui-size-offset));
   font-weight: 700;
 }
 
 .journal-tweet-quote-head .journal-tweet-avatar-fallback {
-  font-size: calc((9px + var(--font-ui-size-offset)) * var(--tweet-avatar-scale, 1));
+  font-size: calc(9px + var(--font-ui-size-offset));
 }
 
 .journal-tweet-author {
   color: inherit;
   text-decoration: none;
-  /* The display name gives way first: a truncated name still reads, while a
-     truncated handle stops identifying anyone. */
-  flex: 0 8 auto;
+  flex: 0 1 auto;
   min-width: 3ch;
   font-size: var(--research-body-font-size);
   font-weight: 700;
@@ -313,16 +352,21 @@ a.journal-tweet-author:hover {
   text-overflow: ellipsis;
 }
 
-.journal-tweet-dot,
+/* Shrink the timestamp before the display name; its tooltip shows the full date. */
 .journal-tweet-age {
-  flex: none;
+  flex: 0 100 auto;
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--text-subtle);
-  font-size: var(--research-body-font-size);
+  font-size: calc(var(--fs-input) - 1px);
   text-decoration: none;
 }
 
 .journal-tweet-reply {
-  margin: 0 0 3px;
+  margin: -2px 0 5px;
   color: var(--text-subtle);
   font-size: calc(var(--fs-input) - 1px);
 }
@@ -355,7 +399,8 @@ a.journal-tweet-author:hover {
 /* The timeline's own affordance for a post that runs past its preview. */
 .journal-tweet-more {
   display: inline-block;
-  margin-top: 2px;
+  flex: none;
+  white-space: nowrap;
   color: var(--accent-color);
   font-size: var(--research-body-font-size);
   text-decoration: none;
@@ -440,14 +485,25 @@ a.journal-tweet-more:hover {
   font-size: calc(13px + var(--font-ui-size-offset));
 }
 
+/* The closing row: Show more, then the counts at the right edge (on a line
+   of their own when both don't fit). */
+.journal-tweet-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 6px;
+  margin-bottom: -2px;
+}
+
 /* Captured engagement, rendered as metadata: no hover, no target, nothing
    here reaches X. */
 .journal-tweet-stats {
   display: flex;
   min-height: 14px;
   align-items: center;
-  gap: 18px;
-  margin-top: 8px;
+  gap: 12px;
+  margin-left: auto;
   color: var(--text-subtle);
   font-size: calc(12.5px + var(--font-ui-size-offset));
   font-variant-numeric: tabular-nums;
@@ -461,8 +517,8 @@ a.journal-tweet-more:hover {
 }
 
 .journal-tweet-stat svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
 
 .journal-tweet-media {

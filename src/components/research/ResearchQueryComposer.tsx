@@ -423,6 +423,12 @@ export default function ResearchQueryComposer({
   // collapse waits for the click to finish, so the list below doesn't move
   // between the press and the release that opens what was pressed.
   const pointerDownOutsideRef = useRef(false);
+  // Set from a press inside the composer until it is released. WebKit does
+  // not focus a clicked button, so pressing the model picker blurs the field
+  // with no related target; collapsing then would remove the picker before
+  // its click event fires. Such a blur keeps the composer open, and the next press
+  // outside it collapses it.
+  const pointerDownInsideRef = useRef(false);
   const collapse = () => {
     if (!pointerDownOutsideRef.current) {
       setFocused(false);
@@ -486,8 +492,16 @@ export default function ResearchQueryComposer({
       ref={rootRef}
       className="new-research-composer"
       onFocus={() => setFocused(true)}
+      onPointerDownCapture={() => {
+        pointerDownInsideRef.current = true;
+        const release = () => window.setTimeout(() => (pointerDownInsideRef.current = false), 0);
+        window.addEventListener("pointerup", release, { once: true });
+        window.addEventListener("pointercancel", release, { once: true });
+      }}
       onBlur={(event) => {
-        if (!insideComposer(rootRef.current, event.relatedTarget)) collapse();
+        if (insideComposer(rootRef.current, event.relatedTarget)) return;
+        if (pointerDownInsideRef.current && !event.relatedTarget) return;
+        collapse();
       }}
     >
       <form

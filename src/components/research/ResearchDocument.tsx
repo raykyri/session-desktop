@@ -4434,9 +4434,11 @@ function ResearchDocument({
           data-research-column="T0"
           data-research-pair="turns"
           data-research-level={0}
-          aria-label={treeTitleText}
+          aria-label={`Thread: ${treeTitleText}`}
         >
-          <ResearchPairHeader title={treeTitleText} history={historyNav} archived={archived} />
+          {/* The note itself starts the column, so the header names the
+              column ("Thread") rather than repeating the note's text. */}
+          <ResearchPairHeader title="Thread" history={historyNav} archived={archived} />
           <div className="research-column-scroll">
             <div className="research-column-content research-reading-surface">
               <ResearchNoteDocument

@@ -70,10 +70,10 @@ export function researchFeedCardControl(
  * (`anchor`): wait while that button is still listed and focused; once it is
  * gone with focus left on the page body, focus the card in its new place;
  * drop it once focus went anywhere else. */
-/** A row's right-hand margin: the drag handle at the top, where the status
- * dot sits, and the … button at the bottom. Both show on hover or focus and
- * hide the dot. The handle is decoration: a press anywhere on the row starts
- * a drag, except on the … button. */
+/** A row's controls: the drag handle and the … button in one pill in the
+ * row's top-right corner, where the status dot sits. The pill shows on hover
+ * or focus and hides the dot. The handle is decoration: a press anywhere on
+ * the row starts a drag, except on the … button. */
 function FeedRowRail({
   grip,
   menuLabel,
@@ -92,9 +92,7 @@ function FeedRowRail({
         <span className="research-feed-card-grip" aria-hidden="true">
           <GripVertical size={14} />
         </span>
-      ) : (
-        <span />
-      )}
+      ) : null}
       {onMenu ? (
         <button
           type="button"

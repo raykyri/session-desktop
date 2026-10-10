@@ -125,7 +125,7 @@
   align-items: center;
   gap: 2px;
   padding: 0 0 10px;
-  border-right: 1px solid var(--surface-divider);
+  border-right: 1px solid transparent;
   background: var(--left-pane-bg);
   -webkit-user-select: none;
   user-select: none;
@@ -138,6 +138,20 @@
   height: 44px;
   margin-bottom: 2px;
   place-items: center;
+  border-bottom: 1px solid var(--surface-divider);
+}
+
+/* The strip's right border starts below its title bar row, so the column
+   headers' bottom rule runs on across the strip at the top. */
+.research-strip::after {
+  position: absolute;
+  top: 44px;
+  right: -1px;
+  bottom: 0;
+  width: 1px;
+  background: var(--surface-divider);
+  content: "";
+  pointer-events: none;
 }
 
 .research-strip-icon {
@@ -178,12 +192,14 @@
 }
 
 /* Beside the traffic lights, where the full sidebar's collapse button sits. */
+/* The same 26px button as the full sidebar's collapse toggle, at the same place. */
 .research-strip-icon.is-beside-titlebar {
   position: absolute;
   top: 9px;
-  left: 78px;
-  width: 30px;
-  height: 28px;
+  left: 80px;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-md);
 }
 
 /* With the strip on macOS the traffic lights and the expand button keep their

@@ -51,12 +51,16 @@ test("tweet card offers Show more on a long post", () => {
   assert.match(html, /…/);
 });
 
-test("tweet card lays out avatar, inline header, and stats like a timeline", () => {
+test("tweet card lays out one compact header line, full-width text, and a closing row of counts", () => {
   const html = renderTweet(snapshot("20"));
-  // Avatar sits outside the content column, and the header is one line:
-  // name, badge, handle, then the plain timestamp.
-  assert.match(html, /journal-tweet-avatar-link/);
+  // The header is one line: a 20px avatar, the name (its tooltip carries the
+  // handle), the badge, the handle for screen readers, then the age.
+  assert.match(html, /journal-tweet-head"><a class="journal-tweet-avatar-link"/);
+  assert.match(html, /width="20"/);
   assert.match(html, /journal-tweet-main/);
+  assert.match(html, /title="jack @jack"/);
+  assert.doesNotMatch(html, /journal-tweet-dot/);
+  assert.match(html, /journal-tweet-end"><div class="journal-tweet-stats"/);
   assert.match(html, /journal-tweet-author"[^>]*>jack<\/a>/);
   assert.match(html, /journal-tweet-verified/);
   assert.match(html, /journal-tweet-handle">@jack<\/span>/);
