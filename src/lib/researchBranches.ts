@@ -1,5 +1,6 @@
 import { isActiveResearchStatus } from "./researchThreads";
 import type { ResearchNode } from "../types";
+import { nodeRun, nodeStatus } from "./researchNodeTypes";
 
 interface ResearchBranchInfo {
   nodeIds: string[];
@@ -34,7 +35,7 @@ export function researchBranchInfo(
     nodeIds: branchNodes.map((node) => node.id),
     descendantCount: Math.max(0, branchNodes.length - 1),
     hasActiveRuns: branchNodes.some(
-      (node) => node.paneId != null || isActiveResearchStatus(node.status),
+      (node) => Boolean(nodeRun(node)?.holdsProcess) || isActiveResearchStatus(nodeStatus(node)),
     ),
   };
 }

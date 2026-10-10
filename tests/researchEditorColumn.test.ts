@@ -11,20 +11,20 @@ import {
   researchQuestionLength,
 } from "../src/lib/researchEditor";
 import type { ResearchNode } from "../src/types";
+import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
-function node(id: string, overrides: Partial<ResearchNode> = {}): ResearchNode {
-  return {
+function node(id: string, overrides: NodeFixture = {}): ResearchNode {
+  return researchNode({
     id,
     treeId: "tree",
     prompt: id,
     adapter: "claude",
     groupId: "ws",
-    worktreeDir: "/ws",
     status: "complete",
     createdAt: 0,
     highlights: [],
     ...overrides,
-  };
+  });
 }
 
 function editor(value: string, overrides: Partial<Parameters<typeof ResearchEditorColumn>[0]> = {}) {
@@ -86,7 +86,7 @@ test("a post with replies is corrected: the button reads Add correction", () => 
 });
 
 test("a post has replies when it has reply items or follow-ups", () => {
-  const post = node("note", { kind: "post", delivery: { status: "posted", postedAt: 1 } });
+  const post = node("note", { type: "post", delivery: { status: "posted", postedAt: 1 } });
   assert.equal(researchPostHasReplies([post], post), false);
   const replied = {
     ...post,

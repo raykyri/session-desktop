@@ -15,7 +15,7 @@ function tree(id: string, overrides: Partial<ResearchTreeSummary> = {}): Researc
     id,
     title: `Thread ${id}`,
     rootNodeId: `${id}-root`,
-    kind: "run",
+    type: "exchange",
     workspaceId: "workspace",
     runningCount: 0,
     failedCount: 0,
@@ -45,7 +45,7 @@ test("archived threads list newest-archived first, documents included, without a
   const ordered = archivedFeedTrees([
     tree("older", { archivedAt: 100 }),
     tree("active", { archivedAt: null }),
-    tree("document", { kind: "document", archivedAt: 300 }),
+    tree("document", { type: "document", archivedAt: 300 }),
     tree("newer", { archivedAt: 200 }),
   ]);
   assert.deepEqual(
@@ -58,7 +58,7 @@ test("Archive renders one card per archived thread, newest archived first", () =
   const html = renderArchived({
     trees: [
       tree("run"),
-      tree("conversation", { kind: "conversation", title: "Terminal session", archivedAt: 200 }),
+      tree("conversation", { type: "document", title: "Terminal session", archivedAt: 200 }),
     ],
     selectedTreeId: "run",
     onMenu: () => {},

@@ -16,7 +16,7 @@ import {
 import { stripImportedReportCitations } from "../../lib/researchDocuments";
 import { formatRunDuration, shortWhen } from "../../lib/shortTime";
 import { latestToolActivityLabel, type MessageBlock, type MessageItem } from "../../lib/turnTimeline";
-import type { ResearchNode, ResearchNodeContent } from "../../types";
+import type { ResearchNode, ResearchNodeContent, ResearchNodeStatus } from "../../types";
 import {
   RawTranscriptDisclosure,
   TranscriptActivityItem,
@@ -25,6 +25,7 @@ import {
 } from "../TranscriptActivity";
 import ResearchRecap from "./ResearchRecap";
 import { ResearchMarkdown, ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
+import { documentSource, nodeAdapter, nodeAgent, nodeAttachments, nodePrompt, nodeRun, nodeStatus } from "../../lib/researchNodeTypes";
 
 // The backend caps snapshots at 64MB, which is still far beyond what markdown
 // parsing and eager React element creation can absorb without freezing the
@@ -239,18 +240,19 @@ export const ResearchTimelineItem = memo(function ResearchTimelineItem({
 function sameTurnNode(a: ResearchNode, b: ResearchNode) {
   return (
     a.id === b.id &&
-    a.status === b.status &&
-    a.error === b.error &&
-    a.paneId === b.paneId &&
+    nodeStatus(a) === nodeStatus(b) &&
+    nodeRun(a)?.error === nodeRun(b)?.error &&
+    nodeRun(a)?.holdsProcess === nodeRun(b)?.holdsProcess &&
+    nodeRun(a)?.sessionReady === nodeRun(b)?.sessionReady &&
     a.parentNodeId === b.parentNodeId &&
-    a.prompt === b.prompt &&
-    a.startedAt === b.startedAt &&
-    a.completedAt === b.completedAt &&
+    nodePrompt(a) === nodePrompt(b) &&
+    nodeRun(a)?.startedAt === nodeRun(b)?.startedAt &&
+    nodeRun(a)?.completedAt === nodeRun(b)?.completedAt &&
     a.createdAt === b.createdAt &&
     a.promotedAt === b.promotedAt &&
-    a.adapter === b.adapter &&
-    a.model === b.model &&
-    a.origin === b.origin
+    nodeAdapter(a) === nodeAdapter(b) &&
+    nodeAgent(a)?.model === nodeAgent(b)?.model &&
+    documentSource(a) === documentSource(b)
   );
 }
 
@@ -304,14 +306,14 @@ interface ResearchAnswerPaneProps {
 /** The status line of an active run: "Working", with the run's latest tool
  * activity when it has one ("Working · reading lesswrong.com"). */
 export function runStatusText(
-  node: Pick<ResearchNode, "status">,
+  status: ResearchNodeStatus,
   waitsForParent: boolean,
   activity: string | null = null,
 ) {
-  if (node.status === "running") {
+  if (status === "running") {
     return activity ? `Working · ${activity}` : "Working";
   }
-  if (node.status === "starting") {
+  if (status === "starting") {
     return "Starting…";
   }
   return waitsForParent ? "Queued. Starts when the running answer finishes." : "Queued";
@@ -353,8 +355,9 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
   onRootMouseMove,
   onRootMouseLeave,
 }: ResearchAnswerPaneProps) {
-  const active = node.status === "queued" || node.status === "starting" || node.status === "running";
-  const lingeringPane = node.status === "cancelled" && Boolean(node.paneId);
+  const active = nodeStatus(node) === "queued" || nodeStatus(node) === "starting" || nodeStatus(node) === "running";
+  const lingeringPane = nodeStatus(node) === "cancelled" && Boolean(nodeRun(node)?.holdsProcess);
+  const run = nodeRun(node);
   // Stable, so React does not detach and reattach the root on every render.
   const nodeId = node.id;
   const contentRootRef = useCallback(
@@ -395,11 +398,11 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
   // A queued run (waiting for its turn on the backend), or a Retry waiting
   // for the running answer: the state as a plain line, with the action that
   // takes it out of the queue below.
-  if (node.status === "queued" || retryQueued) {
+  if (nodeStatus(node) === "queued" || retryQueued) {
     return (
       <section className="research-response" aria-label="Research response">
         <div className="research-turn-note is-state" role="status">
-          {retryQueued ? QUEUED_RETRY_TEXT : runStatusText(node, waitsForParent)}
+          {retryQueued ? QUEUED_RETRY_TEXT : runStatusText(nodeStatus(node), waitsForParent)}
         </div>
         <div className="research-turn-actions">
           <button
@@ -421,7 +424,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
         {active ? (
           <div className="research-turn-run" role="status">
             <span className="research-pulse" aria-hidden="true" />
-            <span>{runStatusText(node, waitsForParent)}</span>
+            <span>{runStatusText(nodeStatus(node), waitsForParent)}</span>
             {elapsedText ? <span className="research-tnum">{elapsedText}</span> : null}
             {stopButton("Stop")}
           </div>
@@ -443,11 +446,11 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
   }
 
   const failure =
-    node.status === "failed" ? (
+    nodeStatus(node) === "failed" ? (
       <>
         <div className="research-turn-alert is-error" role="alert">
           <div>
-            <b>Error.</b> {node.error ?? "The research run failed."}
+            <b>Error.</b> {nodeRun(node)?.error ?? "The research run failed."}
           </div>
         </div>
         <div className="research-turn-actions">
@@ -465,11 +468,11 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
       </>
     ) : null;
   const cancellation =
-    node.status === "cancelled" ? (
+    nodeStatus(node) === "cancelled" ? (
       <>
         <div className="research-turn-note">
-          {node.startedAt
-            ? `Stopped after ${formatRunDuration((node.completedAt ?? node.startedAt) - node.startedAt)}. The answer is incomplete.`
+          {run?.startedAt
+            ? `Stopped after ${formatRunDuration((run.completedAt ?? run.startedAt) - run.startedAt)}. The answer is incomplete.`
             : "Stopped before it started."}
         </div>
         <div className="research-turn-actions">
@@ -479,11 +482,11 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
       </>
     ) : null;
   const emptyText =
-    node.status === "failed" || node.status === "cancelled"
+    nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled"
       ? null
       : view.content.sourceError
         ? `The response is no longer available: ${view.content.sourceError}`
-        : node.status === "complete"
+        : nodeStatus(node) === "complete"
           ? "Research completed, but its response is unavailable. Open the original session transcript if it still exists."
           : active
             ? view.timelineItems.length > 0
@@ -493,7 +496,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
 
   return (
     <section
-      className={`research-response${node.status === "running" ? " is-running" : ""}`}
+      className={`research-response${nodeStatus(node) === "running" ? " is-running" : ""}`}
       aria-label="Research response"
     >
       {contentError ? (
@@ -509,9 +512,9 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
           <span className="research-pulse" aria-hidden="true" />
           <span role="status">
             {runStatusText(
-              node,
+              nodeStatus(node),
               waitsForParent,
-              node.status === "running" ? latestToolActivityLabel(view.timelineItems) : null,
+              nodeStatus(node) === "running" ? latestToolActivityLabel(view.timelineItems) : null,
             )}
           </span>
           {elapsedText ? <span className="research-tnum">{elapsedText}</span> : null}
@@ -561,8 +564,8 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
                 key={item.key}
                 item={item}
                 conversation={view.isConversation}
-                // Provenance, which only the stored origin records.
-                imported={node.origin === "imported"}
+                // Provenance: the document source records it.
+                imported={documentSource(node) === "imported"}
               />
             ))}
           </div>
@@ -586,13 +589,13 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
 
 /** A message's state as a small pill in its row's meta line. */
 export function researchMessagePill(
-  node: Pick<ResearchNode, "status">,
+  status: ResearchNodeStatus,
   retryQueued = false,
 ): { label: string; tone: "run" | "error" | "plain" } | null {
-  if (retryQueued || node.status === "queued") return { label: "Queued", tone: "plain" };
-  if (node.status === "running" || node.status === "starting") return { label: "Running", tone: "run" };
-  if (node.status === "failed") return { label: "Failed", tone: "error" };
-  if (node.status === "cancelled") return { label: "Stopped", tone: "plain" };
+  if (retryQueued || status === "queued") return { label: "Queued", tone: "plain" };
+  if (status === "running" || status === "starting") return { label: "Running", tone: "run" };
+  if (status === "failed") return { label: "Failed", tone: "error" };
+  if (status === "cancelled") return { label: "Stopped", tone: "plain" };
   return null;
 }
 
@@ -650,23 +653,23 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   onOpenContextMenu: (nodeId: string, clientX: number, clientY: number) => void;
 }) {
   const labelId = useId();
-  const settled = node.status === "complete" || node.status === "failed" || node.status === "cancelled";
+  const settled = nodeStatus(node) === "complete" || nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled";
   const promoted = Boolean(node.promotedAt);
-  const pill = researchMessagePill(node, retryQueued);
+  const pill = researchMessagePill(nodeStatus(node), retryQueued);
   const tabIndex = selected ? 0 : -1;
   const branchLabel = `${branchCount} ${branchCount === 1 ? "branch" : "branches"}`;
   let prompt: ReactNode = <span className="research-msg-plain">{label}</span>;
   if (showPrompt) {
     prompt = (
       <ResearchUserMessage className="research-prompt research-msg-prompt">
-        <ResearchMessageBody prompt={node.prompt} attachments={node.attachments} />
+        <ResearchMessageBody prompt={nodePrompt(node)} attachments={nodeAttachments(node)} />
       </ResearchUserMessage>
     );
   }
   return (
     <li
       ref={(element) => registerSegmentElement(node.id, "anchor", element)}
-      className={`research-msg-row is-status-${retryQueued ? "queued" : node.status}${selected ? " is-selected" : ""}`}
+      className={`research-msg-row is-status-${retryQueued ? "queued" : nodeStatus(node)}${selected ? " is-selected" : ""}`}
       data-segment-anchor={node.id}
       onContextMenu={(event) => {
         // Links and other nested controls may own a more specific context
@@ -695,8 +698,8 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
       </div>
       <div className="research-msg-meta">
         <time dateTime={new Date(node.createdAt).toISOString()} title={new Date(node.createdAt).toLocaleString()}>
-          {/* Provenance, which only the stored origin records. */}
-          {node.origin === "imported" ? "Imported " : ""}
+          {/* Provenance: the document source records it. */}
+          {documentSource(node) === "imported" ? "Imported " : ""}
           {shortWhen(node.createdAt, now)}
         </time>
         {pill ? (
@@ -705,7 +708,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
             {pill.label}
           </span>
         ) : null}
-        {starrable && node.status !== "queued" ? (
+        {starrable && nodeStatus(node) !== "queued" ? (
           <button
             type="button"
             className={`control-button research-msg-button research-msg-star${promoted ? " is-on" : ""}`}
@@ -733,7 +736,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
             {branchUnread ? <span className="research-turn-unread" aria-hidden="true" /> : null}
           </button>
         ) : null}
-        {node.status !== "queued" && !retryQueued ? (
+        {nodeStatus(node) !== "queued" && !retryQueued ? (
           <button
             type="button"
             className="control-button research-msg-button research-turn-more"

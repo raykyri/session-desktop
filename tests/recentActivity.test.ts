@@ -18,15 +18,15 @@ import {
 import type {
   NoteReply,
   RecentResearchQuery,
-  ResearchNode,
   ResearchTreeSummary,
 } from "../src/types";
+import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
 const tree: ResearchTreeSummary = {
   id: "tree-1",
   title: "Collective memory",
   rootNodeId: "root",
-  kind: "run",
+  type: "exchange",
   workspaceId: "workspace",
   runningCount: 0,
   failedCount: 0,
@@ -70,7 +70,7 @@ test("model summaries use readable model names where available", () => {
 
 test("note posts name delivery and saved sources", () => {
   const note: RecentResearchQuery = {
-    ...query, nodeId: "note", parentNodeId: null, kind: "post", status: "complete",
+    ...query, nodeId: "note", parentNodeId: null, type: "post", status: "complete",
     prompt: "Who has shipped this?", delivery: { status: "posted", postedAt: 1 }, replyCount: 3,
   };
   const posted = activityEventFromResearchQuery(note, tree);
@@ -102,7 +102,7 @@ test("Home hides archived research and shows it again when restored", () => {
   const items: RecentResearchQuery[] = [
     query,
     { ...query, nodeId: "active", treeId: "active-tree", createdAt: 150 },
-    { ...query, nodeId: "saved", treeId: "active-tree", kind: "post", createdAt: 100 },
+    { ...query, nodeId: "saved", treeId: "active-tree", type: "post", createdAt: 100 },
   ];
   const activeTree = { ...tree, id: "active-tree" };
   assert.deepEqual(
@@ -125,44 +125,49 @@ test("every top-level node enters the Home feed; follow-ups do not", () => {
     prompt: "Question",
     adapter: "codex",
     groupId: "workspace",
-    worktreeDir: "/tmp/workspace",
     status: "complete",
     createdAt: 100,
-    highlights: [],
-  } satisfies ResearchNode;
-  assert.equal(recentResearchQueryFromNode(node)?.nodeId, "root");
-  assert.equal(recentResearchQueryFromNode({ ...node, parentNodeId: "root" }), null);
-  const imported = recentResearchQueryFromNode({ ...node, kind: "document", origin: "imported" });
-  assert.equal(imported?.kind, "document");
-  assert.equal(imported?.origin, "imported");
-  assert.equal(imported?.prompt, "Question");
-  assert.equal(
-    recentResearchQueryFromNode({ ...node, kind: "conversation" })?.kind,
-    "conversation",
+  } satisfies NodeFixture;
+  assert.equal(recentResearchQueryFromNode(researchNode(node))?.nodeId, "root");
+  assert.equal(recentResearchQueryFromNode(researchNode({ ...node, parentNodeId: "root" })), null);
+  const imported = recentResearchQueryFromNode(
+    researchNode({ ...node, type: "document", source: "imported" }),
   );
-  assert.equal(recentResearchQueryFromNode({ ...node, kind: "post" })?.kind, "post");
+  assert.equal(imported?.type, "document");
+  assert.equal(imported?.source, "imported");
+  assert.equal(imported?.prompt, "Question");
+  const transcript = recentResearchQueryFromNode(
+    researchNode({ ...node, type: "document", source: "transcript" }),
+  );
+  assert.equal(transcript?.source, "transcript");
+  const post = recentResearchQueryFromNode(researchNode({ ...node, type: "post", format: "link" }));
+  assert.equal(post?.type, "post");
+  assert.equal(post?.format, "link");
 });
 
 test("live follow-ups stay under their root and survive root updates", () => {
   const root = {
     id: "root", treeId: tree.id, parentNodeId: null, prompt: "Root",
-    adapter: "codex", groupId: "workspace", worktreeDir: "/tmp/workspace",
-    status: "complete", createdAt: 100, highlights: [],
-  } satisfies ResearchNode;
-  let items = upsertRecentActivityResearchNode([], root);
+    adapter: "codex", groupId: "workspace",
+    status: "complete", createdAt: 100,
+  } satisfies NodeFixture;
+  let items = upsertRecentActivityResearchNode([], researchNode(root));
   const child = { ...root, id: "child", parentNodeId: root.id, prompt: "Follow up", createdAt: 300 };
-  items = upsertRecentActivityResearchNode(items, child);
-  items = upsertRecentActivityResearchNode(items, { ...child, id: "earlier", createdAt: 200 });
-  items = upsertRecentActivityResearchNode(items, { ...child, prompt: "Updated follow up" });
-  items = upsertRecentActivityResearchNode(items, { ...child, id: "grandchild", parentNodeId: child.id });
-  items = upsertRecentActivityResearchNode(items, { ...root, prompt: "Updated root" });
+  const upsert = (fields: NodeFixture) => {
+    items = upsertRecentActivityResearchNode(items, researchNode(fields));
+  };
+  upsert(child);
+  upsert({ ...child, id: "earlier", createdAt: 200 });
+  upsert({ ...child, prompt: "Updated follow up" });
+  upsert({ ...child, id: "grandchild", parentNodeId: child.id });
+  upsert({ ...root, prompt: "Updated root" });
   assert.equal(items.length, 1);
   const item = items[0];
   assert.equal(item.prompt, "Updated root");
   assert.deepEqual(item.children?.map((entry) => entry.nodeId), ["earlier", "child"]);
   assert.equal(item.children?.[1].prompt, "Updated follow up");
   assert.equal(item.createdAt, 100);
-  assert.deepEqual(upsertRecentActivityResearchNode([], child), []);
+  assert.deepEqual(upsertRecentActivityResearchNode([], researchNode(child)), []);
 });
 
 test("live activity upserts insert into the sorted position without disturbing peers", () => {
@@ -225,7 +230,7 @@ test("variable-height virtualization returns a small overscanned window", () => 
 
 test("virtual feed rows omit day dividers and retain feed positions", () => {
   const events = buildRecentActivityFromItems(
-    [{ ...query, nodeId: "link", kind: "post", prompt: "https://example.com", createdAt: 300 }, query],
+    [{ ...query, nodeId: "link", type: "post", prompt: "https://example.com", createdAt: 300 }, query],
     [tree],
   );
   const rows = buildRecentActivityVirtualRows(events);
@@ -236,17 +241,18 @@ test("virtual feed rows omit day dividers and retain feed positions", () => {
 
 
 test("live summary events retain imported report provenance", () => {
-  const node: ResearchNode = {
+  const fields = {
     id: "imported", treeId: "imported-tree", prompt: "Original prompt", adapter: "codex",
-    groupId: "workspace", worktreeDir: "/workspace", status: "complete", createdAt: 100,
-    kind: "document", origin: "imported", model: null, highlights: [],
-  };
+    groupId: "workspace", createdAt: 100, type: "document", source: "imported", model: null,
+  } satisfies NodeFixture;
+  const node = researchNode(fields);
   const query = recentResearchQueryFromNode(node)!;
-  assert.equal(query.origin, "imported");
+  assert.equal(query.source, "imported");
   const items = upsertRecentActivityResearchNode([], node);
-  const updated = upsertRecentActivityResearchNode(items, {
-    ...node, recap: { text: "Summary", responseRevision: "revision" },
-  });
+  const updated = upsertRecentActivityResearchNode(
+    items,
+    researchNode({ ...fields, recap: { text: "Summary", responseRevision: "revision" } }),
+  );
   assert.equal(activityEventFromResearchQuery(updated[0]).execution?.origin, "imported");
   assert.equal(updated[0].model, null);
 });
@@ -268,29 +274,29 @@ test("live note updates cut replies to five threads like the backend", () => {
   const capped = cappedNoteDelivery({ status: "posted", postedAt: 0, replies }, 5);
   assert.deepEqual(capped.replies?.map((reply) => reply.id), ["r0", "r1", "r2", "r3", "r4", "response"]);
 
-  const note: ResearchNode = {
+  const note = researchNode({
     id: "note", treeId: "note-tree", prompt: "Question", adapter: "claude",
-    groupId: "workspace", worktreeDir: "/workspace", status: "complete", createdAt: 100,
-    kind: "post", highlights: [], delivery: { status: "posted", postedAt: 100, replies },
-  };
+    groupId: "workspace", createdAt: 100,
+    type: "post", delivery: { status: "posted", postedAt: 100, replies },
+  });
   const [item] = upsertRecentActivityResearchNode([], note);
-  assert.equal(item.kind, "post");
+  assert.equal(item.type, "post");
   assert.equal(item.replyCount, 7);
   assert.equal(item.delivery?.replies?.length, 6);
 });
 
 test("follow-ups about a reply resolve its author from the loaded note", () => {
-  const note: ResearchNode = {
+  const note = researchNode({
     id: "note", treeId: "note-tree", prompt: "Question", adapter: "claude",
-    groupId: "workspace", worktreeDir: "/workspace", status: "complete", createdAt: 100,
-    kind: "post", highlights: [],
+    groupId: "workspace", createdAt: 100, type: "post",
     delivery: { status: "posted", postedAt: 100, replies: [memberReply("r0", 110)] },
-  };
+  });
   let items = upsertRecentActivityResearchNode([], note);
-  const child: ResearchNode = {
-    ...note, id: "child", parentNodeId: "note", kind: "run", delivery: null,
+  const childFields = {
+    id: "child", treeId: "note-tree", parentNodeId: "note", prompt: "Question", groupId: "workspace",
     anchor: { kind: "reply", replyId: "r0" }, status: "running", createdAt: 120,
-  };
+  } satisfies NodeFixture;
+  const child = researchNode(childFields);
   items = upsertRecentActivityResearchNode(items, child);
   assert.equal(items[0].children?.[0].replyAnchorAuthor, "Member r0");
   // A target outside the loaded replies keeps the name the backend sent.
@@ -299,7 +305,10 @@ test("follow-ups about a reply resolve its author from the loaded note", () => {
     delivery: { status: "posted" as const, postedAt: 100 },
     children: [{ ...items[0].children![0], replyAnchorAuthor: "Ana" }],
   }];
-  const refreshed = upsertRecentActivityResearchNode(withBackendName, { ...child, status: "complete" });
+  const refreshed = upsertRecentActivityResearchNode(
+    withBackendName,
+    researchNode({ ...childFields, status: "complete" }),
+  );
   assert.equal(refreshed[0].children?.[0].replyAnchorAuthor, "Ana");
   assert.equal(refreshed[0].children?.[0].status, "complete");
 });

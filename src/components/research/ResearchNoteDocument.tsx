@@ -2,6 +2,7 @@ import type { ResearchNode, ResearchTreeDetail } from "../../types";
 import { shortWhen } from "../../lib/shortTime";
 import { ResearchUserMessage } from "./ResearchMessage";
 import { NoteBody } from "./ResearchNote";
+import { nodeAttachments, nodeEditedAt, nodePrompt } from "../../lib/researchNodeTypes";
 
 function excerpt(text: string, maxChars = 90): string {
   const normalized = text.split(/\s+/).filter(Boolean).join(" ");
@@ -23,6 +24,7 @@ export default function ResearchNoteDocument({
   const parent = note.parentNodeId
     ? detail.nodes.find((node) => node.id === note.parentNodeId) ?? null
     : null;
+  const editedAt = nodeEditedAt(note);
 
   return (
     <div className="note-document">
@@ -35,14 +37,14 @@ export default function ResearchNoteDocument({
               className="note-document-parent"
               onClick={() => onSelectNode(parent.id)}
             >
-              ↳ Network follow-up of “{excerpt(parent.prompt, 60)}”
+              ↳ Network follow-up of “{excerpt(nodePrompt(parent), 60)}”
             </button>
           ) : null}
           <ResearchUserMessage className="research-prompt research-turn-prompt">
             <NoteBody
-              prompt={note.prompt}
-              format={note.format ?? "text"}
-              attachments={note.attachments}
+              prompt={nodePrompt(note)}
+              format={note.type === "post" ? note.format : "text"}
+              attachments={nodeAttachments(note)}
             />
           </ResearchUserMessage>
           <div className="research-turn-meta">
@@ -52,11 +54,11 @@ export default function ResearchNoteDocument({
             >
               {shortWhen(note.createdAt, Date.now())}
             </time>
-            {note.editedAt ? (
+            {editedAt ? (
               <>
                 <span aria-hidden="true">·</span>
-                <span title={new Date(note.editedAt).toLocaleString()}>
-                  Edited {shortWhen(note.editedAt, Date.now())}
+                <span title={new Date(editedAt).toLocaleString()}>
+                  Edited {shortWhen(editedAt, Date.now())}
                 </span>
               </>
             ) : null}

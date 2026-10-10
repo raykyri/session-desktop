@@ -1,7 +1,9 @@
-// Pure helpers for rendering exported-conversation research nodes. The
-// terminal export, since removed, collapsed tool activity into marker turns (a
-// Raw block whose value is `{ type: "sessionToolActivity", toolCalls: N }`);
-// existing conversation snapshots and detached archives still carry them.
+// Pure helpers for rendering transcript documents (terminal conversations
+// exported before the export was removed; stored as the `conversation` kind
+// before state version 8). The export collapsed tool activity into marker
+// turns (a Raw block whose value is `{ type: "sessionToolActivity",
+// toolCalls: N }`); transcript snapshots and detached archives still carry
+// them.
 // buildTimelineItems classifies assistant Raw blocks as thinking activities.
 // The viewer detects these markers and displays an "N tool calls" chip.
 

@@ -4350,7 +4350,7 @@ impl AppState {
             "research.tree.created",
             None,
             None,
-            json!({ "tree": tree, "node": node }),
+            json!({ "tree": tree, "node": node.view() }),
         ));
         self.research_tree(&tree_id)
     }
@@ -4426,7 +4426,7 @@ impl AppState {
             "research.tree.created",
             None,
             None,
-            json!({ "tree": tree, "node": node }),
+            json!({ "tree": tree, "node": node.view() }),
         ));
         self.research_tree(&tree_id)
     }
@@ -4500,7 +4500,7 @@ impl AppState {
             "research.tree.created",
             None,
             None,
-            json!({ "tree": tree, "node": node }),
+            json!({ "tree": tree, "node": node.view() }),
         ));
         self.research_tree(&tree_id)
     }
@@ -4573,7 +4573,7 @@ impl AppState {
             "research.node.created",
             None,
             None,
-            json!({ "node": node }),
+            json!({ "node": node.view() }),
         ));
         Ok(node)
     }
@@ -4660,7 +4660,7 @@ impl AppState {
             "research.node.updated",
             None,
             None,
-            json!({ "node": node }),
+            json!({ "node": node.view() }),
         ));
         Ok(node)
     }
@@ -4713,7 +4713,7 @@ impl AppState {
             "research.node.updated",
             None,
             None,
-            json!({ "node": node }),
+            json!({ "node": node.view() }),
         ));
         Ok(node)
     }
@@ -4854,7 +4854,7 @@ impl AppState {
             "research.node.updated",
             None,
             None,
-            json!({ "node": node }),
+            json!({ "node": node.view() }),
         ));
         if title_changed {
             self.emit(SessionEvent::new(
@@ -4978,7 +4978,7 @@ impl AppState {
             "research.tree.created",
             None,
             None,
-            json!({ "tree": tree, "node": node }),
+            json!({ "tree": tree, "node": node.view() }),
         ));
         self.research_tree(&tree_id)
     }
@@ -5192,7 +5192,7 @@ impl AppState {
             None,
             json!({
                 "tree": tree,
-                "node": node,
+                "node": node.view(),
                 "responseRevision": response_revision,
                 "markdownChanged": markdown_changed,
                 "removedHighlightCount": removed_highlight_count,
@@ -5203,7 +5203,7 @@ impl AppState {
                 "research.node.updated",
                 None,
                 None,
-                json!({ "node": branch }),
+                json!({ "node": branch.view() }),
             ));
         }
         if markdown_changed {
@@ -5556,7 +5556,7 @@ impl AppState {
             "research.node.created",
             None,
             None,
-            json!({ "node": node }),
+            json!({ "node": node.view() }),
         ));
         Ok(node)
     }
@@ -5670,7 +5670,7 @@ impl AppState {
             "research.node.updated",
             Some(pane_id.to_string()),
             Some(agent.id.clone()),
-            json!({ "node": node }),
+            json!({ "node": node.view() }),
         ));
         self.maybe_schedule_research_retirement(&node);
         Ok(node)
@@ -5737,7 +5737,7 @@ impl AppState {
             "research.node.updated",
             None,
             Some(agent.id.clone()),
-            json!({ "node": node }),
+            json!({ "node": node.view() }),
         ));
         self.emit(SessionEvent::new(
             "agent.updated",
@@ -5814,7 +5814,7 @@ impl AppState {
                 "research.node.updated",
                 None,
                 Some(agent_id.to_string()),
-                json!({ "node": node }),
+                json!({ "node": node.view() }),
             ));
         }
         Ok(())
@@ -5917,7 +5917,7 @@ impl AppState {
                 "research.node.updated",
                 None,
                 Some(agent_id.to_string()),
-                json!({ "node": node }),
+                json!({ "node": node.view() }),
             ));
         }
         if snapshot_error.is_none() {
@@ -6061,7 +6061,7 @@ impl AppState {
             "research.node.updated",
             node.pane_id().map(str::to_string),
             node.agent_id().map(str::to_string),
-            json!({ "node": node }),
+            json!({ "node": node.view() }),
         ));
         Ok(node)
     }
@@ -6105,7 +6105,7 @@ impl AppState {
             "research.node.updated",
             node.pane_id().map(str::to_string),
             node.agent_id().map(str::to_string),
-            json!({ "node": node }),
+            json!({ "node": node.view() }),
         ));
         if runtime == ResearchRuntime::Sdk {
             crate::research_runtime::interrupt_session(&node.id);
@@ -6231,7 +6231,7 @@ impl AppState {
             "research.node.updated",
             None,
             None,
-            json!({ "node": node }),
+            json!({ "node": node.view() }),
         ));
         Ok(node)
     }
@@ -6338,7 +6338,7 @@ impl AppState {
                 "research.node.updated",
                 None,
                 None,
-                json!({ "node": node }),
+                json!({ "node": node.view() }),
             ));
         }
         Ok(updated)
@@ -6476,7 +6476,7 @@ impl AppState {
             "research.node.updated",
             None,
             None,
-            json!({ "node": node }),
+            json!({ "node": node.view() }),
         ));
         Ok(node)
     }
@@ -6514,7 +6514,7 @@ impl AppState {
                 "research.node.updated",
                 None,
                 None,
-                json!({ "node": node }),
+                json!({ "node": node.view() }),
             ));
         }
         Ok(node)
@@ -9105,7 +9105,7 @@ impl AppState {
                 "research.node.updated",
                 node.pane_id().map(str::to_string),
                 node.agent_id().map(str::to_string),
-                json!({ "node": node }),
+                json!({ "node": node.view() }),
             ));
         }
         Ok(changed)
@@ -9299,7 +9299,7 @@ impl AppState {
                 "research.node.updated",
                 node.pane_id().map(str::to_string),
                 node.agent_id().map(str::to_string),
-                json!({ "node": node }),
+                json!({ "node": node.view() }),
             ));
         }
         crate::research_recap::schedule(self, node_id);
@@ -9353,7 +9353,7 @@ impl AppState {
             "research.node.updated",
             updated.pane_id().map(str::to_string),
             updated.agent_id().map(str::to_string),
-            json!({ "node": updated }),
+            json!({ "node": updated.view() }),
         ));
         Ok(())
     }
@@ -9435,7 +9435,7 @@ impl AppState {
             "research.node.updated",
             updated.pane_id().map(str::to_string),
             updated.agent_id().map(str::to_string),
-            json!({ "node": updated }),
+            json!({ "node": updated.view() }),
         ));
         Ok(updated)
     }

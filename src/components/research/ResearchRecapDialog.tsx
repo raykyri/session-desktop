@@ -16,6 +16,7 @@ import type {
   ResearchNodeContent,
   ResearchRecapCandidate,
 } from "../../types";
+import { nodeAdapter, nodeAgent, nodeRecap } from "../../lib/researchNodeTypes";
 
 const MAX_INSTRUCTIONS = 4_000;
 
@@ -183,7 +184,7 @@ export default function ResearchRecapDialog({
 }: ResearchRecapDialogProps) {
   const baselineRef = useRef({
     responseRevision: content.responseRevision ?? "",
-    recap: content.node.recap ?? null,
+    recap: nodeRecap(content.node) ?? null,
   });
   const baseline = baselineRef.current;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -219,7 +220,7 @@ export default function ResearchRecapDialog({
         setAdapters(available);
         const preferred =
           available.find((candidateAdapter) => candidateAdapter.id === baseline.recap?.adapter) ??
-          available.find((candidateAdapter) => candidateAdapter.id === content.node.adapter) ??
+          available.find((candidateAdapter) => candidateAdapter.id === nodeAdapter(content.node)) ??
           available.find((candidateAdapter) => candidateAdapter.default) ??
           available[0];
         setAdapter(preferred?.id ?? "");
@@ -228,8 +229,8 @@ export default function ResearchRecapDialog({
         }
         if (preferred?.id === baseline.recap?.adapter) {
           setModel(baseline.recap.model?.trim() ?? "");
-        } else if (preferred?.id === content.node.adapter) {
-          setModel(content.node.model?.trim() ?? "");
+        } else if (preferred?.id === nodeAdapter(content.node)) {
+          setModel(nodeAgent(content.node)?.model?.trim() ?? "");
         } else {
           setModel("");
         }
@@ -252,8 +253,8 @@ export default function ResearchRecapDialog({
     baseline.recap?.adapter,
     baseline.recap?.instructions,
     baseline.recap?.model,
-    content.node.adapter,
-    content.node.model,
+    nodeAdapter(content.node),
+    nodeAgent(content.node)?.model,
   ]);
 
   useEffect(() => {

@@ -4,15 +4,16 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ResearchNoteDocument from "../src/components/research/ResearchNoteDocument";
 import type { ResearchNode, ResearchTreeDetail } from "../src/types";
+import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
 const noop = () => {};
 
-const note: ResearchNode = {
+const noteFields = {
   id: "note", treeId: "tree", prompt: "Who ships component-model plugins?",
-  adapter: "claude", model: "fable", groupId: "ws", worktreeDir: "/ws", kind: "post", format: "text",
+  adapter: "claude", model: "fable", groupId: "ws", type: "post", format: "text",
   status: "complete", createdAt: 100, highlights: [],
-  delivery: { status: "posted", postedAt: 100 },
-};
+  delivery: { status: "posted", postedAt: 100 },} satisfies NodeFixture;
+const note = researchNode(noteFields);
 
 function render(nodes: ResearchNode[], selected: ResearchNode = nodes[0]) {
   const detail: ResearchTreeDetail = {
@@ -40,47 +41,48 @@ test("a note's post column uses the turn layout for the post only", () => {
 });
 
 test("a note's post column has no Activity section", () => {
-  const withActivity: ResearchNode = {
-    ...note,
+  const withActivityFields = {
+    ...noteFields,
     delivery: {
       status: "posted", postedAt: 100,
       replies: [{
         id: "r1", author: { kind: "member", id: "ben", displayName: "Ben Kowalski" },
         body: "wit-bindgen doubled our SDK surface.", createdAt: 110,
       }],
-    },
-  };
-  const followUp: ResearchNode = {
-    ...note, id: "net", parentNodeId: "note", prompt: "Anyone measured wizer?", createdAt: 140,
-  };
+    },} satisfies NodeFixture;
+  const withActivity = researchNode(withActivityFields);
+  const followUpFields = {
+    ...noteFields, id: "net", parentNodeId: "note", prompt: "Anyone measured wizer?", createdAt: 140,} satisfies NodeFixture;
+  const followUp = researchNode(followUpFields);
   const html = render([withActivity, followUp]);
   assert.doesNotMatch(html, />Activity|note-document-group/);
   assert.doesNotMatch(html, /wit-bindgen doubled|Anyone measured wizer/);
 });
 
 test("a network follow-up's page links back to its note", () => {
-  const child: ResearchNode = {
-    ...note, id: "net", parentNodeId: "note", prompt: "Anyone measured wizer?", createdAt: 140,
-  };
+  const childFields = {
+    ...noteFields, id: "net", parentNodeId: "note", prompt: "Anyone measured wizer?", createdAt: 140,} satisfies NodeFixture;
+  const child = researchNode(childFields);
   const html = render([note, child], child);
   assert.match(html, /Network follow-up of “Who ships component-model plugins\?”/);
   assert.doesNotMatch(html, /research-thread-actions/);
 });
 
 test("a saved link's post column shows the link card", () => {
-  const link: ResearchNode = {
-    ...note,
+  const linkFields = {
+    ...noteFields,
     prompt: "https://example.com/page",
     format: "link",
-    delivery: null,
-  };
+    delivery: null,} satisfies NodeFixture;
+  const link = researchNode(linkFields);
   const html = render([link]);
   assert.match(html, /note-link-card/);
   assert.doesNotMatch(html, /Saved the link|No replies yet/);
 });
 
 test("a post renders by its stored format, not by parsing its text", () => {
-  const asked: ResearchNode = { ...note, prompt: "https://example.com/page", format: "text" };
+  const askedFields = { ...noteFields, prompt: "https://example.com/page", format: "text" } satisfies NodeFixture;
+  const asked = researchNode(askedFields);
   assert.doesNotMatch(render([asked]), /note-link-card/);
 });
 

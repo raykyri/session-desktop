@@ -11,21 +11,21 @@ import {
   sameResearchStrip,
 } from "../src/lib/researchColumns";
 import type { ResearchHighlightAnchor, ResearchNode } from "../src/types";
+import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
-function node(id: string, overrides: Partial<ResearchNode> = {}): ResearchNode {
-  return {
+function node(id: string, overrides: NodeFixture = {}): ResearchNode {
+  return researchNode({
     id,
     treeId: "tree",
     prompt: id,
     adapter: "claude",
     groupId: "ws",
-    worktreeDir: "/ws",
     status: "complete",
-    nativeSessionId: `session-${id}`,
+    sessionReady: true,
     createdAt: 0,
     highlights: [],
     ...overrides,
-  };
+  });
 }
 
 const anchor = {
@@ -142,7 +142,7 @@ test("a pending branch adds its column after the level that shows its parent", (
 
 test("a note root is a post column and its thread column; its follow-ups open as ordinary pairs", () => {
   const nodes = [
-    node("note", { kind: "post", delivery: { status: "posted", postedAt: 1, replies: [] } }),
+    node("note", { type: "post", delivery: { status: "posted", postedAt: 1, replies: [] } }),
     node("run", { parentNodeId: "note", createdAt: 1 }),
   ];
   const root = researchStrip(nodes, "note", null);
@@ -208,7 +208,7 @@ test("a draft is the T0 messages column, and every column has one selector", () 
 
 test("editing the root adds the editor column after the root level's columns", () => {
   const doc = [
-    node("doc", { kind: "document" }),
+    node("doc", { type: "document" }),
     node("b1", { parentNodeId: "doc", createdAt: 1 }),
   ];
   const editing = researchStrip(doc, "doc", null, "doc");
@@ -233,6 +233,6 @@ test("editing the root adds the editor column after the root level's columns", (
   assert.equal(sameResearchStrip(editing, researchStrip(doc, "doc", null)), false);
 
   // A post's editor follows its thread column.
-  const post = [node("note", { kind: "post", delivery: { status: "posted", postedAt: 1, replies: [] } })];
+  const post = [node("note", { type: "post", delivery: { status: "posted", postedAt: 1, replies: [] } })];
   assert.deepEqual(ids(researchStrip(post, "note", null, "note")), ["N0", "T0", "E0"]);
 });

@@ -22,12 +22,7 @@ function humanReadableModelName(adapter: string, model?: string | null): string 
 
 /** The model that answered a thread's root prompt, as "Claude Fable" or just
  * "Claude" when the model id has no preset name. Empty for unknown adapters. */
-export function formatResearchModelSummary(
-  adapter: string,
-  model?: string | null,
-  origin?: string | null,
-): string {
-  if (origin === "imported") return "Imported";
+export function formatResearchModelSummary(adapter: string, model?: string | null): string {
   const adapterLabel = adapterDisplayLabel(adapter);
   const modelName = humanReadableModelName(adapter, model);
   if (adapterLabel && modelName) return `${adapterLabel} ${modelName}`;

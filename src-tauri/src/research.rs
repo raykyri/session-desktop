@@ -983,6 +983,110 @@ impl ResearchNode {
     }
 }
 
+/// A research node as commands and events send it to the frontend: the
+/// envelope and the body with its `type` tag inline, and an exchange's run
+/// without its binding. The binding (session, transcript, agent, pane and
+/// thread ids, working directory) stays in the backend; the frontend gets
+/// the two facts it needs from it in `RunView`.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResearchNodeView {
+    pub id: String,
+    pub tree_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_node_id: Option<String>,
+    pub inline: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anchor: Option<NodeAnchor>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    pub group_id: String,
+    pub created_at: u128,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub promoted_at: Option<u128>,
+    pub highlights: Vec<ResearchHighlight>,
+    #[serde(flatten)]
+    pub body: NodeBodyView,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum NodeBodyView {
+    Post(PostBody),
+    Exchange(ExchangeView),
+    Document(DocumentBody),
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExchangeView {
+    pub message: UserMessage,
+    pub agent: AgentSpec,
+    pub run: RunView,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recap: Option<ResearchRecap>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunView {
+    #[serde(flatten)]
+    pub record: RunRecord,
+    /// The native session id was recorded, so a follow-up can fork it.
+    pub session_ready: bool,
+    /// A pane process is still bound to the run and has to be closed, even
+    /// after the run settled (a cancel whose kill failed).
+    pub holds_process: bool,
+}
+
+impl ResearchNode {
+    pub fn view(&self) -> ResearchNodeView {
+        let body = match &self.body {
+            NodeBody::Post(post) => NodeBodyView::Post(post.clone()),
+            NodeBody::Document(document) => NodeBodyView::Document(document.clone()),
+            NodeBody::Exchange(exchange) => NodeBodyView::Exchange(ExchangeView {
+                message: exchange.message.clone(),
+                agent: exchange.agent.clone(),
+                run: RunView {
+                    record: exchange.run.clone(),
+                    session_ready: exchange.binding.native_session_id.is_some(),
+                    holds_process: exchange.binding.pane_id.is_some(),
+                },
+                recap: exchange.recap.clone(),
+            }),
+        };
+        ResearchNodeView {
+            id: self.id.clone(),
+            tree_id: self.tree_id.clone(),
+            parent_node_id: self.parent_node_id.clone(),
+            inline: self.inline,
+            anchor: self.anchor.clone(),
+            title: self.title.clone(),
+            group_id: self.group_id.clone(),
+            created_at: self.created_at,
+            promoted_at: self.promoted_at,
+            highlights: self.highlights.clone(),
+            body,
+        }
+    }
+}
+
+/// `serialize_with` for wire structs that hold a stored node.
+fn serialize_node_view<S: serde::Serializer>(
+    node: &ResearchNode,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    node.view().serialize(serializer)
+}
+
+/// `serialize_with` for wire structs that hold stored nodes.
+fn serialize_node_views<S: serde::Serializer>(
+    nodes: &[ResearchNode],
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.collect_seq(nodes.iter().map(ResearchNode::view))
+}
+
 /// Compact, durable query history for Recent Activity. This deliberately omits
 /// transcripts, filesystem paths, highlights, and runtime bindings: the feed
 /// needs query identity and display metadata, not the full research record.
@@ -1761,6 +1865,7 @@ pub struct UpdateResearchDocumentRequest {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateResearchDocumentResult {
     pub tree: ResearchTree,
+    #[serde(serialize_with = "serialize_node_view")]
     pub node: ResearchNode,
     pub response_revision: String,
     pub markdown_changed: bool,
@@ -1787,6 +1892,7 @@ pub struct UpdateResearchNoteRequest {
 #[serde(rename_all = "camelCase")]
 pub struct UpdateResearchNoteResult {
     pub tree: ResearchTree,
+    #[serde(serialize_with = "serialize_node_view")]
     pub node: ResearchNode,
     pub removed_highlight_count: usize,
 }
@@ -1821,6 +1927,7 @@ pub struct ResearchTreeSummary {
 #[serde(rename_all = "camelCase")]
 pub struct ResearchTreeDetail {
     pub tree: ResearchTree,
+    #[serde(serialize_with = "serialize_node_views")]
     pub nodes: Vec<ResearchNode>,
 }
 
@@ -1835,6 +1942,7 @@ pub struct ResearchBranchRemoval {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResearchNodeContent {
+    #[serde(serialize_with = "serialize_node_view")]
     pub node: ResearchNode,
     pub turns: Vec<crate::transcript::Turn>,
     /// Why `turns` is empty for a finished node (snapshot missing and the
@@ -4361,6 +4469,51 @@ mod tests {
         // (tests/researchDocuments.test.ts): NEL separates, FEFF does not.
         assert_eq!(document_word_count("a\u{85}b"), 2);
         assert_eq!(document_word_count("a\u{FEFF}b"), 1);
+    }
+
+    #[test]
+    fn node_views_inline_the_body_and_leave_out_run_bindings() {
+        let folder = temp_workspace();
+        let mut run = sample_detached_archive(&folder).nodes.remove(0);
+        let view = serde_json::to_value(run.view()).unwrap();
+        assert_eq!(view["type"], "exchange");
+        assert_eq!(view["message"]["text"], "Question");
+        assert_eq!(view["agent"]["adapter"], "claude");
+        assert_eq!(view["run"]["status"], "complete");
+        assert_eq!(view["run"]["sessionReady"], true);
+        assert_eq!(view["run"]["holdsProcess"], false);
+        assert_eq!(view["highlights"], serde_json::json!([]));
+        assert_eq!(view["inline"], false);
+        assert!(view.get("binding").is_none() && view.get("body").is_none());
+        let text = view.to_string();
+        for binding in [
+            "nativeSessionId",
+            "agentId",
+            "worktreeDir",
+            "paneId",
+            "transcriptPath",
+        ] {
+            assert!(!text.contains(binding), "{binding} in {text}");
+        }
+        run.binding_mut().unwrap().pane_id = Some("pane-1".into());
+        run.binding_mut().unwrap().native_session_id = None;
+        let run_view = serde_json::to_value(run.view()).unwrap()["run"].clone();
+        assert_eq!(run_view["holdsProcess"], true);
+        assert_eq!(run_view["sessionReady"], false);
+
+        let post = serde_json::to_value(with_body(&run, post_body("Who?", None)).view()).unwrap();
+        assert_eq!(post["type"], "post");
+        assert_eq!(post["format"], "text");
+        assert_eq!(post["followUpAgent"]["adapter"], "claude");
+        assert!(post.get("run").is_none());
+        let document = serde_json::to_value(
+            with_body(&run, document_body(DocumentSource::Transcript, None)).view(),
+        )
+        .unwrap();
+        assert_eq!(document["type"], "document");
+        assert_eq!(document["source"], "transcript");
+        assert!(document.get("message").is_none());
+        std::fs::remove_dir_all(folder).ok();
     }
 
     #[test]

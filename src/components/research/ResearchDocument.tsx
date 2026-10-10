@@ -53,7 +53,7 @@ import {
 } from "../../lib/researchHistory";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import { researchBranchInfo } from "../../lib/researchBranches";
-import { nodeMessage, nodeType, passageAnchor, replyAnchorId } from "../../lib/researchNodeTypes";
+import { documentHoldsMarkdown, documentSource, nodeAdapter, nodeAgent, nodeDelivery, nodeEditedAt, nodeMessage, nodePrompt, nodeRecap, nodeResponseSnapshotAt, nodeRun, nodeStatus, nodeType, passageAnchor, replyAnchorId } from "../../lib/researchNodeTypes";
 import {
   COLUMN_ROW_SELECTOR,
   columnAttributes,
@@ -139,9 +139,9 @@ import type {
   ResearchBranchRemoval,
   ResearchHighlight,
   NodeAnchor,
+  ResearchNodeType,
   ResearchHighlightAnchor,
   ResearchNode,
-  ResearchNodeKind,
   ResearchNodeContent,
   ResearchTreeDetail,
   UpdateResearchDocumentResult,
@@ -198,7 +198,7 @@ interface ResearchDocumentProps {
   /** The root's kind from the sidebar summary, known before the detail
    * loads. A post's loading header reads "Post", as its post column's does,
    * rather than the post's text. */
-  treeKind?: ResearchNodeKind;
+  treeType?: ResearchNodeType;
   /** Archived trees remain browsable, but cannot be branched. */
   archived: boolean;
   /** Why `detail` is null, when the tree fetch itself failed. */
@@ -734,13 +734,13 @@ function branchBlockerFor(node: ResearchNode | null | undefined, archived: boole
   if (archived) {
     return "Move this question out of Archive to branch from it";
   }
-  if (!node || isActiveResearchStatus(node.status)) {
+  if (!node || isActiveResearchStatus(nodeStatus(node))) {
     return "Wait for the answer to finish";
   }
-  if (node.status === "failed") {
+  if (nodeStatus(node) === "failed") {
     return "This answer stopped with an error. Retry it to branch from it";
   }
-  if (node.status === "cancelled") {
+  if (nodeStatus(node) === "cancelled") {
     return "This answer was stopped. Run it again to branch from it";
   }
   return canFollowUpFrom(node) ? null : "Waiting for the native session checkpoint";
@@ -809,7 +809,7 @@ function scrollIntoColumn(element: Element, behavior: ScrollBehavior = "auto") {
 }
 
 function nodeLabel(node: ResearchNode | null | undefined, fallback: string) {
-  return (node?.title ?? node?.prompt ?? "").trim() || fallback;
+  return (node?.title ?? (node ? nodePrompt(node) : "")).trim() || fallback;
 }
 
 /** Content-derived render state for one answer. */
@@ -820,9 +820,11 @@ function buildSegmentView(
   showFullTrace: boolean,
 ): SegmentView {
   // A conversation node's whole timeline is the document: there is no
-  // "answer" fold to collapse to and no fuller trace to reveal. The stored
-  // kind, not the node type: it selects the transcript renderer.
-  const isConversation = node.kind === "conversation" || content?.node.kind === "conversation";
+  // "answer" fold to collapse to and no fuller trace to reveal. The document
+  // source selects the transcript renderer.
+  const isConversation =
+    documentSource(node) === "transcript" ||
+    (content ? documentSource(content.node) === "transcript" : false);
   const timelineItems = buildTimelineItems(content?.turns ?? []);
   const answerTimelineItems = timelineItemsAfterLastToolCall(timelineItems);
   const hasTranscriptActivity = !isConversation && timelineItemsContainTranscriptActivity(timelineItems);
@@ -839,9 +841,10 @@ function buildSegmentView(
   const rawAnswer = assistantTextFromTimelineItems(answerTimelineItems);
   const conversationCopyText =
     isConversation && content ? formatPlainTextTranscript(content.turns, "Assistant") : null;
-  // The stored kind: only a document record holds editable Markdown.
+  // Only an imported or authored document holds editable Markdown; a
+  // transcript's snapshot is a conversation.
   let editableDocumentMarkdown: string | null = null;
-  if (content?.node.kind === "document") {
+  if (content && documentHoldsMarkdown(content.node)) {
     for (const turn of content.turns) {
       const block = turn.blocks.find((candidate) => candidate.type === "text");
       if (block?.type === "text") {
@@ -953,7 +956,7 @@ function ResearchMarkerTip({
 function ResearchDocument({
   detail,
   treeTitle,
-  treeKind,
+  treeType,
   archived,
   detailError,
   onRetryDetail,
@@ -1241,7 +1244,7 @@ function ResearchDocument({
   // Refetch when a run finishes, its snapshot is saved, or its recap is available.
   // Other detail updates do not need to restart the content loaders.
   const chainStatusKey = chainNodes
-    .map((node) => `${node.id}:${node.status}:${node.responseSnapshotAt ?? 0}:${node.recap?.id ?? node.recap?.responseRevision ?? ""}`)
+    .map((node) => `${node.id}:${nodeStatus(node)}:${nodeResponseSnapshotAt(node) ?? 0}:${nodeRecap(node)?.id ?? nodeRecap(node)?.responseRevision ?? ""}`)
     .join("\n");
   const branchesByParent = useMemo(() => researchBranchesByParent(nodes), [nodes]);
   const branchesByParentRef = useRef(branchesByParent);
@@ -1357,7 +1360,7 @@ function ResearchDocument({
       for (const id of level.chainIds) {
         for (const child of branchesByParent.get(id) ?? []) {
           if (!seen.has(child.id)) {
-            seen.set(child.id, child.status === "complete");
+            seen.set(child.id, nodeStatus(child) === "complete");
           }
         }
       }
@@ -2338,7 +2341,7 @@ function ResearchDocument({
     const errorCounts = new Map<string, number>();
     const stampFor = (nodeId: string) => {
       const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
-      return node ? `${node.status}:${node.responseSnapshotAt ?? 0}:${node.recap?.id ?? node.recap?.responseRevision ?? ""}` : "";
+      return node ? `${nodeStatus(node)}:${nodeResponseSnapshotAt(node) ?? 0}:${nodeRecap(node)?.id ?? nodeRecap(node)?.responseRevision ?? ""}` : "";
     };
     const clearError = (nodeId: string) =>
       setContentErrorByNode((current) => withoutKeys(current, [nodeId]));
@@ -2355,7 +2358,7 @@ function ResearchDocument({
         fetchStampByNodeRef.current.set(nodeId, stamp);
         clearError(nodeId);
         setContentByNode((current) => ({ ...current, [nodeId]: next }));
-        if (isActiveResearchStatus(next.node.status)) {
+        if (isActiveResearchStatus(nodeStatus(next.node))) {
           timers.set(nodeId, window.setTimeout(() => void load(nodeId), 1000));
         }
       } catch (err) {
@@ -2371,7 +2374,7 @@ function ResearchDocument({
         );
         const attempts = (errorCounts.get(nodeId) ?? 0) + 1;
         errorCounts.set(nodeId, attempts);
-        const isActive = knownNode && isActiveResearchStatus(knownNode.status);
+        const isActive = knownNode && isActiveResearchStatus(nodeStatus(knownNode));
         if (isActive || attempts <= 5) {
           timers.set(
             nodeId,
@@ -2398,7 +2401,7 @@ function ResearchDocument({
         // must not sit on screen while this one is in flight.
         clearError(nodeId);
         void load(nodeId);
-      } else if (isActiveResearchStatus(node.status)) {
+      } else if (isActiveResearchStatus(nodeStatus(node))) {
         // The cleanup above cancelled this still-streaming turn's pending
         // poll timer. Re-arm it, or its live transcript freezes until its
         // own status finally changes.
@@ -3066,7 +3069,7 @@ function ResearchDocument({
     const node = nodeId ? detailRef.current?.nodes.find((candidate) => candidate.id === nodeId) : null;
     // A streaming answer has no revision to anchor to yet; its selection can
     // still be copied.
-    const live = isLiveResearchSelection(revision, node?.status);
+    const live = isLiveResearchSelection(revision, node ? nodeStatus(node) : undefined);
     if (!root || !nodeId || !segmentContent || (!revision && !live) || root.closest(".is-leaving")) {
       setHighlightAction(null);
       return;
@@ -3112,7 +3115,7 @@ function ResearchDocument({
     // Keep the quote's surrounding context inside the message it belongs to
     // so the anchor resolves the same in either transcript view.
     const contextBounds = researchAnchorContextBounds({
-      isConversation: segmentContent?.node.kind === "conversation",
+      isConversation: segmentContent ? documentSource(segmentContent.node) === "transcript" : false,
       messageBounds: enclosingMessageFlatBounds(root, range),
       projectionLength: projection.length,
     });
@@ -3711,7 +3714,10 @@ function ResearchDocument({
     }
     const nodesNow = nodesRef.current;
     const busy = inlineChainFor(nodesNow, nodeId).some(
-      (id) => id !== nodeId && isActiveResearchStatus(nodesNow.find((node) => node.id === id)?.status ?? "complete"),
+      (id) => {
+        const node = nodesNow.find((candidate) => candidate.id === id);
+        return id !== nodeId && Boolean(node) && isActiveResearchStatus(nodeStatus(node!));
+      },
     );
     if (busy) {
       setQueuedRetries((current) => new Set(current).add(nodeId));
@@ -3816,7 +3822,7 @@ function ResearchDocument({
     }
     const headId = inlineChainFor(currentDetail.nodes, nodeId)[0] ?? nodeId;
     setEditingByHead((current) => ({ ...current, [headId]: nodeId }));
-    setComposerText((current) => ({ ...current, [headId]: node.prompt }));
+    setComposerText((current) => ({ ...current, [headId]: nodePrompt(node) }));
     requestFocus({ kind: "composer", key: headId }, "reveal");
   }, [requestFocus]);
 
@@ -4073,7 +4079,10 @@ function ResearchDocument({
         continue;
       }
       const busy = inlineChainFor(nodes, nodeId).some(
-        (id) => id !== nodeId && isActiveResearchStatus(nodeById.get(id)?.status ?? "complete"),
+        (id) => {
+          const node = nodeById.get(id);
+          return id !== nodeId && Boolean(node) && isActiveResearchStatus(nodeStatus(node!));
+        },
       );
       if (!busy) {
         setQueuedRetries((current) => {
@@ -4096,7 +4105,7 @@ function ResearchDocument({
 
   // Running turns tick their elapsed clock once a second; relative times in
   // the meta rows refresh once a minute.
-  const anyChainRunActive = chainNodes.some((node) => isActiveResearchStatus(node.status));
+  const anyChainRunActive = chainNodes.some((node) => isActiveResearchStatus(nodeStatus(node)));
   useEffect(() => {
     setMetadataNow(Date.now());
     if (!anyChainRunActive) {
@@ -4157,7 +4166,7 @@ function ResearchDocument({
       return;
     }
     let session: EditorSession;
-    if (node.kind === "document") {
+    if (documentHoldsMarkdown(node)) {
       const content = contentByNode[nodeId];
       const markdown = segmentViews.get(nodeId)?.editableDocumentMarkdown ?? null;
       if (!content?.responseRevision || markdown == null) {
@@ -4180,7 +4189,7 @@ function ResearchDocument({
           return anchor ? [anchor] : [];
         }),
         correction: false,
-        imported: node.origin === "imported",
+        imported: documentSource(node) === "imported",
         returnFocus,
       };
     } else if (nodeType(node) === "post") {
@@ -4188,8 +4197,8 @@ function ResearchDocument({
       session = {
         nodeId,
         kind: "post",
-        initialText: node.prompt,
-        text: node.prompt,
+        initialText: nodePrompt(node),
+        text: nodePrompt(node),
         initialTitle: "",
         title: "",
         responseRevision: null,
@@ -4412,8 +4421,8 @@ function ResearchDocument({
     // there is no node to load, so no in-document retry can recover.
     const placeholderError = detailError ?? null;
     const rootKind = detail
-      ? detail.nodes.find((node) => node.id === detail.tree.rootNodeId)?.kind
-      : treeKind;
+      ? detail.nodes.find((node) => node.id === detail.tree.rootNodeId)?.type
+      : treeType;
     const headerTitle =
       rootKind === "post" ? "Post" : (detail?.tree.title ?? treeTitle ?? "Loading research…");
     return (
@@ -4459,7 +4468,7 @@ function ResearchDocument({
       if (seen.has(id)) continue;
       seen.add(id);
       const node = nodeById.get(id);
-      if (node && isActiveResearchStatus(node.status)) {
+      if (node && isActiveResearchStatus(nodeStatus(node))) {
         return true;
       }
       for (const candidate of nodes) {
@@ -4472,7 +4481,7 @@ function ResearchDocument({
   };
 
   const isUnread = (branch: ResearchNode) =>
-    branch.status === "complete" &&
+    nodeStatus(branch) === "complete" &&
     firstSeenCompleteRef.current.get(branch.id) === false &&
     !openedNodeIds.has(branch.id);
 
@@ -4486,10 +4495,9 @@ function ResearchDocument({
       // A document with no question is one row for the whole document.
       const whole = nodeMessage(node) === null;
       const replyId = replyAnchorId(node);
-      const replyQuote = replyId
-        ? nodeById.get(node.parentNodeId ?? "")?.delivery?.replies?.find(
-            (reply) => reply.id === replyId,
-          )?.body ?? null
+      const replyParent = replyId ? nodeById.get(node.parentNodeId ?? "") : undefined;
+      const replyQuote = replyParent
+        ? nodeDelivery(replyParent)?.replies?.find((reply) => reply.id === replyId)?.body ?? null
         : null;
       const selected = levelPath[level] === id;
       return (
@@ -4618,7 +4626,7 @@ function ResearchDocument({
     const editingId = editingByHead[headId];
     const step = researchQueueStep(tail);
     const queued = (queues[headId] ?? EMPTY_QUEUE).length > 0;
-    const awaitingCheckpoint = tail.status === "complete" && !canFollowUpFrom(tail);
+    const awaitingCheckpoint = nodeStatus(tail) === "complete" && !canFollowUpFrom(tail);
     const canSend =
       !archived &&
       (Boolean(editingId) || step === "wait" || queued || canContinueThread(nodes, tail));
@@ -4629,15 +4637,15 @@ function ResearchDocument({
         : awaitingCheckpoint
           ? "Waiting for the native session checkpoint before continuing."
           : step === "stalled" && !queued
-            ? tail.status === "failed"
+            ? nodeStatus(tail) === "failed"
               ? "The last answer stopped with an error. Retry it or edit its question to continue."
               : "The last answer was stopped. Run it again to continue."
             : null;
-    const busy = chain.some((node) => isActiveResearchStatus(node.status));
+    const busy = chain.some((node) => isActiveResearchStatus(nodeStatus(node)));
     const placeholder = editingId
       ? "Edit the question"
       : nodeMessage(head) === null && chain.length === 1
-        ? head.kind === "conversation"
+        ? documentSource(head) === "transcript"
           ? "Ask about this conversation"
           : "Ask about this document"
           : busy || queued
@@ -4719,7 +4727,8 @@ function ResearchDocument({
           ? "1 branch from the whole answer"
           : "1 branch from this paragraph"
         : `${count} branches from ${whole ? "the whole answer" : "this paragraph"}`;
-    const targetPrompt = nodeById.get(target)?.prompt ?? "";
+    const targetNode = nodeById.get(target);
+    const targetPrompt = targetNode ? nodePrompt(targetNode) : "";
     const label =
       openIndex >= 0
         ? `${what}, one is open${running ? ", running" : ""}. Closes it.`
@@ -4782,10 +4791,13 @@ function ResearchDocument({
     if (!node || !view) {
       return null;
     }
-    const active = isActiveResearchStatus(node.status);
+    const active = isActiveResearchStatus(nodeStatus(node));
     const markers = markersByNode[nodeId] ?? [];
     const endMarker = markers.find((marker) => marker.top === null) ?? null;
-    const footTime = node.status === "complete" ? (node.completedAt ?? node.createdAt) : null;
+    const footTime = nodeStatus(node) === "complete" ? (nodeRun(node)?.completedAt ?? node.createdAt) : null;
+    const startedAt = nodeRun(node)?.startedAt ?? null;
+    const parent = node.parentNodeId ? nodeById.get(node.parentNodeId) : undefined;
+    const editedAt = nodeEditedAt(node);
     const documentEditing = editor?.kind === "document" && editor.nodeId === nodeId ? editor : null;
     const previewing = documentEditing !== null && documentEditing.text !== documentEditing.initialText;
     return (
@@ -4818,17 +4830,16 @@ function ResearchDocument({
               node={node}
               contentError={contentErrorByNode[nodeId] ?? null}
               cancelling={cancelling}
-              elapsedText={active && node.startedAt ? formatElapsedClock(metadataNow - node.startedAt) : null}
+              elapsedText={active && startedAt ? formatElapsedClock(metadataNow - startedAt) : null}
               waitsForParent={
-                node.status === "queued" &&
-                isActiveResearchStatus(nodeById.get(node.parentNodeId ?? "")?.status ?? "complete")
+                nodeStatus(node) === "queued" && Boolean(parent) && isActiveResearchStatus(nodeStatus(parent!))
               }
               recapPending={recapPendingNodeIds.has(nodeId)}
               pointerOverAnnotation={pointerAnnotationNodeId === nodeId}
               canRetry={!archived && canRetryResearchNode(node)}
               retrying={retryingNodeId === nodeId}
               retryQueued={queuedRetries.has(nodeId)}
-              canEditQuestion={!archived && node.status === "failed" && Boolean(node.parentNodeId)}
+              canEditQuestion={!archived && nodeStatus(node) === "failed" && Boolean(node.parentNodeId)}
               registerSegmentElement={registerSegmentElement}
               onExpandTurns={expandAllTurns}
               onRetryContentLoad={retryContentLoad}
@@ -4853,11 +4864,11 @@ function ResearchDocument({
                     <time dateTime={new Date(footTime).toISOString()} title={new Date(footTime).toLocaleString()}>
                       {shortWhen(footTime, minuteNow)}
                     </time>
-                    {node.editedAt ? (
+                    {editedAt ? (
                       <>
                         <span aria-hidden="true"> · </span>
-                        <span title={new Date(node.editedAt).toLocaleString()}>
-                          Edited {shortWhen(node.editedAt, minuteNow)}
+                        <span title={new Date(editedAt).toLocaleString()}>
+                          Edited {shortWhen(editedAt, minuteNow)}
                         </span>
                       </>
                     ) : null}
@@ -5022,7 +5033,10 @@ function ResearchDocument({
                 ) : (
                   <ResearchNoteDocument detail={detail} note={note} onSelectNode={(nodeId) => navigate(nodeId)} />
                 )}
-                <ResearchPostCorrections corrections={note.corrections ?? []} now={minuteNow} />
+                <ResearchPostCorrections
+                  corrections={note.type === "post" ? (note.corrections ?? []) : []}
+                  now={minuteNow}
+                />
                 {postEditing?.correction && postEditing.text.trim() && postEditing.text !== postEditing.initialText ? (
                   <ResearchEditPreview original="" next={editorText} label="Correction preview" marksChanges={false} />
                 ) : null}
@@ -5084,8 +5098,8 @@ function ResearchDocument({
               title={title}
               branch={level === 0 ? null : chainIds.length}
               history={level === 0 ? historyNav : null}
-              // Provenance, which only the stored origin records.
-              imported={level === 0 && rootNode?.origin === "terminalExport"}
+              // Provenance: a transcript came from a terminal session.
+              imported={level === 0 && rootNode?.type === "document" && rootNode.source === "transcript"}
               archived={level === 0 && archived}
               onAsk={
                 head && nodeType(head) !== "post"
@@ -5281,23 +5295,26 @@ function ResearchDocument({
           ? "Delete branch"
           : "Delete follow-up";
     const canRegenerateRecap = Boolean(
-      !archived && content?.responseRevision && content.node.recap?.text.trim(),
+      !archived && content?.responseRevision && nodeRecap(content.node)?.text.trim(),
     );
-    const active = isActiveResearchStatus(node.status);
+    const active = isActiveResearchStatus(nodeStatus(node));
     // A cancelled turn already says how long it ran ("Stopped after").
+    const run = nodeRun(node);
     const durationText =
-      view?.isConversation || active || node.status === "cancelled" || !node.startedAt
+      view?.isConversation || active || !run || run.status === "cancelled" || !run.startedAt
         ? null
-        : `${node.status === "complete" ? "" : "Ran for "}${formatRunDuration(
-            (node.completedAt ?? metadataNow) - node.startedAt,
+        : `${run.status === "complete" ? "" : "Ran for "}${formatRunDuration(
+            (run.completedAt ?? metadataNow) - run.startedAt,
           )}`;
     const stats = [
-      node.status === "complete" && view
+      nodeStatus(node) === "complete" && view
         ? `${view.answerWordCount.toLocaleString()} ${view.answerWordCount === 1 ? "word" : "words"}`
         : null,
       durationText,
       // Provenance: an imported report has no model to name.
-      node.origin === "imported" ? null : formatResearchModelSummary(node.adapter, node.model, node.origin) || null,
+      documentSource(node) === "imported"
+        ? null
+        : formatResearchModelSummary(nodeAdapter(node), nodeAgent(node)?.model) || null,
     ]
       .filter(Boolean)
       .join(" · ");
@@ -5305,7 +5322,7 @@ function ResearchDocument({
     // What can hide a run's passage sits behind the answer fold; a
     // conversation has no fold and hides only windowed-off turns.
     const revealsHighlights = hiddenHighlights > 0 && Boolean(view?.hasTranscriptActivity) && !fullTraceNodes[node.id];
-    const copyText = node.status === "complete" ? view?.conversationCopyText ?? view?.rawAnswer : null;
+    const copyText = nodeStatus(node) === "complete" ? view?.conversationCopyText ?? view?.rawAnswer : null;
     const branchBlocker = branchBlockerFor(node, archived);
     return (
       <ResearchMenu
@@ -5410,13 +5427,13 @@ function ResearchDocument({
               setRenameError(null);
               setRenameTarget({
                 nodeId: node.id,
-                value: isRoot ? treeTitleText : (node.title ?? node.prompt).trim(),
+                value: isRoot ? treeTitleText : (node.title ?? nodePrompt(node)).trim(),
               });
             }}
           />
         ) : null}
-        {/* The stored kind: only a document record holds editable Markdown. */}
-        {isRoot && node.kind === "document" ? (
+        {/* Only an imported or authored document holds editable Markdown. */}
+        {isRoot && documentHoldsMarkdown(node) ? (
           <ResearchMenuItem
             icon={<Pencil size={15} aria-hidden="true" />}
             label="Edit document"
@@ -5550,7 +5567,7 @@ function ResearchDocument({
             return [
               {
                 id: branchId,
-                question: branch.prompt,
+                question: nodePrompt(branch),
                 source: passageAnchor(branch) ? `“${quoteDisplayText(passageAnchor(branch)!.exact)}”` : "Whole answer",
                 messages: chain.length,
                 state: levels[markerTip.level + 1]?.headId === branchId ? ("open" as const) : branchBusy(branchId) ? ("running" as const) : null,
@@ -5697,7 +5714,7 @@ function ResearchDocument({
             document.body,
           )
         : null}
-      {recapDialogNodeId && contentByNode[recapDialogNodeId]?.node.recap
+      {recapDialogNodeId && contentByNode[recapDialogNodeId] && nodeRecap(contentByNode[recapDialogNodeId].node)
         ? createPortal(
             <ResearchRecapDialog
               content={contentByNode[recapDialogNodeId]}
@@ -5752,7 +5769,7 @@ function ResearchDocument({
                 </h2>
                 <p>
                   Delete "
-                  {(deletingBranch.node.title ?? deletingBranch.node.prompt) || treeTitleText}
+                  {(deletingBranch.node.title ?? nodePrompt(deletingBranch.node)) || treeTitleText}
                   "?
                 </p>
                 <p>

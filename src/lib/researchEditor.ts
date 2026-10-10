@@ -3,7 +3,7 @@
 // correction, and whether the text can be asked as a question.
 
 import { closesFence, markerRunAtLineStart, type MarkdownFence } from "./markdownMathDelimiters";
-import { nodeType } from "./researchNodeTypes";
+import { nodeDelivery, nodeType } from "./researchNodeTypes";
 import type { ResearchNode } from "../types";
 
 /** The longest text, in characters after trimming, that "Ask as a question"
@@ -80,7 +80,7 @@ export function editedMarkdownBlocks(original: string, next: string): EditedBloc
  * correction instead of replacing its text. Mirrors update_research_note. */
 export function researchPostHasReplies(nodes: readonly ResearchNode[], post: ResearchNode): boolean {
   return (
-    (post.delivery?.replies?.length ?? 0) > 0 ||
+    (nodeDelivery(post)?.replies?.length ?? 0) > 0 ||
     nodes.some((node) => node.parentNodeId === post.id && nodeType(node) !== "document")
   );
 }

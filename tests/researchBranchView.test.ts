@@ -12,21 +12,21 @@ import {
   researchPairLabel,
 } from "../src/lib/researchBranchView";
 import type { ResearchNode } from "../src/types";
+import { researchNode, withRun, type NodeFixture } from "./researchNodeFixture";
 
-function node(id: string, overrides: Partial<ResearchNode> = {}): ResearchNode {
-  return {
+function node(id: string, overrides: NodeFixture = {}): ResearchNode {
+  return researchNode({
     id,
     treeId: "tree",
     prompt: id,
     adapter: "claude",
     groupId: "ws",
-    worktreeDir: "/ws",
     status: "complete",
-    nativeSessionId: `session-${id}`,
+    sessionReady: true,
     createdAt: 0,
     highlights: [],
     ...overrides,
-  };
+  });
 }
 
 // root → c2 → c3 (the conversation); b1 branches from c2, b2 from b1, b1f
@@ -80,7 +80,7 @@ test("a queued follow-up waits for the running tail, then sends or stalls", () =
   assert.equal(researchQueueStep(node("t", { status: "queued" })), "wait");
   assert.equal(researchQueueStep(node("t", { status: "complete" })), "send");
   // A finished run still waits for its session checkpoint.
-  assert.equal(researchQueueStep(node("t", { status: "complete", nativeSessionId: null })), "wait");
+  assert.equal(researchQueueStep(node("t", { status: "complete", sessionReady: false })), "wait");
   assert.equal(researchQueueStep(node("t", { status: "failed" })), "stalled");
   assert.equal(researchQueueStep(node("t", { status: "cancelled" })), "stalled");
   assert.equal(researchQueueStep(null), "wait");
@@ -91,7 +91,7 @@ const queued = (id: string, failed?: string) => ({ id, prompt: id, createdAt: 0,
 test("a queue sends its first question from the chain's tail once it completes", () => {
   const chain = [node("h"), node("t", { parentNodeId: "h", inline: true, status: "running" })];
   assert.deepEqual(researchQueueAction(chain, "h", [queued("q1"), queued("q2")], undefined), { kind: "wait" });
-  const done = [chain[0], { ...chain[1], status: "complete" as const }];
+  const done = [chain[0], withRun(chain[1], { status: "complete" })];
   assert.deepEqual(researchQueueAction(done, "h", [queued("q1"), queued("q2")], undefined), {
     kind: "send",
     item: queued("q1"),
@@ -120,7 +120,7 @@ test("a refused question holds the queue, a stopped tail stalls it, and a remove
   assert.deepEqual(researchQueueAction(chain, "h", [queued("q1", "refused"), queued("q2")], undefined), {
     kind: "wait",
   });
-  const stopped = [chain[0], { ...chain[1], status: "failed" as const }];
+  const stopped = [chain[0], withRun(chain[1], { status: "failed" })];
   assert.deepEqual(researchQueueAction(stopped, "h", [queued("q1")], undefined), { kind: "wait" });
   // A branch from the tail does not block its inline follow-up.
   const continued = [...chain, node("x", { parentNodeId: "t", inline: false })];

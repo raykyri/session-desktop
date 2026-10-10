@@ -7,6 +7,7 @@ import type {
   ResearchTreeDetail,
   ResearchTreeSummary,
 } from "../types";
+import { nodeRun, nodeStatus } from "./researchNodeTypes";
 
 type TreeCreatedEvent = {
   type: "research.tree.created";
@@ -182,39 +183,101 @@ function isResearchHighlight(value: unknown): value is ResearchHighlight {
   );
 }
 
+function isUserMessage(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.text === "string" &&
+    (value.attachments === undefined || Array.isArray(value.attachments))
+  );
+}
+
+function isAgentSpec(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.adapter === "string" &&
+    isOptionalString(value.model) &&
+    isOptionalString(value.effort)
+  );
+}
+
+function isOptionalRecap(value: unknown): boolean {
+  return (
+    value == null ||
+    (isRecord(value) &&
+      typeof value.text === "string" &&
+      typeof value.responseRevision === "string" &&
+      isOptionalString(value.id) &&
+      isOptionalFiniteNumber(value.generatedAt) &&
+      isOptionalString(value.adapter) &&
+      isOptionalString(value.model) &&
+      isOptionalString(value.instructions))
+  );
+}
+
+function isRunState(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.status === "string" &&
+    RESEARCH_STATUSES.has(value.status as ResearchNodeStatus) &&
+    isOptionalString(value.error) &&
+    isOptionalFiniteNumber(value.startedAt) &&
+    isOptionalFiniteNumber(value.completedAt) &&
+    isOptionalFiniteNumber(value.responseSnapshotAt) &&
+    typeof value.sessionReady === "boolean" &&
+    typeof value.holdsProcess === "boolean"
+  );
+}
+
+/** The envelope every node shares, then the fields its type requires
+ * (src/types.ts ResearchNode, the backend's ResearchNodeView). */
 function isResearchNode(value: unknown): value is ResearchNode {
   if (!isRecord(value)) {
     return false;
   }
-  return (
+  const envelope =
     typeof value.id === "string" &&
     typeof value.treeId === "string" &&
-    typeof value.prompt === "string" &&
-    typeof value.adapter === "string" &&
     typeof value.groupId === "string" &&
-    typeof value.worktreeDir === "string" &&
-    typeof value.status === "string" &&
-    RESEARCH_STATUSES.has(value.status as ResearchNodeStatus) &&
     isFiniteNumber(value.createdAt) &&
-    isOptionalFiniteNumber(value.startedAt) &&
-    isOptionalFiniteNumber(value.completedAt) &&
-    isOptionalFiniteNumber(value.responseSnapshotAt) &&
-    (value.recap == null ||
-      (isRecord(value.recap) &&
-        typeof value.recap.text === "string" &&
-        typeof value.recap.responseRevision === "string" &&
-        isOptionalString(value.recap.id) &&
-        isOptionalFiniteNumber(value.recap.generatedAt) &&
-        isOptionalString(value.recap.adapter) &&
-        isOptionalString(value.recap.model) &&
-        isOptionalString(value.recap.instructions))) &&
     isOptionalString(value.parentNodeId) &&
     isOptionalString(value.title) &&
-    isOptionalString(value.paneId) &&
-    isOptionalString(value.agentId) &&
+    isOptionalFiniteNumber(value.promotedAt) &&
+    isOptionalBoolean(value.inline) &&
+    (value.anchor == null || isRecord(value.anchor)) &&
     Array.isArray(value.highlights) &&
-    value.highlights.every(isResearchHighlight)
-  );
+    value.highlights.every(isResearchHighlight);
+  if (!envelope) {
+    return false;
+  }
+  switch (value.type) {
+    case "post":
+      return (
+        isUserMessage(value.message) &&
+        (value.format === "text" || value.format === "link") &&
+        isAgentSpec(value.followUpAgent) &&
+        (value.delivery == null || isRecord(value.delivery)) &&
+        (value.corrections === undefined || Array.isArray(value.corrections)) &&
+        isOptionalFiniteNumber(value.editedAt)
+      );
+    case "exchange":
+      return (
+        isUserMessage(value.message) &&
+        isAgentSpec(value.agent) &&
+        isRunState(value.run) &&
+        isOptionalRecap(value.recap)
+      );
+    case "document":
+      return (
+        (value.message == null || isUserMessage(value.message)) &&
+        (value.source === "imported" || value.source === "authored" || value.source === "transcript") &&
+        (value.followUpAgent == null || isAgentSpec(value.followUpAgent)) &&
+        isOptionalFiniteNumber(value.responseSnapshotAt) &&
+        isOptionalRecap(value.recap) &&
+        isOptionalFiniteNumber(value.editedAt)
+      );
+    default:
+      return false;
+  }
 }
 
 /** Parse and minimally validate a backend event before it is allowed to
@@ -376,6 +439,15 @@ export function researchStatusContribution(
   };
 }
 
+/** A node's share of its tree's run counts: posts and documents have no run
+ * and count for nothing, as in the backend's summaries. */
+function nodeRunContribution(node: ResearchNode): ResearchStatusContribution {
+  const run = nodeRun(node);
+  return run
+    ? researchStatusContribution(run.status)
+    : { runningCount: 0, failedCount: 0, completedCount: 0, cancelledCount: 0 };
+}
+
 export function researchSummaryFromDetail(detail: ResearchTreeDetail): ResearchTreeSummary {
   let runningCount = 0;
   let failedCount = 0;
@@ -383,16 +455,19 @@ export function researchSummaryFromDetail(detail: ResearchTreeDetail): ResearchT
   let cancelledCount = 0;
   let latestSettlement: number | null = null;
   let latestFailure: number | null = null;
-  for (const node of detail.nodes) {
-    const contribution = researchStatusContribution(node.status);
+  // Runs only, as the backend counts: posts and documents have no run.
+  for (const run of detail.nodes.map(nodeRun)) {
+    if (!run) continue;
+    const contribution = researchStatusContribution(run.status);
     runningCount += contribution.runningCount;
     failedCount += contribution.failedCount;
     completedCount += contribution.completedCount;
     cancelledCount += contribution.cancelledCount;
-    if (node.completedAt != null) {
-      latestSettlement = Math.max(latestSettlement ?? node.completedAt, node.completedAt);
-      if (node.status === "failed") {
-        latestFailure = Math.max(latestFailure ?? node.completedAt, node.completedAt);
+    const completedAt = run.completedAt;
+    if (completedAt != null) {
+      latestSettlement = Math.max(latestSettlement ?? completedAt, completedAt);
+      if (run.status === "failed") {
+        latestFailure = Math.max(latestFailure ?? completedAt, completedAt);
       }
     }
   }
@@ -404,7 +479,7 @@ export function researchSummaryFromDetail(detail: ResearchTreeDetail): ResearchT
     id: detail.tree.id,
     title: detail.tree.title,
     rootNodeId: detail.tree.rootNodeId,
-    kind: root?.kind ?? "run",
+    type: root?.type ?? "exchange",
     workspaceId: detail.tree.workspaceId,
     runningCount,
     failedCount,
@@ -454,10 +529,10 @@ export function removeResearchNodes(nodes: ResearchNode[], removedIds: Iterable<
 
 export function researchNodeIsActivity(node: ResearchNode): boolean {
   return (
-    node.paneId != null ||
-    node.status === "queued" ||
-    node.status === "starting" ||
-    node.status === "running"
+    Boolean(nodeRun(node)?.holdsProcess) ||
+    nodeStatus(node) === "queued" ||
+    nodeStatus(node) === "starting" ||
+    nodeStatus(node) === "running"
   );
 }
 
@@ -603,17 +678,20 @@ export function patchResearchSummaryForNode(
   ) {
     return summary;
   }
-  const before = researchStatusContribution(previous.status);
-  const after = researchStatusContribution(node.status);
+  const before = nodeRunContribution(previous);
+  const after = nodeRunContribution(node);
+  const previousRun = nodeRun(previous);
+  const run = nodeRun(node);
   const lifecycleChanged =
-    previous.status !== node.status || previous.completedAt !== node.completedAt;
+    previousRun?.status !== run?.status || previousRun?.completedAt !== run?.completedAt;
   if (!lifecycleChanged) {
     return summary;
   }
   const newlySettled =
-    terminalStatus(node.status) &&
-    node.completedAt != null &&
-    (previous.completedAt == null || previous.completedAt !== node.completedAt);
+    run != null &&
+    terminalStatus(run.status) &&
+    run.completedAt != null &&
+    previousRun?.completedAt !== run.completedAt;
   return {
     ...summary,
     runningCount: Math.max(0, summary.runningCount - before.runningCount + after.runningCount),
@@ -629,12 +707,12 @@ export function patchResearchSummaryForNode(
     updatedAt: Math.max(
       summary.updatedAt,
       eventTimestamp,
-      node.startedAt ?? 0,
-      node.completedAt ?? 0,
+      run?.startedAt ?? 0,
+      run?.completedAt ?? 0,
     ),
     hasUnseenUpdate: summary.hasUnseenUpdate || newlySettled,
     hasUnseenFailure:
-      summary.hasUnseenFailure || (newlySettled && node.status === "failed"),
+      summary.hasUnseenFailure || (newlySettled && run?.status === "failed"),
   };
 }
 
@@ -649,7 +727,7 @@ export function patchResearchSummaryForCreatedNode(
   if (summary.id !== node.treeId) {
     return summary;
   }
-  const contribution = researchStatusContribution(node.status);
+  const contribution = nodeRunContribution(node);
   return {
     ...summary,
     runningCount: summary.runningCount + contribution.runningCount,
@@ -675,7 +753,7 @@ export function patchResearchSummaryForRemovedNodes(
   }
   const removed = removedNodes.reduce(
     (total, node) => {
-      const contribution = researchStatusContribution(node.status);
+      const contribution = nodeRunContribution(node);
       total.runningCount += contribution.runningCount;
       total.failedCount += contribution.failedCount;
       total.completedCount += contribution.completedCount;

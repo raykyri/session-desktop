@@ -2,7 +2,7 @@ import { useId, useImperativeHandle, useMemo, useState } from "react";
 import type { ReactNode, Ref } from "react";
 import { Globe, Pencil, Sparkles } from "lucide-react";
 import type { NoteCorrection, NoteReply, ResearchNode } from "../../types";
-import { nodeType, replyAnchorId } from "../../lib/researchNodeTypes";
+import { nodeAdapter, nodeAgent, nodeDelivery, nodePrompt, nodeStatus, nodeType, replyAnchorId } from "../../lib/researchNodeTypes";
 import { recentResearchQueryFromNode } from "../../lib/activity";
 import { shortWhen } from "../../lib/shortTime";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
@@ -37,11 +37,11 @@ export function noteThreadEntries(nodes: readonly ResearchNode[], note: Research
   const followUps = nodes
     .filter((node) => node.parentNodeId === note.id && nodeType(node) !== "document")
     .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id));
-  const replies = (note.delivery?.replies ?? []).filter((reply) => !reply.inReplyTo);
+  const replies = (nodeDelivery(note)?.replies ?? []).filter((reply) => !reply.inReplyTo);
   return [
     ...replies.map((reply): NoteThreadEntry => ({ kind: "reply", key: `reply:${reply.id}`, at: reply.createdAt, reply })),
     ...followUps.map((node): NoteThreadEntry => ({ kind: "follow-up", key: node.id, at: node.createdAt, node })),
-    ...(note.corrections ?? []).map(
+    ...(note.type === "post" ? (note.corrections ?? []) : []).map(
       (correction): NoteThreadEntry => ({
         kind: "correction",
         key: `correction:${correction.id}`,
@@ -104,9 +104,9 @@ export default function ResearchNoteThread({
     }
   }
   const entries = useMemo(() => noteThreadEntries(nodes, note), [nodes, note]);
-  const replies = note.delivery?.replies ?? [];
+  const replies = nodeDelivery(note)?.replies ?? [];
   const tabKey = entries.some((entry) => entry.key === activeKey) ? activeKey : (entries[0]?.key ?? null);
-  const modelLabel = formatResearchModelSummary(note.adapter, note.model);
+  const modelLabel = formatResearchModelSummary(nodeAdapter(note), nodeAgent(note)?.model);
 
   return (
     <div className="note-thread">
@@ -114,7 +114,7 @@ export default function ResearchNoteThread({
         <NoteFollowUpField
           key={target?.id ?? "note"}
           composerRef={composerRef}
-          networkAvailable={Boolean(note.delivery)}
+          networkAvailable={Boolean(nodeDelivery(note))}
           modelLabel={modelLabel}
           target={target}
           autoFocus={target !== null}
@@ -212,12 +212,12 @@ function NoteFollowUpRow({
   const labelId = useId();
   const network = nodeType(child) === "post";
   const anchored = noteReplyTargetFor(replies, replyAnchorId(child));
-  const model = formatResearchModelSummary(child.adapter, child.model) || "AI";
+  const model = formatResearchModelSummary(nodeAdapter(child), nodeAgent(child)?.model) || "AI";
   let state: ReactNode;
   if (network) {
-    const count = child.delivery?.replies?.filter((reply) => !reply.inReplyTo).length ?? 0;
+    const count = nodeDelivery(child)?.replies?.filter((reply) => !reply.inReplyTo).length ?? 0;
     state = count > 0 ? <div className="note-thread-meta">{count === 1 ? "1 reply" : `${count} replies`}</div> : null;
-  } else if (child.status === "complete") {
+  } else if (nodeStatus(child) === "complete") {
     state = <div className="note-thread-meta">Answered</div>;
   } else {
     const summary = recentResearchQueryFromNode(child, true);
@@ -253,7 +253,7 @@ function NoteFollowUpRow({
           </time>
         </div>
         <div id={labelId} className="note-thread-question">
-          {child.prompt}
+          {nodePrompt(child)}
         </div>
         {state}
       </div>

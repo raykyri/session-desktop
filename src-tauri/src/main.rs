@@ -60,8 +60,9 @@ use research::{
     ApplyResearchRecapCandidateRequest, CreateResearchTreeRequest, GenerateResearchRecapRequest,
     RecentResearchQueryCursor, ResearchBranchRemoval, ResearchDraft, ResearchFolderState,
     ResearchHighlight, ResearchHighlightAnchor, ResearchHighlightFeedItem, ResearchNode,
-    ResearchNodeContent, ResearchRecapCandidate, ResearchTree, ResearchTreeDetail,
-    ResearchTreeSummary, UpdateResearchDocumentRequest, UpdateResearchDocumentResult,
+    ResearchNodeContent, ResearchNodeView, ResearchRecapCandidate, ResearchTree,
+    ResearchTreeDetail, ResearchTreeSummary, UpdateResearchDocumentRequest,
+    UpdateResearchDocumentResult,
 };
 use show_hide_shortcut::{
     show_hide_shortcut_capture_set, show_hide_shortcut_get, show_hide_shortcut_set,
@@ -1605,8 +1606,10 @@ fn reorder_research_drafts(
 #[tauri::command]
 async fn list_research_activity(
     state: tauri::State<'_, AppState>,
-) -> Result<Vec<ResearchNode>, String> {
-    state.list_research_activity()
+) -> Result<Vec<ResearchNodeView>, String> {
+    state
+        .list_research_activity()
+        .map(|nodes| nodes.iter().map(ResearchNode::view).collect())
 }
 
 #[tauri::command]
@@ -1773,7 +1776,7 @@ async fn create_research_note_follow_up(
     state: tauri::State<'_, AppState>,
     parent_node_id: String,
     body: String,
-) -> Result<ResearchNode, String> {
+) -> Result<ResearchNodeView, String> {
     let state = state.inner().clone();
     let attachments = tweets::resolve_research_message_attachments(&body).await;
     tauri::async_runtime::spawn_blocking(move || {
@@ -1781,6 +1784,7 @@ async fn create_research_note_follow_up(
     })
     .await
     .map_err(|err| format!("create_research_note_follow_up task failed: {err}"))?
+    .map(|node| node.view())
 }
 
 /// The note author's response to a member reply (`in_reply_to` set). There
@@ -1794,18 +1798,20 @@ fn add_research_note_reply(
     in_reply_to: Option<String>,
     body: String,
     member: Option<research::NoteReplyAuthor>,
-) -> Result<ResearchNode, String> {
+) -> Result<ResearchNodeView, String> {
     let author = match member {
         Some(member @ research::NoteReplyAuthor::Member { .. }) if cfg!(debug_assertions) => member,
         Some(_) => return Err("member replies can only arrive from the network".to_string()),
         None => research::NoteReplyAuthor::Author,
     };
-    state.add_research_note_reply(research::AddNoteReplyRequest {
-        node_id,
-        body,
-        author,
-        in_reply_to,
-    })
+    state
+        .add_research_note_reply(research::AddNoteReplyRequest {
+            node_id,
+            body,
+            author,
+            in_reply_to,
+        })
+        .map(|node| node.view())
 }
 
 #[tauri::command]
@@ -1813,8 +1819,10 @@ fn remove_research_note_reply(
     state: tauri::State<'_, AppState>,
     node_id: String,
     reply_id: String,
-) -> Result<ResearchNode, String> {
-    state.remove_research_note_reply(&node_id, &reply_id)
+) -> Result<ResearchNodeView, String> {
+    state
+        .remove_research_note_reply(&node_id, &reply_id)
+        .map(|node| node.view())
 }
 
 #[tauri::command]
@@ -1955,7 +1963,7 @@ async fn fork_research_node(
     anchor: Option<research::NodeAnchor>,
     inline: Option<bool>,
     replaces_node_id: Option<String>,
-) -> Result<ResearchNode, String> {
+) -> Result<ResearchNodeView, String> {
     let state = state.inner().clone();
     let inline = inline.unwrap_or(false);
     let attachments = tweets::resolve_research_message_attachments(&prompt).await;
@@ -2000,6 +2008,7 @@ async fn fork_research_node(
     })
     .await
     .map_err(|err| format!("fork_research_node task failed: {err}"))?
+    .map(|node| node.view())
 }
 
 /// Launches the run for an admitted (Queued) research child from its parent's
@@ -2193,12 +2202,13 @@ async fn retry_research_node(
 async fn cancel_research_node(
     state: tauri::State<'_, AppState>,
     node_id: String,
-) -> Result<ResearchNode, String> {
+) -> Result<ResearchNodeView, String> {
     let state = state.inner().clone();
     // Blocking: cancellation kills the run's pane (process wait + teardown).
     tauri::async_runtime::spawn_blocking(move || state.cancel_research_node(&node_id))
         .await
         .map_err(|err| format!("cancel_research_node task failed: {err}"))?
+        .map(|node| node.view())
 }
 
 #[tauri::command]
@@ -2233,8 +2243,10 @@ fn rename_research_node(
     state: tauri::State<'_, AppState>,
     node_id: String,
     title: String,
-) -> Result<ResearchNode, String> {
-    state.set_research_node_title(&node_id, title)
+) -> Result<ResearchNodeView, String> {
+    state
+        .set_research_node_title(&node_id, title)
+        .map(|node| node.view())
 }
 
 #[tauri::command]
@@ -2242,8 +2254,10 @@ fn set_research_node_promoted(
     state: tauri::State<'_, AppState>,
     node_id: String,
     promoted: bool,
-) -> Result<ResearchNode, String> {
-    state.set_research_node_promoted(&node_id, promoted)
+) -> Result<ResearchNodeView, String> {
+    state
+        .set_research_node_promoted(&node_id, promoted)
+        .map(|node| node.view())
 }
 
 #[tauri::command]
@@ -3395,8 +3409,10 @@ async fn generate_research_recap_candidate(
 fn apply_research_recap_candidate(
     state: tauri::State<'_, AppState>,
     request: ApplyResearchRecapCandidateRequest,
-) -> Result<ResearchNode, String> {
-    state.apply_research_recap_candidate(request)
+) -> Result<ResearchNodeView, String> {
+    state
+        .apply_research_recap_candidate(request)
+        .map(|node| node.view())
 }
 
 pub(crate) fn ensure_rustls_crypto_provider() -> Result<(), String> {

@@ -6,6 +6,7 @@
 import { canContinueThread, canFollowUpFrom, inlineChainFor, isActiveResearchStatus } from "./researchThreads";
 import type { QueuedResearchFollowup } from "./researchNavigation";
 import type { ResearchNode } from "../types";
+import { nodeStatus } from "./researchNodeTypes";
 
 function byCreation(left: ResearchNode, right: ResearchNode) {
   return left.createdAt - right.createdAt || left.id.localeCompare(right.id);
@@ -104,10 +105,10 @@ export function researchBranchesInReadingOrder(
  * finished run's session checkpoint), or stall on a tail that stopped without
  * an answer to continue from. */
 export function researchQueueStep(tail: ResearchNode | null): "send" | "wait" | "stalled" {
-  if (!tail || isActiveResearchStatus(tail.status)) {
+  if (!tail || isActiveResearchStatus(nodeStatus(tail))) {
     return "wait";
   }
-  if (tail.status !== "complete") {
+  if (nodeStatus(tail) !== "complete") {
     return "stalled";
   }
   return canFollowUpFrom(tail) ? "send" : "wait";

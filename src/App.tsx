@@ -423,6 +423,7 @@ import type {
   WaitTarget,
 } from "./types";
 import type { ShowHideShortcutSetting } from "./lib/api";
+import { nodeRun, nodeStatus } from "./lib/researchNodeTypes";
 
 
 interface ConversationHistorySegment {
@@ -2608,38 +2609,14 @@ function MainApp() {
     retainedGraphHistoryThreadIds,
     retainedTurnHistoryAgentIds,
   ]);
-  const researchNodeByPaneId = useMemo(
-    () =>
-      new Map(
-        researchActivity.flatMap((node) => (node.paneId ? [[node.paneId, node] as const] : [])),
-      ),
-    [researchActivity],
-  );
-  // Ref for callbacks captured once (the viewed-marking path runs from event
-  // handlers and window listeners).
-  const researchNodeByPaneIdRef = useRef(researchNodeByPaneId);
-  researchNodeByPaneIdRef.current = researchNodeByPaneId;
-  // Every agent id ever bound to a research run. Grow-only on purpose: the
+  // Every agent id ever spawned for a research run. Grow-only on purpose: the
   // event hook consults it to suppress thread-graph refreshes (research runs
   // have no graphs). A settled run's trailing turn events arrive after the
-  // agent and its node bindings are gone, so pruning the set would schedule
-  // pointless graph reads. Bounded by the number of research launches in one
-  // app session.
+  // agent record is gone, so pruning the set would schedule pointless graph
+  // reads. Bounded by the number of research launches in one app session.
+  // Runs that started before this window loaded are recognized by their
+  // Research-scoped workspace (isResearchRunAgent).
   const researchAgentIdsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    for (const node of researchActivity) {
-      if (node.agentId) {
-        researchAgentIdsRef.current.add(node.agentId);
-      }
-    }
-  }, [researchActivity]);
-  useEffect(() => {
-    for (const node of activeResearchDetail?.nodes ?? []) {
-      if (node.agentId) {
-        researchAgentIdsRef.current.add(node.agentId);
-      }
-    }
-  }, [activeResearchDetail]);
   const researchAttentionState = useMemo(() => researchAttention(researchTrees), [researchTrees]);
   const runningResearchCount = researchAttentionState.runningCount;
   const activeBrowserOwnerId = researchSurfaceActive
@@ -5135,18 +5112,7 @@ function MainApp() {
         activeSurfaceRef.current,
         activeResearchTreeIdRef.current,
       );
-      // Watching the run's own terminal counts as viewing the tree: the user
-      // reached that pane from this document and is looking at the same run,
-      // so the unseen badge must not survive it.
-      const activePaneId = activePaneIdRef.current;
-      const paneVisible =
-        activeSurfaceRef.current === "pane" &&
-        activeResearchTreeIdRef.current === treeId &&
-        document.visibilityState === "visible" &&
-        document.hasFocus() &&
-        activePaneId !== null &&
-        researchNodeByPaneIdRef.current.get(activePaneId)?.treeId === treeId;
-      if (!options.exposureConfirmed && !documentVisible && !paneVisible) {
+      if (!options.exposureConfirmed && !documentVisible) {
         return;
       }
       const hadUnseen =
@@ -5962,13 +5928,11 @@ function MainApp() {
           const cached = researchNodeEventCacheRef.current.get(event.node.id);
           const lifecycleChanged =
             !cached ||
-            cached.status !== event.node.status ||
-            cached.completedAt !== event.node.completedAt ||
+            nodeStatus(cached) !== nodeStatus(event.node) ||
+            nodeRun(cached)?.completedAt !== nodeRun(event.node)?.completedAt ||
             cached.parentNodeId !== event.node.parentNodeId;
           const activityBindingChanged =
-            !cached ||
-            cached.paneId !== event.node.paneId ||
-            cached.agentId !== event.node.agentId;
+            !cached || nodeRun(cached)?.holdsProcess !== nodeRun(event.node)?.holdsProcess;
           const previous = patchNode(
             event.node,
             event.timestamp,
@@ -5979,8 +5943,8 @@ function MainApp() {
           }
           if (
             previous &&
-            previous.completedAt !== event.node.completedAt &&
-            event.node.completedAt != null
+            nodeRun(previous)?.completedAt !== nodeRun(event.node)?.completedAt &&
+            nodeRun(event.node)?.completedAt != null
           ) {
             void markVisibleResearchTreeViewedRef.current(event.node.treeId, {
               knownUnseen: true,
@@ -6540,7 +6504,8 @@ function MainApp() {
     onAgentThreadGraphDirty: scheduleAgentThreadGraphRefresh,
     shouldRetainAgentTurns: (agentId: string) =>
       retainedTurnHistoryAgentIdsRef.current.has(agentId),
-    isResearchAgent: (agentId: string) => researchAgentIdsRef.current.has(agentId),
+    isResearchAgent: (agentId: string) =>
+      researchAgentIdsRef.current.has(agentId) || isResearchRunAgent(agentId),
     refreshAgentTurnQueue,
     refreshTranscriptOptions,
     refreshVisibleTranscriptOptions,
@@ -6726,28 +6691,24 @@ function MainApp() {
     }
   }
 
+  /** An agent in a Research-scoped workspace: research workspaces admit only
+   * research runs. */
+  function isResearchRunAgent(agentId: string): boolean {
+    const groupId = agentsRef.current.find((agent) => agent.id === agentId)?.groupId;
+    return Boolean(
+      groupId && groupsRef.current.some((group) => group.id === groupId && group.scope === "research"),
+    );
+  }
+
   function focusPaneTab(paneId: string) {
     if (document.activeElement instanceof HTMLElement &&
         document.activeElement.closest(".turn-timeline")) {
       document.activeElement.blur();
     }
-    const treeId = researchNodeByPaneIdRef.current.get(paneId)?.treeId;
-    const researchExposureChanged = Boolean(
-      treeId &&
-        (activeSurfaceRef.current !== "pane" ||
-          activePaneIdRef.current !== paneId ||
-          activeResearchTreeIdRef.current !== treeId),
-    );
     setActivePaneId(paneId);
     // Pass intentional so native-terminal keyboard cycles are not gated
     // on webview document focus.
     acknowledgePaneIfDone(paneId, true, true);
-    if (treeId) {
-      void markVisibleResearchTreeViewedRef.current(treeId, {
-        force: researchExposureChanged,
-        exposureConfirmed: true,
-      }).catch(() => undefined);
-    }
     requestAnimationFrame(() => {
 
     });
@@ -7161,25 +7122,10 @@ function MainApp() {
     paneToClose: PaneInfo,
     options?: { confirmAlways?: boolean; checkWorktreeStatus?: boolean },
   ): Promise<CloseDialogState | null> {
-    const researchNode = researchNodeByPaneId.get(paneToClose.id);
-    if (
-      researchNode &&
-      (researchNode.status === "queued" ||
-        researchNode.status === "starting" ||
-        researchNode.status === "running")
-    ) {
-      return { kind: "researchCancel", pane: paneToClose };
-    }
-    // A settled node's pane is already on its way out (retirement kills it
-    // within seconds). Closing it early is a plain close — the process probe
-    // below would otherwise see the still-live adapter and raise a spurious
-    // "running process" confirmation in that window.
-    if (researchNode) {
-      return null;
-    }
-    // A research pane whose node hasn't reached the debounced index yet is
-    // still a research run — closing it cancels, and must say so rather than
-    // falling through to the ordinary agent-close dialog.
+    // A pane in a Research workspace hosts a research run (the backend's
+    // pane runtime); closing it cancels the run, and must say so rather than
+    // falling through to the ordinary agent-close dialog. The interface does
+    // not see which node the pane is bound to.
     if (groupById.get(paneToClose.groupId)?.scope === "research") {
       return { kind: "researchCancel", pane: paneToClose };
     }
@@ -7443,7 +7389,7 @@ function MainApp() {
     flushPendingDrafts();
     try {
       const activeResearchNodeIds = researchActivity
-        .filter((node) => isActiveResearchStatus(node.status))
+        .filter((node) => isActiveResearchStatus(nodeStatus(node)))
         .map((node) => node.id);
       // Settled, not fail-fast: the activity snapshot can be moments stale, so
       // a run that finished (and lost its pane) in the meantime rejects with
@@ -10327,11 +10273,11 @@ function MainApp() {
                     researchTrees.find((tree) => tree.id === activeResearchTreeId)?.title ??
                     archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)?.title
                   }
-                  treeKind={
+                  treeType={
                     (
                       researchTrees.find((tree) => tree.id === activeResearchTreeId) ??
                       archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)
-                    )?.kind
+                    )?.type
                   }
                   archived={Boolean(activeResearchDetail?.tree.archivedAt)}
                   recapPendingNodeIds={recapPendingNodeIds}
