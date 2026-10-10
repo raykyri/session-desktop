@@ -142,7 +142,7 @@ function ResearchHistoryNav({
 
 /** A thread that is loading or failed to load: a pair-wide column with the
  * header bar, with the title when there is one, over the given body. */
-export function ResearchDocumentFrame({
+export function ResearchThreadPlaceholder({
   title = "",
   children,
 }: {

@@ -1,20 +1,20 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import {
   createResearchComposerDraftRestoration,
-  createResearchDocumentPersistence,
-} from "../lib/researchDocumentPersistence";
+  createResearchThreadPersistence,
+} from "../lib/researchThreadPersistence";
 import type { ResearchHighlightAnchor, ResearchNodeContent } from "../types";
 
-type Persistence = ReturnType<typeof createResearchDocumentPersistence>;
+type Persistence = ReturnType<typeof createResearchThreadPersistence>;
 type DraftRestoration = ReturnType<typeof createResearchComposerDraftRestoration>;
 type Draft = { nodeId: string; anchor: ResearchHighlightAnchor };
 
-/** Own the shared store, durable writes, and final scroll capture for one document mount. */
-export function useResearchDocumentNavigation(
+/** Own the shared store, durable writes, and final scroll capture for one thread page mount. */
+export function useResearchThreadNavigation(
   captureScroll: (persistence: Persistence) => void,
 ) {
   const owner = useRef<Persistence | null>(null);
-  if (!owner.current) owner.current = createResearchDocumentPersistence();
+  if (!owner.current) owner.current = createResearchThreadPersistence();
   const latestCapture = useRef(captureScroll);
   useLayoutEffect(() => {
     latestCapture.current = captureScroll;
@@ -35,9 +35,9 @@ export function useResearchDocumentNavigation(
 }
 
 /** Persists the root composer's text and an unsent branch's passage and text
- * per tree across document unmounts. On mount, a branch saved under one of
+ * per tree across thread page unmounts. On mount, a branch saved under one of
  * `chainNodeIds` reopens after its source answer loads, unless another draft
- * branch is already open. Call after the document's tree-reset effect so
+ * branch is already open. Call after the thread page's tree-reset effect so
  * the reset does not clear the restored draft. */
 export function useResearchComposerDrafts({
   persistence,

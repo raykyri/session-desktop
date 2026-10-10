@@ -3,7 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { researchColumnWidths } from "../src/lib/researchColumnWidths";
-import { ResearchPairHeader } from "../src/components/research/ResearchDocumentChrome";
+import { ResearchPairHeader } from "../src/components/research/ResearchColumnChrome";
 
 test("columns are sized from the strip's width: feed 21%, messages 18%, answer 44%, each clamped", () => {
   // The strip at 1440px with the full sidebar, and at 1100px.

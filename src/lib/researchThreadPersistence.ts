@@ -29,7 +29,7 @@ export function createResearchComposerDraftRestoration(
 }
 
 /** Immediate store mutations share one durable-write debounce and final flush. */
-export function createResearchDocumentPersistence(
+export function createResearchThreadPersistence(
   store = researchNavigationStore(),
   save: () => void = saveResearchNavigation,
 ) {

@@ -123,11 +123,11 @@ test("pruning falls back when every visited node was deleted", () => {
   );
 });
 
-test("opening a document from Recent Activity pushes a return visit", () => {
+test("opening a thread from the feed pushes a return visit", () => {
   let history = initResearchWorkspaceHistory({ kind: "feed" });
-  history = pushResearchWorkspaceHistory(history, { kind: "document", treeId: "tree-a" });
+  history = pushResearchWorkspaceHistory(history, { kind: "thread", treeId: "tree-a" });
   assert.deepEqual(history, {
-    entries: [{ kind: "feed" }, { kind: "document", treeId: "tree-a" }],
+    entries: [{ kind: "feed" }, { kind: "thread", treeId: "tree-a" }],
     index: 1,
   });
   assert.equal(canGoWorkspaceBack(history), true);
@@ -138,7 +138,7 @@ test("opening a document from Recent Activity pushes a return visit", () => {
   assert.deepEqual(back.visit, { kind: "feed" });
   const forward = researchWorkspaceHistoryForward(back.history);
   assert.ok(forward);
-  assert.deepEqual(forward.visit, { kind: "document", treeId: "tree-a" });
+  assert.deepEqual(forward.visit, { kind: "thread", treeId: "tree-a" });
 });
 
 test("re-opening the current workspace page does not grow the stack", () => {
@@ -148,12 +148,12 @@ test("re-opening the current workspace page does not grow the stack", () => {
 
 test("pruning removed trees from workspace history keeps the cursor on the current page", () => {
   const feed = { kind: "feed" } as const;
-  const docA = { kind: "document", treeId: "tree-a" } as const;
-  const docB = { kind: "document", treeId: "tree-b" } as const;
+  const threadA = { kind: "thread", treeId: "tree-a" } as const;
+  const threadB = { kind: "thread", treeId: "tree-b" } as const;
   // Home -> A -> Home (via a shortcut) -> B, then A is archived.
-  const history = { entries: [feed, docA, feed, docB], index: 3 };
+  const history = { entries: [feed, threadA, feed, threadB], index: 3 };
   const pruned = pruneResearchWorkspaceHistory(history, (treeId) => treeId !== "tree-a");
-  assert.deepEqual(pruned, { entries: [feed, docB], index: 1 });
+  assert.deepEqual(pruned, { entries: [feed, threadB], index: 1 });
   const back = researchWorkspaceHistoryBack(pruned);
   assert.ok(back);
   assert.deepEqual(back.visit, feed);
@@ -161,8 +161,8 @@ test("pruning removed trees from workspace history keeps the cursor on the curre
 
 test("pruning collapses duplicate pages when an intermediate visit is removed", () => {
   const feed = { kind: "feed" } as const;
-  const docA = { kind: "document", treeId: "tree-a" } as const;
-  const history = { entries: [feed, docA, feed], index: 2 };
+  const threadA = { kind: "thread", treeId: "tree-a" } as const;
+  const history = { entries: [feed, threadA, feed], index: 2 };
   assert.deepEqual(pruneResearchWorkspaceHistory(history, () => false), {
     entries: [feed],
     index: 0,
@@ -171,11 +171,11 @@ test("pruning collapses duplicate pages when an intermediate visit is removed", 
 
 test("pruning preserves the current visit and returns the same stack when unchanged", () => {
   const feed = { kind: "feed" } as const;
-  const docA = { kind: "document", treeId: "tree-a" } as const;
-  const history = { entries: [feed, docA], index: 1 };
+  const threadA = { kind: "thread", treeId: "tree-a" } as const;
+  const history = { entries: [feed, threadA], index: 1 };
   assert.equal(pruneResearchWorkspaceHistory(history, () => true), history);
   assert.deepEqual(pruneResearchWorkspaceHistory(history, () => false), history);
-  const forwardStack = { entries: [feed, docA], index: 0 };
+  const forwardStack = { entries: [feed, threadA], index: 0 };
   assert.deepEqual(pruneResearchWorkspaceHistory(forwardStack, () => false), {
     entries: [feed],
     index: 0,

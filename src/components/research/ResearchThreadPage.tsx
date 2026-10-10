@@ -1,7 +1,7 @@
 import {
   useResearchComposerDrafts,
-  useResearchDocumentNavigation,
-} from "../../hooks/useResearchDocumentNavigation";
+  useResearchThreadNavigation,
+} from "../../hooks/useResearchThreadNavigation";
 import {
   memo,
   useCallback,
@@ -36,7 +36,7 @@ import {
   setResearchNodePromoted,
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
-import ResearchNoteDocument from "./ResearchNoteDocument";
+import ResearchNotePost from "./ResearchNotePost";
 import ResearchNoteThread, { noteThreadEntries, type ResearchNoteThreadHandle } from "./ResearchNoteThread";
 import { ResearchTreeMenuItems, type ResearchTreeMenuProps } from "./ResearchMoveMenu";
 import type { NoteActions } from "./ResearchNote";
@@ -152,7 +152,7 @@ import DomSearchBar from "../DomSearchBar";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import { TranscriptLinkActionsProvider, type LinkActions } from "../TranscriptMarkdown";
 import { ResearchEditorColumn, ResearchEditPreview, ResearchPostCorrections } from "./ResearchEditorColumn";
-import { ResearchDocumentFrame, ResearchPairHeader } from "./ResearchDocumentChrome";
+import { ResearchThreadPlaceholder, ResearchPairHeader } from "./ResearchColumnChrome";
 import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import {
   ResearchAnswerPane,
@@ -192,7 +192,7 @@ const PENDING_NODE_TTL_MS = 30_000;
 /** How long a focus request waits for its element to render. */
 const FOCUS_REQUEST_TTL_MS = 2_000;
 
-interface ResearchDocumentProps {
+interface ResearchThreadPageProps {
   detail: ResearchTreeDetail | null;
   /** Durable sidebar title shown in the header while tree detail is loading. */
   treeTitle?: string;
@@ -213,7 +213,7 @@ interface ResearchDocumentProps {
     inline?: boolean,
     replacesNodeId?: string | null,
   ) => Promise<ResearchNode>;
-  /** Replies and follow-ups on a note page (see ResearchNoteDocument). */
+  /** Replies and follow-ups on a note page (see ResearchNotePost). */
   noteActions: NoteActions;
   onRemoveBranch: (nodeId: string) => Promise<ResearchBranchRemoval>;
   onRemoveTree: (treeId: string) => Promise<void>;
@@ -250,12 +250,12 @@ interface ResearchDocumentProps {
   onToast: (message: string, tone?: "normal" | "warning") => void;
   /** Show held-⌘ shortcut badges (the ⌘J composer hint). */
   shortcutHintsShown: boolean;
-  /** The "Require ⌘↵ to send" setting, for every composer in the document. */
+  /** The "Require ⌘↵ to send" setting, for every composer in the thread. */
   requireCmdEnterToSend: boolean;
   /** Runs whose background summary job is in flight; each renders a spinner in
    * its recap slot until the summary arrives. */
   recapPendingNodeIds?: ReadonlySet<string>;
-  /** Workspace-level back/forward (Recent Activity ↔ documents). Used when
+  /** Workspace-level back/forward (the feed ↔ threads). Used when
    * this tree's own visit stack has nowhere left to go. */
   workspaceCanGoBack?: boolean;
   workspaceCanGoForward?: boolean;
@@ -266,10 +266,10 @@ interface ResearchDocumentProps {
   onOpenNodesChange?: (nodeIds: string[]) => void;
   /** The whole question's Follow, Bookmark and Move to actions, which the
    * root conversation's answer menus list below their own actions. */
-  treeMenu?: ResearchDocumentTreeMenu;
+  treeMenu?: ResearchThreadTreeMenu;
 }
 
-export interface ResearchDocumentTreeMenu
+export interface ResearchThreadTreeMenu
   extends Omit<ResearchTreeMenuProps, "onToggleBookmark" | "onToggleFollow" | "onNewFolder"> {
   bookmarked: boolean;
   followed: boolean;
@@ -368,22 +368,22 @@ interface BranchMarker {
   branchIds: string[];
 }
 
-interface DocumentMenuPlacement {
+interface ThreadMenuPlacement {
   anchor: HTMLElement | ResearchMenuRect;
   align: ResearchMenuAlign;
   /** The button that opened the menu: focus returns to it when it closes. */
   trigger?: HTMLElement | null;
 }
 
-type DocumentMenuState =
-  | ({ kind: "answer"; nodeId: string } & DocumentMenuPlacement)
-  | ({ kind: "post"; nodeId: string } & DocumentMenuPlacement)
+type ThreadMenuState =
+  | ({ kind: "answer"; nodeId: string } & ThreadMenuPlacement)
+  | ({ kind: "post"; nodeId: string } & ThreadMenuPlacement)
   | ({
       kind: "mark";
       nodeId: string;
       branchIds: string[];
       highlightId: string | null;
-    } & DocumentMenuPlacement);
+    } & ThreadMenuPlacement);
 
 interface ResearchHighlightRegistry {
   set(name: string, highlight: unknown): void;
@@ -954,7 +954,7 @@ function ResearchMarkerTip({
   );
 }
 
-function ResearchDocument({
+function ResearchThreadPage({
   detail,
   treeTitle,
   treeType,
@@ -984,7 +984,7 @@ function ResearchDocument({
   onWorkspaceForward,
   onOpenNodesChange,
   treeMenu,
-}: ResearchDocumentProps) {
+}: ResearchThreadPageProps) {
   const columnsLayout = useContext(ResearchColumnsContext);
   const treeId = detail?.tree.id ?? null;
   const rootNodeId = detail?.tree.rootNodeId ?? null;
@@ -1016,7 +1016,7 @@ function ResearchDocument({
   const [retryingNodeId, setRetryingNodeId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const cancelRequestInFlightRef = useRef(false);
-  const [menu, setMenu] = useState<DocumentMenuState | null>(null);
+  const [menu, setMenu] = useState<ThreadMenuState | null>(null);
   const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null);
   const [removingBranch, setRemovingBranch] = useState(false);
   const [branchRemovalError, setBranchRemovalError] = useState<string | null>(null);
@@ -1076,7 +1076,7 @@ function ResearchDocument({
   // Count saved highlights whose anchors cannot be located in the rendered
   // answer. The answer's … menu reports these unresolved highlights.
   const [hiddenHighlightsByNode, setHiddenHighlightsByNode] = useState<Record<string, number>>({});
-  // Branches whose answer finished while this document was open and that
+  // Branches whose answer finished while this thread was open and that
   // the reader has not opened carry an unread dot on their branch count.
   // `firstSeenComplete` records each branch's status the first time it is
   // seen, so a branch that was already complete when the tree loaded is read.
@@ -1159,7 +1159,7 @@ function ResearchDocument({
   editingByHeadRef.current = editingByHead;
   queuesRef.current = queues;
 
-  const navigationPersistence = useResearchDocumentNavigation((persistence) => {
+  const navigationPersistence = useResearchThreadNavigation((persistence) => {
     const currentTreeId = treeIdRef.current;
     if (!currentTreeId) {
       return;
@@ -1319,7 +1319,7 @@ function ResearchDocument({
 
   // Highlight mutations are announced as research events but do not replace
   // the response snapshot. Mirror their refreshed node metadata into each
-  // loaded answer so another window's changes reach the document. Bail on
+  // loaded answer so another window's changes reach the thread. Bail on
   // unchanged id lists: every research event rebuilds the highlights arrays,
   // and adopting each fresh identity re-ran the paint effect's text walk.
   useEffect(() => {
@@ -1642,7 +1642,7 @@ function ResearchDocument({
   );
 
   // Node-open requests from the app shell (feed rows, child rows, the
-  // Highlights view) while this tree's document is already mounted. Focus
+  // Highlights view) while this tree's thread page is already mounted. Focus
   // stays where the request came from; the strip shows the opened level.
   useEffect(
     () =>
@@ -1663,7 +1663,7 @@ function ResearchDocument({
     [navigate, selectedRow],
   );
 
-  // Tree switch (the document is keyed per tree, so this is its mount):
+  // Tree switch (the thread page is keyed per tree, so this is its mount):
   // restore the open levels, queued follow-ups, and reading state.
   useEffect(() => {
     if (!treeId || !rootNodeId || !detail) {
@@ -1690,7 +1690,7 @@ function ResearchDocument({
         settleResearchStrip(row, columnLevelIndex(focused) !== null ? focused : null, "auto");
       }),
     );
-    // Runs once per tree: the document remounts on tree switches, and the
+    // Runs once per tree: the thread page remounts on tree switches, and the
     // first detail to arrive carries the root and the nodes to restore.
   }, [treeId, rootNodeId, Boolean(detail)]);
 
@@ -2284,10 +2284,10 @@ function ResearchDocument({
     },
     [openBranch, requestFocus, selectMessage],
   );
-  useEffect(() => columnsLayout?.registerCycle("document", cycleRows), [columnsLayout, cycleRows]);
+  useEffect(() => columnsLayout?.registerCycle("thread", cycleRows), [columnsLayout, cycleRows]);
 
   // The column (and with it the scroller that carries swipe navigation)
-  // renders once there is a detail, a root and a selection. A document
+  // renders once there is a detail, a root and a selection. A thread page
   // mounted for a new tree first renders the placeholder, so the swipe
   // listeners attach when this turns true.
   const hasColumn = Boolean(detail && rootNodeId && selectedNodeId);
@@ -2304,7 +2304,7 @@ function ResearchDocument({
       ? document.querySelector<HTMLElement>(`[data-research-row][data-node-id="${CSS.escape(parentId)}"]`)
       : null;
     const composer = composerRefs.current.get(mainComposerKey)?.element()?.querySelector("textarea");
-    // Deleting the research closes the document: the feed's composer.
+    // Deleting the research closes the thread: the feed's composer.
     return (
       previous ??
       (composer?.isConnected ? composer : document.querySelector<HTMLElement>(".new-research-input"))
@@ -2619,7 +2619,7 @@ function ResearchDocument({
     };
   }, [annotatedSegmentsKey, revisionsKey, expandedKey, fullTraceKey, segmentRoot]);
 
-  // Keep the two saved-highlight paint objects registered for this document's
+  // Keep the two saved-highlight paint objects registered for this thread page's
   // lifetime. Mutating their range sets avoids WebKit leaving deleted registry
   // paint on screen until an unrelated selection or pointer event invalidates
   // the text layer.
@@ -4394,7 +4394,7 @@ function ResearchDocument({
       }
       const wasOnPath = levelPathRef.current.some((id) => subtree.has(id));
       const removal = await onRemoveBranch(deletingBranch.node.id);
-      // The backend call and detail refresh can outlive this document's tree.
+      // The backend call and detail refresh can outlive this thread page's tree.
       if (treeIdRef.current !== removal.treeId) {
         setDeletingBranchId(null);
         return;
@@ -4427,7 +4427,7 @@ function ResearchDocument({
 
   if (!detail || !rootNodeId || !selectedNodeId || levelPath.length === 0) {
     // A failed *tree* fetch retries through the app shell — without detail
-    // there is no node to load, so no in-document retry can recover.
+    // there is no node to load, so no in-page retry can recover.
     const placeholderError = detailError ?? null;
     const rootKind = detail
       ? detail.nodes.find((node) => node.id === detail.tree.rootNodeId)?.type
@@ -4435,7 +4435,7 @@ function ResearchDocument({
     const headerTitle =
       rootKind === "post" ? "Post" : (detail?.tree.title ?? treeTitle ?? "Loading research…");
     return (
-      <ResearchDocumentFrame title={headerTitle}>
+      <ResearchThreadPlaceholder title={headerTitle}>
         <div className="research-placeholder">
           {placeholderError ? null : (
             <LoaderCircle className="research-spinner" size={24} aria-hidden="true" />
@@ -4452,7 +4452,7 @@ function ResearchDocument({
             </>
           ) : null}
         </div>
-      </ResearchDocumentFrame>
+      </ResearchThreadPlaceholder>
     );
   }
 
@@ -5042,7 +5042,7 @@ function ResearchDocument({
                 {postEditing && !postEditing.correction && postEditing.text !== postEditing.initialText ? (
                   <ResearchEditPreview original={postEditing.initialText} next={editorText} label="Preview" />
                 ) : (
-                  <ResearchNoteDocument detail={detail} note={note} onSelectNode={(nodeId) => navigate(nodeId)} />
+                  <ResearchNotePost detail={detail} note={note} onSelectNode={(nodeId) => navigate(nodeId)} />
                 )}
                 <ResearchPostCorrections
                   corrections={note.type === "post" ? (note.corrections ?? []) : []}
@@ -5835,4 +5835,4 @@ function ResearchDocument({
   );
 }
 
-export default memo(ResearchDocument);
+export default memo(ResearchThreadPage);

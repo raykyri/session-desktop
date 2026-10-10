@@ -12,7 +12,7 @@ import {
 /** A note's post column body: the note as a turn's question. Replies,
  * follow-ups and the follow-up composer are in the thread column to its
  * right (ResearchNoteThread). The column header carries the history buttons. */
-export default function ResearchNoteDocument({
+export default function ResearchNotePost({
   detail,
   note,
   onSelectNode,
@@ -30,14 +30,14 @@ export default function ResearchNoteDocument({
   const editedAt = nodeEditedAt(note);
 
   return (
-    <div className="note-document">
+    <div className="note-post">
       {/* Use the turn layout for the note. */}
       <article className="research-turn note-turn">
         <div className="research-turn-question">
           {parent && parentExcerpt !== null ? (
             <button
               type="button"
-              className="note-document-parent"
+              className="note-post-parent"
               onClick={() => onSelectNode(parent.id)}
             >
               ↳ Network follow-up of “{parentExcerpt}”

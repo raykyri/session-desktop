@@ -89,7 +89,7 @@ import {
   treesForResearchScope,
   workspaceIsInResearchScope,
 } from "./lib/researchScope";
-import ResearchDocument, { type ResearchDocumentTreeMenu } from "./components/research/ResearchDocument";
+import ResearchThreadPage, { type ResearchThreadTreeMenu } from "./components/research/ResearchThreadPage";
 import ResearchDraftView from "./components/research/ResearchDraftView";
 import ResearchActivityFeed from "./components/research/ResearchActivityFeed";
 import ResearchColumns from "./components/research/ResearchColumns";
@@ -471,10 +471,10 @@ const ACTIVE_RESEARCH_PANE_KEY = "session.active-research-pane.v1";
 // Whether Home is forward on the research surface. Selection-level UI state,
 // like the active tree id; the feed contents live backend-side.
 
-// Browser-overlay / link-action owner for a research tree's document. Keyed
+// Browser-overlay / link-action owner for a research tree's thread page. Keyed
 // per tree so an overlay opened from one tree's links doesn't follow the user
 // into another tree (each tree keeps its own overlay, like panes do).
-const RESEARCH_BROWSER_OWNER_PREFIX = "__research_document__:";
+const RESEARCH_BROWSER_OWNER_PREFIX = "__research_thread__:";
 function researchBrowserOwnerId(treeId: string) {
   return `${RESEARCH_BROWSER_OWNER_PREFIX}${treeId}`;
 }
@@ -543,7 +543,7 @@ function replaceResearchActivityForTree(
   return reconcileResearchActivity(activity, next);
 }
 
-function researchDocumentIsVisible(
+function researchThreadIsVisible(
   treeId: string,
   activeSurface: "pane" | "research",
   activeTreeId: string | null,
@@ -1453,8 +1453,8 @@ function MainApp() {
     researchNodeEventCacheRef.current.set(node.id, node);
   }
   // Why activeResearchDetail is null after a failed tree fetch. Without it the
-  // document shows an unexplained spinner forever: the content effect can't
-  // run (no detail-derived node id), so no in-document retry can recover.
+  // thread page shows an unexplained spinner forever: the content effect can't
+  // run (no detail-derived node id), so no in-page retry can recover.
   const [activeResearchDetailError, setActiveResearchDetailError] = useState<string | null>(null);
   const [activeSurface, setActiveSurfaceState] = useState<"pane" | "research">("research");
   const activeSurfaceRef = useRef(activeSurface);
@@ -1859,7 +1859,7 @@ function MainApp() {
     y: number;
     paneId: string | null;
   } | null>(null);
-  // Pane and research-document selection are independent. Switching modes restores
+  // Pane and research-thread selection are independent. Switching modes restores
   // the previous selection instead of erasing the other mode's navigation context.
   const researchSurfaceActive = activeSurface === "research";
   const researchActive = researchSurfaceActive && activeResearchTreeId !== null;
@@ -2098,7 +2098,7 @@ function MainApp() {
   researchScopeRef.current = researchScope;
   // The single source of truth for what the research surface shows. Every
   // stage branch keys off this one value, so precedence (composer page over
-  // document over home) lives here instead of being re-derived — and kept
+  // thread over feed) lives here instead of being re-derived — and kept
   // consistent — inside each render condition. The
   // composer additionally renders while this is null (another surface is
   // forward) as a hidden keep-alive for its draft.
@@ -2106,7 +2106,7 @@ function MainApp() {
     ? null
     : feedOpen || !activeResearchTreeId
       ? ("feed" as const)
-      : ("document" as const);
+      : ("thread" as const);
   const researchStageViewRef = useRef(researchStageView);
   researchStageViewRef.current = researchStageView;
   // Menu badges and the folder-replace dialog both count every tree that keeps
@@ -2177,7 +2177,7 @@ function MainApp() {
       // view of one tree's run. Handing focus to the "nearest" research pane
       // would land on an unrelated tree's hidden terminal while the sidebar
       // still highlights the tree the user was watching. Return no successor;
-      // the surface fallback then restores the durable research document.
+      // the surface fallback then restores the durable research thread.
       if (closedScope === "research") {
         return null;
       }
@@ -3245,7 +3245,7 @@ function MainApp() {
 
   // Drop browser/UI state only when its real owner disappears. Browser owners
   // include research trees as well as terminal panes; unrelated pane metadata
-  // updates must not retire a research document's preserved browser.
+  // updates must not retire a research thread's preserved browser.
   useEffect(() => {
     panesRef.current = panes;
     const ids = new Set(panes.map((pane) => pane.id));
@@ -3836,7 +3836,7 @@ function MainApp() {
   }
 
   // One stable LinkActions object per transcript owner. TurnOverlay and the
-  // research document feed this into the shared provider. Context changes bypass
+  // research thread page feed this into the shared provider. Context changes bypass
   // memoization — a fresh object per App render re-rendered every markdown link in the
   // transcript on every unrelated state change. Actions read the opener through
   // a ref so the cached closures never go stale.
@@ -4721,7 +4721,7 @@ function MainApp() {
             } else {
               showResearchSurface();
               if (
-                researchDocumentIsVisible(
+                researchThreadIsVisible(
                   researchTreeToRestore.id,
                   "research",
                   researchTreeToRestore.id,
@@ -4745,7 +4745,7 @@ function MainApp() {
         } catch (err) {
           // Mirror selectResearchTree's failure path when booting into
           // Research mode: keep the selection and surface the error inside
-          // the document (which has a working Retry) — silently dropping
+          // the thread page (which has a working Retry) — silently dropping
           // the key left the Research sidebar paired with a terminal pane
           // on the stage and nothing able to recover. A later navigation
           // refresh clears the selection if the tree is truly gone.
@@ -4942,10 +4942,10 @@ function MainApp() {
   const recordResearchFeedVisit = useCallback(() => {
     const treeId = activeResearchTreeIdRef.current;
     setResearchWorkspaceHistory((current) => {
-      const withDocument = treeId
-        ? pushResearchWorkspaceHistory(current, { kind: "document", treeId })
+      const withThread = treeId
+        ? pushResearchWorkspaceHistory(current, { kind: "thread", treeId })
         : current;
-      const next = pushResearchWorkspaceHistory(withDocument, { kind: "feed" });
+      const next = pushResearchWorkspaceHistory(withThread, { kind: "feed" });
       researchWorkspaceHistoryRef.current = next;
       return next;
     });
@@ -5020,7 +5020,7 @@ function MainApp() {
       }
       // The backend can remove the selected tree out from under the UI (a root
       // launch that failed removes its never-launched tree). Left selected, the
-      // document would spin on a tree that no longer exists with nothing able to
+      // thread page would spin on a tree that no longer exists with nothing able to
       // recover it — clear the selection so the empty state takes over.
       const activeTreeId = activeResearchTreeIdRef.current;
       if (activeTreeId && !trees.some((tree) => tree.id === activeTreeId)) {
@@ -5043,12 +5043,12 @@ function MainApp() {
   }, [pruneResearchWorkspaceVisits]);
   const markVisibleResearchTreeViewed = useCallback(
     async (treeId: string, options: ResearchViewedAckOptions = {}) => {
-      const documentVisible = researchDocumentIsVisible(
+      const threadVisible = researchThreadIsVisible(
         treeId,
         activeSurfaceRef.current,
         activeResearchTreeIdRef.current,
       );
-      if (!options.exposureConfirmed && !documentVisible) {
+      if (!options.exposureConfirmed && !threadVisible) {
         return;
       }
       const hadUnseen =
@@ -5139,7 +5139,7 @@ function MainApp() {
         );
         // Selection can arrive from outside the scoped sidebar (archive
         // restore, a remembered tree on mode switch). Follow it with the
-        // folder scope, or the document would show a tree the sidebar
+        // folder scope, or the thread page would show a tree the sidebar
         // doesn't list — with nothing highlighted anywhere.
         if (researchScopeRef.current !== detail.tree.workspaceId) {
           changeResearchFolderScope(detail.tree.workspaceId);
@@ -5147,8 +5147,8 @@ function MainApp() {
         void markVisibleResearchTreeViewed(treeId, { force: true }).catch(() => undefined);
       }
     } catch (err) {
-      // Surfaced inside the document (with a working Retry) rather than as a
-      // global banner: without detail the document has no node to load, so
+      // Surfaced inside the thread page (with a working Retry) rather than as a
+      // global banner: without detail the thread page has no node to load, so
       // the error and its recovery belong where the user is looking.
       if (
         researchDetailRequestSeqRef.current === requestSeq &&
@@ -5169,15 +5169,15 @@ function MainApp() {
       return next;
     });
   }, []);
-  const navigateToResearchDocument = useCallback(
+  const navigateToResearchThread = useCallback(
     (treeId: string) => {
-      recordResearchWorkspaceVisit({ kind: "document", treeId });
+      recordResearchWorkspaceVisit({ kind: "thread", treeId });
       void selectResearchTree(treeId);
     },
     [recordResearchWorkspaceVisit, selectResearchTree],
   );
   // Opens a node of a tree: its level, and the levels before it, open as
-  // column pairs, with the node selected. The store covers a document that mounts for
+  // column pairs, with the node selected. The store covers a thread page that mounts for
   // this tree; the request reaches one that is already mounted.
   const openResearchNode = useCallback(
     (treeId: string, nodeId: string) => {
@@ -5186,10 +5186,10 @@ function MainApp() {
       navigation.selectedNodeId = nodeId;
       navigationStore[treeId] = navigation;
       saveResearchNavigation();
-      navigateToResearchDocument(treeId);
+      navigateToResearchThread(treeId);
       requestResearchNodeOpen(treeId, nodeId);
     },
-    [navigateToResearchDocument],
+    [navigateToResearchThread],
   );
   const openRecentResearchQuery = useCallback(
     (query: RecentResearchQuery) => openResearchNode(query.treeId, query.nodeId),
@@ -5197,7 +5197,7 @@ function MainApp() {
   );
   const openResearchHighlight = useCallback(
     (item: ResearchHighlightFeedItem) => {
-      // Recorded before navigation so the document's page-visit restore can
+      // Recorded before navigation so the thread page's visit restore can
       // land on the passage instead of the saved scroll offset.
       const navigationStore = researchNavigationStore();
       const navigation = (navigationStore[item.treeId] ??= { scrollByNode: {} });
@@ -5267,10 +5267,10 @@ function MainApp() {
     localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
   }, [recordResearchFeedVisit, showResearchSurface, setFeedOpen]);
   // Brings the feed page forward on the research surface. Tree selection is
-  // left standing (the feed outranks the document in the stage selector),
+  // left standing (the feed outranks the thread in the stage selector),
   // so closing the feed by picking a tree is a plain selection.
   const showFeed = useCallback(() => {
-    // The feed is a peer page of a research document, not an overlay on one:
+    // The feed is a peer page of a research thread, not an overlay on one:
     // opening it drops the tree selection the way Home does, so the sidebar
     // never shows a selected row behind the tab that is actually forward.
     researchDetailRequestSeqRef.current += 1;
@@ -6248,7 +6248,7 @@ function MainApp() {
     }) => {
       const result = await updateResearchDocument(input);
       if (activeResearchTreeIdRef.current === result.tree.id) {
-        // Apply the authoritative metadata immediately. The document component
+        // Apply the authoritative metadata immediately. The thread page
         // separately refetches the body when its snapshot revision changed.
         setActiveResearchDetail((current) =>
           current?.tree.id === result.tree.id
@@ -6302,8 +6302,8 @@ function MainApp() {
       setError(err instanceof Error ? err.message : String(err));
     }
   }, []);
-  // Every delete entry point (document menu, feed menus) reconciles the active
-  // document the same way: the deleted thread closes back to the feed.
+  // Every delete entry point (thread menus, feed menus) reconciles the active
+  // thread the same way: the deleted thread closes back to the feed.
   const removeResearchTreeAndSelectFallback = useCallback(
     async (treeId: string) => {
       setError(null);
@@ -6364,7 +6364,7 @@ function MainApp() {
   );
   // Replies, follow-ups, and retries under notes, shared by Home's note cards
   // and the note page. The resulting node events update the feed and the open
-  // document, so nothing is patched here.
+  // thread, so nothing is patched here.
   const noteActions = useMemo<NoteActions>(
     () => ({
       onAskFollowUp: async ({ parentNodeId, prompt, network, replyId }) => {
@@ -6389,7 +6389,7 @@ function MainApp() {
     }),
     [createResearchFollowup, retryResearchRun],
   );
-  const removeResearchBranchFromDocument = useCallback(
+  const removeResearchBranchFromThread = useCallback(
     async (nodeId: string) => {
       setError(null);
       const removal = await removeResearchBranch(nodeId);
@@ -6425,7 +6425,7 @@ function MainApp() {
   useSessionEvents({
     appendHookEvent,
     setPanes: setPanesPreservingRecoveredDismissals,
-    // PTY lifecycle bookkeeping must not implicitly leave a research document when
+    // PTY lifecycle bookkeeping must not implicitly leave a research thread when
     // some unrelated terminal exits. User-driven pane activation uses the wrapper.
     setActivePaneId: setActivePaneIdState,
     setExitPreflightRequest,
@@ -6605,13 +6605,13 @@ function MainApp() {
     }
     focusPaneTab(paneId);
   }
-  // Pass a stable callback to the memoized ResearchDocument so unrelated App
+  // Pass a stable callback to the memoized ResearchThreadPage so unrelated App
   // renders do not cause it to render again. The ref calls the current function.
-  const researchDocumentOpenPaneRef = useRef(openResearchPaneTab);
-  researchDocumentOpenPaneRef.current = openResearchPaneTab;
+  const researchThreadOpenPaneRef = useRef(openResearchPaneTab);
+  researchThreadOpenPaneRef.current = openResearchPaneTab;
   // The conversation's toasts use the research toast: its live region is
   // mounted before any text arrives, and it pauses under the pointer or focus.
-  const handleResearchDocumentToast = useCallback(
+  const handleResearchThreadToast = useCallback(
     (message: string, tone?: "normal" | "warning") =>
       showResearchToast(message, tone === "warning" ? { tone: "warning" } : {}),
     [showResearchToast],
@@ -6626,7 +6626,7 @@ function MainApp() {
       section: "Research",
       title: tree.title,
       hint: tree.runningCount > 0 ? `${tree.runningCount} running` : undefined,
-      action: () => navigateToResearchDocument(tree.id),
+      action: () => navigateToResearchThread(tree.id),
     }));
     commands.push(
       {
@@ -6863,7 +6863,7 @@ function MainApp() {
       localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
     }
     // Removing the selected folder/tree should land on an available research
-    // item in the surviving scope, not leave an unexplained empty document.
+    // item in the surviving scope, not leave an unexplained empty thread page.
     if (scopeWasRemoved || activeTreeWasRemoved) {
       const nextTree = treeForResearchScope(
         remainingTrees,
@@ -6871,7 +6871,7 @@ function MainApp() {
         activeTreeWasRemoved ? null : activeTreeId,
       );
       if (nextTree) {
-        navigateToResearchDocument(nextTree.id);
+        navigateToResearchThread(nextTree.id);
       } else {
         focusResearchHome();
       }
@@ -8059,7 +8059,7 @@ function MainApp() {
       if (
         !isResearchTreeSelectionChange(
           activeResearchTreeId,
-          researchSurfaceActive && researchStageView === "document",
+          researchSurfaceActive && researchStageView === "thread",
           treeId,
         )
       ) {
@@ -8067,11 +8067,11 @@ function MainApp() {
       }
       const rootNodeId = researchTrees.find((tree) => tree.id === treeId)?.rootNodeId;
       if (rootNodeId) openResearchNode(treeId, rootNodeId);
-      else navigateToResearchDocument(treeId);
+      else navigateToResearchThread(treeId);
     },
     [
       activeResearchTreeId,
-      navigateToResearchDocument,
+      navigateToResearchThread,
       openResearchNode,
       researchStageView,
       researchSurfaceActive,
@@ -8105,7 +8105,7 @@ function MainApp() {
     [showResearchToast],
   );
   // Follow persists on the tree; the resulting tree update event patches the
-  // feed and the open document, so nothing is set here.
+  // feed and the open thread, so nothing is set here.
   const followResearchTreeFromFeed = useCallback(
     (treeId: string, followed: boolean) => {
       void setResearchTreeFollowed(treeId, followed).then(
@@ -8139,7 +8139,7 @@ function MainApp() {
     activeResearchTreeSummary ??
     (activeResearchDetail?.tree.id === activeResearchTreeId ? activeResearchDetail?.tree : null) ??
     null;
-  const activeResearchTreeMenu = useMemo<ResearchDocumentTreeMenu | undefined>(() => {
+  const activeResearchTreeMenu = useMemo<ResearchThreadTreeMenu | undefined>(() => {
     const tree = activeResearchTreeState;
     if (!tree) return undefined;
     return {
@@ -9613,7 +9613,7 @@ function MainApp() {
               close beside it. */}
           {researchFeedColumnVisible ? (
             <ResearchColumns
-              hasDocument={researchStageView === "document" || openResearchDraft !== null}
+              hasThread={researchStageView === "thread" || openResearchDraft !== null}
               feed={
                 config ? (
                   feedPage.kind === "highlights" ? (
@@ -9629,7 +9629,7 @@ function MainApp() {
                     <ResearchActivityFeed
                       {...activityFeedState}
                       view={feedPage}
-                      selectedTreeId={researchStageView === "document" ? activeResearchTreeId : null}
+                      selectedTreeId={researchStageView === "thread" ? activeResearchTreeId : null}
                       selectedChildNodeIds={openResearchNodeIds}
                       selectedDraftId={openResearchDraft?.id ?? null}
                       onImportReport={importReport}
@@ -9676,11 +9676,11 @@ function MainApp() {
                 ) : null
               }
             >
-              {researchStageView === "document" && activeResearchTreeId ? (
+              {researchStageView === "thread" && activeResearchTreeId ? (
                 // Remount on tree changes to reset selection, fetched content,
                 // and the follow-up draft before paint. Resetting them in effects
                 // would briefly show and refetch the previous tree's node.
-                <ResearchDocument
+                <ResearchThreadPage
                   key={activeResearchTreeId}
                   detail={activeResearchDetail}
                   treeTitle={
@@ -9700,7 +9700,7 @@ function MainApp() {
                   onRetryDetail={retryActiveResearchDetail}
                   onFork={createResearchFollowup}
                   noteActions={noteActions}
-                  onRemoveBranch={removeResearchBranchFromDocument}
+                  onRemoveBranch={removeResearchBranchFromThread}
                   onRemoveTree={removeResearchTreeAndSelectFallback}
                   onRenameTree={renameResearchTreeTitle}
                   onUpdateDocument={editResearchDocument}
@@ -9711,7 +9711,7 @@ function MainApp() {
                   onRetryNode={retryResearchRun}
                   linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}
                   onError={setError}
-                  onToast={handleResearchDocumentToast}
+                  onToast={handleResearchThreadToast}
                   shortcutHintsShown={shortcutHintsShown}
                   requireCmdEnterToSend={settings.requireCmdEnterToSend}
                   onOpenNodesChange={setOpenResearchNodeIds}

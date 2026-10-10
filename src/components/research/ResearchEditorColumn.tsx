@@ -2,7 +2,7 @@ import { memo, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode, Ref } from "react";
 import { Eye, MessageSquarePlus } from "lucide-react";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
-import { ResearchPairHeader } from "./ResearchDocumentChrome";
+import { ResearchPairHeader } from "./ResearchColumnChrome";
 import { ResearchMarkdown } from "./ResearchMessage";
 import { editedMarkdownBlocks, QUESTION_CHARACTER_LIMIT, researchQuestionLength } from "../../lib/researchEditor";
 import { stripImportedReportCitations } from "../../lib/researchDocuments";

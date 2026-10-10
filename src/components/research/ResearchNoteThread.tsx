@@ -59,7 +59,7 @@ export function noteThreadEntries(nodes: readonly ResearchNode[], note: Research
  * responses nested under it; a follow-up row shows its reply count (a network
  * follow-up) or its answer state (an AI follow-up), and opens the follow-up
  * as the next level. One row is in the tab order: the open follow-up's, else
- * the row focused last, else the first. ResearchDocument handles the column's
+ * the row focused last, else the first. ResearchThreadPage handles the column's
  * keys. Each row carries its entry's key in `data-thread-key`. */
 export default function ResearchNoteThread({
   nodes,

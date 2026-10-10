@@ -282,7 +282,7 @@
    turn (research.css): the note where a question sits, its delivery line
    where an answer sits. The thread column holds the follow-up composer and
    the replies and follow-ups. */
-.note-document-parent {
+.note-post-parent {
   display: block;
   margin-bottom: 6px;
   color: var(--text-subtle);
@@ -295,7 +295,7 @@
   cursor: pointer;
 }
 
-.note-document-parent:hover {
+.note-post-parent:hover {
   color: var(--text-secondary);
   text-decoration: underline;
   text-underline-offset: 2px;

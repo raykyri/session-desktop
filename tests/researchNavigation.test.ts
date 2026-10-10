@@ -96,7 +96,7 @@ test("clicking the research tree already displayed is a no-op", () => {
   assert.equal(isResearchTreeSelectionChange("tree", true, "tree"), false);
 });
 
-test("a research tree remains selectable when its document is not displayed", () => {
+test("a research tree remains selectable when its thread is not displayed", () => {
   assert.equal(isResearchTreeSelectionChange("tree", false, "tree"), true);
   assert.equal(isResearchTreeSelectionChange("tree", true, "other-tree"), true);
 });

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   createResearchComposerDraftRestoration,
-  createResearchDocumentPersistence,
-} from "../src/lib/researchDocumentPersistence";
+  createResearchThreadPersistence,
+} from "../src/lib/researchThreadPersistence";
 import type { SavedResearchNavigation } from "../src/lib/researchNavigation";
 import type { ResearchHighlightAnchor } from "../src/types";
 
@@ -22,7 +22,7 @@ test("scroll and both composers mutate immediately and share one durable debounc
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const store: Record<string, SavedResearchNavigation> = {};
   let writes = 0;
-  const owner = createResearchDocumentPersistence(store, () => {
+  const owner = createResearchThreadPersistence(store, () => {
     writes++;
   });
   owner.recordScroll("a", "node-a", 150);
@@ -40,7 +40,7 @@ test("final flush saves pending edits once and cancels the delayed callback", (t
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const store: Record<string, SavedResearchNavigation> = {};
   const saved: string[] = [];
-  const owner = createResearchDocumentPersistence(store, () =>
+  const owner = createResearchThreadPersistence(store, () =>
     saved.push(JSON.stringify(store)),
   );
   owner.recordDraft("tree", "last keystroke");
@@ -86,7 +86,7 @@ test("clearing a draft or explicitly dismissing an ask cannot resurrect it after
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const store: Record<string, SavedResearchNavigation> = {};
   let saved = "";
-  const owner = createResearchDocumentPersistence(store, () => {
+  const owner = createResearchThreadPersistence(store, () => {
     saved = JSON.stringify(store);
   });
   owner.recordDraft("tree", "sent");
@@ -102,7 +102,7 @@ test("clearing a draft or explicitly dismissing an ask cannot resurrect it after
 test("queued follow-ups save at once and clear when emptied", () => {
   const store: Record<string, SavedResearchNavigation> = {};
   let writes = 0;
-  const owner = createResearchDocumentPersistence(store, () => {
+  const owner = createResearchThreadPersistence(store, () => {
     writes++;
   });
   const queued = [{ id: "q1", prompt: "Next question", createdAt: 5 }];

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ResearchDraft } from "../../types";
 import { createResearchDraftAutosave } from "../../lib/researchDraftAutosave";
 import { columnAttributes } from "../../lib/researchColumns";
-import { ResearchPairHeader } from "./ResearchDocumentChrome";
+import { ResearchPairHeader } from "./ResearchColumnChrome";
 import ResearchConversationComposer, { type ResearchComposerHandle } from "./ResearchConversationComposer";
 
 const SAVE_DELAY_MS = 500;

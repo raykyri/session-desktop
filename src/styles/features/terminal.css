@@ -10,7 +10,7 @@
   opacity: 0.75;
 }
 
-/* The find bar shared by transcripts and research documents. */
+/* The find bar shared by transcripts and research threads. */
 .pane-search {
   position: absolute;
   top: 10px;

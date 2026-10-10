@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import ResearchNoteDocument from "../src/components/research/ResearchNoteDocument";
+import ResearchNotePost from "../src/components/research/ResearchNotePost";
 import type { ResearchNode, ResearchTreeDetail } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
@@ -23,17 +23,17 @@ function render(nodes: ResearchNode[], selected: ResearchNode = nodes[0]) {
     },
     nodes,
   };
-  return renderToStaticMarkup(createElement(ResearchNoteDocument, { detail, note: selected, onSelectNode: noop }));
+  return renderToStaticMarkup(createElement(ResearchNotePost, { detail, note: selected, onSelectNode: noop }));
 }
 
 test("a note's post column uses the turn layout for the post only", () => {
   const html = render([note]);
-  assert.doesNotMatch(html, /note-document-kind/);
+  assert.doesNotMatch(html, /note-post-kind/);
   // Use the turn's question section for the note, with no answer section.
   assert.match(html, /<article class="research-turn note-turn">/);
   assert.match(html, /class="research-turn-question"/);
   assert.match(html, /research-prompt research-turn-prompt"/);
-  assert.doesNotMatch(html, /research-turn-answer|note-document-status|Posted to your network|No replies yet/);
+  assert.doesNotMatch(html, /research-turn-answer|note-post-status|Posted to your network|No replies yet/);
   // The column header carries the title and history, so the body repeats
   // neither; replies, follow-ups and the composer are in the thread column.
   assert.doesNotMatch(html, /research-thread-actions|research-breadcrumb/);
@@ -55,7 +55,7 @@ test("a note's post column has no Activity section", () => {
     ...noteFields, id: "net", parentNodeId: "note", prompt: "Anyone measured wizer?", createdAt: 140,} satisfies NodeFixture;
   const followUp = researchNode(followUpFields);
   const html = render([withActivity, followUp]);
-  assert.doesNotMatch(html, />Activity|note-document-group/);
+  assert.doesNotMatch(html, />Activity|note-post-group/);
   assert.doesNotMatch(html, /wit-bindgen doubled|Anyone measured wizer/);
 });
 

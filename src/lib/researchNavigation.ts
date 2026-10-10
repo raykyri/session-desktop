@@ -14,7 +14,7 @@ interface SavedResearchScrollPosition {
 
 /** An in-progress targeted follow-up (ask mode): the passage it is being
  * composed against and whatever the user has typed so far. Persisted so
- * leaving the research surface — which unmounts the document — does not
+ * leaving the research surface — which unmounts the thread page — does not
  * discard the ask; removed only by submit or an explicit dismiss. */
 interface SavedResearchAsk {
   anchor: ResearchHighlightAnchor;
@@ -55,7 +55,7 @@ export interface SavedResearchNavigation {
   /** In-progress text in the conversation composer. */
   followupDraft?: SavedResearchFollowupDraft;
   /** A highlight to scroll into view on the next page visit (set when a
-   * Highlights feed unit is opened). Cleared once the document lands on it. */
+   * Highlights feed unit is opened). Cleared once the thread page lands on it. */
   focusHighlight?: { nodeId: string; highlightId: string };
   /** Queued follow-ups per chain, keyed by the chain's head node. */
   queuedFollowups?: Record<string, QueuedResearchFollowup[]>;
@@ -79,13 +79,13 @@ export function isResearchNodeSelectionChange(
 
 export function isResearchTreeSelectionChange(
   selectedTreeId: string | null,
-  documentVisible: boolean,
+  threadVisible: boolean,
   nextTreeId: string,
 ): boolean {
-  // Re-selecting the visible document would clear its detail while the same
+  // Re-selecting the visible thread would clear its detail while the same
   // tree is fetched again, producing a needless loading blink. The same tree
   // remains selectable when one of its terminal panes is currently visible.
-  return !documentVisible || selectedTreeId !== nextTreeId;
+  return !threadVisible || selectedTreeId !== nextTreeId;
 }
 
 function isSavedAnchor(value: unknown): value is ResearchHighlightAnchor {

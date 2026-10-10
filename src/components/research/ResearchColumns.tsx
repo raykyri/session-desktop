@@ -116,13 +116,13 @@ interface ResearchColumnsLayout {
    * once it has rendered. A draft's column keeps focus off its ask box. */
   focusOpenedThread: (deepest: boolean) => void;
   /** Registers the handler for ⌃Tab / ⌃⇧Tab in the feed or in the open
-   * document; returns the function that removes it. A handler returns false
-   * when the request is not its own (the document's, when the column to
+   * thread; returns the function that removes it. A handler returns false
+   * when the request is not its own (the thread's, when the column to
    * cycle is the feed). */
   registerCycle: (owner: ResearchCycleOwner, handler: ResearchCycleHandler) => () => void;
 }
 
-type ResearchCycleOwner = "feed" | "document";
+type ResearchCycleOwner = "feed" | "thread";
 type ResearchCycleHandler = (request: ResearchCycleRequest) => boolean;
 
 export const ResearchColumnsContext = createContext<ResearchColumnsLayout | null>(null);
@@ -133,11 +133,11 @@ export const ResearchColumnsContext = createContext<ResearchColumnsLayout | null
  * them (researchColumnWidths.ts), and the strip scrolls sideways when the
  * pairs don't fit. */
 export default function ResearchColumns({
-  hasDocument,
+  hasThread,
   feed,
   children,
 }: {
-  hasDocument: boolean;
+  hasThread: boolean;
   feed: ReactNode;
   children: ReactNode;
 }) {
@@ -184,7 +184,7 @@ export default function ResearchColumns({
         keepFocus: isEditableTarget(document.activeElement),
       };
       const handlers = cycleHandlersRef.current;
-      if (!handlers.document?.(request)) handlers.feed?.(request);
+      if (!handlers.thread?.(request)) handlers.feed?.(request);
     };
     row.addEventListener("pointerdown", track, true);
     row.addEventListener("keydown", track, true);
@@ -376,7 +376,7 @@ export default function ResearchColumns({
       <ResearchColumnSizingContext.Provider value={sizing}>
         <div
           ref={rootRef}
-          className={`research-columns${hasDocument ? " has-document" : ""}`}
+          className={`research-columns${hasThread ? " has-thread" : ""}`}
           style={
             {
               "--research-feed-column-width": `${widths.feed}px`,

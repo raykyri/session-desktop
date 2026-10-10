@@ -163,7 +163,7 @@ test("a handle outside the column area renders nothing", () => {
 
 test("the feed column carries its handle, and the strip sets the three width properties", () => {
   const html = renderToStaticMarkup(
-    createElement(ResearchColumns, { hasDocument: false, feed: createElement("p", null, "Feed"), children: null }),
+    createElement(ResearchColumns, { hasThread: false, feed: createElement("p", null, "Feed"), children: null }),
   );
   assert.match(html, /--research-feed-column-width:\d+px;--research-turns-width:\d+px;--research-answer-width:\d+px/);
   assert.match(
