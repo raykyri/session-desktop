@@ -58,6 +58,7 @@ final class NativeSupportHost {
     private var webViewHealthProbeGeneration: UInt64 = 0
     private var webViewHealthRustGeneration: UInt64?
     private var webViewHealthSnapshotAttempt = 0
+    private let trafficLights = TrafficLightPlacement()
 
     private init() {}
 
@@ -79,6 +80,7 @@ final class NativeSupportHost {
         shutdown()
         appWebView = webView
         boundWindow = webView.window
+        placeTrafficLights(for: webView, attemptsLeft: 40)
         installEventMonitor()
         closeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: nil, queue: .main
@@ -158,7 +160,22 @@ final class NativeSupportHost {
         return true
     }
 
+    // The window may be assigned after attach; retry briefly until it exists.
+    private func placeTrafficLights(for webView: WKWebView, attemptsLeft: Int) {
+        guard appWebView === webView else { return }
+        if let window = webView.window {
+            trafficLights.attach(to: window)
+            return
+        }
+        guard attemptsLeft > 0 else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak webView] in
+            guard let self, let webView else { return }
+            self.placeTrafficLights(for: webView, attemptsLeft: attemptsLeft - 1)
+        }
+    }
+
     func shutdown() {
+        trafficLights.detach()
         if let eventMonitor {
             NSEvent.removeMonitor(eventMonitor)
             self.eventMonitor = nil

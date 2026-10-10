@@ -68,7 +68,8 @@
   height: 44px;
 }
 
-/* Beside the traffic lights (x 16–68), so it stays put whatever the sidebar's width. */
+/* Beside the traffic lights, which TrafficLightPlacement.swift centres at y 23 from x 16, so it stays
+   put whatever the sidebar's width. */
 .sidebar-collapse-toggle {
   position: absolute;
   top: 9px;
