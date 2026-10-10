@@ -30,8 +30,12 @@ export function researchMenuPoint(x: number, y: number): ResearchMenuRect {
  * - "end": below it, the right edges level;
  * - "point": at its bottom-left corner (a context menu at the pointer);
  * - "side": to its right, the bottom edges level (the sidebar strip).
- * The first three open above the anchor when the space below is too short
- * and the space above is taller. Every menu is kept inside the viewport. */
+ * "start" and "end" open above the anchor when the menu doesn't fit below but
+ * fits above. When it fits on neither side it opens on the taller side with
+ * `maxHeight` set to that side's room, and scrolls, so it never covers its
+ * button (a second click on the button closes it). A context menu opens above
+ * the pointer when the space below is too short and the space above is
+ * taller. Every menu is kept inside the viewport. */
 export type ResearchMenuAlign = "start" | "end" | "point" | "side";
 
 export function researchMenuPosition(
@@ -39,9 +43,10 @@ export function researchMenuPosition(
   size: { width: number; height: number },
   viewport: { width: number; height: number },
   align: ResearchMenuAlign,
-): { left: number; top: number } {
+): { left: number; top: number; maxHeight?: number } {
   let left: number;
   let top: number;
+  let maxHeight: number | undefined;
   if (align === "side") {
     left = anchor.right + MENU_SIDE_GAP;
     top = anchor.bottom - size.height;
@@ -55,15 +60,23 @@ export function researchMenuPosition(
     const gap = align === "point" ? 0 : MENU_GAP;
     const roomBelow = viewport.height - MENU_MARGIN - (anchor.bottom + gap);
     const roomAbove = anchor.top - gap - MENU_MARGIN;
-    top =
-      size.height > roomBelow && roomAbove > roomBelow
-        ? anchor.top - gap - size.height
-        : anchor.bottom + gap;
+    if (align !== "point" && size.height > roomBelow && size.height > roomAbove) {
+      const above = roomAbove > roomBelow;
+      maxHeight = Math.max(0, above ? roomAbove : roomBelow);
+      top = above ? anchor.top - gap - maxHeight : anchor.bottom + gap;
+    } else {
+      top =
+        size.height > roomBelow && roomAbove > roomBelow
+          ? anchor.top - gap - size.height
+          : anchor.bottom + gap;
+    }
   }
-  return {
+  const height = maxHeight ?? size.height;
+  const position = {
     left: Math.max(MENU_MARGIN, Math.min(left, viewport.width - size.width - MENU_MARGIN)),
-    top: Math.max(MENU_MARGIN, Math.min(top, viewport.height - size.height - MENU_MARGIN)),
+    top: Math.max(MENU_MARGIN, Math.min(top, viewport.height - height - MENU_MARGIN)),
   };
+  return maxHeight === undefined ? position : { ...position, maxHeight };
 }
 
 /** The item index a navigation key moves focus to, among `count` enabled
@@ -117,7 +130,7 @@ function enabledItems(menu: HTMLElement | null) {
 /** A research menu: portaled, placed against its anchor, with the checked
  * item (or the first) focused when it opens. ↑, ↓, Home and End move between
  * items, and an item's shortcut letter selects it. Escape is captured and
- * stopped, so it closes only the menu (never the branch drawer behind it),
+ * stopped, so it closes only the menu (never what is open behind it),
  * and returns focus to the trigger; a modal dialog opened from the menu keeps
  * its own Escape. Tab closes the menu and returns focus to the trigger. When an
  * item's action leaves focus nowhere (the item was removed with the menu),
@@ -131,6 +144,7 @@ export function ResearchMenu({
   label,
   describedBy,
   width,
+  compact = false,
   footer,
   fallbackFocus,
   onClose,
@@ -149,6 +163,9 @@ export function ResearchMenu({
   /** A fixed width in pixels. Otherwise the menu sizes to its items within
    * the stylesheet's limits. */
   width?: number;
+  /** The selection popover's tighter rows (26px), for menus that act on a
+   * passage. */
+  compact?: boolean;
   /** Content under the items in the same popover, such as the strip's account
    * control. It is not part of the menu's keyboard navigation. */
   footer?: ReactNode;
@@ -160,7 +177,11 @@ export function ResearchMenu({
 }) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
-  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  const [position, setPosition] = useState<{
+    left: number;
+    top: number;
+    maxHeight?: number;
+  } | null>(null);
   const owner = trigger ?? (isElementAnchor(anchor) ? anchor : null);
   const latestRef = useRef({ owner, onClose, fallbackFocus });
   latestRef.current = { owner, onClose, fallbackFocus };
@@ -186,16 +207,27 @@ export function ResearchMenu({
   useLayoutEffect(() => {
     const popover = popoverRef.current;
     if (!popover) return;
+    // Measured at its natural height, without a limit set for an earlier
+    // position.
+    const limit = popover.style.maxHeight;
+    popover.style.maxHeight = "none";
+    const size = popover.getBoundingClientRect();
+    popover.style.maxHeight = limit;
     const next = researchMenuPosition(
       isElementAnchor(anchor) ? anchor.getBoundingClientRect() : anchor,
-      popover.getBoundingClientRect(),
+      size,
       { width: window.innerWidth, height: window.innerHeight },
       align,
     );
     // A rect anchor may be a new object on every render; an unchanged
     // position must not re-render.
     setPosition((current) =>
-      current && current.left === next.left && current.top === next.top ? current : next,
+      current &&
+      current.left === next.left &&
+      current.top === next.top &&
+      current.maxHeight === next.maxHeight
+        ? current
+        : next,
     );
   }, [align, anchor]);
 
@@ -273,7 +305,7 @@ export function ResearchMenu({
   return createPortal(
     <div
       ref={popoverRef}
-      className="research-menu"
+      className={`research-menu${compact ? " is-compact" : ""}`}
       // Keep the menu off-screen until measured to avoid briefly displaying
       // it at the viewport origin.
       style={{
@@ -324,7 +356,7 @@ export function ResearchMenuItem({
   shortcut?: string;
   /** Set for a choice among options: the item becomes a menuitemradio. */
   checked?: boolean;
-  /** The item is what is open now, such as the branch in the drawer. */
+  /** The item is what is open now, such as the open branch. */
   current?: boolean;
   danger?: boolean;
   disabled?: boolean;

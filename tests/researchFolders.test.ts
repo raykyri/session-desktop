@@ -157,6 +157,8 @@ test("starred children list follow-ups as text rows and branches with a level", 
       { ...root, nodeId: "f", parentNodeId: "root", inline: true, prompt: " Follow-up ", title: "Ignored", branchDepth: 0 },
       { ...root, nodeId: "b", parentNodeId: "root", prompt: "Branch prompt", title: "Branch title", branchDepth: 1, status: "running" },
       { ...root, nodeId: "bb", parentNodeId: "b", prompt: "Deeper", branchDepth: 4 },
+      { ...root, nodeId: "fb", parentNodeId: "f", inline: false, prompt: "From the starred follow-up", branchDepth: 1 },
+      { ...root, nodeId: "ub", parentNodeId: "unstarred", inline: false, prompt: "From another follow-up", branchDepth: 1 },
     ],
   });
   assert.deepEqual(
@@ -165,6 +167,9 @@ test("starred children list follow-ups as text rows and branches with a level", 
       { nodeId: "f", label: "Follow-up", branch: false, level: 1, running: false },
       { nodeId: "b", label: "Branch title", branch: true, level: 1, running: true },
       { nodeId: "bb", label: "Deeper", branch: true, level: 2, running: false },
+      // A branch from a starred follow-up sits under it.
+      { nodeId: "fb", label: "From the starred follow-up", branch: true, level: 2, running: false },
+      { nodeId: "ub", label: "From another follow-up", branch: true, level: 1, running: false },
     ],
   );
 });

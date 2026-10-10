@@ -1,4 +1,4 @@
-import { Bookmark, Check, House, Plus } from "lucide-react";
+import { Bell, Bookmark, Check, House, Plus, Star } from "lucide-react";
 import type { ResearchFolder } from "../../types";
 import {
   RESEARCH_ARCHIVE_FOLDER_ID,
@@ -25,30 +25,37 @@ export function researchMoveTargets(folders: ResearchFolder[]) {
   ];
 }
 
-/** A card's or conversation header's menu: Bookmark at the top when given,
- * then Move to with every folder (the current one disabled and checked),
- * then New folder…, which creates a folder and moves the question into it. */
-export default function ResearchMoveMenu({
-  anchor,
-  currentPlace,
-  folders,
-  bookmarked,
-  onToggleBookmark,
-  onMove,
-  onNewFolder,
-  onClose,
-}: {
-  anchor: HTMLElement;
+export interface ResearchTreeMenuProps {
   currentPlace: string;
   folders: ResearchFolder[];
   bookmarked?: boolean;
   onToggleBookmark?: () => void;
+  followed?: boolean;
+  /** Why Follow is unavailable (an archived question). */
+  followDisabledReason?: string | null;
+  onToggleFollow?: () => void;
   onMove: (place: string) => void;
   onNewFolder: () => void;
-  onClose: () => void;
-}) {
+}
+
+/** The actions on a whole question: Bookmark and Follow when given, then
+ * Move to with every folder (the current one disabled and checked), then New
+ * folder…, which creates a folder and moves the question into it. A feed
+ * row's menu holds only these; the root answer's menu adds them below its
+ * own actions. */
+export function ResearchTreeMenuItems({
+  currentPlace,
+  folders,
+  bookmarked,
+  onToggleBookmark,
+  followed = false,
+  followDisabledReason = null,
+  onToggleFollow,
+  onMove,
+  onNewFolder,
+}: ResearchTreeMenuProps) {
   return (
-    <ResearchMenu anchor={anchor} label="Bookmark or move" width={MENU_WIDTH} onClose={onClose}>
+    <>
       {onToggleBookmark ? (
         <>
           <ResearchMenuItem
@@ -57,6 +64,24 @@ export default function ResearchMoveMenu({
             }
             label={bookmarked ? "Remove bookmark" : "Bookmark"}
             onSelect={onToggleBookmark}
+          />
+          {onToggleFollow ? null : <ResearchMenuSeparator />}
+        </>
+      ) : null}
+      {onToggleFollow ? (
+        <>
+          <ResearchMenuItem
+            icon={
+              <Bell
+                size={15}
+                aria-hidden="true"
+                fill={followed && !followDisabledReason ? "currentColor" : "none"}
+              />
+            }
+            label={followed && !followDisabledReason ? "Unfollow" : "Follow"}
+            disabled={followDisabledReason !== null}
+            title={followDisabledReason ?? undefined}
+            onSelect={onToggleFollow}
           />
           <ResearchMenuSeparator />
         </>
@@ -92,6 +117,41 @@ export default function ResearchMoveMenu({
         label="New folder…"
         onSelect={onNewFolder}
       />
+    </>
+  );
+}
+
+/** A feed row's menu: the question's actions. A starred child row's menu
+ * starts with Remove star, then its question's actions. */
+export default function ResearchMoveMenu({
+  anchor,
+  onRemoveStar,
+  onClose,
+  ...items
+}: ResearchTreeMenuProps & {
+  anchor: HTMLElement;
+  /** Given for a starred child row: unstars the follow-up or branch. */
+  onRemoveStar?: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <ResearchMenu
+      anchor={anchor}
+      label={onRemoveStar ? "Starred item actions" : "Bookmark, follow or move"}
+      width={MENU_WIDTH}
+      onClose={onClose}
+    >
+      {onRemoveStar ? (
+        <>
+          <ResearchMenuItem
+            icon={<Star size={15} aria-hidden="true" />}
+            label="Remove star"
+            onSelect={onRemoveStar}
+          />
+          <ResearchMenuSeparator />
+        </>
+      ) : null}
+      <ResearchTreeMenuItems {...items} />
     </ResearchMenu>
   );
 }

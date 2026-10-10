@@ -14,13 +14,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  Check,
   Copy,
+  CornerDownRight,
   Files,
   Highlighter,
   LoaderCircle,
   Pencil,
-  Plus,
   RefreshCw,
   ScrollText,
   Trash2,
@@ -37,6 +36,7 @@ import {
 } from "../../lib/api";
 import { writeClipboardText } from "../../lib/clipboard";
 import ResearchNoteDocument from "./ResearchNoteDocument";
+import { ResearchTreeMenuItems, type ResearchTreeMenuProps } from "./ResearchMoveMenu";
 import type { NoteActions } from "./ResearchNote";
 import {
   EMPTY_RESEARCH_HISTORY,
@@ -45,6 +45,7 @@ import {
   initResearchHistory,
   pushResearchHistory,
   pruneResearchHistory,
+  researchHistoryAfterRemoval,
   researchHistoryBack,
   researchHistoryForward,
 } from "../../lib/researchHistory";
@@ -55,17 +56,15 @@ import {
   listenToResearchNodeOpen,
 } from "../../lib/researchShortcuts";
 import {
-  RESEARCH_PINNED_COLUMN_WIDTH,
   researchBranchesByParent,
-  researchChainHead,
+  researchBranchesInReadingOrder,
   researchDocumentHasColumn,
   researchEditedQuestionFork,
-  researchDrawerWidth,
-  researchMainChainAncestor,
-  researchNodePlacement,
-  researchParentBranchHead,
+  researchLevelPath,
+  researchPairLabel,
   researchQueueAction,
   researchQueueStep,
+  researchSurvivingAncestor,
 } from "../../lib/researchBranchView";
 import {
   canContinueThread,
@@ -120,28 +119,28 @@ import DomSearchBar from "../DomSearchBar";
 import ResearchRecapDialog from "./ResearchRecapDialog";
 import { TranscriptLinkActionsProvider, type LinkActions } from "../TranscriptMarkdown";
 import DocumentComposer from "./DocumentComposer";
+import { ResearchDocumentFrame, ResearchPairHeader } from "./ResearchDocumentChrome";
 import {
-  ResearchConversationHeader,
-  ResearchDocumentFrame,
-} from "./ResearchDocumentChrome";
-import { ResearchTurn, type SegmentDomKind, type SegmentView } from "./ResearchTurn";
+  ResearchAnswerPane,
+  ResearchMessageRow,
+  type SegmentDomKind,
+  type SegmentView,
+} from "./ResearchTurn";
 import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
 import ResearchConversationComposer, {
   type ResearchComposerHandle,
 } from "./ResearchConversationComposer";
 import {
-  prefersReducedMotion,
-  ResearchBranchDrawer,
-  ResearchBranchHeader,
-  ResearchBranchSource,
-} from "./ResearchBranchDrawer";
-import { ResearchColumnsContext, showResearchColumn } from "./ResearchColumns";
+  ResearchColumnsContext,
+  researchScrollBehavior,
+  revealResearchColumns,
+  settleResearchStrip,
+} from "./ResearchColumns";
 import {
   ResearchMenu,
   ResearchMenuItem,
   ResearchMenuMeta,
   ResearchMenuSeparator,
-  ResearchMenuTitle,
   researchMenuPoint,
   type ResearchMenuAlign,
   type ResearchMenuRect,
@@ -153,12 +152,11 @@ const EMPTY_QUEUE: QueuedResearchFollowup[] = [];
 /** How long a sent queued follow-up keeps its chain blocked while waiting
  * for the new node to appear in the tree detail. */
 const QUEUE_CHILD_WAIT_MS = 15_000;
-/** How long a node created a moment ago is kept in navigation state before
- * it appears in the tree detail. */
+/** How long a node created a moment ago is shown before it appears in the
+ * tree detail. */
 const PENDING_NODE_TTL_MS = 30_000;
-/** Below this much uncovered conversation width the header drops its
- * history arrows so the title keeps its room. */
-const HISTORY_NAV_MIN_VISIBLE_WIDTH = 280;
+/** How long a focus request waits for its element to render. */
+const FOCUS_REQUEST_TTL_MS = 2_000;
 
 interface ResearchDocumentProps {
   detail: ResearchTreeDetail | null;
@@ -183,14 +181,6 @@ interface ResearchDocumentProps {
   onRemoveBranch: (nodeId: string) => Promise<ResearchBranchRemoval>;
   onRemoveTree: (treeId: string) => Promise<void>;
   onRenameTree: (treeId: string, title: string) => Promise<void>;
-  /** Persist the thread's Follow / Bookmark flags; the tree update event
-   * flows back through `detail`. */
-  onSetFollowed: (treeId: string, followed: boolean) => Promise<void>;
-  onSetBookmarked: (treeId: string, bookmarked: boolean) => Promise<void>;
-  /** Opens the folder menu for this question (the header's Move button). */
-  onMoveTree?: (treeId: string, trigger: HTMLElement) => void;
-  /** Closes the conversation column. */
-  onClose?: () => void;
   onUpdateDocument: (input: {
     nodeId: string;
     markdown: string;
@@ -220,12 +210,22 @@ interface ResearchDocumentProps {
   workspaceCanGoForward?: boolean;
   onWorkspaceBack?: () => void;
   onWorkspaceForward?: () => void;
-  /** Called with the node the branch drawer shows whenever that changes, and
-   * with null when the drawer closes (or shows a branch not yet created). */
-  onDrawerNodeChange?: (nodeId: string | null) => void;
-  /** Called with the visited node (the turn opened or focused last) whenever
-   * that changes, and with null on unmount. */
-  onSelectedNodeChange?: (nodeId: string | null) => void;
+  /** Called with the open nodes whenever they change: the message selected
+   * in the root pair, then the head of each open branch. Empty on unmount. */
+  onOpenNodesChange?: (nodeIds: string[]) => void;
+  /** The whole question's Follow, Bookmark and Move to actions, which the
+   * root conversation's answer menus list below their own actions. */
+  treeMenu?: ResearchDocumentTreeMenu;
+}
+
+export interface ResearchDocumentTreeMenu
+  extends Omit<ResearchTreeMenuProps, "onToggleBookmark" | "onToggleFollow" | "onNewFolder"> {
+  bookmarked: boolean;
+  followed: boolean;
+  onSetBookmarked: (bookmarked: boolean) => void;
+  onSetFollowed: (followed: boolean) => void;
+  /** `trigger` is where focus returns when the folder dialog closes. */
+  onNewFolder: (trigger: HTMLElement | undefined) => void;
 }
 
 const TIMELINE_ITEM_RENDER_WINDOW = 100;
@@ -270,23 +270,47 @@ interface DocumentEditSession {
   highlightCount: number;
 }
 
-/** What the drawer shows: a branch (any node of its chain), or a new branch
- * that has no node until its first question is sent. */
-type DrawerTarget =
-  | { kind: "node"; nodeId: string }
-  | { kind: "draft"; parentNodeId: string; anchor: ResearchHighlightAnchor | null };
+
+/** A new branch being written: the pair after its parent's level shows the
+ * passage and an ask box; the branch is created when its first question is
+ * sent. `anchor` is null for a branch from the whole answer. */
+interface PendingBranch {
+  parentNodeId: string;
+  anchor: ResearchHighlightAnchor | null;
+}
+
+/** Where focus goes once the next render has committed, and how the strip
+ * follows it: `reveal` shows the level's pair by the least scroll, `settle`
+ * shows the strip's last column with the target's column in view. */
+type FocusRequest = {
+  target:
+    | { kind: "row"; level: number }
+    | { kind: "answer"; level: number }
+    | { kind: "marker"; level: number; key: string }
+    | { kind: "composer"; key: string };
+  strip: "reveal" | "settle" | "none";
+  /** Only when focus was lost (it sat in a column that went away). */
+  onlyIfLost: boolean;
+  at: number;
+};
+
+/** A margin marker: the branches from one paragraph of an answer (`top`, in
+ * px from the top of the answer), or from the whole answer (`top` null). */
+interface BranchMarker {
+  key: string;
+  top: number | null;
+  branchIds: string[];
+}
 
 interface DocumentMenuPlacement {
   anchor: HTMLElement | ResearchMenuRect;
   align: ResearchMenuAlign;
-  /** The button that opened the menu: a branch opened from the menu returns
-   * focus to it when it closes. */
+  /** The button that opened the menu: focus returns to it when it closes. */
   trigger?: HTMLElement | null;
 }
 
 type DocumentMenuState =
   | ({ kind: "answer"; nodeId: string } & DocumentMenuPlacement)
-  | ({ kind: "branches"; nodeId: string } & DocumentMenuPlacement)
   | ({
       kind: "mark";
       nodeId: string;
@@ -313,6 +337,8 @@ interface ResearchHighlightApi {
 const RESEARCH_HIGHLIGHT_NAME = "session-research-highlights";
 const RESEARCH_BRANCH_NAME = "session-research-branch-passages";
 const RESEARCH_OPEN_BRANCH_NAME = "session-research-open-branch";
+const RESEARCH_PENDING_BRANCH_NAME = "session-research-pending-branch";
+const PENDING_BRANCH_ID = "__draft__";
 const RESEARCH_OVERLAP_NAME = "session-research-highlight-overlaps";
 const RESEARCH_HOVER_HIGHLIGHT_NAME = "session-research-highlight-hover";
 const RESEARCH_HOVER_BRANCH_NAME = "session-research-branch-hover";
@@ -640,7 +666,7 @@ function highlightActionPlacement(range: Range, size = SELECTION_ACTIONS_SIZE) {
 /** Why no branch can start from `node`, or null when one can. */
 function branchBlockerFor(node: ResearchNode | null | undefined, archived: boolean) {
   if (archived) {
-    return "Restore this question from Archive to branch from it";
+    return "Move this question out of Archive to branch from it";
   }
   if (!node || isActiveResearchStatus(node.status)) {
     return "Wait for the answer to finish";
@@ -695,37 +721,174 @@ function useStableValue<T>(next: T, isEqual: (previous: T, candidate: T) => bool
   return ref.current;
 }
 
-function scrollBehavior(): ScrollBehavior {
-  return prefersReducedMotion() ? "auto" : "smooth";
-}
-
-/** Scrolls `element`'s column (its nearest `.research-column-scroll`) so the
- * element's top sits `offset` px below the column's top; a third of the way
- * down by default. */
-function scrollColumnTo(element: Element, offset?: number, behavior = scrollBehavior()) {
+/** Brings `element` (a row, or the row it sits in) fully into its column; a
+ * row taller than the column scrolls its top to the column's top. */
+function scrollIntoColumn(element: Element, behavior: ScrollBehavior = "auto") {
   const scroller = element.closest<HTMLElement>(".research-column-scroll");
   if (!scroller) {
     return;
   }
-  const top =
-    element.getBoundingClientRect().top -
-    scroller.getBoundingClientRect().top +
-    scroller.scrollTop -
-    (offset ?? scroller.clientHeight / 3);
-  scroller.scrollTo({ top: Math.max(0, top), behavior });
-}
-
-function inColumnView(rect: DOMRect, element: Element) {
-  const scroller = element.closest<HTMLElement>(".research-column-scroll");
-  if (!scroller) {
-    return true;
-  }
+  const target = element.closest(".research-msg-row") ?? element;
+  const rect = target.getBoundingClientRect();
   const bounds = scroller.getBoundingClientRect();
-  return rect.top >= bounds.top + 8 && rect.bottom <= bounds.bottom - 8;
+  let delta = 0;
+  if (rect.height > bounds.height || rect.top < bounds.top) {
+    delta = rect.top - bounds.top;
+  } else if (rect.bottom > bounds.bottom) {
+    delta = rect.bottom - bounds.bottom;
+  }
+  if (delta) {
+    scroller.scrollTo({ top: scroller.scrollTop + delta, behavior });
+  }
 }
 
 function nodeLabel(node: ResearchNode | null | undefined, fallback: string) {
   return (node?.title ?? node?.prompt ?? "").trim() || fallback;
+}
+
+/** Content-derived render state for one answer. */
+function buildSegmentView(
+  node: ResearchNode,
+  content: ResearchNodeContent | null,
+  showAllTurns: boolean,
+  showFullTrace: boolean,
+): SegmentView {
+  // A conversation node's whole timeline is the document: there is no
+  // "answer" fold to collapse to and no fuller trace to reveal.
+  const isConversation = node.kind === "conversation" || content?.node.kind === "conversation";
+  const isDocument = node.kind === "document";
+  const timelineItems = buildTimelineItems(content?.turns ?? []);
+  const answerTimelineItems = timelineItemsAfterLastToolCall(timelineItems);
+  const hasTranscriptActivity = !isConversation && timelineItemsContainTranscriptActivity(timelineItems);
+  const displayedTimelineItems = isConversation || showFullTrace ? timelineItems : answerTimelineItems;
+  // A run trace reads bottom-up (the answer is the tail), so its window
+  // keeps the newest items; a conversation reads top-down from its opening
+  // question, so its window keeps the head.
+  const visibleTimelineItems =
+    showAllTurns || displayedTimelineItems.length <= TIMELINE_ITEM_RENDER_WINDOW
+      ? displayedTimelineItems
+      : isConversation
+        ? displayedTimelineItems.slice(0, TIMELINE_ITEM_RENDER_WINDOW)
+        : displayedTimelineItems.slice(-TIMELINE_ITEM_RENDER_WINDOW);
+  const rawAnswer = assistantTextFromTimelineItems(answerTimelineItems);
+  const conversationCopyText =
+    isConversation && content ? formatPlainTextTranscript(content.turns, "Assistant") : null;
+  let editableDocumentMarkdown: string | null = null;
+  if (content?.node.kind === "document") {
+    for (const turn of content.turns) {
+      const block = turn.blocks.find((candidate) => candidate.type === "text");
+      if (block?.type === "text") {
+        editableDocumentMarkdown = block.text;
+        break;
+      }
+    }
+  }
+  return {
+    node,
+    content,
+    isDocument,
+    isConversation,
+    showAllTurns,
+    showFullTrace,
+    timelineItems,
+    displayedTimelineItems,
+    visibleTimelineItems,
+    hiddenTimelineItemCount: displayedTimelineItems.length - visibleTimelineItems.length,
+    hasTranscriptActivity,
+    rawAnswer,
+    conversationCopyText,
+    answerWordCount: countResearchDocumentWords(conversationCopyText ?? rawAnswer),
+    editableDocumentMarkdown,
+  };
+}
+
+/** The branch questions behind a margin marker, shown beside it on hover
+ * or keyboard focus. Not interactive; Esc hides it. */
+function ResearchMarkerTip({
+  anchor,
+  items,
+  opensNext,
+  onDismiss,
+}: {
+  anchor: HTMLElement;
+  items: { id: string; question: string; source: string; messages: number; state: "open" | "running" | null }[];
+  /** One of the marker's branches is open: a click opens the next one. */
+  opensNext: boolean;
+  onDismiss: () => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
+    const place = () => {
+      const tip = ref.current;
+      if (!tip || !anchor.isConnected) return;
+      const rect = anchor.getBoundingClientRect();
+      const width = tip.offsetWidth;
+      const height = tip.offsetHeight;
+      let left = rect.left - 8 - width;
+      let top = rect.top - 6;
+      if (left < 8) {
+        left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.right - width));
+        top = rect.bottom + 6;
+      }
+      top = Math.max(8, Math.min(window.innerHeight - height - 8, top));
+      setPosition((current) => (current?.left === left && current.top === top ? current : { left, top }));
+    };
+    place();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onDismiss();
+      }
+    };
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [anchor, items, onDismiss]);
+  const clip = (text: string, length: number) => {
+    const flat = text.split(/\s+/).join(" ").trim();
+    return flat.length > length ? `${flat.slice(0, length - 1)}…` : flat;
+  };
+  return createPortal(
+    <div
+      ref={ref}
+      className="research-marker-tip"
+      role="tooltip"
+      style={{ left: position?.left ?? 0, top: position?.top ?? 0, visibility: position ? undefined : "hidden" }}
+    >
+      {items.map((item) => (
+        <div key={item.id} className="research-marker-tip-item">
+          <span className="research-marker-tip-question">{clip(item.question, 160)}</span>
+          <span className="research-marker-tip-meta">
+            <span className="research-marker-tip-source">{clip(item.source, 62)}</span>
+            <span>
+              {item.messages} {item.messages === 1 ? "message" : "messages"}
+            </span>
+            {item.state === "open" ? <span className="is-open">Open</span> : null}
+            {item.state === "running" ? <span className="is-running">Running</span> : null}
+          </span>
+        </div>
+      ))}
+      {items.length > 1 ? (
+        <div className="research-marker-tip-item">
+          <span className="research-marker-tip-meta">Click opens the {opensNext ? "next" : "first"} branch.</span>
+        </div>
+      ) : null}
+    </div>,
+    document.body,
+  );
+}
+
+/** The open path as columns: one [messages | answer] pair per level, keyed
+ * so a column keeps its element (and focus) while its level shows the same
+ * conversation and message. */
+function pairColumnKey(kind: "turns" | "answer", level: number, id: string) {
+  return `${kind === "turns" ? "T" : "A"}${level}`.concat(":", id);
 }
 
 function ResearchDocument({
@@ -739,10 +902,6 @@ function ResearchDocument({
   onRemoveBranch,
   onRemoveTree,
   onRenameTree,
-  onSetFollowed,
-  onSetBookmarked,
-  onMoveTree,
-  onClose,
   onUpdateDocument,
   onCancel,
   onRetryNode,
@@ -756,41 +915,37 @@ function ResearchDocument({
   workspaceCanGoForward = false,
   onWorkspaceBack,
   onWorkspaceForward,
-  onDrawerNodeChange,
-  onSelectedNodeChange,
+  onOpenNodesChange,
+  treeMenu,
 }: ResearchDocumentProps) {
   const columnsLayout = useContext(ResearchColumnsContext);
   const treeId = detail?.tree.id ?? null;
   const rootNodeId = detail?.tree.rootNodeId ?? null;
-  // The current visit: the node the reader last navigated to. A conversation
-  // node means the drawer is closed; a branch node is shown in the drawer (or
-  // its pinned column). Back/forward walk these visits.
+  // The deepest open level's selected message. It determines every level
+  // before it (see researchLevelPath). Back/forward walk these visits.
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [pending, setPending] = useState<PendingBranch | null>(null);
   const [history, setHistory] = useState(EMPTY_RESEARCH_HISTORY);
-  // Loaded contents for every rendered turn, keyed by node id. Pruned to the
-  // rendered chains (conversation, drawer, pinned columns) when they change.
+  // Show newly created question nodes until the refreshed tree detail
+  // includes them.
+  const [createdNodes, setCreatedNodes] = useState<{ node: ResearchNode; at: number }[]>([]);
+  // Record ids synchronously so the event that creates a node can select it.
+  const createdNodeIdsRef = useRef(new Set<string>());
+  // The level whose pair holds keyboard focus (-1: the feed). Its header
+  // title is at full strength; null until something is focused, which makes
+  // the deepest level current.
+  const [focusedLevel, setFocusedLevel] = useState<number | null>(null);
+  // Loaded answers, keyed by node id. Pruned to the open levels' chains.
   const [contentByNode, setContentByNode] = useState<Record<string, ResearchNodeContent>>({});
   const [contentErrorByNode, setContentErrorByNode] = useState<Record<string, string>>({});
   const [contentLoadNonce, setContentLoadNonce] = useState(0);
-  const [drawer, setDrawer] = useState<DrawerTarget | null>(null);
-  // Each drawer opened from closed is a new instance (it slides in); a swap
-  // keeps the instance (it fades). A closing drawer keeps its instance until
-  // its slide-out ends.
-  const [drawerInstance, setDrawerInstance] = useState(0);
-  const [drawerAnimates, setDrawerAnimates] = useState(true);
-  const [leavingDrawer, setLeavingDrawer] = useState<{
-    target: DrawerTarget;
-    mode: "close" | "pin";
-    instance: number;
-  } | null>(null);
-  const [pinnedHeads, setPinnedHeads] = useState<string[]>([]);
-  // "main" or a pinned column's head id. Focus only moves the accent rule.
-  const [focusedColumn, setFocusedColumn] = useState<string>("main");
   const [composerText, setComposerText] = useState<Record<string, string>>({});
   const [submittingKey, setSubmittingKey] = useState<string | null>(null);
   const [queues, setQueues] = useState<Record<string, QueuedResearchFollowup[]>>({});
   // Per chain head: the failed node whose question the composer is editing.
   const [editingByHead, setEditingByHead] = useState<Record<string, string>>({});
+  // Retries waiting for the running answer in their conversation.
+  const [queuedRetries, setQueuedRetries] = useState<ReadonlySet<string>>(() => new Set());
   const [retryingNodeId, setRetryingNodeId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const cancelRequestInFlightRef = useRef(false);
@@ -803,25 +958,26 @@ function ResearchDocument({
   const [renameError, setRenameError] = useState<string | null>(null);
   const [documentEditSession, setDocumentEditSession] = useState<DocumentEditSession | null>(null);
   const [recapDialogNodeId, setRecapDialogNodeId] = useState<string | null>(null);
-  // Per-node reading state: which turns show their full item window
-  // (persisted per tree), which show the full transcript (per visit), and
-  // which finished answers are expanded past the nine-line clamp.
+  // Per-node reading state: which answers show their full item window
+  // (persisted per tree) and which show the full transcript (per visit).
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [fullTraceNodes, setFullTraceNodes] = useState<Record<string, boolean>>({});
-  const [expandedAnswers, setExpandedAnswers] = useState<Record<string, boolean>>({});
   const [highlightAction, setHighlightAction] = useState<HighlightAction | null>(null);
   const [savingHighlight, setSavingHighlight] = useState(false);
-  // Saved highlights whose anchors no longer locate a passage in a turn's
-  // current rendered projection. They still exist — surfaced in that turn's
-  // footer instead of vanishing silently.
+  // Count saved highlights whose anchors cannot be located in the rendered
+  // answer. The answer's … menu reports these unresolved highlights.
   const [hiddenHighlightsByNode, setHiddenHighlightsByNode] = useState<Record<string, number>>({});
   // Branches whose answer finished while this document was open and that
-  // the reader has not opened carry an unread dot on their branch button.
+  // the reader has not opened carry an unread dot on their branch count.
   // `firstSeenComplete` records each branch's status the first time it is
   // seen, so a branch that was already complete when the tree loaded is read.
   const firstSeenCompleteRef = useRef<Map<string, boolean>>(new Map());
   const [openedNodeIds, setOpenedNodeIds] = useState<ReadonlySet<string>>(() => new Set());
   const [highlightDomNonce, setHighlightDomNonce] = useState(0);
+  const [markerLayoutNonce, setMarkerLayoutNonce] = useState(0);
+  const [markersByNode, setMarkersByNode] = useState<Record<string, BranchMarker[]>>({});
+  const [markerTip, setMarkerTip] = useState<{ element: HTMLElement; branchIds: string[]; level: number } | null>(null);
+  const dismissMarkerTip = useCallback(() => setMarkerTip(null), []);
   const [pointerAnnotationNodeId, setPointerAnnotationNodeId] = useState<string | null>(null);
   const [hoveredAnnotation, setHoveredAnnotation] = useState<{
     nodeId: string;
@@ -834,30 +990,16 @@ function ResearchDocument({
   const [minuteNow, setMinuteNow] = useState(() => Date.now());
 
   const workspaceRef = useRef<HTMLDivElement | null>(null);
-  const mainScrollRef = useRef<HTMLDivElement | null>(null);
-  const mainContentRef = useRef<HTMLDivElement | null>(null);
-  const drawerScrollRef = useRef<HTMLDivElement | null>(null);
-  const drawerElementRef = useRef<HTMLElement | null>(null);
-  // Branches created a moment ago that the next detail refresh delivers,
-  // with the time each was created: until then the drawer and the selection
-  // may name a node detail lacks. One that never arrives is dropped after
-  // PENDING_NODE_TTL_MS.
-  const pendingNodeIdsRef = useRef(new Map<string, number>());
-  // A new branch's composer takes focus once its node arrives.
-  const pendingComposerFocusRef = useRef<string | null>(null);
   // The selection actions' measured size, for centring them.
   const selectionActionsSizeRef = useRef(SELECTION_ACTIONS_SIZE);
-  const drawerTitleRef = useRef<HTMLHeadingElement | null>(null);
   const composerRefs = useRef(new Map<string, ResearchComposerHandle>());
-  const columnTitleRefs = useRef(new Map<string, HTMLHeadingElement>());
-  const drawerReturnFocusRef = useRef<HTMLElement | null>(null);
-  // Resolved highlight ranges per turn, refreshed by the paint effect.
+  // Resolved highlight ranges per answer, refreshed by the paint effect.
   const resolvedHighlightsRef = useRef(new Map<string, ResolvedHighlight[]>());
   // Bumped after each highlight paint so the focus-highlight effect below
   // observes freshly resolved ranges.
   const [highlightPaintVersion, setHighlightPaintVersion] = useState(0);
   // Flat-offset ranges of the branch passages that resolved, tagged with the
-  // turn they sit in. Consulted by passage clicks, hover, and reveal.
+  // answer they sit in. Consulted by passage clicks, hover, markers and order.
   const branchRangeOffsetsRef = useRef<
     { segmentId: string; id: string; start: number; end: number }[]
   >([]);
@@ -878,25 +1020,21 @@ function ResearchDocument({
   const detailRef = useRef(detail);
   const contentByNodeRef = useRef(contentByNode);
   const contentErrorByNodeRef = useRef(contentErrorByNode);
-  const drawerRef = useRef(drawer);
   const menuRef = useRef(menu);
+  const pendingRef = useRef(pending);
   // The (status, snapshot) stamp each cached content was fetched under, so
   // the loader can tell a cache hit from a stale entry without refetching
-  // unchanged turns every time the rendered chains recompute.
+  // unchanged answers every time the open levels recompute.
   const fetchStampByNodeRef = useRef(new Map<string, string>());
-  // Guards scroll recording and restoration: offsets are only meaningful once
-  // the whole conversation has settled (content or a terminal error per
-  // turn). While a turn is still a short loading placeholder the page is not
-  // at its real height, and the browser's clamp scroll event would otherwise
-  // record — and permanently overwrite — the saved offset.
-  const mainContentSettledRef = useRef(false);
-  // Set once the conversation's scroll offset has been restored for this tree.
-  const restoredScrollRef = useRef(false);
-  // Scroll to a turn once it appears — the just-submitted follow-up, delivered
-  // by the next detail refresh.
-  const pendingScrollNodeIdRef = useRef<string | null>(null);
+  // Answer scroll offsets, per node, for this mount; the persisted store
+  // carries them across mounts.
+  const answerScrollRef = useRef(new Map<string, number>());
+  // Answers whose scroll offset has been restored since their column mounted.
+  const restoredAnswerScrollRef = useRef(new Set<string>());
+  // The same for each level's messages column, keyed by its head node.
+  const turnsScrollRef = useRef(new Map<string, number>());
+  const restoredTurnsScrollRef = useRef(new Set<string>());
   // Live mirrors for stable callbacks that must read current state.
-  const drawerInstanceRef = useRef(drawerInstance);
   const composerTextRef = useRef(composerText);
   const submittingKeyRef = useRef(submittingKey);
   const editingByHeadRef = useRef(editingByHead);
@@ -905,84 +1043,86 @@ function ResearchDocument({
   detailRef.current = detail;
   contentByNodeRef.current = contentByNode;
   contentErrorByNodeRef.current = contentErrorByNode;
-  drawerRef.current = drawer;
   menuRef.current = menu;
-  drawerInstanceRef.current = drawerInstance;
+  pendingRef.current = pending;
   composerTextRef.current = composerText;
   submittingKeyRef.current = submittingKey;
   editingByHeadRef.current = editingByHead;
   queuesRef.current = queues;
 
   const navigationPersistence = useResearchDocumentNavigation((persistence) => {
-    const scroller = mainScrollRef.current;
-    if (treeId && rootNodeId && scroller && mainContentSettledRef.current) {
-      persistence.recordScroll(treeId, rootNodeId, scroller.scrollTop);
+    const currentTreeId = treeIdRef.current;
+    if (!currentTreeId) {
+      return;
+    }
+    for (const [nodeId, top] of answerScrollRef.current) {
+      if (restoredAnswerScrollRef.current.has(nodeId)) {
+        persistence.recordScroll(currentTreeId, nodeId, top);
+      }
+    }
+    for (const [headId, top] of turnsScrollRef.current) {
+      if (restoredTurnsScrollRef.current.has(headId)) {
+        persistence.recordScroll(currentTreeId, headId, top, "turns");
+      }
     }
   });
 
-  const nodes = useMemo(() => detail?.nodes ?? [], [detail]);
+  // The tree's nodes, with nodes created a moment ago that the detail has
+  // not delivered yet.
+  const nodes = useMemo(() => {
+    const base = detail?.nodes ?? [];
+    const extra = createdNodes
+      .map((entry) => entry.node)
+      .filter((node) => node.treeId === detail?.tree.id && !base.some((candidate) => candidate.id === node.id));
+    return extra.length > 0 ? [...base, ...extra] : base;
+  }, [createdNodes, detail]);
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+  // Every node's parent as last seen, kept after the node is removed, so a
+  // removed selection can fall back to the message its branch came from.
+  const parentByIdRef = useRef(new Map<string, string | null>());
+  useEffect(() => {
+    for (const node of nodes) {
+      parentByIdRef.current.set(node.id, node.parentNodeId ?? null);
+    }
+  }, [nodes]);
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
 
-  // The root's inline chain: always the conversation column.
-  const mainChainIds = useStableValue(
+  // The selected message of each open level, root conversation first.
+  const levelPath = useStableValue(
     useMemo(
-      () => (detail && rootNodeId ? inlineChainFor(detail.nodes, rootNodeId) : []),
-      [detail, rootNodeId],
+      () => (selectedNodeId && nodeById.has(selectedNodeId) ? researchLevelPath(nodes, selectedNodeId) : []),
+      [nodeById, nodes, selectedNodeId],
     ),
     sameIds,
   );
-  const mainChainIdsRef = useRef(mainChainIds);
-  mainChainIdsRef.current = mainChainIds;
-  const validPinnedHeads = useStableValue(
-    useMemo(
-      () => pinnedHeads.filter((id) => nodeById.has(id) && !mainChainIds.includes(id)),
-      [mainChainIds, nodeById, pinnedHeads],
-    ),
-    sameIds,
+  const levelPathRef = useRef(levelPath);
+  levelPathRef.current = levelPath;
+  const deepestSelection = useMemo(() => levelPath.slice(-1), [levelPath]);
+  // Each level's chain (its messages), as one stable key per level.
+  const levelChainsKey = useMemo(
+    () => levelPath.map((id) => inlineChainFor(nodes, id).join(",")).join("\n"),
+    [levelPath, nodes],
   );
-  const pinnedHeadsRef = useRef(validPinnedHeads);
-  pinnedHeadsRef.current = validPinnedHeads;
-  const pinnedChainsKey = useMemo(
-    () =>
-      validPinnedHeads
-        .map((head) => (detail ? inlineChainFor(detail.nodes, head) : [head]).join(","))
-        .join("\n"),
-    [detail, validPinnedHeads],
+  const levelChains = useMemo(
+    () => (levelChainsKey ? levelChainsKey.split("\n").map((chain) => chain.split(",")) : []),
+    [levelChainsKey],
   );
-  const pinnedChains = useMemo(
-    () => (pinnedChainsKey ? pinnedChainsKey.split("\n").map((chain) => chain.split(",")) : []),
-    [pinnedChainsKey],
-  );
-  const drawerNodeId = drawer?.kind === "node" ? drawer.nodeId : null;
-  const drawerChainIds = useStableValue(
-    useMemo(
-      () => (detail && drawerNodeId ? inlineChainFor(detail.nodes, drawerNodeId) : []),
-      [detail, drawerNodeId],
-    ),
-    sameIds,
-  );
-  const drawerHeadId = drawerChainIds[0] ?? null;
-  const leavingNodeId = leavingDrawer?.target.kind === "node" ? leavingDrawer.target.nodeId : null;
-  const leavingChainIds = useStableValue(
-    useMemo(
-      () => (detail && leavingNodeId ? inlineChainFor(detail.nodes, leavingNodeId) : []),
-      [detail, leavingNodeId],
-    ),
-    sameIds,
-  );
-  // Every rendered turn, across the conversation, pinned columns, and the
-  // drawer. Chains partition the tree, so each node renders at most once
-  // (the leaving drawer renders inert, without registering its DOM).
+  // A pending branch belongs after the level that shows its parent selected.
+  const pendingLevel =
+    pending && levelPath.length > 0 && levelPath[levelPath.length - 1] === pending.parentNodeId
+      ? levelPath.length
+      : null;
+  const activePending = pendingLevel !== null ? pending : null;
+
+  // Answers on screen: each level's selected message, plus the message whose
+  // … menu is open (its details need the answer).
+  const menuNodeId = menu?.kind === "answer" ? menu.nodeId : null;
   const chainNodeIds = useStableValue(
-    useMemo(() => {
-      const ids = [...mainChainIds, ...pinnedChains.flat(), ...drawerChainIds];
-      for (const id of leavingChainIds) {
-        if (!ids.includes(id)) {
-          ids.push(id);
-        }
-      }
-      return ids;
-    }, [drawerChainIds, leavingChainIds, mainChainIds, pinnedChains]),
+    useMemo(
+      () => (menuNodeId && !levelPath.includes(menuNodeId) ? [...levelPath, menuNodeId] : levelPath),
+      [levelPath, menuNodeId],
+    ),
     sameIds,
   );
   const chainKey = chainNodeIds.join("\n");
@@ -993,9 +1133,6 @@ function ResearchDocument({
         .filter((node): node is ResearchNode => Boolean(node)),
     [chainNodeIds, nodeById],
   );
-  mainContentSettledRef.current =
-    mainChainIds.length > 0 &&
-    mainChainIds.every((id) => contentByNode[id] || contentErrorByNode[id]);
   // Refetch when a run finishes, its snapshot is saved, or its recap is available.
   // Other detail updates do not need to restart the content loaders.
   const chainStatusKey = chainNodes
@@ -1005,9 +1142,9 @@ function ResearchDocument({
   const branchesByParentRef = useRef(branchesByParent);
   branchesByParentRef.current = branchesByParent;
 
-  // Turn-scoped DOM lookups. Each turn registers its article (scroll anchor)
-  // and response root as it mounts; measurement effects read the maps
-  // instead of scanning the whole subtree with attribute selectors.
+  // Answer- and row-scoped DOM lookups. Each message row registers itself
+  // ("anchor") and each answer its response root as it mounts; measurement
+  // effects read the maps instead of scanning the whole subtree.
   const segmentDomRef = useRef({
     anchor: new Map<string, HTMLElement>(),
     root: new Map<string, HTMLElement>(),
@@ -1023,63 +1160,37 @@ function ResearchDocument({
       } else {
         map.delete(nodeId);
       }
-      // A turn's text moved to new DOM (pinning moves a branch from the
-      // drawer to its column): ranges painted into the old DOM are gone.
+      // An answer's text moved to new DOM: ranges painted into the old DOM
+      // are gone.
       if (kind === "root") {
         setHighlightDomNonce((value) => value + 1);
       }
     },
     [],
   );
-  // The leaving drawer renders inert copies of turns that may also be shown
-  // in a pinned column; they never register, so lookups keep resolving to
-  // the live copy.
-  const registerNothing = useCallback(() => {}, []);
   const segmentRoot = useCallback(
     (nodeId: string) =>
       (segmentDomRef.current.root.get(nodeId) as HTMLDivElement | undefined) ?? null,
     [],
   );
-  const segmentAnchor = useCallback(
-    (nodeId: string) => segmentDomRef.current.anchor.get(nodeId) ?? null,
-    [],
-  );
-  // A passage has no focusable element of its own (CSS highlights paint over
-  // text), so focus returns to its turn's branch button when the drawer it
-  // opened closes.
-  const branchTriggerFor = useCallback(
-    (nodeId: string) =>
-      segmentDomRef.current.anchor
-        .get(nodeId)
-        ?.querySelector<HTMLElement>("[data-research-branch-trigger]") ?? null,
-    [],
-  );
-  const scrollToSegment = useCallback(
-    (nodeId: string, behavior: ScrollBehavior = scrollBehavior()) => {
-      const anchor = segmentDomRef.current.anchor.get(nodeId);
-      if (anchor) {
-        scrollColumnTo(anchor, 0, behavior);
-      }
-    },
-    [],
-  );
-  const flashTurn = useCallback((nodeId: string) => {
-    const question = segmentDomRef.current.anchor
-      .get(nodeId)
-      ?.querySelector<HTMLElement>(".research-turn-question");
-    if (!question) {
-      return;
-    }
-    question.classList.remove("is-flashing");
-    void question.offsetWidth;
-    question.classList.add("is-flashing");
-    window.setTimeout(() => question.classList.remove("is-flashing"), FLASH_MS);
-  }, []);
 
-  // Content-derived keys the annotation machinery re-runs on: a turn's
-  // durable revision landing, or a turn's transcript view toggling, both
-  // shift every flat-text offset in that turn. Answer expansion changes the
-  // geometry (passages become visible) but not the offsets.
+  // Columns of the open pairs, found by level.
+  const pairColumn = useCallback(
+    (kind: "turns" | "answer", level: number) =>
+      workspaceRef.current?.querySelector<HTMLElement>(
+        `[data-research-pair="${kind}"][data-research-level="${level}"]`,
+      ) ?? null,
+    [],
+  );
+  const selectedRow = useCallback(
+    (level: number) =>
+      pairColumn("turns", level)?.querySelector<HTMLElement>(".research-msg-row.is-selected .research-msg-hit") ??
+      null,
+    [pairColumn],
+  );
+
+  // Recompute annotations when an answer's revision or transcript view
+  // changes, since either can change its flat-text offsets.
   const revisionsKey = chainNodeIds
     .map((id) => contentByNode[id]?.responseRevision ?? "")
     .join("\n");
@@ -1091,10 +1202,8 @@ function ResearchDocument({
   const expandedKey = chainNodeIds.map((id) => (expandedNodes[id] ? "1" : "0")).join("");
   const fullTraceKey = chainNodeIds.map((id) => (fullTraceNodes[id] ? "1" : "0")).join("");
 
-  // The floating action bar caches pixel geometry and a live selection from
-  // one rendered projection, so a transcript-visibility change (or another
-  // turn's content landing and reflowing the page) leaves it pointing at
-  // content that has moved: drop it whenever the view changes.
+  // Clear the action bar and selection when the view changes. Transcript
+  // visibility and loaded content can invalidate their cached positions.
   useEffect(() => {
     setHighlightAction(null);
     window.getSelection()?.removeAllRanges();
@@ -1102,7 +1211,7 @@ function ResearchDocument({
 
   // Highlight mutations are announced as research events but do not replace
   // the response snapshot. Mirror their refreshed node metadata into each
-  // loaded turn so another window's changes reach the document. Bail on
+  // loaded answer so another window's changes reach the document. Bail on
   // unchanged id lists: every research event rebuilds the highlights arrays,
   // and adopting each fresh identity re-ran the paint effect's text walk.
   useEffect(() => {
@@ -1140,38 +1249,35 @@ function ResearchDocument({
   // commit so aborted renders do not mark branches as seen.
   useEffect(() => {
     const seen = firstSeenCompleteRef.current;
-    for (const id of chainNodeIds) {
-      for (const child of branchesByParent.get(id) ?? []) {
-        if (!seen.has(child.id)) {
-          seen.set(child.id, child.status === "complete");
+    for (const chain of levelChains) {
+      for (const id of chain) {
+        for (const child of branchesByParent.get(id) ?? []) {
+          if (!seen.has(child.id)) {
+            seen.set(child.id, child.status === "complete");
+          }
         }
       }
     }
-  }, [branchesByParent, chainNodeIds]);
+  }, [branchesByParent, levelChains]);
 
-  // Branch passages per rendered turn: the anchors of each turn's branches,
+  // Branch passages per open answer: the anchors of each answer's branches,
   // plus the pending new branch's passage. Immutable per id, so the stable
-  // identity only changes when the (turn, id) list does.
-  const pendingAnchor =
-    drawer?.kind === "draft" && drawer.anchor
-      ? { segmentId: drawer.parentNodeId, id: "__draft__", anchor: drawer.anchor }
-      : null;
+  // identity only changes when the (answer, id) list does.
   const branchEntries = useStableValue(
     useMemo(() => {
       const next: { segmentId: string; id: string; anchor: ResearchHighlightAnchor }[] = [];
-      for (const segmentId of chainNodeIds) {
+      for (const segmentId of levelPath) {
         for (const child of branchesByParent.get(segmentId) ?? []) {
           if (child.queryAnchor) {
             next.push({ segmentId, id: child.id, anchor: child.queryAnchor });
           }
         }
       }
-      if (pendingAnchor) {
-        next.push(pendingAnchor);
+      if (activePending?.anchor) {
+        next.push({ segmentId: activePending.parentNodeId, id: PENDING_BRANCH_ID, anchor: activePending.anchor });
       }
       return next;
-      // pendingAnchor is derived from `drawer`.
-    }, [branchesByParent, chainNodeIds, drawer]),
+    }, [activePending, branchesByParent, levelPath]),
     (previous, candidate) =>
       previous.length === candidate.length &&
       previous.every(
@@ -1181,27 +1287,15 @@ function ResearchDocument({
           entry.anchor === candidate[index].anchor,
       ),
   );
-  // Branch heads that are open somewhere: in the drawer (with the branches it
-  // descends from), the pending draft, and the pinned columns. Their passages
-  // are underlined and their turns' branch buttons turn accent.
+  // Branch heads open as levels (and the pending branch): their passages are
+  // underlined and their markers drawn in the accent colour.
   const openBranchIds = useMemo(() => {
-    const open = new Set<string>(validPinnedHeads);
-    if (drawer?.kind === "draft") {
-      open.add("__draft__");
-    }
-    let head = drawerHeadId;
-    const seen = new Set<string>();
-    while (head && !seen.has(head)) {
-      seen.add(head);
-      open.add(head);
-      const parentId = nodeById.get(head)?.parentNodeId;
-      if (!parentId || mainChainIds.includes(parentId) || !detail) {
-        break;
-      }
-      head = inlineChainFor(detail.nodes, parentId)[0] ?? null;
+    const open = new Set<string>(levelChains.slice(1).map((chain) => chain[0]));
+    if (activePending) {
+      open.add(PENDING_BRANCH_ID);
     }
     return open;
-  }, [detail, drawer, drawerHeadId, mainChainIds, nodeById, validPinnedHeads]);
+  }, [activePending, levelChains]);
   const openBranchKey = [...openBranchIds].sort().join(",");
 
   const deletingBranch = useMemo(
@@ -1230,8 +1324,239 @@ function ResearchDocument({
     [navigationPersistence],
   );
 
+  // ---- focus requests and the strip ----------------------------------------
+
+  const focusRequestRef = useRef<FocusRequest | null>(null);
+  // The strip's horizontal position as of the last render: a re-render
+  // never moves it; only an explicit reveal or settle does.
+  const stripLeftRef = useRef<number | null>(null);
+  stripLeftRef.current = columnsLayout?.row?.scrollLeft ?? null;
+  const columnsLayoutRef = useRef(columnsLayout);
+  columnsLayoutRef.current = columnsLayout;
+
+  const resolveFocusTarget = useCallback(
+    (target: FocusRequest["target"]): HTMLElement | null => {
+      switch (target.kind) {
+        case "row":
+          return selectedRow(target.level);
+        case "answer":
+          return (
+            pairColumn("answer", target.level)?.querySelector<HTMLElement>(":scope > .research-column-scroll") ??
+            null
+          );
+        case "marker":
+          return (
+            pairColumn("answer", target.level)?.querySelector<HTMLElement>(
+              `[data-research-marker="${CSS.escape(target.key)}"]`,
+            ) ?? null
+          );
+        case "composer":
+          return composerRefs.current.get(target.key)?.element()?.querySelector("textarea") ?? null;
+      }
+    },
+    [pairColumn, selectedRow],
+  );
+
+  const processFocusRequest = useCallback(() => {
+    const request = focusRequestRef.current;
+    if (!request) {
+      return;
+    }
+    const active = document.activeElement;
+    if (
+      Date.now() - request.at > FOCUS_REQUEST_TTL_MS ||
+      (request.onlyIfLost && active && active !== document.body && active.isConnected)
+    ) {
+      focusRequestRef.current = null;
+      return;
+    }
+    const element = resolveFocusTarget(request.target);
+    if (!element) {
+      return;
+    }
+    focusRequestRef.current = null;
+    element.focus({ preventScroll: true });
+    if (request.target.kind !== "answer") {
+      scrollIntoColumn(element, request.target.kind === "composer" ? researchScrollBehavior() : "auto");
+    }
+    const row = columnsLayoutRef.current?.row ?? null;
+    const column = element.closest<HTMLElement>("[data-research-column]");
+    if (request.strip === "settle") {
+      settleResearchStrip(row, column);
+    } else if (request.strip === "reveal" && column) {
+      const level = column.dataset.researchLevel;
+      revealResearchColumns(
+        row,
+        level === undefined ? column : pairColumn("turns", Number(level)) ?? column,
+        level === undefined ? column : pairColumn("answer", Number(level)) ?? column,
+      );
+    }
+  }, [pairColumn, resolveFocusTarget]);
+
+  const requestFocus = useCallback(
+    (target: FocusRequest["target"], strip: FocusRequest["strip"] = "reveal", onlyIfLost = false) => {
+      focusRequestRef.current = { target, strip, onlyIfLost, at: Date.now() };
+      window.requestAnimationFrame(processFocusRequest);
+    },
+    [processFocusRequest],
+  );
+
+  useLayoutEffect(() => {
+    const row = columnsLayoutRef.current?.row;
+    const left = stripLeftRef.current;
+    if (row && left !== null && Math.abs(row.scrollLeft - left) > 1) {
+      row.scrollLeft = left;
+    }
+    processFocusRequest();
+  });
+
+  // ---- levels --------------------------------------------------------------
+
+  // Per message: the deepest node that was open while it was on the path,
+  // so reselecting it reopens its branches. Per chain head: the message last
+  // selected in it, so reopening a branch shows that message.
+  const levelMemoryRef = useRef(new Map<string, string>());
+  const chainMemoryRef = useRef(new Map<string, string>());
+  useEffect(() => {
+    const deepest = levelPath[levelPath.length - 1];
+    if (!deepest) {
+      return;
+    }
+    levelPath.forEach((id, level) => {
+      levelMemoryRef.current.set(id, deepest);
+      const head = levelChains[level]?.[0];
+      if (head) {
+        chainMemoryRef.current.set(head, id);
+      }
+    });
+  }, [levelChains, levelPath]);
+
+  /** The deepest node remembered under `nodeId`, when it still descends
+   * from it; otherwise the node itself. */
+  const rememberedUnder = useCallback((nodeId: string) => {
+    const remembered = levelMemoryRef.current.get(nodeId);
+    if (!remembered || remembered === nodeId) {
+      return nodeId;
+    }
+    return researchLevelPath(nodesRef.current, remembered).includes(nodeId) ? remembered : nodeId;
+  }, []);
+
+  const markOpened = useCallback((nodeId: string) => {
+    setOpenedNodeIds((prev) => (prev.has(nodeId) ? prev : new Set(prev).add(nodeId)));
+  }, []);
+
+  /** Moves the deepest selection to `nodeId` without touching history. */
+  const applyVisit = useCallback(
+    (nodeId: string) => {
+      if (!nodesRef.current.some((node) => node.id === nodeId) && !createdNodeIdsRef.current.has(nodeId)) {
+        return;
+      }
+      setSelectedNodeId(nodeId);
+      persistSelection(nodeId);
+      // Leaving a new branch unsent discards it, as Esc does: its stored text
+      // must not reopen it (and close these levels) on the next mount.
+      const dropped = pendingRef.current;
+      if (dropped) {
+        setPending(null);
+        const currentTreeId = treeIdRef.current;
+        if (currentTreeId) {
+          navigationPersistence.clearAsk(currentTreeId, dropped.parentNodeId);
+        }
+        setComposerText((text) => withoutKeys(text, [`draft:${dropped.parentNodeId}`]));
+      }
+      setMenu(null);
+      markOpened(nodeId);
+    },
+    [markOpened, navigationPersistence, persistSelection],
+  );
+
+  /** User navigation: applies the visit and extends history. */
+  const navigate = useCallback(
+    (nodeId: string) => {
+      applyVisit(nodeId);
+      setHistory((current) =>
+        current.entries[current.index] === nodeId ? current : pushResearchHistory(current, nodeId),
+      );
+    },
+    [applyVisit],
+  );
+
+  /** Selects a message in level `level`'s column. Its answer replaces the
+   * one shown, and the levels after it close, unless it is already selected;
+   * a message selected before reopens the branches that were open under it. */
+  const selectMessage = useCallback(
+    (level: number, nodeId: string) => {
+      if (levelPathRef.current[level] === nodeId) {
+        return;
+      }
+      navigate(rememberedUnder(nodeId));
+    },
+    [navigate, rememberedUnder],
+  );
+
+  /** Opens branch `headId` of level `level`'s selected answer as the next
+   * level, showing the message last selected in it (its last message the
+   * first time). Opening the branch already open there changes nothing. */
+  const openBranch = useCallback(
+    (level: number, headId: string, end?: "first" | "last") => {
+      const nodesNow = nodesRef.current;
+      const chain = inlineChainFor(nodesNow, headId);
+      const open = levelPathRef.current[level + 1];
+      if (!end && open && chain.includes(open)) {
+        return;
+      }
+      const remembered = chainMemoryRef.current.get(headId);
+      const message =
+        end === "first"
+          ? chain[0]
+          : end === "last" || !remembered || !chain.includes(remembered)
+            ? chain[chain.length - 1]
+            : remembered;
+      if (!message) {
+        return;
+      }
+      markOpened(headId);
+      navigate(end ? message : rememberedUnder(message));
+    },
+    [markOpened, navigate, rememberedUnder],
+  );
+
+  /** Closes the levels after `level`. */
+  const closeAfter = useCallback(
+    (level: number) => {
+      const keep = levelPathRef.current[level];
+      if (keep) {
+        navigate(keep);
+      }
+    },
+    [navigate],
+  );
+
+  // Node-open requests from the app shell (feed rows, child rows, the
+  // Highlights view) while this tree's document is already mounted. Focus
+  // stays where the request came from; the strip shows the opened level.
+  useEffect(
+    () =>
+      listenToResearchNodeOpen((request) => {
+        if (request.treeId !== treeIdRef.current) {
+          return;
+        }
+        navigate(request.nodeId);
+        window.requestAnimationFrame(() => {
+          const path = levelPathRef.current;
+          const level = path.length - 1;
+          const row = selectedRow(level);
+          if (row) {
+            scrollIntoColumn(row);
+          }
+          settleResearchStrip(columnsLayoutRef.current?.row ?? null, pairColumn("turns", level));
+        });
+      }),
+    [navigate, pairColumn, selectedRow],
+  );
+
   // Tree switch (the document is keyed per tree, so this is its mount):
-  // restore the visit, pinned columns, queued follow-ups, and reading state.
+  // restore the open levels, queued follow-ups, and reading state.
   useEffect(() => {
     if (!treeId || !rootNodeId || !detail) {
       return;
@@ -1239,117 +1564,96 @@ function ResearchDocument({
     const navigation = navigationPersistence.store[treeId];
     const nodeIds = new Set(detail.nodes.map((node) => node.id));
     const saved = navigation?.selectedNodeId;
-    const selected = saved && nodeIds.has(saved) ? saved : rootNodeId;
     const main = inlineChainFor(detail.nodes, rootNodeId);
-    const pinned = (navigation?.pinnedBranches ?? []).filter(
-      (id) => nodeIds.has(id) && !main.includes(id),
-    );
-    setPinnedHeads(pinned);
+    const selected = saved && nodeIds.has(saved) ? saved : (main[main.length - 1] ?? rootNodeId);
     setQueues({ ...(navigation?.queuedFollowups ?? {}) });
     setSelectedNodeId(selected);
     setHistory(initResearchHistory(selected));
-    const placement = researchNodePlacement(detail.nodes, main, pinned, selected);
-    if (placement.kind === "drawer") {
-      // Opened from outside the document (a feed child row): closing the
-      // drawer returns focus there.
-      const active = document.activeElement;
-      drawerReturnFocusRef.current =
-        active instanceof HTMLElement && active !== document.body ? active : null;
-      setDrawerAnimates(false);
-      setDrawer({ kind: "node", nodeId: selected });
-    } else if (placement.kind === "pinned") {
-      setFocusedColumn(placement.headId);
-    }
-    if (selected !== rootNodeId && placement.kind === "main") {
-      pendingScrollNodeIdRef.current = selected;
-    }
     setExpandedNodes({ ...navigation?.expandedByNode });
     setFullTraceNodes({});
-    restoredScrollRef.current = false;
+    // Restoring reopens the levels without animation: the strip shows the
+    // deepest level (and, when the feed and the first pair don't fit, the
+    // answer rather than the feed).
+    // Keyboard focus already in the pairs (→ from the feed) stays in view.
+    window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(() => {
+        const row = columnsLayoutRef.current?.row ?? null;
+        const focused =
+          document.activeElement?.closest<HTMLElement>("[data-research-pair]") ?? null;
+        settleResearchStrip(row, focused && row?.contains(focused) ? focused : null, "auto");
+      }),
+    );
     // Runs once per tree: the document remounts on tree switches, and the
     // first detail to arrive carries the root and the nodes to restore.
   }, [treeId, rootNodeId, Boolean(detail)]);
 
   const mainComposerKey = rootNodeId ?? "main";
-  const persistedDraft = useMemo(
-    () =>
-      drawer?.kind === "draft" && drawer.anchor
-        ? { nodeId: drawer.parentNodeId, anchor: drawer.anchor }
-        : null,
-    [drawer],
-  );
-  const draftKey = drawer?.kind === "draft" ? `draft:${drawer.parentNodeId}` : null;
+  const draftKey = activePending ? `draft:${activePending.parentNodeId}` : null;
   useResearchComposerDrafts({
     persistence: navigationPersistence,
     treeId,
     mainText: composerText[mainComposerKey] ?? "",
-    draft: persistedDraft,
+    draft: activePending?.anchor ? { nodeId: activePending.parentNodeId, anchor: activePending.anchor } : null,
     draftText: draftKey ? composerText[draftKey] ?? "" : "",
-    drawerOpen: drawer !== null,
-    chainNodeIds,
+    draftOpen: activePending !== null,
+    // Only the deepest selection's saved new branch reopens: one saved under
+    // a shallower message would close the levels the path restored.
+    chainNodeIds: deepestSelection,
     contentByNode,
     setMainText: (text) =>
       setComposerText((current) =>
         (current[mainComposerKey] ?? "") === text ? current : { ...current, [mainComposerKey]: text },
       ),
     restoreDraft: (nodeId, anchor, text) => {
-      setDrawerAnimates(false);
-      setDrawer({ kind: "draft", parentNodeId: nodeId, anchor });
+      // A saved new branch reopens after its parent, without taking focus.
+      setSelectedNodeId(nodeId);
+      setPending({ parentNodeId: nodeId, anchor });
       if (text) {
         setComposerText((current) => ({ ...current, [`draft:${nodeId}`]: text }));
       }
     },
   });
 
-  // Deleted nodes: prune persisted state, history, pinned columns, and a
-  // drawer that showed a removed branch.
+  // Deleted nodes: prune persisted state, history, created nodes, and a
+  // selection or pending branch that named a removed node.
   useEffect(() => {
     if (!treeId || !detail) {
       return;
     }
     const validNodeIds = new Set(detail.nodes.map((node) => node.id));
-    const pending = pendingNodeIdsRef.current;
+    // Keep created nodes for their full TTL, even after a refresh includes
+    // them. An older refresh without the node may complete afterward.
     const now = Date.now();
-    for (const [id, addedAt] of [...pending]) {
-      if (validNodeIds.has(id) || now - addedAt > PENDING_NODE_TTL_MS) {
-        pending.delete(id);
+    setCreatedNodes((current) => {
+      const next = current.filter((entry) => now - entry.at < PENDING_NODE_TTL_MS);
+      return next.length === current.length ? current : next;
+    });
+    for (const entry of createdNodes) {
+      if (now - entry.at < PENDING_NODE_TTL_MS) {
+        validNodeIds.add(entry.node.id);
       } else {
-        validNodeIds.add(id);
+        createdNodeIdsRef.current.delete(entry.node.id);
       }
     }
     pruneResearchNavigationNodes(treeId, [...validNodeIds]);
-    setHistory((current) => pruneResearchHistory(current, validNodeIds, detail.tree.rootNodeId));
-    setPinnedHeads((current) =>
-      current.every((id) => validNodeIds.has(id)) ? current : current.filter((id) => validNodeIds.has(id)),
-    );
-    const current = drawerRef.current;
-    if (
-      (current?.kind === "node" && !validNodeIds.has(current.nodeId)) ||
-      (current?.kind === "draft" && !validNodeIds.has(current.parentNodeId))
-    ) {
-      setDrawer(null);
+    const current = pendingRef.current;
+    if (current && !validNodeIds.has(current.parentNodeId)) {
+      setPending(null);
     }
     if (selectedNodeId && !validNodeIds.has(selectedNodeId)) {
-      setSelectedNodeId(detail.tree.rootNodeId);
-      persistSelection(detail.tree.rootNodeId);
+      // If a message on the open path was removed, select its nearest surviving
+      // ancestor. Move focus there if the removed columns contained focus.
+      const fallback =
+        researchSurvivingAncestor(parentByIdRef.current, selectedNodeId, validNodeIds) ?? detail.tree.rootNodeId;
+      setSelectedNodeId(fallback);
+      persistSelection(fallback);
+      setHistory((history) => researchHistoryAfterRemoval(history, validNodeIds, fallback));
+      const level = researchLevelPath(detail.nodes, fallback).length - 1;
+      requestFocus({ kind: "row", level: Math.max(0, level) }, "settle", true);
+    } else {
+      setHistory((history) => pruneResearchHistory(history, validNodeIds, detail.tree.rootNodeId));
     }
-  }, [detail, persistSelection, selectedNodeId, treeId]);
-
-  // Pinned columns and queued follow-ups persist per tree.
-  const pinnedPersistKey = validPinnedHeads.join(",");
-  const pinnedRestoredRef = useRef(false);
-  useEffect(() => {
-    if (!treeId) {
-      return;
-    }
-    // The first pass after mount carries the restored list; writing it back
-    // would only rewrite the same value.
-    if (!pinnedRestoredRef.current) {
-      pinnedRestoredRef.current = true;
-      return;
-    }
-    navigationPersistence.recordPinned(treeId, validPinnedHeads);
-  }, [navigationPersistence, pinnedPersistKey, treeId]);
+  }, [createdNodes, detail, persistSelection, requestFocus, selectedNodeId, treeId]);
 
   const updateQueue = useCallback(
     (headId: string, transform: (queue: QueuedResearchFollowup[]) => QueuedResearchFollowup[]) => {
@@ -1366,409 +1670,51 @@ function ResearchDocument({
     [navigationPersistence],
   );
 
-  // ---- columns, focus, and the drawer --------------------------------------
-
-  // The column area (ResearchColumns) sets the drawer width and the
-  // single-column mode: the drawer is 46% of the area, feed included, and
-  // never wider than the conversation column.
-  const areaWidth = columnsLayout?.areaWidth ?? 1200;
-  const singleColumn = columnsLayout?.singleColumn ?? false;
-  const drawerWidth = researchDrawerWidth(areaWidth, columnsLayout?.conversationWidth ?? areaWidth);
-  const drawerWidthRef = useRef(drawerWidth);
-  drawerWidthRef.current = drawerWidth;
-  const singleColumnRef = useRef(singleColumn);
-  singleColumnRef.current = singleColumn;
-  const columnsLayoutRef = useRef(columnsLayout);
-  columnsLayoutRef.current = columnsLayout;
-  // The feed is column 0 for `[` and `]`.
-  const focusedColumnKey = columnsLayout?.feedFocused
-    ? "feed"
-    : focusedColumn === "main" || validPinnedHeads.includes(focusedColumn)
-      ? focusedColumn
-      : "main";
-  const columnKeys = useMemo(
-    () => [...(columnsLayout ? ["feed"] : []), "main", ...validPinnedHeads],
-    [Boolean(columnsLayout), validPinnedHeads],
-  );
-
-  const showColumn = useCallback((key: string) => {
-    const row = columnsLayoutRef.current?.row ?? workspaceRef.current;
-    showResearchColumn(
-      row,
-      row?.querySelector<HTMLElement>(`[data-research-column="${CSS.escape(key)}"]`) ?? null,
-      scrollBehavior(),
-    );
-  }, []);
-
-  /** Gives a conversation column (or the feed) the focus rule. */
-  const takeColumnFocus = useCallback((key: string) => {
-    setFocusedColumn(key);
-    columnsLayoutRef.current?.releaseFeed();
-  }, []);
-
-  const focusColumn = useCallback(
-    (key: string, { moveFocus = false }: { moveFocus?: boolean } = {}) => {
-      if (key === "feed") {
-        columnsLayoutRef.current?.focusFeed({ moveFocus });
-        return;
-      }
-      takeColumnFocus(key);
-      window.requestAnimationFrame(() => {
-        showColumn(key);
-        if (moveFocus) {
-          columnTitleRefs.current.get(key)?.focus({ preventScroll: true });
-        }
-      });
-    },
-    [showColumn, takeColumnFocus],
-  );
-
-  const markOpened = useCallback((nodeId: string) => {
-    setOpenedNodeIds((prev) => (prev.has(nodeId) ? prev : new Set(prev).add(nodeId)));
-  }, []);
-
-  /** The viewport x of the drawer's left edge (where it is, or where it
-   * will be once it opens), from the column area's geometry. */
-  const drawerLeftEdge = () => {
-    const area = (columnsLayoutRef.current?.overlay ?? workspaceRef.current)?.getBoundingClientRect();
-    if (!area) {
-      return null;
-    }
-    return singleColumnRef.current ? area.left : area.right - drawerWidthRef.current;
-  };
-
-  // Keeps the passage a branch came from visible in its column. A passage
-  // under the drawer can't be shown, so its turn's question is scrolled to
-  // the top instead, unless it is already in view.
-  const revealPassage = useCallback(
-    (headId: string, flash: boolean) => {
-      const head = detailRef.current?.nodes.find((node) => node.id === headId);
-      const parentId = head?.parentNodeId;
-      if (!head || !parentId) {
-        return;
-      }
-      window.requestAnimationFrame(() => {
-        const turn = segmentDomRef.current.anchor.get(parentId);
-        if (!turn) {
-          return;
-        }
-        const question = turn.querySelector<HTMLElement>(".research-turn-question") ?? turn;
-        const entry = branchRangeOffsetsRef.current.find((candidate) => candidate.id === headId);
-        const root = segmentDomRef.current.root.get(parentId);
-        const range = entry && root ? rangeForTextOffsets(root, entry.start, entry.end) : null;
-        const rect = range?.getBoundingClientRect() ?? null;
-        const drawerLeft = drawerRef.current ? drawerLeftEdge() : null;
-        const under =
-          drawerLeft !== null &&
-          !turn.closest(".research-branch-drawer") &&
-          (rect ?? question.getBoundingClientRect()).right > drawerLeft + 4;
-        if (under || !rect) {
-          if (!inColumnView(question.getBoundingClientRect(), question)) {
-            scrollColumnTo(turn, 0);
-          }
-        } else if (!inColumnView(rect, turn)) {
-          const scroller = turn.closest<HTMLElement>(".research-column-scroll");
-          if (scroller) {
-            const bounds = scroller.getBoundingClientRect();
-            scroller.scrollTo({
-              top: Math.max(0, rect.top - bounds.top + scroller.scrollTop - scroller.clientHeight / 3),
-              behavior: scrollBehavior(),
-            });
-          }
-        }
-        if (flash) {
-          if (entry && !under) {
-            setFlashRange({ nodeId: parentId, start: entry.start, end: entry.end });
-          } else {
-            flashTurn(parentId);
-          }
-        }
-      });
-    },
-    [flashTurn],
-  );
-
-  // Expanding a clamped answer moves the text below it, so it happens only
-  // when the passage a branch opens from is cut off by the clamp, and not
-  // when the drawer will cover it anyway.
-  const expandToRevealPassage = useCallback((headId: string) => {
-    const head = detailRef.current?.nodes.find((node) => node.id === headId);
-    const parentId = head?.parentNodeId;
-    const entry = branchRangeOffsetsRef.current.find((candidate) => candidate.id === headId);
-    const root = parentId ? segmentDomRef.current.root.get(parentId) : null;
-    const clamp = root?.closest<HTMLElement>(".research-answer-clamp.is-clamped");
-    if (!parentId || !entry || !root || !clamp || singleColumnRef.current) {
-      return;
-    }
-    const range = rangeForTextOffsets(root, entry.start, entry.end);
-    const rect = range?.getBoundingClientRect();
-    const drawerLeft = root.closest(".research-branch-drawer") ? null : drawerLeftEdge();
-    if (
-      rect &&
-      rect.bottom > clamp.getBoundingClientRect().bottom &&
-      (drawerLeft === null || rect.right <= drawerLeft)
-    ) {
-      setExpandedAnswers((current) => (current[parentId] ? current : { ...current, [parentId]: true }));
-    }
-  }, []);
-
-  /** Opens a branch node in the drawer: slides it in when the drawer was
-   * closed, replaces its content otherwise. `returnFocus` is where focus
-   * goes when the drawer closes; replacing the content keeps the first. */
-  const openDrawerNode = useCallback(
-    (nodeId: string, returnFocus: HTMLElement | null) => {
-      if (!drawerRef.current) {
-        drawerReturnFocusRef.current =
-          returnFocus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-        setDrawerInstance((value) => value + 1);
-        setDrawerAnimates(true);
-        setLeavingDrawer(null);
-      }
-      setDrawer({ kind: "node", nodeId });
-      markOpened(nodeId);
-      const nodesNow = detailRef.current?.nodes ?? [];
-      const headId = inlineChainFor(nodesNow, nodeId)[0] ?? nodeId;
-      markOpened(headId);
-      expandToRevealPassage(headId);
-      revealPassage(headId, false);
-      window.requestAnimationFrame(() => {
-        if (nodeId !== headId) {
-          scrollToSegment(nodeId, "auto");
-        } else if (drawerScrollRef.current) {
-          drawerScrollRef.current.scrollTop = 0;
-        }
-      });
-    },
-    [expandToRevealPassage, markOpened, revealPassage, scrollToSegment],
-  );
-
-  const returnFocusAfterDrawer = useCallback((closed: DrawerTarget) => {
-    window.requestAnimationFrame(() => {
-      const saved = drawerReturnFocusRef.current;
-      drawerReturnFocusRef.current = null;
-      if (saved && saved.isConnected && !saved.closest(".research-branch-drawer")) {
-        saved.focus({ preventScroll: true });
-        return;
-      }
-      const nodesNow = detailRef.current?.nodes ?? [];
-      let parentId =
-        closed.kind === "draft"
-          ? closed.parentNodeId
-          : nodesNow.find((node) => node.id === (inlineChainFor(nodesNow, closed.nodeId)[0] ?? closed.nodeId))
-              ?.parentNodeId ?? null;
-      const seen = new Set<string>();
-      while (parentId && !seen.has(parentId)) {
-        seen.add(parentId);
-        const trigger = workspaceRef.current?.querySelector<HTMLElement>(
-          `[data-research-branch-trigger="${CSS.escape(parentId)}"]`,
-        );
-        if (trigger && !trigger.closest(".research-branch-drawer")) {
-          trigger.focus({ preventScroll: true });
-          return;
-        }
-        parentId = nodesNow.find((node) => node.id === parentId)?.parentNodeId ?? null;
-      }
-      columnTitleRefs.current.get("main")?.focus({ preventScroll: true });
-    });
-  }, []);
-
-  /** Closes the drawer: it slides out (or fades, when pinned) and focus
-   * returns to whatever opened it. Closing a new branch before its first
-   * question discards it. */
-  const closeDrawer = useCallback(
-    (mode: "close" | "pin" = "close") => {
-      const current = drawerRef.current;
-      if (!current) {
-        return;
-      }
-      setDrawer(null);
-      setLeavingDrawer(
-        prefersReducedMotion() ? null : { target: current, mode, instance: drawerInstanceRef.current },
-      );
-      if (current.kind === "draft") {
-        const currentTreeId = treeIdRef.current;
-        if (currentTreeId) {
-          navigationPersistence.clearAsk(currentTreeId, current.parentNodeId);
-        }
-        setComposerText((text) => withoutKeys(text, [`draft:${current.parentNodeId}`]));
-      }
-      if (mode === "close") {
-        returnFocusAfterDrawer(current);
-      }
-    },
-    [navigationPersistence, returnFocusAfterDrawer],
-  );
-
-  /** Moves the reader to a node without touching visit history: a node of
-   * the conversation closes the drawer (and, with `reveal`, scrolls to and
-   * flashes its turn); a pinned branch focuses its column; any other branch
-   * opens in the drawer. */
-  const applyVisit = useCallback(
-    (
-      nodeId: string,
-      { reveal = false, returnFocus = null }: { reveal?: boolean; returnFocus?: HTMLElement | null } = {},
-    ) => {
-      const currentDetail = detailRef.current;
-      if (!currentDetail || !currentDetail.nodes.some((node) => node.id === nodeId)) {
-        return;
-      }
-      const placement = researchNodePlacement(
-        currentDetail.nodes,
-        mainChainIdsRef.current,
-        pinnedHeadsRef.current,
-        nodeId,
-      );
-      setSelectedNodeId(nodeId);
-      persistSelection(nodeId);
-      setMenu(null);
-      if (placement.kind === "main") {
-        if (drawerRef.current) {
-          closeDrawer("close");
-        }
-        setFocusedColumn("main");
-        if (reveal) {
-          setExpandedAnswers((current) => (current[nodeId] ? current : { ...current, [nodeId]: true }));
-          window.requestAnimationFrame(() => {
-            scrollToSegment(nodeId);
-            flashTurn(nodeId);
-          });
-        }
-        return;
-      }
-      if (placement.kind === "pinned") {
-        focusColumn(placement.headId, { moveFocus: true });
-        if (reveal || nodeId !== placement.headId) {
-          window.requestAnimationFrame(() => scrollToSegment(nodeId));
-        }
-        return;
-      }
-      openDrawerNode(nodeId, returnFocus);
-      window.requestAnimationFrame(() => drawerTitleRef.current?.focus({ preventScroll: true }));
-    },
-    [closeDrawer, flashTurn, focusColumn, openDrawerNode, persistSelection, scrollToSegment],
-  );
-
-  /** User navigation: applies the visit and extends history. */
-  const navigate = useCallback(
-    (nodeId: string, options?: { reveal?: boolean; returnFocus?: HTMLElement | null }) => {
-      applyVisit(nodeId, options);
-      setHistory((current) =>
-        current.entries[current.index] === nodeId ? current : pushResearchHistory(current, nodeId),
-      );
-    },
-    [applyVisit],
-  );
-  const navigateRef = useRef(navigate);
-  navigateRef.current = navigate;
-
-  /** Closing the drawer is a visit too: back reopens the branch. */
-  const closeDrawerToConversation = useCallback(() => {
-    const current = drawerRef.current;
-    if (!current) {
-      return;
-    }
-    closeDrawer("close");
-    const currentDetail = detailRef.current;
-    const target =
-      current.kind === "node" && currentDetail
-        ? researchMainChainAncestor(currentDetail.nodes, mainChainIdsRef.current, current.nodeId)
-        : null;
-    if (current.kind === "node" && target) {
-      setSelectedNodeId(target);
-      persistSelection(target);
-      setHistory((value) =>
-        value.entries[value.index] === target ? value : pushResearchHistory(value, target),
-      );
-    }
-  }, [closeDrawer, persistSelection]);
-
+  /** Opens a new branch on `anchor` (a passage) or on the whole answer of
+   * `parentNodeId`, as the pair after the parent's level. Its ask box takes
+   * focus. */
   const openDraft = useCallback(
-    (parentNodeId: string, anchor: ResearchHighlightAnchor | null, returnFocus: HTMLElement | null) => {
+    (parentNodeId: string, anchor: ResearchHighlightAnchor | null) => {
       if (archived) {
         return;
       }
-      if (!drawerRef.current) {
-        drawerReturnFocusRef.current =
-          returnFocus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
-        setDrawerInstance((value) => value + 1);
-        setDrawerAnimates(true);
-        setLeavingDrawer(null);
-      } else if (drawerRef.current.kind === "draft") {
-        const previous = drawerRef.current.parentNodeId;
-        setComposerText((text) => withoutKeys(text, [`draft:${previous}`]));
+      const previous = pendingRef.current;
+      if (previous && previous.parentNodeId !== parentNodeId) {
+        setComposerText((text) => withoutKeys(text, [`draft:${previous.parentNodeId}`]));
         const currentTreeId = treeIdRef.current;
         if (currentTreeId) {
-          navigationPersistence.clearAsk(currentTreeId, previous);
+          navigationPersistence.clearAsk(currentTreeId, previous.parentNodeId);
         }
       }
       setMenu(null);
-      setDrawer({ kind: "draft", parentNodeId, anchor });
-      window.requestAnimationFrame(() =>
-        composerRefs.current.get(`draft:${parentNodeId}`)?.focus(),
-      );
-    },
-    [archived, navigationPersistence],
-  );
-
-  /** Shows a branch created a moment ago in the drawer, with its composer
-   * focused once it renders. The next detail refresh delivers its node, so
-   * it cannot go through `navigate` yet. */
-  const openNewBranch = useCallback(
-    (nodeId: string) => {
-      pendingNodeIdsRef.current.set(nodeId, Date.now());
-      pendingComposerFocusRef.current = nodeId;
-      if (!drawerRef.current) {
-        drawerReturnFocusRef.current =
-          document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        setDrawerInstance((value) => value + 1);
-        setDrawerAnimates(true);
-        setLeavingDrawer(null);
+      if (levelPathRef.current[levelPathRef.current.length - 1] !== parentNodeId) {
+        setSelectedNodeId(parentNodeId);
+        persistSelection(parentNodeId);
       }
-      setDrawer({ kind: "node", nodeId });
-      markOpened(nodeId);
-      setSelectedNodeId(nodeId);
-      persistSelection(nodeId);
-      setHistory((value) => pushResearchHistory(value, nodeId));
+      setPending({ parentNodeId, anchor });
+      requestFocus({ kind: "composer", key: `draft:${parentNodeId}` }, "settle");
     },
-    [markOpened, persistSelection],
+    [archived, navigationPersistence, persistSelection, requestFocus],
   );
 
-  const pinBranch = useCallback(
-    (headId: string) => {
-      setPinnedHeads((current) => [...current.filter((id) => id !== headId), headId]);
-      closeDrawer("pin");
-      focusColumn(headId, { moveFocus: true });
-    },
-    [closeDrawer, focusColumn],
-  );
-
-  const unpinBranch = useCallback(
-    (headId: string) => {
-      setPinnedHeads((current) => {
-        const index = current.indexOf(headId);
-        const next = current.filter((id) => id !== headId);
-        setFocusedColumn((focused) =>
-          focused === headId ? (index > 0 ? current[index - 1] : "main") : focused,
-        );
-        return next;
-      });
-      window.requestAnimationFrame(() => columnTitleRefs.current.get("main")?.focus({ preventScroll: true }));
-    },
-    [],
-  );
-
-  // Node-open requests from the app shell (feed rows, child rows, the
-  // Highlights view) while this tree's document is already mounted.
-  useEffect(
-    () =>
-      listenToResearchNodeOpen((request) => {
-        if (request.treeId !== treeIdRef.current) {
-          return;
-        }
-        navigateRef.current(request.nodeId, { reveal: true });
-      }),
-    [],
-  );
+  /** Discards the new branch being written; focus returns to the answer it
+   * was asked from. */
+  const cancelPending = useCallback(() => {
+    const current = pendingRef.current;
+    if (!current) {
+      return;
+    }
+    setPending(null);
+    const currentTreeId = treeIdRef.current;
+    if (currentTreeId) {
+      navigationPersistence.clearAsk(currentTreeId, current.parentNodeId);
+    }
+    setComposerText((text) => withoutKeys(text, [`draft:${current.parentNodeId}`]));
+    const level = levelPathRef.current.indexOf(current.parentNodeId);
+    if (level >= 0) {
+      requestFocus({ kind: "answer", level }, "settle");
+    }
+  }, [navigationPersistence, requestFocus]);
 
   // ---- history -------------------------------------------------------------
 
@@ -1795,10 +1741,9 @@ function ResearchDocument({
     onWorkspaceForward?.();
   }, [applyVisit, history, onWorkspaceForward]);
 
-  // Keyboard: ⌘[ / ⌘] and Alt+←/→ (and mouse buttons 3/4) walk history;
-  // bare [ and ] move focus between columns; Esc closes the drawer when no
-  // menu, popover, or dialog is open. Keys are ignored while typing, except
-  // Esc, which also leaves a composer inside the drawer.
+  // Keyboard: ⌘[ / ⌘] and Alt+←/→ (and mouse buttons 3/4) walk history; Esc
+  // returns to the root conversation when no menu, popover, or dialog is
+  // open. Keys are ignored while typing.
   const anyOverlayOpen =
     Boolean(menu) ||
     Boolean(highlightAction) ||
@@ -1815,50 +1760,26 @@ function ResearchDocument({
       }
       if (event.key === "Escape" && !event.metaKey && !event.ctrlKey && !event.altKey) {
         // An IME composition uses Escape to cancel itself.
-        if (event.isComposing || event.keyCode === 229) {
-          return;
-        }
-        if (anyOverlayOpenRef.current || !drawerRef.current) {
+        if (event.isComposing || event.keyCode === 229 || anyOverlayOpenRef.current) {
           return;
         }
         const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("[role='menu'], [role='dialog'], [role='alertdialog'], .popover-surface")) {
-          return;
-        }
-        // Escape in a field with text leaves the field and keeps the text
-        // (closing a new branch discards its question); a second Escape
-        // closes the drawer.
         if (
-          (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) &&
-          target.value.trim()
+          isEditableTarget(event.target) ||
+          target?.closest("[role='menu'], [role='dialog'], [role='alertdialog'], .popover-surface")
         ) {
-          event.preventDefault();
-          const column = target.closest(".research-branch-drawer, .research-conv-column");
-          const title = column?.querySelector<HTMLElement>(".research-column-title");
-          if (title) {
-            title.focus({ preventScroll: true });
-          } else {
-            target.blur();
-          }
           return;
         }
-        event.preventDefault();
-        closeDrawerToConversation();
+        if (levelPathRef.current.length > 0 && document.querySelector(".research-columns")?.contains(target ?? document.body)) {
+          event.preventDefault();
+          requestFocus({ kind: "row", level: 0 }, "reveal");
+        }
         return;
       }
       if (isEditableTarget(event.target)) {
         return;
       }
       const primary = event.metaKey || event.ctrlKey;
-      if (!primary && !event.altKey && !event.shiftKey && (event.key === "[" || event.key === "]")) {
-        const index = columnKeys.indexOf(focusedColumnKey);
-        const next = columnKeys[index + (event.key === "]" ? 1 : -1)];
-        if (next) {
-          event.preventDefault();
-          focusColumn(next, { moveFocus: true });
-        }
-        return;
-      }
       let handler: (() => void) | null = null;
       if (primary && !event.altKey && !event.shiftKey && event.code === "BracketLeft") {
         handler = goBack;
@@ -1890,105 +1811,215 @@ function ResearchDocument({
       window.removeEventListener("keydown", onKeyDown);
       mouseTarget?.removeEventListener("mouseup", onMouseUp);
     };
-  }, [closeDrawerToConversation, columnKeys, focusColumn, focusedColumnKey, goBack, goForward]);
+  }, [goBack, goForward, requestFocus]);
 
-  // ⌘J routed from the app-level shortcut dispatcher: bring the composer of
-  // the column in front (the drawer when it is open) into view and focus it.
-  const focusedComposerKeyRef = useRef<string>(mainComposerKey);
+  /** The branches of level `level`'s selected answer, in reading order. */
+  const siblingsAt = useCallback((level: number) => {
+    const parentId = levelPathRef.current[level];
+    const branches = parentId ? branchesByParentRef.current.get(parentId) ?? EMPTY_BRANCHES : EMPTY_BRANCHES;
+    return researchBranchesInReadingOrder(branches, (branchId) => {
+      const entry = branchRangeOffsetsRef.current.find(
+        (candidate) => candidate.id === branchId && candidate.segmentId === parentId,
+      );
+      return entry ? entry.start : null;
+    });
+  }, []);
+
+  /** Opens branch `headId` from level `level` and puts focus on its selected
+   * message; the passage it came from is underlined in the answer. */
+  const goBranch = useCallback(
+    (level: number, headId: string, end?: "first" | "last") => {
+      openBranch(level, headId, end);
+      requestFocus({ kind: "row", level: level + 1 }, "settle");
+      window.requestAnimationFrame(() => {
+        const entry = branchRangeOffsetsRef.current.find((candidate) => candidate.id === headId);
+        const root = entry ? segmentRoot(entry.segmentId) : null;
+        const range = entry && root ? rangeForTextOffsets(root, entry.start, entry.end) : null;
+        const scroller = root?.closest<HTMLElement>(".research-column-scroll");
+        if (!range || !scroller) {
+          return;
+        }
+        const rect = range.getBoundingClientRect();
+        const bounds = scroller.getBoundingClientRect();
+        if (rect.top < bounds.top || rect.bottom > bounds.bottom) {
+          scroller.scrollTop += rect.top - bounds.top - bounds.height / 3;
+        }
+      });
+    },
+    [openBranch, requestFocus, segmentRoot],
+  );
+
+  /** → from level `level`: into the open (or first) branch of its answer;
+   * with no branches, into the answer. */
+  const rightFrom = useCallback(
+    (level: number) => {
+      const siblings = siblingsAt(level);
+      if (siblings.length === 0) {
+        requestFocus({ kind: "answer", level }, "settle");
+        return;
+      }
+      const open = levelPathRef.current[level + 1];
+      const current = open
+        ? siblings.find((branch) => inlineChainFor(nodesRef.current, branch.id).includes(open))
+        : undefined;
+      goBranch(level, (current ?? siblings[0]).id);
+    },
+    [goBranch, requestFocus, siblingsAt],
+  );
+
+  /** Keys in the pairs: ↑/↓ move between messages (and, at a branch
+   * column's first or last message, to the previous or next branch of the
+   * same answer), Enter opens a message's answer, → selects a row in the
+   * branch column, ← goes to the parent message (or the feed). */
+  const onPairsKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
+      return;
+    }
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target) {
+      return;
+    }
+    const key = event.key;
+    if (target.matches("[data-research-row]")) {
+      const level = Number(target.dataset.researchLevel);
+      const nodeId = target.dataset.nodeId ?? "";
+      const column = target.closest<HTMLElement>("[data-research-pair]");
+      const rows = [...(column?.querySelectorAll<HTMLElement>("[data-research-row]") ?? [])];
+      const index = rows.indexOf(target);
+      if ((key === "ArrowDown" || key === "ArrowUp") && level > 0 && (key === "ArrowUp" ? index === 0 : index === rows.length - 1)) {
+        const siblings = siblingsAt(level - 1);
+        const head = levelChains[level]?.[0];
+        const at = siblings.findIndex((branch) => branch.id === head);
+        const next = siblings[key === "ArrowUp" ? at - 1 : at + 1];
+        event.preventDefault();
+        if (at >= 0 && next) {
+          goBranch(level - 1, next.id, key === "ArrowUp" ? "last" : "first");
+        }
+        return;
+      }
+      if (key === "ArrowDown" || key === "ArrowUp" || key === "Home" || key === "End") {
+        event.preventDefault();
+        const nextIndex =
+          key === "Home" ? 0 : key === "End" ? rows.length - 1 : index + (key === "ArrowDown" ? 1 : -1);
+        const next = rows[Math.max(0, Math.min(rows.length - 1, nextIndex))];
+        if (next) {
+          for (const row of rows) row.tabIndex = row === next ? 0 : -1;
+          next.focus({ preventScroll: true });
+          scrollIntoColumn(next);
+        }
+        return;
+      }
+      if (key === "ArrowRight") {
+        event.preventDefault();
+        if (levelPathRef.current[level] === nodeId) {
+          rightFrom(level);
+          return;
+        }
+        // An unselected message: selecting it and opening its branch (the
+        // one remembered under it, else the first) is one visit, in one
+        // render; with no branches, only the selection.
+        const branches = researchBranchesInReadingOrder(
+          branchesByParentRef.current.get(nodeId) ?? EMPTY_BRANCHES,
+          () => null,
+        );
+        if (branches.length > 0) {
+          const remembered = levelMemoryRef.current.get(nodeId);
+          const rememberedPath = remembered ? researchLevelPath(nodesRef.current, remembered) : [];
+          const head = branches.find((branch) => rememberedPath.includes(branch.id)) ?? branches[0];
+          openBranch(level, head.id);
+          requestFocus({ kind: "row", level: level + 1 }, "settle");
+        } else {
+          selectMessage(level, nodeId);
+          requestFocus({ kind: "answer", level }, "settle");
+        }
+        return;
+      }
+      if (key === "Enter" || key === " ") {
+        event.preventDefault();
+        selectMessage(level, nodeId);
+        requestFocus({ kind: "answer", level }, "reveal");
+        return;
+      }
+      if (key === "ArrowLeft") {
+        event.preventDefault();
+        if (level > 0) {
+          requestFocus({ kind: "row", level: level - 1 }, "reveal");
+        } else {
+          columnsLayoutRef.current?.focusFeed();
+        }
+      }
+      return;
+    }
+    if (target.matches("[data-research-pair='answer'] > .research-column-scroll")) {
+      const level = Number(target.closest<HTMLElement>("[data-research-pair]")?.dataset.researchLevel);
+      if (key === "ArrowRight") {
+        event.preventDefault();
+        rightFrom(level);
+      } else if (key === "ArrowLeft") {
+        event.preventDefault();
+        requestFocus({ kind: "row", level }, "reveal");
+      }
+    }
+  };
+
+  // ⌘J routed from the app-level shortcut dispatcher: the ask box of the
+  // current pair (the deepest level before anything is focused; the feed's
+  // composer while the feed is current).
+  const currentLevelRef = useRef<number>(0);
   useEffect(
     () =>
       listenToResearchFollowupsFocus(() => {
-        const layout = columnsLayoutRef.current;
-        const focusComposer = () => {
-          const handle = composerRefs.current.get(focusedComposerKeyRef.current);
-          handle?.focus();
-          handle?.element()?.scrollIntoView({ behavior: scrollBehavior(), block: "center" });
-        };
-        if (layout?.singleColumn && layout.feedFocused) {
-          // The single column shows the feed: switch back to the
-          // conversation; the effect below focuses its composer once the
-          // column is no longer inert.
-          composerFocusAfterFeedRef.current = focusComposer;
-          layout.releaseFeed();
+        if (columnsLayoutRef.current?.feedCurrent) {
+          document.querySelector<HTMLElement>(".research-feed-composer textarea")?.focus();
           return;
         }
-        focusComposer();
-      }),
-    [],
-  );
-  const composerFocusAfterFeedRef = useRef<(() => void) | null>(null);
-  const feedShown = Boolean(columnsLayout?.feedFocused);
-  useEffect(() => {
-    const focusComposer = composerFocusAfterFeedRef.current;
-    if (feedShown || !focusComposer) return;
-    composerFocusAfterFeedRef.current = null;
-    focusComposer();
-  }, [feedShown]);
-
-  const hasColumn = researchDocumentHasColumn(detail, rootNodeId, selectedNodeId);
-  useResearchSwipeNavigation(mainScrollRef, goBack, goForward, hasColumn);
-
-  // Controls the drawer covers (a column's header actions, an answer's length
-  // dots) leave the tab order and pointer while it is open, so Tab never
-  // lands on something hidden under it. Rechecked after every render (turns
-  // and columns come and go), on horizontal scroll of the row and on resize.
-  const drawerOpen = drawer !== null;
-  useLayoutEffect(() => {
-    const workspace = workspaceRef.current;
-    if (!workspace) return;
-    const update = () => {
-      const left = drawerOpen && !singleColumnRef.current ? drawerLeftEdge() : null;
-      const candidates = workspace.querySelectorAll<HTMLElement>(
-        ".research-conv-column .research-column-bar button, .research-conv-column .research-answer-dots, [data-drawer-covered]",
-      );
-      for (const element of candidates) {
-        const covered = left !== null && element.getBoundingClientRect().right > left;
-        if (covered && !element.inert) {
-          element.inert = true;
-          element.dataset.drawerCovered = "";
-        } else if (!covered && element.dataset.drawerCovered !== undefined) {
-          element.inert = false;
-          delete element.dataset.drawerCovered;
+        const level = currentLevelRef.current;
+        const pendingNow = pendingRef.current;
+        const key =
+          pendingNow && level >= levelPathRef.current.length
+            ? `draft:${pendingNow.parentNodeId}`
+            : inlineChainFor(nodesRef.current, levelPathRef.current[level] ?? "")[0];
+        if (key) {
+          requestFocus({ kind: "composer", key }, "reveal");
         }
+      }),
+    [requestFocus],
+  );
+
+  // The current pair follows keyboard focus.
+  useEffect(() => {
+    const row = columnsLayout?.row;
+    if (!row) return;
+    const onFocusIn = (event: FocusEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target) return;
+      if (target.closest("[data-research-column='feed']")) {
+        setFocusedLevel(-1);
+        return;
+      }
+      const level = target.closest<HTMLElement>("[data-research-pair]")?.dataset.researchLevel;
+      if (level !== undefined) {
+        setFocusedLevel(Number(level));
       }
     };
-    update();
-    if (!drawerOpen) return;
-    const row = columnsLayoutRef.current?.row ?? null;
-    row?.addEventListener("scroll", update, { passive: true });
-    window.addEventListener("resize", update);
-    return () => {
-      row?.removeEventListener("scroll", update);
-      window.removeEventListener("resize", update);
-    };
-  });
+    row.addEventListener("focusin", onFocusIn);
+    return () => row.removeEventListener("focusin", onFocusIn);
+  }, [columnsLayout?.row]);
 
-  // When the conversation appears with focus nowhere (a sent draft's view
-  // was replaced by it), its title takes focus, as moving to a column does.
-  useEffect(() => {
-    if (!hasColumn) return;
-    const active = document.activeElement;
-    if (!active || active === document.body) {
-      columnTitleRefs.current.get("main")?.focus({ preventScroll: true });
-    }
-  }, [hasColumn]);
+  const hasColumn = researchDocumentHasColumn(detail, rootNodeId, selectedNodeId);
+  useResearchSwipeNavigation(workspaceRef, goBack, goForward, hasColumn);
 
   // Dialogs return focus to the control that opened them (the … menu's
-  // button). A deleted turn takes its button along: focus then goes to the
-  // previous turn's … button, else to the composer.
+  // button). A deleted message takes its button along: focus then goes to the
+  // row of the message it was asked from, else to the root's ask box.
   const deletedParentIdRef = useRef<string | null>(null);
   useResearchDialogReturnFocus(renameTarget !== null);
   useResearchDialogReturnFocus(deletingBranchId !== null, () => {
     const parentId = deletedParentIdRef.current;
     const previous = parentId
-      ? document.querySelector<HTMLElement>(
-          `[data-segment-anchor="${CSS.escape(parentId)}"] .research-turn-more`,
-        )
+      ? document.querySelector<HTMLElement>(`[data-research-row][data-node-id="${CSS.escape(parentId)}"]`)
       : null;
-    const composer = composerRefs.current
-      .get(focusedComposerKeyRef.current)
-      ?.element()
-      ?.querySelector("textarea");
+    const composer = composerRefs.current.get(mainComposerKey)?.element()?.querySelector("textarea");
     // Deleting the research closes the document: the feed's composer.
     return (
       previous ??
@@ -2012,9 +2043,9 @@ function ResearchDocument({
 
   // ---- content loading -----------------------------------------------------
 
-  // Bound the cache to the rendered chains.
+  // Bound the cache to the open levels' messages.
   useEffect(() => {
-    const keep = new Set(chainNodeIds);
+    const keep = new Set([...levelChains.flat(), ...chainNodeIds]);
     const prune = <T,>(current: Record<string, T>) =>
       withoutKeys(current, Object.keys(current).filter((key) => !keep.has(key)));
     setContentByNode(prune);
@@ -2024,7 +2055,7 @@ function ResearchDocument({
         fetchStampByNodeRef.current.delete(key);
       }
     }
-  }, [chainKey]);
+  }, [chainKey, levelChainsKey]);
 
   useEffect(() => {
     if (chainNodeIds.length === 0) {
@@ -2114,57 +2145,102 @@ function ResearchDocument({
     // unchanged content.
   }, [chainKey, chainStatusKey, contentLoadNonce]);
 
-  // Restore the conversation's scroll offset once it has fully settled (see
-  // mainContentSettledRef — restoring against a partially loaded page clamps,
-  // and the clamp destroys the saved offset). Once per tree visit. A pending
-  // turn to land on (a feed child row) wins over the saved offset.
+  // Each answer's scroll offset: restored once its content has loaded (a
+  // short loading placeholder would clamp the offset), then recorded on
+  // scroll, in memory and in the persisted store.
   useLayoutEffect(() => {
-    if (
-      !treeId ||
-      !rootNodeId ||
-      !mainContentSettledRef.current ||
-      !mainScrollRef.current ||
-      restoredScrollRef.current
-    ) {
+    if (!treeId) {
       return;
     }
-    restoredScrollRef.current = true;
-    if (pendingScrollNodeIdRef.current && mainChainIds.includes(pendingScrollNodeIdRef.current)) {
-      const target = pendingScrollNodeIdRef.current;
-      pendingScrollNodeIdRef.current = null;
-      setExpandedAnswers((current) => (current[target] ? current : { ...current, [target]: true }));
-      window.requestAnimationFrame(() => {
-        scrollToSegment(target, "auto");
-        flashTurn(target);
-      });
-      return;
+    for (const nodeId of [...restoredAnswerScrollRef.current]) {
+      if (!levelPath.includes(nodeId)) {
+        restoredAnswerScrollRef.current.delete(nodeId);
+      }
     }
-    mainScrollRef.current.scrollTop = restoreResearchScrollPosition(
-      navigationPersistence.store[treeId],
-      rootNodeId,
-    );
-  }, [contentByNode, contentErrorByNode, flashTurn, mainChainIds, navigationPersistence, rootNodeId, scrollToSegment, treeId]);
+    for (const nodeId of levelPath) {
+      if (restoredAnswerScrollRef.current.has(nodeId) || !(contentByNode[nodeId] || contentErrorByNode[nodeId])) {
+        continue;
+      }
+      const level = levelPath.indexOf(nodeId);
+      const scroller = pairColumn("answer", level)?.querySelector<HTMLElement>(":scope > .research-column-scroll");
+      if (!scroller) {
+        continue;
+      }
+      restoredAnswerScrollRef.current.add(nodeId);
+      scroller.scrollTop =
+        answerScrollRef.current.get(nodeId) ??
+        restoreResearchScrollPosition(navigationPersistence.store[treeId], nodeId);
+    }
+  }, [contentByNode, contentErrorByNode, levelPath, navigationPersistence, pairColumn, treeId]);
 
-  const recordScroll = useCallback(() => {
-    const scroller = mainScrollRef.current;
-    if (!scroller) {
+  // Each messages column, as it mounts: its scroll offset comes back (from
+  // this visit, else the persisted store), then its selected message is
+  // brought fully into view (top-aligned when taller than the column),
+  // without animation. Showing the selected message can change the restored offset.
+  useLayoutEffect(() => {
+    if (!treeId) {
       return;
     }
-    // The column never scrolls sideways legitimately (wide tables and code
-    // blocks scroll inside their own containers), but programmatic scrolls
-    // can still shift a hidden axis. Pin it back to the left edge.
-    if (scroller.scrollLeft !== 0) {
-      scroller.scrollLeft = 0;
+    const heads = levelChains.map((chain) => chain[0]).filter((id): id is string => Boolean(id));
+    for (const headId of [...restoredTurnsScrollRef.current]) {
+      if (!heads.includes(headId)) {
+        restoredTurnsScrollRef.current.delete(headId);
+      }
     }
-    if (!treeId || !rootNodeId || !mainContentSettledRef.current || !restoredScrollRef.current) {
-      return;
-    }
-    navigationPersistence.recordScroll(treeId, rootNodeId, scroller.scrollTop);
-  }, [navigationPersistence, rootNodeId, treeId]);
+    heads.forEach((headId, level) => {
+      if (restoredTurnsScrollRef.current.has(headId)) {
+        return;
+      }
+      const scroller = pairColumn("turns", level)?.querySelector<HTMLElement>(":scope > .research-column-scroll");
+      const row = selectedRow(level);
+      if (!scroller || !row) {
+        return;
+      }
+      restoredTurnsScrollRef.current.add(headId);
+      scroller.scrollTop =
+        turnsScrollRef.current.get(headId) ??
+        restoreResearchScrollPosition(navigationPersistence.store[treeId], headId, Date.now(), "turns");
+      scrollIntoColumn(row, "auto");
+    });
+  });
 
-  // Per-turn content-derived view state. Recomputed only for turns whose
-  // content or view toggles changed — node metadata stays live while the
-  // parsed timeline keeps its identity, which is what keeps the memoized
+  const recordTurnsScroll = useCallback(
+    (headId: string, scroller: HTMLElement) => {
+      if (!restoredTurnsScrollRef.current.has(headId)) {
+        return;
+      }
+      turnsScrollRef.current.set(headId, scroller.scrollTop);
+      const currentTreeId = treeIdRef.current;
+      if (currentTreeId) {
+        navigationPersistence.recordScroll(currentTreeId, headId, scroller.scrollTop, "turns");
+      }
+    },
+    [navigationPersistence],
+  );
+
+  const recordAnswerScroll = useCallback(
+    (nodeId: string, scroller: HTMLElement) => {
+      // The column never scrolls sideways legitimately (wide tables and code
+      // blocks scroll inside their own containers), but programmatic scrolls
+      // can still shift a hidden axis. Pin it back to the left edge.
+      if (scroller.scrollLeft !== 0) {
+        scroller.scrollLeft = 0;
+      }
+      if (!restoredAnswerScrollRef.current.has(nodeId)) {
+        return;
+      }
+      answerScrollRef.current.set(nodeId, scroller.scrollTop);
+      const currentTreeId = treeIdRef.current;
+      if (currentTreeId) {
+        navigationPersistence.recordScroll(currentTreeId, nodeId, scroller.scrollTop);
+      }
+    },
+    [navigationPersistence],
+  );
+
+  // Per-answer content-derived view state. Recomputed only for answers
+  // whose content or view toggles changed: node metadata stays live while
+  // the parsed timeline keeps its identity, which is what keeps the memoized
   // markdown renderer's cache effective.
   const segmentViewCacheRef = useRef(
     new Map<
@@ -2194,60 +2270,7 @@ function ResearchDocument({
         views.set(node.id, cached.view);
         continue;
       }
-      // A conversation node's whole timeline is the document: there is no
-      // "answer" fold to collapse to and no fuller trace to reveal.
-      const isConversation =
-        node.kind === "conversation" || content?.node.kind === "conversation";
-      const isDocument = node.kind === "document";
-      const timelineItems = buildTimelineItems(content?.turns ?? []);
-      const answerTimelineItems = timelineItemsAfterLastToolCall(timelineItems);
-      const hasTranscriptActivity =
-        !isConversation && timelineItemsContainTranscriptActivity(timelineItems);
-      const displayedTimelineItems =
-        isConversation || showFullTrace ? timelineItems : answerTimelineItems;
-      // A run trace reads bottom-up (the answer is the tail), so its window
-      // keeps the newest items; a conversation reads top-down from its
-      // opening question, so its window keeps the head.
-      const visibleTimelineItems =
-        showAllTurns || displayedTimelineItems.length <= TIMELINE_ITEM_RENDER_WINDOW
-          ? displayedTimelineItems
-          : isConversation
-            ? displayedTimelineItems.slice(0, TIMELINE_ITEM_RENDER_WINDOW)
-            : displayedTimelineItems.slice(-TIMELINE_ITEM_RENDER_WINDOW);
-      const rawAnswer = assistantTextFromTimelineItems(answerTimelineItems);
-      const conversationCopyText =
-        isConversation && content ? formatPlainTextTranscript(content.turns, "Assistant") : null;
-      let editableDocumentMarkdown: string | null = null;
-      if (content?.node.kind === "document") {
-        for (const turn of content.turns) {
-          for (const block of turn.blocks) {
-            if (block.type === "text") {
-              editableDocumentMarkdown = block.text;
-              break;
-            }
-          }
-          if (editableDocumentMarkdown !== null) {
-            break;
-          }
-        }
-      }
-      const view: SegmentView = {
-        node,
-        content,
-        isDocument,
-        isConversation,
-        showAllTurns,
-        showFullTrace,
-        timelineItems,
-        displayedTimelineItems,
-        visibleTimelineItems,
-        hiddenTimelineItemCount: displayedTimelineItems.length - visibleTimelineItems.length,
-        hasTranscriptActivity,
-        rawAnswer,
-        conversationCopyText,
-        answerWordCount: countResearchDocumentWords(conversationCopyText ?? rawAnswer),
-        editableDocumentMarkdown,
-      };
+      const view = buildSegmentView(node, content, showAllTurns, showFullTrace);
       cache.set(node.id, { content, showAllTurns, showFullTrace, view });
       views.set(node.id, view);
     }
@@ -2399,25 +2422,22 @@ function ResearchDocument({
     segmentRoot,
   ]);
 
-  // Land on the highlight a Highlights feed unit was opened from: once the
-  // conversation has restored (so the saved offset cannot override us) and
-  // the passage has been painted, expand its answer, scroll the passage a
-  // third of the way down its column, and clear the request.
+
+  // Reveal the highlight opened from the Highlights feed. After restoring
+  // the answer's scroll offset and painting the passage, scroll the passage
+  // a third of the way down its column, flash it, and clear the request.
+  // Waiting for restoration prevents it from overriding this scroll.
   useLayoutEffect(() => {
-    if (!treeId || !restoredScrollRef.current) {
+    if (!treeId) {
       return;
     }
     const navigation = navigationPersistence.store[treeId];
     const focus = navigation?.focusHighlight;
-    if (!navigation || !focus) {
+    if (!navigation || !focus || !restoredAnswerScrollRef.current.has(focus.nodeId)) {
       return;
     }
     const segmentContent = contentByNode[focus.nodeId];
     if (!segmentContent?.responseRevision) {
-      return;
-    }
-    if (!expandedAnswers[focus.nodeId]) {
-      setExpandedAnswers((current) => ({ ...current, [focus.nodeId]: true }));
       return;
     }
     const clear = () => {
@@ -2434,31 +2454,30 @@ function ResearchDocument({
       );
       if (!stillExists || resolvedHighlightsRef.current.has(focus.nodeId)) {
         clear();
-        scrollToSegment(focus.nodeId, "auto");
       }
       return;
     }
     const range = rangeForTextOffsets(root, resolved.start, resolved.end);
     const scroller = root.closest<HTMLElement>(".research-column-scroll");
+    clear();
     if (!range || !scroller) {
-      clear();
-      scrollToSegment(focus.nodeId, "auto");
       return;
     }
     const scrollerRect = scroller.getBoundingClientRect();
     const rect = range.getBoundingClientRect();
     scroller.scrollTop += rect.top - scrollerRect.top - Math.max(72, scrollerRect.height / 3);
     setFlashRange({ nodeId: focus.nodeId, start: resolved.start, end: resolved.end });
-    clear();
-  }, [contentByNode, expandedAnswers, highlightPaintVersion, navigationPersistence, scrollToSegment, segmentRoot, treeId]);
+  }, [contentByNode, highlightPaintVersion, navigationPersistence, segmentRoot, treeId]);
 
   // Paint branch passages (blue) and resolve their offsets for clicks, hover,
-  // and reveal. The passages of open branches are also underlined. Anchors
-  // that no longer locate a passage simply drop out.
+  // and reveal. The passages of open branches are also underlined; a new
+  // branch's passage has only a dashed underline. Anchors that no longer
+  // locate a passage simply drop out.
   useLayoutEffect(() => {
     const api = researchHighlightApi();
     api?.registry.delete(RESEARCH_BRANCH_NAME);
     api?.registry.delete(RESEARCH_OPEN_BRANCH_NAME);
+    api?.registry.delete(RESEARCH_PENDING_BRANCH_NAME);
     branchRangeOffsetsRef.current = [];
     if (!api) {
       return;
@@ -2466,8 +2485,11 @@ function ResearchDocument({
     const painted = new api.Highlight();
     const open = new api.Highlight();
     open.priority = RESEARCH_OPEN_PRIORITY;
+    const pending = new api.Highlight();
+    pending.priority = RESEARCH_OPEN_PRIORITY;
     let paintedAny = false;
     let openAny = false;
+    let pendingAny = false;
     const openIds = new Set(openBranchKey ? openBranchKey.split(",") : []);
     for (const nodeId of chainNodeIds) {
       const root = segmentRoot(nodeId);
@@ -2486,9 +2508,14 @@ function ResearchDocument({
         if (!range || !offsets) {
           continue;
         }
+        branchRangeOffsetsRef.current.push({ segmentId: nodeId, id, ...offsets });
+        if (id === PENDING_BRANCH_ID) {
+          pending.add(range);
+          pendingAny = true;
+          continue;
+        }
         painted.add(range);
         paintedAny = true;
-        branchRangeOffsetsRef.current.push({ segmentId: nodeId, id, ...offsets });
         if (openIds.has(id)) {
           const underline = rangeForTextOffsets(root, offsets.start, offsets.end);
           if (underline) {
@@ -2504,9 +2531,13 @@ function ResearchDocument({
     if (openAny) {
       api.registry.set(RESEARCH_OPEN_BRANCH_NAME, open);
     }
+    if (pendingAny) {
+      api.registry.set(RESEARCH_PENDING_BRANCH_NAME, pending);
+    }
     return () => {
       api.registry.delete(RESEARCH_BRANCH_NAME);
       api.registry.delete(RESEARCH_OPEN_BRANCH_NAME);
+      api.registry.delete(RESEARCH_PENDING_BRANCH_NAME);
     };
     // revisionsKey instead of contentByNode identity for the same reason as
     // the saved-highlight paint above.
@@ -2521,6 +2552,95 @@ function ResearchDocument({
     highlightDomNonce,
     segmentRoot,
   ]);
+
+  // Margin markers: for each open answer, one marker level with each
+  // paragraph that has branched passages, and one at the end for branches
+  // from the whole answer (and passages that no longer resolve, after a
+  // rerun). Positions are measured from the painted ranges, after the branch
+  // paint above, and again whenever an answer's layout changes.
+  useLayoutEffect(() => {
+    const next: Record<string, BranchMarker[]> = {};
+    for (const nodeId of levelPath) {
+      const branches = branchesByParent.get(nodeId) ?? EMPTY_BRANCHES;
+      if (branches.length === 0) {
+        continue;
+      }
+      const root = segmentRoot(nodeId);
+      if (!root) {
+        continue;
+      }
+      const answer = root.closest<HTMLElement>(".research-answer");
+      const byBlock = new Map<HTMLElement, string[]>();
+      const whole: string[] = [];
+      for (const branch of branches) {
+        const entry = branchRangeOffsetsRef.current.find(
+          (candidate) => candidate.id === branch.id && candidate.segmentId === nodeId,
+        );
+        const range = entry ? rangeForTextOffsets(root, entry.start, entry.end) : null;
+        const block = range ? passageBlockAt(root, range.startContainer) : null;
+        if (block) {
+          byBlock.set(block, [...(byBlock.get(block) ?? []), branch.id]);
+        } else {
+          whole.push(branch.id);
+        }
+      }
+      const answerTop = answer?.getBoundingClientRect().top ?? 0;
+      const markers: BranchMarker[] = [...byBlock.entries()]
+        .map(([block, ids]) => ({ block, ids, top: block.getBoundingClientRect().top - answerTop }))
+        .sort((a, b) => a.top - b.top)
+        .map(({ ids, top }, index) => ({
+          key: `p${index}`,
+          top: Math.round(top),
+          branchIds: researchBranchesInReadingOrder(
+            ids.map((id) => nodeById.get(id)).filter((node): node is ResearchNode => Boolean(node)),
+            (branchId) => branchRangeOffsetsRef.current.find((entry) => entry.id === branchId)?.start ?? null,
+          ).map((node) => node.id),
+        }));
+      if (whole.length > 0) {
+        markers.push({ key: "end", top: null, branchIds: whole });
+      }
+      next[nodeId] = markers;
+    }
+    setMarkersByNode((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
+  }, [
+    branchEntries,
+    branchesByParent,
+    levelPath,
+    markerLayoutNonce,
+    nodeById,
+    revisionsKey,
+    expandedKey,
+    fullTraceKey,
+    highlightDomNonce,
+    segmentRoot,
+  ]);
+
+  // Paragraphs move when an answer reflows (the window resizes, an image or
+  // diagram loads): measure the markers again.
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    let frame = 0;
+    const observer = new ResizeObserver(() => {
+      if (!frame) {
+        frame = window.requestAnimationFrame(() => {
+          frame = 0;
+          setMarkerLayoutNonce((value) => value + 1);
+        });
+      }
+    });
+    for (const nodeId of levelPath) {
+      const root = segmentRoot(nodeId);
+      if (root) {
+        observer.observe(root);
+      }
+    }
+    return () => {
+      observer.disconnect();
+      window.cancelAnimationFrame(frame);
+    };
+  }, [highlightDomNonce, levelPath, segmentRoot]);
 
   // Repaint regions where annotations stack — highlights over each other, or
   // a branch passage over a highlight — in the near-text overlap tone, so
@@ -2541,7 +2661,9 @@ function ResearchDocument({
       }
       const ranges = [
         ...(resolvedHighlightsRef.current.get(nodeId) ?? []),
-        ...branchRangeOffsetsRef.current.filter((entry) => entry.segmentId === nodeId),
+        ...branchRangeOffsetsRef.current.filter(
+          (entry) => entry.segmentId === nodeId && entry.id !== PENDING_BRANCH_ID,
+        ),
       ].map(({ start, end }) => ({ start, end }));
       for (const region of overlappingResearchHighlightRegions(ranges)) {
         const range = rangeForTextOffsets(root, region.start, region.end);
@@ -2951,7 +3073,7 @@ function ResearchDocument({
         .filter(
           (entry) =>
             entry.segmentId === nodeId &&
-            entry.id !== "__draft__" &&
+            entry.id !== PENDING_BRANCH_ID &&
             offset >= entry.start &&
             offset < entry.end,
         )
@@ -2963,7 +3085,10 @@ function ResearchDocument({
         return;
       }
       if (branchIds.length === 1 && !highlight) {
-        navigate(branchIds[0], { returnFocus: branchTriggerFor(nodeId) });
+        const level = levelPathRef.current.indexOf(nodeId);
+        if (level >= 0) {
+          goBranch(level, branchIds[0]);
+        }
         return;
       }
       setHighlightAction(null);
@@ -2981,7 +3106,7 @@ function ResearchDocument({
         align: "point",
       });
     },
-    [branchTriggerFor, navigate],
+    [goBranch],
   );
 
   // Passage-side hover: hit-test the pointer against the turn's resolved
@@ -3009,7 +3134,7 @@ function ResearchDocument({
         return;
       }
       const segmentBranches = branchRangeOffsetsRef.current.filter(
-        (entry) => entry.segmentId === nodeId,
+        (entry) => entry.segmentId === nodeId && entry.id !== PENDING_BRANCH_ID,
       );
       const segmentHighlights = resolvedHighlightsRef.current.get(nodeId) ?? [];
       const offset =
@@ -3151,8 +3276,8 @@ function ResearchDocument({
     const { nodeId, anchor } = highlightAction;
     setHighlightAction(null);
     window.getSelection()?.removeAllRanges();
-    openDraft(nodeId, anchor, branchTriggerFor(nodeId));
-  }, [branchTriggerFor, highlightAction, openDraft, selectionBranchBlocker]);
+    openDraft(nodeId, anchor);
+  }, [highlightAction, openDraft, selectionBranchBlocker]);
 
   const copySelection = useCallback(async () => {
     if (!highlightAction) {
@@ -3165,7 +3290,7 @@ function ResearchDocument({
       await writeClipboardText(text);
       onToast("Copied.");
     } catch {
-      onToast("Couldn’t copy the selection", "warning");
+      onToast("Couldn't copy.", "warning");
     }
   }, [highlightAction, onToast]);
 
@@ -3284,14 +3409,6 @@ function ResearchDocument({
   onErrorRef.current = onError;
   const onForkRef = useRef(onFork);
   onForkRef.current = onFork;
-  const treeFollowed = Boolean(detail?.tree.followed);
-  const treeBookmarked = Boolean(detail?.tree.bookmarked);
-  const handleToggleFollow = useCallback(() => {
-    if (treeId) void onSetFollowed(treeId, !treeFollowed);
-  }, [onSetFollowed, treeFollowed, treeId]);
-  const handleToggleBookmark = useCallback(() => {
-    if (treeId) void onSetBookmarked(treeId, !treeBookmarked);
-  }, [onSetBookmarked, treeBookmarked, treeId]);
   const handleCancelNode = useCallback((nodeId: string) => {
     if (cancelRequestInFlightRef.current) {
       return;
@@ -3313,10 +3430,20 @@ function ResearchDocument({
       });
   }, []);
   // Relaunches a settled node in place. Ref-guarded against double entry from
-  // two controls for the same node.
+  // two controls for the same node. While another answer in its conversation
+  // runs, the retry waits behind it (see the queued-retry effect).
   const retryRequestInFlightRef = useRef(false);
   const handleRetryNode = useCallback((nodeId: string) => {
     if (retryRequestInFlightRef.current) {
+      return;
+    }
+    const nodesNow = nodesRef.current;
+    const busy = inlineChainFor(nodesNow, nodeId).some(
+      (id) => id !== nodeId && isActiveResearchStatus(nodesNow.find((node) => node.id === id)?.status ?? "complete"),
+    );
+    if (busy) {
+      setQueuedRetries((current) => new Set(current).add(nodeId));
+      onToastRef.current("Queued. It runs after the running answer finishes.");
       return;
     }
     retryRequestInFlightRef.current = true;
@@ -3328,6 +3455,22 @@ function ResearchDocument({
         setRetryingNodeId((current) => (current === nodeId ? null : current));
       });
   }, []);
+  // Removing a queued retry brings the failed attempt back.
+  const removeQueuedRetry = useCallback((nodeId: string) => {
+    setQueuedRetries((current) => {
+      const next = new Set(current);
+      next.delete(nodeId);
+      return next;
+    });
+  }, []);
+  /** A click on a message row: selects it and brings its pair into view. */
+  const selectRow = useCallback(
+    (nodeId: string, level: number) => {
+      selectMessage(level, nodeId);
+      requestFocus({ kind: "row", level }, "reveal");
+    },
+    [requestFocus, selectMessage],
+  );
   const retryContentLoad = useCallback(() => setContentLoadNonce((value) => value + 1), []);
   const showFullTraceFor = useCallback(
     (nodeId: string) =>
@@ -3340,9 +3483,6 @@ function ResearchDocument({
     (nodeId: string) => setFullTraceNodes((current) => ({ ...current, [nodeId]: !current[nodeId] })),
     [],
   );
-  const toggleAnswer = useCallback((nodeId: string) => {
-    setExpandedAnswers((current) => ({ ...current, [nodeId]: !current[nodeId] }));
-  }, []);
   const togglePromoted = useCallback((nodeId: string) => {
     const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
     if (!node) {
@@ -3372,10 +3512,10 @@ function ResearchDocument({
     try {
       await writeClipboardText(text);
       onToastRef.current(
-        view.conversationCopyText ? "Copied conversation" : "Copied research answer",
+        view.conversationCopyText ? "Conversation copied." : "Answer copied.",
       );
     } catch {
-      onToastRef.current("Couldn’t copy the research answer", "warning");
+      onToastRef.current("Couldn't copy.", "warning");
     }
   }, []);
   const handleCopyAnswer = useCallback(
@@ -3396,26 +3536,6 @@ function ResearchDocument({
     setMenu({ kind: "answer", nodeId, anchor: researchMenuPoint(clientX, clientY), align: "point" });
   }, []);
 
-  // The branch button: with branches it opens their menu; with none it
-  // starts a new branch from the whole answer.
-  const handleBranchButton = useCallback(
-    (nodeId: string, trigger: HTMLButtonElement) => {
-      const count = branchesByParentRef.current.get(nodeId)?.length ?? 0;
-      if (count === 0) {
-        setMenu(null);
-        openDraft(nodeId, null, trigger);
-        return;
-      }
-      if (menuRef.current?.kind === "branches" && menuRef.current.nodeId === nodeId) {
-        setMenu(null);
-        return;
-      }
-      // Opens to the right of the button (as the … menu beside it does).
-      setMenu({ kind: "branches", nodeId, anchor: trigger, align: "start", trigger });
-    },
-    [openDraft],
-  );
-
   const handleEditQuestion = useCallback((nodeId: string) => {
     const currentDetail = detailRef.current;
     const node = currentDetail?.nodes.find((candidate) => candidate.id === nodeId);
@@ -3425,12 +3545,26 @@ function ResearchDocument({
     const headId = inlineChainFor(currentDetail.nodes, nodeId)[0] ?? nodeId;
     setEditingByHead((current) => ({ ...current, [headId]: nodeId }));
     setComposerText((current) => ({ ...current, [headId]: node.prompt }));
-    window.requestAnimationFrame(() => {
-      const handle = composerRefs.current.get(headId);
-      handle?.focus();
-      handle?.element()?.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" });
-    });
-  }, []);
+    requestFocus({ kind: "composer", key: headId }, "reveal");
+  }, [requestFocus]);
+
+  // The branch count beside a message: selects the message and moves focus to
+  // its answer's margin markers (the open one, else the first).
+  const showBranches = useCallback(
+    (nodeId: string, level: number) => {
+      selectMessage(level, nodeId);
+      window.requestAnimationFrame(() => {
+        const column = pairColumn("answer", level);
+        const marker =
+          column?.querySelector<HTMLElement>(".research-marker.is-open") ??
+          column?.querySelector<HTMLElement>(".research-marker");
+        if (marker) {
+          requestFocus({ kind: "marker", level, key: marker.dataset.researchMarker ?? "" }, "reveal");
+        }
+      });
+    },
+    [pairColumn, requestFocus, selectMessage],
+  );
 
   // Per chain head, the follow-up last sent from it: `true` while the fork
   // request runs, then the new child's id until the detail includes it. The
@@ -3448,10 +3582,17 @@ function ResearchDocument({
     }, QUEUE_CHILD_WAIT_MS);
   }, []);
 
-  /** Sends a column's composer. Editing a failed question forks the new
+  /** Shows a newly forked node until the refreshed tree detail includes it. */
+  const addCreatedNode = useCallback((node: ResearchNode) => {
+    createdNodeIdsRef.current.add(node.id);
+    setCreatedNodes((current) => [...current.filter((entry) => entry.node.id !== node.id), { node, at: Date.now() }]);
+  }, []);
+
+  /** Sends a column's ask box. Editing a failed question forks the new
    * question from the same parent in place of the failed node (removed by the
-   * backend once the new one is admitted). While the tail is
-   * running the question joins the chain's client-side queue. */
+   * backend after creating the new node). While the tail is running the
+   * question joins the chain's client-side queue. A sent question becomes
+   * the level's selected message. */
   const submitComposer = useCallback(
     async (headId: string, { branch = false }: { branch?: boolean } = {}) => {
       const currentDetail = detailRef.current;
@@ -3480,7 +3621,9 @@ function ResearchDocument({
         try {
           const child = await onForkRef.current(source.id, prompt, null, false);
           clearComposer();
-          openNewBranch(child.id);
+          addCreatedNode(child);
+          navigate(child.id);
+          requestFocus({ kind: "composer", key: child.id }, "settle");
         } catch (err) {
           onErrorRef.current(err instanceof Error ? err.message : String(err));
         } finally {
@@ -3507,17 +3650,9 @@ function ResearchDocument({
           );
           clearComposer();
           setEditingByHead((current) => withoutKeys(current, [headId]));
-          if (failed.id === headId) {
-            // The failed node headed a branch: show its replacement.
-            pendingNodeIdsRef.current.set(child.id, Date.now());
-            if (pinnedHeadsRef.current.includes(headId)) {
-              setPinnedHeads((current) => current.map((id) => (id === headId ? child.id : id)));
-            } else {
-              setDrawer({ kind: "node", nodeId: child.id });
-            }
-          } else {
-            pendingScrollNodeIdRef.current = child.id;
-          }
+          addCreatedNode(child);
+          navigate(child.id);
+          requestFocus({ kind: "composer", key: failed.id === headId ? child.id : headId }, "none");
         } catch (err) {
           onErrorRef.current(err instanceof Error ? err.message : String(err));
         } finally {
@@ -3546,21 +3681,22 @@ function ResearchDocument({
         const child = await onForkRef.current(tail.id, prompt, null, true);
         awaitChainChild(headId, child.id);
         clearComposer();
-        pendingScrollNodeIdRef.current = child.id;
+        addCreatedNode(child);
+        navigate(child.id);
       } catch (err) {
         onErrorRef.current(err instanceof Error ? err.message : String(err));
       } finally {
         setSubmittingKey(null);
       }
     },
-    [archived, awaitChainChild, mainComposerKey, navigationPersistence, openNewBranch, updateQueue],
+    [addCreatedNode, archived, awaitChainChild, mainComposerKey, navigate, navigationPersistence, requestFocus, updateQueue],
   );
 
-  /** Sends the drawer's new branch: the branch is created with its first
-   * question, then the drawer shows it. */
+  /** Sends the new branch's first question: the branch is created with it
+   * and becomes the next level, with its ask box focused. */
   const submitDraft = useCallback(async () => {
-    const current = drawerRef.current;
-    if (current?.kind !== "draft") {
+    const current = pendingRef.current;
+    if (!current) {
       return;
     }
     const key = `draft:${current.parentNodeId}`;
@@ -3576,15 +3712,17 @@ function ResearchDocument({
         navigationPersistence.clearAsk(currentTreeId, current.parentNodeId);
       }
       setComposerText((text) => withoutKeys(text, [key]));
-      if (drawerRef.current === current) {
-        openNewBranch(child.id);
+      if (pendingRef.current === current) {
+        addCreatedNode(child);
+        navigate(child.id);
+        requestFocus({ kind: "composer", key: child.id }, "settle");
       }
     } catch (err) {
       onErrorRef.current(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmittingKey(null);
     }
-  }, [archived, navigationPersistence, openNewBranch]);
+  }, [addCreatedNode, archived, navigate, navigationPersistence, requestFocus]);
 
   // Send each chain's first queued follow-up once its tail completes. A
   // chain stays blocked from the send until the child it created is in the
@@ -3615,7 +3753,6 @@ function ResearchDocument({
         .then((child) => {
           awaitChainChild(headId, child.id);
           updateQueue(headId, (current) => current.filter((entry) => entry.id !== item.id));
-          pendingScrollNodeIdRef.current = child.id;
         })
         .catch((err) => {
           inFlight.delete(headId);
@@ -3643,44 +3780,46 @@ function ResearchDocument({
     }
   });
 
-  // A new branch's composer takes focus once its node has rendered.
+  // A retry waits while another answer in its conversation runs, and starts
+  // once none does.
   useEffect(() => {
-    const target = pendingComposerFocusRef.current;
-    const handle = target ? composerRefs.current.get(target) : null;
-    if (!target || !handle) {
+    if (queuedRetries.size === 0) {
       return;
     }
-    pendingComposerFocusRef.current = null;
-    if (drawerRef.current?.kind === "node" && drawerRef.current.nodeId === target) {
-      handle.focus();
+    for (const nodeId of queuedRetries) {
+      const node = nodeById.get(nodeId);
+      if (!node || !canRetryResearchNode(node)) {
+        setQueuedRetries((current) => {
+          const next = new Set(current);
+          next.delete(nodeId);
+          return next;
+        });
+        continue;
+      }
+      const busy = inlineChainFor(nodes, nodeId).some(
+        (id) => id !== nodeId && isActiveResearchStatus(nodeById.get(id)?.status ?? "complete"),
+      );
+      if (!busy) {
+        setQueuedRetries((current) => {
+          const next = new Set(current);
+          next.delete(nodeId);
+          return next;
+        });
+        handleRetryNode(nodeId);
+      }
     }
-  });
+  }, [handleRetryNode, nodeById, nodes, queuedRetries]);
 
-  const onDrawerNodeChangeRef = useRef(onDrawerNodeChange);
-  onDrawerNodeChangeRef.current = onDrawerNodeChange;
+  const onOpenNodesChangeRef = useRef(onOpenNodesChange);
+  onOpenNodesChangeRef.current = onOpenNodesChange;
+  const openNodesKey = [
+    levelPath[0] ?? "",
+    ...levelChains.slice(1).map((chain) => chain[0] ?? ""),
+  ].join("\n");
   useEffect(() => {
-    onDrawerNodeChangeRef.current?.(drawerNodeId);
-  }, [drawerNodeId]);
-  useEffect(() => () => onDrawerNodeChangeRef.current?.(null), []);
-  const onSelectedNodeChangeRef = useRef(onSelectedNodeChange);
-  onSelectedNodeChangeRef.current = onSelectedNodeChange;
-  useEffect(() => {
-    onSelectedNodeChangeRef.current?.(selectedNodeId);
-  }, [selectedNodeId]);
-  useEffect(() => () => onSelectedNodeChangeRef.current?.(null), []);
-
-  // Scroll to a just-submitted follow-up once the refreshed detail delivers it.
-  useEffect(() => {
-    const target = pendingScrollNodeIdRef.current;
-    if (!target || !chainNodeIds.includes(target) || !restoredScrollRef.current) {
-      return;
-    }
-    pendingScrollNodeIdRef.current = null;
-    window.requestAnimationFrame(() => {
-      const anchor = segmentAnchor(target);
-      anchor?.scrollIntoView({ behavior: scrollBehavior(), block: "nearest" });
-    });
-  }, [chainKey, chainNodeIds, segmentAnchor]);
+    onOpenNodesChangeRef.current?.(openNodesKey.split("\n").filter(Boolean));
+  }, [openNodesKey]);
+  useEffect(() => () => onOpenNodesChangeRef.current?.([]), []);
 
   // Running turns tick their elapsed clock once a second; relative times in
   // the meta rows refresh once a minute.
@@ -3698,36 +3837,41 @@ function ResearchDocument({
     return () => window.clearInterval(timer);
   }, []);
 
-  // The whole chain as one Markdown document: each turn's question and
-  // answer in order, separated by rules.
+  // The whole chain as one Markdown document: each message and its answer in
+  // order, separated by rules. Answers not loaded yet are fetched first.
   async function copyThread(chainIds: string[]) {
     const parts: string[] = [];
-    for (const id of chainIds) {
-      const view = segmentViews.get(id);
-      const chainNode = nodeById.get(id);
-      if (!view) {
-        continue;
+    try {
+      for (const id of chainIds) {
+        const chainNode = nodeById.get(id);
+        if (!chainNode) {
+          continue;
+        }
+        const content = contentByNodeRef.current[id] ?? (await getResearchNodeContent(id));
+        const view = buildSegmentView(chainNode, content, true, false);
+        const body = (view.conversationCopyText ?? view.rawAnswer).trim();
+        const prompt = view.isDocument || view.isConversation ? null : chainNode.prompt.trim() || null;
+        if (!prompt && !body) {
+          continue;
+        }
+        parts.push(
+          [prompt ? `**Question:** ${prompt}` : null, body || "_No response available._"]
+            .filter(Boolean)
+            .join("\n\n"),
+        );
       }
-      const body = (view.conversationCopyText ?? view.rawAnswer).trim();
-      const prompt =
-        view.isDocument || view.isConversation ? null : chainNode?.prompt.trim() || null;
-      if (!prompt && !body) {
-        continue;
-      }
-      parts.push(
-        [prompt ? `**Question:** ${prompt}` : null, body || "_No response available._"]
-          .filter(Boolean)
-          .join("\n\n"),
-      );
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+      return;
     }
     if (parts.length === 0) {
       return;
     }
     try {
       await writeClipboardText(parts.join("\n\n---\n\n"));
-      onToast("Copied thread");
+      onToast("Thread copied.");
     } catch {
-      onToast("Couldn’t copy the thread", "warning");
+      onToast("Couldn't copy.", "warning");
     }
   }
 
@@ -3762,56 +3906,6 @@ function ResearchDocument({
     }
   }
 
-  async function confirmBranchRemoval() {
-    if (!deletingBranch?.node || !deletingBranch.info || deletingBranch.info.hasActiveRuns) {
-      return;
-    }
-    setBranchRemovalError(null);
-    setRemovingBranch(true);
-    try {
-      if (deletingBranch.node.id === detail?.tree.rootNodeId) {
-        await onRemoveTree(detail.tree.id);
-        setDeletingBranchId(null);
-        return;
-      }
-      deletedParentIdRef.current = deletingBranch.node.parentNodeId ?? null;
-      const removal = await onRemoveBranch(deletingBranch.node.id);
-      // The backend call and detail refresh can outlive this document's tree.
-      if (treeIdRef.current !== removal.treeId) {
-        setDeletingBranchId(null);
-        return;
-      }
-      const removedNodeIds = new Set(removal.removedNodeIds);
-      const validNodeIds = new Set(
-        (detail?.nodes ?? [])
-          .filter((node) => !removedNodeIds.has(node.id))
-          .map((node) => node.id),
-      );
-      setHistory((current) => pruneResearchHistory(current, validNodeIds, removal.parentNodeId));
-      setPinnedHeads((current) => current.filter((id) => !removedNodeIds.has(id)));
-      const current = drawerRef.current;
-      if (current?.kind === "node" && removedNodeIds.has(current.nodeId)) {
-        // The drawer showed the removed branch (or a later turn of it): show
-        // the surviving parent when it is itself a branch, else close.
-        const parentId = removal.parentNodeId;
-        if (parentId && !mainChainIdsRef.current.includes(parentId)) {
-          setDrawer({ kind: "node", nodeId: parentId });
-        } else {
-          closeDrawer("close");
-        }
-      }
-      if (selectedNodeId && removedNodeIds.has(selectedNodeId)) {
-        setSelectedNodeId(removal.parentNodeId);
-        persistSelection(removal.parentNodeId);
-      }
-      setDeletingBranchId(null);
-    } catch (err) {
-      setBranchRemovalError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setRemovingBranch(false);
-    }
-  }
-
   async function confirmRename() {
     if (!renameTarget || !detail || renaming) {
       return;
@@ -3836,25 +3930,71 @@ function ResearchDocument({
     }
   }
 
-  // Which composer ⌘J focuses: the drawer's when it is open, else the
-  // focused column's.
-  focusedComposerKeyRef.current = drawer
-    ? drawer.kind === "draft"
-      ? `draft:${drawer.parentNodeId}`
-      : drawerHeadId ?? mainComposerKey
-    : focusedColumnKey === "main"
-      ? mainComposerKey
-      : focusedColumnKey;
+  async function confirmBranchRemoval() {
+    if (!deletingBranch?.node || !deletingBranch.info || deletingBranch.info.hasActiveRuns) {
+      return;
+    }
+    setBranchRemovalError(null);
+    setRemovingBranch(true);
+    try {
+      if (deletingBranch.node.id === detail?.tree.rootNodeId) {
+        await onRemoveTree(detail.tree.id);
+        setDeletingBranchId(null);
+        return;
+      }
+      deletedParentIdRef.current = deletingBranch.node.parentNodeId ?? null;
+      // Whether the open path runs through what is removed, checked before the
+      // call: the caller prunes the detail before the call resolves.
+      const subtree = new Set([deletingBranch.node.id]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const node of nodesRef.current) {
+          if (node.parentNodeId && subtree.has(node.parentNodeId) && !subtree.has(node.id)) {
+            subtree.add(node.id);
+            grew = true;
+          }
+        }
+      }
+      const wasOnPath = levelPathRef.current.some((id) => subtree.has(id));
+      const removal = await onRemoveBranch(deletingBranch.node.id);
+      // The backend call and detail refresh can outlive this document's tree.
+      if (treeIdRef.current !== removal.treeId) {
+        setDeletingBranchId(null);
+        return;
+      }
+      const removedNodeIds = new Set(removal.removedNodeIds);
+      setCreatedNodes((current) => current.filter((entry) => !removedNodeIds.has(entry.node.id)));
+      for (const id of removedNodeIds) {
+        createdNodeIdsRef.current.delete(id);
+      }
+      const validNodeIds = new Set(
+        nodesRef.current.filter((node) => !removedNodeIds.has(node.id)).map((node) => node.id),
+      );
+      // A removed message on the open path: the message it was asked from
+      // becomes the deepest selection, which closes the levels after it.
+      if (wasOnPath && removal.parentNodeId) {
+        const parentId = removal.parentNodeId;
+        setSelectedNodeId(parentId);
+        persistSelection(parentId);
+        setHistory((current) => researchHistoryAfterRemoval(current, validNodeIds, parentId));
+      } else {
+        setHistory((current) => pruneResearchHistory(current, validNodeIds, removal.parentNodeId));
+      }
+      setDeletingBranchId(null);
+    } catch (err) {
+      setBranchRemovalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRemovingBranch(false);
+    }
+  }
 
-  if (!detail || !rootNodeId || !selectedNodeId) {
+  if (!detail || !rootNodeId || !selectedNodeId || levelPath.length === 0) {
     // A failed *tree* fetch retries through the app shell — without detail
     // there is no node to load, so no in-document retry can recover.
     const placeholderError = detailError ?? null;
     const headerTitle = detail?.tree.title ?? treeTitle ?? "Loading research…";
     return (
-      <ResearchDocumentFrame
-        title={headerTitle}
-      >
+      <ResearchDocumentFrame title={headerTitle}>
         <div className="research-placeholder">
           {placeholderError ? null : (
             <LoaderCircle className="research-spinner" size={24} aria-hidden="true" />
@@ -3877,90 +4017,83 @@ function ResearchDocument({
 
   const rootNode = nodeById.get(rootNodeId) ?? null;
   const treeTitleText = detail.tree.title;
+  const lastLevel = pendingLevel ?? levelPath.length - 1;
+  const currentLevel =
+    focusedLevel !== null && focusedLevel <= lastLevel ? focusedLevel : lastLevel;
+  currentLevelRef.current = currentLevel < 0 ? lastLevel : currentLevel;
 
   // ---- rendering -------------------------------------------------------------
 
-  const renderTurns = (
-    chainIds: readonly string[],
-    {
-      inConversation,
-      register,
-    }: {
-      inConversation: boolean;
-      register: (nodeId: string, kind: SegmentDomKind, element: HTMLElement | null) => void;
-    },
-  ) =>
+  /** Whether any node in the branch headed by `headId`, or in a branch below
+   * it, is running or queued. */
+  const branchBusy = (headId: string) => {
+    const stack = [headId];
+    const seen = new Set<string>();
+    while (stack.length > 0) {
+      const id = stack.pop() as string;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const node = nodeById.get(id);
+      if (node && isActiveResearchStatus(node.status)) {
+        return true;
+      }
+      for (const candidate of nodes) {
+        if (candidate.parentNodeId === id) {
+          stack.push(candidate.id);
+        }
+      }
+    }
+    return false;
+  };
+
+  const isUnread = (branch: ResearchNode) =>
+    branch.status === "complete" &&
+    firstSeenCompleteRef.current.get(branch.id) === false &&
+    !openedNodeIds.has(branch.id);
+
+  const renderRows = (chainIds: readonly string[], level: number) =>
     chainIds.map((id, index) => {
       const node = nodeById.get(id);
-      const view = segmentViews.get(id);
-      if (!node || !view) {
+      if (!node) {
         return null;
       }
       const branches = branchesByParent.get(id) ?? EMPTY_BRANCHES;
-      const active = isActiveResearchStatus(node.status);
+      const whole = node.kind === "document" || node.kind === "conversation";
       const replyQuote = node.replyAnchor
         ? nodeById.get(node.parentNodeId ?? "")?.delivery?.replies?.find(
             (reply) => reply.id === node.replyAnchor,
           )?.body ?? null
         : null;
+      const selected = levelPath[level] === id;
       return (
-        <ResearchTurn
+        <ResearchMessageRow
           key={id}
-          view={view}
           node={node}
+          level={level}
+          label={nodeLabel(node, treeTitleText)}
+          showPrompt={!whole}
           replyQuote={replyQuote}
+          selected={selected}
           now={minuteNow}
-          promotable={inConversation && index > 0 && Boolean(node.inline)}
+          starrable={level === 0 ? index > 0 && Boolean(node.inline) : index === 0}
+          retryQueued={queuedRetries.has(id)}
           branchCount={branches.length}
-          branchOpen={branches.some((branch) => openBranchIds.has(branch.id)) ||
-            (drawer?.kind === "draft" && drawer.parentNodeId === id)}
-          branchUnread={branches.some(
-            (branch) =>
-              branch.status === "complete" &&
-              firstSeenCompleteRef.current.get(branch.id) === false &&
-              !openedNodeIds.has(branch.id),
-          )}
-          branchMenuOpen={menu?.kind === "branches" && menu.nodeId === id}
-          branchBlocker={branchBlockerFor(node, archived)}
-          contentError={contentErrorByNode[id] ?? null}
-          cancelling={cancelling}
-          elapsedText={active && node.startedAt ? formatElapsedClock(metadataNow - node.startedAt) : null}
-          waitsForParent={
-            node.status === "queued" &&
-            isActiveResearchStatus(nodeById.get(node.parentNodeId ?? "")?.status ?? "complete")
-          }
-          recapPending={recapPendingNodeIds.has(id)}
-          pointerOverAnnotation={pointerAnnotationNodeId === id}
+          branchOpen={selected && (levelPath.length > level + 1 || activePending?.parentNodeId === id)}
+          branchUnread={branches.some(isUnread)}
           answerMenuOpen={menu?.kind === "answer" && menu.nodeId === id && Boolean(menu.trigger)}
-          expanded={Boolean(expandedAnswers[id])}
-          canRetry={!archived && canRetryResearchNode(node)}
-          retrying={retryingNodeId === id}
-          canEditQuestion={!archived && node.status === "failed" && Boolean(node.parentNodeId)}
-          registerSegmentElement={register}
-          onExpandTurns={expandAllTurns}
-          onRetryContentLoad={retryContentLoad}
-          onToggleFullTrace={toggleFullTrace}
-          onOpenAnswerMenu={openAnswerMenu}
-          onCancelNode={handleCancelNode}
-          onRetryNode={handleRetryNode}
-          onEditQuestion={handleEditQuestion}
-          onToggleAnswer={toggleAnswer}
+          registerSegmentElement={registerSegmentElement}
+          onSelect={selectRow}
           onTogglePromoted={togglePromoted}
-          onBranchButton={handleBranchButton}
+          onShowBranches={showBranches}
+          onOpenAnswerMenu={openAnswerMenu}
           onOpenContextMenu={openContextMenu}
-          onRootMouseDown={beginHighlightSelectionDrag}
-          onRootMouseUp={finishHighlightSelectionDrag}
-          onRootKeyUp={captureHighlightSelection}
-          onRootClick={openAnnotationAtPoint}
-          onRootMouseMove={trackAnnotationUnderPointer}
-          onRootMouseLeave={clearAnnotationPointer}
         />
       );
     });
 
   const renderQueue = (headId: string) =>
     (queues[headId] ?? EMPTY_QUEUE).map((item, index) => {
-      const chain = inlineChainFor(detail.nodes, headId);
+      const chain = inlineChainFor(nodes, headId);
       const tail = nodeById.get(chain[chain.length - 1] ?? "") ?? null;
       const stalled = index === 0 && !item.failed && researchQueueStep(tail) === "stalled";
       const remove = () => {
@@ -3968,25 +4101,25 @@ function ResearchDocument({
         window.requestAnimationFrame(() => composerRefs.current.get(headId)?.focus());
       };
       // Retry removes the Retry button: focus moves to the item's Remove
-      // button, and to the composer once the question has been sent (see
+      // button, and to the ask box once the question has been sent (see
       // queueRefocusRef).
       const retry = (event: React.MouseEvent<HTMLButtonElement>) => {
-        const article = event.currentTarget.closest("article");
+        const row = event.currentTarget.closest("li");
         queueRefocusRef.current = { headId, itemId: item.id };
         updateQueue(headId, (queue) =>
           queue.map((entry) => (entry.id === item.id ? { ...entry, failed: undefined } : entry)),
         );
         window.requestAnimationFrame(() => {
-          if (article?.isConnected) {
-            article.querySelector<HTMLButtonElement>(".research-queue-remove")?.focus();
+          if (row?.isConnected) {
+            row.querySelector<HTMLButtonElement>(".research-queue-remove")?.focus();
           }
         });
       };
-      // Editing moves the question into the composer. Text already there is
+      // Editing moves the question into the ask box. Text already there is
       // never replaced or merged into it: the reader clears it first.
       const edit = () => {
         if ((composerTextRef.current[headId] ?? "").trim()) {
-          onToast("Clear the composer to edit this question.");
+          onToast("Clear the ask box to edit this question.");
           return;
         }
         updateQueue(headId, (queue) => queue.filter((entry) => entry.id !== item.id));
@@ -3994,60 +4127,44 @@ function ResearchDocument({
         window.requestAnimationFrame(() => composerRefs.current.get(headId)?.focus());
       };
       return (
-        <article key={item.id} className="research-turn is-status-queued is-client-queued">
-          <div className="research-turn-question">
-            <div className="research-user-message research-prompt research-turn-prompt is-plain">
-              {item.prompt}
-            </div>
-            <div className="research-turn-meta">
-              <time
-                dateTime={new Date(item.createdAt).toISOString()}
-                title={new Date(item.createdAt).toLocaleString()}
-              >
-                {shortWhen(item.createdAt, minuteNow)}
-              </time>
-            </div>
+        <li key={item.id} className="research-msg-row is-status-queued is-client-queued">
+          <div className="research-msg-content">
+            <div className="research-msg-plain is-typed">{item.prompt}</div>
           </div>
-          <div className="research-turn-answer">
+          <div className="research-msg-meta">
+            <time dateTime={new Date(item.createdAt).toISOString()} title={new Date(item.createdAt).toLocaleString()}>
+              {shortWhen(item.createdAt, minuteNow)}
+            </time>
+            <span className={`research-msg-pill${item.failed || stalled ? " is-error" : " is-plain"}`}>
+              {item.failed || stalled ? "Not sent" : "Queued"}
+            </span>
+          </div>
+          {item.failed || stalled ? (
+            <p className="research-msg-note" role={item.failed ? "alert" : undefined}>
+              {item.failed ?? "The answer above stopped; retry it, or edit this question."}
+            </p>
+          ) : null}
+          <div className="research-turn-actions research-msg-actions">
             {item.failed ? (
-              <div className="research-turn-alert is-error" role="alert">
-                <div>
-                  <b>Not sent.</b> {item.failed}
-                </div>
-              </div>
-            ) : (
-              <div className="research-turn-note is-state">
-                {stalled
-                  ? "Not sent. The answer above stopped; retry it, or edit this question."
-                  : "Queued. Starts when the running answer finishes."}
-              </div>
-            )}
-            <div className="research-turn-actions">
-              {item.failed ? (
-                <button type="button" className="control-button research-turn-button" onClick={retry}>
-                  <RefreshCw size={13} aria-hidden="true" />
-                  <span>Retry</span>
-                </button>
-              ) : null}
-              {stalled || item.failed ? (
-                <button
-                  type="button"
-                  className="control-button research-turn-button is-ghost"
-                  onClick={edit}
-                >
-                  Edit question
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="control-button research-turn-button is-ghost research-queue-remove"
-                onClick={remove}
-              >
-                Remove
+              <button type="button" className="control-button research-turn-button" onClick={retry}>
+                <RefreshCw size={13} aria-hidden="true" />
+                <span>Retry</span>
               </button>
-            </div>
+            ) : null}
+            {stalled || item.failed ? (
+              <button type="button" className="control-button research-turn-button is-ghost" onClick={edit}>
+                Edit question
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="control-button research-turn-button is-ghost research-queue-remove"
+              onClick={remove}
+            >
+              Remove
+            </button>
           </div>
-        </article>
+        </li>
       );
     });
 
@@ -4059,9 +4176,9 @@ function ResearchDocument({
     }
   };
 
-  /** A column's composer: continue the chain (queueing while it runs), or
-   * replace a failed question being edited. */
-  const renderChainComposer = (headId: string, chainIds: readonly string[], live = true) => {
+  /** A messages column's ask box: continue the chain (queueing while it
+   * runs), or replace a failed question being edited. */
+  const renderChainComposer = (headId: string, chainIds: readonly string[], level: number) => {
     const chain = chainIds
       .map((id) => nodeById.get(id))
       .filter((node): node is ResearchNode => Boolean(node));
@@ -4077,49 +4194,59 @@ function ResearchDocument({
     const awaitingCheckpoint = tail.status === "complete" && !canFollowUpFrom(tail);
     const canSend =
       !archived &&
-      (Boolean(editingId) || step === "wait" || queued || canContinueThread(detail.nodes, tail));
-    const note = editingId ? (
-      <>
-        Editing the failed question. Sending replaces the failed attempt.{" "}
-        <button
-          type="button"
-          className="research-link-button"
-          onClick={() => {
-            setEditingByHead((current) => withoutKeys(current, [headId]));
-            setComposerText((current) => ({ ...current, [headId]: "" }));
-          }}
-        >
-          Cancel
-        </button>
-      </>
-    ) : archived ? (
-      "Archived questions are read-only. Restore it from Archive to ask follow-ups."
-    ) : awaitingCheckpoint ? (
-      "Waiting for the native session checkpoint before continuing."
-    ) : step === "stalled" && !queued ? (
-      tail.status === "failed"
-        ? "The last answer stopped with an error. Retry it or edit its question to continue."
-        : "The last answer was stopped. Run it again to continue."
-    ) : null;
+      (Boolean(editingId) || step === "wait" || queued || canContinueThread(nodes, tail));
+    const note = editingId
+      ? null
+      : archived
+        ? "Archived questions are read-only. Move the question out of Archive to continue."
+        : awaitingCheckpoint
+          ? "Waiting for the native session checkpoint before continuing."
+          : step === "stalled" && !queued
+            ? tail.status === "failed"
+              ? "The last answer stopped with an error. Retry it or edit its question to continue."
+              : "The last answer was stopped. Run it again to continue."
+            : null;
+    const busy = chain.some((node) => isActiveResearchStatus(node.status));
     const placeholder = editingId
       ? "Edit the question"
       : head.kind === "document" && chain.length === 1
         ? "Ask about this document"
         : head.kind === "conversation" && chain.length === 1
           ? "Ask about this conversation"
-          : "Ask a follow-up";
-    const composerFocused = focusedComposerKeyRef.current === headId;
+          : busy || queued
+            ? "Ask a follow-up (queued)"
+            : "Ask a follow-up";
+    const cancelEditing = () => {
+      setEditingByHead((current) => withoutKeys(current, [headId]));
+      setComposerText((current) => ({ ...current, [headId]: "" }));
+      requestFocus({ kind: "composer", key: headId }, "none");
+    };
     return (
       <ResearchConversationComposer
-        ref={live ? registerComposer(headId) : undefined}
+        ref={registerComposer(headId)}
         value={text}
         placeholder={placeholder}
-        ariaLabel={editingId ? "Edit the question" : "Ask a follow-up"}
+        ariaLabel={
+          editingId ? "Edit the failed question" : level === 0 ? "Follow-up in this conversation" : "Follow-up in this branch"
+        }
+        mode={
+          editingId
+            ? {
+                label: (
+                  <>
+                    <b>Editing</b> the failed question. Sending replaces the failed attempt.
+                  </>
+                ),
+                cancelLabel: "Cancel editing",
+                onCancel: cancelEditing,
+              }
+            : null
+        }
         disabled={archived || (step === "stalled" && !editingId && !queued)}
         canSubmit={canSend}
         submitting={submittingKey === headId}
         note={note}
-        shortcutHint={shortcutHintsShown && composerFocused ? "⌘J" : null}
+        shortcutHint={shortcutHintsShown && currentLevel === level ? "⌘J" : null}
         requireCmdEnter={requireCmdEnterToSend}
         onChange={(value) => setComposerText((current) => ({ ...current, [headId]: value }))}
         onSubmit={() => void submitComposer(headId)}
@@ -4128,427 +4255,280 @@ function ResearchDocument({
     );
   };
 
-  const branchTitle = (head: ResearchNode | null | undefined, anchor?: ResearchHighlightAnchor | null) => {
-    if (head) {
-      return nodeLabel(head, "Branch");
-    }
-    return anchor ? `Branch: ${quoteDisplayText(anchor.exact)}` : "New branch";
-  };
-
-  const siblingSwitcher = (headId: string, onSwitch: (siblingId: string) => void) => {
-    const head = nodeById.get(headId);
-    const siblings = head?.parentNodeId ? branchesByParent.get(head.parentNodeId) ?? EMPTY_BRANCHES : EMPTY_BRANCHES;
-    const index = siblings.findIndex((sibling) => sibling.id === headId);
-    if (siblings.length < 2 || index < 0) {
-      return null;
-    }
-    return {
-      index,
-      count: siblings.length,
-      onStep: (delta: -1 | 1) => {
-        const next = siblings[index + delta];
-        if (next) {
-          onSwitch(next.id);
-        }
-      },
-    };
-  };
-
-  const jumpToSource = (headId: string) => {
-    const head = nodeById.get(headId);
-    const parentId = head?.parentNodeId;
-    if (!head || !parentId) {
-      return;
-    }
-    const placement = researchNodePlacement(detail.nodes, mainChainIds, validPinnedHeads, parentId);
-    setExpandedAnswers((current) => (current[parentId] ? current : { ...current, [parentId]: true }));
-    if (placement.kind === "drawer") {
-      navigate(parentId);
-      window.setTimeout(() => revealPassage(headId, true), 0);
-      return;
-    }
-    if (singleColumn && drawer) {
-      closeDrawer("close");
-    }
-    focusColumn(placement.kind === "main" ? "main" : placement.headId);
-    window.requestAnimationFrame(() => revealPassage(headId, true));
-  };
-
-  /** The title of the conversation or branch a node is part of. */
-  const chainTitleOf = (nodeId: string) =>
-    mainChainIds.includes(nodeId)
-      ? treeTitleText
-      : nodeLabel(nodeById.get(researchChainHead(detail.nodes, nodeId)), "the parent branch");
-
-  const sourceLine = (headId: string, hasTurns: boolean) => {
-    const head = nodeById.get(headId);
-    const parent = head?.parentNodeId ? nodeById.get(head.parentNodeId) : null;
-    if (!head || !parent) {
-      return null;
-    }
-    const resolves = branchRangeOffsetsRef.current.some((entry) => entry.id === headId);
-    const quote = head.queryAnchor ? quoteDisplayText(head.queryAnchor.exact) : null;
+  /** The passage a branch was asked about, a muted block at the top of its
+   * messages column. */
+  const sourceBlock = (anchor: ResearchHighlightAnchor | null, parentId: string, branchId: string | null) => {
+    const resolves = branchId
+      ? branchRangeOffsetsRef.current.some((entry) => entry.id === branchId)
+      : Boolean(anchor);
+    const parentLoaded = Boolean(contentByNode[parentId]);
+    const quote = anchor ? quoteDisplayText(anchor.exact) : null;
     return (
-      <ResearchBranchSource
-        quote={quote && (resolves || !contentByNode[parent.id]) ? quote : null}
-        previousQuote={quote && !resolves && contentByNode[parent.id] ? quote : null}
-        parentTitle={chainTitleOf(parent.id)}
-        full={!hasTurns}
-        onJump={() => jumpToSource(headId)}
-      />
-    );
-  };
-
-  const columnBody = (headId: string, chainIds: readonly string[], register: typeof registerSegmentElement) => {
-    const head = nodeById.get(headId);
-    if (head?.kind === "note") {
-      return (
-        <ResearchNoteDocument
-          detail={detail}
-          note={head}
-          archived={archived}
-          actions={noteActions}
-          requireCmdEnterToSend={requireCmdEnterToSend}
-          onSelectNode={(nodeId) => navigate(nodeId)}
-        />
-      );
-    }
-    return (
-      <>
-        <div className="research-turns">{renderTurns(chainIds, { inConversation: false, register })}</div>
-        {renderQueue(headId)}
-        {renderChainComposer(headId, chainIds, register !== registerNothing)}
-      </>
-    );
-  };
-
-  // The part of the conversation column the drawer leaves uncovered.
-  const mainVisibleWidth =
-    (columnsLayout?.conversationWidth ?? areaWidth) - (drawer && !singleColumn ? drawerWidth : 0);
-  const mainColumn = (
-    <section
-      key="main"
-      className={`research-conv-column is-main${focusedColumnKey === "main" ? " is-focused" : ""}${
-        singleColumn && focusedColumnKey !== "main" ? " is-hidden" : ""
-      }`}
-      data-research-column="main"
-      aria-label={treeTitleText}
-      inert={(singleColumn && focusedColumnKey !== "main") || undefined}
-      onMouseDown={() => takeColumnFocus("main")}
-    >
-      <ResearchConversationHeader
-        title={treeTitleText}
-        titleRef={(element) => {
-          if (element) columnTitleRefs.current.set("main", element);
-          else columnTitleRefs.current.delete("main");
-        }}
-        canGoBack={canGoBack}
-        canGoForward={canGoForward}
-        backTitle={`Back (${IS_MAC ? "⌘[" : "Ctrl+["})`}
-        forwardTitle={`Forward (${IS_MAC ? "⌘]" : "Ctrl+]"})`}
-        onBack={goBack}
-        onForward={goForward}
-        imported={rootNode?.origin === "terminalExport"}
-        archived={archived}
-        followed={treeFollowed}
-        bookmarked={treeBookmarked}
-        onToggleFollow={handleToggleFollow}
-        onToggleBookmark={handleToggleBookmark}
-        onMove={onMoveTree ? (trigger) => onMoveTree(detail.tree.id, trigger) : undefined}
-        onClose={onClose}
-        onColumnBack={
-          singleColumn && columnsLayout ? () => columnsLayout.focusFeed({ moveFocus: true }) : undefined
-        }
-        // Single column: Back to feed takes their place (⌘[ and ⌘] still work).
-        showHistory={!singleColumn && mainVisibleWidth >= HISTORY_NAV_MIN_VISIBLE_WIDTH}
-      />
-      <div
-        ref={mainScrollRef}
-        className="research-column-scroll"
-        onScroll={recordScroll}
-      >
-        <div ref={mainContentRef} className="research-column-content research-reading-surface">
-          {rootNode?.kind === "note" ? (
-            <ResearchNoteDocument
-              detail={detail}
-              note={rootNode}
-              archived={archived}
-              actions={noteActions}
-              requireCmdEnterToSend={requireCmdEnterToSend}
-              onSelectNode={(nodeId) => navigate(nodeId)}
-            />
+      <div className="research-branch-source">
+        <CornerDownRight size={13} aria-hidden="true" />
+        <span className="research-branch-source-quote">
+          {quote && (resolves || !parentLoaded) ? (
+            <i>“{quote}”</i>
+          ) : quote ? (
+            `The whole answer (was “${quote}”, before the answer was rerun)`
           ) : (
-            <>
-              <div className="research-turns">
-                {renderTurns(mainChainIds, { inConversation: true, register: registerSegmentElement })}
-              </div>
-              {renderQueue(rootNodeId)}
-              {renderChainComposer(rootNodeId, mainChainIds)}
-            </>
+            "The whole answer"
           )}
-        </div>
+        </span>
       </div>
-    </section>
-  );
+    );
+  };
 
-  const pinnedColumns = validPinnedHeads.map((headId, index) => {
-    const head = nodeById.get(headId);
-    const chainIds = pinnedChains[index] ?? [headId];
-    const parentBranch = researchParentBranchHead(detail.nodes, mainChainIds, headId);
+  const renderMarker = (level: number, marker: BranchMarker) => {
+    const openHead = levelChains[level + 1]?.[0] ?? null;
+    const openIndex = openHead ? marker.branchIds.indexOf(openHead) : -1;
+    const target = marker.branchIds[openIndex < 0 ? 0 : openIndex];
+    const count = marker.branchIds.length;
+    const running = marker.branchIds.some(branchBusy);
+    const whole = marker.top === null;
+    const what =
+      count === 1
+        ? whole
+          ? "1 branch from the whole answer"
+          : "1 branch from this paragraph"
+        : `${count} branches from ${whole ? "the whole answer" : "this paragraph"}`;
+    const targetPrompt = nodeById.get(target)?.prompt ?? "";
+    const label =
+      openIndex >= 0
+        ? `${what}, one is open${running ? ", running" : ""}. Closes it.`
+        : `${what}${running ? ", running" : ""}. Opens: ${targetPrompt.split(/\s+/).join(" ").trim().slice(0, 80)}`;
+    const showTip = (element: HTMLElement) =>
+      setMarkerTip(openIndex >= 0 ? null : { element, branchIds: marker.branchIds, level });
+    return (
+      <button
+        key={marker.key}
+        type="button"
+        className={`research-marker${openIndex >= 0 ? " is-open" : ""}${running ? " is-running" : ""}${
+          whole ? " is-end" : ""
+        }`}
+        style={whole ? undefined : { top: marker.top ?? 0 }}
+        data-research-marker={marker.key}
+        aria-label={label}
+        aria-current={openIndex >= 0 ? "true" : undefined}
+        onMouseEnter={(event) => showTip(event.currentTarget)}
+        onMouseLeave={() => setMarkerTip(null)}
+        onFocus={(event) => {
+          if (event.currentTarget.matches(":focus-visible")) {
+            showTip(event.currentTarget);
+          }
+        }}
+        onBlur={() => setMarkerTip(null)}
+        onClick={() => {
+          setMarkerTip(null);
+          if (openIndex >= 0) {
+            closeAfter(level);
+            requestFocus({ kind: "marker", level, key: marker.key }, "settle");
+          } else if (target) {
+            goBranch(level, target);
+          }
+        }}
+      >
+        <ResearchBranchIcon size={13} />
+        {count > 1 ? <span className="research-tnum">{count}</span> : null}
+      </button>
+    );
+  };
+
+  const renderAnswerColumn = (level: number, nodeId: string) => {
+    const node = nodeById.get(nodeId);
+    const view = segmentViews.get(nodeId);
+    if (!node || !view) {
+      return null;
+    }
+    const active = isActiveResearchStatus(node.status);
+    const markers = markersByNode[nodeId] ?? [];
+    const endMarker = markers.find((marker) => marker.top === null) ?? null;
+    const footTime = node.status === "complete" ? (node.completedAt ?? node.createdAt) : null;
     return (
       <section
-        key={headId}
-        className={`research-conv-column is-pinned${focusedColumnKey === headId ? " is-focused" : ""}${
-          singleColumn && focusedColumnKey !== headId ? " is-hidden" : ""
-        }`}
-        style={singleColumn ? undefined : { width: RESEARCH_PINNED_COLUMN_WIDTH }}
-        data-research-column={headId}
-        aria-label={branchTitle(head)}
-        inert={(singleColumn && focusedColumnKey !== headId) || undefined}
-        onMouseDown={() => takeColumnFocus(headId)}
+        key={pairColumnKey("answer", level, nodeId)}
+        className={`research-pair-answer${currentLevel === level ? " is-current" : ""}`}
+        data-research-column={`A${level}`}
+        data-research-pair="answer"
+        data-research-level={level}
+        aria-label={`Answer to: ${researchPairLabel(nodeLabel(node, treeTitleText))}`}
       >
-        <ResearchBranchHeader
-          title={branchTitle(head)}
-          titleRef={(element) => {
-            if (element) columnTitleRefs.current.set(headId, element);
-            else columnTitleRefs.current.delete(headId);
-          }}
-          backLabel={
-            singleColumn
-              ? "Back"
-              : parentBranch
-                ? `Back to “${nodeLabel(nodeById.get(parentBranch), "the parent branch")}”`
-                : undefined
+        <header className="research-column-header is-spanned">
+          <div className="research-column-bar" data-tauri-drag-region />
+        </header>
+        <div
+          className="research-column-scroll"
+          tabIndex={-1}
+          onScroll={(event) => recordAnswerScroll(nodeId, event.currentTarget)}
+        >
+          <article className="research-answer research-reading-surface">
+            <ResearchAnswerPane
+              view={view}
+              node={node}
+              contentError={contentErrorByNode[nodeId] ?? null}
+              cancelling={cancelling}
+              elapsedText={active && node.startedAt ? formatElapsedClock(metadataNow - node.startedAt) : null}
+              waitsForParent={
+                node.status === "queued" &&
+                isActiveResearchStatus(nodeById.get(node.parentNodeId ?? "")?.status ?? "complete")
+              }
+              recapPending={recapPendingNodeIds.has(nodeId)}
+              pointerOverAnnotation={pointerAnnotationNodeId === nodeId}
+              canRetry={!archived && canRetryResearchNode(node)}
+              retrying={retryingNodeId === nodeId}
+              retryQueued={queuedRetries.has(nodeId)}
+              canEditQuestion={!archived && node.status === "failed" && Boolean(node.parentNodeId)}
+              registerSegmentElement={registerSegmentElement}
+              onExpandTurns={expandAllTurns}
+              onRetryContentLoad={retryContentLoad}
+              onToggleFullTrace={toggleFullTrace}
+              onCancelNode={handleCancelNode}
+              onRetryNode={handleRetryNode}
+              onRemoveQueuedRetry={removeQueuedRetry}
+              onEditQuestion={handleEditQuestion}
+              onRootMouseDown={beginHighlightSelectionDrag}
+              onRootMouseUp={finishHighlightSelectionDrag}
+              onRootKeyUp={captureHighlightSelection}
+              onRootClick={openAnnotationAtPoint}
+              onRootMouseMove={trackAnnotationUnderPointer}
+              onRootMouseLeave={clearAnnotationPointer}
+            />
+            {markers.filter((marker) => marker.top !== null).map((marker) => renderMarker(level, marker))}
+            {footTime !== null || endMarker ? (
+              <div className={`research-answer-foot${footTime === null ? " is-bare" : ""}`}>
+                {footTime !== null ? (
+                  <div className="research-answer-foot-meta">
+                    <time dateTime={new Date(footTime).toISOString()} title={new Date(footTime).toLocaleString()}>
+                      {shortWhen(footTime, minuteNow)}
+                    </time>
+                  </div>
+                ) : null}
+                {endMarker ? renderMarker(level, endMarker) : null}
+              </div>
+            ) : null}
+          </article>
+        </div>
+      </section>
+    );
+  };
+
+  const historyNav = {
+    canGoBack,
+    canGoForward,
+    backTitle: `Back (${IS_MAC ? "⌘[" : "Ctrl+["})`,
+    forwardTitle: `Forward (${IS_MAC ? "⌘]" : "Ctrl+]"})`,
+    onBack: goBack,
+    onForward: goForward,
+  };
+
+  const levelColumns = levelPath.map((selectedId, level) => {
+    const chainIds = levelChains[level] ?? [selectedId];
+    const headId = chainIds[0] ?? selectedId;
+    const head = nodeById.get(headId);
+    const current = currentLevel === level ? " is-current" : "";
+    if (level === 0 && rootNode?.kind === "note") {
+      return (
+        <section
+          key={pairColumnKey("turns", 0, headId)}
+          className={`research-pair-note${current}`}
+          data-research-column="T0"
+          data-research-pair="turns"
+          data-research-level={0}
+          aria-label={treeTitleText}
+        >
+          <ResearchPairHeader title={treeTitleText} history={historyNav} archived={archived} />
+          <div className="research-column-scroll">
+            <div className="research-column-content research-reading-surface">
+              <ResearchNoteDocument
+                detail={detail}
+                note={rootNode}
+                archived={archived}
+                actions={noteActions}
+                requireCmdEnterToSend={requireCmdEnterToSend}
+                onSelectNode={(nodeId) => navigate(nodeId)}
+              />
+            </div>
+          </div>
+        </section>
+      );
+    }
+    const turns = (
+      <section
+        key={pairColumnKey("turns", level, headId)}
+        className={`research-pair-turns${current}`}
+        data-research-column={`T${level}`}
+        data-research-pair="turns"
+        data-research-level={level}
+        aria-label={`${level === 0 ? "Messages" : "Branch messages"}: ${
+          level === 0 ? treeTitleText : nodeLabel(head, "Branch")
+        }`}
+      >
+        <ResearchPairHeader
+          title={level === 0 ? treeTitleText : nodeLabel(head, "Branch")}
+          branch={level === 0 ? null : chainIds.length}
+          history={level === 0 ? historyNav : null}
+          imported={level === 0 && rootNode?.origin === "terminalExport"}
+          archived={level === 0 && archived}
+          onAsk={
+            head && head.kind !== "note"
+              ? () => requestFocus({ kind: "composer", key: headId }, "reveal")
+              : undefined
           }
-          onBack={
-            singleColumn
-              ? () => focusColumn(columnKeys[columnKeys.indexOf(headId) - 1] ?? "main", { moveFocus: true })
-              : parentBranch
-                ? () => navigate(parentBranch)
-                : undefined
-          }
-          siblings={siblingSwitcher(headId, (siblingId) => {
-            if (drawerHeadId === siblingId) {
-              closeDrawer("pin");
-            }
-            setPinnedHeads((current) =>
-              current
-                .map((id) => (id === headId ? siblingId : id))
-                .filter((id, position, all) => all.indexOf(id) === position),
-            );
-            takeColumnFocus(siblingId);
-            markOpened(siblingId);
-          })}
-          promoted={Boolean(head?.promotedAt)}
-          canPromote={Boolean(head)}
-          onTogglePromoted={() => togglePromoted(headId)}
-          onClose={() => unpinBranch(headId)}
-          closeLabel="Close this pinned column"
         />
-        <div className="research-column-scroll">
-          <div className="research-column-content research-reading-surface is-branch">
-            {sourceLine(headId, chainIds.some((id) => nodeById.has(id)))}
-            {columnBody(headId, chainIds, registerSegmentElement)}
+        <div className="research-column-scroll" onScroll={(event) => recordTurnsScroll(headId, event.currentTarget)}>
+          <div className="research-column-content research-reading-surface">
+            {level > 0 && head?.parentNodeId ? sourceBlock(head.queryAnchor ?? null, head.parentNodeId, headId) : null}
+            <ul className="research-msg-list">
+              {renderRows(chainIds, level)}
+              {renderQueue(headId)}
+            </ul>
+            {renderChainComposer(headId, chainIds, level)}
           </div>
         </div>
       </section>
     );
+    return [turns, renderAnswerColumn(level, selectedId)];
   });
 
-  const renderDrawerContent = (target: DrawerTarget, live: boolean) => {
-    const register = live ? registerSegmentElement : registerNothing;
-    if (target.kind === "draft") {
-      const parent = nodeById.get(target.parentNodeId);
-      const key = `draft:${target.parentNodeId}`;
-      const quote = target.anchor ? quoteDisplayText(target.anchor.exact) : null;
-      return (
-        <>
-          <ResearchBranchHeader
-            title={branchTitle(null, target.anchor)}
-            titleRef={live ? drawerTitleRef : undefined}
-            backLabel={singleColumn ? "Back" : undefined}
-            onBack={singleColumn ? closeDrawerToConversation : undefined}
-            promoted={false}
-            canPromote={false}
-            onClose={singleColumn ? undefined : closeDrawerToConversation}
-            closeLabel="Close (Esc)"
-          />
-          <div className="research-column-scroll" ref={live ? drawerScrollRef : undefined}>
-            <div className="research-column-content research-reading-surface is-branch">
-              {parent ? (
-                <ResearchBranchSource
-                  quote={quote}
-                  parentTitle={chainTitleOf(parent.id)}
-                  full
-                  onJump={() => {
-                    const placement = researchNodePlacement(
-                      detail.nodes,
-                      mainChainIds,
-                      validPinnedHeads,
-                      parent.id,
-                    );
-                    if (placement.kind === "drawer") {
-                      return;
-                    }
-                    focusColumn(placement.kind === "main" ? "main" : placement.headId);
-                    window.requestAnimationFrame(() => {
-                      const entry = branchRangeOffsetsRef.current.find((candidate) => candidate.id === "__draft__");
-                      if (entry) {
-                        setFlashRange({ nodeId: parent.id, start: entry.start, end: entry.end });
-                      } else {
-                        flashTurn(parent.id);
-                      }
-                    });
-                  }}
-                />
-              ) : null}
-              <div className="research-branch-empty">
-                <p>
-                  Ask about {quote ? "this passage" : "this answer"} to create a new branch.
-                </p>
-              </div>
-              <ResearchConversationComposer
-                ref={live ? registerComposer(key) : undefined}
-                value={composerText[key] ?? ""}
-                placeholder={quote ? "Ask about this passage" : "Ask about this answer"}
-                ariaLabel="Ask about this passage to create a new branch"
-                requireCmdEnter={requireCmdEnterToSend}
-                disabled={archived}
-                canSubmit={!archived}
-                submitting={submittingKey === key}
-                onChange={(value) => setComposerText((current) => ({ ...current, [key]: value }))}
-                onSubmit={() => void submitDraft()}
-              />
-            </div>
-          </div>
-        </>
-      );
-    }
-    const chainIds = live ? drawerChainIds : leavingChainIds;
-    const headId = chainIds[0] ?? target.nodeId;
-    const head = nodeById.get(headId);
-    const parentBranch = researchParentBranchHead(detail.nodes, mainChainIds, headId);
-    return (
-      <>
-        <ResearchBranchHeader
-          title={branchTitle(head)}
-          titleRef={live ? drawerTitleRef : undefined}
-          backLabel={
-            singleColumn
-              ? "Back"
-              : parentBranch
-                ? `Back to “${nodeLabel(nodeById.get(parentBranch), "the parent branch")}”`
-                : undefined
-          }
-          onBack={
-            singleColumn
-              ? closeDrawerToConversation
-              : parentBranch
-                ? () => navigate(parentBranch)
-                : undefined
-          }
-          siblings={siblingSwitcher(headId, (siblingId) => navigate(siblingId))}
-          promoted={Boolean(head?.promotedAt)}
-          canPromote={Boolean(head)}
-          onTogglePromoted={() => togglePromoted(headId)}
-          onPin={head ? () => pinBranch(headId) : undefined}
-          onClose={singleColumn ? undefined : closeDrawerToConversation}
-          closeLabel="Close (Esc)"
-        />
-        <div className="research-column-scroll" ref={live ? drawerScrollRef : undefined}>
-          <div className="research-column-content research-reading-surface is-branch">
-            {head ? (
-              <>
-                {sourceLine(headId, true)}
-                {columnBody(headId, chainIds, register)}
-              </>
-            ) : (
-              <div className="research-response-loading is-drawer">
-                <LoaderCircle className="research-spinner" size={18} aria-hidden="true" />
-              </div>
-            )}
+  const pendingColumn =
+    activePending && pendingLevel !== null ? (
+      <section
+        key={`P${pendingLevel}:${activePending.parentNodeId}`}
+        className={`research-pair-turns is-pending${currentLevel === pendingLevel ? " is-current" : ""}`}
+        data-research-column={`P${pendingLevel}`}
+        data-research-pair="turns"
+        data-research-level={pendingLevel}
+        aria-label="New branch"
+      >
+        <ResearchPairHeader title="New branch" branch="new" />
+        <div className="research-column-scroll">
+          <div className="research-column-content research-reading-surface">
+            {sourceBlock(activePending.anchor, activePending.parentNodeId, null)}
+            <ResearchConversationComposer
+              ref={registerComposer(`draft:${activePending.parentNodeId}`)}
+              value={composerText[`draft:${activePending.parentNodeId}`] ?? ""}
+              placeholder={activePending.anchor ? "Ask about this passage" : "Ask about this answer"}
+              ariaLabel="First question of the new branch"
+              mode={{ label: <b>New branch</b>, cancelLabel: "Cancel branch", onCancel: cancelPending }}
+              requireCmdEnter={requireCmdEnterToSend}
+              disabled={archived}
+              canSubmit={!archived}
+              submitting={submittingKey === `draft:${activePending.parentNodeId}`}
+              shortcutHint={shortcutHintsShown && currentLevel === pendingLevel ? "⌘J" : null}
+              onChange={(value) =>
+                setComposerText((current) => ({ ...current, [`draft:${activePending.parentNodeId}`]: value }))
+              }
+              onSubmit={() => void submitDraft()}
+            />
           </div>
         </div>
-      </>
-    );
-  };
-
-  const drawerTarget = drawer ?? leavingDrawer?.target ?? null;
-  const drawerElement = drawerTarget ? (
-    <ResearchBranchDrawer
-      key={drawer ? drawerInstance : leavingDrawer?.instance}
-      ref={drawer ? drawerElementRef : undefined}
-      width={drawerWidth}
-      full={singleColumn}
-      label={`Branch: ${
-        drawerTarget.kind === "draft"
-          ? branchTitle(null, drawerTarget.anchor)
-          : branchTitle(nodeById.get((drawer ? drawerChainIds : leavingChainIds)[0] ?? drawerTarget.nodeId))
-      }`}
-      contentKey={
-        drawerTarget.kind === "draft"
-          ? `draft:${drawerTarget.parentNodeId}`
-          : (drawer ? drawerHeadId : leavingChainIds[0]) ?? drawerTarget.nodeId
-      }
-      animateOpen={drawerAnimates}
-      leaving={drawer ? null : leavingDrawer?.mode ?? null}
-      onLeft={() => setLeavingDrawer((current) => (current && !drawerRef.current ? null : current))}
-    >
-      {renderDrawerContent(drawerTarget, Boolean(drawer))}
-    </ResearchBranchDrawer>
-  ) : null;
+      </section>
+    ) : null;
 
   const menuNode = menu ? nodeById.get(menu.nodeId) ?? null : null;
   const renderMenu = () => {
     if (!menu || !menuNode) {
       return null;
-    }
-    if (menu.kind === "branches") {
-      const branches = branchesByParent.get(menu.nodeId) ?? EMPTY_BRANCHES;
-      const blocker = branchBlockerFor(menuNode, archived);
-      return (
-        <ResearchMenu
-          anchor={menu.anchor}
-          align={menu.align}
-          trigger={menu.trigger}
-          label="Branches from this answer"
-          onClose={() => setMenu(null)}
-        >
-          <ResearchMenuTitle>Branches from this answer</ResearchMenuTitle>
-          {branches.map((branch) => {
-            const open = openBranchIds.has(branch.id);
-            const unread =
-              branch.status === "complete" &&
-              firstSeenCompleteRef.current.get(branch.id) === false &&
-              !openedNodeIds.has(branch.id);
-            return (
-              <ResearchMenuItem
-                key={branch.id}
-                icon={<ResearchBranchIcon size={15} />}
-                label={nodeLabel(branch, "Branch")}
-                description={unread && !open ? "New answer" : undefined}
-                current={open}
-                onSelect={() => navigate(branch.id, { returnFocus: menu.trigger ?? null })}
-                trailing={
-                  open ? (
-                    <Check size={15} className="research-menu-check" aria-hidden="true" />
-                  ) : unread ? (
-                    <span className="research-turn-unread" aria-hidden="true" />
-                  ) : null
-                }
-              />
-            );
-          })}
-          <ResearchMenuSeparator />
-          <ResearchMenuItem
-            icon={<Plus size={15} aria-hidden="true" />}
-            label="New branch here"
-            disabled={blocker !== null}
-            title={blocker ?? undefined}
-            onSelect={() => openDraft(menu.nodeId, null, menu.trigger ?? null)}
-          />
-        </ResearchMenu>
-      );
     }
     if (menu.kind === "mark") {
       const highlight = menu.highlightId
@@ -4561,6 +4541,7 @@ function ResearchDocument({
           align={menu.align}
           trigger={menu.trigger}
           label="Passage"
+          compact
           onClose={() => setMenu(null)}
         >
           {menu.branchIds.map((branchId) => (
@@ -4569,7 +4550,13 @@ function ResearchDocument({
               icon={<ResearchBranchIcon size={15} />}
               label={nodeLabel(nodeById.get(branchId), "Branch")}
               current={openBranchIds.has(branchId)}
-              onSelect={() => navigate(branchId)}
+              onSelect={() => {
+                setMenu(null);
+                const level = levelPathRef.current.indexOf(menu.nodeId);
+                if (level >= 0) {
+                  goBranch(level, branchId);
+                }
+              }}
             />
           ))}
           {highlight ? (
@@ -4579,7 +4566,7 @@ function ResearchDocument({
                 label="Branch from highlight"
                 disabled={blocker !== null}
                 title={blocker ?? undefined}
-                onSelect={() => openDraft(menu.nodeId, highlight.anchor, branchTriggerFor(menu.nodeId))}
+                onSelect={() => openDraft(menu.nodeId, highlight.anchor)}
               />
               <ResearchMenuItem
                 icon={<X size={15} aria-hidden="true" />}
@@ -4604,7 +4591,7 @@ function ResearchDocument({
     const isRoot = node.id === rootNodeId;
     const view = segmentViews.get(node.id) ?? null;
     const content = contentByNode[node.id] ?? null;
-    const chainIds = inlineChainFor(detail.nodes, node.id);
+    const chainIds = inlineChainFor(nodes, node.id);
     const deleteLabel = isRoot
       ? "Delete research"
       : node.inline
@@ -4617,7 +4604,6 @@ function ResearchDocument({
     const canRegenerateRecap = Boolean(
       !archived && content?.responseRevision && content.node.recap?.text.trim(),
     );
-    const threadReady = chainIds.every((id) => segmentViews.get(id)?.content);
     const active = isActiveResearchStatus(node.status);
     // A cancelled turn already says how long it ran ("Stopped after").
     const durationText =
@@ -4640,17 +4626,18 @@ function ResearchDocument({
     // conversation has no fold and hides only windowed-off turns.
     const revealsHighlights = hiddenHighlights > 0 && Boolean(view?.hasTranscriptActivity) && !fullTraceNodes[node.id];
     const copyText = node.status === "complete" ? view?.conversationCopyText ?? view?.rawAnswer : null;
+    const branchBlocker = branchBlockerFor(node, archived);
     return (
       <ResearchMenu
         anchor={menu.anchor}
         align={menu.align}
         trigger={menu.trigger}
-        label={`Actions for ${nodeLabel(node, treeTitleText)}`}
+        label="Answer actions"
         describedBy={stats || hiddenHighlights > 0 ? "research-answer-menu-meta" : undefined}
         // Retry hides the … button (a queued run has no answer yet).
         fallbackFocus={() =>
           document.querySelector<HTMLElement>(
-            `[data-research-branch-trigger="${CSS.escape(node.id)}"]`,
+            `[data-research-row][data-node-id="${CSS.escape(node.id)}"]`,
           )
         }
         onClose={() => setMenu(null)}
@@ -4676,6 +4663,13 @@ function ResearchDocument({
           />
         ) : null}
         {stats || hiddenHighlights > 0 ? <ResearchMenuSeparator /> : null}
+        <ResearchMenuItem
+          icon={<ResearchBranchIcon size={15} />}
+          label="Branch from the whole answer"
+          disabled={branchBlocker !== null}
+          title={branchBlocker ?? undefined}
+          onSelect={() => openDraft(node.id, null)}
+        />
         {copyText && view ? (
           <ResearchMenuItem
             icon={<Copy size={15} aria-hidden="true" />}
@@ -4690,8 +4684,6 @@ function ResearchDocument({
           <ResearchMenuItem
             icon={<Files size={15} aria-hidden="true" />}
             label="Copy thread as Markdown"
-            disabled={!threadReady}
-            title={threadReady ? undefined : "The thread is still loading"}
             onSelect={() => {
               setMenu(null);
               void copyThread(chainIds);
@@ -4752,7 +4744,7 @@ function ResearchDocument({
             }
             title={
               archived
-                ? "Unarchive this research before editing its document"
+                ? "Move this question out of Archive to edit its document"
                 : !content?.responseRevision || view?.editableDocumentMarkdown == null
                   ? "The document content is unavailable"
                   : undefined
@@ -4789,82 +4781,115 @@ function ResearchDocument({
             setDeletingBranchId(node.id);
           }}
         />
+        {treeMenu && chainIds[0] === rootNodeId ? (
+          <>
+            <ResearchMenuSeparator />
+            <ResearchTreeMenuItems
+              currentPlace={treeMenu.currentPlace}
+              folders={treeMenu.folders}
+              bookmarked={treeMenu.bookmarked}
+              onToggleBookmark={() => {
+                setMenu(null);
+                treeMenu.onSetBookmarked(!treeMenu.bookmarked);
+              }}
+              followed={treeMenu.followed}
+              followDisabledReason={treeMenu.followDisabledReason}
+              onToggleFollow={() => {
+                setMenu(null);
+                treeMenu.onSetFollowed(!treeMenu.followed);
+              }}
+              onMove={(place) => {
+                setMenu(null);
+                treeMenu.onMove(place);
+              }}
+              onNewFolder={() => {
+                setMenu(null);
+                treeMenu.onNewFolder(
+                  menu.trigger ??
+                    document.querySelector<HTMLElement>(
+                      `[data-research-row][data-node-id="${CSS.escape(node.id)}"]`,
+                    ) ??
+                    undefined,
+                );
+              }}
+            />
+          </>
+        ) : null}
       </ResearchMenu>
     );
   };
 
-  // ⌘F searches the drawer, then the conversation, then pinned columns.
-  const searchRoots = () => {
-    const roots: HTMLElement[] = [];
-    const drawerContent = drawerElementRef.current?.querySelector<HTMLElement>(".research-column-content");
-    if (drawer && drawerContent) {
-      roots.push(drawerContent);
-    }
-    roots.push(
-      ...(workspaceRef.current?.querySelectorAll<HTMLElement>(
-        ".research-conv-column:not(.is-hidden) .research-column-content",
-      ) ?? []),
-    );
-    return roots;
-  };
-  // A match inside a clamped answer expands the answer; a match in a pinned
-  // column scrolled out of view scrolls the row to it.
+  // ⌘F searches every open column, left to right.
+  const searchRoots = () => [
+    ...(workspaceRef.current?.querySelectorAll<HTMLElement>(
+      "[data-research-pair] .research-column-content, [data-research-pair] .research-answer",
+    ) ?? []),
+  ];
+  // A match in a column scrolled out of the strip's view scrolls the strip to it.
   const revealSearchMatch = (range: Range) => {
     const element =
       range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
-    showResearchColumn(
-      columnsLayout?.row ?? null,
-      element?.closest<HTMLElement>(".research-conv-column") ?? null,
-      "auto",
-    );
-    const clamp = element?.closest<HTMLElement>(".research-answer-clamp.is-clamped");
-    const nodeId = element?.closest<HTMLElement>(".research-response-content-root")?.dataset.nodeId;
-    if (!clamp || !nodeId || range.getBoundingClientRect().bottom <= clamp.getBoundingClientRect().bottom - 2) {
-      return false;
-    }
-    setExpandedAnswers((current) => ({ ...current, [nodeId]: true }));
-    return true;
+    const column = element?.closest<HTMLElement>("[data-research-column]") ?? null;
+    revealResearchColumns(columnsLayout?.row ?? null, column, column, "auto");
+    return false;
   };
-  const overlayContent = (
-    <>
-      {drawerElement}
-      <DomSearchBar
-        active={!(singleColumn && columnsLayout?.feedFocused)}
-        // ⌘F while the single column shows the feed switches back to the
-        // conversation and searches it.
-        onActivate={columnsLayout ? columnsLayout.releaseFeed : undefined}
-        placeholder="Find in research"
-        rootRef={mainContentRef}
-        viewportRef={mainScrollRef}
-        getRoots={searchRoots}
-        rootsKey={`${drawerHeadId ?? drawer?.kind ?? ""}:${validPinnedHeads.join(",")}:${focusedColumnKey}`}
-        scopeContains={(target) =>
-          Boolean(workspaceRef.current?.contains(target) || drawerElementRef.current?.contains(target))
-        }
-        viewportFor={(range) =>
-          (range.startContainer instanceof Element
-            ? range.startContainer
-            : range.startContainer.parentElement
-          )?.closest<HTMLElement>(".research-column-scroll") ?? null
-        }
-        revealRange={revealSearchMatch}
-      />
-    </>
+  const searchBar = (
+    <DomSearchBar
+      active
+      placeholder="Find in research"
+      rootRef={workspaceRef}
+      getRoots={searchRoots}
+      rootsKey={`${levelPath.join(",")}:${activePending?.parentNodeId ?? ""}`}
+      scopeContains={(target) => Boolean(workspaceRef.current?.contains(target))}
+      viewportFor={(range) =>
+        (range.startContainer instanceof Element
+          ? range.startContainer
+          : range.startContainer.parentElement
+        )?.closest<HTMLElement>(".research-column-scroll") ?? null
+      }
+      revealRange={revealSearchMatch}
+    />
   );
 
+  const lastColumnIsAnswer = !activePending && !(levelPath.length === 1 && rootNode?.kind === "note");
   return (
     <TranscriptLinkActionsProvider actions={linkActions}>
       <div
         ref={workspaceRef}
-        className={`research-workspace research-conversation-workspace${
-          singleColumn ? " is-single-column" : ""
-        }${drawer ? " has-drawer" : ""}`}
+        className="research-workspace research-pairs"
+        onKeyDown={onPairsKeyDown}
       >
-        {mainColumn}
-        {pinnedColumns}
+        {levelColumns}
+        {pendingColumn}
+        <div className="research-columns-filler" aria-hidden={!lastColumnIsAnswer || undefined}>
+          {lastColumnIsAnswer ? (
+            <p>Select a passage or a branch marker beside the answer to open it as the next pair.</p>
+          ) : null}
+        </div>
       </div>
-      {columnsLayout?.overlay ? createPortal(overlayContent, columnsLayout.overlay) : overlayContent}
+      {columnsLayout?.overlay ? createPortal(searchBar, columnsLayout.overlay) : searchBar}
       {renderMenu()}
+      {markerTip ? (
+        <ResearchMarkerTip
+          anchor={markerTip.element}
+          items={markerTip.branchIds.flatMap((branchId) => {
+            const branch = nodeById.get(branchId);
+            if (!branch) return [];
+            const chain = inlineChainFor(nodes, branchId);
+            return [
+              {
+                id: branchId,
+                question: branch.prompt,
+                source: branch.queryAnchor ? `“${quoteDisplayText(branch.queryAnchor.exact)}”` : "Whole answer",
+                messages: chain.length,
+                state: levelChains[markerTip.level + 1]?.[0] === branchId ? ("open" as const) : branchBusy(branchId) ? ("running" as const) : null,
+              },
+            ];
+          })}
+          opensNext={markerTip.branchIds.includes(levelChains[markerTip.level + 1]?.[0] ?? "")}
+          onDismiss={dismissMarkerTip}
+        />
+      ) : null}
       {highlightAction
         ? createPortal(
             <div
@@ -4879,6 +4904,18 @@ function ResearchDocument({
               }}
             >
               <div className="research-selection-row">
+                <button
+                  type="button"
+                  className="control-button research-menu-item is-inline"
+                  disabled={savingHighlight || selectionBranchBlocker !== null}
+                  aria-keyshortcuts="A"
+                  title={selectionBranchBlocker ?? "Branch (A)"}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={branchFromSelection}
+                >
+                  <ResearchBranchIcon size={14} />
+                  <span>Branch</span>
+                </button>
                 <button
                   type="button"
                   className="control-button research-menu-item is-inline"
@@ -4898,18 +4935,6 @@ function ResearchDocument({
                           ? "Remove highlights"
                           : "Remove highlight"}
                   </span>
-                </button>
-                <button
-                  type="button"
-                  className="control-button research-menu-item is-inline"
-                  disabled={savingHighlight || selectionBranchBlocker !== null}
-                  aria-keyshortcuts="A"
-                  title={selectionBranchBlocker ?? "Branch (A)"}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={branchFromSelection}
-                >
-                  <ResearchBranchIcon size={14} />
-                  <span>Branch</span>
                 </button>
                 <button
                   type="button"

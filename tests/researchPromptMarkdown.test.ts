@@ -3,8 +3,8 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  ResearchMessageRow,
   ResearchTimelineItem,
-  ResearchTurnQuestion,
 } from "../src/components/research/ResearchTurn";
 import {
   ResearchMessageBody,
@@ -59,10 +59,34 @@ function questionNode(overrides: Partial<ResearchNode> = {}): ResearchNode {
   };
 }
 
-test("research prompts preserve Markdown blockquotes", () => {
-  const html = renderToStaticMarkup(
-    createElement(ResearchTurnQuestion, { node: questionNode(), showPrompt: true, now: NOW }),
+const noop = () => {};
+type RowProps = Parameters<typeof ResearchMessageRow>[0];
+const row = (node: ResearchNode, overrides: Partial<RowProps> = {}) =>
+  renderToStaticMarkup(
+    createElement(ResearchMessageRow, {
+      node,
+      level: 0,
+      label: node.prompt,
+      showPrompt: true,
+      selected: false,
+      now: NOW,
+      starrable: false,
+      branchCount: 0,
+      branchOpen: false,
+      branchUnread: false,
+      answerMenuOpen: false,
+      registerSegmentElement: noop,
+      onSelect: noop,
+      onTogglePromoted: noop,
+      onShowBranches: noop,
+      onOpenAnswerMenu: noop,
+      onOpenContextMenu: noop,
+      ...overrides,
+    }),
   );
+
+test("research prompts preserve Markdown blockquotes", () => {
+  const html = row(questionNode());
 
   assert.doesNotMatch(html, /Claude Fable/);
   assert.doesNotMatch(html, /You asked/);
@@ -72,79 +96,59 @@ test("research prompts preserve Markdown blockquotes", () => {
   assert.match(html, /foo<br\/>[\n]?bar/);
 });
 
-test("the question meta row shows short time, star, and branch count with even spacing", () => {
-  const html = renderToStaticMarkup(
-    createElement(ResearchTurnQuestion, {
-      node: questionNode({ inline: true, parentNodeId: "root", promotedAt: NOW }),
-      showPrompt: true,
-      now: NOW,
-      promotable: true,
-      branchCount: 3,
-      branchOpen: true,
-      branchMenuOpen: true,
-      branchUnread: true,
-      onTogglePromoted: () => {},
-      onBranchButton: () => {},
-    }),
-  );
+test("a message row's meta line shows short time, star, branch count and … with even spacing", () => {
+  const html = row(questionNode({ inline: true, parentNodeId: "root", promotedAt: NOW }), {
+    selected: true,
+    starrable: true,
+    branchCount: 3,
+    branchOpen: true,
+    branchUnread: true,
+  });
 
-  assert.match(html, /research-turn-meta"><time[^>]*>2d<\/time>/);
-  assert.match(html, /research-turn-star is-on"[^>]*aria-pressed="true"/);
-  assert.match(
-    html,
-    /research-turn-branches has-count is-open"[^>]*aria-haspopup="menu" aria-expanded="true"/,
-  );
+  assert.match(html, /research-msg-meta"><time[^>]*>2d<\/time>/);
+  assert.match(html, /research-msg-star is-on"[^>]*aria-pressed="true"/);
+  assert.match(html, /research-msg-branches is-open"/);
   // The unread dot is announced as part of the button's name.
   assert.match(html, /aria-label="3 branches from this answer, one with a new answer"/);
   assert.match(html, /research-turn-unread" aria-hidden="true"/);
-  assert.ok(html.indexOf("research-turn-star") < html.indexOf("research-turn-branches"));
-  // The thread-level Follow / Bookmark pair moved to the column header.
-  assert.doesNotMatch(html, /research-thread-actions/);
+  const star = html.indexOf("research-msg-star");
+  const branches = html.indexOf("research-msg-branches");
+  const more = html.indexOf('aria-label="Answer actions"');
+  assert.ok(star >= 0 && branches > star && more > branches);
+  // Follow, Bookmark and Move are in the feed row's … menu, not here.
+  assert.doesNotMatch(html, /Bookmark|Follow/);
 });
 
-test("a question without branches offers to start one, or says why it cannot", () => {
-  const settled = renderToStaticMarkup(
-    createElement(ResearchTurnQuestion, {
-      node: questionNode(),
-      showPrompt: true,
-      now: NOW,
-      onBranchButton: () => {},
-    }),
-  );
-  assert.match(settled, /aria-label="Branch from this answer"/);
-  assert.doesNotMatch(settled, /aria-haspopup|aria-disabled/);
-  // The star is offered only for root-conversation follow-ups.
-  assert.doesNotMatch(settled, /research-turn-star/);
+test("the branch count shows only once the answer has branches, and the star only where offered", () => {
+  const settled = row(questionNode());
+  assert.doesNotMatch(settled, /research-msg-branches/);
+  assert.doesNotMatch(settled, /research-msg-star/);
+  // A branch from the whole answer starts from the … menu.
+  assert.match(settled, /aria-label="Answer actions"/);
 
-  const running = renderToStaticMarkup(
-    createElement(ResearchTurnQuestion, {
-      node: questionNode({ status: "running", createdAt: NOW - 31 * 60 * 1000 }),
-      showPrompt: true,
-      now: NOW,
-      promotable: true,
-      branchBlocker: "Wait for the answer to finish",
-      onTogglePromoted: () => {},
-      onBranchButton: () => {},
-    }),
-  );
+  const running = row(questionNode({ status: "running", createdAt: NOW - 31 * 60 * 1000 }), {
+    starrable: true,
+    branchCount: 2,
+  });
   assert.match(running, /<time[^>]*>31 min<\/time>/);
-  assert.doesNotMatch(running, /research-turn-star/);
-  // The branch button stays, disabled with the reason as its tooltip.
-  assert.match(
-    running,
-    /research-turn-branches"[^>]*aria-disabled="true"[^>]*title="Wait for the answer to finish"/,
-  );
+  assert.match(running, /research-msg-pill is-run"/);
+  assert.match(running, />Running</);
+  // Branches appear once the answer has finished.
+  assert.doesNotMatch(running, /research-msg-branches/);
 });
 
-test("documents and conversations show the meta row without a question", () => {
-  const html = renderToStaticMarkup(
-    createElement(ResearchTurnQuestion, {
-      node: questionNode({ kind: "document", origin: "imported" }),
-      showPrompt: false,
-      now: NOW,
-    }),
-  );
+test("only the selected row is in the tab order", () => {
+  assert.match(row(questionNode(), { selected: true }), /class="research-msg-hit"[^>]*aria-current="true"[^>]*tabindex="0"/);
+  assert.match(row(questionNode()), /class="research-msg-hit"[^>]*tabindex="-1"/);
+});
+
+test("documents and conversations show their title in place of a question", () => {
+  const html = row(questionNode({ kind: "document", origin: "imported" }), {
+    label: "Imported report",
+    showPrompt: false,
+  });
   assert.doesNotMatch(html, /research-prompt/);
+  assert.match(html, /research-msg-plain">Imported report</);
   assert.match(html, /<time[^>]*>Imported 2d<\/time>/);
 });
 
@@ -211,14 +215,7 @@ test("exported conversation assistant messages remain uncarded research prose", 
 });
 
 test("a follow-up of a note reply quotes the reply above the question", () => {
-  const html = renderToStaticMarkup(
-    createElement(ResearchTurnQuestion, {
-      node: questionNode({ prompt: "Why?" }),
-      showPrompt: true,
-      replyQuote: "Selected   reply\npassage",
-      now: NOW,
-    }),
-  );
+  const html = row(questionNode({ prompt: "Why?" }), { replyQuote: "Selected   reply\npassage" });
 
   assert.match(html, /research-prompt-quote">Selected reply passage<\/blockquote>/);
   assert.ok(html.indexOf("Selected reply passage") < html.indexOf("research-user-message"));

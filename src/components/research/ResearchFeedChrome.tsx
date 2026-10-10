@@ -29,7 +29,7 @@ export function ResearchFeedHeader({
 }) {
   return (
     <header className="research-feed-header">
-      <div className="research-feed-header-bar" data-tauri-drag-region>
+      <div className="research-feed-header-bar" data-tauri-drag-region data-research-header-bar>
         {onBack ? (
           <button
             type="button"

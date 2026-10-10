@@ -222,3 +222,15 @@ export function pruneResearchHistory(
   }
   return { entries, index: Math.max(0, index) };
 }
+
+/** History after nodes were removed: the removed visits go, and the visit
+ * the document moved to (`selection`) is current, so back and forward keep
+ * matching what is open. */
+export function researchHistoryAfterRemoval(
+  history: ResearchHistory,
+  validNodeIds: ReadonlySet<string>,
+  selection: string,
+): ResearchHistory {
+  const pruned = pruneResearchHistory(history, validNodeIds, selection);
+  return pruned.entries[pruned.index] === selection ? pruned : pushResearchHistory(pruned, selection);
+}

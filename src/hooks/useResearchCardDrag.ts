@@ -12,9 +12,13 @@ interface ResearchDragItem {
   place: string;
 }
 
+/** Starts a drag from a pointer down. `source` is the card being dragged
+ * when the pointer went down elsewhere (a child row drags its question's
+ * card); by default it is the element the handler is on. */
 export type ResearchCardDragStart = (
   event: ReactPointerEvent<HTMLElement>,
   item: ResearchDragItem,
+  source?: HTMLElement | null,
 ) => void;
 
 interface ResearchCardDragOptions {
@@ -56,11 +60,11 @@ export function useResearchCardDrag(options: ResearchCardDragOptions): ResearchC
   const cancelRef = useRef<(() => void) | null>(null);
   useEffect(() => () => cancelRef.current?.(), []);
 
-  return useCallback((event: ReactPointerEvent<HTMLElement>, item: ResearchDragItem) => {
+  return useCallback((event: ReactPointerEvent<HTMLElement>, item: ResearchDragItem, source?: HTMLElement | null) => {
     if (event.button !== 0 || !event.isPrimary || cancelRef.current) return;
     const target = event.target as Element;
     if (target.closest("a, input, textarea, select, [data-research-no-drag]")) return;
-    const card = event.currentTarget;
+    const card = source ?? event.currentTarget;
     const startX = event.clientX;
     const startY = event.clientY;
     const scroller = card.closest<HTMLElement>("[data-research-scroll]");

@@ -98,14 +98,8 @@ import {
   treesForResearchScope,
   workspaceIsInResearchScope,
 } from "./lib/researchScope";
-import ResearchDocument from "./components/research/ResearchDocument";
-import ResearchMoveMenu from "./components/research/ResearchMoveMenu";
+import ResearchDocument, { type ResearchDocumentTreeMenu } from "./components/research/ResearchDocument";
 import ResearchDraftView from "./components/research/ResearchDraftView";
-import {
-  focusResearchFeedCard,
-  researchFeedCardNeighbour,
-} from "./components/research/ResearchFeedPost";
-import { ResearchDocumentFrame } from "./components/research/ResearchDocumentChrome";
 import ResearchActivityFeed from "./components/research/ResearchActivityFeed";
 import ResearchColumns from "./components/research/ResearchColumns";
 import ResearchHighlightsFeed from "./components/research/ResearchHighlightsFeed";
@@ -291,6 +285,7 @@ import {
   RESEARCH_DRAFTS_FOLDER_ID,
   researchTreePlace,
   treesWithWorkspaceOrder,
+  type ResearchFeedChild,
 } from "./lib/researchFolders";
 import { useResearchToast } from "./hooks/useResearchToast";
 import { useResearchFiling } from "./hooks/useResearchFiling";
@@ -355,6 +350,7 @@ import {
   listResearchHighlights,
   removeResearchHighlights,
   renameResearchTree,
+  setResearchNodePromoted,
   setResearchTreeBookmarked,
   setResearchTreeFollowed,
   removeResearchTree,
@@ -5463,8 +5459,8 @@ function MainApp() {
     },
     [recordResearchWorkspaceVisit, selectResearchTree],
   );
-  // Opens a node of a tree: a follow-up of the conversation scrolls into view,
-  // a branch opens in the drawer. The store covers a document that mounts for
+  // Opens a node of a tree: its level, and the levels before it, open as
+  // column pairs, with the node selected. The store covers a document that mounts for
   // this tree; the request reaches one that is already mounted.
   const openResearchNode = useCallback(
     (treeId: string, nodeId: string) => {
@@ -6569,28 +6565,6 @@ function MainApp() {
   const renameResearchTreeTitle = useCallback(async (treeId: string, title: string) => {
     await renameResearchTree(treeId, title);
   }, []);
-  // Follow / Bookmark persist on the tree; the resulting tree update event
-  // patches the open document and sidebar summaries, so nothing is set here.
-  const setResearchTreeFollowedFlag = useCallback(
-    async (treeId: string, followed: boolean) => {
-      try {
-        await setResearchTreeFollowed(treeId, followed);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    },
-    [],
-  );
-  const setResearchTreeBookmarkedFlag = useCallback(
-    async (treeId: string, bookmarked: boolean) => {
-      try {
-        await setResearchTreeBookmarked(treeId, bookmarked);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      }
-    },
-    [],
-  );
   // Unarchiving leaves the selection alone, so several threads can be
   // restored from the Archived list in a row; an open thread stays open.
   const restoreResearchTreeFromMenu = useCallback(async (treeId: string) => {
@@ -8805,53 +8779,32 @@ function MainApp() {
     (treeId: string, place: string) => void moveResearchTree(treeId, place),
     [moveResearchTree],
   );
-  // The conversation header's Move to folder button opens the same menu as a
-  // feed card's, anchored to the button.
-  const [headerMoveMenu, setHeaderMoveMenu] = useState<{
-    treeId: string;
-    anchor: HTMLElement;
-  } | null>(null);
-  const toggleHeaderMoveMenu = useCallback((treeId: string, anchor: HTMLElement) => {
-    setHeaderMoveMenu((current) =>
-      current?.treeId === treeId && current.anchor === anchor ? null : { treeId, anchor },
-    );
-  }, []);
-  useEffect(() => setHeaderMoveMenu(null), [activeResearchTreeId]);
-  // The branch open in the conversation's drawer, which the feed marks among
-  // the open card's starred children. Node ids are unique across trees, so a
-  // value left from another tree matches nothing.
-  const [activeResearchDrawerNodeId, setActiveResearchDrawerNodeId] = useState<string | null>(
-    null,
-  );
-  // The turn last opened in the conversation: a starred follow-up's row is
-  // marked while its turn is the one visited, unless a branch is open.
-  const [activeResearchNodeId, setActiveResearchNodeId] = useState<string | null>(null);
-  // The follow-up last opened from its feed row. Only that visit marks the
-  // row: a selection the conversation makes itself (closing a branch selects
-  // the turn it came from) does not. Cleared once the visit moves on.
-  const [feedChildVisit, setFeedChildVisit] = useState<{ nodeId: string; arrived: boolean } | null>(
-    null,
-  );
-  useEffect(() => {
-    setFeedChildVisit((visit) => {
-      if (!visit) return visit;
-      if (activeResearchNodeId === visit.nodeId) return visit.arrived ? visit : { ...visit, arrived: true };
-      return visit.arrived ? null : visit;
-    });
-  }, [activeResearchNodeId]);
-  const openFeedChildQuery = useCallback(
-    (query: RecentResearchQuery) => {
-      setFeedChildVisit({ nodeId: query.nodeId, arrived: false });
-      openRecentResearchQuery(query);
+  // The open conversation's open nodes (the message selected in its root
+  // pair and each open branch's head), whose starred child rows the feed
+  // shows selected. Node ids are unique across trees, so ids left from
+  // another tree match nothing.
+  const [openResearchNodeIds, setOpenResearchNodeIds] = useState<string[]>([]);
+  // Remove star on a feed child row; the node update event drops the row.
+  const unstarResearchFeedChild = useCallback(
+    (child: ResearchFeedChild) => {
+      void setResearchNodePromoted(child.nodeId, false).then(
+        () => showResearchToast(child.branch ? "Branch unstarred." : "Unstarred."),
+        (err: unknown) => setError(err instanceof Error ? err.message : String(err)),
+      );
     },
-    [openRecentResearchQuery],
+    [showResearchToast],
   );
-  const markedFeedChildNodeId =
-    activeResearchDrawerNodeId ??
-    (feedChildVisit && activeResearchNodeId === feedChildVisit.nodeId ? activeResearchNodeId : null);
-  const headerMoveTree = headerMoveMenu
-    ? [...researchTrees, ...archivedResearchTrees].find((tree) => tree.id === headerMoveMenu.treeId)
-    : undefined;
+  // Follow persists on the tree; the resulting tree update event patches the
+  // feed and the open document, so nothing is set here.
+  const followResearchTreeFromFeed = useCallback(
+    (treeId: string, followed: boolean) => {
+      void setResearchTreeFollowed(treeId, followed).then(
+        () => showResearchToast(followed ? "Following. You'll be notified of replies." : "Unfollowed."),
+        (err: unknown) => setError(err instanceof Error ? err.message : String(err)),
+      );
+    },
+    [showResearchToast],
+  );
   const bookmarkResearchTreeFromFeed = useCallback(
     (treeId: string, bookmarked: boolean) => {
       void setResearchTreeBookmarked(treeId, bookmarked).then(
@@ -8861,6 +8814,44 @@ function MainApp() {
     },
     [showResearchToast],
   );
+  // The open question's Follow, Bookmark and Move to, listed in its root
+  // answer menus with the same state as its feed row's menu.
+  const activeResearchTreeSummary = useMemo(
+    () =>
+      activeResearchTreeId
+        ? (researchTrees.find((tree) => tree.id === activeResearchTreeId) ??
+          archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId) ??
+          null)
+        : null,
+    [activeResearchTreeId, researchTrees, archivedResearchTrees],
+  );
+  const activeResearchTreeState =
+    activeResearchTreeSummary ??
+    (activeResearchDetail?.tree.id === activeResearchTreeId ? activeResearchDetail?.tree : null) ??
+    null;
+  const activeResearchTreeMenu = useMemo<ResearchDocumentTreeMenu | undefined>(() => {
+    const tree = activeResearchTreeState;
+    if (!tree) return undefined;
+    return {
+      currentPlace: researchTreePlace(tree, researchFolderState),
+      folders: researchFolders,
+      bookmarked: Boolean(tree.bookmarked),
+      followed: Boolean(tree.followed),
+      followDisabledReason: tree.archivedAt ? "Archived questions don't send notifications" : null,
+      onSetBookmarked: (bookmarked) => bookmarkResearchTreeFromFeed(tree.id, bookmarked),
+      onSetFollowed: (followed) => followResearchTreeFromFeed(tree.id, followed),
+      onMove: (place) => moveResearchTreeFromFeed(tree.id, place),
+      onNewFolder: (trigger) => openNewResearchFolderDialog(tree.id, trigger),
+    };
+  }, [
+    activeResearchTreeState,
+    researchFolderState,
+    researchFolders,
+    bookmarkResearchTreeFromFeed,
+    followResearchTreeFromFeed,
+    moveResearchTreeFromFeed,
+    openNewResearchFolderDialog,
+  ]);
   // A draft opens in the content column beside the feed, which keeps its
   // view; opening a thread replaces it.
   const [openResearchDraftId, setOpenResearchDraftId] = useState<string | null>(null);
@@ -8878,28 +8869,11 @@ function MainApp() {
     },
     [focusResearchHome, showResearchSurface],
   );
-  // Closing or deleting the open draft returns focus to the feed: its card,
-  // or the card that took its place. The frame after the view closes, since
-  // single-column mode shows the feed only then.
-  const closeResearchDraft = useCallback((draftId: string) => {
-    setOpenResearchDraftId(null);
-    window.requestAnimationFrame(() => focusResearchFeedCard(draftId));
-  }, []);
   const saveOpenResearchDraft = useCallback(
     async (draft: ResearchDraft, prompt: string) => {
       await saveResearchDraftText(draft.id, prompt, draft.workspaceId);
     },
     [saveResearchDraftText],
-  );
-  const deleteOpenResearchDraft = useCallback(
-    async (draft: ResearchDraft) => {
-      const neighbour = researchFeedCardNeighbour(draft.id);
-      await deleteResearchDraftEntry(draft.id);
-      setOpenResearchDraftId((current) => (current === draft.id ? null : current));
-      showResearchToast("Draft deleted.");
-      window.requestAnimationFrame(() => focusResearchFeedCard(neighbour));
-    },
-    [deleteResearchDraftEntry, showResearchToast],
   );
   const deleteResearchDraftFromFeed = useCallback(
     (draft: ResearchDraft) => {
@@ -10892,13 +10866,6 @@ function MainApp() {
           {researchFeedColumnVisible ? (
             <ResearchColumns
               hasDocument={researchStageView === "document" || openResearchDraft !== null}
-              documentKey={
-                researchStageView === "document"
-                  ? activeResearchTreeId
-                  : openResearchDraft
-                    ? `draft:${openResearchDraft.id}`
-                    : null
-              }
               feed={
                 config ? (
                   journalView.kind === "highlights" ? (
@@ -10915,7 +10882,7 @@ function MainApp() {
                       {...activityFeedState}
                       view={journalView}
                       selectedTreeId={researchStageView === "document" ? activeResearchTreeId : null}
-                      selectedChildNodeId={markedFeedChildNodeId}
+                      selectedChildNodeIds={openResearchNodeIds}
                       selectedDraftId={openResearchDraft?.id ?? null}
                       onImportReport={importReport}
                       composer={feedComposer}
@@ -10928,7 +10895,7 @@ function MainApp() {
                       nextCursor={recentActivityCursor}
                       loadingOlder={loadingOlderActivity}
                       olderError={olderActivityError}
-                      onOpenResearchQuery={openFeedChildQuery}
+                      onOpenResearchQuery={openRecentResearchQuery}
                       onOpenDraft={openResearchDraftInColumn}
                       onOpenTree={openFeedResearchTree}
                       onOpenView={openFeedView}
@@ -10938,7 +10905,9 @@ function MainApp() {
                       onRestoreResearch={restoreResearchTreeFromMenu}
                       onRemoveResearch={removeResearchTreeFromMenu}
                       onSetResearchBookmarked={bookmarkResearchTreeFromFeed}
+                      onSetResearchFollowed={followResearchTreeFromFeed}
                       onMoveTree={moveResearchTreeFromFeed}
+                      onUnstarChild={unstarResearchFeedChild}
                       onNewFolder={openNewResearchFolderDialog}
                       onRenameFolder={openRenameResearchFolderDialog}
                       onRequestDeleteFolder={requestResearchFolderDelete}
@@ -10980,9 +10949,6 @@ function MainApp() {
                   onRemoveBranch={removeResearchBranchFromDocument}
                   onRemoveTree={removeResearchTreeAndSelectFallback}
                   onRenameTree={renameResearchTreeTitle}
-                  onClose={focusResearchHome}
-                  onSetFollowed={setResearchTreeFollowedFlag}
-                  onSetBookmarked={setResearchTreeBookmarkedFlag}
                   onUpdateDocument={editResearchDocument}
                   onCancel={cancelResearchRun}
                   onRetryNode={retryResearchRun}
@@ -10991,9 +10957,8 @@ function MainApp() {
                   onToast={handleResearchDocumentToast}
                   shortcutHintsShown={shortcutHintsShown}
                   requireCmdEnterToSend={settings.requireCmdEnterToSend}
-                  onMoveTree={toggleHeaderMoveMenu}
-                  onDrawerNodeChange={setActiveResearchDrawerNodeId}
-                  onSelectedNodeChange={setActiveResearchNodeId}
+                  onOpenNodesChange={setOpenResearchNodeIds}
+                  treeMenu={activeResearchTreeMenu}
                   workspaceCanGoBack={canGoWorkspaceBack(researchWorkspaceHistory)}
                   workspaceCanGoForward={canGoWorkspaceForward(researchWorkspaceHistory)}
                   onWorkspaceBack={goResearchWorkspaceBack}
@@ -11006,43 +10971,12 @@ function MainApp() {
                   requireCmdEnterToSend={settings.requireCmdEnterToSend}
                   onSave={(prompt) => saveOpenResearchDraft(openResearchDraft, prompt)}
                   onSend={(prompt) => sendResearchDraft(openResearchDraft, prompt)}
-                  onDelete={() => deleteOpenResearchDraft(openResearchDraft)}
-                  onClose={() => closeResearchDraft(openResearchDraft.id)}
                 />
               ) : (
-                <ResearchDocumentFrame>
-                  <div className="research-content-placeholder">
-                    <h3>No question open</h3>
-                    <p>Choose a question from the feed, or ask a new one.</p>
-                  </div>
-                </ResearchDocumentFrame>
+                <div className="research-columns-filler">
+                  <p>Select a question to open its conversation.</p>
+                </div>
               )}
-              {headerMoveMenu && headerMoveTree ? (
-                <ResearchMoveMenu
-                  anchor={headerMoveMenu.anchor}
-                  currentPlace={researchTreePlace(headerMoveTree, researchFolderState)}
-                  folders={researchFolders}
-                  bookmarked={Boolean(headerMoveTree.bookmarked)}
-                  onToggleBookmark={() => {
-                    const { anchor } = headerMoveMenu;
-                    setHeaderMoveMenu(null);
-                    anchor.focus();
-                    bookmarkResearchTreeFromFeed(headerMoveTree.id, !headerMoveTree.bookmarked);
-                  }}
-                  onMove={(place) => {
-                    const { anchor } = headerMoveMenu;
-                    setHeaderMoveMenu(null);
-                    anchor.focus();
-                    moveResearchTreeFromFeed(headerMoveTree.id, place);
-                  }}
-                  onNewFolder={() => {
-                    const { anchor } = headerMoveMenu;
-                    setHeaderMoveMenu(null);
-                    openNewResearchFolderDialog(headerMoveTree.id, anchor);
-                  }}
-                  onClose={() => setHeaderMoveMenu(null)}
-                />
-              ) : null}
             </ResearchColumns>
           ) : null}
         </div>

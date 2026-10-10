@@ -273,7 +273,7 @@ export default function DomSearchBar({
       });
       root.addEventListener("toggle", scheduleRescan, true);
     }
-    // A different set of roots (a drawer opening) has different matches.
+    // A different set of roots (a column opening) has different matches.
     scheduleRescan();
     return () => {
       observer.disconnect();

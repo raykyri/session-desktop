@@ -1,6 +1,5 @@
-import type { CSSProperties, ReactNode } from "react";
-import { Ellipsis, GripVertical } from "lucide-react";
-import { ResearchBranchIcon } from "./ResearchIcons";
+import { useRef, type CSSProperties, type ReactNode } from "react";
+import { Ellipsis, GripVertical, Star } from "lucide-react";
 import type { ResearchFeedChild } from "../../lib/researchFolders";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 
@@ -20,9 +19,9 @@ interface ResearchFeedPostProps {
   /** The thread title, shown above the question when it differs from it. */
   title?: string | null;
   /** Renders the question or note body. The body passes its prompt text
-   * through `clamp`, which limits it to four lines; anything rendered outside
-   * it (link cards, embeds) shows in full. */
-  renderBody: (clamp: (content: ReactNode) => ReactNode) => ReactNode;
+   * through `asQuestion`, which sets it as the card's question; the question
+   * and anything rendered outside it (link cards, embeds) show in full. */
+  renderBody: (asQuestion: (content: ReactNode) => ReactNode) => ReactNode;
   /** The accessible name of the card's open button. */
   label: string;
   /** The open button's tooltip (an archived card's archive time). */
@@ -35,14 +34,20 @@ interface ResearchFeedPostProps {
   unread?: boolean;
   /** Starred follow-ups and branches listed under the question. */
   childRows?: ResearchFeedChild[];
-  selectedChildNodeId?: string | null;
+  /** Child rows shown selected: the open branches' heads and the message
+   * selected in the root pair. */
+  selectedChildNodeIds?: readonly string[];
   menuOpen?: boolean;
-  /** The … button's name: "Bookmark or move" by default. */
+  /** The child row whose … menu is open. */
+  childMenuNodeId?: string | null;
+  /** The … button's name: "Bookmark, follow or move" by default. */
   menuLabel?: string;
   onOpen: () => void;
   onOpenChild?: (child: ResearchFeedChild) => void;
   /** Opens the card's … menu below `anchor`. */
   onMenu?: (anchor: HTMLElement) => void;
+  /** Opens a child row's … menu below `anchor`. */
+  onChildMenu?: (child: ResearchFeedChild, anchor: HTMLElement) => void;
   onContextMenu?: (clientX: number, clientY: number) => void;
   onDragStart?: ResearchCardDragStart;
 }
@@ -61,19 +66,53 @@ export function researchFeedCardControl(
   );
 }
 
-/** The card listed after `cardId`, or before it when it is the last: where
- * focus goes once the card is removed. */
-export function researchFeedCardNeighbour(cardId: string): string | null {
-  const cards = [...document.querySelectorAll<HTMLElement>(".research-feed-card[data-research-card]")];
-  const index = cards.findIndex((card) => card.dataset.researchCard === cardId);
-  if (index < 0) return null;
-  return (cards[index + 1] ?? cards[index - 1])?.dataset.researchCard ?? null;
-}
-
 /** The next step for focus waiting on a moved card's old … button
  * (`anchor`): wait while that button is still listed and focused; once it is
  * gone with focus left on the page body, focus the card in its new place;
  * drop it once focus went anywhere else. */
+/** A row's right-hand margin: the drag handle at the top, where the status
+ * dot sits, and the … button at the bottom. Both show on hover or focus and
+ * hide the dot. The handle is decoration: a press anywhere on the row starts
+ * a drag, except on the … button. */
+function FeedRowRail({
+  grip,
+  menuLabel,
+  menuOpen,
+  onMenu,
+}: {
+  grip: boolean;
+  menuLabel: string;
+  menuOpen: boolean;
+  onMenu?: (anchor: HTMLElement) => void;
+}) {
+  if (!grip && !onMenu) return null;
+  return (
+    <span className="research-feed-rail">
+      {grip ? (
+        <span className="research-feed-card-grip" aria-hidden="true">
+          <GripVertical size={14} />
+        </span>
+      ) : (
+        <span />
+      )}
+      {onMenu ? (
+        <button
+          type="button"
+          className="research-feed-icon-button research-feed-card-menu"
+          title={menuLabel}
+          aria-label={menuLabel}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          data-research-no-drag
+          onClick={(event) => onMenu(event.currentTarget)}
+        >
+          <Ellipsis size={14} aria-hidden="true" />
+        </button>
+      ) : null}
+    </span>
+  );
+}
+
 export function researchCardRefocus(
   anchor: { isConnected: boolean },
   active: unknown,
@@ -83,21 +122,14 @@ export function researchCardRefocus(
   return active === null || active === body ? "focus" : "drop";
 }
 
-/** Focuses a card's open button, or the feed's title when the card isn't
- * listed. */
-export function focusResearchFeedCard(cardId: string | null) {
-  const target =
-    (cardId ? researchFeedCardControl(cardId) : null) ??
-    document.querySelector<HTMLElement>(".research-feed-header-title");
-  target?.focus({ preventScroll: true });
-  target?.scrollIntoView({ block: "nearest" });
-}
-
 /** One question in the feed: the thread title (when it differs) and the
- * question, with no metadata row. Running and failed threads show a status
- * dot in the top-right corner, which the … menu replaces on hover. The whole
+ * question, with no metadata row. Rows are bubbles: no fill at rest, an inset
+ * rounded fill on hover and selection, and a faint ring on the focused row.
+ * Running and failed threads show a status dot in the top-right corner,
+ * which the drag handle and … button replace on hover and focus. The whole
  * card opens the thread; links and embeds inside it stay their own targets.
- * Starred children follow as indented rows of their own. */
+ * Starred children follow as indented rows of their own, each with the same
+ * margin controls; dragging one drags its question. */
 export default function ResearchFeedPost({
   cardId,
   dragKind = "tree",
@@ -111,19 +143,23 @@ export default function ResearchFeedPost({
   selected = false,
   unread = false,
   childRows = [],
-  selectedChildNodeId = null,
+  selectedChildNodeIds = [],
   menuOpen = false,
-  menuLabel = "Bookmark or move",
+  childMenuNodeId = null,
+  menuLabel = "Bookmark, follow or move",
   onOpen,
   onOpenChild,
   onMenu,
+  onChildMenu,
   onContextMenu,
   onDragStart,
 }: ResearchFeedPostProps) {
   const statusLabel = status ? (statusLabelOverride ?? STATUS_LABELS[status]) : null;
+  const cardRef = useRef<HTMLDivElement | null>(null);
   return (
     <>
       <div
+        ref={cardRef}
         className={`research-feed-card${selected ? " is-selected" : ""}${
           menuOpen ? " has-open-menu" : ""
         }${childRows.length > 0 ? " has-children" : ""}`}
@@ -149,11 +185,6 @@ export default function ResearchFeedPost({
           title={tooltip}
           onClick={onOpen}
         />
-        {onDragStart ? (
-          <span className="research-feed-card-grip" aria-hidden="true">
-            <GripVertical size={14} />
-          </span>
-        ) : null}
         {unread ? (
           <span className="research-feed-card-unread" role="img" aria-label="Updated" />
         ) : null}
@@ -170,48 +201,61 @@ export default function ResearchFeedPost({
             aria-hidden="true"
           />
         ) : null}
-        {onMenu ? (
-          <button
-            type="button"
-            className="research-feed-icon-button research-feed-card-menu"
-            title={menuLabel}
-            aria-label={menuLabel}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            data-research-no-drag
-            onClick={(event) => onMenu(event.currentTarget)}
-          >
-            <Ellipsis size={16} aria-hidden="true" />
-          </button>
-        ) : null}
+        <FeedRowRail
+          grip={Boolean(onDragStart)}
+          menuLabel={menuLabel}
+          menuOpen={menuOpen}
+          onMenu={onMenu}
+        />
       </div>
-      {childRows.map((child, index) => (
-        <div
-          key={child.nodeId}
-          className={`research-feed-child${index === 0 ? " is-group-start" : ""}${
-            index === childRows.length - 1 ? " is-group-end" : ""
-          }${child.nodeId === selectedChildNodeId ? " is-selected" : ""}`}
-          style={{ "--research-child-level": child.level } as CSSProperties}
-        >
-          <button
-            type="button"
-            className="research-feed-child-open"
-            aria-current={child.nodeId === selectedChildNodeId ? "true" : undefined}
-            onClick={() => onOpenChild?.(child)}
+      {childRows.map((child, index) => {
+        const childSelected = selectedChildNodeIds.includes(child.nodeId);
+        const childMenuOpen = child.nodeId === childMenuNodeId;
+        return (
+          <div
+            key={child.nodeId}
+            className={`research-feed-child${index === 0 ? " is-group-start" : ""}${
+              index === childRows.length - 1 ? " is-group-end" : ""
+            }${childSelected ? " is-selected" : ""}${childMenuOpen ? " has-open-menu" : ""}`}
+            style={{ "--research-child-level": child.level } as CSSProperties}
+            onPointerDown={
+              onDragStart
+                ? (event) => onDragStart(event, { kind: dragKind, id: cardId, place }, cardRef.current)
+                : undefined
+            }
           >
-            {child.branch ? (
-              <>
-                <ResearchBranchIcon className="research-feed-child-icon" size={13} />
-                <span className="research-visually-hidden">Branch: </span>
-              </>
+            <button
+              type="button"
+              className="research-feed-child-open"
+              aria-current={childSelected ? "true" : undefined}
+              onClick={() => onOpenChild?.(child)}
+            >
+              {child.branch ? (
+                <>
+                  <Star
+                    className="research-feed-child-icon"
+                    size={13}
+                    fill="currentColor"
+                    aria-hidden="true"
+                  />
+                  <span className="research-visually-hidden">Starred branch: </span>
+                </>
+              ) : null}
+              <span className="research-feed-child-text">{child.label}</span>
+              {child.running ? <span className="research-visually-hidden">, Running</span> : null}
+            </button>
+            {child.running ? (
+              <span className="research-feed-status is-running" title="Running" aria-hidden="true" />
             ) : null}
-            <span className="research-feed-child-text">{child.label}</span>
-          </button>
-          {child.running ? (
-            <span className="research-feed-status is-running" title="Running" aria-hidden="true" />
-          ) : null}
-        </div>
-      ))}
+            <FeedRowRail
+              grip={Boolean(onDragStart)}
+              menuLabel="Remove the star, bookmark, follow or move"
+              menuOpen={childMenuOpen}
+              onMenu={onChildMenu ? (anchor) => onChildMenu(child, anchor) : undefined}
+            />
+          </div>
+        );
+      })}
     </>
   );
 }

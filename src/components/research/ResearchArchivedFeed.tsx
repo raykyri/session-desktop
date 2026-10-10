@@ -66,7 +66,7 @@ function ResearchArchivedFeed({
           key={tree.id}
           cardId={tree.id}
           place={RESEARCH_ARCHIVE_FOLDER_ID}
-          renderBody={(clamp) => clamp(tree.title)}
+          renderBody={(asQuestion) => asQuestion(tree.title)}
           label={tree.title}
           tooltip={archivedTooltip(tree.archivedAt)}
           selected={tree.id === selectedTreeId}

@@ -53,8 +53,8 @@ export function createResearchDocumentPersistence(
   return {
     store,
     flush,
-    recordScroll(treeId: string, nodeId: string, top: number) {
-      recordResearchScrollPosition(entry(treeId), nodeId, top);
+    recordScroll(treeId: string, nodeId: string, top: number, column: "answer" | "turns" = "answer") {
+      recordResearchScrollPosition(entry(treeId), nodeId, top, Date.now(), column);
       schedule();
     },
     recordDraft(treeId: string, text: string) {
@@ -72,16 +72,6 @@ export function createResearchDocumentPersistence(
         updatedAt: Date.now(),
       };
       schedule();
-    },
-    recordPinned(treeId: string, headIds: string[]) {
-      const navigation = entry(treeId);
-      if (headIds.length === 0) {
-        if (!navigation.pinnedBranches) return;
-        delete navigation.pinnedBranches;
-      } else {
-        navigation.pinnedBranches = [...headIds];
-      }
-      flush();
     },
     recordQueue(treeId: string, headId: string, queue: QueuedResearchFollowup[]) {
       const navigation = entry(treeId);

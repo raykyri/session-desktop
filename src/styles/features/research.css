@@ -396,32 +396,10 @@
   --pane-search-right: 16px;
 }
 
-/* Keep the user's prompt visually distinct from the plain-text answer below. */
-.research-prompt-block {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.research-prompt-metadata {
-  max-width: min(100%, 640px);
-  color: var(--text-subtle);
-  font-size: var(--research-meta-font-size);
-  line-height: var(--research-meta-line-height);
-}
-
 .research-prompt {
   width: fit-content;
   max-width: min(100%, 640px);
   margin: 0 0 26px;
-}
-
-.research-prompt.has-trailing-metadata {
-  margin-bottom: 0;
-}
-
-.research-prompt-metadata.is-after-prompt {
-  margin-bottom: 26px;
 }
 
 .research-prompt > * {
@@ -440,10 +418,7 @@
 
 .research-response {
   min-width: 0;
-  /* Cap the answer column directly rather than trusting the grid track's max:
-     a grid item's max-content contribution is clamped by its own max-width,
-     so this keeps the answer track from overrunning even where the track's
-     max is dropped. Literal for the same WebKit reason as the grid above. */
+  /* The answer's reading width, inside a wider answer column. */
   max-width: 640px;
 }
 
@@ -477,8 +452,8 @@
   background: rgba(244, 184, 40, 0.28); /* highlight-pseudo-literal */
 }
 
-/* Passages that branches were asked about (and the passage of a new branch
-   being written) use a blue wash. Mirrors --research-branch-tint. */
+/* Passages that branches were asked about use a blue background tint. Mirrors
+   --research-branch-tint. */
 ::highlight(session-research-branch-passages) {
   color: inherit;
   background: rgba(91, 164, 243, 0.14); /* highlight-pseudo-literal */
@@ -486,24 +461,6 @@
 
 :root[data-appearance="light"] *::highlight(session-research-branch-passages) {
   background: rgba(51, 119, 205, 0.12); /* highlight-pseudo-literal */
-}
-
-/* Outside the focused column the tints drop to 40% (dark) or 65% (light);
-   the passage under the pointer is repainted at full strength above them. */
-.research-conv-column:not(.is-focused) *::highlight(session-research-highlights) {
-  background: rgba(240, 178, 70, 0.076); /* highlight-pseudo-literal */
-}
-
-.research-conv-column:not(.is-focused) *::highlight(session-research-branch-passages) {
-  background: rgba(91, 164, 243, 0.056); /* highlight-pseudo-literal */
-}
-
-:root[data-appearance="light"] .research-conv-column:not(.is-focused) *::highlight(session-research-highlights) {
-  background: rgba(244, 184, 40, 0.182); /* highlight-pseudo-literal */
-}
-
-:root[data-appearance="light"] .research-conv-column:not(.is-focused) *::highlight(session-research-branch-passages) {
-  background: rgba(51, 119, 205, 0.078); /* highlight-pseudo-literal */
 }
 
 /* Increase background opacity on hover. Mirrors --research-highlight-bg-hover. */
@@ -525,7 +482,7 @@
   background: rgba(51, 119, 205, 0.22); /* highlight-pseudo-literal */
 }
 
-/* The passage of an open branch (in the drawer or pinned) is underlined in
+/* The passage of a branch open as a pair is underlined in
    the accent colour of each colour theme. */
 ::highlight(session-research-open-branch) {
   color: inherit;
@@ -545,6 +502,18 @@
   text-decoration: underline 2px #0a6fb8; /* highlight-pseudo-literal */
 }
 
+/* The passage of a new branch being written: a dashed blue underline and no
+   background tint. */
+::highlight(session-research-pending-branch) {
+  color: inherit;
+  text-decoration: underline dashed 1.5px rgba(109, 167, 236, 0.7); /* highlight-pseudo-literal */
+  text-underline-offset: 3px;
+}
+
+:root[data-appearance="light"] *::highlight(session-research-pending-branch) {
+  text-decoration: underline dashed 1.5px rgba(11, 127, 209, 0.6); /* highlight-pseudo-literal */
+}
+
 /* A passage flashed after a jump to a branch's source or a highlight.
    Mirrors --research-highlight-flash. */
 ::highlight(session-research-flash) {
@@ -556,10 +525,9 @@
   background: rgba(240, 170, 40, 0.5); /* highlight-pseudo-literal */
 }
 
-/* Regions where annotations stack (highlight over highlight, or a branch
-   passage over a saved highlight): repainted toward the text color so depth is
-   visible without deepening the amber. Above the base layers via priority.
-   Mirrors --research-highlight-neutral-bg. */
+/* Overlapping annotations (two highlights, or a branch passage and a saved
+   highlight) use a fill closer to the text color to distinguish the overlap
+   without adding a stronger amber tint. Priority places it above the base layers. */
 ::highlight(session-research-highlight-overlaps) {
   color: inherit;
   background: rgba(255, 244, 225, 0.1); /* highlight-pseudo-literal */
@@ -582,115 +550,80 @@
   background: #a9cbf2; /* highlight-pseudo-literal */
 }
 
-/* — Conversation column, pinned branch columns, and the branch drawer — */
+/* — Column pairs: one [messages | answer] pair per level — */
 
-/* The conversation and any pinned branch columns sit in the column area's
-   horizontally scrolling row (see research-surface.css), after the feed.
-   Widths never change with focus or with the drawer: the conversation takes
-   the area beside the feed, a pinned column is 560px, and the drawer is an
-   overlay on the right of the area. */
-.research-conversation-workspace {
-  position: relative;
-  display: flex;
+/* The pairs are flex items of the column strip (research-surface.css):
+   the open thread's wrapper takes no box of its own. Widths come from the
+   strip's width (ResearchColumns), so opening or closing a level never
+   resizes a column. */
+.research-pairs {
+  display: contents;
 }
 
-.research-conv-column {
+.research-pair-turns,
+.research-pair-answer,
+.research-pair-note,
+.research-placeholder-column {
   position: relative;
   display: flex;
   flex: none;
   flex-direction: column;
   min-width: 0;
   height: 100%;
-  border-right: 1px solid var(--surface-border-default);
+  border-right: 1px solid var(--surface-divider);
+}
+
+.research-pair-turns {
+  width: var(--research-turns-width);
+  border-left: 1px solid var(--surface-border-strong);
+  background: var(--research-feed-bg);
+}
+
+.research-pair-answer {
+  width: var(--research-answer-width);
   background: var(--research-workspace-bg);
-  container: research-column / inline-size;
 }
 
-.research-conv-column.is-main {
-  width: var(--research-conversation-width, 100%);
+.research-pair-note,
+.research-placeholder-column {
+  width: calc(var(--research-turns-width) + var(--research-answer-width));
+  border-left: 1px solid var(--surface-border-strong);
+  background: var(--research-workspace-bg);
 }
 
-.research-conv-column:last-child {
-  border-right: 0;
+/* One divider where a pair starts: the column before it drops its own. */
+.research-pair-answer:has(+ :is(.research-pair-turns, .research-pair-note)) {
+  border-right-color: transparent;
 }
 
-/* Focus only moves this 2px rule on the column's top edge. */
-.research-conv-column.is-focused::before {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 2;
-  height: 2px;
-  background: var(--accent-color);
-  content: "";
-  opacity: 0.75;
-}
-
-.research-conversation-workspace.is-single-column .research-conv-column {
-  width: var(--research-conversation-width, 100%);
-}
-
-.research-conversation-workspace.is-single-column .research-conv-column.is-focused::before {
-  display: none;
-}
-
-/* Single-column mode: the columns not shown stay laid out, transparent and
-   inert, so each keeps its scroll position (see research-surface.css for
-   why not visibility). */
-.research-conv-column.is-hidden {
-  position: absolute;
-  inset: 0 auto 0 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Column headers: one 44px bar (a window drag region). The conversation's
-   title wraps to three lines and the bar grows with it. */
+/* ResearchColumns measures the headers and sets each to the tallest height.
+   Text sits 1px below the bar's centre, level with the traffic lights. */
 .research-column-header {
+  position: relative;
+  display: flex;
   flex: none;
-  padding: 0 12px 0 16px;
+  height: var(--research-header-height, 43px);
+  align-items: center;
   border-bottom: 1px solid var(--surface-divider);
 }
 
-/* Content sits 1px below the row's centre, as in the feed's header bar
-   (journal.css), so titles and controls share one line across columns. */
 .research-column-bar {
   display: flex;
+  flex: 1;
+  box-sizing: border-box;
   min-width: 0;
-  min-height: 44px;
+  min-height: 43px;
   align-items: center;
-  gap: 4px;
-  padding-top: 2px;
+  gap: 6px;
+  padding: 9px 8px 8px 20px;
 }
 
-.research-column-header.is-root .research-column-bar {
-  align-items: flex-start;
-  gap: 8px;
-  padding-block: 13px 9px;
-}
-
-/* With the drawer open the conversation's title keeps to one line, so its
-   header stays 44px like the feed's and the drawer's and the header rules
-   line up. */
-.research-conversation-workspace.has-drawer:not(.is-single-column)
-  .research-conv-column.is-main
-  .research-column-title {
-  -webkit-line-clamp: 1;
-}
-
-/* Controls are 26px in a 20px title line: pull them up and down by 3px so
-   they centre on the first line of a wrapping title. */
-.research-column-header.is-root .research-column-bar > :not(.research-column-title) {
-  margin-block: -3px;
-}
-
-.research-column-header.is-root .research-history-nav {
-  height: 26px;
-}
-
-/* The bar's padding already places its line; the arrows' own -1px nudge
-   would lift them above the title. */
-.research-column-header .research-history-button {
-  transform: none;
+/* A pair's header spans its messages and answer columns: the messages
+   column's header is widened across the answer column, over its empty one. */
+.research-pair-turns:not(.is-pending, .research-draft-view) > .research-column-header {
+  z-index: 1;
+  width: calc(var(--research-turns-width) + var(--research-answer-width) - 1px);
+  background: var(--research-feed-bg);
 }
 
 .research-column-title {
@@ -702,41 +635,76 @@
   color: var(--text-heading);
   font-size: calc(15px + var(--font-ui-size-offset));
   font-weight: 600;
-  line-height: 20px;
+  line-height: 1.35;
   overflow-wrap: anywhere;
-  text-wrap: balance;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 4;
 }
 
-.research-column-title.is-one-line {
-  display: block;
-  flex: 0 1 auto;
-  min-width: 4ch;
-  font-size: calc(13px + var(--font-ui-size-offset));
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.research-column-header.is-branch .research-column-title {
+  font-size: calc(14px + var(--font-ui-size-offset));
 }
 
 .research-column-title:focus {
   outline: none;
 }
 
-/* Header text of unfocused columns is one step dimmer. */
-.research-conv-column:not(.is-focused) .research-column-title {
+/* Use the heading text color for the focused pair's header and the secondary
+   text color for other headers. */
+:is(.research-pair-turns, .research-pair-note):not(.is-current) .research-column-title {
   color: var(--text-secondary);
 }
 
-.research-column-spacer {
-  flex: 1;
-  align-self: stretch;
+.research-column-title-icon {
+  margin-right: 5px;
+  color: var(--text-faint);
+  vertical-align: -1px;
 }
 
-.research-column-actions {
+.research-column-count {
+  color: var(--text-muted);
+  font-size: calc(12.5px + var(--font-ui-size-offset));
+  font-weight: 400;
+}
+
+.research-head-button {
+  position: relative;
+  top: 1px;
+  display: inline-flex;
+  flex: none;
+  min-height: 0;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: calc(12.5px + var(--font-ui-size-offset));
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.research-head-button:hover {
+  color: var(--text-primary);
+  background: var(--surface-fill-hover);
+}
+
+.research-column-title + .research-head-button {
+  margin-left: 12px;
+}
+
+.research-column-header .research-history-nav {
   display: flex;
   flex: none;
-  align-items: center;
-  gap: 4px;
+  margin-left: -8px;
+}
+
+/* The bar's padding already places its line; the arrows' own -1px nudge
+   would lift them above the title. */
+.research-column-header .research-history-button {
+  transform: none;
 }
 
 .research-icon-button {
@@ -762,36 +730,8 @@
   opacity: 0.35;
 }
 
-.research-icon-button.is-on {
-  color: var(--text-strong);
-}
-
-/* The star is grey in both states; only the fill changes. */
-.research-icon-button.research-branch-star.is-on {
-  color: var(--text-muted);
-}
-
-.research-tint-button {
-  display: inline-flex;
-  flex: none;
-  height: 26px;
-  min-height: 0;
-  align-items: center;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 6px;
-  color: var(--text-strong);
-  background: var(--surface-fill-medium);
-  font-size: calc(12.5px + var(--font-ui-size-offset));
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.research-tint-button:hover {
-  background: var(--surface-fill-strong);
-}
-
 .research-archived-label {
+  flex: none;
   padding: 1px 7px;
   border: 1px solid var(--surface-border-default);
   border-radius: 999px;
@@ -800,118 +740,152 @@
   white-space: nowrap;
 }
 
-.research-branch-siblings {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  margin-right: 4px;
-  color: var(--text-muted);
-  font-size: calc(12px + var(--font-ui-size-offset));
-}
-
-.research-branch-pin {
-  margin-left: 2px;
-}
-
 .research-column-scroll {
   flex: 1;
   min-height: 0;
   overflow: hidden auto;
   /* Vertical only: horizontal wheel and trackpad scrolling over a column
-     still reaches the column row. */
+     still reaches the strip. */
   overscroll-behavior-y: contain;
   scrollbar-color: var(--surface-border-strong) transparent;
   scrollbar-width: thin;
 }
 
-.research-column-content {
-  max-width: 1120px;
+.research-column-scroll:focus-visible {
+  outline: none;
 }
 
-/* — Turns: question | answer at 600px of column width, stacked below it
-   and always stacked in the drawer (which is not a size container). — */
-.research-turn {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-  padding: 18px 26px 14px 18px;
-  border-bottom: 1px solid var(--research-turn-divider);
+/* A focused answer column (read with the keyboard) shows the rows' faint
+   ring, inside the column below the header. */
+.research-pair-answer:has(> .research-column-scroll:focus-visible)::after {
+  position: absolute;
+  inset: calc(var(--research-header-height, 43px) + 1px) 0 0;
+  z-index: 2;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
+  content: "";
+  pointer-events: none;
 }
 
-.research-turn.is-whole {
-  gap: 6px;
+/* — Message rows: bubbles, as in the feed. No fill or separators at rest;
+   hover is an inset rounded bubble at 55% of the selected fill; the row the
+   keys act on has a faint accent ring. — */
+.research-msg-list {
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
 }
 
-/* Top-aligned, so the question's box (measured when a branch's source is
-   revealed, and flashed) is the question, not the whole turn's height. */
-.research-turn-question {
-  min-width: 0;
-  align-self: start;
-  border-radius: 4px;
+.research-msg-row {
+  position: relative;
+  margin: 0 8px;
+  border-radius: 10px;
 }
 
-.research-turn-question.is-flashing {
-  animation: research-flash 1.6s ease-out;
+.research-msg-row + .research-msg-row {
+  margin-top: 2px;
 }
 
-@keyframes research-flash {
-  0%,
-  30% {
-    background: var(--research-highlight-flash);
-    box-shadow: 0 0 0 3px var(--research-highlight-flash);
-  }
-
-  100% {
-    box-shadow: 0 0 0 3px transparent;
-  }
+.research-msg-row:hover {
+  background: color-mix(in srgb, var(--research-card-selected-bg) 55%, transparent);
 }
 
-.research-turn .research-prompt {
+.research-msg-row.is-selected {
+  background: var(--research-card-selected-bg);
+}
+
+.research-msg-row:has(> .research-msg-hit:focus) {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
+}
+
+/* One button under the row's content selects the message; links in the
+   message and the meta line's buttons stay their own targets above it. */
+.research-msg-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.research-msg-hit:focus,
+.research-msg-hit:focus-visible {
+  outline: none;
+}
+
+.research-msg-content {
+  position: relative;
+  z-index: 1;
+  padding: 10px 6px 2px 12px;
+  pointer-events: none;
+}
+
+.research-msg-content a,
+.research-msg-content .research-message-attachments {
+  pointer-events: auto;
+}
+
+.research-msg-content .research-prompt {
   width: auto;
   max-width: none;
   margin: 0;
 }
 
-.research-turn-prompt .turn-markdown.research-prose {
-  color: var(--text-heading);
-  font-weight: 500;
-}
-
-/* A queued question has no node yet; its text renders as typed. */
-.research-turn-prompt.is-plain {
-  color: var(--text-heading);
+.research-msg-prompt .turn-markdown.research-prose,
+.research-msg-plain {
+  color: var(--text-primary);
   font-size: var(--research-body-font-size);
-  font-weight: 500;
   line-height: var(--research-body-line-height);
   overflow-wrap: anywhere;
+}
+
+.research-msg-plain {
+  display: block;
   white-space: pre-wrap;
 }
 
-.research-turn.is-client-queued .research-turn-prompt.is-plain {
+.research-msg-row.is-selected :is(.research-msg-prompt .turn-markdown.research-prose, .research-msg-plain) {
+  color: var(--text-heading);
+}
+
+.research-msg-row.is-status-queued :is(.research-msg-prompt .turn-markdown.research-prose, .research-msg-plain) {
   color: var(--text-muted);
 }
 
-/* Time, star, and branch button with even 13px gaps: the 22px buttons
+/* Time, pill, star, branch count and … with even gaps: the 22px buttons
    inset their 13px icons by 4.5px, and the time takes the same margin. */
-.research-turn-meta {
+.research-msg-meta {
+  position: relative;
+  z-index: 1;
   display: flex;
+  min-height: 28px;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  margin-top: 4px;
+  padding: 2px 4px 6px 12px;
   color: var(--text-faint);
   font-size: calc(12px + var(--font-ui-size-offset));
+  pointer-events: none;
 }
 
-.research-turn-meta > time {
+.research-msg-meta > * {
+  pointer-events: auto;
+}
+
+.research-msg-meta > time {
   margin-right: 4.5px;
+  pointer-events: none;
 }
 
-.research-turn.is-whole .research-turn-meta {
-  margin-top: 0;
+.research-msg-row.is-selected .research-msg-meta {
+  color: var(--text-muted);
 }
 
-.research-turn-meta-button {
+.research-msg-button {
   position: relative;
   display: inline-flex;
   min-width: 22px;
@@ -926,27 +900,21 @@
   color: var(--text-muted);
   background: transparent;
   font-size: calc(11.5px + var(--font-ui-size-offset));
-  font-weight: 400;
 }
 
-.research-turn-meta-button[aria-expanded="true"],
-.research-turn-meta-button:hover {
+.research-msg-button:hover,
+.research-msg-button[aria-expanded="true"] {
   color: var(--text-heading);
   background: var(--surface-fill-medium);
 }
 
-.research-turn-branches.is-open {
+.research-msg-branches .research-tnum {
+  font-size: calc(12px + var(--font-ui-size-offset));
+  font-weight: 500;
+}
+
+.research-msg-branches.is-open {
   color: var(--accent-color);
-}
-
-.research-turn-branches[aria-disabled="true"] {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.research-turn-branches[aria-disabled="true"]:hover {
-  color: var(--text-muted);
-  background: transparent;
 }
 
 .research-turn-unread {
@@ -957,108 +925,298 @@
   background: var(--accent-color);
 }
 
-.research-turn-meta-button .research-turn-unread {
+.research-msg-button .research-turn-unread {
   position: absolute;
   top: 0;
   right: -1px;
+}
+
+.research-msg-pill {
+  display: inline-flex;
+  flex: none;
+  height: 20px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 7px;
+  border-radius: 10px;
+  color: var(--text-secondary);
+  background: var(--surface-fill-hover);
+  font-size: calc(11.5px + var(--font-ui-size-offset));
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.research-msg-pill.is-run {
+  color: var(--status-active-fg);
+  background: color-mix(in srgb, var(--status-active-fg) 12%, transparent);
+}
+
+/* Mixed 20% toward the strongest text so the label reaches 4.5:1 on its
+   tint, on a selected row too, in both appearances. */
+.research-msg-pill.is-error {
+  color: color-mix(in srgb, var(--status-failed-fg) 80%, var(--text-strong));
+  background: var(--status-failed-bg);
+}
+
+/* A question in the client-side queue: its state and actions under it. */
+.research-msg-row.is-client-queued {
+  padding-bottom: 4px;
+}
+
+.research-msg-row.is-client-queued .research-msg-content,
+.research-msg-row.is-client-queued .research-msg-meta {
+  pointer-events: auto;
+}
+
+.research-msg-note {
+  margin: 0;
+  padding: 0 8px 0 12px;
+  color: var(--text-muted);
+  font-size: calc(12.5px + var(--font-ui-size-offset));
+  line-height: 1.45;
+}
+
+.research-msg-actions {
+  padding: 0 8px 0 12px;
+}
+
+/* A branch's source passage: a muted block at the top of its messages
+   column. */
+.research-branch-source {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 14px 10px 20px;
+  border-bottom: 1px solid var(--surface-divider);
+  color: var(--text-muted);
+  font-size: calc(12.5px + var(--font-ui-size-offset));
+  line-height: 1.45;
+}
+
+.research-branch-source > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--text-faint);
+}
+
+.research-branch-source-quote {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.research-branch-source-quote i {
+  color: var(--text-secondary);
+  font-style: normal;
+}
+
+/* — The answer column: the selected message's answer in full, with a
+   right margin for the branch markers. — */
+.research-answer {
+  --research-answer-gutter: 42px;
+  position: relative;
+  padding: 18px var(--research-answer-gutter) 16px 24px;
+}
+
+.research-answer .turn-markdown {
+  color: var(--text-body-soft);
+}
+
+.research-answer .turn-markdown > :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6) {
+  max-width: 70ch;
+}
+
+/* A margin marker, level with the first line of its paragraph. */
+.research-marker {
+  position: absolute;
+  right: 6px;
+  display: inline-flex;
+  height: 22px;
+  min-width: 26px;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-faint);
+  background: none;
+  font-size: calc(11.5px + var(--font-ui-size-offset));
+  font-weight: 500;
+  line-height: 1;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.research-marker:hover {
+  color: var(--text-primary);
+}
+
+.research-marker.is-open {
+  color: var(--accent-color);
+}
+
+.research-marker.is-running::after {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--status-active-fg);
+  animation: research-pulse 1.4s ease-in-out infinite;
+  content: "";
+}
+
+/* The answer's time under a rule; whole-answer branches' marker sits level
+   with it, in the margin. */
+.research-answer-foot {
+  position: relative;
+  min-height: 22px;
+  margin-top: 8px;
+}
+
+.research-answer-foot-meta {
+  max-width: 70ch;
+  padding-top: 10px;
+  border-top: 1px solid var(--surface-divider);
+  color: var(--text-faint);
+  font-size: calc(12px + var(--font-ui-size-offset));
+}
+
+.research-answer-foot > .research-marker {
+  top: 8px;
+  right: calc(6px - var(--research-answer-gutter));
+}
+
+.research-answer-foot.is-bare > .research-marker {
+  top: 0;
+}
+
+/* Hover or focus on a marker: the branch questions, beside it. */
+.research-marker-tip {
+  position: fixed;
+  z-index: var(--z-context-menu);
+  width: 280px;
+  max-width: calc(100vw - 16px);
+  padding: 7px 10px 8px;
+  border: 1px solid var(--surface-border-strong);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: var(--research-feed-popover-bg);
+  box-shadow: var(--popover-shadow);
+  font-size: calc(13px + var(--font-ui-size-offset));
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.research-marker-tip-item + .research-marker-tip-item {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--surface-divider);
+}
+
+.research-marker-tip-question {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.research-marker-tip-meta {
+  display: flex;
+  gap: 6px;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: calc(12px + var(--font-ui-size-offset));
+}
+
+.research-marker-tip-meta > span {
+  flex: none;
+  white-space: nowrap;
+}
+
+.research-marker-tip-meta > .research-marker-tip-source {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.research-marker-tip-meta > .is-open {
+  color: var(--accent-color);
+}
+
+.research-marker-tip-meta > .is-running {
+  color: var(--status-active-fg);
+}
+
+/* Where the next pair opens, when there is room for it. */
+.research-columns-filler {
+  display: grid;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 24px 16px;
+  overflow: hidden;
+  color: var(--text-subtle);
+  background: var(--research-page-bg);
+  font-size: calc(13px + var(--font-ui-size-offset));
+  text-align: center;
+  container-type: inline-size;
+  place-items: center;
+}
+
+.research-columns-filler p {
+  max-width: min(30ch, 100%);
+  margin: 0;
+}
+
+/* Hide placeholder text when the remaining width is 140px or less. */
+@container (max-width: 140px) {
+  .research-columns-filler p {
+    display: none;
+  }
+}
+
+/* — Note pages: the note and its activity, in a pair-wide column — */
+.research-turn {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 18px 26px 14px 24px;
+}
+
+.research-turn-question {
+  min-width: 0;
+  align-self: start;
+}
+
+.research-turn .research-prompt {
+  width: auto;
+  max-width: none;
+  margin: 0;
+}
+
+.research-turn-prompt .turn-markdown.research-prose {
+  color: var(--text-heading);
+  font-weight: 500;
+}
+
+.research-turn-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--text-faint);
+  font-size: calc(12px + var(--font-ui-size-offset));
 }
 
 .research-turn-answer {
   min-width: 0;
 }
 
-/* Answers read in the body colour, one step below the question's. */
 .research-turn-answer .turn-markdown {
   color: var(--text-body-soft);
-}
-
-/* — Answers: clamped to nine lines of body text with a fade, and length
-   dots in the right gutter. ResearchTurn.tsx measures the same nine lines. — */
-.research-answer-wrap {
-  position: relative;
-}
-
-.research-answer-clamp.is-clamped {
-  max-height: calc(9 * var(--research-body-font-size) * var(--research-body-line-height));
-  overflow: hidden;
-}
-
-.research-answer-fade {
-  position: absolute;
-  inset: auto 0 0;
-  display: flex;
-  height: 32px;
-  min-height: 0;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 0 0 4px;
-  border: 0;
-  border-radius: 0;
-  background: linear-gradient(to bottom, transparent, var(--research-workspace-bg));
-  cursor: pointer;
-}
-
-.research-answer-fade span {
-  padding: 3px 10px;
-  border: 1px solid var(--surface-border-strong);
-  border-radius: 12px;
-  color: var(--text-secondary);
-  background: var(--research-feed-field-bg);
-  font-size: calc(12.5px + var(--font-ui-size-offset));
-  font-weight: 500;
-  opacity: 0;
-  transition: opacity 120ms;
-}
-
-.research-answer-fade:hover span {
-  opacity: 1;
-}
-
-.research-answer-dots {
-  position: absolute;
-  top: 6px;
-  right: -18px;
-  display: flex;
-  width: 10px;
-  min-height: 0;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 0;
-  border: 0;
-  background: transparent;
-  opacity: 0;
-  transition: opacity 100ms;
-}
-
-.research-answer-wrap:hover .research-answer-dots,
-.research-answer-dots:focus-visible {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .research-answer-dots {
-    opacity: 1;
-  }
-}
-
-.research-answer-dots i {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--text-faint);
-  opacity: 0.6;
-}
-
-.research-answer-dots i.is-on {
-  height: 10px;
-  border-radius: 2px;
-  background: var(--accent-color);
-  opacity: 1;
-}
-
-.research-answer-dots:hover i {
-  opacity: 1;
 }
 
 /* — Run states — */
@@ -1078,8 +1236,8 @@
 /* A running answer ends in a block caret, blinking unless motion is
    reduced. A pseudo-element, so the answer's text (and the offsets anchors
    are stored at) stays unchanged. */
-.research-turn.is-status-running .research-response-content-root .turn-markdown > p:last-child::after,
-.research-turn.is-status-running
+.research-response.is-running .research-response-content-root .turn-markdown > p:last-child::after,
+.research-response.is-running
   .research-response-content-root
   .turn-markdown
   > :is(ul, ol):last-child
@@ -1095,12 +1253,12 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .app-shell:not(.reduce-motion)
-    .research-turn.is-status-running
+    .research-response.is-running
     .research-response-content-root
     .turn-markdown
     > p:last-child::after,
   .app-shell:not(.reduce-motion)
-    .research-turn.is-status-running
+    .research-response.is-running
     .research-response-content-root
     .turn-markdown
     > :is(ul, ol):last-child
@@ -1144,6 +1302,7 @@
 
 .research-turn-alert {
   display: flex;
+  max-width: 70ch;
   align-items: flex-start;
   gap: 8px;
   margin-top: 4px;
@@ -1218,89 +1377,49 @@
   background: var(--surface-fill-hover);
 }
 
-/* — Branch body: the source passage line and the empty new-branch state — */
-.research-branch-source {
+/* — The ask box at the end of each messages column — */
+.research-composer-wrap {
+  padding: 14px 12px 20px;
+}
+
+.research-composer-mode {
   display: flex;
-  width: 100%;
-  max-width: 1120px;
-  min-height: 0;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
-  padding: 10px 26px 0 18px;
-  border: 0;
+  margin: 0 2px 8px 8px;
   color: var(--text-muted);
-  background: transparent;
   font-size: calc(12.5px + var(--font-ui-size-offset));
   line-height: 1.45;
-  text-align: left;
 }
 
-.research-branch-source > svg {
-  flex: none;
-  color: var(--text-faint);
-}
-
-.research-branch-source-quote {
+.research-composer-mode-label {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
-.research-branch-source:hover .research-branch-source-quote {
+.research-composer-mode-label b {
   color: var(--text-secondary);
-  text-decoration: underline;
-  text-decoration-color: var(--surface-border-strong);
-  text-underline-offset: 2px;
+  font-weight: 600;
 }
 
-.research-branch-source:focus-visible {
-  border-radius: 4px;
-  outline-offset: -2px;
-}
-
-.research-branch-source.is-full {
-  align-items: flex-start;
-  padding-top: 18px;
-}
-
-.research-branch-source.is-full > svg {
-  margin-top: 2px;
-}
-
-.research-branch-source.is-full .research-branch-source-quote {
-  color: var(--text-secondary);
-  white-space: normal;
-}
-
-/* Indented to the text of the source line above it. */
-.research-branch-empty {
-  max-width: 640px;
-  padding: 12px 18px 4px 37px;
-}
-
-.research-branch-empty p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: calc(13px + var(--font-ui-size-offset));
-  line-height: 1.5;
-}
-
-.research-response-loading.is-drawer {
-  padding: 24px;
-}
-
-/* — The composer after the last turn of each column — */
-.research-composer-wrap {
-  max-width: 1120px;
-  padding: 16px 18px 20px;
+.research-composer-mode-cancel.research-icon-button {
+  width: 22px;
+  height: 22px;
+  margin-top: -2px;
 }
 
 .research-composer-note {
-  margin: 0 0 8px;
+  margin: 0 2px 8px 8px;
   color: var(--text-muted);
   font-size: calc(12px + var(--font-ui-size-offset));
+}
+
+.research-composer-agent {
+  margin: 6px 2px 0 8px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: calc(11.5px + var(--font-ui-size-offset));
 }
 
 .research-link-button {
@@ -1319,7 +1438,6 @@
 .research-composer {
   position: relative;
   display: flex;
-  max-width: 1092px;
   align-items: flex-end;
   gap: 8px;
   padding: 7px 7px 7px 12px;
@@ -1337,7 +1455,7 @@
   flex: 1;
   min-width: 0;
   min-height: 30px;
-  max-height: 140px;
+  max-height: 260px;
   padding: 5px 0;
   border: 0;
   outline: none;
@@ -1364,6 +1482,21 @@
   cursor: not-allowed;
 }
 
+/* A draft's ask box gives the text the full width; Send sits on its own
+   row below. */
+.research-composer-wrap.is-full-width .research-composer {
+  flex-wrap: wrap;
+}
+
+.research-composer-wrap.is-full-width .research-composer textarea {
+  flex-basis: 100%;
+  padding-right: 5px;
+}
+
+.research-composer-wrap.is-full-width .research-composer-send {
+  margin-left: auto;
+}
+
 .research-composer-send {
   display: inline-flex;
   width: 30px;
@@ -1381,6 +1514,8 @@
 }
 
 .research-composer-send:disabled {
+  color: var(--text-muted);
+  background: var(--surface-fill-medium);
   cursor: default;
 }
 
@@ -1408,61 +1543,6 @@
   position: absolute;
   top: -9px;
   left: 10px;
-}
-
-/* Wide columns (600px and up): question | answer side by side. After the
-   base rules, which it overrides. */
-@container research-column (min-width: 600px) {
-  .research-turn {
-    grid-template-columns: minmax(180px, 0.4fr) minmax(0, 1fr);
-    gap: 36px;
-    padding: 22px 30px 18px 24px;
-  }
-
-  .research-turn.is-whole {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
-  }
-
-  .research-turn-prompt .turn-markdown.research-prose,
-  .research-turn-prompt.is-plain {
-    color: var(--text-strong);
-    font-weight: 400;
-  }
-
-  .research-branch-source {
-    padding: 12px 30px 0 24px;
-  }
-
-  .research-branch-empty {
-    padding-left: 43px;
-  }
-
-  .research-composer-wrap {
-    padding: 18px 24px 22px;
-  }
-}
-
-/* — The branch drawer: an overlay over the right of the column area — */
-.research-branch-drawer {
-  position: absolute;
-  inset: 0 0 0 auto;
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  border-left: 1px solid var(--surface-border-strong);
-  background: var(--research-workspace-bg);
-  box-shadow: var(--research-drawer-shadow);
-}
-
-.research-branch-drawer.is-full {
-  left: 0;
-  border-left: 0;
-  box-shadow: none;
-}
-
-.research-branch-drawer .research-column-bar {
-  gap: 6px;
 }
 
 /* — Menus (ResearchMenu.tsx) and the selection actions — */
@@ -1631,10 +1711,11 @@
   padding-top: 0;
 }
 
+/* The selection actions are one row, tighter than the menus. */
 .research-selection-actions {
   z-index: var(--z-context-menu);
-  padding: 6px;
-  border-radius: 10px;
+  padding: 3px;
+  border-radius: 8px;
 }
 
 .research-selection-row {
@@ -1642,9 +1723,15 @@
   gap: 2px;
 }
 
+.research-menu-item.is-inline,
+.research-menu.is-compact .research-menu-item {
+  height: 26px;
+  gap: 6px;
+  padding: 0 7px;
+}
+
 .research-menu-item.is-inline {
   width: auto;
-  height: 28px;
 }
 
 .research-rename-dialog {
@@ -1792,52 +1879,6 @@
   color: var(--text-subtle);
   font-size: calc(10.5px + var(--font-ui-size-offset));
   white-space: nowrap;
-}
-
-.export-research-dialog {
-  max-width: 420px;
-}
-
-.export-research-note {
-  margin: 6px 0 10px;
-  color: var(--text-subtle);
-  font-size: calc(12px + var(--font-ui-size-offset));
-}
-
-.export-research-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 10px;
-  font-size: calc(12px + var(--font-ui-size-offset));
-}
-
-.export-research-field > span {
-  color: var(--text-subtle);
-}
-
-.export-research-field .export-research-input,
-.export-research-field select {
-  width: 100%;
-  min-height: var(--control-h-lg);
-  padding: 0 10px;
-  border: 1px solid var(--control-border);
-  border-radius: var(--radius-md);
-  background: var(--field-bg);
-  color: var(--text-strong);
-  font-size: var(--fs-input);
-}
-
-.export-research-field .export-research-input:focus,
-.export-research-field select:focus {
-  outline: none;
-  border-color: var(--focus-ring);
-}
-
-.export-research-error {
-  margin: 4px 0 8px;
-  color: var(--status-failed-fg);
-  font-size: calc(12px + var(--font-ui-size-offset));
 }
 
 .research-response-empty {

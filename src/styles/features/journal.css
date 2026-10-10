@@ -23,42 +23,39 @@
   font-family: var(--font-ui);
 }
 
-/* With nothing open beside it, the feed is the focused column and carries
-   the conversation columns' 2px accent rule (not when it shows alone). */
-.research-columns:not(.has-document):not(.is-single) .research-feed::before {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 4;
-  height: 2px;
-  background: var(--accent-color);
-  content: "";
-  opacity: 0.75;
-  pointer-events: none;
-}
-
 /* — Title bar — */
 
+/* The header takes the strip's shared header height (ResearchColumns
+   measures every bar, this one included), so it lines up with the pairs'. */
 .research-feed-header {
+  display: flex;
   flex: none;
+  min-height: calc(var(--research-header-height, 43px) + 1px);
+  flex-direction: column;
+  justify-content: center;
   padding: 0 12px 0 calc(16px + var(--research-titlebar-inset, 0px));
   border-bottom: 1px solid var(--surface-divider);
 }
 
-/* Content sits 1px below the row's centre, level with the traffic lights. */
+/* Content sits 1px below the row's centre, level with the traffic lights; a
+   long folder name wraps and the bar grows. */
 .research-feed-header-bar {
   display: flex;
+  box-sizing: border-box;
+  min-height: 43px;
   align-items: center;
   gap: 4px;
-  height: 44px;
   min-width: 0;
-  padding-top: 2px;
+  padding: 9px 0 8px;
 }
 
 .research-feed-header-bar .research-feed-icon-button:first-child {
   margin-left: -6px;
 }
 
+/* Wraps at word boundaries and is clamped to 4 lines, like a pair title. */
 .research-feed-header-title {
+  display: -webkit-box;
   margin: 0;
   min-width: 0;
   overflow: hidden;
@@ -66,13 +63,9 @@
   font-size: calc(var(--fs-base) + 2px);
   font-weight: 600;
   line-height: 20px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* One step dimmer while a conversation column has the focus. */
-.research-columns.has-document .research-feed-column:not(.is-focused) .research-feed-header-title {
-  color: var(--text-secondary);
+  overflow-wrap: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
 }
 
 .research-feed-header-title:focus {
@@ -254,15 +247,22 @@
 
 /* — Composer — */
 
+/* The ask box ends the Unfiled list (or the open folder), before the trays. */
 .research-feed-composer {
   flex: none;
+  margin-bottom: 10px;
 }
 
+.new-research-composer {
+  margin: 12px;
+}
+
+/* The box: the field with the send button inside it, as in a conversation's
+   ask box. */
 .new-research-launcher {
   display: flex;
   flex-direction: column;
-  margin: 12px;
-  padding: 8px 12px;
+  padding: 7px 7px 7px 12px;
   border: 1px solid var(--surface-border-strong);
   border-radius: 10px;
   background: var(--research-feed-field-bg);
@@ -273,18 +273,22 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-/* One line until focused or filled; then the field grows and the buttons appear. */
-.new-research-launcher.is-expanded {
-  padding: 10px 12px 8px;
+.new-research-main {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
 }
 
+/* One line until focused or filled; then the field grows and the picker
+   appears under it. */
 .new-research-input {
   display: block;
-  width: 100%;
-  min-height: 20px;
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
   max-height: 160px;
   margin: 0;
-  padding: 2px;
+  padding: 4px 0;
   border: 0;
   resize: none;
   color: var(--text-strong);
@@ -295,12 +299,8 @@
   field-sizing: content;
 }
 
-.new-research-launcher.is-expanded .new-research-input {
-  min-height: 42px;
-}
-
 .new-research-input::placeholder {
-  color: var(--placeholder-color);
+  color: var(--text-faint);
 }
 
 .new-research-input:focus {
@@ -309,26 +309,21 @@
   box-shadow: none;
 }
 
-/* One line at every feed width: the picker at the leading edge, Save draft
-   and the primary button at the trailing edge. The ↵ glyph widens only the
-   primary button. */
+/* The recipient and model picker, at the leading edge under the field. */
 .new-research-row {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  margin-top: 6px;
+  margin-top: 4px;
+  margin-left: -5px;
 }
 
-.new-research-actions {
+/* Save draft, under the box at the trailing edge, once there is text. */
+.new-research-after {
   display: flex;
-  flex: none;
-  gap: 6px;
-  margin-left: auto;
-}
-
-.new-research-actions .research-feed-button {
-  padding: 0 8px;
+  justify-content: flex-end;
+  margin-top: 6px;
 }
 
 /* Recipient, agent, and model in one quiet picker: just the agent's icon. */
@@ -406,7 +401,7 @@
 }
 
 .research-feed-rows {
-  border-top: 1px solid var(--surface-divider);
+  padding: 6px 0;
 }
 
 .recent-activity-virtual-canvas {
@@ -419,22 +414,7 @@
   top: 0;
   left: 0;
   width: 100%;
-  border-bottom: 1px solid var(--surface-divider);
   will-change: transform;
-}
-
-/* Plain (non-virtual) rows draw the rule the virtual row wrapper would. */
-.research-feed-tray-body > .research-feed-unit,
-.research-feed-solo > .research-feed-unit,
-.research-feed-rows > .research-feed-unit,
-.research-feed-tray-body > .research-feed-card,
-.research-feed-solo > .research-feed-card {
-  border-bottom: 1px solid var(--surface-divider);
-}
-
-.research-feed-tray-body > :is(.research-feed-unit, .research-feed-card):first-child,
-.research-feed-solo > :is(.research-feed-unit, .research-feed-card):first-child {
-  border-top: 1px solid var(--surface-divider);
 }
 
 .research-feed-solo {
@@ -529,37 +509,50 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 36px;
+  min-height: 36px;
   padding-right: 6px;
   cursor: pointer;
 }
 
-/* The icon starts at 20px, the inset of the card text below it. */
+/* The icon starts at 14px, the inset of the row text below it. Long folder
+   names wrap. */
 .research-feed-tray-title {
   display: flex;
   flex: 1;
   align-items: center;
   gap: 7px;
   min-width: 0;
-  height: 36px;
-  padding: 0 8px 0 20px;
+  min-height: 36px;
+  padding: 5px 8px 5px 14px;
   color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.research-feed-tray-title > svg {
+  flex: none;
 }
 
 .research-feed-tray-name {
   min-width: 0;
-  padding: 0;
-  overflow: hidden;
+  padding: 3px 0;
   border: 0;
   color: var(--text-secondary);
   background: transparent;
   font-family: inherit;
   font-size: var(--fs-base);
   font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: inherit;
+  overflow-wrap: anywhere;
+  text-align: left;
   cursor: pointer;
   transition: color var(--transition-fast);
+}
+
+.research-feed-tray-count {
+  flex: none;
+  color: var(--text-faint);
+  font-size: calc(var(--fs-base) - 1px);
+  font-weight: 400;
 }
 
 .research-feed-tray-name:hover {
@@ -580,9 +573,8 @@
   transform: rotate(-90deg);
 }
 
-/* A rule under the last question, with a little space before the tray's own border. */
 .research-feed-tray-body:has(> .research-feed-unit, > .research-feed-card) {
-  padding-bottom: 8px;
+  padding-bottom: 6px;
 }
 
 .research-feed-tray.is-drop-target,
@@ -599,35 +591,76 @@
   border-style: dashed;
 }
 
-/* — Cards — */
+/* — Cards: bubble rows. No fill or separators at rest; hover is an inset
+   rounded bubble (8px from the column edge, 6px in a folder tray) at 55% of
+   the selected fill; the row the keys act on has a faint accent ring. The
+   row text sits 20px from the column edge (14px in a folder tray). — */
 
-.research-feed-card {
+.research-feed-card,
+.research-feed-child {
+  --research-row-inset: 8px;
+  --research-row-text: 20px;
   position: relative;
-  padding: 12px 12px 12px 20px;
-  cursor: pointer;
-  outline-offset: -2px;
+  margin: 0 var(--research-row-inset);
+  border-radius: 10px;
   -webkit-user-select: none;
   user-select: none;
 }
 
-.research-feed-card:hover {
-  background: var(--surface-fill-hover);
+.research-feed-tray-body > :is(.research-feed-card, .research-feed-child),
+.research-feed-tray-body > .research-feed-unit > :is(.research-feed-card, .research-feed-child) {
+  --research-row-inset: 6px;
+  --research-row-text: 14px;
+  border-radius: 8px;
 }
 
-.research-feed-card.is-selected {
+.research-feed-card {
+  padding: 10px 12px 10px calc(var(--research-row-text) - var(--research-row-inset));
+  cursor: pointer;
+}
+
+:is(.research-feed-card, .research-feed-child) + :is(.research-feed-card, .research-feed-child) {
+  margin-top: 2px;
+}
+
+.research-feed-card:hover,
+.research-feed-child:hover {
+  background: color-mix(in srgb, var(--research-card-selected-bg) 55%, transparent);
+}
+
+.research-feed-card.is-selected,
+.research-feed-child.is-selected {
   background: var(--research-card-selected-bg);
+}
+
+.research-feed-card:has(> .research-feed-card-hit:focus),
+.research-feed-child:has(.research-feed-child-open:focus) {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
 }
 
 .research-feed-card.is-dragging {
   opacity: 0.4;
 }
 
-.research-feed-card.is-insert-before {
-  box-shadow: inset 0 2px 0 var(--accent-color);
+/* The insertion line, in the gap between rows. */
+.research-feed-card.is-insert-before::before,
+.research-feed-card.is-insert-after::after {
+  position: absolute;
+  right: -4px;
+  left: -4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent-color);
+  content: "";
+  pointer-events: none;
 }
 
-.research-feed-card.is-insert-after {
-  box-shadow: inset 0 -2px 0 var(--accent-color);
+.research-feed-card.is-insert-before::before {
+  top: -2px;
+}
+
+.research-feed-card.is-insert-after::after {
+  bottom: -2px;
 }
 
 /* The whole card is one button under its content; links and embeds in the
@@ -639,13 +672,14 @@
   width: 100%;
   padding: 0;
   border: 0;
+  border-radius: inherit;
   background: transparent;
   cursor: pointer;
 }
 
+.research-feed-card-hit:focus,
 .research-feed-card-hit:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
+  outline: none;
 }
 
 .research-feed-card-content {
@@ -655,7 +689,8 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding-right: 22px;
+  /* Clear of the right-hand margin's controls. */
+  padding-right: 14px;
   pointer-events: none;
 }
 
@@ -666,49 +701,63 @@
 }
 
 .research-feed-card-title {
-  display: -webkit-box;
-  overflow: hidden;
+  display: block;
   color: var(--text-heading);
   font-size: calc(var(--fs-base) + 0.5px);
   font-weight: 600;
   line-height: 1.4;
   overflow-wrap: anywhere;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
-/* The question as plain text, four lines at most; it reads one step larger
-   than the title above it. */
+/* Show the full question in a larger font than the title above it. */
 .research-feed-card-question {
-  display: -webkit-box;
   min-width: 0;
-  overflow: hidden;
   color: var(--text-primary);
   font-size: calc(var(--research-compact-font-size) + 1px);
   line-height: var(--research-compact-line-height);
   overflow-wrap: anywhere;
   white-space: pre-line;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
 }
 
 .research-feed-card .research-message-attachments {
   margin-top: 6px;
 }
 
-.research-feed-card-grip {
+/* The right-hand margin: the drag handle at the top, where the status dot
+   sits, and the … button at the bottom. Both show on hover and focus and
+   replace the dot. The handle is not a target of its own: a press on it
+   reaches the row, which starts the drag. */
+.research-feed-rail {
   position: absolute;
-  top: 15px;
-  left: 3px;
-  z-index: 1;
-  display: grid;
-  color: var(--text-subtle);
+  top: 5px;
+  right: 4px;
+  bottom: 4px;
+  z-index: 2;
+  display: flex;
+  width: 20px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   opacity: 0;
   pointer-events: none;
 }
 
-.research-feed-card:hover .research-feed-card-grip {
+:is(.research-feed-card, .research-feed-child):is(:hover, :focus-within, .has-open-menu)
+  > .research-feed-rail {
+  opacity: 1;
+}
+
+.research-feed-card-grip {
+  display: grid;
+  margin-top: 3px;
+  color: var(--text-faint);
   opacity: 0.8;
+  cursor: grab;
+  pointer-events: auto;
+}
+
+.research-feed-child .research-feed-card-grip {
+  margin-top: 0;
 }
 
 .research-feed-card-unread {
@@ -726,23 +775,15 @@
   opacity: 0;
 }
 
-.research-feed-card-menu {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 2;
-  opacity: 0;
+.research-feed-icon-button.research-feed-card-menu {
+  width: 20px;
+  height: 18px;
+  border-radius: 5px;
+  pointer-events: auto;
 }
 
-.research-feed-card:hover .research-feed-card-menu,
-.research-feed-card:focus-within .research-feed-card-menu,
-.research-feed-card.is-selected .research-feed-card-menu,
-.research-feed-card.has-open-menu .research-feed-card-menu {
-  opacity: 1;
-}
-
-/* Running (pulsing) and failed threads: a dot in the corner the … button
-   takes over on hover. */
+/* Running (pulsing) and failed threads: a dot in the corner the drag handle
+   takes over on hover and focus. */
 .research-feed-status {
   flex: none;
   width: 8px;
@@ -760,16 +801,19 @@
   background: var(--status-failed-fg);
 }
 
-.research-feed-card > .research-feed-status {
+.research-feed-card > .research-feed-status,
+.research-feed-child > .research-feed-status {
   position: absolute;
-  top: 18px;
-  right: 17px;
+  top: 16px;
+  right: 10px;
 }
 
-.research-feed-card:hover > .research-feed-status,
-.research-feed-card:focus-within > .research-feed-status,
-.research-feed-card.is-selected > .research-feed-status,
-.research-feed-card.has-open-menu > .research-feed-status {
+.research-feed-child > .research-feed-status {
+  top: 17px;
+}
+
+:is(.research-feed-card, .research-feed-child):is(:hover, :focus-within, .has-open-menu)
+  > .research-feed-status {
   opacity: 0;
 }
 
@@ -781,35 +825,16 @@
 
 /* — Starred children — */
 
-/* Rows of their own under the question, indented 16px per level. The rule
-   above the first child starts where the child text starts. */
+/* Rows of their own under the question, indented 16px per level, with no
+   rules between them. A row is selected while it is open: a branch while its
+   branch is open, a follow-up while its message is selected in the root
+   pair. A single-line row is tall enough for both margin controls. */
 .research-feed-child {
-  -webkit-user-select: none;
-  user-select: none;
-  --research-child-inset: calc(20px + var(--research-child-level, 1) * 16px);
-  position: relative;
   display: flex;
+  min-height: 42px;
   align-items: flex-start;
-  gap: 6px;
-  padding: 7px 12px 7px var(--research-child-inset);
-}
-
-.research-feed-child:hover {
-  background: var(--surface-fill-hover);
-}
-
-/* The branch open in the drawer. */
-.research-feed-child.is-selected {
-  background: var(--research-card-selected-bg);
-}
-
-.research-feed-child.is-group-start::before {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: var(--research-child-inset);
-  border-top: 1px solid var(--surface-divider);
-  content: "";
+  padding: 11px 26px 11px
+    calc(var(--research-row-text) - var(--research-row-inset) + var(--research-child-level, 1) * 16px);
 }
 
 .research-feed-child.is-group-end {
@@ -831,10 +856,16 @@
   cursor: pointer;
 }
 
+.research-feed-child-open::before {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: "";
+}
+
+.research-feed-child-open:focus,
 .research-feed-child-open:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
+  outline: none;
 }
 
 .research-feed-child-icon {
@@ -854,10 +885,6 @@
   white-space: pre-line;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
-}
-
-.research-feed-child > .research-feed-status {
-  margin: 6px 4px 0 0;
 }
 
 /* — Drag — */
@@ -900,84 +927,6 @@
 .is-research-drop-none,
 .is-research-drop-none * {
   cursor: no-drop !important;
-}
-
-/* — A draft open in the content column — */
-
-.research-draft-view {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  color: var(--text-primary);
-  background: var(--research-workspace-bg);
-  font-family: var(--font-ui);
-}
-
-/* The open draft is the content column: focused (not the feed), it takes the
-   2px rule on its top edge, as a conversation column does. */
-.research-draft-view.is-focused::before {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 2;
-  height: 2px;
-  background: var(--accent-color);
-  content: "";
-  opacity: 0.75;
-  pointer-events: none;
-}
-
-.research-columns.is-single .research-draft-view.is-focused::before {
-  display: none;
-}
-
-.research-column-title.research-draft-view-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.research-draft-view-title > svg {
-  flex: none;
-  color: var(--text-muted);
-}
-
-.research-draft-view-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-width: 760px;
-  padding: 18px;
-  overflow-y: auto;
-}
-
-.research-draft-view-input {
-  display: block;
-  width: 100%;
-  min-height: 120px;
-  max-height: 60vh;
-  padding: 10px 12px;
-  border: 1px solid var(--surface-border-strong);
-  border-radius: var(--radius-lg);
-  resize: none;
-  color: var(--text-strong);
-  background: var(--research-feed-field-bg);
-  font-family: inherit;
-  font-size: var(--fs-input);
-  line-height: 1.5;
-}
-
-.research-draft-view-input:focus {
-  border-color: var(--accent-color);
-  outline: none;
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
-.research-draft-view-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 
 /* — Dialogs and the toast (the menus are in research.css) — */

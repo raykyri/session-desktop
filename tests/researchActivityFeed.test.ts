@@ -53,7 +53,7 @@ const folders: ResearchFolderState = {
 
 const cards = (html: string) => html.split(/class="research-feed-card(?=[ "])/).slice(1);
 
-test("Home renders cards under the composer: the title when it differs, then the question", () => {
+test("Home lists Unfiled cards, then the composer, then the trays; a card shows the title when it differs, then the question", () => {
   const html = renderFeed({ items: [savedLink, question], researchTrees: [tree] });
   assert.match(html, /research-feed-header-title[^>]*>Home</);
   assert.match(html, /role="feed"/);
@@ -62,7 +62,11 @@ test("Home renders cards under the composer: the title when it differs, then the
   assert.match(html, /note-link-card research-content-card/);
   assert.match(html, /research-user-message research-feed-card-message/);
   assert.match(html, /Query composer/);
-  assert.ok(html.indexOf("Query composer") < html.indexOf("research-feed-card"));
+  // The ask box ends the Unfiled list, before the folder trays, and + Ask
+  // in the header brings it into view.
+  assert.ok(html.indexOf("research-feed-card") < html.indexOf("Query composer"));
+  assert.ok(html.indexOf("Query composer") < html.indexOf("research-feed-tray"));
+  assert.match(html, /aria-label="Go to the ask box"/);
   assert.ok(html.indexOf("research-feed-card-title\">Collective memory<") > 0);
   assert.ok(
     html.indexOf("research-feed-card-title\">Collective memory<") <
@@ -83,7 +87,7 @@ test("cards have no metadata row: no time, counts, summary, Follow or Bookmark",
   // Direct follow-ups are not rows of their own unless starred.
   assert.doesNotMatch(html, /Follow up question here/);
   // Bookmarking and moving live in the card's … menu.
-  assert.match(html, /title="Bookmark or move" aria-label="Bookmark or move" aria-haspopup="menu"/);
+  assert.match(html, /title="Bookmark, follow or move" aria-label="Bookmark, follow or move" aria-haspopup="menu"/);
   // A title that only repeats the question is not shown above it.
   const echoed = renderFeed({
     items: [question],
@@ -142,34 +146,55 @@ test("starred follow-ups and branches are indented rows under their question", (
       ],
     }],
     researchTrees: [tree],
+    onDragStart: noop,
   });
-  const rows = html.split(/class="research-feed-child(?=[ "])/).slice(1);
+  const rows = html
+    .split(/class="research-feed-child(?=[ "])/)
+    .slice(1)
+    .map((row) => row.slice(0, row.indexOf("</div>")));
   assert.equal(rows.length, 3);
   assert.ok(rows[0].startsWith(" is-group-start"));
   assert.match(rows[0], /--research-child-level:1/);
-  assert.doesNotMatch(rows[0], /Branch: /);
-  assert.match(rows[1], /Branch: <\/span><span class="research-feed-child-text">Branch title</);
-  // Levels cap at two; running children keep a status dot and no buttons.
+  // A follow-up has no icon; a starred branch is marked with a filled star.
+  assert.doesNotMatch(rows[0], /Starred branch: |research-feed-child-icon/);
+  assert.match(rows[1], /<svg(?=[^>]*lucide-star)(?=[^>]*fill="currentColor")/);
+  assert.match(rows[1], /Starred branch: <\/span><span class="research-feed-child-text">Branch title</);
+  // Levels cap at two; running children keep a status dot.
   assert.match(rows[2], /--research-child-level:2/);
   assert.ok(rows[2].startsWith(" is-group-end"));
   assert.match(rows[2], /research-feed-status is-running/);
-  // A child row has one button, its open target.
-  for (const row of rows.slice(0, 2)) assert.equal((row.match(/<button/g) ?? []).length, 1);
+  // Each child row has its open target and, in the right-hand margin, the
+  // drag handle above a … menu.
+  for (const row of rows) {
+    assert.equal((row.match(/<button/g) ?? []).length, 2);
+    assert.match(
+      row,
+      /class="research-feed-rail"><span class="research-feed-card-grip"[^]*class="research-feed-icon-button research-feed-card-menu" title="Remove the star, bookmark, follow or move"/,
+    );
+  }
   assert.equal((html.match(/class="research-feed-child-open"/g) ?? []).length, 3);
+  // The question row has the same margin.
+  assert.match(html, /class="research-feed-rail"><span class="research-feed-card-grip"[^]*title="Bookmark, follow or move"/);
 
-  // The branch open in the open thread's drawer is marked; other cards' rows are not.
+  // The open nodes' rows are marked (a follow-up whose message is selected
+  // in the root pair, an open branch); other cards' rows are not.
+  const promoted = [
+    { ...question, nodeId: "follow", parentNodeId: "node", inline: true, prompt: "A starred follow-up", branchDepth: 0 },
+    { ...question, nodeId: "branch", parentNodeId: "node", inline: false, prompt: "Branch prompt", branchDepth: 1 },
+  ];
   const open = renderFeed({
-    items: [{ ...question, promoted: [{ ...question, nodeId: "branch", parentNodeId: "node", inline: false, prompt: "Branch prompt", branchDepth: 1 }] }],
+    items: [{ ...question, promoted }],
     researchTrees: [tree],
     selectedTreeId: "tree",
-    selectedChildNodeId: "branch",
+    selectedChildNodeIds: ["follow", "branch"],
   });
-  assert.match(open, /research-feed-child is-group-start is-group-end is-selected/);
-  assert.match(open, /class="research-feed-child-open" aria-current="true"/);
+  assert.match(open, /research-feed-child is-group-start is-selected"[^]*?aria-current="true"><span class="research-feed-child-text">A starred follow-up/);
+  assert.match(open, /research-feed-child is-group-end is-selected"[^]*?aria-current="true"><svg/);
+  assert.match(open, /research-feed-card is-selected/);
   const elsewhere = renderFeed({
-    items: [{ ...question, promoted: [{ ...question, nodeId: "branch", parentNodeId: "node", inline: false, prompt: "Branch prompt", branchDepth: 1 }] }],
+    items: [{ ...question, promoted }],
     researchTrees: [tree],
-    selectedChildNodeId: "branch",
+    selectedChildNodeIds: ["follow", "branch"],
   });
   assert.doesNotMatch(elsewhere, /is-selected/);
 });
@@ -209,6 +234,11 @@ test("Home lists filed questions in their folder's tray, after Unfiled", () => {
   assert.match(trays[2], /data-research-tray-collapsed=""/);
   assert.doesNotMatch(trays[2], /Archived thread/);
   assert.match(trays[2], /aria-expanded="false" aria-label="Expand Archive"/);
+  // Each header counts the folder's questions, with words for screen readers
+  // so the name doesn't run into the number.
+  assert.match(trays[0], /research-feed-tray-count">2<span class="research-visually-hidden"> questions<\/span>/);
+  assert.match(trays[1], /research-feed-tray-count">1<span class="research-visually-hidden"> question<\/span>/);
+  assert.match(trays[2], /research-feed-tray-count">1</);
 });
 
 test("a folder view names the folder and lists only its questions", () => {

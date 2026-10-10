@@ -99,24 +99,19 @@ test("clearing a draft or explicitly dismissing an ask cannot resurrect it after
   assert.equal(store.tree.followupDraft, undefined);
 });
 
-test("pinned columns and queued follow-ups save at once and clear when emptied", () => {
+test("queued follow-ups save at once and clear when emptied", () => {
   const store: Record<string, SavedResearchNavigation> = {};
   let writes = 0;
   const owner = createResearchDocumentPersistence(store, () => {
     writes++;
   });
-  owner.recordPinned("tree", ["b1", "b3"]);
-  assert.deepEqual(store.tree.pinnedBranches, ["b1", "b3"]);
   const queued = [{ id: "q1", prompt: "Next question", createdAt: 5 }];
   owner.recordQueue("tree", "root", queued);
   assert.deepEqual(store.tree.queuedFollowups?.root, queued);
-  assert.equal(writes, 2);
-  owner.recordPinned("tree", []);
+  assert.equal(writes, 1);
   owner.recordQueue("tree", "root", []);
-  assert.equal(store.tree.pinnedBranches, undefined);
   assert.equal(store.tree.queuedFollowups?.root, undefined);
   // Clearing state that is already absent writes nothing.
-  owner.recordPinned("tree", []);
   owner.recordQueue("tree", "other", []);
-  assert.equal(writes, 4);
+  assert.equal(writes, 2);
 });

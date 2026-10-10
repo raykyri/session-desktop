@@ -34,19 +34,18 @@ export function useResearchDocumentNavigation(
   return owner.current;
 }
 
-/** Persists the conversation composer's text per tree, and a new branch that
- * is still being written (the drawer's draft: its passage and text), so
- * leaving the research surface — which unmounts the document — loses
- * neither. A saved draft reopens in the drawer once its passage's turn has
- * loaded, unless the drawer is already showing something. Call after the
- * document's tree-reset effect so restoration wins over resets. */
+/** Persists the root composer's text and an unsent branch's passage and text
+ * per tree across document unmounts. On mount, a branch saved under one of
+ * `chainNodeIds` reopens after its source answer loads, unless another draft
+ * branch is already open. Call after the document's tree-reset effect so
+ * the reset does not clear the restored draft. */
 export function useResearchComposerDrafts({
   persistence,
   treeId,
   mainText,
   draft,
   draftText,
-  drawerOpen,
+  draftOpen,
   chainNodeIds,
   contentByNode,
   setMainText,
@@ -57,7 +56,7 @@ export function useResearchComposerDrafts({
   mainText: string;
   draft: Draft | null;
   draftText: string;
-  drawerOpen: boolean;
+  draftOpen: boolean;
   chainNodeIds: string[];
   contentByNode: Record<string, ResearchNodeContent>;
   setMainText: (text: string) => void;
@@ -80,19 +79,24 @@ export function useResearchComposerDrafts({
 
   useEffect(() => {
     if (!treeId || draftRestoredRef.current || chainNodeIds.length === 0) return;
-    if (drawerOpen) {
+    if (draftOpen) {
       draftRestoredRef.current = true;
       return;
     }
     const drafts = persistence.store[treeId]?.askByNode;
     for (const nodeId of chainNodeIds) {
       const saved = drafts?.[nodeId];
-      if (!saved || !contentByNode[nodeId]?.responseRevision) continue;
+      if (!saved) continue;
+      // Wait for the passage's answer before reopening the draft on it.
+      if (!contentByNode[nodeId]?.responseRevision) return;
       draftRestoredRef.current = true;
       restoreDraftRef.current(nodeId, saved.anchor, saved.text);
       return;
     }
-  }, [chainNodeIds, contentByNode, drawerOpen, persistence, treeId]);
+    // Restore drafts only on mount. Selecting another message during the visit
+    // does not reopen its saved draft.
+    draftRestoredRef.current = true;
+  }, [chainNodeIds, contentByNode, draftOpen, persistence, treeId]);
 
   useEffect(() => {
     if (!treeId) return;
