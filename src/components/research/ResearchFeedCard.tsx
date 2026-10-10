@@ -3,14 +3,14 @@ import { Ellipsis, GripVertical, Star } from "lucide-react";
 import type { ResearchFeedChild } from "../../lib/researchFolders";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 
-export type ResearchFeedPostStatus = "running" | "failed";
+export type ResearchFeedCardStatus = "running" | "failed";
 
-const STATUS_LABELS: Record<ResearchFeedPostStatus, string> = {
+const STATUS_LABELS: Record<ResearchFeedCardStatus, string> = {
   running: "Running",
   failed: "Failed",
 };
 
-interface ResearchFeedPostProps {
+interface ResearchFeedCardProps {
   /** Tree id, or draft id for a draft card. */
   cardId: string;
   dragKind?: "tree" | "draft";
@@ -26,7 +26,7 @@ interface ResearchFeedPostProps {
   label: string;
   /** The open button's tooltip (an archived card's archive time). */
   tooltip?: string;
-  status?: ResearchFeedPostStatus | null;
+  status?: ResearchFeedCardStatus | null;
   /** Replaces the status's name, such as "Failed since last viewed". */
   statusLabel?: string;
   selected?: boolean;
@@ -120,15 +120,16 @@ export function researchCardRefocus(
   return active === null || active === body ? "focus" : "drop";
 }
 
-/** One question in the feed: the thread title (when it differs) and the
- * question, with no metadata row. Rows are bubbles: no fill at rest, an inset
+/** One thread in the feed, whatever its root is (a question, a post or a
+ * document): the thread title (when it differs) and the root's message, with
+ * no metadata row. Rows are bubbles: no fill at rest, an inset
  * rounded fill on hover and selection, and a faint ring on the focused row.
  * Running and failed threads show a status dot in the top-right corner,
  * which the drag handle and … button replace on hover and focus. The whole
  * card opens the thread; links and embeds inside it stay their own targets.
  * Starred children follow as indented rows of their own, each with the same
  * margin controls; dragging one drags its question. */
-export default function ResearchFeedPost({
+export default function ResearchFeedCard({
   cardId,
   dragKind = "tree",
   place,
@@ -151,7 +152,7 @@ export default function ResearchFeedPost({
   onChildMenu,
   onContextMenu,
   onDragStart,
-}: ResearchFeedPostProps) {
+}: ResearchFeedCardProps) {
   const statusLabel = status ? (statusLabelOverride ?? STATUS_LABELS[status]) : null;
   const cardRef = useRef<HTMLDivElement | null>(null);
   return (

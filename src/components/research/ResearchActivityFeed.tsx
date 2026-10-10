@@ -52,11 +52,11 @@ import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchArchivedFeed, { archivedFeedTrees } from "./ResearchArchivedFeed";
 import { ResearchColumnsContext } from "./ResearchColumns";
 import { ResearchFeedHeader, ResearchFeedScrollThumb } from "./ResearchFeedChrome";
-import ResearchFeedPost, {
+import ResearchFeedCard, {
   researchCardRefocus,
   researchFeedCardControl,
-  type ResearchFeedPostStatus,
-} from "./ResearchFeedPost";
+  type ResearchFeedCardStatus,
+} from "./ResearchFeedCard";
 import ResearchFeedTray, { researchPlaceEmptyText } from "./ResearchFeedTray";
 import { ResearchFolderDeleteConfirm } from "./ResearchFolderDialogs";
 import { ResearchMenu, ResearchMenuItem, researchMenuPoint } from "./ResearchMenu";
@@ -250,7 +250,7 @@ export function virtualActivityRange(
 export function researchFeedStatus(
   tree: ResearchTreeSummary | undefined,
   query: RecentResearchQuery | undefined,
-): ResearchFeedPostStatus | null {
+): ResearchFeedCardStatus | null {
   if ((tree?.runningCount ?? 0) > 0 || (query && isActiveResearchStatus(query.status))) {
     return "running";
   }
@@ -826,7 +826,7 @@ function ResearchActivityFeed({
     const plainPrompt = (asQuestion: (content: ReactNode) => ReactNode) => () =>
       asQuestion(query ? visibleResearchPrompt(query.prompt, query.attachments).trim() : question);
     return (
-      <ResearchFeedPost
+      <ResearchFeedCard
         cardId={treeId}
         place={placeOf(tree)}
         title={title}
@@ -883,7 +883,7 @@ function ResearchActivityFeed({
   /** A draft opens in the content column; its … menu has Open and Delete. */
   function renderDraftCard(draft: ResearchDraft) {
     return (
-      <ResearchFeedPost
+      <ResearchFeedCard
         key={draft.id}
         cardId={draft.id}
         dragKind="draft"
