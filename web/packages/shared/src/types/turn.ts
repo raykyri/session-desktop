@@ -12,16 +12,11 @@
 
 import { z } from "zod";
 
-// Every schema in this module is `.loose()`, and that is load-bearing rather
-// than laxity. A zod object strips unknown keys, and these objects are parsed
-// on the way out of the `response_snapshots` and `run_turns` JSON columns —
-// the same values `research/revision.ts` hashes. A field written by a newer
-// server, or provider metadata the mapper starts carrying, would be dropped
-// silently on read, and the canonical JSON of the stripped turns no longer
-// hashes to the revision that was committed with them. A record that is
-// content-addressed by its own bytes has to round-trip whatever it was stored
-// with; the named fields below are the parts this build understands, not the
-// whole of what a turn may contain.
+// Every schema uses `.loose()` to preserve unknown fields when reading the
+// `response_snapshots` and `run_turns` JSON columns. Stripping fields written
+// by a newer server or provider mapper would change the canonical JSON and
+// break the revision hash computed by `research/revision.ts`. The schemas
+// validate fields this build understands while retaining all stored fields.
 
 export const turnBlockSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("text"), text: z.string() }).loose(),

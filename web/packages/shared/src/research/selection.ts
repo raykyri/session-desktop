@@ -144,9 +144,9 @@ function segmenterConstructor() {
  * and fuses one message's last word with the next one's first: `"…faster"` +
  * `"I rewrote…"` is one unit, and so is `"…faster."` + `"I…"` — a period
  * between letters does not break a word. Snapping to such a unit would drag a
- * selection into a neighbouring message. Splitting at the seams keeps snapping
- * to what it advertises: each endpoint moves by at most a partial word, and
- * which messages a selection touches never changes. */
+ * selection into a neighbouring message. Splitting at message boundaries
+ * limits each endpoint adjustment to a partial word and preserves the
+ * selected messages. */
 function unitsSplitAtBoundaries(units: SelectionUnit[], boundaries: number[]) {
   if (boundaries.length === 0) {
     return units;

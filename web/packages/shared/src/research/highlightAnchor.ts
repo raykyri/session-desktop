@@ -6,7 +6,7 @@
 // `src-tauri/src/research.rs:1522-1590`; the caps are
 // `02-domain-model-and-database.md` §5.5.
 //
-// Two different length units are in play and both are load-bearing:
+// Offsets and storage caps use different length units:
 //
 //   - `start` and `end` are offsets into the `answer-v1` projection in UTF-16
 //     code units, the unit a browser's Selection API reports, so
