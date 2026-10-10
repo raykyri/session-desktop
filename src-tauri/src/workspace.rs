@@ -261,7 +261,7 @@ pub fn prepare_agent_workspace(
         dir.display().to_string()
     } else {
         // Default: no worktree — the agent runs directly in the base repo / cwd.
-        // base_repo is always Some by construction above; the tail is belt-and-braces.
+        // base_repo is always Some by construction above; retain the fallback defensively.
         base_repo.unwrap_or_else(|| state.default_open_dir().display().to_string())
     };
 
