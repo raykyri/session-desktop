@@ -405,7 +405,7 @@ const RESEARCH_HIGHLIGHT_NAME = "session-research-highlights";
 const RESEARCH_BRANCH_NAME = "session-research-branch-passages";
 const RESEARCH_OPEN_BRANCH_NAME = "session-research-open-branch";
 const RESEARCH_PENDING_BRANCH_NAME = "session-research-pending-branch";
-const PENDING_BRANCH_ID = "__draft__";
+const PENDING_BRANCH_ID = "__pending__";
 const RESEARCH_OVERLAP_NAME = "session-research-highlight-overlaps";
 const RESEARCH_HOVER_HIGHLIGHT_NAME = "session-research-highlight-hover";
 const RESEARCH_HOVER_BRANCH_NAME = "session-research-branch-hover";
@@ -1569,9 +1569,9 @@ function ResearchThreadPage({
         setPending(null);
         const currentTreeId = treeIdRef.current;
         if (currentTreeId) {
-          navigationPersistence.clearAsk(currentTreeId, dropped.parentNodeId);
+          navigationPersistence.clearPendingBranch(currentTreeId, dropped.parentNodeId);
         }
-        setComposerText((text) => withoutKeys(text, [`draft:${dropped.parentNodeId}`]));
+        setComposerText((text) => withoutKeys(text, [`pending:${dropped.parentNodeId}`]));
       }
       setMenu(null);
       markOpened(nodeId);
@@ -1695,14 +1695,14 @@ function ResearchThreadPage({
   }, [treeId, rootNodeId, Boolean(detail)]);
 
   const mainComposerKey = rootNodeId ?? "main";
-  const draftKey = activePending ? `draft:${activePending.parentNodeId}` : null;
+  const pendingComposerKey = activePending ? `pending:${activePending.parentNodeId}` : null;
   useResearchComposerDrafts({
     persistence: navigationPersistence,
     treeId,
     mainText: composerText[mainComposerKey] ?? "",
-    draft: activePending?.anchor ? { nodeId: activePending.parentNodeId, anchor: activePending.anchor } : null,
-    draftText: draftKey ? composerText[draftKey] ?? "" : "",
-    draftOpen: activePending !== null,
+    pendingBranch: activePending?.anchor ? { nodeId: activePending.parentNodeId, anchor: activePending.anchor } : null,
+    pendingBranchText: pendingComposerKey ? composerText[pendingComposerKey] ?? "" : "",
+    pendingBranchOpen: activePending !== null,
     // Only the deepest selection's saved new branch reopens: one saved under
     // a shallower message would close the levels the path restored.
     chainNodeIds: deepestSelection,
@@ -1711,12 +1711,12 @@ function ResearchThreadPage({
       setComposerText((current) =>
         (current[mainComposerKey] ?? "") === text ? current : { ...current, [mainComposerKey]: text },
       ),
-    restoreDraft: (nodeId, anchor, text) => {
+    restorePendingBranch: (nodeId, anchor, text) => {
       // A saved new branch reopens after its parent, without taking focus.
       setSelectedNodeId(nodeId);
       setPending({ parentNodeId: nodeId, anchor });
       if (text) {
-        setComposerText((current) => ({ ...current, [`draft:${nodeId}`]: text }));
+        setComposerText((current) => ({ ...current, [`pending:${nodeId}`]: text }));
       }
     },
   });
@@ -1780,17 +1780,17 @@ function ResearchThreadPage({
   /** Opens a new branch on `anchor` (a passage) or on the whole answer of
    * `parentNodeId`, as the pair after the parent's level. Its ask box takes
    * focus. */
-  const openDraft = useCallback(
+  const openPendingBranch = useCallback(
     (parentNodeId: string, anchor: ResearchHighlightAnchor | null) => {
       if (archived) {
         return;
       }
       const previous = pendingRef.current;
       if (previous && previous.parentNodeId !== parentNodeId) {
-        setComposerText((text) => withoutKeys(text, [`draft:${previous.parentNodeId}`]));
+        setComposerText((text) => withoutKeys(text, [`pending:${previous.parentNodeId}`]));
         const currentTreeId = treeIdRef.current;
         if (currentTreeId) {
-          navigationPersistence.clearAsk(currentTreeId, previous.parentNodeId);
+          navigationPersistence.clearPendingBranch(currentTreeId, previous.parentNodeId);
         }
       }
       setMenu(null);
@@ -1799,7 +1799,7 @@ function ResearchThreadPage({
         persistSelection(parentNodeId);
       }
       setPending({ parentNodeId, anchor });
-      requestFocus({ kind: "composer", key: `draft:${parentNodeId}` }, "settle");
+      requestFocus({ kind: "composer", key: `pending:${parentNodeId}` }, "settle");
     },
     [archived, navigationPersistence, persistSelection, requestFocus],
   );
@@ -1814,9 +1814,9 @@ function ResearchThreadPage({
     setPending(null);
     const currentTreeId = treeIdRef.current;
     if (currentTreeId) {
-      navigationPersistence.clearAsk(currentTreeId, current.parentNodeId);
+      navigationPersistence.clearPendingBranch(currentTreeId, current.parentNodeId);
     }
-    setComposerText((text) => withoutKeys(text, [`draft:${current.parentNodeId}`]));
+    setComposerText((text) => withoutKeys(text, [`pending:${current.parentNodeId}`]));
     const level = levelPathRef.current.indexOf(current.parentNodeId);
     if (level >= 0) {
       requestFocus({ kind: "answer", level }, "settle");
@@ -2170,7 +2170,7 @@ function ResearchThreadPage({
         const pendingNow = pendingRef.current;
         const key =
           pendingNow && level >= levelPathRef.current.length
-            ? `draft:${pendingNow.parentNodeId}`
+            ? `pending:${pendingNow.parentNodeId}`
             : stripRef.current.levels[level]?.headId;
         if (key) {
           requestFocus({ kind: "composer", key }, "reveal");
@@ -3560,8 +3560,8 @@ function ResearchThreadPage({
     const { nodeId, anchor } = highlightAction;
     setHighlightAction(null);
     window.getSelection()?.removeAllRanges();
-    openDraft(nodeId, anchor);
-  }, [highlightAction, openDraft, selectionBranchBlocker]);
+    openPendingBranch(nodeId, anchor);
+  }, [highlightAction, openPendingBranch, selectionBranchBlocker]);
 
   const copySelection = useCallback(async () => {
     if (!highlightAction) {
@@ -3980,12 +3980,12 @@ function ResearchThreadPage({
 
   /** Sends the new branch's first question: the branch is created with it
    * and becomes the next level, with its ask box focused. */
-  const submitDraft = useCallback(async () => {
+  const submitPendingBranch = useCallback(async () => {
     const current = pendingRef.current;
     if (!current) {
       return;
     }
-    const key = `draft:${current.parentNodeId}`;
+    const key = `pending:${current.parentNodeId}`;
     const prompt = (composerTextRef.current[key] ?? "").trim();
     if (!prompt || submittingKeyRef.current || archived) {
       return;
@@ -4000,7 +4000,7 @@ function ResearchThreadPage({
       );
       const currentTreeId = treeIdRef.current;
       if (currentTreeId) {
-        navigationPersistence.clearAsk(currentTreeId, current.parentNodeId);
+        navigationPersistence.clearPendingBranch(currentTreeId, current.parentNodeId);
       }
       setComposerText((text) => withoutKeys(text, [key]));
       if (pendingRef.current === current) {
@@ -5137,7 +5137,7 @@ function ResearchThreadPage({
       case "editor":
         return renderEditorColumn(column);
       case "pending": {
-        const pendingKey = `draft:${column.parentNodeId}`;
+        const pendingKey = `pending:${column.parentNodeId}`;
         return (
           <section
             key={columnKey(column)}
@@ -5161,7 +5161,7 @@ function ResearchThreadPage({
                   submitting={submittingKey === pendingKey}
                   shortcutHint={shortcutHintsShown && currentLevel === column.levelIndex ? "⌘J" : null}
                   onChange={(value) => setComposerText((current) => ({ ...current, [pendingKey]: value }))}
-                  onSubmit={() => void submitDraft()}
+                  onSubmit={() => void submitPendingBranch()}
                 />
               </div>
             </div>
@@ -5217,7 +5217,7 @@ function ResearchThreadPage({
                 label="Branch from highlight"
                 disabled={blocker !== null}
                 title={blocker ?? undefined}
-                onSelect={() => openDraft(menu.nodeId, highlight.anchor)}
+                onSelect={() => openPendingBranch(menu.nodeId, highlight.anchor)}
               />
               <ResearchMenuItem
                 icon={<X size={15} aria-hidden="true" />}
@@ -5376,7 +5376,7 @@ function ResearchThreadPage({
           label="Branch from the whole answer"
           disabled={branchBlocker !== null}
           title={branchBlocker ?? undefined}
-          onSelect={() => openDraft(node.id, null)}
+          onSelect={() => openPendingBranch(node.id, null)}
         />
         {copyText && view ? (
           <ResearchMenuItem

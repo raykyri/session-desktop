@@ -7,7 +7,7 @@ import type { ResearchHighlightAnchor, ResearchNodeContent } from "../types";
 
 type Persistence = ReturnType<typeof createResearchThreadPersistence>;
 type DraftRestoration = ReturnType<typeof createResearchComposerDraftRestoration>;
-type Draft = { nodeId: string; anchor: ResearchHighlightAnchor };
+type PendingBranch = { nodeId: string; anchor: ResearchHighlightAnchor };
 
 /** Own the shared store, durable writes, and final scroll capture for one thread page mount. */
 export function useResearchThreadNavigation(
@@ -36,31 +36,31 @@ export function useResearchThreadNavigation(
 
 /** Persists the root composer's text and an unsent branch's passage and text
  * per tree across thread page unmounts. On mount, a branch saved under one of
- * `chainNodeIds` reopens after its source answer loads, unless another draft
+ * `chainNodeIds` reopens after its source answer loads, unless another pending
  * branch is already open. Call after the thread page's tree-reset effect so
- * the reset does not clear the restored draft. */
+ * the reset does not clear the restored branch. */
 export function useResearchComposerDrafts({
   persistence,
   treeId,
   mainText,
-  draft,
-  draftText,
-  draftOpen,
+  pendingBranch,
+  pendingBranchText,
+  pendingBranchOpen,
   chainNodeIds,
   contentByNode,
   setMainText,
-  restoreDraft,
+  restorePendingBranch,
 }: {
   persistence: Persistence;
   treeId: string | null;
   mainText: string;
-  draft: Draft | null;
-  draftText: string;
-  draftOpen: boolean;
+  pendingBranch: PendingBranch | null;
+  pendingBranchText: string;
+  pendingBranchOpen: boolean;
   chainNodeIds: string[];
   contentByNode: Record<string, ResearchNodeContent>;
   setMainText: (text: string) => void;
-  restoreDraft: (nodeId: string, anchor: ResearchHighlightAnchor, text: string) => void;
+  restorePendingBranch: (nodeId: string, anchor: ResearchHighlightAnchor, text: string) => void;
 }) {
   const restoring = useRef<DraftRestoration | null>(null);
   if (!restoring.current) {
@@ -68,35 +68,35 @@ export function useResearchComposerDrafts({
   }
   const setMainTextRef = useRef(setMainText);
   setMainTextRef.current = setMainText;
-  const restoreDraftRef = useRef(restoreDraft);
-  restoreDraftRef.current = restoreDraft;
-  const draftRestoredRef = useRef(false);
+  const restorePendingBranchRef = useRef(restorePendingBranch);
+  restorePendingBranchRef.current = restorePendingBranch;
+  const pendingBranchRestoredRef = useRef(false);
 
   useEffect(() => {
     setMainTextRef.current(restoring.current!.restore(treeId));
-    draftRestoredRef.current = false;
+    pendingBranchRestoredRef.current = false;
   }, [persistence, treeId]);
 
   useEffect(() => {
-    if (!treeId || draftRestoredRef.current || chainNodeIds.length === 0) return;
-    if (draftOpen) {
-      draftRestoredRef.current = true;
+    if (!treeId || pendingBranchRestoredRef.current || chainNodeIds.length === 0) return;
+    if (pendingBranchOpen) {
+      pendingBranchRestoredRef.current = true;
       return;
     }
-    const drafts = persistence.store[treeId]?.askByNode;
+    const saved = persistence.store[treeId]?.askByNode;
     for (const nodeId of chainNodeIds) {
-      const saved = drafts?.[nodeId];
-      if (!saved) continue;
-      // Wait for the passage's answer before reopening the draft on it.
+      const branch = saved?.[nodeId];
+      if (!branch) continue;
+      // Wait for the passage's answer before reopening the branch on it.
       if (!contentByNode[nodeId]?.responseRevision) return;
-      draftRestoredRef.current = true;
-      restoreDraftRef.current(nodeId, saved.anchor, saved.text);
+      pendingBranchRestoredRef.current = true;
+      restorePendingBranchRef.current(nodeId, branch.anchor, branch.text);
       return;
     }
-    // Restore drafts only on mount. Selecting another message during the visit
-    // does not reopen its saved draft.
-    draftRestoredRef.current = true;
-  }, [chainNodeIds, contentByNode, draftOpen, persistence, treeId]);
+    // Restore a pending branch only on mount. Selecting another message during the visit
+    // does not reopen its saved branch.
+    pendingBranchRestoredRef.current = true;
+  }, [chainNodeIds, contentByNode, pendingBranchOpen, persistence, treeId]);
 
   useEffect(() => {
     if (!treeId) return;
@@ -104,12 +104,12 @@ export function useResearchComposerDrafts({
     persistence.recordDraft(treeId, mainText);
   }, [mainText, persistence, treeId]);
 
-  const draftContentLoaded = draft ? Boolean(contentByNode[draft.nodeId]) : false;
+  const pendingBranchContentLoaded = pendingBranch ? Boolean(contentByNode[pendingBranch.nodeId]) : false;
   useEffect(() => {
-    // A tree reset commits asynchronously; an outgoing draft still present in
+    // A tree reset commits asynchronously; an outgoing pending branch still present in
     // that render must not be written under the incoming tree.
-    if (draft && treeId && draftContentLoaded && chainNodeIds.includes(draft.nodeId)) {
-      persistence.recordAsk(treeId, draft.nodeId, draft.anchor, draftText);
+    if (pendingBranch && treeId && pendingBranchContentLoaded && chainNodeIds.includes(pendingBranch.nodeId)) {
+      persistence.recordPendingBranch(treeId, pendingBranch.nodeId, pendingBranch.anchor, pendingBranchText);
     }
-  }, [chainNodeIds, draft, draftContentLoaded, draftText, persistence, treeId]);
+  }, [chainNodeIds, pendingBranch, pendingBranchContentLoaded, pendingBranchText, persistence, treeId]);
 }

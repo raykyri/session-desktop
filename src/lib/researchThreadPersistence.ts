@@ -60,7 +60,7 @@ export function createResearchThreadPersistence(
     recordDraft(treeId: string, text: string) {
       if (recordResearchFollowupDraft(entry(treeId), text)) schedule();
     },
-    recordAsk(
+    recordPendingBranch(
       treeId: string,
       nodeId: string,
       anchor: ResearchHighlightAnchor,
@@ -83,10 +83,10 @@ export function createResearchThreadPersistence(
       }
       flush();
     },
-    clearAsk(treeId: string, nodeId: string) {
-      const asks = store[treeId]?.askByNode;
-      if (asks?.[nodeId]) {
-        delete asks[nodeId];
+    clearPendingBranch(treeId: string, nodeId: string) {
+      const branches = store[treeId]?.askByNode;
+      if (branches?.[nodeId]) {
+        delete branches[nodeId];
         flush();
       }
     },

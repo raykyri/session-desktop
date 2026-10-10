@@ -12,17 +12,17 @@ interface SavedResearchScrollPosition {
   updatedAt: number;
 }
 
-/** An in-progress targeted follow-up (ask mode): the passage it is being
- * composed against and whatever the user has typed so far. Persisted so
+/** A pending branch (UI: New branch): the passage of the parent's answer it
+ * is asked about and whatever the user has typed so far. Persisted so
  * leaving the research surface — which unmounts the thread page — does not
- * discard the ask; removed only by submit or an explicit dismiss. */
-interface SavedResearchAsk {
+ * discard it; removed only by submit or an explicit dismiss. */
+interface SavedPendingBranch {
   anchor: ResearchHighlightAnchor;
   text: string;
   updatedAt: number;
 }
 
-/** The conversation composer's draft. Unlike a targeted ask, this belongs
+/** The conversation composer's draft. Unlike a pending branch, this belongs
  * to the tree rather than a passage. */
 interface SavedResearchFollowupDraft {
   text: string;
@@ -50,8 +50,9 @@ export interface SavedResearchNavigation {
    * with the scroll offset — an offset captured against the expanded list
    * would land in the wrong place in the collapsed one. */
   expandedByNode?: Record<string, boolean>;
-  /** In-progress asks, keyed by the node they were started on. */
-  askByNode?: Record<string, SavedResearchAsk>;
+  /** Pending branches, keyed by the parent node they were started on. The
+   * stored field keeps the earlier name, "ask". */
+  askByNode?: Record<string, SavedPendingBranch>;
   /** In-progress text in the conversation composer. */
   followupDraft?: SavedResearchFollowupDraft;
   /** A highlight to scroll into view on the next page visit (set when a
@@ -149,12 +150,12 @@ function load(): Record<string, SavedResearchNavigation> {
             if (!value || typeof value !== "object") {
               return [];
             }
-            const ask = value as Partial<SavedResearchAsk>;
-            return isSavedAnchor(ask.anchor) &&
-              typeof ask.text === "string" &&
-              typeof ask.updatedAt === "number" &&
-              Number.isFinite(ask.updatedAt)
-              ? [[nodeId, { anchor: ask.anchor, text: ask.text, updatedAt: ask.updatedAt }]]
+            const branch = value as Partial<SavedPendingBranch>;
+            return isSavedAnchor(branch.anchor) &&
+              typeof branch.text === "string" &&
+              typeof branch.updatedAt === "number" &&
+              Number.isFinite(branch.updatedAt)
+              ? [[nodeId, { anchor: branch.anchor, text: branch.text, updatedAt: branch.updatedAt }]]
               : [];
           }),
         );
