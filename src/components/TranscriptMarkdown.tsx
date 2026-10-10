@@ -65,9 +65,8 @@ export interface CodexVisualizationReference {
   mode?: "wide";
 }
 
-/** Parses the current Codex visualization content-reference contract. Keeping
- * this deliberately exact prevents prose, code samples, and malformed control
- * text from turning into launchable local-file UI. */
+/** Parses Codex visualization references. Exact matching prevents prose, code
+ * samples, and malformed control text from becoming links to local files. */
 export function parseCodexVisualizationReference(
   text: string,
 ): CodexVisualizationReference | null {

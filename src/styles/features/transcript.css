@@ -1153,8 +1153,8 @@ header + .turn-blocks {
   background: var(--surface-fill-hover);
 }
 
-/* A current Codex visualization reference is a first-class transcript object,
-   rather than exposing the transport marker or its absolute local path. */
+/* Display Codex visualization references as attachments; hide the transport
+   marker and absolute local path. */
 .turn-visualization-attachment {
   appearance: none;
   display: grid;
