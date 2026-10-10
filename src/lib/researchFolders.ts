@@ -88,7 +88,7 @@ export function researchFolderNameError(
   return null;
 }
 
-/** The strip shows a user folder as the first letter or digit of its name. */
+/** The sidebar rail shows a user folder as the first letter or digit of its name. */
 export function researchFolderMonogram(name: string): string {
   const match = name.trim().match(/[\p{L}\p{N}]/u);
   return match ? match[0].toUpperCase() : "?";

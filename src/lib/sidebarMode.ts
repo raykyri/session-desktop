@@ -15,6 +15,6 @@ export function researchFeedPageKey(view: ResearchFeedPage): string {
   return view.kind === "folder" ? `folder:${view.folderId}` : view.kind;
 }
 
-/** Below this window width the sidebar shows as the icon strip regardless of
+/** Below this window width the sidebar shows as the icon rail regardless of
  * the saved preference. */
-export const RESEARCH_SIDEBAR_AUTO_STRIP_WIDTH = 900;
+export const RESEARCH_SIDEBAR_AUTO_RAIL_WIDTH = 900;

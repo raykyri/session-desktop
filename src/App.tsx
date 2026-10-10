@@ -252,7 +252,7 @@ import {
   researchAttention,
 } from "./lib/workspaceScope";
 import {
-  RESEARCH_SIDEBAR_AUTO_STRIP_WIDTH,
+  RESEARCH_SIDEBAR_AUTO_RAIL_WIDTH,
   type ResearchFeedView,
   type ResearchFeedPage,
 } from "./lib/sidebarMode";
@@ -273,8 +273,8 @@ import {
 import { ResearchFeedToast } from "./components/research/ResearchFeedChrome";
 import {
   ResearchSidebarNav,
-  ResearchSidebarStrip,
-  ResearchStripButton,
+  ResearchSidebarRail,
+  ResearchRailButton,
 } from "./components/research/ResearchSidebarNav";
 import { stripTaggedUserInstructionBlocks } from "./lib/taggedInstructions";
 import {
@@ -452,7 +452,7 @@ const LEFT_SIDEBAR_MIN_WIDTH = 208;
 const LEFT_SIDEBAR_DEFAULT_WIDTH = LEFT_SIDEBAR_MIN_WIDTH;
 const LEFT_SIDEBAR_MAX_WIDTH = 420;
 // Below this width, compact the research sidebar around its content.
-const RESEARCH_SIDEBAR_STRIP_WIDTH = 52;
+const RESEARCH_SIDEBAR_RAIL_WIDTH = 52;
 type ResearchViewedAckOptions = {
   /** A real exposure edge (selection, focus, composer close) should check the
    * backend even when the current sidebar snapshot carries no attention bit. */
@@ -1555,19 +1555,19 @@ function MainApp() {
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(false);
   const leftSidebarCollapsedRef = useRef(leftSidebarCollapsed);
   leftSidebarCollapsedRef.current = leftSidebarCollapsed;
-  // Below 900px of window width the sidebar shows as the icon strip without
-  // changing the saved preference; collapsing also shows the strip.
+  // Below 900px of window width the sidebar shows as the icon rail without
+  // changing the saved preference; collapsing also shows the rail.
   const [windowNarrowForSidebar, setWindowNarrowForSidebar] = useState(
-    () => window.innerWidth < RESEARCH_SIDEBAR_AUTO_STRIP_WIDTH,
+    () => window.innerWidth < RESEARCH_SIDEBAR_AUTO_RAIL_WIDTH,
   );
   useEffect(() => {
     const onResize = () =>
-      setWindowNarrowForSidebar(window.innerWidth < RESEARCH_SIDEBAR_AUTO_STRIP_WIDTH);
+      setWindowNarrowForSidebar(window.innerWidth < RESEARCH_SIDEBAR_AUTO_RAIL_WIDTH);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  const researchSidebarStrip = leftSidebarCollapsed || windowNarrowForSidebar;
-  const effectiveSidebarWidth = researchSidebarStrip ? RESEARCH_SIDEBAR_STRIP_WIDTH : sidebarWidth;
+  const researchSidebarRail = leftSidebarCollapsed || windowNarrowForSidebar;
+  const effectiveSidebarWidth = researchSidebarRail ? RESEARCH_SIDEBAR_RAIL_WIDTH : sidebarWidth;
   // Application-level settings, loaded from localStorage once on mount and
   // persisted on every change. Shared by every pane. Font size is also adjustable
   // in-session with Cmd-=/Cmd--.
@@ -5297,7 +5297,7 @@ function MainApp() {
     [showResearchSurface],
   );
   // Folders, drafts, and moving questions between them. Toasts confirm moves
-  // with Undo; drags run on pointer events shared by feed, sidebar, and strip.
+  // with Undo; drags run on pointer events shared by feed, sidebar, and rail.
   const {
     toast: researchToast,
     showToast: showResearchToast,
@@ -8344,10 +8344,10 @@ function MainApp() {
   );
   const refreshFeed = useCallback(() => void refreshResearchNavigation(), [refreshResearchNavigation]);
   // The workspace switcher sits at the bottom of the full sidebar; in the
-  // strip it is an icon whose menu opens as a popover, with the account
+  // rail it is an icon whose menu opens as a popover, with the account
   // control inside, so both (and ⌘O) stay reachable below 900px.
   const renderResearchFolderSwitcher = (
-    variant: "sidebar" | "strip",
+    variant: "sidebar" | "rail",
     footer?: ReactNode,
   ) => (
     <ResearchFolderSwitcher
@@ -8414,13 +8414,13 @@ function MainApp() {
     <div
       ref={appRef}
       className={`app-shell ${hasGlobalTurnSidebar ? "has-turn-sidebar" : ""}${
-        researchSidebarStrip && IS_MAC ? " has-titlebar-strip" : ""
+        researchSidebarRail && IS_MAC ? " has-titlebar-rail" : ""
       }${
         activeTranscriptVisibleExpanded ? " has-expanded-transcript" : ""
       }${settings.reduceMotion ? " reduce-motion" : ""}`}
       style={appStyle}
     >
-      {!researchSidebarStrip ? (
+      {!researchSidebarRail ? (
         <div
           className="sidebar-resizer"
           role="separator"
@@ -8434,8 +8434,8 @@ function MainApp() {
           onKeyDown={resizeSidebarWithKeyboard}
         />
       ) : null}
-      {researchSidebarStrip ? (
-        <ResearchSidebarStrip
+      {researchSidebarRail ? (
+        <ResearchSidebarRail
           current={feedPage}
           folders={researchFolders}
           forced={windowNarrowForSidebar}
@@ -8446,8 +8446,8 @@ function MainApp() {
           onNewFolder={() => openNewResearchFolderDialog()}
           footer={
             <>
-              {renderResearchFolderSwitcher("strip", <GithubAccountControl />)}
-              <ResearchStripButton
+              {renderResearchFolderSwitcher("rail", <GithubAccountControl />)}
+              <ResearchRailButton
                 label="Agents"
                 selected={agentsOpen}
                 onClick={() => {
@@ -8456,8 +8456,8 @@ function MainApp() {
                 }}
               >
                 <Bot size={16} aria-hidden="true" />
-              </ResearchStripButton>
-              <ResearchStripButton
+              </ResearchRailButton>
+              <ResearchRailButton
                 label={settings.appearance === "light" ? "Dark mode" : "Light mode"}
                 onClick={toggleAppearance}
               >
@@ -8466,8 +8466,8 @@ function MainApp() {
                 ) : (
                   <Sun size={16} aria-hidden="true" />
                 )}
-              </ResearchStripButton>
-              <ResearchStripButton
+              </ResearchRailButton>
+              <ResearchRailButton
                 label="Settings (⌘,)"
                 selected={settingsOpen}
                 onClick={() => {
@@ -8476,7 +8476,7 @@ function MainApp() {
                 }}
               >
                 <Settings size={16} aria-hidden="true" />
-              </ResearchStripButton>
+              </ResearchRailButton>
             </>
           }
         />

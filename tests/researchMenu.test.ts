@@ -77,13 +77,13 @@ test("menus are kept inside the window's margins", () => {
 });
 
 test("a side menu opens to the right of its anchor, bottom edges level", () => {
-  const strip = { left: 8, top: 740, right: 52, bottom: 776 };
-  assert.deepEqual(researchMenuPosition(strip, size, viewport, "side"), {
+  const rail = { left: 8, top: 740, right: 52, bottom: 776 };
+  assert.deepEqual(researchMenuPosition(rail, size, viewport, "side"), {
     left: 58,
     top: 776 - 200,
   });
   // Too close to the top: it moves down into the window.
-  assert.equal(researchMenuPosition({ ...strip, top: 20, bottom: 56 }, size, viewport, "side").top, 8);
+  assert.equal(researchMenuPosition({ ...rail, top: 20, bottom: 56 }, size, viewport, "side").top, 8);
 });
 
 test("arrow keys wrap through the items; Home and End go to the ends", () => {

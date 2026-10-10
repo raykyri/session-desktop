@@ -114,9 +114,9 @@
   background: var(--surface-fill-medium);
 }
 
-/* The collapsed sidebar: a 52px icon strip. Its top cell is the 44px title
+/* The collapsed sidebar: a 52px icon rail. Its top cell is the 44px title
    bar row, so Home sits at the same height as in the full sidebar. */
-.research-strip {
+.research-rail {
   position: relative;
   z-index: 3;
   display: flex;
@@ -131,7 +131,7 @@
   user-select: none;
 }
 
-.research-strip-top {
+.research-rail-top {
   display: grid;
   flex: none;
   width: 100%;
@@ -141,9 +141,9 @@
   border-bottom: 1px solid var(--surface-divider);
 }
 
-/* The strip's right border starts below its title bar row, so the column
-   headers' bottom rule runs on across the strip at the top. */
-.research-strip::after {
+/* The rail's right border starts below its title bar row, so the column
+   headers' bottom rule runs on across the rail at the top. */
+.research-rail::after {
   position: absolute;
   top: 44px;
   right: -1px;
@@ -154,7 +154,7 @@
   pointer-events: none;
 }
 
-.research-strip-icon {
+.research-rail-icon {
   position: relative;
   display: grid;
   flex: none;
@@ -169,31 +169,31 @@
   cursor: pointer;
 }
 
-.research-strip-icon:hover {
+.research-rail-icon:hover {
   color: var(--text-primary);
   background: var(--surface-fill-hover);
 }
 
-.research-strip-icon.is-selected,
-.research-strip-icon[aria-expanded="true"] {
+.research-rail-icon.is-selected,
+.research-rail-icon[aria-expanded="true"] {
   color: var(--text-heading);
   background: var(--surface-fill-medium);
 }
 
-.research-strip-icon:focus-visible {
+.research-rail-icon:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: -1px;
 }
 
 /* Without traffic lights the expand button sits 3px below the row's centre,
    level with the column titles; the icons below it don't move. */
-.research-strip-top .research-strip-icon.is-expand:not(.is-beside-titlebar) {
+.research-rail-top .research-rail-icon.is-expand:not(.is-beside-titlebar) {
   top: 3px;
 }
 
 /* Beside the traffic lights, where the full sidebar's collapse button sits. */
 /* The same 26px button as the full sidebar's collapse toggle, at the same place. */
-.research-strip-icon.is-beside-titlebar {
+.research-rail-icon.is-beside-titlebar {
   position: absolute;
   top: 9px;
   left: 80px;
@@ -202,24 +202,24 @@
   border-radius: var(--radius-md);
 }
 
-/* With the strip on macOS the traffic lights and the expand button keep their
+/* With the rail on macOS the traffic lights and the expand button keep their
    116px zone, so the column headers under it start after it. */
-.app-shell.has-titlebar-strip {
+.app-shell.has-titlebar-rail {
   --research-titlebar-inset: 64px;
 }
 
-.research-strip-icon.is-expand[aria-disabled="true"] {
+.research-rail-icon.is-expand[aria-disabled="true"] {
   opacity: 0.45;
   cursor: not-allowed;
 }
 
-.research-strip-icon.is-drop-target {
+.research-rail-icon.is-drop-target {
   color: var(--text-heading);
   background: var(--split-drop-bg);
   box-shadow: inset 0 0 0 1.5px var(--split-drop-border);
 }
 
-.research-strip-monogram {
+.research-rail-monogram {
   display: grid;
   width: 17px;
   height: 17px;
@@ -232,7 +232,7 @@
 }
 
 /* Fixed beside the icon so the scrolling folder group can't clip it. */
-.research-strip-tip {
+.research-rail-tip {
   position: fixed;
   top: 0;
   left: -999px;
@@ -251,13 +251,13 @@
   transition: opacity 100ms;
 }
 
-.research-strip-icon:hover .research-strip-tip,
-.research-strip-icon:focus-visible .research-strip-tip,
-.research-strip-icon.is-drop-target .research-strip-tip {
+.research-rail-icon:hover .research-rail-tip,
+.research-rail-icon:focus-visible .research-rail-tip,
+.research-rail-icon.is-drop-target .research-rail-tip {
   opacity: 1;
 }
 
-.research-strip-divider {
+.research-rail-divider {
   flex: none;
   width: 22px;
   height: 1px;
@@ -265,7 +265,7 @@
   background: var(--surface-border-strong);
 }
 
-.research-strip-folders {
+.research-rail-folders {
   display: flex;
   min-height: 0;
   flex: 0 1 auto;
@@ -277,7 +277,7 @@
   scrollbar-width: none;
 }
 
-.research-strip-spacer {
+.research-rail-spacer {
   flex: 1;
   min-height: 8px;
 }

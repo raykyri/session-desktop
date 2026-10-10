@@ -29,7 +29,7 @@ export function researchMenuPoint(x: number, y: number): ResearchMenuRect {
  *   at the start of a row, such as the question meta row);
  * - "end": below it, the right edges level;
  * - "point": at its bottom-left corner (a context menu at the pointer);
- * - "side": to its right, the bottom edges level (the sidebar strip).
+ * - "side": to its right, the bottom edges level (the sidebar rail).
  * "start" and "end" open above the anchor when the menu doesn't fit below but
  * fits above. When it fits on neither side it opens on the taller side with
  * `maxHeight` set to that side's room, and scrolls, so it never covers its
@@ -166,7 +166,7 @@ export function ResearchMenu({
   /** The selection popover's tighter rows (26px), for menus that act on a
    * passage. */
   compact?: boolean;
-  /** Content under the items in the same popover, such as the strip's account
+  /** Content under the items in the same popover, such as the rail's account
    * control. It is not part of the menu's keyboard navigation. */
   footer?: ReactNode;
   /** Where focus goes when the menu closed and its trigger is gone, such as

@@ -47,7 +47,7 @@ function swallowNextClick() {
 }
 
 /**
- * Pointer-driven card dragging shared by the feed, the sidebar, and the strip.
+ * Pointer-driven card dragging shared by the feed, the sidebar, and the rail.
  * Drop zones carry `data-research-drop="<place>"`; cards carry
  * `data-research-card="<id>"` and `data-research-card-kind`. Marks are set on
  * the DOM directly so a drag re-renders nothing until it ends. Pointer events

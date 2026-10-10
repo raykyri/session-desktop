@@ -19,7 +19,7 @@ import {
   ResearchMenuSeparator,
   type ResearchMenuRect,
 } from "./ResearchMenu";
-import { ResearchStripButton } from "./ResearchSidebarNav";
+import { ResearchRailButton } from "./ResearchSidebarNav";
 
 const MENU_WIDTH = 264;
 
@@ -37,9 +37,9 @@ interface ResearchFolderSwitcherProps {
   onRenameFolder: (folder: GroupInfo) => void;
   onMoveFolder: (folder: GroupInfo) => Promise<void>;
   onRemoveFolder: (folder: GroupInfo) => void;
-  /** "strip": an icon in the collapsed sidebar whose menu opens beside the
-   * strip, with `footer` (the account control) at its bottom. */
-  variant?: "sidebar" | "strip";
+  /** "rail": an icon in the collapsed sidebar whose menu opens beside the
+   * rail, with `footer` (the account control) at its bottom. */
+  variant?: "sidebar" | "rail";
   footer?: ReactNode;
 }
 
@@ -62,10 +62,10 @@ export default function ResearchFolderSwitcher({
   variant = "sidebar",
   footer,
 }: ResearchFolderSwitcherProps) {
-  const strip = variant === "strip";
+  const rail = variant === "rail";
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   /** The open menu's trigger and what it is placed against: the trigger, or
-   * in the strip, the strip's edge level with the icon. Null while closed. */
+   * in the rail, the rail's edge level with the icon. Null while closed. */
   const [placement, setPlacement] = useState<{
     trigger: HTMLElement;
     anchor: HTMLElement | ResearchMenuRect;
@@ -77,15 +77,15 @@ export default function ResearchFolderSwitcher({
   const show = () => {
     const trigger = triggerRef.current;
     if (!trigger) return;
-    if (!strip) {
+    if (!rail) {
       setPlacement({ trigger, anchor: trigger });
       return;
     }
     const rect = trigger.getBoundingClientRect();
-    const stripRight = trigger.closest(".research-strip")?.getBoundingClientRect().right ?? rect.right;
+    const railRight = trigger.closest(".research-rail")?.getBoundingClientRect().right ?? rect.right;
     setPlacement({
       trigger,
-      anchor: { left: rect.left, top: rect.top, right: stripRight, bottom: rect.bottom },
+      anchor: { left: rect.left, top: rect.top, right: railRight, bottom: rect.bottom },
     });
   };
   const close = (restoreFocus: boolean) => {
@@ -125,11 +125,11 @@ export default function ResearchFolderSwitcher({
   const menu = placement ? (
     <ResearchMenu
       anchor={placement.anchor}
-      align={strip ? "side" : "start"}
+      align={rail ? "side" : "start"}
       trigger={placement.trigger}
       label="Research workspaces"
       width={MENU_WIDTH}
-      footer={strip ? footer : undefined}
+      footer={rail ? footer : undefined}
       onClose={() => close(false)}
     >
       {folders.map((folder, index) => (
@@ -209,10 +209,10 @@ export default function ResearchFolderSwitcher({
     </ResearchMenu>
   ) : null;
 
-  if (strip) {
+  if (rail) {
     return (
-      <div className="research-folder-switcher is-strip">
-        <ResearchStripButton
+      <div className="research-folder-switcher is-rail">
+        <ResearchRailButton
           label={scopedName ? `Workspace: ${scopedName}` : "Choose a workspace"}
           description={`${scopedName ?? "Workspaces"} (⌘O)`}
           buttonRef={triggerRef}
@@ -221,7 +221,7 @@ export default function ResearchFolderSwitcher({
           onClick={toggle}
         >
           <Folder size={16} aria-hidden="true" />
-        </ResearchStripButton>
+        </ResearchRailButton>
         {menu}
       </div>
     );

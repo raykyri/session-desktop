@@ -78,9 +78,9 @@
   align-self: stretch;
 }
 
-/* With the sidebar collapsed to its strip, Home's title is hidden (the strip
+/* With the sidebar collapsed to its rail, Home's title is hidden (the rail
    marks Home); it stays in the accessibility tree and focusable. */
-.app-shell:has(.research-strip) .research-feed-header.is-home .research-feed-header-title {
+.app-shell:has(.research-rail) .research-feed-header.is-home .research-feed-header-title {
   position: absolute;
   width: 1px;
   height: 1px;
