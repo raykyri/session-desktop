@@ -32,12 +32,14 @@ interface ResearchUserMessage {
   attachments: ResearchMessageAttachment[];
 }
 
-/** The node's user message: a post's text, an exchange's question, or the
- * question an imported report answers. Null for a document with no question
- * (an authored document or a transcript), which shows as one row for the
- * whole document. */
+/** The node's user message as a question row: a post's text, an exchange's
+ * question, or the question an imported report answers. Null for a
+ * transcript and for a document without a message (an authored document),
+ * which show as one row for the whole document. A transcript's message is
+ * its first user turn, which the transcript itself shows; feed cards read
+ * it through nodePrompt. */
 export function nodeMessage(node: ResearchNode): ResearchUserMessage | null {
-  if (!node.message) {
+  if (!node.message || (node.type === "document" && node.source === "transcript")) {
     return null;
   }
   return { text: node.message.text, attachments: node.message.attachments ?? [] };

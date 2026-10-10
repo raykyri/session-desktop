@@ -635,8 +635,11 @@ pub enum DocumentSource {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentBody {
-    /// The question the document answers (imported reports); absent for an
-    /// authored document or a transcript, which show as one row.
+    /// The question an imported report answers, or a transcript's first user
+    /// turn (feed cards and highlight labels show it; the transcript view
+    /// shows the whole conversation as one row). Absent for an authored
+    /// document, and for transcripts converted by builds that wrote the body
+    /// shape at state version 8.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<UserMessage>,
     pub source: DocumentSource,
@@ -831,9 +834,9 @@ impl ResearchNode {
         self.document().map(|document| document.source)
     }
 
-    /// The user message: a post's text, an exchange's question, or the
-    /// question an imported report answers. `None` for a document without
-    /// one.
+    /// The user message: a post's text, an exchange's question, the
+    /// question an imported report answers, or a transcript's first user
+    /// turn. `None` for a document without one.
     pub fn message(&self) -> Option<&UserMessage> {
         match &self.body {
             NodeBody::Post(post) => Some(&post.message),
@@ -1524,8 +1527,8 @@ const ENVELOPE_FIELDS: [&str; 10] = [
 ///   question as `message` unless it is empty, `followUpAgent` when the
 ///   record names an adapter, the snapshot time, recap and `editedAt`.
 /// - `conversation` (an exported terminal transcript): a document with
-///   source `transcript` and no message; its prompt was the transcript's
-///   first user turn, which the snapshot still holds.
+///   source `transcript` and its prompt, the transcript's first user turn,
+///   as `message` unless it is empty.
 ///
 /// Dropped: a post's or document's run status and times (they have no run;
 /// both read as complete), their bindings, and fields no create path wrote
@@ -1601,7 +1604,7 @@ pub fn migrate_flat_node_to_body(node: &mut serde_json::Value) -> bool {
                 "authored"
             };
             body.insert("type".to_string(), Value::from("document"));
-            if source != "transcript" && prompt.as_str().is_some_and(|text| !text.is_empty()) {
+            if prompt.as_str().is_some_and(|text| !text.is_empty()) {
                 body.insert("message".to_string(), Value::Object(message));
             }
             body.insert("source".to_string(), Value::from(source));
@@ -4879,9 +4882,11 @@ mod tests {
 
         let transcript = typed[4].document().unwrap();
         assert_eq!(transcript.source, DocumentSource::Transcript);
-        assert!(
-            transcript.message.is_none(),
-            "the snapshot holds the first turn"
+        assert_eq!(transcript.message.as_ref().unwrap().text, "First user turn");
+        assert_eq!(typed[4].prompt(), "First user turn");
+        assert_eq!(
+            RecentResearchQuery::from(&typed[4]).prompt,
+            "First user turn"
         );
         assert_eq!(
             transcript.follow_up_agent.as_ref().unwrap().adapter,

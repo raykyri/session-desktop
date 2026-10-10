@@ -87,8 +87,9 @@ export function researchNode(fields: NodeFixture = {}): ResearchNode {
       return {
         ...base,
         type: "document",
-        // Only an imported report keeps the question it answers.
-        message: source === "imported" ? message : null,
+        // An imported report keeps the question it answers and a transcript
+        // its first user turn; an authored document has no message.
+        message: source === "authored" ? null : message,
         source,
         followUpAgent: agent,
         responseSnapshotAt: fields.responseSnapshotAt ?? null,

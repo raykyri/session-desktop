@@ -4501,7 +4501,8 @@ function ResearchDocument({
         return null;
       }
       const branches = branchesByParent.get(id) ?? EMPTY_BRANCHES;
-      // A document with no question is one row for the whole document.
+      // A transcript, or a document with no question, is one row for the
+      // whole document (nodeMessage is null for both).
       const whole = nodeMessage(node) === null;
       const replyId = replyAnchorId(node);
       const replyParent = replyId ? nodeById.get(node.parentNodeId ?? "") : undefined;

@@ -10,6 +10,7 @@ import {
 import { canFollowUpFrom } from "../src/lib/researchThreads";
 import type { ResearchMessageAttachment, ResearchNode } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
+import { recentResearchQueryFromNode } from "../src/lib/activity";
 
 function node(overrides: NodeFixture = {}): ResearchNode {
   return researchNode({
@@ -42,7 +43,7 @@ test("follow-up launch and recaps follow the node type and document source", () 
   }
 });
 
-test("only a document without a question has no user message", () => {
+test("authored documents and transcripts have no question row", () => {
   const attachments = [{ kind: "tweet" }] as unknown as ResearchMessageAttachment[];
   assert.deepEqual(nodeMessage(node({ attachments })), { text: "What changed?", attachments });
   assert.deepEqual(nodeMessage(node({ type: "post" })), { text: "What changed?", attachments: [] });
@@ -51,7 +52,12 @@ test("only a document without a question has no user message", () => {
     attachments: [],
   });
   assert.equal(nodeMessage(node({ type: "document" })), null);
-  assert.equal(nodeMessage(node({ type: "document", source: "transcript" })), null);
+  // A transcript keeps its first user turn as its message (the feed card's
+  // text) but still shows as one row.
+  const transcript = node({ type: "document", source: "transcript" });
+  assert.equal(transcript.message?.text, "What changed?");
+  assert.equal(recentResearchQueryFromNode(transcript)?.prompt, "What changed?");
+  assert.equal(nodeMessage(transcript), null);
 });
 
 test("follow-ups that fork need the session checkpoint; context launches do not", () => {

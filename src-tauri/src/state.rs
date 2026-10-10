@@ -4119,7 +4119,8 @@ impl AppState {
                 if tree.archived_at.is_some() {
                     return None;
                 }
-                // Documents carry their title on the tree and have no prompt.
+                // An authored document has no message; it is labelled by
+                // its tree's title.
                 let node_label = [node.title.as_deref(), Some(node.prompt())]
                     .into_iter()
                     .flatten()
@@ -17536,6 +17537,9 @@ mod tests {
                 now,
                 test_document_body(research::DocumentSource::Transcript),
             );
+            // A transcript keeps its first user turn as its message.
+            node.document_mut().unwrap().message =
+                Some(research::UserMessage::text("What did the export find?"));
             node.highlights.push(ResearchHighlight {
                 id: "highlight-1".into(),
                 anchor: ResearchHighlightAnchor {
@@ -17633,6 +17637,27 @@ mod tests {
         assert!(!path.with_file_name("state.v6.bak").exists());
         // Every node survives with the shape it was created with.
         assert_eq!(research_nodes_by_id(&restored), original);
+        // The conversation's prompt stays the transcript's message, which
+        // the feed and the highlight labels show.
+        let transcript = original
+            .values()
+            .find(|node| node.document_source() == Some(research::DocumentSource::Transcript))
+            .unwrap();
+        assert_eq!(transcript.prompt(), "What did the export find?");
+        let highlight = restored
+            .list_research_highlights()
+            .unwrap()
+            .into_iter()
+            .find(|item| item.node_id == transcript.id)
+            .unwrap();
+        assert_eq!(highlight.node_label, "What did the export find?");
+        let page = restored.list_recent_activity(10, None).unwrap();
+        let item = page
+            .items
+            .iter()
+            .find(|item| item.node_id == transcript.id)
+            .unwrap();
+        assert_eq!(item.prompt, "What did the export find?");
 
         restored.finalize_persistence_for_exit();
         drop(restored);

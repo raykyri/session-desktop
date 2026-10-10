@@ -510,8 +510,9 @@ export interface ResearchExchangeNode extends ResearchNodeBase {
 
 export interface ResearchDocumentNode extends ResearchNodeBase {
   type: "document";
-  /** The question an imported report answers; absent for an authored
-   * document or a transcript, which show as one row. */
+  /** The question an imported report answers, or a transcript's first user
+   * turn; absent for an authored document. Authored documents and
+   * transcripts show as one row (see nodeMessage). */
   message?: UserMessage | null;
   source: DocumentSource;
   /** The agent that produced an imported report or a transcript. */
