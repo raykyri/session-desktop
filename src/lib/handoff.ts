@@ -296,13 +296,11 @@ function markRecentTurns(history: HandoffMessage[], recentTurns: number) {
 }
 
 /**
- * Anchor for a handoff of the whole transcript as it stands — what the composer
- * menu hands off, as opposed to the per-message menus, which name their own
- * anchor. That is the newest message with something to say: plumbing, dropped
- * branch work, and empty cards are skipped, and a trailing assistant reply
- * resolves to the *start* of its run so the whole reply lands in the closing
- * section instead of arriving split across the transcript. Null when the
- * transcript holds nothing worth handing over.
+ * Selects the anchor for a whole-transcript handoff from the composer menu.
+ * Skips system instructions, dropped branch work, and empty cards. A trailing
+ * assistant reply resolves to the start of its run so the complete reply
+ * appears in the closing section. Returns null if no eligible message remains.
+ * Per-message menus supply their own anchor.
  */
 export function latestHandoffAnchorKey(items: MessageItem[]): string | null {
   const eligible = (item: MessageItem) =>
