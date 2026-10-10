@@ -588,6 +588,80 @@ pub struct ResearchNode {
     pub highlights: Vec<ResearchHighlight>,
 }
 
+/// What a node is, derived from its stored kind and origin. The stored shape
+/// is unchanged; this is the one place that interprets it.
+///
+/// - `Post`: a note, written by the user (a saved link or tweet, or a post
+///   delivered to the network).
+/// - `Exchange`: a question and the agent run that answers it.
+/// - `Document`: long-form content with no run behind it: an imported report,
+///   an authored document, or an exported terminal conversation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResearchNodeType {
+    Post,
+    Exchange,
+    Document,
+}
+
+/// The saved content a follow-up run receives when there is no session to
+/// fork.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FollowUpContext {
+    /// The note and its replies.
+    Post,
+    /// An authored document's Markdown.
+    Document,
+    /// A saved transcript: an exported conversation, or an imported report
+    /// with the question that produced it.
+    Snapshot,
+}
+
+/// How a follow-up of a node launches.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FollowUpLaunch {
+    /// Fork the node's native session; needs its recorded checkpoint.
+    Fork,
+    /// A fresh run with the node's saved content as context.
+    Context(FollowUpContext),
+}
+
+impl ResearchNode {
+    pub fn node_type(&self) -> ResearchNodeType {
+        match self.kind {
+            ResearchNodeKind::Note => ResearchNodeType::Post,
+            ResearchNodeKind::Document | ResearchNodeKind::Conversation => {
+                ResearchNodeType::Document
+            }
+            ResearchNodeKind::Run if self.origin == Some(ResearchNodeOrigin::Imported) => {
+                ResearchNodeType::Document
+            }
+            ResearchNodeKind::Run => ResearchNodeType::Exchange,
+        }
+    }
+
+    /// Matches every stored kind so adding a kind requires an explicit
+    /// launch path, including whether it needs a session checkpoint.
+    pub fn follow_up_launch(&self) -> FollowUpLaunch {
+        let imported = self.origin == Some(ResearchNodeOrigin::Imported);
+        match self.kind {
+            ResearchNodeKind::Note => FollowUpLaunch::Context(FollowUpContext::Post),
+            ResearchNodeKind::Conversation => FollowUpLaunch::Context(FollowUpContext::Snapshot),
+            ResearchNodeKind::Document | ResearchNodeKind::Run if imported => {
+                FollowUpLaunch::Context(FollowUpContext::Snapshot)
+            }
+            ResearchNodeKind::Document => FollowUpLaunch::Context(FollowUpContext::Document),
+            ResearchNodeKind::Run => FollowUpLaunch::Fork,
+        }
+    }
+
+    /// Whether a summary (recap) is generated for the node: exchanges and
+    /// imported reports.
+    pub fn recap_eligible(&self) -> bool {
+        self.node_type() == ResearchNodeType::Exchange
+            || self.origin == Some(ResearchNodeOrigin::Imported)
+    }
+}
+
 /// Compact, durable query history for Recent Activity. This deliberately omits
 /// transcripts, filesystem paths, highlights, and runtime bindings: the feed
 /// needs query identity and display metadata, not the full research record.
@@ -844,7 +918,9 @@ pub fn node_uses_note_fields(node: &ResearchNode) -> bool {
 
 /// Structural rules the note create paths maintain: only notes carry
 /// delivery, a note's parent is a note, a reply anchor sits on a run whose
-/// parent is a note, and replies nest at most one level.
+/// parent is a note, and replies nest at most one level. These check the
+/// stored kinds (state files and archives), so they do not go through
+/// `ResearchNode::node_type`.
 pub fn validate_note_node_shape(
     node: &ResearchNode,
     node_by_id: &HashMap<&str, &ResearchNode>,
@@ -3300,6 +3376,67 @@ mod tests {
             nodes: vec![node],
             exported_at: 3,
         }
+    }
+
+    #[test]
+    fn node_type_and_follow_up_launch_follow_the_stored_kind_and_origin() {
+        let folder = temp_workspace();
+        let run = sample_detached_archive(&folder).nodes.remove(0);
+        let with = |kind: ResearchNodeKind, origin: Option<ResearchNodeOrigin>| ResearchNode {
+            kind,
+            origin,
+            ..run.clone()
+        };
+        let cases = [
+            (
+                with(ResearchNodeKind::Run, None),
+                ResearchNodeType::Exchange,
+                FollowUpLaunch::Fork,
+                true,
+            ),
+            (
+                with(ResearchNodeKind::Run, Some(ResearchNodeOrigin::Imported)),
+                ResearchNodeType::Document,
+                FollowUpLaunch::Context(FollowUpContext::Snapshot),
+                true,
+            ),
+            (
+                with(
+                    ResearchNodeKind::Document,
+                    Some(ResearchNodeOrigin::Imported),
+                ),
+                ResearchNodeType::Document,
+                FollowUpLaunch::Context(FollowUpContext::Snapshot),
+                true,
+            ),
+            (
+                with(ResearchNodeKind::Document, None),
+                ResearchNodeType::Document,
+                FollowUpLaunch::Context(FollowUpContext::Document),
+                false,
+            ),
+            (
+                with(
+                    ResearchNodeKind::Conversation,
+                    Some(ResearchNodeOrigin::TerminalExport),
+                ),
+                ResearchNodeType::Document,
+                FollowUpLaunch::Context(FollowUpContext::Snapshot),
+                false,
+            ),
+            (
+                with(ResearchNodeKind::Note, None),
+                ResearchNodeType::Post,
+                FollowUpLaunch::Context(FollowUpContext::Post),
+                false,
+            ),
+        ];
+        for (node, node_type, launch, recap) in cases {
+            assert_eq!(node.node_type(), node_type, "{:?}", node.kind);
+            assert_eq!(node.follow_up_launch(), launch, "{:?}", node.kind);
+            assert_eq!(node.recap_eligible(), recap, "{:?}", node.kind);
+        }
+        std::fs::remove_dir_all(folder).ok();
     }
 
     #[test]

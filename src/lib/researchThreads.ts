@@ -5,6 +5,7 @@
 // whatever node list they are given, so a malformed graph degrades to
 // shorter chains rather than throwing.
 
+import { followUpLaunch } from "./researchNodeTypes";
 import type { ResearchNode, ResearchNodeStatus } from "../types";
 
 /** The statuses of a run that has been admitted but not settled. One list,
@@ -37,19 +38,14 @@ export function researchThreadStopTarget(chain: readonly ResearchNode[]): Resear
 }
 
 /** Whether a settled node can take any follow-up at all: it finished, and —
- * for run nodes, whose follow-ups fork the native session — its checkpoint
- * was recorded. Imported reports, documents, conversations, and notes launch
- * fresh runs with their content as context, so they need no checkpoint. */
+ * for exchanges, whose follow-ups fork the native session — its checkpoint
+ * was recorded. Posts and documents launch fresh runs with their content as
+ * context, so they need no checkpoint. */
 export function canFollowUpFrom(node: ResearchNode): boolean {
   if (node.status !== "complete") {
     return false;
   }
-  const launchesFresh =
-    node.origin === "imported" ||
-    node.kind === "document" ||
-    node.kind === "conversation" ||
-    node.kind === "note";
-  return launchesFresh || Boolean(node.nativeSessionId);
+  return followUpLaunch(node) === "context" || Boolean(node.nativeSessionId);
 }
 
 /** Selects the oldest inline child, breaking ties by id so the chain

@@ -7,11 +7,12 @@ use crate::remote_terminal::{RemoteAttachmentController, RemoteHistoryCheckpoint
 #[cfg(test)]
 use crate::research::CreateResearchDocumentRequest;
 use crate::research::{
-    self, CreateResearchTreeRequest, RecentResearchQuery, RecentResearchQueryCursor,
-    ResearchBranchRemoval, ResearchHighlight, ResearchHighlightAnchor, ResearchHighlightFeedItem,
-    ResearchNode, ResearchNodeContent, ResearchNodeKind, ResearchNodeOrigin, ResearchNodeStatus,
-    ResearchRuntime, ResearchTree, ResearchTreeDetail, ResearchTreeSummary,
-    UpdateResearchDocumentRequest, UpdateResearchDocumentResult,
+    self, CreateResearchTreeRequest, FollowUpContext, FollowUpLaunch, RecentResearchQuery,
+    RecentResearchQueryCursor, ResearchBranchRemoval, ResearchHighlight, ResearchHighlightAnchor,
+    ResearchHighlightFeedItem, ResearchNode, ResearchNodeContent, ResearchNodeKind,
+    ResearchNodeOrigin, ResearchNodeStatus, ResearchNodeType, ResearchRuntime, ResearchTree,
+    ResearchTreeDetail, ResearchTreeSummary, UpdateResearchDocumentRequest,
+    UpdateResearchDocumentResult,
 };
 use crate::scrollback::{bounded_undo_scrollback, read_pane_scrollback, remove_pane_scrollback};
 use crate::thread_graph;
@@ -2882,6 +2883,8 @@ impl AppState {
                 } else if model
                     .research_nodes
                     .values()
+                    // The persisted kind, not the node type: the version tier
+                    // describes the stored shape.
                     .any(|node| node.kind == ResearchNodeKind::Conversation)
                 {
                     persistence::STATE_VERSION_PRE_ATTACHMENTS
@@ -2956,7 +2959,7 @@ impl AppState {
             let mut settled = Vec::new();
             let mut agent_ids = Vec::new();
             for node in model.research_nodes.values_mut() {
-                if node.kind == ResearchNodeKind::Run && node.status.is_active() {
+                if node.node_type() == ResearchNodeType::Exchange && node.status.is_active() {
                     node.status = ResearchNodeStatus::Cancelled;
                     node.error = None;
                     node.completed_at = Some(now);
@@ -3208,7 +3211,9 @@ impl AppState {
                 model
                     .research_nodes
                     .values()
-                    .filter(|node| node.kind == ResearchNodeKind::Run && node.status.is_active())
+                    .filter(|node| {
+                        node.node_type() == ResearchNodeType::Exchange && node.status.is_active()
+                    })
                     .count()
             })
             .unwrap_or_default()
@@ -4549,7 +4554,7 @@ impl AppState {
                 .get(parent_node_id)
                 .cloned()
                 .ok_or_else(|| format!("research node {parent_node_id} was not found"))?;
-            if parent.kind != ResearchNodeKind::Note || parent.delivery.is_none() {
+            if parent.node_type() != ResearchNodeType::Post || parent.delivery.is_none() {
                 return Err("network follow-ups require a note posted to the network".to_string());
             }
             if model
@@ -4737,7 +4742,7 @@ impl AppState {
         question: &str,
     ) -> Result<String, String> {
         let parent = self.research_node(parent_node_id)?;
-        if parent.kind != ResearchNodeKind::Note {
+        if parent.follow_up_launch() != FollowUpLaunch::Context(FollowUpContext::Post) {
             return Err("the research node is not a note".to_string());
         }
         let replies = parent
@@ -4886,6 +4891,9 @@ impl AppState {
                 .ok_or_else(|| format!("research tree {} was not found", node.tree_id))?;
             (node, tree)
         };
+        // The stored kind, not the node type: an exported conversation is a
+        // document too, but its snapshot is a transcript, not editable
+        // Markdown.
         if current_node.kind != ResearchNodeKind::Document
             || current_node.parent_node_id.is_some()
             || current_tree.root_node_id != current_node.id
@@ -5041,7 +5049,7 @@ impl AppState {
                 .ok_or_else(|| format!("research tree {} was not found", node.tree_id))?;
             (node, tree.title.clone())
         };
-        if node.kind != ResearchNodeKind::Document {
+        if node.follow_up_launch() != FollowUpLaunch::Context(FollowUpContext::Document) {
             return Err("the research node is not a document".to_string());
         }
         let turns = research::read_response_snapshot(&self.inner.config.workspace_root, node_id)?
@@ -5086,13 +5094,12 @@ impl AppState {
                 .ok_or_else(|| format!("research tree {} was not found", node.tree_id))?;
             (node, tree.title.clone())
         };
-        let imported_report =
-            node.kind == ResearchNodeKind::Run && node.origin == Some(ResearchNodeOrigin::Imported);
-        if node.kind != ResearchNodeKind::Conversation && !imported_report {
+        if node.follow_up_launch() != FollowUpLaunch::Context(FollowUpContext::Snapshot) {
             return Err(
                 "the research node is not an exported conversation or imported report".to_string(),
             );
         }
+        let imported_report = node.origin == Some(ResearchNodeOrigin::Imported);
         let mut turns =
             research::read_response_snapshot(&self.inner.config.workspace_root, node_id)?
                 .ok_or_else(|| "the saved research content is unavailable".to_string())?;
@@ -5268,7 +5275,7 @@ impl AppState {
             {
                 return Err("this answer already has an inline follow-up".to_string());
             }
-            if parent.kind == ResearchNodeKind::Note {
+            if parent.node_type() == ResearchNodeType::Post {
                 // A note has no answer text: nothing to continue inline and
                 // no passage to anchor to.
                 if inline || query_anchor.is_some() {
@@ -5284,26 +5291,21 @@ impl AppState {
             } else if reply_anchor.is_some() {
                 return Err("only follow-ups of a note can be asked about a reply".to_string());
             }
-            // A document has no session to fork — its follow-ups launch fresh
-            // runs on the default adapter, so only run parents need the
-            // checkpoint (and only they carry an adapter to inherit).
-            let (adapter, parent_model, parent_effort) = match parent.kind {
-                ResearchNodeKind::Document => (
+            // Forked follow-ups require the parent's checkpoint and adapter.
+            // Context-based follow-ups start fresh runs. Authored documents use
+            // the default adapter; notes, exported conversations and imported
+            // reports use the parent's agent if it supports research, otherwise
+            // the default fork-capable adapter. This lets later follow-ups branch.
+            // Conversation and report quotes are accepted here and passed to
+            // `conversation_query_followup_prompt`, which neutralizes their tags
+            // using the same rules as serialized turns.
+            let (adapter, parent_model, parent_effort) = match parent.follow_up_launch() {
+                FollowUpLaunch::Context(FollowUpContext::Document) => (
                     crate::adapters::default_fork_adapter(&self.inner.config)?,
                     None,
                     None,
                 ),
-                // An exported conversation is severed from its session by
-                // design, so its follow-ups also launch fresh runs, with
-                // the serialized conversation as context. The source
-                // terminal's adapter carries over when it can fork —
-                // children are run nodes whose own follow-ups branch —
-                // else the default fork-capable adapter takes over.
-                ResearchNodeKind::Conversation => {
-                    // An anchored quote is admitted here; the launch path sends
-                    // it through `conversation_query_followup_prompt` so it
-                    // carries the same tag neutralization as the serialized
-                    // turns it travels with.
+                FollowUpLaunch::Context(FollowUpContext::Post | FollowUpContext::Snapshot) => {
                     if crate::adapters::adapter_supports_research(
                         &self.inner.config,
                         &parent.adapter,
@@ -5317,39 +5319,7 @@ impl AppState {
                         )
                     }
                 }
-                // A note has no session either; its follow-ups launch fresh
-                // runs with the agent the user chose when posting it.
-                ResearchNodeKind::Note => {
-                    if crate::adapters::adapter_supports_research(
-                        &self.inner.config,
-                        &parent.adapter,
-                    ) {
-                        (parent.adapter, parent.model, parent.effort)
-                    } else {
-                        (
-                            crate::adapters::default_fork_adapter(&self.inner.config)?,
-                            None,
-                            None,
-                        )
-                    }
-                }
-                ResearchNodeKind::Run if parent.origin == Some(ResearchNodeOrigin::Imported) => {
-                    // Imported reports have a saved answer, not a native
-                    // checkpoint. Their children start fresh with that context.
-                    if crate::adapters::adapter_supports_research(
-                        &self.inner.config,
-                        &parent.adapter,
-                    ) {
-                        (parent.adapter, parent.model, parent.effort)
-                    } else {
-                        (
-                            crate::adapters::default_fork_adapter(&self.inner.config)?,
-                            None,
-                            None,
-                        )
-                    }
-                }
-                ResearchNodeKind::Run => {
+                FollowUpLaunch::Fork => {
                     if parent.native_session_id.is_none() {
                         return Err(
                             "research follow-ups require a recorded parent checkpoint".to_string()
@@ -5432,11 +5402,9 @@ impl AppState {
                 .get(node_id)
                 .cloned()
                 .ok_or_else(|| format!("research node {node_id} was not found"))?;
-            // Documents and exported conversations are snapshot-only by
-            // contract — a conversation in particular is severed from its
-            // source session, and binding a live agent here would hand the
-            // shared read paths live-looking pointers the kind promises it
-            // does not have.
+            // Only stored Run nodes support live agent bindings. Documents
+            // and exported conversations use snapshots without a source
+            // session. Check the stored kind because binding writes run fields.
             if node_snapshot.kind != ResearchNodeKind::Run {
                 return Err(format!(
                     "research node {node_id} is not a run and cannot bind a live agent"
@@ -5540,6 +5508,7 @@ impl AppState {
                 .get(node_id)
                 .cloned()
                 .ok_or_else(|| format!("research node {node_id} was not found"))?;
+            // The stored kind: binding writes run fields (see the bind above).
             if node_snapshot.kind != ResearchNodeKind::Run {
                 return Err(format!(
                     "research node {node_id} is not a run and cannot bind a live agent"
@@ -9207,7 +9176,7 @@ impl AppState {
                 .research_nodes
                 .get_mut(&request.node_id)
                 .ok_or_else(|| format!("research node {} was not found", request.node_id))?;
-            if !node.kind.is_run() || node.status != ResearchNodeStatus::Complete {
+            if !node.recap_eligible() || node.status != ResearchNodeStatus::Complete {
                 return Err("only completed research runs can replace a summary".to_string());
             }
             if node.recap.as_ref().and_then(|recap| recap.id.clone())

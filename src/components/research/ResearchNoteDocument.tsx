@@ -1,3 +1,4 @@
+import { nodeType } from "../../lib/researchNodeTypes";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Globe, LoaderCircle, Sparkles } from "lucide-react";
 import type { NoteReply, ResearchNode, ResearchTreeDetail } from "../../types";
@@ -34,7 +35,7 @@ function useFollowUpAnswers(children: ResearchNode[]) {
   const answersRef = useRef(answers);
   answersRef.current = answers;
   const wanted = children
-    .filter((child) => (child.kind ?? "run") === "run" && child.status === "complete")
+    .filter((child) => nodeType(child) === "exchange" && child.status === "complete")
     .map((child) => `${child.id}:${child.responseSnapshotAt ?? 0}`);
   const wantedKey = wanted.join("|");
   useEffect(() => {
@@ -110,7 +111,7 @@ export default function ResearchNoteDocument({
     () =>
       detail.nodes
         // Documents never list as follow-ups.
-        .filter((node) => node.parentNodeId === note.id && node.kind !== "document")
+        .filter((node) => node.parentNodeId === note.id && nodeType(node) !== "document")
         .sort((left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id)),
     [detail.nodes, note.id],
   );
@@ -130,7 +131,7 @@ export default function ResearchNoteDocument({
   const renderFollowUp = (child: ResearchNode) => {
     const summary = recentResearchQueryFromNode(child, true);
     if (!summary) return null;
-    const childIsNote = child.kind === "note";
+    const childIsNote = nodeType(child) === "post";
     const childReplies = child.delivery?.replies?.filter((reply) => !reply.inReplyTo).length ?? 0;
     const anchored = noteReplyTargetFor(replies, child.replyAnchor);
     const answer = answers[child.id]?.text;

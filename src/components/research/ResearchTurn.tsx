@@ -51,7 +51,6 @@ const OVERSIZED_MARKDOWN_POLICY = {
 export interface SegmentView {
   node: ResearchNode;
   content: ResearchNodeContent | null;
-  isDocument: boolean;
   isConversation: boolean;
   showAllTurns: boolean;
   showFullTrace: boolean;
@@ -562,6 +561,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
                 key={item.key}
                 item={item}
                 conversation={view.isConversation}
+                // Provenance, which only the stored origin records.
                 imported={node.origin === "imported"}
               />
             ))}
@@ -695,6 +695,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
       </div>
       <div className="research-msg-meta">
         <time dateTime={new Date(node.createdAt).toISOString()} title={new Date(node.createdAt).toLocaleString()}>
+          {/* Provenance, which only the stored origin records. */}
           {node.origin === "imported" ? "Imported " : ""}
           {shortWhen(node.createdAt, now)}
         </time>

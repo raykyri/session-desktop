@@ -35,7 +35,7 @@ pub fn schedule(state: &AppState, node_id: &str) {
     let Ok(node) = state.research_node(node_id) else {
         return;
     };
-    if !node.kind.is_run()
+    if !node.recap_eligible()
         || node.status != ResearchNodeStatus::Complete
         || node.response_snapshot_at.is_none()
         || node.recap.is_some()
