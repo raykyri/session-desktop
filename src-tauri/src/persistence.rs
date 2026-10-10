@@ -35,14 +35,17 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 /// Bumped whenever the on-disk shape changes incompatibly. A file written by a
 /// newer or unknown version is treated as empty rather than misinterpreted.
 ///
-/// Version 8 stores research nodes as an envelope with a tagged body (see
-/// `research::ResearchNode`); builds that accept up to version 7 read flat
-/// records and would drop every node. Versions 5 to 7 were tiers for the
-/// newest research feature a state held (terminal conversations, message
-/// attachments, imported documents) so older builds kept reading states
-/// without those features; with every node in the new shape, a state holds
-/// either no research nodes or version-8 nodes.
-pub const STATE_VERSION: u32 = 8;
+/// Version 9 stores research nodes as an envelope with a tagged body (see
+/// `research::ResearchNode`); builds that accept up to version 8 read flat
+/// records and would drop every node. Version 8 denotes two shapes, both
+/// written only by unreleased builds: flat records with notes stored as
+/// posts and one merged anchor, and, from later builds, the body shape. The
+/// load migration is shape-based, so this build reads either. Versions 5 to
+/// 7 were tiers for the newest research feature a state held (terminal
+/// conversations, message attachments, imported documents) so older builds
+/// kept reading states without those features; with every node in the body
+/// shape, a state holds either no research nodes or version-9 nodes.
+pub const STATE_VERSION: u32 = 9;
 /// Written when the state contains no research nodes, so it stays loadable by
 /// builds that accept versions 2 to 4.
 pub const STATE_VERSION_WITHOUT_RESEARCH_NODES: u32 = 4;
@@ -54,9 +57,19 @@ const V2_BACKUP_FILE: &str = "state.v2.bak";
 /// written at versions 3 to 6. Builds that accept up to version 6 cannot read
 /// the converted file; this backup allows restoring it for those builds.
 const PRE_DOCUMENT_IMPORTS_BACKUP_FILE: &str = "state.v6.bak";
-/// The state file as it was before the version-8 migration converted its
-/// research nodes, when it was written at version 7.
+/// The state file as it was before the migration converted its research
+/// nodes, when it was written at version 7.
 const PRE_POSTS_BACKUP_FILE: &str = "state.v7.bak";
+/// The state file as it was before it was rewritten at version 9, when it was
+/// written at version 8 (in either of that version's shapes).
+const PRE_BODY_VERSION_BACKUP_FILE: &str = "state.v8.bak";
+/// Every migration backup name; their scratch files are named after them.
+const MIGRATION_BACKUP_FILES: [&str; 4] = [
+    V2_BACKUP_FILE,
+    PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
+    PRE_POSTS_BACKUP_FILE,
+    PRE_BODY_VERSION_BACKUP_FILE,
+];
 pub(crate) const STATE_DIR: &str = ".session";
 
 /// Snapshot of everything a Session restart needs to recreate panes, agents,
@@ -591,12 +604,12 @@ pub fn load_with_diagnostics_from(workspace_root: &Path, preread: Option<Vec<u8>
     if version == 2 {
         migrate_v2_to_v3(&mut value);
     }
-    // Version 8 stores research nodes as an envelope with a tagged body (with
+    // Version 9 stores research nodes as an envelope with a tagged body (with
     // imported reports as documents and notes as posts). Convert older
     // records here, before lenient deserialization, so every reader sees one
     // shape and no node is dropped for having the old one. The migration is
-    // shape-based and idempotent, so it also runs on version-8 files: builds
-    // of this branch wrote flat posts at version 8 before the body existed.
+    // shape-based and idempotent, so it runs on files of every version:
+    // version-8 files hold either flat posts or the body shape.
     let research_nodes_migrated = migrate_research_nodes(&mut value);
 
     // Deserialize collections element-by-element so a single malformed record
@@ -677,7 +690,7 @@ fn migrate_v2_to_v3(value: &mut Value) {
     map.insert("version".to_string(), Value::from(STATE_VERSION));
 }
 
-/// Pure JSON-shape migration of the research nodes to the version-8 shape
+/// Pure JSON-shape migration of the research nodes to the version-9 shape
 /// (see `research::migrate_research_node_values`). Returns whether any node
 /// changed.
 fn migrate_research_nodes(value: &mut Value) -> bool {
@@ -903,13 +916,12 @@ pub fn backup_v2_state_for_migration(workspace_root: &Path) -> Result<Option<Pat
     backup_state_for_migration(workspace_root, V2_BACKUP_FILE, "version-2")
 }
 
-/// Preserves the bytes of a state file written at `source_version` (3 to 7)
-/// before a save rewrites state.json with migrated research nodes, the way
-/// `backup_v2_state_for_migration` does for version 2: versions 3 to 6 as
-/// `state.v6.bak`, version 7 as `state.v7.bak`. Each backup is readable by
-/// the builds its name gives. A version-8 source needs none: the migration
-/// only rewrites flat records that builds of this branch wrote before the
-/// body existed, and this build reads both shapes.
+/// Preserves the bytes of a state file written at `source_version` (3 to 8)
+/// before a save rewrites state.json with research nodes at version 9, which
+/// the source's builds refuse, the way `backup_v2_state_for_migration` does
+/// for version 2: versions 3 to 6 as `state.v6.bak`, version 7 as
+/// `state.v7.bak` and version 8 as `state.v8.bak`. Each backup is readable by
+/// the builds its name gives. A version-9 source needs none.
 pub fn backup_research_node_state_for_migration(
     workspace_root: &Path,
     source_version: u32,
@@ -921,6 +933,7 @@ pub fn backup_research_node_state_for_migration(
             "pre-version-7",
         ),
         7 => backup_state_for_migration(workspace_root, PRE_POSTS_BACKUP_FILE, "version-7"),
+        8 => backup_state_for_migration(workspace_root, PRE_BODY_VERSION_BACKUP_FILE, "version-8"),
         _ => Ok(None),
     }
 }
@@ -1098,15 +1111,7 @@ fn scratch_writer_pid(name: &str) -> Option<u32> {
     let (rest, seq) = rest.rsplit_once('.')?;
     seq.parse::<u64>().ok()?;
     let (base, pid) = rest.rsplit_once('.')?;
-    if ![
-        STATE_FILE,
-        PREFERENCES_FILE,
-        V2_BACKUP_FILE,
-        PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
-        PRE_POSTS_BACKUP_FILE,
-    ]
-    .contains(&base)
-    {
+    if base != STATE_FILE && base != PREFERENCES_FILE && !MIGRATION_BACKUP_FILES.contains(&base) {
         return None;
     }
     pid.parse().ok()

@@ -2338,10 +2338,12 @@ impl AppState {
         {
             migration_warnings.push(err);
         }
-        // The next save writes the migrated research nodes at version 8, which
-        // the source's builds refuse. A version-2 source is already preserved
-        // whole as state.v2.bak.
-        if research_nodes_migrated
+        // The next save writes the research nodes at version 9, which the
+        // source's builds refuse. A version-8 source can need no node
+        // migration (its nodes may already have the body shape) and still be
+        // rewritten. A version-2 source is already preserved whole as
+        // state.v2.bak.
+        if (research_nodes_migrated || !persisted.research_nodes.is_empty())
             && let Some(source_version) = source_version.filter(|version| *version != 2)
             && let Err(err) = persistence::backup_research_node_state_for_migration(
                 &self.inner.config.workspace_root,
@@ -2889,7 +2891,7 @@ impl AppState {
                 .map_err(|_| "model lock poisoned".to_string())?;
             PersistedState {
                 // Research nodes are stored as an envelope with a tagged body
-                // only builds that accept version 8 read. A state without
+                // only builds that accept version 9 read. A state without
                 // research nodes stays loadable by builds that accept 2 to 4.
                 version: if model.research_nodes.is_empty() {
                     persistence::STATE_VERSION_WITHOUT_RESEARCH_NODES
@@ -17015,7 +17017,7 @@ mod tests {
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
-    /// The flat record a build before state version 8 and archive version 10
+    /// The flat record a build before state version 9 and archive version 11
     /// stored for `node` (a serialized node in the current shape): the
     /// inverse of `research::migrate_flat_node_to_body`. Imported reports
     /// are documents and posts are `post`, as builds of state version 7
@@ -17135,7 +17137,7 @@ mod tests {
     }
 
     #[test]
-    fn version_six_state_migrates_imported_runs_to_documents_and_round_trips_at_eight() {
+    fn version_six_state_migrates_imported_runs_to_documents_and_round_trips_at_nine() {
         let workspace = temp_workspace();
         let (state, root_id, child_id) = imported_report_with_child(&workspace);
         let original = research_nodes_by_id(&state);
@@ -17158,7 +17160,7 @@ mod tests {
         let version_six_bytes = std::fs::read(&path).unwrap();
         let restored = AppState::new(test_config(workspace.clone()));
         restored.restore_session();
-        // The version-8 save will replace a file version-6 builds can read;
+        // The version-9 save will replace a file version-6 builds can read;
         // its bytes are kept beside it first.
         assert_eq!(
             std::fs::read(path.with_file_name("state.v6.bak")).unwrap(),
@@ -17186,7 +17188,7 @@ mod tests {
         assert_eq!(page.items[0].node_id, root_id);
         assert_eq!(page.items[0].children[0].node_id, child_id);
 
-        // Saved again, the file is version 8 with the body shape, and it
+        // Saved again, the file is version 9 with the body shape, and it
         // loads back unchanged.
         restored.finalize_persistence_for_exit();
         drop(restored);
@@ -17202,7 +17204,7 @@ mod tests {
     }
 
     #[test]
-    fn state_version_is_eight_with_research_nodes_and_four_without() {
+    fn state_version_is_nine_with_research_nodes_and_four_without() {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace.clone()));
         assert!(state.restore_session().is_empty());
@@ -17380,7 +17382,7 @@ mod tests {
             &bundle.responses,
         )
         .unwrap_err();
-        assert!(error.contains("written at version 10"), "{error}");
+        assert!(error.contains("written at version 11"), "{error}");
         std::fs::remove_dir_all(source).unwrap();
     }
 
@@ -17595,7 +17597,7 @@ mod tests {
     }
 
     #[test]
-    fn version_seven_state_migrates_every_node_and_round_trips_at_eight() {
+    fn version_seven_state_migrates_every_node_and_round_trips_at_nine() {
         let workspace = temp_workspace();
         let state = state_with_posts_and_anchors(&workspace);
         let original = research_nodes_by_id(&state);
@@ -17668,27 +17670,72 @@ mod tests {
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
-    /// Builds of this branch wrote flat posts at version 8 before the body
-    /// existed. The shape-based migration converts them without a backup.
+    /// Version 8 was written with flat posts and, by later builds, with the
+    /// body shape. Builds that write either refuse version 9, so both are
+    /// kept as state.v8.bak before the version-9 save, and both load as the
+    /// same nodes.
     #[test]
-    fn flat_version_eight_state_is_migrated_without_a_backup() {
+    fn version_eight_state_in_either_shape_is_backed_up_and_saved_at_nine() {
+        for flat in [true, false] {
+            let workspace = temp_workspace();
+            let state = state_with_posts_and_anchors(&workspace);
+            let original = research_nodes_by_id(&state);
+            state.finalize_persistence_for_exit();
+            drop(state);
+            let path = persistence::state_path(&workspace);
+            let mut raw: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            raw["version"] = serde_json::json!(8);
+            if flat {
+                flatten_legacy_nodes(&mut raw["researchNodes"]);
+            }
+            std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+            let version_eight_bytes = std::fs::read(&path).unwrap();
+
+            let restored = AppState::new(test_config(workspace.clone()));
+            restored.restore_session();
+            assert_eq!(research_nodes_by_id(&restored), original, "flat: {flat}");
+            assert_eq!(
+                std::fs::read(path.with_file_name("state.v8.bak")).unwrap(),
+                version_eight_bytes,
+                "flat: {flat}"
+            );
+            for backup in ["state.v6.bak", "state.v7.bak"] {
+                assert!(!path.with_file_name(backup).exists(), "{backup}");
+            }
+            restored.finalize_persistence_for_exit();
+            drop(restored);
+            let raw: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            assert_eq!(raw["version"], persistence::STATE_VERSION);
+            assert_eq!(persistence::STATE_VERSION, 9);
+            std::fs::remove_dir_all(workspace).unwrap();
+        }
+    }
+
+    /// A version-9 state needs no backup: its builds read what this build
+    /// writes.
+    #[test]
+    fn version_nine_state_is_not_backed_up() {
         let workspace = temp_workspace();
         let state = state_with_posts_and_anchors(&workspace);
-        let original = research_nodes_by_id(&state);
         state.finalize_persistence_for_exit();
         drop(state);
-        let path = persistence::state_path(&workspace);
-        let mut raw: serde_json::Value =
-            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        flatten_legacy_nodes(&mut raw["researchNodes"]);
-        std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
-
         let restored = AppState::new(test_config(workspace.clone()));
         restored.restore_session();
-        assert_eq!(research_nodes_by_id(&restored), original);
-        for backup in ["state.v6.bak", "state.v7.bak"] {
-            assert!(!path.with_file_name(backup).exists(), "{backup}");
-        }
+        restored.finalize_persistence_for_exit();
+        drop(restored);
+        let dir = persistence::state_path(&workspace)
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let backups = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".bak"))
+            .collect::<Vec<_>>();
+        assert!(backups.is_empty(), "{backups:?}");
         std::fs::remove_dir_all(workspace).unwrap();
     }
 

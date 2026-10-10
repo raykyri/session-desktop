@@ -19,14 +19,17 @@ pub const MAX_RESEARCH_DOCUMENT_WORDS: usize = 10_000;
 /// Imports and the composer both advertise this exact limit.
 pub const MAX_RESEARCH_DOCUMENT_BYTES: usize = 10 * 1024 * 1024;
 /// Archives store research nodes as an envelope with a tagged body (see
-/// `ResearchNode`) since version 10, so every archive is written at this
-/// version: builds that accept versions 1 to 9 read flat records and would
-/// drop every node. Reads accept versions 1 to 10 and migrate older nodes
-/// (`migrate_research_node_values`). Earlier versions were tiers for the
-/// newest feature an archive held (3 runs only, 4 documents, 5 terminal
-/// conversations, 6 inline follow-ups, 7 attachments, 8 notes, 9 imported
-/// documents), so older builds kept reading archives without those features.
-pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 10;
+/// `ResearchNode`) since version 11, so every archive is written at this
+/// version: builds that accept versions 1 to 10 read flat records and would
+/// drop every node. Reads accept versions 1 to 11 and migrate older nodes
+/// (`migrate_research_node_values`). Version 10 denotes two shapes, both
+/// written only by unreleased builds: flat records with posts and one merged
+/// anchor, and, from later builds, the body shape; the shape-based migration
+/// reads either. Earlier versions were tiers for the newest feature an
+/// archive held (3 runs only, 4 documents, 5 terminal conversations, 6 inline
+/// follow-ups, 7 attachments, 8 notes, 9 imported documents), so older builds
+/// kept reading archives without those features.
+pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 11;
 const DETACHED_RESEARCH_DIR: &str = "research-v1";
 const DETACHED_RESEARCH_PENDING_DIR: &str = "research-v1.pending";
 const DETACHED_RESEARCH_MANIFEST: &str = "manifest.json";
@@ -622,7 +625,8 @@ pub enum DocumentSource {
     Authored,
     /// A terminal agent conversation exported as a point-in-time snapshot,
     /// sanitized and severed from its source session (stored as the
-    /// `conversation` kind before state version 8 and archive version 10).
+    /// `conversation` kind in flat records, before state version 9 and
+    /// archive version 11).
     Transcript,
 }
 
@@ -662,8 +666,9 @@ pub enum NodeBody {
 }
 
 /// One node of a research tree: an envelope shared by every node type and a
-/// tagged body. Stored in this shape since state version 8 and archive
-/// version 10 (`migrate_research_node_values` converts older records).
+/// tagged body. Stored in this shape since state version 9 and archive
+/// version 11, and by some builds at state version 8 and archive version 10
+/// (`migrate_research_node_values` converts older records).
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResearchNode {
@@ -1384,14 +1389,21 @@ pub fn migrate_imported_report_node(node: &mut serde_json::Value) -> bool {
 
 /// Every JSON-shape migration for stored nodes, oldest first: imported
 /// reports become documents, notes become posts with merged anchors, and
-/// every flat record gets the envelope-and-body shape (state version 8,
-/// archive version 10). Shared by state loads and archive reads so both paths
+/// every flat record gets the envelope-and-body shape (state version 9,
+/// archive version 11). Shared by state loads and archive reads so both paths
 /// convert the same shapes. Each step only rewrites nodes in its own old
 /// shape, so the whole migration is idempotent and runs on files of any
-/// supported version, including version-8 and version-10 files written by
-/// builds of this branch before the body existed. Nodes are only rewritten,
-/// never removed; a record that did not deserialize before (a missing
-/// required field) still does not. Returns whether any node changed.
+/// supported version, including version-8 and version-10 files, which hold
+/// either shape.
+///
+/// Nodes are only rewritten, never removed. Deserialization afterwards does
+/// not accept exactly the records the flat types accepted: the migration
+/// defaults `prompt`, `adapter` and `worktreeDir` to empty strings and drops
+/// a post's or document's run fields, so a record that lacked one of those
+/// (which the flat types required) now loads. A record without `id`,
+/// `treeId`, `groupId` or `createdAt`, an exchange without `status`, or a
+/// malformed value in a field the record keeps still fails. Returns whether
+/// any node changed.
 pub fn migrate_research_node_values(nodes: &mut [&mut serde_json::Value]) -> bool {
     let mut changed = false;
     for node in nodes.iter_mut() {
@@ -2426,9 +2438,8 @@ fn read_detached_research_from_path(
         ));
     }
     // Older nodes get the current shape before the typed parse. The
-    // migration is shape-based, so it also converts the flat records of
-    // version-10 archives written by builds of this branch before the body
-    // existed.
+    // migration is shape-based, so it reads both shapes of version 10: flat
+    // records with posts, and the body shape.
     let mut raw_value = raw_value;
     if let Some(nodes) = raw_value
         .get_mut("nodes")
@@ -4580,7 +4591,7 @@ mod tests {
         archive.version = DETACHED_RESEARCH_ARCHIVE_VERSION - 1;
         let error =
             write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap_err();
-        assert!(error.contains("written at version 10"), "{error}");
+        assert!(error.contains("written at version 11"), "{error}");
         archive.version = DETACHED_RESEARCH_ARCHIVE_VERSION;
         write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap();
         std::fs::remove_dir_all(folder).unwrap();
@@ -4674,8 +4685,8 @@ mod tests {
         })
     }
 
-    /// A flat record as builds before state version 8 and archive version
-    /// 10 stored it, with every required field.
+    /// A flat record as builds before state version 9 and archive version
+    /// 11 stored it, with every required field.
     fn flat_node(id: &str, extra: serde_json::Value) -> serde_json::Value {
         let mut node = serde_json::json!({
             "id": id,
@@ -4948,6 +4959,60 @@ mod tests {
         assert_eq!(raw["nodes"][0]["body"]["format"], "link");
         std::fs::remove_dir_all(folder).unwrap();
         std::fs::remove_dir_all(moved).unwrap();
+    }
+
+    /// Version 10 was written with flat posts and, by later builds, with the
+    /// body shape. Both read back as the same nodes, stamped version 11.
+    #[test]
+    fn version_ten_archives_read_in_either_shape() {
+        let folder = temp_workspace();
+        let mut archive = sample_detached_archive(&folder);
+        let root = archive.nodes[0].clone();
+        archive.nodes[0] = with_body(&root, post_body("Who has tried X?", None));
+        let mut follow_up = root.clone();
+        follow_up.id = "research-node-2".to_string();
+        follow_up.parent_node_id = Some(root.id.clone());
+        follow_up.anchor = Some(NodeAnchor::Reply {
+            reply_id: "reply-1".to_string(),
+        });
+        follow_up.message_mut().unwrap().text = "Why?".to_string();
+        archive.nodes.push(follow_up);
+        write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap();
+        let manifest = detached_archive_path(&folder, true).join(DETACHED_RESEARCH_MANIFEST);
+        let current: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+        assert_eq!(current["version"], DETACHED_RESEARCH_ARCHIVE_VERSION);
+        let worktree = folder.display().to_string();
+        let flat_nodes = serde_json::json!([
+            flat_node(
+                "research-node-1",
+                serde_json::json!({
+                    "treeId": "research-1", "groupId": "group-1", "kind": "post",
+                    "format": "text", "prompt": "Who has tried X?", "worktreeDir": worktree,
+                })
+            ),
+            flat_node(
+                "research-node-2",
+                serde_json::json!({
+                    "treeId": "research-1", "groupId": "group-1",
+                    "parentNodeId": "research-node-1", "prompt": "Why?",
+                    "anchor": {"kind": "reply", "replyId": "reply-1"},
+                    "worktreeDir": worktree, "nativeSessionId": "session-1",
+                    "agentId": "agent-1", "startedAt": 1, "completedAt": 2,
+                    "responseSnapshotAt": 2,
+                })
+            ),
+        ]);
+        for nodes in [current["nodes"].clone(), flat_nodes] {
+            let mut raw = current.clone();
+            raw["version"] = serde_json::json!(10);
+            raw["nodes"] = nodes;
+            std::fs::write(&manifest, serde_json::to_vec(&raw).unwrap()).unwrap();
+            let bundle = read_detached_research(&folder).unwrap().unwrap();
+            assert_eq!(bundle.archive.version, DETACHED_RESEARCH_ARCHIVE_VERSION);
+            assert_eq!(bundle.archive.nodes, archive.nodes);
+        }
+        std::fs::remove_dir_all(folder).unwrap();
     }
 
     #[test]
