@@ -2308,6 +2308,7 @@ impl AppState {
         let outcome =
             persistence::load_with_diagnostics_from(&self.inner.config.workspace_root, preread);
         let source_version = outcome.source_version;
+        let imported_reports_migrated = outcome.imported_reports_migrated;
         let persistence_warning = outcome.warning.map(|warning| warning.message);
         let mut persisted = outcome.state;
         // Workspace migration allocates durable ids, so restore the allocator
@@ -2335,6 +2336,17 @@ impl AppState {
         if source_version == Some(2)
             && let Err(err) =
                 persistence::backup_v2_state_for_migration(&self.inner.config.workspace_root)
+        {
+            migration_warnings.push(err);
+        }
+        // The next save writes imported reports as documents at version 7,
+        // which builds that accept up to version 6 refuse. A version-2 source
+        // is already preserved whole as state.v2.bak.
+        if imported_reports_migrated
+            && source_version != Some(2)
+            && let Err(err) = persistence::backup_pre_document_imports_state_for_migration(
+                &self.inner.config.workspace_root,
+            )
         {
             migration_warnings.push(err);
         }
@@ -2877,9 +2889,15 @@ impl AppState {
                 version: if model
                     .research_nodes
                     .values()
-                    .any(|node| !node.attachments.is_empty())
+                    .any(research::is_imported_document)
                 {
                     persistence::STATE_VERSION
+                } else if model
+                    .research_nodes
+                    .values()
+                    .any(|node| !node.attachments.is_empty())
+                {
+                    persistence::STATE_VERSION_PRE_DOCUMENT_IMPORTS
                 } else if model
                     .research_nodes
                     .values()
@@ -3877,21 +3895,17 @@ impl AppState {
         Ok(model.research_folders.clone())
     }
 
-    /// Home's feed: research roots (runs and notes), newest first, each with
-    /// its direct follow-ups oldest first and every promoted node in its tree.
+    /// Home's feed: every research root (exchanges, posts and documents),
+    /// newest first, each with its direct follow-ups oldest first and every
+    /// promoted node in its tree.
     pub fn list_recent_activity(
         &self,
         limit: usize,
         before: Option<RecentResearchQueryCursor>,
     ) -> Result<research::RecentActivityPage, String> {
-        // Documents stay out of the feed; exported terminal conversations are
-        // listed like runs, with their run follow-ups as children.
-        let is_feed_kind = |kind: ResearchNodeKind| {
-            matches!(
-                kind,
-                ResearchNodeKind::Run | ResearchNodeKind::Note | ResearchNodeKind::Conversation
-            )
-        };
+        // List every root. Nested documents are invalid, so exclude them from
+        // child and promoted rows.
+        let is_feed_child = |node: &ResearchNode| node.kind != ResearchNodeKind::Document;
         let compare = |left: &&ResearchNode, right: &&ResearchNode| {
             right
                 .created_at
@@ -3907,8 +3921,7 @@ impl AppState {
             .research_nodes
             .values()
             .filter(|node| {
-                is_feed_kind(node.kind)
-                    && node.parent_node_id.is_none()
+                node.parent_node_id.is_none()
                     && model
                         .research_trees
                         .get(&node.tree_id)
@@ -3973,18 +3986,18 @@ impl AppState {
                 let mut query = RecentResearchQuery::from(root);
                 query.children = sorted_children(root)
                     .iter()
-                    .filter(|child| is_feed_kind(child.kind))
+                    .filter(|child| is_feed_child(child))
                     .map(|child| feed_entry(root, child, u32::from(!child.inline)))
                     .collect();
                 if trees_with_promotions.contains(root.tree_id.as_str()) {
                     // Depth-first. A node's branches (oldest first) come before
                     // its inline continuation, so each promoted branch follows
-                    // the turn it was asked from. Non-feed kinds are skipped
+                    // the turn it was asked from. Stray documents are skipped
                     // with their subtrees, matching `children`. The stack holds
                     // each level reversed so the next entry pops first.
                     let traversal_order = |parent: &ResearchNode| {
                         let mut children = sorted_children(parent);
-                        children.retain(|child| is_feed_kind(child.kind));
+                        children.retain(|child| is_feed_child(child));
                         // Stable: keeps created_at order within each group.
                         children.sort_by_key(|child| child.inline);
                         children
@@ -4826,7 +4839,8 @@ impl AppState {
             pane_id: None,
             runtime: crate::research::ResearchRuntime::Pane,
             thread_id: None,
-            kind: ResearchNodeKind::Run,
+            // The report is a document; its prompt is the question it answers.
+            kind: ResearchNodeKind::Document,
             origin: Some(ResearchNodeOrigin::Imported),
             delivery: None,
             reply_anchor: None,
@@ -4859,8 +4873,10 @@ impl AppState {
     /// Replaces a root document's durable Markdown in place. Existing child
     /// runs are intentionally untouched: their agents already received a copy
     /// of the document in their launch prompt. A body replacement invalidates
-    /// every highlight on this node because anchors are revision-bound; a
-    /// title-only edit preserves both the snapshot and its highlights.
+    /// every highlight on this node because anchors are revision-bound, and
+    /// replaces an imported report's recap; a title-only edit preserves the
+    /// snapshot, its highlights and its recap, and skips the body's size
+    /// limits so an imported report over them can still be renamed.
     pub fn update_research_document(
         &self,
         request: UpdateResearchDocumentRequest,
@@ -4871,7 +4887,6 @@ impl AppState {
             .lock()
             .map_err(|_| "research document lock poisoned".to_string())?;
         let markdown = request.markdown.trim().to_string();
-        research::validate_document_markdown(&markdown)?;
 
         let (current_node, current_tree) = {
             let model = self
@@ -4928,8 +4943,14 @@ impl AppState {
             .map(|title| title.trim().to_string())
             .filter(|title| !title.is_empty())
             .unwrap_or_else(|| research::document_default_title(&markdown));
-        let markdown_changed = current_markdown != markdown;
+        // Trim the stored body for comparison with the trimmed request. This
+        // prevents title-only edits from rewriting an imported report whose
+        // stored body includes surrounding whitespace.
+        let markdown_changed = current_markdown.trim() != markdown;
         if markdown_changed {
+            // Only a new body is validated. An imported report can exceed the
+            // editor's word limit, and its title stays editable.
+            research::validate_document_markdown(&markdown)?;
             let expected_highlight_ids = request
                 .expected_highlight_ids
                 .iter()
@@ -4976,6 +4997,9 @@ impl AppState {
             let removed = if turns.is_some() {
                 let removed = node.highlights.len();
                 node.highlights.clear();
+                // A recap (only imported reports have one) describes the
+                // previous body; a replacement is scheduled below.
+                node.recap = None;
                 node.response_snapshot_at = Some(
                     node.response_snapshot_at
                         .map_or(now, |previous| now.max(previous.saturating_add(1))),
@@ -5010,6 +5034,9 @@ impl AppState {
                 "removedHighlightCount": removed_highlight_count,
             }),
         ));
+        if markdown_changed {
+            crate::research_recap::schedule(self, &node.id);
+        }
         Ok(UpdateResearchDocumentResult {
             tree,
             node,
@@ -5061,9 +5088,11 @@ impl AppState {
 
     /// The launch prompt for a follow-up on an exported conversation or
     /// imported report. Its saved content rides along as context because
-    /// neither has a native session to fork.
-    /// These snapshots are immutable, so unlike documents no editor
-    /// lock is needed to capture a coherent version.
+    /// neither has a native session to fork. An imported report is an
+    /// editable document, so the document lock is held while its title and
+    /// body are read, as in `research_document_followup_prompt`; a
+    /// conversation snapshot is immutable and takes the same lock only to
+    /// keep one acquisition order.
     ///
     /// A targeted ask's quoted passage is wrapped around `prompt` here rather
     /// than by the caller: the passage is conversation content, so it must
@@ -5077,6 +5106,11 @@ impl AppState {
         prompt: &str,
         query_anchor: Option<&ResearchHighlightAnchor>,
     ) -> Result<String, String> {
+        let _document_guard = self
+            .inner
+            .research_document_lock
+            .lock()
+            .map_err(|_| "research document lock poisoned".to_string())?;
         let (node, title) = {
             let model = self
                 .inner
@@ -12793,7 +12827,7 @@ mod tests {
     }
 
     #[test]
-    fn recent_activity_lists_exported_conversations_but_not_documents() {
+    fn recent_activity_lists_documents_and_exported_conversations() {
         let state = AppState::new(test_config(temp_workspace()));
         state.insert_group_after(sample_group(), None).unwrap();
         let detail = state
@@ -12845,12 +12879,13 @@ mod tests {
                 .map(|query| (query.node_id.as_str(), query.kind))
                 .collect::<Vec<_>>(),
             vec![
+                ("document-node", ResearchNodeKind::Document),
                 ("conversation-node", ResearchNodeKind::Conversation),
                 (root_id.as_str(), ResearchNodeKind::Run),
             ]
         );
         assert_eq!(
-            page.items[0]
+            page.items[1]
                 .children
                 .iter()
                 .map(|child| child.node_id.as_str())
@@ -16492,6 +16527,486 @@ mod tests {
         assert_eq!(restored.prompt, prompt);
         assert!(restored.model.is_none());
         assert_eq!(restored.recap.unwrap().text, "The imported findings.");
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    /// A research workspace whose directory is `workspace`, with an imported
+    /// report and one completed run follow-up under it.
+    fn imported_report_with_child(workspace: &std::path::Path) -> (AppState, String, String) {
+        let state = AppState::new(test_config(workspace.to_path_buf()));
+        assert!(state.restore_session().is_empty());
+        let mut group = sample_group();
+        group.dir = workspace.display().to_string();
+        group.managed_dir = workspace.join("managed").display().to_string();
+        group.agents.clear();
+        state.insert_group_after(group, None).unwrap();
+        let detail = state
+            .import_research_report(research::ImportResearchReportRequest {
+                markdown: "# Survey\n\nReported result.".into(),
+                prompt: "What did the survey find?".into(),
+                adapter: "codex".into(),
+                workspace_id: "group-1".into(),
+            })
+            .unwrap();
+        let root_id = detail.tree.root_node_id.clone();
+        let child = state
+            .create_research_child(&root_id, "Explain the result".into(), None, true)
+            .unwrap();
+        {
+            let mut model = state.inner.model.lock().unwrap();
+            let child = model.research_nodes.get_mut(&child.id).unwrap();
+            child.status = ResearchNodeStatus::Complete;
+            child.native_session_id = Some("session-child".into());
+        }
+        (state, root_id, child.id)
+    }
+
+    #[test]
+    fn imported_reports_are_stored_as_documents() {
+        let workspace = temp_workspace();
+        let (state, root_id, _) = imported_report_with_child(&workspace);
+        let root = state.research_node(&root_id).unwrap();
+        assert_eq!(root.kind, ResearchNodeKind::Document);
+        assert_eq!(root.origin, Some(ResearchNodeOrigin::Imported));
+        assert_eq!(root.prompt, "What did the survey find?");
+        assert_eq!(root.node_type(), ResearchNodeType::Document);
+        assert_eq!(
+            root.follow_up_launch(),
+            FollowUpLaunch::Context(FollowUpContext::Snapshot)
+        );
+        // A document thread lists in the feed like any other.
+        let page = state.list_recent_activity(10, None).unwrap();
+        assert_eq!(page.items[0].node_id, root_id);
+        assert_eq!(page.items[0].kind, ResearchNodeKind::Document);
+        assert_eq!(page.items[0].children.len(), 1);
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn version_six_state_migrates_imported_runs_to_documents_and_round_trips_at_seven() {
+        let workspace = temp_workspace();
+        let (state, root_id, child_id) = imported_report_with_child(&workspace);
+        state.finalize_persistence_for_exit();
+        drop(state);
+
+        // Rewrite the file as a version-6 build stored it: the report as a
+        // run (no `kind`, so it defaulted to run) with its imported origin.
+        let path = persistence::state_path(&workspace);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(raw["version"], persistence::STATE_VERSION);
+        assert_eq!(raw["researchNodes"][&root_id]["kind"], "document");
+        raw["version"] = serde_json::json!(6);
+        raw["researchNodes"][&root_id]
+            .as_object_mut()
+            .unwrap()
+            .remove("kind");
+        assert!(raw["researchNodes"][&child_id].get("kind").is_none());
+        std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+
+        let version_six_bytes = std::fs::read(&path).unwrap();
+        let restored = AppState::new(test_config(workspace.clone()));
+        restored.restore_session();
+        // The version-7 save will replace a file version-6 builds can read;
+        // its bytes are kept beside it first.
+        assert_eq!(
+            std::fs::read(path.with_file_name("state.v6.bak")).unwrap(),
+            version_six_bytes
+        );
+        let root = restored.research_node(&root_id).unwrap();
+        assert_eq!(root.kind, ResearchNodeKind::Document);
+        assert_eq!(root.origin, Some(ResearchNodeOrigin::Imported));
+        assert_eq!(root.prompt, "What did the survey find?");
+        let child = restored.research_node(&child_id).unwrap();
+        assert_eq!(child.kind, ResearchNodeKind::Run);
+        assert_eq!(child.parent_node_id.as_deref(), Some(root_id.as_str()));
+        assert_eq!(child.status, ResearchNodeStatus::Complete);
+        // The snapshot is keyed by node id and needs no change: follow-ups
+        // still carry the question and the report.
+        let prompt = restored
+            .research_snapshot_followup_prompt(&root_id, "Why?", None)
+            .unwrap();
+        assert!(prompt.contains("What did the survey find?"), "{prompt}");
+        assert!(prompt.contains("Reported result."), "{prompt}");
+        let page = restored.list_recent_activity(10, None).unwrap();
+        assert_eq!(page.items[0].node_id, root_id);
+        assert_eq!(page.items[0].children[0].node_id, child_id);
+
+        // Saved again, the file is version 7 with the document shape, and it
+        // loads back unchanged.
+        restored.finalize_persistence_for_exit();
+        drop(restored);
+        let raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(raw["version"], 7);
+        assert_eq!(raw["researchNodes"][&root_id]["kind"], "document");
+        assert_eq!(raw["researchNodes"][&root_id]["origin"], "imported");
+        let reloaded = AppState::new(test_config(workspace.clone()));
+        reloaded.restore_session();
+        assert_eq!(reloaded.research_node(&root_id).unwrap(), {
+            let mut expected = root.clone();
+            expected.worktree_dir = reloaded.research_node(&root_id).unwrap().worktree_dir;
+            expected
+        });
+        assert_eq!(
+            reloaded.research_node(&child_id).unwrap().kind,
+            ResearchNodeKind::Run
+        );
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn state_without_imported_documents_keeps_an_older_version_tier() {
+        let workspace = temp_workspace();
+        let state = AppState::new(test_config(workspace.clone()));
+        assert!(state.restore_session().is_empty());
+        state.insert_group_after(sample_group(), None).unwrap();
+        state
+            .create_research_tree(research_root_request("Root"))
+            .unwrap();
+        state.finalize_persistence_for_exit();
+        let raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(persistence::state_path(&workspace)).unwrap())
+                .unwrap();
+        assert_eq!(raw["version"], persistence::STATE_VERSION_PRE_CONVERSATIONS);
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn detached_archive_at_version_eight_imports_reports_as_documents() {
+        let source = temp_workspace();
+        let (state, root_id, _) = imported_report_with_child(&source);
+        let archive = state.detached_research_archive("group-1").unwrap();
+        assert_eq!(archive.version, research::DETACHED_RESEARCH_ARCHIVE_VERSION);
+        let responses = HashMap::from([(
+            root_id.clone(),
+            research::read_response_snapshot(&source, &root_id)
+                .unwrap()
+                .unwrap(),
+        )]);
+        let folder = source.join("project");
+        std::fs::create_dir_all(&folder).unwrap();
+        research::write_detached_research_pending(&folder, &archive, &responses).unwrap();
+        research::commit_detached_research(&folder).unwrap();
+        // Rewrite the manifest as a version-8 build wrote it: the report is a
+        // run (no `kind`) with its imported origin.
+        let manifest = research::detached_research_manifest_path(&folder);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+        raw["version"] = serde_json::json!(8);
+        for node in raw["nodes"].as_array_mut().unwrap() {
+            if node["id"] == root_id.as_str() {
+                assert_eq!(node["kind"], "document");
+                node.as_object_mut().unwrap().remove("kind");
+            }
+        }
+        std::fs::write(&manifest, serde_json::to_vec(&raw).unwrap()).unwrap();
+
+        let bundle = research::read_detached_research(&folder).unwrap().unwrap();
+        let root = bundle
+            .archive
+            .nodes
+            .iter()
+            .find(|node| node.id == root_id)
+            .unwrap();
+        assert_eq!(root.kind, ResearchNodeKind::Document);
+        assert_eq!(root.origin, Some(ResearchNodeOrigin::Imported));
+        assert_eq!(
+            research::detached_archive_version(&bundle.archive.nodes),
+            research::DETACHED_RESEARCH_ARCHIVE_VERSION
+        );
+
+        let destination = temp_workspace();
+        let target = AppState::new(test_config(destination.clone()));
+        assert!(target.restore_session().is_empty());
+        let mut group = bundle.archive.workspace.clone();
+        group.dir = folder.display().to_string();
+        group.managed_dir = destination.join("managed").display().to_string();
+        let imported = target
+            .import_detached_research(
+                group,
+                bundle.archive.tree_order,
+                bundle.archive.trees,
+                bundle.archive.folders,
+                bundle.archive.membership,
+                bundle.archive.nodes,
+                bundle.responses,
+            )
+            .unwrap();
+        let page = target.list_recent_activity(10, None).unwrap();
+        assert_eq!(page.items.len(), 1);
+        let item = &page.items[0];
+        assert_eq!(item.kind, ResearchNodeKind::Document);
+        assert_eq!(item.origin, Some(ResearchNodeOrigin::Imported));
+        assert_eq!(item.prompt, "What did the survey find?");
+        assert_eq!(item.children.len(), 1);
+        let new_root = item.node_id.clone();
+        assert_eq!(
+            target
+                .research_node(&item.children[0].node_id)
+                .unwrap()
+                .prompt,
+            "Explain the result"
+        );
+        assert!(
+            target
+                .research_snapshot_followup_prompt(&new_root, "Why?", None)
+                .unwrap()
+                .contains("Reported result.")
+        );
+        assert_eq!(imported.scope, WorkspaceScope::Research);
+        std::fs::remove_dir_all(source).unwrap();
+        std::fs::remove_dir_all(destination).unwrap();
+    }
+
+    /// Writes `archive` as a committed detached archive in `folder`, then
+    /// rewrites its manifest the way a pre-version-9 build stored an imported
+    /// report: at `version`, with the report as a run (no `kind`).
+    fn write_pre_document_imports_archive(
+        workspace: &std::path::Path,
+        folder: &std::path::Path,
+        archive: &research::DetachedResearchArchive,
+        root_id: &str,
+        version: u32,
+    ) {
+        let responses = HashMap::from([(
+            root_id.to_string(),
+            research::read_response_snapshot(workspace, root_id)
+                .unwrap()
+                .unwrap(),
+        )]);
+        std::fs::create_dir_all(folder).unwrap();
+        research::write_detached_research_pending(folder, archive, &responses).unwrap();
+        research::commit_detached_research(folder).unwrap();
+        let manifest = research::detached_research_manifest_path(folder);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+        raw["version"] = serde_json::json!(version);
+        for node in raw["nodes"].as_array_mut().unwrap() {
+            if node["id"] == root_id {
+                node.as_object_mut().unwrap().remove("kind");
+            }
+        }
+        std::fs::write(&manifest, serde_json::to_vec(&raw).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn migrated_archive_is_stamped_version_nine_and_rewritten_at_nine() {
+        let source = temp_workspace();
+        let (state, root_id, _) = imported_report_with_child(&source);
+        let archive = state.detached_research_archive("group-1").unwrap();
+        let folder = source.join("project");
+        write_pre_document_imports_archive(&source, &folder, &archive, &root_id, 8);
+
+        // Moving a research folder writes the bundle it read back unchanged.
+        let bundle = research::read_detached_research(&folder).unwrap().unwrap();
+        assert_eq!(
+            bundle.archive.version,
+            research::DETACHED_RESEARCH_ARCHIVE_VERSION
+        );
+        let moved = source.join("moved");
+        std::fs::create_dir_all(&moved).unwrap();
+        research::write_detached_research_pending(&moved, &bundle.archive, &bundle.responses)
+            .unwrap();
+        research::commit_detached_research(&moved).unwrap();
+        let raw: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(research::detached_research_manifest_path(&moved)).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(raw["version"], research::DETACHED_RESEARCH_ARCHIVE_VERSION);
+        let root = raw["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|node| node["id"] == root_id.as_str())
+            .unwrap();
+        assert_eq!(root["kind"], "document");
+        assert_eq!(root["origin"], "imported");
+
+        // An imported document below version 9 is refused, so no writer can
+        // produce one.
+        let mut stale = bundle.archive.clone();
+        stale.version = 8;
+        let error = research::write_detached_research_pending(
+            &source.join("stale"),
+            &stale,
+            &bundle.responses,
+        )
+        .unwrap_err();
+        assert!(error.contains("requires archive version 9"), "{error}");
+        std::fs::remove_dir_all(source).unwrap();
+    }
+
+    #[test]
+    fn version_three_archive_with_an_imported_run_is_stamped_version_nine() {
+        let source = temp_workspace();
+        let (state, root_id, _) = imported_report_with_child(&source);
+        let mut archive = state.detached_research_archive("group-1").unwrap();
+        // Without the inline child, a pre-version-9 build would assign the
+        // archive version used for runs only.
+        archive.nodes.retain(|node| node.id == root_id);
+        archive.version = research::detached_archive_version(&archive.nodes);
+        let folder = source.join("project");
+        write_pre_document_imports_archive(&source, &folder, &archive, &root_id, 3);
+        let bundle = research::read_detached_research(&folder).unwrap().unwrap();
+        assert_eq!(
+            bundle.archive.version,
+            research::DETACHED_RESEARCH_ARCHIVE_VERSION
+        );
+        assert_eq!(bundle.archive.nodes[0].kind, ResearchNodeKind::Document);
+        std::fs::remove_dir_all(source).unwrap();
+    }
+
+    /// Preserve a nested imported run during migration so it remains in the
+    /// feed and its tree can still be detached.
+    #[test]
+    fn nested_imported_run_is_not_migrated_to_a_document() {
+        let workspace = temp_workspace();
+        let (state, root_id, child_id) = imported_report_with_child(&workspace);
+        state.finalize_persistence_for_exit();
+        drop(state);
+        let path = persistence::state_path(&workspace);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        raw["version"] = serde_json::json!(6);
+        let root = raw["researchNodes"][&root_id].as_object_mut().unwrap();
+        root.remove("kind");
+        root.remove("origin");
+        raw["researchNodes"][&child_id]["origin"] = serde_json::json!("imported");
+        std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+
+        let restored = AppState::new(test_config(workspace.clone()));
+        restored.restore_session();
+        let child = restored.research_node(&child_id).unwrap();
+        assert_eq!(child.kind, ResearchNodeKind::Run);
+        assert_eq!(child.origin, Some(ResearchNodeOrigin::Imported));
+        let page = restored.list_recent_activity(10, None).unwrap();
+        assert_eq!(page.items[0].node_id, root_id);
+        assert_eq!(page.items[0].children[0].node_id, child_id);
+        let archive = restored.detached_research_archive("group-1").unwrap();
+        research::write_detached_research_pending(
+            &workspace.join("detach"),
+            &archive,
+            &HashMap::new(),
+        )
+        .unwrap();
+        // No node changed, so no pre-version-7 backup was written.
+        assert!(!path.with_file_name("state.v6.bak").exists());
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    fn set_test_recap(state: &AppState, node_id: &str, revision: &str) {
+        let mut model = state.inner.model.lock().unwrap();
+        model.research_nodes.get_mut(node_id).unwrap().recap = Some(research::ResearchRecap {
+            id: Some("recap".into()),
+            text: "Old summary".into(),
+            response_revision: revision.to_string(),
+            generated_at: None,
+            adapter: None,
+            model: None,
+            instructions: None,
+        });
+    }
+
+    #[test]
+    fn editing_an_imported_document_body_clears_its_recap() {
+        let workspace = temp_workspace();
+        let (state, root_id, _) = imported_report_with_child(&workspace);
+        let snapshot = research::read_response_snapshot_with_revision(&workspace, &root_id)
+            .unwrap()
+            .unwrap();
+        set_test_recap(&state, &root_id, &snapshot.revision);
+        let title = state
+            .research_tree(&state.research_node(&root_id).unwrap().tree_id)
+            .unwrap()
+            .tree
+            .title;
+
+        // A title-only edit keeps the body and the recap that describes it.
+        let renamed = state
+            .update_research_document(UpdateResearchDocumentRequest {
+                node_id: root_id.clone(),
+                markdown: "# Survey\n\nReported result.".into(),
+                title: Some("Renamed".into()),
+                expected_response_revision: snapshot.revision.clone(),
+                expected_title: title,
+                expected_highlight_ids: Vec::new(),
+            })
+            .unwrap();
+        assert!(!renamed.markdown_changed);
+        assert!(renamed.node.recap.is_some());
+
+        let edited = state
+            .update_research_document(UpdateResearchDocumentRequest {
+                node_id: root_id.clone(),
+                markdown: "# Survey\n\nA different result.".into(),
+                title: None,
+                expected_response_revision: snapshot.revision.clone(),
+                expected_title: "Renamed".into(),
+                expected_highlight_ids: Vec::new(),
+            })
+            .unwrap();
+        assert!(edited.markdown_changed);
+        assert_ne!(edited.response_revision, snapshot.revision);
+        assert!(edited.node.recap.is_none());
+        assert!(state.research_node(&root_id).unwrap().recap.is_none());
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn imported_document_over_the_word_limit_accepts_a_title_only_edit() {
+        let workspace = temp_workspace();
+        let state = AppState::new(test_config(workspace.clone()));
+        assert!(state.restore_session().is_empty());
+        let mut group = sample_group();
+        group.dir = workspace.display().to_string();
+        group.managed_dir = workspace.join("managed").display().to_string();
+        group.agents.clear();
+        state.insert_group_after(group, None).unwrap();
+        // Imports keep the file's surrounding whitespace.
+        let body = format!(
+            "# Long report\n\n{}\n",
+            vec!["word"; research::MAX_RESEARCH_DOCUMENT_WORDS + 1].join(" ")
+        );
+        let detail = state
+            .import_research_report(research::ImportResearchReportRequest {
+                markdown: body.clone(),
+                prompt: "What is in the long report?".into(),
+                adapter: "codex".into(),
+                workspace_id: "group-1".into(),
+            })
+            .unwrap();
+        let root_id = detail.tree.root_node_id.clone();
+        let snapshot = research::read_response_snapshot_with_revision(&workspace, &root_id)
+            .unwrap()
+            .unwrap();
+
+        let renamed = state
+            .update_research_document(UpdateResearchDocumentRequest {
+                node_id: root_id.clone(),
+                markdown: body.clone(),
+                title: Some("Renamed".into()),
+                expected_response_revision: snapshot.revision.clone(),
+                expected_title: detail.tree.title.clone(),
+                expected_highlight_ids: Vec::new(),
+            })
+            .unwrap();
+        assert!(!renamed.markdown_changed);
+        assert_eq!(renamed.response_revision, snapshot.revision);
+        assert_eq!(renamed.tree.title, "Renamed");
+
+        // Body edits must satisfy the size limit.
+        let error = state
+            .update_research_document(UpdateResearchDocumentRequest {
+                node_id: root_id.clone(),
+                markdown: format!("{body} more"),
+                title: None,
+                expected_response_revision: snapshot.revision.clone(),
+                expected_title: "Renamed".into(),
+                expected_highlight_ids: Vec::new(),
+            })
+            .unwrap_err();
+        assert!(error.contains("limited to"), "{error}");
         std::fs::remove_dir_all(workspace).unwrap();
     }
 

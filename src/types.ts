@@ -471,8 +471,9 @@ export interface ResearchNode {
   /** The run agent's thread-graph record id, kept for backend reaping. */
   threadId?: string | null;
   kind?: ResearchNodeKind;
-  /** Present on nodes whose content did not come from a research launch —
-   * today, conversations exported from a terminal session. */
+  /** Present on nodes whose content did not come from a research launch:
+   * conversations exported from a terminal session, and imported reports
+   * (documents). */
   origin?: ResearchNodeOrigin | null;
   /** Only on notes posted with Ask network. */
   delivery?: NoteDelivery | null;

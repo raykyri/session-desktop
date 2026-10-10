@@ -2053,6 +2053,14 @@
   line-height: 1.4;
 }
 
+.edit-document-limit-notice {
+  width: 100%;
+  margin: 0;
+  color: var(--status-failed-fg);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+
 .new-document-wordcount {
   color: var(--text-activity);
   font-size: var(--fs-sm);

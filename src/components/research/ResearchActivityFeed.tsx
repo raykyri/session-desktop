@@ -893,14 +893,14 @@ function ResearchActivityFeed({
   /** Trees filed in a place, in the folder order (Archive: newest archived). */
   function treesIn(place: string): ResearchTreeSummary[] {
     return researchTrees.filter(
-      (tree) => tree.archivedAt == null && tree.kind !== "document" && placeOf(tree) === place,
+      (tree) => tree.archivedAt == null && placeOf(tree) === place,
     );
   }
 
   /** How many questions a place holds, for its tray header. */
   function placeCount(place: string) {
     if (place === RESEARCH_ARCHIVE_FOLDER_ID) {
-      return researchTrees.filter((tree) => tree.archivedAt != null && tree.kind !== "document").length;
+      return researchTrees.filter((tree) => tree.archivedAt != null).length;
     }
     return treesIn(place).length + (place === RESEARCH_DRAFTS_FOLDER_ID ? drafts.length : 0);
   }
@@ -964,7 +964,7 @@ function ResearchActivityFeed({
     view.kind === "home" &&
     items.length === 0 &&
     drafts.length === 0 &&
-    !researchTrees.some((tree) => tree.kind !== "document");
+    researchTrees.length === 0;
 
   // The feed's ask box starts Home. In Bookmarks and a folder it ends the
   // list, and "+ Ask" in the header brings it into view.

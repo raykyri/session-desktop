@@ -129,3 +129,35 @@ export function deriveResearchDocumentTitle(markdown: string): string {
 export function stripImportedReportCitations(markdown: string): string {
   return markdown.replace(/[ \t]*\uE200cite\uE202[^\uE200\uE201\r\n]*\uE201/g, "");
 }
+
+/** Save eligibility and size-limit notice for the edit dialog. Matches
+ * update_research_document: size limits apply only when the body changes, so
+ * an imported report that exceeds them can still be renamed. */
+export function researchDocumentEditGate(input: {
+  markdown: string;
+  initialMarkdown: string;
+  title: string;
+  initialTitle: string;
+  overWordLimit: boolean;
+  overByteLimit: boolean;
+}): { canSave: boolean; limitNotice: string | null } {
+  const bodyChanged = input.markdown !== input.initialMarkdown;
+  const changed = bodyChanged || input.title !== input.initialTitle;
+  const overLimit = input.overWordLimit || input.overByteLimit;
+  const canSave = changed && (!bodyChanged || (Boolean(input.markdown.trim()) && !overLimit));
+  if (!overLimit) {
+    return { canSave, limitNotice: null };
+  }
+  const [limit, target] = input.overWordLimit
+    ? [
+        `${RESEARCH_DOCUMENT_WORD_LIMIT.toLocaleString("en-US")}-word`,
+        `${RESEARCH_DOCUMENT_WORD_LIMIT.toLocaleString("en-US")} words or fewer`,
+      ]
+    : ["10 MB", "10 MB or less"];
+  return {
+    canSave,
+    limitNotice: bodyChanged
+      ? `The content is over the ${limit} limit. Shorten it to ${target} to save.`
+      : `The content is over the ${limit} limit for edits, so only the title can be changed. To save content changes, shorten it to ${target}.`,
+  };
+}

@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import DocumentComposer from "../src/components/research/DocumentComposer";
 import {
   RESEARCH_DOCUMENT_BYTE_LIMIT,
   RESEARCH_DOCUMENT_WORD_LIMIT,
   ResearchDocumentWordLimitExceeded,
   countResearchDocumentWords,
   deriveResearchDocumentTitle,
+  researchDocumentEditGate,
 } from "../src/lib/researchDocuments";
 
 test("word counting matches whitespace-delimited tokens", () => {
@@ -68,4 +72,58 @@ test("derived titles normalize whitespace and truncate like backend titles", () 
     deriveResearchDocumentTitle("x".repeat(RESEARCH_DOCUMENT_BYTE_LIMIT)),
     `${"x".repeat(72)}…`,
   );
+});
+
+test("document size limits apply when the body changes", () => {
+  const long = Array(RESEARCH_DOCUMENT_WORD_LIMIT + 1).fill("w").join(" ");
+  const base = {
+    markdown: long,
+    initialMarkdown: long,
+    title: "Report",
+    initialTitle: "Report",
+    overWordLimit: true,
+    overByteLimit: false,
+  };
+  const unchanged = researchDocumentEditGate(base);
+  assert.equal(unchanged.canSave, false);
+  assert.match(unchanged.limitNotice ?? "", /only the title can be changed/);
+
+  const renamed = researchDocumentEditGate({ ...base, title: "Renamed" });
+  assert.equal(renamed.canSave, true);
+  assert.match(renamed.limitNotice ?? "", /10,000-word limit/);
+
+  const edited = researchDocumentEditGate({ ...base, markdown: `${long} more`, title: "Renamed" });
+  assert.equal(edited.canSave, false);
+  assert.match(edited.limitNotice ?? "", /Shorten it to 10,000 words or fewer to save/);
+
+  const withinLimit = researchDocumentEditGate({
+    ...base,
+    markdown: "Short",
+    initialMarkdown: "Old",
+    overWordLimit: false,
+  });
+  assert.deepEqual(withinLimit, { canSave: true, limitNotice: null });
+  assert.equal(
+    researchDocumentEditGate({ ...base, markdown: "  ", overWordLimit: false }).canSave,
+    false,
+  );
+  assert.equal(
+    researchDocumentEditGate({ ...base, markdown: "x", overWordLimit: false, overByteLimit: true })
+      .limitNotice,
+    "The content is over the 10 MB limit. Shorten it to 10 MB or less to save.",
+  );
+});
+
+test("the edit dialog says when a document is over the word limit", () => {
+  const long = Array(RESEARCH_DOCUMENT_WORD_LIMIT + 1).fill("w").join(" ");
+  const html = renderToStaticMarkup(
+    createElement(DocumentComposer, {
+      initialMarkdown: long,
+      initialTitle: "Report",
+      onClose: () => {},
+      onSubmit: async () => {},
+    }),
+  );
+  assert.match(html, /only the title can be changed/);
+  assert.match(html, /Over 10,000 words/);
 });

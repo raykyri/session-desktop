@@ -6,6 +6,7 @@ import {
   ResearchDocumentWordLimitExceeded,
   countResearchDocumentWords,
   deriveResearchDocumentTitle,
+  researchDocumentEditGate,
 } from "../../lib/researchDocuments";
 import {
   ComposerSubmitShortcutGlyph,
@@ -20,8 +21,9 @@ interface DocumentComposerProps {
   onSubmit: (input: { markdown: string; title: string | null }) => Promise<void>;
 }
 
-/** Modal editor retained for legacy research-document snapshots. Creation is
- * no longer exposed, and legacy document trees are hidden by the app shell. */
+/** Modal editor for an existing root document's title and Markdown body
+ * (imported reports, and documents created before the app stopped offering
+ * document creation). */
 export default function DocumentComposer({
   initialMarkdown = "",
   initialTitle = "",
@@ -86,12 +88,15 @@ export default function DocumentComposer({
   const pristine = !changed;
 
   const overByteLimit = byteCount > RESEARCH_DOCUMENT_BYTE_LIMIT;
-  const canSubmit =
-    Boolean(markdown.trim()) &&
-    !overWordLimit &&
-    !overByteLimit &&
-    !submitting &&
-    changed;
+  const { canSave, limitNotice } = researchDocumentEditGate({
+    markdown,
+    initialMarkdown,
+    title,
+    initialTitle,
+    overWordLimit,
+    overByteLimit,
+  });
+  const canSubmit = canSave && !submitting;
   const warningId = highlightCount > 0 ? "edit-document-highlight-warning" : undefined;
 
   async function submit() {
@@ -176,17 +181,23 @@ export default function DocumentComposer({
               {highlightCount === 1 ? "it" : "them"}. Title-only changes keep highlights.
             </p>
           ) : null}
+          {limitNotice ? (
+            <p className="edit-document-limit-notice" role="alert">
+              {limitNotice}
+            </p>
+          ) : null}
           <div className="new-document-footer-row">
             <span
               className={`new-document-wordcount${overWordLimit || overByteLimit ? " is-over" : ""}`}
-              role={overWordLimit || overByteLimit ? "alert" : undefined}
               title={
                 overWordLimit
                   ? `Documents are limited to ${RESEARCH_DOCUMENT_WORD_LIMIT.toLocaleString()} words for now`
                   : undefined
               }
             >
-              {wordCount.toLocaleString()} / {RESEARCH_DOCUMENT_WORD_LIMIT.toLocaleString()} words
+              {overWordLimit
+                ? `Over ${RESEARCH_DOCUMENT_WORD_LIMIT.toLocaleString()} words`
+                : `${wordCount.toLocaleString()} / ${RESEARCH_DOCUMENT_WORD_LIMIT.toLocaleString()} words`}
               {overByteLimit ? " · over the 10 MB size limit" : ""}
             </span>
             {error ? (

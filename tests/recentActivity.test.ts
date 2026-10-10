@@ -117,7 +117,7 @@ test("Home hides archived research and shows it again when restored", () => {
   );
 });
 
-test("only top-level runs, notes, and conversations enter the Home feed", () => {
+test("every top-level node enters the Home feed; follow-ups do not", () => {
   const node = {
     id: "root",
     treeId: tree.id,
@@ -132,7 +132,10 @@ test("only top-level runs, notes, and conversations enter the Home feed", () => 
   } satisfies ResearchNode;
   assert.equal(recentResearchQueryFromNode(node)?.nodeId, "root");
   assert.equal(recentResearchQueryFromNode({ ...node, parentNodeId: "root" }), null);
-  assert.equal(recentResearchQueryFromNode({ ...node, kind: "document" }), null);
+  const imported = recentResearchQueryFromNode({ ...node, kind: "document", origin: "imported" });
+  assert.equal(imported?.kind, "document");
+  assert.equal(imported?.origin, "imported");
+  assert.equal(imported?.prompt, "Question");
   assert.equal(
     recentResearchQueryFromNode({ ...node, kind: "conversation" })?.kind,
     "conversation",
@@ -236,7 +239,7 @@ test("live summary events retain imported report provenance", () => {
   const node: ResearchNode = {
     id: "imported", treeId: "imported-tree", prompt: "Original prompt", adapter: "codex",
     groupId: "workspace", worktreeDir: "/workspace", status: "complete", createdAt: 100,
-    kind: "run", origin: "imported", model: null, highlights: [],
+    kind: "document", origin: "imported", model: null, highlights: [],
   };
   const query = recentResearchQueryFromNode(node)!;
   assert.equal(query.origin, "imported");

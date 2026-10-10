@@ -517,10 +517,9 @@ const INPUT_DEQUEUE_HOLD_MS = 1500;
 const THREAD_GRAPH_REFRESH_DEBOUNCE_MS = 300;
 
 function partitionResearchTrees(trees: ResearchTreeSummary[]) {
-  const visibleTrees = trees.filter((tree) => tree.kind !== "document");
   return {
-    active: visibleTrees.filter((tree) => !tree.archivedAt),
-    archived: visibleTrees.filter((tree) => Boolean(tree.archivedAt)),
+    active: trees.filter((tree) => !tree.archivedAt),
+    archived: trees.filter((tree) => Boolean(tree.archivedAt)),
   };
 }
 
@@ -529,9 +528,6 @@ function upsertResearchTreeSummary(
   summary: ResearchTreeSummary,
   prepend = false,
 ): ResearchTreeSummary[] {
-  if (summary.kind === "document") {
-    return trees.filter((tree) => tree.id !== summary.id);
-  }
   const index = trees.findIndex((tree) => tree.id === summary.id);
   if (index === -1) {
     return prepend ? [summary, ...trees] : [...trees, summary];

@@ -315,6 +315,25 @@ test("an exported conversation lists as a titled card", () => {
   assert.match(html, /First user message/);
 });
 
+test("an imported report lists as a titled card with its question, in Home and in Archive", () => {
+  const imported = {
+    ...question, kind: "document" as const, origin: "imported" as const, recap: null,
+    prompt: "What did the survey find?",
+  };
+  const importedTree = { ...tree, kind: "document" as const, title: "Survey report" };
+  const html = renderFeed({ items: [imported], researchTrees: [importedTree] });
+  assert.equal(cards(html).length, 1);
+  assert.match(html, /research-feed-card-title">Survey report</);
+  assert.match(html, /What did the survey find\?/);
+  // An imported document prevents Home from showing the first-run text.
+  assert.doesNotMatch(html, /appear here, newest first/);
+  const archived = renderFeed({
+    view: { kind: "archive" },
+    researchTrees: [{ ...importedTree, archivedAt: 300 }],
+  });
+  assert.match(archived, /Survey report/);
+});
+
 test("one card per thread, even when a follow-up item is loaded", () => {
   const followUp = {
     ...question, nodeId: "follow", parentNodeId: "node", prompt: "A later follow-up", createdAt: 200,

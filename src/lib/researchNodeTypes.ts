@@ -1,6 +1,5 @@
-// What a research node is, derived from its stored kind and origin. The
-// stored shape is unchanged; these helpers are the one place that interprets
-// it, mirroring ResearchNode::node_type and follow_up_launch in research.rs.
+// Derive node type and follow-up launch behavior from stored kind and origin.
+// These helpers mirror ResearchNode::node_type and follow_up_launch in research.rs.
 
 import type { ResearchMessageAttachment, ResearchNode } from "../types";
 
@@ -21,7 +20,7 @@ export function nodeType(node: NodeShape): ResearchNodeType {
     case "conversation":
       return "document";
     default:
-      return node.origin === "imported" ? "document" : "exchange";
+      return "exchange";
   }
 }
 

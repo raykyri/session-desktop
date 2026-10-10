@@ -31,6 +31,17 @@ test("recaps reserve no space until generated and belonging to the displayed ans
   assert.equal(render(value), "");
 });
 
+test("imported reports show their recap; other documents and posts do not", () => {
+  const value = content();
+  value.node.kind = "document";
+  value.node.origin = "imported";
+  assert.match(render(value), /Summary: The result is ready\./);
+  value.node.origin = null;
+  assert.equal(render(value), "");
+  value.node.kind = "note";
+  assert.equal(render(value), "");
+});
+
 test("a pending summary job holds the recap slot with a spinner", () => {
   const value = content();
   const pending = (input: ResearchNodeContent) =>
