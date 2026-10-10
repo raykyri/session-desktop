@@ -42,10 +42,9 @@ export function toUser(row: UserRow): User {
 /**
  * Creates or refreshes the account behind a GitHub identity.
  *
- * `github_id` is the identity, not `login`: a user may rename their GitHub
- * account, and the rename must follow their data rather than fork it. The
- * sign-up context is written only on creation — the IP and inviter of an
- * existing account are historical facts.
+ * Identify accounts by `github_id` so a GitHub login rename keeps the same
+ * account and data. Write the sign-up context only when creating an account
+ * to preserve the original IP and inviter.
  */
 export function upsertFromGitHub(
   db: SessionDatabase,

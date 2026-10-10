@@ -1,12 +1,10 @@
 // Deleting nodes.
 //
-// `nodes.parent_node_id` is `ON DELETE RESTRICT` on purpose
-// (`docs/02-domain-model-and-database.md` §3.3): an accidental delete of a
-// node with children must fail loudly rather than take a subtree with it. The
-// cost is that every legitimate removal has to work upward from the leaves,
-// which is what these helpers do. A tree's own cascade would hit the same
-// constraint, so its nodes are removed here first and the tree row is deleted
-// with nothing left to cascade.
+// `nodes.parent_node_id` uses `ON DELETE RESTRICT`
+// (`docs/02-domain-model-and-database.md` §3.3) to prevent accidental deletion
+// of a node with children. These helpers delete nodes from the leaves upward
+// to satisfy that constraint. They also remove a tree's nodes before deleting
+// its row, because the tree cascade is subject to the same constraint.
 
 import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 

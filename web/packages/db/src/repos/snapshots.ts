@@ -63,13 +63,13 @@ function assistantTextExists(turns: readonly Turn[]): boolean {
  * The two-guard rule — an assistant text turn exists, and two consecutive
  * reads of the live turns agreed — is split: the second guard is the
  * runtime's, because only it can read the same buffer twice; the first is
- * here, because a snapshot without an answer is not a snapshot.
+ * enforced here to reject snapshots without an answer.
  *
- * Everything lands in one transaction committed under `synchronous = FULL`
+ * All changes use one transaction committed under `synchronous = FULL`
  * (`docs/00-plan.md` §6): the snapshot, the terminal status, the timestamps,
  * the thread's `updated_at`, and the removal of the live turns the snapshot
  * replaces. A crash between any two of those would show a finished run with
- * no answer, which is the one inconsistency this domain cannot repair.
+ * no answer and no live turns from which to recover it.
  */
 export function commit(db: SessionDatabase, userId: string, input: CommitInput): CommitResult {
   const turns = [...input.turns];
