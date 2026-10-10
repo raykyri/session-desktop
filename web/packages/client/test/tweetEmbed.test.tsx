@@ -88,9 +88,8 @@ test("the avatar, the inline header, and the counts lay out like a timeline", (t
 
 test("a link preview renders as its card", (t) => {
   const html = markup("1628832338187636740");
-  // The wide variant is a modifier on the card, so the space before it is
-  // load-bearing: without it the class is one unknown name and the card
-  // renders in the small layout.
+  // The space separates the card and wide-variant classes. Without it,
+  // neither class matches and the card renders in the small layout.
   t.regex(html, /journal-tweet-card is-large/);
   t.regex(html, /journal-tweet-card-domain">nextjs\.org</);
   t.regex(html, /journal-tweet-card-title">Next\.js 13\.2/);
