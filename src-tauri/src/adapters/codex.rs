@@ -879,7 +879,7 @@ impl CodexAdapter {
         }
         // Status/paused writes go straight to the store without touching this
         // local snapshot, so re-read the agent before attaching it — otherwise
-        // the event ships a stale copy and the surgical upsert below hides the
+        // the event contains a stale copy and the frontend update hides the
         // change from the UI.
         let agent = match agent {
             Some(agent) => state.agent(&agent.id)?.or(Some(agent)),
