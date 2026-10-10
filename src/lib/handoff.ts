@@ -5,12 +5,9 @@
 // those tools. Excludes tool results because they may contain file contents,
 // command output, and credentials that should not be copied to another agent.
 //
-// Length is spent, not rationed: the document budget is allocated rather than
-// applied as a blanket per-message cap, so nothing is truncated that the budget
-// could have carried whole. The order of priority is anchor turn, then the last
-// couple of turns, then older history — because the freshest exchanges hold the
-// live state of the work (what was just tried, what broke, what comes next)
-// while older ones have already been distilled into the files on disk.
+// Allocate the document budget before truncating individual messages.
+// Prioritize the anchor turn, then recent turns, then older history so the
+// receiving agent gets the current request and latest work state.
 
 import type {
   ActivityItem,
@@ -32,13 +29,12 @@ export interface HandoffContext {
 export interface HandoffLimits {
   /**
    * Cap on one older history message, applied only when the whole conversation
-   * does not fit — a relief valve, not a routine trim.
+   * does not fit.
    */
   messageCharacters: number;
   /**
    * The same cap for a message inside the last `recentTurns` turns of history.
-   * Much larger, because a stale summary of the last exchange is exactly what
-   * makes a receiving agent redo work or resume from the wrong state.
+   * Allows more detail so the receiving agent can resume from the latest state.
    */
   recentMessageCharacters: number;
   /** How many trailing history turns are treated as recent. */
@@ -262,9 +258,8 @@ export function buildHandoffDocument({
   sections.push(closing);
 
   const document = `${sections.join("\n\n")}\n`;
-  // Belt-and-braces clamp: the sections above are budgeted against the same
-  // total, but one unbounded field (a pathological cwd, a caller's very small
-  // total) must still not produce a clipboard payload no agent can accept.
+  // Enforce the total budget even when an unbounded field, such as cwd,
+  // exceeds it or the caller supplies a very small limit.
   return document.length > limits.totalCharacters
     ? `${document.slice(0, limits.totalCharacters)}\n[… handoff truncated …]\n`
     : document;
@@ -481,7 +476,7 @@ function conversationSection(
  * 3. Still over: drop whole messages from the middle outward, sparing the
  *    original task statement, the recent turns, and the trailing messages.
  * 4. Spend whatever the drops freed by restoring messages to full length,
- *    newest first, so the budget lands on the exchanges that matter most.
+ *    newest first, prioritizing recent exchanges within the budget.
  *
  * A conversation that is *all* protected and still over budget falls through to
  * a proportional squeeze, oldest first, down to `MIN_MESSAGE_CHARACTERS`.
