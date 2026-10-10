@@ -193,8 +193,8 @@ fn reset_state_requested() -> bool {
 /// The same refusal applies to a state file written by a *newer* qmux: this
 /// build cannot load it (there are no forward migrations), and moving it aside
 /// to start empty would destroy the newer install's session every time a stale
-/// copy of the app is launched. The fix is to run the newer app, so abort and
-/// say so rather than eat the session.
+/// copy of the app is launched. Abort and ask the user to run the newer app
+/// to preserve the saved session.
 ///
 /// A missing file (first run) or a readable, loadable file returns `Ok`. With
 /// `QMUX_RESET_STATE` set, an unreadable or newer-versioned file is renamed
