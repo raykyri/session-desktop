@@ -53,7 +53,7 @@ import {
 } from "../../lib/researchHistory";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import { researchBranchInfo } from "../../lib/researchBranches";
-import { documentHoldsMarkdown, documentSource, nodeAdapter, nodeAgent, nodeDelivery, nodeEditedAt, nodeMessage, nodePrompt, nodeRecap, nodeResponseSnapshotAt, nodeRun, nodeStatus, nodeType, passageAnchor, replyAnchorId } from "../../lib/researchNodeTypes";
+import { documentHoldsMarkdown, documentSource, nodeAdapter, nodeAgent, nodeDelivery, nodeEditedAt, nodeMessage, nodePrompt, nodeRecap, nodeResponseSnapshotAt, nodeRun, nodeStatus, nodeType, passageAnchor, postFollowUpSourceExcerpt, replyAnchorId } from "../../lib/researchNodeTypes";
 import {
   COLUMN_ROW_SELECTOR,
   columnAttributes,
@@ -2203,7 +2203,15 @@ function ResearchDocument({
   // it is in a text field. A column without rows uses the nearest one to its
   // left. Returns false when the column to cycle is the feed, which then
   // handles the request.
-  const threadHandleRef = useRef<ResearchNoteThreadHandle | null>(null);
+  // The thread column of each post level, by level index.
+  const threadHandlesRef = useRef(new Map<number, ResearchNoteThreadHandle>());
+  const registerThread = (level: number) => (handle: ResearchNoteThreadHandle | null) => {
+    if (handle) {
+      threadHandlesRef.current.set(level, handle);
+    } else {
+      threadHandlesRef.current.delete(level);
+    }
+  };
   const cycleRows = useCallback(
     (request: ResearchCycleRequest): boolean => {
       const workspace = workspaceRef.current;
@@ -2262,7 +2270,7 @@ function ResearchDocument({
         openBranch(level, followUpId);
       }
       if (request.keepFocus) {
-        threadHandleRef.current?.makeCurrent(next);
+        threadHandlesRef.current.get(level)?.makeCurrent(next);
       } else {
         next.focus({ preventScroll: true });
       }
@@ -4685,11 +4693,14 @@ function ResearchDocument({
     );
   };
 
-  /** The passage a branch was asked about, a muted block at the top of its
-   * messages column. */
-  const sourceBlock = (anchor: ResearchHighlightAnchor | null, parentId: string, branchId: string | null) => {
-    const resolves = branchId
-      ? branchRangeOffsetsRef.current.some((entry) => entry.id === branchId)
+  /** What a branch was asked about, a muted block at the top of its first
+   * column: the passage of the parent's answer, the whole answer, or, for a
+   * follow-up of a post, the post's text or the reply it was asked about. */
+  const sourceBlock = (anchor: ResearchHighlightAnchor | null, parentId: string, branch: ResearchNode | null) => {
+    const parent = nodeById.get(parentId);
+    const postExcerpt = parent && branch ? postFollowUpSourceExcerpt(parent, branch) : null;
+    const resolves = branch
+      ? branchRangeOffsetsRef.current.some((entry) => entry.id === branch.id)
       : Boolean(anchor);
     const parentLoaded = Boolean(contentByNode[parentId]);
     const quote = anchor ? quoteDisplayText(anchor.exact) : null;
@@ -4697,7 +4708,11 @@ function ResearchDocument({
       <div className="research-branch-source">
         <CornerDownRight size={13} aria-hidden="true" />
         <span className="research-branch-source-quote">
-          {quote && (resolves || !parentLoaded) ? (
+          {postExcerpt !== null ? (
+            <>
+              Follow-up of <i>“{postExcerpt}”</i>
+            </>
+          ) : quote && (resolves || !parentLoaded) ? (
             <i>“{quote}”</i>
           ) : quote ? (
             `The whole answer (was “${quote}”, before the answer was rerun)`
@@ -5002,13 +5017,13 @@ function ResearchDocument({
             key={columnKey(column)}
             className={`research-pair-note${currentLevel === level ? " is-current" : ""}`}
             {...columnAttributes(column)}
-            aria-label={`Post: ${treeTitleText}`}
+            aria-label={`Post: ${level === 0 ? treeTitleText : nodeLabel(note, "Post")}`}
           >
             {/* The note itself starts the column, so the header names the
                 column ("Post") rather than repeating the note's text. */}
             <ResearchPairHeader
               title="Post"
-              history={historyNav}
+              history={level === 0 ? historyNav : null}
               archived={archived}
               menu={
                 level === 0 && note.id === rootNodeId
@@ -5066,7 +5081,7 @@ function ResearchDocument({
                   requireCmdEnterToSend={requireCmdEnterToSend}
                   openNodeId={levels[level + 1]?.headId ?? null}
                   composerRef={registerComposer(note.id)}
-                  threadRef={threadHandleRef}
+                  threadRef={registerThread(level)}
                   onOpenFollowUp={(nodeId) => {
                     openBranch(level, nodeId);
                     requestFocus({ kind: "row", level }, "settle");
@@ -5104,7 +5119,7 @@ function ResearchDocument({
             />
             <div className="research-column-scroll" onScroll={onColumnScroll(column)}>
               <div className="research-column-content research-reading-surface">
-                {level > 0 && head?.parentNodeId ? sourceBlock(passageAnchor(head), head.parentNodeId, headId) : null}
+                {level > 0 && head?.parentNodeId ? sourceBlock(passageAnchor(head), head.parentNodeId, head) : null}
                 <ul className="research-msg-list">
                   {renderRows(chainIds, level)}
                   {renderQueue(headId)}
