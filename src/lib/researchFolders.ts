@@ -4,7 +4,7 @@ import type {
   ResearchFolderState,
   ResearchTreeSummary,
 } from "../types";
-import { isActiveResearchStatus } from "./researchThreads";
+import { isActiveResearchStatus } from "./researchChains";
 
 // Places a research tree can be filed in. Unfiled and Archive are derived
 // (no membership, and `archivedAt`); Drafts is a membership value with no

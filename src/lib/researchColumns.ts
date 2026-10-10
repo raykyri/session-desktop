@@ -17,7 +17,7 @@
 
 import { nodeType, passageAnchor } from "./researchNodeTypes";
 import { researchLevelPath } from "./researchBranchView";
-import { inlineChainFor } from "./researchThreads";
+import { inlineChainFor } from "./researchChains";
 import type { ResearchHighlightAnchor, ResearchNode } from "../types";
 
 export interface ResearchLevel {

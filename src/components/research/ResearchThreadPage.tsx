@@ -87,13 +87,13 @@ import {
   researchSurvivingAncestor,
 } from "../../lib/researchBranchView";
 import {
-  canContinueThread,
+  canContinueChain,
   canFollowUpFrom,
   canRetryResearchNode,
   inlineChainFor,
   isActiveResearchStatus,
-  threadComposerPlaceholder,
-} from "../../lib/researchThreads";
+  chainComposerPlaceholder,
+} from "../../lib/researchChains";
 import {
   RESEARCH_DOCUMENT_BYTE_LIMIT,
   RESEARCH_DOCUMENT_WORD_LIMIT,
@@ -3959,7 +3959,7 @@ function ResearchThreadPage({
         clearComposer();
         return;
       }
-      if (step === "stalled" || !canContinueThread(currentDetail.nodes, tail)) {
+      if (step === "stalled" || !canContinueChain(currentDetail.nodes, tail)) {
         return;
       }
       setSubmittingKey(headId);
@@ -4639,7 +4639,7 @@ function ResearchThreadPage({
     const awaitingCheckpoint = nodeStatus(tail) === "complete" && !canFollowUpFrom(tail);
     const canSend =
       !archived &&
-      (Boolean(editingId) || step === "wait" || queued || canContinueThread(nodes, tail));
+      (Boolean(editingId) || step === "wait" || queued || canContinueChain(nodes, tail));
     const note = editingId
       ? null
       : archived
@@ -4654,7 +4654,7 @@ function ResearchThreadPage({
     const busy = chain.some((node) => isActiveResearchStatus(nodeStatus(node)));
     const placeholder = editingId
       ? "Edit the question"
-      : threadComposerPlaceholder(head, chain.length, busy || queued);
+      : chainComposerPlaceholder(head, chain.length, busy || queued);
     const cancelEditing = () => {
       setEditingByHead((current) => withoutKeys(current, [headId]));
       setComposerText((current) => ({ ...current, [headId]: "" }));

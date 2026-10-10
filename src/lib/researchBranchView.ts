@@ -1,9 +1,9 @@
 // Level math for the column pairs. A level shows an inline chain (see
-// researchThreads); a branch is a non-inline child node, shown as the chain it
+// researchChains); a branch is a non-inline child node, shown as the chain it
 // heads. Level 0 is the root's chain; each later level is a branch asked from
 // the previous level's selected message.
 
-import { canContinueThread, canFollowUpFrom, inlineChainFor, isActiveResearchStatus } from "./researchThreads";
+import { canContinueChain, canFollowUpFrom, inlineChainFor, isActiveResearchStatus } from "./researchChains";
 import type { QueuedResearchFollowup } from "./researchNavigation";
 import type { ResearchNode } from "../types";
 import { nodeStatus } from "./researchNodeTypes";
@@ -145,7 +145,7 @@ export function researchQueueAction(
   const chain = inlineChainFor(nodes, headId);
   const tailId = chain[chain.length - 1];
   const tail = nodes.find((node) => node.id === tailId) ?? null;
-  if (!tail || researchQueueStep(tail) !== "send" || !canContinueThread(nodes, tail)) {
+  if (!tail || researchQueueStep(tail) !== "send" || !canContinueChain(nodes, tail)) {
     return { kind: "wait" };
   }
   return { kind: "send", item: queue[0], tailId: tail.id };

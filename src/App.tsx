@@ -245,7 +245,7 @@ import {
   patchRecentActivityStarred,
   upsertRecentActivityResearchNode,
 } from "./lib/activity";
-import { isActiveResearchStatus } from "./lib/researchThreads";
+import { isActiveResearchStatus } from "./lib/researchChains";
 import {
   groupsForScope,
   panesForScope,

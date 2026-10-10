@@ -7,7 +7,7 @@ import {
   postFollowUpSourceExcerpt,
   recapEligible,
 } from "../src/lib/researchNodeTypes";
-import { canFollowUpFrom } from "../src/lib/researchThreads";
+import { canFollowUpFrom } from "../src/lib/researchChains";
 import type { ResearchMessageAttachment, ResearchNode } from "../src/types";
 import { researchNode, type NodeFixture } from "./researchNodeFixture";
 import { recentResearchQueryFromNode } from "../src/lib/activity";

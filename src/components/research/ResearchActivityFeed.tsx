@@ -39,7 +39,7 @@ import {
   researchTreePlace,
   type ResearchFeedChild,
 } from "../../lib/researchFolders";
-import { isActiveResearchStatus } from "../../lib/researchThreads";
+import { isActiveResearchStatus } from "../../lib/researchChains";
 import {
   feedCycleStep,
   type FeedCycleEntry,
