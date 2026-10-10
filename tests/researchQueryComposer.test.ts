@@ -10,6 +10,7 @@ register("./svgStubLoader.mjs", import.meta.url);
 const {
   default: ResearchQueryComposer,
   askModeShowsAiControls,
+  homeComposerDraftToStore,
   parseResearchModelChoice,
   researchEffortOptionsFor,
   researchModelChoiceValue,
@@ -222,4 +223,19 @@ test("a LauncherSelect opened from another control renders no trigger of its own
     createElement(LauncherSelect, { ...props, anchorRef: { current: null }, open: false, onOpenChange: () => {} }),
   );
   assert.equal(anchored, "");
+});
+
+test("the Home ask box keeps a non-default agent, model, or effort after its text is cleared", () => {
+  const fresh = { prompt: "", adapter: "claude", modelChoice: null, customModel: "", effortChoice: "" };
+  assert.equal(homeComposerDraftToStore(fresh, "claude"), null);
+  // A send clears only the text; each kind of choice keeps the draft stored.
+  const codex = { ...fresh, adapter: "codex" };
+  assert.deepEqual(homeComposerDraftToStore(codex, "claude"), codex);
+  const model = { ...fresh, modelChoice: "opus" };
+  assert.deepEqual(homeComposerDraftToStore(model, "claude"), model);
+  const effort = { ...fresh, effortChoice: "high" };
+  assert.deepEqual(homeComposerDraftToStore(effort, "claude"), effort);
+  // Drafts stored before effort was kept have no effortChoice.
+  const { effortChoice: _omitted, ...older } = fresh;
+  assert.equal(homeComposerDraftToStore(older, "claude"), null);
 });
