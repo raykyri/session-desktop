@@ -109,9 +109,8 @@ export const useNavigationStore = create<NavigationState>()(
         set((state) => ({
           scrollByNode: { ...state.scrollByNode, [nodeId]: { top, updatedAt: now } },
         })),
-      // Offsets expire: a position captured against content that has since
-      // streamed further lands in the wrong place, and after a quarter hour the
-      // reader is starting over anyway.
+      // Expire saved offsets after fifteen minutes because streamed content
+      // may have changed the position of the text.
       restoreScroll: (nodeId, now = Date.now()) => {
         const saved = get().scrollByNode[nodeId];
         if (!saved) return null;

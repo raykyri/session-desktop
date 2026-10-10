@@ -83,9 +83,8 @@ test.serial("toggleAppearance flips between the two appearances", (t) => {
   t.is(useSettingsStore.getState().settings.appearance, "dark");
 });
 
-// The default record lives in `shared`, which cannot import the client's font
-// list and so repeats the id as a literal. This is the seam where that would
-// drift unnoticed.
+// The default record in `shared` cannot import the client's font list, so it
+// repeats the id as a literal. Check that both definitions agree.
 test("the shared default body font id is one the client actually offers", (t) => {
   t.is(DEFAULT_USER_SETTINGS.bodyFontId, DEFAULT_BODY_FONT_ID);
   t.truthy(
