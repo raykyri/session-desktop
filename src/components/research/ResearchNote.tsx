@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
-import { ArrowUp, Check, ChevronDown, ExternalLink, LoaderCircle, X } from "lucide-react";
+import { useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import type { KeyboardEvent, LiHTMLAttributes, MouseEvent, ReactNode, Ref } from "react";
+import { ArrowRight, Check, ChevronDown, ExternalLink, LoaderCircle, X } from "lucide-react";
 import type {
   NoteReply,
   RecentResearchQuery,
@@ -10,13 +10,14 @@ import { openExternalUrl } from "../../lib/api";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 import { growComposerTextarea } from "../../lib/composerTextarea";
 import { noteReplyAuthorName } from "../../lib/activity";
-import { formatRelativeTime } from "../../lib/transcriptSessions";
+import { shortWhen } from "../../lib/shortTime";
 import {
   ResearchMarkdown,
   ResearchMessageBody,
   type ResearchProseVariant,
 } from "./ResearchMessage";
 import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
+import type { ResearchComposerHandle } from "./ResearchConversationComposer";
 
 /** Handlers shared by the Home note card and the note page. Each rejects
  * with the backend's message so the control that started it can show it. */
@@ -143,7 +144,8 @@ function ReplyAvatar({ reply }: { reply: NoteReply }) {
 }
 
 /** One reply on the avatar spine, followed one level down by the author's
- * responses to it. */
+ * responses to it. `rowProps` go on the item itself (the thread column makes
+ * a top-level reply a keyboard row). */
 export function NoteReplyItem({
   nodeId,
   reply,
@@ -151,6 +153,7 @@ export function NoteReplyItem({
   archived,
   actions,
   onAskAbout,
+  rowProps,
 }: {
   nodeId: string;
   reply: NoteReply;
@@ -158,6 +161,7 @@ export function NoteReplyItem({
   archived: boolean;
   actions: NoteActions;
   onAskAbout?: (target: NoteReplyTarget) => void;
+  rowProps?: LiHTMLAttributes<HTMLLIElement> & { [attribute: `data-${string}`]: string | undefined };
 }) {
   const [responding, setResponding] = useState(false);
   const [draft, setDraft] = useState("");
@@ -179,7 +183,7 @@ export function NoteReplyItem({
       .finally(() => setSubmitting(false));
   };
   return (
-    <li className="note-thread-item" data-type={member ? "reply" : "self"}>
+    <li className="note-thread-item" data-type={member ? "reply" : "self"} {...rowProps}>
       <div className="note-thread-gutter">
         <ReplyAvatar reply={reply} />
       </div>
@@ -192,7 +196,7 @@ export function NoteReplyItem({
             dateTime={new Date(reply.createdAt).toISOString()}
             title={new Date(reply.createdAt).toLocaleString()}
           >
-            {formatRelativeTime(reply.createdAt)}
+            {shortWhen(reply.createdAt)}
           </time>
         </div>
         <ResearchMarkdown className="note-reply-text" text={reply.body} variant="compact" />
@@ -347,8 +351,9 @@ export function NoteFollowUpStatus({
 
 type NoteFollowUpMode = "network" | "ai";
 
-/** Follow-up composer at the end of a note page: the column's follow-up
- * composer (research-composer), with a destination control before Send. On
+/** Follow-up composer at the top of a note's thread column: the column's
+ * follow-up composer (research-composer), with a destination control before
+ * Send. With `fullWidth`, the text has its own row above the controls. On
  * a network note it posts to the network by default, with Ask (the note's AI
  * model) in the destination menu. A saved link, or a follow-up about a
  * reply, can only ask, so it has no destination control. A reply target
@@ -360,7 +365,9 @@ export function NoteFollowUpField({
   target,
   placeholder = "Ask a follow-up",
   autoFocus = false,
+  fullWidth = false,
   requireCmdEnter,
+  composerRef,
   onClearTarget,
   onSubmit,
 }: {
@@ -369,7 +376,10 @@ export function NoteFollowUpField({
   target: NoteReplyTarget | null;
   placeholder?: string;
   autoFocus?: boolean;
+  fullWidth?: boolean;
   requireCmdEnter: boolean;
+  /** Lets the document focus the field (⌘J). */
+  composerRef?: Ref<ResearchComposerHandle>;
   onClearTarget: () => void;
   onSubmit: (prompt: string, network: boolean) => Promise<void>;
 }) {
@@ -379,6 +389,12 @@ export function NoteFollowUpField({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  useImperativeHandle(
+    composerRef,
+    () => ({ focus: () => textareaRef.current?.focus(), element: () => wrapRef.current }),
+    [],
+  );
   useLayoutEffect(() => {
     if (textareaRef.current) {
       growComposerTextarea(textareaRef.current);
@@ -415,7 +431,11 @@ export function NoteFollowUpField({
     { mode: "ai", label: askLabel },
   ];
   return (
-    <div className="research-composer-wrap note-composer" onClick={stopForInteractive}>
+    <div
+      ref={wrapRef}
+      className={`research-composer-wrap note-composer${fullWidth ? " is-full-width" : ""}`}
+      onClick={stopForInteractive}
+    >
       {target ? (
         <div className="research-composer-note">
           <button
@@ -480,7 +500,7 @@ export function NoteFollowUpField({
           {submitting ? (
             <LoaderCircle className="research-spinner" size={15} aria-hidden="true" />
           ) : (
-            <ArrowUp size={15} aria-hidden="true" />
+            <ArrowRight size={15} aria-hidden="true" />
           )}
           <ComposerSubmitShortcutGlyph
             requireCmdEnter={requireCmdEnter}

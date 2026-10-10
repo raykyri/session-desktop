@@ -6,10 +6,12 @@ import { columnAttributes } from "../../lib/researchColumns";
 /** The header bar of one level's pair. It spans the messages and answer
  * columns: the conversation's title (or "Branch · N messages"), clamped to
  * four lines, and "+ Ask" at the right, which jumps to the level's ask box.
- * The bar is a window drag region; its buttons are not. */
+ * A post's two columns have a header each ("Post", "Thread · N"). The bar is
+ * a window drag region; its buttons are not. */
 export function ResearchPairHeader({
   title,
   branch = null,
+  count = null,
   history,
   imported = false,
   archived = false,
@@ -19,6 +21,9 @@ export function ResearchPairHeader({
   /** A branch: its number of messages ("Branch · 2 messages"), or "new" for
    * a branch not yet sent ("New branch"). */
   branch?: number | "new" | null;
+  /** A count after the title, set at the branch header's size
+   * ("Thread · 3"); 0 shows the title alone. */
+  count?: number | null;
   /** Back and forward, in the root conversation's header. */
   history?: ResearchHistoryNavProps | null;
   /** A point-in-time copy of a terminal conversation. */
@@ -27,7 +32,7 @@ export function ResearchPairHeader({
   onAsk?: () => void;
 }) {
   return (
-    <header className={`research-column-header${branch !== null ? " is-branch" : ""}`}>
+    <header className={`research-column-header${branch !== null || count !== null ? " is-branch" : ""}`}>
       <div className="research-column-bar" data-tauri-drag-region data-research-header-bar>
         {history ? <ResearchHistoryNav {...history} /> : null}
         <h2 className="research-column-title" tabIndex={-1} title={title}>
@@ -43,7 +48,10 @@ export function ResearchPairHeader({
               ) : null}
             </>
           ) : (
-            title
+            <>
+              {title}
+              {count ? <span className="research-column-count"> · {count}</span> : null}
+            </>
           )}
         </h2>
         {imported ? (

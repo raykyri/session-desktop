@@ -1,10 +1,9 @@
-// Pure helpers for rendering exported-conversation research nodes. An export
-// collapses tool activity into marker turns (a Raw block whose value is
-// `{ type: "sessionToolActivity", toolCalls: N }`, written by
-// src-tauri/src/research.rs); buildTimelineItems routes assistant Raw blocks
-// into thinking activities, so the viewer needs to recognize those markers
-// inside activity items and render them as quiet "N tool calls" chips instead
-// of thinking disclosures.
+// Pure helpers for rendering exported-conversation research nodes. The
+// terminal export, since removed, collapsed tool activity into marker turns (a
+// Raw block whose value is `{ type: "sessionToolActivity", toolCalls: N }`);
+// existing conversation snapshots and detached archives still carry them.
+// buildTimelineItems classifies assistant Raw blocks as thinking activities.
+// The viewer detects these markers and displays an "N tool calls" chip.
 
 import type { ActivityItem } from "./turnTimeline";
 

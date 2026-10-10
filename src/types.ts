@@ -375,11 +375,12 @@ export type ResearchNodeStatus =
   | "failed"
   | "cancelled";
 
-/** What produced a node's content: an agent run, user-authored markdown, a
- * terminal conversation exported as a severed point-in-time snapshot, or a
- * note (a user's question to their network, or a saved link) with no
- * response of its own. The backend omits the field for runs, so absence
- * means "run". */
+/** What produced a node's content: an agent run; a Markdown document (written
+ * in the document composer, or an imported report, which has origin
+ * "imported" and keeps the question it answers as its prompt); a terminal
+ * conversation exported as an independent point-in-time snapshot; or a note (a
+ * user's question to their network, or a saved link) with no response of its
+ * own. The backend omits the field for runs, so absence means "run". */
 export type ResearchNodeKind = "run" | "document" | "conversation" | "note";
 
 export type NoteReplyAuthor =

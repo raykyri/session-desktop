@@ -1,6 +1,7 @@
 import { createContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from "react";
 import {
+  COLUMN_ROW_SELECTOR,
   columnAttributes,
   columnIdOf,
   columnSelector,
@@ -337,13 +338,13 @@ export default function ResearchColumns({
       focusOpenedThread: (deepest) => {
         const started = performance.now();
         const attempt = () => {
-          // The messages-side columns (a level's messages, post or pending
+          // The messages-side columns (a level's messages, thread or pending
           // column, or a draft), left to right.
           const columns = [...(row?.querySelectorAll<HTMLElement>(columnSelector()) ?? [])].filter((element) =>
             isMessagesColumnId(element.dataset.researchColumn),
           );
           const column = deepest ? columns[columns.length - 1] : columns[0];
-          const target = column?.querySelector<HTMLElement>(".research-msg-row.is-selected .research-msg-hit");
+          const target = column?.querySelector<HTMLElement>(COLUMN_ROW_SELECTOR);
           if (target && column) {
             target.focus({ preventScroll: true });
             // Scroll the focused column into view.

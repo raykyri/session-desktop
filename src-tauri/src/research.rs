@@ -365,8 +365,10 @@ impl ResearchNodeStatus {
 }
 
 /// What produced a node's content. `Run` nodes carry an agent run (adapter,
-/// session, pane bindings); `Document` nodes carry user-authored markdown that
-/// rides the same response-snapshot pipeline as run responses; `Conversation`
+/// session, pane bindings); `Document` nodes store Markdown through the
+/// same response-snapshot pipeline as run responses, either written in the
+/// document composer or imported from a report file (origin `Imported`, with
+/// the question the report answers as the prompt); `Conversation`
 /// nodes carry a terminal agent conversation exported as a point-in-time
 /// snapshot, sanitized and severed from its source session; `Note` nodes carry
 /// a user-authored question or saved link in `prompt`, with no response of

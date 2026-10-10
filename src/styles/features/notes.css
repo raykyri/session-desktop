@@ -1,6 +1,6 @@
 /* Notes: Ask-network questions and saved links, on Home posts and on a note's
-   page. A note's replies and follow-ups share one Activity list: an avatar
-   (or glyph) gutter joined by a spine. */
+   page. Replies and follow-ups are items with an avatar (or glyph) gutter
+   joined by a spine; a note page lists them as rows in its thread column. */
 
 /* — Outline — */
 
@@ -174,8 +174,7 @@
 }
 
 .note-thread-spinner,
-.note-field-spinner,
-.note-segment-spinner {
+.note-field-spinner {
   flex: none;
   color: var(--text-muted);
   animation: spinner-spin 0.9s linear infinite;
@@ -270,9 +269,10 @@
 
 /* — Note page — */
 
-/* A note page is the body of a column, laid out as one turn (research.css):
-   the note in the question column, its delivery and activity in the answer
-   column, then the column's follow-up composer at full width. */
+/* A note page is two columns. The post column holds the note laid out as one
+   turn (research.css): the note where a question sits, its delivery line
+   where an answer sits. The thread column holds the follow-up composer and
+   the replies and follow-ups. */
 .note-document-parent {
   display: block;
   margin-bottom: 6px;
@@ -298,36 +298,6 @@
   color: var(--text-muted);
   font-size: var(--research-body-font-size);
   line-height: var(--research-body-line-height);
-}
-
-.note-document-group {
-  display: flex;
-  flex-direction: column;
-  margin-top: 22px;
-}
-
-.note-document-group-label {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin: 0 0 14px;
-  color: var(--text-secondary);
-  font-size: var(--research-meta-font-size);
-  font-weight: 500;
-}
-
-.note-document-group-count {
-  color: var(--text-subtle);
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-}
-
-.note-document-group > .note-thread-list > .note-thread-item {
-  padding-bottom: 22px;
-}
-
-.note-document-group > .note-thread-list > .note-thread-item:last-child {
-  padding-bottom: 0;
 }
 
 /* The follow-up destination control ("Post ⌄" or "Ask ⌄") precedes Send
@@ -357,47 +327,126 @@
   margin-top: 8px;
 }
 
-.note-segment-question {
-  width: fit-content;
-  max-width: 100%;
-  margin-top: 1px;
-  color: var(--text-strong);
-  font-size: var(--research-body-font-size);
-  line-height: 1.45;
+/* — Thread column — */
+
+/* Place the follow-up composer before the thread rows. The text field uses
+   the full width; the destination control and Send align right on the row below. */
+.note-thread > .note-composer {
+  padding: 12px 12px 14px;
+  border-bottom: 1px solid var(--surface-divider);
+}
+
+.note-composer.is-full-width .note-composer-destination {
+  margin-left: auto;
+}
+
+.note-composer.is-full-width .note-composer-destination + .research-composer-send {
+  margin-left: 0;
+}
+
+.note-thread-empty {
+  margin: 14px 20px;
+  color: var(--text-muted);
+  font-size: var(--research-meta-font-size);
+  line-height: var(--research-meta-line-height);
+}
+
+/* Rows are bubbles, as message rows are (research.css): no fill at rest, the
+   open follow-up filled, a faint accent ring on the row the keys act on.
+   An item's avatar or glyph sits on its name line and its text takes the
+   row's full width; responses indent under their reply. */
+.note-thread-rows {
+  --note-gutter: 16px;
+  gap: 2px;
+  padding: 6px 0;
+}
+
+.note-thread-rows .note-thread-item {
+  grid-template-columns: var(--note-gutter) minmax(0, 1fr);
+  column-gap: 6px;
+}
+
+.note-thread-rows .note-thread-item::before {
+  content: none;
+}
+
+.note-thread-rows .note-thread-body {
+  display: contents;
+}
+
+.note-thread-rows .note-thread-body > :not(.note-reply-head) {
+  grid-column: 1 / -1;
+}
+
+.note-thread-rows .note-thread-list.is-nested {
+  margin-left: 14px;
+}
+
+.note-thread-rows > .note-thread-item,
+.note-thread-rows > .note-thread-item:last-child {
+  margin: 0 8px;
+  padding: 10px 10px 10px 12px;
+  border-radius: 10px;
+}
+
+.note-thread-rows > .note-thread-item:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
+}
+
+.note-thread-follow-up:hover {
+  background: color-mix(in srgb, var(--research-card-selected-bg) 55%, transparent);
+}
+
+.note-thread-follow-up.is-selected {
+  background: var(--research-card-selected-bg);
+}
+
+.note-thread-follow-up:has(> .note-thread-hit:focus) {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
+}
+
+/* One button under a follow-up row's content opens the follow-up; Retry
+   stays its own target above it. */
+.note-thread-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
   cursor: pointer;
 }
 
-.note-segment-question:hover {
-  text-decoration: underline;
-  text-decoration-color: var(--text-subtle);
-  text-underline-offset: 3px;
+.note-thread-hit:focus,
+.note-thread-hit:focus-visible {
+  outline: none;
 }
 
-.note-segment-question:focus-visible {
-  outline: 2px solid var(--accent-color);
-  outline-offset: 2px;
-  border-radius: 3px;
+.note-thread-follow-up > .note-thread-gutter,
+.note-thread-follow-up > .note-thread-body > * {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
 }
 
-/* An AI follow-up previews five lines of its answer; Open answer reads the
-   rest on the run's own page. */
-.note-segment-answer {
-  display: -webkit-box;
-  overflow: hidden;
-  margin-top: 8px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 5;
+.note-thread-follow-up > .note-thread-body button {
+  pointer-events: auto;
 }
 
-/* The preview reads one step below the question it answers. */
-.note-segment-answer.research-prose--compact {
-  color: var(--text-secondary);
+/* Use the same font size for questions and replies. */
+.note-thread-question {
+  margin-top: 1px;
+  color: var(--text-primary);
+  font-size: var(--research-compact-font-size);
+  line-height: var(--research-compact-line-height);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
-.note-segment-open {
-  margin-top: 4px;
-}
-
-.note-segment-spinner {
-  margin-top: 10px;
+.note-thread-follow-up.is-selected .note-thread-question {
+  color: var(--text-heading);
 }
