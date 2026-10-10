@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { MutableRefObject } from "react";
-import { ArrowUp, LoaderCircle, Users } from "lucide-react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, MutableRefObject, RefObject } from "react";
+import { ArrowRight, ChevronDown, LoaderCircle, Users } from "lucide-react";
 import type { AgentAdapterMetadata } from "../../types";
-import { LauncherSelect, type LauncherSelectOption } from "../LauncherSelect";
+import { LauncherSelect, OptionIcon, type LauncherSelectOption } from "../LauncherSelect";
 import { isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 import { ADAPTER_ICON_BY_ID, adapterIconClassName } from "../../lib/adapterIcons";
 import { CLAUDE_ADAPTER_ID, CLAUDE_EFFORT_OPTIONS } from "../../adapters/claude";
@@ -64,14 +64,123 @@ export function researchEffortOptionsFor(
 
 /** Who a question goes to: an agent ("ai"), or the network, which posts a
  * note to Home (network delivery itself is not built yet); a body that is a
- * single URL is saved as a link or post instead of asked. The recipient is
- * the last choice of the model picker. */
+ * single URL is saved as a link or post instead of asked. The Ask/Post
+ * switcher sets it. */
 type AskMode = "network" | "ai";
-
-const NETWORK_CHOICE = "network";
 
 export function askModeShowsAiControls(askMode: AskMode) {
   return askMode === "ai";
+}
+
+/** The mode a key on the Ask/Post switcher selects, or null for any other
+ * key: ← and → move to the other segment, Home to Ask, End to Post. */
+export function askSwitchKeyTarget(key: string, current: AskMode): AskMode | null {
+  switch (key) {
+    case "ArrowLeft":
+    case "ArrowRight":
+      return current === "ai" ? "network" : "ai";
+    case "Home":
+      return "ai";
+    case "End":
+      return "network";
+    default:
+      return null;
+  }
+}
+
+interface AskPostSwitchProps {
+  askMode: AskMode;
+  /** The selected agent's icon. */
+  askIcon: LauncherSelectOption;
+  /** "Ask with {agent} {model}": the Ask segment's name and tooltip. */
+  askLabel: string;
+  menuOpen: boolean;
+  askRef: RefObject<HTMLButtonElement | null>;
+  onModeChange: (mode: AskMode) => void;
+  onMenuOpenChange: (open: boolean) => void;
+}
+
+/** Ask and Post as two icon segments in a radiogroup with a roving tabindex.
+ * A press on the selected Ask segment (or Enter, Space or ↓ on it) opens the
+ * model menu; from Post, Ask only switches back, keeping the last model. A
+ * radio cannot carry aria-haspopup, so the menu is announced through a
+ * description instead. */
+export function AskPostSwitch({
+  askMode,
+  askIcon,
+  askLabel,
+  menuOpen,
+  askRef,
+  onModeChange,
+  onMenuOpenChange,
+}: AskPostSwitchProps) {
+  const hintId = useId();
+  const postRef = useRef<HTMLButtonElement | null>(null);
+  const ask = askMode === "ai";
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, segment: AskMode) => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const target = askSwitchKeyTarget(event.key, segment);
+    if (target) {
+      event.preventDefault();
+      onModeChange(target);
+      (target === "ai" ? askRef : postRef).current?.focus();
+      return;
+    }
+    if (segment === "ai" && ask && event.key === "ArrowDown") {
+      event.preventDefault();
+      onMenuOpenChange(true);
+    }
+  };
+
+  return (
+    <div className="new-research-switch" role="radiogroup" aria-label="Send to">
+      <button
+        ref={askRef}
+        type="button"
+        role="radio"
+        aria-checked={ask}
+        tabIndex={ask ? 0 : -1}
+        className="new-research-switch-option"
+        aria-label={askLabel}
+        aria-describedby={ask ? hintId : undefined}
+        title={askLabel}
+        onClick={(event) => {
+          // WebKit does not focus a clicked button; focus it so the arrow
+          // keys work from here and the menu has a place to return focus to.
+          event.currentTarget.focus();
+          if (ask) onMenuOpenChange(!menuOpen);
+          else onModeChange("ai");
+        }}
+        onKeyDown={(event) => onKeyDown(event, "ai")}
+      >
+        <OptionIcon option={askIcon} />
+        {ask ? (
+          <ChevronDown size={9} className="new-research-switch-chevron" aria-hidden="true" />
+        ) : null}
+      </button>
+      <button
+        ref={postRef}
+        type="button"
+        role="radio"
+        aria-checked={!ask}
+        tabIndex={ask ? -1 : 0}
+        className="new-research-switch-option"
+        aria-label="Post to network"
+        title="Post to network"
+        onClick={(event) => {
+          event.currentTarget.focus();
+          onModeChange("network");
+        }}
+        onKeyDown={(event) => onKeyDown(event, "network")}
+      >
+        <Users size={14} aria-hidden="true" />
+      </button>
+      <span id={hintId} hidden>
+        Press Enter to choose a model
+      </span>
+    </div>
+  );
 }
 
 /* The Ask picker lists every agent's models in one menu, so each option's
@@ -154,9 +263,8 @@ export interface ResearchLaunchChoice {
 }
 
 /** The feed's composer: a one-line "Ask a question" field that grows when it
- * has focus or text and then shows the recipient and model controls, Save
- * draft, and the primary button. The ↵ glyph shows only while Enter (or ⌘↵)
- * would submit. */
+ * has focus or text and then shows a row under it with the Ask/Post switcher
+ * and the send button, and Save draft under the box once there is text. */
 export default function ResearchQueryComposer({
   adapters: allAdapters,
   requireCmdEnterToSend,
@@ -374,18 +482,29 @@ export default function ResearchQueryComposer({
         : "Start research";
   const sendShortcut = requireCmdEnterToSend ? "⌘↵" : "↵";
 
-  const modelOptions = useMemo(
-    () => [
-      ...researchModelOptions(adapters),
-      {
-        value: NETWORK_CHOICE,
-        label: "Post to network",
-        icon: <Users size={14} />,
-        dividerBefore: true,
-      },
-    ],
-    [adapters],
+  const modelOptions = useMemo(() => researchModelOptions(adapters), [adapters]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const askSegmentRef = useRef<HTMLButtonElement | null>(null);
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  // The model menu belongs to the expanded row in Ask; it never reopens by
+  // itself after a collapse or a switch to Post.
+  useEffect(() => {
+    if (!expanded || askMode !== "ai") setMenuOpen(false);
+  }, [askMode, expanded]);
+  const askIcon = useMemo(
+    () => ({
+      value: adapter,
+      label: selectedAdapter?.label ?? adapter,
+      iconSrc: ADAPTER_ICON_BY_ID[adapter],
+      iconClassName: adapterIconClassName(adapter),
+    }),
+    [adapter, selectedAdapter?.label],
   );
+  const askModelName =
+    selectedModel === CUSTOM_MODEL && customModel.trim()
+      ? customModel.trim()
+      : formatLauncherModelLabel(adapter, selectedModel);
+  const askLabel = `Ask with ${selectedAdapter?.label ?? "an agent"} ${askModelName}`;
 
   function cycleAdapter() {
     const readyAdapters = adapters.filter(adapterCanLaunchResearch);
@@ -505,7 +624,7 @@ export default function ResearchQueryComposer({
       }}
     >
       <form
-        className="new-research-launcher"
+        className={`new-research-launcher${menuOpen ? " is-menu-open" : ""}`}
         aria-label="New research"
         onKeyDown={(event) => {
           // Plain Tab moves focus; ⌃Tab cycles the model and ⌃⇧Tab the agent.
@@ -530,57 +649,48 @@ export default function ResearchQueryComposer({
           event.preventDefault();
           void submit();
         }}
+        onMouseDown={(event) => {
+          // A press on the box's padding or the row's empty space puts the
+          // caret in the field, as in any text box.
+          if (event.target === event.currentTarget || event.target === rowRef.current) {
+            event.preventDefault();
+            promptRef.current?.focus();
+          }
+        }}
       >
-        <div className="new-research-main">
-          <textarea
-            ref={promptRef}
-            className="new-research-input"
-            rows={1}
-            value={prompt}
-            placeholder={
-              askMode === "network" ? "Ask your network, or paste a link to save" : placeholder
+        <textarea
+          ref={promptRef}
+          className="new-research-input"
+          rows={1}
+          value={prompt}
+          placeholder={
+            askMode === "network" ? "Ask your network, or paste a link to save" : placeholder
+          }
+          aria-label="New question"
+          onChange={(event) => {
+            sessionDraftTouchedRef.current = true;
+            setPrompt(event.currentTarget.value);
+            setError(null);
+          }}
+          onKeyDown={(event) => {
+            // Esc leaves the field, which collapses again when it is empty.
+            if (event.key === "Escape" && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              event.stopPropagation();
+              event.currentTarget.blur();
+              return;
             }
-            aria-label="New question"
-            onChange={(event) => {
-              sessionDraftTouchedRef.current = true;
-              setPrompt(event.currentTarget.value);
-              setError(null);
-            }}
-            onKeyDown={(event) => {
-              // Esc leaves the field, which collapses again when it is empty.
-              if (event.key === "Escape" && !event.nativeEvent.isComposing) {
-                event.preventDefault();
-                event.stopPropagation();
-                event.currentTarget.blur();
-                return;
-              }
-              // Enter in an empty field does nothing; Shift+Enter adds a line.
-              if (event.key === "Enter" && !event.shiftKey && !prompt.trim()) {
-                event.preventDefault();
-                return;
-              }
-              if (isComposerSubmitShortcut(event, requireCmdEnterToSend)) {
-                event.preventDefault();
-                void submit();
-              }
-            }}
-          />
-          {/* The send button, as in a conversation's ask box: an arrow with no
-              label or shortcut text; the tooltip names the action. */}
-          <button
-            type="submit"
-            className="control-button research-composer-send"
-            disabled={!canSubmit}
-            aria-label={submitLabel}
-            title={`${submitLabel} (${sendShortcut})`}
-          >
-            {submitting ? (
-              <LoaderCircle className="research-spinner" size={15} aria-hidden="true" />
-            ) : (
-              <ArrowUp size={15} aria-hidden="true" />
-            )}
-          </button>
-        </div>
+            // Enter in an empty field does nothing; Shift+Enter adds a line.
+            if (event.key === "Enter" && !event.shiftKey && !prompt.trim()) {
+              event.preventDefault();
+              return;
+            }
+            if (isComposerSubmitShortcut(event, requireCmdEnterToSend)) {
+              event.preventDefault();
+              void submit();
+            }
+          }}
+        />
         {expanded && askModeShowsAiControls(askMode) && selectedModel === CUSTOM_MODEL ? (
           <input
             className="new-research-custom-model"
@@ -595,45 +705,62 @@ export default function ResearchQueryComposer({
           />
         ) : null}
         {expanded ? (
-          <div className="new-research-row">
-            {/* One picker for the recipient, agent, and model; the trigger shows
-                only the agent's icon and names the model in its tooltip. The
-                row stays one line at every feed width. */}
-            <div className="new-research-model-controls">
-              <LauncherSelect
-                iconOnly
-                value={
-                  askMode === "network"
-                    ? NETWORK_CHOICE
-                    : researchModelChoiceValue(adapter, selectedModel)
-                }
-                options={modelOptions}
-                ariaLabel="Recipient and model"
-                onChange={(choice) => {
-                  sessionDraftTouchedRef.current = true;
-                  setError(null);
-                  if (choice === NETWORK_CHOICE) {
-                    setAskMode("network");
-                    return;
-                  }
-                  const next = parseResearchModelChoice(choice);
-                  setAskMode("ai");
-                  setAdapter(next.adapter);
-                  setModelChoice(next.preset || null);
-                }}
-                submenu={
-                  effortOptions && askModeShowsAiControls(askMode)
-                    ? {
-                        label: "Effort",
-                        ariaLabel: "Effort",
-                        value: selectedEffort,
-                        options: effortOptions,
-                        onChange: setEffortChoice,
-                      }
-                    : undefined
-                }
-              />
-            </div>
+          <div ref={rowRef} className="new-research-row">
+            {/* Ask (the agent's icon) and Post side by side; the selected Ask
+                segment opens the model menu. Send ends the row. */}
+            <AskPostSwitch
+              askMode={askMode}
+              askIcon={askIcon}
+              askLabel={askLabel}
+              menuOpen={menuOpen}
+              askRef={askSegmentRef}
+              onModeChange={(mode) => {
+                setAskMode(mode);
+                setError(null);
+              }}
+              onMenuOpenChange={setMenuOpen}
+            />
+            <LauncherSelect
+              anchorRef={askSegmentRef}
+              open={menuOpen && askModeShowsAiControls(askMode)}
+              onOpenChange={setMenuOpen}
+              value={researchModelChoiceValue(adapter, selectedModel)}
+              options={modelOptions}
+              ariaLabel="Model"
+              onChange={(choice) => {
+                sessionDraftTouchedRef.current = true;
+                setError(null);
+                const next = parseResearchModelChoice(choice);
+                setAdapter(next.adapter);
+                setModelChoice(next.preset || null);
+              }}
+              submenu={
+                effortOptions
+                  ? {
+                      label: "Effort",
+                      ariaLabel: "Effort",
+                      value: selectedEffort,
+                      options: effortOptions,
+                      onChange: setEffortChoice,
+                    }
+                  : undefined
+              }
+            />
+            {/* The send button, as in a conversation's ask box: an arrow with
+                no label or shortcut text; the tooltip names the action. */}
+            <button
+              type="submit"
+              className="control-button research-composer-send"
+              disabled={!canSubmit}
+              aria-label={submitLabel}
+              title={`${submitLabel} (${sendShortcut})`}
+            >
+              {submitting ? (
+                <LoaderCircle className="research-spinner" size={15} aria-hidden="true" />
+              ) : (
+                <ArrowRight size={15} aria-hidden="true" />
+              )}
+            </button>
           </div>
         ) : null}
         {setupNeeded || error ? (
