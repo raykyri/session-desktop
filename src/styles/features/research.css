@@ -170,10 +170,10 @@
   color: var(--text-heading);
 }
 
-/* Folder scope switcher: pinned beneath the research list, scoping the sidebar
-   to one Research workspace. Folder management actions live at the bottom of
-   its menu (a ResearchMenu) and always apply to the currently scoped folder. */
-.research-folder-switcher {
+/* Workspace switcher: pinned beneath the research list, scoping the sidebar
+   to one research workspace. Workspace management actions live at the bottom
+   of its menu (a ResearchMenu) and always apply to the scoped workspace. */
+.research-workspace-switcher {
   position: relative;
   flex: none;
   margin: 0;

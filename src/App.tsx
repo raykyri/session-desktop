@@ -1,5 +1,5 @@
 import { useAppStartup } from "./hooks/useAppStartup";
-import { RESEARCH_FOLDER_SCOPE_KEY, useResearchNavigationState } from "./hooks/useResearchNavigationState";
+import { RESEARCH_WORKSPACE_SCOPE_KEY, useResearchNavigationState } from "./hooks/useResearchNavigationState";
 import { useUserNotifications } from "./hooks/useUserNotifications";
 import { recordRemoteStartup, reconcileRemoteReservation } from "./lib/remoteStartup";
 import {
@@ -80,7 +80,7 @@ import {
 import { formatTurnsTranscript } from "./lib/transcriptFormat";
 import type { TranscriptScrollPosition } from "./lib/transcriptScroll";
 import type { LinkActions } from "./components/TranscriptMarkdown";
-import ResearchFolderSwitcher from "./components/research/ResearchFolderSwitcher";
+import ResearchWorkspaceSwitcher from "./components/research/ResearchWorkspaceSwitcher";
 import GithubAccountControl from "./components/GithubAccountControl";
 import { formatResearchModelSummary } from "./lib/researchModelSummary";
 import {
@@ -181,7 +181,7 @@ import {
 } from "./lib/turnTimeline";
 import {
   requestResearchFollowupsFocus,
-  requestResearchFolderMenuToggle,
+  requestResearchWorkspaceMenuToggle,
   requestResearchNodeOpen,
 } from "./lib/researchShortcuts";
 import { useSessionEvents } from "./hooks/useSessionEvents";
@@ -1422,8 +1422,8 @@ function MainApp() {
     researchWorkspaceHistory,
     researchWorkspaceHistoryRef,
     setResearchWorkspaceHistory,
-    researchFolderScope,
-    changeResearchFolderScope,
+    researchWorkspaceScope,
+    changeResearchWorkspaceScope,
   } = useResearchNavigationState();
   // Read by mark-viewed acknowledgment (a stable callback) to decide whether
   // any attention badge was actually lit without threading the lists through
@@ -2091,8 +2091,8 @@ function MainApp() {
   const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
   const researchGroups = useMemo(() => groupsForScope(groups, "research"), [groups]);
   const researchScope = useMemo(
-    () => resolveResearchScope(researchFolderScope, researchGroups),
-    [researchFolderScope, researchGroups],
+    () => resolveResearchScope(researchWorkspaceScope, researchGroups),
+    [researchWorkspaceScope, researchGroups],
   );
   const researchScopeRef = useRef(researchScope);
   researchScopeRef.current = researchScope;
@@ -4665,7 +4665,7 @@ function MainApp() {
       setRecentActivityCursor(existingRecentActivity.nextCursor ?? null);
       const savedResearchTreeId = localStorage.getItem(ACTIVE_RESEARCH_TREE_KEY);
       const restoredResearchScope = resolveResearchScope(
-        localStorage.getItem(RESEARCH_FOLDER_SCOPE_KEY),
+        localStorage.getItem(RESEARCH_WORKSPACE_SCOPE_KEY),
         groupsForScope(existingGroups, "research"),
       );
       const allResearchTrees = [
@@ -5139,10 +5139,10 @@ function MainApp() {
         );
         // Selection can arrive from outside the scoped sidebar (archive
         // restore, a remembered tree on mode switch). Follow it with the
-        // folder scope, or the thread page would show a tree the sidebar
+        // workspace scope, or the thread page would show a tree the sidebar
         // doesn't list — with nothing highlighted anywhere.
         if (researchScopeRef.current !== detail.tree.workspaceId) {
-          changeResearchFolderScope(detail.tree.workspaceId);
+          changeResearchWorkspaceScope(detail.tree.workspaceId);
         }
         void markVisibleResearchTreeViewed(treeId, { force: true }).catch(() => undefined);
       }
@@ -5158,7 +5158,7 @@ function MainApp() {
       }
     }
   }, [
-    changeResearchFolderScope,
+    changeResearchWorkspaceScope,
     markVisibleResearchTreeViewed,
     setFeedOpen,
   ]);
@@ -6141,10 +6141,10 @@ function MainApp() {
       );
       setActiveResearchDetailError(null);
       if (researchScopeRef.current !== detail.tree.workspaceId) {
-        changeResearchFolderScope(detail.tree.workspaceId);
+        changeResearchWorkspaceScope(detail.tree.workspaceId);
       }
     },
-    [changeResearchFolderScope, setFeedOpen, showResearchSurface],
+    [changeResearchWorkspaceScope, setFeedOpen, showResearchSurface],
   );
   const submitNewResearch = useCallback(
     async (input: {
@@ -6857,7 +6857,7 @@ function MainApp() {
         )?.id ?? null)
       : researchScopeRef.current;
     if (scopeWasRemoved) {
-      changeResearchFolderScope(nextScope);
+      changeResearchWorkspaceScope(nextScope);
       activeResearchPaneIdRef.current = null;
       setActiveResearchPaneId(null);
       localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
@@ -7827,7 +7827,7 @@ function MainApp() {
           requestResearchFollowupsFocus();
           return;
         case "openFolderMenu":
-          requestResearchFolderMenuToggle();
+          requestResearchWorkspaceMenuToggle();
           return;
         case "toggleSourceBrowser": {
           const anyBrowserOpen = anyBrowserOverlayOpen(browserOverlayByPaneRef.current);
@@ -8346,11 +8346,11 @@ function MainApp() {
   // The workspace switcher sits at the bottom of the full sidebar; in the
   // rail it is an icon whose menu opens as a popover, with the account
   // control inside, so both (and ⌘O) stay reachable below 900px.
-  const renderResearchFolderSwitcher = (
+  const renderResearchWorkspaceSwitcher = (
     variant: "sidebar" | "rail",
     footer?: ReactNode,
   ) => (
-    <ResearchFolderSwitcher
+    <ResearchWorkspaceSwitcher
       variant={variant}
       footer={footer}
       folders={researchGroups}
@@ -8359,7 +8359,7 @@ function MainApp() {
       folderPickerBusy={folderPickerStatus !== null}
       shortcutHintsShown={shortcutHintsShown}
       onSelectScope={(scope) => {
-        changeResearchFolderScope(scope);
+        changeResearchWorkspaceScope(scope);
         // Keep the selection inside the new scope.
         const allTrees = [...researchTrees, ...archivedResearchTrees];
         const scopedTrees = treesForResearchScope(allTrees, scope);
@@ -8446,7 +8446,7 @@ function MainApp() {
           onNewFolder={() => openNewResearchFolderDialog()}
           footer={
             <>
-              {renderResearchFolderSwitcher("rail", <GithubAccountControl />)}
+              {renderResearchWorkspaceSwitcher("rail", <GithubAccountControl />)}
               <ResearchRailButton
                 label="Agents"
                 selected={agentsOpen}
@@ -8552,7 +8552,7 @@ function MainApp() {
               homeShortcutHint={shortcutHintsShown ? RESEARCH_HOME_SHORTCUT_LABEL : null}
             />
           </div>
-          {renderResearchFolderSwitcher("sidebar")}
+          {renderResearchWorkspaceSwitcher("sidebar")}
           <GithubAccountControl />
         </aside>
       )}
