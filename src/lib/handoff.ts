@@ -1,12 +1,9 @@
-// Renders a transcript prefix as a self-contained briefing that can be pasted
-// into a *different* coding agent. Pure and deterministic (no timestamps, no
-// ambient state) so the whole fold is testable without a DOM.
+// Renders a transcript prefix as a briefing for another coding agent.
+// It uses no timestamps or ambient state and can be tested without a DOM.
 //
-// The shape is deliberately narrow: message text, a per-run tool-name summary,
-// and the file paths those tools touched. Tool *results* never appear — they
-// are where file contents, command output, and credentials live, and a handoff
-// is on its way to the clipboard and then to a third-party agent. Paths carry
-// the signal without carrying the payload.
+// Includes message text, a per-run tool-name summary, and paths touched by
+// those tools. Excludes tool results because they may contain file contents,
+// command output, and credentials that should not be copied to another agent.
 
 import type {
   ActivityItem,
