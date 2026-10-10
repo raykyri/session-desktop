@@ -78,7 +78,7 @@ const row = (node: ResearchNode, overrides: Partial<RowProps> = {}) =>
       answerMenuOpen: false,
       registerSegmentElement: noop,
       onSelect: noop,
-      onTogglePromoted: noop,
+      onToggleStarred: noop,
       onShowBranches: noop,
       onOpenAnswerMenu: noop,
       onOpenContextMenu: noop,

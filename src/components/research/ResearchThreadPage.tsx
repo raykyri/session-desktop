@@ -3770,16 +3770,16 @@ function ResearchThreadPage({
     (nodeId: string) => setFullTraceNodes((current) => ({ ...current, [nodeId]: !current[nodeId] })),
     [],
   );
-  const togglePromoted = useCallback((nodeId: string) => {
+  const toggleStarred = useCallback((nodeId: string) => {
     const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
     if (!node) {
       return;
     }
-    const promoted = !node.promotedAt;
-    setResearchNodePromoted(nodeId, promoted)
+    const starred = !node.promotedAt;
+    setResearchNodePromoted(nodeId, starred)
       .then(() =>
         onToastRef.current(
-          promoted
+          starred
             ? node.inline
               ? "Starred. It's listed under its question in the feed."
               : "Starred. The branch is listed under its question in the feed."
@@ -4528,7 +4528,7 @@ function ResearchThreadPage({
           answerMenuOpen={menu?.kind === "answer" && menu.nodeId === id && Boolean(menu.trigger)}
           registerSegmentElement={registerSegmentElement}
           onSelect={selectRow}
-          onTogglePromoted={togglePromoted}
+          onToggleStarred={toggleStarred}
           onShowBranches={showBranches}
           onOpenAnswerMenu={openAnswerMenu}
           onOpenContextMenu={openContextMenu}

@@ -179,7 +179,7 @@ export function upsertRecentActivityResearchNode(
  * listed node takes the new prompt, title, and status, and an unstarred one
  * drops out. A newly starred node needs its depth and tree position from the
  * backend, so `stale` asks the caller to refetch the feed. */
-export function patchRecentActivityPromoted(
+export function patchRecentActivityStarred(
   items: RecentResearchQuery[],
   node: ResearchNode & { promotedAt?: number | null },
 ): { items: RecentResearchQuery[]; stale: boolean } {

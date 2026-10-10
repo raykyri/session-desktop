@@ -622,7 +622,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   answerMenuOpen,
   registerSegmentElement,
   onSelect,
-  onTogglePromoted,
+  onToggleStarred,
   onShowBranches,
   onOpenAnswerMenu,
   onOpenContextMenu,
@@ -647,14 +647,14 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   answerMenuOpen: boolean;
   registerSegmentElement: (nodeId: string, kind: SegmentDomKind, element: HTMLElement | null) => void;
   onSelect: (nodeId: string, level: number, row: HTMLElement) => void;
-  onTogglePromoted: (nodeId: string) => void;
+  onToggleStarred: (nodeId: string) => void;
   onShowBranches: (nodeId: string, level: number) => void;
   onOpenAnswerMenu: (trigger: HTMLButtonElement, nodeId: string) => void;
   onOpenContextMenu: (nodeId: string, clientX: number, clientY: number) => void;
 }) {
   const labelId = useId();
   const settled = nodeStatus(node) === "complete" || nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled";
-  const promoted = Boolean(node.promotedAt);
+  const starred = Boolean(node.promotedAt);
   const pill = researchMessagePill(nodeStatus(node), retryQueued);
   const tabIndex = selected ? 0 : -1;
   const branchLabel = `${branchCount} ${branchCount === 1 ? "branch" : "branches"}`;
@@ -711,14 +711,14 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
         {starrable && nodeStatus(node) !== "queued" ? (
           <button
             type="button"
-            className={`control-button research-msg-button research-msg-star${promoted ? " is-on" : ""}`}
-            aria-pressed={promoted}
+            className={`control-button research-msg-button research-msg-star${starred ? " is-on" : ""}`}
+            aria-pressed={starred}
             aria-label="Star"
-            title={promoted ? "Unstar" : "Star: list this under its question in the feed"}
+            title={starred ? "Unstar" : "Star: list this under its question in the feed"}
             tabIndex={tabIndex}
-            onClick={() => onTogglePromoted(node.id)}
+            onClick={() => onToggleStarred(node.id)}
           >
-            <Star size={13} aria-hidden="true" fill={promoted ? "currentColor" : "none"} />
+            <Star size={13} aria-hidden="true" fill={starred ? "currentColor" : "none"} />
           </button>
         ) : null}
         {settled && branchCount > 0 ? (

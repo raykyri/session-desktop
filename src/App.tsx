@@ -242,7 +242,7 @@ import {
   mergeRecentActivityItems,
   reconcileRecentActivityHead,
   recentActivityCursor as recentActivityItemCursor,
-  patchRecentActivityPromoted,
+  patchRecentActivityStarred,
   upsertRecentActivityResearchNode,
 } from "./lib/activity";
 import { isActiveResearchStatus } from "./lib/researchThreads";
@@ -5806,13 +5806,13 @@ function MainApp() {
         invalidateVisibleDetailSnapshot(node.treeId);
         setActiveResearchDetail((current) => patchResearchDetailNode(current, node));
         setResearchActivity((current) => upsertResearchActivity(current, node));
-        const promotedPatch = patchRecentActivityPromoted(
+        const starredPatch = patchRecentActivityStarred(
           upsertRecentActivityResearchNode(recentActivityItemsRef.current, node),
           node,
         );
-        recentActivityItemsRef.current = promotedPatch.items;
-        setRecentActivityItems(promotedPatch.items);
-        if (promotedPatch.stale) scheduleResearchRefresh();
+        recentActivityItemsRef.current = starredPatch.items;
+        setRecentActivityItems(starredPatch.items);
+        if (starredPatch.stale) scheduleResearchRefresh();
         if (previous) {
           const patchSummary = (summary: ResearchTreeSummary) =>
             patchResearchSummaryForNode(summary, previous, node, timestamp);

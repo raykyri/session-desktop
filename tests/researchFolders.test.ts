@@ -22,7 +22,7 @@ import {
   treesWithWorkspaceOrder,
   workspaceResearchFolders,
 } from "../src/lib/researchFolders";
-import { patchRecentActivityPromoted } from "../src/lib/activity";
+import { patchRecentActivityStarred } from "../src/lib/activity";
 import { researchMoveTargets } from "../src/components/research/ResearchMoveMenu";
 import type { ResearchFolderState, ResearchTreeSummary } from "../src/types";
 import { researchNode } from "./researchNodeFixture";
@@ -182,14 +182,14 @@ test("node updates keep a root's starred list current, or ask for a refetch", ()
   }];
   const node = (id: string, promotedAt: number | null, prompt = "New") =>
     researchNode({ id, treeId: "t", prompt, title: null, status: "running", promotedAt });
-  const updated = patchRecentActivityPromoted(items, node("f", 5));
+  const updated = patchRecentActivityStarred(items, node("f", 5));
   assert.equal(updated.stale, false);
   assert.equal(updated.items[0].promoted?.[0].prompt, "New");
   assert.equal(updated.items[0].promoted?.[0].status, "running");
-  const unstarred = patchRecentActivityPromoted(items, node("f", null));
+  const unstarred = patchRecentActivityStarred(items, node("f", null));
   assert.deepEqual(unstarred.items[0].promoted, []);
-  const starred = patchRecentActivityPromoted(items, node("g", 9));
+  const starred = patchRecentActivityStarred(items, node("g", 9));
   assert.equal(starred.stale, true);
   assert.equal(starred.items, items);
-  assert.equal(patchRecentActivityPromoted(items, node("g", null)).items, items);
+  assert.equal(patchRecentActivityStarred(items, node("g", null)).items, items);
 });
