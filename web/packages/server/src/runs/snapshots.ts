@@ -21,11 +21,9 @@ export interface CommitAnswerInput {
   error?: string | null;
   /** Reads the live turns; called twice, and the two results must agree.
    *
-   * A seam rather than a fixed read because in this process they always do:
-   * SQLite reads are synchronous and the loop is the only writer, so the guard
-   * is the desktop's rule carried over (`state.rs:8870`) and cannot fail here.
-   * The test that has to prove the refusal works supplies a reader that
-   * changes its answer. */
+   * SQLite reads are synchronous and the loop is the only writer, so the
+   * results always agree in this process. The injected reader lets tests
+   * verify that the desktop's guard (`state.rs:8870`) rejects changing data. */
   readTurns?: (() => Turn[]) | undefined;
 }
 

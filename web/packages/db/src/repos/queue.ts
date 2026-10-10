@@ -20,10 +20,9 @@ import { now } from "../time.js";
  * Only `research` is ever written today: the metadata pool of four
  * (`docs/04-agent-runtime.md` §10) is an in-memory queue in
  * `RunsService`, because a title or a recap that a restart loses is
- * regenerated from the answer it summarizes and never worth a durable row.
- * The arm stays because `run_queue.pool` is declared with both values and
- * dropping one is a migration; it is the seam a metadata run would use if it
- * ever had to survive a deploy.
+ * regenerated from the answer it summarizes.
+ * The `metadata` variant remains because `run_queue.pool` declares both
+ * values; removing it requires a migration.
  */
 export type RunPool = "research" | "metadata";
 
