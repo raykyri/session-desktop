@@ -10324,6 +10324,12 @@ function MainApp() {
                     researchTrees.find((tree) => tree.id === activeResearchTreeId)?.title ??
                     archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)?.title
                   }
+                  treeKind={
+                    (
+                      researchTrees.find((tree) => tree.id === activeResearchTreeId) ??
+                      archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)
+                    )?.kind
+                  }
                   archived={Boolean(activeResearchDetail?.tree.archivedAt)}
                   recapPendingNodeIds={recapPendingNodeIds}
                   detailError={activeResearchDetailError}

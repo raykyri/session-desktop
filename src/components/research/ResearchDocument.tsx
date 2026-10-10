@@ -139,6 +139,7 @@ import type {
   ResearchHighlight,
   ResearchHighlightAnchor,
   ResearchNode,
+  ResearchNodeKind,
   ResearchNodeContent,
   ResearchTreeDetail,
   UpdateResearchDocumentResult,
@@ -191,6 +192,10 @@ interface ResearchDocumentProps {
   detail: ResearchTreeDetail | null;
   /** Durable sidebar title shown in the header while tree detail is loading. */
   treeTitle?: string;
+  /** The root's kind from the sidebar summary, known before the detail
+   * loads. A post's loading header reads "Post", as its post column's does,
+   * rather than the post's text. */
+  treeKind?: ResearchNodeKind;
   /** Archived trees remain browsable, but cannot be branched. */
   archived: boolean;
   /** Why `detail` is null, when the tree fetch itself failed. */
@@ -946,6 +951,7 @@ function ResearchMarkerTip({
 function ResearchDocument({
   detail,
   treeTitle,
+  treeKind,
   archived,
   detailError,
   onRetryDetail,
@@ -4312,7 +4318,11 @@ function ResearchDocument({
     // A failed *tree* fetch retries through the app shell — without detail
     // there is no node to load, so no in-document retry can recover.
     const placeholderError = detailError ?? null;
-    const headerTitle = detail?.tree.title ?? treeTitle ?? "Loading research…";
+    const rootKind = detail
+      ? detail.nodes.find((node) => node.id === detail.tree.rootNodeId)?.kind
+      : treeKind;
+    const headerTitle =
+      rootKind === "note" ? "Post" : (detail?.tree.title ?? treeTitle ?? "Loading research…");
     return (
       <ResearchDocumentFrame title={headerTitle}>
         <div className="research-placeholder">
