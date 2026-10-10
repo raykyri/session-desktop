@@ -1116,9 +1116,8 @@
   font-size: 9px;
 }
 
-/* The close affordance is a plain linkified glyph that sits directly over the
-   status dot (same left offset + size as .pane-tab-dot), not a boxed button.
-   On hover the dot is hidden and only the × shows. */
+/* Place the close glyph over the status dot, using the same left offset and
+   size as .pane-tab-dot. On hover, replace the dot with ×. */
 .pane-tab-close {
   position: absolute;
   top: 50%;
