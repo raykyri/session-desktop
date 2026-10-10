@@ -8,6 +8,7 @@ import {
 } from "../src/lib/researchSiblingCycle";
 import { researchStrip, type ResearchColumnId } from "../src/lib/researchColumns";
 import type { ResearchNode } from "../src/types";
+import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
 const key = (overrides: Partial<Parameters<typeof researchCycleDirection>[0]> = {}) => ({
   key: "Tab",
@@ -42,18 +43,18 @@ test("cycleIndex wraps at both ends and starts at an end with no current item", 
   assert.equal(cycleIndex(0, -1, -1), -1);
 });
 
-const node = (id: string, overrides: Partial<ResearchNode> = {}): ResearchNode => ({
+const node = (id: string, overrides: NodeFixture = {}): ResearchNode =>
+  researchNode({
   id,
   treeId: "tree",
   prompt: id,
   adapter: "claude",
   groupId: "ws",
-  worktreeDir: "/ws",
   status: "complete",
   createdAt: 1,
   highlights: [],
   ...overrides,
-});
+  });
 
 test("the cycled column is the one last interacted with when it has rows", () => {
   const candidates: ResearchColumnId[] = ["T0", "T1"];
@@ -98,7 +99,7 @@ test("a column without rows falls back to the nearest column with rows to its le
 });
 
 test("a post's own column and an empty thread fall back to the feed", () => {
-  const nodes = [node("post", { kind: "post" })];
+  const nodes = [node("post", { type: "post" })];
   const strip = researchStrip(nodes, "post", null, "post");
   assert.deepEqual(
     strip.columns.map((column) => column.id),

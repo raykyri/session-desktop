@@ -11,24 +11,24 @@ import {
   researchThreadStopTarget,
 } from "../src/lib/researchThreads";
 import type { ResearchNode, ResearchNodeStatus } from "../src/types";
+import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
 function node(
   id: string,
-  overrides: Partial<ResearchNode> = {},
+  overrides: NodeFixture = {},
 ): ResearchNode {
-  return {
+  return researchNode({
     id,
     treeId: "tree-1",
     prompt: `Prompt ${id}`,
     adapter: "claude",
     groupId: "group-1",
-    worktreeDir: "/tmp/research",
     status: "complete" as ResearchNodeStatus,
-    nativeSessionId: `session-${id}`,
+    sessionReady: true,
     createdAt: 1,
     highlights: [],
     ...overrides,
-  };
+  });
 }
 
 test("a lone node is a chain of itself", () => {
@@ -92,10 +92,9 @@ test("Stop is available during queuing and startup and disappears after settleme
 });
 
 test("Retry stop remains available for incomplete pane cleanup but not settled SDK runs", () => {
-  const stopping = node("run", { status: "cancelled", paneId: "pane-1" });
+  const stopping = node("run", { status: "cancelled", holdsProcess: true });
   assert.equal(researchThreadStopTarget([stopping])?.id, "run");
-  assert.equal(canStopResearchNode({ ...stopping, paneId: null }), false);
-  assert.equal(canStopResearchNode(node("sdk", { status: "cancelled", runtime: "sdk" })), false);
+  assert.equal(canStopResearchNode(node("sdk", { status: "cancelled", holdsProcess: false })), false);
 });
 
 test("branch children never appear as inline children", () => {
@@ -164,13 +163,13 @@ test("isActiveResearchStatus matches only unsettled statuses", () => {
 test("canFollowUpFrom gates on completion and the run checkpoint", () => {
   assert.equal(canFollowUpFrom(node("done")), true);
   assert.equal(canFollowUpFrom(node("running", { status: "running" })), false);
-  assert.equal(canFollowUpFrom(node("unforked", { nativeSessionId: null })), false);
+  assert.equal(canFollowUpFrom(node("unforked", { sessionReady: false })), false);
   assert.equal(
-    canFollowUpFrom(node("doc", { kind: "document", nativeSessionId: null })),
+    canFollowUpFrom(node("doc", { type: "document", sessionReady: false })),
     true,
   );
   assert.equal(
-    canFollowUpFrom(node("conv", { kind: "conversation", nativeSessionId: null })),
+    canFollowUpFrom(node("conv", { type: "document", source: "transcript", sessionReady: false })),
     true,
   );
 });
@@ -184,12 +183,12 @@ test("canRetryResearchNode allows settled failures without a lingering pane", ()
   // A still-bound pane means the previous run's process may linger — the
   // cancel controls own that recovery, not retry.
   assert.equal(
-    canRetryResearchNode(node("stuck", { status: "failed", paneId: "pane-1" })),
+    canRetryResearchNode(node("stuck", { status: "failed", holdsProcess: true })),
     false,
   );
   assert.equal(
     canRetryResearchNode(
-      node("stuck-cancel", { status: "cancelled", paneId: "pane-1" }),
+      node("stuck-cancel", { status: "cancelled", holdsProcess: true }),
     ),
     false,
   );
@@ -200,22 +199,19 @@ test("canRetryResearchNode allows settled failures without a lingering pane", ()
 });
 
 test("imported reports allow follow-ups without a native session checkpoint", () => {
-  const report = node("report", { kind: "document", origin: "imported", nativeSessionId: null });
+  const report = node("report", { type: "document", source: "imported", sessionReady: false });
   assert.equal(canFollowUpFrom(report), true);
   assert.equal(canContinueThread([report], report), true);
-  const child = node("child", { parentNodeId: report.id, inline: true, nativeSessionId: null });
+  const child = node("child", { parentNodeId: report.id, inline: true, sessionReady: false });
   assert.equal(canContinueThread([report, child], report), false);
   assert.equal(canFollowUpFrom(child), false);
-  for (const status of ["queued", "running", "failed", "cancelled"] as const) {
-    assert.equal(canFollowUpFrom({ ...report, status }), false);
-  }
 });
 
 test("run tails need the session checkpoint; documents and conversations do not", () => {
-  const unforked = node("tail", { nativeSessionId: null });
+  const unforked = node("tail", { sessionReady: false });
   assert.equal(canContinueThread([unforked], unforked), false);
-  const document = node("doc", { kind: "document", nativeSessionId: null });
+  const document = node("doc", { type: "document", sessionReady: false });
   assert.equal(canContinueThread([document], document), true);
-  const conversation = node("conv", { kind: "conversation", nativeSessionId: null });
+  const conversation = node("conv", { type: "document", source: "transcript", sessionReady: false });
   assert.equal(canContinueThread([conversation], conversation), true);
 });

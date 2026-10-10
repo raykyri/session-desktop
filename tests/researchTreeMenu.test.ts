@@ -9,7 +9,7 @@ const tree: ResearchTreeSummary = {
   id: "tree-1",
   title: "Collective memory",
   rootNodeId: "root",
-  kind: "conversation",
+  type: "document",
   workspaceId: "workspace",
   runningCount: 0,
   failedCount: 0,
@@ -22,11 +22,11 @@ const tree: ResearchTreeSummary = {
 
 const noop = () => {};
 
-test("research tree menus omit regenerate title for every kind", () => {
-  for (const kind of ["conversation", "run", "document"] as const) {
+test("research tree menus omit regenerate title for every node type", () => {
+  for (const type of ["post", "exchange", "document"] as const) {
     const html = renderToStaticMarkup(
       createElement(ResearchTreeMenuItems, {
-        tree: { ...tree, kind },
+        tree: { ...tree, type },
         archived: false,
         onClose: noop,
         onRename: noop,

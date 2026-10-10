@@ -14,7 +14,7 @@ const noop = () => {};
 const asyncNoop = async () => {};
 const savedLink = {
   nodeId: "link", treeId: "link-tree", parentNodeId: null, inline: false,
-  prompt: "https://example.com/finding", adapter: "codex", kind: "post" as const,
+  prompt: "https://example.com/finding", adapter: "codex", type: "post" as const,
   format: "link" as const,
   status: "complete" as const, createdAt: 200,
 };
@@ -36,7 +36,7 @@ function renderFeed(overrides: Partial<ResearchActivityFeedProps> = {}) {
 }
 
 const tree = {
-  id: "tree", title: "Collective memory", rootNodeId: "node", kind: "run" as const, workspaceId: "ws",
+  id: "tree", title: "Collective memory", rootNodeId: "node", type: "exchange" as const, workspaceId: "ws",
   runningCount: 0, failedCount: 0, completedCount: 1, cancelledCount: 0, updatedAt: 100,
   archivedAt: null, hasUnseenUpdate: false, hasUnseenFailure: false,
 };
@@ -306,10 +306,10 @@ test("Home with only drafts says Unfiled is empty instead of the first-run text"
   assert.doesNotMatch(html, /Agent setup guide|appear here, newest first/);
 });
 
-test("an exported conversation lists as a titled card", () => {
+test("a transcript (an exported conversation) lists as a titled card", () => {
   const html = renderFeed({
-    items: [{ ...question, kind: "conversation" as const, recap: null, prompt: "First user message" }],
-    researchTrees: [{ ...tree, kind: "conversation" as const, title: "Terminal session" }],
+    items: [{ ...question, type: "document" as const, source: "transcript" as const, recap: null, prompt: "First user message" }],
+    researchTrees: [{ ...tree, type: "document" as const, title: "Terminal session" }],
   });
   assert.equal(cards(html).length, 1);
   assert.match(html, /research-feed-card-title">Terminal session</);
@@ -318,10 +318,10 @@ test("an exported conversation lists as a titled card", () => {
 
 test("an imported report lists as a titled card with its question, in Home and in Archive", () => {
   const imported = {
-    ...question, kind: "document" as const, origin: "imported" as const, recap: null,
+    ...question, type: "document" as const, source: "imported" as const, recap: null,
     prompt: "What did the survey find?",
   };
-  const importedTree = { ...tree, kind: "document" as const, title: "Survey report" };
+  const importedTree = { ...tree, type: "document" as const, title: "Survey report" };
   const html = renderFeed({ items: [imported], researchTrees: [importedTree] });
   assert.equal(cards(html).length, 1);
   assert.match(html, /research-feed-card-title">Survey report</);
@@ -445,7 +445,7 @@ test("the feed scroll anchor round-trips correctly", () => {
 test("Home offers report import", () => {
   const html = renderFeed({ onImportReport: asyncNoop, items: [{
     nodeId: "import", treeId: "import-tree", inline: false, prompt: "Original prompt",
-    adapter: "codex", model: null, origin: "imported", status: "complete", createdAt: 100,
+    adapter: "codex", model: null, type: "document", source: "imported", status: "complete", createdAt: 100,
   }] });
   assert.match(html, /aria-label="Import \.md report"/);
   assert.ok(html.indexOf('aria-label="Refresh Home"') < html.indexOf('aria-label="Import .md report"'));
@@ -457,7 +457,7 @@ test("a network note is an untitled card showing its body", () => {
   const html = renderFeed({ items: [{
     nodeId: "note", treeId: "note-tree", parentNodeId: null, inline: false,
     prompt: "Who ships component-model plugins?", adapter: "claude", model: "fable",
-    kind: "post" as const, status: "complete" as const, createdAt: 100,
+    type: "post" as const, status: "complete" as const, createdAt: 100,
     delivery: {
       status: "posted", postedAt: 100,
       replies: [{ id: "r1", author: { kind: "member", id: "ana", displayName: "Ana Moreau", handle: "ana" }, body: "We moved in March.", createdAt: 110 }],

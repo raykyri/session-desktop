@@ -1,32 +1,28 @@
-// Derive node type and follow-up launch behavior from stored kind and origin.
-// These helpers mirror ResearchNode::node_type and follow_up_launch in research.rs.
+// Readers for the node union (src/types.ts ResearchNode, the backend's
+// ResearchNodeView). They mirror ResearchNode::node_type, follow_up_launch
+// and recap_eligible in research.rs, and read the fields only some node
+// types carry with one answer for the others.
 
 import type {
+  AgentSpec,
+  DocumentSource,
+  NoteDelivery,
   PostFormat,
   ResearchHighlightAnchor,
   ResearchMessageAttachment,
   ResearchNode,
+  ResearchNodeStatus,
+  ResearchNodeType,
+  ResearchRecap,
+  RunState,
 } from "../types";
 
-/** - post: written by you (a saved link or tweet, or a post
- *    delivered to the network).
- *  - exchange: a question and the agent run that answers it.
- *  - document: long-form content with no run behind it: an imported report,
- *    an authored document, or an exported terminal conversation. */
-type ResearchNodeType = "post" | "exchange" | "document";
+/** A node, or a feed entry, which carries the same tag (absent in hand-built
+ * fixtures, where it reads as an exchange). */
+type Typed = { type?: ResearchNodeType; source?: DocumentSource | null };
 
-type NodeShape = Pick<ResearchNode, "kind" | "origin">;
-
-export function nodeType(node: NodeShape): ResearchNodeType {
-  switch (node.kind ?? "run") {
-    case "post":
-      return "post";
-    case "document":
-    case "conversation":
-      return "document";
-    default:
-      return "exchange";
-  }
+export function nodeType(node: Typed): ResearchNodeType {
+  return node.type ?? "exchange";
 }
 
 /** What a person wrote, as the node's row in the messages column. */
@@ -36,30 +32,93 @@ interface ResearchUserMessage {
   attachments: ResearchMessageAttachment[];
 }
 
-/** The node's user message: a post's text, an exchange's question, or the
- * question an imported report answers. Null for a document with no question
- * (an authored document or an exported conversation), which shows as one
- * row for the whole document. */
-export function nodeMessage(
-  node: NodeShape & Pick<ResearchNode, "prompt" | "attachments">,
-): ResearchUserMessage | null {
-  if (nodeType(node) === "document" && node.origin !== "imported") {
+/** The node's user message as a question row: a post's text, an exchange's
+ * question, or the question an imported report answers. Null for a
+ * transcript and for a document without a message (an authored document),
+ * which show as one row for the whole document. A transcript's message is
+ * its first user turn, which the transcript itself shows; feed cards read
+ * it through nodePrompt. */
+export function nodeMessage(node: ResearchNode): ResearchUserMessage | null {
+  if (!node.message || (node.type === "document" && node.source === "transcript")) {
     return null;
   }
-  return { text: node.prompt, attachments: node.attachments ?? [] };
+  return { text: node.message.text, attachments: node.message.attachments ?? [] };
+}
+
+/** The message text, or "" for a document without one. */
+export function nodePrompt(node: ResearchNode): string {
+  return node.message?.text ?? "";
+}
+
+export function nodeAttachments(node: ResearchNode): ResearchMessageAttachment[] {
+  return node.message?.attachments ?? [];
+}
+
+/** An exchange's run; posts and documents have none. */
+export function nodeRun(node: ResearchNode): RunState | null {
+  return node.type === "exchange" ? node.run : null;
+}
+
+/** The run's status; posts and documents have no run and read as complete. */
+export function nodeStatus(node: ResearchNode): ResearchNodeStatus {
+  return node.type === "exchange" ? node.run.status : "complete";
+}
+
+/** An exchange's agent, or the default agent for a post's or document's AI
+ * follow-ups. */
+export function nodeAgent(node: ResearchNode): AgentSpec | null {
+  if (node.type === "exchange") return node.agent;
+  return node.followUpAgent ?? null;
+}
+
+/** The adapter of `nodeAgent`, or "" when the node names none. */
+export function nodeAdapter(node: ResearchNode): string {
+  return nodeAgent(node)?.adapter ?? "";
+}
+
+export function nodeRecap(node: ResearchNode): ResearchRecap | null {
+  return node.type === "post" ? null : (node.recap ?? null);
+}
+
+export function nodeDelivery(node: ResearchNode): NoteDelivery | null {
+  return node.type === "post" ? (node.delivery ?? null) : null;
+}
+
+/** When the node's response snapshot was last written: an exchange's answer
+ * or a document's body. */
+export function nodeResponseSnapshotAt(node: ResearchNode): number | null {
+  if (node.type === "exchange") return node.run.responseSnapshotAt ?? null;
+  if (node.type === "document") return node.responseSnapshotAt ?? null;
+  return null;
+}
+
+/** When a post's text or a document's body was last replaced by an edit. */
+export function nodeEditedAt(node: ResearchNode): number | null {
+  return node.type === "exchange" ? null : (node.editedAt ?? null);
+}
+
+/** A document's source, or null for posts and exchanges. */
+export function documentSource(node: Typed): DocumentSource | null {
+  return nodeType(node) === "document" ? (node.source ?? null) : null;
+}
+
+/** Whether a document's snapshot is editable Markdown: an imported report or
+ * an authored document, not a transcript. */
+export function documentHoldsMarkdown(node: ResearchNode): boolean {
+  return node.type === "document" && node.source !== "transcript";
 }
 
 /** How a follow-up launches: an exchange forks its native session (which
  * needs its recorded checkpoint); posts and documents start a fresh run with
  * their saved content as context. */
-export function followUpLaunch(node: NodeShape): "fork" | "context" {
+export function followUpLaunch(node: Typed): "fork" | "context" {
   return nodeType(node) === "exchange" ? "fork" : "context";
 }
 
 /** Whether a summary (recap) belongs to the node: exchanges and imported
  * reports. */
-export function recapEligible(node: NodeShape): boolean {
-  return nodeType(node) === "exchange" || node.origin === "imported";
+export function recapEligible(node: Typed): boolean {
+  return nodeType(node) === "exchange" || documentSource(node) === "imported";
 }
 
 /** The passage of the parent's answer a follow-up was asked about. */

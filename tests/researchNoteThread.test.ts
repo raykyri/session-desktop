@@ -4,19 +4,20 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ResearchNoteThread, { noteThreadEntries } from "../src/components/research/ResearchNoteThread";
 import type { ResearchNode } from "../src/types";
+import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
 const noop = () => {};
 const asyncNoop = async () => {};
 
-const note: ResearchNode = {
+const noteFields = {
   id: "note", treeId: "tree", prompt: "Who ships component-model plugins?",
-  adapter: "claude", model: "fable", groupId: "ws", worktreeDir: "/ws", kind: "post", format: "text",
+  adapter: "claude", model: "fable", groupId: "ws", type: "post", format: "text",
   status: "complete", createdAt: 100, highlights: [],
-  delivery: { status: "posted", postedAt: 100 },
-};
+  delivery: { status: "posted", postedAt: 100 },} satisfies NodeFixture;
+const note = researchNode(noteFields);
 
-const withReplies: ResearchNode = {
-  ...note,
+const withRepliesFields = {
+  ...noteFields,
   delivery: {
     status: "posted", postedAt: 100,
     replies: [{
@@ -29,26 +30,26 @@ const withReplies: ResearchNode = {
       id: "r2", author: { kind: "member", id: "ana", displayName: "Ana Moreau" },
       body: "We stayed on plain WASI.", createdAt: 150,
     }],
-  },
-};
-const about: ResearchNode = {
-  ...note, id: "about", parentNodeId: "note", kind: "run", delivery: null,
+  },} satisfies NodeFixture;
+const withReplies = researchNode(withRepliesFields);
+const aboutFields = {
+  ...noteFields, id: "about", parentNodeId: "note", type: "exchange", delivery: null,
   anchor: { kind: "reply", replyId: "r1" },
-  prompt: "How large is the generated surface?", status: "running", createdAt: 130,
-};
-const answered: ResearchNode = {
-  ...note, id: "answered", parentNodeId: "note", kind: "run", delivery: null,
-  prompt: "Which runtimes support it?", status: "complete", createdAt: 160,
-};
-const network: ResearchNode = {
-  ...note, id: "net", parentNodeId: "note", prompt: "Anyone measured wizer?", createdAt: 140,
+  prompt: "How large is the generated surface?", status: "running", createdAt: 130,} satisfies NodeFixture;
+const about = researchNode(aboutFields);
+const answeredFields = {
+  ...noteFields, id: "answered", parentNodeId: "note", type: "exchange", delivery: null,
+  prompt: "Which runtimes support it?", status: "complete", createdAt: 160,} satisfies NodeFixture;
+const answered = researchNode(answeredFields);
+const networkFields = {
+  ...noteFields, id: "net", parentNodeId: "note", prompt: "Anyone measured wizer?", createdAt: 140,
   delivery: {
     status: "posted", postedAt: 140,
     replies: [{
       id: "n1", author: { kind: "member", id: "kai", displayName: "Kai" }, body: "Yes.", createdAt: 145,
     }],
-  },
-};
+  },} satisfies NodeFixture;
+const network = researchNode(networkFields);
 
 function render(nodes: ResearchNode[], options: { openNodeId?: string | null; archived?: boolean } = {}) {
   return renderToStaticMarkup(createElement(ResearchNoteThread, {
@@ -112,7 +113,7 @@ test("a follow-up row shows its reply count or its answer state", () => {
   assert.match(html, />Answering</);
   assert.match(html, /Which runtimes support it\?<\/div><div class="note-thread-meta">Answered<\/div>/);
   assert.doesNotMatch(html, /Open answer|note-segment/);
-  const empty = render([note, { ...network, delivery: { status: "posted", postedAt: 140 } }]);
+  const empty = render([note, researchNode({ ...networkFields, delivery: { status: "posted", postedAt: 140 } })]);
   // With no replies, the row shows no status line.
   assert.match(empty, /Anyone measured wizer\?<\/div><\/div>/);
   assert.doesNotMatch(empty, /No replies yet/);
@@ -135,7 +136,7 @@ test("an archived thread has rows but no composer", () => {
 });
 
 test("a saved link's thread can only ask", () => {
-  const link: ResearchNode = { ...note, prompt: "https://example.com/page", delivery: null };
+  const link = researchNode({ ...noteFields, prompt: "https://example.com/page", format: "link", delivery: null });
   const html = render([link]);
   assert.match(html, /placeholder="Ask a follow-up"/);
   // Collapsed while empty, and with no Post option it has no switch.
@@ -144,9 +145,12 @@ test("a saved link's thread can only ask", () => {
 });
 
 test("thread entries skip documents and responses and break time ties by id", () => {
-  const document: ResearchNode = { ...note, id: "doc", parentNodeId: "note", kind: "document", createdAt: 105 };
-  const tieB: ResearchNode = { ...about, id: "b", createdAt: 170 };
-  const tieA: ResearchNode = { ...about, id: "a", createdAt: 170 };
+  const documentFields = { ...noteFields, id: "doc", parentNodeId: "note", type: "document", createdAt: 105 } satisfies NodeFixture;
+  const document = researchNode(documentFields);
+  const tieBFields = { ...aboutFields, id: "b", createdAt: 170 } satisfies NodeFixture;
+  const tieB = researchNode(tieBFields);
+  const tieAFields = { ...aboutFields, id: "a", createdAt: 170 } satisfies NodeFixture;
+  const tieA = researchNode(tieAFields);
   assert.deepEqual(
     noteThreadEntries([withReplies, document, tieB, tieA], withReplies).map((entry) => entry.key),
     ["reply:r1", "reply:r2", "a", "b"],
@@ -154,10 +158,10 @@ test("thread entries skip documents and responses and break time ties by id", ()
 });
 
 test("corrections are Thread rows ordered by time with the replies and follow-ups", () => {
-  const corrected: ResearchNode = {
-    ...withReplies,
+  const corrected = researchNode({
+    ...withRepliesFields,
     corrections: [{ id: "c1", body: "It ships **wit-bindgen 0.30**.", createdAt: 135 }],
-  };
+  });
   assert.deepEqual(
     noteThreadEntries([corrected, about, answered], corrected).map((entry) => entry.key),
     ["reply:r1", "about", "correction:c1", "reply:r2", "answered"],

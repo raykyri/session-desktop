@@ -34,26 +34,21 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 
 /// Bumped whenever the on-disk shape changes incompatibly. A file written by a
 /// newer or unknown version is treated as empty rather than misinterpreted.
-pub const STATE_VERSION: u32 = 8;
-/// Written when an imported report is stored as a document but no node uses
-/// the post shape (`research::node_uses_post_fields`: posts, formats and
-/// merged anchors). Builds that accept up to version 7 read notes, not posts,
-/// and would drop post nodes and merged anchors.
-pub const STATE_VERSION_PRE_POSTS: u32 = 7;
-/// Written when research-message attachments exist but no imported report is
-/// stored as a document. Builds that accept up to version 6 stored imported
-/// reports as runs, and would treat an imported document as an authored one.
-pub const STATE_VERSION_PRE_DOCUMENT_IMPORTS: u32 = 6;
-/// Written when conversation nodes exist but research-message attachments do
-/// not, preserving compatibility with builds that understand conversations.
-pub const STATE_VERSION_PRE_ATTACHMENTS: u32 = 5;
-/// Written when the state contains no conversation nodes, so sessions that
-/// never used terminal export stay loadable by pre-conversations builds
-/// (which accept versions 2–4). Version 5 marks conversation nodes being
-/// present: a pre-conversations build then refuses the file with its
-/// newer-version guidance instead of silently dropping those nodes and
-/// erasing them on its next save. Mirrors the detached-archive tiering.
-pub const STATE_VERSION_PRE_CONVERSATIONS: u32 = 4;
+///
+/// Version 9 stores research nodes as an envelope with a tagged body (see
+/// `research::ResearchNode`); builds that accept up to version 8 read flat
+/// records and would drop every node. Version 8 denotes two shapes, both
+/// written only by unreleased builds: flat records with notes stored as
+/// posts and one merged anchor, and, from later builds, the body shape. The
+/// load migration is shape-based, so this build reads either. Versions 5 to
+/// 7 were tiers for the newest research feature a state held (terminal
+/// conversations, message attachments, imported documents) so older builds
+/// kept reading states without those features; with every node in the body
+/// shape, a state holds either no research nodes or version-9 nodes.
+pub const STATE_VERSION: u32 = 9;
+/// Written when the state contains no research nodes, so it stays loadable by
+/// builds that accept versions 2 to 4.
+pub const STATE_VERSION_WITHOUT_RESEARCH_NODES: u32 = 4;
 const MIN_MIGRATABLE_STATE_VERSION: u32 = 2;
 const STATE_FILE: &str = "state.json";
 const PREFERENCES_FILE: &str = "preferences.json";
@@ -62,9 +57,19 @@ const V2_BACKUP_FILE: &str = "state.v2.bak";
 /// written at versions 3 to 6. Builds that accept up to version 6 cannot read
 /// the converted file; this backup allows restoring it for those builds.
 const PRE_DOCUMENT_IMPORTS_BACKUP_FILE: &str = "state.v6.bak";
-/// The state file as it was before the version-8 migration converted notes to
-/// posts, when it was written at version 7.
+/// The state file as it was before the migration converted its research
+/// nodes, when it was written at version 7.
 const PRE_POSTS_BACKUP_FILE: &str = "state.v7.bak";
+/// The state file as it was before it was rewritten at version 9, when it was
+/// written at version 8 (in either of that version's shapes).
+const PRE_BODY_VERSION_BACKUP_FILE: &str = "state.v8.bak";
+/// Every migration backup name; their scratch files are named after them.
+const MIGRATION_BACKUP_FILES: [&str; 4] = [
+    V2_BACKUP_FILE,
+    PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
+    PRE_POSTS_BACKUP_FILE,
+    PRE_BODY_VERSION_BACKUP_FILE,
+];
 pub(crate) const STATE_DIR: &str = ".session";
 
 /// Snapshot of everything a Session restart needs to recreate panes, agents,
@@ -599,11 +604,13 @@ pub fn load_with_diagnostics_from(workspace_root: &Path, preread: Option<Vec<u8>
     if version == 2 {
         migrate_v2_to_v3(&mut value);
     }
-    // Version 7 stores imported reports as documents and version 8 stores
-    // notes as posts with merged anchors. Convert the older records here,
-    // before lenient deserialization, so every reader sees one shape and no
-    // node is dropped for having the old one.
-    let research_nodes_migrated = version < STATE_VERSION && migrate_research_nodes(&mut value);
+    // Version 9 stores research nodes as an envelope with a tagged body (with
+    // imported reports as documents and notes as posts). Convert older
+    // records here, before lenient deserialization, so every reader sees one
+    // shape and no node is dropped for having the old one. The migration is
+    // shape-based and idempotent, so it runs on files of every version:
+    // version-8 files hold either flat posts or the body shape.
+    let research_nodes_migrated = migrate_research_nodes(&mut value);
 
     // Deserialize collections element-by-element so a single malformed record
     // (partial corruption, a hand-edit, an unforeseen schema drift in one entry)
@@ -683,7 +690,7 @@ fn migrate_v2_to_v3(value: &mut Value) {
     map.insert("version".to_string(), Value::from(STATE_VERSION));
 }
 
-/// Pure JSON-shape migration of the research nodes to the version-8 shape
+/// Pure JSON-shape migration of the research nodes to the version-9 shape
 /// (see `research::migrate_research_node_values`). Returns whether any node
 /// changed.
 fn migrate_research_nodes(value: &mut Value) -> bool {
@@ -909,26 +916,37 @@ pub fn backup_v2_state_for_migration(workspace_root: &Path) -> Result<Option<Pat
     backup_state_for_migration(workspace_root, V2_BACKUP_FILE, "version-2")
 }
 
-/// Preserves the bytes of a state file written at `source_version` (3 to 7)
-/// before a save rewrites state.json with migrated research nodes, the way
-/// `backup_v2_state_for_migration` does for version 2: versions 3 to 6 as
-/// `state.v6.bak`, version 7 as `state.v7.bak`. Each backup is readable by
-/// the builds its name gives.
+/// Preserves the bytes of a state file written at `source_version` (3 to 8)
+/// before a save rewrites state.json with research nodes at version 9, which
+/// the source's builds refuse, the way `backup_v2_state_for_migration` does
+/// for version 2: versions 3 to 6 as `state.v6.bak`, version 7 as
+/// `state.v7.bak` and version 8 as `state.v8.bak`. Each backup is readable by
+/// the builds its name gives. A version-9 source needs none.
 pub fn backup_research_node_state_for_migration(
     workspace_root: &Path,
     source_version: u32,
 ) -> Result<Option<PathBuf>, String> {
-    if source_version >= STATE_VERSION_PRE_POSTS {
-        backup_state_for_migration(workspace_root, PRE_POSTS_BACKUP_FILE, "version-7")
-    } else {
-        backup_state_for_migration(
+    match source_version {
+        3..=6 => backup_state_for_migration(
             workspace_root,
             PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
             "pre-version-7",
-        )
+        ),
+        7 => backup_state_for_migration(workspace_root, PRE_POSTS_BACKUP_FILE, "version-7"),
+        8 => backup_state_for_migration(workspace_root, PRE_BODY_VERSION_BACKUP_FILE, "version-8"),
+        _ => Ok(None),
     }
 }
 
+/// Copies state.json to `backup_name` before a migration's save replaces it.
+/// An existing backup is never overwritten: it holds a state an earlier
+/// migration preserved (for example, this workspace's state before a
+/// downgrade and a later upgrade). When it holds other bytes, the source is
+/// copied to a sibling `<stem>.<millis>.bak` instead (`state.v7.<millis>.bak`
+/// beside `state.v7.bak`). No copy is written when the backup or one of its
+/// timestamped siblings already holds the source's bytes, so a migration
+/// that repeats because its save did not land adds no file, and a launch
+/// without a migration never calls this.
 fn backup_state_for_migration(
     workspace_root: &Path,
     backup_name: &str,
@@ -938,21 +956,25 @@ fn backup_state_for_migration(
     if !source.is_file() {
         return Ok(None);
     }
-    let backup = source.with_file_name(backup_name);
-    if backup.exists() {
-        return Ok(Some(backup));
-    }
     let bytes = fs::read(&source).map_err(|err| {
         format!(
             "failed to read {label} state {} for backup: {err}",
             source.display()
         )
     })?;
-    // Same temp+fsync+rename discipline as `save`: the exists() short-circuit
-    // above trusts whatever bytes are at the backup path forever, so a crash
-    // mid-copy must not be able to leave a truncated backup as the only
-    // preserved snapshot. write_synced also keeps the backup owner-only,
-    // matching the file it copies.
+    let (existing, backup) = migration_backup_paths(&source, backup_name);
+    if let Some(same) = existing
+        .into_iter()
+        .find(|path| fs::read(path).is_ok_and(|backup_bytes| backup_bytes == bytes))
+    {
+        return Ok(Some(same));
+    }
+    // Same temp+fsync+rename discipline as `save`: an existing backup is
+    // trusted as preserved forever, so a crash mid-copy must not be able to
+    // leave a truncated backup as the only preserved snapshot. write_synced
+    // also keeps the backup owner-only, matching the file it copies. The
+    // scratch name uses `backup_name` even for a timestamped backup, so the
+    // stale scratch-file cleanup recognizes it.
     let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
     let tmp = source.with_file_name(format!("{backup_name}.{}.{seq}.tmp", std::process::id()));
     write_synced(&tmp, &bytes).map_err(|err| {
@@ -975,6 +997,49 @@ fn backup_state_for_migration(
         let _ = dir.sync_all();
     }
     Ok(Some(backup))
+}
+
+/// The existing backups for `backup_name` beside `source` (the backup itself
+/// and its `<stem>.<millis>.bak` siblings), and the path a new backup takes:
+/// `backup_name` when it is free, otherwise the first free timestamped name.
+fn migration_backup_paths(source: &Path, backup_name: &str) -> (Vec<PathBuf>, PathBuf) {
+    let stem = backup_name.strip_suffix(".bak").unwrap_or(backup_name);
+    let is_timestamped = |name: &str| {
+        name.strip_prefix(stem)
+            .and_then(|rest| rest.strip_prefix('.'))
+            .and_then(|rest| rest.strip_suffix(".bak"))
+            .is_some_and(|millis| !millis.is_empty() && millis.bytes().all(|b| b.is_ascii_digit()))
+    };
+    let mut existing = source
+        .parent()
+        .and_then(|dir| fs::read_dir(dir).ok())
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name == backup_name || is_timestamped(name))
+        })
+        .map(|entry| entry.path())
+        .collect::<Vec<_>>();
+    existing.sort();
+    let plain = source.with_file_name(backup_name);
+    if !plain.exists() {
+        return (existing, plain);
+    }
+    let mut millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis())
+        .unwrap_or_default();
+    loop {
+        let candidate = source.with_file_name(format!("{stem}.{millis}.bak"));
+        if !candidate.exists() {
+            return (existing, candidate);
+        }
+        millis += 1;
+    }
 }
 
 fn discard_state_file(path: &Path, label: &str, reason: String) -> LoadOutcome {
@@ -1102,15 +1167,7 @@ fn scratch_writer_pid(name: &str) -> Option<u32> {
     let (rest, seq) = rest.rsplit_once('.')?;
     seq.parse::<u64>().ok()?;
     let (base, pid) = rest.rsplit_once('.')?;
-    if ![
-        STATE_FILE,
-        PREFERENCES_FILE,
-        V2_BACKUP_FILE,
-        PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
-        PRE_POSTS_BACKUP_FILE,
-    ]
-    .contains(&base)
-    {
+    if base != STATE_FILE && base != PREFERENCES_FILE && !MIGRATION_BACKUP_FILES.contains(&base) {
         return None;
     }
     pid.parse().ok()
@@ -1521,7 +1578,7 @@ mod tests {
     }
 
     #[test]
-    fn version_two_migration_backup_preserves_original_bytes_once() {
+    fn version_two_migration_backup_is_never_overwritten() {
         let root = temp_root();
         let path = state_path(&root);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -1531,12 +1588,17 @@ mod tests {
         let backup = backup_v2_state_for_migration(&root)
             .unwrap()
             .expect("existing state is backed up");
+        assert_eq!(backup.file_name().unwrap(), V2_BACKUP_FILE);
         assert_eq!(fs::read(&backup).unwrap(), original);
-        fs::write(&path, br#"{"version":3}"#).unwrap();
         assert_eq!(
             backup_v2_state_for_migration(&root).unwrap(),
             Some(backup.clone())
         );
+        let other = br#"{"version":2,"nextId":8}"#;
+        fs::write(&path, other).unwrap();
+        let sibling = backup_v2_state_for_migration(&root).unwrap().unwrap();
+        assert_ne!(sibling, backup);
+        assert_eq!(fs::read(&sibling).unwrap(), other);
         assert_eq!(fs::read(&backup).unwrap(), original);
         fs::remove_dir_all(root).unwrap();
     }
@@ -1762,10 +1824,24 @@ mod tests {
 
         let dead = dir.join(format!("state.json.{dead_pid}.7.tmp"));
         let dead_prefs = dir.join(format!("preferences.json.{dead_pid}.9.tmp"));
+        let dead_backups = MIGRATION_BACKUP_FILES
+            .map(|backup| dir.join(format!("{backup}.{dead_pid}.3.tmp")))
+            .to_vec();
         let live = dir.join(format!("state.json.{}.8.tmp", std::process::id()));
         let state_file = dir.join(STATE_FILE);
         let preserved = dir.join(format!("state.json.corrupt.123.{dead_pid}.0.bak"));
-        for path in [&dead, &dead_prefs, &live, &state_file, &preserved] {
+        let timestamped = dir.join("state.v8.1700000000000.bak");
+        for path in [
+            &dead,
+            &dead_prefs,
+            &live,
+            &state_file,
+            &preserved,
+            &timestamped,
+        ]
+        .into_iter()
+        .chain(&dead_backups)
+        {
             fs::write(path, b"x").unwrap();
         }
 
@@ -1773,9 +1849,77 @@ mod tests {
 
         assert!(!dead.exists());
         assert!(!dead_prefs.exists());
+        for path in &dead_backups {
+            assert!(!path.exists(), "{}", path.display());
+        }
         assert!(live.exists(), "a live writer's scratch file must survive");
         assert!(state_file.exists());
         assert!(preserved.exists(), ".bak preserves must survive");
+        assert!(timestamped.exists(), "migration backups must survive");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn migration_backup_keeps_existing_backups_and_adds_one_per_new_source() {
+        let root = temp_root();
+        let dir = root.join(STATE_DIR);
+        fs::create_dir_all(&dir).unwrap();
+        let path = state_path(&root);
+        let backups = || {
+            let mut names = fs::read_dir(&dir)
+                .unwrap()
+                .flatten()
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .filter(|name| name.starts_with("state.v7"))
+                .collect::<Vec<_>>();
+            names.sort();
+            names
+        };
+
+        // No backup yet: the plain name.
+        fs::write(&path, br#"{"version":7,"a":1}"#).unwrap();
+        let first = backup_research_node_state_for_migration(&root, 7)
+            .unwrap()
+            .unwrap();
+        assert_eq!(first, dir.join("state.v7.bak"));
+        // The same source again (its save did not land): nothing new.
+        assert_eq!(
+            backup_research_node_state_for_migration(&root, 7).unwrap(),
+            Some(first.clone())
+        );
+        assert_eq!(backups(), ["state.v7.bak"]);
+
+        // Another source while state.v7.bak holds the first: a timestamped
+        // sibling, and the first backup stays as it was.
+        fs::write(&path, br#"{"version":7,"a":2}"#).unwrap();
+        let second = backup_research_node_state_for_migration(&root, 7)
+            .unwrap()
+            .unwrap();
+        assert_ne!(second, first);
+        assert_eq!(fs::read(&second).unwrap(), br#"{"version":7,"a":2}"#);
+        assert_eq!(fs::read(&first).unwrap(), br#"{"version":7,"a":1}"#);
+        let name = second.file_name().unwrap().to_str().unwrap();
+        let millis = name
+            .strip_prefix("state.v7.")
+            .and_then(|rest| rest.strip_suffix(".bak"))
+            .unwrap();
+        assert!(millis.bytes().all(|byte| byte.is_ascii_digit()), "{name}");
+        assert_eq!(
+            backup_research_node_state_for_migration(&root, 7).unwrap(),
+            Some(second.clone())
+        );
+        // Either earlier source again: its backup is found, nothing new.
+        fs::write(&path, br#"{"version":7,"a":1}"#).unwrap();
+        assert_eq!(
+            backup_research_node_state_for_migration(&root, 7).unwrap(),
+            Some(first)
+        );
+        assert_eq!(backups().len(), 2);
+        assert!(
+            !backups().iter().any(|name| name.ends_with(".tmp")),
+            "{:?}",
+            backups()
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

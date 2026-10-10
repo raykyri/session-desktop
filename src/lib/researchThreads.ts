@@ -5,7 +5,7 @@
 // whatever node list they are given, so a malformed graph degrades to
 // shorter chains rather than throwing.
 
-import { followUpLaunch } from "./researchNodeTypes";
+import { followUpLaunch, nodeRun, nodeStatus } from "./researchNodeTypes";
 import type { ResearchNode, ResearchNodeStatus } from "../types";
 
 /** The statuses of a run that has been admitted but not settled. One list,
@@ -22,12 +22,13 @@ export function isActiveResearchStatus(status: ResearchNodeStatus): boolean {
   return ACTIVE_RESEARCH_STATUSES.includes(status);
 }
 
-/** A cancelled pane run can still need process cleanup. SDK cancellation
- * interrupts the session without a pane binding, so it needs no retry here. */
+/** A cancelled pane run can still need process cleanup (`holdsProcess`). SDK
+ * cancellation interrupts the session without a pane binding, so it needs no
+ * retry here. */
 export function canStopResearchNode(node: ResearchNode): boolean {
   return (
-    isActiveResearchStatus(node.status) ||
-    (node.status === "cancelled" && Boolean(node.paneId))
+    isActiveResearchStatus(nodeStatus(node)) ||
+    (nodeStatus(node) === "cancelled" && Boolean(nodeRun(node)?.holdsProcess))
   );
 }
 
@@ -42,10 +43,10 @@ export function researchThreadStopTarget(chain: readonly ResearchNode[]): Resear
  * was recorded. Posts and documents launch fresh runs with their content as
  * context, so they need no checkpoint. */
 export function canFollowUpFrom(node: ResearchNode): boolean {
-  if (node.status !== "complete") {
+  if (nodeStatus(node) !== "complete") {
     return false;
   }
-  return followUpLaunch(node) === "context" || Boolean(node.nativeSessionId);
+  return followUpLaunch(node) === "context" || Boolean(nodeRun(node)?.sessionReady);
 }
 
 /** Selects the oldest inline child, breaking ties by id so the chain
@@ -151,7 +152,7 @@ export function inlineChainFor(nodes: readonly ResearchNode[], nodeId: string): 
  * Archived-tree gating stays the caller's job, matching canContinueThread. */
 export function canRetryResearchNode(node: ResearchNode): boolean {
   return (
-    (node.status === "failed" || node.status === "cancelled") && !node.paneId
+    (nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled") && !nodeRun(node)?.holdsProcess
   );
 }
 

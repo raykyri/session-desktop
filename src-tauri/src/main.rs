@@ -60,8 +60,9 @@ use research::{
     ApplyResearchRecapCandidateRequest, CreateResearchTreeRequest, GenerateResearchRecapRequest,
     RecentResearchQueryCursor, ResearchBranchRemoval, ResearchDraft, ResearchFolderState,
     ResearchHighlight, ResearchHighlightAnchor, ResearchHighlightFeedItem, ResearchNode,
-    ResearchNodeContent, ResearchRecapCandidate, ResearchTree, ResearchTreeDetail,
-    ResearchTreeSummary, UpdateResearchDocumentRequest, UpdateResearchDocumentResult,
+    ResearchNodeContent, ResearchNodeView, ResearchRecapCandidate, ResearchTree,
+    ResearchTreeDetail, ResearchTreeSummary, UpdateResearchDocumentRequest,
+    UpdateResearchDocumentResult,
 };
 use show_hide_shortcut::{
     show_hide_shortcut_capture_set, show_hide_shortcut_get, show_hide_shortcut_set,
@@ -1605,8 +1606,10 @@ fn reorder_research_drafts(
 #[tauri::command]
 async fn list_research_activity(
     state: tauri::State<'_, AppState>,
-) -> Result<Vec<ResearchNode>, String> {
-    state.list_research_activity()
+) -> Result<Vec<ResearchNodeView>, String> {
+    state
+        .list_research_activity()
+        .map(|nodes| nodes.iter().map(ResearchNode::view).collect())
 }
 
 #[tauri::command]
@@ -1671,7 +1674,7 @@ async fn create_research_tree(
             &state,
             &root.id,
             &workspace,
-            tweets::prompt_with_research_attachments(root.prompt.clone(), &root.attachments),
+            tweets::prompt_with_research_attachments(root.prompt().to_string(), root.attachments()),
         ) {
             Ok(_) => state.research_tree(&detail.tree.id),
             Err(err) => {
@@ -1773,7 +1776,7 @@ async fn create_research_note_follow_up(
     state: tauri::State<'_, AppState>,
     parent_node_id: String,
     body: String,
-) -> Result<ResearchNode, String> {
+) -> Result<ResearchNodeView, String> {
     let state = state.inner().clone();
     let attachments = tweets::resolve_research_message_attachments(&body).await;
     tauri::async_runtime::spawn_blocking(move || {
@@ -1781,6 +1784,7 @@ async fn create_research_note_follow_up(
     })
     .await
     .map_err(|err| format!("create_research_note_follow_up task failed: {err}"))?
+    .map(|node| node.view())
 }
 
 /// The note author's response to a member reply (`in_reply_to` set). There
@@ -1794,18 +1798,20 @@ fn add_research_note_reply(
     in_reply_to: Option<String>,
     body: String,
     member: Option<research::NoteReplyAuthor>,
-) -> Result<ResearchNode, String> {
+) -> Result<ResearchNodeView, String> {
     let author = match member {
         Some(member @ research::NoteReplyAuthor::Member { .. }) if cfg!(debug_assertions) => member,
         Some(_) => return Err("member replies can only arrive from the network".to_string()),
         None => research::NoteReplyAuthor::Author,
     };
-    state.add_research_note_reply(research::AddNoteReplyRequest {
-        node_id,
-        body,
-        author,
-        in_reply_to,
-    })
+    state
+        .add_research_note_reply(research::AddNoteReplyRequest {
+            node_id,
+            body,
+            author,
+            in_reply_to,
+        })
+        .map(|node| node.view())
 }
 
 #[tauri::command]
@@ -1813,8 +1819,10 @@ fn remove_research_note_reply(
     state: tauri::State<'_, AppState>,
     node_id: String,
     reply_id: String,
-) -> Result<ResearchNode, String> {
-    state.remove_research_note_reply(&node_id, &reply_id)
+) -> Result<ResearchNodeView, String> {
+    state
+        .remove_research_note_reply(&node_id, &reply_id)
+        .map(|node| node.view())
 }
 
 #[tauri::command]
@@ -1906,9 +1914,12 @@ async fn get_research_node_content(
                 Some(err)
             }
         };
-        if content.node.transcript_path.is_some()
+        if content
+            .node
+            .binding()
+            .is_some_and(|binding| binding.transcript_path.is_some())
             && matches!(
-                content.node.status,
+                content.node.status(),
                 research::ResearchNodeStatus::Complete
                     | research::ResearchNodeStatus::Failed
                     | research::ResearchNodeStatus::Cancelled
@@ -1952,7 +1963,7 @@ async fn fork_research_node(
     anchor: Option<research::NodeAnchor>,
     inline: Option<bool>,
     replaces_node_id: Option<String>,
-) -> Result<ResearchNode, String> {
+) -> Result<ResearchNodeView, String> {
     let state = state.inner().clone();
     let inline = inline.unwrap_or(false);
     let attachments = tweets::resolve_research_message_attachments(&prompt).await;
@@ -1997,11 +2008,12 @@ async fn fork_research_node(
     })
     .await
     .map_err(|err| format!("fork_research_node task failed: {err}"))?
+    .map(|node| node.view())
 }
 
 /// Launches the run for an admitted (Queued) research child from its parent's
-/// kind: documents, conversations, notes, and imported reports launch fresh
-/// runs with saved content as context; other runs fork the native session.
+/// type: posts and documents (authored, imported, transcripts) launch fresh
+/// runs with saved content as context; exchanges fork the native session.
 /// Shared by the fork command and retry, which relaunches a reset child
 /// through the same dispatch. Every failure path settles the child as Failed
 /// (reclaiming any spawned pane) before returning the error, exactly as the
@@ -2012,7 +2024,8 @@ fn launch_research_child_run(
     workspace: &GroupInfo,
     child: &ResearchNode,
 ) -> Result<ResearchNode, String> {
-    let prompt = tweets::prompt_with_research_attachments(child.prompt.clone(), &child.attachments);
+    let prompt =
+        tweets::prompt_with_research_attachments(child.prompt().to_string(), child.attachments());
     // A highlight-targeted follow-up sends the quoted passage with the
     // question. Only the sent prompt carries the quote — the child's
     // displayed prompt stays the bare question, which boundary matching
@@ -2035,7 +2048,10 @@ fn launch_research_child_run(
             // quoted passage as it does for serialized turns, then wraps it.
             Some(state.research_snapshot_followup_prompt(
                 &parent.id,
-                &tweets::prompt_with_research_attachments(child.prompt.clone(), &child.attachments),
+                &tweets::prompt_with_research_attachments(
+                    child.prompt().to_string(),
+                    child.attachments(),
+                ),
                 child.passage_anchor(),
             ))
         }
@@ -2055,14 +2071,16 @@ fn launch_research_child_run(
         };
         return launch_fresh_research_run(state, &child.id, workspace, launch_prompt);
     }
-    let live_source = parent
+    // A forked parent is an exchange; its binding names the session.
+    let binding = parent.binding().cloned().unwrap_or_default();
+    let live_source = binding
         .agent_id
         .as_deref()
         .and_then(|agent_id| state.agent(agent_id).ok().flatten());
     let mut source = match live_source {
         Some(source) => source,
         None => {
-            let session_id = match parent.native_session_id.clone() {
+            let session_id = match binding.native_session_id.clone() {
                 Some(session_id) => session_id,
                 None => {
                     let err =
@@ -2072,22 +2090,22 @@ fn launch_research_child_run(
                 }
             };
             AgentInfo {
-                id: parent
+                id: binding
                     .agent_id
                     .clone()
                     .unwrap_or_else(|| format!("research-source-{}", parent.id)),
                 group_id: parent.group_id.clone(),
-                adapter: parent.adapter.clone(),
-                worktree_dir: parent.worktree_dir.clone(),
+                adapter: parent.adapter().to_string(),
+                worktree_dir: binding.worktree_dir.clone(),
                 branch: None,
                 active_workspace: None,
                 pane_id: None,
                 orphaned_queue_pane_id: None,
                 session_id: Some(session_id.clone()),
-                transcript_path: parent.transcript_path.clone(),
+                transcript_path: binding.transcript_path.clone(),
                 status: AgentStatus::Done,
-                model: parent.model.clone(),
-                effort: parent.effort.clone(),
+                model: parent.model().map(str::to_string),
+                effort: parent.effort().map(str::to_string),
                 approval_mode: None,
                 parent_id: None,
                 fork_point: None,
@@ -2106,7 +2124,7 @@ fn launch_research_child_run(
     source.worktree_dir = workspace.dir.clone();
     // The follow-up runs at the child's (inherited) effort, applied by the
     // adapter's fork path the same way `model` is re-applied.
-    source.effort = child.effort.clone();
+    source.effort = child.effort().map(str::to_string);
     launch_research_execution(state, child, workspace, question, Some(&source))
 }
 
@@ -2149,7 +2167,10 @@ async fn retry_research_node(
                 &state,
                 &node.id,
                 &workspace,
-                tweets::prompt_with_research_attachments(node.prompt.clone(), &node.attachments),
+                tweets::prompt_with_research_attachments(
+                    node.prompt().to_string(),
+                    node.attachments(),
+                ),
             ),
             Some(parent_id) => {
                 let parent = match state.research_node(parent_id) {
@@ -2162,7 +2183,7 @@ async fn retry_research_node(
                 // The original fork required a completed parent; a parent that
                 // has since been re-run (or whose checkpoint regressed) cannot
                 // anchor the relaunch.
-                if parent.status != research::ResearchNodeStatus::Complete {
+                if parent.status() != research::ResearchNodeStatus::Complete {
                     let err = "research follow-ups require a completed parent response".to_string();
                     let _ = state.fail_research_node(&node.id, err.clone());
                     return Err(err);
@@ -2181,12 +2202,13 @@ async fn retry_research_node(
 async fn cancel_research_node(
     state: tauri::State<'_, AppState>,
     node_id: String,
-) -> Result<ResearchNode, String> {
+) -> Result<ResearchNodeView, String> {
     let state = state.inner().clone();
     // Blocking: cancellation kills the run's pane (process wait + teardown).
     tauri::async_runtime::spawn_blocking(move || state.cancel_research_node(&node_id))
         .await
         .map_err(|err| format!("cancel_research_node task failed: {err}"))?
+        .map(|node| node.view())
 }
 
 #[tauri::command]
@@ -2221,8 +2243,10 @@ fn rename_research_node(
     state: tauri::State<'_, AppState>,
     node_id: String,
     title: String,
-) -> Result<ResearchNode, String> {
-    state.set_research_node_title(&node_id, title)
+) -> Result<ResearchNodeView, String> {
+    state
+        .set_research_node_title(&node_id, title)
+        .map(|node| node.view())
 }
 
 #[tauri::command]
@@ -2230,8 +2254,10 @@ fn set_research_node_promoted(
     state: tauri::State<'_, AppState>,
     node_id: String,
     promoted: bool,
-) -> Result<ResearchNode, String> {
-    state.set_research_node_promoted(&node_id, promoted)
+) -> Result<ResearchNodeView, String> {
+    state
+        .set_research_node_promoted(&node_id, promoted)
+        .map(|node| node.view())
 }
 
 #[tauri::command]
@@ -3342,7 +3368,7 @@ async fn generate_research_recap_candidate(
             ));
         }
         let node = state.research_node(&request.node_id)?;
-        if !node.recap_eligible() || node.status != research::ResearchNodeStatus::Complete {
+        if !node.recap_eligible() || node.status() != research::ResearchNodeStatus::Complete {
             return Err("only completed research runs can generate summaries".to_string());
         }
         let snapshot = research::read_response_snapshot_with_revision(
@@ -3383,8 +3409,10 @@ async fn generate_research_recap_candidate(
 fn apply_research_recap_candidate(
     state: tauri::State<'_, AppState>,
     request: ApplyResearchRecapCandidateRequest,
-) -> Result<ResearchNode, String> {
-    state.apply_research_recap_candidate(request)
+) -> Result<ResearchNodeView, String> {
+    state
+        .apply_research_recap_candidate(request)
+        .map(|node| node.view())
 }
 
 pub(crate) fn ensure_rustls_crypto_provider() -> Result<(), String> {

@@ -28,24 +28,24 @@ import type {
   ResearchTreeDetail,
   ResearchTreeSummary,
 } from "../src/types";
+import { researchNode } from "./researchNodeFixture";
 
 function node(
   id: string,
   parentNodeId: string | null,
   status: ResearchNodeStatus = "complete",
 ): ResearchNode {
-  return {
+  return researchNode({
     id,
     treeId: "tree",
     parentNodeId,
     prompt: id,
     adapter: "claude",
     groupId: "group",
-    worktreeDir: "/tmp",
     status,
     createdAt: 1,
     highlights: [],
-  };
+  });
 }
 
 function highlight(overrides: Partial<ResearchHighlight["anchor"]> = {}): ResearchHighlight {
@@ -71,7 +71,7 @@ function tree(id: string, workspaceId: string): ResearchTreeSummary {
     id,
     title: id,
     rootNodeId: `${id}-root`,
-    kind: "run",
+    type: "exchange",
     workspaceId,
     runningCount: 0,
     failedCount: 0,
@@ -173,8 +173,7 @@ test("branch info includes every descendant but not siblings", () => {
 test("branch info detects active descendants and live panes", () => {
   const running = [node("branch", "root"), node("child", "branch", "running")];
   assert.equal(researchBranchInfo(running, "branch")?.hasActiveRuns, true);
-  const pane = node("child", "branch");
-  pane.paneId = "pane";
+  const pane = researchNode({ id: "child", treeId: "tree", parentNodeId: "branch", holdsProcess: true });
   assert.equal(researchBranchInfo([node("branch", "root"), pane], "branch")?.hasActiveRuns, true);
   assert.equal(researchBranchInfo(running, "missing"), null);
 });

@@ -27,6 +27,7 @@ import type {
   ResearchTree,
   ResearchTreeDetail,
 } from "../src/types";
+import { researchNode, withRun, type NodeFixture } from "./researchNodeFixture";
 
 const anchor = {
   version: 1 as const,
@@ -60,8 +61,8 @@ function tree(overrides: Partial<ResearchTree> = {}): ResearchTree {
   };
 }
 
-function node(overrides: Partial<ResearchNode> = {}): ResearchNode {
-  return {
+function node(overrides: NodeFixture = {}): ResearchNode {
+  return researchNode({
     id: "node-root",
     treeId: "tree-1",
     parentNodeId: null,
@@ -69,14 +70,9 @@ function node(overrides: Partial<ResearchNode> = {}): ResearchNode {
     adapter: "codex",
     model: null,
     groupId: "workspace-1",
-    worktreeDir: "/tmp/workspace",
-    nativeSessionId: null,
-    transcriptPath: null,
-    promptNativeId: null,
-    agentId: null,
-    paneId: null,
-    threadId: null,
-    kind: "run",
+    sessionReady: false,
+    holdsProcess: false,
+    type: "exchange",
     status: "queued",
     error: null,
     responseSnapshotAt: null,
@@ -85,7 +81,7 @@ function node(overrides: Partial<ResearchNode> = {}): ResearchNode {
     completedAt: null,
     highlights: [],
     ...overrides,
-  };
+  });
 }
 
 function detail(nodes: ResearchNode[], overrides: Partial<ResearchTree> = {}): ResearchTreeDetail {
@@ -169,9 +165,12 @@ test("parseResearchEvent separates unrelated, unsupported, and malformed events"
   );
 });
 
-test("researchSummaryFromDetail exactly derives counts, kind, and unseen attention", () => {
+test("researchSummaryFromDetail derives run counts, the root type, and unseen attention", () => {
+  // The root document has no run: it counts toward nothing, as in the
+  // backend's summaries.
   const nodes = [
-    node({ kind: "document", status: "complete", completedAt: 10 }),
+    node({ type: "document" }),
+    node({ id: "complete", parentNodeId: "node-root", status: "complete", completedAt: 10, createdAt: 15 }),
     node({ id: "running", parentNodeId: "node-root", status: "running", createdAt: 11 }),
     node({ id: "failed-old", status: "failed", completedAt: 9, createdAt: 12 }),
     node({ id: "failed-new", status: "failed", completedAt: 14, createdAt: 13 }),
@@ -181,7 +180,7 @@ test("researchSummaryFromDetail exactly derives counts, kind, and unseen attenti
     id: "tree-1",
     title: "Research",
     rootNodeId: "node-root",
-    kind: "document",
+    type: "document",
     workspaceId: "workspace-1",
     runningCount: 1,
     failedCount: 2,
@@ -231,16 +230,16 @@ test("node collection helpers upsert in backend order and remove without no-op c
 });
 
 test("activity helper retains terminal nodes while their pane is bound, then removes them", () => {
-  const active = node({ paneId: "pane-1", status: "running" });
+  const active = node({ holdsProcess: true, status: "running" });
   assert.equal(researchNodeIsActivity(active), true);
   const activity = upsertResearchActivity([], active);
 
-  const settledBound = { ...active, status: "complete" as const, completedAt: 30 };
+  const settledBound = withRun(active, { status: "complete", completedAt: 30 });
   const settledActivity = upsertResearchActivity(activity, settledBound);
   assert.equal(settledActivity.length, 1);
   assert.equal(settledActivity[0], settledBound);
 
-  const detached = { ...settledBound, paneId: null };
+  const detached = withRun(settledBound, { holdsProcess: false });
   assert.equal(researchNodeIsActivity(detached), false);
   assert.deepEqual(upsertResearchActivity(settledActivity, detached), []);
 });
@@ -248,7 +247,7 @@ test("activity helper retains terminal nodes while their pane is bound, then rem
 test("detail node/tree/remove helpers touch only their matching tree", () => {
   const root = node();
   const current = detail([root]);
-  const updatedRoot = { ...root, status: "running" as const };
+  const updatedRoot = withRun(root, { status: "running" });
   const withNode = patchResearchDetailNode(current, updatedRoot);
   assert.notEqual(withNode, current);
   assert.equal(withNode?.nodes[0], updatedRoot);
@@ -293,7 +292,7 @@ test("highlight helpers are idempotent and preserve unrelated highlights", () =>
 test("summary node patch handles active transitions without changing bucket totals", () => {
   const queued = node({ status: "queued" });
   const summary = researchSummaryFromDetail(detail([queued]));
-  const running = { ...queued, status: "running" as const, startedAt: 50 };
+  const running = withRun(queued, { status: "running", startedAt: 50 });
   const patched = patchResearchSummaryForNode(summary, queued, running, 51);
   assert.equal(patched.runningCount, 1);
   assert.equal(patched.completedCount, 0);
@@ -304,26 +303,21 @@ test("summary node patch handles active transitions without changing bucket tota
 test("summary node patch moves counts and lights attention only on a new settlement", () => {
   const running = node({ status: "running", startedAt: 20 });
   const summary = researchSummaryFromDetail(detail([running]));
-  const failed = {
-    ...running,
-    status: "failed" as const,
-    error: "boom",
-    completedAt: 60,
-  };
+  const failed = withRun(running, { status: "failed", error: "boom", completedAt: 60 });
   const settled = patchResearchSummaryForNode(summary, running, failed, 61);
   assert.equal(settled.runningCount, 0);
   assert.equal(settled.failedCount, 1);
   assert.equal(settled.hasUnseenUpdate, true);
   assert.equal(settled.hasUnseenFailure, true);
 
-  const metadataOnly = { ...failed, responseSnapshotAt: 70 };
+  const metadataOnly = withRun(failed, { responseSnapshotAt: 70 });
   assert.equal(patchResearchSummaryForNode(settled, failed, metadataOnly, 70), settled);
 });
 
 test("summary node patch clamps inconsistent counts and ignores mismatched records", () => {
   const running = node({ status: "running" });
   const summary = { ...researchSummaryFromDetail(detail([running])), runningCount: 0 };
-  const complete = { ...running, status: "complete" as const, completedAt: 40 };
+  const complete = withRun(running, { status: "complete", completedAt: 40 });
   const patched = patchResearchSummaryForNode(summary, running, complete, 40);
   assert.equal(patched.runningCount, 0);
   assert.equal(patched.completedCount, 1);

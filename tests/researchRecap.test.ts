@@ -5,14 +5,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import ResearchRecap from "../src/components/research/ResearchRecap";
 import ResearchRecapDialog from "../src/components/research/ResearchRecapDialog";
 import type { ResearchNodeContent } from "../src/types";
+import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
-function content(): ResearchNodeContent {
+const RECAP = { text: "The result is ready.", responseRevision: "revision" };
+
+function content(fields: NodeFixture = {}): ResearchNodeContent {
   return {
-    node: {
-      id: "node", treeId: "tree", prompt: "Question", adapter: "claude",
-      groupId: "group", worktreeDir: "/tmp", status: "complete", createdAt: 1,
-      highlights: [], recap: { text: "The result is ready.", responseRevision: "revision" },
-    },
+    node: researchNode({ prompt: "Question", recap: RECAP, ...fields }),
     turns: [], responseRevision: "revision",
   };
 }
@@ -23,52 +22,43 @@ test("recaps reserve no space until generated and belonging to the displayed ans
   assert.match(render(value), /Summary: The result is ready\./);
   value.responseRevision = "different";
   assert.equal(render(value), "");
-  value.responseRevision = "revision";
-  value.node.status = "running";
-  assert.equal(render(value), "");
-  value.node.status = "complete";
-  delete value.node.recap;
-  assert.equal(render(value), "");
+  assert.equal(render(content({ status: "running" })), "");
+  assert.equal(render(content({ recap: null })), "");
 });
 
 test("imported reports show their recap; other documents and posts do not", () => {
-  const value = content();
-  value.node.kind = "document";
-  value.node.origin = "imported";
-  assert.match(render(value), /Summary: The result is ready\./);
-  value.node.origin = null;
-  assert.equal(render(value), "");
-  value.node.kind = "post";
-  assert.equal(render(value), "");
+  assert.match(
+    render(content({ type: "document", source: "imported" })),
+    /Summary: The result is ready\./,
+  );
+  assert.equal(render(content({ type: "document" })), "");
+  assert.equal(render(content({ type: "document", source: "transcript" })), "");
+  assert.equal(render(content({ type: "post" })), "");
 });
 
 test("a pending summary job holds the recap slot with a spinner", () => {
-  const value = content();
   const pending = (input: ResearchNodeContent) =>
     renderToStaticMarkup(createElement(ResearchRecap, { content: input, pending: true }));
   // A current recap always wins over the placeholder.
-  assert.match(pending(value), /Summary: The result is ready\./);
-  delete value.node.recap;
-  assert.match(pending(value), /Generating summary/);
-  assert.equal(render(value), "");
+  assert.match(pending(content()), /Summary: The result is ready\./);
+  const missing = content({ recap: null });
+  assert.match(pending(missing), /Generating summary/);
+  assert.equal(render(missing), "");
   // A stale recap generates again, so its slot shows the spinner, not the text.
-  value.node.recap = { text: "Stale.", responseRevision: "older" };
-  assert.match(pending(value), /Generating summary/);
-  assert.doesNotMatch(pending(value), /Stale\./);
+  const stale = content({ recap: { text: "Stale.", responseRevision: "older" } });
+  assert.match(pending(stale), /Generating summary/);
+  assert.doesNotMatch(pending(stale), /Stale\./);
   // Nothing to summarize yet on a run that has not settled.
-  value.node.status = "running";
-  assert.equal(pending(value), "");
+  assert.equal(pending(content({ status: "running", recap: null })), "");
 });
 
 test("recaps render as text, with no Markdown or HTML interpretation", () => {
-  const value = content();
-  value.node.recap!.text = "<script>alert(1)</script> **text**";
+  const value = content({ recap: { ...RECAP, text: "<script>alert(1)</script> **text**" } });
   const html = render(value);
   assert.ok(html.includes("&lt;script&gt;"));
   assert.ok(html.includes("**text**"));
   assert.ok(!html.includes("<strong>"));
-  value.node.kind = "document";
-  assert.equal(render(value), "");
+  assert.equal(render(content({ type: "document" })), "");
 });
 
 test("current recaps render without an inline regeneration control", () => {

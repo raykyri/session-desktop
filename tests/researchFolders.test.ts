@@ -24,11 +24,12 @@ import {
 } from "../src/lib/researchFolders";
 import { patchRecentActivityPromoted } from "../src/lib/activity";
 import { researchMoveTargets } from "../src/components/research/ResearchMoveMenu";
-import type { ResearchFolderState, ResearchNode, ResearchTreeSummary } from "../src/types";
+import type { ResearchFolderState, ResearchTreeSummary } from "../src/types";
+import { researchNode } from "./researchNodeFixture";
 
 function tree(id: string, overrides: Partial<ResearchTreeSummary> = {}): ResearchTreeSummary {
   return {
-    id, title: id, rootNodeId: `${id}-root`, kind: "run", workspaceId: "ws",
+    id, title: id, rootNodeId: `${id}-root`, type: "exchange", workspaceId: "ws",
     runningCount: 0, failedCount: 0, completedCount: 1, cancelledCount: 0, updatedAt: 1,
     archivedAt: null, hasUnseenUpdate: false, hasUnseenFailure: false, ...overrides,
   };
@@ -180,9 +181,7 @@ test("node updates keep a root's starred list current, or ask for a refetch", ()
     promoted: [{ ...root, nodeId: "f", parentNodeId: "root", inline: true, prompt: "Old", branchDepth: 0, promotedAt: 5 }],
   }];
   const node = (id: string, promotedAt: number | null, prompt = "New") =>
-    ({ id, treeId: "t", prompt, title: null, status: "running", promotedAt }) as unknown as ResearchNode & {
-      promotedAt: number | null;
-    };
+    researchNode({ id, treeId: "t", prompt, title: null, status: "running", promotedAt });
   const updated = patchRecentActivityPromoted(items, node("f", 5));
   assert.equal(updated.stale, false);
   assert.equal(updated.items[0].promoted?.[0].prompt, "New");

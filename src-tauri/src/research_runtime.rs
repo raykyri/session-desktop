@@ -78,13 +78,13 @@ pub fn launch(
     fork: bool,
 ) -> Result<ResearchNode, String> {
     let resume = resume
-        .map(|session_id| validate_session_id(&session_id, &node.adapter))
+        .map(|session_id| validate_session_id(&session_id, node.adapter()))
         .transpose()
         .map_err(|err| {
             let _ = state.fail_research_node(&node.id, err.clone());
             err
         })?;
-    match node.adapter.as_str() {
+    match node.adapter() {
         "claude" => launch_claude(state, node, workspace, prompt, resume, fork),
         "codex" | "grok" => launch_jsonl(state, node, workspace, prompt, resume, fork),
         adapter => Err(format!("'{adapter}' is not a supported research agent")),
@@ -120,8 +120,8 @@ fn launch_claude(
             base_repo: Some(workspace.dir.clone()),
             base_ref: Some("HEAD".to_string()),
             adapter: "claude".to_string(),
-            model: node.model.clone(),
-            effort: node.effort.clone(),
+            model: node.model().map(str::to_string),
+            effort: node.effort().map(str::to_string),
             use_worktree: false,
         },
     )
@@ -137,7 +137,7 @@ fn launch_claude(
             state.prune_agent(&agent.id);
             err
         })?;
-    if bound.status.is_terminal() {
+    if bound.status().is_terminal() {
         if let Err(err) = state.finish_research_sdk_run(&node.id, &agent.id, false, None) {
             eprintln!("session: failed to preserve pre-launch research cancellation: {err}");
         }
@@ -171,7 +171,7 @@ fn launch_claude(
             return Err(err);
         }
     };
-    if current.status.is_terminal() {
+    if current.status().is_terminal() {
         if let Err(err) = state.finish_research_sdk_run(&node.id, &agent.id, false, None) {
             eprintln!("session: failed to preserve pre-thread research cancellation: {err}");
         }
@@ -188,8 +188,8 @@ fn launch_claude(
     let spec = ClaudeSdkSpawnSpec {
         binary,
         cwd: PathBuf::from(&workspace.dir),
-        model: node.model.clone(),
-        effort: node.effort.clone(),
+        model: node.model().map(str::to_string),
+        effort: node.effort().map(str::to_string),
         resume,
         fork,
         stderr_log,
@@ -254,7 +254,7 @@ fn launch_jsonl(
     resume: Option<String>,
     fork: bool,
 ) -> Result<ResearchNode, String> {
-    let flavor = match node.adapter.as_str() {
+    let flavor = match node.adapter() {
         "codex" => JsonlFlavor::Codex,
         "grok" => JsonlFlavor::Grok,
         adapter => return Err(format!("'{adapter}' has no JSONL research runtime")),
@@ -290,9 +290,9 @@ fn launch_jsonl(
             group_id: Some(workspace.id.clone()),
             base_repo: Some(workspace.dir.clone()),
             base_ref: Some("HEAD".to_string()),
-            adapter: node.adapter.clone(),
-            model: node.model.clone(),
-            effort: node.effort.clone(),
+            adapter: node.adapter().to_string(),
+            model: node.model().map(str::to_string),
+            effort: node.effort().map(str::to_string),
             use_worktree: false,
         },
     )
@@ -318,7 +318,7 @@ fn launch_jsonl(
             state.prune_agent(&agent.id);
             err
         })?;
-    if bound.status.is_terminal() {
+    if bound.status().is_terminal() {
         let _ = state.finish_research_sdk_run(&node.id, &agent.id, false, None);
         return Ok(bound);
     }
@@ -347,7 +347,7 @@ fn launch_jsonl(
         state.prune_agent(&agent.id);
         err
     })?;
-    if current.status.is_terminal() {
+    if current.status().is_terminal() {
         let _ = state.finish_research_sdk_run(&node.id, &agent.id, false, None);
         unregister(&node.id);
         return Ok(current);
@@ -362,16 +362,16 @@ fn launch_jsonl(
     let args = match flavor {
         JsonlFlavor::Codex => build_codex_exec_args(
             &prompt,
-            node.model.as_deref(),
-            node.effort.as_deref(),
+            node.model(),
+            node.effort(),
             resume.as_deref(),
             fork,
         ),
         JsonlFlavor::Grok => build_grok_headless_args(
             &cwd,
             &prompt,
-            node.model.as_deref(),
-            node.effort.as_deref(),
+            node.model(),
+            node.effort(),
             resume.as_deref(),
             fork,
             grok_session_id
@@ -1885,17 +1885,17 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             .unwrap();
         let node = detail.nodes[0].clone();
         let launched = launch(&state, &node, &group, "hello".to_string(), None, false).unwrap();
-        assert_eq!(launched.runtime, ResearchRuntime::Sdk);
-        assert!(launched.pane_id.is_none());
+        assert_eq!(launched.runtime(), ResearchRuntime::Sdk);
+        assert!(launched.pane_id().is_none());
         let agent_id = launched
-            .agent_id
+            .agent_id()
             .clone()
             .expect("sdk bind records agent_id");
 
         let deadline = Instant::now() + Duration::from_secs(8);
         let finished = loop {
             let current = state.research_node(&node.id).unwrap();
-            if current.status.is_terminal() {
+            if current.status().is_terminal() {
                 break current;
             }
             assert!(
@@ -1905,9 +1905,12 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
             );
             thread::sleep(Duration::from_millis(50));
         };
-        assert_eq!(finished.status, ResearchNodeStatus::Complete);
-        assert_eq!(finished.native_session_id.as_deref(), Some("sess-1"));
-        assert!(finished.pane_id.is_none());
+        assert_eq!(finished.status(), ResearchNodeStatus::Complete);
+        assert_eq!(
+            finished.binding().unwrap().native_session_id.as_deref(),
+            Some("sess-1")
+        );
+        assert!(finished.pane_id().is_none());
         assert!(state.agent(&agent_id).unwrap().is_none());
         fs::remove_dir_all(root).ok();
     }
@@ -1952,7 +1955,7 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
         state.cancel_research_node(&node.id).unwrap();
         assert!(wait_for_session_stop(&node.id, Duration::from_secs(5)));
         assert_eq!(
-            state.research_node(&node.id).unwrap().status,
+            state.research_node(&node.id).unwrap().status(),
             ResearchNodeStatus::Cancelled
         );
         assert!(!workspace_dir.join("prompt-sent").exists());
@@ -1990,8 +1993,8 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
         state.cancel_research_node(&node.id).unwrap();
         assert!(wait_for_session_stop(&node.id, Duration::from_secs(5)));
         let finished = state.research_node(&node.id).unwrap();
-        assert_eq!(finished.status, ResearchNodeStatus::Cancelled);
-        assert!(finished.error.is_none());
+        assert_eq!(finished.status(), ResearchNodeStatus::Cancelled);
+        assert!(finished.run().unwrap().error.is_none());
         fs::remove_dir_all(root).ok();
     }
 
@@ -2034,7 +2037,7 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
         launch(&state, &node, &group, "hello".to_string(), None, false).unwrap();
         assert!(wait_for_session_stop(&node.id, Duration::from_secs(5)));
         assert_eq!(
-            state.research_node(&node.id).unwrap().status,
+            state.research_node(&node.id).unwrap().status(),
             ResearchNodeStatus::Complete
         );
         let snapshot = crate::research::read_response_snapshot(&root, &node.id)
@@ -2086,7 +2089,7 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
         launch(&state, &node, &group, "hello".to_string(), None, false).unwrap();
         assert!(wait_for_session_stop(&node.id, Duration::from_secs(5)));
         assert_eq!(
-            state.research_node(&node.id).unwrap().status,
+            state.research_node(&node.id).unwrap().status(),
             ResearchNodeStatus::Complete
         );
         let snapshot = crate::research::read_response_snapshot(&root, &node.id)
@@ -2226,12 +2229,12 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
         launch(&state, &node, &group, "hello".to_string(), None, false).unwrap();
         assert!(wait_for_session_stop(&node.id, Duration::from_secs(5)));
         let finished = state.research_node(&node.id).unwrap();
-        assert_eq!(finished.status, ResearchNodeStatus::Complete);
+        assert_eq!(finished.status(), ResearchNodeStatus::Complete);
         assert_eq!(
-            finished.native_session_id.as_deref(),
+            finished.binding().unwrap().native_session_id.as_deref(),
             Some("codex-thread-1")
         );
-        assert!(finished.pane_id.is_none());
+        assert!(finished.pane_id().is_none());
         let snapshot = crate::research::read_response_snapshot(&root, &node.id)
             .unwrap()
             .unwrap();
@@ -2268,9 +2271,9 @@ print(json.dumps({"type":"result","subtype":"success","session_id":session_id,"r
         launch(&state, &node, &group, "hello".to_string(), None, false).unwrap();
         assert!(wait_for_session_stop(&node.id, Duration::from_secs(5)));
         let finished = state.research_node(&node.id).unwrap();
-        assert_eq!(finished.status, ResearchNodeStatus::Complete);
-        assert!(finished.native_session_id.is_some());
-        assert!(finished.pane_id.is_none());
+        assert_eq!(finished.status(), ResearchNodeStatus::Complete);
+        assert!(finished.binding().unwrap().native_session_id.is_some());
+        assert!(finished.pane_id().is_none());
         let snapshot = crate::research::read_response_snapshot(&root, &node.id)
             .unwrap()
             .unwrap();

@@ -4,7 +4,9 @@
 // `transcriptPath`, `nativeSessionId`, `promptNativeId`, `effort`) are gone,
 // `groupId` is `workspaceId`, `adapter` is `model` and holds a registry id
 // (`models/registry.ts`), and runs carry an `attempt` counter and the ids of
-// the documents attached to them.
+// the documents attached to them. The desktop has since moved to an envelope
+// with a tagged `post | exchange | document` body; the web model keeps the flat
+// `run | document` node, for the reasons in that document's §2.
 //
 // Each type is defined by its zod schema and the TypeScript type is inferred
 // from it, so the validator and the type cannot drift. Schemas are applied at

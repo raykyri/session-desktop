@@ -375,13 +375,15 @@ export type ResearchNodeStatus =
   | "failed"
   | "cancelled";
 
-/** What produced a node's content: an agent run; a Markdown document (written
- * in the document composer, or an imported report, which has origin
- * "imported" and keeps the question it answers as its prompt); a terminal
- * conversation exported as an independent point-in-time snapshot; or a post (a
- * user's question to their network, or a saved link) with no response of its
- * own. The backend omits the field for runs, so absence means "run". */
-export type ResearchNodeKind = "run" | "document" | "conversation" | "post";
+/** A node's type, the tag of its body: a post (written by the user: a saved
+ * link or tweet, or a post delivered to the network), an exchange (a
+ * question and the agent run that answers it), or a document (long-form
+ * content with no run: an imported report, an authored document, or an
+ * exported terminal transcript). */
+export type ResearchNodeType = "post" | "exchange" | "document";
+
+/** Where a document's content came from. */
+export type DocumentSource = "imported" | "authored" | "transcript";
 
 /** How a post renders, decided by the backend when its text is written:
  * "link" when the whole text is one http(s) URL (a saved link, or an X post
@@ -417,8 +419,6 @@ export interface NoteDelivery {
   replies?: NoteReply[];
 }
 
-/** Provenance for content that did not come from a research launch. */
-export type ResearchNodeOrigin = "terminalExport" | "imported";
 
 export interface ResearchTweetAttachment {
   kind: "tweet";
@@ -451,66 +451,105 @@ export interface ResearchTree {
   bookmarked?: boolean;
 }
 
-export interface ResearchNode {
-  id: string;
-  treeId: string;
-  parentNodeId?: string | null;
-  /** What this follow-up was asked about in its parent. A passage anchor is
-   * marked in the parent's answer as the anchor of the branch. */
-  anchor?: NodeAnchor | null;
-  /** True when this follow-up continues its parent's conversation at the same
-   * level (the same messages column) instead of opening a branch. At most one
-   * existing inline child per node; absent means false. */
-  inline?: boolean;
-  prompt: string;
+/** What a person wrote: a post's text, an exchange's question, or the
+ * question an imported report answers. */
+export interface UserMessage {
+  /** Markdown, or a single URL for a link post. */
+  text: string;
+  /** Omitted by the backend when empty. */
   attachments?: ResearchMessageAttachment[];
-  /** Short generated title for breadcrumbs and menus; the document body still
-   * shows the full prompt. */
-  title?: string | null;
+}
+
+/** An exchange's agent, or the default agent for a post's or document's AI
+ * follow-ups; follow-ups inherit model and effort. */
+export interface AgentSpec {
   adapter: string;
   model?: string | null;
-  /** Reasoning effort the run launches with; inherited by follow-ups. */
   effort?: string | null;
-  groupId: string;
-  worktreeDir: string;
-  nativeSessionId?: string | null;
-  transcriptPath?: string | null;
-  promptNativeId?: string | null;
-  agentId?: string | null;
-  paneId?: string | null;
-  /** How the run executes. Absent means the historical hidden TUI pane. */
-  runtime?: "pane" | "sdk" | null;
-  /** The run agent's thread-graph record id, kept for backend reaping. */
-  threadId?: string | null;
-  kind?: ResearchNodeKind;
-  /** Present on nodes whose content did not come from a research launch:
-   * conversations exported from a terminal session, and imported reports
-   * (documents). */
-  origin?: ResearchNodeOrigin | null;
-  /** Only on posts delivered with Ask network. */
-  delivery?: NoteDelivery | null;
-  /** Only on posts, where the backend always sets it. */
-  format?: PostFormat | null;
+}
+
+/** An exchange's run. The run binding (session, agent, pane) stays in the
+ * backend; these two flags carry what the interface needs from it. */
+export interface RunState {
   status: ResearchNodeStatus;
   error?: string | null;
+  startedAt?: number | null;
+  completedAt?: number | null;
   /** Set when the durable response snapshot lands — the viewer's signal to
    * refetch content it may have read before the adapter finished flushing. */
   responseSnapshotAt?: number | null;
-  recap?: ResearchRecap;
+  /** The native session was recorded, so a follow-up can fork it. */
+  sessionReady: boolean;
+  /** A pane process is still bound to the run and has to be closed, even
+   * after the run settled (a cancel whose kill failed). */
+  holdsProcess: boolean;
+}
+
+/** The fields every node shares. */
+interface ResearchNodeBase {
+  id: string;
+  treeId: string;
+  parentNodeId?: string | null;
+  /** True when this follow-up continues its parent's conversation at the same
+   * level (the same messages column) instead of opening a branch. At most one
+   * existing inline child per node. Optional in hand-built fixtures. */
+  inline?: boolean;
+  /** What this follow-up was asked about in its parent. A passage anchor is
+   * marked in the parent's answer as the anchor of the branch. */
+  anchor?: NodeAnchor | null;
+  /** Short generated title for breadcrumbs and menus; the message stays the
+   * displayed text. */
+  title?: string | null;
+  /** The workspace the node was created in; the tree's is authoritative. */
+  groupId: string;
   createdAt: number;
-  startedAt?: number | null;
-  completedAt?: number | null;
   /** Set when the node is starred: a starred follow-up or branch is listed
    * under its question in the feed. Never set on a root node. */
   promotedAt?: number | null;
   highlights: ResearchHighlight[];
-  /** When the content was last replaced by an edit (a document's body or a
-   * post's text). Absent on content that was never edited. */
-  editedAt?: number | null;
-  /** Corrections the author appended to a post that already had replies or
-   * follow-ups, oldest first. Only on posts; omitted when empty. */
-  corrections?: NoteCorrection[];
 }
+
+export interface ResearchPostNode extends ResearchNodeBase {
+  type: "post";
+  message: UserMessage;
+  format: PostFormat;
+  /** Only on posts delivered with Ask network. */
+  delivery?: NoteDelivery | null;
+  /** Default agent for AI follow-ups; not provenance. */
+  followUpAgent: AgentSpec;
+  /** Corrections the author appended to a post that already had replies or
+   * follow-ups, oldest first. Omitted when empty. */
+  corrections?: NoteCorrection[];
+  /** When the text was last replaced by an edit. */
+  editedAt?: number | null;
+}
+
+export interface ResearchExchangeNode extends ResearchNodeBase {
+  type: "exchange";
+  message: UserMessage;
+  agent: AgentSpec;
+  run: RunState;
+  recap?: ResearchRecap | null;
+}
+
+export interface ResearchDocumentNode extends ResearchNodeBase {
+  type: "document";
+  /** The question an imported report answers, or a transcript's first user
+   * turn; absent for an authored document. Authored documents and
+   * transcripts show as one row (see nodeMessage). */
+  message?: UserMessage | null;
+  source: DocumentSource;
+  /** The agent that produced an imported report or a transcript. */
+  followUpAgent?: AgentSpec | null;
+  /** Set when the body's snapshot was last written. */
+  responseSnapshotAt?: number | null;
+  recap?: ResearchRecap | null;
+  /** When the body was last replaced by an edit. */
+  editedAt?: number | null;
+}
+
+/** A research node as commands and events send it (`ResearchNodeView`). */
+export type ResearchNode = ResearchPostNode | ResearchExchangeNode | ResearchDocumentNode;
 
 export interface NoteCorrection {
   id: string;
@@ -554,9 +593,10 @@ export interface RecentResearchQuery {
   title?: string | null;
   adapter: string;
   model?: string | null;
-  origin?: ResearchNodeOrigin | null;
   /** Absent in hand-built fixtures; the backend always sends it. */
-  kind?: ResearchNodeKind;
+  type?: ResearchNodeType;
+  /** A document's source. */
+  source?: DocumentSource | null;
   /** A post's format. */
   format?: PostFormat | null;
   /** A note's network state, with replies cut to the first five top-level
@@ -648,8 +688,8 @@ export interface ResearchTreeSummary {
   id: string;
   title: string;
   rootNodeId: string;
-  /** The root node's kind — what this sidebar item fundamentally is. */
-  kind: ResearchNodeKind;
+  /** The root node's type — what this sidebar item fundamentally is. */
+  type: ResearchNodeType;
   workspaceId: string;
   runningCount: number;
   failedCount: number;

@@ -73,6 +73,31 @@ medium). `adapter` is renamed `model` and holds a registry id
 `AgentAdapterMetadata` is replaced by `ModelInfo { id, label, provider,
 adminOnly, available, supportsFiles, supportsImages }`.
 
+The desktop has since changed its node model (state version 8): a node is an
+envelope (`id`, `treeId`, `parentNodeId`, `inline`, `anchor`, `title`,
+`groupId`, `createdAt`, `promotedAt`, `highlights`) plus a body tagged by
+`type`: `post` (a note with `format: text | link`, `delivery`, `corrections`,
+`editedAt`), `exchange` (a question with a run), or `document` (`source:
+imported | authored | transcript`). `queryAnchor` and `replyAnchor` became one
+`anchor` (`{ kind: "passage", anchor } | { kind: "reply", replyId }`), and the
+frontend receives `ResearchNodeView`, which replaces the run's process
+bindings with `sessionReady` and `holdsProcess`. The web model is not aligned
+with it and keeps the flat `run | document` node described here, because:
+
+- The web app has no posts. Saved links and tweets are `journal_entries` rows
+  (`JournalLinkEntry`, `JournalTweetEntry`), not research nodes, and there is
+  no network delivery, replies or corrections.
+- It has no terminal transcripts, so `source: transcript` has nothing to hold.
+- It has no local process bindings; the fields the desktop moved into the
+  exchange binding were already dropped from the web wire type.
+- Nodes are SQLite rows with per-column constraints and indexes (§3), not one
+  JSON document. Adopting the tagged body would be a schema migration of its
+  own, which this change does not make.
+
+Code shared between the two (anchors, highlights, recaps, turns, tweets) does
+not depend on the node's shape, so the difference is confined to
+`ResearchNode` and the queries that select on `kind`.
+
 New wire types: `User` (with `isAdmin`), `Workspace` (replaces `GroupInfo`),
 `UserSettings`, `DocumentInfo`, `UsageSummary`.
 

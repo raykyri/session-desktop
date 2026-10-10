@@ -12,6 +12,8 @@ import {
   visibleResearchPrompt,
 } from "../src/components/research/ResearchMessage";
 import type { ResearchMessageAttachment, ResearchNode } from "../src/types";
+import { nodePrompt } from "../src/lib/researchNodeTypes";
+import { researchNode, type NodeFixture } from "./researchNodeFixture";
 
 const tweetAttachment: ResearchMessageAttachment = {
   kind: "tweet",
@@ -44,19 +46,18 @@ const tweetAttachment: ResearchMessageAttachment = {
 
 const NOW = Date.UTC(2026, 9, 9, 12, 0, 0);
 
-function questionNode(overrides: Partial<ResearchNode> = {}): ResearchNode {
-  return {
+function questionNode(overrides: NodeFixture = {}): ResearchNode {
+  return researchNode({
     id: "node",
     treeId: "tree",
     prompt: "> foo\n> bar",
     adapter: "claude",
     groupId: "ws",
-    worktreeDir: "/ws",
     status: "complete",
     createdAt: NOW - 2 * 24 * 60 * 60 * 1000,
     highlights: [],
     ...overrides,
-  };
+  });
 }
 
 const noop = () => {};
@@ -66,7 +67,7 @@ const row = (node: ResearchNode, overrides: Partial<RowProps> = {}) =>
     createElement(ResearchMessageRow, {
       node,
       level: 0,
-      label: node.prompt,
+      label: nodePrompt(node),
       showPrompt: true,
       selected: false,
       now: NOW,
@@ -143,7 +144,7 @@ test("only the selected row is in the tab order", () => {
 });
 
 test("documents and conversations show their title in place of a question", () => {
-  const html = row(questionNode({ kind: "document", origin: "imported" }), {
+  const html = row(questionNode({ type: "document", source: "imported" }), {
     label: "Imported report",
     showPrompt: false,
   });
@@ -153,7 +154,7 @@ test("documents and conversations show their title in place of a question", () =
 });
 
 test("an imported report's row shows the question it answers and the Imported time", () => {
-  const html = row(questionNode({ kind: "document", origin: "imported", prompt: "What did the survey find?" }));
+  const html = row(questionNode({ type: "document", source: "imported", prompt: "What did the survey find?" }));
   assert.match(html, /What did the survey find\?/);
   assert.match(html, /<time[^>]*>Imported 2d<\/time>/);
 });

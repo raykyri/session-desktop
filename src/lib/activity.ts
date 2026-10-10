@@ -1,4 +1,4 @@
-import { nodeType, passageAnchor, replyAnchorId } from "./researchNodeTypes";
+import { nodeAdapter, nodeAgent, nodeAttachments, nodeDelivery, nodePrompt, nodeRecap, nodeRun, nodeStatus, nodeType, passageAnchor, replyAnchorId } from "./researchNodeTypes";
 import type {
   NoteDelivery,
   NoteReply,
@@ -99,35 +99,36 @@ export function recentResearchQueryFromNode(
   node: ResearchNode,
   includeFollowUps = false,
 ): RecentResearchQuery | null {
-  const kind = node.kind ?? "run";
   if (!includeFollowUps && node.parentNodeId) {
     return null;
   }
+  const delivery = nodeDelivery(node);
+  const error = nodeRun(node)?.error;
   return {
     nodeId: node.id,
     treeId: node.treeId,
     parentNodeId: node.parentNodeId,
     inline: Boolean(node.inline),
-    prompt: node.prompt,
+    prompt: nodePrompt(node),
     queryTarget: passageAnchor(node)?.exact,
-    attachments: node.attachments,
+    attachments: nodeAttachments(node),
     title: node.title,
-    adapter: node.adapter,
-    model: node.model,
-    ...(node.origin ? { origin: node.origin } : {}),
-    kind,
-    ...(node.format ? { format: node.format } : {}),
-    ...(node.delivery
+    adapter: nodeAdapter(node),
+    model: nodeAgent(node)?.model,
+    type: node.type,
+    ...(node.type === "document" ? { source: node.source } : {}),
+    ...(node.type === "post" ? { format: node.format } : {}),
+    ...(delivery
       ? {
-          delivery: cappedNoteDelivery(node.delivery, RECENT_ACTIVITY_NOTE_REPLY_LIMIT),
-          replyCount: topLevelReplyCount(node.delivery.replies),
+          delivery: cappedNoteDelivery(delivery, RECENT_ACTIVITY_NOTE_REPLY_LIMIT),
+          replyCount: topLevelReplyCount(delivery.replies),
         }
       : {}),
     ...(replyAnchorId(node) ? { replyAnchor: replyAnchorId(node) } : {}),
-    status: node.status,
-    ...(node.error ? { error: node.error } : {}),
+    status: nodeStatus(node),
+    ...(error ? { error } : {}),
     createdAt: node.createdAt,
-    recap: node.recap?.text.trim() || undefined,
+    recap: nodeRecap(node)?.text.trim() || undefined,
   };
 }
 
@@ -202,7 +203,7 @@ export function patchRecentActivityPromoted(
       ...item,
       promoted: promoted.map((candidate, position) =>
         position === index
-          ? { ...entry, prompt: node.prompt, title: node.title, status: node.status, promotedAt }
+          ? { ...entry, prompt: nodePrompt(node), title: node.title, status: nodeStatus(node), promotedAt }
           : candidate,
       ),
     };
@@ -240,7 +241,7 @@ export function activityEventFromResearchQuery(
     execution: {
       adapter: query.adapter,
       model: query.model,
-      ...(query.origin ? { origin: query.origin } : {}),
+      ...(query.source === "imported" ? { origin: "imported" } : {}),
     },
     state: visibleResearchState(query.status),
     occurredAt: query.createdAt,

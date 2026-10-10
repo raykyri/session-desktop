@@ -1,5 +1,5 @@
 import { LoaderCircle } from "lucide-react";
-import { recapEligible } from "../../lib/researchNodeTypes";
+import { nodeRecap, nodeStatus, recapEligible } from "../../lib/researchNodeTypes";
 import type { ResearchNodeContent } from "../../types";
 
 function ResearchRecapLine({
@@ -52,8 +52,8 @@ export default function ResearchRecap({
   pending?: boolean;
 }) {
   const { node, responseRevision } = content;
-  const recap = node.recap;
-  if (!recapEligible(node) || node.status !== "complete") {
+  const recap = nodeRecap(node);
+  if (!recapEligible(node) || nodeStatus(node) !== "complete") {
     return null;
   }
   if (
