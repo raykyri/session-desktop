@@ -133,7 +133,8 @@ interface ResearchQueryComposerProps {
     workspaceId: string | null;
     askNetwork: boolean;
   }) => Promise<void>;
-  /** Save draft: keeps the question in Drafts and clears the field. */
+  /** Save draft: keeps the question in Drafts and clears the text; the agent,
+   * model, and effort choice stays. */
   onSaveDraft?: (prompt: string) => Promise<void>;
   placeholder?: string;
   /** Filled with a reader of the selected agent, model, and effort, so a draft
@@ -145,6 +146,34 @@ export interface ResearchLaunchChoice {
   adapter: string;
   model: string | null;
   effort: string | null;
+}
+
+/** The Home ask box's session draft: the question text and the agent, model,
+ * and effort choice. `effortChoice` is absent in drafts stored before it was
+ * kept. */
+interface HomeComposerDraft {
+  prompt: string;
+  adapter: string;
+  modelChoice: string | null;
+  customModel: string;
+  effortChoice?: string;
+}
+
+/** The draft to store for the Home ask box, or null when it matches a fresh
+ * box (no text, the default agent, and no model or effort choice). A send or
+ * Save draft clears only the text, so a non-default choice stays stored and
+ * the next ask, including one made after the box remounts, uses it. */
+export function homeComposerDraftToStore(
+  draft: HomeComposerDraft,
+  defaultAdapter: string,
+): HomeComposerDraft | null {
+  const empty =
+    !draft.prompt &&
+    !draft.modelChoice &&
+    !draft.customModel &&
+    !draft.effortChoice &&
+    draft.adapter === defaultAdapter;
+  return empty ? null : draft;
 }
 
 /** The feed's composer: a one-line "Ask a question" field that grows when it
@@ -195,16 +224,11 @@ export default function ResearchQueryComposer({
 
   useEffect(() => {
     sessionDraftTouchedRef.current = false;
-    const restored = readSessionDraftJson<{
-      prompt: string;
-      adapter: string;
-      modelChoice: string | null;
-      customModel: string;
-    }>(draftKey);
+    const restored = readSessionDraftJson<HomeComposerDraft>(draftKey);
     setPrompt(restored?.prompt ?? "");
     setModelChoice(restored?.modelChoice ?? null);
     setCustomModel(restored?.customModel ?? "");
-    setEffortChoice("");
+    setEffortChoice(restored?.effortChoice ?? "");
     setError(null);
     setAdapter(
       preferredResearchAdapter(adapters, restored?.adapter)?.id ??
@@ -213,18 +237,14 @@ export default function ResearchQueryComposer({
         "",
     );
     let disposed = false;
-    void loadSessionDraftJson<{
-      prompt: string;
-      adapter: string;
-      modelChoice: string | null;
-      customModel: string;
-    }>(draftKey)
+    void loadSessionDraftJson<HomeComposerDraft>(draftKey)
       .then((backendDraft) => {
         if (!disposed && backendDraft && !sessionDraftTouchedRef.current) {
           setPrompt(backendDraft.prompt);
           setAdapter(backendDraft.adapter);
           setModelChoice(backendDraft.modelChoice);
           setCustomModel(backendDraft.customModel);
+          setEffortChoice(backendDraft.effortChoice ?? "");
         }
       })
       .catch(() => undefined)
@@ -238,19 +258,32 @@ export default function ResearchQueryComposer({
     };
   }, [draftKey]);
 
-  useEffect(() => {
-    if (!sessionDraftReady) {
-      return;
-    }
-    if (!prompt && !modelChoice && !customModel) {
+  const defaultAdapter = preferredResearchAdapter(adapters)?.id ?? "";
+  // Runs from the effect below on each change, and directly after a send or
+  // Save draft so the choice is stored even when the send unmounts the box
+  // before the effect runs.
+  function storeDraft(nextPrompt: string) {
+    const draft = homeComposerDraftToStore(
+      { prompt: nextPrompt, adapter, modelChoice, customModel, effortChoice },
+      defaultAdapter,
+    );
+    if (draft) {
+      saveSessionDraftJson(draftKey, draft);
+    } else {
       clearSessionDraft(draftKey);
-      return;
     }
-    saveSessionDraftJson(draftKey, { prompt, adapter, modelChoice, customModel });
+  }
+  useEffect(() => {
+    if (sessionDraftReady) {
+      storeDraft(prompt);
+    }
+    // storeDraft reads the same state listed here.
   }, [
     adapter,
     customModel,
+    defaultAdapter,
     draftKey,
+    effortChoice,
     modelChoice,
     prompt,
     sessionDraftReady,
@@ -341,12 +374,11 @@ export default function ResearchQueryComposer({
         });
       }
       // A successful launch opens its research page, and a note appears at the
-      // top of the feed. Clear the Home composer so the next draft starts fresh.
+      // top of the feed. Clear the text; the agent, model, and effort stay
+      // selected for the next ask.
       setPrompt("");
-      setModelChoice(null);
-      setCustomModel("");
       setError(null);
-      clearSessionDraft(draftKey);
+      storeDraft("");
     } catch (err) {
       // Surfaced here, where the user is looking, with every field intact for
       // the retry.
@@ -437,10 +469,8 @@ export default function ResearchQueryComposer({
     try {
       await onSaveDraft(text);
       setPrompt("");
-      setModelChoice(null);
-      setCustomModel("");
       setError(null);
-      clearSessionDraft(draftKey);
+      storeDraft("");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
