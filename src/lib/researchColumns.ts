@@ -219,7 +219,7 @@ export function isMessagesColumnId(id: string | null | undefined): boolean {
 /** The data attributes that identify a column in the DOM, written in one
  * place for every column kind. `data-research-pair` and
  * `data-research-level` are set on the columns of a level: messages, thread,
- * draft and pending columns are the "turns" side, an answer column the
+ * draft and pending columns are the "messages" side, an answer column the
  * "answer" side, a post's own column is "post", and the editor "editor". */
 export function columnAttributes(column: ResearchColumn): Record<string, string> {
   switch (column.role) {
@@ -228,21 +228,21 @@ export function columnAttributes(column: ResearchColumn): Record<string, string>
       return { "data-research-column": column.id };
     case "messages":
     case "thread":
-      return pairAttributes(column.id, "turns", column.level.index);
+      return pairAttributes(column.id, "messages", column.level.index);
     case "post":
       return pairAttributes(column.id, "post", column.level.index);
     case "answer":
       return pairAttributes(column.id, "answer", column.level.index);
     case "pending":
-      return pairAttributes(column.id, "turns", column.levelIndex);
+      return pairAttributes(column.id, "messages", column.levelIndex);
     case "draft":
-      return pairAttributes(column.id, "turns", 0);
+      return pairAttributes(column.id, "messages", 0);
     case "editor":
       return pairAttributes(column.id, "editor", column.levelIndex);
   }
 }
 
-function pairAttributes(id: ResearchColumnId, pair: "turns" | "answer" | "post" | "editor", level: number) {
+function pairAttributes(id: ResearchColumnId, pair: "messages" | "answer" | "post" | "editor", level: number) {
   return {
     "data-research-column": id,
     "data-research-pair": pair,
@@ -285,7 +285,7 @@ export function columnKey(column: ResearchColumn): string {
 
 /** Which saved scroll offsets a column uses: an answer column's are keyed by
  * its message, a messages column's by its chain head. */
-export type ResearchScrollKind = "answer" | "turns";
+export type ResearchScrollKind = "answer" | "messages";
 
 /** The scroll persistence key of a column, or null for a column whose scroll
  * position is not kept. */
@@ -294,7 +294,7 @@ export function columnScrollKey(column: ResearchColumn): { kind: ResearchScrollK
     case "answer":
       return { kind: "answer", key: column.nodeId };
     case "messages":
-      return { kind: "turns", key: column.level.headId };
+      return { kind: "messages", key: column.level.headId };
     default:
       return null;
   }

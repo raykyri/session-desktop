@@ -53,7 +53,7 @@ export function createResearchThreadPersistence(
   return {
     store,
     flush,
-    recordScroll(treeId: string, nodeId: string, top: number, column: "answer" | "turns" = "answer") {
+    recordScroll(treeId: string, nodeId: string, top: number, column: "answer" | "messages" = "answer") {
       recordResearchScrollPosition(entry(treeId), nodeId, top, Date.now(), column);
       schedule();
     },

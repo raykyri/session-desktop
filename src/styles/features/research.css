@@ -560,7 +560,7 @@
   display: contents;
 }
 
-.research-pair-turns,
+.research-pair-messages,
 .research-pair-answer,
 .research-pair-note,
 .research-pair-thread,
@@ -574,8 +574,8 @@
   border-right: 1px solid var(--surface-divider);
 }
 
-.research-pair-turns {
-  width: var(--research-turns-width);
+.research-pair-messages {
+  width: var(--research-messages-width);
   border-left: 1px solid var(--surface-border-strong);
   background: var(--research-feed-bg);
 }
@@ -594,19 +594,19 @@
 }
 
 .research-pair-thread {
-  width: var(--research-turns-width);
+  width: var(--research-messages-width);
   background: var(--research-feed-bg);
 }
 
 /* The placeholder: 100px narrower than a messages + answer pair. */
 .research-placeholder-column {
-  width: calc(var(--research-turns-width) + var(--research-answer-width) - 100px);
+  width: calc(var(--research-messages-width) + var(--research-answer-width) - 100px);
   border-left: 1px solid var(--surface-border-strong);
   background: var(--research-workspace-bg);
 }
 
 /* One divider where a pair starts: the column before it drops its own. */
-:is(.research-pair-answer, .research-pair-thread):has(+ :is(.research-pair-turns, .research-pair-note)) {
+:is(.research-pair-answer, .research-pair-thread):has(+ :is(.research-pair-messages, .research-pair-note)) {
   border-right-color: transparent;
 }
 
@@ -634,9 +634,9 @@
 
 /* A pair's header spans its messages and answer columns: the messages
    column's header is widened across the answer column, over its empty one. */
-.research-pair-turns:not(.is-pending, .research-draft-view) > .research-column-header {
+.research-pair-messages:not(.is-pending, .research-draft-view) > .research-column-header {
   z-index: 1;
-  width: calc(var(--research-turns-width) + var(--research-answer-width) - 1px);
+  width: calc(var(--research-messages-width) + var(--research-answer-width) - 1px);
   background: var(--research-feed-bg);
 }
 
@@ -665,7 +665,7 @@
 
 /* Use the heading text color for the focused pair's header and the secondary
    text color for other headers. */
-:is(.research-pair-turns, .research-pair-note, .research-pair-thread):not(.is-current) .research-column-title {
+:is(.research-pair-messages, .research-pair-note, .research-pair-thread):not(.is-current) .research-column-title {
   color: var(--text-secondary);
 }
 

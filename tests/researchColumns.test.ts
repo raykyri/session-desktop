@@ -7,16 +7,16 @@ import { ResearchPairHeader } from "../src/components/research/ResearchColumnChr
 
 test("columns are sized from the strip's width: feed 21%, messages 18%, answer 44%, each clamped", () => {
   // The strip at 1440px with the full sidebar, and at 1100px.
-  assert.deepEqual(researchColumnWidths(1198), { feed: 252, turns: 220, answer: 527 });
-  assert.deepEqual(researchColumnWidths(858), { feed: 240, turns: 220, answer: 378 });
+  assert.deepEqual(researchColumnWidths(1198), { feed: 252, messages: 220, answer: 527 });
+  assert.deepEqual(researchColumnWidths(858), { feed: 240, messages: 220, answer: 378 });
   // Wide strips stop at the maximums; narrow ones keep the minimums and scroll.
-  assert.deepEqual(researchColumnWidths(2400), { feed: 300, turns: 280, answer: 660 });
-  assert.deepEqual(researchColumnWidths(500), { feed: 240, turns: 220, answer: 340 });
+  assert.deepEqual(researchColumnWidths(2400), { feed: 300, messages: 280, answer: 660 });
+  assert.deepEqual(researchColumnWidths(500), { feed: 240, messages: 220, answer: 340 });
 });
 
 test("invalid widths fall back to the minimums", () => {
-  assert.deepEqual(researchColumnWidths(NaN), { feed: 240, turns: 220, answer: 340 });
-  assert.deepEqual(researchColumnWidths(-Infinity), { feed: 240, turns: 220, answer: 340 });
+  assert.deepEqual(researchColumnWidths(NaN), { feed: 240, messages: 220, answer: 340 });
+  assert.deepEqual(researchColumnWidths(-Infinity), { feed: 240, messages: 220, answer: 340 });
 });
 
 const noop = () => {};

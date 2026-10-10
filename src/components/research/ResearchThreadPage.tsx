@@ -1141,7 +1141,7 @@ function ResearchThreadPage({
   // Answers whose scroll offset has been restored since their column mounted.
   const restoredAnswerScrollRef = useRef(new Set<string>());
   // The same for each level's messages column, keyed by its head node.
-  const turnsScrollRef = useRef(new Map<string, number>());
+  const messagesScrollRef = useRef(new Map<string, number>());
   const restoredTurnsScrollRef = useRef(new Set<string>());
   // Live mirrors for stable callbacks that must read current state.
   const composerTextRef = useRef(composerText);
@@ -1169,9 +1169,9 @@ function ResearchThreadPage({
         persistence.recordScroll(currentTreeId, nodeId, top);
       }
     }
-    for (const [headId, top] of turnsScrollRef.current) {
+    for (const [headId, top] of messagesScrollRef.current) {
       if (restoredTurnsScrollRef.current.has(headId)) {
-        persistence.recordScroll(currentTreeId, headId, top, "turns");
+        persistence.recordScroll(currentTreeId, headId, top, "messages");
       }
     }
   });
@@ -1285,15 +1285,15 @@ function ResearchThreadPage({
 
   // Columns of the open pairs, found by level.
   const pairColumn = useCallback(
-    (kind: "turns" | "answer", level: number) =>
+    (kind: "messages" | "answer", level: number) =>
       workspaceRef.current?.querySelector<HTMLElement>(
-        columnSelector(kind === "turns" ? `T${level}` : `A${level}`),
+        columnSelector(kind === "messages" ? `T${level}` : `A${level}`),
       ) ?? null,
     [],
   );
   const selectedRow = useCallback(
     (level: number) =>
-      pairColumn("turns", level)?.querySelector<HTMLElement>(COLUMN_ROW_SELECTOR) ?? null,
+      pairColumn("messages", level)?.querySelector<HTMLElement>(COLUMN_ROW_SELECTOR) ?? null,
     [pairColumn],
   );
 
@@ -1499,7 +1499,7 @@ function ResearchThreadPage({
       const level = columnLevelIndex(columnId);
       revealResearchColumns(
         row,
-        level === null ? column : pairColumn("turns", level) ?? column,
+        level === null ? column : pairColumn("messages", level) ?? column,
         level === null ? column : pairColumn("answer", level) ?? column,
       );
     }
@@ -2475,15 +2475,15 @@ function ResearchThreadPage({
       if (restoredTurnsScrollRef.current.has(headId)) {
         return;
       }
-      const scroller = pairColumn("turns", level)?.querySelector<HTMLElement>(":scope > .research-column-scroll");
+      const scroller = pairColumn("messages", level)?.querySelector<HTMLElement>(":scope > .research-column-scroll");
       const row = selectedRow(level);
       if (!scroller || !row) {
         return;
       }
       restoredTurnsScrollRef.current.add(headId);
       scroller.scrollTop =
-        turnsScrollRef.current.get(headId) ??
-        restoreResearchScrollPosition(navigationPersistence.store[treeId], headId, Date.now(), "turns");
+        messagesScrollRef.current.get(headId) ??
+        restoreResearchScrollPosition(navigationPersistence.store[treeId], headId, Date.now(), "messages");
       scrollIntoColumn(row, "auto");
     });
   });
@@ -2493,10 +2493,10 @@ function ResearchThreadPage({
       if (!restoredTurnsScrollRef.current.has(headId)) {
         return;
       }
-      turnsScrollRef.current.set(headId, scroller.scrollTop);
+      messagesScrollRef.current.set(headId, scroller.scrollTop);
       const currentTreeId = treeIdRef.current;
       if (currentTreeId) {
-        navigationPersistence.recordScroll(currentTreeId, headId, scroller.scrollTop, "turns");
+        navigationPersistence.recordScroll(currentTreeId, headId, scroller.scrollTop, "messages");
       }
     },
     [navigationPersistence],
@@ -5090,7 +5090,7 @@ function ResearchThreadPage({
                 />
               </div>
             </div>
-            <ResearchColumnResizer kind="turns" label="Resize thread column" />
+            <ResearchColumnResizer kind="messages" label="Resize thread column" />
           </section>
         );
       }
@@ -5101,7 +5101,7 @@ function ResearchThreadPage({
         return (
           <section
             key={columnKey(column)}
-            className={`research-pair-turns${currentLevel === level ? " is-current" : ""}`}
+            className={`research-pair-messages${currentLevel === level ? " is-current" : ""}`}
             {...columnAttributes(column)}
             aria-label={`${level === 0 ? "Messages" : "Branch messages"}: ${title}`}
           >
@@ -5128,7 +5128,7 @@ function ResearchThreadPage({
                 {renderChainComposer(headId, chainIds, level)}
               </div>
             </div>
-            <ResearchColumnResizer kind="turns" label="Resize messages column" belowHeader />
+            <ResearchColumnResizer kind="messages" label="Resize messages column" belowHeader />
           </section>
         );
       }
@@ -5141,7 +5141,7 @@ function ResearchThreadPage({
         return (
           <section
             key={columnKey(column)}
-            className={`research-pair-turns is-pending${currentLevel === column.levelIndex ? " is-current" : ""}`}
+            className={`research-pair-messages is-pending${currentLevel === column.levelIndex ? " is-current" : ""}`}
             {...columnAttributes(column)}
             aria-label="New branch"
           >
@@ -5165,7 +5165,7 @@ function ResearchThreadPage({
                 />
               </div>
             </div>
-            <ResearchColumnResizer kind="turns" label="Resize messages column" />
+            <ResearchColumnResizer kind="messages" label="Resize messages column" />
           </section>
         );
       }

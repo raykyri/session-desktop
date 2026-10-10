@@ -62,7 +62,7 @@ export default function ResearchDraftView({
   const title = draft.prompt.trim() || "Draft";
   return (
     <section
-      className="research-pair-turns research-draft-view is-current"
+      className="research-pair-messages research-draft-view is-current"
       {...columnAttributes({ id: "T0", role: "draft", draftId: draft.id })}
       aria-label={`Draft: ${title}`}
     >

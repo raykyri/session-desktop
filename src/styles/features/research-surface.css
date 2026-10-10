@@ -114,7 +114,7 @@
 }
 
 /* The first pair's divider replaces the feed's own border. */
-.research-feed-column:has(+ .research-content-column > :is(.research-pairs, .research-pair-turns, .research-placeholder-column)) {
+.research-feed-column:has(+ .research-content-column > :is(.research-pairs, .research-pair-messages, .research-placeholder-column)) {
   border-right-color: transparent;
 }
 

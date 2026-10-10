@@ -312,7 +312,7 @@ export default function ResearchColumns({
       automatic: researchColumnWidths(availableWidth),
       bounds: {
         feed: researchColumnWidthBounds("feed", availableWidth),
-        turns: researchColumnWidthBounds("turns", availableWidth),
+        messages: researchColumnWidthBounds("messages", availableWidth),
         answer: researchColumnWidthBounds("answer", availableWidth),
       },
       setWidth,
@@ -380,7 +380,7 @@ export default function ResearchColumns({
           style={
             {
               "--research-feed-column-width": `${widths.feed}px`,
-              "--research-turns-width": `${widths.turns}px`,
+              "--research-messages-width": `${widths.messages}px`,
               "--research-answer-width": `${widths.answer}px`,
             } as CSSProperties
           }

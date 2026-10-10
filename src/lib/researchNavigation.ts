@@ -61,7 +61,8 @@ export interface SavedResearchNavigation {
   queuedFollowups?: Record<string, QueuedResearchFollowup[]>;
   /** Each level's messages column scroll offset, keyed by the head node of
    * the conversation or branch it shows. (`scrollByNode` holds the answer
-   * columns', keyed by the message.) */
+   * columns', keyed by the message.) The stored field keeps the column's
+   * earlier name, "turns". */
   turnsScrollByHead?: Record<string, SavedResearchScrollPosition>;
 }
 
