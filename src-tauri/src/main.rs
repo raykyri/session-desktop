@@ -25,6 +25,7 @@ mod remote_files;
 mod remote_terminal;
 mod remote_transcript;
 mod research;
+mod research_anchors;
 mod research_recap;
 mod research_runtime;
 mod scrollback;
@@ -1814,6 +1815,14 @@ fn remove_research_note_reply(
     reply_id: String,
 ) -> Result<ResearchNode, String> {
     state.remove_research_note_reply(&node_id, &reply_id)
+}
+
+#[tauri::command]
+fn update_research_note(
+    state: tauri::State<'_, AppState>,
+    request: research::UpdateResearchNoteRequest,
+) -> Result<research::UpdateResearchNoteResult, String> {
+    state.update_research_note(request)
 }
 
 #[tauri::command]
@@ -3715,6 +3724,7 @@ fn main() {
             add_research_note_reply,
             remove_research_note_reply,
             update_research_document,
+            update_research_note,
             read_transcript_image,
             save_pasted_image,
             get_research_node_content,

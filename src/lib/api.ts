@@ -35,6 +35,7 @@ import type {
   ResearchNodeContent,
   ResearchRecapCandidate,
   UpdateResearchDocumentResult,
+  UpdateResearchNoteResult,
   SendNextQueuedAgentTurnResult,
   RuntimeConfig,
   RemoteChoice,
@@ -335,6 +336,17 @@ export function updateResearchDocument(request: {
   expectedHighlightIds: string[];
 }) {
   return invoke<UpdateResearchDocumentResult>("update_research_document", { request });
+}
+
+/** Edits a thread's own post: replaces its text when it has no replies or
+ * follow-ups (`correction: false`), else appends a correction. */
+export function updateResearchNote(request: {
+  nodeId: string;
+  text: string;
+  expectedText: string;
+  correction: boolean;
+}) {
+  return invoke<UpdateResearchNoteResult>("update_research_note", { request });
 }
 
 export function getResearchNodeContent(nodeId: string) {

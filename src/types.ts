@@ -493,6 +493,18 @@ export interface ResearchNode {
    * under its question in the feed. Never set on a root node. */
   promotedAt?: number | null;
   highlights: ResearchHighlight[];
+  /** When the content was last replaced by an edit (a document's body or a
+   * post's text). Absent on content that was never edited. */
+  editedAt?: number | null;
+  /** Corrections the author appended to a post that already had replies or
+   * follow-ups, oldest first. Only on notes; omitted when empty. */
+  corrections?: NoteCorrection[];
+}
+
+export interface NoteCorrection {
+  id: string;
+  body: string;
+  createdAt: number;
 }
 
 export interface ResearchRecap {
@@ -665,6 +677,15 @@ export interface UpdateResearchDocumentResult {
   node: ResearchNode;
   responseRevision: string;
   markdownChanged: boolean;
+  removedHighlightCount: number;
+  /** Branches asked from a passage whose quote is not in the new body; they
+   * keep their anchors. */
+  unmatchedBranchCount: number;
+}
+
+export interface UpdateResearchNoteResult {
+  tree: ResearchTree;
+  node: ResearchNode;
   removedHighlightCount: number;
 }
 

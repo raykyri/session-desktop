@@ -4359,6 +4359,8 @@ impl AppState {
             started_at: None,
             completed_at: None,
             promoted_at: None,
+            edited_at: None,
+            corrections: Vec::new(),
             highlights: Vec::new(),
         };
         self.admit_research_root(&tree, &mut node)?;
@@ -4450,6 +4452,8 @@ impl AppState {
             started_at: None,
             completed_at: Some(now),
             promoted_at: None,
+            edited_at: None,
+            corrections: Vec::new(),
             highlights: Vec::new(),
         };
         if let Err(err) = self.admit_research_root(&tree, &mut node) {
@@ -4746,6 +4750,155 @@ impl AppState {
         Ok(node)
     }
 
+    /// Edits a root post. A post with no replies and no follow-ups gets the
+    /// new text, its highlights move to their quote in it (research_anchors),
+    /// and it is marked edited; the tree title follows the text when it was
+    /// still the title derived from the old text. A post with replies or
+    /// follow-ups keeps its text, which they refer to, and the new text is
+    /// appended as a correction. `request.correction` states which of the
+    /// two the editor showed; a post that changed state in the meantime is
+    /// refused.
+    pub fn update_research_note(
+        &self,
+        request: research::UpdateResearchNoteRequest,
+    ) -> Result<research::UpdateResearchNoteResult, String> {
+        let text = request.text.trim().to_string();
+        if text.is_empty() {
+            return Err("the post cannot be empty".to_string());
+        }
+        if text.len() > research::MAX_NOTE_TEXT_BYTES {
+            return Err(format!(
+                "posts are limited to {} bytes",
+                research::MAX_NOTE_TEXT_BYTES
+            ));
+        }
+        let now = now_millis();
+        let correction_id = request.correction.then(|| self.next_id("note-correction"));
+        let (tree, node, removed_highlight_count, title_changed) = {
+            let mut model = self
+                .inner
+                .model
+                .lock()
+                .map_err(|_| "model lock poisoned".to_string())?;
+            let current = model
+                .research_nodes
+                .get(&request.node_id)
+                .cloned()
+                .ok_or_else(|| format!("research node {} was not found", request.node_id))?;
+            let tree = model
+                .research_trees
+                .get(&current.tree_id)
+                .cloned()
+                .ok_or_else(|| format!("research tree {} was not found", current.tree_id))?;
+            if current.kind != ResearchNodeKind::Note
+                || current.parent_node_id.is_some()
+                || tree.root_node_id != current.id
+            {
+                return Err("only a thread's own post can be edited".to_string());
+            }
+            if tree.archived_at.is_some() {
+                return Err("restore archived research before editing its post".to_string());
+            }
+            if current.prompt != request.expected_text {
+                return Err(
+                    "the post changed while you were editing; reopen the editor and try again"
+                        .to_string(),
+                );
+            }
+            let has_replies = current
+                .delivery
+                .as_ref()
+                .is_some_and(|delivery| !delivery.replies.is_empty())
+                || model.research_nodes.values().any(|node| {
+                    node.parent_node_id.as_deref() == Some(current.id.as_str())
+                        && node.node_type() != ResearchNodeType::Document
+                });
+            if has_replies != request.correction {
+                return Err(if has_replies {
+                    "the post has a reply or follow-up now, so it can only be corrected; reopen the editor and try again"
+                } else {
+                    "the post has no replies or follow-ups now, so its text can be edited; reopen the editor and try again"
+                }
+                .to_string());
+            }
+            if text == current.prompt.trim() {
+                return Err(if request.correction {
+                    "the correction repeats the post's text".to_string()
+                } else {
+                    "the post's text is unchanged".to_string()
+                });
+            }
+            let mut node = current.clone();
+            let mut removed = 0usize;
+            let mut title = tree.title.clone();
+            if let Some(correction_id) = correction_id {
+                node.corrections.push(research::NoteCorrection {
+                    id: correction_id,
+                    body: text,
+                    created_at: now,
+                });
+                research::validate_note_corrections(&node.corrections)?;
+            } else {
+                // A saved link stays a link, and an attached post keeps the
+                // link it was captured from.
+                if node.delivery.is_none() && !research::note_body_is_single_url(&text) {
+                    return Err("a saved link must stay a single link".to_string());
+                }
+                if let Some(url) = node.attachments.iter().find_map(|attachment| {
+                    let crate::tweets::ResearchMessageAttachment::Tweet { source_url, .. } =
+                        attachment;
+                    (!text.contains(source_url.as_str())).then(|| source_url.clone())
+                }) {
+                    return Err(format!(
+                        "keep the link {url} in the text: the attached post was captured from it"
+                    ));
+                }
+                let (kept, count) = crate::research_anchors::reanchor_highlights(
+                    &node.highlights,
+                    &current.prompt,
+                    &text,
+                    None,
+                );
+                node.highlights = kept;
+                removed = count;
+                if tree.title == research::note_default_title(&current.prompt) {
+                    title = research::note_default_title(&text);
+                }
+                node.prompt = text;
+                node.edited_at = Some(now);
+            }
+            model.research_nodes.insert(node.id.clone(), node.clone());
+            let stored_tree = model
+                .research_trees
+                .get_mut(&tree.id)
+                .expect("the tree was found above");
+            let title_changed = stored_tree.title != title;
+            stored_tree.title = title;
+            stored_tree.updated_at = now.max(stored_tree.updated_at.saturating_add(1));
+            (stored_tree.clone(), node, removed, title_changed)
+        };
+        self.persist();
+        self.emit(SessionEvent::new(
+            "research.node.updated",
+            None,
+            None,
+            json!({ "node": node }),
+        ));
+        if title_changed {
+            self.emit(SessionEvent::new(
+                "research.tree.updated",
+                None,
+                None,
+                json!({ "tree": tree }),
+            ));
+        }
+        Ok(research::UpdateResearchNoteResult {
+            tree,
+            node,
+            removed_highlight_count,
+        })
+    }
+
     /// The launch prompt for an AI follow-up of a note: the note body (with
     /// resolved attachments), every reply, and the anchored reply, if any.
     pub fn research_note_followup_prompt(
@@ -4772,7 +4925,11 @@ impl AppState {
             &parent.attachments,
         );
         Ok(research::note_followup_prompt(
-            &note_body, replies, anchored, question,
+            &note_body,
+            &parent.corrections,
+            replies,
+            anchored,
+            question,
         ))
     }
 
@@ -4852,6 +5009,8 @@ impl AppState {
             started_at: None,
             completed_at: Some(now),
             promoted_at: None,
+            edited_at: None,
+            corrections: Vec::new(),
             highlights: Vec::new(),
         };
         if let Err(err) = self.admit_research_root(&tree, &mut node) {
@@ -4871,12 +5030,14 @@ impl AppState {
     }
 
     /// Replaces a root document's durable Markdown in place. Existing child
-    /// runs are intentionally untouched: their agents already received a copy
-    /// of the document in their launch prompt. A body replacement invalidates
-    /// every highlight on this node because anchors are revision-bound, and
-    /// replaces an imported report's recap; a title-only edit preserves the
-    /// snapshot, its highlights and its recap, and skips the body's size
-    /// limits so an imported report over them can still be renamed.
+    /// runs keep their questions and answers: their agents already received a
+    /// copy of the document in their launch prompt. A body replacement moves
+    /// each highlight and branch anchor to its quote in the new body
+    /// (research_anchors), removes the highlights whose quote is gone, marks
+    /// the node edited, and replaces an imported report's recap; a title-only
+    /// edit preserves the snapshot, its highlights and its recap, and skips
+    /// the body's size limits so an imported report over them can still be
+    /// renamed.
     pub fn update_research_document(
         &self,
         request: UpdateResearchDocumentRequest,
@@ -4984,7 +5145,7 @@ impl AppState {
         };
 
         let now = now_millis();
-        let (tree, node, removed_highlight_count) = {
+        let (tree, node, removed_highlight_count, moved_branches, unmatched_branch_count) = {
             let mut model = self
                 .inner
                 .model
@@ -4995,8 +5156,16 @@ impl AppState {
                 .get_mut(&current_node.id)
                 .ok_or_else(|| format!("research node {} was not found", current_node.id))?;
             let removed = if turns.is_some() {
-                let removed = node.highlights.len();
-                node.highlights.clear();
+                // Highlights move to their quote in the new body; those whose
+                // quote is gone are removed (research_anchors).
+                let (kept, removed) = crate::research_anchors::reanchor_highlights(
+                    &node.highlights,
+                    &current_markdown,
+                    &markdown,
+                    Some(&response_revision),
+                );
+                node.highlights = kept;
+                node.edited_at = Some(now);
                 // A recap (only imported reports have one) describes the
                 // previous body; a replacement is scheduled below.
                 node.recap = None;
@@ -5009,13 +5178,50 @@ impl AppState {
                 0
             };
             let node = node.clone();
+            // Branches asked from a passage of the document move with their
+            // quote too. A branch whose quote is gone keeps its anchor: the
+            // branch itself and its question stay as they were.
+            let mut moved_branches = Vec::new();
+            let mut unmatched_branches = 0usize;
+            if turns.is_some() {
+                for child in model.research_nodes.values_mut() {
+                    if child.parent_node_id.as_deref() != Some(node.id.as_str()) {
+                        continue;
+                    }
+                    let Some(anchor) = child.query_anchor.as_mut() else {
+                        continue;
+                    };
+                    let outcome =
+                        crate::research_anchors::reanchor(anchor, &current_markdown, &markdown);
+                    match outcome {
+                        crate::research_anchors::AnchorOutcome::Unmatched => {
+                            unmatched_branches += 1;
+                        }
+                        crate::research_anchors::AnchorOutcome::Moved { .. } => {
+                            crate::research_anchors::apply_outcome(
+                                anchor,
+                                &outcome,
+                                Some(&response_revision),
+                            );
+                            moved_branches.push(child.clone());
+                        }
+                        crate::research_anchors::AnchorOutcome::Unchanged => {}
+                    }
+                }
+            }
             let tree = model
                 .research_trees
                 .get_mut(&current_tree.id)
                 .ok_or_else(|| format!("research tree {} was not found", current_tree.id))?;
             tree.title = title;
             tree.updated_at = now.max(tree.updated_at.saturating_add(1));
-            (tree.clone(), node, removed)
+            (
+                tree.clone(),
+                node,
+                removed,
+                moved_branches,
+                unmatched_branches,
+            )
         };
         // The response snapshot above is already durable. Persist its matching
         // title, revision timestamp, and cleared-highlight metadata before the
@@ -5034,6 +5240,14 @@ impl AppState {
                 "removedHighlightCount": removed_highlight_count,
             }),
         ));
+        for branch in moved_branches {
+            self.emit(SessionEvent::new(
+                "research.node.updated",
+                None,
+                None,
+                json!({ "node": branch }),
+            ));
+        }
         if markdown_changed {
             crate::research_recap::schedule(self, &node.id);
         }
@@ -5043,6 +5257,7 @@ impl AppState {
             response_revision,
             markdown_changed,
             removed_highlight_count,
+            unmatched_branch_count,
         })
     }
 
@@ -5402,6 +5617,8 @@ impl AppState {
                 started_at: None,
                 completed_at: None,
                 promoted_at: None,
+                edited_at: None,
+                corrections: Vec::new(),
                 highlights: Vec::new(),
             };
             model.research_nodes.insert(node_id, node.clone());
@@ -13049,6 +13266,189 @@ mod tests {
         );
     }
 
+    fn note_edit(
+        node_id: &str,
+        text: &str,
+        expected: &str,
+        correction: bool,
+    ) -> research::UpdateResearchNoteRequest {
+        research::UpdateResearchNoteRequest {
+            node_id: node_id.to_string(),
+            text: text.to_string(),
+            expected_text: expected.to_string(),
+            correction,
+        }
+    }
+
+    #[test]
+    fn a_post_without_replies_takes_new_text_and_is_marked_edited() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let note = state
+            .create_research_note(note_request("Who has tried this?", true), Vec::new())
+            .unwrap();
+        let note_id = note.tree.root_node_id.clone();
+        // The editor's expected state must match the post's.
+        assert!(
+            state
+                .update_research_note(note_edit(&note_id, "New", "Old text", false))
+                .unwrap_err()
+                .contains("changed while you were editing")
+        );
+        assert!(
+            state
+                .update_research_note(note_edit(&note_id, "New", "Who has tried this?", true))
+                .unwrap_err()
+                .contains("can be edited")
+        );
+        assert!(
+            state
+                .update_research_note(note_edit(&note_id, "  ", "Who has tried this?", false))
+                .is_err()
+        );
+        let edited = state
+            .update_research_note(note_edit(
+                &note_id,
+                " Who has tried this tool? ",
+                "Who has tried this?",
+                false,
+            ))
+            .unwrap();
+        assert_eq!(edited.node.prompt, "Who has tried this tool?");
+        assert!(edited.node.edited_at.is_some());
+        assert!(edited.node.corrections.is_empty());
+        // The title was derived from the text, so it follows the text.
+        assert_eq!(edited.tree.title, "Who has tried this tool?");
+        assert_eq!(
+            state.research_node(&note_id).unwrap().prompt,
+            "Who has tried this tool?"
+        );
+        // A renamed thread keeps its title.
+        state
+            .rename_research_tree(&note.tree.id, "Tools".to_string())
+            .unwrap();
+        let again = state
+            .update_research_note(note_edit(
+                &note_id,
+                "Who has tried this tool before?",
+                "Who has tried this tool?",
+                false,
+            ))
+            .unwrap();
+        assert_eq!(again.tree.title, "Tools");
+    }
+
+    #[test]
+    fn a_post_with_replies_or_follow_ups_gets_corrections() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let note = state
+            .create_research_note(note_request("The meeting is on Monday.", true), Vec::new())
+            .unwrap();
+        let note_id = note.tree.root_node_id.clone();
+        add_member_reply(&state, &note_id, "Ana", "I will be there.");
+        let text = "The meeting is on Monday.";
+        assert!(
+            state
+                .update_research_note(note_edit(&note_id, "Tuesday", text, false))
+                .unwrap_err()
+                .contains("can only be corrected")
+        );
+        assert!(
+            state
+                .update_research_note(note_edit(&note_id, text, text, true))
+                .is_err()
+        );
+        let corrected = state
+            .update_research_note(note_edit(
+                &note_id,
+                "The meeting is on Tuesday.",
+                text,
+                true,
+            ))
+            .unwrap();
+        assert_eq!(corrected.node.prompt, text);
+        assert!(corrected.node.edited_at.is_none());
+        assert_eq!(corrected.node.corrections.len(), 1);
+        assert_eq!(
+            corrected.node.corrections[0].body,
+            "The meeting is on Tuesday."
+        );
+        // Follow-ups read the corrections after the note.
+        let child = state
+            .create_research_child_with_attachments(
+                &note_id,
+                "Which day?".to_string(),
+                None,
+                None,
+                false,
+                Vec::new(),
+            )
+            .unwrap();
+        let prompt = state
+            .research_note_followup_prompt(&note_id, &child, "Which day?")
+            .unwrap();
+        assert!(prompt.contains(
+            "</note>\n<corrections>\n<correction>\nThe meeting is on Tuesday.\n</correction>\n</corrections>"
+        ));
+
+        // An AI follow-up alone also makes the post correctable.
+        let quiet = state
+            .create_research_note(note_request("Draft plan", true), Vec::new())
+            .unwrap();
+        let quiet_id = quiet.tree.root_node_id.clone();
+        state
+            .create_research_child_with_attachments(
+                &quiet_id,
+                "Summarize".to_string(),
+                None,
+                None,
+                false,
+                Vec::new(),
+            )
+            .unwrap();
+        assert!(
+            state
+                .update_research_note(note_edit(&quiet_id, "Final plan", "Draft plan", false))
+                .is_err()
+        );
+        assert!(
+            state
+                .update_research_note(note_edit(&quiet_id, "Final plan", "Draft plan", true))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn a_saved_link_stays_a_single_link() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let link = state
+            .create_research_note(note_request("https://example.com/a", false), Vec::new())
+            .unwrap();
+        let link_id = link.tree.root_node_id.clone();
+        assert!(
+            state
+                .update_research_note(note_edit(
+                    &link_id,
+                    "A comment and https://example.com/a",
+                    "https://example.com/a",
+                    false,
+                ))
+                .unwrap_err()
+                .contains("single link")
+        );
+        let edited = state
+            .update_research_note(note_edit(
+                &link_id,
+                "https://example.com/b",
+                "https://example.com/a",
+                false,
+            ))
+            .unwrap();
+        assert_eq!(edited.node.prompt, "https://example.com/b");
+    }
+
     #[test]
     fn note_follow_ups_are_plain_runs_that_may_anchor_to_a_reply() {
         let state = AppState::new(test_config(temp_workspace()));
@@ -14873,6 +15273,8 @@ mod tests {
             started_at: Some(now),
             completed_at: Some(now),
             promoted_at: None,
+            edited_at: None,
+            corrections: Vec::new(),
             highlights: Vec::new(),
         };
         state.admit_research_root(&tree, &mut node).unwrap();
@@ -15640,6 +16042,8 @@ mod tests {
             started_at: Some(1),
             completed_at: Some(2),
             promoted_at: None,
+            edited_at: None,
+            corrections: Vec::new(),
             highlights: Vec::new(),
         };
         let persisted_tree = |id: &str, root: &str| ResearchTree {
@@ -15757,6 +16161,8 @@ mod tests {
             started_at: Some(2),
             completed_at: None,
             promoted_at: None,
+            edited_at: None,
+            corrections: Vec::new(),
             highlights: Vec::new(),
         };
         let mut agent = sample_agent("sdk-agent");
@@ -15856,6 +16262,8 @@ mod tests {
             started_at: Some(1),
             completed_at: None,
             promoted_at: None,
+            edited_at: None,
+            corrections: Vec::new(),
             highlights: Vec::new(),
         };
         let persisted = PersistedState {
@@ -15965,6 +16373,8 @@ mod tests {
             started_at: Some(1),
             completed_at: Some(2),
             promoted_at: None,
+            edited_at: None,
+            corrections: Vec::new(),
             highlights: Vec::new(),
         };
         let mut persisted = PersistedState {
@@ -16049,6 +16459,8 @@ mod tests {
             started_at: Some(1),
             completed_at: Some(2),
             promoted_at: None,
+            edited_at: None,
+            corrections: Vec::new(),
             highlights: Vec::new(),
         };
         let persisted = PersistedState {
@@ -16142,6 +16554,8 @@ mod tests {
                     started_at: Some(1),
                     completed_at: Some(2),
                     promoted_at: None,
+                    edited_at: None,
+                    corrections: Vec::new(),
                     highlights: Vec::new(),
                 },
             );
@@ -17041,7 +17455,117 @@ mod tests {
     }
 
     #[test]
-    fn research_document_edits_replace_content_clear_highlights_and_preserve_children() {
+    fn document_edits_move_matching_highlights_and_branch_anchors() {
+        let workspace = temp_workspace();
+        let state = AppState::new(test_config(workspace.clone()));
+        state.restore_session();
+        let mut group = sample_group();
+        group.dir = workspace.display().to_string();
+        group.managed_dir = workspace.join("managed").display().to_string();
+        group.agents.clear();
+        state.insert_group_after(group, None).unwrap();
+        let detail = state
+            .create_research_document(CreateResearchDocumentRequest {
+                markdown: "# Notes\n\nKeep this **paragraph**.\n\nMiddle text.\n\nDrop this one."
+                    .to_string(),
+                title: Some("Notes".to_string()),
+                group_id: "group-1".to_string(),
+            })
+            .unwrap();
+        let node_id = detail.tree.root_node_id.clone();
+        let revision = research::read_response_snapshot_with_revision(&workspace, &node_id)
+            .unwrap()
+            .unwrap()
+            .revision;
+        // Anchors are captured from the rendered text.
+        let rendered_anchor =
+            |exact: &str, prefix: &str, suffix: &str, start: usize| ResearchHighlightAnchor {
+                version: 1,
+                projection: "answer-v1".to_string(),
+                response_revision: revision.clone(),
+                start,
+                end: start + exact.len(),
+                exact: exact.to_string(),
+                prefix: prefix.to_string(),
+                suffix: suffix.to_string(),
+            };
+        let keep = state
+            .create_research_highlight(
+                &node_id,
+                rendered_anchor("Keep this paragraph", "Notes\n", ".\nMiddle", 6),
+            )
+            .unwrap();
+        let drop = state
+            .create_research_highlight(
+                &node_id,
+                rendered_anchor("Drop this one", "Middle text.\n", ".", 39),
+            )
+            .unwrap();
+        let kept_branch = state
+            .create_research_child(
+                &node_id,
+                "Why keep it?".to_string(),
+                Some(rendered_anchor(
+                    "Keep this paragraph",
+                    "Notes\n",
+                    ".\nMiddle",
+                    6,
+                )),
+                false,
+            )
+            .unwrap();
+        let dropped_branch = state
+            .create_research_child(
+                &node_id,
+                "Why drop it?".to_string(),
+                Some(rendered_anchor("Drop this one", "Middle text.\n", ".", 39)),
+                false,
+            )
+            .unwrap();
+
+        let updated = state
+            .update_research_document(UpdateResearchDocumentRequest {
+                node_id: node_id.clone(),
+                markdown:
+                    "# Notes\n\nA new first paragraph.\n\nKeep this **paragraph**.\n\nMiddle text."
+                        .to_string(),
+                title: Some("Notes".to_string()),
+                expected_response_revision: revision.clone(),
+                expected_title: "Notes".to_string(),
+                expected_highlight_ids: vec![keep.id.clone(), drop.id.clone()],
+            })
+            .unwrap();
+        assert!(updated.markdown_changed);
+        assert!(updated.node.edited_at.is_some());
+        assert_eq!(updated.removed_highlight_count, 1);
+        assert_eq!(updated.unmatched_branch_count, 1);
+        assert_eq!(updated.node.highlights.len(), 1);
+        let moved = &updated.node.highlights[0];
+        assert_eq!(moved.id, keep.id);
+        // 24 UTF-16 units were inserted before the paragraph in the source;
+        // its prefix changed and its suffix still matches.
+        assert_eq!(moved.anchor.start, 6 + 24);
+        assert_eq!(moved.anchor.response_revision, updated.response_revision);
+        let kept_anchor = state
+            .research_node(&kept_branch.id)
+            .unwrap()
+            .query_anchor
+            .unwrap();
+        assert_eq!(kept_anchor.start, 6 + 24);
+        assert_eq!(kept_anchor.response_revision, updated.response_revision);
+        // The branch whose passage is gone keeps its anchor as it was.
+        assert_eq!(
+            state
+                .research_node(&dropped_branch.id)
+                .unwrap()
+                .query_anchor,
+            dropped_branch.query_anchor
+        );
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn research_document_edits_replace_content_reanchor_highlights_and_preserve_children() {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace.clone()));
         state.restore_session();

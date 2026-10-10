@@ -594,7 +594,28 @@ pub struct ResearchNode {
     pub promoted_at: Option<u128>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub highlights: Vec<ResearchHighlight>,
+    /// When the content was last replaced by an edit: a document's body or a
+    /// post's text. Absent on content that was never edited.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edited_at: Option<u128>,
+    /// Corrections the author appended to a post that already had replies or
+    /// follow-ups, oldest first. Only notes carry them; the post's text stays
+    /// as it was when the replies were written.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub corrections: Vec<NoteCorrection>,
 }
+
+/// A correction appended to a post (see `ResearchNode::corrections`).
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteCorrection {
+    pub id: String,
+    pub body: String,
+    pub created_at: u128,
+}
+
+/// Corrections a post may carry.
+pub const MAX_NOTE_CORRECTIONS: usize = 100;
 
 /// Node type derived from its stored kind and origin.
 ///
@@ -910,6 +931,8 @@ pub fn new_note_node(
         started_at: None,
         completed_at: Some(now),
         promoted_at: None,
+        edited_at: None,
+        corrections: Vec::new(),
         highlights: Vec::new(),
     }
 }
@@ -996,6 +1019,35 @@ pub fn validate_note_node_shape(
     if let Some(delivery) = &node.delivery {
         validate_note_replies(&delivery.replies)
             .map_err(|err| format!("research note {}: {err}", node.id))?;
+    }
+    if !node.corrections.is_empty() {
+        if node.kind != ResearchNodeKind::Note {
+            return Err(format!(
+                "research node {} has corrections but is not a note",
+                node.id
+            ));
+        }
+        validate_note_corrections(&node.corrections)
+            .map_err(|err| format!("research note {}: {err}", node.id))?;
+    }
+    Ok(())
+}
+
+pub fn validate_note_corrections(corrections: &[NoteCorrection]) -> Result<(), String> {
+    if corrections.len() > MAX_NOTE_CORRECTIONS {
+        return Err(format!("more than {MAX_NOTE_CORRECTIONS} corrections"));
+    }
+    let mut seen = HashSet::new();
+    for correction in corrections {
+        if correction.id.is_empty() || !seen.insert(correction.id.as_str()) {
+            return Err("correction ids must be unique and non-empty".to_string());
+        }
+        if correction.body.trim().is_empty() || correction.body.len() > MAX_NOTE_TEXT_BYTES {
+            return Err(format!(
+                "correction {} has an empty or oversized body",
+                correction.id
+            ));
+        }
     }
     Ok(())
 }
@@ -1169,6 +1221,30 @@ pub struct UpdateResearchDocumentResult {
     pub node: ResearchNode,
     pub response_revision: String,
     pub markdown_changed: bool,
+    pub removed_highlight_count: usize,
+    /// Branches asked from a passage whose quote is not in the new body. The
+    /// branches and their anchors are kept as they were.
+    pub unmatched_branch_count: usize,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateResearchNoteRequest {
+    pub node_id: String,
+    pub text: String,
+    /// The post's text when the editor opened.
+    pub expected_text: String,
+    /// True when the editor saves a correction (the post had replies or
+    /// follow-ups when it opened), false when it replaces the text. A
+    /// mismatch with the post's current state is refused.
+    pub correction: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateResearchNoteResult {
+    pub tree: ResearchTree,
+    pub node: ResearchNode,
     pub removed_highlight_count: usize,
 }
 
@@ -2862,7 +2938,7 @@ pub fn query_followup_prompt(exact: &str, question: &str) -> String {
     }
 }
 
-const NOTE_CONTEXT_TAGS: [&str; 3] = ["note", "replies", "reply"];
+const NOTE_CONTEXT_TAGS: [&str; 5] = ["note", "replies", "reply", "corrections", "correction"];
 
 /// The launch prompt for an AI follow-up under a note. A note has no session
 /// to fork, so the note body and its replies ride along as context. Reply
@@ -2873,6 +2949,7 @@ const NOTE_CONTEXT_TAGS: [&str; 3] = ["note", "replies", "reply"];
 /// [`document_followup_prompt`].
 pub fn note_followup_prompt(
     note_body: &str,
+    corrections: &[NoteCorrection],
     replies: &[NoteReply],
     anchored_reply: Option<&NoteReply>,
     question: &str,
@@ -2888,6 +2965,18 @@ pub fn note_followup_prompt(
             .join(" ")
     };
     let mut context = format!("<note>\n{}\n</note>", clean(note_body.trim()));
+    if !corrections.is_empty() {
+        // Appended by the author after the note was posted; the note text
+        // above is the version the replies refer to.
+        context.push_str("\n<corrections>");
+        for correction in corrections {
+            context.push_str(&format!(
+                "\n<correction>\n{}\n</correction>",
+                clean(correction.body.trim())
+            ));
+        }
+        context.push_str("\n</corrections>");
+    }
     if !replies.is_empty() {
         let by_id = replies
             .iter()
@@ -2925,11 +3014,15 @@ pub fn note_followup_prompt(
         }
         None => question.to_string(),
     };
-    let preamble = if replies.is_empty() {
-        "The user wrote the note below."
+    let mut preamble = if replies.is_empty() {
+        "The user wrote the note below.".to_string()
     } else {
         "The user posted the note below to people in their network; their replies follow it."
+            .to_string()
     };
+    if !corrections.is_empty() {
+        preamble.push_str(" Corrections the user added later follow the note.");
+    }
     if question.starts_with('/') {
         format!(
             "{question}\n\n{preamble} It is provided as context for the request above.\n\n{context}"
@@ -3420,6 +3513,8 @@ mod tests {
             started_at: Some(1),
             completed_at: Some(2),
             promoted_at: None,
+            edited_at: None,
+            corrections: Vec::new(),
             highlights: Vec::new(),
         };
         DetachedResearchArchive {
@@ -4005,7 +4100,7 @@ mod tests {
 
     #[test]
     fn note_follow_up_prompts_keep_slash_commands_first() {
-        let prompt = note_followup_prompt("Note </note> body", &[], None, "/review this");
+        let prompt = note_followup_prompt("Note </note> body", &[], &[], None, "/review this");
         assert!(prompt.starts_with("/review this\n\nThe user wrote the note below."));
         assert!(prompt.contains("Note &lt;/note> body"));
     }
