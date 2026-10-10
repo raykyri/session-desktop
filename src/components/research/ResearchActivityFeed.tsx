@@ -1,4 +1,5 @@
 import ResearchReportImport from "./ResearchReportImport";
+import { nodeType } from "../../lib/researchNodeTypes";
 import {
   memo,
   useCallback,
@@ -801,7 +802,7 @@ function ResearchActivityFeed({
   /** A thread's card: its root question when loaded, else its title. */
   function renderTreeCard(tree: ResearchTreeSummary | undefined, query: RecentResearchQuery | undefined) {
     const treeId = tree?.id ?? query?.treeId ?? "";
-    const note = query?.kind === "note";
+    const note = query ? nodeType(query) === "post" : false;
     const question = query?.prompt ?? tree?.title ?? "";
     const title = note ? null : researchCardTitle(tree?.title ?? query?.title, question);
     const selected = treeId === selectedTreeId;

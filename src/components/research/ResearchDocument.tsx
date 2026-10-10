@@ -51,6 +51,7 @@ import {
 } from "../../lib/researchHistory";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import { researchBranchInfo } from "../../lib/researchBranches";
+import { nodeMessage, nodeType } from "../../lib/researchNodeTypes";
 import {
   columnAttributes,
   columnIdOf,
@@ -768,9 +769,9 @@ function buildSegmentView(
   showFullTrace: boolean,
 ): SegmentView {
   // A conversation node's whole timeline is the document: there is no
-  // "answer" fold to collapse to and no fuller trace to reveal.
+  // "answer" fold to collapse to and no fuller trace to reveal. The stored
+  // kind, not the node type: it selects the transcript renderer.
   const isConversation = node.kind === "conversation" || content?.node.kind === "conversation";
-  const isDocument = node.kind === "document";
   const timelineItems = buildTimelineItems(content?.turns ?? []);
   const answerTimelineItems = timelineItemsAfterLastToolCall(timelineItems);
   const hasTranscriptActivity = !isConversation && timelineItemsContainTranscriptActivity(timelineItems);
@@ -787,6 +788,7 @@ function buildSegmentView(
   const rawAnswer = assistantTextFromTimelineItems(answerTimelineItems);
   const conversationCopyText =
     isConversation && content ? formatPlainTextTranscript(content.turns, "Assistant") : null;
+  // The stored kind: only a document record holds editable Markdown.
   let editableDocumentMarkdown: string | null = null;
   if (content?.node.kind === "document") {
     for (const turn of content.turns) {
@@ -800,7 +802,6 @@ function buildSegmentView(
   return {
     node,
     content,
-    isDocument,
     isConversation,
     showAllTurns,
     showFullTrace,
@@ -3853,7 +3854,7 @@ function ResearchDocument({
         const content = contentByNodeRef.current[id] ?? (await getResearchNodeContent(id));
         const view = buildSegmentView(chainNode, content, true, false);
         const body = (view.conversationCopyText ?? view.rawAnswer).trim();
-        const prompt = view.isDocument || view.isConversation ? null : chainNode.prompt.trim() || null;
+        const prompt = nodeMessage(chainNode)?.text.trim() || null;
         if (!prompt && !body) {
           continue;
         }
@@ -4063,7 +4064,8 @@ function ResearchDocument({
         return null;
       }
       const branches = branchesByParent.get(id) ?? EMPTY_BRANCHES;
-      const whole = node.kind === "document" || node.kind === "conversation";
+      // A document with no question is one row for the whole document.
+      const whole = nodeMessage(node) === null;
       const replyQuote = node.replyAnchor
         ? nodeById.get(node.parentNodeId ?? "")?.delivery?.replies?.find(
             (reply) => reply.id === node.replyAnchor,
@@ -4189,7 +4191,7 @@ function ResearchDocument({
       .filter((node): node is ResearchNode => Boolean(node));
     const tail = chain[chain.length - 1] ?? null;
     const head = chain[0] ?? null;
-    if (!tail || !head || head.kind === "note") {
+    if (!tail || !head || nodeType(head) === "post") {
       return null;
     }
     const text = composerText[headId] ?? "";
@@ -4214,10 +4216,10 @@ function ResearchDocument({
     const busy = chain.some((node) => isActiveResearchStatus(node.status));
     const placeholder = editingId
       ? "Edit the question"
-      : head.kind === "document" && chain.length === 1
-        ? "Ask about this document"
-        : head.kind === "conversation" && chain.length === 1
+      : nodeMessage(head) === null && chain.length === 1
+        ? head.kind === "conversation"
           ? "Ask about this conversation"
+          : "Ask about this document"
           : busy || queued
             ? "Ask a follow-up (queued)"
             : "Ask a follow-up";
@@ -4489,10 +4491,11 @@ function ResearchDocument({
               title={title}
               branch={level === 0 ? null : chainIds.length}
               history={level === 0 ? historyNav : null}
+              // Provenance, which only the stored origin records.
               imported={level === 0 && rootNode?.origin === "terminalExport"}
               archived={level === 0 && archived}
               onAsk={
-                head && head.kind !== "note"
+                head && nodeType(head) !== "post"
                   ? () => requestFocus({ kind: "composer", key: headId }, "reveal")
                   : undefined
               }
@@ -4643,6 +4646,7 @@ function ResearchDocument({
         ? `${view.answerWordCount.toLocaleString()} ${view.answerWordCount === 1 ? "word" : "words"}`
         : null,
       durationText,
+      // Provenance: an imported report has no model to name.
       node.origin === "imported" ? null : formatResearchModelSummary(node.adapter, node.model, node.origin) || null,
     ]
       .filter(Boolean)
@@ -4761,6 +4765,7 @@ function ResearchDocument({
             }}
           />
         ) : null}
+        {/* The stored kind: only a document record holds editable Markdown. */}
         {isRoot && node.kind === "document" ? (
           <ResearchMenuItem
             icon={<Pencil size={15} aria-hidden="true" />}

@@ -1,3 +1,4 @@
+import { nodeType } from "./researchNodeTypes";
 import type {
   NoteDelivery,
   NoteReply,
@@ -214,7 +215,7 @@ export function activityEventFromResearchQuery(
   tree?: ResearchTreeSummary,
 ): RecentActivityEvent {
   const followUp = Boolean(query.parentNodeId);
-  const note = query.kind === "note";
+  const note = nodeType(query) === "post";
   const object: RecentActivityEvent["object"] = note
     ? { kind: noteObjectKind(query), id: query.nodeId, label: "Note" }
     : { kind: "research-query", id: query.nodeId, label: "Research" };

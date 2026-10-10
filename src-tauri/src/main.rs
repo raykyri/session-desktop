@@ -2015,87 +2015,39 @@ fn launch_research_child_run(
         Some(anchor) => research::query_followup_prompt(&anchor.exact, &prompt),
         None => prompt,
     };
-    // Exhaustive on purpose: each kind must pick its launch path
-    // explicitly, so a new kind (or lifting a refusal in
-    // create_research_child) forces a decision here instead of falling
-    // into the session-fork branch without a checkpoint.
-    match parent.kind {
-        research::ResearchNodeKind::Document => {
-            // A document has no session to fork. Its follow-up launches a
-            // fresh run whose prompt carries the document as context; the
-            // child's displayed prompt stays the bare question (the
-            // response boundary still matches it as a substring of the
-            // sent prompt).
-            let launch_prompt = state.research_document_followup_prompt(&parent.id, &question);
-            let launch_prompt = match launch_prompt {
-                Ok(launch_prompt) => launch_prompt,
-                Err(err) => {
-                    let _ = state.fail_research_node(&child.id, err.clone());
-                    return Err(err);
-                }
-            };
-            return launch_fresh_research_run(state, &child.id, workspace, launch_prompt);
+    // Without a session to fork, launch a fresh run with the parent's saved
+    // content as context. Display only the child's question, which remains
+    // a substring of the sent prompt for response-boundary matching.
+    let context_prompt = match parent.follow_up_launch() {
+        research::FollowUpLaunch::Fork => None,
+        research::FollowUpLaunch::Context(research::FollowUpContext::Document) => {
+            Some(state.research_document_followup_prompt(&parent.id, &question))
         }
-        research::ResearchNodeKind::Conversation => {
-            // An exported conversation is severed from its source session
-            // — there is nothing to fork. Its follow-up launches a fresh
-            // run whose prompt carries the serialized conversation as
-            // context; the child's displayed prompt stays the bare
-            // question (the response boundary still matches it as a
-            // substring of the sent prompt).
-            //
-            // The bare prompt and the anchor go in unwrapped: an anchored
-            // quote is conversation content, so the conversation prompt
-            // builder wraps it itself with the tag neutralization the
-            // serialized turns get, rather than taking the verbatim
-            // `question` the other kinds share.
-            let launch_prompt = state.research_snapshot_followup_prompt(
+        research::FollowUpLaunch::Context(research::FollowUpContext::Snapshot) => {
+            // For exported conversations and imported reports, pass the prompt
+            // and anchor separately. The prompt builder neutralizes tags in the
+            // quoted passage as it does for serialized turns, then wraps it.
+            Some(state.research_snapshot_followup_prompt(
                 &parent.id,
                 &tweets::prompt_with_research_attachments(child.prompt.clone(), &child.attachments),
                 child.query_anchor.as_ref(),
-            );
-            let launch_prompt = match launch_prompt {
-                Ok(launch_prompt) => launch_prompt,
-                Err(err) => {
-                    let _ = state.fail_research_node(&child.id, err.clone());
-                    return Err(err);
-                }
-            };
-            return launch_fresh_research_run(state, &child.id, workspace, launch_prompt);
+            ))
         }
-        research::ResearchNodeKind::Note => {
-            // A note has no session to fork. Its follow-up launches a fresh
-            // run whose prompt carries the note and its replies as context.
+        research::FollowUpLaunch::Context(research::FollowUpContext::Post) => {
             // Reply text is other people's words, so the builder neutralizes
             // it; the question (and any anchored reply) is wrapped there too.
-            let launch_prompt = state.research_note_followup_prompt(&parent.id, child, &question);
-            let launch_prompt = match launch_prompt {
-                Ok(launch_prompt) => launch_prompt,
-                Err(err) => {
-                    let _ = state.fail_research_node(&child.id, err.clone());
-                    return Err(err);
-                }
-            };
-            return launch_fresh_research_run(state, &child.id, workspace, launch_prompt);
+            Some(state.research_note_followup_prompt(&parent.id, child, &question))
         }
-        research::ResearchNodeKind::Run
-            if parent.origin == Some(research::ResearchNodeOrigin::Imported) =>
-        {
-            let launch_prompt = state.research_snapshot_followup_prompt(
-                &parent.id,
-                &tweets::prompt_with_research_attachments(child.prompt.clone(), &child.attachments),
-                child.query_anchor.as_ref(),
-            );
-            let launch_prompt = match launch_prompt {
-                Ok(prompt) => prompt,
-                Err(err) => {
-                    let _ = state.fail_research_node(&child.id, err.clone());
-                    return Err(err);
-                }
-            };
-            return launch_fresh_research_run(state, &child.id, workspace, launch_prompt);
-        }
-        research::ResearchNodeKind::Run => {}
+    };
+    if let Some(launch_prompt) = context_prompt {
+        let launch_prompt = match launch_prompt {
+            Ok(launch_prompt) => launch_prompt,
+            Err(err) => {
+                let _ = state.fail_research_node(&child.id, err.clone());
+                return Err(err);
+            }
+        };
+        return launch_fresh_research_run(state, &child.id, workspace, launch_prompt);
     }
     let live_source = parent
         .agent_id
@@ -3342,7 +3294,7 @@ async fn generate_research_agent_title(
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let node = state.research_node(&node_id)?;
-        if node.kind != research::ResearchNodeKind::Run {
+        if node.node_type() != research::ResearchNodeType::Exchange {
             return Err("only research runs can generate model titles".to_string());
         }
         let workspace = state.research_workspace_for_node(&node_id)?;
@@ -3384,7 +3336,7 @@ async fn generate_research_recap_candidate(
             ));
         }
         let node = state.research_node(&request.node_id)?;
-        if !node.kind.is_run() || node.status != research::ResearchNodeStatus::Complete {
+        if !node.recap_eligible() || node.status != research::ResearchNodeStatus::Complete {
             return Err("only completed research runs can generate summaries".to_string());
         }
         let snapshot = research::read_response_snapshot_with_revision(
