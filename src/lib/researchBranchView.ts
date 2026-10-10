@@ -151,7 +151,7 @@ export function researchQueueAction(
 }
 
 /** The fork that sends an edited question in place of a failed (or stopped)
- * one: same parent, passage, reply and inline slot, naming the failed node as
+ * one: same parent, anchor (passage or reply) and inline slot, naming the failed node as
  * the one it replaces. The backend admits the new node before it removes the
  * failed one, so a send that fails leaves the failed turn and its partial
  * answer in place. */
@@ -162,9 +162,8 @@ export function researchEditedQuestionFork(failed: ResearchNode, prompt: string)
   return {
     parentNodeId: failed.parentNodeId,
     prompt,
-    queryAnchor: failed.queryAnchor ?? null,
+    anchor: failed.anchor ?? null,
     inline: Boolean(failed.inline),
-    replyAnchor: failed.replyAnchor ?? null,
     replacesNodeId: failed.id,
   };
 }

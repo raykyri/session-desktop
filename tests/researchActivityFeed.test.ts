@@ -14,7 +14,8 @@ const noop = () => {};
 const asyncNoop = async () => {};
 const savedLink = {
   nodeId: "link", treeId: "link-tree", parentNodeId: null, inline: false,
-  prompt: "https://example.com/finding", adapter: "codex", kind: "note" as const,
+  prompt: "https://example.com/finding", adapter: "codex", kind: "post" as const,
+  format: "link" as const,
   status: "complete" as const, createdAt: 200,
 };
 
@@ -456,7 +457,7 @@ test("a network note is an untitled card showing its body", () => {
   const html = renderFeed({ items: [{
     nodeId: "note", treeId: "note-tree", parentNodeId: null, inline: false,
     prompt: "Who ships component-model plugins?", adapter: "claude", model: "fable",
-    kind: "note" as const, status: "complete" as const, createdAt: 100,
+    kind: "post" as const, status: "complete" as const, createdAt: 100,
     delivery: {
       status: "posted", postedAt: 100,
       replies: [{ id: "r1", author: { kind: "member", id: "ana", displayName: "Ana Moreau", handle: "ana" }, body: "We moved in March.", createdAt: 110 }],

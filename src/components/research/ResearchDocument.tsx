@@ -53,7 +53,7 @@ import {
 } from "../../lib/researchHistory";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import { researchBranchInfo } from "../../lib/researchBranches";
-import { nodeMessage, nodeType } from "../../lib/researchNodeTypes";
+import { nodeMessage, nodeType, passageAnchor, replyAnchorId } from "../../lib/researchNodeTypes";
 import {
   COLUMN_ROW_SELECTOR,
   columnAttributes,
@@ -138,6 +138,7 @@ import {
 import type {
   ResearchBranchRemoval,
   ResearchHighlight,
+  NodeAnchor,
   ResearchHighlightAnchor,
   ResearchNode,
   ResearchNodeKind,
@@ -207,9 +208,8 @@ interface ResearchDocumentProps {
   onFork: (
     parentNodeId: string,
     prompt: string,
-    queryAnchor?: ResearchHighlightAnchor | null,
+    anchor?: NodeAnchor | null,
     inline?: boolean,
-    replyAnchor?: string | null,
     replacesNodeId?: string | null,
   ) => Promise<ResearchNode>;
   /** Replies and follow-ups on a note page (see ResearchNoteDocument). */
@@ -1372,8 +1372,9 @@ function ResearchDocument({
       const next: { segmentId: string; id: string; anchor: ResearchHighlightAnchor }[] = [];
       for (const segmentId of levelPath) {
         for (const child of branchesByParent.get(segmentId) ?? []) {
-          if (child.queryAnchor) {
-            next.push({ segmentId, id: child.id, anchor: child.queryAnchor });
+          const anchor = passageAnchor(child);
+          if (anchor) {
+            next.push({ segmentId, id: child.id, anchor });
           }
         }
       }
@@ -3914,9 +3915,8 @@ function ResearchDocument({
           const child = await onForkRef.current(
             request.parentNodeId,
             request.prompt,
-            request.queryAnchor,
+            request.anchor,
             request.inline,
-            request.replyAnchor,
             request.replacesNodeId,
           );
           clearComposer();
@@ -3977,7 +3977,12 @@ function ResearchDocument({
     }
     setSubmittingKey(key);
     try {
-      const child = await onForkRef.current(current.parentNodeId, prompt, current.anchor, false);
+      const child = await onForkRef.current(
+        current.parentNodeId,
+        prompt,
+        current.anchor ? { kind: "passage", anchor: current.anchor } : null,
+        false,
+      );
       const currentTreeId = treeIdRef.current;
       if (currentTreeId) {
         navigationPersistence.clearAsk(currentTreeId, current.parentNodeId);
@@ -4170,9 +4175,10 @@ function ResearchDocument({
         responseRevision: content.responseRevision,
         highlightIds: highlights.map((highlight) => highlight.id),
         highlightAnchors: highlights.map((highlight) => highlight.anchor),
-        branchAnchors: nodes.flatMap((child) =>
-          child.parentNodeId === nodeId && child.queryAnchor ? [child.queryAnchor] : [],
-        ),
+        branchAnchors: nodes.flatMap((child) => {
+          const anchor = child.parentNodeId === nodeId ? passageAnchor(child) : null;
+          return anchor ? [anchor] : [];
+        }),
         correction: false,
         imported: node.origin === "imported",
         returnFocus,
@@ -4409,7 +4415,7 @@ function ResearchDocument({
       ? detail.nodes.find((node) => node.id === detail.tree.rootNodeId)?.kind
       : treeKind;
     const headerTitle =
-      rootKind === "note" ? "Post" : (detail?.tree.title ?? treeTitle ?? "Loading research…");
+      rootKind === "post" ? "Post" : (detail?.tree.title ?? treeTitle ?? "Loading research…");
     return (
       <ResearchDocumentFrame title={headerTitle}>
         <div className="research-placeholder">
@@ -4479,9 +4485,10 @@ function ResearchDocument({
       const branches = branchesByParent.get(id) ?? EMPTY_BRANCHES;
       // A document with no question is one row for the whole document.
       const whole = nodeMessage(node) === null;
-      const replyQuote = node.replyAnchor
+      const replyId = replyAnchorId(node);
+      const replyQuote = replyId
         ? nodeById.get(node.parentNodeId ?? "")?.delivery?.replies?.find(
-            (reply) => reply.id === node.replyAnchor,
+            (reply) => reply.id === replyId,
           )?.body ?? null
         : null;
       const selected = levelPath[level] === id;
@@ -5088,7 +5095,7 @@ function ResearchDocument({
             />
             <div className="research-column-scroll" onScroll={onColumnScroll(column)}>
               <div className="research-column-content research-reading-surface">
-                {level > 0 && head?.parentNodeId ? sourceBlock(head.queryAnchor ?? null, head.parentNodeId, headId) : null}
+                {level > 0 && head?.parentNodeId ? sourceBlock(passageAnchor(head), head.parentNodeId, headId) : null}
                 <ul className="research-msg-list">
                   {renderRows(chainIds, level)}
                   {renderQueue(headId)}
@@ -5544,7 +5551,7 @@ function ResearchDocument({
               {
                 id: branchId,
                 question: branch.prompt,
-                source: branch.queryAnchor ? `“${quoteDisplayText(branch.queryAnchor.exact)}”` : "Whole answer",
+                source: passageAnchor(branch) ? `“${quoteDisplayText(passageAnchor(branch)!.exact)}”` : "Whole answer",
                 messages: chain.length,
                 state: levels[markerTip.level + 1]?.headId === branchId ? ("open" as const) : branchBusy(branchId) ? ("running" as const) : null,
               },

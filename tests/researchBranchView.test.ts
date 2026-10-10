@@ -129,32 +129,30 @@ test("a refused question holds the queue, a stopped tail stalls it, and a remove
 });
 
 test("an edited question forks in place of the failed node instead of removing it first", () => {
-  const anchor = { exact: "passage", prefix: "", suffix: "", start: 0, end: 7 } as unknown as NonNullable<
-    ResearchNode["queryAnchor"]
-  >;
+  const anchor = {
+    kind: "reply",
+    replyId: "reply-1",
+  } as const satisfies NonNullable<ResearchNode["anchor"]>;
   const failed = node("failed", {
     parentNodeId: "root",
     inline: true,
     status: "failed",
-    queryAnchor: anchor,
-    replyAnchor: "reply-1",
+    anchor,
   });
   // One request: the backend admits the new question, then removes the
   // failed node. A refused send leaves the failed turn and its partial answer.
   assert.deepEqual(researchEditedQuestionFork(failed, "Edited"), {
     parentNodeId: "root",
     prompt: "Edited",
-    queryAnchor: anchor,
+    anchor,
     inline: true,
-    replyAnchor: "reply-1",
     replacesNodeId: "failed",
   });
   assert.deepEqual(researchEditedQuestionFork(node("b", { parentNodeId: "root" }), "Q"), {
     parentNodeId: "root",
     prompt: "Q",
-    queryAnchor: null,
+    anchor: null,
     inline: false,
-    replyAnchor: null,
     replacesNodeId: "b",
   });
   assert.equal(researchEditedQuestionFork(node("root"), "Q"), null);

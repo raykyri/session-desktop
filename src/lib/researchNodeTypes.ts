@@ -1,9 +1,14 @@
 // Derive node type and follow-up launch behavior from stored kind and origin.
 // These helpers mirror ResearchNode::node_type and follow_up_launch in research.rs.
 
-import type { ResearchMessageAttachment, ResearchNode } from "../types";
+import type {
+  PostFormat,
+  ResearchHighlightAnchor,
+  ResearchMessageAttachment,
+  ResearchNode,
+} from "../types";
 
-/** - post: a note, written by you (a saved link or tweet, or a post
+/** - post: written by you (a saved link or tweet, or a post
  *    delivered to the network).
  *  - exchange: a question and the agent run that answers it.
  *  - document: long-form content with no run behind it: an imported report,
@@ -14,7 +19,7 @@ type NodeShape = Pick<ResearchNode, "kind" | "origin">;
 
 export function nodeType(node: NodeShape): ResearchNodeType {
   switch (node.kind ?? "run") {
-    case "note":
+    case "post":
       return "post";
     case "document":
     case "conversation":
@@ -55,4 +60,33 @@ export function followUpLaunch(node: NodeShape): "fork" | "context" {
  * reports. */
 export function recapEligible(node: NodeShape): boolean {
   return nodeType(node) === "exchange" || node.origin === "imported";
+}
+
+/** The passage of the parent's answer a follow-up was asked about. */
+export function passageAnchor(
+  node: Pick<ResearchNode, "anchor">,
+): ResearchHighlightAnchor | null {
+  return node.anchor?.kind === "passage" ? node.anchor.anchor : null;
+}
+
+/** The id of the parent post's reply a follow-up was asked about. */
+export function replyAnchorId(node: Pick<ResearchNode, "anchor">): string | null {
+  return node.anchor?.kind === "reply" ? node.anchor.replyId : null;
+}
+
+/** The format the backend stores for a post with this text
+ * (`PostFormat::of`): "link" when the whole text is one http(s) URL. The
+ * composer uses it to label and route what it is about to create; stored
+ * posts carry their format. */
+export function postFormatOf(text: string): PostFormat {
+  const trimmed = text.trim();
+  if (!trimmed || /\s/.test(trimmed)) return "text";
+  try {
+    const url = new URL(trimmed);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname
+      ? "link"
+      : "text";
+  } catch {
+    return "text";
+  }
 }

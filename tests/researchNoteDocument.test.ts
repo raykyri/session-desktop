@@ -9,7 +9,7 @@ const noop = () => {};
 
 const note: ResearchNode = {
   id: "note", treeId: "tree", prompt: "Who ships component-model plugins?",
-  adapter: "claude", model: "fable", groupId: "ws", worktreeDir: "/ws", kind: "note",
+  adapter: "claude", model: "fable", groupId: "ws", worktreeDir: "/ws", kind: "post", format: "text",
   status: "complete", createdAt: 100, highlights: [],
   delivery: { status: "posted", postedAt: 100 },
 };
@@ -68,9 +68,19 @@ test("a network follow-up's page links back to its note", () => {
 });
 
 test("a saved link's post column shows the link card", () => {
-  const link: ResearchNode = { ...note, prompt: "https://example.com/page", delivery: null };
+  const link: ResearchNode = {
+    ...note,
+    prompt: "https://example.com/page",
+    format: "link",
+    delivery: null,
+  };
   const html = render([link]);
   assert.match(html, /note-link-card/);
   assert.doesNotMatch(html, /Saved the link|No replies yet/);
+});
+
+test("a post renders by its stored format, not by parsing its text", () => {
+  const asked: ResearchNode = { ...note, prompt: "https://example.com/page", format: "text" };
+  assert.doesNotMatch(render([asked]), /note-link-card/);
 });
 

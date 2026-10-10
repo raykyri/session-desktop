@@ -2,7 +2,7 @@ import { useId, useImperativeHandle, useMemo, useState } from "react";
 import type { ReactNode, Ref } from "react";
 import { Globe, Pencil, Sparkles } from "lucide-react";
 import type { NoteCorrection, NoteReply, ResearchNode } from "../../types";
-import { nodeType } from "../../lib/researchNodeTypes";
+import { nodeType, replyAnchorId } from "../../lib/researchNodeTypes";
 import { recentResearchQueryFromNode } from "../../lib/activity";
 import { shortWhen } from "../../lib/shortTime";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
@@ -127,7 +127,7 @@ export default function ResearchNoteThread({
                 parentNodeId: note.id,
                 prompt,
                 network,
-                replyAnchor: network ? null : target?.id ?? null,
+                replyId: network ? null : target?.id ?? null,
               })
               .then(() => setTarget(null))
           }
@@ -211,7 +211,7 @@ function NoteFollowUpRow({
 }) {
   const labelId = useId();
   const network = nodeType(child) === "post";
-  const anchored = noteReplyTargetFor(replies, child.replyAnchor);
+  const anchored = noteReplyTargetFor(replies, replyAnchorId(child));
   const model = formatResearchModelSummary(child.adapter, child.model) || "AI";
   let state: ReactNode;
   if (network) {

@@ -38,7 +38,7 @@ test("imported reports show their recap; other documents and posts do not", () =
   assert.match(render(value), /Summary: The result is ready\./);
   value.node.origin = null;
   assert.equal(render(value), "");
-  value.node.kind = "note";
+  value.node.kind = "post";
   assert.equal(render(value), "");
 });
 

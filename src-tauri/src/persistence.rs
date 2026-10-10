@@ -34,7 +34,12 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 
 /// Bumped whenever the on-disk shape changes incompatibly. A file written by a
 /// newer or unknown version is treated as empty rather than misinterpreted.
-pub const STATE_VERSION: u32 = 7;
+pub const STATE_VERSION: u32 = 8;
+/// Written when an imported report is stored as a document but no node uses
+/// the post shape (`research::node_uses_post_fields`: posts, formats and
+/// merged anchors). Builds that accept up to version 7 read notes, not posts,
+/// and would drop post nodes and merged anchors.
+pub const STATE_VERSION_PRE_POSTS: u32 = 7;
 /// Written when research-message attachments exist but no imported report is
 /// stored as a document. Builds that accept up to version 6 stored imported
 /// reports as runs, and would treat an imported document as an authored one.
@@ -53,10 +58,13 @@ const MIN_MIGRATABLE_STATE_VERSION: u32 = 2;
 const STATE_FILE: &str = "state.json";
 const PREFERENCES_FILE: &str = "preferences.json";
 const V2_BACKUP_FILE: &str = "state.v2.bak";
-/// The state file as it was before the version-7 migration converted imported
-/// reports to documents. Builds that accept up to version 6 cannot read the
-/// converted file; this backup allows restoring it for those builds.
+/// The state file as it was before a research-node migration, when it was
+/// written at versions 3 to 6. Builds that accept up to version 6 cannot read
+/// the converted file; this backup allows restoring it for those builds.
 const PRE_DOCUMENT_IMPORTS_BACKUP_FILE: &str = "state.v6.bak";
+/// The state file as it was before the version-8 migration converted notes to
+/// posts, when it was written at version 7.
+const PRE_POSTS_BACKUP_FILE: &str = "state.v7.bak";
 pub(crate) const STATE_DIR: &str = ".session";
 
 /// Snapshot of everything a Session restart needs to recreate panes, agents,
@@ -372,9 +380,9 @@ pub struct LoadOutcome {
     pub state: PersistedState,
     pub warning: Option<LoadWarning>,
     pub source_version: Option<u32>,
-    /// Whether loading converted at least one imported report from the
-    /// pre-version-7 run shape to a document.
-    pub imported_reports_migrated: bool,
+    /// Whether loading converted at least one research node from an older
+    /// stored shape (`research::migrate_research_node_values`).
+    pub research_nodes_migrated: bool,
 }
 
 /// True when the user asked to force startup past an *unreadable* state file,
@@ -591,11 +599,11 @@ pub fn load_with_diagnostics_from(workspace_root: &Path, preread: Option<Vec<u8>
     if version == 2 {
         migrate_v2_to_v3(&mut value);
     }
-    // Version 7 stores imported reports as documents. Convert the run-shaped
-    // records here, before lenient deserialization, so every reader sees one
-    // shape.
-    let imported_reports_migrated =
-        version < STATE_VERSION && migrate_imported_reports_to_documents(&mut value);
+    // Version 7 stores imported reports as documents and version 8 stores
+    // notes as posts with merged anchors. Convert the older records here,
+    // before lenient deserialization, so every reader sees one shape and no
+    // node is dropped for having the old one.
+    let research_nodes_migrated = version < STATE_VERSION && migrate_research_nodes(&mut value);
 
     // Deserialize collections element-by-element so a single malformed record
     // (partial corruption, a hand-edit, an unforeseen schema drift in one entry)
@@ -605,7 +613,7 @@ pub fn load_with_diagnostics_from(workspace_root: &Path, preread: Option<Vec<u8>
     let (state, dropped) = deserialize_lenient(value);
     if dropped.is_empty() {
         LoadOutcome {
-            imported_reports_migrated,
+            research_nodes_migrated,
             ..load_ok_version(state, Some(version))
         }
     } else {
@@ -623,7 +631,7 @@ pub fn load_with_diagnostics_from(workspace_root: &Path, preread: Option<Vec<u8>
                 backup_path: None,
             }),
             source_version: Some(version),
-            imported_reports_migrated,
+            research_nodes_migrated,
         }
     }
 }
@@ -675,17 +683,16 @@ fn migrate_v2_to_v3(value: &mut Value) {
     map.insert("version".to_string(), Value::from(STATE_VERSION));
 }
 
-/// Pure JSON-shape migration to version 7: imported reports stored as runs
-/// become documents (see `research::migrate_imported_report_node`). Returns
-/// whether any node changed.
-fn migrate_imported_reports_to_documents(value: &mut Value) -> bool {
-    let mut changed = false;
-    if let Some(Value::Object(nodes)) = value.get_mut("researchNodes") {
-        for node in nodes.values_mut() {
-            changed |= crate::research::migrate_imported_report_node(node);
-        }
+/// Pure JSON-shape migration of the research nodes to the version-8 shape
+/// (see `research::migrate_research_node_values`). Returns whether any node
+/// changed.
+fn migrate_research_nodes(value: &mut Value) -> bool {
+    match value.get_mut("researchNodes") {
+        Some(Value::Object(nodes)) => crate::research::migrate_research_node_values(
+            &mut nodes.values_mut().collect::<Vec<_>>(),
+        ),
+        _ => false,
     }
-    changed
 }
 
 /// Rebuilds a `PersistedState` from an already-validated JSON object, converting
@@ -878,7 +885,7 @@ fn load_ok_version(state: PersistedState, source_version: Option<u32>) -> LoadOu
         state,
         warning: None,
         source_version,
-        imported_reports_migrated: false,
+        research_nodes_migrated: false,
     }
 }
 
@@ -891,7 +898,7 @@ fn load_warning(path: PathBuf, message: String, backup_path: Option<PathBuf>) ->
             backup_path,
         }),
         source_version: None,
-        imported_reports_migrated: false,
+        research_nodes_migrated: false,
     }
 }
 
@@ -902,17 +909,24 @@ pub fn backup_v2_state_for_migration(workspace_root: &Path) -> Result<Option<Pat
     backup_state_for_migration(workspace_root, V2_BACKUP_FILE, "version-2")
 }
 
-/// Preserves the pre-version-7 bytes (versions 3 to 6) as `state.v6.bak`
-/// before a save rewrites state.json with imported reports as documents, the
-/// way `backup_v2_state_for_migration` does for version 2.
-pub fn backup_pre_document_imports_state_for_migration(
+/// Preserves the bytes of a state file written at `source_version` (3 to 7)
+/// before a save rewrites state.json with migrated research nodes, the way
+/// `backup_v2_state_for_migration` does for version 2: versions 3 to 6 as
+/// `state.v6.bak`, version 7 as `state.v7.bak`. Each backup is readable by
+/// the builds its name gives.
+pub fn backup_research_node_state_for_migration(
     workspace_root: &Path,
+    source_version: u32,
 ) -> Result<Option<PathBuf>, String> {
-    backup_state_for_migration(
-        workspace_root,
-        PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
-        "pre-version-7",
-    )
+    if source_version >= STATE_VERSION_PRE_POSTS {
+        backup_state_for_migration(workspace_root, PRE_POSTS_BACKUP_FILE, "version-7")
+    } else {
+        backup_state_for_migration(
+            workspace_root,
+            PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
+            "pre-version-7",
+        )
+    }
 }
 
 fn backup_state_for_migration(
@@ -1093,6 +1107,7 @@ fn scratch_writer_pid(name: &str) -> Option<u32> {
         PREFERENCES_FILE,
         V2_BACKUP_FILE,
         PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
+        PRE_POSTS_BACKUP_FILE,
     ]
     .contains(&base)
     {

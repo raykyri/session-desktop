@@ -837,6 +837,7 @@ function ResearchActivityFeed({
               {note ? (
                 <NoteBody
                   prompt={query.prompt}
+                  format={query.format ?? "text"}
                   attachments={query.attachments}
                   variant="compact"
                   renderPrompt={plainPrompt(asQuestion)}
