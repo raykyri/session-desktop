@@ -2,8 +2,9 @@
 // level per open conversation: level 0 is the root's inline chain, and each
 // later level is a branch asked from the previous level's selected message.
 // Each level renders as a messages column and an answer column, except a
-// post (a note root), which renders as the post column and its thread column
-// (replies, follow-ups and the follow-up composer). An unsent branch adds a
+// level whose head is a post (a note root, or a network follow-up of a post),
+// which renders as the post column and its thread column (replies,
+// follow-ups and the follow-up composer). An unsent branch adds a
 // pending column after the level it was asked from, and editing the root's
 // document or post adds an editor column after the root level's columns.
 //
@@ -34,8 +35,8 @@ export interface ResearchLevel {
   sourceId: string | null;
   /** The passage of the source answer the branch was asked about. */
   anchor: ResearchHighlightAnchor | null;
-  /** A post root (a note) is a post column and a thread column, with no
-   * answer. */
+  /** A level whose head is a post (the root, or a network follow-up of a
+   * post) is a post column and a thread column, with no answer. */
   kind: "conversation" | "branch" | "post";
 }
 
@@ -114,7 +115,7 @@ export function researchStrip(
       selectedId,
       sourceId: index === 0 ? null : (head?.parentNodeId ?? null),
       anchor: index === 0 || !head ? null : passageAnchor(head),
-      kind: index > 0 ? "branch" : head && nodeType(head) === "post" ? "post" : "conversation",
+      kind: head && nodeType(head) === "post" ? "post" : index > 0 ? "branch" : "conversation",
     };
   });
   const columns: ResearchColumn[] = [];

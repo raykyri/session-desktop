@@ -2,12 +2,12 @@ import type { ResearchNode, ResearchTreeDetail } from "../../types";
 import { shortWhen } from "../../lib/shortTime";
 import { ResearchUserMessage } from "./ResearchMessage";
 import { NoteBody } from "./ResearchNote";
-import { nodeAttachments, nodeEditedAt, nodePrompt } from "../../lib/researchNodeTypes";
-
-function excerpt(text: string, maxChars = 90): string {
-  const normalized = text.split(/\s+/).filter(Boolean).join(" ");
-  return normalized.length > maxChars ? `${normalized.slice(0, maxChars - 1).trimEnd()}…` : normalized;
-}
+import {
+  nodeAttachments,
+  nodeEditedAt,
+  nodePrompt,
+  postFollowUpSourceExcerpt,
+} from "../../lib/researchNodeTypes";
 
 /** A note's post column body: the note as a turn's question. Replies,
  * follow-ups and the follow-up composer are in the thread column to its
@@ -24,6 +24,9 @@ export default function ResearchNoteDocument({
   const parent = note.parentNodeId
     ? detail.nodes.find((node) => node.id === note.parentNodeId) ?? null
     : null;
+  // A network follow-up's parent is always a post (the backend refuses any
+  // other parent).
+  const parentExcerpt = parent ? postFollowUpSourceExcerpt(parent, note, 60) : null;
   const editedAt = nodeEditedAt(note);
 
   return (
@@ -31,13 +34,13 @@ export default function ResearchNoteDocument({
       {/* Use the turn layout for the note. */}
       <article className="research-turn note-turn">
         <div className="research-turn-question">
-          {parent ? (
+          {parent && parentExcerpt !== null ? (
             <button
               type="button"
               className="note-document-parent"
               onClick={() => onSelectNode(parent.id)}
             >
-              ↳ Network follow-up of “{excerpt(nodePrompt(parent), 60)}”
+              ↳ Network follow-up of “{parentExcerpt}”
             </button>
           ) : null}
           <ResearchUserMessage className="research-prompt research-turn-prompt">

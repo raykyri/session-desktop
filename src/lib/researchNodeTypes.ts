@@ -133,6 +133,33 @@ export function replyAnchorId(node: Pick<ResearchNode, "anchor">): string | null
   return node.anchor?.kind === "reply" ? node.anchor.replyId : null;
 }
 
+/** The excerpt a follow-up of a post quotes as its source: the reply it was
+ * asked about, else the post's own text, on one line, without emphasis and
+ * code markers, and cut at a word boundary to at most `maxChars` characters
+ * (the ellipsis included). Null when `parent` is not a post. */
+export function postFollowUpSourceExcerpt(
+  parent: ResearchNode,
+  child: Pick<ResearchNode, "anchor">,
+  maxChars = 120,
+): string | null {
+  if (parent.type !== "post") {
+    return null;
+  }
+  const replyId = replyAnchorId(child);
+  const reply = replyId ? parent.delivery?.replies?.find((candidate) => candidate.id === replyId) : undefined;
+  const text = (reply?.body ?? parent.message.text)
+    .replace(/\*\*|__|`/g, "")
+    .split(/\s+/)
+    .join(" ")
+    .trim();
+  if (text.length <= maxChars) {
+    return text;
+  }
+  const cut = text.slice(0, maxChars - 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > maxChars / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
 /** The format the backend stores for a post with this text
  * (`PostFormat::of`): "link" when the whole text is one http(s) URL. The
  * composer uses it to label and route what it is about to create; stored

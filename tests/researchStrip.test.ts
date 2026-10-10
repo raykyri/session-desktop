@@ -180,6 +180,22 @@ test("a note root is a post column and its thread column; its follow-ups open as
   assert.equal(sameResearchStrip(root, withRun), false);
 });
 
+test("a network follow-up (a post under a post) opens as a post column and its thread column", () => {
+  const delivery = { status: "posted" as const, postedAt: 1, replies: [] };
+  const nodes = [
+    node("note", { type: "post", delivery }),
+    node("net", { type: "post", parentNodeId: "note", createdAt: 1, delivery }),
+    node("run", { parentNodeId: "net", createdAt: 2 }),
+  ];
+  const opened = researchStrip(nodes, "net", null);
+  assert.deepEqual(ids(opened), ["N0", "T0", "N1", "T1"]);
+  assert.equal(opened.levels[1].kind, "post");
+  assert.equal(opened.levels[1].sourceId, "note");
+  assert.equal(opened.endsWithAnswer, false);
+  // Its own AI follow-up is an ordinary pair after it.
+  assert.deepEqual(ids(researchStrip(nodes, "run", null)), ["N0", "T0", "N1", "T1", "T2", "A2"]);
+});
+
 test("a draft is the T0 messages column, and every column has one selector", () => {
   const draft = { id: "T0", role: "draft", draftId: "draft-1" } as const;
   assert.deepEqual(columnAttributes(draft), {
