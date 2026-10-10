@@ -48,6 +48,14 @@ export default function ResearchNoteDocument({
             >
               {shortWhen(note.createdAt, Date.now())}
             </time>
+            {note.editedAt ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <span title={new Date(note.editedAt).toLocaleString()}>
+                  Edited {shortWhen(note.editedAt, Date.now())}
+                </span>
+              </>
+            ) : null}
           </div>
         </div>
       </article>

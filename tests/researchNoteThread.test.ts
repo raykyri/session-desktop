@@ -143,3 +143,28 @@ test("thread entries skip documents and responses and break time ties by id", ()
     ["reply:r1", "reply:r2", "a", "b"],
   );
 });
+
+test("corrections are Thread rows ordered by time with the replies and follow-ups", () => {
+  const corrected: ResearchNode = {
+    ...withReplies,
+    corrections: [{ id: "c1", body: "It ships **wit-bindgen 0.30**.", createdAt: 135 }],
+  };
+  assert.deepEqual(
+    noteThreadEntries([corrected, about, answered], corrected).map((entry) => entry.key),
+    ["reply:r1", "about", "correction:c1", "reply:r2", "answered"],
+  );
+  const html = renderToStaticMarkup(
+    createElement(ResearchNoteThread, {
+      nodes: [corrected],
+      note: corrected,
+      archived: false,
+      actions: { onAskFollowUp: asyncNoop, onRespond: asyncNoop, onDeleteResponse: asyncNoop, onRetry: asyncNoop },
+      requireCmdEnterToSend: false,
+      openNodeId: null,
+      onOpenFollowUp: noop,
+    }),
+  );
+  assert.match(html, /data-type="correction"[^>]*data-research-thread-row/);
+  assert.match(html, /note-correction-label">Correction</);
+  assert.match(html, /<strong>wit-bindgen 0.30<\/strong>/);
+});

@@ -1,12 +1,13 @@
 import { useId, useMemo, useState } from "react";
 import type { ReactNode, Ref } from "react";
-import { Globe, Sparkles } from "lucide-react";
-import type { NoteReply, ResearchNode } from "../../types";
+import { Globe, Pencil, Sparkles } from "lucide-react";
+import type { NoteCorrection, NoteReply, ResearchNode } from "../../types";
 import { nodeType } from "../../lib/researchNodeTypes";
 import { recentResearchQueryFromNode } from "../../lib/activity";
 import { shortWhen } from "../../lib/shortTime";
 import { formatResearchModelSummary } from "../../lib/researchModelSummary";
 import type { ResearchComposerHandle } from "./ResearchConversationComposer";
+import { ResearchMarkdown } from "./ResearchMessage";
 import {
   NoteFollowUpField,
   NoteFollowUpStatus,
@@ -17,14 +18,15 @@ import {
 } from "./ResearchNote";
 
 /** One row of a note's thread column: a top-level reply (with the author's
- * responses to it) or a follow-up. */
+ * responses to it), a follow-up, or a correction the author appended. */
 type NoteThreadEntry =
   | { kind: "reply"; key: string; at: number; reply: NoteReply }
-  | { kind: "follow-up"; key: string; at: number; node: ResearchNode };
+  | { kind: "follow-up"; key: string; at: number; node: ResearchNode }
+  | { kind: "correction"; key: string; at: number; correction: NoteCorrection };
 
-/** The rows of a note's thread, oldest first: its top-level network replies
- * and its follow-ups (child nodes other than documents), merged by time. A
- * follow-up row's key is its node id. */
+/** The rows of a note's thread, oldest first: its top-level network replies,
+ * its follow-ups (child nodes other than documents) and its corrections,
+ * merged by time. A follow-up row's key is its node id. */
 export function noteThreadEntries(nodes: readonly ResearchNode[], note: ResearchNode): NoteThreadEntry[] {
   const followUps = nodes
     .filter((node) => node.parentNodeId === note.id && nodeType(node) !== "document")
@@ -33,6 +35,14 @@ export function noteThreadEntries(nodes: readonly ResearchNode[], note: Research
   return [
     ...replies.map((reply): NoteThreadEntry => ({ kind: "reply", key: `reply:${reply.id}`, at: reply.createdAt, reply })),
     ...followUps.map((node): NoteThreadEntry => ({ kind: "follow-up", key: node.id, at: node.createdAt, node })),
+    ...(note.corrections ?? []).map(
+      (correction): NoteThreadEntry => ({
+        kind: "correction",
+        key: `correction:${correction.id}`,
+        at: correction.createdAt,
+        correction,
+      }),
+    ),
   ].sort((left, right) => left.at - right.at);
 }
 
@@ -108,7 +118,14 @@ export default function ResearchNoteThread({
       {entries.length > 0 ? (
         <ol className="note-thread-list note-thread-rows" aria-label="Replies and follow-ups">
           {entries.map((entry) =>
-            entry.kind === "reply" ? (
+            entry.kind === "correction" ? (
+              <NoteCorrectionRow
+                key={entry.key}
+                correction={entry.correction}
+                tabbable={tabKey === entry.key}
+                onFocus={() => setActiveKey(entry.key)}
+              />
+            ) : entry.kind === "reply" ? (
               <NoteReplyItem
                 key={entry.key}
                 nodeId={note.id}
@@ -218,6 +235,49 @@ function NoteFollowUpRow({
           {child.prompt}
         </div>
         {state}
+      </div>
+    </li>
+  );
+}
+
+/** A correction the author appended to the post, as a row in its thread. */
+function NoteCorrectionRow({
+  correction,
+  tabbable,
+  onFocus,
+}: {
+  correction: NoteCorrection;
+  tabbable: boolean;
+  onFocus: () => void;
+}) {
+  return (
+    <li
+      className="note-thread-item note-thread-correction"
+      data-type="correction"
+      data-research-thread-row=""
+      tabIndex={tabbable ? 0 : -1}
+      onFocus={(event) => {
+        if (event.target === event.currentTarget) onFocus();
+      }}
+    >
+      <div className="note-thread-gutter">
+        <span className="note-glyph" aria-hidden="true">
+          <Pencil size={10} />
+        </span>
+      </div>
+      <div className="note-thread-body">
+        <div className="note-reply-head">
+          <span className="note-reply-author">You</span>
+          <span className="note-correction-label">Correction</span>
+          <span aria-hidden="true">·</span>
+          <time
+            dateTime={new Date(correction.createdAt).toISOString()}
+            title={new Date(correction.createdAt).toLocaleString()}
+          >
+            {shortWhen(correction.createdAt)}
+          </time>
+        </div>
+        <ResearchMarkdown className="note-reply-text" text={correction.body} variant="compact" />
       </div>
     </li>
   );
