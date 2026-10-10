@@ -388,10 +388,9 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
         event.type !== "agent.shell_job_state_changed" &&
         event.type !== "agent.shell_job_removed"
       ) {
-        // Status events now carry the updated agent: apply it surgically so a busy
-        // agent's stream of hook events doesn't refetch and replace the entire list
-        // (with the re-renders and ordering hazards that caused). Events without an
-        // agent fall back to a sequenced refetch.
+        // Apply the agent carried by each status event without refetching the
+        // entire list. This avoids repeated renders and out-of-order updates.
+        // Events without an agent fall back to a sequenced refetch.
         const updatedAgent = event.payload.agent;
         if (isAgentInfo(updatedAgent)) {
           setAgents((current) => upsertAgent(current, updatedAgent));
@@ -408,8 +407,8 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
           // working status restored from disk can't trigger it. "agent.recovered"
           // is excluded too: a recovered agent is waiting for input, not working,
           // even if it momentarily carries a working status.
-          // Workspace-only refreshes carry a full AgentInfo so the display can
-          // update surgically, but they are not lifecycle activity. In
+          // Workspace-only refreshes carry a full AgentInfo to update that agent,
+          // but they are not lifecycle activity. In
           // particular, a sibling shell prompt must not make a restored agent
           // with a stale `running` status light up as "Working…".
           if (agentEventAffectsThinkingState(event.type)) {

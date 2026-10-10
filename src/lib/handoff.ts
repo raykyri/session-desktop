@@ -647,8 +647,8 @@ function handoffMessage(item: MessageItem, assistantLabel: string): HandoffMessa
   if (item.role !== "user" && item.role !== "assistant") {
     return null;
   }
-  // messageItemCopyText strips Session's own tagged instruction blocks, so an
-  // item that was nothing but plumbing sanitizes to null and drops out here.
+  // messageItemCopyText strips Session's tagged instruction blocks. Exclude
+  // items with no remaining message text or tool entries.
   const text = messageItemCopyText(item);
   const activities = item.role === "assistant" ? item.activities : [];
   if (!text && toolEntries(activities).length === 0) {

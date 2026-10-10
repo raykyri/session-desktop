@@ -4363,8 +4363,8 @@ pub fn pane_activity(state: &AppState, pane_id: String) -> Result<PaneActivity, 
     let Some(root_pid) = root_pid else {
         return Ok(PaneActivity::idle());
     };
-    // The Session bridge is implementation plumbing, not user work. Do not make
-    // it inflate the close-warning count or trigger a warning on its own.
+    // Exclude the Session bridge from the user-process count so it cannot
+    // trigger a close warning or increase the count.
     let processes = user_running_processes(running_descendant_processes(root_pid));
     if processes.is_empty() {
         Ok(PaneActivity::idle())
