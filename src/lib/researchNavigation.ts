@@ -22,7 +22,7 @@ interface SavedPendingBranch {
   updatedAt: number;
 }
 
-/** The conversation composer's draft. Unlike a pending branch, this belongs
+/** The root follow-up composer's draft. Unlike a pending branch, this belongs
  * to the tree rather than a passage. */
 interface SavedResearchFollowupDraft {
   text: string;
@@ -53,7 +53,7 @@ export interface SavedResearchNavigation {
   /** Pending branches, keyed by the parent node they were started on. The
    * stored field keeps the earlier name, "ask". */
   askByNode?: Record<string, SavedPendingBranch>;
-  /** In-progress text in the conversation composer. */
+  /** In-progress text in the root follow-up composer. */
   followupDraft?: SavedResearchFollowupDraft;
   /** A highlight to scroll into view on the next page visit (set when a
    * Highlights feed unit is opened). Cleared once the thread page lands on it. */
@@ -259,7 +259,7 @@ export function restoreResearchScrollPosition(
   return position.top;
 }
 
-/** Updates the conversation composer's draft and reports whether the stored
+/** Updates the root follow-up composer's draft and reports whether the stored
  * value changed. Empty text removes the saved draft so it cannot be restored
  * after sending or clearing the composer. */
 export function recordResearchFollowupDraft(

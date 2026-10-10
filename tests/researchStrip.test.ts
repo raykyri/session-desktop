@@ -46,7 +46,7 @@ test("a root alone is one messages column and its answer", () => {
   const strip = researchStrip(nodes, "root", null);
   assert.deepEqual(ids(strip), ["T0", "A0"]);
   assert.deepEqual(strip.levels, [
-    { index: 0, headId: "root", chainIds: ["root"], selectedId: "root", sourceId: null, anchor: null, kind: "conversation" },
+    { index: 0, headId: "root", chainIds: ["root"], selectedId: "root", sourceId: null, anchor: null, kind: "root" },
   ]);
   assert.equal(strip.endsWithAnswer, true);
   assert.deepEqual(strip.openNodeIds, ["root"]);
@@ -90,7 +90,7 @@ test("a root with two levels of branches is three pairs, deepest last", () => {
       kind,
     })),
     [
-      { index: 0, headId: "root", chainIds: ["root", "c2"], selectedId: "c2", sourceId: null, kind: "conversation" },
+      { index: 0, headId: "root", chainIds: ["root", "c2"], selectedId: "c2", sourceId: null, kind: "root" },
       { index: 1, headId: "b1", chainIds: ["b1", "b1f"], selectedId: "b1f", sourceId: "c2", kind: "branch" },
       { index: 2, headId: "b2", chainIds: ["b2"], selectedId: "b2", sourceId: "b1f", kind: "branch" },
     ],

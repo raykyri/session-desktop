@@ -265,7 +265,7 @@ interface ResearchThreadPageProps {
    * in the root pair, then the head of each open branch. Empty on unmount. */
   onOpenNodesChange?: (nodeIds: string[]) => void;
   /** The whole question's Follow, Bookmark and Move to actions, which the
-   * root conversation's answer menus list below their own actions. */
+   * root level's answer menus list below their own actions. */
   treeMenu?: ResearchThreadTreeMenu;
 }
 
@@ -1211,7 +1211,7 @@ function ResearchThreadPage({
   const stripRef = useRef(strip);
   stripRef.current = strip;
   const levels = useStableValue(strip.levels, sameResearchLevels);
-  // The selected message of each open level, root conversation first.
+  // The selected message of each open level, root level first.
   const levelPath = useStableValue(
     useMemo(() => levels.map((level) => level.selectedId), [levels]),
     sameIds,
@@ -1849,7 +1849,7 @@ function ResearchThreadPage({
   }, [applyVisit, history, onWorkspaceForward]);
 
   // Keyboard: ⌘[ / ⌘] and Alt+←/→ (and mouse buttons 3/4) walk history; Esc
-  // returns to the root conversation when no menu, popover, or dialog is
+  // returns to the root level when no menu, popover, or dialog is
   // open. Keys are ignored while typing.
   const anyOverlayOpen =
     Boolean(menu) ||

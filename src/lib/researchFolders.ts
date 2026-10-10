@@ -229,7 +229,7 @@ export interface ResearchFeedChild {
 }
 
 /** Starred follow-ups and branches listed under a root question, in tree
- * order. Only follow-ups of the root conversation and branch heads can be
+ * order. Only follow-ups of the root level and branch heads can be
  * starred, so a branch head's parent is the message it was asked from. */
 export function researchFeedChildren(root: RecentResearchQuery): ResearchFeedChild[] {
   const starred = (root.promoted ?? []).filter((child) => child.nodeId !== root.nodeId);

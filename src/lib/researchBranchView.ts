@@ -1,4 +1,4 @@
-// Level math for the column pairs. A conversation is an inline chain (see
+// Level math for the column pairs. A level shows an inline chain (see
 // researchThreads); a branch is a non-inline child node, shown as the chain it
 // heads. Level 0 is the root's chain; each later level is a branch asked from
 // the previous level's selected message.
@@ -42,7 +42,7 @@ export function researchBranchesByParent(
   return map;
 }
 
-/** The selected message of each open level, root conversation first. The
+/** The selected message of each open level, root level first. The
  * deepest level's selection determines the whole path: each level's chain
  * head was asked from the previous level's selected message. */
 export function researchLevelPath(nodes: readonly ResearchNode[], nodeId: string): string[] {

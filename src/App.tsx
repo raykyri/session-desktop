@@ -6609,7 +6609,7 @@ function MainApp() {
   // renders do not cause it to render again. The ref calls the current function.
   const researchThreadOpenPaneRef = useRef(openResearchPaneTab);
   researchThreadOpenPaneRef.current = openResearchPaneTab;
-  // The conversation's toasts use the research toast: its live region is
+  // The thread page's toasts use the research toast: its live region is
   // mounted before any text arrives, and it pauses under the pointer or focus.
   const handleResearchThreadToast = useCallback(
     (message: string, tone?: "normal" | "warning") =>

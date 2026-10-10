@@ -1,5 +1,5 @@
 // The column strip of an open research thread, as data. A thread shows one
-// level per open conversation: level 0 is the root's inline chain, and each
+// level per open chain: level 0 is the root's inline chain, and each
 // later level is a branch asked from the previous level's selected message.
 // Each level renders as a messages column and an answer column, except a
 // level whose head is a post (a note root, or a network follow-up of a post),
@@ -21,7 +21,7 @@ import { inlineChainFor } from "./researchThreads";
 import type { ResearchHighlightAnchor, ResearchNode } from "../types";
 
 export interface ResearchLevel {
-  /** 0 is the root conversation. */
+  /** 0 is the root level. */
   index: number;
   /** The chain's first node: the key for the messages column's scroll
    * position, its follow-up queue and its ask box. */
@@ -31,13 +31,13 @@ export interface ResearchLevel {
   /** The message whose answer the level shows. */
   selectedId: string;
   /** The message in the previous level this branch was asked from; null for
-   * the root conversation. */
+   * the root level. */
   sourceId: string | null;
   /** The passage of the source answer the branch was asked about. */
   anchor: ResearchHighlightAnchor | null;
   /** A level whose head is a post (the root, or a network follow-up of a
    * post) is a post column and a thread column, with no answer. */
-  kind: "conversation" | "branch" | "post";
+  kind: "root" | "branch" | "post";
 }
 
 /** `Tn`: level n's messages column (a post's thread column); `An`: its
@@ -115,7 +115,7 @@ export function researchStrip(
       selectedId,
       sourceId: index === 0 ? null : (head?.parentNodeId ?? null),
       anchor: index === 0 || !head ? null : passageAnchor(head),
-      kind: head && nodeType(head) === "post" ? "post" : index > 0 ? "branch" : "conversation",
+      kind: head && nodeType(head) === "post" ? "post" : index > 0 ? "branch" : "root",
     };
   });
   const columns: ResearchColumn[] = [];
