@@ -260,9 +260,8 @@ export function ArtifactPanel() {
         onLoad={onFrameLoad}
       />
 
-      {/* The left edge and the bottom-left corner. `role="separator"` is what
-          a pointer-driven splitter is; there is no keyboard resize on the
-          desktop either, and the panel's size is not load-bearing. */}
+      {/* Pointer resize handles on the left edge and bottom-left corner.
+          Like the desktop panel, these do not support keyboard resizing. */}
       {fullWidth ? null : (
         <>
           <div
