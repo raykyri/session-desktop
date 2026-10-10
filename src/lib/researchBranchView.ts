@@ -44,7 +44,7 @@ export function researchBranchesByParent(
 /** The selected message of each open level, root conversation first. The
  * deepest level's selection determines the whole path: each level's chain
  * head was asked from the previous level's selected message. */
-export function researchLevelPath(nodes: ResearchNode[], nodeId: string): string[] {
+export function researchLevelPath(nodes: readonly ResearchNode[], nodeId: string): string[] {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const path: string[] = [];
   const seen = new Set<string>();

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ResearchDraft } from "../../types";
 import { createResearchDraftAutosave } from "../../lib/researchDraftAutosave";
+import { columnAttributes } from "../../lib/researchColumns";
 import { ResearchPairHeader } from "./ResearchDocumentChrome";
 import ResearchConversationComposer, { type ResearchComposerHandle } from "./ResearchConversationComposer";
 
@@ -62,9 +63,7 @@ export default function ResearchDraftView({
   return (
     <section
       className="research-pair-turns research-draft-view is-current"
-      data-research-column="T0"
-      data-research-pair="turns"
-      data-research-level={0}
+      {...columnAttributes({ id: "T0", role: "draft", draftId: draft.id })}
       aria-label={`Draft: ${title}`}
     >
       <ResearchPairHeader

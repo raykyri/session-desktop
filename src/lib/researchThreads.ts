@@ -79,7 +79,7 @@ export function inlineChildOf(nodes: ResearchNode[], nodeId: string): ResearchNo
  * array at every downward step, so an N-node inline chain — attacker-controlled
  * data from an imported archive, bounded by bytes but not by node count — did
  * ~N full scans and could freeze the renderer. */
-function inlineChildByParent(nodes: ResearchNode[]): Map<string, ResearchNode> {
+function inlineChildByParent(nodes: readonly ResearchNode[]): Map<string, ResearchNode> {
   const byParent = new Map<string, ResearchNode>();
   for (const node of nodes) {
     if (!node.inline || !node.parentNodeId) {
@@ -96,7 +96,7 @@ function inlineChildByParent(nodes: ResearchNode[]): Map<string, ResearchNode> {
  * links while the current node is inline, then down through inline children.
  * Every node is a chain of at least itself. Cycle-guarded with visited sets
  * so a malformed graph cannot hang the renderer. */
-export function inlineChainFor(nodes: ResearchNode[], nodeId: string): string[] {
+export function inlineChainFor(nodes: readonly ResearchNode[], nodeId: string): string[] {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   // Both maps are built in a single linear pass, so the walks below are O(1)
   // per step and the whole traversal is O(N).

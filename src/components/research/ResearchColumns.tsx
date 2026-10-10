@@ -1,5 +1,12 @@
 import { createContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from "react";
+import {
+  columnAttributes,
+  columnIdOf,
+  columnSelector,
+  isMessagesColumnId,
+  type ResearchColumnId,
+} from "../../lib/researchColumns";
 
 const clampWidth = (value: number, min: number, max: number) =>
   Math.round(Math.max(min, Math.min(max, value)));
@@ -97,14 +104,15 @@ export function revealResearchColumns(
 }
 
 /** After a level opens or closes: shows the strip's last column at its right
- * edge, adjusted so `focus` (a column) stays in view. */
+ * edge, adjusted so the column `focusId` stays in view. */
 export function settleResearchStrip(
   row: HTMLElement | null,
-  focus: HTMLElement | null,
+  focusId: ResearchColumnId | null,
   behavior: ScrollBehavior = researchScrollBehavior(),
 ) {
   if (!row) return;
-  const columns = [...row.querySelectorAll<HTMLElement>("[data-research-column]")];
+  const focus = focusId ? row.querySelector<HTMLElement>(columnSelector(focusId)) : null;
+  const columns = [...row.querySelectorAll<HTMLElement>(columnSelector())];
   const last = columns[columns.length - 1];
   if (!last) return;
   const viewWidth = row.clientWidth;
@@ -329,13 +337,17 @@ export default function ResearchColumns({
       focusOpenedThread: (deepest) => {
         const started = performance.now();
         const attempt = () => {
-          const columns = [...(row?.querySelectorAll<HTMLElement>("[data-research-pair='turns']") ?? [])];
+          // The messages-side columns (a level's messages, post or pending
+          // column, or a draft), left to right.
+          const columns = [...(row?.querySelectorAll<HTMLElement>(columnSelector()) ?? [])].filter((element) =>
+            isMessagesColumnId(element.dataset.researchColumn),
+          );
           const column = deepest ? columns[columns.length - 1] : columns[0];
           const target = column?.querySelector<HTMLElement>(".research-msg-row.is-selected .research-msg-hit");
           if (target && column) {
             target.focus({ preventScroll: true });
             // Scroll the focused column into view.
-            settleResearchStrip(row, column);
+            settleResearchStrip(row, columnIdOf(column));
             return;
           }
           if (!column?.classList.contains("research-draft-view") && performance.now() - started < 1500) {
@@ -365,7 +377,7 @@ export default function ResearchColumns({
             <section
               ref={feedRef}
               className="research-feed-column"
-              data-research-column="feed"
+              {...columnAttributes({ id: "feed", role: "feed" })}
               aria-label="Feed"
             >
               {feed}

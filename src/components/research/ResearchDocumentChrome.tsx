@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ArrowLeft, ArrowRight, Plus, Terminal } from "lucide-react";
 import { ResearchBranchIcon } from "./ResearchIcons";
+import { columnAttributes } from "../../lib/researchColumns";
 
 /** The header bar of one level's pair. It spans the messages and answer
  * columns: the conversation's title (or "Branch · N messages"), clamped to
@@ -125,7 +126,10 @@ export function ResearchDocumentFrame({
   children: ReactNode;
 }) {
   return (
-    <section className="research-workspace research-placeholder-column" data-research-column="placeholder">
+    <section
+      className="research-workspace research-placeholder-column"
+      {...columnAttributes({ id: "placeholder", role: "placeholder" })}
+    >
       <header className="research-column-header">
         <div className="research-column-bar" data-tauri-drag-region data-research-header-bar>
           {title ? (
