@@ -12,6 +12,7 @@ import {
   pushResearchWorkspaceHistory,
   pruneResearchHistory,
   pruneResearchWorkspaceHistory,
+  researchHistoryAfterRemoval,
   researchHistoryBack,
   researchHistoryForward,
   researchSwipeDirection,
@@ -188,4 +189,20 @@ test("swipe tail captures horizontal momentum per wheel event", () => {
   assert.equal(researchSwipeTailCapturesWheel(0, 30), false);
   assert.equal(researchSwipeTailCapturesWheel(4, 12), false);
   assert.equal(researchSwipeTailCapturesWheel(10, -10), false);
+});
+
+test("removal prunes deleted visits and selects the fallback node in history", () => {
+  let history = initResearchHistory("c1-0");
+  history = pushResearchHistory(history, "c1-1");
+  history = pushResearchHistory(history, "b1");
+  history = pushResearchHistory(history, "b2");
+  const valid = new Set(["c1-0", "c1-1"]);
+  const after = researchHistoryAfterRemoval(history, valid, "c1-1");
+  assert.deepEqual(after, { entries: ["c1-0", "c1-1"], index: 1 });
+  // Back goes to the visit before, not to a removed one.
+  assert.equal(researchHistoryBack(after)?.nodeId, "c1-0");
+  // Select the fallback node even when another surviving visit is last.
+  const moved = researchHistoryAfterRemoval(pushResearchHistory(history, "c1-0"), new Set(["c1-0", "c1-1"]), "c1-1");
+  assert.equal(moved.entries[moved.index], "c1-1");
+  assert.equal(canGoForward(moved), false);
 });

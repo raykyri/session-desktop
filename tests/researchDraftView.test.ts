@@ -10,22 +10,23 @@ import { createResearchDraftAutosave } from "../src/lib/researchDraftAutosave";
 const noop = () => {};
 const asyncNoop = async () => {};
 
-test("a draft opens in the content column with its header, field, and Send", () => {
+test("a draft opens as a messages column: its question as the title, then a full-width ask box labelled Draft", () => {
   const html = renderToStaticMarkup(
     createElement(ResearchDraftView, {
       draft: { id: "d1", workspaceId: "ws", prompt: "An unsent draft", createdAt: 1, updatedAt: 1 },
       requireCmdEnterToSend: true,
       onSave: asyncNoop,
       onSend: asyncNoop,
-      onDelete: asyncNoop,
-      onClose: noop,
     }),
   );
-  assert.match(html, /<h2 class="research-column-title is-one-line research-draft-view-title"[^>]*>.*Draft · Not sent<\/h2>/);
-  assert.match(html, /aria-label="Delete draft"/);
-  assert.match(html, /aria-label="Close"/);
+  assert.match(html, /<h2 class="research-column-title"[^>]*>An unsent draft<\/h2>/);
+  assert.match(html, /aria-label="Go to the ask box"/);
+  assert.match(html, /research-composer-wrap is-full-width/);
+  assert.match(html, /research-composer-mode-label"><b>Draft<\/b>/);
   assert.match(html, /<textarea[^>]*aria-label="Draft question"[^>]*>An unsent draft<\/textarea>/);
-  assert.match(html, /type="submit"[^>]*>Send/);
+  assert.match(html, /type="submit"[^>]*aria-label="Send"/);
+  // Opening a draft never focuses its box; Delete is in the feed row's menu.
+  assert.doesNotMatch(html, /autofocus|Delete draft/i);
 });
 
 test("the toast's live region stays mounted while no toast shows", () => {
@@ -139,5 +140,5 @@ test("a moved card regains focus only if no other control received focus", () =>
   anchor.isConnected = false;
   assert.equal(researchCardRefocus(anchor, body, body), "focus", "the button is gone and focus fell to the page");
   assert.equal(researchCardRefocus(anchor, null, body), "focus");
-  assert.equal(researchCardRefocus(anchor, { name: "drawer" }, body), "drop", "it never takes focus back");
+  assert.equal(researchCardRefocus(anchor, { name: "answer column" }, body), "drop", "it never takes focus back");
 });

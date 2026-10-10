@@ -115,6 +115,15 @@ test("research scroll positions remain available for 15 minutes", () => {
   );
 });
 
+test("messages columns keep their own scroll offsets, keyed by the level's head node", () => {
+  const navigation: SavedResearchNavigation = { scrollByNode: {} };
+  recordResearchScrollPosition(navigation, "root-node", 480, 1_000);
+  recordResearchScrollPosition(navigation, "root-node", 90, 1_000, "turns");
+  assert.equal(restoreResearchScrollPosition(navigation, "root-node", 2_000), 480);
+  assert.equal(restoreResearchScrollPosition(navigation, "root-node", 2_000, "turns"), 90);
+  assert.equal(restoreResearchScrollPosition(navigation, "branch-head", 2_000, "turns"), 0);
+});
+
 test("research scroll positions expire at 15 minutes", () => {
   const navigation: SavedResearchNavigation = { scrollByNode: {} };
   recordResearchScrollPosition(navigation, "root-node", 480, 1_000);

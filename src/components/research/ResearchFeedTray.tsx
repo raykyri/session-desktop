@@ -25,6 +25,7 @@ export function researchPlaceEmptyText(place: string): string {
 export default function ResearchFeedTray({
   place,
   name,
+  count = 0,
   collapsed,
   onToggle,
   onOpen,
@@ -32,6 +33,8 @@ export default function ResearchFeedTray({
 }: {
   place: string;
   name: string;
+  /** How many questions the folder holds; shown after its name. */
+  count?: number;
   collapsed: boolean;
   onToggle: () => void;
   onOpen: () => void;
@@ -58,6 +61,12 @@ export default function ResearchFeedTray({
           >
             {name}
           </button>
+          {count > 0 ? (
+            <span className="research-feed-tray-count">
+              {count}
+              <span className="research-visually-hidden"> {count === 1 ? "question" : "questions"}</span>
+            </span>
+          ) : null}
         </div>
         <button
           type="button"

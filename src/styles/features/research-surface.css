@@ -22,13 +22,11 @@
   background: var(--research-workspace-bg);
 }
 
-/* The column area: one horizontally scrolling row with the feed column, the
-   content column (the open thread, then its pinned branch columns), and an
-   overlay layer outside the row for the branch drawer and the find bar.
-   ResearchColumns sets the widths from the column area's width alone: the
-   feed is 240–320px and the conversation takes the rest, so pinned columns
-   scroll the feed out of view instead of resizing anything. Below the
-   single-column width one column shows at a time. */
+/* The column area: one horizontally scrolling strip with the feed column,
+   then the open thread's column pairs (or a filler), and an overlay layer
+   outside the strip for the find bar. ResearchColumns sets the widths from
+   the column area's width alone, so the strip scrolls sideways when the
+   pairs don't fit instead of resizing anything. */
 .research-columns {
   position: relative;
   display: flex;
@@ -57,40 +55,20 @@
   border-right: 1px solid var(--surface-divider);
 }
 
-/* The feed is column 0 for [ and ]: focused, it takes the same 2px rule on
-   its top edge as a conversation column. */
-.research-feed-column.is-focused::before {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 5;
-  height: 2px;
-  background: var(--accent-color);
-  content: "";
-  opacity: 0.75;
-  pointer-events: none;
+/* The first pair's divider replaces the feed's own border. */
+.research-feed-column:has(+ .research-content-column > :is(.research-pairs, .research-pair-turns, .research-placeholder-column)) {
+  border-right-color: transparent;
 }
 
-.research-columns.is-single .research-feed-column::before {
-  display: none;
-}
-
+/* The content's columns are items of the strip itself. */
 .research-content-column {
-  display: flex;
-  flex: none;
-  width: max-content;
-  min-width: var(--research-conversation-width, 100%);
-  height: 100%;
-}
-
-.research-content-column > .research-placeholder-column,
-.research-content-column > .research-draft-view {
-  width: var(--research-conversation-width, 100%);
+  display: contents;
 }
 
 .research-columns-overlay {
   position: absolute;
   inset: 0;
-  z-index: var(--z-research-drawer);
+  z-index: var(--z-research-overlay);
   pointer-events: none;
 }
 
@@ -98,75 +76,9 @@
   pointer-events: auto;
 }
 
-/* Single-column mode: the feed until a thread opens, then the thread until
-   its Back shows the feed again. The other column stays laid out but
-   transparent and inert (see ResearchColumns), so both keep their scroll
-   positions. Opacity rather than visibility: with reduced motion every
-   element has a 0.01ms transition, and a descendant whose inherited
-   visibility is still transitioning can't take focus in the same frame. */
-.research-columns.is-single .research-feed-column {
-  width: 100%;
-  border-right: 0;
-}
-
-.research-columns.is-single.shows-feed .research-content-column,
-.research-columns.is-single:not(.shows-feed) .research-feed-column {
-  position: absolute;
-  inset: 0 auto 0 0;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.research-columns.is-single.shows-feed .research-columns-overlay {
-  opacity: 0;
-}
-
-.research-columns.is-single.shows-feed .research-columns-overlay > * {
-  pointer-events: none;
-}
-
-/* With the strip on macOS, the visible column's header starts after the
-   traffic lights and the expand button, as the feed header does. */
-.research-columns.is-single .research-column-header {
-  padding-left: calc(16px + var(--research-titlebar-inset, 0px));
-}
-
-.research-placeholder-column {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
 .research-placeholder-column > :last-child {
   flex: 1;
   min-height: 0;
-}
-
-.research-content-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 100%;
-  padding: 24px;
-  text-align: center;
-}
-
-.research-content-placeholder h3 {
-  margin: 0;
-  color: var(--text-heading);
-  font-size: calc(15px + var(--font-ui-size-offset));
-  font-weight: 600;
-}
-
-.research-content-placeholder p {
-  max-width: 36ch;
-  margin: 0;
-  color: var(--text-muted);
-  font-size: calc(13px + var(--font-ui-size-offset));
-  line-height: 1.5;
 }
 
 /* Browser-style back/forward in the conversation header. Link styling, no
@@ -297,12 +209,12 @@
 /* Shared tweet embed used both as a Home item and as a research-message
    attachment. Home-only menu clearance remains in journal.css. */
 
-.research-conversation-workspace {
+.research-pairs {
   --tweet-avatar-scale: 0.5;
 }
 
-.research-conversation-workspace .journal-tweet-verified,
-.research-conversation-workspace .research-summary-text {
+.research-pairs .journal-tweet-verified,
+.research-pairs .research-summary-text {
   display: none;
 }
 

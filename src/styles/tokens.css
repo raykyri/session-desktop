@@ -218,8 +218,8 @@
   --z-popover: 15;
   --z-select-popover: 50;
   --z-dialog: 20;
-  /* The branch drawer and find bar over the research column area. */
-  --z-research-drawer: 20;
+  /* The find bar over the research column area. */
+  --z-research-overlay: 20;
   --z-toast: 30;
   --z-context-menu: 1000;
 
@@ -308,10 +308,9 @@
   --warning-callout-bg: #241f18;
   --warning-callout-border: #5b4630;
   /* Research passage highlights (amber = saved passage, stronger amber = hover or
-     asked-about passage, neutral = stacked annotations). */
+     asked-about passage). */
   --research-highlight-bg: rgba(240, 178, 70, 0.19);
   --research-highlight-bg-hover: rgba(240, 178, 70, 0.32);
-  --research-highlight-neutral-bg: rgba(255, 244, 225, 0.1);
 
   --danger-bg: #2c1a17;
   --danger-bg-hover: #3a221d;
@@ -399,17 +398,14 @@
   line-height: 1.5;
   text-rendering: optimizeLegibility;
 
-  /* Conversation column, branch drawer, and passage tints (B2). The tints
+  /* Conversation columns and passage tints (B2). The tints
      are mirrored as literals in research.css, where ::highlight() pseudos
      cannot resolve custom properties reliably. */
   --research-branch-tint: rgba(91, 164, 243, 0.14);
   --research-highlight-flash: rgba(240, 178, 70, 0.39);
-  --research-drawer-shadow: -14px 0 32px rgba(0, 0, 0, 0.45);
   --research-failed-border: rgba(217, 135, 135, 0.35);
-  /* "Stopped with an error." on the failed alert's tint (≥4.5:1). */
+  /* "Error." on the failed alert's tint (≥4.5:1). */
   --research-failed-text: #d98787;
-  /* The rule between turns. */
-  --research-turn-divider: rgba(255, 255, 255, 0.075);
 }
 
 :root[data-body-font="dm-sans"] {
@@ -431,6 +427,8 @@
      may diverge in a future theme. */
   --workspace-bg: #17191b;
   --research-workspace-bg: #151719;
+  /* The strip past the last pair, where the next pair opens. */
+  --research-page-bg: #101213;
   --field-bg: #111315;
   --field-bg-hover: #16191b;
   --panel-bg: #1b2022;
@@ -502,6 +500,7 @@
 
   --workspace-bg: #1c1b1a;
   --research-workspace-bg: var(--right-pane-bg);
+  --research-page-bg: #121110;
   --field-bg: #171615;
   --field-bg-hover: #1e1d1a;
   --panel-bg: var(--field-bg);
@@ -645,7 +644,6 @@
   --warning-callout-border: #e6cf9c;
   --research-highlight-bg: rgba(244, 184, 40, 0.28);
   --research-highlight-bg-hover: rgba(244, 184, 40, 0.46);
-  --research-highlight-neutral-bg: rgba(120, 80, 20, 0.1);
 
   --danger-bg: #fdeae6;
   --danger-bg-hover: #fbdcd5;
@@ -704,13 +702,11 @@
   --shadow-ring: 0 0 0 1px rgba(20, 24, 26, 0.1);
   --shadow-glow-warm: inset 0 0 0 1px rgba(154, 107, 18, 0.16);
 
-  /* Conversation column, branch drawer, and passage tints (B2). */
+  /* Conversation columns and passage tints (B2). */
   --research-branch-tint: rgba(51, 119, 205, 0.12);
   --research-highlight-flash: rgba(240, 170, 40, 0.5);
-  --research-drawer-shadow: -14px 0 32px rgba(40, 30, 20, 0.14);
   --research-failed-border: rgba(177, 74, 74, 0.35);
   --research-failed-text: #a94446;
-  --research-turn-divider: rgba(0, 0, 0, 0.08);
 }
 
 :root[data-appearance="light"],
@@ -723,6 +719,7 @@
 
   --workspace-bg: #f4f6f5;
   --research-workspace-bg: #f6f7f6;
+  --research-page-bg: #e8ebea;
   --field-bg: #ffffff;
   --field-bg-hover: #f7f9f8;
   --panel-bg: #f0f2f1;
@@ -747,7 +744,6 @@
   --transcript-code-header-bg: #e9edeb;
   --surface-divider: #dde2df;
   --surface-border-strong: #cfd6d3;
-  --research-turn-divider: #e1e5e3;
   --dialog-border: #c6cdca;
   --chrome-control-bg: rgba(241, 243, 242, 0.9);
   --chrome-control-bg-hover: rgba(228, 232, 230, 0.95);
@@ -796,6 +792,7 @@
 
   --workspace-bg: #f5f3f0;
   --research-workspace-bg: var(--right-pane-bg);
+  --research-page-bg: #e9e6e1;
   --field-bg: #fbfaf8;
   --field-bg-hover: #f5f2ee;
   --panel-bg: var(--field-bg);
@@ -820,8 +817,6 @@
   --transcript-code-header-bg: #ebe6e0;
   --surface-divider: #e0dbd5;
   --surface-border-strong: #d2ccc5;
-  /* The mock's warm divider. */
-  --research-turn-divider: #e4dfd9;
   --dialog-border: #c8c1b9;
   --chrome-control-bg: rgba(244, 242, 239, 0.9);
   --chrome-control-bg-hover: rgba(232, 228, 222, 0.95);

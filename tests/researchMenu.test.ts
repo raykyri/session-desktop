@@ -41,13 +41,21 @@ test("a menu near the bottom opens above its button", () => {
   });
 });
 
-test("a menu stays below when the space above is shorter, shifted up to fit", () => {
+test("a menu that fits on neither side opens on the taller one and scrolls, clear of its button", () => {
   const tall = { width: 220, height: 500 };
   const anchor = { left: 400, top: 300, right: 426, bottom: 326 };
-  // 466px below, 292px above: it stays below and moves up into the window.
+  // 462px below, 288px above: below, limited to the room below.
   assert.deepEqual(researchMenuPosition(anchor, tall, viewport, "end"), {
     left: 206,
-    top: 800 - 8 - 500,
+    top: 330,
+    maxHeight: 800 - 8 - 330,
+  });
+  // 288px below, 462px above: above, its bottom 4px above the button.
+  const low = { left: 400, top: 474, right: 426, bottom: 500 };
+  assert.deepEqual(researchMenuPosition(low, tall, viewport, "start"), {
+    left: 396,
+    top: 8,
+    maxHeight: 474 - 4 - 8,
   });
 });
 

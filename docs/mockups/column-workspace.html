@@ -77,7 +77,7 @@
     --heading: #121617; --text: #23282a; --body: #2d3133; --text-2: #4a514f; --muted: #5c6460; --faint: #676f6b;
     --accent: #0a6fb8; --on-accent: #ffffff; --accent-soft: rgba(11, 127, 209, 0.12);
     --hl: rgba(240, 170, 40, 0.27); --hl-strong: rgba(240, 170, 40, 0.5); --br-tint: rgba(51, 119, 205, 0.12); --br-tint-hover: rgba(51, 119, 205, 0.22); --anc: #8a7d66;
-    --run: #9a6a12; --run-soft: rgba(200, 140, 30, 0.12); --fail: #b14a4a; --fail-soft: rgba(200, 80, 80, 0.09); --fail-border: rgba(177, 74, 74, 0.35);
+    --run: #9a6a12; --run-soft: rgba(200, 140, 30, 0.12); --fail: #9a3a3a; --fail-soft: rgba(200, 80, 80, 0.09); --fail-border: rgba(177, 74, 74, 0.35);
     --warn: #8a6414; --warn-soft: rgba(200, 150, 40, 0.12); --warn-border: rgba(160, 120, 30, 0.4);
     --drop: rgba(215, 160, 60, 0.14); --drop-border: rgba(180, 125, 30, 0.8); --zone: rgba(11, 127, 209, 0.1); --scrim: rgba(40, 32, 24, 0.28); --zone-line: rgba(11, 127, 209, 0.6);
     --shadow: 0 10px 28px rgba(40, 30, 20, 0.16); --win-shadow: 0 24px 60px rgba(40, 30, 20, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
@@ -90,7 +90,7 @@
   --heading: #121617; --text: #23282a; --body: #2d3133; --text-2: #4a514f; --muted: #5c6460; --faint: #676f6b;
   --accent: #0a6fb8; --on-accent: #ffffff; --accent-soft: rgba(11, 127, 209, 0.12);
   --hl: rgba(240, 170, 40, 0.27); --hl-strong: rgba(240, 170, 40, 0.5); --br-tint: rgba(51, 119, 205, 0.12); --br-tint-hover: rgba(51, 119, 205, 0.22); --anc: #8a7d66;
-  --run: #9a6a12; --run-soft: rgba(200, 140, 30, 0.12); --fail: #b14a4a; --fail-soft: rgba(200, 80, 80, 0.09); --fail-border: rgba(177, 74, 74, 0.35);
+  --run: #9a6a12; --run-soft: rgba(200, 140, 30, 0.12); --fail: #9a3a3a; --fail-soft: rgba(200, 80, 80, 0.09); --fail-border: rgba(177, 74, 74, 0.35);
   --warn: #8a6414; --warn-soft: rgba(200, 150, 40, 0.12); --warn-border: rgba(160, 120, 30, 0.4);
   --drop: rgba(215, 160, 60, 0.14); --drop-border: rgba(180, 125, 30, 0.8); --zone: rgba(11, 127, 209, 0.1); --scrim: rgba(40, 32, 24, 0.28); --zone-line: rgba(11, 127, 209, 0.6);
   --shadow: 0 10px 28px rgba(40, 30, 20, 0.16); --win-shadow: 0 24px 60px rgba(40, 30, 20, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.3);
@@ -217,7 +217,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 .col:has(+ .col.pair-start) { border-right-color: transparent; }
 /* 10px above and 8px below: header text is centred 1px below the 44px row's centre, level with the traffic lights. */
 .col-head { flex: none; min-height: 44px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 10px 8px 8px 20px; border-bottom: 1px solid var(--border); white-space: normal; }
-.col-head .h { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; margin: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; font-size: 14px; font-weight: 600; color: var(--heading); }
+.col-head .h { flex: 1; min-width: 0; overflow-wrap: break-word; line-height: 1.35; margin: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; font-size: 14px; font-weight: 600; color: var(--heading); }
 .col:not(.cur):not(.k-F) .col-head .h { color: var(--text-2); }
 .col-head .h.big { font-size: 15px; }
 .col-head .h .ic { width: 13px; height: 13px; vertical-align: -1px; margin-right: 5px; color: var(--faint); }
@@ -239,7 +239,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 /* Optical alignment: the smaller header text sits 1px low against the title's cap height. */
 .col-head .headbtn, .col-head .cnt { position: relative; top: 1px; }
 .col-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
-.filler { flex: 1 1 0; min-width: 0; display: grid; place-items: center; padding: 24px 16px; color: var(--faint); font-size: 13px; text-align: center; overflow: hidden; container-type: inline-size; }
+.filler { flex: 1 1 0; min-width: 0; display: grid; place-items: center; padding: 24px 16px; color: var(--muted); font-size: 13px; text-align: center; overflow: hidden; container-type: inline-size; }
 .filler p { max-width: min(30ch, 100%); margin: 0; }
 @container (max-width: 150px) { .filler p { display: none; } }
 /* A branch's source passage: one muted block at the top of its turns column, as in the app */
@@ -297,19 +297,18 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 .c-st.st-run { background: var(--run); animation: pulse 1.4s ease-in-out infinite; }
 .c-st.st-err { background: var(--fail); }
 .c-st.st-warn { background: var(--warn); }
-/* Feed rows: the "…" menu (Bookmark, Follow, Move to) takes the status dot's corner on hover and on focus. Rows can be dragged to a tray or a sidebar folder; the insertion line sits in the
-   2px gap between bubbles. */
-.c-menu { position: absolute; top: 7px; right: 4px; opacity: 0; }
-.card:hover .c-menu, .card:focus-within .c-menu { opacity: 1; }
+/* Feed rows: a right-hand margin holds the drag handle at the top, where the status dot sits, and the "…"
+   menu (Remove star, Bookmark, Follow, Move to) at the bottom; both replace the dot on hover and on focus.
+   Rows can be dragged to a tray or a sidebar folder; the insertion line sits in the 2px gap between bubbles.
+   A child row's handle drags its question. */
+.c-rail { position: absolute; top: 5px; bottom: 4px; right: 4px; width: 20px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; opacity: 0; pointer-events: none; }
+.card:hover .c-rail, .card:focus-within .c-rail { opacity: 1; }
 .card:hover .c-st, .card:focus-within .c-st { opacity: 0; }
+.grip { margin-top: 3px; color: var(--faint); opacity: 0.8; cursor: grab; pointer-events: auto; }
+.grip .ic { width: 14px; height: 14px; display: block; }
+.c-menu.ib { width: 20px; height: 18px; border-radius: 5px; pointer-events: auto; }
+.c-menu .ic { width: 14px; height: 14px; }
 .card.dragging { opacity: 0.4; }
-/* Drag handle, as in the workspace: 3px from the list's edge (left of the bubble, so the row text doesn't
-   move), its top 3px below the top of the first line, shown on hover and focus. A child row's handle drags its question. */
-.grip { position: absolute; left: calc(3px - var(--bx)); top: 13px; color: var(--faint); opacity: 0; cursor: grab; }
-.grip .ic { width: 14px; height: 14px; }
-.card.kid .grip { top: 10px; }
-.tray:not(.inbox):not(.solo) .grip { left: calc(-1 * var(--bx)); } /* folder-tray text starts 14px in, not 20px */
-.card:hover .grip, .card:focus-within .grip { opacity: 0.8; }
 .card.ins-before::before, .card.ins-after::after { content: ""; position: absolute; left: 4px; right: 4px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none; }
 .card.ins-before::before { top: -2px; }
 .card.ins-after::after { bottom: -2px; }
@@ -342,7 +341,7 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 .tray-h { display: flex; align-items: center; min-height: 36px; padding-right: 6px; }
 /* The folder name opens the folder; a click elsewhere in the header, or on the chevron, collapses the tray. */
 .tray-t { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 5px 0 5px 20px; line-height: 1.35; font-size: 13px; font-weight: 600; color: var(--text-2); cursor: pointer; }
-.tray-n { min-width: 0; padding: 3px 0; overflow-wrap: anywhere; text-align: left; font-weight: 600; color: var(--text-2); }
+.tray-n { min-width: 0; padding: 3px 0; overflow-wrap: break-word; text-align: left; font-weight: 600; color: var(--text-2); }
 .tray-n:hover { color: var(--heading); }
 .tray-t > .ic, .tray-t .cnt { flex: none; }
 .tray-t > .ic { width: 14px; height: 14px; }
@@ -366,13 +365,14 @@ kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px s
 .askbox.feed-ask { margin-bottom: 10px; }
 .askbox .a-foot.save { justify-content: flex-end; }
 /* Promoted children: starred follow-ups and branches are rows of their own after their question,
-   indented 16px per level, with a branch icon before branch children. */
-.card.kid .c-open { display: flex; align-items: flex-start; gap: 7px; padding-top: 7px; padding-bottom: 7px; padding-left: calc(20px - var(--bx) + var(--lvl) * 16px); }
+   indented 16px per level; a branch child is marked with a star, a follow-up has no icon. */
+.card.kid { min-height: 42px; } /* room for the handle above the menu in the right-hand margin */
+.card.kid .grip { margin-top: 0; }
+.card.kid .c-open { display: flex; align-items: flex-start; gap: 7px; min-height: 42px; padding-top: 11px; padding-bottom: 11px; padding-left: calc(20px - var(--bx) + var(--lvl) * 16px); }
 .tray:not(.inbox):not(.solo) .card.kid .c-open { padding-left: calc(14px - var(--bx) + var(--lvl) * 16px); }
 .kid-ic { width: 13px; height: 13px; margin-top: 4px; color: var(--faint); }
 .kid-q { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; overflow-wrap: anywhere; white-space: pre-line; font-size: 14px; line-height: 1.45; color: var(--text-2); }
-.card.kid .c-st { top: 13px; }
-.card.kid:hover .c-st, .card.kid.sel .c-st { opacity: 1; }
+.card.kid .c-st { top: 17px; }
 /* Highlights view: highlights grouped by conversation, with a little context around each. */
 .hl-group { padding: 12px 14px 12px 20px; border-bottom: 1px solid var(--border); }
 .hl-src { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -599,7 +599,7 @@ form.ready .btn.primary .ent { display: inline; }
 
 <h2>Chrome</h2>
 <ul>
-  <li><b>Pair header:</b> the conversation title, or "Branch · N messages" with a branch icon, then "+ Ask". There is no "Answer" label and no "N of M" counter. Follow, Move to folder and Bookmark are in the question's … menu in the feed.</li>
+  <li><b>Pair header:</b> the conversation title, or "Branch · N messages" with a branch icon, then "+ Ask". There is no "Answer" label and no "N of M" counter. Follow, Move to folder and Bookmark are in the question's … menu in the feed, and below the answer's own actions in the … menu of every answer in the root pair, so they stay reachable when the feed doesn't list the question (for example from Highlights).</li>
   <li><b>Source passage</b> is a muted block at the top of a branch's messages column (“↳ passage”).</li>
   <li><b>Message rows</b> show the time, then the star (follow-ups in a root conversation, and a branch's first message), the branch icon with a count when the answer already has branches, and the … menu. The … menu starts with the answer's token count, run time and model, then "Branch from the whole answer" and "Copy answer".</li>
   <li><b>Answer footer</b> is the time only, under a rule.</li>
@@ -628,9 +628,9 @@ form.ready .btn.primary .ent { display: inline; }
 <h3>Feed cards</h3>
 <ul>
   <li><b>Only the question.</b> A card shows the full question, with the thread title above it when the title differs. There is no metadata row: no timestamp, follow-up count, draft badge, or inline bookmark button. Unfiled questions have no section heading.</li>
-  <li><b>Status as a dot.</b> Running, failed, and unsent questions show a coloured dot in the card's top-right corner (pulsing for running). It's replaced by the menu button on hover, on focus and on the selected card, and is announced to screen readers with the question.</li>
+  <li><b>Status as a dot.</b> Running, failed, and unsent questions show a coloured dot in the card's top-right corner (pulsing for running). On hover and on focus it gives way to the row's right-hand margin controls; otherwise it stays visible, on the selected card too. It is announced to screen readers with the question.</li>
   <li><b>Composer.</b> No keyboard hint text. Enter sends when the field has text; Shift+Enter adds a line. The send button is disabled while the field is empty.</li>
-  <li><b>One menu.</b> The "…" button at the top right opens a menu with Bookmark or Remove bookmark, Follow or Unfollow, then Move to.</li>
+  <li><b>One menu.</b> On hover or focus a row's right-hand margin shows the drag handle at the top and a small "…" button at the bottom. "…" opens a menu with Bookmark or Remove bookmark, Follow or Unfollow, then Move to; a starred child's menu starts with Remove star. A second click on "…" closes it.</li>
 </ul>
 
 <h2>Conversation turns</h2>
@@ -702,7 +702,7 @@ form.ready .btn.primary .ent { display: inline; }
 <p>Five ways of showing children were reviewed. In the conversation, starred follow-ups stay in line with the other turns (Flat); the indented and folded layouts below were tried and dropped.</p>
 <div class="tablewrap"><table>
 <tr><th>Variant</th><th>Verdict</th><th>How it works</th><th>Limits</th></tr>
-<tr><td>Children in feed: Indented</td><td>Viable, chosen</td><td>Children are rows of their own in the feed, directly after their question and indented 16px per level, rather than a nested list inside the question's card. They use the same text size as questions (up to four lines), with no connector lines; branch children have a branch icon before the text. Like the questions, child rows have no rules between them; each has its own hover bubble and no buttons, and an open branch's row is shown selected; unstarring happens in the conversation. Clicking a follow-up child opens the conversation with that message selected; clicking a branch child opens the branch, with its ancestors as the pairs before it. The <a href="https://claude.ai/artifact/L8GHB9QXkxbjTanqvNwQAT">feed child items mockup</a> compares this with connectors, inset dividers and compact text.</td><td>Children move with their question, so they can't be dragged to a folder on their own.</td></tr>
+<tr><td>Children in feed: Indented</td><td>Viable, chosen</td><td>Children are rows of their own in the feed, directly after their question and indented 16px per level, rather than a nested list inside the question's card. They use the same text size as questions (up to four lines), with no connector lines; a branch child is marked with a filled star before the text (it is listed because it was starred), a follow-up child has no icon, and a branch under another child is indented a second level. Like the questions, child rows have no rules between them and each has its own hover bubble. A child row is shown selected while it is open: a branch child while its branch is open, a follow-up child while its message is the selected one in the root pair; its question's row stays selected too. On hover or focus, every feed row's right-hand margin shows the drag handle at the top and a small … menu at the bottom; a child's menu starts with Remove star, then its question's Bookmark, Follow and Move to. A second click on a … button closes its menu. Clicking a follow-up child opens the conversation with that message selected; clicking a branch child opens the branch, with its ancestors as the pairs before it. The <a href="https://claude.ai/artifact/L8GHB9QXkxbjTanqvNwQAT">feed child items mockup</a> compares this with connectors, inset dividers and compact text.</td><td>Children move with their question, so they can't be dragged to a folder on their own.</td></tr>
 <tr><td>Children in conversation: Flat</td><td>Chosen</td><td>Starred follow-ups stay in line with the other turns, in order. The filled star beside the question is the only marker.</td><td>Nothing in the conversation groups children under their question; the feed is where they are listed together.</td></tr>
 <tr><td>Children in conversation: Indented</td><td>Dropped</td><td>The root question keeps its place in the left column. Promoted follow-ups are indented, with an elbow joined to a rail in the gutter that runs down from the root, as in your first screenshot. Other follow-ups stay in line and are muted.</td><td>Follow-ups form a single chain, so within a conversation there is only one level of children. Any deeper child is a branch, and its answers live in another conversation. Putting those in the left column would break the alignment of each question with its answer, so deeper levels use inline previews or columns.</td></tr>
 <tr><td>Children in conversation: Key turns only</td><td>Dropped</td><td>The same as Indented, except that runs of finished, unpromoted follow-ups fold into one row ("2 follow-ups hidden · Show") that lists their questions.</td><td>Running, queued, failed, and unsent turns never fold. Neither does a turn that an open branch, a highlight, or a child link points to.</td></tr>
@@ -716,7 +716,7 @@ form.ready .btn.primary .ent { display: inline; }
 <tr><td>Answer running</td><td>A status line with elapsed time and Stop. Text streams in. The card shows a pulsing dot in its top-right corner.</td><td>Open "How do Claude Mods work?"</td></tr>
 <tr><td>Follow-up while running</td><td>The new turn is labelled Queued and starts when the current answer finishes. It can be removed.</td><td>Ask a follow-up in the running thread</td></tr>
 <tr><td>Failed</td><td>The partial answer is kept, followed by an error box that starts "Error." and names the cause, with Retry and Edit question. Edit question puts the text in the ask box, and the failed turn is replaced only when you send. Retry while another answer is running is queued, and removing it from the queue brings the earlier attempt back. The message row shows a Failed label, and the feed card a red dot.</td><td>Permissions research → "TAL tool access language"</td></tr>
-<tr><td>Stopped by you</td><td>The partial answer is kept, followed by a note such as "Stopped after 1m 02s." and a Run again button.</td><td>"design-team → main"</td></tr>
+<tr><td>Stopped by you</td><td>The partial answer is kept, followed by a note such as "Stopped after 1m 02s. The answer is incomplete." and a Run again button.</td><td>"design-team → main"</td></tr>
 <tr><td>Offline</td><td>New questions show "Not sent" with Delete. When the connection returns they are queued and sent one at a time per conversation. Folder moves still apply locally. An Offline badge stays in the sidebar header, or in the strip, whatever is open.</td><td>Turn on Offline, then ask</td></tr>
 <tr><td>Draft</td><td>The question opens in its messages column, in an ask box labelled "Draft" that gives the text the full width, with Send on its own row. Opening it doesn't focus the field. Feed cards carry no draft badge; the Drafts tray already says what they are.</td><td>Drafts tray</td></tr>
 <tr><td>Empty folder, Archive, Drafts, Highlights, or Bookmarks</td><td>A line of text that says how items get there.</td><td>"Later" folder</td></tr>
@@ -855,7 +855,7 @@ form.ready .btn.primary .ent { display: inline; }
 <ul>
   <li>The strip's expand button keeps the normal icon-button size and is centred in a 44px wrapper, so its hover background matches the other strip icons while Home stays in place.</li>
   <li>The Unfiled list has a border above its first question and below its last.</li>
-  <li>A stopped answer's note now reads "Stopped after 1m 02s."</li>
+  <li>A stopped answer's note now reads "Stopped after 1m 02s. The answer is incomplete."</li>
 </ul>
 <ul><li>Questions and answers now use one size and line height everywhere: 14.5px with a line height of 1.5 (21.75px). Font weights are unchanged. The collapsed answer height is 9 lines (196px).</li></ul>
 <ul><li>The expand and collapse controls under an answer now read "Show more" and "Show less".</li></ul>
@@ -1207,11 +1207,19 @@ function pillOf(t) {
 /* ---------- promoted children ----------
    A child is a starred follow-up of a root question, or a starred branch anywhere in its tree. In the feed
    it is a row of its own after its question. */
-function anchorOrder(b) { let x = b; while (C[x.parent.conv].parent) x = C[x.parent.conv]; return x.parent.turn + 0.5 + depthOf(b.id) * 0.01; }
+// Find the root message by following the branch ancestry.
+function anchorTurn(b) { let x = b; while (C[x.parent.conv].parent) x = C[x.parent.conv]; return x.parent.turn; }
+function anchorOrder(b) { return anchorTurn(b) + 0.5 + depthOf(b.id) * 0.01; }
+/* Feed children: starred follow-ups at level 1; starred branches at level 1 under their question, or at
+   level 2 when they sit under another child (a branch of a branch, or a branch from a starred follow-up). */
 function kidsOf(root) {
   const out = [];
   root.turns.forEach((t, ti) => { if (ti > 0 && t.promoted) out.push({ kind: 'turn', t: ti, label: t.prompt, running: t.status === 'running', order: ti, level: 1 }); });
-  Object.values(C).forEach((b) => { if (b.parent && b.promoted && b.turns.length && rootOf(b.id) === root) out.push({ kind: 'branch', id: b.id, label: titleOf(b), running: convStatus(b) === 'running', order: anchorOrder(b), level: Math.min(2, depthOf(b.id)) }); });
+  Object.values(C).forEach((b) => {
+    if (!b.parent || !b.promoted || !b.turns.length || rootOf(b.id) !== root) return;
+    const at = anchorTurn(b), underChild = depthOf(b.id) > 1 || (at > 0 && root.turns[at].promoted);
+    out.push({ kind: 'branch', id: b.id, label: titleOf(b), running: convStatus(b) === 'running', order: anchorOrder(b), level: underChild ? 2 : 1 });
+  });
   return out.sort((a, b) => a.order - b.order);
 }
 // Removing a turn shifts later turn indexes; keep anchors and highlights pointing at the same turns.
@@ -1446,7 +1454,7 @@ function roving(col, target) {
   const cur = target || items.find((x) => x.getAttribute('aria-current') === 'true' || x.classList.contains('on')) || items[0];
   items.forEach((x) => { x.tabIndex = x === cur ? 0 : -1; });
   if (col.classList.contains('k-A')) col.querySelector('.col-scroll').tabIndex = items.length ? -1 : 0;
-  col.querySelectorAll('.card .t-meta button, .card > .c-menu').forEach((b) => { b.tabIndex = b.closest('.card').classList.contains('sel') ? 0 : -1; });
+  col.querySelectorAll('.card .t-meta button, .card .c-rail .c-menu').forEach((b) => { b.tabIndex = b.closest('.card').classList.contains('sel') ? 0 : -1; });
 }
 
 /* Feed: places and questions in one column (the app's feed). Its views are the workspace's: Home (Unfiled,
@@ -1460,15 +1468,22 @@ function feedCard(c) {
   const norm = (x) => x.replace(/\s+/g, ' ').trim().toLowerCase();
   const showTitle = c.title && !norm(q).startsWith(norm(c.title).slice(0, 60));
   return `<li class="card${sel ? ' sel' : ''}" draggable="true" data-card="${c.id}">
-    <span class="grip" aria-hidden="true">${I('grip')}</span>
     <button class="c-open" data-nav data-act="root" data-id="${c.id}" data-fk="root:${c.id}" aria-current="${sel}">${showTitle ? `<span class="c-name">${esc(c.title)}</span>` : ''}<span class="c-title">${esc(q.trim())}</span>${st ? `<span class="sr">, ${st[1]}</span>` : ''}${!c.turns.length ? '<span class="sr">, Draft</span>' : ''}</button>
-    ${st ? `<span class="c-st ${st[0]}" title="${st[1]}" aria-hidden="true"></span>` : ''}<button class="ib c-menu" data-act="cardmenu" data-id="${c.id}" data-fk="cm:${c.id}" tabindex="-1" aria-haspopup="menu" aria-label="More actions" title="Bookmark, follow or move">${I('more')}</button></li>`;
+    ${st ? `<span class="c-st ${st[0]}" title="${st[1]}" aria-hidden="true"></span>` : ''}${railHTML(`data-act="cardmenu" data-id="${c.id}" data-fk="cm:${c.id}"`, 'Question actions', 'Bookmark, follow or move')}</li>`;
+}
+/* A row's right-hand margin: the drag handle at the top, the … menu at the bottom; both show on hover or focus. */
+function railHTML(menuAttrs, label, title) {
+  return `<span class="c-rail"><span class="grip" aria-hidden="true">${I('grip')}</span><button class="ib c-menu" ${menuAttrs} tabindex="-1" aria-haspopup="menu" aria-label="${label}" title="${title}">${I('more')}</button></span>`;
 }
 function kidRowsHTML(c) {
   return kidsOf(c).map((k) => {
-    const on = k.kind === 'branch' && S.levels.some((v) => v.conv === k.id);  // an open branch, as in the workspace
+    // Selected while its branch is open, or while its message is the selected one in the root pair.
+    const on = k.kind === 'branch' ? S.levels.some((v) => v.conv === k.id) : !!S.levels[0] && S.levels[0].conv === c.id && S.levels[0].turn === k.t;
     const target = k.kind === 'turn' ? `data-t="${k.t}" data-fk="kid:${c.id}:${k.t}"` : `data-b="${k.id}" data-fk="kid:${k.id}"`;
-    return `<li class="card kid${on ? ' sel' : ''}" style="--lvl:${k.level}" draggable="true" data-drag="${c.id}"><span class="grip" aria-hidden="true">${I('grip')}</span><button class="c-open" data-nav data-act="kid" data-id="${c.id}" ${target}>${k.kind === 'branch' ? `${I('branch', 'kid-ic')}<span class="sr">Branch: </span>` : ''}<span class="kid-q">${esc(k.label.trim())}</span>${k.running ? '<span class="sr">, Running</span>' : ''}</button>${k.running ? '<span class="c-st st-run" title="Running" aria-hidden="true"></span>' : ''}</li>`;
+    const menuTarget = k.kind === 'turn' ? `data-t="${k.t}" data-fk="km:${c.id}:${k.t}"` : `data-b="${k.id}" data-fk="km:${k.id}"`;
+    // Mark starred branches with a star; group starred follow-ups under their question.
+    const icon = k.kind === 'branch' ? `${IF('star', 'kid-ic')}<span class="sr">Starred branch: </span>` : '';
+    return `<li class="card kid${on ? ' sel' : ''}" style="--lvl:${k.level}" draggable="true" data-drag="${c.id}"><button class="c-open" data-nav data-act="kid" data-id="${c.id}" ${target} aria-current="${on}">${icon}<span class="kid-q">${esc(k.label.trim())}</span>${k.running ? '<span class="sr">, Running</span>' : ''}</button>${k.running ? '<span class="c-st st-run" title="Running" aria-hidden="true"></span>' : ''}${railHTML(`data-act="kidmenu" data-id="${c.id}" ${menuTarget}`, 'Star and question actions', 'Remove the star, bookmark, follow or move')}</li>`;
   }).join('');
 }
 // Where a question asked from the feed is filed: the open user folder, otherwise Unfiled.
@@ -1882,7 +1897,7 @@ function act(a, el) {
       reveal(o.el);
       return;
     }
-    case 'menu': openMenu(el, L, ti); return;
+    case 'menu': if (menuOpenFor(el)) hidePop(); else openMenu(el, L, ti); return;
     case 'stop': { const [cv, t] = el.dataset.k.split(':'); stopTurn(cv, +t); commit(); return; }
     case 'retry': {
       const [cv, t] = el.dataset.k.split(':'), turn = C[cv].turns[+t];
@@ -1935,7 +1950,8 @@ function act(a, el) {
       return;
     }
     case 'rmhl': { D.hl = D.hl.filter((h) => h.id !== el.dataset.h); commit(); return; }
-    case 'cardmenu': openCardMenu(el, el.dataset.id); return;
+    case 'cardmenu': if (menuOpenFor(el)) hidePop(); else openCardMenu(el, el.dataset.id); return;
+    case 'kidmenu': if (menuOpenFor(el)) hidePop(); else openCardMenu(el, el.dataset.id, el.dataset.b ? { b: el.dataset.b } : { t: +el.dataset.t }); return;
     case 'home': { S.view = { type: 'home' }; S.confirm = null; renderAll(); const f = colByKey('F'); if (f) focusCol(f); return; }
     case 'renamefolder': openFolderDialog({ f: el.dataset.f, value: folderName(el.dataset.f), ret: el }); return;
     case 'deletefolder': { S.confirm = { f: el.dataset.f }; commit(); const b = strip.querySelector('[data-act="canceldel"]'); if (b) b.focus(); return; }
@@ -2161,6 +2177,8 @@ function showPop(rect, w) {
   pop.style.left = x + 'px'; pop.style.top = Math.min(y, innerHeight - ph - 8) + 'px';
 }
 function hidePop() { pop.hidden = true; pop.dataset.kind = ''; S.menu = null; }
+// A second click on the button that opened a menu closes it.
+const menuOpenFor = (btn) => !pop.hidden && pop.dataset.kind === 'menu' && !!S.menu && S.menu.btn === btn;
 pop.addEventListener('mousedown', (e) => { if (pop.dataset.kind === 'sel') e.preventDefault(); });
 pop.addEventListener('click', (e) => {
   const b = e.target.closest('[data-pa]'); if (!b || b.disabled) return;
@@ -2191,6 +2209,7 @@ pop.addEventListener('click', (e) => {
   if (a === 'hl-remove') { const m = S.menu; hidePop(); D.hl = D.hl.filter((h) => h.id !== m.hl); commit(); toast('Highlight removed.'); return; }
   // A feed row's menu
   const c = C[b.dataset.id], ret = S.menu && S.menu.btn;
+  if (a === 'unstar') { if (b.dataset.b) C[b.dataset.b].promoted = false; else c.turns[+b.dataset.t].promoted = false; hidePop(); commit(); toast('Star removed.'); refocus(ret); return; }
   if (a === 'bookmark') { c.bookmarked = !c.bookmarked; hidePop(); commit(); toast(c.bookmarked ? 'Bookmarked.' : 'Bookmark removed.'); refocus(ret); return; }
   if (a === 'follow') { c.followed = !c.followed; hidePop(); toast(c.followed ? "Following. You'll be notified of replies." : 'Unfollowed.'); refocus(ret); return; }
   if (a === 'move-to') { hidePop(); moveThread(c.id, b.dataset.f); refocus(ret); return; }
@@ -2226,13 +2245,17 @@ document.addEventListener('keydown', (e) => {
   if (e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey || e.target.closest('textarea, input')) return;
   commitPending(); // focus moves to the new pair's ask box, so the keystroke lands there
 });
-document.addEventListener('mousedown', (e) => { if (!pop.hidden && !pop.contains(e.target) && pop.dataset.kind === 'menu') hidePop(); });
+document.addEventListener('mousedown', (e) => {
+  if (pop.hidden || pop.contains(e.target) || pop.dataset.kind !== 'menu') return;
+  if (S.menu && S.menu.btn && S.menu.btn.contains(e.target)) return;  // its click toggles the menu
+  hidePop();
+});
 function openMenu(btn, L, ti) {
   const t = C[S.levels[L].conv].turns[ti];
   const w = words(t);
   const canBr = ['done', 'failed', 'cancelled'].includes(t.status);
   S.menu = { L, t: ti, btn };
-  pop.innerHTML = `<div class="pop-meta">${tokens(t).toLocaleString()} tokens${t.status === 'done' ? ` · ${Math.floor((60 + w) / 60)}m ${String((60 + w) % 60).padStart(2, '0')}s` : ''} · Claude Opus</div><div role="menu" aria-label="Answer actions"><button class="mi" role="menuitem" data-pa="menu-whole" ${canBr ? '' : 'disabled'}>${I('branch')}Branch from the whole answer</button><button class="mi" role="menuitem" data-pa="menu-copy">${I('copy')}Copy answer</button></div>`;
+  pop.innerHTML = `<div class="pop-meta">${tokens(t).toLocaleString()} tokens${t.status === 'done' ? ` · ${Math.floor((60 + w) / 60)}m ${String((60 + w) % 60).padStart(2, '0')}s` : ''} · Claude Opus</div><div role="menu" aria-label="Answer actions"><button class="mi" role="menuitem" data-pa="menu-whole" ${canBr ? '' : 'disabled'}>${I('branch')}Branch from the whole answer</button><button class="mi" role="menuitem" data-pa="menu-copy">${I('copy')}Copy answer</button>${L === 0 && !C[S.levels[0].conv].parent ? `<div class="mdiv"></div>${questionMenuItems(S.levels[0].conv)}` : ''}</div>`;
   pop.dataset.kind = 'menu';
   const r = btn.getBoundingClientRect();
   pop.hidden = false;
@@ -2250,16 +2273,22 @@ function openHlMenu(mk) {
   showPop(mk.getBoundingClientRect(), 340);
   const first = pop.querySelector('.mi:not(:disabled)'); if (first) first.focus();
 }
-/* A feed row's menu: Bookmark, Follow, then Move to (every folder, the current one disabled) and New folder. */
-function openCardMenu(btn, id) {
+/* A question's actions: Bookmark, Follow, then Move to (every folder, the current one disabled) and New folder.
+   Shown in its feed row's menu and, below the answer's own actions, in the root pair's answer menus. */
+function questionMenuItems(id) {
   const c = C[id], archived = c.folder === 'archive';
   const opts = [{ id: 'inbox', name: 'Unfiled', icon: 'home' }].concat(D.folders);
   const mi = (attrs, icon, label, extra = '') => `<button class="mi" role="menuitem" ${attrs}>${icon}<span class="clip">${label}</span>${extra}</button>`;
-  S.menu = { btn };
-  pop.innerHTML = `<div role="menu" aria-label="Question actions">${mi(`data-pa="bookmark" data-id="${id}"`, c.bookmarked ? IF('bookmark') : I('bookmark'), c.bookmarked ? 'Remove bookmark' : 'Bookmark')}`
+  return mi(`data-pa="bookmark" data-id="${id}"`, c.bookmarked ? IF('bookmark') : I('bookmark'), c.bookmarked ? 'Remove bookmark' : 'Bookmark')
     + mi(`data-pa="follow" data-id="${id}" ${archived || !c.turns.length ? 'disabled' : ''} ${archived ? 'title="Archived questions don\'t send notifications"' : ''}`, c.followed && c.turns.length ? IF('bell') : I('bell'), c.followed && c.turns.length ? 'Unfollow' : 'Follow')
     + `<div class="mdiv"></div><div class="pop-t">Move to</div>${opts.map((f) => { const here = c.folder === f.id; return mi(`data-pa="move-to" data-id="${id}" data-f="${f.id}" ${here ? 'disabled aria-current="true"' : ''}`, I(f.icon || 'folder'), esc(f.name), here ? I('check', 'r') : ''); }).join('')}`
-    + `<div class="mdiv"></div>${mi(`data-pa="new-folder" data-id="${id}"`, I('plus'), 'New folder…')}</div>`;
+    + `<div class="mdiv"></div>${mi(`data-pa="new-folder" data-id="${id}"`, I('plus'), 'New folder…')}`;
+}
+/* A feed row's menu. A starred child's menu starts with Remove star, then its question's actions. */
+function openCardMenu(btn, id, kid) {
+  S.menu = { btn };
+  const unstar = kid ? `<button class="mi" role="menuitem" data-pa="unstar" data-id="${id}" ${kid.b ? `data-b="${kid.b}"` : `data-t="${kid.t}"`}>${I('star')}<span class="clip">Remove star</span></button><div class="mdiv"></div>` : '';
+  pop.innerHTML = `<div role="menu" aria-label="${kid ? 'Star and question actions' : 'Question actions'}">${unstar}${questionMenuItems(id)}</div>`;
   pop.dataset.kind = 'menu';
   const r = btn.getBoundingClientRect();
   pop.hidden = false;

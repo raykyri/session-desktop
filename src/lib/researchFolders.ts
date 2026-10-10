@@ -44,7 +44,10 @@ export function researchPlaceName(place: string, folders: ResearchFolder[]): str
 /** Where a tree is listed. An archived tree shows only in Archive even when
  * it keeps a folder membership; a membership whose folder no longer exists
  * reads as Unfiled. */
-export function researchTreePlace(tree: ResearchTreeSummary, state: ResearchFolderState): string {
+export function researchTreePlace(
+  tree: Pick<ResearchTreeSummary, "id" | "archivedAt">,
+  state: ResearchFolderState,
+): string {
   if (tree.archivedAt != null) return RESEARCH_ARCHIVE_FOLDER_ID;
   const member = state.membership[tree.id];
   if (member === RESEARCH_DRAFTS_FOLDER_ID) return member;
@@ -216,27 +219,38 @@ export interface ResearchFeedChild {
   nodeId: string;
   treeId: string;
   label: string;
-  /** A non-inline child: opens in the branch drawer instead of scrolling. */
+  /** A non-inline child: opens as a branch pair with its ancestors. */
   branch: boolean;
-  /** Indent level, 1 or 2. */
+  /** Indent level: 1 under the question; 2 for a branch under another
+   * child (a branch of a branch, or a branch from a starred follow-up). */
   level: number;
   running: boolean;
   query: RecentResearchQuery;
 }
 
-/** Starred follow-ups and branches listed under a root question, in tree order. */
+/** Starred follow-ups and branches listed under a root question, in tree
+ * order. Only follow-ups of the root conversation and branch heads can be
+ * starred, so a branch head's parent is the message it was asked from. */
 export function researchFeedChildren(root: RecentResearchQuery): ResearchFeedChild[] {
-  return (root.promoted ?? [])
-    .filter((child) => child.nodeId !== root.nodeId)
-    .map((child) => ({
+  const starred = (root.promoted ?? []).filter((child) => child.nodeId !== root.nodeId);
+  const starredFollowUps = new Set(
+    starred.filter((child) => child.inline).map((child) => child.nodeId),
+  );
+  return starred.map((child) => {
+    const depth = child.branchDepth ?? (child.inline ? 0 : 1);
+    const underChild =
+      !child.inline &&
+      (depth > 1 || (child.parentNodeId != null && starredFollowUps.has(child.parentNodeId)));
+    return {
       nodeId: child.nodeId,
       treeId: child.treeId,
       label: (child.inline ? child.prompt : (child.title?.trim() || child.prompt)).trim(),
       branch: !child.inline,
-      level: Math.min(2, Math.max(1, child.branchDepth ?? (child.inline ? 0 : 1))),
+      level: underChild ? 2 : 1,
       running: isActiveResearchStatus(child.status),
       query: child,
-    }));
+    };
+  });
 }
 
 /** Puts one workspace's trees in `orderedIds` order, in the slots they

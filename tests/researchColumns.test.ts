@@ -2,100 +2,53 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-  researchColumnsShown,
-  researchConversationColumnWidth,
-  researchFeedColumnWidth,
-} from "../src/components/research/ResearchColumns";
-import { ResearchConversationHeader } from "../src/components/research/ResearchDocumentChrome";
-import { RESEARCH_SINGLE_COLUMN_BELOW } from "../src/lib/researchBranchView";
+import { researchColumnWidths } from "../src/components/research/ResearchColumns";
+import { ResearchPairHeader } from "../src/components/research/ResearchDocumentChrome";
 
-test("the feed is 240–320px and leaves the conversation at least 620px before it grows", () => {
-  assert.equal(researchFeedColumnWidth(1440 - 208), 320);
-  assert.equal(researchFeedColumnWidth(1100 - 52), 320);
-  assert.equal(researchFeedColumnWidth(900), 280);
-  assert.equal(researchFeedColumnWidth(700 - 52), 240);
-  assert.equal(researchFeedColumnWidth(300), 240);
+test("columns are sized from the strip's width: feed 21%, messages 18%, answer 44%, each clamped", () => {
+  // The strip at 1440px with the full sidebar, and at 1100px.
+  assert.deepEqual(researchColumnWidths(1198), { feed: 252, turns: 220, answer: 527 });
+  assert.deepEqual(researchColumnWidths(858), { feed: 240, turns: 220, answer: 378 });
+  // Wide strips stop at the maximums; narrow ones keep the minimums and scroll.
+  assert.deepEqual(researchColumnWidths(2400), { feed: 300, turns: 280, answer: 660 });
+  assert.deepEqual(researchColumnWidths(500), { feed: 240, turns: 220, answer: 340 });
 });
 
-test("the feed width depends only on the column area's width", () => {
-  // The same available width always gives the same feed width: opening a
-  // conversation, the drawer, or pinned columns does not change its input.
-  for (const available of [620, 860, 940, 1232, 2400]) {
-    assert.equal(researchFeedColumnWidth(available), researchFeedColumnWidth(available));
-    const width = researchFeedColumnWidth(available);
-    assert.ok(width >= 240 && width <= 320);
-  }
-});
-
-test("invalid widths fall back to the minimum, and narrow areas show one column", () => {
-  assert.equal(researchFeedColumnWidth(NaN), 240);
-  assert.equal(researchFeedColumnWidth(-Infinity), 240);
-  assert.equal(RESEARCH_SINGLE_COLUMN_BELOW, 620);
-});
-
-test("the conversation takes the area beside the feed, or the whole area in single-column mode", () => {
-  // Pinned columns add to the row instead, so the conversation's width
-  // depends on the column area alone.
-  assert.equal(researchConversationColumnWidth(1232), 912);
-  assert.equal(researchConversationColumnWidth(1048), 728);
-  assert.equal(researchConversationColumnWidth(908), 620);
-  assert.equal(researchConversationColumnWidth(619), 619);
-  assert.equal(researchConversationColumnWidth(NaN), 0);
-});
-
-test("single-column mode shows the feed until a thread opens, the thread until Back to feed", () => {
-  const wide = researchColumnsShown({ single: false, hasDocument: true, feedFocused: true });
-  assert.deepEqual(wide, { showsFeed: true, feedHidden: false, contentHidden: false });
-  assert.deepEqual(researchColumnsShown({ single: true, hasDocument: false, feedFocused: false }), {
-    showsFeed: true,
-    feedHidden: false,
-    contentHidden: true,
-  });
-  // A thread opens: it shows and the feed is hidden (still mounted).
-  assert.deepEqual(researchColumnsShown({ single: true, hasDocument: true, feedFocused: false }), {
-    showsFeed: false,
-    feedHidden: true,
-    contentHidden: false,
-  });
-  // Back to feed focuses the feed: the thread is hidden, not closed.
-  assert.deepEqual(researchColumnsShown({ single: true, hasDocument: true, feedFocused: true }), {
-    showsFeed: true,
-    feedHidden: false,
-    contentHidden: true,
-  });
+test("invalid widths fall back to the minimums", () => {
+  assert.deepEqual(researchColumnWidths(NaN), { feed: 240, turns: 220, answer: 340 });
+  assert.deepEqual(researchColumnWidths(-Infinity), { feed: 240, turns: 220, answer: 340 });
 });
 
 const noop = () => {};
-const header = (props: Partial<Parameters<typeof ResearchConversationHeader>[0]> = {}) =>
-  renderToStaticMarkup(
-    createElement(ResearchConversationHeader, {
-      title: "A thread",
-      canGoBack: true,
-      canGoForward: false,
-      backTitle: "Back (⌘[)",
-      forwardTitle: "Forward (⌘])",
-      onBack: noop,
-      onForward: noop,
-      imported: false,
-      archived: false,
-      followed: false,
-      bookmarked: false,
-      onToggleFollow: noop,
-      onToggleBookmark: noop,
-      ...props,
-    }),
-  );
+const header = (props: Partial<Parameters<typeof ResearchPairHeader>[0]> = {}) =>
+  renderToStaticMarkup(createElement(ResearchPairHeader, { title: "A thread", ...props }));
 
-test("the single-column Back to feed button is named apart from history Back", () => {
-  const html = header({ onColumnBack: noop });
-  assert.equal(html.match(/aria-label="Back to feed"/g)?.length, 1);
-  assert.equal(html.match(/aria-label="Back"/g)?.length, 1);
-  assert.match(html, /<div class="research-history-nav" role="group" aria-label="Research history">/);
-  assert.doesNotMatch(header(), /Back to feed/);
+test("a pair's header is one drag-region bar with the title and + Ask, and no Answer label or counter", () => {
+  const html = header({ onAsk: noop });
+  assert.match(html, /class="research-column-bar" data-tauri-drag-region="true"/);
+  assert.match(html, /<h2 class="research-column-title"[^>]*title="A thread">A thread<\/h2>/);
+  assert.match(html, /aria-label="Go to the ask box"[^>]*>.*Ask<\/button>/);
+  assert.doesNotMatch(html, />Answer</);
+  assert.doesNotMatch(html, / of \d/);
 });
 
-test("a narrow uncovered column drops the history arrows for the title", () => {
-  assert.doesNotMatch(header({ showHistory: false }), /research-history-nav/);
-  assert.match(header(), /research-history-nav/);
+test("a branch's header reads Branch with its message count; a new branch reads New branch", () => {
+  assert.match(header({ branch: 2 }), /Branch<span class="research-column-count"> · 2 messages<\/span>/);
+  assert.match(header({ branch: 1 }), / · 1 message</);
+  assert.match(header({ branch: "new" }), /New branch<\/h2>/);
+});
+
+test("only the root conversation's header carries back and forward", () => {
+  const history = {
+    canGoBack: true,
+    canGoForward: false,
+    backTitle: "Back (⌘[)",
+    forwardTitle: "Forward (⌘])",
+    onBack: noop,
+    onForward: noop,
+  };
+  const html = header({ history });
+  assert.match(html, /<div class="research-history-nav" role="group" aria-label="Research history">/);
+  assert.equal(html.match(/aria-label="Back"/g)?.length, 1);
+  assert.doesNotMatch(header({ branch: 1 }), /research-history-nav/);
 });

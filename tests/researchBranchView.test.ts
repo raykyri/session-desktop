@@ -2,16 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   researchBranchesByParent,
+  researchBranchesInReadingOrder,
   researchBranchesOf,
-  researchChainHead,
   researchDocumentHasColumn,
   researchEditedQuestionFork,
-  researchDrawerWidth,
-  researchMainChainAncestor,
-  researchNodePlacement,
-  researchParentBranchHead,
+  researchLevelPath,
   researchQueueAction,
+  researchSurvivingAncestor,
   researchQueueStep,
+  researchPairLabel,
 } from "../src/lib/researchBranchView";
 import type { ResearchNode } from "../src/types";
 
@@ -43,7 +42,6 @@ const nodes = [
   node("b4", { parentNodeId: "c3", createdAt: 7 }),
   node("b3", { parentNodeId: "c3", createdAt: 6 }),
 ];
-const main = ["root", "c2", "c3"];
 
 test("branches are non-inline children in creation order", () => {
   assert.deepEqual(researchBranchesOf(nodes, "c3").map((item) => item.id), ["b3", "b4"]);
@@ -54,33 +52,28 @@ test("branches are non-inline children in creation order", () => {
   assert.equal(byParent.has("root"), false);
 });
 
-test("a node shows in the conversation, its pinned column, or the drawer", () => {
-  assert.deepEqual(researchNodePlacement(nodes, main, [], "c3"), { kind: "main" });
-  assert.deepEqual(researchNodePlacement(nodes, main, [], "b1f"), { kind: "drawer", headId: "b1" });
-  assert.deepEqual(researchNodePlacement(nodes, main, ["b1"], "b1f"), { kind: "pinned", headId: "b1" });
-  assert.equal(researchChainHead(nodes, "b1f"), "b1");
+test("one selection determines every open level: a branch's level follows the message it was asked from", () => {
+  assert.deepEqual(researchLevelPath(nodes, "c3"), ["c3"]);
+  assert.deepEqual(researchLevelPath(nodes, "root"), ["root"]);
+  // b1f continues b1, which was asked from c2; b2 was asked from b1f.
+  assert.deepEqual(researchLevelPath(nodes, "b1f"), ["c2", "b1f"]);
+  assert.deepEqual(researchLevelPath(nodes, "b2"), ["c2", "b1f", "b2"]);
+  assert.deepEqual(researchLevelPath(nodes, "b4"), ["c3", "b4"]);
+  assert.deepEqual(researchLevelPath(nodes, "missing"), []);
 });
 
-test("the drawer's back button leads to the parent branch, never the conversation", () => {
-  assert.equal(researchParentBranchHead(nodes, main, "b2"), "b1");
-  assert.equal(researchParentBranchHead(nodes, main, "b1"), null);
-  assert.equal(researchParentBranchHead(nodes, main, "missing"), null);
-});
-
-test("closing a branch returns to the conversation turn it descends from", () => {
-  assert.equal(researchMainChainAncestor(nodes, main, "b2"), "c2");
-  assert.equal(researchMainChainAncestor(nodes, main, "c3"), "c3");
-  assert.equal(researchMainChainAncestor(nodes, main, "missing"), "root");
-});
-
-test("the drawer takes 46% of the column area within 380–640px and covers it below 620px", () => {
-  assert.equal(researchDrawerWidth(1230, 910), 566);
-  assert.equal(researchDrawerWidth(890, 620), 409);
-  assert.equal(researchDrawerWidth(700, 460), 380);
-  assert.equal(researchDrawerWidth(2000, 1680), 640);
-  // Never wider than the conversation column it overlays.
-  assert.equal(researchDrawerWidth(700, 360), 360);
-  assert.equal(researchDrawerWidth(600, 600), 600);
+test("an answer's branches read in passage order, then whole-answer branches, oldest first", () => {
+  const branches = researchBranchesOf(nodes, "c3");
+  const starts: Record<string, number | null> = { b3: 40, b4: 12 };
+  assert.deepEqual(
+    researchBranchesInReadingOrder(branches, (id) => starts[id] ?? null).map((item) => item.id),
+    ["b4", "b3"],
+  );
+  assert.deepEqual(
+    researchBranchesInReadingOrder(branches, (id) => (id === "b4" ? 5 : null)).map((item) => item.id),
+    ["b4", "b3"],
+  );
+  assert.deepEqual(researchBranchesInReadingOrder(branches, () => null).map((item) => item.id), ["b3", "b4"]);
 });
 
 test("a queued follow-up waits for the running tail, then sends or stalls", () => {
@@ -181,4 +174,20 @@ test("an edited question forks in place of the failed node instead of removing i
     replacesNodeId: "b",
   });
   assert.equal(researchEditedQuestionFork(node("root"), "Q"), null);
+});
+
+test("a removed selection falls back to its nearest surviving ancestor", () => {
+  const parents = new Map(nodes.map((item) => [item.id, item.parentNodeId ?? null]));
+  // b1 (with b1f and b2 under it) is removed: b2 falls back to c2, where b1 was asked.
+  const valid = new Set(["root", "c2", "c3", "b3", "b4"]);
+  assert.equal(researchSurvivingAncestor(parents, "b2", valid), "c2");
+  assert.equal(researchSurvivingAncestor(parents, "b1f", valid), "c2");
+  assert.equal(researchSurvivingAncestor(parents, "c3", valid), "c3");
+  assert.equal(researchSurvivingAncestor(parents, "unknown", valid), null);
+});
+
+test("a pair label is cut at a word boundary with an ellipsis", () => {
+  assert.equal(researchPairLabel("  short\n question "), "short question");
+  assert.equal(researchPairLabel("alpha beta gamma delta", 14), "alpha beta…");
+  assert.equal(researchPairLabel("supercalifragilistic", 10), "supercalif…");
 });

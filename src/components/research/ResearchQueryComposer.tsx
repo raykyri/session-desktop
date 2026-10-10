@@ -1,12 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
-import { Users } from "lucide-react";
+import { ArrowUp, LoaderCircle, Users } from "lucide-react";
 import type { AgentAdapterMetadata } from "../../types";
 import { LauncherSelect, type LauncherSelectOption } from "../LauncherSelect";
-import {
-  ComposerSubmitShortcutGlyph,
-  isComposerSubmitShortcut,
-} from "../ComposerSubmitShortcut";
+import { isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 import { ADAPTER_ICON_BY_ID, adapterIconClassName } from "../../lib/adapterIcons";
 import { CLAUDE_ADAPTER_ID, CLAUDE_EFFORT_OPTIONS } from "../../adapters/claude";
 import { CODEX_ADAPTER_ID, CODEX_REASONING_OPTIONS } from "../../adapters/codex";
@@ -176,7 +173,7 @@ export default function ResearchQueryComposer({
   // composer opens on Ask.
   const [askMode, setAskMode] = useState<AskMode>("ai");
   const [focused, setFocused] = useState(false);
-  const formRef = useRef<HTMLFormElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [adapter, setAdapter] = useState("");
   const [modelChoice, setModelChoice] = useState<string | null>(null);
   const [customModel, setCustomModel] = useState("");
@@ -375,20 +372,7 @@ export default function ResearchQueryComposer({
       : submitting
         ? "Starting research…"
         : "Start research";
-
-  // The send button names its action; its tooltip carries the longer form.
-  // Its accessible name is the visible label (plus the longer form where that
-  // starts with it), so speech input can say what it shows.
-  const submitShortLabel =
-    askMode === "network"
-      ? submitting
-        ? "Posting…"
-        : noteBodyIsSingleUrl(prompt)
-          ? "Save link"
-          : "Post"
-      : submitting
-        ? "Starting…"
-        : "Ask";
+  const sendShortcut = requireCmdEnterToSend ? "⌘↵" : "↵";
 
   const modelOptions = useMemo(
     () => [
@@ -457,12 +441,12 @@ export default function ResearchQueryComposer({
   // that becomes disabled loses focus without a blur event; once focus has
   // left the composer this way, it collapses as after a click elsewhere.
   const collapseIfFocusLeft = () => {
-    if (!insideComposer(formRef.current, document.activeElement)) setFocused(false);
+    if (!insideComposer(rootRef.current, document.activeElement)) setFocused(false);
   };
   useEffect(() => {
     if (!focused) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (insideComposer(formRef.current, event.target)) return;
+      if (insideComposer(rootRef.current, event.target)) return;
       pointerDownOutsideRef.current = true;
       collapse();
     };
@@ -495,190 +479,195 @@ export default function ResearchQueryComposer({
     window.requestAnimationFrame(collapseIfFocusLeft);
   }
 
-  const ready = focused && Boolean(prompt.trim()) && canSubmit;
   const setupNeeded = !adapters.some(adapterCanLaunchResearch);
 
   return (
-    <form
-      ref={formRef}
-      className={`new-research-launcher${expanded ? " is-expanded" : ""}${ready ? " is-ready" : ""}`}
-      aria-label="New research"
+    <div
+      ref={rootRef}
+      className="new-research-composer"
       onFocus={() => setFocused(true)}
       onBlur={(event) => {
-        if (!insideComposer(formRef.current, event.relatedTarget)) collapse();
-      }}
-      onKeyDown={(event) => {
-        // Plain Tab moves focus; ⌃Tab cycles the model and ⌃⇧Tab the agent.
-        const aiControlsVisible = askModeShowsAiControls(askMode);
-        const requestedTabAction = launcherTabAction(event, aiControlsVisible);
-        const tabAction =
-          !aiControlsVisible && requestedTabAction === "cycle-provider"
-            ? "capture"
-            : requestedTabAction;
-        if (tabAction) {
-          event.preventDefault();
-          event.stopPropagation();
-          if (tabAction === "cycle-provider") {
-            cycleAdapter();
-          } else if (tabAction === "cycle-model") {
-            cycleModel();
-          }
-          return;
-        }
-      }}
-      onSubmit={(event) => {
-        event.preventDefault();
-        void submit();
+        if (!insideComposer(rootRef.current, event.relatedTarget)) collapse();
       }}
     >
-      <textarea
-        ref={promptRef}
-        className="new-research-input"
-        rows={1}
-        value={prompt}
-        placeholder={
-          askMode === "network" ? "Ask your network, or paste a link to save" : placeholder
-        }
-        aria-label="New question"
-        onChange={(event) => {
-          sessionDraftTouchedRef.current = true;
-          setPrompt(event.currentTarget.value);
-          setError(null);
-        }}
+      <form
+        className="new-research-launcher"
+        aria-label="New research"
         onKeyDown={(event) => {
-          // Esc leaves the field, which collapses again when it is empty.
-          if (event.key === "Escape" && !event.nativeEvent.isComposing) {
+          // Plain Tab moves focus; ⌃Tab cycles the model and ⌃⇧Tab the agent.
+          const aiControlsVisible = askModeShowsAiControls(askMode);
+          const requestedTabAction = launcherTabAction(event, aiControlsVisible);
+          const tabAction =
+            !aiControlsVisible && requestedTabAction === "cycle-provider"
+              ? "capture"
+              : requestedTabAction;
+          if (tabAction) {
             event.preventDefault();
             event.stopPropagation();
-            event.currentTarget.blur();
+            if (tabAction === "cycle-provider") {
+              cycleAdapter();
+            } else if (tabAction === "cycle-model") {
+              cycleModel();
+            }
             return;
-          }
-          // Enter in an empty field does nothing; Shift+Enter adds a line.
-          if (event.key === "Enter" && !event.shiftKey && !prompt.trim()) {
-            event.preventDefault();
-            return;
-          }
-          if (isComposerSubmitShortcut(event, requireCmdEnterToSend)) {
-            event.preventDefault();
-            void submit();
           }
         }}
-      />
-      {expanded && askModeShowsAiControls(askMode) && selectedModel === CUSTOM_MODEL ? (
-        <input
-          className="new-research-custom-model"
-          type="text"
-          value={customModel}
-          placeholder="Model name"
-          aria-label="Custom model"
-          onChange={(event) => {
-            sessionDraftTouchedRef.current = true;
-            setCustomModel(event.currentTarget.value);
-          }}
-        />
-      ) : null}
-      {expanded ? (
-        <div className="new-research-row">
-          {/* One picker for the recipient, agent, and model; the trigger shows
-              only the agent's icon and names the model in its tooltip. The
-              row stays one line at every feed width. */}
-          <div className="new-research-model-controls">
-            <LauncherSelect
-              iconOnly
-              value={
-                askMode === "network"
-                  ? NETWORK_CHOICE
-                  : researchModelChoiceValue(adapter, selectedModel)
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        <div className="new-research-main">
+          <textarea
+            ref={promptRef}
+            className="new-research-input"
+            rows={1}
+            value={prompt}
+            placeholder={
+              askMode === "network" ? "Ask your network, or paste a link to save" : placeholder
+            }
+            aria-label="New question"
+            onChange={(event) => {
+              sessionDraftTouchedRef.current = true;
+              setPrompt(event.currentTarget.value);
+              setError(null);
+            }}
+            onKeyDown={(event) => {
+              // Esc leaves the field, which collapses again when it is empty.
+              if (event.key === "Escape" && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.currentTarget.blur();
+                return;
               }
-              options={modelOptions}
-              ariaLabel="Recipient and model"
-              onChange={(choice) => {
-                sessionDraftTouchedRef.current = true;
-                setError(null);
-                if (choice === NETWORK_CHOICE) {
-                  setAskMode("network");
-                  return;
+              // Enter in an empty field does nothing; Shift+Enter adds a line.
+              if (event.key === "Enter" && !event.shiftKey && !prompt.trim()) {
+                event.preventDefault();
+                return;
+              }
+              if (isComposerSubmitShortcut(event, requireCmdEnterToSend)) {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+          />
+          {/* The send button, as in a conversation's ask box: an arrow with no
+              label or shortcut text; the tooltip names the action. */}
+          <button
+            type="submit"
+            className="control-button research-composer-send"
+            disabled={!canSubmit}
+            aria-label={submitLabel}
+            title={`${submitLabel} (${sendShortcut})`}
+          >
+            {submitting ? (
+              <LoaderCircle className="research-spinner" size={15} aria-hidden="true" />
+            ) : (
+              <ArrowUp size={15} aria-hidden="true" />
+            )}
+          </button>
+        </div>
+        {expanded && askModeShowsAiControls(askMode) && selectedModel === CUSTOM_MODEL ? (
+          <input
+            className="new-research-custom-model"
+            type="text"
+            value={customModel}
+            placeholder="Model name"
+            aria-label="Custom model"
+            onChange={(event) => {
+              sessionDraftTouchedRef.current = true;
+              setCustomModel(event.currentTarget.value);
+            }}
+          />
+        ) : null}
+        {expanded ? (
+          <div className="new-research-row">
+            {/* One picker for the recipient, agent, and model; the trigger shows
+                only the agent's icon and names the model in its tooltip. The
+                row stays one line at every feed width. */}
+            <div className="new-research-model-controls">
+              <LauncherSelect
+                iconOnly
+                value={
+                  askMode === "network"
+                    ? NETWORK_CHOICE
+                    : researchModelChoiceValue(adapter, selectedModel)
                 }
-                const next = parseResearchModelChoice(choice);
-                setAskMode("ai");
-                setAdapter(next.adapter);
-                setModelChoice(next.preset || null);
-              }}
-              submenu={
-                effortOptions && askModeShowsAiControls(askMode)
-                  ? {
-                      label: "Effort",
-                      ariaLabel: "Effort",
-                      value: selectedEffort,
-                      options: effortOptions,
-                      onChange: setEffortChoice,
-                    }
-                  : undefined
-              }
-            />
+                options={modelOptions}
+                ariaLabel="Recipient and model"
+                onChange={(choice) => {
+                  sessionDraftTouchedRef.current = true;
+                  setError(null);
+                  if (choice === NETWORK_CHOICE) {
+                    setAskMode("network");
+                    return;
+                  }
+                  const next = parseResearchModelChoice(choice);
+                  setAskMode("ai");
+                  setAdapter(next.adapter);
+                  setModelChoice(next.preset || null);
+                }}
+                submenu={
+                  effortOptions && askModeShowsAiControls(askMode)
+                    ? {
+                        label: "Effort",
+                        ariaLabel: "Effort",
+                        value: selectedEffort,
+                        options: effortOptions,
+                        onChange: setEffortChoice,
+                      }
+                    : undefined
+                }
+              />
+            </div>
           </div>
-          <div className="new-research-actions">
-            {onSaveDraft ? (
+        ) : null}
+        {setupNeeded || error ? (
+          <div className="new-research-footer">
+            {setupNeeded ? (
+              <p className="new-research-unavailable" role="alert">
+                {selectedAdapter
+                  ? adapterReadinessMessage(selectedAdapter)
+                  : "No supported research agent is available."}
+              </p>
+            ) : null}
+            {error ? (
+              <p className="new-research-error" role="alert">
+                {error}
+              </p>
+            ) : null}
+            {setupNeeded ? (
               <button
                 type="button"
-                className="research-feed-button is-tint"
-                disabled={savingDraft}
-                onClick={() => void saveDraft()}
+                className="control-button new-research-setup-button"
+                onClick={onOpenAgentSettings}
               >
-                Save draft
+                Review agents
               </button>
             ) : null}
-            <button
-              type="submit"
-              className="research-feed-button is-primary new-research-send"
-              disabled={submitting || (askMode === "ai" && !launchReady)}
-              aria-label={submitLabel.startsWith(submitShortLabel) ? submitLabel : submitShortLabel}
-              title={submitLabel}
-            >
-              <span>{submitShortLabel}</span>
-              {ready ? (
-                <ComposerSubmitShortcutGlyph
-                  requireCmdEnter={requireCmdEnterToSend}
-                  className="research-feed-enter"
-                  ariaHidden
-                />
-              ) : null}
-            </button>
           </div>
+        ) : null}
+      </form>
+      {/* Save draft sits under the box once there is text to save. */}
+      {onSaveDraft && prompt.trim() ? (
+        <div className="new-research-after">
+          <button
+            type="button"
+            className="research-feed-button is-ghost"
+            disabled={savingDraft}
+            onClick={() => void saveDraft()}
+          >
+            Save draft
+          </button>
         </div>
       ) : null}
-      {setupNeeded || error ? (
-        <div className="new-research-footer">
-          {setupNeeded ? (
-            <p className="new-research-unavailable" role="alert">
-              {selectedAdapter
-                ? adapterReadinessMessage(selectedAdapter)
-                : "No supported research agent is available."}
-            </p>
-          ) : null}
-          {error ? (
-            <p className="new-research-error" role="alert">
-              {error}
-            </p>
-          ) : null}
-          {setupNeeded ? (
-            <button
-              type="button"
-              className="control-button new-research-setup-button"
-              onClick={onOpenAgentSettings}
-            >
-              Review agents
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-    </form>
+    </div>
   );
 }
 
-/** Focus inside the form or its model menu (rendered in a portal). */
-function insideComposer(form: HTMLFormElement | null, target: EventTarget | null) {
+/** Focus inside the composer or its model menu (rendered in a portal). */
+function insideComposer(root: HTMLElement | null, target: EventTarget | null) {
   if (!(target instanceof Node)) return false;
-  if (form?.contains(target)) return true;
+  if (root?.contains(target)) return true;
   return target instanceof Element && Boolean(target.closest(".launcher-select-popover"));
 }

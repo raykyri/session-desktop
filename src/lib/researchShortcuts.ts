@@ -43,8 +43,8 @@ interface ResearchOpenNodeRequest {
   nodeId: string;
 }
 
-/** Asks the mounted document for `treeId` to show `nodeId`: a branch opens in
- * the drawer, a follow-up of the conversation scrolls into view. The app shell
+/** Asks the mounted document for `treeId` to show `nodeId`: its level, and
+ * the levels before it, open as column pairs with the node selected. The app shell
  * also records the node in the navigation store, which covers the case where
  * no document for that tree is mounted yet. */
 export function requestResearchNodeOpen(treeId: string, nodeId: string) {

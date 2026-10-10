@@ -60,10 +60,14 @@ function renderComposer() {
 test("the composer starts as one Ask a question line without its controls", () => {
   const html = renderComposer();
   assert.match(html, /<textarea[^>]*rows="1"[^>]*placeholder="Ask a question"[^>]*aria-label="New question"/);
-  // The recipient, model, Save draft, and Ask controls show only once the
-  // field has focus or text, so the collapsed composer is the field alone.
+  // The picker shows once the field has focus or text, and Save draft once
+  // it has text; at rest the box is the field and a disabled arrow send
+  // button with no label or shortcut text.
   assert.doesNotMatch(html, /aria-label="Recipient"|new-research-model-controls|Save draft|research-feed-enter/);
-  assert.doesNotMatch(html, /is-expanded/);
+  assert.match(
+    html,
+    /<button type="submit" class="control-button research-composer-send" disabled="" aria-label="Start research" title="Start research \(↵\)"><svg[^>]*lucide-arrow-up/,
+  );
   const inFolder = renderToStaticMarkup(
     createElement(ResearchQueryComposer, {
       adapters: [adapter("claude")],

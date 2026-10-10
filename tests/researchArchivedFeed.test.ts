@@ -69,7 +69,7 @@ test("Archive renders one card per archived thread, newest archived first", () =
   // Archived cards are drop sources for moving out of Archive, and carry the
   // … menu but no Follow or Bookmark controls.
   assert.match(html, /data-research-card="run"/);
-  assert.match(html, /aria-label="Bookmark or move"/);
+  assert.match(html, /aria-label="Bookmark, follow or move"/);
   // The archive time is in the card's tooltip.
   assert.match(html, /aria-label="Thread run"[^>]*title="Archived [^"]+"/);
   assert.doesNotMatch(html, /research-thread-actions/);

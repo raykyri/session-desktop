@@ -1,4 +1,5 @@
-import { memo, useCallback, useLayoutEffect, useState } from "react";
+import { memo, useCallback, useId } from "react";
+import type { ReactNode } from "react";
 import {
   LoaderCircle,
   MoreHorizontal,
@@ -40,10 +41,6 @@ const OVERSIZED_MARKDOWN_POLICY = {
   maxDisplayCharacters: PLAINTEXT_DISPLAY_CHAR_LIMIT,
   fallbackClassName: "research-plaintext",
 } as const;
-/** A clamped answer shows nine lines of body text, as
- * `.research-answer-clamp.is-clamped` in research.css does. */
-const ANSWER_CLAMP_LINES = 9;
-const ANSWER_MAX_LENGTH_DOTS = 12;
 
 /** Content-derived render state for one turn, cached per node so the whole
  * view identity survives detail replacements — which is what lets the turn's
@@ -240,40 +237,6 @@ export const ResearchTimelineItem = memo(function ResearchTimelineItem({
   );
 });
 
-/** Measures a clamped answer: whether it overflows the nine-line clamp and how
- * many clamp heights its content takes (the length dots). */
-function useAnswerLength(enabled: boolean) {
-  const [element, setElement] = useState<HTMLDivElement | null>(null);
-  const [length, setLength] = useState({ overflows: false, pages: 1, shown: 1 });
-  useLayoutEffect(() => {
-    if (!enabled || !element) {
-      return;
-    }
-    const measure = () => {
-      const prose = element.querySelector<HTMLElement>(".research-prose") ?? element;
-      const lineHeight = Number.parseFloat(getComputedStyle(prose).lineHeight);
-      const clampHeight = ANSWER_CLAMP_LINES * (Number.isFinite(lineHeight) ? lineHeight : 22);
-      const total = element.scrollHeight;
-      const overflows = total > clampHeight + 4;
-      const pages = Math.min(ANSWER_MAX_LENGTH_DOTS, Math.max(1, Math.ceil(total / clampHeight)));
-      const shown = total > 0 ? Math.min(1, clampHeight / total) : 1;
-      setLength((current) =>
-        current.overflows === overflows && current.pages === pages && current.shown === shown
-          ? current
-          : { overflows, pages, shown },
-      );
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") {
-      return;
-    }
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [element, enabled]);
-  return { setContentElement: setElement, ...length };
-}
-
 function sameTurnNode(a: ResearchNode, b: ResearchNode) {
   return (
     a.id === b.id &&
@@ -318,9 +281,10 @@ interface ResearchAnswerPaneProps {
   waitsForParent: boolean;
   recapPending: boolean;
   pointerOverAnnotation: boolean;
-  expanded: boolean;
   canRetry: boolean;
   retrying: boolean;
+  /** A Retry waiting for the running answer in this conversation. */
+  retryQueued: boolean;
   canEditQuestion: boolean;
   registerSegmentElement: (nodeId: string, kind: SegmentDomKind, element: HTMLElement | null) => void;
   onExpandTurns: (nodeId: string) => void;
@@ -328,8 +292,8 @@ interface ResearchAnswerPaneProps {
   onToggleFullTrace: (nodeId: string) => void;
   onCancelNode: (nodeId: string) => void;
   onRetryNode: (nodeId: string) => void;
+  onRemoveQueuedRetry: (nodeId: string) => void;
   onEditQuestion: (nodeId: string) => void;
-  onToggleAnswer: (nodeId: string) => void;
   onRootMouseDown: (event: React.MouseEvent<HTMLDivElement>) => void;
   onRootMouseUp: (event: React.MouseEvent<HTMLDivElement>) => void;
   onRootKeyUp: () => void;
@@ -354,13 +318,15 @@ export function runStatusText(
   return waitsForParent ? "Queued. Starts when the running answer finishes." : "Queued";
 }
 
-/** The answer side of a turn. Finished answers are clamped to nine lines with
- * a fade (the pointer expand target) and length dots (the keyboard control,
- * which also collapses); running answers stream unclamped under a status line
- * with the elapsed time and Stop. Isolated behind its own memo so the
- * question's meta row (branch counts, star) can change without rebuilding the
- * answer's timeline element tree. */
-const ResearchAnswerPane = memo(function ResearchAnswerPane({
+const QUEUED_RETRY_TEXT = "Queued. Starts when the running answer in this conversation finishes.";
+
+/** The answer column's content for one message: the answer in full (the
+ * column scrolls), under a status line with the elapsed time and Stop while
+ * it runs. A failed answer ends in "Error." and the error, with Retry and
+ * Edit question; a stopped one in "Stopped after …" with Run again. Memoized
+ * so the message rows (branch counts, star) can change without rebuilding
+ * the answer's timeline element tree. */
+export const ResearchAnswerPane = memo(function ResearchAnswerPane({
   view,
   node,
   contentError,
@@ -369,9 +335,9 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
   waitsForParent,
   recapPending,
   pointerOverAnnotation,
-  expanded,
   canRetry,
   retrying,
+  retryQueued,
   canEditQuestion,
   registerSegmentElement,
   onExpandTurns,
@@ -379,8 +345,8 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
   onToggleFullTrace,
   onCancelNode,
   onRetryNode,
+  onRemoveQueuedRetry,
   onEditQuestion,
-  onToggleAnswer,
   onRootMouseDown,
   onRootMouseUp,
   onRootKeyUp,
@@ -390,20 +356,11 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
 }: ResearchAnswerPaneProps) {
   const active = node.status === "queued" || node.status === "starting" || node.status === "running";
   const lingeringPane = node.status === "cancelled" && Boolean(node.paneId);
-  // Documents and conversations are the content itself, not an answer to a
-  // question, so they are never clamped.
-  const clampable =
-    node.status === "complete" && !view.isDocument && !view.isConversation && !view.showFullTrace;
-  const clamped = clampable && !expanded;
-  const { setContentElement, overflows, pages, shown } = useAnswerLength(clampable);
   // Stable, so React does not detach and reattach the root on every render.
   const nodeId = node.id;
   const contentRootRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      setContentElement(element);
-      registerSegmentElement(nodeId, "root", element);
-    },
-    [nodeId, registerSegmentElement, setContentElement],
+    (element: HTMLDivElement | null) => registerSegmentElement(nodeId, "root", element),
+    [nodeId, registerSegmentElement],
   );
   const retryButton = (label: string) =>
     canRetry ? (
@@ -436,23 +393,23 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
     </button>
   );
 
-  // A queued run (waiting for its turn on the backend) reads like a question
-  // in the client-side queue: the state as a plain line, its action (Stop,
-  // which cancels it) below, where the queue's Remove sits.
-  if (node.status === "queued") {
+  // A queued run (waiting for its turn on the backend), or a Retry waiting
+  // for the running answer: the state as a plain line, with the action that
+  // takes it out of the queue below.
+  if (node.status === "queued" || retryQueued) {
     return (
       <section className="research-response" aria-label="Research response">
         <div className="research-turn-note is-state" role="status">
-          {runStatusText(node, waitsForParent)}
+          {retryQueued ? QUEUED_RETRY_TEXT : runStatusText(node, waitsForParent)}
         </div>
         <div className="research-turn-actions">
           <button
             className="control-button research-turn-button is-ghost"
             type="button"
             disabled={cancelling}
-            onClick={() => onCancelNode(node.id)}
+            onClick={() => (retryQueued ? onRemoveQueuedRetry(node.id) : onCancelNode(node.id))}
           >
-            {cancelling ? "Stopping…" : "Stop"}
+            {retryQueued ? "Remove" : cancelling ? "Stopping…" : "Stop"}
           </button>
         </div>
       </section>
@@ -491,7 +448,7 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
       <>
         <div className="research-turn-alert is-error" role="alert">
           <div>
-            <b>Stopped with an error.</b> {node.error ?? "The research run failed."}
+            <b>Error.</b> {node.error ?? "The research run failed."}
           </div>
         </div>
         <div className="research-turn-actions">
@@ -513,7 +470,7 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
       <>
         <div className="research-turn-note">
           {node.startedAt
-            ? `Stopped after ${formatRunDuration((node.completedAt ?? node.startedAt) - node.startedAt)}.`
+            ? `Stopped after ${formatRunDuration((node.completedAt ?? node.startedAt) - node.startedAt)}. The answer is incomplete.`
             : "Stopped before it started."}
         </div>
         <div className="research-turn-actions">
@@ -536,7 +493,10 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
             : "No response is available.";
 
   return (
-    <section className="research-response" aria-label="Research response">
+    <section
+      className={`research-response${node.status === "running" ? " is-running" : ""}`}
+      aria-label="Research response"
+    >
       {contentError ? (
         <div className="research-response-stale" role="alert">
           <p>Refreshing this response failed: {contentError}</p>
@@ -585,66 +545,26 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
             </button>
           ) : null}
           <div
-            className={`research-answer-wrap${
-              clampable ? (overflows ? (clamped ? " is-clamped" : " is-expanded") : " fits") : ""
+            ref={contentRootRef}
+            data-node-id={node.id}
+            className={`research-response-content-root${
+              pointerOverAnnotation ? " is-highlight-hovered" : ""
             }`}
+            onMouseDown={onRootMouseDown}
+            onMouseUp={onRootMouseUp}
+            onKeyUp={onRootKeyUp}
+            onClick={onRootClick}
+            onMouseMove={onRootMouseMove}
+            onMouseLeave={onRootMouseLeave}
           >
-            <div
-              className={`research-answer-clamp${clamped && overflows ? " is-clamped" : ""}`}
-              // Focus or find-in-page can scroll a clipped answer inside its
-              // clamp; keep the clamp showing the start of the answer.
-              onScroll={(event) => {
-                event.currentTarget.scrollTop = 0;
-              }}
-            >
-              <div
-                ref={contentRootRef}
-                data-node-id={node.id}
-                className={`research-response-content-root${
-                  pointerOverAnnotation ? " is-highlight-hovered" : ""
-                }`}
-                onMouseDown={onRootMouseDown}
-                onMouseUp={onRootMouseUp}
-                onKeyUp={onRootKeyUp}
-                onClick={onRootClick}
-                onMouseMove={onRootMouseMove}
-                onMouseLeave={onRootMouseLeave}
-              >
-                {view.visibleTimelineItems.map((item) => (
-                  <ResearchTimelineItem
-                    key={item.key}
-                    item={item}
-                    conversation={view.isConversation}
-                    imported={node.origin === "imported"}
-                  />
-                ))}
-              </div>
-            </div>
-            {clampable && overflows && clamped ? (
-              <button
-                type="button"
-                className="research-answer-fade"
-                tabIndex={-1}
-                aria-hidden="true"
-                onClick={() => onToggleAnswer(node.id)}
-              >
-                <span>Show more</span>
-              </button>
-            ) : null}
-            {clampable && overflows ? (
-              <button
-                type="button"
-                className="research-answer-dots"
-                aria-expanded={!clamped}
-                aria-label={clamped ? "Show more" : "Show less"}
-                title={clamped ? `${Math.round(shown * 100)}% shown · Show more` : "Show less"}
-                onClick={() => onToggleAnswer(node.id)}
-              >
-                {Array.from({ length: pages }, (_, index) => (
-                  <i key={index} className={index === 0 && clamped ? "is-on" : undefined} />
-                ))}
-              </button>
-            ) : null}
+            {view.visibleTimelineItems.map((item) => (
+              <ResearchTimelineItem
+                key={item.key}
+                item={item}
+                conversation={view.isConversation}
+                imported={node.origin === "imported"}
+              />
+            ))}
           </div>
           {view.hiddenTimelineItemCount > 0 && view.isConversation ? (
             <button
@@ -664,208 +584,170 @@ const ResearchAnswerPane = memo(function ResearchAnswerPane({
   );
 }, propsEqualExceptNode);
 
-/** The question side of a turn: the prompt, then one meta row with the short
- * relative time, the star (root-conversation follow-ups only) and the branch
- * button. The branch button is always there; with no branches and no way to
- * start one it is disabled and says why. */
-export const ResearchTurnQuestion = memo(function ResearchTurnQuestion({
+/** A message's state as a small pill in its row's meta line. */
+export function researchMessagePill(
+  node: Pick<ResearchNode, "status">,
+  retryQueued = false,
+): { label: string; tone: "run" | "error" | "plain" } | null {
+  if (retryQueued || node.status === "queued") return { label: "Queued", tone: "plain" };
+  if (node.status === "running" || node.status === "starting") return { label: "Running", tone: "run" };
+  if (node.status === "failed") return { label: "Failed", tone: "error" };
+  if (node.status === "cancelled") return { label: "Stopped", tone: "plain" };
+  return null;
+}
+
+/** One message in a level's messages column: the user's message in full,
+ * then a meta line with the short time, the state pill, the star (root
+ * follow-ups and a branch's first message), the branch count (only once the
+ * answer has branches) and the answer's … menu. The row is a bubble: one
+ * button under its content selects the message; links in the message and
+ * the meta line's buttons stay their own targets. Only the selected row is
+ * in the tab order (the column's keys move between rows). */
+export const ResearchMessageRow = memo(function ResearchMessageRow({
   node,
+  level,
+  label,
   showPrompt,
   replyQuote = null,
+  selected,
   now,
-  promotable = false,
-  branchCount = 0,
-  branchOpen = false,
-  branchUnread = false,
-  branchMenuOpen = false,
-  branchBlocker = null,
-  answerMenuOpen = false,
+  starrable,
+  retryQueued = false,
+  branchCount,
+  branchOpen,
+  branchUnread,
+  answerMenuOpen,
+  registerSegmentElement,
+  onSelect,
   onTogglePromoted,
-  onBranchButton,
+  onShowBranches,
   onOpenAnswerMenu,
+  onOpenContextMenu,
 }: {
   node: ResearchNode;
-  /** Documents and conversations carry no question; their meta row stands
-   * alone above the content. */
+  level: number;
+  /** The row's name: the question, or a document's title. */
+  label: string;
+  /** Documents and conversations carry no question: the row shows `label`. */
   showPrompt: boolean;
-  /** For a follow-up of a note asked about one reply: that reply's text,
-   * quoted above the question. */
+  /** For a follow-up of a note asked about one reply: that reply's text. */
   replyQuote?: string | null;
+  selected: boolean;
   /** Clock for the relative time; the parent refreshes it once a minute. */
   now: number;
-  promotable?: boolean;
-  branchCount?: number;
-  branchOpen?: boolean;
-  branchUnread?: boolean;
-  branchMenuOpen?: boolean;
-  /** Why no branch can start from this answer, or null when one can. */
-  branchBlocker?: string | null;
-  /** The answer menu (details and actions) is open. */
-  answerMenuOpen?: boolean;
-  onTogglePromoted?: (nodeId: string) => void;
-  onBranchButton?: (nodeId: string, trigger: HTMLButtonElement) => void;
-  /** The … button after the branch button: the answer's length, run time
-   * and model, and its actions. A queued run has no answer yet. */
-  onOpenAnswerMenu?: (trigger: HTMLButtonElement, nodeId: string) => void;
+  starrable: boolean;
+  retryQueued?: boolean;
+  branchCount: number;
+  /** One of the answer's branches is open as the next level. */
+  branchOpen: boolean;
+  branchUnread: boolean;
+  answerMenuOpen: boolean;
+  registerSegmentElement: (nodeId: string, kind: SegmentDomKind, element: HTMLElement | null) => void;
+  onSelect: (nodeId: string, level: number, row: HTMLElement) => void;
+  onTogglePromoted: (nodeId: string) => void;
+  onShowBranches: (nodeId: string, level: number) => void;
+  onOpenAnswerMenu: (trigger: HTMLButtonElement, nodeId: string) => void;
+  onOpenContextMenu: (nodeId: string, clientX: number, clientY: number) => void;
 }) {
+  const labelId = useId();
   const settled = node.status === "complete" || node.status === "failed" || node.status === "cancelled";
   const promoted = Boolean(node.promotedAt);
+  const pill = researchMessagePill(node, retryQueued);
+  const tabIndex = selected ? 0 : -1;
   const branchLabel = `${branchCount} ${branchCount === 1 ? "branch" : "branches"}`;
-  const branchDisabled = branchCount === 0 && branchBlocker !== null;
-  const branchName =
-    (branchCount > 0 ? `${branchLabel} from this answer` : "Branch from this answer") +
-    (branchUnread ? ", one with a new answer" : "");
+  let prompt: ReactNode = <span className="research-msg-plain">{label}</span>;
+  if (showPrompt) {
+    prompt = (
+      <ResearchUserMessage className="research-prompt research-msg-prompt">
+        <ResearchMessageBody prompt={node.prompt} attachments={node.attachments} />
+      </ResearchUserMessage>
+    );
+  }
   return (
-    <div className="research-turn-question">
-      {showPrompt && replyQuote ? (
-        <blockquote className="research-prompt-quote">
-          {replyQuote.split(/\s+/).join(" ").trim()}
-        </blockquote>
-      ) : null}
-      {showPrompt ? (
-        <ResearchUserMessage className="research-prompt research-turn-prompt">
-          <ResearchMessageBody prompt={node.prompt} attachments={node.attachments} />
-        </ResearchUserMessage>
-      ) : null}
-      <div className="research-turn-meta">
-        <time
-          dateTime={new Date(node.createdAt).toISOString()}
-          title={new Date(node.createdAt).toLocaleString()}
-        >
+    <li
+      ref={(element) => registerSegmentElement(node.id, "anchor", element)}
+      className={`research-msg-row is-status-${retryQueued ? "queued" : node.status}${selected ? " is-selected" : ""}`}
+      data-segment-anchor={node.id}
+      onContextMenu={(event) => {
+        // Links and other nested controls may own a more specific context
+        // menu. Everywhere else in the row opens its answer menu.
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onOpenContextMenu(node.id, event.clientX, event.clientY);
+      }}
+    >
+      <button
+        type="button"
+        className="research-msg-hit"
+        data-research-row
+        data-research-level={level}
+        data-node-id={node.id}
+        aria-current={selected ? "true" : undefined}
+        aria-labelledby={labelId}
+        tabIndex={tabIndex}
+        onClick={(event) => onSelect(node.id, level, event.currentTarget)}
+      />
+      <div id={labelId} className="research-msg-content">
+        {showPrompt && replyQuote ? (
+          <blockquote className="research-prompt-quote">{replyQuote.split(/\s+/).join(" ").trim()}</blockquote>
+        ) : null}
+        {prompt}
+      </div>
+      <div className="research-msg-meta">
+        <time dateTime={new Date(node.createdAt).toISOString()} title={new Date(node.createdAt).toLocaleString()}>
           {node.origin === "imported" ? "Imported " : ""}
           {shortWhen(node.createdAt, now)}
         </time>
-        {promotable && settled && onTogglePromoted ? (
+        {pill ? (
+          <span className={`research-msg-pill is-${pill.tone}`}>
+            {pill.tone === "run" ? <span className="research-pulse" aria-hidden="true" /> : null}
+            {pill.label}
+          </span>
+        ) : null}
+        {starrable && node.status !== "queued" ? (
           <button
             type="button"
-            className={`control-button research-turn-meta-button research-turn-star${
-              promoted ? " is-on" : ""
-            }`}
+            className={`control-button research-msg-button research-msg-star${promoted ? " is-on" : ""}`}
             aria-pressed={promoted}
             aria-label="Star"
-            title={
-              promoted
-                ? "Unstar: stop listing this follow-up under its question"
-                : "Star: list this follow-up under its question in the feed"
-            }
+            title={promoted ? "Unstar" : "Star: list this under its question in the feed"}
+            tabIndex={tabIndex}
             onClick={() => onTogglePromoted(node.id)}
           >
             <Star size={13} aria-hidden="true" fill={promoted ? "currentColor" : "none"} />
           </button>
         ) : null}
-        {onBranchButton ? (
+        {settled && branchCount > 0 ? (
           <button
             type="button"
-            className={`control-button research-turn-meta-button research-turn-branches${
-              branchCount > 0 ? " has-count" : ""
-            }${branchOpen ? " is-open" : ""}`}
-            aria-haspopup={branchCount > 0 ? "menu" : undefined}
-            aria-expanded={branchCount > 0 ? branchMenuOpen : undefined}
-            aria-disabled={branchDisabled || undefined}
-            aria-label={branchName}
-            title={branchDisabled ? branchBlocker ?? undefined : branchCount > 0 ? branchLabel : "Branch from this answer"}
+            className={`control-button research-msg-button research-msg-branches${branchOpen ? " is-open" : ""}`}
+            aria-label={`${branchLabel} from this answer${branchUnread ? ", one with a new answer" : ""}`}
+            title={`${branchLabel}: marked in the answer's right margin`}
             data-research-branch-trigger={node.id}
-            onClick={(event) => {
-              if (!branchDisabled) {
-                onBranchButton(node.id, event.currentTarget);
-              }
-            }}
+            tabIndex={tabIndex}
+            onClick={() => onShowBranches(node.id, level)}
           >
             <ResearchBranchIcon size={13} />
-            {branchCount > 0 ? <span className="research-tnum">{branchCount}</span> : null}
+            <span className="research-tnum">{branchCount}</span>
             {branchUnread ? <span className="research-turn-unread" aria-hidden="true" /> : null}
           </button>
         ) : null}
-        {onOpenAnswerMenu && node.status !== "queued" ? (
+        {node.status !== "queued" && !retryQueued ? (
           <button
             type="button"
-            className="control-button research-turn-meta-button research-turn-more"
+            className="control-button research-msg-button research-turn-more"
             aria-haspopup="menu"
             aria-expanded={answerMenuOpen}
             aria-label="Answer actions"
             title="Answer details and actions"
+            tabIndex={tabIndex}
             onClick={(event) => onOpenAnswerMenu(event.currentTarget, node.id)}
           >
             <MoreHorizontal size={13} aria-hidden="true" />
           </button>
         ) : null}
       </div>
-    </div>
-  );
-});
-
-interface ResearchTurnProps extends ResearchAnswerPaneProps {
-  replyQuote: string | null;
-  now: number;
-  promotable: boolean;
-  branchCount: number;
-  branchOpen: boolean;
-  branchUnread: boolean;
-  branchMenuOpen: boolean;
-  branchBlocker: string | null;
-  answerMenuOpen: boolean;
-  onOpenAnswerMenu: (trigger: HTMLButtonElement, nodeId: string) => void;
-  onTogglePromoted: (nodeId: string) => void;
-  onBranchButton: (nodeId: string, trigger: HTMLButtonElement) => void;
-  onOpenContextMenu: (nodeId: string, clientX: number, clientY: number) => void;
-}
-
-/** One question | answer turn. The grid switches from stacked to two columns
- * at 600px of column width (a container query), so the same turn reads
- * stacked in the drawer and side by side in a wide conversation column. */
-export const ResearchTurn = memo(function ResearchTurn({
-  replyQuote,
-  now,
-  promotable,
-  branchCount,
-  branchOpen,
-  branchUnread,
-  branchMenuOpen,
-  branchBlocker,
-  answerMenuOpen,
-  onOpenAnswerMenu,
-  onTogglePromoted,
-  onBranchButton,
-  onOpenContextMenu,
-  ...answer
-}: ResearchTurnProps) {
-  const { node, view, registerSegmentElement } = answer;
-  const whole = view.isDocument || view.isConversation;
-  return (
-    <article
-      ref={(element) => registerSegmentElement(node.id, "anchor", element)}
-      className={`research-turn is-status-${node.status}${whole ? " is-whole" : ""}`}
-      data-segment-anchor={node.id}
-      onContextMenu={(event) => {
-        // Links and other nested controls may own a more specific context
-        // menu. Everywhere else in the turn opens its answer menu.
-        if (event.defaultPrevented) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        onOpenContextMenu(node.id, event.clientX, event.clientY);
-      }}
-    >
-      <ResearchTurnQuestion
-        node={node}
-        showPrompt={!whole}
-        replyQuote={replyQuote}
-        now={now}
-        promotable={promotable}
-        branchCount={branchCount}
-        branchOpen={branchOpen}
-        branchUnread={branchUnread}
-        branchMenuOpen={branchMenuOpen}
-        branchBlocker={branchBlocker}
-        answerMenuOpen={answerMenuOpen}
-        onTogglePromoted={onTogglePromoted}
-        onBranchButton={onBranchButton}
-        onOpenAnswerMenu={onOpenAnswerMenu}
-      />
-      <div className="research-turn-answer">
-        <ResearchAnswerPane {...answer} />
-      </div>
-    </article>
+    </li>
   );
 }, propsEqualExceptNode);

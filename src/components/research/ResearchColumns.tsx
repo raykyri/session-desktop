@@ -1,98 +1,124 @@
-import { createContext, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { RESEARCH_SINGLE_COLUMN_BELOW } from "../../lib/researchBranchView";
-import { listenToResearchNodeOpen } from "../../lib/researchShortcuts";
 
-const FEED_MIN_WIDTH = 240;
-const FEED_MAX_WIDTH = 320;
-/** The conversation keeps at least this much before the feed grows past its minimum. */
-const CONVERSATION_MIN_WIDTH = 620;
+const clampWidth = (value: number, min: number, max: number) =>
+  Math.round(Math.max(min, Math.min(max, value)));
 
-/** The feed column's width: 240–320px, set by the width of the column area
- * alone, so opening a conversation, the branch drawer, or pinned columns
- * never changes it. */
-export function researchFeedColumnWidth(availableWidth: number): number {
-  const width = Number.isFinite(availableWidth) ? availableWidth - CONVERSATION_MIN_WIDTH : 0;
-  return Math.round(Math.max(FEED_MIN_WIDTH, Math.min(FEED_MAX_WIDTH, width)));
+/** Column widths from the strip's width alone (the column area: the window
+ * less the sidebar), so opening, closing or switching a level never resizes
+ * a column: the feed is 21% (240–300px), each pair's messages column 18%
+ * (220–280px) and its answer column 44% (340–660px). */
+export function researchColumnWidths(stripWidth: number): { feed: number; turns: number; answer: number } {
+  const width = Number.isFinite(stripWidth) ? Math.max(0, stripWidth) : 0;
+  return {
+    feed: clampWidth(width * 0.21, 240, 300),
+    turns: clampWidth(width * 0.18, 220, 280),
+    answer: clampWidth(width * 0.44, 340, 660),
+  };
 }
 
-/** The conversation column's width: the rest of the column area beside the
- * feed, or the whole area when one column shows at a time. Pinned columns
- * add to the row's width instead of taking from this. */
-export function researchConversationColumnWidth(availableWidth: number): number {
-  const area = Number.isFinite(availableWidth) ? Math.max(0, Math.round(availableWidth)) : 0;
-  return area < RESEARCH_SINGLE_COLUMN_BELOW ? area : area - researchFeedColumnWidth(area);
+/** The system setting or the app's own Reduce motion setting. */
+function prefersReducedMotion() {
+  return (
+    (typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches) ||
+    document.querySelector(".app-shell.reduce-motion") !== null
+  );
 }
 
-/** Which columns show. In single-column mode the feed shows until a thread
- * opens, and again after the thread's Back to feed; the other column is
- * hidden (kept mounted, so it keeps its scroll position) and inert. */
-export function researchColumnsShown({
-  single,
-  hasDocument,
-  feedFocused,
-}: {
-  single: boolean;
-  hasDocument: boolean;
-  feedFocused: boolean;
-}): { showsFeed: boolean; feedHidden: boolean; contentHidden: boolean } {
-  const showsFeed = !hasDocument || feedFocused;
-  return { showsFeed, feedHidden: single && !showsFeed, contentHidden: single && showsFeed };
+// Disable scroll animation until the first pointer, key, or wheel input
+// so loading or restoring a thread sets its scroll positions immediately.
+let interacted = false;
+let interactionListening = false;
+function listenForInteraction() {
+  if (interactionListening) return;
+  interactionListening = true;
+  for (const type of ["pointerdown", "keydown", "wheel"]) {
+    window.addEventListener(
+      type,
+      () => {
+        interacted = true;
+      },
+      { capture: true, passive: true },
+    );
+  }
+}
+
+export function researchScrollBehavior(): ScrollBehavior {
+  return interacted && !prefersReducedMotion() ? "smooth" : "auto";
+}
+
+/** Scrolls the strip by the least distance that shows `first` through
+ * `last` (one column, or a pair), keeping `first`'s left edge in view when
+ * they don't fit. Nothing moves when they are already in view. */
+export function revealResearchColumns(
+  row: HTMLElement | null,
+  first: HTMLElement | null,
+  last: HTMLElement | null = first,
+  behavior: ScrollBehavior = researchScrollBehavior(),
+) {
+  if (!row || !first || !last) return;
+  const viewLeft = row.scrollLeft;
+  const viewWidth = row.clientWidth;
+  const left = first.offsetLeft;
+  const right = last.offsetLeft + last.offsetWidth;
+  if (left >= viewLeft - 1 && right <= viewLeft + viewWidth + 1) return;
+  const target = right - left > viewWidth || left < viewLeft ? left : right - viewWidth;
+  row.scrollTo({ left: target, behavior });
+}
+
+/** After a level opens or closes: shows the strip's last column at its right
+ * edge, adjusted so `focus` (a column) stays in view. */
+export function settleResearchStrip(
+  row: HTMLElement | null,
+  focus: HTMLElement | null,
+  behavior: ScrollBehavior = researchScrollBehavior(),
+) {
+  if (!row) return;
+  const columns = [...row.querySelectorAll<HTMLElement>("[data-research-column]")];
+  const last = columns[columns.length - 1];
+  if (!last) return;
+  const viewWidth = row.clientWidth;
+  let left = Math.max(0, last.offsetLeft + last.offsetWidth - viewWidth);
+  if (focus) {
+    if (focus.offsetLeft < left) left = focus.offsetLeft;
+    if (focus.offsetLeft + focus.offsetWidth > left + viewWidth) {
+      left = focus.offsetLeft + focus.offsetWidth - viewWidth;
+    }
+  }
+  if (Math.abs(row.scrollLeft - left) > 1) {
+    row.scrollTo({ left, behavior });
+  }
 }
 
 interface ResearchColumnsLayout {
-  /** The column area's width, feed included. */
-  areaWidth: number;
-  conversationWidth: number;
-  singleColumn: boolean;
-  /** The horizontally scrolling row that holds the feed, the conversation,
-   * and pinned columns. */
+  /** The horizontally scrolling strip: the feed, then each level's pair. */
   row: HTMLElement | null;
-  /** A layer over the column area, outside the scrolling row, for the branch
-   * drawer and the find bar: they stay put while the row scrolls. */
+  /** A layer over the column area, outside the strip, for the find bar: it
+   * stays put while the strip scrolls. */
   overlay: HTMLElement | null;
-  /** The feed is column 0 for `[` and `]`, and the column shown in
-   * single-column mode after Back. */
-  feedFocused: boolean;
-  focusFeed: (options?: { moveFocus?: boolean }) => void;
-  /** A conversation column took focus. */
-  releaseFeed: () => void;
+  /** Focus is in the feed column. */
+  feedCurrent: boolean;
+  /** Shows the feed and focuses its selected row (or its title). */
+  focusFeed: () => void;
+  /** After a feed row opened a thread from the keyboard: focuses the
+   * selected message of its first level (`deepest`: of its deepest level)
+   * once it has rendered. A draft's column keeps focus off its ask box. */
+  focusOpenedThread: (deepest: boolean) => void;
 }
 
 export const ResearchColumnsContext = createContext<ResearchColumnsLayout | null>(null);
 
-/** Scrolls the row horizontally so `column` is in view, by as little as
- * possible (no-op when it already is). */
-export function showResearchColumn(row: HTMLElement | null, column: HTMLElement | null, behavior: ScrollBehavior) {
-  if (!row || !column) {
-    return;
-  }
-  const rect = column.getBoundingClientRect();
-  const bounds = row.getBoundingClientRect();
-  let dx = rect.right > bounds.right ? rect.right - bounds.right : 0;
-  if (rect.left - dx < bounds.left) {
-    dx = rect.left - bounds.left;
-  }
-  if (dx) {
-    row.scrollBy({ left: dx, behavior });
-  }
-}
-
-/** The column area: one horizontally scrolling row with the feed column,
- * then the content column (the open thread with its pinned branch columns, or
- * a placeholder). Pinning a branch scrolls the feed out of view and keeps
- * the conversation where it is. Below RESEARCH_SINGLE_COLUMN_BELOW only one
- * column shows: the feed, or the thread once one is open (its header's Back
- * returns to the feed). */
+/** The column area: one horizontally scrolling strip with the feed column,
+ * then the content (the open thread's column pairs, or a filler). Column
+ * widths come from the area's width, so the strip scrolls sideways when the
+ * pairs don't fit. */
 export default function ResearchColumns({
   hasDocument,
-  documentKey,
   feed,
   children,
 }: {
   hasDocument: boolean;
-  /** Changes when another thread opens; showing a thread hands it the focus. */
-  documentKey: string | null;
   feed: ReactNode;
   children: ReactNode;
 }) {
@@ -100,8 +126,10 @@ export default function ResearchColumns({
   const feedRef = useRef<HTMLElement>(null);
   const [row, setRow] = useState<HTMLDivElement | null>(null);
   const [overlay, setOverlay] = useState<HTMLDivElement | null>(null);
-  const [availableWidth, setAvailableWidth] = useState(CONVERSATION_MIN_WIDTH + FEED_MAX_WIDTH);
-  const [feedFocused, setFeedFocused] = useState(false);
+  const [availableWidth, setAvailableWidth] = useState(1232);
+  const [feedCurrent, setFeedCurrent] = useState(false);
+
+  useEffect(listenForInteraction, []);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -113,53 +141,144 @@ export default function ResearchColumns({
     return () => observer.disconnect();
   }, []);
 
-  // Opening a thread, or a node of the open one, shows the thread.
-  useEffect(() => setFeedFocused(false), [documentKey]);
-  useEffect(() => listenToResearchNodeOpen(() => setFeedFocused(false)), []);
-
-  const focusFeed = useCallback(
-    ({ moveFocus = false }: { moveFocus?: boolean } = {}) => {
-      setFeedFocused(true);
-      window.requestAnimationFrame(() => {
-        row?.scrollTo({ left: 0, behavior: "auto" });
-        if (moveFocus) {
-          feedRef.current
-            ?.querySelector<HTMLElement>(".research-feed-header-title")
-            ?.focus({ preventScroll: true });
+  // Mostly horizontal wheel and trackpad input (and Shift+wheel) scrolls the
+  // strip, even over a column that only scrolls vertically. Capture phase, so
+  // a column's swipe navigation sees the event as handled while the strip can
+  // still move that way.
+  useEffect(() => {
+    if (!row) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey) return;
+      const unit =
+        event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? row.clientWidth : 1;
+      let dx = event.deltaX;
+      let dy = event.deltaY;
+      if (event.shiftKey && !dx) {
+        dx = dy;
+        dy = 0;
+      }
+      if (!dx || Math.abs(dx) <= Math.abs(dy)) return;
+      // A wide table or code block that can still scroll that way keeps it.
+      for (
+        let element = event.target instanceof Element ? event.target : null;
+        element && element !== row;
+        element = element.parentElement
+      ) {
+        if (element.scrollWidth - element.clientWidth <= 1) continue;
+        const overflowX = getComputedStyle(element).overflowX;
+        if (overflowX !== "auto" && overflowX !== "scroll") continue;
+        if ((dx < 0 && element.scrollLeft > 0) || (dx > 0 && element.scrollLeft < element.scrollWidth - element.clientWidth - 1)) {
+          return;
         }
-      });
-    },
-    [row],
-  );
-  const releaseFeed = useCallback(() => setFeedFocused(false), []);
+      }
+      const max = row.scrollWidth - row.clientWidth;
+      if ((dx < 0 && row.scrollLeft > 0) || (dx > 0 && row.scrollLeft < max - 1)) {
+        row.scrollLeft += dx * unit;
+        event.preventDefault();
+      }
+    };
+    row.addEventListener("wheel", onWheel, { capture: true, passive: false });
+    return () => row.removeEventListener("wheel", onWheel, { capture: true });
+  }, [row]);
 
-  const single = availableWidth < RESEARCH_SINGLE_COLUMN_BELOW;
-  const conversationWidth = researchConversationColumnWidth(availableWidth);
-  const { showsFeed, feedHidden, contentHidden } = researchColumnsShown({ single, hasDocument, feedFocused });
+  // Match all column headers to the tallest wrapped title, with a minimum
+  // height of 43px (44px including the border).
+  useEffect(() => {
+    if (!row) return;
+    let frame = 0;
+    const sync = () => {
+      frame = 0;
+      const bars = [...row.querySelectorAll<HTMLElement>("[data-research-header-bar]")];
+      const tallest = Math.max(43, ...bars.map((bar) => bar.offsetHeight));
+      const value = `${tallest}px`;
+      if (row.style.getPropertyValue("--research-header-height") !== value) {
+        row.style.setProperty("--research-header-height", value);
+      }
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(sync);
+    };
+    sync();
+    const resize = new ResizeObserver(schedule);
+    resize.observe(row);
+    const observed = new Set<Element>();
+    const observeBars = () => {
+      for (const bar of row.querySelectorAll("[data-research-header-bar]")) {
+        if (!observed.has(bar)) {
+          observed.add(bar);
+          resize.observe(bar);
+        }
+      }
+      schedule();
+    };
+    observeBars();
+    const mutations = new MutationObserver(observeBars);
+    mutations.observe(row, { childList: true, subtree: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      resize.disconnect();
+      mutations.disconnect();
+    };
+  }, [row]);
+
+  // The feed is the current column while focus is in it.
+  useEffect(() => {
+    const feedColumn = feedRef.current;
+    if (!row) return;
+    const onFocusIn = (event: FocusEvent) => {
+      setFeedCurrent(Boolean(feedColumn && event.target instanceof Node && feedColumn.contains(event.target)));
+    };
+    row.addEventListener("focusin", onFocusIn);
+    return () => row.removeEventListener("focusin", onFocusIn);
+  }, [row]);
+
+  const widths = researchColumnWidths(availableWidth);
   const layout = useMemo<ResearchColumnsLayout>(
     () => ({
-      areaWidth: availableWidth,
-      conversationWidth,
-      singleColumn: single,
       row,
       overlay,
-      feedFocused: hasDocument && feedFocused,
-      focusFeed,
-      releaseFeed,
+      feedCurrent,
+      focusFeed: () => {
+        const feedColumn = feedRef.current;
+        if (!feedColumn) return;
+        revealResearchColumns(row, feedColumn);
+        (
+          feedColumn.querySelector<HTMLElement>(
+            ".research-feed-card.is-selected .research-feed-card-hit, .research-feed-child.is-selected .research-feed-child-open",
+          ) ?? feedColumn.querySelector<HTMLElement>(".research-feed-header-title")
+        )?.focus({ preventScroll: true });
+      },
+      focusOpenedThread: (deepest) => {
+        const started = performance.now();
+        const attempt = () => {
+          const columns = [...(row?.querySelectorAll<HTMLElement>("[data-research-pair='turns']") ?? [])];
+          const column = deepest ? columns[columns.length - 1] : columns[0];
+          const target = column?.querySelector<HTMLElement>(".research-msg-row.is-selected .research-msg-hit");
+          if (target && column) {
+            target.focus({ preventScroll: true });
+            // Scroll the focused column into view.
+            settleResearchStrip(row, column);
+            return;
+          }
+          if (!column?.classList.contains("research-draft-view") && performance.now() - started < 1500) {
+            requestAnimationFrame(attempt);
+          }
+        };
+        requestAnimationFrame(attempt);
+      },
     }),
-    [availableWidth, conversationWidth, feedFocused, focusFeed, hasDocument, overlay, releaseFeed, row, single],
+    [feedCurrent, overlay, row],
   );
   return (
     <ResearchColumnsContext.Provider value={layout}>
       <div
         ref={rootRef}
-        className={`research-columns${hasDocument ? " has-document" : ""}${single ? " is-single" : ""}${
-          single && showsFeed ? " shows-feed" : ""
-        }`}
+        className={`research-columns${hasDocument ? " has-document" : ""}`}
         style={
           {
-            "--research-feed-column-width": `${researchFeedColumnWidth(availableWidth)}px`,
-            "--research-conversation-width": `${conversationWidth}px`,
+            "--research-feed-column-width": `${widths.feed}px`,
+            "--research-turns-width": `${widths.turns}px`,
+            "--research-answer-width": `${widths.answer}px`,
           } as CSSProperties
         }
       >
@@ -167,42 +286,16 @@ export default function ResearchColumns({
           {feed ? (
             <section
               ref={feedRef}
-              className={`research-feed-column${hasDocument && feedFocused ? " is-focused" : ""}`}
+              className="research-feed-column"
               data-research-column="feed"
               aria-label="Feed"
-              inert={feedHidden || undefined}
-              onClickCapture={(event) => {
-                // The open thread's own card shows the thread again.
-                if (
-                  !(event.target instanceof Element) ||
-                  !event.target.closest(".research-feed-card.is-selected .research-feed-card-hit")
-                ) {
-                  return;
-                }
-                setFeedFocused(false);
-                if (single) {
-                  // In single-column mode it only switches back: reopening
-                  // would scroll the thread to its first question, and the
-                  // hidden thread kept its place.
-                  event.stopPropagation();
-                  window.requestAnimationFrame(() =>
-                    rootRef.current
-                      ?.querySelector<HTMLElement>(
-                        ".research-content-column .research-conv-column:not(.is-hidden) .research-column-title",
-                      )
-                      ?.focus({ preventScroll: true }),
-                  );
-                }
-              }}
             >
               {feed}
             </section>
           ) : null}
-          <div className="research-content-column" inert={contentHidden || undefined}>
-            {children}
-          </div>
+          <div className="research-content-column">{children}</div>
         </div>
-        <div ref={setOverlay} className="research-columns-overlay" inert={contentHidden || undefined} />
+        <div ref={setOverlay} className="research-columns-overlay" />
       </div>
     </ResearchColumnsContext.Provider>
   );

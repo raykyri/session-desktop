@@ -1,31 +1,11 @@
-// Placement math for the conversation column, the branch drawer, and pinned
-// branch columns. A conversation is an inline chain (see researchThreads); a
-// branch is a non-inline child node, rendered as the chain it heads. The root's
-// chain is always the conversation column; any other chain shows either in the
-// drawer or, once pinned, as its own column.
+// Level math for the column pairs. A conversation is an inline chain (see
+// researchThreads); a branch is a non-inline child node, shown as the chain it
+// heads. Level 0 is the root's chain; each later level is a branch asked from
+// the previous level's selected message.
 
 import { canContinueThread, canFollowUpFrom, inlineChainFor, isActiveResearchStatus } from "./researchThreads";
 import type { QueuedResearchFollowup } from "./researchNavigation";
 import type { ResearchNode } from "../types";
-
-/** Below this column-area width (feed included) one column shows at a time
- * and the drawer covers the whole column area. */
-export const RESEARCH_SINGLE_COLUMN_BELOW = 620;
-export const RESEARCH_PINNED_COLUMN_WIDTH = 560;
-const DRAWER_SHARE = 0.46;
-const DRAWER_MIN_WIDTH = 380;
-const DRAWER_MAX_WIDTH = 640;
-
-/** The drawer is 46% of the column area (feed included), 380–640px, never
- * wider than the conversation column it overlays. In single-column mode it
- * covers the whole column. */
-export function researchDrawerWidth(areaWidth: number, columnWidth: number): number {
-  if (areaWidth < RESEARCH_SINGLE_COLUMN_BELOW) {
-    return columnWidth;
-  }
-  const preferred = Math.round(areaWidth * DRAWER_SHARE);
-  return Math.min(columnWidth, Math.max(DRAWER_MIN_WIDTH, Math.min(DRAWER_MAX_WIDTH, preferred)));
-}
 
 function byCreation(left: ResearchNode, right: ResearchNode) {
   return left.createdAt - right.createdAt || left.id.localeCompare(right.id);
@@ -61,67 +41,62 @@ export function researchBranchesByParent(
   return map;
 }
 
-/** The head of the chain containing `nodeId`: the branch node a drawer or
- * pinned column is named after. */
-export function researchChainHead(nodes: ResearchNode[], nodeId: string): string {
-  return inlineChainFor(nodes, nodeId)[0] ?? nodeId;
-}
-
-type ResearchNodePlacement =
-  | { kind: "main" }
-  | { kind: "pinned"; headId: string }
-  | { kind: "drawer"; headId: string };
-
-/** Where a node renders: in the conversation column, in a pinned column, or
- * (anything else) in the drawer. */
-export function researchNodePlacement(
-  nodes: ResearchNode[],
-  mainChainIds: readonly string[],
-  pinnedHeadIds: readonly string[],
-  nodeId: string,
-): ResearchNodePlacement {
-  if (mainChainIds.includes(nodeId)) {
-    return { kind: "main" };
-  }
-  const headId = researchChainHead(nodes, nodeId);
-  return pinnedHeadIds.includes(headId) ? { kind: "pinned", headId } : { kind: "drawer", headId };
-}
-
-/** For a branch opened from another branch: the parent branch's head, which
- * the drawer's back button opens. Null when the parent is in the root
- * conversation (or missing). */
-export function researchParentBranchHead(
-  nodes: ResearchNode[],
-  mainChainIds: readonly string[],
-  headId: string,
-): string | null {
-  const head = nodes.find((node) => node.id === headId);
-  const parentId = head?.parentNodeId;
-  if (!parentId || mainChainIds.includes(parentId)) {
-    return null;
-  }
-  return nodes.some((node) => node.id === parentId) ? researchChainHead(nodes, parentId) : null;
-}
-
-/** The root-conversation turn a node descends from: the node itself when it
- * is in the conversation, otherwise the turn its outermost branch was asked
- * from. Falls back to the conversation's head. */
-export function researchMainChainAncestor(
-  nodes: ResearchNode[],
-  mainChainIds: readonly string[],
-  nodeId: string,
-): string | null {
+/** The selected message of each open level, root conversation first. The
+ * deepest level's selection determines the whole path: each level's chain
+ * head was asked from the previous level's selected message. */
+export function researchLevelPath(nodes: ResearchNode[], nodeId: string): string[] {
   const byId = new Map(nodes.map((node) => [node.id, node]));
+  const path: string[] = [];
   const seen = new Set<string>();
-  let current = byId.get(nodeId);
-  while (current && !seen.has(current.id)) {
-    if (mainChainIds.includes(current.id)) {
-      return current.id;
-    }
-    seen.add(current.id);
-    current = current.parentNodeId ? byId.get(current.parentNodeId) : undefined;
+  let current: string | undefined = nodeId;
+  while (current && byId.has(current) && !seen.has(current)) {
+    seen.add(current);
+    path.unshift(current);
+    const head = byId.get(inlineChainFor(nodes, current)[0] ?? current);
+    current = head?.parentNodeId ?? undefined;
   }
-  return mainChainIds[0] ?? null;
+  return path;
+}
+
+/** The nearest node on `nodeId`'s ancestry (itself included) that still
+ * exists, from the parents recorded before a removal: the message a removed
+ * branch was asked from, or null when nothing on the way survives. */
+export function researchSurvivingAncestor(
+  parentById: ReadonlyMap<string, string | null>,
+  nodeId: string,
+  validNodeIds: ReadonlySet<string>,
+): string | null {
+  const seen = new Set<string>();
+  let current: string | null | undefined = nodeId;
+  while (current && !seen.has(current)) {
+    if (validNodeIds.has(current)) {
+      return current;
+    }
+    seen.add(current);
+    current = parentById.get(current);
+  }
+  return null;
+}
+
+/** Branches of one answer in reading order: by where their passage starts
+ * (`passageStart`, for anchors that resolve in the rendered answer), then
+ * whole-answer and unresolved branches, each group oldest first. */
+export function researchBranchesInReadingOrder(
+  branches: readonly ResearchNode[],
+  passageStart: (branchId: string) => number | null,
+): ResearchNode[] {
+  const start = new Map(branches.map((branch) => [branch.id, passageStart(branch.id)]));
+  return [...branches].sort((left, right) => {
+    const a = start.get(left.id) ?? null;
+    const b = start.get(right.id) ?? null;
+    if (a !== null && b !== null && a !== b) {
+      return a - b;
+    }
+    if ((a === null) !== (b === null)) {
+      return a === null ? 1 : -1;
+    }
+    return byCreation(left, right);
+  });
 }
 
 /** What a chain's client-side follow-up queue does next, given the chain's
@@ -204,4 +179,15 @@ export function researchEditedQuestionFork(failed: ResearchNode, prompt: string)
     replyAnchor: failed.replyAnchor ?? null,
     replacesNodeId: failed.id,
   };
+}
+
+/** A pair's accessible label from a question: whitespace collapsed, and cut
+ * at the last word boundary within `max` characters, with an ellipsis. A
+ * single word longer than `max` is cut at `max`. */
+export function researchPairLabel(text: string, max = 80): string {
+  const flat = text.split(/\s+/).join(" ").trim();
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > 0 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }

@@ -40,6 +40,9 @@ export interface QueuedResearchFollowup {
 }
 
 export interface SavedResearchNavigation {
+  /** The deepest open level's selected message. The levels before it (which
+   * branch is open at each level, and which message is selected in it)
+   * follow from the tree, so this one id restores the whole open path. */
   selectedNodeId?: string;
   scrollByNode: Record<string, SavedResearchScrollPosition>;
   /** Nodes whose "Show earlier" window the user expanded. Restored together
@@ -53,10 +56,12 @@ export interface SavedResearchNavigation {
   /** A highlight to scroll into view on the next page visit (set when a
    * Highlights feed unit is opened). Cleared once the document lands on it. */
   focusHighlight?: { nodeId: string; highlightId: string };
-  /** Branch chain heads pinned as columns beside the conversation, in order. */
-  pinnedBranches?: string[];
   /** Queued follow-ups per chain, keyed by the chain's head node. */
   queuedFollowups?: Record<string, QueuedResearchFollowup[]>;
+  /** Each level's messages column scroll offset, keyed by the head node of
+   * the conversation or branch it shows. (`scrollByNode` holds the answer
+   * columns', keyed by the message.) */
+  turnsScrollByHead?: Record<string, SavedResearchScrollPosition>;
 }
 
 const RESEARCH_NAVIGATION_KEY = "session.research-navigation.v1";
@@ -112,8 +117,8 @@ function load(): Record<string, SavedResearchNavigation> {
           return [];
         }
         const candidate = value as Partial<SavedResearchNavigation>;
-        const scrollByNode = Object.fromEntries(
-          Object.entries(candidate.scrollByNode ?? {}).flatMap(([nodeId, value]) => {
+        const scrollPositions = (record: Record<string, unknown> | undefined) => Object.fromEntries(
+          Object.entries(record ?? {}).flatMap(([nodeId, value]) => {
             if (!value || typeof value !== "object") {
               // The previous schema stored a bare number, which has no age and
               // therefore cannot safely be carried into the expiring cache.
@@ -130,6 +135,8 @@ function load(): Record<string, SavedResearchNavigation> {
               : [];
           }),
         );
+        const scrollByNode = scrollPositions(candidate.scrollByNode);
+        const turnsScrollByHead = scrollPositions(candidate.turnsScrollByHead);
         const expandedByNode = Object.fromEntries(
           Object.entries(candidate.expandedByNode ?? {}).filter(
             (entry): entry is [string, boolean] => entry[1] === true,
@@ -173,9 +180,6 @@ function load(): Record<string, SavedResearchNavigation> {
                 highlightId: candidate.focusHighlight.highlightId,
               }
             : undefined;
-        const pinnedBranches = Array.isArray(candidate.pinnedBranches)
-          ? [...new Set(candidate.pinnedBranches.filter((id): id is string => typeof id === "string"))]
-          : [];
         const queuedFollowups = Object.fromEntries(
           Object.entries(candidate.queuedFollowups ?? {}).flatMap(([headId, value]) => {
             if (!Array.isArray(value)) {
@@ -203,8 +207,8 @@ function load(): Record<string, SavedResearchNavigation> {
           ...(Object.keys(askByNode).length > 0 ? { askByNode } : {}),
           ...(followupDraft ? { followupDraft } : {}),
           ...(focusHighlight ? { focusHighlight } : {}),
-          ...(pinnedBranches.length > 0 ? { pinnedBranches } : {}),
           ...(Object.keys(queuedFollowups).length > 0 ? { queuedFollowups } : {}),
+          ...(Object.keys(turnsScrollByHead).length > 0 ? { turnsScrollByHead } : {}),
         } satisfies SavedResearchNavigation]];
       }),
     );
@@ -225,21 +229,31 @@ export function saveResearchNavigation(): void {
   }
 }
 
+/** Which column a saved scroll offset belongs to: an answer column (keyed by
+ * its message) or a messages column (keyed by its conversation's or branch's
+ * head node). */
+type ResearchScrollColumn = "answer" | "turns";
+
 export function recordResearchScrollPosition(
   navigation: SavedResearchNavigation,
   nodeId: string,
   top: number,
   now = Date.now(),
+  column: ResearchScrollColumn = "answer",
 ): void {
-  navigation.scrollByNode[nodeId] = { top, updatedAt: now };
+  const positions =
+    column === "answer" ? navigation.scrollByNode : (navigation.turnsScrollByHead ??= {});
+  positions[nodeId] = { top, updatedAt: now };
 }
 
 export function restoreResearchScrollPosition(
   navigation: SavedResearchNavigation | undefined,
   nodeId: string,
   now = Date.now(),
+  column: ResearchScrollColumn = "answer",
 ): number {
-  const position = navigation?.scrollByNode[nodeId];
+  const positions = column === "answer" ? navigation?.scrollByNode : navigation?.turnsScrollByHead;
+  const position = positions?.[nodeId];
   if (!position || now - position.updatedAt >= RESEARCH_SCROLL_POSITION_TTL_MS) {
     return 0;
   }
@@ -311,9 +325,11 @@ export function pruneResearchNavigationNodes(treeId: string, validNodeIds: Itera
       changed = true;
     }
   }
-  if (navigation.pinnedBranches?.some((nodeId) => !valid.has(nodeId))) {
-    navigation.pinnedBranches = navigation.pinnedBranches.filter((nodeId) => valid.has(nodeId));
-    changed = true;
+  for (const headId of Object.keys(navigation.turnsScrollByHead ?? {})) {
+    if (!valid.has(headId)) {
+      delete navigation.turnsScrollByHead?.[headId];
+      changed = true;
+    }
   }
   for (const headId of Object.keys(navigation.queuedFollowups ?? {})) {
     if (!valid.has(headId)) {

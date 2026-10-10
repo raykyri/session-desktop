@@ -1121,13 +1121,12 @@ header + .turn-blocks {
   color: var(--text-tertiary);
 }
 
-/* In a research turn the answer sits beside its question in a dense column:
-   headings h1–h4 label sections at body size (14.5px base) and weight 650
-   instead of stepping up a document scale. */
-.research-turn-answer .turn-markdown h1,
-.research-turn-answer .turn-markdown h2,
-.research-turn-answer .turn-markdown h3,
-.research-turn-answer .turn-markdown h4 {
+/* Research answer headings h1–h4 use the body font size (14.5px base)
+   and weight 650. */
+.research-answer .turn-markdown h1,
+.research-answer .turn-markdown h2,
+.research-answer .turn-markdown h3,
+.research-answer .turn-markdown h4 {
   margin: 14px 0 6px;
   font-size: calc(14.5px + var(--font-ui-size-offset));
   font-weight: 650;
@@ -1135,7 +1134,7 @@ header + .turn-blocks {
   letter-spacing: 0;
 }
 
-.research-turn-answer .turn-markdown > :is(h1, h2, h3, h4):first-child {
+.research-answer .turn-markdown > :is(h1, h2, h3, h4):first-child {
   margin-top: 0;
 }
 

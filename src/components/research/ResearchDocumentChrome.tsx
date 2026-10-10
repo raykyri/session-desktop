@@ -1,169 +1,91 @@
 import type { ReactNode, Ref } from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Bell,
-  Bookmark,
-  ChevronLeft,
-  Folder,
-  Terminal,
-  X,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, Plus, Terminal } from "lucide-react";
+import { ResearchBranchIcon } from "./ResearchIcons";
 
-/** The conversation column's header: one 44px bar (it grows when the title
- * wraps to two or three lines) with history controls, the title, and Follow,
- * Move to folder, Bookmark and Close, always visible. The bar is a window
- * drag region; its buttons are not. */
-export function ResearchConversationHeader({
+/** The header bar of one level's pair. It spans the messages and answer
+ * columns: the conversation's title (or "Branch · N messages"), clamped to
+ * four lines, and "+ Ask" at the right, which jumps to the level's ask box.
+ * The bar is a window drag region; its buttons are not. */
+export function ResearchPairHeader({
   title,
+  branch = null,
   titleRef,
-  canGoBack,
-  canGoForward,
-  backTitle,
-  forwardTitle,
-  onBack,
-  onForward,
-  imported,
-  archived,
-  followed,
-  bookmarked,
-  onToggleFollow,
-  onToggleBookmark,
-  onMove,
-  onClose,
-  onColumnBack,
-  showHistory = true,
+  history,
+  imported = false,
+  archived = false,
+  onAsk,
 }: {
   title: string;
+  /** A branch: its number of messages ("Branch · 2 messages"), or "new" for
+   * a branch not yet sent ("New branch"). */
+  branch?: number | "new" | null;
   titleRef?: Ref<HTMLHeadingElement>;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  backTitle: string;
-  forwardTitle: string;
-  onBack: () => void;
-  onForward: () => void;
+  /** Back and forward, in the root conversation's header. */
+  history?: ResearchHistoryNavProps | null;
   /** A point-in-time copy of a terminal conversation. */
-  imported: boolean;
-  archived: boolean;
-  followed: boolean;
-  bookmarked: boolean;
-  onToggleFollow: () => void;
-  onToggleBookmark: () => void;
-  onMove?: (trigger: HTMLButtonElement) => void;
-  onClose?: () => void;
-  /** Single-column mode: show the feed. */
-  onColumnBack?: () => void;
-  /** False when the drawer leaves too little of the column for the title:
-   * the history arrows give it their room (⌘[ and ⌘] still work). */
-  showHistory?: boolean;
+  imported?: boolean;
+  archived?: boolean;
+  onAsk?: () => void;
 }) {
   return (
-    <header className="research-column-header is-root">
-      <div className="research-column-bar" data-tauri-drag-region>
-        {onColumnBack ? (
-          <button
-            type="button"
-            className="control-button research-icon-button"
-            aria-label="Back to feed"
-            title="Back to feed"
-            onClick={onColumnBack}
-          >
-            <ChevronLeft size={16} aria-hidden="true" />
-          </button>
-        ) : null}
-        {showHistory ? (
-          <ResearchHistoryNav
-            canGoBack={canGoBack}
-            canGoForward={canGoForward}
-            backTitle={backTitle}
-            forwardTitle={forwardTitle}
-            onBack={onBack}
-            onForward={onForward}
-          />
-        ) : null}
+    <header className={`research-column-header${branch !== null ? " is-branch" : ""}`}>
+      <div className="research-column-bar" data-tauri-drag-region data-research-header-bar>
+        {history ? <ResearchHistoryNav {...history} /> : null}
         <h2 ref={titleRef} className="research-column-title" tabIndex={-1} title={title}>
-          {title}
+          {branch !== null ? (
+            <>
+              <ResearchBranchIcon size={13} className="research-column-title-icon" />
+              {branch === "new" ? "New branch" : "Branch"}
+              {typeof branch === "number" && branch > 0 ? (
+                <span className="research-column-count">
+                  {" "}
+                  · {branch} {branch === 1 ? "message" : "messages"}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            title
+          )}
         </h2>
-        <span className="research-column-actions">
-          {imported ? (
-            <span
-              className="research-provenance-badge"
-              title="This is a point-in-time copy of an imported conversation."
-            >
-              <Terminal size={12} aria-hidden="true" />
-              Imported conversation
-            </span>
-          ) : null}
-          {archived ? <span className="research-archived-label">Archived</span> : null}
+        {imported ? (
+          <span
+            className="research-provenance-badge"
+            title="This is a point-in-time copy of an imported conversation."
+          >
+            <Terminal size={12} aria-hidden="true" />
+            Imported conversation
+          </span>
+        ) : null}
+        {archived ? <span className="research-archived-label">Archived</span> : null}
+        {onAsk ? (
           <button
             type="button"
-            className={`control-button research-icon-button${followed && !archived ? " is-on" : ""}`}
-            disabled={archived}
-            aria-pressed={archived ? undefined : followed}
-            aria-label={archived ? "Follow, unavailable while archived" : "Follow"}
-            title={
-              archived
-                ? "Archived questions don't send notifications"
-                : followed
-                  ? "Following: you get notified of replies"
-                  : "Follow"
-            }
-            onClick={onToggleFollow}
+            className="control-button research-head-button"
+            aria-label="Go to the ask box"
+            onClick={onAsk}
           >
-            <Bell size={16} aria-hidden="true" fill={followed && !archived ? "currentColor" : "none"} />
+            <Plus size={13} aria-hidden="true" />
+            Ask
           </button>
-          {onMove ? (
-            <button
-              type="button"
-              className="control-button research-icon-button"
-              aria-label="Move to folder"
-              aria-haspopup="menu"
-              title="Move to folder"
-              onClick={(event) => onMove(event.currentTarget)}
-            >
-              <Folder size={16} aria-hidden="true" />
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className={`control-button research-icon-button${bookmarked ? " is-on" : ""}`}
-            aria-pressed={bookmarked}
-            aria-label="Bookmark"
-            title={bookmarked ? "Remove bookmark" : "Bookmark"}
-            onClick={onToggleBookmark}
-          >
-            <Bookmark size={16} aria-hidden="true" fill={bookmarked ? "currentColor" : "none"} />
-          </button>
-          {onClose ? (
-            <button
-              type="button"
-              className="control-button research-icon-button"
-              aria-label="Close"
-              title="Close"
-              onClick={onClose}
-            >
-              <X size={16} aria-hidden="true" />
-            </button>
-          ) : null}
-        </span>
+        ) : null}
       </div>
     </header>
   );
 }
 
 interface ResearchHistoryNavProps {
-  canGoBack?: boolean;
-  canGoForward?: boolean;
-  backTitle?: string;
-  forwardTitle?: string;
-  onBack?: () => void;
-  onForward?: () => void;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  backTitle: string;
+  forwardTitle: string;
+  onBack: () => void;
+  onForward: () => void;
 }
 
-/** Browser-style back/forward pair in the conversation header. */
+/** Browser-style back/forward pair in the root conversation's header. */
 function ResearchHistoryNav({
-  canGoBack = false,
-  canGoForward = false,
+  canGoBack,
+  canGoForward,
   backTitle,
   forwardTitle,
   onBack,
@@ -195,8 +117,7 @@ function ResearchHistoryNav({
   );
 }
 
-/** A content column without a live document (the "No question open"
- * placeholder, a thread that is loading or failed to load): the column
+/** A thread that is loading or failed to load: a pair-wide column with the
  * header bar, with the title when there is one, over the given body. */
 export function ResearchDocumentFrame({
   title = "",
@@ -206,9 +127,9 @@ export function ResearchDocumentFrame({
   children: ReactNode;
 }) {
   return (
-    <div className="research-workspace research-placeholder-column">
-      <header className="research-column-header is-root">
-        <div className="research-column-bar" data-tauri-drag-region>
+    <section className="research-workspace research-placeholder-column" data-research-column="placeholder">
+      <header className="research-column-header">
+        <div className="research-column-bar" data-tauri-drag-region data-research-header-bar>
           {title ? (
             <h2 className="research-column-title" title={title}>
               {title}
@@ -217,6 +138,6 @@ export function ResearchDocumentFrame({
         </div>
       </header>
       {children}
-    </div>
+    </section>
   );
 }

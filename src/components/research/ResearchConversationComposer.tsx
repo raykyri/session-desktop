@@ -1,5 +1,5 @@
 import { forwardRef, useId, useImperativeHandle, useLayoutEffect, useRef } from "react";
-import { ArrowUp, LoaderCircle } from "lucide-react";
+import { ArrowUp, LoaderCircle, X } from "lucide-react";
 import { growComposerTextarea } from "../../lib/composerTextarea";
 import { ComposerSubmitShortcutGlyph, isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
 
@@ -27,10 +27,13 @@ export function researchComposerEnterAction(
   return isComposerSubmitShortcut(event, requireCmdEnter) ? "send" : null;
 }
 
-/** The follow-up composer at the end of one column. It scrolls with the
- * conversation (nothing is docked or sticky). The send shortcut follows the
+/** The ask box at the end of a messages column. It scrolls with the
+ * messages (nothing is docked or sticky). The send shortcut follows the
  * "Require ⌘↵ to send" setting, and ⇧⌘↵ starts a branch from the column's
- * last finished answer instead of continuing the conversation. */
+ * last finished answer instead of continuing the conversation. A mode label
+ * ("Draft", "New branch", "Editing …") sits above the field, with a × that
+ * Esc also triggers; a draft gives the text the full width, with Send on its
+ * own row. */
 const ResearchConversationComposer = forwardRef<
   ResearchComposerHandle,
   {
@@ -39,8 +42,14 @@ const ResearchConversationComposer = forwardRef<
     disabled: boolean;
     canSubmit: boolean;
     submitting: boolean;
-    /** Shown above the field (editing a failed question, a stalled tail). */
+    /** Shown above the field (a stalled tail, an archived question). */
     note?: React.ReactNode;
+    /** The box's mode, above the field: "Draft", "New branch", "Editing …". */
+    mode?: { label: React.ReactNode; cancelLabel?: string; onCancel?: () => void } | null;
+    /** A draft: the text takes the full width and Send sits on its own row. */
+    fullWidth?: boolean;
+    /** The agent a draft was written for, under the field. */
+    agent?: string | null;
     shortcutHint?: string | null;
     ariaLabel?: string;
     /** The "Require ⌘↵ to send" setting. */
@@ -57,6 +66,9 @@ const ResearchConversationComposer = forwardRef<
     canSubmit,
     submitting,
     note,
+    mode = null,
+    fullWidth = false,
+    agent = null,
     shortcutHint,
     ariaLabel = "Ask a follow-up",
     requireCmdEnter,
@@ -84,7 +96,23 @@ const ResearchConversationComposer = forwardRef<
   const ready = canSubmit && value.trim().length > 0;
   const noteId = useId();
   return (
-    <div ref={wrapRef} className="research-composer-wrap">
+    <div ref={wrapRef} className={`research-composer-wrap${fullWidth ? " is-full-width" : ""}`}>
+      {mode ? (
+        <div className="research-composer-mode">
+          <span className="research-composer-mode-label">{mode.label}</span>
+          {mode.onCancel ? (
+            <button
+              type="button"
+              className="control-button research-icon-button research-composer-mode-cancel"
+              aria-label={mode.cancelLabel ?? "Cancel"}
+              title={mode.cancelLabel ? `${mode.cancelLabel} (Esc)` : "Cancel (Esc)"}
+              onClick={mode.onCancel}
+            >
+              <X size={13} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {note ? (
         <div id={noteId} className="research-composer-note">
           {note}
@@ -114,6 +142,12 @@ const ResearchConversationComposer = forwardRef<
           disabled={disabled}
           onChange={(event) => onChange(event.currentTarget.value)}
           onKeyDown={(event) => {
+            if (event.key === "Escape" && mode?.onCancel && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              event.stopPropagation();
+              mode.onCancel();
+              return;
+            }
             const action = researchComposerEnterAction(event, requireCmdEnter);
             if (action === null) {
               return;
@@ -147,6 +181,7 @@ const ResearchConversationComposer = forwardRef<
           />
         </button>
       </form>
+      {agent ? <div className="research-composer-agent">{agent}</div> : null}
     </div>
   );
 });

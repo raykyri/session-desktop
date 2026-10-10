@@ -2,6 +2,7 @@ import ResearchReportImport from "./ResearchReportImport";
 import {
   memo,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -10,7 +11,7 @@ import {
 } from "react";
 import type { FocusEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, FilePen, Pencil, RotateCw, Trash2 } from "lucide-react";
+import { ChevronDown, FilePen, Pencil, Plus, RotateCw, Trash2 } from "lucide-react";
 import {
   buildRecentActivityFromItems,
   type RecentActivityEvent,
@@ -35,12 +36,14 @@ import {
   researchFeedChildren,
   researchPlaceName,
   researchTreePlace,
+  type ResearchFeedChild,
 } from "../../lib/researchFolders";
 import { isActiveResearchStatus } from "../../lib/researchThreads";
 import { researchJournalViewKey, type ResearchFeedView } from "../../lib/sidebarMode";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import ResearchArchivedFeed from "./ResearchArchivedFeed";
+import { ResearchColumnsContext } from "./ResearchColumns";
 import { ResearchFeedHeader, ResearchFeedScrollThumb } from "./ResearchFeedChrome";
 import ResearchFeedPost, {
   researchCardRefocus,
@@ -90,6 +93,29 @@ export function recentActivityAnchorScrollTop(
 }
 
 const EMPTY_DRAFTS: ResearchDraft[] = [];
+const EMPTY_NODE_IDS: readonly string[] = [];
+
+/** The feed's rows: questions, drafts and starred children. */
+const FEED_ROW_SELECTOR = ".research-feed-card-hit, .research-feed-child-open";
+
+/** A roving tab stop over the feed's rows: one row is in the Tab order (the
+ * last focused row while it is listed, else the selected one, else the
+ * first), and only the selected rows' … buttons are. ↑ and ↓ move between
+ * rows. */
+function applyFeedRoving(root: HTMLElement | null, last: HTMLElement | null) {
+  if (!root) return;
+  const rows = [...root.querySelectorAll<HTMLElement>(FEED_ROW_SELECTOR)];
+  const current =
+    (last && rows.includes(last) ? last : null) ??
+    rows.find((row) => row.getAttribute("aria-current") === "true") ??
+    rows[0];
+  for (const row of rows) row.tabIndex = row === current ? 0 : -1;
+  for (const menu of root.querySelectorAll<HTMLElement>(".research-feed-card-menu")) {
+    menu.tabIndex = menu.closest(".research-feed-card, .research-feed-child")?.classList.contains("is-selected")
+      ? 0
+      : -1;
+  }
+}
 
 export interface ResearchActivityFeedProps {
   view?: ResearchFeedView;
@@ -122,7 +148,10 @@ export interface ResearchActivityFeedProps {
   onRestoreResearch: (treeId: string) => Promise<void>;
   onRemoveResearch: (treeId: string) => Promise<void>;
   onSetResearchBookmarked: (treeId: string, bookmarked: boolean) => void;
+  onSetResearchFollowed?: (treeId: string, followed: boolean) => void;
   onMoveTree?: (treeId: string, place: string) => void;
+  /** Remove star on a child row: unstars the follow-up or branch. */
+  onUnstarChild?: (child: ResearchFeedChild) => void;
   /** New folder…; with a tree id the tree moves into the new folder. Focus
    * returns to `trigger` when the dialog closes. */
   onNewFolder?: (moveTreeId?: string, trigger?: HTMLElement) => void;
@@ -139,8 +168,9 @@ export interface ResearchActivityFeedProps {
   onRefresh?: () => void;
   /** The thread open in the content column beside the feed. */
   selectedTreeId?: string | null;
-  /** The branch of that thread open in its drawer. */
-  selectedChildNodeId?: string | null;
+  /** That thread's open nodes: the message selected in its root pair and
+   * the head of each open branch. Their child rows show selected. */
+  selectedChildNodeIds?: readonly string[];
   /** The draft open in the content column. */
   selectedDraftId?: string | null;
   onBack?: () => void;
@@ -276,7 +306,7 @@ function feedViewTitle(view: ResearchFeedView, folders: ResearchFolder[]): strin
 }
 
 type FeedMenu =
-  | { kind: "move"; treeId: string; anchor: HTMLElement }
+  | { kind: "move"; treeId: string; anchor: HTMLElement; child?: ResearchFeedChild }
   | { kind: "draft"; draftId: string; anchor: HTMLElement }
   | {
       kind: "tree";
@@ -312,7 +342,9 @@ function ResearchActivityFeed({
   onRestoreResearch,
   onRemoveResearch,
   onSetResearchBookmarked,
+  onSetResearchFollowed,
   onMoveTree,
+  onUnstarChild,
   onNewFolder,
   onRenameFolder,
   onRequestDeleteFolder,
@@ -325,7 +357,7 @@ function ResearchActivityFeed({
   onLoadOlder,
   onRefresh,
   selectedTreeId = null,
-  selectedChildNodeId = null,
+  selectedChildNodeIds = EMPTY_NODE_IDS,
   selectedDraftId = null,
   onBack,
   onForward,
@@ -336,6 +368,10 @@ function ResearchActivityFeed({
   const [recapDialogContent, setRecapDialogContent] =
     useState<ResearchNodeContent | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const rovingRowRef = useRef<HTMLElement | null>(null);
+  // After every render: rows come and go with views, trays and pages.
+  useLayoutEffect(() => applyFeedRoving(scrollRef.current, rovingRowRef.current));
+  const columns = useContext(ResearchColumnsContext);
   const initialScrollAnchorRef = useRef(initialScrollAnchor);
   const onScrollAnchorChangeRef = useRef(onScrollAnchorChange);
   onScrollAnchorChangeRef.current = onScrollAnchorChange;
@@ -746,10 +782,14 @@ function ResearchActivityFeed({
       .catch((err: unknown) => onError(err instanceof Error ? err.message : String(err)));
   }
 
-  const menuTreeId = menu?.kind === "move" ? menu.treeId : null;
-  const openMoveMenu = (treeId: string, anchor: HTMLElement) =>
+  const menuTreeId = menu?.kind === "move" && !menu.child ? menu.treeId : null;
+  const menuChildNodeId = menu?.kind === "move" ? (menu.child?.nodeId ?? null) : null;
+  // A second click on the … button that opened a menu closes it.
+  const openMoveMenu = (treeId: string, anchor: HTMLElement, child?: ResearchFeedChild) =>
     setMenu((current) =>
-      current?.kind === "move" && current.treeId === treeId ? null : { kind: "move", treeId, anchor },
+      current?.kind === "move" && current.anchor === anchor
+        ? null
+        : { kind: "move", treeId, anchor, child },
     );
   const openDraftMenu = (draftId: string, anchor: HTMLElement) =>
     setMenu((current) =>
@@ -769,15 +809,15 @@ function ResearchActivityFeed({
     const childRows = query ? researchFeedChildren(query) : [];
     // The card shows the question as plain text; its Markdown renders in the
     // conversation. Link cards and tweet embeds still show.
-    const plainPrompt = (clamp: (content: ReactNode) => ReactNode) => () =>
-      clamp(query ? visibleResearchPrompt(query.prompt, query.attachments).trim() : question);
+    const plainPrompt = (asQuestion: (content: ReactNode) => ReactNode) => () =>
+      asQuestion(query ? visibleResearchPrompt(query.prompt, query.attachments).trim() : question);
     return (
       <ResearchFeedPost
         cardId={treeId}
         place={placeOf(tree)}
         title={title}
         label={title ? `${title}. ${question}` : question}
-        renderBody={(clamp) =>
+        renderBody={(asQuestion) =>
           query ? (
             <ResearchUserMessage className="research-feed-card-message">
               {note ? (
@@ -785,19 +825,19 @@ function ResearchActivityFeed({
                   prompt={query.prompt}
                   attachments={query.attachments}
                   variant="compact"
-                  renderPrompt={plainPrompt(clamp)}
+                  renderPrompt={plainPrompt(asQuestion)}
                 />
               ) : (
                 <ResearchMessageBody
                   prompt={query.prompt}
                   attachments={query.attachments}
                   variant="compact"
-                  renderPrompt={plainPrompt(clamp)}
+                  renderPrompt={plainPrompt(asQuestion)}
                 />
               )}
             </ResearchUserMessage>
           ) : (
-            clamp(question)
+            asQuestion(question)
           )
         }
         status={status}
@@ -808,11 +848,19 @@ function ResearchActivityFeed({
         // A failure dot already says the thread changed.
         unread={Boolean(tree?.hasUnseenUpdate) && !selected && status !== "failed"}
         childRows={childRows}
-        selectedChildNodeId={selected ? selectedChildNodeId : null}
+        selectedChildNodeIds={selected ? selectedChildNodeIds : EMPTY_NODE_IDS}
+        childMenuNodeId={menuChildNodeId}
         menuOpen={menuTreeId === treeId}
-        onOpen={() => (query ? onOpenResearchQuery(query) : onOpenTree?.(treeId))}
+        // A question row opens its thread with the levels last open in it; a
+        // row for a later node of the tree opens at that node.
+        onOpen={() =>
+          query && query.nodeId !== tree?.rootNodeId ? onOpenResearchQuery(query) : onOpenTree?.(treeId)
+        }
         onOpenChild={(child) => onOpenResearchQuery(child.query)}
         onMenu={tree && onMoveTree ? (anchor) => openMoveMenu(tree.id, anchor) : undefined}
+        onChildMenu={
+          tree && onMoveTree ? (child, anchor) => openMoveMenu(tree.id, anchor, child) : undefined
+        }
         onContextMenu={
           tree ? (clientX, clientY) => openTreeContextMenu(tree, clientX, clientY, query?.nodeId) : undefined
         }
@@ -830,7 +878,7 @@ function ResearchActivityFeed({
         dragKind="draft"
         place={RESEARCH_DRAFTS_FOLDER_ID}
         label={`Draft: ${draft.prompt.trim()}`}
-        renderBody={(clamp) => clamp(draft.prompt.trim())}
+        renderBody={(asQuestion) => asQuestion(draft.prompt.trim())}
         selected={draft.id === selectedDraftId}
         menuOpen={menu?.kind === "draft" && menu.draftId === draft.id}
         menuLabel="Draft actions"
@@ -846,6 +894,14 @@ function ResearchActivityFeed({
     return researchTrees.filter(
       (tree) => tree.archivedAt == null && tree.kind !== "document" && placeOf(tree) === place,
     );
+  }
+
+  /** How many questions a place holds, for its tray header. */
+  function placeCount(place: string) {
+    if (place === RESEARCH_ARCHIVE_FOLDER_ID) {
+      return researchTrees.filter((tree) => tree.archivedAt != null && tree.kind !== "document").length;
+    }
+    return treesIn(place).length + (place === RESEARCH_DRAFTS_FOLDER_ID ? drafts.length : 0);
   }
 
   function renderPlaceCards(place: string) {
@@ -909,6 +965,24 @@ function ResearchActivityFeed({
     drafts.length === 0 &&
     !researchTrees.some((tree) => tree.kind !== "document");
 
+  // The feed's ask box ends the Unfiled list (or the open folder), where new
+  // questions are added; "+ Ask" in the header brings it into view.
+  const composerBlock = composer ? <div className="research-feed-composer">{composer}</div> : null;
+  const askButton = composer ? (
+    <button
+      type="button"
+      className="control-button research-head-button"
+      aria-label="Go to the ask box"
+      onClick={() => {
+        const box = rootRef.current?.querySelector<HTMLElement>(".research-feed-composer");
+        box?.scrollIntoView({ block: "nearest" });
+        box?.querySelector<HTMLElement>("textarea, input")?.focus({ preventScroll: true });
+      }}
+    >
+      <Plus size={13} aria-hidden="true" />
+      Ask
+    </button>
+  ) : null;
   const headerActions =
     userFolder ? (
       <>
@@ -931,6 +1005,7 @@ function ResearchActivityFeed({
         >
           <Trash2 size={15} aria-hidden="true" />
         </button>
+        {askButton}
       </>
     ) : view.kind === "home" || view.kind === "bookmarks" ? (
       <>
@@ -950,8 +1025,9 @@ function ResearchActivityFeed({
         {view.kind === "home" && onImportReport ? (
           <ResearchReportImport dropTarget={scrollRef} onImport={onImportReport} onError={onError} />
         ) : null}
+        {askButton}
       </>
-    ) : null;
+    ) : askButton;
 
   return (
     <div ref={rootRef} className="research-feed">
@@ -982,14 +1058,31 @@ function ResearchActivityFeed({
         ref={scrollRef}
         className="research-feed-scroll"
         data-research-scroll
+        onFocus={(event) => {
+          const target = event.target as HTMLElement;
+          if (!target.matches(FEED_ROW_SELECTOR)) return;
+          rovingRowRef.current = target;
+          applyFeedRoving(event.currentTarget, target);
+        }}
         onKeyDown={(event) => {
-          // ↑ and ↓ move between the questions in the list.
+          const target = event.target as HTMLElement;
+          // → and Enter open the focused question (or child row) and move
+          // into its messages column.
+          if (
+            (event.key === "ArrowRight" || event.key === "Enter") &&
+            !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey &&
+            target.matches(".research-feed-card-hit, .research-feed-child-open")
+          ) {
+            event.preventDefault();
+            target.click();
+            columns?.focusOpenedThread(target.matches(".research-feed-child-open"));
+            return;
+          }
+          // ↑ and ↓ move between the rows, child rows included.
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-          const target = event.target as Element;
-          if (!target.matches(".research-feed-card-hit")) return;
-          const all = [
-            ...event.currentTarget.querySelectorAll<HTMLElement>(".research-feed-card-hit"),
-          ];
+          if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+          if (!target.matches(FEED_ROW_SELECTOR)) return;
+          const all = [...event.currentTarget.querySelectorAll<HTMLElement>(FEED_ROW_SELECTOR)];
           const next = all[all.indexOf(target as HTMLElement) + (event.key === "ArrowDown" ? 1 : -1)];
           if (!next) return;
           event.preventDefault();
@@ -998,7 +1091,6 @@ function ResearchActivityFeed({
         }}
       >
         <div className="research-feed-column-body research-reading-surface">
-          <div className="research-feed-composer">{composer}</div>
           {newActivityCount > 0 && paginated ? (
             <div className="recent-activity-new-status" role="status" aria-live="polite">
               <button
@@ -1117,12 +1209,14 @@ function ResearchActivityFeed({
               </div>
             </section>
           ) : null}
+          {paginated ? composerBlock : null}
           {view.kind === "home"
             ? trayPlaces.map((place) => (
                 <ResearchFeedTray
                   key={place}
                   place={place}
                   name={researchPlaceName(place, folders)}
+                  count={placeCount(place)}
                   collapsed={collapsed.has(place)}
                   onToggle={() => onToggleTray?.(place)}
                   onOpen={() =>
@@ -1148,12 +1242,22 @@ function ResearchActivityFeed({
               {renderPlaceCards(soloPlace)}
             </section>
           ) : null}
+          {soloPlace ? composerBlock : null}
         </div>
       </div>
       <ResearchFeedScrollThumb scrollRef={scrollRef} />
       {menu?.kind === "move" && moveTree ? (
         <ResearchMoveMenu
           anchor={menu.anchor}
+          onRemoveStar={
+            menu.child && onUnstarChild
+              ? () => {
+                  const child = menu.child!;
+                  closeMenu();
+                  onUnstarChild(child);
+                }
+              : undefined
+          }
           currentPlace={placeOf(moveTree)}
           folders={folders}
           bookmarked={Boolean(moveTree.bookmarked)}
@@ -1161,6 +1265,16 @@ function ResearchActivityFeed({
             closeMenu(true);
             onSetResearchBookmarked(moveTree.id, !moveTree.bookmarked);
           }}
+          followed={Boolean(moveTree.followed)}
+          followDisabledReason={moveTree.archivedAt ? "Archived questions don't send notifications" : null}
+          onToggleFollow={
+            onSetResearchFollowed
+              ? () => {
+                  closeMenu(true);
+                  onSetResearchFollowed(moveTree.id, !moveTree.followed);
+                }
+              : undefined
+          }
           onMove={(place) => {
             refocusCardRef.current = { cardId: moveTree.id, anchor: menu.anchor };
             closeMenu(true);
