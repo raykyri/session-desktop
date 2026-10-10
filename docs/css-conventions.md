@@ -24,8 +24,8 @@ Session uses global CSS with cascade layers. The application imports one entrypo
   `features/shell.css`.
 
 Feature styles should not rely on an unrelated file loading later to complete or correct
-their layout. When two destinations share a visual contract, give that contract a shared
-class instead of copying its declarations.
+their layout. When two pages need the same styles, use a shared class instead of
+copying its declarations.
 
 ## Naming and composition
 
