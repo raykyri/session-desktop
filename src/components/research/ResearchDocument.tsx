@@ -151,6 +151,7 @@ import ResearchRecapDialog from "./ResearchRecapDialog";
 import { TranscriptLinkActionsProvider, type LinkActions } from "../TranscriptMarkdown";
 import { ResearchEditorColumn, ResearchEditPreview, ResearchPostCorrections } from "./ResearchEditorColumn";
 import { ResearchDocumentFrame, ResearchPairHeader } from "./ResearchDocumentChrome";
+import { ResearchColumnResizer } from "./ResearchColumnResizer";
 import {
   ResearchAnswerPane,
   ResearchMessageRow,
@@ -4860,6 +4861,7 @@ function ResearchDocument({
             ) : null}
           </article>
         </div>
+        <ResearchColumnResizer kind="answer" label="Resize answer column" />
       </section>
     );
   };
@@ -5019,6 +5021,7 @@ function ResearchDocument({
                 ) : null}
               </div>
             </div>
+            <ResearchColumnResizer kind="answer" label="Resize post column" />
           </section>
         );
       }
@@ -5055,6 +5058,7 @@ function ResearchDocument({
                 />
               </div>
             </div>
+            <ResearchColumnResizer kind="turns" label="Resize thread column" />
           </section>
         );
       }
@@ -5092,6 +5096,7 @@ function ResearchDocument({
                 {renderChainComposer(headId, chainIds, level)}
               </div>
             </div>
+            <ResearchColumnResizer kind="turns" label="Resize messages column" belowHeader />
           </section>
         );
       }
@@ -5128,6 +5133,7 @@ function ResearchDocument({
                 />
               </div>
             </div>
+            <ResearchColumnResizer kind="turns" label="Resize messages column" />
           </section>
         );
       }

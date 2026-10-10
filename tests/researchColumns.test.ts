@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { researchColumnWidths } from "../src/components/research/ResearchColumns";
+import { researchColumnWidths } from "../src/lib/researchColumnWidths";
 import { ResearchPairHeader } from "../src/components/research/ResearchDocumentChrome";
 
 test("columns are sized from the strip's width: feed 21%, messages 18%, answer 44%, each clamped", () => {

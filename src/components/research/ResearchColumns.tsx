@@ -1,5 +1,5 @@
 import { createContext, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   COLUMN_ROW_SELECTOR,
   columnAttributes,
@@ -10,51 +10,21 @@ import {
 } from "../../lib/researchColumns";
 import { isEditableTarget } from "../../lib/appHelpers";
 import { researchCycleDirection, type ResearchCycleRequest } from "../../lib/researchSiblingCycle";
-
-const clampWidth = (value: number, min: number, max: number) =>
-  Math.round(Math.max(min, Math.min(max, value)));
-
-/** Column widths from the strip's width alone (the column area: the window
- * less the sidebar), so opening, closing or switching a level never resizes
- * a column: the feed is 21% (240–300px), each pair's messages column 18%
- * (220–280px) and its answer column 44% (340–660px). */
-export function researchColumnWidths(stripWidth: number): { feed: number; turns: number; answer: number } {
-  const width = Number.isFinite(stripWidth) ? Math.max(0, stripWidth) : 0;
-  return {
-    feed: clampWidth(width * 0.21, 240, 300),
-    turns: clampWidth(width * 0.18, 220, 280),
-    answer: clampWidth(width * 0.44, 340, 660),
-  };
-}
-
-/** A feed width set with the feed's resize handle replaces the automatic
- * width. It is kept per device, like other layout state. */
-const FEED_WIDTH_KEY = "session.research.feedWidth";
-const RESEARCH_FEED_MIN_WIDTH = 240;
-const RESEARCH_FEED_MAX_WIDTH = 560;
-
-/** The widest the feed may be: 560px, and at most half of the column area. */
-function researchFeedMaxWidth(stripWidth: number): number {
-  return Math.max(RESEARCH_FEED_MIN_WIDTH, Math.min(RESEARCH_FEED_MAX_WIDTH, Math.floor(stripWidth / 2)));
-}
-
-function loadFeedWidth(): number | null {
-  try {
-    const value = Number(localStorage.getItem(FEED_WIDTH_KEY));
-    return Number.isFinite(value) && value > 0 ? value : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveFeedWidth(width: number | null) {
-  try {
-    if (width == null) localStorage.removeItem(FEED_WIDTH_KEY);
-    else localStorage.setItem(FEED_WIDTH_KEY, String(width));
-  } catch {
-    // Storage unavailable: the width lasts until the window reloads.
-  }
-}
+import {
+  loadResearchColumnWidths,
+  researchColumnWidthBounds,
+  researchColumnWidths,
+  saveResearchColumnWidth,
+  shownResearchColumnWidths,
+  type ResearchColumnWidthKind,
+  type ResearchStoredColumnWidths,
+} from "../../lib/researchColumnWidths";
+import {
+  ResearchColumnResizer,
+  ResearchColumnSizingContext,
+  trimResearchStripSlack,
+  type ResearchColumnSizing,
+} from "./ResearchColumnResizer";
 
 /** The system setting or the app's own Reduce motion setting. */
 function prefersReducedMotion() {
@@ -159,7 +129,8 @@ export const ResearchColumnsContext = createContext<ResearchColumnsLayout | null
 
 /** The column area: one horizontally scrolling strip with the feed column,
  * then the content (the open thread's column pairs, or a filler). Column
- * widths come from the area's width, so the strip scrolls sideways when the
+ * widths come from the area's width until a column's resize handle sets
+ * them (researchColumnWidths.ts), and the strip scrolls sideways when the
  * pairs don't fit. */
 export default function ResearchColumns({
   hasDocument,
@@ -176,7 +147,7 @@ export default function ResearchColumns({
   const [overlay, setOverlay] = useState<HTMLDivElement | null>(null);
   const [availableWidth, setAvailableWidth] = useState(1232);
   const [feedCurrent, setFeedCurrent] = useState(false);
-  const [feedWidth, setFeedWidth] = useState<number | null>(loadFeedWidth);
+  const [storedWidths, setStoredWidths] = useState<ResearchStoredColumnWidths>(loadResearchColumnWidths);
 
   useEffect(listenForInteraction, []);
 
@@ -328,55 +299,37 @@ export default function ResearchColumns({
     return () => row.removeEventListener("focusin", onFocusIn);
   }, [row]);
 
-  const widths = researchColumnWidths(availableWidth);
-  const feedMax = researchFeedMaxWidth(availableWidth);
-  const clampFeed = (width: number) => clampWidth(width, RESEARCH_FEED_MIN_WIDTH, feedMax);
-  const shownFeedWidth = feedWidth == null ? widths.feed : clampFeed(feedWidth);
-  const setFeedWidthAndSave = (width: number | null) => {
-    setFeedWidth(width);
-    saveFeedWidth(width);
-  };
+  // The feed's, the messages columns' and the answer columns' widths, each
+  // automatic until its resize handle (ResearchColumnResizer) sets it.
+  const setWidth = useCallback((kind: ResearchColumnWidthKind, width: number | null, persist: boolean) => {
+    setStoredWidths((current) => (current[kind] === width ? current : { ...current, [kind]: width }));
+    if (persist) saveResearchColumnWidth(kind, width);
+  }, []);
+  const sizing = useMemo<ResearchColumnSizing>(
+    () => ({
+      row,
+      widths: shownResearchColumnWidths(storedWidths, availableWidth),
+      automatic: researchColumnWidths(availableWidth),
+      bounds: {
+        feed: researchColumnWidthBounds("feed", availableWidth),
+        turns: researchColumnWidthBounds("turns", availableWidth),
+        answer: researchColumnWidthBounds("answer", availableWidth),
+      },
+      setWidth,
+    }),
+    [availableWidth, row, setWidth, storedWidths],
+  );
+  const widths = sizing.widths;
 
-  // The handle on the feed's right edge works like the sidebar's: drag, or
-  // Left/Right (Shift for larger steps). A double-click returns the feed to
-  // its automatic width.
-  const startFeedResize = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    const handle = event.currentTarget;
-    const pointerId = event.pointerId;
-    handle.setPointerCapture(pointerId);
-    const startX = event.clientX;
-    const startWidth = shownFeedWidth;
-    let lastWidth = startWidth;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    const move = (moveEvent: globalThis.PointerEvent) => {
-      lastWidth = clampFeed(startWidth + moveEvent.clientX - startX);
-      setFeedWidth(lastWidth);
-    };
-    const stop = () => {
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-      window.removeEventListener("pointercancel", stop);
-      if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
-      if (lastWidth !== startWidth) saveFeedWidth(lastWidth);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
-    window.addEventListener("pointercancel", stop);
-  };
-  const resizeFeedWithKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    event.preventDefault();
-    event.stopPropagation();
-    const step = event.shiftKey ? 40 : 16;
-    setFeedWidthAndSave(clampFeed(shownFeedWidth + (event.key === "ArrowRight" ? step : -step)));
-  };
+  // A resize can leave space after the last column, which kept the strip's
+  // scroll offset in range; it shrinks as the strip scrolls back.
+  useEffect(() => {
+    if (!row) return;
+    const onScroll = () => trimResearchStripSlack(row);
+    row.addEventListener("scroll", onScroll, { passive: true });
+    return () => row.removeEventListener("scroll", onScroll);
+  }, [row]);
+
   const layout = useMemo<ResearchColumnsLayout>(
     () => ({
       row,
@@ -420,46 +373,36 @@ export default function ResearchColumns({
   );
   return (
     <ResearchColumnsContext.Provider value={layout}>
-      <div
-        ref={rootRef}
-        className={`research-columns${hasDocument ? " has-document" : ""}`}
-        style={
-          {
-            "--research-feed-column-width": `${shownFeedWidth}px`,
-            "--research-turns-width": `${widths.turns}px`,
-            "--research-answer-width": `${widths.answer}px`,
-          } as CSSProperties
-        }
-      >
-        <div ref={setRow} className="research-columns-row">
-          {feed ? (
-            <section
-              ref={feedRef}
-              className="research-feed-column"
-              {...columnAttributes({ id: "feed", role: "feed" })}
-              aria-label="Feed"
-            >
-              {feed}
-              <div
-                className="research-feed-resizer"
-                role="separator"
-                aria-label="Resize feed"
-                aria-orientation="vertical"
-                aria-valuemin={RESEARCH_FEED_MIN_WIDTH}
-                aria-valuemax={feedMax}
-                aria-valuenow={shownFeedWidth}
-                title="Drag to resize · double-click to reset"
-                tabIndex={0}
-                onPointerDown={startFeedResize}
-                onKeyDown={resizeFeedWithKeyboard}
-                onDoubleClick={() => setFeedWidthAndSave(null)}
-              />
-            </section>
-          ) : null}
-          <div className="research-content-column">{children}</div>
+      <ResearchColumnSizingContext.Provider value={sizing}>
+        <div
+          ref={rootRef}
+          className={`research-columns${hasDocument ? " has-document" : ""}`}
+          style={
+            {
+              "--research-feed-column-width": `${widths.feed}px`,
+              "--research-turns-width": `${widths.turns}px`,
+              "--research-answer-width": `${widths.answer}px`,
+            } as CSSProperties
+          }
+        >
+          <div ref={setRow} className="research-columns-row">
+            {feed ? (
+              <section
+                ref={feedRef}
+                className="research-feed-column"
+                {...columnAttributes({ id: "feed", role: "feed" })}
+                aria-label="Feed"
+              >
+                {feed}
+                <ResearchColumnResizer kind="feed" label="Resize feed" />
+              </section>
+            ) : null}
+            <div className="research-content-column">{children}</div>
+            <div className="research-strip-slack" aria-hidden="true" />
+          </div>
+          <div ref={setOverlay} className="research-columns-overlay" />
         </div>
-        <div ref={setOverlay} className="research-columns-overlay" />
-      </div>
+      </ResearchColumnSizingContext.Provider>
     </ResearchColumnsContext.Provider>
   );
 }

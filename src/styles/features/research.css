@@ -554,8 +554,8 @@
 
 /* The pairs are flex items of the column strip (research-surface.css):
    the open thread's wrapper takes no box of its own. Widths come from the
-   strip's width (ResearchColumns), so opening or closing a level never
-   resizes a column. */
+   strip's width or the columns' resize handles (ResearchColumns), so
+   opening or closing a level never resizes a column. */
 .research-pairs {
   display: contents;
 }

@@ -25,8 +25,9 @@
 /* The column area: one horizontally scrolling strip with the feed column,
    then the open thread's column pairs (or a filler), and an overlay layer
    outside the strip for the find bar. ResearchColumns sets the widths from
-   the column area's width alone, so the strip scrolls sideways when the
-   pairs don't fit instead of resizing anything. */
+   the column area's width, or from the columns' resize handles, so the
+   strip scrolls sideways when the pairs don't fit instead of resizing
+   anything. */
 .research-columns {
   position: relative;
   display: flex;
@@ -46,6 +47,23 @@
   scrollbar-width: thin;
 }
 
+/* While a column is being resized (ResearchColumnResizer), widths apply
+   immediately, also under Reduce motion's near-zero transitions, so the
+   scroll offset set with them matches the layout. */
+.research-columns-row.is-resizing,
+.research-columns-row.is-resizing * {
+  transition-property: none !important;
+}
+
+/* Space after the last column that a resize adds so the strip's scroll
+   offset stays in range while columns shrink (ResearchColumnResizer sets its
+   width); 0 otherwise. It looks like the filler. */
+.research-strip-slack {
+  flex: none;
+  width: 0;
+  background: var(--research-page-bg);
+}
+
 .research-feed-column {
   position: relative;
   flex: none;
@@ -55,11 +73,13 @@
   border-right: 1px solid var(--surface-divider);
 }
 
-/* The feed's resize handle: a 10px drag target centred on its right edge,
-   above the next column's header (z-index 1) and below the strip's overlay.
-   Like the sidebar's, it paints the divider in the hover color on hover,
-   focus and while dragging. */
-.research-feed-resizer {
+/* A column's resize handle (ResearchColumnResizer): a 10px drag target
+   centred on its right edge, above the next column's header (z-index 1) and
+   the answer column's focus ring (z-index 2), below the strip's overlay. It
+   adds no width. Like the sidebar's, it paints the divider in the hover
+   color on hover, focus and while dragging. A messages column's handle
+   starts below its header, which spans the pair. */
+.research-column-resizer {
   position: absolute;
   top: 0;
   right: -5px;
@@ -70,7 +90,11 @@
   touch-action: none;
 }
 
-.research-feed-resizer::before {
+.research-column-resizer.is-below-header {
+  top: calc(var(--research-header-height, 43px) + 1px);
+}
+
+.research-column-resizer::before {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -79,13 +103,13 @@
   content: "";
 }
 
-.research-feed-resizer:hover::before,
-.research-feed-resizer:focus-visible::before,
-.research-feed-resizer:active::before {
+.research-column-resizer:hover::before,
+.research-column-resizer:focus-visible::before,
+.research-column-resizer:active::before {
   background: var(--split-border-hover);
 }
 
-.research-feed-resizer:focus-visible {
+.research-column-resizer:focus-visible {
   outline: none;
 }
 
