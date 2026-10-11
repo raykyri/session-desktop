@@ -14,7 +14,7 @@ if (!id) { console.error("usage: shot.mjs <id> <round> [variant|all] [light|dark
 const file = path.join(here, "..", "candidates", id, `r${round}.js`);
 if (!fs.existsSync(file)) { console.error("missing " + file); process.exit(1); }
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1340, height: 1000 }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width: 1700, height: 1200 }, deviceScaleFactor: 1 });
 const errors = [];
 page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
 page.on("pageerror", (e) => errors.push(String(e)));
