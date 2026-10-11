@@ -10,32 +10,14 @@ import {
   listenToEvents,
   markEventsListenerReady,
 } from "../lib/api";
-import {
-  agentEventAffectsThinkingState,
-  isAgentInfo,
-  isQueuedTurn,
-  isTurn,
-  reconcileReplacedTurns,
-  transcriptHookEvent,
-  upsertAgent,
-} from "../lib/appHelpers";
+import { isAgentInfo, upsertAgent } from "../lib/appHelpers";
 import { parseAppShortcutCommand, type AppShortcutCommand } from "../lib/appShortcuts";
 import {
   publishResearchContentChanged,
   RESEARCH_CONTENT_CHANGED_EVENT,
 } from "../lib/researchContentRefresh";
 import type { ExitPreflightRequest } from "../appTypes";
-import type {
-  ActiveWorkspace,
-  AgentInfo,
-  GroupInfo,
-  PaneInfo,
-  PaneSplitInfo,
-  SessionEvent,
-  QueuedTurn,
-  TranscriptHookEvent,
-  Turn,
-} from "../types";
+import type { ActiveWorkspace, AgentInfo, GroupInfo, PaneInfo, SessionEvent } from "../types";
 
 // How long events accumulate before the batch is handled. A busy agent emits
 // bursts of hook/status/turn events (dozens per second), and handling each in
@@ -53,40 +35,17 @@ import type {
 // events are about to change, and one frame is imperceptible for those actions.
 const EVENT_COALESCE_MS = 16;
 
-// Mirror the backend's per-agent turn cap (MAX_TURNS_PER_AGENT in state.rs). The
-// backend only ever holds the most recent N turns per agent, but the frontend
-// appended to its global turns array forever — a long-lived session grew memory and
-// per-render cost without bound. Keep the newest N per agent to match.
-const MAX_TURNS_PER_AGENT = 200;
-
 // The backend event stream drives most of the app's live state. This hook owns
 // the single global subscription: it is intentionally set up once (empty deps),
 // so every callback it touches is passed in and captured at first render,
 // matching how the inline effect behaved before it was extracted. State setters
-// from useState are stable, and the three helper callbacks read through refs
-// internally, so the first-render capture stays correct.
+// from useState are stable, and the callbacks read the state they need through
+// refs, so the first-render capture stays correct.
 interface UseSessionEventsHandlers {
-  // Records a transcript hook event for the copy-as-JSON export. Nothing renders
-  // hook events, so the store lives outside React state (see App) and appending
-  // must never trigger a render.
-  appendHookEvent: (event: TranscriptHookEvent) => void;
   setPanes: Dispatch<SetStateAction<PaneInfo[]>>;
-  setActivePaneId: Dispatch<SetStateAction<string | null>>;
   setExitPreflightRequest: Dispatch<SetStateAction<ExitPreflightRequest | null>>;
   setAgents: Dispatch<SetStateAction<AgentInfo[]>>;
   setGroups: Dispatch<SetStateAction<GroupInfo[]>>;
-  // Tracks which agents are actively working, for the transcript "Working…"
-  // indicator. Only live transitions into a working status flip it on, so an
-  // agent restored into a working status never falsely shows it (see below).
-  setThinkingAgentIds: Dispatch<SetStateAction<Set<string>>>;
-  setTurns: Dispatch<SetStateAction<Turn[]>>;
-  setAgentQueuedTurns: (agentId: string, queuedTurns: QueuedTurn[]) => void;
-  // Turn snapshots follow the same surface ownership policy. App can rehydrate
-  // the backend's bounded window when a hidden agent becomes visible, so retaining
-  // every hidden agent's live window here would only turn the frontend into an
-  // app-lifetime cache again.
-  shouldRetainAgentTurns?: (agentId: string) => boolean;
-  refreshAgentTurnQueue: (agentId: string) => Promise<void>;
   // Binds a browser-overlay URL to a pane (the backend emits the fully-formed URL).
   openBrowserOverlay: (
     paneId: string,
@@ -94,16 +53,8 @@ interface UseSessionEventsHandlers {
     sandbox?: boolean,
     artifactId?: string | null,
   ) => void;
-  // Picks the next active pane when a pane closes, honoring split membership and
-  // collapsed groups. Supplied by App so the pane.removed path selects consistently with
-  // the user-initiated close path (forgetClosedPane).
-  selectPaneAfterClose: (panes: PaneInfo[], closedPaneId: string) => string | null;
-  // Fired once the single backend subscription is live.
-  onEventsReady: () => void;
   onAgentSpawned?: (agent: AgentInfo, paneId: string | null, source: string | null) => void;
   onAgentPromptSubmitted?: (agentId: string, prompt: string) => void;
-  onPaneFocusRequested?: (paneId: string) => void;
-  onPaneSplitsChanged?: (splits: PaneSplitInfo[]) => void;
   onAppShortcut?: (command: AppShortcutCommand, repeat: boolean) => void;
   onBrowserEscapeRequested?: () => void;
   onResearchChanged?: (event: SessionEvent) => void;
@@ -125,24 +76,13 @@ function agentPromptSubmittedText(payload: Record<string, unknown>): string | nu
 
 export function useSessionEvents(handlers: UseSessionEventsHandlers) {
   const {
-    appendHookEvent,
     setPanes,
-    setActivePaneId,
     setExitPreflightRequest,
     setAgents,
     setGroups,
-    setThinkingAgentIds,
-    setTurns,
-    setAgentQueuedTurns,
-    shouldRetainAgentTurns,
-    refreshAgentTurnQueue,
     openBrowserOverlay,
-    selectPaneAfterClose: selectPaneAfterCloseWithContext,
-    onEventsReady,
     onAgentSpawned,
     onAgentPromptSubmitted,
-    onPaneFocusRequested,
-    onPaneSplitsChanged,
     onAppShortcut,
     onBrowserEscapeRequested,
     onResearchChanged,
@@ -186,29 +126,12 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
       if (event.type === "app.notification_requested") {
         onUserNotificationRequested?.(event);
       }
-      const hookEvent = transcriptHookEvent(event);
-      if (hookEvent) {
-        appendHookEvent(hookEvent);
-      }
       if (event.type === "pane.removed" && event.paneId) {
         const exitedPaneId = event.paneId;
         setPanes((current) => {
           forgetRemotePane(exitedPaneId);
-          const nextPanes = current.filter((pane) => pane.id !== exitedPaneId);
-          setActivePaneId((currentActivePaneId) => {
-            if (currentActivePaneId !== exitedPaneId) {
-              return currentActivePaneId;
-            }
-            return selectPaneAfterCloseWithContext(current, exitedPaneId);
-          });
-          return nextPanes;
+          return current.filter((pane) => pane.id !== exitedPaneId);
         });
-      }
-      if (event.type === "pane.focus_requested" && event.paneId) {
-        onPaneFocusRequested?.(event.paneId);
-      }
-      if (event.type === "pane.splits_changed" && Array.isArray(event.payload.splits)) {
-        onPaneSplitsChanged?.(event.payload.splits as PaneSplitInfo[]);
       }
       if (event.type === "pane.created" || event.type === "pane.renamed") {
         const seq = (panesRefreshSeq += 1);
@@ -296,33 +219,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
               stringField(event.payload, "source"),
             );
           }
-          // Light up "Working…" only on a *live* transition into a working
-          // status. The boot snapshot loads agents via setAgents(list) (the
-          // else-branch below), which never touches this set, so a stale
-          // working status restored from disk can't trigger it. "agent.recovered"
-          // is excluded too: a recovered agent is waiting for input, not working,
-          // even if it momentarily carries a working status.
-          // Workspace-only refreshes carry a full AgentInfo so the display can
-          // update surgically, but they are not lifecycle activity. In
-          // particular, a sibling shell prompt must not make a restored agent
-          // with a stale `running` status light up as "Working…".
-          if (agentEventAffectsThinkingState(event.type)) {
-            const working =
-              updatedAgent.status === "running" || updatedAgent.status === "starting";
-            setThinkingAgentIds((prev) => {
-              const shouldThink = working && event.type !== "agent.recovered";
-              if (shouldThink === prev.has(updatedAgent.id)) {
-                return prev;
-              }
-              const next = new Set(prev);
-              if (shouldThink) {
-                next.add(updatedAgent.id);
-              } else {
-                next.delete(updatedAgent.id);
-              }
-              return next;
-            });
-          }
         } else {
           const seq = (agentRefreshSeq += 1);
           void listAgents()
@@ -384,78 +280,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
           })
           .catch(() => undefined);
       }
-      if (
-        event.agentId &&
-        (event.type === "agent.turn_queued" ||
-          event.type === "agent.queued_turn_sent" ||
-          event.type === "agent.queued_turn_removed" ||
-          event.type === "agent.queued_turn_reordered" ||
-          event.type === "agent.unpaused" ||
-          event.type === "agent.queue_error")
-      ) {
-        const queuedTurns = Array.isArray(event.payload.queuedTurns)
-          ? event.payload.queuedTurns.filter(isQueuedTurn)
-          : null;
-        if (queuedTurns) {
-          setAgentQueuedTurns(event.agentId, queuedTurns);
-        } else {
-          void refreshAgentTurnQueue(event.agentId).catch(() => undefined);
-        }
-      }
-      if (event.type === "turn.appended") {
-        const turn = event.payload.turn;
-        if (isTurn(turn)) {
-          if (shouldRetainAgentTurns?.(turn.agentId) !== false) {
-            setTurns((current) => {
-              const existingIndex = current.findIndex((existing) => existing.id === turn.id);
-              if (existingIndex !== -1) {
-                // Positional turn ids can be reused across a transcript
-                // rewrite/rebind, so a same-id append carries the id's newest
-                // content and belongs at the tail. An identical re-delivery
-                // keeps the array (and downstream memos) untouched.
-                if (JSON.stringify(current[existingIndex]) === JSON.stringify(turn)) {
-                  return current;
-                }
-                return [...current.filter((_, index) => index !== existingIndex), turn];
-              }
-              const next = [...current, turn];
-              const agentTurnCount = next.reduce(
-                (count, existing) => (existing.agentId === turn.agentId ? count + 1 : count),
-                0,
-              );
-              if (agentTurnCount <= MAX_TURNS_PER_AGENT) {
-                return next;
-              }
-              // Over the cap: drop the oldest turns for this agent (the earliest matches in
-              // arrival order) so the global array can't grow without bound.
-              let toDrop = agentTurnCount - MAX_TURNS_PER_AGENT;
-              return next.filter((existing) => {
-                if (toDrop > 0 && existing.agentId === turn.agentId) {
-                  toDrop -= 1;
-                  return false;
-                }
-                return true;
-              });
-            });
-          }
-        }
-      }
-      if (event.type === "turn.updated" && event.payload.reset) {
-        const agentId = event.agentId;
-        // A reset can carry more than the per-agent cap (the backend truncates its
-        // stored copy but emits the full parsed window). Keep the newest N here too,
-        // so the fallback timeline holds a stable-size window instead of flipping
-        // between a full list on reset and a capped one on the next append.
-        const replacementTurns = (
-          Array.isArray(event.payload.turns) ? event.payload.turns.filter(isTurn) : []
-        ).slice(-MAX_TURNS_PER_AGENT);
-        // Reuse prior turn objects for content-identical replacements so the
-        // per-agent turn caches (and per-message memos) hold across a reset;
-        // see reconcileReplacedTurns.
-        if (!agentId || shouldRetainAgentTurns?.(agentId) !== false) {
-          setTurns((current) => reconcileReplacedTurns(current, agentId, replacementTurns));
-        }
-      }
     };
 
     const pendingEvents: SessionEvent[] = [];
@@ -489,7 +313,6 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
         // Unblock the native shortcut classifiers: from here on an emitted
         // terminal.shortcut / app.shortcut event actually reaches this hook.
         void markEventsListenerReady().catch(() => undefined);
-        onEventsReady();
       }
     });
 

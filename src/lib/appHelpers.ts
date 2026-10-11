@@ -3,11 +3,7 @@ import type {
   AgentInfo,
   PaneInfo,
   PaneSplitInfo,
-  SessionEvent,
-  QueuedTurn,
   RuntimeConfig,
-  TranscriptHookEvent,
-  Turn,
 } from "../types";
 
 export function clamp(value: number, min: number, max: number) {
@@ -43,28 +39,6 @@ export function clampContextMenuToViewport(args: {
     x: clamp(args.x, margin, Math.max(margin, viewportWidth - margin - args.width)),
     y: clamp(args.y, margin, Math.max(margin, viewportHeight - margin - args.height)),
   };
-}
-
-export function firstUserTurnText(turn: Turn): string | null {
-  if (
-    turn.role !== "user" ||
-    turn.status === "superseded" ||
-    turn.contextStatus === "rolledBack"
-  ) {
-    return null;
-  }
-
-  for (const block of turn.blocks) {
-    if (block.type !== "text") {
-      continue;
-    }
-    const trimmed = block.text.trim();
-    if (trimmed) {
-      return trimmed;
-    }
-  }
-
-  return null;
 }
 
 const DEFAULT_SHELL_TITLE = "Shell";
@@ -236,51 +210,6 @@ export function selectPaneAfterClose(
   return selectPreferredPane(candidates);
 }
 
-// Validates a turn payload arriving over the backend event stream before it is
-// trusted as a Turn. The data is structured by Rust, but guarding at the boundary
-// keeps a malformed/renamed field from silently producing an invalid turn the UI
-// then renders.
-export function isTurn(value: unknown): value is Turn {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  const turn = value as Record<string, unknown>;
-  return (
-    typeof turn.id === "string" &&
-    typeof turn.agentId === "string" &&
-    typeof turn.role === "string" &&
-    Array.isArray(turn.blocks) &&
-    optionalTurnStatus(turn.status) &&
-    optionalTurnStatusReason(turn.statusReason) &&
-    optionalTurnContextStatus(turn.contextStatus)
-  );
-}
-
-function optionalTurnStatus(value: unknown) {
-  return (
-    value === undefined ||
-    value === null ||
-    value === "superseded" ||
-    value === "interrupted" ||
-    value === "uncertain"
-  );
-}
-
-function optionalTurnStatusReason(value: unknown) {
-  return (
-    value === undefined ||
-    value === null ||
-    value === "codexRollback" ||
-    value === "interrupted" ||
-    value === "claudePromptBranch" ||
-    value === "unknownBranch"
-  );
-}
-
-function optionalTurnContextStatus(value: unknown) {
-  return value === undefined || value === null || value === "rolledBack";
-}
-
 // Validates an agent payload arriving on an event before it is applied to local
 // state, mirroring isTurn. Status events now carry the updated agent so the UI can
 // apply changes surgically instead of refetching the whole list every time.
@@ -293,14 +222,6 @@ export function isAgentInfo(value: unknown): value is AgentInfo {
     typeof agent.id === "string" &&
     typeof agent.adapter === "string" &&
     typeof agent.status === "string"
-  );
-}
-
-export function isQueuedTurn(value: unknown): value is QueuedTurn {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as Record<string, unknown>).text === "string"
   );
 }
 
@@ -332,52 +253,6 @@ export function upsertAgent(agents: AgentInfo[], updated: AgentInfo): AgentInfo[
     return [...next, updated];
   }
   return unchanged ? agents : next;
-}
-
-// Preserves turn object identity across a `turn.updated` reset. A reset ships
-// the agent's whole turn list re-parsed into fresh objects — fired for every
-// typed user prompt and lifecycle marker — even though almost every turn is
-// content-identical to what the app already holds. Downstream memoization
-// (the per-agent turn-info cache, the per-message timeline memo) keys on turn
-// identity, so handing out fresh objects re-rendered and re-parsed the whole
-// visible transcript per reset. Reuse the prior object when a replacement is
-// content-equal, gated behind cheap discriminators so genuinely changed turns
-// skip the JSON comparison; returns `current` itself when nothing about the
-// agent's slice (content, order, or placement) changed.
-export function reconcileReplacedTurns(
-  current: Turn[],
-  agentId: string | null | undefined,
-  replacement: Turn[],
-): Turn[] {
-  const priorById = new Map<string, Turn>();
-  for (const turn of current) {
-    if (turn.agentId === agentId) {
-      priorById.set(turn.id, turn);
-    }
-  }
-  const reconciled = replacement.map((turn) => {
-    const prior = priorById.get(turn.id);
-    if (
-      prior &&
-      prior.sourceIndex === turn.sourceIndex &&
-      prior.status === turn.status &&
-      prior.statusReason === turn.statusReason &&
-      prior.contextStatus === turn.contextStatus &&
-      prior.blocks.length === turn.blocks.length &&
-      JSON.stringify(prior) === JSON.stringify(turn)
-    ) {
-      return prior;
-    }
-    return turn;
-  });
-  const next = [
-    ...current.filter((turn) => turn.agentId !== agentId),
-    ...reconciled,
-  ];
-  if (next.length === current.length && next.every((turn, index) => turn === current[index])) {
-    return current;
-  }
-  return next;
 }
 
 // On macOS the find shortcut is Cmd-F; on other platforms it is Ctrl-F. (Ctrl-F
@@ -612,20 +487,4 @@ export function agentStatusTone(status: AgentInfo["status"]): AgentStatusTone {
     default:
       return "idle";
   }
-}
-
-export function transcriptHookEvent(event: SessionEvent): TranscriptHookEvent | null {
-  const hookEvent = event.payload.hookEvent;
-  if (!event.agentId || typeof hookEvent !== "string") {
-    return null;
-  }
-
-  return {
-    type: event.type,
-    paneId: event.paneId ?? null,
-    agentId: event.agentId,
-    hookEvent,
-    payload: event.payload.payload ?? null,
-    timestamp: event.timestamp,
-  };
 }

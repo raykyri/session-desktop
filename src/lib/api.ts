@@ -1,4 +1,3 @@
-import { trackRemoteStartup, recordRemoteStartup, reconcileRemoteReservation, forgetRemoteStartup } from "./remoteStartup";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { RecentActivityPage } from "./activity";
@@ -13,13 +12,8 @@ import type {
   GithubDeviceLogin,
   GithubLoginPoll,
   GroupInfo,
-  HomeTurnHistoryPage,
-  InitialPaneSize,
-  PaneActivity,
   PaneInfo,
-  PaneSplitInfo,
   SessionEvent,
-  QueuedTurn,
   ResearchBranchRemoval,
   RecentResearchQuery,
   RecentResearchQueryCursor,
@@ -37,13 +31,10 @@ import type {
   ResearchRecapCandidate,
   UpdateResearchDocumentResult,
   UpdateResearchPostResult,
-  SendNextQueuedAgentTurnResult,
   RuntimeConfig,
   RemoteChoice,
   RemoteProbeResult,
   SavedRemote,
-  Turn,
-  WorktreeStatus,
 } from "../types";
 
 export function getRuntimeConfig() {
@@ -116,10 +107,6 @@ export function openRouterChatCompletion(payload: unknown) {
   });
 }
 
-export function setActiveTab(tabId: string | null) {
-  return invoke<void>("active_tab_set", { tabId });
-}
-
 export interface ShowHideShortcutSetting {
   accelerator: string | null;
   registered: boolean;
@@ -171,28 +158,8 @@ export function revealResearchWorkspace(workspaceId: string) {
   return invoke<void>("research_workspace_reveal", { workspaceId });
 }
 
-export function renameGroup(groupId: string, name: string | null) {
-  return invoke<GroupInfo>("group_rename", { groupId, name });
-}
-
 export function listAgents() {
   return invoke<AgentInfo[]>("list_agents");
-}
-
-export function listTurns(agentId?: string | null) {
-  return invoke<Turn[]>("list_turns", { agentId: agentId ?? null });
-}
-
-export function listHomeTurnHistory(
-  agentId: string,
-  before?: string | null,
-  limit = 100,
-) {
-  return invoke<HomeTurnHistoryPage>("list_home_turn_history", {
-    agentId,
-    before: before ?? null,
-    limit,
-  });
 }
 
 export function listResearchTrees(includeArchived = false) {
@@ -442,33 +409,6 @@ export function removeResearchBranch(nodeId: string) {
   return invoke<ResearchBranchRemoval>("remove_research_branch", { nodeId });
 }
 
-export function listAgentTurnQueue(agentId: string) {
-  return invoke<QueuedTurn[]>("list_agent_turn_queue", { agentId });
-}
-
-export async function spawnShell(
-  initialSize?: InitialPaneSize | null,
-  sourcePaneId?: string | null,
-  groupId?: string | null,
-  remoteId?: string | null,
-) {
-  const started = performance.now();
-  const pane = await invoke<PaneInfo>("spawn_shell", {
-    initialSize: initialSize ?? null,
-    sourcePaneId: sourcePaneId ?? null,
-    groupId: groupId ?? null,
-    remoteId: remoteId ?? null,
-  });
-  if (pane.remoteSession) {
-    trackRemoteStartup(pane.id, started);
-    recordRemoteStartup(pane.id, "reserved");
-    const observed = reconcileRemoteReservation(pane).remoteConnection;
-    if (observed?.state === "connected") recordRemoteStartup(pane.id, "ready");
-    if (observed?.state === "failed") forgetRemoteStartup(pane.id);
-  }
-  return pane;
-}
-
 export function getUseLoginShell() {
   return invoke<boolean>("use_login_shell_get");
 }
@@ -491,12 +431,6 @@ export function getResearchLaunchInstruction() {
 
 export function setResearchLaunchInstruction(instruction: string) {
   return invoke<void>("research_launch_instruction_set", { instruction });
-}
-
-/** Marks/clears that the user is actively typing for an agent, so the backend holds
- *  off auto-draining its queue. Clearing drains a held turn if the agent is idle. */
-export function setAgentTyping(agentId: string, typing: boolean) {
-  return invoke<SendNextQueuedAgentTurnResult>("agent_set_typing", { agentId, typing });
 }
 
 /** Opens an http(s)/mailto URL in the user's default external browser/mail client. */
@@ -792,33 +726,12 @@ export function sendBrowserAutomationKey(
   });
 }
 
-export function setAgentDraft(agentId: string, draft: string) {
-  return invoke<void>("agent_set_draft", { agentId, draft });
-}
-
-export function getAgentDraft(agentId: string) {
-  return invoke<string | null>("agent_get_draft", { agentId });
-}
-
 export function getInterfaceDraft(key: string) {
   return invoke<string | null>("interface_draft_get", { key });
 }
 
 export function setInterfaceDraft(key: string, value: string | null) {
   return invoke<void>("interface_draft_set", { key, value });
-}
-
-export function acknowledgeAgent(agentId: string, includeFailed = false) {
-  return invoke<AgentInfo>("agent_acknowledge", { agentId, includeFailed });
-}
-
-/**
- * Tells the backend the listener for this pane is live, flushing any PTY output
- * buffered before the webview subscribed (e.g. the cold-start prompt). Must be
- * called only after listenToEvents has resolved.
- */
-export function attachPane(paneId: string) {
-  return invoke<void>("pane_attach", { paneId });
 }
 
 /** Keep overlay transitions ordered across asynchronous native calls. */
@@ -841,14 +754,6 @@ export function setNativeBrowserBackground(red: number, green: number, blue: num
   return nativeBrowserBackgroundUpdate;
 }
 
-export function paneActivity(paneId: string) {
-  return invoke<PaneActivity>("pane_activity", { paneId });
-}
-
-export function killPane(paneId: string) {
-  return invoke<void>("pane_kill", { paneId });
-}
-
 // Records the focused pane so the backend can pick a group's most-recently-active
 // shell pane when resolving a spawn cwd. Best-effort; failures are ignored.
 export function activatePane(paneId: string) {
@@ -857,27 +762,6 @@ export function activatePane(paneId: string) {
 
 export function renamePane(paneId: string, title: string) {
   return invoke<PaneInfo>("pane_rename", { paneId, title });
-}
-
-/** Moves `paneId` immediately after `siblingPaneId` in the flat sidebar order. */
-export function placePaneAfter(paneId: string, siblingPaneId: string) {
-  return invoke<PaneInfo[]>("pane_place_after", { paneId, siblingPaneId });
-}
-
-export function getPaneSplits() {
-  return invoke<PaneSplitInfo[]>("pane_splits_get");
-}
-
-export function setPaneSplits(splits: PaneSplitInfo[]) {
-  return invoke<PaneSplitInfo[]>("pane_splits_set", { splits });
-}
-
-export function worktreeStatus(agentId: string) {
-  return invoke<WorktreeStatus>("worktree_status", { agentId });
-}
-
-export function closeWorktreePane(agentId: string, deleteWorktree: boolean) {
-  return invoke<void>("worktree_close_pane", { agentId, deleteWorktree });
 }
 
 export function confirmAppExit() {

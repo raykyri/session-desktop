@@ -1097,13 +1097,6 @@ export function reservedTerminalStageWidth({
   return minWidth;
 }
 
-export function paneSplitForPane(splits: PaneSplitInfo[], paneId: string | null | undefined) {
-  if (!paneId) {
-    return null;
-  }
-  return splits.find((split) => split.paneIds.includes(paneId)) ?? null;
-}
-
 export function paneSnapshotForPersistedPaneSplits(
   persistedSplits: PaneSplitInfo[],
   currentPanes: PaneInfo[],

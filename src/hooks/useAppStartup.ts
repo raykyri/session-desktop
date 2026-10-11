@@ -1,14 +1,11 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import {
-  getAgentDraft,
   getOpenRouterKey,
-  getPaneSplits,
   getResearchLaunchInstruction,
   getRuntimeConfig,
   getUseLoginShell,
   getWorktreeLocation,
   listAgents,
-  listAgentTurnQueue,
   listGroups,
   listPanes,
   listRecentActivity,
@@ -23,7 +20,6 @@ async function loadInitial() {
     runtimeConfig,
     existingGroups,
     existingPanes,
-    existingPaneSplits,
     existingAgents,
     existingResearchTrees,
     existingResearchActivity,
@@ -32,7 +28,6 @@ async function loadInitial() {
     getRuntimeConfig(),
     listGroups().catch(() => []),
     listPanes(),
-    getPaneSplits().catch(() => []),
     listAgents(),
     listResearchTrees(true).catch(() => []),
     listResearchActivity().catch(() => []),
@@ -42,7 +37,6 @@ async function loadInitial() {
     runtimeConfig,
     existingGroups,
     existingPanes,
-    existingPaneSplits,
     existingAgents,
     existingResearchTrees,
     existingResearchActivity,
@@ -50,45 +44,24 @@ async function loadInitial() {
   };
 }
 
-async function loadSecondary({
-  existingAgents,
-}: Awaited<ReturnType<typeof loadInitial>>) {
-  // Fetch only lightweight per-agent state. Visible surfaces own transcript hydration.
+// Preferences whose durable copy lives in the backend.
+async function loadSecondary() {
   const [
     storedOpenRouterKey,
     storedUseLoginShell,
     storedWorktreeLocation,
     storedResearchLaunchInstruction,
-    queueEntries,
-    draftEntries,
   ] = await Promise.all([
     getOpenRouterKey().catch(() => ""),
     getUseLoginShell().catch(() => null),
     getWorktreeLocation().catch(() => null),
     getResearchLaunchInstruction().catch(() => null),
-    Promise.all(
-      existingAgents.map(
-        async (agent) =>
-          [
-            agent.id,
-            await listAgentTurnQueue(agent.id).catch(() => []),
-          ] as const,
-      ),
-    ),
-    Promise.all(
-      existingAgents.map(
-        async (agent) =>
-          [agent.id, await getAgentDraft(agent.id).catch(() => null)] as const,
-      ),
-    ),
   ]);
   return {
     storedOpenRouterKey,
     storedUseLoginShell,
     storedWorktreeLocation,
     storedResearchLaunchInstruction,
-    queueEntries,
-    draftEntries,
   };
 }
 

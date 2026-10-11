@@ -7,7 +7,7 @@ interface TranscriptSearchOptions {
   regex: boolean;
 }
 
-// Highlight registry names, referenced by ::highlight() rules in terminal.css.
+// Highlight registry names, referenced by ::highlight() rules in find-bar.css.
 const TRANSCRIPT_SEARCH_HIGHLIGHT = "transcript-search-match";
 const TRANSCRIPT_SEARCH_ACTIVE_HIGHLIGHT = "transcript-search-active-match";
 

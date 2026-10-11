@@ -9,7 +9,7 @@
 @import "./styles/features/posts.css" layer(features);
 @import "./styles/features/shell.css" layer(features);
 @import "./styles/features/agent-setup.css" layer(features);
-@import "./styles/features/terminal.css" layer(features);
+@import "./styles/features/find-bar.css" layer(features);
 @import "./styles/features/transcript.css" layer(features);
 @import "./styles/features/composer.css" layer(features);
 @import "./styles/features/browser.css" layer(features);

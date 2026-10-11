@@ -4,6 +4,7 @@
     "src/lib/composerSlashCommands.ts": "Tested agent fork/worktree command grammar retained independently of the current composer UI.",
     "src/lib/handoff.ts": "Tested bounded agent handoff payload formatting retained as research process infrastructure.",
     "src/lib/imageMarkers.ts": "Tested persisted transcript image marker grammar retained for imported agent transcripts.",
+    "src/lib/paneSplits.ts": "Tested pane split layout and normalization helpers retained with the flat pane-order helpers; the backend normalizes persisted splits itself, and the app consumer was the removed terminal stage.",
     "src/lib/paneTree.ts": "Tested flat pane-order helpers retained for terminal pane infrastructure; the app consumer was the removed pane context menu."
   },
   "exports": {
@@ -53,7 +54,11 @@
         "AgentReadiness",
         "ArtifactInfo",
         "GlobalDraft",
+        "HomeTurnHistoryPage",
+        "HomeTurnSummary",
+        "InitialPaneSize",
         "MoveQueuedAgentTurnResult",
+        "PaneActivity",
         "PaneKind",
         "PaneSplitPaneNode",
         "PostReplyAuthor",
@@ -72,12 +77,15 @@
         "ResearchPostNode",
         "ResearchTweetAttachment",
         "SavedPrompt",
+        "SendNextQueuedAgentTurnResult",
         "ShellAgentJobInfo",
         "ShellAgentJobState",
         "SubmitAgentTurnMode",
         "SubmitAgentTurnResult",
         "TranscriptCopyPayload",
-        "UserMessage"
+        "TranscriptHookEvent",
+        "UserMessage",
+        "WorktreeStatus"
       ]
     }
   }

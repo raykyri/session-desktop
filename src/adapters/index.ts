@@ -40,7 +40,3 @@ const agentUiAdapters = [
 export function findAgentUiAdapter(adapterId: string | null | undefined): AgentUiAdapter | null {
   return agentUiAdapters.find((adapter) => adapter.id === adapterId) ?? null;
 }
-
-export function getAgentUiAdapter(adapterId: string | null | undefined): AgentUiAdapter {
-  return findAgentUiAdapter(adapterId) ?? claudeUiAdapter;
-}

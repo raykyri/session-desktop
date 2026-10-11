@@ -1,10 +1,8 @@
 import { useAppStartup } from "./hooks/useAppStartup";
 import { RESEARCH_WORKSPACE_SCOPE_KEY, useResearchNavigationState } from "./hooks/useResearchNavigationState";
 import { useUserNotifications } from "./hooks/useUserNotifications";
-import { recordRemoteStartup, reconcileRemoteReservation } from "./lib/remoteStartup";
-import {
-  shouldCloseRemotePaneOnControlD,
-} from "./lib/remoteConnection";
+import { useEditableFocusRestore } from "./hooks/useEditableFocusRestore";
+import { reconcileRemoteReservation } from "./lib/remoteStartup";
 import {
   useCallback,
   useEffect,
@@ -38,7 +36,6 @@ import {
   X,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { getAgentUiAdapter } from "./adapters";
 import { CODEX_ADAPTER_ID } from "./adapters/codex";
 import {
   adapterCanLaunchResearch,
@@ -61,13 +58,6 @@ import {
   subscribeDiagramLightbox,
 } from "./lib/diagramLightbox";
 import ConfirmDialogActionButton from "./components/ConfirmDialogActionButton";
-import {
-  mergeRailPastTurns,
-  railPastTurnSummaries,
-} from "./lib/homeRails";
-import type {
-  HomeRailPastTurn,
-} from "./lib/homeRailTypes";
 import LinkContextMenu from "./components/LinkContextMenu";
 import {
   UserNotificationStack,
@@ -81,7 +71,6 @@ import {
   resolveResearchScope,
   treeForResearchScope,
   treesForResearchScope,
-  workspaceIsInResearchScope,
 } from "./lib/researchScope";
 import ResearchThreadPage, { type ResearchThreadTreeMenu } from "./components/research/ResearchThreadPage";
 import ResearchDraftView from "./components/research/ResearchDraftView";
@@ -124,12 +113,8 @@ import {
   desiredPreventSleepState,
   clamp,
   defaultPaneTitle,
-  firstUserTurnText,
-  isEditableTarget,
   IS_MAC,
   isTerminalTarget,
-
-  selectPaneAfterClose,
 } from "./lib/appHelpers";
 import { sanitizeTerminalTitle } from "./lib/terminalTitle";
 import {
@@ -139,15 +124,6 @@ import {
   unconfiguredSshAliases,
   type RemoteSettingsDraft,
 } from "./lib/remoteSettings";
-import {
-  windowFocusKeyboardOwner,
-} from "./lib/windowFocus";
-import {
-  applicableSpeculativeAcknowledgements,
-  terminalAttentionProbeIsDue,
-  terminalPaneHasUserAttention,
-  terminalPaneWasIntentionallyActivated,
-} from "./lib/terminalAttention";
 import {
   RESEARCH_HOME_SHORTCUT_LABEL,
   resolveAppShortcut,
@@ -162,9 +138,6 @@ import {
   closeBrowserOverlayState,
 } from "./lib/browserOverlay";
 import {
-  threadIdForAgent,
-} from "./lib/threadGraph";
-import {
   requestResearchFollowupsFocus,
   requestResearchWorkspaceMenuToggle,
   requestResearchNodeOpen,
@@ -174,22 +147,9 @@ import type {
   BrowserOverlayMode,
   BrowserOverlaySize,
   BrowserOverlayState,
-  CloseDialogState,
   ExitDialogState,
   ExitPreflightRequest,
 } from "./appTypes";
-import {
-  canSplitPaneInTree,
-  joinPaneSplit,
-  normalizePaneSplitsForPanes,
-  paneSplitAxis,
-  paneSplitForPane,
-  paneSplitsEqual,
-  paneSnapshotForPersistedPaneSplits,
-  reservedTerminalStageWidth,
-  splitAxisForPane,
-  splitBranchChildCountForPane,
-} from "./lib/paneSplits";
 import {
   APP_TEXT_SIZE,
 } from "./lib/appearance";
@@ -199,7 +159,6 @@ import {
   isFileServerUrl,
   pathFromSessionFileHref,
   resolveLocalLinkPath,
-
 } from "./lib/links";
 import {
   canGoResearchBack,
@@ -234,7 +193,6 @@ import {
 import { isActiveResearchStatus } from "./lib/researchChains";
 import {
   groupsForScope,
-  panesForScope,
   researchAttention,
 } from "./lib/workspaceScope";
 import {
@@ -270,13 +228,6 @@ import {
 } from "./components/research/ResearchSidebarNav";
 import { stripTaggedUserInstructionBlocks } from "./lib/taggedInstructions";
 import {
-  clearSessionDraft,
-  loadSessionDraftJson,
-  readSessionDraftJson,
-  saveSessionDraftJson,
-  SESSION_DRAFT_KEYS,
-} from "./lib/sessionDrafts";
-import {
   APPEARANCE_OPTIONS,
   bodyFontStackFor,
   clampResearchLaunchInstruction,
@@ -292,13 +243,9 @@ import {
   type BodyFontOption,
 } from "./lib/settings";
 import {
-  acknowledgeAgent,
-  attachPane,
   browserOpenLocalPathExternal,
-
   browserOpenPreviewExternal,
   browserRevealLocalPath,
-  closeWorktreePane,
   confirmAppExit,
   deleteRemote,
   createResearchWorkspaceWithFolder,
@@ -332,17 +279,10 @@ import {
   probeRemote,
   probeAgentAdapters,
   generateResearchAgentTitle,
-  killPane,
-  listGroups,
-  listAgents,
   listSshConfigAliases,
-  listAgentTurnQueue,
-  listHomeTurnHistory,
   destroyHumanBrowser,
   hideAllHumanBrowsers,
   reloadHumanBrowser,
-  listTurns,
-  listPanes,
   listResearchActivity,
   listRecentActivity,
   listRecentActivityForTrees,
@@ -354,35 +294,22 @@ import {
   browserOpenCodexInlineVisualization,
   browserOpenCodexVisualizationReference,
   browserOpenLocalPath,
-  paneActivity,
-  placePaneAfter,
-  renameGroup,
   renamePane,
-  setActiveTab,
   setNativeBrowserBackground,
   setNativeBrowserOverlayOpen,
-  setPaneSplits as persistPaneSplits,
-  setAgentDraft as persistAgentDraft,
-  setAgentTyping,
   setShowHideShortcut,
   setShowHideShortcutCaptureActive,
   setPreventSleep,
   setUseLoginShell,
   setResearchLaunchInstruction,
   setWorktreeLocation,
-  spawnShell,
   upsertRemote,
-  worktreeStatus,
 } from "./lib/api";
 import type {
   AgentInfo,
   GroupInfo,
-  InitialPaneSize,
   PaneInfo,
-  PaneSplitAxis,
-  PaneSplitInfo,
   SessionEvent,
-  QueuedTurn,
   RecentResearchQuery,
   NodeAnchor,
   ResearchDraft,
@@ -394,8 +321,6 @@ import type {
   RemoteChoice,
   RemoteProbeResult,
   SavedRemote,
-  TranscriptHookEvent,
-  Turn,
 } from "./types";
 import type { ShowHideShortcutSetting } from "./lib/api";
 import { nodeRun, nodeStatus } from "./lib/researchNodeTypes";
@@ -431,17 +356,8 @@ type ResearchViewedAckOptions = {
   force?: boolean;
   /** The accepted navigation snapshot already proved this tree has attention. */
   knownUnseen?: boolean;
-  /** Native terminal activation is authoritative even when DOM focus belongs
-   * to the sibling native view rather than the webview document. */
-  exposureConfirmed?: boolean;
 };
-// Legacy sentinel once used as the selected tab for the Home page. Kept so a
-// persisted last-tab id from an older build is ignored instead of restored.
-const HOME_TAB_ID = "__home__";
 const ACTIVE_RESEARCH_TREE_KEY = "session.active-research-tree.v1";
-const ACTIVE_RESEARCH_PANE_KEY = "session.active-research-pane.v1";
-// Whether Home is forward on the research surface. Selection-level UI state,
-// like the active tree id; the feed contents live backend-side.
 
 // Browser-overlay / link-action owner for a research tree's thread page. Keyed
 // per tree so an overlay opened from one tree's links doesn't follow the user
@@ -450,10 +366,6 @@ const RESEARCH_BROWSER_OWNER_PREFIX = "__research_thread__:";
 function researchBrowserOwnerId(treeId: string) {
   return `${RESEARCH_BROWSER_OWNER_PREFIX}${treeId}`;
 }
-// How long after the user's last keystroke we keep holding the queue before letting a
-// finished turn auto-send the next queued message.
-const INPUT_DEQUEUE_HOLD_MS = 1500;
-
 function partitionResearchTrees(trees: ResearchTreeSummary[]) {
   return {
     active: trees.filter((tree) => !tree.archivedAt),
@@ -512,13 +424,8 @@ function replaceResearchActivityForTree(
   return reconcileResearchActivity(activity, next);
 }
 
-function researchThreadIsVisible(
-  treeId: string,
-  activeSurface: "pane" | "research",
-  activeTreeId: string | null,
-): boolean {
+function researchThreadIsVisible(treeId: string, activeTreeId: string | null): boolean {
   return (
-    activeSurface === "research" &&
     activeTreeId === treeId &&
     document.visibilityState === "visible" &&
     document.hasFocus()
@@ -541,24 +448,11 @@ function claimResizePointer(event: ReactPointerEvent<HTMLDivElement>): () => voi
   };
 }
 
-// Bounded retry for releasing a pane's output backlog (attachPane). A failure would
-// otherwise leave the terminal blank forever, so retry with backoff to ride out a
-// transient race (e.g. the pane not yet visible to the backend) before giving up.
-const ATTACH_MAX_RETRIES = 4;
-const ATTACH_INITIAL_RETRY_MS = 150;
-const ATTACH_MAX_RETRY_MS = 2000;
 const BROWSER_OVERLAY_LEFT_MARGIN = 64;
 const EXPAND_TOGGLE_SHORTCUT_LABEL = "⌘⇧E / Ctrl+Shift+E";
 const LEFT_SIDEBAR_TOGGLE_SHORTCUT_LABEL = "⇧⌘G";
-const TERMINAL_MIN_WIDTH = 380;
-
-const TERMINAL_SPLIT_MIN_HEIGHT = 140;
-const TERMINAL_SPLIT_MIN_WIDTH = 200;
-const TERMINAL_SPLIT_GUTTER_PX = 8;
-const DEFAULT_INITIAL_COLS = 100;
-const DEFAULT_INITIAL_ROWS = 24;
-const MIN_INITIAL_COLS = 20;
-const MIN_INITIAL_ROWS = 5;
+// The width the research stage keeps when the sidebar is resized.
+const RESEARCH_STAGE_MIN_WIDTH = 380;
 
 const MAX_FIRST_MESSAGE_TITLE_CHARS = 80;
 const MAX_OPENROUTER_TITLE_SOURCE_CHARS = 4000;
@@ -570,12 +464,6 @@ const FIRST_MESSAGE_TITLE_LOOKAHEAD_LIMIT = 5;
 const APP_TOAST_TIMEOUT_MS = 5000;
 const TITLE_GENERATION_TEST_MESSAGE =
   "Review the launch plan, identify the highest-risk blockers, and suggest next steps.";
-// Upper bound on the per-agent hook-event history. This feed accumulates for an
-// agent's whole lifetime (it backs the "copy transcript as JSON" export), so
-// without a cap a long-running, tool-heavy agent grows the array without limit.
-// N is generous enough that the copy export stays complete for any realistic
-// session.
-const MAX_HOOK_EVENTS_PER_AGENT = 2000;
 
 function waitForPaintedFrame(): Promise<void> {
   return new Promise((resolve) => {
@@ -1057,73 +945,17 @@ function createPendingFirstMessageTitle(
   };
 }
 
-function latestUserTurnId(turns: Turn[]): string | null {
-  let latest: string | null = null;
-  for (const turn of turns) {
-    if (firstUserTurnText(turn)) {
-      latest = turn.id;
-    }
-  }
-  return latest;
-}
-
-function agentHistoryRequestKey(agent: AgentInfo) {
-  return [
-    threadIdForAgent(agent),
-    agent.branchId ?? "",
-    agent.sessionId ?? "",
-    agent.transcriptPath ?? "",
-  ].join("\0");
-}
-
-interface HomeTurnHistoryState {
-  requestKey: string;
-  pastTurns: HomeRailPastTurn[];
-  nextBefore: string | null;
-  loading: boolean;
-}
-
 function MainApp() {
   const appRef = useRef<HTMLDivElement | null>(null);
-  const mainStageRef = useRef<HTMLDivElement | null>(null);
-
-  // Becomes true once the single backend event subscription is live. Until then,
-  // panes that want to attach are parked here so their pre-attach backlog is only
-  // released after the listener can actually deliver it.
-  const eventsReadyRef = useRef(false);
-  const pendingAttachRef = useRef<Set<string>>(new Set());
   const panesRef = useRef<PaneInfo[]>([]);
   const agentsRef = useRef<AgentInfo[]>([]);
-  const queuedTurnsByAgentRef = useRef<Record<string, QueuedTurn[]>>({});
-  // Composer drafts live here keyed by agent so they survive tab switches; the
-  // ref mirrors the state for synchronous reads from the debounced disk flush.
-  const draftsByAgentRef = useRef<Record<string, string>>({});
-  const draftFlushTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-  // Keep active-tab actions reachable from the global keydown listener without
-  // re-registering it on every state change.
-  const activePaneRef = useRef<PaneInfo | undefined>(undefined);
-  const requestClosePaneRef = useRef<(pane: PaneInfo, options?: { confirmAlways?: boolean }) => void>(() => {});
-  const closeUnavailableRemotePaneRef = useRef<(pane: PaneInfo) => void>(() => {});
-  const splitPaneBelowRef = useRef<(pane: PaneInfo) => void | Promise<void>>(() => {});
-  const splitPaneRightRef = useRef<(pane: PaneInfo) => void | Promise<void>>(() => {});
   const browserOverlayByPaneRef = useRef<Record<string, BrowserOverlayState>>({});
   const nativeHumanBrowserOwnerIdsRef = useRef<Set<string>>(new Set());
-  const activeBrowserOwnerIdRef = useRef<string | null>(null);
-  const toggleActiveBrowserOverlayRef = useRef<() => void>(() => {});
   const closeActiveBrowserOverlayRef = useRef<() => void>(() => {});
   const browserEscapeDispatcherRef = useRef<() => "exclusive" | null>(
     () => null,
   );
-  // Debounced "user is typing" hold per agent: while active the backend won't
-  // auto-drain that agent's queue. Holds the agent id + the pending release timer.
-  const agentTypingRef = useRef<{ agentId: string; timer: number } | null>(null);
   const pendingFirstTitleByAgentRef = useRef<Map<string, PendingFirstMessageTitle>>(new Map());
-  const titleRegenerationSeqByPaneRef = useRef<Record<string, number>>({});
-  // Per-agent write generation for the queued-turns list. Bumped on every write (a
-  // refresh starting, or a direct/event-driven update) so an in-flight refresh whose
-  // generation was superseded drops its stale response instead of clobbering newer
-  // state. Mirrors the pane/group reorder seq guards.
-  const agentTurnQueueSeqRef = useRef<Record<string, number>>({});
   // Set once the OpenRouter key has been loaded from the backend, so the
   // persist-on-change effect doesn't push the pre-hydration in-memory value back.
   const openRouterKeyHydratedRef = useRef(false);
@@ -1132,11 +964,8 @@ function MainApp() {
   const useLoginShellHydratedRef = useRef(false);
   const worktreeLocationHydratedRef = useRef(false);
   const researchLaunchInstructionHydratedRef = useRef(false);
-  const paneSplitsRef = useRef<PaneSplitInfo[]>([]);
   const titleGenerationTestSeqRef = useRef(0);
-  const activeTabPersistenceReadyRef = useRef(false);
   const appToastTimerRef = useRef<number | null>(null);
-  const dismissedRecoveredPaneIdsRef = useRef<Set<string>>(new Set());
   const [config, setConfig] = useState<RuntimeConfig | null>(null);
   const [adapterProbeLoading, setAdapterProbeLoading] = useState(false);
   const [adapterProbeError, setAdapterProbeError] = useState<string | null>(null);
@@ -1172,94 +1001,26 @@ function MainApp() {
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const groupsRef = useRef(groups);
   groupsRef.current = groups;
-  const [lastActiveGroupId, setLastActiveGroupId] = useState<string | null>(null);
   const [panes, setPanes] = useState<PaneInfo[]>([]);
-  const applyRecoveredDismissals = useCallback((paneList: PaneInfo[]) => {
-    const dismissed = dismissedRecoveredPaneIdsRef.current;
-    if (dismissed.size === 0) {
-      return paneList;
-    }
-    let changed = false;
-    const next = paneList.map((pane) => {
-      if (pane.recovered && dismissed.has(pane.id)) {
-        changed = true;
-        return { ...pane, recovered: false };
-      }
-      return pane;
+  const setPanesReconciled = useCallback((update: SetStateAction<PaneInfo[]>) => {
+    setPanes((current) => {
+      const next =
+        typeof update === "function"
+          ? (update as (current: PaneInfo[]) => PaneInfo[])(current)
+          : update;
+      return next.map(reconcileRemoteReservation);
     });
-    return changed ? next : paneList;
   }, []);
-  const setPanesPreservingRecoveredDismissals = useCallback(
-    (update: SetStateAction<PaneInfo[]>) => {
-      setPanes((current) => {
-        const next =
-          typeof update === "function"
-            ? (update as (current: PaneInfo[]) => PaneInfo[])(current)
-            : update;
-        return applyRecoveredDismissals(next.map(reconcileRemoteReservation));
-      });
-    },
-    [applyRecoveredDismissals],
-  );
   const [manuallyTitledPaneIds, setManuallyTitledPaneIds] = useState<Set<string>>(
     () => new Set(),
   );
   const manuallyTitledPaneIdsRef = useRef(manuallyTitledPaneIds);
   manuallyTitledPaneIdsRef.current = manuallyTitledPaneIds;
-  const [regeneratingTitlePaneIds, setRegeneratingTitlePaneIds] = useState<Set<string>>(
-    () => new Set(),
-  );
-  const regeneratingTitlePaneIdsRef = useRef(regeneratingTitlePaneIds);
-  regeneratingTitlePaneIdsRef.current = regeneratingTitlePaneIds;
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   // False while a fresh/reloaded WebContent document still holds the empty
   // placeholder above. Until listAgents() succeeds, it is not safe to infer
   // that the backend has no active agents and release its existing wake lock.
   const [agentsHydrated, setAgentsHydrated] = useState(false);
-  // Agents we believe are actively working *right now*, used to show the
-  // "Working…" indicator at the bottom of the transcript. This is driven by live
-  // status transitions (see useSessionEvents), not the raw status field: an agent
-  // restored into a working status — or loaded that way from the boot snapshot —
-  // must not light up, since it isn't genuinely doing work. Membership is added
-  // only on a live event that moves the agent into a working status (and on the
-  // user's own send), and cleared on any non-working event.
-  const [thinkingAgentIds, setThinkingAgentIds] = useState<Set<string>>(() => new Set());
-  const [processingNewMessageByAgent, setProcessingNewMessageByAgent] = useState<
-    Record<string, string | null>
-  >({});
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const turnsRef = useRef(turns);
-  turnsRef.current = turns;
-  const [homeTurnHistoryByAgent, setHomeTurnHistoryByAgent] = useState<
-    Record<string, HomeTurnHistoryState>
-  >({});
-  const homeTurnHistoryByAgentRef = useRef(homeTurnHistoryByAgent);
-  homeTurnHistoryByAgentRef.current = homeTurnHistoryByAgent;
-  const homeHistoryRequestKeyByAgentRef = useRef(new Map<string, string>());
-  const homeHistoryRequestSequenceByAgentRef = useRef(new Map<string, number>());
-  /** One auto-retry budget per agent+requestKey after an initial history load fails. */
-  const homeHistoryRetryBudgetByAgentRef = useRef(new Map<string, string>());
-  // Per-agent hook-event history. It backs only the "copy transcript as JSON"
-  // export — nothing renders it — so it lives outside React state: hooks fire on
-  // every tool call of a busy agent, and putting each one through setState was a
-  // full-app re-render per event. Mutated in place; capped so a long-running,
-  // tool-heavy agent bounds both memory and export size.
-  const hookEventsByAgentRef = useRef<Record<string, TranscriptHookEvent[]>>({});
-  const appendHookEvent = useCallback((event: TranscriptHookEvent) => {
-    const store = hookEventsByAgentRef.current;
-    const existing = store[event.agentId];
-    if (!existing) {
-      store[event.agentId] = [event];
-      return;
-    }
-    existing.push(event);
-    if (existing.length > MAX_HOOK_EVENTS_PER_AGENT) {
-      existing.splice(0, existing.length - MAX_HOOK_EVENTS_PER_AGENT);
-    }
-  }, []);
-  const [activePaneId, setActivePaneIdState] = useState<string | null>(null);
-  const activePaneIdRef = useRef(activePaneId);
-  activePaneIdRef.current = activePaneId;
   const [activeResearchTreeId, setActiveResearchTreeId] = useState<string | null>(null);
   const activeResearchTreeIdRef = useRef(activeResearchTreeId);
   const researchDetailRequestSeqRef = useRef(0);
@@ -1275,11 +1036,6 @@ function MainApp() {
     (treeId: string, options?: ResearchViewedAckOptions) => Promise<void>
   >(async () => undefined);
   activeResearchTreeIdRef.current = activeResearchTreeId;
-  const [activeResearchPaneId, setActiveResearchPaneId] = useState<string | null>(() =>
-    localStorage.getItem(ACTIVE_RESEARCH_PANE_KEY),
-  );
-  const activeResearchPaneIdRef = useRef(activeResearchPaneId);
-  activeResearchPaneIdRef.current = activeResearchPaneId;
   const [researchTrees, setResearchTrees] = useState<ResearchTreeSummary[]>([]);
   // After "Ask as a question": the offer to delete the edited thread, then
   // the delete confirmation for it.
@@ -1334,93 +1090,6 @@ function MainApp() {
   // thread page shows an unexplained spinner forever: the content effect can't
   // run (no detail-derived node id), so no in-page retry can recover.
   const [activeResearchDetailError, setActiveResearchDetailError] = useState<string | null>(null);
-  const [activeSurface, setActiveSurfaceState] = useState<"pane" | "research">("research");
-  const activeSurfaceRef = useRef(activeSurface);
-  activeSurfaceRef.current = activeSurface;
-  const showResearchSurface = useCallback(() => {
-    activeSurfaceRef.current = "research";
-    setActiveSurfaceState("research");
-  }, []);
-  // Half-typed home-rail composer text, keyed by rail id. App-owned so a tab
-  // away can unmount Home without losing it; the transient backend mirror also
-  // restores it after a WebKit reload without carrying it across app restarts.
-  const [initialHomeComposerDrafts] = useState(() =>
-    readSessionDraftJson<Record<string, string>>(SESSION_DRAFT_KEYS.homeComposers),
-  );
-  const [homeComposerDrafts, setHomeComposerDrafts] = useState<Record<string, string>>(
-    initialHomeComposerDrafts ?? {},
-  );
-  const [homeComposerDraftsReady, setHomeComposerDraftsReady] = useState(
-    initialHomeComposerDrafts !== null,
-  );
-  useEffect(() => {
-    if (initialHomeComposerDrafts !== null) {
-      return;
-    }
-    let disposed = false;
-    void loadSessionDraftJson<Record<string, string>>(SESSION_DRAFT_KEYS.homeComposers)
-      .then((restored) => {
-        if (!disposed && restored) {
-          setHomeComposerDrafts((current) => ({ ...restored, ...current }));
-        }
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (!disposed) {
-          setHomeComposerDraftsReady(true);
-        }
-      });
-    return () => {
-      disposed = true;
-    };
-  }, [initialHomeComposerDrafts]);
-  useEffect(() => {
-    if (!homeComposerDraftsReady) {
-      return;
-    }
-    if (Object.values(homeComposerDrafts).some(Boolean)) {
-      saveSessionDraftJson(SESSION_DRAFT_KEYS.homeComposers, homeComposerDrafts);
-    } else {
-      clearSessionDraft(SESSION_DRAFT_KEYS.homeComposers);
-    }
-  }, [homeComposerDrafts, homeComposerDraftsReady]);
-  const setActivePaneId = useCallback(
-    (next: SetStateAction<string | null>) => {
-      if (typeof next === "function") {
-        setActivePaneIdState((current) => {
-          const resolved = next(current);
-          activePaneIdRef.current = resolved;
-          activePaneRef.current =
-            resolved && resolved !== HOME_TAB_ID
-              ? panesRef.current.find((candidate) => candidate.id === resolved)
-              : undefined;
-          return resolved;
-        });
-        return;
-      }
-      showResearchSurface();
-      activePaneIdRef.current = next;
-      activePaneRef.current =
-        next && next !== HOME_TAB_ID
-          ? panesRef.current.find((candidate) => candidate.id === next)
-          : undefined;
-      setActivePaneIdState(next);
-      if (!next) {
-        return;
-      }
-      const pane = panesRef.current.find((candidate) => candidate.id === next);
-      const scope =
-        next === HOME_TAB_ID
-          ? "terminal"
-          : (groupsRef.current.find((group) => group.id === pane?.groupId)?.scope ?? "terminal");
-      if (scope === "research" && pane) {
-        activeResearchPaneIdRef.current = pane.id;
-        setActiveResearchPaneId(pane.id);
-        localStorage.setItem(ACTIVE_RESEARCH_PANE_KEY, pane.id);
-      }
-    },
-    [],
-  );
   const [shortcutHintsVisible, setShortcutHintsVisible] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(LEFT_SIDEBAR_DEFAULT_WIDTH);
   // The sidebar starts as the icon rail; the expand button, ⌘⇧G and the
@@ -1461,28 +1130,7 @@ function MainApp() {
     setAgentSetupInstanceId(instanceId);
     setAgentsOpen(true);
   }, []);
-  const [terminalMapOpen, setTerminalMapOpen] = useState(false);
-  const terminalMapOpenRef = useRef(terminalMapOpen);
-  terminalMapOpenRef.current = terminalMapOpen;
-  const terminalMapDialogRef = useRef<HTMLDivElement | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  // True while a web editable (composer, rename input, search field…) holds DOM
-  // focus. Native terminal panes must never claim first responder then, or they
-  // would steal the keyboard mid-typing.
-  const [webEditableFocused, setWebEditableFocused] = useState(false);
-  const webEditableFocusedRef = useRef(webEditableFocused);
-  webEditableFocusedRef.current = webEditableFocused;
-  // The DOM node that owned keyboard input when the native app window last
-  // deactivated. WebKit can temporarily replace activeElement with <body>
-  // during that handoff, so the node itself is needed to restore the composer
-  // rather than misclassifying the return as terminal first-responder churn.
-  const lastFocusedWebEditableRef = useRef<HTMLElement | null>(null);
-  const appBlurWebEditableRef = useRef<HTMLElement | null>(null);
-  const nativeWindowFocusedRef = useRef(true);
-  // Pointer, wheel, and input events can arrive in dense bursts. One backend
-  // Done probe per pane per short attention window closes event-order races
-  // without turning every key repeat or trackpad tick into IPC.
-  const terminalAttentionProbeAtRef = useRef(new Map<string, number>());
   const [settingsTab, setSettingsTab] = useState<"basic" | "remotes">("basic");
   const [expandedSettingsRemoteId, setExpandedSettingsRemoteId] = useState<string | null>(null);
   const [remoteAddMenuOpen, setRemoteAddMenuOpen] = useState(false);
@@ -1667,37 +1315,33 @@ function MainApp() {
     dismissUserNotification,
   } = useUserNotifications({
     settings,
+    // No surface shows panes; opening a notification's source pane records
+    // it as the most recently active one, as selecting it did.
     onOpenPane: (paneId) => {
       if (panesRef.current.some((pane) => pane.id === paneId)) {
-        focusPaneTab(paneId);
+        void activatePane(paneId).catch(() => {});
       }
     },
   });
   const [folderPickerStatus, setFolderPickerStatus] = useState<string | null>(null);
-  const [closeDialog, setCloseDialog] = useState<CloseDialogState | null>(null);
+  // The research workspace whose removal the confirmation dialog asks about.
+  const [researchFolderRemoval, setResearchFolderRemoval] = useState<GroupInfo | null>(null);
   const [researchFolderRemovalError, setResearchFolderRemovalError] = useState<string | null>(null);
-  // Monotonic id for worktree-dialog git-status probes (see closeDialogForPane).
-  const worktreeProbeNonceRef = useRef(0);
-  const closeConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
-  // Which destructive close-dialog action is mid-flight, so the dialog stays
-  // open (and its buttons disabled) until the operation actually finishes.
-  const [resolvingClose, setResolvingClose] = useState<
-    "keep" | "delete" | "removeResearchFolder" | null
-  >(null);
+  const researchFolderRemovalButtonRef = useRef<HTMLButtonElement | null>(null);
+  // True while the removal runs, so the dialog stays open (and its buttons
+  // disabled) until the operation finishes.
+  const [removingResearchFolder, setRemovingResearchFolder] = useState(false);
   const [exitDialog, setExitDialog] = useState<ExitDialogState | null>(null);
   const [quitting, setQuitting] = useState(false);
   const quittingRef = useRef(false);
   const exitConfirmButtonRef = useRef<HTMLButtonElement | null>(null);
   const [exitPreflightRequest, setExitPreflightRequest] =
     useState<ExitPreflightRequest | null>(null);
-  const [renamePaneId, setRenamePaneId] = useState<string | null>(null);
   const [renameGroupId, setRenameGroupId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const [titleGenerationTest, setTitleGenerationTest] =
     useState<TitleGenerationTestState | null>(null);
-  const [paneSplits, setPaneSplitsState] = useState<PaneSplitInfo[]>([]);
-  paneSplitsRef.current = paneSplits;
   // Per-pane browser overlay state, so each tab keeps its own page and open/closed.
   const [browserOverlayByPane, setBrowserOverlayByPane] = useState<
     Record<string, BrowserOverlayState>
@@ -1711,76 +1355,7 @@ function MainApp() {
     y: number;
     paneId: string | null;
   } | null>(null);
-  // Pane and research-thread selection are independent. Switching modes restores
-  // the previous selection instead of erasing the other mode's navigation context.
-  const researchSurfaceActive = activeSurface === "research";
-  const researchActive = researchSurfaceActive && activeResearchTreeId !== null;
-  const researchHomeActive = researchSurfaceActive && activeResearchTreeId === null;
-  const selectedPane = panes.find((pane) => pane.id === activePaneId);
-  const activePane = useMemo(
-    () =>
-      researchActive || activeSurface !== "pane" ? undefined : selectedPane,
-    [activeSurface, researchActive, selectedPane],
-  );
-  const paneById = useMemo(
-    () => new Map(panes.map((pane) => [pane.id, pane])),
-    [panes],
-  );
-  const agentByPaneId = useMemo(() => {
-    const result = new Map<string, AgentInfo>();
-    for (const agent of agents) {
-      if (agent.paneId) {
-        result.set(agent.paneId, agent);
-      }
-    }
-    return result;
-  }, [agents]);
-  const activePaneSplitMembership = useMemo(
-    () => paneSplitForPane(paneSplits, activePane?.id),
-    [activePane?.id, paneSplits],
-  );
-  const activePaneSplit = useMemo(() => {
-    if (!activePaneSplitMembership || activePaneSplitMembership.paneIds.length < 2) {
-      return null;
-    }
-    return activePaneSplitMembership;
-  }, [activePaneSplitMembership]);
-  // Width the stage must keep for the current layout. Memoized as a number so
-  // the sidebar clamp re-runs exactly when the floor moves: a nested tree can
-  // change its column count without changing the pane count or the root axis
-  // (dragging a pane out of a stack), and it must not change on every frame of
-  // a divider drag either.
-  const reservedTerminalStageMinWidth = useMemo(
-    () =>
-      reservedTerminalStageWidth({
-        axis: paneSplitAxis(activePaneSplit),
-        paneCount: activePaneSplit?.paneIds.length ?? 1,
-        minWidth: TERMINAL_MIN_WIDTH,
-        splitMinWidth: TERMINAL_SPLIT_MIN_WIDTH,
-        gutter: TERMINAL_SPLIT_GUTTER_PX,
-        // A nested layout's floor is not "one column per pane": stacked panes
-        // share a column, so only the widest row of the tree counts.
-        root: activePaneSplit?.root ?? null,
-      }),
-    [activePaneSplit],
-  );
-  const visibleTerminalPaneIds = useMemo(
-    () =>
-      activePaneSplitMembership
-        ? activePaneSplitMembership.paneIds
-        : activePane
-          ? [activePane.id]
-          : [],
-    [activePane?.id, activePaneSplitMembership],
-  );
-  const visibleTerminalPanes = useMemo(
-    () =>
-      visibleTerminalPaneIds
-        .map((paneId) => paneById.get(paneId))
-        .filter((pane): pane is PaneInfo => Boolean(pane)),
-    [paneById, visibleTerminalPaneIds],
-  );
-
+  const researchHomeActive = activeResearchTreeId === null;
   const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
   const researchGroups = useMemo(() => groupsForScope(groups, "research"), [groups]);
   const researchScope = useMemo(
@@ -1789,17 +1364,10 @@ function MainApp() {
   );
   const researchScopeRef = useRef(researchScope);
   researchScopeRef.current = researchScope;
-  // The single source of truth for what the research surface shows. Every
-  // stage branch keys off this one value, so precedence (composer page over
-  // thread over feed) lives here instead of being re-derived — and kept
-  // consistent — inside each render condition. The
-  // composer additionally renders while this is null (another surface is
-  // forward) as a hidden keep-alive for its draft.
-  const researchStageView = !researchSurfaceActive
-    ? null
-    : feedOpen || !activeResearchTreeId
-      ? ("feed" as const)
-      : ("thread" as const);
+  // What the research stage shows beside the feed column: the open thread,
+  // or (with no thread open, or the feed brought forward) the feed alone.
+  const researchStageView =
+    feedOpen || !activeResearchTreeId ? ("feed" as const) : ("thread" as const);
   const researchStageViewRef = useRef(researchStageView);
   researchStageViewRef.current = researchStageView;
   // Menu badges and the folder-replace dialog both count every tree that keeps
@@ -1811,328 +1379,14 @@ function MainApp() {
     }
     return counts;
   }, [archivedResearchTrees, researchTrees]);
-  useEffect(() => {
-    // Boot-gated like the active-tab effect below: this runs on mount with the
-    // pane list still empty, and ungated it would wipe the saved research-pane
-    // key before the boot restore ever reads it.
-    if (!activeTabPersistenceReadyRef.current) {
-      return;
-    }
-    const visibleResearchPane =
-      activeSurface === "pane" &&
-      activePane &&
-      groupById.get(activePane.groupId)?.scope === "research"
-        ? activePane
-        : null;
-    if (visibleResearchPane && activeResearchPaneId !== visibleResearchPane.id) {
-      activeResearchPaneIdRef.current = visibleResearchPane.id;
-      setActiveResearchPaneId(visibleResearchPane.id);
-      localStorage.setItem(ACTIVE_RESEARCH_PANE_KEY, visibleResearchPane.id);
-    } else if (
-      activeResearchPaneId &&
-      !panes.some((pane) => pane.id === activeResearchPaneId)
-    ) {
-      activeResearchPaneIdRef.current = null;
-      setActiveResearchPaneId(null);
-      localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
-    }
-  }, [activePane, activeResearchPaneId, activeSurface, groupById, panes]);
-  useEffect(() => {
-    if (activeSurface !== "pane" || selectedPane) {
-      return;
-    }
-    // Pane-backed research runs are short-lived. Return to the durable
-    // research surface as soon as one retires.
-    showResearchSurface();
-  }, [
-    activePaneId,
-    activeResearchTreeId,
-    activeSurface,
-    groups,
-    panes,
-    selectedPane,
-  ]);
-  // Kept current so callbacks captured once (e.g. the events hook's first-render
-  // capture) can still read the latest group collapse state through the ref.
-  const groupByIdRef = useRef(groupById);
-  groupByIdRef.current = groupById;
-  // Picks the next active pane after one closes, honoring split membership and skipping
-  // collapsed groups — the same rules forgetClosedPane uses. Stable + ref-backed so the
-  // pane.removed handler (captured once by useSessionEvents) selects consistently with the
-  // user-initiated close path.
-  const selectPaneAfterCloseWithContext = useCallback(
-    (panesForSelection: PaneInfo[], closedPaneId: string) => {
-      const closedPane = panesForSelection.find((pane) => pane.id === closedPaneId);
-      const closedScope = closedPane
-        ? (groupByIdRef.current.get(closedPane.groupId)?.scope ?? "terminal")
-        : "terminal";
-      // A research pane is not a tab among tabs: it is the transient terminal
-      // view of one tree's run. Handing focus to the "nearest" research pane
-      // would land on an unrelated tree's hidden terminal while the sidebar
-      // still highlights the tree the user was watching. Return no successor;
-      // the surface fallback then restores the durable research thread.
-      if (closedScope === "research") {
-        return null;
-      }
-      const scopedPanes = panesForSelection.filter(
-        (pane) =>
-          (groupByIdRef.current.get(pane.groupId)?.scope ?? "terminal") === closedScope,
-      );
-      return selectPaneAfterClose(scopedPanes, closedPaneId, paneSplitsRef.current, {
-        isPaneInCollapsedGroup: (pane) =>
-          groupByIdRef.current.get(pane.groupId)?.collapsed === true,
-      });
-    },
-    [],
-  );
-  const sidebarPanes = useMemo(
-    () => panesForScope(panes, groups, "terminal"),
-    [groups, panes],
-  );
-  // Turn history is deliberately surface-owned. A workspace can retain hundreds
-  // of parked agents; hydrating every one copied their history through Rust,
-  // IPC, JSON, and React. Only agents of the visible surface keep the backend's
-  // bounded turn windows, and leaving the surface evicts what it owned.
-  const turnHistoryRequestKeyByAgentRef = useRef(new Map<string, string>());
-  const retainedTurnHistoryAgentIdsRef = useRef(new Set<string>());
-  const hydrateAgentHistory = useCallback(async (agent: AgentInfo) => {
-    const requestKey = agentHistoryRequestKey(agent);
-    const needsTurns = turnHistoryRequestKeyByAgentRef.current.get(agent.id) !== requestKey;
-    if (!needsTurns) {
-      return;
-    }
-    turnHistoryRequestKeyByAgentRef.current.set(agent.id, requestKey);
-    const turnsAtRequestStart = new Map(
-      turnsRef.current
-        .filter((turn) => turn.agentId === agent.id)
-        .map((turn) => [turn.id, turn]),
-    );
-    await listTurns(agent.id)
-      .then((existingTurns) => {
-        if (
-          !retainedTurnHistoryAgentIdsRef.current.has(agent.id) ||
-          turnHistoryRequestKeyByAgentRef.current.get(agent.id) !== requestKey
-        ) {
-          return;
-        }
-        // Do not let the snapshot overwrite turns delivered by the live event
-        // stream while the request was in flight. Same-id live objects win;
-        // genuinely new live turns are appended after the snapshot.
-        setTurns((current) => {
-          const liveById = new Map(
-            current
-              .filter((turn) => turn.agentId === agent.id)
-              .map((turn) => [turn.id, turn]),
-          );
-          const merged = existingTurns.map((turn) => {
-            const live = liveById.get(turn.id);
-            // Prefer only turns that arrived or changed after this request
-            // began. Previously hydrated same-id turns may belong to an old
-            // transcript generation and must be replaced by this snapshot.
-            return live && live !== turnsAtRequestStart.get(turn.id) ? live : turn;
-          });
-          const snapshotIds = new Set(existingTurns.map((turn) => turn.id));
-          for (const turn of liveById.values()) {
-            if (!snapshotIds.has(turn.id)) {
-              merged.push(turn);
-            }
-          }
-          const next = [
-            ...current.filter((turn) => turn.agentId !== agent.id),
-            ...merged,
-          ];
-          return next.length === current.length &&
-            next.every((turn, index) => turn === current[index])
-            ? current
-            : next;
-        });
-      })
-      .catch((err) => {
-        if (turnHistoryRequestKeyByAgentRef.current.get(agent.id) === requestKey) {
-          turnHistoryRequestKeyByAgentRef.current.delete(agent.id);
-          setError(err instanceof Error ? err.message : String(err));
-        }
-      });
-  }, []);
-  const fetchHomeTurnHistoryPage = useCallback(
-    async (agent: AgentInfo, before: string | null) => {
-      const requestKey = agentHistoryRequestKey(agent);
-      const sequence = (homeHistoryRequestSequenceByAgentRef.current.get(agent.id) ?? 0) + 1;
-      homeHistoryRequestSequenceByAgentRef.current.set(agent.id, sequence);
-      setHomeTurnHistoryByAgent((current) => {
-        const existing = current[agent.id];
-        const next: HomeTurnHistoryState =
-          before !== null && existing?.requestKey === requestKey
-            ? { ...existing, loading: true }
-            : { requestKey, pastTurns: [], nextBefore: null, loading: true };
-        return { ...current, [agent.id]: next };
-      });
-      try {
-        const page = await listHomeTurnHistory(agent.id, before);
-        if (
-          homeHistoryRequestSequenceByAgentRef.current.get(agent.id) !== sequence ||
-          homeHistoryRequestKeyByAgentRef.current.get(agent.id) !== requestKey
-        ) {
-          return;
-        }
-        const pageTurns = railPastTurnSummaries(page.turns);
-        setHomeTurnHistoryByAgent((current) => {
-          const existing = current[agent.id];
-          if (!existing || existing.requestKey !== requestKey) {
-            return current;
-          }
-          return {
-            ...current,
-            [agent.id]: {
-              requestKey,
-              pastTurns:
-                before === null
-                  ? pageTurns
-                  : mergeRailPastTurns(pageTurns, existing.pastTurns),
-              nextBefore: page.nextBefore,
-              loading: false,
-            },
-          };
-        });
-      } catch (err) {
-        if (
-          homeHistoryRequestSequenceByAgentRef.current.get(agent.id) === sequence &&
-          homeHistoryRequestKeyByAgentRef.current.get(agent.id) === requestKey
-        ) {
-          // Initial loads stamp the request key before the IPC call. On failure
-          // drop it so leaving/returning home or a soft retry can re-issue the
-          // same key instead of treating the blank history as a permanent load.
-          // "Load earlier" keeps the key so the button can retry the same page.
-          if (before === null) {
-            homeHistoryRequestKeyByAgentRef.current.delete(agent.id);
-          }
-          setHomeTurnHistoryByAgent((current) => {
-            const existing = current[agent.id];
-            return existing?.requestKey === requestKey
-              ? { ...current, [agent.id]: { ...existing, loading: false } }
-              : current;
-          });
-          setError(err instanceof Error ? err.message : String(err));
-          if (
-            before === null &&
-            homeHistoryRetryBudgetByAgentRef.current.get(agent.id) !== requestKey
-          ) {
-            homeHistoryRetryBudgetByAgentRef.current.set(agent.id, requestKey);
-            window.setTimeout(() => {
-              if (homeHistoryRequestKeyByAgentRef.current.has(agent.id)) {
-                return;
-              }
-              const live = agentsRef.current.find((candidate) => candidate.id === agent.id);
-              if (!live || agentHistoryRequestKey(live) !== requestKey) {
-                return;
-              }
-              homeHistoryRequestKeyByAgentRef.current.set(agent.id, requestKey);
-              void fetchHomeTurnHistoryPage(live, null);
-            }, 1_500);
-          }
-        }
-      }
-    },
-    [],
-  );
-  const historyTargetAgents = useMemo(
-    () =>
-      (terminalMapOpen ? sidebarPanes : visibleTerminalPanes).flatMap((pane) => {
-        const agent = agentByPaneId.get(pane.id);
-        return agent ? [agent] : [];
-      }),
-    [agentByPaneId, sidebarPanes, terminalMapOpen, visibleTerminalPanes],
-  );
-  const retainedTurnHistoryAgentIds = useMemo(
-    () => new Set(historyTargetAgents.map((agent) => agent.id)),
-    [historyTargetAgents],
-  );
-  retainedTurnHistoryAgentIdsRef.current = retainedTurnHistoryAgentIds;
-  useEffect(() => {
-    if (!terminalMapOpen) {
-      for (const agentId of homeHistoryRequestSequenceByAgentRef.current.keys()) {
-        homeHistoryRequestSequenceByAgentRef.current.set(
-          agentId,
-          (homeHistoryRequestSequenceByAgentRef.current.get(agentId) ?? 0) + 1,
-        );
-      }
-      homeHistoryRequestKeyByAgentRef.current.clear();
-      homeHistoryRetryBudgetByAgentRef.current.clear();
-      setHomeTurnHistoryByAgent((current) =>
-        Object.keys(current).length > 0 ? {} : current,
-      );
-      return;
-    }
-    const liveAgentIds = new Set(historyTargetAgents.map((agent) => agent.id));
-    setHomeTurnHistoryByAgent((current) => {
-      const entries = Object.entries(current).filter(([agentId]) => liveAgentIds.has(agentId));
-      return entries.length === Object.keys(current).length
-        ? current
-        : Object.fromEntries(entries);
-    });
-    for (const agentId of homeHistoryRequestKeyByAgentRef.current.keys()) {
-      if (!liveAgentIds.has(agentId)) {
-        homeHistoryRequestKeyByAgentRef.current.delete(agentId);
-        homeHistoryRetryBudgetByAgentRef.current.delete(agentId);
-      }
-    }
-    for (const agent of historyTargetAgents) {
-      const requestKey = agentHistoryRequestKey(agent);
-      if (homeHistoryRequestKeyByAgentRef.current.get(agent.id) === requestKey) {
-        continue;
-      }
-      // New session identity gets a fresh retry budget.
-      if (homeHistoryRetryBudgetByAgentRef.current.get(agent.id) !== requestKey) {
-        homeHistoryRetryBudgetByAgentRef.current.delete(agent.id);
-      }
-      homeHistoryRequestKeyByAgentRef.current.set(agent.id, requestKey);
-      void fetchHomeTurnHistoryPage(agent, null);
-    }
-  }, [fetchHomeTurnHistoryPage, historyTargetAgents, terminalMapOpen]);
-  useEffect(() => {
-    setTurns((current) => {
-      const retained = current.filter((turn) => retainedTurnHistoryAgentIds.has(turn.agentId));
-      return retained.length === current.length ? current : retained;
-    });
-    for (const agentId of turnHistoryRequestKeyByAgentRef.current.keys()) {
-      if (!retainedTurnHistoryAgentIds.has(agentId)) {
-        turnHistoryRequestKeyByAgentRef.current.delete(agentId);
-      }
-    }
-    for (const agent of historyTargetAgents) {
-      void hydrateAgentHistory(agent);
-    }
-  }, [historyTargetAgents, hydrateAgentHistory, retainedTurnHistoryAgentIds]);
   const researchAttentionState = useMemo(() => researchAttention(researchTrees), [researchTrees]);
   const runningResearchCount = researchAttentionState.runningCount;
-  const activeBrowserOwnerId = researchSurfaceActive
-    ? activeResearchTreeId
-      ? researchBrowserOwnerId(activeResearchTreeId)
-      : null
-    : (activePane?.id ?? null);
+  const activeBrowserOwnerId = activeResearchTreeId
+    ? researchBrowserOwnerId(activeResearchTreeId)
+    : null;
   const activeBrowserOverlay = activeBrowserOwnerId
     ? browserOverlayByPane[activeBrowserOwnerId]
     : undefined;
-  useEffect(() => {
-    if (
-      activePane?.groupId &&
-      groupById.get(activePane.groupId)?.scope === "terminal"
-    ) {
-      setLastActiveGroupId(activePane.groupId);
-    }
-  }, [activePane?.groupId, groupById]);
-  useEffect(() => {
-    if (!activeTabPersistenceReadyRef.current) {
-      return;
-    }
-    const activePaneIsTerminal =
-      activePane && groupById.get(activePane.groupId)?.scope === "terminal";
-    const nextActiveTabId = activePaneIsTerminal ? activePane.id : null;
-    if (!nextActiveTabId) {
-      return;
-    }
-    void setActiveTab(nextActiveTabId).catch(() => undefined);
-  }, [activePane, groupById]);
 
   function paneHasUserSetTitle(pane: PaneInfo, agent: AgentInfo | undefined): boolean {
     if (manuallyTitledPaneIdsRef.current.has(pane.id)) {
@@ -2670,7 +1924,7 @@ function MainApp() {
         next.add(paneId);
         return next;
       });
-      setPanesPreservingRecoveredDismissals((current) =>
+      setPanesReconciled((current) =>
         current.map((pane) => (pane.id === paneId ? { ...pane, title: updated.title } : pane)),
       );
     } catch (err) {
@@ -2764,14 +2018,6 @@ function MainApp() {
       const next = new Set([...current].filter((paneId) => ids.has(paneId)));
       return next.size === current.size ? current : next;
     });
-    setRegeneratingTitlePaneIds((current) => {
-      const next = new Set([...current].filter((paneId) => ids.has(paneId)));
-      if (next.size === current.size) {
-        return current;
-      }
-      regeneratingTitlePaneIdsRef.current = next;
-      return next;
-    });
     setBrowserOverlayByPane((current) => {
       const next = Object.fromEntries(
         Object.entries(current).filter(([ownerId]) => browserOwnerIds.has(ownerId)),
@@ -2781,11 +2027,6 @@ function MainApp() {
     for (const [agentId, pending] of pendingFirstTitleByAgentRef.current) {
       if (!ids.has(pending.paneId)) {
         pendingFirstTitleByAgentRef.current.delete(agentId);
-      }
-    }
-    for (const paneId of Object.keys(titleRegenerationSeqByPaneRef.current)) {
-      if (!ids.has(paneId)) {
-        delete titleRegenerationSeqByPaneRef.current[paneId];
       }
     }
   }, [archivedResearchTrees, panes, researchTrees]);
@@ -2815,123 +2056,15 @@ function MainApp() {
     }
   }, [browserOverlayByPane]);
 
-  // Drop per-agent UI state for agents that no longer exist, so these maps and refs
-  // don't grow unbounded across a long session of spawning and closing agents.
+  // Drop pending title requests for agents that no longer exist.
   useEffect(() => {
     const ids = new Set(agents.map((agent) => agent.id));
-    const pruneRecord = <T,>(current: Record<string, T>): Record<string, T> => {
-      const next = Object.fromEntries(Object.entries(current).filter(([id]) => ids.has(id)));
-      return Object.keys(next).length === Object.keys(current).length ? current : next;
-    };
-    setProcessingNewMessageByAgent(pruneRecord);
-    setThinkingAgentIds((current) => {
-      const next = new Set([...current].filter((id) => ids.has(id)));
-      return next.size === current.size ? current : next;
-    });
-    for (const id of Object.keys(queuedTurnsByAgentRef.current)) {
-      if (!ids.has(id)) delete queuedTurnsByAgentRef.current[id];
-    }
-    for (const id of Object.keys(draftsByAgentRef.current)) {
-      if (!ids.has(id)) delete draftsByAgentRef.current[id];
-    }
-    for (const id of Object.keys(hookEventsByAgentRef.current)) {
-      if (!ids.has(id)) delete hookEventsByAgentRef.current[id];
-    }
     for (const agentId of pendingFirstTitleByAgentRef.current.keys()) {
       if (!ids.has(agentId)) {
         pendingFirstTitleByAgentRef.current.delete(agentId);
       }
     }
   }, [agents]);
-
-  useEffect(() => {
-    setProcessingNewMessageByAgent((current) => {
-      const next = Object.fromEntries(
-        Object.entries(current).filter(([agentId]) => thinkingAgentIds.has(agentId)),
-      );
-      return Object.keys(next).length === Object.keys(current).length ? current : next;
-    });
-  }, [thinkingAgentIds]);
-
-  useEffect(() => {
-    setProcessingNewMessageByAgent((current) => {
-      const entries = Object.entries(current);
-      if (entries.length === 0) {
-        return current;
-      }
-
-      const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
-      let next: Record<string, string | null> | null = null;
-      const mutableNext = () => {
-        next ??= { ...current };
-        return next;
-      };
-
-      for (const [agentId, baselineUserTurnId] of entries) {
-        const agent = agentsById.get(agentId);
-        if (!agent) {
-          delete mutableNext()[agentId];
-          continue;
-        }
-
-        const agentTurns = turns.filter((turn) => turn.agentId === agentId);
-        const adapter = getAgentUiAdapter(agent.adapter);
-        const normalizedTurns = adapter.normalizeTurns?.(agentTurns) ?? agentTurns;
-        const latestTurnId = latestUserTurnId(normalizedTurns);
-        if (latestTurnId && latestTurnId !== baselineUserTurnId) {
-          delete mutableNext()[agentId];
-        }
-      }
-
-      return next ?? current;
-    });
-  }, [agents, processingNewMessageByAgent, turns]);
-
-  useEffect(() => {
-    const pendingAgentIds = Array.from(pendingFirstTitleByAgentRef.current.keys());
-    if (pendingAgentIds.length === 0) {
-      return;
-    }
-
-    for (const agentId of pendingAgentIds) {
-      for (const turn of turns) {
-        if (!pendingFirstTitleByAgentRef.current.has(agentId)) {
-          break;
-        }
-        if (turn.agentId !== agentId) {
-          continue;
-        }
-        const text = firstUserTurnText(turn);
-        if (text) {
-          applyPendingFirstMessageTitle(agentId, text, { turnId: turn.id });
-        }
-      }
-    }
-  }, [turns]);
-
-  // Called on each keystroke in an agent's composer or terminal. Sets a backend
-  // "typing" hold (so a finishing turn won't auto-drain into what the user is typing)
-  // and schedules its release INPUT_DEQUEUE_HOLD_MS after the last keystroke; the
-  // release drains a held turn if the agent is idle.
-  function noteUserInput(agentId: string) {
-    const current = agentTypingRef.current;
-    if (current && current.agentId !== agentId) {
-      // The user moved to a different agent; release the previous hold immediately.
-      window.clearTimeout(current.timer);
-      void setAgentTyping(current.agentId, false).catch(() => undefined);
-      agentTypingRef.current = null;
-    }
-    if (agentTypingRef.current) {
-      window.clearTimeout(agentTypingRef.current.timer);
-    } else {
-      void setAgentTyping(agentId, true).catch(() => undefined);
-    }
-    const timer = window.setTimeout(() => {
-      agentTypingRef.current = null;
-      void setAgentTyping(agentId, false).catch(() => undefined);
-    }, INPUT_DEQUEUE_HOLD_MS);
-    agentTypingRef.current = { agentId, timer };
-  }
 
   // Opens (or replaces) a pane's browser overlay with a URL, bumping the reload nonce
   // so even re-opening the same URL reloads. Driven by the browser.open event.
@@ -3048,22 +2181,6 @@ function MainApp() {
   function closeAllBrowserOverlays() {
     setBrowserOverlayByPane((current) => closeAllBrowserOverlaysState(current));
     void hideEveryHumanBrowser();
-  }
-
-  function toggleActiveBrowserOverlay() {
-    if (anyBrowserOverlayOpen(browserOverlayByPaneRef.current)) {
-      closeAllBrowserOverlays();
-      return;
-    }
-    void hideEveryHumanBrowser().then((hidden) => {
-      if (hidden > 0) {
-        return;
-      }
-      const ownerId = activeBrowserOwnerIdRef.current;
-      if (ownerId) {
-        toggleBrowserOverlay(ownerId);
-      }
-    });
   }
 
   function closeActiveBrowserOverlay() {
@@ -3255,7 +2372,6 @@ function MainApp() {
     return actions;
   }
 
-
   const imageLightbox = useSyncExternalStore(
     subscribeImageLightbox,
     getImageLightbox,
@@ -3269,28 +2385,17 @@ function MainApp() {
     getDiagramLightbox,
     getDiagramLightbox,
   );
-  // This is the shared hard-input policy for every visible native surface and
-  // for the logical owner calculation below. Keeping it single-sourced avoids
-  // a modal disabling pointer claims while the owner coordinator still grants
-  // keyboard input (or vice versa).
-  // Only a search/confirm overlay on a *visible* pane should revoke native
-  // keyboard ownership. A pane keeps its overlay-open state while hidden (a
-  // find bar left open when the user switched tabs), and its unchanged
-  // searchOpen never re-fires the publish effect — so gating on the raw set
-  // would let an off-screen pane keyboard-deaden the terminal actually on
-  // screen. Intersecting with the visible set matches how the expanded
-  // transcript and browser overlays are already visibility-derived.
+  // The native browser view draws above the webview, so it yields to any
+  // app-level dialog or menu that would otherwise sit underneath it.
   const nativeModalOccluded = Boolean(
     settingsOpen ||
       agentsOpen ||
       imageLightbox !== null ||
       diagramLightbox !== null ||
-      terminalMapOpen ||
       commandPaletteOpen ||
-      closeDialog ||
+      researchFolderRemoval ||
       exitDialog ||
       exitPreflightRequest ||
-      renamePaneId ||
       renameGroupId ||
       linkMenu,
   );
@@ -3310,50 +2415,10 @@ function MainApp() {
     agentsRef.current = agents;
   }, [agents]);
 
-  function replaceQueuedTurnsByAgent(nextQueues: Record<string, QueuedTurn[]>) {
-    queuedTurnsByAgentRef.current = nextQueues;
-  }
-
-  function setAgentQueuedTurns(agentId: string, queuedTurns: QueuedTurn[]) {
-    // Any write advances the agent's queue generation so a slower in-flight
-    // refreshAgentTurnQueue() sees it was superseded and drops its stale list.
-    agentTurnQueueSeqRef.current[agentId] = (agentTurnQueueSeqRef.current[agentId] ?? 0) + 1;
-    const previousQueues = queuedTurnsByAgentRef.current;
-    const nextQueues = {
-      ...previousQueues,
-      [agentId]: queuedTurns,
-    };
-    queuedTurnsByAgentRef.current = nextQueues;
-  }
-
-  // Composer-local edit flushers, registered by each mounted NativeInput. The
-  // composer holds keystrokes locally behind a short debounce, so a quit/close
-  // flush must first pull those edits into draftsByAgentRef before writing to
-  // disk — otherwise the last moments of typing are invisible to it.
-  const composerDraftFlushersRef = useRef(new Set<() => void>());
-
-  // Flushes every still-pending debounced draft right now (used when the window is
-  // going away, so the last second of typing is not lost on a quick close).
-  function flushPendingDrafts() {
-    // Drain composer-local edits first; each flusher synchronously pushes into
-    // draftsByAgentRef (and re-arms a disk timer that the loop below collects).
-    for (const flush of composerDraftFlushersRef.current) {
-      flush();
-    }
-    const timers = draftFlushTimersRef.current;
-    for (const [agentId, timer] of Object.entries(timers)) {
-      clearTimeout(timer);
-      delete timers[agentId];
-      void persistAgentDraft(agentId, draftsByAgentRef.current[agentId] ?? "").catch(
-        () => undefined,
-      );
-    }
-  }
-
-  // Compact directory label for a pane tab. Worktrees under the workspace root
-  // are shown relative to it (e.g. "group-1/agent-1"); home paths use ~/ and
-  // other paths fall back to their last two segments so the meaningful tail stays
-  // visible. The full path is preserved in the tab's title attribute.
+  // Compact directory label, the fallback name of a group whose directory has
+  // no last segment. Paths under the workspace root are shown relative to it
+  // (e.g. "group-1/agent-1"); home paths use ~/ and other paths fall back to
+  // their last two segments so the meaningful tail stays visible.
   function formatPaneDir(rawPath: string): string {
     const workspaceRoot = config?.workspaceRoot;
     if (workspaceRoot && rawPath.startsWith(`${workspaceRoot}/`)) {
@@ -3404,268 +2469,11 @@ function MainApp() {
     return group.nameOverride?.trim() || defaultGroupName(group);
   }
 
-  // Computes the spawned pane's position locally and returns the reordered
-  // list without waiting for the backend to persist that order, so the new
-  // pane mounts — and its terminal becomes visible — one IPC round-trip
-  // sooner. The backend's authoritative result reconciles the list when it
-  // arrives; if persisting fails (e.g. the pane already closed), the backend
-  // keeps spawn (append) order and the next authoritative pane update applies
-  // it here too, so the failure is deliberately not surfaced as a spawn error.
-  function placePaneAfterOptimistically(
-    pane: PaneInfo,
-    siblingPaneId: string | null,
-    persistPlacement = true,
-  ): PaneInfo[] {
-    const current = panesRef.current.filter((existing) => existing.id !== pane.id);
-    if (!siblingPaneId || siblingPaneId === pane.id) {
-      return [...current, pane];
-    }
-    const siblingIndex = current.findIndex((existing) => existing.id === siblingPaneId);
-    if (siblingIndex === -1) {
-      return [...current, pane];
-    }
-    if (persistPlacement) {
-      void placePaneAfter(pane.id, siblingPaneId)
-        .then((orderedPanes) => setPanesPreservingRecoveredDismissals(orderedPanes))
-        .catch(() => undefined);
-    }
-    return [...current.slice(0, siblingIndex + 1), pane, ...current.slice(siblingIndex + 1)];
-  }
-
-  async function refreshGroups() {
-    setGroups(await listGroups());
-  }
-
-  // The new pane's grid, as a share of the pane it splits — not of the stage,
-  // which is wrong for any pane nested inside a branch. Spawning at the wrong
-  // grid means the first layout sync resizes a brand new PTY, and a resize
-  // SIGWINCHes full-screen TUIs into a clear and re-layout.
-  function estimateSplitPaneSize(
-    sourcePane: PaneInfo,
-    axis: PaneSplitAxis,
-    scale: number,
-  ): InitialPaneSize {
-    const stage = estimateInitialPaneSize(false);
-    const cols = sourcePane.cols > 0 ? sourcePane.cols : stage.cols;
-    const rows = sourcePane.rows > 0 ? sourcePane.rows : stage.rows;
-    if (axis === "horizontal") {
-      return {
-        rows: clamp(rows, MIN_INITIAL_ROWS, Math.max(MIN_INITIAL_ROWS, stage.rows)),
-        cols: clamp(
-          Math.floor(cols * scale),
-          MIN_INITIAL_COLS,
-          Math.max(MIN_INITIAL_COLS, stage.cols),
-        ),
-      };
-    }
-    return {
-      cols: clamp(cols, MIN_INITIAL_COLS, Math.max(MIN_INITIAL_COLS, stage.cols)),
-      rows: clamp(
-        Math.floor(rows * scale),
-        MIN_INITIAL_ROWS,
-        Math.max(MIN_INITIAL_ROWS, stage.rows),
-      ),
-    };
-  }
-
-  async function splitPaneBelow(sourcePane: PaneInfo) {
-    return splitTerminal(sourcePane, "vertical");
-  }
-
-  async function splitPaneRight(sourcePane: PaneInfo) {
-    return splitTerminal(sourcePane, "horizontal");
-  }
-
-  /** Whether the pane can be split along `axis` without dropping a resulting
-   * pane below the resize floor. A pane outside any split always can. */
-  function canSplitTerminal(sourcePane: PaneInfo, axis: PaneSplitAxis) {
-    const split = paneSplitForPane(paneSplitsRef.current, sourcePane.id);
-    if (!split || split.paneIds.length < 2) {
-      return true;
-    }
-    const stageRect = mainStageRef.current?.getBoundingClientRect();
-    if (!stageRect) {
-      return false;
-    }
-    return canSplitPaneInTree({
-      split,
-      paneId: sourcePane.id,
-      axis,
-      stage: { width: stageRect.width, height: stageRect.height },
-      gutter: TERMINAL_SPLIT_GUTTER_PX,
-      minWidth: TERMINAL_SPLIT_MIN_WIDTH,
-      minHeight: TERMINAL_SPLIT_MIN_HEIGHT,
-    });
-  }
-
-  async function splitTerminal(sourcePane: PaneInfo, requestedAxis: PaneSplitAxis) {
-    const existingSplit = paneSplitForPane(paneSplitsRef.current, sourcePane.id);
-    const inSplit = Boolean(existingSplit && existingSplit.paneIds.length >= 2);
-    // Refusing beats producing an unusable pane, and bounding depth by real
-    // screen area beats an arbitrary nesting cap.
-    if (!canSplitTerminal(sourcePane, requestedAxis)) {
-      return;
-    }
-    // Splitting along the pane's own branch axis appends a sibling; across it,
-    // the pane becomes a two-child branch — the nesting step. Either way the new
-    // tab lands immediately after the source, so tab order matches the tree.
-    const branchAxis =
-      inSplit && existingSplit ? splitAxisForPane(existingSplit, sourcePane.id) : null;
-    const siblingCount =
-      existingSplit && branchAxis === requestedAxis
-        ? splitBranchChildCountForPane(existingSplit, sourcePane.id)
-        : 1;
-    const scale = siblingCount > 1 ? siblingCount / (siblingCount + 1) : 0.5;
-    setError(null);
-    try {
-      const pane = await spawnShell(
-        estimateSplitPaneSize(sourcePane, requestedAxis, scale),
-        sourcePane.kind === "shell" ? sourcePane.id : null,
-        sourcePane.groupId,
-      );
-      const orderedPanes = placePaneAfterOptimistically(pane, sourcePane.id);
-      setPanesPreservingRecoveredDismissals(orderedPanes);
-      savePaneSplits(
-        joinPaneSplit(paneSplitsRef.current, orderedPanes, sourcePane.id, pane.id, {
-          insertedPaneId: pane.id,
-          source: "command",
-          axis: requestedAxis,
-          nestAxis: requestedAxis,
-        }),
-        orderedPanes,
-      );
-      setActivePaneId(pane.id);
-      setLastActiveGroupId(pane.groupId);
-      if (pane.remoteSession) requestAnimationFrame(() => requestAnimationFrame(() => recordRemoteStartup(pane.id, "visible")));
-      await refreshGroups();
-      requestAnimationFrame(() => {
-
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function refreshAgentTurnQueue(agentId: string) {
-    const requestSeq = (agentTurnQueueSeqRef.current[agentId] ?? 0) + 1;
-    agentTurnQueueSeqRef.current[agentId] = requestSeq;
-    const queuedTurns = await listAgentTurnQueue(agentId);
-    // A newer write (another refresh, or an event-driven queue update) landed while we
-    // awaited, so our list is stale — drop it rather than overwrite fresher state.
-    if (agentTurnQueueSeqRef.current[agentId] !== requestSeq) {
-      return;
-    }
-    setAgentQueuedTurns(agentId, queuedTurns);
-  }
-
-
-  function paneIdsForSplitStatusGroup(paneId: string): string[] {
-    const split = paneSplitForPane(paneSplitsRef.current, paneId);
-    if (!split) {
-      return [paneId];
-    }
-    const livePaneIds = new Set(panesRef.current.map((pane) => pane.id));
-    const paneIds = split.paneIds.filter((candidate) => livePaneIds.has(candidate));
-    return paneIds.length > 0 ? paneIds : [paneId];
-  }
-
-  function agentsForSplitStatusGroup(paneId: string): AgentInfo[] {
-    const paneIds = new Set(paneIdsForSplitStatusGroup(paneId));
-    return agentsRef.current.filter((agent) => agent.paneId && paneIds.has(agent.paneId));
-  }
-
-  function replaceAgents(updatedAgents: AgentInfo[]) {
-    if (updatedAgents.length === 0) {
-      return;
-    }
-    const updatedById = new Map<string, AgentInfo>(
-      updatedAgents.map((agent) => [agent.id, agent]),
-    );
-    setAgents((current) => current.map((agent) => updatedById.get(agent.id) ?? agent));
-  }
-
-  async function acknowledgeAgentStatuses(
-    targetAgents: AgentInfo[],
-    includeFailed = false,
-    checkBackend = false,
-  ) {
-    const dismissibleAgents = checkBackend
-      ? targetAgents
-      : targetAgents.filter(
-          (agent) => agent.status === "done" || (includeFailed && agent.status === "failed"),
-        );
-    if (dismissibleAgents.length === 0) {
-      return;
-    }
-    setError(null);
-    try {
-      const results = await Promise.all(
-        dismissibleAgents.map((agent) =>
-          acknowledgeAgent(agent.id, includeFailed).catch((err: unknown) => {
-            // A pane close races the attention probe: the backend prunes the
-            // agent before the frontend forgets its pane. Acknowledging a
-            // pruned agent has nothing left to do (the close path already
-            // released its waiters), so drop it instead of surfacing an error.
-            if (String(err).includes(`agent ${agent.id} was not found`)) {
-              return null;
-            }
-            throw err;
-          }),
-        ),
-      );
-      const acknowledged = results.filter((agent): agent is AgentInfo => agent !== null);
-      replaceAgents(
-        checkBackend ? applicableSpeculativeAcknowledgements(acknowledged) : acknowledged,
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  function acknowledgePaneIfDone(
-    paneId: string | null,
-    checkBackend = false,
-    intentional = false,
-  ) {
-    if (!paneId) {
-      return;
-    }
-    const attentionBase = {
-      activeSurface: activeSurfaceRef.current,
-      activePaneId: activePaneIdRef.current,
-      paneId,
-      paneExists: panesRef.current.some((pane) => pane.id === paneId),
-      documentVisible: document.visibilityState === "visible",
-    };
-    // App focus covers both the webview and a native terminal first-responder
-    // inside the focused Session window. document.hasFocus() alone misses the
-    // latter, which is exactly how keyboard tab switches arrive.
-    const appFocused = document.hasFocus() || nativeWindowFocusedRef.current;
-    const allowed = intentional
-      ? terminalPaneWasIntentionallyActivated(attentionBase)
-      : terminalPaneHasUserAttention({ ...attentionBase, appFocused });
-    if (!allowed) {
-      return;
-    }
-    if (checkBackend) {
-      const now = performance.now();
-      const lastProbeAt = terminalAttentionProbeAtRef.current.get(paneId);
-      // Intentional activation always probes: a prior ambient key/scroll probe
-      // on this pane must not swallow the Done clear for a real tab switch.
-      if (!intentional && !terminalAttentionProbeIsDue(lastProbeAt, now)) {
-        return;
-      }
-      terminalAttentionProbeAtRef.current.set(paneId, now);
-    }
-    void acknowledgeAgentStatuses(agentsForSplitStatusGroup(paneId), false, checkBackend);
-  }
-
   // The sidebar may grow until the stage would fall below its minimum, capped
-  // by a comfortable absolute maximum. Column splits reserve 200px per pane
-  // plus gutters.
+  // by a comfortable absolute maximum.
   function maxSidebarWidth() {
     const appWidth = appRef.current?.getBoundingClientRect().width ?? window.innerWidth;
-    const available = Math.floor(appWidth - reservedTerminalStageMinWidth);
+    const available = Math.floor(appWidth - RESEARCH_STAGE_MIN_WIDTH);
     return Math.max(LEFT_SIDEBAR_MIN_WIDTH, Math.min(LEFT_SIDEBAR_MAX_WIDTH, available));
   }
 
@@ -3673,10 +2481,6 @@ function MainApp() {
     // Keep the sidebar boundary on a whole CSS pixel so its 1px separator
     // cannot be antialiased across two adjacent pixel columns.
     return Math.round(clamp(width, LEFT_SIDEBAR_MIN_WIDTH, maxSidebarWidth()));
-  }
-
-  function estimateInitialPaneSize(_willShowTurnPane: boolean): InitialPaneSize {
-    return { cols: DEFAULT_INITIAL_COLS, rows: DEFAULT_INITIAL_ROWS };
   }
 
   // Preserve the existing bounded research/transcript text zoom.
@@ -3694,7 +2498,7 @@ function MainApp() {
 
   useAppStartup({
     applySecondary: ({ storedOpenRouterKey, storedUseLoginShell, storedWorktreeLocation,
-      storedResearchLaunchInstruction, queueEntries, draftEntries }) => {
+      storedResearchLaunchInstruction }) => {
       // Hydrate the OpenRouter key from the backend (its durable home). If the backend
       // has none but a key survives in an old localStorage settings blob, migrate that
       // value into the backend once; either way the in-memory settings track the key.
@@ -3728,29 +2532,12 @@ function MainApp() {
               researchLaunchInstruction: effectiveResearchLaunchInstruction,
             };
       });
-
-      // Live entries win over the snapshot: a queue event or a draft the
-      // user already typed since the window appeared is fresher than the
-      // boot-time disk state, and clobbering a live draft would erase text
-      // mid-composition (and then persist the stale value).
-      replaceQueuedTurnsByAgent({
-        ...Object.fromEntries(queueEntries),
-        ...queuedTurnsByAgentRef.current,
-      });
-      const restoredDrafts = {
-        ...Object.fromEntries(
-          draftEntries.filter((entry): entry is [string, string] => Boolean(entry[1])),
-        ),
-        ...draftsByAgentRef.current,
-      };
-      draftsByAgentRef.current = restoredDrafts;
     },
-    applyInitial: async ({ runtimeConfig, existingGroups, existingPanes, existingPaneSplits,
+    applyInitial: async ({ runtimeConfig, existingGroups, existingPanes,
       existingAgents, existingResearchTrees, existingResearchActivity,
       existingRecentActivity }, isCancelled) => {
       setConfig(runtimeConfig);
       setGroups(existingGroups);
-      setPaneSplitsState(normalizePaneSplitsForPanes(existingPaneSplits, existingPanes));
       setAgents(existingAgents);
       setAgentsHydrated(true);
       const partitionedResearchTrees = partitionResearchTrees(existingResearchTrees);
@@ -3788,10 +2575,6 @@ function MainApp() {
             setActiveResearchTreeId(null);
             setActiveResearchDetail(null);
             setActiveResearchDetailError(null);
-            activeResearchPaneIdRef.current = null;
-            setActiveResearchPaneId(null);
-            localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
-            showResearchSurface();
           }
           return;
         }
@@ -3811,230 +2594,42 @@ function MainApp() {
             setActiveResearchDetail((current) =>
               reconcileResearchTreeDetail(current, detail),
             );
-            const restoredResearchPaneId = localStorage.getItem(ACTIVE_RESEARCH_PANE_KEY);
-            const restoredResearchPane = existingPanes.find(
-              (pane) =>
-                pane.id === restoredResearchPaneId &&
-                existingGroups.find((group) => group.id === pane.groupId)?.scope === "research" &&
-                workspaceIsInResearchScope(pane.groupId, restoredResearchScope),
-            );
-            if (restoredResearchPane) {
-              activeResearchPaneIdRef.current = restoredResearchPane.id;
-              setActiveResearchPaneId(restoredResearchPane.id);
-              activePaneIdRef.current = restoredResearchPane.id;
-              setActivePaneIdState(restoredResearchPane.id);
-              showResearchSurface();
-            } else {
-              showResearchSurface();
-              if (
-                researchThreadIsVisible(
-                  researchTreeToRestore.id,
-                  "research",
-                  researchTreeToRestore.id,
-                )
-              ) {
-                void markResearchTreeViewed(researchTreeToRestore.id)
-                  .then(() => {
-                    if (isCancelled()) return;
-                    setResearchTrees((current) =>
-                      current.map((tree) =>
-                        tree.id === researchTreeToRestore.id
-                          ? { ...tree, hasUnseenUpdate: false, hasUnseenFailure: false }
-                          : tree,
-                      ),
-                    );
-                  })
-                  .catch(() => undefined);
-              }
+            if (researchThreadIsVisible(researchTreeToRestore.id, researchTreeToRestore.id)) {
+              void markResearchTreeViewed(researchTreeToRestore.id)
+                .then(() => {
+                  if (isCancelled()) return;
+                  setResearchTrees((current) =>
+                    current.map((tree) =>
+                      tree.id === researchTreeToRestore.id
+                        ? { ...tree, hasUnseenUpdate: false, hasUnseenFailure: false }
+                        : tree,
+                    ),
+                  );
+                })
+                .catch(() => undefined);
             }
           }
         } catch (err) {
-          // Mirror selectResearchTree's failure path when booting into
-          // Research mode: keep the selection and surface the error inside
-          // the thread page (which has a working Retry) — silently dropping
-          // the key left the Research sidebar paired with a terminal pane
-          // on the stage and nothing able to recover. A later navigation
-          // refresh clears the selection if the tree is truly gone.
+          // Mirror selectResearchTree's failure path: keep the selection and
+          // surface the error inside the thread page (which has a working
+          // Retry). A later navigation refresh clears the selection if the
+          // tree is truly gone.
           if (!isCancelled()) {
             seedRestoredVisit();
             setActiveResearchTreeId(researchTreeToRestore.id);
             localStorage.setItem(ACTIVE_RESEARCH_TREE_KEY, researchTreeToRestore.id);
             setActiveResearchDetailError(err instanceof Error ? err.message : String(err));
-            showResearchSurface();
           }
         }
       };
 
       if (!isCancelled()) {
-        setPanesPreservingRecoveredDismissals(existingPanes);
-        activePaneIdRef.current = null;
-        setActivePaneIdState(null);
-        activeTabPersistenceReadyRef.current = true;
+        setPanesReconciled(existingPanes);
         await restoreResearchSelection();
       }
     },
     onError: (err) => setError(err instanceof Error ? err.message : String(err)),
   });
-
-  // Persist any debounced-but-unwritten drafts when the window is hidden or the
-  // app unmounts, so a quick close never drops the last second of typing.
-  useEffect(() => {
-    const handlePageHide = () => flushPendingDrafts();
-    window.addEventListener("pagehide", handlePageHide);
-    return () => {
-      window.removeEventListener("pagehide", handlePageHide);
-      flushPendingDrafts();
-    };
-  }, []);
-
-  useEffect(() => {
-    // Probe the backend on a real view transition. Its Done event can still be
-    // crossing the event bridge, so the local agent snapshot is not sufficient.
-    // Intentional: activePaneId changes are user/system navigation to this pane
-    // (keyboard cycle, click, restore), including while a native terminal owns
-    // first responder and document.hasFocus() is false.
-    acknowledgePaneIfDone(activePaneId, true, true);
-  }, [activePaneId, activeSurface]);
-
-  useEffect(() => {
-    // If the pane was already visible when Done arrived, acknowledge it as soon
-    // as the event reaches React instead of waiting for another focus change.
-    // Ambient: requires the Session window to be focused so a backgrounded app
-    // does not clear Done on a still-selected pane.
-    acknowledgePaneIfDone(activePaneId);
-  }, [activePaneId, activeSurface, agents, paneSplits]);
-
-  // Selecting a pane clears its one-time "Restored" badge automatically — the same
-  // dismiss-on-select behavior as a done agent's review status — so it's never a
-  // manual click. Guarded so it only fires for a pane that still carries the badge.
-  useEffect(() => {
-    if (!activePaneId) {
-      return;
-    }
-    const paneIds = new Set(paneIdsForSplitStatusGroup(activePaneId));
-    if (panes.some((pane) => pane.recovered && paneIds.has(pane.id))) {
-      dismissRecoveredBadge(activePaneId);
-    }
-  }, [activePaneId, paneSplits, panes]);
-
-  // Report the focused pane to the backend so it can stamp `last_active_at`, which
-  // feeds the group's spawn-cwd heuristic (most-recently-active shell pane). One
-  // effect for every setActivePaneId call site; the legacy Home sentinel is not
-  // a real pane.
-  useEffect(() => {
-    if (!activePaneId || activePaneId === HOME_TAB_ID) {
-      return;
-    }
-    void activatePane(activePaneId).catch(() => {});
-  }, [activePaneId]);
-
-  useEffect(() => {
-    const handleFocus = () => acknowledgePaneIfDone(activePaneIdRef.current, true);
-    const handleBlur = () => terminalAttentionProbeAtRef.current.clear();
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        handleFocus();
-      }
-    };
-    const appWindow = getCurrentWindow();
-    let disposed = false;
-    let unlistenNativeFocus: (() => void) | undefined;
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("blur", handleBlur);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    void appWindow
-      .onFocusChanged(({ payload: focused }) => {
-        if (focused) {
-          handleFocus();
-          // Tauri can report native focus just before WebKit updates
-          // document.hasFocus(). Sample once more after that handoff.
-          requestAnimationFrame(handleFocus);
-        } else {
-          handleBlur();
-        }
-      })
-      .then((unlisten) => {
-        if (disposed) {
-          unlisten();
-        } else {
-          unlistenNativeFocus = unlisten;
-        }
-      })
-      .catch(() => undefined);
-    return () => {
-      disposed = true;
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("blur", handleBlur);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      unlistenNativeFocus?.();
-    };
-  }, []);
-
-  // Flushes a pane's pre-attach output backlog, retrying on failure. attachPane is
-  // idempotent (a repeat call is a no-op once the pane is already flushed), so retrying
-  // can't double-deliver output. A silently-swallowed failure here used to leave the
-  // terminal blank with no backlog and no recovery; instead we retry with backoff to
-  // ride out a transient race, and surface a persistent failure — but only when the pane
-  // is still open, since a pane that closed in the meantime failing to attach is expected.
-  const attachPaneWithRetry = useCallback((paneId: string) => {
-    const attempt = (remaining: number, delayMs: number) => {
-      void attachPane(paneId).catch((err) => {
-        if (remaining <= 0) {
-          const stillOpen = panesRef.current.some((pane) => pane.id === paneId);
-          console.error(
-            `session: failed to attach pane ${paneId}${stillOpen ? "" : " (pane already closed)"}:`,
-            err,
-          );
-          if (stillOpen) {
-            setError("A terminal couldn't finish loading its output — reselect the tab to retry.");
-          }
-          return;
-        }
-        window.setTimeout(
-          () => attempt(remaining - 1, Math.min(delayMs * 2, ATTACH_MAX_RETRY_MS)),
-          delayMs,
-        );
-      });
-    };
-    attempt(ATTACH_MAX_RETRIES, ATTACH_INITIAL_RETRY_MS);
-  }, []);
-
-  const handleEventsReady = useCallback(() => {
-    eventsReadyRef.current = true;
-    const pending = pendingAttachRef.current;
-    pendingAttachRef.current = new Set();
-    for (const paneId of pending) {
-      attachPaneWithRetry(paneId);
-    }
-  }, [attachPaneWithRetry]);
-
-  function savePaneSplits(nextSplits: PaneSplitInfo[], paneSnapshot = panes) {
-    const normalized = normalizePaneSplitsForPanes(nextSplits, paneSnapshot);
-    setPaneSplitsState(normalized);
-    void persistPaneSplits(normalized)
-      .then((persisted) => {
-        const paneBasis = paneSnapshotForPersistedPaneSplits(
-          persisted,
-          panesRef.current,
-          paneSnapshot,
-        );
-        setPaneSplitsState(normalizePaneSplitsForPanes(persisted, paneBasis));
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : String(err));
-      });
-  }
-
-  useEffect(() => {
-    setPaneSplitsState((current) => {
-      const normalized = normalizePaneSplitsForPanes(current, panes);
-      if (paneSplitsEqual(current, normalized)) {
-        return current;
-      }
-      void persistPaneSplits(normalized).catch(() => undefined);
-      return normalized;
-    });
-  }, [panes]);
 
   const clearResearchUnseen = useCallback((treeId: string) => {
     // Both attention flags: viewing acknowledges failures exactly like
@@ -4144,12 +2739,9 @@ function MainApp() {
   }, [pruneResearchTreeVisits, recordResearchVisit]);
   const markVisibleResearchTreeViewed = useCallback(
     async (treeId: string, options: ResearchViewedAckOptions = {}) => {
-      const threadVisible = researchThreadIsVisible(
-        treeId,
-        activeSurfaceRef.current,
-        activeResearchTreeIdRef.current,
-      );
-      if (!options.exposureConfirmed && !threadVisible) {
+      const threadVisible = researchThreadIsVisible(treeId, activeResearchTreeIdRef.current);
+      if (!threadVisible) {
+
         return;
       }
       const hadUnseen =
@@ -4219,11 +2811,7 @@ function MainApp() {
   const selectResearchTree = useCallback(async (treeId: string) => {
     const requestSeq = researchDetailRequestSeqRef.current + 1;
     researchDetailRequestSeqRef.current = requestSeq;
-    showResearchSurface();
     setFeedOpen(false);
-    activeResearchPaneIdRef.current = null;
-    setActiveResearchPaneId(null);
-    localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
     activeResearchTreeIdRef.current = treeId;
     setActiveResearchTreeId(treeId);
     localStorage.setItem(ACTIVE_RESEARCH_TREE_KEY, treeId);
@@ -4354,17 +2942,13 @@ function MainApp() {
     // Invalidate a tree request that may still be landing while Home is
     // selected; otherwise its detail can repaint behind the launcher.
     researchDetailRequestSeqRef.current += 1;
-    showResearchSurface();
     setFeedOpen(true);
-    activeResearchPaneIdRef.current = null;
-    setActiveResearchPaneId(null);
-    localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
     activeResearchTreeIdRef.current = null;
     setActiveResearchTreeId(null);
     setActiveResearchDetail(null);
     setActiveResearchDetailError(null);
     localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
-  }, [recordResearchVisit, showResearchSurface, setFeedOpen]);
+  }, [recordResearchVisit, setFeedOpen]);
   // Brings the feed page forward on the research surface. Tree selection is
   // left standing (the feed outranks the thread in the stage selector),
   // so closing the feed by picking a tree is a plain selection.
@@ -4373,28 +2957,19 @@ function MainApp() {
     // opening it drops the tree selection the way Home does, so the sidebar
     // never shows a selected row behind the tab that is actually forward.
     researchDetailRequestSeqRef.current += 1;
-    showResearchSurface();
-    activeResearchPaneIdRef.current = null;
-    setActiveResearchPaneId(null);
-    localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
     activeResearchTreeIdRef.current = null;
     setActiveResearchTreeId(null);
     setActiveResearchDetail(null);
     setActiveResearchDetailError(null);
     localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
     setFeedOpen(true);
-  }, [showResearchSurface, setFeedOpen]);
+  }, [setFeedOpen]);
   // Which list the feed column shows: Home, Bookmarks, Highlights, Drafts,
   // Archive, or a user folder. Switching lists keeps the open thread.
   const [feedPage, setFeedPage] = useState<ResearchFeedPage>({ kind: "home" });
-  const researchFeedColumnVisible = researchStageView !== null;
-  const openFeedPage = useCallback(
-    (view: ResearchFeedPage) => {
-      setFeedPage(view);
-      showResearchSurface();
-    },
-    [showResearchSurface],
-  );
+  const openFeedPage = useCallback((view: ResearchFeedPage) => {
+    setFeedPage(view);
+  }, []);
   // Folders, drafts, and moving questions between them. Toasts confirm moves
   // with Undo; drags run on pointer events shared by feed, sidebar, and rail.
   const {
@@ -4569,7 +3144,7 @@ function MainApp() {
       }
     }
   }, []);
-  const highlightsFeedVisible = researchStageView !== null && feedPage.kind === "highlights";
+  const highlightsFeedVisible = feedPage.kind === "highlights";
   useEffect(() => {
     if (!highlightsFeedVisible) return;
     void refreshResearchHighlights();
@@ -5267,16 +3842,12 @@ function MainApp() {
       // must not leave the composer covering the tree it just created. A
       // document submit's own composer is dirty here, so it is unaffected and
       // closes itself right after this adopt.
-      showResearchSurface();
       // Clear feedOpen so the new thread is visible after closing a
       // conversation or opening a draft.
       setFeedOpen(false);
       // A new question is a visit like opening one: Back returns to what was
       // open before it.
       recordResearchVisit({ kind: "node", treeId: detail.tree.id, nodeId: null });
-      activeResearchPaneIdRef.current = null;
-      setActiveResearchPaneId(null);
-      localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
       activeResearchTreeIdRef.current = detail.tree.id;
       setActiveResearchTreeId(detail.tree.id);
       localStorage.setItem(ACTIVE_RESEARCH_TREE_KEY, detail.tree.id);
@@ -5288,7 +3859,7 @@ function MainApp() {
         changeResearchWorkspaceScope(detail.tree.workspaceId);
       }
     },
-    [changeResearchWorkspaceScope, recordResearchVisit, setFeedOpen, showResearchSurface],
+    [changeResearchWorkspaceScope, recordResearchVisit, setFeedOpen],
   );
   const submitNewResearch = useCallback(
     async (input: {
@@ -5562,36 +4133,13 @@ function MainApp() {
   );
 
   useSessionEvents({
-    appendHookEvent,
-    setPanes: setPanesPreservingRecoveredDismissals,
-    // PTY lifecycle bookkeeping must not implicitly leave a research thread when
-    // some unrelated terminal exits. User-driven pane activation uses the wrapper.
-    setActivePaneId: setActivePaneIdState,
+    setPanes: setPanesReconciled,
     setExitPreflightRequest,
     setAgents,
     setGroups,
-    setThinkingAgentIds,
-    setTurns,
-    setAgentQueuedTurns,
-    shouldRetainAgentTurns: (agentId: string) =>
-      retainedTurnHistoryAgentIdsRef.current.has(agentId),
-    refreshAgentTurnQueue,
     openBrowserOverlay,
-    selectPaneAfterClose: selectPaneAfterCloseWithContext,
-    onEventsReady: handleEventsReady,
     onAgentSpawned: handleAgentSpawned,
     onAgentPromptSubmitted: handleAgentPromptSubmitted,
-    onPaneFocusRequested: (paneId: string) => {
-      if (!panesRef.current.some((pane) => pane.id === paneId)) {
-        return;
-      }
-      setActivePaneId(paneId);
-
-    },
-    onPaneSplitsChanged: (splits: PaneSplitInfo[]) => {
-      paneSplitsRef.current = splits;
-      setPaneSplitsState(splits);
-    },
     onAppShortcut: handleNativeAppShortcut,
     onBrowserEscapeRequested: () => {
       browserEscapeDispatcherRef.current();
@@ -5599,16 +4147,6 @@ function MainApp() {
     onResearchChanged: handleResearchEvent,
     onUserNotificationRequested: handleUserNotificationRequested,
   });
-
-  function focusPaneTab(paneId: string) {
-    setActivePaneId(paneId);
-    // Pass intentional so native-terminal keyboard cycles are not gated
-    // on webview document focus.
-    acknowledgePaneIfDone(paneId, true, true);
-    requestAnimationFrame(() => {
-
-    });
-  }
 
   useEffect(() => {
     if (!config || adapterProbeCompletedAtRef.current > 0) {
@@ -5683,47 +4221,6 @@ function MainApp() {
     };
   }, [refreshAdapterReadiness]);
 
-  // Escape is handled here in bubble phase so a rail/group menu's capture
-  // listener can consume the key first. The app-level capture dispatcher
-  // would otherwise close the whole map before those menus see it.
-  useEffect(() => {
-    if (!terminalMapOpen) {
-      return;
-    }
-    const frame = window.requestAnimationFrame(() => {
-      terminalMapDialogRef.current?.focus();
-    });
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) {
-        return;
-      }
-      event.preventDefault();
-      setTerminalMapOpen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [terminalMapOpen]);
-
-  function openResearchPaneTab(paneId: string) {
-    // The research detail for a newly created run trails
-    // pane.removed by a debounced refresh, so the pane can already be gone
-    // when the button is clicked. Falling through to focusPaneTab would
-    // classify the unknown id as a legacy pane (setActivePaneId's recovery
-    // fallback) and evict the user from the research surface;
-    // acknowledge and stay put instead.
-    if (!panesRef.current.some((pane) => pane.id === paneId)) {
-      showAppToast("That research run has already closed.", "warning");
-      return;
-    }
-    focusPaneTab(paneId);
-  }
-  // Pass a stable callback to the memoized ResearchThreadPage so unrelated App
-  // renders do not cause it to render again. The ref calls the current function.
-  const researchThreadOpenPaneRef = useRef(openResearchPaneTab);
-  researchThreadOpenPaneRef.current = openResearchPaneTab;
   // The thread page's toasts use the research toast: its live region is
   // mounted before any text arrives, and it pauses under the pointer or focus.
   const handleResearchThreadToast = useCallback(
@@ -5732,9 +4229,9 @@ function MainApp() {
     [showResearchToast],
   );
 
-  // The ⌘K palette's command list, rebuilt on each open from live state: tab
-  // navigation, pane/session actions gated on what the active pane supports,
-  // and saved prompts that insert into the active agent's composer.
+  // The ⌘K palette's command list, rebuilt on each open from live state:
+  // research threads and app actions.
+
   function buildPaletteCommands(): PaletteCommand[] {
     const commands: PaletteCommand[] = researchTrees.map((tree) => ({
       id: `research:${tree.id}`,
@@ -5778,172 +4275,53 @@ function MainApp() {
     return commands;
   }
 
-  // The "Restored" badge is a one-time, post-restart hint, cleared automatically
-  // when its pane or split group is selected (see the activePaneId effect). Clearing
-  // the flag locally and recording the pane ids keeps later backend pane refetches
-  // from resurrecting the badge during this app session.
-  function dismissRecoveredBadge(paneId: string) {
-    const paneIds = paneIdsForSplitStatusGroup(paneId);
-    for (const id of paneIds) {
-      dismissedRecoveredPaneIdsRef.current.add(id);
-    }
-    const paneIdSet = new Set(paneIds);
-    setPanesPreservingRecoveredDismissals((current) => {
-      let changed = false;
-      const next = current.map((pane) => {
-        if (pane.recovered && paneIdSet.has(pane.id)) {
-          changed = true;
-          return { ...pane, recovered: false };
-        }
-        return pane;
-      });
-      return changed ? next : current;
-    });
-  }
-
+  // Research workspaces are the only groups any surface renames.
   function openGroupRenameDialog(group: GroupInfo) {
     setRenameValue(displayGroupName(group));
-    setRenamePaneId(null);
     setRenameGroupId(group.id);
   }
 
   function closeRenameDialog() {
-    setRenamePaneId(null);
     setRenameGroupId(null);
   }
 
   async function submitRename() {
     const groupId = renameGroupId;
-    if (groupId) {
-      const title = renameValue.trim();
-      const previous = groups.find((group) => group.id === groupId);
-      const clearingUserTitle = title.length === 0;
-      const nextNameOverride = clearingUserTitle ? null : title;
-      closeRenameDialog();
-      if (!previous) {
-        return;
-      }
-      const previousNameOverride = previous.nameOverride?.trim() || null;
-      if (
-        previousNameOverride === nextNameOverride ||
-        (previousNameOverride === null && nextNameOverride === defaultGroupName(previous))
-      ) {
-        return;
-      }
-
-      setGroups((current) =>
-        current.map((group) =>
-          group.id === groupId ? { ...group, nameOverride: nextNameOverride } : group,
-        ),
-      );
-      try {
-        const updated =
-          previous.scope === "research"
-            ? await renameResearchWorkspace(groupId, nextNameOverride)
-            : await renameGroup(groupId, nextNameOverride);
-        setGroups((current) =>
-          current.map((group) => (group.id === groupId ? updated : group)),
-        );
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-        setGroups((current) =>
-          current.map((group) => (group.id === groupId ? previous : group)),
-        );
-      }
-      return;
-    }
-
-    const paneId = renamePaneId;
-    if (!paneId) {
+    if (!groupId) {
       return;
     }
     const title = renameValue.trim();
-    const previous = panes.find((pane) => pane.id === paneId);
-    const paneAgent = previous ? agents.find((agent) => agent.paneId === previous.id) : undefined;
-    const clearingUserTitle = title.length === 0;
-    const nextTitle = clearingUserTitle
-      ? (previous ? (defaultPaneTitle(previous, paneAgent, config) ?? previous.title) : "")
-      : title;
-    const previousWasManuallyTitled = manuallyTitledPaneIds.has(paneId);
+    const previous = groups.find((group) => group.id === groupId);
+    const nextNameOverride = title.length === 0 ? null : title;
     closeRenameDialog();
     if (!previous) {
       return;
     }
-    if (previous.title === nextTitle) {
-      if (clearingUserTitle && previousWasManuallyTitled) {
-        setManuallyTitledPaneIds((current) => {
-          const next = new Set(current);
-          next.delete(paneId);
-          return next;
-        });
-      }
+    const previousNameOverride = previous.nameOverride?.trim() || null;
+    if (
+      previousNameOverride === nextNameOverride ||
+      (previousNameOverride === null && nextNameOverride === defaultGroupName(previous))
+    ) {
       return;
     }
 
-    setManuallyTitledPaneIds((current) => {
-      const next = new Set(current);
-      if (clearingUserTitle) {
-        next.delete(paneId);
-      } else {
-        next.add(paneId);
-      }
-      return next;
-    });
-    // Optimistically rename, then persist; revert if the backend rejects it.
-    setPanesPreservingRecoveredDismissals((current) =>
-      current.map((pane) => (pane.id === paneId ? { ...pane, title: nextTitle } : pane)),
+    setGroups((current) =>
+      current.map((group) =>
+        group.id === groupId ? { ...group, nameOverride: nextNameOverride } : group,
+      ),
     );
     try {
-      const updated = await renamePane(paneId, nextTitle);
-      setPanesPreservingRecoveredDismissals((current) =>
-        current.map((pane) => (pane.id === paneId ? { ...pane, title: updated.title } : pane)),
+      const updated = await renameResearchWorkspace(groupId, nextNameOverride);
+      setGroups((current) =>
+        current.map((group) => (group.id === groupId ? updated : group)),
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-      setManuallyTitledPaneIds((current) => {
-        const next = new Set(current);
-        if (previousWasManuallyTitled) {
-          next.add(paneId);
-        } else {
-          next.delete(paneId);
-        }
-        return next;
-      });
-      setPanesPreservingRecoveredDismissals((current) =>
-        current.map((pane) =>
-          pane.id === paneId ? { ...pane, title: previous?.title ?? pane.title } : pane,
-        ),
+      setGroups((current) =>
+        current.map((group) => (group.id === groupId ? previous : group)),
       );
     }
   }
-
-  function forgetClosedPane(paneToClose: PaneInfo) {
-    setPanesPreservingRecoveredDismissals((current) => {
-      const nextPanes = current.filter((pane) => pane.id !== paneToClose.id);
-      setActivePaneId((currentActivePaneId) => {
-        if (currentActivePaneId !== paneToClose.id) {
-          return currentActivePaneId;
-        }
-        return selectPaneAfterCloseWithContext(current, paneToClose.id);
-      });
-      return nextPanes;
-    });
-  }
-
-  async function closePane(paneToClose: PaneInfo): Promise<boolean> {
-    setError(null);
-    try {
-      await killPane(paneToClose.id);
-      forgetClosedPane(paneToClose);
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      return false;
-    }
-  }
-  closeUnavailableRemotePaneRef.current = (pane) => {
-    void closePane(pane);
-  };
 
   async function removeResearchWorkspaceFromSidebar(workspace: GroupInfo) {
     setError(null);
@@ -5970,9 +4348,6 @@ function MainApp() {
       : researchScopeRef.current;
     if (scopeWasRemoved) {
       changeResearchWorkspaceScope(nextScope);
-      activeResearchPaneIdRef.current = null;
-      setActiveResearchPaneId(null);
-      localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
     }
     // Removing the selected folder/tree should land on an available research
     // item in the surviving scope, not leave an unexplained empty thread page.
@@ -5993,155 +4368,23 @@ function MainApp() {
   }
 
   async function confirmResearchFolderRemoval() {
-    const dialog = closeDialog;
-    if (!dialog || dialog.kind !== "researchFolderRemove" || resolvingClose) {
+    const workspace = researchFolderRemoval;
+    if (!workspace || removingResearchFolder) {
       return;
     }
     setResearchFolderRemovalError(null);
-    setResolvingClose("removeResearchFolder");
+    setRemovingResearchFolder(true);
     try {
-      await removeResearchWorkspaceFromSidebar(dialog.workspace);
-      setCloseDialog(null);
+      await removeResearchWorkspaceFromSidebar(workspace);
+      setResearchFolderRemoval(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setResearchFolderRemovalError(message);
       setError(message);
     } finally {
-      setResolvingClose(null);
+      setRemovingResearchFolder(false);
     }
   }
-
-  async function closeDialogForPane(
-    paneToClose: PaneInfo,
-    options?: { confirmAlways?: boolean; checkWorktreeStatus?: boolean },
-  ): Promise<CloseDialogState | null> {
-    // A pane in a Research workspace hosts a research run (the backend's
-    // pane runtime); closing it cancels the run, and must say so rather than
-    // falling through to the ordinary agent-close dialog. The interface does
-    // not see which node the pane is bound to.
-    if (groupById.get(paneToClose.groupId)?.scope === "research") {
-      return { kind: "researchCancel", pane: paneToClose };
-    }
-    const agent = agentsRef.current.find((candidate) => candidate.paneId === paneToClose.id);
-    if (agent && agent.branch) {
-      const checkingChanges = options?.checkWorktreeStatus !== false;
-      const probeNonce = (worktreeProbeNonceRef.current += 1);
-      if (checkingChanges) {
-        // The dialog opens immediately and the git-status verdict patches in:
-        // awaiting the probe here left ⌘W with no visible response for as
-        // long as `git status` takes on the worktree (seconds on large or
-        // cold-cache repos). A probe failure keeps the unknown state so the
-        // dialog cannot falsely assure the user that deleting is safe. The
-        // nonce ties the patch to this dialog generation: a probe from a
-        // dismissed dialog (cancel → reopen the same pane) must not land its
-        // older verdict on the newer dialog.
-        void worktreeStatus(agent.id)
-          .then(
-            (status): boolean | null => status.hasChanges,
-            (): boolean | null => null,
-          )
-          .then((hasChanges) => {
-            setCloseDialog((current) =>
-              current?.kind === "worktree" &&
-              current.probeNonce === probeNonce &&
-              current.checkingChanges
-                ? { ...current, hasChanges, checkingChanges: false }
-                : current,
-            );
-          });
-      }
-      return {
-        kind: "worktree",
-        pane: paneToClose,
-        agentId: agent.id,
-        worktreeDir: agent.worktreeDir,
-        hasChanges: null,
-        checkingChanges,
-        probeNonce,
-        busy:
-          agent.status === "starting" ||
-          agent.status === "running" ||
-          agent.status === "awaitingInput" ||
-          agent.status === "awaitingPermission",
-      };
-    }
-
-    const liveReason =
-      agent?.status === "awaitingPermission"
-        ? "is waiting to approve a tool use"
-        : agent?.status === "awaitingInput"
-          ? "is waiting for your input"
-          : agent?.status === "running" || agent?.status === "starting"
-            ? "is still working"
-            : null;
-
-    // Pending queued turns that would be parked (and easy to lose track of) on close —
-    // surface them through the same stop dialog rather than closing silently. This
-    // covers both the closing pane's own live agent, whose own queue is otherwise not
-    // counted once it goes idle, and any recovered (orphaned) queues already parked here.
-    const ownQueuedCount = agent
-      ? (queuedTurnsByAgentRef.current[agent.id]?.length ?? 0)
-      : 0;
-    const recoveredTurnCount = agents
-      .filter((candidate) => candidate.orphanedQueuePaneId === paneToClose.id)
-      .reduce(
-        (total, candidate) =>
-          total + (queuedTurnsByAgentRef.current[candidate.id]?.length ?? 0),
-        0,
-      );
-    const pendingQueuedCount = ownQueuedCount + recoveredTurnCount;
-
-    const reason =
-      liveReason ??
-      (pendingQueuedCount > 0
-        ? `has ${pendingQueuedCount} queued ${
-            pendingQueuedCount === 1 ? "turn" : "turns"
-          }`
-        : null);
-    if (reason) {
-      return { kind: "stop", pane: paneToClose, reason };
-    }
-    // Remote process inspection cannot establish that the session is idle.
-    // Show the requested confirmation without waiting for that probe.
-    if (paneToClose.remoteSession && options?.confirmAlways) {
-      return { kind: "pane", pane: paneToClose };
-    }
-    try {
-      const activity = await paneActivity(paneToClose.id);
-      if (activity.kind === "runningProcess" && activity.processCount > 0) {
-        return {
-          kind: "runningProcess",
-          pane: paneToClose,
-          processCount: activity.processCount,
-          processSummary: activity.processSummary,
-        };
-      }
-    } catch {
-      // Process inspection is best-effort. If the probe fails, let the normal close
-      // path continue instead of turning an inspection error into a blocking prompt.
-    }
-    if (options?.confirmAlways) {
-      return { kind: "pane", pane: paneToClose };
-    }
-    return null;
-  }
-
-  // Closing a tab that owns a git worktree opens a dialog: check the worktree for
-  // uncommitted changes first, then let the user delete or keep it (or cancel).
-  // Other agent panes confirm only when a live agent would be interrupted; shell
-  // panes and finished/failed agents close without a prompt.
-  async function requestClosePane(paneToClose: PaneInfo, options?: { confirmAlways?: boolean }) {
-    const dialog = await closeDialogForPane(paneToClose, {
-      confirmAlways: options?.confirmAlways,
-      checkWorktreeStatus: true,
-    });
-    if (dialog) {
-      setCloseDialog(dialog);
-      return;
-    }
-    await closePane(paneToClose);
-  }
-
   useEffect(() => {
     if (!exitPreflightRequest) {
       return;
@@ -6160,12 +4403,12 @@ function MainApp() {
   }, [exitPreflightRequest, runningResearchCount]);
 
   useEffect(() => {
-    if (!closeDialog) {
+    if (!researchFolderRemoval) {
       return;
     }
 
     const focusCloseButton = (force = false) =>
-      focusConfirmDialogButton(closeConfirmButtonRef.current, force);
+      focusConfirmDialogButton(researchFolderRemovalButtonRef.current, force);
 
     focusCloseButton(true);
     const frame = requestAnimationFrame(() => focusCloseButton());
@@ -6174,7 +4417,7 @@ function MainApp() {
       cancelAnimationFrame(frame);
       window.clearTimeout(settle);
     };
-  }, [closeDialog]);
+  }, [researchFolderRemoval]);
 
   useEffect(() => {
     if (!exitDialog) {
@@ -6210,65 +4453,6 @@ function MainApp() {
     };
   }, [remoteDeleteConfirm]);
 
-  // Resolves the worktree close dialog: always closes the pane, and additionally
-  // deletes the worktree when the user chose to.
-  async function resolveCloseDialog(choice: "keep" | "delete") {
-    const dialog = closeDialog;
-    if (!dialog || dialog.kind !== "worktree" || resolvingClose) {
-      return;
-    }
-    setError(null);
-    setResolvingClose(choice);
-    try {
-      await closeWorktreePane(dialog.agentId, choice === "delete");
-      forgetClosedPane(dialog.pane);
-      setCloseDialog(null);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      // Worktree deletion runs after the pane is killed. If cleanup fails, the
-      // command reports an error even though the backend no longer has the pane;
-      // reconcile that partial success so the UI cannot retain a dead tab/agent.
-      try {
-        const [latestPanes, latestAgents, latestGroups] = await Promise.all([
-          listPanes(),
-          listAgents(),
-          listGroups(),
-        ]);
-        if (!latestPanes.some((pane) => pane.id === dialog.pane.id)) {
-          setPanesPreservingRecoveredDismissals(latestPanes);
-          setAgents(latestAgents);
-          setGroups(latestGroups);
-        }
-      } catch {
-        // Preserve the cleanup error; a later backend event/resync can reconcile
-        // state if this best-effort read also fails.
-      }
-      setError(message);
-      setCloseDialog(null);
-    } finally {
-      setResolvingClose(null);
-    }
-  }
-
-  // Confirms stopping a live agent that has no worktree to clean up.
-  async function confirmStopAndClose() {
-    const dialog = closeDialog;
-    if (!dialog || (dialog.kind !== "stop" && dialog.kind !== "researchCancel")) {
-      return;
-    }
-    setCloseDialog(null);
-    await closePane(dialog.pane);
-  }
-
-  async function confirmPaneClose() {
-    const dialog = closeDialog;
-    if (!dialog || (dialog.kind !== "pane" && dialog.kind !== "runningProcess")) {
-      return;
-    }
-    setCloseDialog(null);
-    await closePane(dialog.pane);
-  }
-
   async function confirmExit() {
     if (quittingRef.current) {
       return;
@@ -6279,7 +4463,6 @@ function MainApp() {
     // Let React commit the pending button and give WebKit a full paint before
     // AppKit begins the comparatively slow application teardown.
     await waitForNextPaint();
-    flushPendingDrafts();
     try {
       const activeResearchNodeIds = researchActivity
         .filter((node) => isActiveResearchStatus(nodeStatus(node)))
@@ -6306,238 +4489,14 @@ function MainApp() {
     }
   }
 
-  const terminalHandlersRef = useRef({
-    noteUserInput,
-  });
-  terminalHandlersRef.current = {
-    noteUserInput,
-  };
-  // Mirror active-tab state into refs so the always-on keydown listener never reads
-  // stale state.
+  // Mirror browser state into refs so the always-on Escape listener never
+  // reads stale state.
   useEffect(() => {
-    activePaneRef.current = activePane;
     browserOverlayByPaneRef.current = browserOverlayByPane;
-    activeBrowserOwnerIdRef.current = activeBrowserOwnerId;
-    toggleActiveBrowserOverlayRef.current = toggleActiveBrowserOverlay;
     closeActiveBrowserOverlayRef.current = closeActiveBrowserOverlay;
-    requestClosePaneRef.current = requestClosePane;
-    splitPaneBelowRef.current = splitPaneBelow;
-    splitPaneRightRef.current = splitPaneRight;
   });
 
-  // Keyboard-ownership arbitration between the webview and the native terminal
-  // surfaces. Two responsibilities:
-  //
-  // 1. Track whether a web editable element really holds DOM focus (composer,
-  //    rename input, search field…). While it does, the native pane must not
-  //    claim AppKit first responder — see the `focused` layout flag.
-  //
-  // 2. Recover from first-responder theft. WKWebView grabs first responder on
-  //    its own schedule (initial page load, engine-internal focus churn); when
-  //    that happens without any web editable claiming the keyboard, the active
-  //    terminal still owns it, so bounce first responder straight back. The
-  //    theft itself is the signal: the page receives a window `focus` event.
-  //    Focus-in claims web ownership synchronously from the event target so the
-  //    first typed key cannot race the native layout update. Focus-out and
-  //    window-focus recovery sample one frame later, after activeElement settles.
-  useEffect(() => {
-    let frame: number | null = null;
-    let restoreFrame: number | null = null;
-    let restoringRememberedEditable = false;
-    let disposed = false;
-    let unlistenNativeFocus: (() => void) | undefined;
-    const restorableEditable = (target: HTMLElement | null) =>
-      Boolean(
-        target &&
-          target.isConnected &&
-          isEditableTarget(target) &&
-          !target.matches(":disabled"),
-      );
-    const sample = () => {
-      frame = null;
-      const editable = document.hasFocus() && isEditableTarget(document.activeElement);
-      webEditableFocusedRef.current = editable;
-      setWebEditableFocused(editable);
-    };
-    const schedule = () => {
-      if (frame === null) {
-        frame = requestAnimationFrame(sample);
-      }
-    };
-    const handleFocusIn = (event: FocusEvent) => {
-      const editable = document.hasFocus() && isEditableTarget(event.target);
-      if (editable && event.target instanceof HTMLElement) {
-        lastFocusedWebEditableRef.current = event.target;
-      }
-      webEditableFocusedRef.current = editable;
-      setWebEditableFocused(editable);
-    };
-    const restoreWindowEditable = (returningToApp: boolean) => {
-      const active =
-        document.activeElement instanceof HTMLElement &&
-        isEditableTarget(document.activeElement)
-          ? document.activeElement
-          : null;
-      const remembered = appBlurWebEditableRef.current;
-      const owner = windowFocusKeyboardOwner({
-        currentWebEditable: active !== null,
-        rememberedWebEditable: restorableEditable(remembered),
-        returningToApp: returningToApp || restoringRememberedEditable,
-      });
-      if (owner === "current-web-editable") {
-        lastFocusedWebEditableRef.current = active;
-        webEditableFocusedRef.current = true;
-        setWebEditableFocused(true);
-        return true;
-      }
-      if (owner !== "remembered-web-editable" || !remembered) {
-        restoringRememberedEditable = false;
-        return false;
-      }
-      // Block native ownership synchronously, then focus both now and on the
-      // next frame: Tauri can announce native activation just before WKWebView
-      // is ready to accept first responder again.
-      restoringRememberedEditable = true;
-      lastFocusedWebEditableRef.current = remembered;
-      webEditableFocusedRef.current = true;
-      setWebEditableFocused(true);
-      if (frame !== null) {
-        cancelAnimationFrame(frame);
-        frame = null;
-      }
-      remembered.focus({ preventScroll: true });
-      if (restoreFrame !== null) {
-        cancelAnimationFrame(restoreFrame);
-      }
-      restoreFrame = requestAnimationFrame(() => {
-        restoreFrame = null;
-        if (!restorableEditable(remembered)) {
-          appBlurWebEditableRef.current = null;
-          restoringRememberedEditable = false;
-          sample();
-          return;
-        }
-        if (document.activeElement !== remembered) {
-          remembered.focus({ preventScroll: true });
-        }
-        restoringRememberedEditable = false;
-        sample();
-      });
-      return true;
-    };
-    const bounceStolenFocus = () => {
-      const returningToApp = !nativeWindowFocusedRef.current;
-      schedule();
-      if (restoreWindowEditable(returningToApp)) {
-        return;
-      }
-    };
-    window.addEventListener("focusin", handleFocusIn);
-    window.addEventListener("focusout", schedule);
-    window.addEventListener("blur", schedule);
-    window.addEventListener("focus", bounceStolenFocus);
-    // Recovery backstop for editables that vanish on a path the explicit
-    // re-samples (pane membership, the known modals) don't cover: WebKit emits
-    // no focusout when a focused element's subtree is removed, so
-    // webEditableFocused can wedge true with focus back on <body>, leaving
-    // every terminal keyboard-dead. Keys and clicks only reach the DOM at all
-    // while the native surface doesn't own the keyboard, so re-sampling on
-    // them is cheap (rAF-coalesced, no-op state update) and heals any such
-    // wedge on the user's next keystroke or click, whatever overlay caused it.
-    window.addEventListener("keydown", schedule, true);
-    window.addEventListener("pointerdown", schedule, true);
-    const appWindow = getCurrentWindow();
-    void appWindow
-      .onFocusChanged(({ payload: focused }) => {
-        nativeWindowFocusedRef.current = focused;
-        if (!focused) {
-          appBlurWebEditableRef.current = webEditableFocusedRef.current
-            ? lastFocusedWebEditableRef.current
-            : null;
-          return;
-        }
-        if (!restoreWindowEditable(true)) {
-          schedule();
-        }
-      })
-      .then((unlisten) => {
-        if (disposed) {
-          unlisten();
-        } else {
-          unlistenNativeFocus = unlisten;
-        }
-      })
-      .catch(() => undefined);
-    sample();
-    return () => {
-      disposed = true;
-      window.removeEventListener("focusin", handleFocusIn);
-      window.removeEventListener("focusout", schedule);
-      window.removeEventListener("blur", schedule);
-      window.removeEventListener("focus", bounceStolenFocus);
-      window.removeEventListener("keydown", schedule, true);
-      window.removeEventListener("pointerdown", schedule, true);
-      if (frame !== null) {
-        cancelAnimationFrame(frame);
-      }
-      if (restoreFrame !== null) {
-        cancelAnimationFrame(restoreFrame);
-      }
-      unlistenNativeFocus?.();
-    };
-  }, []);
-
-  useLayoutEffect(() => {
-    if (activeSurface !== "pane") {
-      return;
-    }
-    const selection = document.getSelection();
-    if (selection && !selection.isCollapsed) {
-      selection.removeAllRanges();
-    }
-    const editable = document.hasFocus() && isEditableTarget(document.activeElement);
-    webEditableFocusedRef.current = editable;
-    setWebEditableFocused(editable);
-  }, [activeSurface]);
-
-  // Backstop for editables that unmount together with a closing pane (the
-  // terminal and transcript find inputs live inside pane subtrees): WebKit
-  // emits no focusout when a focused element is removed, so without this a
-  // pane closing under a focused find input leaves webEditableFocused wedged
-  // true and every remaining terminal keyboard-dead. Re-sample focus whenever
-  // pane membership changes.
-  const paneIdsKey = panes.map((pane) => pane.id).join("\n");
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      setWebEditableFocused(
-        document.hasFocus() && isEditableTarget(document.activeElement),
-      );
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [paneIdsKey]);
-
-  // Backstop for editables that unmount with a closing modal: the ⌘K palette,
-  // rename dialogs, settings, and the command palette all hold DOM focus in an input.
-  // WebKit may remove that input without focusout, leaving the active terminal
-  // keyboard-dead until another real focus event.
-  const modalEditorOpen =
-    commandPaletteOpen ||
-    settingsOpen ||
-    agentsOpen ||
-    terminalMapOpen ||
-    Boolean(renamePaneId || renameGroupId);
-  useEffect(() => {
-    if (modalEditorOpen) {
-      return;
-    }
-    const frame = requestAnimationFrame(() => {
-      setWebEditableFocused(
-        document.hasFocus() && isEditableTarget(document.activeElement),
-      );
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [modalEditorOpen]);
-
+  useEditableFocusRestore();
   // Live snapshot of the app-level overlay state for the Escape dispatcher
   // below, which is registered exactly once. Mirrored every render, read only
   // at event time.
@@ -6545,11 +4504,10 @@ function MainApp() {
     remoteAddMenuOpen,
     remoteDeleteConfirm,
     remoteSettingsSaving,
-    closeDialog,
+    researchFolderRemoval,
     exitDialog,
-    renamePaneId,
     renameGroupId,
-    resolvingClose,
+    removingResearchFolder,
     quitting,
     settingsOpen,
     agentsOpen,
@@ -6560,11 +4518,10 @@ function MainApp() {
       remoteAddMenuOpen,
       remoteDeleteConfirm,
       remoteSettingsSaving,
-      closeDialog,
+      researchFolderRemoval,
       exitDialog,
-      renamePaneId,
       renameGroupId,
-      resolvingClose,
+      removingResearchFolder,
       quitting,
       settingsOpen,
       agentsOpen,
@@ -6572,12 +4529,13 @@ function MainApp() {
     };
   });
 
-  // Escape can originate in three separate AppKit responders while the
-  // browser is visible: the outer app webview, the child human-browser
-  // WKWebView, or a native terminal whose ownership release is still crossing
-  // the bridge. The native monitor funnels all three through this live
-  // dispatcher. The DOM listener below uses it too so lightbox/browser
-  // priority stays single-sourced.
+
+  // Escape can originate in two separate AppKit responders while the browser
+  // is visible: the outer app webview and the child human-browser WKWebView.
+  // The native monitor funnels both through this live dispatcher. The DOM
+  // listener below uses it too so lightbox/browser priority stays
+  // single-sourced.
+
   browserEscapeDispatcherRef.current = () => {
     if (getImageLightbox() !== null) {
       closeImageLightbox();
@@ -6640,14 +4598,14 @@ function MainApp() {
 
       // The remaining overlays dismiss together on one Escape, as they did as
       // independent listeners that each observed the same keydown.
-      const dialogsOpen = Boolean(overlays.closeDialog || overlays.exitDialog);
+      const dialogsOpen = Boolean(overlays.researchFolderRemoval || overlays.exitDialog);
       let stopPropagation = false;
       if (dialogsOpen) {
         stopPropagation = true;
         event.preventDefault();
-        // Don't dismiss the worktree dialog while its close/delete is running.
-        if (!overlays.resolvingClose) {
-          setCloseDialog(null);
+        // Don't dismiss the removal dialog while the removal is running.
+        if (!overlays.removingResearchFolder) {
+          setResearchFolderRemoval(null);
         }
         if (!overlays.quitting) {
           setExitDialog(null);
@@ -6668,8 +4626,8 @@ function MainApp() {
       if (
         overlays.error &&
         !dialogsOpen &&
-        !overlays.renamePaneId &&
         !overlays.renameGroupId
+
       ) {
         stopPropagation = true;
         event.preventDefault();
@@ -6830,12 +4788,12 @@ function MainApp() {
   // Focus and select the name when the rename dialog opens, so the user can type
   // a new name straight away.
   useEffect(() => {
-    if (renamePaneId || renameGroupId) {
+    if (renameGroupId) {
       const input = renameInputRef.current;
       input?.focus();
       input?.select();
     }
-  }, [renamePaneId, renameGroupId]);
+  }, [renameGroupId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -6868,10 +4826,8 @@ function MainApp() {
   }, []);
 
   useEffect(() => {
-
-    const executeShortcut = (rawCommand: AppShortcutCommand, repeat: boolean) => {
+    const executeShortcut = (command: AppShortcutCommand, repeat: boolean) => {
       if (document.querySelector("dialog[open]")) return;
-      const command = rawCommand;
       // No app command repeats while its chord is held.
       if (repeat) {
         return;
@@ -6911,12 +4867,9 @@ function MainApp() {
             if (hidden > 0) {
               return;
             }
-            const browserOwnerId =
-              activeSurfaceRef.current === "research"
-                ? activeResearchTreeIdRef.current
-                  ? researchBrowserOwnerId(activeResearchTreeIdRef.current)
-                  : null
-                : null;
+            const browserOwnerId = activeResearchTreeIdRef.current
+              ? researchBrowserOwnerId(activeResearchTreeIdRef.current)
+              : null;
             if (browserOwnerId) {
               toggleBrowserOverlay(browserOwnerId);
             }
@@ -6930,31 +4883,6 @@ function MainApp() {
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isShowHideShortcutCaptureTarget(event.target) || event.defaultPrevented) {
-        return;
-      }
-      const pane = activeSurfaceRef.current === "pane" ? activePaneRef.current : undefined;
-      if (
-        pane &&
-        shouldCloseRemotePaneOnControlD(
-          {
-            key: event.key,
-            ctrlKey: event.ctrlKey,
-            metaKey: event.metaKey,
-            altKey: event.altKey,
-            shiftKey: event.shiftKey,
-            repeat: event.repeat,
-            editableTarget: isEditableTarget(event.target),
-            paneTarget:
-              isTerminalTarget(event.target) ||
-              event.target === document.body ||
-              event.target === document.documentElement,
-          },
-          pane,
-        )
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-        closeUnavailableRemotePaneRef.current(pane);
         return;
       }
       const command = resolveAppShortcut({
@@ -6978,21 +4906,9 @@ function MainApp() {
       window.removeEventListener("keydown", handleKeyDown, true);
       nativeAppShortcutHandlerRef.current = () => undefined;
     };
-  }, [
-    activePaneId,
-    panes,
-    sidebarPanes,
-    activePane,
-    lastActiveGroupId,
-    groupById,
-    researchSurfaceActive,
-    researchHomeActive,
-    activeResearchTreeId,
-    focusResearchHome,
-  ]);
+  }, [focusResearchHome]);
 
-  // Keep the sidebar within bounds as the window resizes or the stage's minimum
-  // width changes (deps refresh the clamp's view of available width).
+  // Keep the sidebar within bounds as the window resizes.
   useEffect(() => {
     const handleResize = () => {
       setSidebarWidth((current) => clampSidebarWidth(current));
@@ -7001,7 +4917,8 @@ function MainApp() {
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [reservedTerminalStageMinWidth]);
+  }, []);
+
 
   async function updateShowHideShortcut(accelerator: string | null) {
     const request = ++showHideShortcutRequestRef.current;
@@ -7117,7 +5034,7 @@ function MainApp() {
       if (
         !isResearchTreeSelectionChange(
           activeResearchTreeId,
-          researchSurfaceActive && researchStageView === "thread",
+          researchStageView === "thread",
           treeId,
         )
       ) {
@@ -7132,8 +5049,8 @@ function MainApp() {
       navigateToResearchThread,
       openResearchNode,
       researchStageView,
-      researchSurfaceActive,
       researchTrees,
+
     ],
   );
   const openFeedView = useCallback(
@@ -7217,19 +5134,17 @@ function MainApp() {
   // A draft opens in the content column beside the feed, which keeps its
   // view; opening a thread replaces it.
   const [openResearchDraftId, setOpenResearchDraftId] = useState<string | null>(null);
-  const openResearchDraft = researchSurfaceActive
-    ? (researchDrafts.find((draft) => draft.id === openResearchDraftId) ?? null)
-    : null;
+  const openResearchDraft =
+    researchDrafts.find((draft) => draft.id === openResearchDraftId) ?? null;
   useEffect(() => {
     if (activeResearchTreeId) setOpenResearchDraftId(null);
   }, [activeResearchTreeId]);
   const openResearchDraftInColumn = useCallback(
     (draft: ResearchDraft) => {
       if (activeResearchTreeIdRef.current) focusResearchHome();
-      else showResearchSurface();
       setOpenResearchDraftId(draft.id);
     },
-    [focusResearchHome, showResearchSurface],
+    [focusResearchHome],
   );
   const saveOpenResearchDraft = useCallback(
     async (draft: ResearchDraft, prompt: string) => {
@@ -7459,21 +5374,10 @@ function MainApp() {
         const activeInScope = scopedTrees.some(
           (tree) => tree.id === activeResearchTreeId,
         );
-        const activeResearchPane = panesRef.current.find(
-          (pane) => pane.id === activeResearchPaneIdRef.current,
-        );
-        const activePaneInScope =
-          !activeResearchPane ||
-          workspaceIsInResearchScope(activeResearchPane.groupId, scope);
-        if (!activePaneInScope) {
-          activeResearchPaneIdRef.current = null;
-          setActiveResearchPaneId(null);
-          localStorage.removeItem(ACTIVE_RESEARCH_PANE_KEY);
-        }
         if (researchHomeActive) {
           return;
         }
-        if (!activeInScope || !activePaneInScope) {
+        if (!activeInScope) {
           const tree = treeForResearchScope(allTrees, scope, activeResearchTreeId);
           if (tree) {
             navigateToResearchThread(tree.id);
@@ -7484,9 +5388,6 @@ function MainApp() {
             setActiveResearchDetail(null);
             setActiveResearchDetailError(null);
             localStorage.removeItem(ACTIVE_RESEARCH_TREE_KEY);
-            // Preserve any selected research pane in the current scope.
-            // focusResearchHome would clear that selection.
-            showResearchSurface();
           }
         }
       }}
@@ -7496,7 +5397,7 @@ function MainApp() {
       onMoveFolder={moveResearchWorkspaceFolder}
       onRemoveFolder={(workspace) => {
         setResearchFolderRemovalError(null);
-        setCloseDialog({ kind: "researchFolderRemove", workspace });
+        setResearchFolderRemoval(workspace);
       }}
     />
   );
@@ -8349,13 +6250,13 @@ function MainApp() {
         </div>
       ) : null}
 
-      {closeDialog ? (
+      {researchFolderRemoval ? (
         <div
           className="confirm-dialog-backdrop"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !resolvingClose) {
-              setCloseDialog(null);
+            if (event.target === event.currentTarget && !removingResearchFolder) {
+              setResearchFolderRemoval(null);
             }
           }}
         >
@@ -8366,184 +6267,34 @@ function MainApp() {
             aria-labelledby="close-dialog-title"
           >
             <h2 id="close-dialog-title">
-              {closeDialog.kind === "researchFolderRemove"
-                ? `Remove ${displayGroupName(closeDialog.workspace)}?`
-                : `Close "${closeDialog.pane.title}?"`}
+              {`Remove ${displayGroupName(researchFolderRemoval)}?`}
             </h2>
-            {closeDialog.kind === "researchFolderRemove" ? (
-              <>
-                <p>Remove this workspace from Session?</p>
-                <p>The folder and its files will remain on disk, with history in the .session directory.</p>
-                {researchFolderRemovalError ? (
-                  <p className="confirm-dialog-error" role="alert">
-                    {researchFolderRemovalError}
-                  </p>
-                ) : null}
-                <div className="confirm-dialog-actions">
-                  <button className="control-button"
-                    type="button"
-                    disabled={resolvingClose !== null}
-                    onClick={() => setCloseDialog(null)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    ref={closeConfirmButtonRef}
-                    type="button"
-                    className="control-button danger"
-                    autoFocus
-                    disabled={resolvingClose !== null}
-                    onClick={() => void confirmResearchFolderRemoval()}
-                  >
-                    {resolvingClose === "removeResearchFolder" ? "Removing…" : "Remove workspace"}
-                  </button>
-                </div>
-              </>
-            ) : closeDialog.kind === "worktree" ? (
-              <>
-                <p>
-                  {closeDialog.busy
-                    ? "The agent is still working — closing this tab will stop it."
-                    : "Closing this tab will stop the agent."}
-                </p>
-                <p>
-                  {closeDialog.checkingChanges ? (
-                    <>
-                      Checking the worktree {formatPaneDir(closeDialog.worktreeDir)} for
-                      uncommitted changes…
-                    </>
-                  ) : closeDialog.hasChanges === true ? (
-                    <span className="confirm-dialog-changes">
-                      The worktree {formatPaneDir(closeDialog.worktreeDir)} has uncommitted changes
-                      that will be lost if deleted.
-                    </span>
-                  ) : closeDialog.hasChanges === false ? (
-                    <>
-                      The worktree {formatPaneDir(closeDialog.worktreeDir)} has no uncommitted
-                      changes.
-                    </>
-                  ) : (
-                    <span className="confirm-dialog-changes">
-                      Session could not check the worktree {formatPaneDir(closeDialog.worktreeDir)} for
-                      uncommitted changes. Deleting it may discard work.
-                    </span>
-                  )}{" "}
-                  Delete the worktree?
-                </p>
-                <div className="confirm-dialog-actions">
-                  <button className="control-button"
-                    type="button"
-                    disabled={resolvingClose !== null}
-                    onClick={() => setCloseDialog(null)}
-                  >
-                    Cancel
-                  </button>
-                  <ConfirmDialogActionButton
-                    type="button"
-                    className="danger"
-                    // Deleting stays gated on the status verdict: before the
-                    // dialog opened eagerly the user could never delete ahead
-                    // of the probe, so keep that ordering.
-                    disabled={resolvingClose !== null || closeDialog.checkingChanges}
-                    pending={resolvingClose === "delete"}
-                    pendingLabel="Deleting…"
-                    onClick={() => void resolveCloseDialog("delete")}
-                  >
-                    Delete worktree
-                  </ConfirmDialogActionButton>
-                  <ConfirmDialogActionButton
-                    ref={closeConfirmButtonRef}
-                    type="button"
-                    autoFocus
-                    disabled={resolvingClose !== null}
-                    pending={resolvingClose === "keep"}
-                    pendingLabel="Closing…"
-                    onClick={() => void resolveCloseDialog("keep")}
-                  >
-                    Keep worktree
-                  </ConfirmDialogActionButton>
-                </div>
-              </>
-            ) : closeDialog.kind === "researchCancel" ? (
-              <>
-                <p>Closing cancels this research run. Its completed work and follow-up history remain available.</p>
-                <div className="confirm-dialog-actions">
-                  <button className="control-button" type="button" onClick={() => setCloseDialog(null)}>
-                    Keep running
-                  </button>
-                  <button
-                    ref={closeConfirmButtonRef}
-                    type="button"
-                    className="control-button danger"
-                    autoFocus
-                    onClick={() => void confirmStopAndClose()}
-                  >
-                    Cancel research
-                  </button>
-                </div>
-              </>
-            ) : closeDialog.kind === "stop" ? (
-              <>
-                <p>This agent {closeDialog.reason}. Close the tab and stop it?</p>
-                <div className="confirm-dialog-actions">
-                  <button className="control-button" type="button" onClick={() => setCloseDialog(null)}>
-                    Cancel
-                  </button>
-                  <button
-                    ref={closeConfirmButtonRef}
-                    type="button"
-                    className="control-button danger"
-                    autoFocus
-                    onClick={() => void confirmStopAndClose()}
-                  >
-                    Close tab
-                  </button>
-                </div>
-              </>
-            ) : closeDialog.kind === "runningProcess" ? (
-              <>
-                <p>
-                  {closeDialog.processCount === 1
-                    ? closeDialog.processSummary
-                      ? `This tab has a running process: ${closeDialog.processSummary}.`
-                      : "This tab has a running process."
-                    : `This tab has ${closeDialog.processCount} running processes.`}
-                </p>
-                <p>Closing this tab will terminate running processes in it.</p>
-                <div className="confirm-dialog-actions">
-                  <button className="control-button" type="button" onClick={() => setCloseDialog(null)}>
-                    Cancel
-                  </button>
-                  <button
-                    ref={closeConfirmButtonRef}
-                    type="button"
-                    className="control-button danger"
-                    autoFocus
-                    onClick={() => void confirmPaneClose()}
-                  >
-                    Close tab
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p>Close this tab?</p>
-                <div className="confirm-dialog-actions">
-                  <button className="control-button" type="button" onClick={() => setCloseDialog(null)}>
-                    Cancel
-                  </button>
-                  <button
-                    ref={closeConfirmButtonRef}
-                    type="button"
-                    className="control-button danger"
-                    autoFocus
-                    onClick={() => void confirmPaneClose()}
-                  >
-                    Close tab
-                  </button>
-                </div>
-              </>
-            )}
+            <p>Remove this workspace from Session?</p>
+            <p>The folder and its files will remain on disk, with history in the .session directory.</p>
+            {researchFolderRemovalError ? (
+              <p className="confirm-dialog-error" role="alert">
+                {researchFolderRemovalError}
+              </p>
+            ) : null}
+            <div className="confirm-dialog-actions">
+              <button className="control-button"
+                type="button"
+                disabled={removingResearchFolder}
+                onClick={() => setResearchFolderRemoval(null)}
+              >
+                Cancel
+              </button>
+              <button
+                ref={researchFolderRemovalButtonRef}
+                type="button"
+                className="control-button danger"
+                autoFocus
+                disabled={removingResearchFolder}
+                onClick={() => void confirmResearchFolderRemoval()}
+              >
+                {removingResearchFolder ? "Removing…" : "Remove workspace"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -8604,7 +6355,7 @@ function MainApp() {
         </div>
       ) : null}
 
-      {renamePaneId || renameGroupId ? (
+      {renameGroupId ? (
         <div
           className="confirm-dialog-backdrop"
           role="presentation"
@@ -8625,11 +6376,7 @@ function MainApp() {
             }}
           >
             <h2 id="rename-dialog-title">
-              {renamingResearchFolder
-                ? "Rename workspace"
-                : renameGroupId
-                  ? "Rename group"
-                  : "Rename tab"}
+              {renamingResearchFolder ? "Rename workspace" : "Rename group"}
             </h2>
             <input
               ref={renameInputRef}
@@ -8642,9 +6389,7 @@ function MainApp() {
                   closeRenameDialog();
                 }
               }}
-              aria-label={
-                renamingResearchFolder ? "Workspace name" : renameGroupId ? "Group name" : "Tab name"
-              }
+              aria-label={renamingResearchFolder ? "Workspace name" : "Group name"}
               aria-describedby={renamingResearchFolder ? "rename-folder-hint" : undefined}
             />
             {renamingResearchFolder ? (
@@ -8684,145 +6429,136 @@ function MainApp() {
           </div>
         ) : null}
 
-        <div
-          ref={mainStageRef}
-          className={`main-stage${
-            researchSurfaceActive ? " is-research" : ""
-          }${
-            !researchSurfaceActive && visibleTerminalPaneIds.length === 0 ? " is-empty" : ""
-          }`}
-        >
+        <div className="main-stage is-research">
           {/* The feed column lists Home, a folder, Drafts, Archive, Bookmarks,
               or Highlights beside the content column, which shows the open
               thread (or a placeholder). One wrapper for both states keeps the
               feed mounted, and its scroll position, while threads open and
               close beside it. */}
-          {researchFeedColumnVisible ? (
-            <ResearchColumns
-              hasThread={researchStageView === "thread" || openResearchDraft !== null}
-              feed={
-                config ? (
-                  feedPage.kind === "highlights" ? (
-                    <ResearchHighlightsFeed
-                      items={researchHighlightItems}
-                      loading={researchHighlightsLoading}
-                      error={researchHighlightsError}
-                      onOpen={openResearchHighlight}
-                      onRemove={removeResearchHighlightFromFeed}
-                      onRefresh={() => void refreshResearchHighlights()}
-                    />
-                  ) : (
-                    <ResearchActivityFeed
-                      {...activityFeedState}
-                      view={feedPage}
-                      selectedTreeId={researchStageView === "thread" ? activeResearchTreeId : null}
-                      selectedChildNodeIds={openResearchNodeIds}
-                      selectedDraftId={openResearchDraft?.id ?? null}
-                      onImportReport={importReport}
-                      composer={feedComposer}
-                      setupGuide={feedSetupGuide}
-                      items={recentActivityItems}
-                      researchTrees={feedResearchTrees}
-                      folders={researchFolders}
-                      folderState={researchFolderState}
-                      drafts={researchDrafts}
-                      onLoadTrees={loadActivityForTrees}
-                      onOpenResearchQuery={openRecentResearchQuery}
-                      onOpenDraft={openResearchDraftInColumn}
-                      onOpenTree={openFeedResearchTree}
-                      onOpenView={openFeedView}
-                      onResearchRecapApplied={handleResearchRecapApplied}
-                      onError={setError}
-                      onRenameResearch={renameResearchTreeTitle}
-                      onRestoreResearch={restoreResearchTreeFromMenu}
-                      onRemoveResearch={removeResearchTreeFromMenu}
-                      onSetResearchBookmarked={bookmarkResearchTreeFromFeed}
-                      onMoveTree={moveResearchTreeFromFeed}
-                      onReorderTree={reorderResearchTreeFromFeed}
-                      onReorderDraft={moveResearchDraftFromFeed}
-                      onUnstarChild={unstarResearchFeedChild}
-                      onNewFolder={openNewResearchFolderDialog}
-                      onRenameFolder={openRenameResearchFolderDialog}
-                      onRequestDeleteFolder={requestResearchFolderDelete}
-                      pendingDeleteFolderId={pendingResearchFolderDelete}
-                      onConfirmDeleteFolder={confirmResearchFolderDelete}
-                      onCancelDeleteFolder={cancelResearchFolderDelete}
-                      onToggleTray={toggleResearchTray}
-                      onDeleteDraft={deleteResearchDraftFromFeed}
-                      onDragStart={startResearchCardDrag}
-                      onRefresh={refreshFeed}
-                      // Mouse buttons and swipes over the feed walk the same
-                      // history as the thread's controls.
-                      onBack={goResearchBack}
-                      onForward={goResearchForward}
-                    />
-                  )
-                ) : null
-              }
-            >
-              {researchStageView === "thread" && activeResearchTreeId ? (
-                // Remount on tree changes to reset selection, fetched content,
-                // and the follow-up draft before paint. Resetting them in effects
-                // would briefly show and refetch the previous tree's node.
-                <ResearchThreadPage
-                  key={activeResearchTreeId}
-                  detail={activeResearchDetail}
-                  treeTitle={
-                    activeResearchDetail?.tree.title ??
-                    researchTrees.find((tree) => tree.id === activeResearchTreeId)?.title ??
-                    archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)?.title
-                  }
-                  treeType={
-                    (
-                      researchTrees.find((tree) => tree.id === activeResearchTreeId) ??
-                      archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)
-                    )?.type
-                  }
-                  archived={Boolean(activeResearchDetail?.tree.archivedAt)}
-                  recapPendingNodeIds={recapPendingNodeIds}
-                  detailError={activeResearchDetailError}
-                  onRetryDetail={retryActiveResearchDetail}
-                  onFork={createResearchFollowup}
-                  postActions={postActions}
-                  onRemoveBranch={removeResearchBranchFromThread}
-                  onRemoveTree={removeResearchTreeAndSelectFallback}
-                  onRenameTree={renameResearchTreeTitle}
-                  onUpdateDocument={editResearchDocument}
-                  onUpdatePost={editResearchPost}
-                  onAskAsQuestion={askResearchEditorQuestion}
-                  readQuestionModel={readResearchQuestionModel}
-                  onCancel={cancelResearchRun}
-                  onRetryNode={retryResearchRun}
-                  onRerunNode={rerunResearchRun}
-                  linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}
-                  onError={setError}
-                  onToast={handleResearchThreadToast}
-                  shortcutHintsShown={shortcutHintsShown}
-                  requireCmdEnterToSend={settings.requireCmdEnterToSend}
-                  onOpenNodesChange={setOpenResearchNodeIds}
-                  treeMenu={activeResearchTreeMenu}
-                  canGoBack={researchHistoryNav.canGoBack}
-                  canGoForward={researchHistoryNav.canGoForward}
-                  onBack={goResearchBack}
-                  onForward={goResearchForward}
-                  onNavigate={reportResearchNavigation}
-                  onPruneVisits={pruneResearchNodeVisits}
-                />
-              ) : openResearchDraft ? (
-                <ResearchDraftView
-                  key={openResearchDraft.id}
-                  draft={openResearchDraft}
-                  requireCmdEnterToSend={settings.requireCmdEnterToSend}
-                  onSave={(prompt) => saveOpenResearchDraft(openResearchDraft, prompt)}
-                  onSend={(prompt) => sendResearchDraft(openResearchDraft, prompt)}
-                />
-              ) : (
-                <ResearchEmptyContent history={researchHistoryNav}>
-                  <p>Select a question to open its conversation.</p>
-                </ResearchEmptyContent>
-              )}
-            </ResearchColumns>
-          ) : null}
+          <ResearchColumns
+            hasThread={researchStageView === "thread" || openResearchDraft !== null}
+            feed={
+              config ? (
+                feedPage.kind === "highlights" ? (
+                  <ResearchHighlightsFeed
+                    items={researchHighlightItems}
+                    loading={researchHighlightsLoading}
+                    error={researchHighlightsError}
+                    onOpen={openResearchHighlight}
+                    onRemove={removeResearchHighlightFromFeed}
+                    onRefresh={() => void refreshResearchHighlights()}
+                  />
+                ) : (
+                  <ResearchActivityFeed
+                    {...activityFeedState}
+                    view={feedPage}
+                    selectedTreeId={researchStageView === "thread" ? activeResearchTreeId : null}
+                    selectedChildNodeIds={openResearchNodeIds}
+                    selectedDraftId={openResearchDraft?.id ?? null}
+                    onImportReport={importReport}
+                    composer={feedComposer}
+                    setupGuide={feedSetupGuide}
+                    items={recentActivityItems}
+                    researchTrees={feedResearchTrees}
+                    folders={researchFolders}
+                    folderState={researchFolderState}
+                    drafts={researchDrafts}
+                    onLoadTrees={loadActivityForTrees}
+                    onOpenResearchQuery={openRecentResearchQuery}
+                    onOpenDraft={openResearchDraftInColumn}
+                    onOpenTree={openFeedResearchTree}
+                    onOpenView={openFeedView}
+                    onResearchRecapApplied={handleResearchRecapApplied}
+                    onError={setError}
+                    onRenameResearch={renameResearchTreeTitle}
+                    onRestoreResearch={restoreResearchTreeFromMenu}
+                    onRemoveResearch={removeResearchTreeFromMenu}
+                    onSetResearchBookmarked={bookmarkResearchTreeFromFeed}
+                    onMoveTree={moveResearchTreeFromFeed}
+                    onReorderTree={reorderResearchTreeFromFeed}
+                    onReorderDraft={moveResearchDraftFromFeed}
+                    onUnstarChild={unstarResearchFeedChild}
+                    onNewFolder={openNewResearchFolderDialog}
+                    onRenameFolder={openRenameResearchFolderDialog}
+                    onRequestDeleteFolder={requestResearchFolderDelete}
+                    pendingDeleteFolderId={pendingResearchFolderDelete}
+                    onConfirmDeleteFolder={confirmResearchFolderDelete}
+                    onCancelDeleteFolder={cancelResearchFolderDelete}
+                    onToggleTray={toggleResearchTray}
+                    onDeleteDraft={deleteResearchDraftFromFeed}
+                    onDragStart={startResearchCardDrag}
+                    onRefresh={refreshFeed}
+                    // Mouse buttons and swipes over the feed walk the same
+                    // history as the thread's controls.
+                    onBack={goResearchBack}
+                    onForward={goResearchForward}
+                  />
+                )
+              ) : null
+            }
+          >
+            {researchStageView === "thread" && activeResearchTreeId ? (
+              // Remount on tree changes to reset selection, fetched content,
+              // and the follow-up draft before paint. Resetting them in effects
+              // would briefly show and refetch the previous tree's node.
+              <ResearchThreadPage
+                key={activeResearchTreeId}
+                detail={activeResearchDetail}
+                treeTitle={
+                  activeResearchDetail?.tree.title ??
+                  researchTrees.find((tree) => tree.id === activeResearchTreeId)?.title ??
+                  archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)?.title
+                }
+                treeType={
+                  (
+                    researchTrees.find((tree) => tree.id === activeResearchTreeId) ??
+                    archivedResearchTrees.find((tree) => tree.id === activeResearchTreeId)
+                  )?.type
+                }
+                archived={Boolean(activeResearchDetail?.tree.archivedAt)}
+                recapPendingNodeIds={recapPendingNodeIds}
+                detailError={activeResearchDetailError}
+                onRetryDetail={retryActiveResearchDetail}
+                onFork={createResearchFollowup}
+                postActions={postActions}
+                onRemoveBranch={removeResearchBranchFromThread}
+                onRemoveTree={removeResearchTreeAndSelectFallback}
+                onRenameTree={renameResearchTreeTitle}
+                onUpdateDocument={editResearchDocument}
+                onUpdatePost={editResearchPost}
+                onAskAsQuestion={askResearchEditorQuestion}
+                readQuestionModel={readResearchQuestionModel}
+                onCancel={cancelResearchRun}
+                onRetryNode={retryResearchRun}
+                onRerunNode={rerunResearchRun}
+                linkActions={linkActionsForPane(researchBrowserOwnerId(activeResearchTreeId))}
+                onError={setError}
+                onToast={handleResearchThreadToast}
+                shortcutHintsShown={shortcutHintsShown}
+                requireCmdEnterToSend={settings.requireCmdEnterToSend}
+                onOpenNodesChange={setOpenResearchNodeIds}
+                treeMenu={activeResearchTreeMenu}
+                canGoBack={researchHistoryNav.canGoBack}
+                canGoForward={researchHistoryNav.canGoForward}
+                onBack={goResearchBack}
+                onForward={goResearchForward}
+                onNavigate={reportResearchNavigation}
+                onPruneVisits={pruneResearchNodeVisits}
+              />
+            ) : openResearchDraft ? (
+              <ResearchDraftView
+                key={openResearchDraft.id}
+                draft={openResearchDraft}
+                requireCmdEnterToSend={settings.requireCmdEnterToSend}
+                onSave={(prompt) => saveOpenResearchDraft(openResearchDraft, prompt)}
+                onSend={(prompt) => sendResearchDraft(openResearchDraft, prompt)}
+              />
+            ) : (
+              <ResearchEmptyContent history={researchHistoryNav}>
+                <p>Select a question to open its conversation.</p>
+              </ResearchEmptyContent>
+            )}
+          </ResearchColumns>
         </div>
       </main>
 
