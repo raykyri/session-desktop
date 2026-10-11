@@ -326,7 +326,7 @@ import {
   listResearchHighlights,
   removeResearchHighlights,
   renameResearchTree,
-  setResearchNodePromoted,
+  setResearchNodeStarred,
   setResearchTreeBookmarked,
   setResearchTreeFollowed,
   removeResearchTree,
@@ -8097,7 +8097,7 @@ function MainApp() {
   // Remove star on a feed child row; the node update event drops the row.
   const unstarResearchFeedChild = useCallback(
     (child: ResearchFeedChild) => {
-      void setResearchNodePromoted(child.nodeId, false).then(
+      void setResearchNodeStarred(child.nodeId, false).then(
         () => showResearchToast(child.branch ? "Branch unstarred." : "Unstarred."),
         (err: unknown) => setError(err instanceof Error ? err.message : String(err)),
       );

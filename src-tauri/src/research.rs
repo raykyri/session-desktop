@@ -18,18 +18,20 @@ pub const MAX_RESEARCH_DOCUMENT_WORDS: usize = 10_000;
 /// Backstop for word-sparse documents (one giant token counts as one word).
 /// Imports and the composer both advertise this exact limit.
 pub const MAX_RESEARCH_DOCUMENT_BYTES: usize = 10 * 1024 * 1024;
-/// Archives store research nodes as an envelope with a tagged body (see
-/// `ResearchNode`) since version 11, so every archive is written at this
-/// version: builds that accept versions 1 to 10 read flat records and would
-/// drop every node. Reads accept versions 1 to 11 and migrate older nodes
-/// (`migrate_research_node_values`). Version 10 denotes two shapes, both
+/// Every archive is written at this version. Version 12 stores a node's star
+/// timestamp as `starredAt` (`promotedAt` before); builds that accept up to
+/// version 11 ignore the new key and would drop every star. Archives store
+/// research nodes as an envelope with a tagged body (see `ResearchNode`)
+/// since version 11; builds that accept versions 1 to 10 read flat records
+/// and would drop every node. Reads accept versions 1 to 12 and migrate older
+/// nodes (`migrate_research_node_values`). Version 10 denotes two shapes, both
 /// written only by unreleased builds: flat records with posts and one merged
 /// anchor, and, from later builds, the body shape; the shape-based migration
 /// reads either. Earlier versions were tiers for the newest feature an
 /// archive held (3 runs only, 4 documents, 5 terminal conversations, 6 inline
 /// follow-ups, 7 attachments, 8 notes, 9 imported documents), so older builds
 /// kept reading archives without those features.
-pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 11;
+pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 12;
 const DETACHED_RESEARCH_DIR: &str = "research-v1";
 const DETACHED_RESEARCH_PENDING_DIR: &str = "research-v1.pending";
 const DETACHED_RESEARCH_MANIFEST: &str = "manifest.json";
@@ -50,10 +52,11 @@ pub struct ResearchFolder {
 /// The whole grouping layer for research trees. Persisted in `state.json`
 /// alongside the trees it references — durably and atomically — rather than in
 /// webview localStorage, where a hard-abort mid-write or a transient empty tree
-/// list could silently erase it. Membership/stars/collapsed reference tree and
-/// folder ids; entries for ids that no longer exist are reconciled away at load
-/// and when a tree is actually removed, never against a possibly-incomplete
-/// snapshot on every refresh.
+/// list could silently erase it. Membership and collapsed entries reference
+/// tree and folder ids; entries for ids that no longer exist are reconciled
+/// away at load and when a tree is actually removed, never against a
+/// possibly-incomplete snapshot on every refresh. Earlier builds also stored
+/// a `starred` id list that no UI read; loads ignore it and saves omit it.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResearchFolderState {
@@ -62,9 +65,6 @@ pub struct ResearchFolderState {
     /// treeId -> folderId
     #[serde(default)]
     pub membership: HashMap<String, String>,
-    /// Starred tree and folder ids, in the starred list's display order.
-    #[serde(default)]
-    pub starred: Vec<String>,
     /// Folder ids whose member rows are hidden in the sidebar.
     #[serde(default)]
     pub collapsed: Vec<String>,
@@ -74,10 +74,7 @@ impl ResearchFolderState {
     /// serde skip guard: an untouched grouping serializes to nothing, so state
     /// files from builds that predate folders round-trip byte-identically.
     pub fn is_empty(&self) -> bool {
-        self.folders.is_empty()
-            && self.membership.is_empty()
-            && self.starred.is_empty()
-            && self.collapsed.is_empty()
+        self.folders.is_empty() && self.membership.is_empty() && self.collapsed.is_empty()
     }
 }
 
@@ -168,8 +165,7 @@ pub fn validate_research_folders(
 /// Structural normalization independent of which trees exist: dedupe folder
 /// ids, drop membership pointing at folders that are not present (the system
 /// Drafts folder excepted), and drop collapsed entries for absent folders
-/// other than the system sections. Stars are only deduped — they may
-/// reference trees this function has no view of.
+/// other than the system sections.
 pub fn normalize_research_folder_state(state: &mut ResearchFolderState) {
     let mut seen = HashSet::new();
     state
@@ -183,8 +179,6 @@ pub fn normalize_research_folder_state(state: &mut ResearchFolderState) {
     state.membership.retain(|_, folder_id| {
         folder_ids.contains(folder_id) || folder_id == RESEARCH_DRAFTS_FOLDER_ID
     });
-    let mut seen_star = HashSet::new();
-    state.starred.retain(|id| seen_star.insert(id.clone()));
     let mut seen_collapsed = HashSet::new();
     state.collapsed.retain(|id| {
         (folder_ids.contains(id) || is_research_system_folder_id(id))
@@ -211,15 +205,11 @@ pub fn reconcile_research_folder_state(
         .map(|folder| folder.id.clone())
         .collect::<HashSet<_>>();
     state
-        .starred
-        .retain(|id| known_tree_ids.contains(id) || folder_ids.contains(id));
-    state
         .collapsed
         .retain(|id| folder_ids.contains(id) || is_research_system_folder_id(id));
 }
 
-/// Drops the supplied trees out of whatever folder holds them and out of the
-/// starred list. Folder records and their view state survive when left empty.
+/// Drops the supplied trees out of whatever folder holds them. Folder records and their view state survive when left empty.
 /// Mirrors the frontend `removeTreesFromResearchFolders`; used when a tree is
 /// actually removed so the persisted grouping stays clean between loads.
 pub fn remove_trees_from_research_folders(
@@ -229,11 +219,10 @@ pub fn remove_trees_from_research_folders(
     state
         .membership
         .retain(|tree_id, _| !tree_ids.contains(tree_id));
-    state.starred.retain(|id| !tree_ids.contains(id));
 }
 
-/// Removes every folder belonging to a workspace along with the memberships,
-/// stars, and collapsed flags that reference them. Used when a whole research
+/// Removes every folder belonging to a workspace along with the memberships
+/// and collapsed flags that reference them. Used when a whole research
 /// workspace is detached; the workspace's trees are scrubbed separately via
 /// [`remove_trees_from_research_folders`].
 pub fn remove_research_workspace_folders(state: &mut ResearchFolderState, workspace_id: &str) {
@@ -252,7 +241,6 @@ pub fn remove_research_workspace_folders(state: &mut ResearchFolderState, worksp
     state
         .membership
         .retain(|_, folder_id| !removed.contains(folder_id));
-    state.starred.retain(|id| !removed.contains(id));
     state.collapsed.retain(|id| !removed.contains(id));
 }
 
@@ -696,10 +684,12 @@ pub struct ResearchNode {
     /// authoritative; loads reconcile this copy to it.
     pub group_id: String,
     pub created_at: u128,
-    /// When the user promoted this follow-up into its tree's Home feed entry.
+    /// When the user starred this follow-up, listing it under its tree's Home
+    /// feed entry. Stored as `promotedAt` before state version 10 and archive
+    /// version 12.
     /// Never set on a root.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub promoted_at: Option<u128>,
+    pub starred_at: Option<u128>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub highlights: Vec<ResearchHighlight>,
     pub body: NodeBody,
@@ -1011,7 +1001,7 @@ pub struct ResearchNodeView {
     pub group_id: String,
     pub created_at: u128,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub promoted_at: Option<u128>,
+    pub starred_at: Option<u128>,
     pub highlights: Vec<ResearchHighlight>,
     #[serde(flatten)]
     pub body: NodeBodyView,
@@ -1072,7 +1062,7 @@ impl ResearchNode {
             title: self.title.clone(),
             group_id: self.group_id.clone(),
             created_at: self.created_at,
-            promoted_at: self.promoted_at,
+            starred_at: self.starred_at,
             highlights: self.highlights.clone(),
             body,
         }
@@ -1144,15 +1134,15 @@ pub struct RecentResearchQuery {
     pub error: Option<String>,
     pub created_at: u128,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub promoted_at: Option<u128>,
+    pub starred_at: Option<u128>,
     /// Non-inline edges on the path from the tree's root to this node: 0 for
     /// the root and its inline continuations, 1 for a branch of the root.
     pub branch_depth: u32,
-    /// Root entries only: every promoted feed-kind node in the tree,
+    /// Root entries only: every starred feed-kind node in the tree,
     /// depth-first, visiting a node's branches (oldest first) before its
     /// inline continuation.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub promoted: Vec<RecentResearchQuery>,
+    pub starred: Vec<RecentResearchQuery>,
     /// Current answer recap, when one has been generated for this run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recap: Option<String>,
@@ -1186,9 +1176,9 @@ impl From<&ResearchNode> for RecentResearchQuery {
             status: node.status(),
             error: node.run().and_then(|run| run.error.clone()),
             created_at: node.created_at,
-            promoted_at: node.promoted_at,
+            starred_at: node.starred_at,
             branch_depth: 0,
-            promoted: Vec::new(),
+            starred: Vec::new(),
             recap: node.recap().and_then(|recap| {
                 let text = recap.text.trim();
                 (!text.is_empty()).then(|| text.to_string())
@@ -1288,7 +1278,7 @@ pub fn reply_anchor_author(parent: &ResearchNode, child: &ResearchNode) -> Optio
 
 impl ResearchNode {
     /// A node with the envelope defaults: no anchor, inline slot, title,
-    /// promotion or highlights.
+    /// star or highlights.
     pub fn new(
         id: String,
         tree_id: String,
@@ -1306,7 +1296,7 @@ impl ResearchNode {
             title: None,
             group_id,
             created_at,
-            promoted_at: None,
+            starred_at: None,
             highlights: Vec::new(),
             body,
         }
@@ -1391,9 +1381,10 @@ pub fn migrate_imported_report_node(node: &mut serde_json::Value) -> bool {
 }
 
 /// Every JSON-shape migration for stored nodes, oldest first: imported
-/// reports become documents, notes become posts with merged anchors, and
-/// every flat record gets the envelope-and-body shape (state version 9,
-/// archive version 11). Shared by state loads and archive reads so both paths
+/// reports become documents, notes become posts with merged anchors, every
+/// flat record gets the envelope-and-body shape (state version 9, archive
+/// version 11), and `promotedAt` becomes `starredAt` (state version 10,
+/// archive version 12). Shared by state loads and archive reads so both paths
 /// convert the same shapes. Each step only rewrites nodes in its own old
 /// shape, so the whole migration is idempotent and runs on files of any
 /// supported version, including version-8 and version-10 files, which hold
@@ -1415,8 +1406,31 @@ pub fn migrate_research_node_values(nodes: &mut [&mut serde_json::Value]) -> boo
     changed |= migrate_note_nodes_to_posts(nodes);
     for node in nodes.iter_mut() {
         changed |= migrate_flat_node_to_body(node);
+        changed |= migrate_promoted_at_to_starred_at(node);
     }
     changed
+}
+
+/// Step four of [`migrate_research_node_values`], after flat records have the
+/// envelope shape: the envelope's `promotedAt` (a star's timestamp, written
+/// before state version 10 and archive version 12) becomes `starredAt`. A
+/// node that already has a `starredAt` keeps it, and the old key is dropped
+/// either way. Returns whether the node changed.
+pub fn migrate_promoted_at_to_starred_at(node: &mut serde_json::Value) -> bool {
+    let Some(object) = node.as_object_mut() else {
+        return false;
+    };
+    let Some(promoted_at) = object.remove("promotedAt") else {
+        return false;
+    };
+    if !promoted_at.is_null()
+        && object
+            .get("starredAt")
+            .is_none_or(serde_json::Value::is_null)
+    {
+        object.insert("starredAt".to_string(), promoted_at);
+    }
+    true
 }
 
 /// Step two of [`migrate_research_node_values`], for flat records:
@@ -1500,7 +1514,7 @@ pub fn migrate_note_nodes_to_posts(nodes: &mut [&mut serde_json::Value]) -> bool
 
 /// The fields a flat record shares with the envelope; every other field moves
 /// into the body or, where the body type has no place for it, is dropped.
-const ENVELOPE_FIELDS: [&str; 10] = [
+const ENVELOPE_FIELDS: [&str; 11] = [
     "id",
     "treeId",
     "parentNodeId",
@@ -1509,7 +1523,9 @@ const ENVELOPE_FIELDS: [&str; 10] = [
     "title",
     "groupId",
     "createdAt",
+    // Flat records stored a star as `promotedAt`; the next step renames it.
     "promotedAt",
+    "starredAt",
     "highlights",
 ];
 
@@ -3778,7 +3794,6 @@ mod tests {
     fn folder_state(
         folders: &[(&str, &str)],
         membership: &[(&str, &str)],
-        starred: &[&str],
         collapsed: &[&str],
     ) -> ResearchFolderState {
         ResearchFolderState {
@@ -3787,7 +3802,6 @@ mod tests {
                 .iter()
                 .map(|(tree, folder)| (tree.to_string(), folder.to_string()))
                 .collect(),
-            starred: starred.iter().map(|id| id.to_string()).collect(),
             collapsed: collapsed.iter().map(|id| id.to_string()).collect(),
         }
     }
@@ -3797,7 +3811,6 @@ mod tests {
         let mut state = folder_state(
             &[("f1", "ws"), ("f2", "ws")],
             &[("t1", "f1"), ("gone", "f2")],
-            &["t1", "f2", "starred-gone-tree"],
             &["f1", "f2"],
         );
         let known = HashSet::from(["t1".to_string()]);
@@ -3809,41 +3822,59 @@ mod tests {
             state.membership,
             HashMap::from([("t1".to_string(), "f1".to_string())])
         );
-        // Stars survive for live trees and durable folders.
-        assert_eq!(state.starred, vec!["t1".to_string(), "f2".to_string()]);
         assert_eq!(state.collapsed, vec!["f1".to_string(), "f2".to_string()]);
     }
 
     #[test]
+    fn a_stored_starred_list_is_ignored_on_load_and_omitted_on_save() {
+        let stored = concat!(
+            r#"{"folders":[{"id":"f1","name":"f1","workspaceId":"ws"}],"#,
+            r#""membership":{"t1":"f1"},"starred":["t1","f1"],"collapsed":["f1"]}"#
+        );
+        let state: ResearchFolderState = serde_json::from_str(stored).unwrap();
+        assert_eq!(
+            state,
+            folder_state(&[("f1", "ws")], &[("t1", "f1")], &["f1"])
+        );
+        assert_eq!(
+            serde_json::to_string(&state).unwrap(),
+            concat!(
+                r#"{"folders":[{"id":"f1","name":"f1","workspaceId":"ws"}],"#,
+                r#""membership":{"t1":"f1"},"collapsed":["f1"]}"#
+            )
+        );
+        // A grouping that held only stars is empty, so the state omits it.
+        let only_stars: ResearchFolderState =
+            serde_json::from_str(r#"{"starred":["t1"]}"#).unwrap();
+        assert!(only_stars.is_empty());
+    }
+
+    #[test]
     fn reconcile_against_empty_tree_set_preserves_folders() {
-        // Reconciliation may clear stale memberships and tree stars, but never
-        // uses an empty tree snapshot as a reason to delete folders.
-        let mut state = folder_state(&[("f1", "ws")], &[("t1", "f1")], &["t1"], &["f1"]);
+        // Reconciliation may clear stale memberships, but never uses an empty
+        // tree snapshot as a reason to delete folders.
+        let mut state = folder_state(&[("f1", "ws")], &[("t1", "f1")], &["f1"]);
         reconcile_research_folder_state(&mut state, &HashSet::new());
         assert_eq!(state.folders.len(), 1);
         assert!(state.membership.is_empty());
-        assert!(state.starred.is_empty());
         assert_eq!(state.collapsed, vec!["f1".to_string()]);
     }
 
     #[test]
-    fn removing_a_tree_drops_its_star_and_preserves_the_emptied_folder() {
-        let mut state = folder_state(
-            &[("f1", "ws")],
-            &[("t1", "f1"), ("t2", "f1")],
-            &["t1", "f1", "t2"],
-            &["f1"],
-        );
+    fn removing_a_tree_drops_its_membership_and_preserves_the_emptied_folder() {
+        let mut state = folder_state(&[("f1", "ws")], &[("t1", "f1"), ("t2", "f1")], &["f1"]);
         remove_trees_from_research_folders(&mut state, &HashSet::from(["t1".to_string()]));
-        // f1 still has t2, so it and its star/collapsed survive; t1's star is gone.
+        // f1 still has t2, so it and its collapsed flag survive.
         assert_eq!(state.folders.len(), 1);
-        assert_eq!(state.starred, vec!["f1".to_string(), "t2".to_string()]);
+        assert_eq!(
+            state.membership,
+            HashMap::from([("t2".to_string(), "f1".to_string())])
+        );
         assert_eq!(state.collapsed, vec!["f1".to_string()]);
         // Removing the last member leaves the folder and its view state intact.
         remove_trees_from_research_folders(&mut state, &HashSet::from(["t2".to_string()]));
         assert_eq!(state.folders.len(), 1);
         assert!(state.membership.is_empty());
-        assert_eq!(state.starred, vec!["f1".to_string()]);
         assert_eq!(state.collapsed, vec!["f1".to_string()]);
     }
 
@@ -3853,7 +3884,6 @@ mod tests {
             &[("f1", "ws-a"), ("f2", "ws-b")],
             &[("t1", "f1"), ("t2", "f2")],
             &["f1", "f2"],
-            &["f1", "f2"],
         );
         remove_research_workspace_folders(&mut state, "ws-a");
         assert_eq!(state.folders.len(), 1);
@@ -3862,7 +3892,6 @@ mod tests {
             state.membership,
             HashMap::from([("t2".to_string(), "f2".to_string())])
         );
-        assert_eq!(state.starred, vec!["f2".to_string()]);
         assert_eq!(state.collapsed, vec!["f2".to_string()]);
     }
 
@@ -3871,18 +3900,16 @@ mod tests {
         let mut state = folder_state(
             &[("f1", "ws"), ("f1", "ws")],
             &[("t1", "f1"), ("t2", "ghost")],
-            &["t1", "t1"],
             &["f1", "ghost", "f1"],
         );
         normalize_research_folder_state(&mut state);
         // Duplicate folder id collapses to one; membership/collapsed for the
-        // absent folder are dropped; stars are deduped.
+        // absent folder are dropped.
         assert_eq!(state.folders.len(), 1);
         assert_eq!(
             state.membership,
             HashMap::from([("t1".to_string(), "f1".to_string())])
         );
-        assert_eq!(state.starred, vec!["t1".to_string()]);
         assert_eq!(state.collapsed, vec!["f1".to_string()]);
     }
 
@@ -3891,7 +3918,6 @@ mod tests {
         let mut state = folder_state(
             &[("f1", "ws")],
             &[("t1", RESEARCH_DRAFTS_FOLDER_ID), ("t2", "system:archive")],
-            &[],
             &[
                 "system:drafts",
                 "system:archive",
@@ -4076,7 +4102,7 @@ mod tests {
             title: None,
             group_id: "group-1".to_string(),
             created_at: 1,
-            promoted_at: None,
+            starred_at: None,
             highlights: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                 message: crate::research::UserMessage {
@@ -4594,7 +4620,12 @@ mod tests {
         archive.version = DETACHED_RESEARCH_ARCHIVE_VERSION - 1;
         let error =
             write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap_err();
-        assert!(error.contains("written at version 11"), "{error}");
+        assert!(
+            error.contains(&format!(
+                "written at version {DETACHED_RESEARCH_ARCHIVE_VERSION}"
+            )),
+            "{error}"
+        );
         archive.version = DETACHED_RESEARCH_ARCHIVE_VERSION;
         write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap();
         std::fs::remove_dir_all(folder).unwrap();
@@ -4858,7 +4889,7 @@ mod tests {
         assert_eq!(run.binding.thread_id.as_deref(), Some("thread"));
         assert_eq!(run.recap.as_ref().unwrap().generated_at, Some(5));
         assert_eq!(typed[0].title.as_deref(), Some("Run"));
-        assert_eq!(typed[0].promoted_at, Some(9));
+        assert_eq!(typed[0].starred_at, Some(9));
         assert_eq!(typed[0].highlights.len(), 1);
 
         let post = typed[1].post().unwrap();
@@ -4967,7 +4998,8 @@ mod tests {
     }
 
     /// Version 10 was written with flat posts and, by later builds, with the
-    /// body shape. Both read back as the same nodes, stamped version 11.
+    /// body shape. Both read back as the same nodes, stamped with the current
+    /// version.
     #[test]
     fn version_ten_archives_read_in_either_shape() {
         let folder = temp_workspace();
@@ -5018,6 +5050,86 @@ mod tests {
             assert_eq!(bundle.archive.nodes, archive.nodes);
         }
         std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    /// Version 11 stored a star as `promotedAt`. A version-11 archive reads
+    /// back with `starredAt`, is stamped version 12, and is rewritten with
+    /// only the new key; reading the rewritten archive changes nothing.
+    #[test]
+    fn version_eleven_archives_read_stars_as_starred_at() {
+        let folder = temp_workspace();
+        let mut archive = sample_detached_archive(&folder);
+        let root = archive.nodes[0].clone();
+        let mut starred = root.clone();
+        starred.id = "research-node-2".to_string();
+        starred.parent_node_id = Some(root.id.clone());
+        starred.starred_at = Some(7);
+        let mut unstarred = starred.clone();
+        unstarred.id = "research-node-3".to_string();
+        unstarred.starred_at = None;
+        archive.nodes.extend([starred, unstarred]);
+        write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap();
+        let manifest = detached_archive_path(&folder, true).join(DETACHED_RESEARCH_MANIFEST);
+        let current: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+        assert_eq!(current["version"], serde_json::json!(12));
+        assert_eq!(current["nodes"][1]["starredAt"], serde_json::json!(7));
+        assert!(current["nodes"][1].get("promotedAt").is_none());
+
+        let mut version_eleven = current.clone();
+        version_eleven["version"] = serde_json::json!(11);
+        let node = version_eleven["nodes"][1].as_object_mut().unwrap();
+        let star = node.remove("starredAt").unwrap();
+        node.insert("promotedAt".to_string(), star);
+        std::fs::write(&manifest, serde_json::to_vec(&version_eleven).unwrap()).unwrap();
+        let bundle = read_detached_research(&folder).unwrap().unwrap();
+        assert_eq!(bundle.archive.version, DETACHED_RESEARCH_ARCHIVE_VERSION);
+        assert_eq!(bundle.archive.nodes, archive.nodes);
+
+        write_detached_research_pending(&folder, &bundle.archive, &HashMap::new()).unwrap();
+        let rewritten: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+        assert_eq!(rewritten["version"], serde_json::json!(12));
+        assert_eq!(rewritten["nodes"], current["nodes"]);
+        let again = read_detached_research(&folder).unwrap().unwrap();
+        assert_eq!(again.archive.nodes, archive.nodes);
+        std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn archives_from_newer_versions_are_refused() {
+        let folder = temp_workspace();
+        let archive = sample_detached_archive(&folder);
+        write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap();
+        let manifest = detached_archive_path(&folder, true).join(DETACHED_RESEARCH_MANIFEST);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+        raw["version"] = serde_json::json!(DETACHED_RESEARCH_ARCHIVE_VERSION + 1);
+        std::fs::write(&manifest, serde_json::to_vec(&raw).unwrap()).unwrap();
+        let error = read_detached_research(&folder).err().unwrap();
+        assert!(
+            error.contains(&format!(
+                "unsupported detached research archive version {}",
+                DETACHED_RESEARCH_ARCHIVE_VERSION + 1
+            )),
+            "{error}"
+        );
+        std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn star_migration_renames_promoted_at_once() {
+        let mut node = serde_json::json!({"id": "n", "promotedAt": 5});
+        assert!(migrate_promoted_at_to_starred_at(&mut node));
+        assert_eq!(node, serde_json::json!({"id": "n", "starredAt": 5}));
+        assert!(!migrate_promoted_at_to_starred_at(&mut node));
+        // A cleared star stays cleared, and an existing starredAt wins.
+        let mut cleared = serde_json::json!({"id": "n", "promotedAt": null});
+        assert!(migrate_promoted_at_to_starred_at(&mut cleared));
+        assert_eq!(cleared, serde_json::json!({"id": "n"}));
+        let mut both = serde_json::json!({"id": "n", "promotedAt": 5, "starredAt": 6});
+        assert!(migrate_promoted_at_to_starred_at(&mut both));
+        assert_eq!(both, serde_json::json!({"id": "n", "starredAt": 6}));
     }
 
     /// The stored shape of a post with every optional field set: a network

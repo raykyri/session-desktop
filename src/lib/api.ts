@@ -402,8 +402,8 @@ export function renameResearchNode(nodeId: string, title: string) {
   return invoke<ResearchNode>("rename_research_node", { nodeId, title });
 }
 
-export function setResearchNodePromoted(nodeId: string, promoted: boolean) {
-  return invoke<ResearchNode>("set_research_node_promoted", { nodeId, promoted });
+export function setResearchNodeStarred(nodeId: string, starred: boolean) {
+  return invoke<ResearchNode>("set_research_node_starred", { nodeId, starred });
 }
 
 export function createResearchHighlight(

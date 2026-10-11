@@ -170,7 +170,7 @@ export function upsertRecentActivityResearchNode(
   const existing = items.find((item) => item.nodeId === query.nodeId);
   if (existing) {
     query.children = existing.children;
-    query.promoted = existing.promoted;
+    query.starred = existing.starred;
   }
   return upsertRecentActivityItem(items, query);
 }
@@ -181,29 +181,29 @@ export function upsertRecentActivityResearchNode(
  * backend, so `stale` asks the caller to refetch the feed. */
 export function patchRecentActivityStarred(
   items: RecentResearchQuery[],
-  node: ResearchNode & { promotedAt?: number | null },
+  node: ResearchNode & { starredAt?: number | null },
 ): { items: RecentResearchQuery[]; stale: boolean } {
-  const promotedAt = node.promotedAt ?? null;
+  const starredAt = node.starredAt ?? null;
   let stale = false;
   let changed = false;
   const next = items.map((item) => {
     if (item.treeId !== node.treeId || item.parentNodeId || item.nodeId === node.id) return item;
-    const promoted = item.promoted ?? [];
-    const index = promoted.findIndex((entry) => entry.nodeId === node.id);
+    const starred = item.starred ?? [];
+    const index = starred.findIndex((entry) => entry.nodeId === node.id);
     if (index < 0) {
-      if (promotedAt != null) stale = true;
+      if (starredAt != null) stale = true;
       return item;
     }
     changed = true;
-    if (promotedAt == null) {
-      return { ...item, promoted: promoted.filter((entry) => entry.nodeId !== node.id) };
+    if (starredAt == null) {
+      return { ...item, starred: starred.filter((entry) => entry.nodeId !== node.id) };
     }
-    const entry = promoted[index];
+    const entry = starred[index];
     return {
       ...item,
-      promoted: promoted.map((candidate, position) =>
+      starred: starred.map((candidate, position) =>
         position === index
-          ? { ...entry, prompt: nodePrompt(node), title: node.title, status: nodeStatus(node), promotedAt }
+          ? { ...entry, prompt: nodePrompt(node), title: node.title, status: nodeStatus(node), starredAt }
           : candidate,
       ),
     };

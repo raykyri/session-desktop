@@ -18,7 +18,7 @@ const RESEARCH_FOLDER_NAME_MAX_LENGTH = 40;
 const RESERVED_FOLDER_NAMES = ["home", "unfiled", "drafts", "archive", "bookmarks", "highlights"];
 
 export function emptyResearchFolderState(): ResearchFolderState {
-  return { folders: [], membership: {}, starred: [], collapsed: [] };
+  return { folders: [], membership: {}, collapsed: [] };
 }
 
 /** Only Drafts and user folders keep a manual order: Unfiled follows the
@@ -139,7 +139,6 @@ export function researchFolderStateWithoutFolder(
     membership: Object.fromEntries(
       Object.entries(state.membership).filter(([, member]) => member !== folderId),
     ),
-    starred: state.starred.filter((id) => id !== folderId),
     collapsed: state.collapsed.filter((id) => id !== folderId),
   };
 }
@@ -232,7 +231,7 @@ export interface ResearchFeedChild {
  * order. Only follow-ups of the root level and branch heads can be
  * starred, so a branch head's parent is the message it was asked from. */
 export function researchFeedChildren(root: RecentResearchQuery): ResearchFeedChild[] {
-  const starred = (root.promoted ?? []).filter((child) => child.nodeId !== root.nodeId);
+  const starred = (root.starred ?? []).filter((child) => child.nodeId !== root.nodeId);
   const starredFollowUps = new Set(
     starred.filter((child) => child.inline).map((child) => child.nodeId),
   );
