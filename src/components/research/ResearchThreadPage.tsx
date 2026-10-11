@@ -2020,8 +2020,10 @@ function ResearchThreadPage({
     (level: number) => {
       const levels = stripRef.current.levels;
       const siblings = siblingsAt(levels[level]);
+      // The last pair: the answer is already beside the message, so focus
+      // stays on the message and ↑/↓ keep moving between messages.
       if (siblings.length === 0) {
-        requestFocus({ kind: "answer", level }, "settle");
+        requestFocus({ kind: "row", level }, "settle");
         return;
       }
       const open = levels[level + 1]?.selectedId;
@@ -2036,7 +2038,8 @@ function ResearchThreadPage({
   /** Keys in the pairs: ↑/↓ move between messages (and, at a branch
    * column's first or last message, to the previous or next branch of the
    * same answer), Enter opens a message's answer, → selects a row in the
-   * branch column, ← goes to the parent message (or the feed). */
+   * branch column (or, in the last pair, selects the message and keeps focus
+   * on it), ← goes to the parent message (or the feed). */
   const onPairsKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const target = event.target instanceof HTMLElement ? event.target : null;
     // ⌥↑ and ⌥↓ move a message up or down its column.
@@ -2172,8 +2175,10 @@ function ResearchThreadPage({
           openBranch(level, head.id);
           requestFocus({ kind: "row", level: level + 1 }, "settle");
         } else {
+          // No branches: the message's pair is the last one. Its answer
+          // shows beside it and focus stays on the message.
           selectMessage(level, nodeId);
-          requestFocus({ kind: "answer", level }, "settle");
+          requestFocus({ kind: "row", level }, "settle");
         }
         return;
       }
