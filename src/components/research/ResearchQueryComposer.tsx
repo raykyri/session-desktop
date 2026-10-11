@@ -32,6 +32,7 @@ import {
 } from "../../lib/adapterReadiness";
 import { postFormatOf } from "../../lib/researchNodeTypes";
 import { AskPostSwitch, type AskMode } from "./AskPostSwitch";
+import { ResearchModelNameDialog } from "./ResearchModelNameDialog";
 import { useComposerPopOpen } from "../../hooks/useComposerPopOpen";
 
 const CLAUDE_RESEARCH_EFFORT_OPTIONS = CLAUDE_EFFORT_OPTIONS.map((option) => ({
@@ -392,7 +393,19 @@ export default function ResearchQueryComposer({
         : "Start research";
   const sendShortcut = requireCmdEnterToSend ? "⌘↵" : "↵";
 
-  const modelOptions = useMemo(() => researchModelOptions(adapters), [adapters]);
+  // The selected agent's Custom option shows the model name it launches with.
+  const customModelName = customModel.trim();
+  const modelOptions = useMemo(
+    () =>
+      researchModelOptions(adapters).map((option) =>
+        customModelName && option.value === researchModelChoiceValue(adapter, CUSTOM_MODEL)
+          ? { ...option, detail: customModelName }
+          : option,
+      ),
+    [adapter, adapters, customModelName],
+  );
+  // The agent whose Custom option was chosen, while its model name dialog is open.
+  const [customModelAdapter, setCustomModelAdapter] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const askSegmentRef = useRef<HTMLButtonElement | null>(null);
   const rowRef = useRef<HTMLDivElement | null>(null);
@@ -552,19 +565,6 @@ export default function ResearchQueryComposer({
             }
           }}
         />
-        {expanded && askModeShowsAiControls(askMode) && selectedModel === CUSTOM_MODEL ? (
-          <input
-            className="new-research-custom-model"
-            type="text"
-            value={customModel}
-            placeholder="Model name"
-            aria-label="Custom model"
-            onChange={(event) => {
-              sessionDraftTouchedRef.current = true;
-              setCustomModel(event.currentTarget.value);
-            }}
-          />
-        ) : null}
         {expanded ? (
           <div ref={rowRef} className="new-research-row">
             {/* Ask (the agent's icon) and Post side by side; the selected Ask
@@ -589,11 +589,21 @@ export default function ResearchQueryComposer({
               options={modelOptions}
               ariaLabel="Model"
               onChange={(choice) => {
+                const next = parseResearchModelChoice(choice);
+                // Custom asks for the model name first; Cancel keeps the
+                // current choice.
+                if (next.preset === CUSTOM_MODEL) {
+                  setCustomModelAdapter(next.adapter);
+                  return;
+                }
                 sessionDraftTouchedRef.current = true;
                 setError(null);
-                const next = parseResearchModelChoice(choice);
                 setAdapter(next.adapter);
                 setModelChoice(next.preset || null);
+              }}
+              onReselect={(choice) => {
+                const next = parseResearchModelChoice(choice);
+                if (next.preset === CUSTOM_MODEL) setCustomModelAdapter(next.adapter);
               }}
               submenu={
                 effortOptions
@@ -669,6 +679,21 @@ export default function ResearchQueryComposer({
           </div>
         ) : null}
       </form>
+      {customModelAdapter ? (
+        <ResearchModelNameDialog
+          agentLabel={adapters.find((candidate) => candidate.id === customModelAdapter)?.label ?? customModelAdapter}
+          initialName={customModel}
+          onClose={() => setCustomModelAdapter(null)}
+          onSubmit={(name) => {
+            sessionDraftTouchedRef.current = true;
+            setError(null);
+            setAdapter(customModelAdapter);
+            setModelChoice(CUSTOM_MODEL);
+            setCustomModel(name);
+            setCustomModelAdapter(null);
+          }}
+        />
+      ) : null}
       {moreAnchor ? (
         <ResearchMenu anchor={moreAnchor} label="Question actions" onClose={() => setMoreAnchor(null)}>
           <ResearchMenuItem
@@ -690,5 +715,5 @@ export default function ResearchQueryComposer({
 function insideComposer(root: HTMLElement | null, target: EventTarget | null) {
   if (!(target instanceof Node)) return false;
   if (root?.contains(target)) return true;
-  return target instanceof Element && Boolean(target.closest(".launcher-select-popover, .research-menu"));
+  return target instanceof Element && Boolean(target.closest(".launcher-select-popover, .research-menu, .research-model-dialog"));
 }

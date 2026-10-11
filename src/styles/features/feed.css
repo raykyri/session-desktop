@@ -421,23 +421,6 @@
   margin-left: 0;
 }
 
-.new-research-custom-model {
-  width: 100%;
-  margin-top: 6px;
-  padding: 3px 6px;
-  border: 1px solid var(--surface-border-strong);
-  border-radius: var(--radius-md);
-  color: var(--text-strong);
-  background: transparent;
-  font-family: inherit;
-  font-size: var(--fs-sm);
-}
-
-.new-research-custom-model:focus {
-  border-color: var(--accent-color);
-  outline: none;
-}
-
 .new-research-footer {
   display: flex;
   flex-direction: column;

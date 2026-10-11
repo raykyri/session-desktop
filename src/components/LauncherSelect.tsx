@@ -31,6 +31,8 @@ interface LauncherSelectProps {
   value: string;
   options: LauncherSelectOption[];
   onChange: (value: string) => void;
+  /** Called when the option already selected is chosen again. */
+  onReselect?: (value: string) => void;
   ariaLabel?: string;
   disabled?: boolean;
   submenu?: LauncherSelectSubmenu;
@@ -84,6 +86,7 @@ export function LauncherSelect({
   value,
   options,
   onChange,
+  onReselect,
   ariaLabel,
   disabled = false,
   submenu,
@@ -344,6 +347,8 @@ export function LauncherSelect({
                         closeAll(true);
                         if (option.value !== value) {
                           onChange(option.value);
+                        } else {
+                          onReselect?.(option.value);
                         }
                       }}
                     >
