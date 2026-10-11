@@ -491,7 +491,7 @@
 }
 
 :root[data-color-theme="orange-blob"] *::highlight(session-research-open-branch) {
-  text-decoration: underline 2px #33adff; /* highlight-pseudo-literal */
+  text-decoration: underline 2px #6890f5; /* highlight-pseudo-literal */
 }
 
 :root[data-appearance="light"] *::highlight(session-research-open-branch) {

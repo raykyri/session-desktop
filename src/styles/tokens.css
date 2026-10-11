@@ -495,75 +495,98 @@
 }
 
 :root[data-color-theme="orange-blob"] {
-  --left-pane-bg: #171716;
-  --terminal-pane-bg: #161514;
-  --right-pane-bg: #1c1b1a;
-  --right-pane-bg-transparent: rgba(28, 27, 26, 0);
-  --right-pane-active-bg: #1b1a19;
+  /* Dark appearance: cool neutral greys with a blue accent, after the
+     shared-inbox palette (Front). The light variant below is unchanged. */
+  --left-pane-bg: #16171a;
+  --terminal-pane-bg: #131417;
+  --right-pane-bg: #1d1e22;
+  --right-pane-bg-transparent: rgba(29, 30, 34, 0);
+  --right-pane-active-bg: #1c1d21;
 
-  --workspace-bg: #1c1b1a;
+  --workspace-bg: #1a1b1f;
   --research-thread-page-bg: var(--right-pane-bg);
-  --research-page-bg: #121110;
-  --field-bg: #171615;
-  --field-bg-hover: #1e1d1a;
-  --panel-bg: var(--field-bg);
-  --popover-bg: var(--field-bg);
-  --content-card-bg: #222120;
-  --content-inset-bg: #1d1c19;
-  --context-menu-bg: #23221f;
+  --research-page-bg: #131417;
+  --field-bg: #18191c;
+  --field-bg-hover: #1e1f23;
+  --panel-bg: #1a1b1f;
+  --popover-bg: #25262b;
+  --content-card-bg: #222327;
+  --content-inset-bg: #1a1b1f;
+  --context-menu-bg: #25262b;
   --popover-item-hover-bg: var(--pane-tab-hover-bg);
-  --chrome-header-bg: #171716;
-  --pane-hover-bg: #23211f;
-  --pane-tab-hover-bg: var(--right-pane-bg);
+  --chrome-header-bg: #16171a;
+  --pane-hover-bg: #27282e;
+  --pane-tab-hover-bg: #212227;
   --markdown-table-header-bg: color-mix(
     in srgb,
     var(--pane-hover-bg) 75%,
     var(--right-pane-bg) 25%
   );
-  --markdown-table-border: #302d2a;
-  --markdown-table-frame-border: #36332f;
-  --markdown-table-header-border: #403a35;
-  --markdown-blockquote-border: #45484a;
-  --transcript-code-bg: #171512;
-  --transcript-code-header-bg: #12110f;
-  --surface-divider: #2d2d2c;
-  --surface-border-strong: #373634;
-  --dialog-border: #3f3c37;
-  --chrome-control-bg: rgba(31, 29, 27, 0.9);
-  --chrome-control-bg-hover: rgba(44, 41, 37, 0.95);
-  --chrome-control-bg-disabled: rgba(31, 29, 26, 0.65);
+  --markdown-table-border: #2b2c32;
+  --markdown-table-frame-border: #33343b;
+  --markdown-table-header-border: #3a3b43;
+  --markdown-blockquote-border: #3f4149;
+  --transcript-code-bg: #17181b;
+  --transcript-code-header-bg: #131417;
+  --surface-divider: #2b2c32;
+  --surface-border-strong: #3a3b43;
+  --dialog-border: #3d3e46;
+  --chrome-control-bg: rgba(29, 30, 34, 0.9);
+  --chrome-control-bg-hover: rgba(42, 43, 49, 0.95);
+  --chrome-control-bg-disabled: rgba(29, 30, 34, 0.65);
 
-  --settings-tab-active-bg: #322f2b;
-  --recovered-queue-divider: #34312d;
-  --pane-status-active-dot: #b3ada3;
-  --folder-picker-status-border: #49423a;
-  --queued-turn-border: #48413a;
+  --settings-tab-active-bg: #2a2b31;
+  --recovered-queue-divider: #2f3036;
+  --pane-status-active-dot: #a9a9b5;
+  --folder-picker-status-border: #3a3b43;
+  --queued-turn-border: #3a3b43;
 
-  --accent-color: #33adff;
-  --accent-shadow: rgba(51, 173, 255, 0.35);
-  --accent-soft: rgba(51, 173, 255, 0.13);
-  --accent-subtle: rgba(51, 173, 255, 0.08);
-  --accent-active-bg: #263a49;
-  --accent-strong: #268fd6;
+  /* #6890f5 keeps 4.5:1 as text on the pane surfaces; fills use the same hue. */
+  --accent-color: #6890f5;
+  --accent-shadow: rgba(104, 144, 245, 0.35);
+  --accent-soft: rgba(77, 127, 242, 0.17);
+  --accent-subtle: rgba(77, 127, 242, 0.08);
+  --accent-active-bg: #24304d;
+  --accent-strong: #4d7ff2;
 
-  --control-bg: #282827;
-  --control-bg-hover: #313130;
-  --control-border: #3d3d3c;
-  --control-border-hover: #4a4946;
-  --control-border-hover-accent: #57544f;
-  --focus-ring: #33adff;
+  --control-bg: #25262b;
+  --control-bg-hover: #2c2d33;
+  --control-border: #3a3b43;
+  --control-border-hover: #474852;
+  --control-border-hover-accent: #4a5578;
+  --focus-ring: #6890f5;
+
+  /* Text roles are theme-invariant elsewhere; this theme cools them to match
+     its neutrals. The light appearance block still overrides them. */
+  --text-primary: #e9e9ee;
+  --text-strong: #f3f3f6;
+  --text-secondary: #c4c4cd;
+  --text-body-soft: #d8d8df;
+  --text-muted: #9696a2;
+  --text-activity: #8f8f9b;
+  --text-interactive: #ececf1;
+  --text-heading: #f4f4f7;
+  --text-subtle: #8a8a96;
+  --text-faint: #82828e;
+  --text-disabled: #797982;
+  --placeholder-color: #6b6b76;
+  --text-tertiary: #ababb6;
+  --text-dim: #5f5f6a;
+  --text-ghost: #4d4d57;
+  --text-on-accent: #0e1016;
+  --selection-bg: rgba(77, 127, 242, 0.45);
 
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
      the card of the open thread, and the fields and popovers over the feed,
      which sit one step above it (--field-bg sits below it). The
      conversation's composers, buttons, menus, and selection actions use the
      same field and popover colours. */
-  --research-feed-bg: #1a1918;
-  --research-tray-bg: #1d1c1b;
-  --research-card-selected-bg: #2b2927;
-  --research-feed-field-bg: #232220;
-  --research-feed-popover-bg: #23221f;
-  --research-feed-switch-raised-bg: var(--control-bg);
+  --research-feed-bg: #1a1b1f;
+  --research-tray-bg: #1d1e22;
+  --research-card-selected-bg: #2a2b31;
+  --research-feed-field-bg: #25262b;
+  --research-feed-popover-bg: #25262b;
+  --research-feed-switch-raised-bg: #34353c;
   --research-feed-switch-raised-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
 }
 
