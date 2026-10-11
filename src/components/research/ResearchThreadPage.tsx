@@ -50,17 +50,6 @@ import ResearchPostColumn from "./ResearchPostColumn";
 import ResearchPostThread, { postThreadEntries, type ResearchPostThreadHandle } from "./ResearchPostThread";
 import { ResearchTreeMenuItems, type ResearchTreeMenuProps } from "./ResearchMoveMenu";
 import type { PostActions } from "./ResearchPost";
-import {
-  EMPTY_RESEARCH_HISTORY,
-  canGoBack as historyCanGoBack,
-  canGoForward as historyCanGoForward,
-  initResearchHistory,
-  pushResearchHistory,
-  pruneResearchHistory,
-  researchHistoryAfterRemoval,
-  researchHistoryBack,
-  researchHistoryForward,
-} from "../../lib/researchHistory";
 import { useResearchSwipeNavigation } from "../../hooks/useResearchSwipeNavigation";
 import { researchBranchInfo } from "../../lib/researchBranches";
 import { documentHoldsMarkdown, documentSource, nodeAdapter, nodeAgent, nodeEditedAt, nodeMessage, nodePrompt, nodeRecap, nodeResponseSnapshotAt, nodeRun, nodeStatus, nodeType, passageAnchor, postFollowUpSourceExcerpt } from "../../lib/researchNodeTypes";
@@ -276,12 +265,19 @@ interface ResearchThreadPageProps {
   /** Runs whose background recap job is in flight; each renders a spinner in
    * its recap slot until the recap arrives. */
   recapPendingNodeIds?: ReadonlySet<string>;
-  /** Page-level back/forward (the feed ↔ threads). Used when
-   * this tree's own visit stack has nowhere left to go. */
-  pageCanGoBack?: boolean;
-  pageCanGoForward?: boolean;
-  onPageBack?: () => void;
-  onPageForward?: () => void;
+  /** Back and forward through the research visit history, which the app
+   * shell holds for every thread (see researchHistory.ts). */
+  canGoBack?: boolean;
+  canGoForward?: boolean;
+  onBack?: () => void;
+  onForward?: () => void;
+  /** Reports the deepest selected message for the visit history: "push" for
+   * the reader's own navigation, "replace" for a selection the page made
+   * itself (the message it restored on opening). */
+  onNavigate?: (treeId: string, nodeId: string, mode: "push" | "replace") => void;
+  /** Removes visits to this tree's messages that `keepNode` rejects (removed
+   * messages). With `selection`, that message is on screen afterwards. */
+  onPruneVisits?: (treeId: string, keepNode: (nodeId: string) => boolean, selection: string | null) => void;
   /** Called with the open nodes whenever they change: the message selected
    * in the root pair, then the head of each open branch. Empty on unmount. */
   onOpenNodesChange?: (nodeIds: string[]) => void;
@@ -1029,10 +1025,12 @@ function ResearchThreadPage({
   shortcutHintsShown,
   requireCmdEnterToSend,
   recapPendingNodeIds = EMPTY_RECAP_PENDING_NODE_IDS,
-  pageCanGoBack = false,
-  pageCanGoForward = false,
-  onPageBack,
-  onPageForward,
+  canGoBack = false,
+  canGoForward = false,
+  onBack,
+  onForward,
+  onNavigate,
+  onPruneVisits,
   onOpenNodesChange,
   treeMenu,
 }: ResearchThreadPageProps) {
@@ -1043,7 +1041,10 @@ function ResearchThreadPage({
   // before it (see researchLevelPath). Back/forward walk these visits.
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingBranch | null>(null);
-  const [history, setHistory] = useState(EMPTY_RESEARCH_HISTORY);
+  const onNavigateRef = useRef(onNavigate);
+  onNavigateRef.current = onNavigate;
+  const onPruneVisitsRef = useRef(onPruneVisits);
+  onPruneVisitsRef.current = onPruneVisits;
   // Show newly created question nodes until the refreshed tree detail
   // includes them.
   const [createdNodes, setCreatedNodes] = useState<{ node: ResearchNode; at: number }[]>([]);
@@ -1621,11 +1622,12 @@ function ResearchThreadPage({
     setOpenedNodeIds((prev) => (prev.has(nodeId) ? prev : new Set(prev).add(nodeId)));
   }, []);
 
-  /** Moves the deepest selection to `nodeId` without touching history. */
+  /** Moves the deepest selection to `nodeId` without touching history.
+   * False when the node is not in this tree. */
   const applyVisit = useCallback(
-    (nodeId: string) => {
+    (nodeId: string): boolean => {
       if (!nodesRef.current.some((node) => node.id === nodeId) && !createdNodeIdsRef.current.has(nodeId)) {
-        return;
+        return false;
       }
       setSelectedNodeId(nodeId);
       persistSelection(nodeId);
@@ -1642,17 +1644,19 @@ function ResearchThreadPage({
       }
       setMenu(null);
       markOpened(nodeId);
+      return true;
     },
     [markOpened, navigationPersistence, persistSelection],
   );
 
-  /** User navigation: applies the visit and extends history. */
+  /** User navigation: applies the visit and records it in the visit
+   * history. */
   const navigate = useCallback(
     (nodeId: string) => {
-      applyVisit(nodeId);
-      setHistory((current) =>
-        current.entries[current.index] === nodeId ? current : pushResearchHistory(current, nodeId),
-      );
+      const currentTreeId = treeIdRef.current;
+      if (applyVisit(nodeId) && currentTreeId) {
+        onNavigateRef.current?.(currentTreeId, nodeId, "push");
+      }
     },
     [applyVisit],
   );
@@ -1720,9 +1724,21 @@ function ResearchThreadPage({
     () =>
       listenToResearchNodeOpen((request) => {
         if (request.treeId !== treeIdRef.current) {
-          return;
+          return false;
         }
-        navigate(request.nodeId);
+        if (!applyVisit(request.nodeId)) {
+          return false;
+        }
+        // Back/forward replaying a recorded visit selects the node without
+        // recording it again.
+        if (request.record) {
+          onNavigateRef.current?.(request.treeId, request.nodeId, "push");
+        }
+        // A highlight opened from the Highlights feed in this thread: the
+        // reveal effect runs again for it (the page does not remount).
+        if (navigationPersistence.store[request.treeId]?.focusHighlight) {
+          setHighlightPaintVersion((version) => version + 1);
+        }
         window.requestAnimationFrame(() => {
           const level = stripRef.current.levels.length - 1;
           const row = selectedRow(level);
@@ -1731,8 +1747,9 @@ function ResearchThreadPage({
           }
           settleResearchStrip(columnsLayoutRef.current?.row ?? null, `T${level}`);
         });
+        return true;
       }),
-    [navigate, selectedRow],
+    [applyVisit, navigationPersistence, selectedRow],
   );
 
   // Tree switch (the thread page is keyed per tree, so this is its mount):
@@ -1748,7 +1765,10 @@ function ResearchThreadPage({
     const selected = saved && nodeIds.has(saved) ? saved : (main[main.length - 1] ?? rootNodeId);
     setQueues({ ...(navigation?.queuedFollowups ?? {}) });
     setSelectedNodeId(selected);
-    setHistory(initResearchHistory(selected));
+    // The restored message is this thread's visit on screen: it fills in a
+    // visit recorded before the thread loaded, or corrects one whose message
+    // is gone.
+    onNavigateRef.current?.(treeId, selected, "replace");
     setExpandedNodes({ ...navigation?.expandedByNode });
     setFullTraceNodes({});
     // Restoring reopens the levels without animation: the strip shows the
@@ -1826,11 +1846,11 @@ function ResearchThreadPage({
         researchSurvivingAncestor(parentByIdRef.current, selectedNodeId, validNodeIds) ?? detail.tree.rootNodeId;
       setSelectedNodeId(fallback);
       persistSelection(fallback);
-      setHistory((history) => researchHistoryAfterRemoval(history, validNodeIds, fallback));
+      onPruneVisitsRef.current?.(treeId, (nodeId) => validNodeIds.has(nodeId), fallback);
       const level = researchLevelPath(detail.nodes, fallback).length - 1;
       requestFocus({ kind: "row", level: Math.max(0, level) }, "settle", true);
     } else {
-      setHistory((history) => pruneResearchHistory(history, validNodeIds, detail.tree.rootNodeId));
+      onPruneVisitsRef.current?.(treeId, (nodeId) => validNodeIds.has(nodeId), null);
     }
   }, [createdNodes, detail, persistSelection, requestFocus, selectedNodeId, treeId]);
 
@@ -1897,28 +1917,12 @@ function ResearchThreadPage({
 
   // ---- history -------------------------------------------------------------
 
-  const canGoBack = historyCanGoBack(history) || pageCanGoBack;
-  const canGoForward = historyCanGoForward(history) || pageCanGoForward;
-
-  const goBack = useCallback(() => {
-    const step = researchHistoryBack(history);
-    if (step) {
-      applyVisit(step.nodeId);
-      setHistory(step.history);
-      return;
-    }
-    onPageBack?.();
-  }, [applyVisit, history, onPageBack]);
-
-  const goForward = useCallback(() => {
-    const step = researchHistoryForward(history);
-    if (step) {
-      applyVisit(step.nodeId);
-      setHistory(step.history);
-      return;
-    }
-    onPageForward?.();
-  }, [applyVisit, history, onPageForward]);
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+  const onForwardRef = useRef(onForward);
+  onForwardRef.current = onForward;
+  const goBack = useCallback(() => onBackRef.current?.(), []);
+  const goForward = useCallback(() => onForwardRef.current?.(), []);
 
   // Keyboard: ⌘[ / ⌘] and Alt+←/→ (and mouse buttons 3/4) walk history; Esc
   // returns to the root level when no menu, popover, or dialog is
@@ -4619,18 +4623,15 @@ function ResearchThreadPage({
       for (const id of removedNodeIds) {
         createdNodeIdsRef.current.delete(id);
       }
-      const validNodeIds = new Set(
-        nodesRef.current.filter((node) => !removedNodeIds.has(node.id)).map((node) => node.id),
-      );
       // A removed message on the open path: the message it was asked from
       // becomes the deepest selection, which closes the levels after it.
       if (wasOnPath && removal.parentNodeId) {
         const parentId = removal.parentNodeId;
         setSelectedNodeId(parentId);
         persistSelection(parentId);
-        setHistory((current) => researchHistoryAfterRemoval(current, validNodeIds, parentId));
+        onPruneVisitsRef.current?.(removal.treeId, (nodeId) => !removedNodeIds.has(nodeId), parentId);
       } else {
-        setHistory((current) => pruneResearchHistory(current, validNodeIds, removal.parentNodeId));
+        onPruneVisitsRef.current?.(removal.treeId, (nodeId) => !removedNodeIds.has(nodeId), null);
       }
       setDeletingBranchId(null);
     } catch (err) {

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { initResearchPageHistory } from "../lib/researchHistory";
+import { EMPTY_RESEARCH_VISITS, type ResearchVisitHistory } from "../lib/researchHistory";
 import type { ResearchWorkspaceScope } from "../lib/researchScope";
 
 // The stored key keeps the scope's earlier name, "folder scope".
@@ -18,13 +18,23 @@ export function useResearchNavigationState() {
     setFeedOpenState(open);
     localStorage.setItem(FEED_OPEN_KEY, open ? "true" : "false");
   }, []);
-  const [researchPageHistory, setResearchPageHistory] = useState(() =>
-    initResearchPageHistory(
-      localStorage.getItem(FEED_OPEN_KEY) === "true" ? { kind: "feed" } : null,
-    ),
+  // Back/forward visits. Empty until the startup restore seeds it with the
+  // thread (or Home) it opens.
+  const [researchVisits, setResearchVisitsState] = useState<ResearchVisitHistory>(EMPTY_RESEARCH_VISITS);
+  const researchVisitsRef = useRef(researchVisits);
+  researchVisitsRef.current = researchVisits;
+  /** Applies `update` to the latest visits (the ref, so several updates in
+   * one event compose) and stores the result when it changed. */
+  const updateResearchVisits = useCallback(
+    (update: (current: ResearchVisitHistory) => ResearchVisitHistory) => {
+      const current = researchVisitsRef.current;
+      const next = update(current);
+      if (next === current) return;
+      researchVisitsRef.current = next;
+      setResearchVisitsState(next);
+    },
+    [],
   );
-  const researchPageHistoryRef = useRef(researchPageHistory);
-  researchPageHistoryRef.current = researchPageHistory;
   // The research workspace the sidebar and feed show. The raw stored
   // value is resolved against live research workspaces wherever it is read.
   const [researchWorkspaceScope, setResearchWorkspaceScope] = useState<ResearchWorkspaceScope>(
@@ -42,9 +52,9 @@ export function useResearchNavigationState() {
     feedOpen,
     feedOpenRef,
     setFeedOpen,
-    researchPageHistory,
-    researchPageHistoryRef,
-    setResearchPageHistory,
+    researchVisits,
+    researchVisitsRef,
+    updateResearchVisits,
     researchWorkspaceScope,
     changeResearchWorkspaceScope,
   };

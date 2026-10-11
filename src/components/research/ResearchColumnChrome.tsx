@@ -159,3 +159,25 @@ export function ResearchThreadPlaceholder({
     </section>
   );
 }
+
+/** The content column with no thread open (Home): back and forward in a
+ * header bar over the given hint, so Forward stays reachable after Back
+ * closed a thread. */
+export function ResearchEmptyContent({
+  history,
+  children,
+}: {
+  history: ResearchHistoryNavProps;
+  children: ReactNode;
+}) {
+  return (
+    <div className="research-empty-content">
+      <header className="research-column-header">
+        <div className="research-column-bar" data-tauri-drag-region data-research-header-bar>
+          <ResearchHistoryNav {...history} />
+        </div>
+      </header>
+      <div className="research-columns-filler">{children}</div>
+    </div>
+  );
+}

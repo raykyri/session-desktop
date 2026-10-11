@@ -1,21 +1,32 @@
-// Browser-style visit history for the research thread page's back/forward
-// controls. A pure, immutable reducer: the component holds one `ResearchHistory`
-// value and swaps it for the result of these transitions, so the branch/cursor
-// semantics live here (and are unit-tested) rather than inline in the view.
+// Browser-style visit history for the research surface's back/forward
+// controls. One history covers every thread: each entry is the message
+// selected in a thread (or Home, with no thread open), so switching between
+// questions within a thread and across threads replays in the order it
+// happened. A pure, immutable reducer: the app shell holds one
+// `ResearchVisitHistory` value and swaps it for the result of these
+// transitions, so the branch/cursor semantics live here and are unit-tested.
 
-interface ResearchHistory {
-  /** Visited node ids, oldest first. */
-  entries: string[];
-  /** Cursor into `entries` for the currently displayed node, or -1 when empty. */
+/** One step of research navigation. `home`: no thread open (the feed column
+ * beside an empty content column). `node`: a thread with `nodeId` as its
+ * deepest selected message; null until the thread page reports the message
+ * it restored on opening. */
+export type ResearchVisit =
+  | { kind: "home" }
+  | { kind: "node"; treeId: string; nodeId: string | null };
+
+export interface ResearchVisitHistory {
+  /** Visits, oldest first. */
+  entries: ResearchVisit[];
+  /** Cursor into `entries` for the visit on screen, or -1 when empty. */
   index: number;
 }
 
-interface ResearchHistoryStep {
-  history: ResearchHistory;
-  nodeId: string;
+interface ResearchVisitStep {
+  history: ResearchVisitHistory;
+  visit: ResearchVisit;
 }
 
-export const EMPTY_RESEARCH_HISTORY: ResearchHistory = { entries: [], index: -1 };
+export const EMPTY_RESEARCH_VISITS: ResearchVisitHistory = { entries: [], index: -1 };
 
 const RESEARCH_SWIPE_THRESHOLD_PX = 80;
 
@@ -42,195 +53,202 @@ export function researchSwipeTailCapturesWheel(deltaX: number, deltaY: number): 
   return Math.abs(deltaX) > Math.abs(deltaY);
 }
 
-/** Starts a fresh history at the given entry node (e.g. on a tree switch). */
-export function initResearchHistory(nodeId: string | null): ResearchHistory {
-  return nodeId ? { entries: [nodeId], index: 0 } : EMPTY_RESEARCH_HISTORY;
+/** The visit for what is on screen: a thread and its selected message, or
+ * Home when no thread is open. */
+export function researchVisitFor(treeId: string | null, nodeId: string | null): ResearchVisit {
+  return treeId ? { kind: "node", treeId, nodeId } : { kind: "home" };
+}
+
+/** Starts a history at the given visit (the state restored at startup). */
+export function initResearchVisits(visit: ResearchVisit | null): ResearchVisitHistory {
+  return visit ? { entries: [visit], index: 0 } : EMPTY_RESEARCH_VISITS;
+}
+
+/** Seeds an empty history with the state restored at startup. A history the
+ * reader already added to (by navigating before the restore finished) is
+ * kept as it is. */
+export function seedResearchVisits(
+  history: ResearchVisitHistory,
+  visit: ResearchVisit,
+): ResearchVisitHistory {
+  return history.index < 0 ? initResearchVisits(visit) : history;
+}
+
+/** Whether two visits show the same thing. A thread visit without a node
+ * matches any visit to that thread: it stands for "the thread as it
+ * restores", which the thread page fills in once it has opened. */
+function sameResearchVisit(left: ResearchVisit, right: ResearchVisit): boolean {
+  if (left.kind === "home" || right.kind === "home") {
+    return left.kind === right.kind;
+  }
+  return (
+    left.treeId === right.treeId &&
+    (left.nodeId === null || right.nodeId === null || left.nodeId === right.nodeId)
+  );
+}
+
+/** Of two matching visits, the one that names a node. */
+function moreSpecificVisit(left: ResearchVisit, right: ResearchVisit): ResearchVisit {
+  return left.kind === "node" && left.nodeId === null ? right : left;
+}
+
+/** The visit on screen, or null for an empty history. */
+export function currentResearchVisit(history: ResearchVisitHistory): ResearchVisit | null {
+  return history.index >= 0 ? (history.entries[history.index] ?? null) : null;
 }
 
 /**
- * Records fresh navigation to `nodeId`: any forward entries beyond the cursor
- * are discarded and the node is appended, leaving the cursor at the end —
- * exactly how a browser drops the forward stack when you follow a new link.
+ * Records fresh navigation to `visit`: entries beyond the cursor are
+ * discarded, in this thread or any other, and the visit is appended — how a
+ * browser drops the forward stack when you follow a new link. Navigating to
+ * the visit already on screen changes nothing, except that a thread visit
+ * without a node takes the node now named.
  */
-export function pushResearchHistory(history: ResearchHistory, nodeId: string): ResearchHistory {
-  const entries = [...history.entries.slice(0, history.index + 1), nodeId];
-  return { entries, index: entries.length - 1 };
-}
-
-export function canGoBack(history: ResearchHistory): boolean {
-  return history.index > 0;
-}
-
-export function canGoForward(history: ResearchHistory): boolean {
-  return history.index < history.entries.length - 1;
-}
-
-/** Moves the cursor back one entry, or null if already at the start. */
-export function researchHistoryBack(history: ResearchHistory): ResearchHistoryStep | null {
-  if (!canGoBack(history)) {
-    return null;
-  }
-  const index = history.index - 1;
-  return { history: { entries: history.entries, index }, nodeId: history.entries[index] };
-}
-
-/** Moves the cursor forward one entry, or null if already at the end. */
-export function researchHistoryForward(history: ResearchHistory): ResearchHistoryStep | null {
-  if (!canGoForward(history)) {
-    return null;
-  }
-  const index = history.index + 1;
-  return { history: { entries: history.entries, index }, nodeId: history.entries[index] };
-}
-
-/** Cross-page research visits. The feed is a peer page of a thread, so
- * opening a query from the feed must push here — the thread page's own node
- * stack remounts empty and holds no record of the feed. */
-export type ResearchPageVisit =
-  | { kind: "feed" }
-  | { kind: "thread"; treeId: string };
-
-interface ResearchPageHistory {
-  entries: ResearchPageVisit[];
-  index: number;
-}
-
-interface ResearchPageHistoryStep {
-  history: ResearchPageHistory;
-  visit: ResearchPageVisit;
-}
-
-const EMPTY_RESEARCH_PAGE_HISTORY: ResearchPageHistory = {
-  entries: [],
-  index: -1,
-};
-
-export function initResearchPageHistory(
-  visit: ResearchPageVisit | null,
-): ResearchPageHistory {
-  return visit ? { entries: [visit], index: 0 } : EMPTY_RESEARCH_PAGE_HISTORY;
-}
-
-function sameResearchPageVisit(
-  left: ResearchPageVisit,
-  right: ResearchPageVisit,
-): boolean {
-  if (left.kind !== right.kind) return false;
-  if (left.kind === "feed" && right.kind === "feed") return true;
-  if (left.kind === "thread" && right.kind === "thread") return left.treeId === right.treeId;
-  return false;
-}
-
-export function pushResearchPageHistory(
-  history: ResearchPageHistory,
-  visit: ResearchPageVisit,
-): ResearchPageHistory {
-  const current = history.index >= 0 ? history.entries[history.index] : undefined;
-  if (current && sameResearchPageVisit(current, visit)) {
-    return history;
+export function pushResearchVisit(
+  history: ResearchVisitHistory,
+  visit: ResearchVisit,
+): ResearchVisitHistory {
+  const current = currentResearchVisit(history);
+  if (current && sameResearchVisit(current, visit)) {
+    const next = moreSpecificVisit(current, visit);
+    return next === current ? history : replaceResearchVisit(history, next);
   }
   const entries = [...history.entries.slice(0, history.index + 1), visit];
   return { entries, index: entries.length - 1 };
 }
 
-export function canGoPageBack(history: ResearchPageHistory): boolean {
+/** Replaces the visit on screen without adding a step (a selection the
+ * thread page made itself, e.g. the message it restored on opening). The
+ * forward entries stay. A visit that now repeats its neighbour merges with
+ * it. */
+export function replaceResearchVisit(
+  history: ResearchVisitHistory,
+  visit: ResearchVisit,
+): ResearchVisitHistory {
+  if (history.index < 0) {
+    return initResearchVisits(visit);
+  }
+  const current = history.entries[history.index];
+  if (
+    current.kind === visit.kind &&
+    (current.kind === "home" ||
+      (visit.kind === "node" && current.treeId === visit.treeId && current.nodeId === visit.nodeId))
+  ) {
+    return history;
+  }
+  const entries = [...history.entries];
+  entries[history.index] = visit;
+  return collapseResearchVisits(entries, history.index);
+}
+
+export function canGoResearchBack(history: ResearchVisitHistory): boolean {
   return history.index > 0;
 }
 
-export function canGoPageForward(history: ResearchPageHistory): boolean {
+export function canGoResearchForward(history: ResearchVisitHistory): boolean {
   return history.index >= 0 && history.index < history.entries.length - 1;
 }
 
-export function researchPageHistoryBack(
-  history: ResearchPageHistory,
-): ResearchPageHistoryStep | null {
-  if (!canGoPageBack(history)) {
+/** Moves the cursor back one entry, or null if already at the start. */
+export function researchVisitBack(history: ResearchVisitHistory): ResearchVisitStep | null {
+  if (!canGoResearchBack(history)) {
     return null;
   }
   const index = history.index - 1;
   return { history: { entries: history.entries, index }, visit: history.entries[index] };
 }
 
-export function researchPageHistoryForward(
-  history: ResearchPageHistory,
-): ResearchPageHistoryStep | null {
-  if (!canGoPageForward(history)) {
+/** Moves the cursor forward one entry, or null if already at the end. */
+export function researchVisitForward(history: ResearchVisitHistory): ResearchVisitStep | null {
+  if (!canGoResearchForward(history)) {
     return null;
   }
   const index = history.index + 1;
   return { history: { entries: history.entries, index }, visit: history.entries[index] };
 }
 
-/** Removes thread visits that match the filter predicate while preserving the current visit.
- * Collapses adjacent duplicate entries and updates the active index. */
-export function pruneResearchPageHistory(
-  history: ResearchPageHistory,
-  keepTree: (treeId: string) => boolean,
-): ResearchPageHistory {
-  const entries: ResearchPageVisit[] = [];
+/** Merges adjacent matching entries, keeping the cursor on the entry that
+ * held it. Stepping between two entries that show the same thing would
+ * re-apply what is already on screen. */
+function collapseResearchVisits(source: readonly ResearchVisit[], sourceIndex: number): ResearchVisitHistory {
+  const entries: ResearchVisit[] = [];
   let index = -1;
-  for (let visit = 0; visit < history.entries.length; visit += 1) {
-    const entry = history.entries[visit];
-    const current = visit === history.index;
-    if (entry.kind === "thread" && !current && !keepTree(entry.treeId)) {
-      continue;
-    }
+  for (let at = 0; at < source.length; at += 1) {
+    const visit = source[at];
     const previous = entries[entries.length - 1];
-    if (previous && sameResearchPageVisit(previous, entry)) {
-      if (current) {
-        index = entries.length - 1;
-      }
-      continue;
+    if (previous && sameResearchVisit(previous, visit)) {
+      entries[entries.length - 1] = moreSpecificVisit(previous, visit);
+    } else {
+      entries.push(visit);
     }
-    entries.push(entry);
-    if (visit <= history.index) {
+    if (at <= sourceIndex) {
       index = entries.length - 1;
     }
   }
-  if (entries.length === history.entries.length && index === history.index) {
+  return entries.length === 0 ? EMPTY_RESEARCH_VISITS : { entries, index: Math.max(0, index) };
+}
+
+/** Removes visits that `keep` rejects (to a removed thread or message).
+ * With `keepCurrent`, the visit on screen stays even when rejected: the
+ * caller is still showing it and navigates away itself. Otherwise the cursor
+ * moves to the nearest surviving visit before it (or the first one after).
+ * Visits that become adjacent duplicates merge. Returns `history` itself
+ * when nothing changed. */
+export function pruneResearchVisits(
+  history: ResearchVisitHistory,
+  keep: (visit: ResearchVisit) => boolean,
+  { keepCurrent = false }: { keepCurrent?: boolean } = {},
+): ResearchVisitHistory {
+  const kept: ResearchVisit[] = [];
+  let keptIndex = -1;
+  for (let at = 0; at < history.entries.length; at += 1) {
+    const visit = history.entries[at];
+    if (!keep(visit) && !(keepCurrent && at === history.index)) {
+      continue;
+    }
+    kept.push(visit);
+    if (at <= history.index) {
+      keptIndex = kept.length - 1;
+    }
+  }
+  const pruned = collapseResearchVisits(kept, keptIndex);
+  if (
+    pruned.index === history.index &&
+    pruned.entries.length === history.entries.length &&
+    pruned.entries.every((visit, at) => visit === history.entries[at])
+  ) {
     return history;
   }
-  return { entries, index };
+  return pruned;
 }
 
-/** Removes visits to nodes that no longer exist while keeping the cursor on
- * the same surviving visit whenever possible. Visits that become adjacent
- * duplicates are collapsed: stepping between two entries for the same node
- * would re-apply the already-selected node, which readers treat as a real
- * navigation (e.g. clearing content for a load that never restarts). */
-export function pruneResearchHistory(
-  history: ResearchHistory,
-  validNodeIds: ReadonlySet<string>,
-  fallbackNodeId: string | null,
-): ResearchHistory {
-  const entries: string[] = [];
-  let index = -1;
-  for (let visit = 0; visit < history.entries.length; visit += 1) {
-    const nodeId = history.entries[visit];
-    if (!validNodeIds.has(nodeId)) {
-      continue;
-    }
-    if (entries[entries.length - 1] !== nodeId) {
-      entries.push(nodeId);
-    }
-    if (visit <= history.index) {
-      index = entries.length - 1;
-    }
-  }
-  if (entries.length === 0) {
-    return initResearchHistory(fallbackNodeId);
-  }
-  return { entries, index: Math.max(0, index) };
+/** History after messages of a thread were removed: their visits go, and
+ * `selection` (the visit the thread page moved to) is on screen, so back and
+ * forward keep matching what is open. */
+export function researchVisitsAfterRemoval(
+  history: ResearchVisitHistory,
+  keep: (visit: ResearchVisit) => boolean,
+  selection: ResearchVisit,
+): ResearchVisitHistory {
+  const pruned = pruneResearchVisits(history, keep);
+  const current = currentResearchVisit(pruned);
+  return current && sameResearchVisit(current, selection) && moreSpecificVisit(current, selection) === current
+    ? pruned
+    : pushResearchVisit(pruned, selection);
 }
 
-/** History after nodes were removed: the removed visits go, and the visit
- * the thread page moved to (`selection`) is current, so back and forward keep
- * matching what is open. */
-export function researchHistoryAfterRemoval(
-  history: ResearchHistory,
-  validNodeIds: ReadonlySet<string>,
-  selection: string,
-): ResearchHistory {
-  const pruned = pruneResearchHistory(history, validNodeIds, selection);
-  return pruned.entries[pruned.index] === selection ? pruned : pushResearchHistory(pruned, selection);
+/** How the app shell shows a visit that back or forward moved to:
+ * - `home`: close the open thread;
+ * - `in-place`: select the message in the thread page already showing its
+ *   thread (no remount, no refetch);
+ * - `open-tree`: open the thread, restoring the visit's message. */
+export function researchVisitAction(
+  visit: ResearchVisit,
+  activeTreeId: string | null,
+  threadVisible: boolean,
+): "home" | "in-place" | "open-tree" {
+  if (visit.kind === "home") {
+    return "home";
+  }
+  return threadVisible && activeTreeId === visit.treeId ? "in-place" : "open-tree";
 }

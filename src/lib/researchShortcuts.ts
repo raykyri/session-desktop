@@ -41,27 +41,38 @@ const OPEN_NODE_EVENT = "session:research-open-node";
 interface ResearchOpenNodeRequest {
   treeId: string;
   nodeId: string;
+  /** False when back/forward replays a recorded visit: the thread page shows
+   * the node without reporting a new visit. */
+  record: boolean;
 }
 
 /** Asks the mounted thread page for `treeId` to show `nodeId`: its level, and
  * the levels before it, open as column pairs with the node selected. The app shell
  * also records the node in the navigation store, which covers the case where
- * no thread page for that tree is mounted yet. */
-export function requestResearchNodeOpen(treeId: string, nodeId: string) {
-  window.dispatchEvent(
-    new CustomEvent<ResearchOpenNodeRequest>(OPEN_NODE_EVENT, { detail: { treeId, nodeId } }),
-  );
+ * no thread page for that tree is mounted yet. Returns whether a mounted
+ * thread page selected the node (false when none shows the tree, or its
+ * loaded tree does not have the node yet). */
+export function requestResearchNodeOpen(
+  treeId: string,
+  nodeId: string,
+  { record = true }: { record?: boolean } = {},
+): boolean {
+  const detail = { treeId, nodeId, record, handled: false };
+  window.dispatchEvent(new CustomEvent(OPEN_NODE_EVENT, { detail }));
+  return detail.handled;
 }
 
 /** Subscribes a thread page to node-open requests; returns the
- * unsubscribe function. */
+ * unsubscribe function. `onOpen` returns true when it selected the node. */
 export function listenToResearchNodeOpen(
-  onOpen: (request: ResearchOpenNodeRequest) => void,
+  onOpen: (request: ResearchOpenNodeRequest) => boolean,
 ): () => void {
   const handler = (event: Event) => {
-    const detail = (event as CustomEvent<ResearchOpenNodeRequest>).detail;
+    const detail = (event as CustomEvent<ResearchOpenNodeRequest & { handled?: boolean }>).detail;
     if (detail && typeof detail.treeId === "string" && typeof detail.nodeId === "string") {
-      onOpen(detail);
+      if (onOpen({ treeId: detail.treeId, nodeId: detail.nodeId, record: detail.record !== false })) {
+        detail.handled = true;
+      }
     }
   };
   window.addEventListener(OPEN_NODE_EVENT, handler);

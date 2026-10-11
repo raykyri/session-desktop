@@ -1287,6 +1287,17 @@
   color: var(--status-active-fg);
 }
 
+/* The content column with no thread open: a header bar with back and
+   forward over the filler. */
+.research-empty-content {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  background: var(--research-page-bg);
+}
+
 /* Where the next pair opens, when there is room for it. */
 .research-columns-filler {
   display: grid;
