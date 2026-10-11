@@ -393,10 +393,30 @@
 }
 
 /* Save draft, under the box at the trailing edge, once there is text. */
-.new-research-after {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 6px;
+/* The … button before Send, shown once there is text (Save draft). It
+   takes the row's free space so Send stays at the trailing edge. */
+.new-research-more {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  min-height: 0;
+  margin-left: auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.new-research-more:hover,
+.new-research-more[aria-expanded="true"] {
+  color: var(--text-primary);
+  background: var(--surface-fill-hover);
+}
+
+.new-research-row .new-research-more + .research-composer-send {
+  margin-left: 0;
 }
 
 .new-research-custom-model {

@@ -1592,7 +1592,8 @@
   font-size: calc(12px + var(--font-ui-size-offset));
 }
 
-/* The ↵ glyph shows exactly while Enter would send. */
+/* While Enter would send, the button shows the shortcut glyph (↵ or ⌘↵)
+   in place of the arrow. */
 .research-composer.is-ready:focus-within .research-composer-send {
   width: auto;
   padding: 0 9px;
@@ -1600,6 +1601,10 @@
 
 .research-composer.is-ready:focus-within .research-composer-enter {
   display: inline;
+}
+
+.research-composer.is-ready:focus-within .research-composer-send > svg:not(.research-spinner) {
+  display: none;
 }
 
 .research-composer-shortcut-hint {

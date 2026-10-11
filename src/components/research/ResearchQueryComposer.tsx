@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
-import { ArrowRight, LoaderCircle } from "lucide-react";
+import { ArrowRight, FilePen, LoaderCircle, MoreHorizontal } from "lucide-react";
 import type { AgentAdapterMetadata } from "../../types";
 import { LauncherSelect, OptionIcon, type LauncherSelectOption } from "../LauncherSelect";
 import { isComposerSubmitShortcut } from "../ComposerSubmitShortcut";
+import { ResearchMenu, ResearchMenuItem } from "./ResearchMenu";
 import { ADAPTER_ICON_BY_ID, adapterIconClassName } from "../../lib/adapterIcons";
 import { CLAUDE_ADAPTER_ID, CLAUDE_EFFORT_OPTIONS } from "../../adapters/claude";
 import { CODEX_ADAPTER_ID, CODEX_REASONING_OPTIONS } from "../../adapters/codex";
@@ -178,7 +179,8 @@ export function homeComposerDraftToStore(
 
 /** The feed's composer: a one-line "Ask a question" field that grows when it
  * has focus or text and then shows a row under it with the Ask/Post switcher
- * and the send button, and Save draft under the box once there is text. */
+ * and the send button. Once there is text, a … button before Send opens a
+ * menu with Save draft. */
 export default function ResearchQueryComposer({
   adapters: allAdapters,
   requireCmdEnterToSend,
@@ -457,6 +459,12 @@ export default function ResearchQueryComposer({
   }, [adapter, launchChoiceRef, launchReady, resolvedEffort, resolvedModel]);
 
   const [savingDraft, setSavingDraft] = useState(false);
+  // The … menu before Send (Save draft); it exists only while there is text.
+  const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
+  const canSaveDraft = Boolean(onSaveDraft) && Boolean(prompt.trim());
+  useEffect(() => {
+    if (!canSaveDraft) setMoreAnchor(null);
+  }, [canSaveDraft]);
   async function saveDraft() {
     const text = prompt.trim();
     if (!onSaveDraft || savingDraft) return;
@@ -610,6 +618,25 @@ export default function ResearchQueryComposer({
                   : undefined
               }
             />
+            {canSaveDraft ? (
+              <button
+                type="button"
+                className="control-button new-research-more"
+                aria-label="More actions"
+                aria-haspopup="menu"
+                aria-expanded={moreAnchor !== null}
+                title="More actions"
+                onClick={(event) => {
+                  // WebKit does not focus a clicked button; focus it so the
+                  // menu returns focus here.
+                  const trigger = event.currentTarget;
+                  trigger.focus();
+                  setMoreAnchor((current) => (current ? null : trigger));
+                }}
+              >
+                <MoreHorizontal size={15} aria-hidden="true" />
+              </button>
+            ) : null}
             {/* The send button, as in a conversation's ask box: an arrow with
                 no label or shortcut text; the tooltip names the action. */}
             <button
@@ -653,26 +680,26 @@ export default function ResearchQueryComposer({
           </div>
         ) : null}
       </form>
-      {/* Save draft sits under the box once there is text to save. */}
-      {onSaveDraft && prompt.trim() ? (
-        <div className="new-research-after">
-          <button
-            type="button"
-            className="research-feed-button is-ghost"
+      {moreAnchor ? (
+        <ResearchMenu anchor={moreAnchor} label="Question actions" onClose={() => setMoreAnchor(null)}>
+          <ResearchMenuItem
+            icon={<FilePen size={15} aria-hidden="true" />}
+            label="Save draft"
             disabled={savingDraft}
-            onClick={() => void saveDraft()}
-          >
-            Save draft
-          </button>
-        </div>
+            onSelect={() => {
+              setMoreAnchor(null);
+              void saveDraft();
+            }}
+          />
+        </ResearchMenu>
       ) : null}
     </div>
   );
 }
 
-/** Focus inside the composer or its model menu (rendered in a portal). */
+/** Focus inside the composer or one of its menus (rendered in portals). */
 function insideComposer(root: HTMLElement | null, target: EventTarget | null) {
   if (!(target instanceof Node)) return false;
   if (root?.contains(target)) return true;
-  return target instanceof Element && Boolean(target.closest(".launcher-select-popover"));
+  return target instanceof Element && Boolean(target.closest(".launcher-select-popover, .research-menu"));
 }

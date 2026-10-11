@@ -64,11 +64,11 @@ test("the composer starts as one Ask a question line without its controls", () =
   const html = renderComposer();
   assert.match(html, /<textarea[^>]*rows="1"[^>]*placeholder="Ask a question"[^>]*aria-label="New question"/);
   // The row with the switcher and the send button shows once the field has
-  // focus or text, and Save draft once it has text; at rest the box is only
-  // the field.
+  // focus or text, and the … button with Save draft once it has text; at
+  // rest the box is only the field.
   assert.doesNotMatch(
     html,
-    /radiogroup|new-research-row|research-composer-send|launcher-select|Save draft/,
+    /radiogroup|new-research-row|research-composer-send|launcher-select|new-research-more|Save draft/,
   );
   const inFolder = renderToStaticMarkup(
     createElement(ResearchQueryComposer, {
