@@ -16,7 +16,7 @@ try {
 }
 
 const root = dirname(fileURLToPath(import.meta.url));
-const slugs = ["ulysses", "macos", "notes", "inbox", "linear"];
+const slugs = ["ulysses", "macos", "inbox", "linear"];
 const only = new Set(process.argv.slice(2));
 const manifest = { generated: new Date().toISOString(), rounds: { 1: {}, 2: {}, 3: {} } };
 mkdirSync(join(root, "thumbs"), { recursive: true });

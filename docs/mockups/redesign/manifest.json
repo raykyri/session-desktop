@@ -88,49 +88,6 @@
         "file": "r1/macos.html",
         "thumb": "thumbs/r1-macos.jpg"
       },
-      "notes": {
-        "slug": "notes",
-        "round": 1,
-        "title": "Notes with Ask",
-        "influence": "Apple Notes (macOS)",
-        "summary": "Session becomes a three-pane notes app: folders, a dated note list, and a note whose first line is its title. Any note can run a model inline (\u2318J); answers stay in the note as editable text, and selecting a passage branches it into a linked sub-note. Outline and Link Map are two more views of the same notes, so there is one object to learn.",
-        "nouns": [
-          "Note",
-          "Chat",
-          "Folder",
-          "Tag",
-          "Link"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "Inline chats",
-            "summary": "Chats run as blocks inside the note; branches nest as sub-notes in the list; Linked Notes sits at the bottom of each note."
-          },
-          {
-            "id": "b",
-            "label": "Chat side panel",
-            "summary": "The note holds only the answer text; the conversation (questions, run status, follow-up box) lives in a panel beside it."
-          },
-          {
-            "id": "c",
-            "label": "Replies section",
-            "summary": "Branches do not appear in the note list; they are numbered on the passage and listed in a Replies section at the end of the note."
-          },
-          {
-            "id": "d",
-            "label": "Gallery home",
-            "summary": "Folders open in gallery view with run status on each thumbnail; Quick Note is the primary capture path."
-          },
-          {
-            "id": "e",
-            "label": "Link inspector",
-            "summary": "A right-hand inspector shows a mini link map, backlinks and tags for the open note; the tag browser shows counts."
-          }
-        ],
-        "file": "r1/notes.html",
-        "thumb": "thumbs/r1-notes.jpg"
-      },
       "inbox": {
         "slug": "inbox",
         "round": 1,
@@ -337,66 +294,6 @@
         ],
         "file": "r2/macos.html",
         "thumb": "thumbs/r2-macos.jpg"
-      },
-      "notes": {
-        "slug": "notes",
-        "round": 2,
-        "title": "Notes with Ask",
-        "influence": "Apple Notes (macOS)",
-        "summary": "Session becomes a three-pane notes app: folders, a dated note list, and a note whose first line is its title. It opens on a pinned Start Here note with one ask box; any note can run a model inline (\u2318J), and every answer paragraph has a margin button to ask about it, branch it into a sub-note, or add it to another note. Outline and Link Map are two more views of the same notes, so there is one object to learn.",
-        "nouns": [
-          "Note",
-          "Chat",
-          "Folder",
-          "Tag",
-          "Link"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "Inline chats",
-            "summary": "Chats run as blocks inside the note; branches nest as sub-notes in the list; Linked Notes sits at the bottom of each note."
-          },
-          {
-            "id": "b",
-            "label": "Chat side panel",
-            "summary": "The note holds only the answer text; questions, run status and the follow-up box live in a panel beside it."
-          },
-          {
-            "id": "c",
-            "label": "Replies section",
-            "summary": "Branches stay out of the note list; they are numbered on the passage and listed in a Replies section at the end of the note."
-          },
-          {
-            "id": "d",
-            "label": "Ask-first notes",
-            "summary": "The compose button makes a chat and every new note opens with the ask line under the title; writing plain text is one Escape away."
-          },
-          {
-            "id": "e",
-            "label": "Link inspector",
-            "summary": "A right-hand inspector shows a mini link map, backlinks, sub-notes and tags for the open note; the tag browser shows counts."
-          }
-        ],
-        "changes": [
-          "Opens on a pinned Start Here note with one ask box and a five-step checklist that ticks itself off; round 1 opened on a finished answer with no starting point.",
-          "Every answer paragraph has a margin \u21b3 button (Ask, Ask in New Note, Highlight, Add to Note); in round 1 branching existed only on text selection (issue S-07).",
-          "Add to Note\u2026 files a passage as a linked bullet into a chosen note and section; round 1 could not file part of an answer, and its Link button only showed a toast.",
-          "Split New Note (\u2318N) from New Chat (\u21e7\u2318N) and kept \u2318J as Ask in This Note; in round 1 \u2318J was the only entry and appended to whichever note was open.",
-          "Links made with >> or from a selection are saved and update Linked Notes, the outline and the Link Map; opening a search result highlights the match in the note.",
-          "Format, Table, Lock, Share and New Folder now act (Lock = never sent to a model); in round 1 five toolbar buttons did nothing.",
-          "Replaced Gallery home (thumbnail text was unreadable) with Ask-first notes; Quick Note moved from \u2303\u2318Q, which is the macOS Lock Screen shortcut, to fn Q.",
-          "Model setup re-checks by itself after sign-in and starts the queued chat (issue S-08); round 1 needed a manual Check Again."
-        ],
-        "decisions": [
-          "Should a new note start as a chat (d) or as plain text with \u2318J to ask (a)?",
-          "Inline chat blocks (a) or a conversation panel (b): which makes it clearer what is model output and what is your own writing?",
-          "Do sub-notes belong in the note list (a) or only as Replies inside the parent note (c)?",
-          "Is the margin \u21b3 button found without the Start Here checklist pointing at it?",
-          "Is \u201cLock: never sent to a model\u201d understood without explanation?"
-        ],
-        "file": "r2/notes.html",
-        "thumb": "thumbs/r2-notes.jpg"
       },
       "inbox": {
         "slug": "inbox",
