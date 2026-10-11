@@ -993,6 +993,7 @@ impl AdapterRegistry {
                     },
                     version: None,
                     auth: AdapterAuthState::Unknown,
+                    auth_detail: None,
                     checked_at: None,
                     login_command,
                     install_command: adapter_install_command(adapter.id()).map(str::to_string),
@@ -1057,6 +1058,11 @@ pub struct AdapterMetadata {
     pub research_readiness: AdapterReadiness,
     pub version: Option<String>,
     pub auth: AdapterAuthState,
+    /// Why sign-in could not be verified, set when a probe leaves `auth`
+    /// `Unknown`: the status command failed to run, or its output matched
+    /// neither a signed-in nor a signed-out result. It never carries the
+    /// command's output, which can include account details.
+    pub auth_detail: Option<String>,
     pub checked_at: Option<u64>,
     pub login_command: Option<String>,
     pub install_command: Option<String>,
@@ -1283,6 +1289,38 @@ fn classify_auth(adapter_id: &str, output: &ProbeOutput) -> AdapterAuthState {
     AdapterAuthState::Unknown
 }
 
+/// The sign-in state an auth probe establishes, and why it is inconclusive
+/// when it is. A probe that fails to run, or whose output is not recognized,
+/// leaves the state `Unknown`: neither signed in nor signed out.
+fn auth_probe_result(
+    adapter_id: &str,
+    args: &[&str],
+    probe: Result<ProbeOutput, String>,
+) -> (AdapterAuthState, Option<String>) {
+    match probe {
+        Ok(output) => match classify_auth(adapter_id, &output) {
+            AdapterAuthState::Unknown => (
+                AdapterAuthState::Unknown,
+                Some(format!(
+                    "`{} {}` returned a result Session does not recognize{}.",
+                    adapter_id,
+                    args.join(" "),
+                    if output.success {
+                        ""
+                    } else {
+                        " and exited with an error"
+                    }
+                )),
+            ),
+            state => (state, None),
+        },
+        Err(err) => (
+            AdapterAuthState::Unknown,
+            Some(format!("The sign-in status check failed: {err}.")),
+        ),
+    }
+}
+
 fn probe_adapter_metadata(mut metadata: AdapterMetadata) -> AdapterMetadata {
     metadata.checked_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1318,15 +1356,14 @@ fn probe_adapter_metadata(mut metadata: AdapterMetadata) -> AdapterMetadata {
     {
         metadata.research_readiness = AdapterReadiness::UnsupportedVersion;
         metadata.message = Some(format!(
-            "Claude Code {} can open a terminal, but Research requires 2.1.0 or newer.",
+            "Claude Code {} is installed, but Research requires 2.1.0 or newer.",
             version.display()
         ));
     }
 
-    if let Some(args) = adapter_auth_args(&metadata.id)
-        && let Ok(output) = run_adapter_probe(&binary, args)
-    {
-        metadata.auth = classify_auth(&metadata.id, &output);
+    if let Some(args) = adapter_auth_args(&metadata.id) {
+        let probe = run_adapter_probe(&binary, args);
+        (metadata.auth, metadata.auth_detail) = auth_probe_result(&metadata.id, args, probe);
         if metadata.auth == AdapterAuthState::Unauthenticated {
             metadata.readiness = AdapterReadiness::NeedsAuth;
             metadata.research_readiness = AdapterReadiness::NeedsAuth;
@@ -1391,10 +1428,9 @@ fn probe_remote_adapter_metadata(
         };
     metadata.version = first_probe_line(&version_output.text);
 
-    if let Some(args) = adapter_auth_args(&metadata.id)
-        && let Ok(output) = run_remote_adapter_probe(host, &binary, args)
-    {
-        metadata.auth = classify_auth(&metadata.id, &output);
+    if let Some(args) = adapter_auth_args(&metadata.id) {
+        let probe = run_remote_adapter_probe(host, &binary, args);
+        (metadata.auth, metadata.auth_detail) = auth_probe_result(&metadata.id, args, probe);
         if metadata.auth == AdapterAuthState::Unauthenticated {
             metadata.readiness = AdapterReadiness::NeedsAuth;
             metadata.message = metadata.login_command.as_ref().map(|command| {
@@ -2304,6 +2340,50 @@ mod tests {
                 },
             ),
             AdapterAuthState::Unknown
+        );
+    }
+
+    #[test]
+    fn an_inconclusive_auth_probe_stays_unknown_and_says_why() {
+        let args: &[&str] = &["login", "status"];
+        // A definitive result needs no explanation.
+        assert_eq!(
+            auth_probe_result(
+                "codex",
+                args,
+                Ok(ProbeOutput {
+                    success: true,
+                    text: "Logged in using ChatGPT".to_string(),
+                }),
+            ),
+            (AdapterAuthState::Authenticated, None)
+        );
+        // Unrecognized output is not a sign-in, and its text (which can name
+        // the account) is not repeated in the explanation.
+        let (auth, detail) = auth_probe_result(
+            "codex",
+            args,
+            Ok(ProbeOutput {
+                success: false,
+                text: "profile user@example.com: status unavailable".to_string(),
+            }),
+        );
+        assert_eq!(auth, AdapterAuthState::Unknown);
+        let detail = detail.expect("an unknown result explains itself");
+        assert!(detail.contains("`codex login status`"), "{detail}");
+        assert!(detail.contains("exited with an error"), "{detail}");
+        assert!(!detail.contains("user@example.com"), "{detail}");
+        // A probe that could not run is inconclusive too, not a failure of
+        // the CLI or a sign-out.
+        let (auth, detail) = auth_probe_result(
+            "codex",
+            args,
+            Err("`codex login status` timed out".to_string()),
+        );
+        assert_eq!(auth, AdapterAuthState::Unknown);
+        assert_eq!(
+            detail.as_deref(),
+            Some("The sign-in status check failed: `codex login status` timed out.")
         );
     }
 

@@ -56,6 +56,7 @@ import { ResearchEmptyContent } from "./components/research/ResearchColumnChrome
 import ResearchHighlightsFeed from "./components/research/ResearchHighlightsFeed";
 import { useActivityFeedState } from "./hooks/useActivityFeedState";
 import ResearchQueryComposer, {
+  type ComposerFocusRequest,
   type ResearchLaunchChoice,
 } from "./components/research/ResearchQueryComposer";
 import {
@@ -127,6 +128,7 @@ import {
   activatePane,
 } from "./lib/api";
 import type {
+  AgentAdapterMetadata,
   ResearchDraft,
   RuntimeConfig,
   RemoteChoice,
@@ -214,12 +216,39 @@ function MainApp() {
   // The agent instance the Agent Setup dialog opens on; null selects the first
   // agent whose setup is incomplete.
   const [agentSetupInstanceId, setAgentSetupInstanceId] = useState<string | null>(null);
-  const openAgentSetup = useCallback((instanceId: string | null = null) => {
-    setSettingsOpen(false);
-    setAgentSetupInstanceId(instanceId);
-    setAgentsOpen(true);
+  // Where Agent Setup was opened: from the research composer (whose question
+  // stays in place under the dialog) or from elsewhere (sidebar, palette).
+  const agentSetupOriginRef = useRef<"composer" | "other">("other");
+  // A request for the feed's research composer to select an agent (when
+  // `adapterId` is set) and take focus. The composer clears it once applied;
+  // `seq` distinguishes repeated requests for the same agent.
+  const [composerFocusRequest, setComposerFocusRequest] = useState<ComposerFocusRequest | null>(
+    null,
+  );
+  const requestComposerFocus = useCallback((adapterId: string | null) => {
+    setComposerFocusRequest((current) => ({ seq: (current?.seq ?? 0) + 1, adapterId }));
   }, []);
-  const closeAgentSetup = useCallback(() => setAgentsOpen(false), []);
+  const clearComposerFocusRequest = useCallback((seq: number) => {
+    setComposerFocusRequest((current) => (current?.seq === seq ? null : current));
+  }, []);
+  const openAgentSetup = useCallback(
+    (instanceId: string | null = null, origin: "composer" | "other" = "other") => {
+      setSettingsOpen(false);
+      agentSetupOriginRef.current = origin;
+      setAgentSetupInstanceId(instanceId);
+      setAgentsOpen(true);
+    },
+    [],
+  );
+  const openAgentSetupFromComposer = useCallback(
+    (instanceId: string | null) => openAgentSetup(instanceId, "composer"),
+    [openAgentSetup],
+  );
+  // Closing setup opened from the composer returns focus to its question.
+  const closeAgentSetup = useCallback(() => {
+    setAgentsOpen(false);
+    if (agentSetupOriginRef.current === "composer") requestComposerFocus(null);
+  }, [requestComposerFocus]);
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
@@ -881,7 +910,9 @@ function MainApp() {
             composerFolderName ? `Ask a question in ${composerFolderName}` : "Ask a question"
           }
           launchChoiceRef={composerLaunchChoiceRef}
-          onOpenAgentSettings={() => openAgentSetup()}
+          onOpenAgentSettings={openAgentSetupFromComposer}
+          focusRequest={composerFocusRequest}
+          onFocusRequestHandled={clearComposerFocusRequest}
           onCreate={submitFeedResearch}
           onPost={submitFeedPost}
           onSaveDraft={saveComposerDraft}
@@ -890,7 +921,9 @@ function MainApp() {
     [
       configAdapters,
       composerFolderName,
-      openAgentSetup,
+      composerFocusRequest,
+      clearComposerFocusRequest,
+      openAgentSetupFromComposer,
       settings.requireCmdEnterToSend,
       researchScope,
       saveComposerDraft,
@@ -898,10 +931,42 @@ function MainApp() {
       submitFeedPost,
     ],
   );
-  // Show setup guide on Home only when no agents can run research.
+  // "Start research with …" from Agent Setup: select the agent in the feed's
+  // composer and focus its question, keeping the text, workspace and options
+  // already there. Setup opened from the composer returns to it in place;
+  // from elsewhere it goes to Home. Nothing is submitted.
+  const startResearchFromSetup = useCallback(
+    (adapter: AgentAdapterMetadata, origin: "composer" | "home" | "other") => {
+      setAgentsOpen(false);
+      setHomeSetupPinned(false);
+      if (origin === "other") {
+        openFeedPage({ kind: "home" });
+        focusResearchHome();
+      }
+      requestComposerFocus(adapter.id);
+    },
+    [focusResearchHome, openFeedPage, requestComposerFocus],
+  );
+  const startResearchFromSetupDialog = useCallback(
+    (adapter: AgentAdapterMetadata) => startResearchFromSetup(adapter, agentSetupOriginRef.current),
+    [startResearchFromSetup],
+  );
+  const startResearchFromHomeSetup = useCallback(
+    (adapter: AgentAdapterMetadata) => startResearchFromSetup(adapter, "home"),
+    [startResearchFromSetup],
+  );
+  // Home shows the setup guide while no agent can run research. Once shown,
+  // it stays until its start action is used (or Home gets content), so an
+  // agent becoming ready shows its completion state instead of removing the
+  // guide before its "Start research" action can be used.
+  const noResearchAgent = Boolean(configAdapters) && !configAdapters?.some(adapterCanLaunchResearch);
+  const [homeSetupPinned, setHomeSetupPinned] = useState(false);
+  useEffect(() => {
+    if (noResearchAgent) setHomeSetupPinned(true);
+  }, [noResearchAgent]);
   const feedSetupGuide = useMemo(
     () =>
-      !configAdapters || configAdapters.some(adapterCanLaunchResearch) ? undefined : (
+      !configAdapters || !(noResearchAgent || homeSetupPinned) ? undefined : (
         <AgentSetupGuide
           adapters={configAdapters}
           loading={adapterProbeLoading}
@@ -909,15 +974,19 @@ function MainApp() {
           onRefresh={forceRefreshAdapterReadiness}
           onCopied={showAppToast}
           onError={setAdapterProbeError}
+          onStartResearch={startResearchFromHomeSetup}
         />
       ),
     [
       configAdapters,
+      noResearchAgent,
+      homeSetupPinned,
       adapterProbeLoading,
       adapterProbeError,
       forceRefreshAdapterReadiness,
       setAdapterProbeError,
       showAppToast,
+      startResearchFromHomeSetup,
     ],
   );
   const refreshFeed = useCallback(() => void refreshResearchNavigation(), [refreshResearchNavigation]);
@@ -986,6 +1055,7 @@ function MainApp() {
           onRefresh={forceRefreshAdapterReadiness}
           onCopied={showAppToast}
           onError={setAdapterProbeError}
+          onStartResearch={startResearchFromSetupDialog}
           onClose={closeAgentSetup}
         />
       ) : null}

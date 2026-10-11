@@ -10,6 +10,7 @@ register("./svgStubLoader.mjs", import.meta.url);
 const {
   default: ResearchQueryComposer,
   askBoxCopy,
+  applyComposerFocusRequest,
   askModeShowsAiControls,
   homeComposerDraftToStore,
   parseResearchModelChoice,
@@ -257,4 +258,42 @@ test("the Home ask box keeps a non-default agent, model, or effort after its tex
   // Drafts stored before effort was kept have no effortChoice.
   const { effortChoice: _omitted, ...older } = fresh;
   assert.equal(homeComposerDraftToStore(older, "claude"), null);
+});
+
+test("returning from Agent Setup selects the agent and keeps the question", () => {
+  const draft = {
+    prompt: "What changed in grid storage costs?",
+    adapter: "claude",
+    modelChoice: "opus",
+    customModel: "",
+    effortChoice: "high",
+  };
+  const codex = adapter("codex");
+  const missing = { ...adapter("grok"), readiness: "missing" as const, researchReadiness: "missing" as const };
+  const adapters = [adapter("claude"), codex, missing];
+
+  // The chosen agent is selected; text and options are untouched (a model or
+  // effort that does not apply falls back when the box resolves the launch).
+  assert.deepEqual(applyComposerFocusRequest(draft, { seq: 1, adapterId: "codex" }, adapters), {
+    ...draft,
+    adapter: "codex",
+  });
+  // An agent that cannot launch research is not selected.
+  assert.equal(applyComposerFocusRequest(draft, { seq: 2, adapterId: "grok" }, adapters), draft);
+  // A plain focus request (closing setup opened from the composer) changes nothing.
+  assert.equal(applyComposerFocusRequest(draft, { seq: 3, adapterId: null }, adapters), draft);
+});
+
+test("a composer without a research-ready agent links to Agent Setup", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchQueryComposer, {
+      adapters: [{ ...adapter("claude"), readiness: "needsAuth", researchReadiness: "needsAuth" }],
+      requireCmdEnterToSend: false,
+      workspaceId: "workspace",
+      onOpenAgentSettings: () => {},
+      onCreate: async () => {},
+      onPost: async () => {},
+    }),
+  );
+  assert.match(html, /Review agents/);
 });

@@ -41,6 +41,10 @@
   color: var(--control-fg-muted);
 }
 
+.agent-setup .control-button[aria-disabled="true"] {
+  cursor: default;
+}
+
 .agent-setup .is-spinning {
   animation: spinner-spin 0.9s linear infinite;
 }
@@ -159,9 +163,16 @@
 
 .agent-setup-status.is-missing,
 .agent-setup-status.is-needsAuth,
-.agent-setup-status.is-unsupportedVersion,
+.agent-setup-status.is-needsUpdate,
 .agent-setup-status.is-error {
   color: var(--status-attention-fg);
+}
+
+/* Neither verified nor failed: sign-in could not be checked, or the CLI works
+   but cannot run research here. */
+.agent-setup-status.is-unverified,
+.agent-setup-status.is-researchUnavailable {
+  color: var(--status-warning-fg);
 }
 
 .agent-setup-steps {
@@ -231,11 +242,13 @@
   font-size: calc(var(--fs-sm) - var(--font-ui-size-offset));
 }
 
+/* Commands wrap rather than scroll: a full executable path stays visible in
+   a narrow window. */
 .agent-setup-command code {
   flex: 1 1 auto;
   min-width: 0;
-  overflow-x: auto;
-  white-space: nowrap;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .agent-setup-command code::before {
@@ -269,6 +282,7 @@
 
 .agent-setup-foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -276,6 +290,8 @@
 
 .agent-setup-foot-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
 }
 
@@ -301,4 +317,30 @@
 .agent-setup-foot .agent-setup-refresh-current {
   width: 27px;
   padding: 0;
+}
+
+/* The selected agent's completed state, above the start action. */
+.agent-setup-complete {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--status-success-border);
+  border-radius: var(--radius-md);
+  background: var(--status-success-bg);
+  color: var(--status-success-fg);
+}
+
+.agent-setup-complete p {
+  margin: 0;
+}
+
+.agent-setup-complete-title {
+  color: var(--text-heading);
+  font-size: var(--fs-base);
+}
+
+.agent-setup-complete .agent-setup-hint {
+  display: block;
+  margin-top: 2px;
 }

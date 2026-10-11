@@ -126,7 +126,15 @@ interface ResearchQueryComposerProps {
   adapters: AgentAdapterMetadata[];
   requireCmdEnterToSend: boolean;
   workspaceId: string | null;
-  onOpenAgentSettings: () => void;
+  /** Opens Agent Setup on an agent instance (the selected agent's), or on
+   * the first incomplete one when null. */
+  onOpenAgentSettings: (instanceId: string | null) => void;
+  /** A request to select an agent (when `adapterId` names a research-ready
+   * one) and focus the question field, sent when Agent Setup returns here.
+   * The text and other choices are kept, and nothing is submitted. */
+  focusRequest?: ComposerFocusRequest | null;
+  /** Called once a focus request has been applied. */
+  onFocusRequestHandled?: (seq: number) => void;
   onCreate: (input: {
     prompt: string;
     adapter: string;
@@ -152,6 +160,11 @@ interface ResearchQueryComposerProps {
   launchChoiceRef?: MutableRefObject<(() => ResearchLaunchChoice | null) | null>;
 }
 
+export interface ComposerFocusRequest {
+  seq: number;
+  adapterId: string | null;
+}
+
 export interface ResearchLaunchChoice {
   adapter: string;
   model: string | null;
@@ -167,6 +180,23 @@ interface HomeComposerDraft {
   modelChoice: string | null;
   customModel: string;
   effortChoice?: string;
+}
+
+/** The ask box after a focus request from Agent Setup: the requested agent
+ * when it can launch research, and otherwise the draft unchanged. The
+ * question text and the model, custom model and effort choices are kept;
+ * a choice that does not apply to the new agent falls back to that agent's
+ * default when the box resolves what to launch. */
+export function applyComposerFocusRequest(
+  draft: HomeComposerDraft,
+  request: ComposerFocusRequest,
+  adapters: readonly AgentAdapterMetadata[],
+): HomeComposerDraft {
+  if (!request.adapterId || request.adapterId === draft.adapter) return draft;
+  const candidate = adapters.find((adapter) => adapter.id === request.adapterId);
+  return candidate && adapterCanLaunchResearch(candidate)
+    ? { ...draft, adapter: candidate.id }
+    : draft;
 }
 
 /** The draft to store for the Home ask box, or null when it matches a fresh
@@ -195,6 +225,8 @@ export default function ResearchQueryComposer({
   requireCmdEnterToSend,
   workspaceId,
   onOpenAgentSettings,
+  focusRequest = null,
+  onFocusRequestHandled,
   onCreate,
   onPost,
   onSaveDraft,
@@ -232,6 +264,9 @@ export default function ResearchQueryComposer({
   );
   const selectedAdapter = adapters.find((candidate) => candidate.id === adapter) ?? null;
   const adapterReady = adapterCanLaunchResearch(selectedAdapter);
+  // The agent a focus request selected. The backend copy of the draft, which
+  // can arrive after the request, keeps its text but not its agent.
+  const requestedAdapterRef = useRef<string | null>(null);
 
   useEffect(() => {
     sessionDraftTouchedRef.current = false;
@@ -252,7 +287,7 @@ export default function ResearchQueryComposer({
       .then((backendDraft) => {
         if (!disposed && backendDraft && !sessionDraftTouchedRef.current) {
           setPrompt(backendDraft.prompt);
-          setAdapter(backendDraft.adapter);
+          setAdapter(requestedAdapterRef.current ?? backendDraft.adapter);
           setModelChoice(backendDraft.modelChoice);
           setCustomModel(backendDraft.customModel);
           setEffortChoice(backendDraft.effortChoice ?? "");
@@ -268,6 +303,30 @@ export default function ResearchQueryComposer({
       disposed = true;
     };
   }, [draftKey]);
+
+  // Apply a focus request from Agent Setup after the draft restore above, so
+  // the requested agent wins over the stored one. The request is cleared
+  // through onFocusRequestHandled; the focus itself waits a frame for the
+  // dialog to unmount.
+  const focusRequestSeq = focusRequest?.seq ?? null;
+  useEffect(() => {
+    if (!focusRequest) return;
+    const next = applyComposerFocusRequest(
+      { prompt, adapter, modelChoice, customModel, effortChoice },
+      focusRequest,
+      adapters,
+    );
+    if (next.adapter !== adapter) {
+      requestedAdapterRef.current = next.adapter;
+      setAdapter(next.adapter);
+      setError(null);
+    }
+    // Starting research with an agent asks a question, not a note.
+    if (focusRequest.adapterId) setAskMode("ai");
+    onFocusRequestHandled?.(focusRequest.seq);
+    window.requestAnimationFrame(() => promptRef.current?.focus());
+    // Runs once per request.
+  }, [focusRequestSeq]);
 
   const defaultAdapter = preferredResearchAdapter(adapters)?.id ?? "";
   // Runs from the effect below on each change, and directly after a send or
@@ -683,7 +742,7 @@ export default function ResearchQueryComposer({
               <button
                 type="button"
                 className="control-button new-research-setup-button"
-                onClick={onOpenAgentSettings}
+                onClick={() => onOpenAgentSettings(selectedAdapter?.instanceId ?? null)}
               >
                 Review agents
               </button>

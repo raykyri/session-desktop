@@ -1,11 +1,10 @@
-import { useId, useState } from "react";
-import { Check, Copy, ExternalLink, RefreshCw } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
+import { ArrowRight, Check, CircleCheck, Copy, ExternalLink, RefreshCw } from "lucide-react";
 import type { AgentAdapterMetadata } from "../types";
 import { ADAPTER_ICON_BY_ID, adapterIconClassName } from "../lib/adapterIcons";
 import {
-  adapterNeedsUpdate,
   adapterSetupIsComplete,
-  adapterStatusChecked,
+  agentResearchState,
   agentSetupIntro,
   agentSetupStatusLabel,
   agentSetupSteps,
@@ -16,16 +15,23 @@ import { writeClipboardText } from "../lib/clipboard";
 interface AgentSetupGuideProps {
   adapters: readonly AgentAdapterMetadata[];
   /** The agent instance selected when the guide mounts. Null, or an id no
-   * longer in `adapters`, selects the first agent whose setup is incomplete. */
+   * longer in `adapters`, selects the first agent whose setup is incomplete.
+   * The selection then stays put while statuses change, so an agent that
+   * becomes ready keeps its completion state on screen. */
   initialInstanceId?: string | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
   onCopied: (message: string) => void;
   onError: (message: string) => void;
+  /** Selects the agent in the research composer and moves focus there. When
+   * set, a ready agent offers "Start research with …", and an agent whose
+   * sign-in could not be verified offers "Try research with …". */
+  onStartResearch?: (adapter: AgentAdapterMetadata) => void;
 }
 
-function CommandLine({
+/** A shell command with a copy button. Long commands wrap. */
+function AgentSetupCommand({
   command,
   onCopied,
   onError,
@@ -61,6 +67,12 @@ function CommandLine({
   );
 }
 
+function firstIncompleteInstanceId(adapters: readonly AgentAdapterMetadata[]) {
+  return (
+    adapters.find((adapter) => !adapterSetupIsComplete(adapter)) ?? adapters[0] ?? null
+  )?.instanceId ?? null;
+}
+
 export default function AgentSetupGuide({
   adapters,
   initialInstanceId = null,
@@ -69,15 +81,26 @@ export default function AgentSetupGuide({
   onRefresh,
   onCopied,
   onError,
+  onStartResearch,
 }: AgentSetupGuideProps) {
   const tabsId = useId();
-  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(initialInstanceId);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(() =>
+    initialInstanceId && adapters.some((adapter) => adapter.instanceId === initialInstanceId)
+      ? initialInstanceId
+      : firstIncompleteInstanceId(adapters),
+  );
   const intro = agentSetupIntro(adapters);
   const selected =
     adapters.find((adapter) => adapter.instanceId === selectedInstanceId) ??
-    adapters.find((adapter) => !adapterSetupIsComplete(adapter)) ??
-    adapters[0] ??
+    adapters.find((adapter) => adapter.instanceId === firstIncompleteInstanceId(adapters)) ??
     null;
+  // Keep the shown agent selected: without this, an agent that became ready
+  // would hand the panel to the next incomplete one and hide its completion.
+  useEffect(() => {
+    if (selected && selected.instanceId !== selectedInstanceId) {
+      setSelectedInstanceId(selected.instanceId);
+    }
+  }, [selected, selectedInstanceId]);
 
   function selectNextAgent() {
     if (!selected || adapters.length < 2) {
@@ -87,12 +110,39 @@ export default function AgentSetupGuide({
     setSelectedInstanceId(adapters[(index + 1) % adapters.length].instanceId);
   }
 
+  const state = selected ? agentResearchState(selected) : null;
   const steps = selected ? agentSetupSteps(selected) : [];
   const activeIndex = steps.findIndex((step) => !step.done);
   const selectedIndex = selected
     ? adapters.findIndex((adapter) => adapter.instanceId === selected.instanceId)
     : -1;
   const panelId = `${tabsId}-panel`;
+  const startAction =
+    selected && onStartResearch && (state === "ready" || state === "unverified")
+      ? state === "ready"
+        ? `Start research with ${selected.label}`
+        : `Try research with ${selected.label}`
+      : null;
+
+  const refresh = () => {
+    if (!loading) onRefresh();
+  };
+  // When a refresh shows the selected agent ready, move focus from the
+  // refresh button to the start action that replaced it as the next step.
+  const refreshCurrentRef = useRef<HTMLButtonElement | null>(null);
+  const startRef = useRef<HTMLButtonElement | null>(null);
+  const previousStateRef = useRef(state);
+  useEffect(() => {
+    const previous = previousStateRef.current;
+    previousStateRef.current = state;
+    if (
+      state === "ready" &&
+      previous !== "ready" &&
+      document.activeElement === refreshCurrentRef.current
+    ) {
+      startRef.current?.focus({ preventScroll: true });
+    }
+  }, [state]);
 
   return (
     <div className="agent-setup">
@@ -133,10 +183,12 @@ export default function AgentSetupGuide({
             <button
               type="button"
               className="control-button agent-setup-refresh"
-              disabled={loading}
+              // Not disabled while checking: a disabled button would drop
+              // keyboard focus to the page.
+              aria-disabled={loading || undefined}
               aria-label={loading ? "Checking all agent statuses" : "Refresh all agent statuses"}
               title={loading ? "Checking all agent statuses" : "Refresh all agent statuses"}
-              onClick={onRefresh}
+              onClick={refresh}
             >
               <RefreshCw
                 size={13}
@@ -159,30 +211,22 @@ export default function AgentSetupGuide({
                 aria-hidden="true"
               />
               <h4>{selected.label}</h4>
-              <span
-                className={`agent-setup-status is-${
-                  adapterNeedsUpdate(selected)
-                    ? "unsupportedVersion"
-                    : adapterStatusChecked(selected)
-                      ? selected.readiness
-                      : "unchecked"
-                }`}
-              >
+              <span className={`agent-setup-status is-${state}`}>
                 {agentSetupStatusLabel(selected)}
               </span>
             </div>
             <ol className="agent-setup-steps">
               {steps.map((step, index) => {
-                const state = step.done ? "is-done" : index === activeIndex ? "is-active" : "";
+                const stepState = step.done ? "is-done" : index === activeIndex ? "is-active" : "";
                 return (
-                  <li key={step.title} className={`agent-setup-step ${state}`}>
+                  <li key={step.title} className={`agent-setup-step ${stepState}`}>
                     <span className="agent-setup-step-number" aria-hidden="true">
                       {step.done ? <Check size={12} /> : index + 1}
                     </span>
                     <div className="agent-setup-step-body">
                       <span className="agent-setup-step-title">{step.title}</span>
                       {step.command && index === activeIndex ? (
-                        <CommandLine
+                        <AgentSetupCommand
                           command={step.command}
                           onCopied={onCopied}
                           onError={onError}
@@ -196,6 +240,19 @@ export default function AgentSetupGuide({
                 );
               })}
             </ol>
+            {state === "ready" ? (
+              <div className="agent-setup-complete" role="status">
+                <CircleCheck size={16} aria-hidden="true" />
+                <div>
+                  <p className="agent-setup-complete-title">
+                    {selected.label} is ready for research.
+                  </p>
+                  <p className="agent-setup-hint">
+                    One ready agent is enough. Setting up other agents is optional.
+                  </p>
+                </div>
+              </div>
+            ) : null}
             <div className="agent-setup-foot">
               {selected.installUrl ? (
                 <button
@@ -214,18 +271,21 @@ export default function AgentSetupGuide({
                 <span />
               )}
               <div className="agent-setup-foot-actions">
-                {adapters.length > 1 ? (
+                {adapters.length > 1 && state !== "ready" ? (
                   <button type="button" className="control-button" onClick={selectNextAgent}>
                     Next agent
                   </button>
                 ) : null}
                 <button
+                  ref={refreshCurrentRef}
                   type="button"
-                  className="control-button is-primary agent-setup-refresh-current"
-                  disabled={loading}
+                  className={`control-button agent-setup-refresh-current${
+                    state === "ready" ? "" : " is-primary"
+                  }`}
+                  aria-disabled={loading || undefined}
                   aria-label={loading ? "Checking agent status" : "Refresh agent status"}
                   title={loading ? "Checking agent status" : "Refresh agent status"}
-                  onClick={onRefresh}
+                  onClick={refresh}
                 >
                   <RefreshCw
                     size={13}
@@ -233,6 +293,19 @@ export default function AgentSetupGuide({
                     aria-hidden="true"
                   />
                 </button>
+                {startAction ? (
+                  <button
+                    ref={startRef}
+                    type="button"
+                    className={`control-button agent-setup-start${
+                      state === "ready" ? " is-primary" : ""
+                    }`}
+                    onClick={() => onStartResearch?.(selected)}
+                  >
+                    <span>{startAction}</span>
+                    <ArrowRight size={13} aria-hidden="true" />
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>

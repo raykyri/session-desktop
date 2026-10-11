@@ -1201,9 +1201,18 @@
 
 .settings-agent-status.is-missing,
 .settings-agent-status.is-needsAuth,
-.settings-agent-status.is-unsupportedVersion,
+.settings-agent-status.is-needsUpdate,
 .settings-agent-status.is-error {
   color: var(--status-attention-fg);
+}
+
+.settings-agent-status.is-unverified,
+.settings-agent-status.is-researchUnavailable {
+  color: var(--status-warning-fg);
+}
+
+.settings-agent-status.is-unchecked {
+  color: var(--text-muted);
 }
 
 .settings-agent-chevron {

@@ -1,4 +1,3 @@
-import { adapterIsReady, adapterReadinessLabel } from "./adapterReadiness";
 import type { AgentAdapterMetadata } from "../types";
 
 interface AgentSetupStep {
@@ -8,7 +7,33 @@ interface AgentSetupStep {
   hint: string | null;
 }
 
-export function adapterNeedsUpdate(adapter: AgentAdapterMetadata) {
+/**
+ * An agent's readiness for research, from its probed metadata. One
+ * classification serves the setup guide, the sidebar Agents module, Home and
+ * the repair panel, so their counts, labels and actions agree.
+ *
+ * - `unchecked`: installed, but no probe has reported on it yet.
+ * - `missing`: the configured binary was not found.
+ * - `needsUpdate`: the CLI or its research runtime needs a newer version.
+ * - `needsAuth`: the provider's status command reported it signed out.
+ * - `error`: a probe failed (for example, the version check).
+ * - `researchUnavailable`: the CLI works, but research cannot run through it
+ *   (a remote target, or an adapter without a research runtime).
+ * - `unverified`: research can launch, but the sign-in status command gave no
+ *   definitive answer. Not counted as ready; research can still be attempted.
+ * - `ready`: sign-in verified and research ready.
+ */
+type AgentResearchState =
+  | "unchecked"
+  | "missing"
+  | "needsUpdate"
+  | "needsAuth"
+  | "error"
+  | "researchUnavailable"
+  | "unverified"
+  | "ready";
+
+function adapterNeedsUpdate(adapter: AgentAdapterMetadata) {
   return (
     adapter.readiness === "unsupportedVersion" ||
     (adapter.supportsResearch && adapter.researchReadiness === "unsupportedVersion")
@@ -16,36 +41,91 @@ export function adapterNeedsUpdate(adapter: AgentAdapterMetadata) {
 }
 
 /** Returns true if the adapter has been verified by a status probe. */
-export function adapterStatusChecked(adapter: AgentAdapterMetadata) {
+function adapterStatusChecked(adapter: AgentAdapterMetadata) {
   return adapter.checkedAt !== null;
 }
 
-export function adapterSetupIsComplete(adapter: AgentAdapterMetadata) {
-  return adapterStatusChecked(adapter) && adapterIsReady(adapter) && !adapterNeedsUpdate(adapter);
+export function agentResearchState(adapter: AgentAdapterMetadata): AgentResearchState {
+  // Missing, outdated, signed-out and failed states come from the binary
+  // lookup and the probe itself, so they apply even before checkedAt is read.
+  if (adapter.readiness === "missing") {
+    return "missing";
+  }
+  if (adapterNeedsUpdate(adapter)) {
+    return "needsUpdate";
+  }
+  if (
+    adapter.readiness === "needsAuth" ||
+    adapter.researchReadiness === "needsAuth" ||
+    adapter.auth === "unauthenticated"
+  ) {
+    return "needsAuth";
+  }
+  if (adapter.readiness === "error") {
+    return "error";
+  }
+  // An installed CLI starts out "ready" with unknown sign-in until a probe
+  // reports on it; that is not evidence of anything yet.
+  if (!adapterStatusChecked(adapter)) {
+    return "unchecked";
+  }
+  if (!adapter.supportsResearch || adapter.researchReadiness !== "ready") {
+    return "researchUnavailable";
+  }
+  return adapter.auth === "authenticated" ? "ready" : "unverified";
 }
 
+/** Research setup is complete only with verified sign-in and research
+ * readiness. An unverified agent can still launch research (see
+ * `agentCanAttemptResearch`), but does not count as set up. */
+export function adapterSetupIsComplete(adapter: AgentAdapterMetadata) {
+  return agentResearchState(adapter) === "ready";
+}
+
+/** Research can be launched with this agent, verified or not. */
+export function agentCanAttemptResearch(adapter: AgentAdapterMetadata) {
+  const state = agentResearchState(adapter);
+  return state === "ready" || state === "unverified";
+}
+
+const STATUS_LABELS: Record<AgentResearchState, string> = {
+  unchecked: "Not checked",
+  missing: "Not installed",
+  needsUpdate: "Needs update",
+  needsAuth: "Sign-in required",
+  error: "Needs attention",
+  researchUnavailable: "Research unavailable",
+  unverified: "Sign-in unverified",
+  ready: "Signed in",
+};
+
 export function agentSetupStatusLabel(adapter: AgentAdapterMetadata) {
-  if (adapterNeedsUpdate(adapter)) {
-    return "Needs update";
-  }
-  if (adapterIsReady(adapter) && !adapterStatusChecked(adapter)) {
-    return "Not checked";
-  }
-  return adapterReadinessLabel(adapter);
+  return STATUS_LABELS[agentResearchState(adapter)];
+}
+
+/** Why sign-in could not be verified, for an unverified agent. */
+function agentSignInUnverifiedText(adapter: AgentAdapterMetadata) {
+  const detail = adapter.authDetail?.trim();
+  return detail
+    ? `Session could not verify sign-in. ${detail}`
+    : "Session could not verify sign-in: the status check gave no definitive result.";
 }
 
 export function agentSetupSteps(adapter: AgentAdapterMetadata): AgentSetupStep[] {
-  const installed = adapter.readiness !== "missing";
-  const needsUpdate = adapterNeedsUpdate(adapter);
-  const ready = adapterSetupIsComplete(adapter);
-  const unchecked = installed && !needsUpdate && adapterIsReady(adapter) && !ready;
+  const state = agentResearchState(adapter);
+  const installed = state !== "missing";
+  const ready = state === "ready";
   const installStep: AgentSetupStep =
-    installed && needsUpdate
+    state === "needsUpdate"
       ? {
           title: "Update the CLI",
           done: false,
           command: adapter.updateCommand,
-          hint: adapter.message,
+          hint:
+            adapter.message ??
+            (adapter.updateCommand
+              ? null
+              : `Update ${adapter.label} with the method you used to install it, then refresh status.`),
         }
       : {
           title: "Install the CLI",
@@ -53,38 +133,62 @@ export function agentSetupSteps(adapter: AgentAdapterMetadata): AgentSetupStep[]
           command: installed ? null : adapter.installCommand,
           hint: installed ? null : adapter.message,
         };
-  const signInStep: AgentSetupStep =
-    adapter.readiness === "error"
+  let signInStep: AgentSetupStep;
+  switch (state) {
+    case "error":
+      signInStep = {
+        title: "Resolve the reported issue",
+        done: false,
+        command: null,
+        hint: adapter.message,
+      };
+      break;
+    case "unchecked":
+      signInStep = {
+        title: "Sign in",
+        done: false,
+        command: null,
+        hint: "Sign-in has not been checked yet. Refresh status to verify it.",
+      };
+      break;
+    case "needsAuth":
+      signInStep = {
+        title: "Sign in",
+        done: false,
+        command: adapter.loginCommand,
+        hint: adapter.loginCommand
+          ? "Run this command in Terminal and complete sign-in, then refresh status."
+          : adapter.message,
+      };
+      break;
+    case "unverified":
+      signInStep = {
+        title: "Verify sign-in",
+        done: false,
+        command: adapter.loginCommand,
+        hint: `${agentSignInUnverifiedText(adapter)} If ${adapter.label} is not signed in, run this command in Terminal, then refresh status.`,
+      };
+      break;
+    case "researchUnavailable":
+      signInStep = {
+        title: "Sign in",
+        done: adapter.auth === "authenticated",
+        command: null,
+        hint: null,
+      };
+      break;
+    default:
+      signInStep = { title: "Sign in", done: ready, command: null, hint: null };
+  }
+  const checkStep: AgentSetupStep =
+    state === "researchUnavailable"
       ? {
-          title: "Resolve the reported issue",
+          title: "Research support",
           done: false,
           command: null,
-          hint: adapter.message,
+          hint: adapter.message ?? `${adapter.label} cannot run research here.`,
         }
-      : unchecked
-        ? {
-            title: "Sign in",
-            done: false,
-            command: null,
-            hint: "Sign-in has not been checked yet. Refresh status to verify it.",
-          }
-        : {
-            title: "Sign in",
-            done: ready,
-            command: installed && !needsUpdate && !ready ? adapter.loginCommand : null,
-            hint:
-              installed && !needsUpdate && !ready && adapter.readiness !== "needsAuth"
-                ? adapter.message
-                : null,
-          };
-  const checkStep: AgentSetupStep = {
-    title: "Refresh status",
-    done: ready,
-    command: null,
-    hint: ready
-      ? `${adapter.label} is ready for research. Select it from the agent menu on Home.`
-      : null,
-  };
+      : { title: "Refresh status", done: ready, command: null, hint: null };
   return [installStep, signInStep, checkStep];
 }
 
@@ -99,7 +203,7 @@ export function agentSetupIntro(adapters: readonly AgentAdapterMetadata[]) {
     body:
       readyCount === 0
         ? "Research requires at least one supported agent CLI installed and signed in on this Mac. Complete the steps for an agent, then refresh its status."
-        : "Set up agents to make them available for research.",
+        : "One ready agent is enough for research. Set up others to make them available as alternatives.",
   };
 }
 
@@ -110,7 +214,8 @@ type AgentSetupSummaryTone = "ready" | "attention" | "failed" | "neutral";
  * the last readiness probe's error. Every probe sets checkedAt on the agents it
  * reports, so agents with none set are still waiting for the first probe.
  * Readiness counts use adapterSetupIsComplete, as the Agent Setup dialog's
- * heading does, so the sidebar and the dialog agree. */
+ * heading does, so the sidebar and the dialog agree: an unverified sign-in or
+ * an agent that cannot run research is not counted as ready. */
 export function agentSetupSummary(
   adapters: readonly AgentAdapterMetadata[] | null,
   probeError: string | null,
@@ -128,19 +233,24 @@ export function agentSetupSummary(
     return { text: "Checking…", tone: "neutral" };
   }
   const total = adapters.length;
-  const readyCount = adapters.filter(adapterSetupIsComplete).length;
-  const updateCount = adapters.filter(adapterNeedsUpdate).length;
+  const states = adapters.map(agentResearchState);
+  const readyCount = states.filter((state) => state === "ready").length;
+  const unverifiedCount = states.filter((state) => state === "unverified").length;
+  const updateCount = states.filter((state) => state === "needsUpdate").length;
   if (readyCount === 0) {
-    return { text: "Set up an agent", tone: "attention" };
+    return unverifiedCount > 0
+      ? { text: "Sign-in unverified", tone: "attention" }
+      : { text: "Set up an agent", tone: "attention" };
   }
   if (readyCount === total) {
     return { text: total === 1 ? "Ready" : `All ${total} ready`, tone: "ready" };
   }
+  const unverified = unverifiedCount === 0 ? "" : ` · ${unverifiedCount} unverified`;
   const updates =
     updateCount === 0 ? "" : ` · ${updateCount} ${updateCount === 1 ? "needs" : "need"} update`;
   return {
-    text: `${readyCount} of ${total}${updates}`,
-    tone: updateCount === 0 ? "ready" : "attention",
+    text: `${readyCount} of ${total}${unverified}${updates}`,
+    tone: updateCount === 0 && unverifiedCount === 0 ? "ready" : "attention",
   };
 }
 

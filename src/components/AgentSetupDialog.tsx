@@ -15,6 +15,9 @@ interface AgentSetupDialogProps {
   onRefresh: () => void;
   onCopied: (message: string) => void;
   onError: (message: string) => void;
+  /** "Start research with …": closes the dialog and returns to the research
+   * composer with the agent selected. */
+  onStartResearch: (adapter: AgentAdapterMetadata) => void;
   onClose: () => void;
 }
 
@@ -28,6 +31,7 @@ export default function AgentSetupDialog({
   onRefresh,
   onCopied,
   onError,
+  onStartResearch,
   onClose,
 }: AgentSetupDialogProps) {
   useEffect(() => {
@@ -70,6 +74,7 @@ export default function AgentSetupDialog({
             onRefresh={onRefresh}
             onCopied={onCopied}
             onError={onError}
+            onStartResearch={onStartResearch}
           />
         </div>
       </div>

@@ -3,7 +3,7 @@ import { Check, ChevronDown, Globe, LoaderCircle, Minus, Plus, X } from "lucide-
 import ConfirmDialogActionButton from "../ConfirmDialogActionButton";
 import { useConfirmDialogFocus } from "../../hooks/useConfirmDialogFocus";
 import { remoteProbeKey, type RemoteSettingsState } from "../../hooks/useRemoteSettings";
-import { adapterReadinessLabel } from "../../lib/adapterReadiness";
+import { agentResearchState, agentSetupStatusLabel } from "../../lib/agentSetup";
 import { availableRemoteId, remoteIdFromLabel, remoteSettingsDraft } from "../../lib/remoteSettings";
 
 function RemoteProbeStatus({ state, probeKey }: { state: RemoteSettingsState; probeKey: string }) {
@@ -45,8 +45,13 @@ function RemoteProbeStatus({ state, probeKey }: { state: RemoteSettingsState; pr
           {remoteAdapters.map((adapter) => (
             <div key={adapter.instanceId}>
               <strong>{adapter.label}</strong>
-              <span className={`settings-agent-status is-${adapter.readiness}`}>
-                {adapterReadinessLabel(adapter)}
+              {/* Research readiness, as in Agent Setup: a remote CLI that
+                  works but cannot run research reads "Research unavailable". */}
+              <span
+                className={`settings-agent-status is-${agentResearchState(adapter)}`}
+                title={adapter.message ?? undefined}
+              >
+                {agentSetupStatusLabel(adapter)}
               </span>
             </div>
           ))}

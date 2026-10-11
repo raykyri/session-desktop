@@ -61,6 +61,9 @@ export interface AgentAdapterMetadata {
   message: string | null;
   version: string | null;
   auth: "authenticated" | "unauthenticated" | "unknown";
+  /** Why sign-in could not be verified when `auth` is "unknown" after a
+   * probe: the status command failed or its output was not recognized. */
+  authDetail?: string | null;
   checkedAt: number | null;
   loginCommand: string | null;
   installCommand: string | null;

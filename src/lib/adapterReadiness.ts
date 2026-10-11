@@ -1,9 +1,5 @@
 import type { AgentAdapterMetadata } from "../types";
 
-export function adapterIsReady(adapter: AgentAdapterMetadata | null | undefined) {
-  return adapter?.readiness === "ready";
-}
-
 export function adapterCanLaunchResearch(adapter: AgentAdapterMetadata | null | undefined) {
   return adapter?.researchReadiness === "ready";
 }
