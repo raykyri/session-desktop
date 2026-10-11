@@ -820,8 +820,8 @@
 }
 
 /* Dragging a row to reorder the column: the row dims, and a line in the gap
-   between rows shows where it goes. The grip shows on hover and focus, in
-   the feed's corner pill. */
+   between rows shows where it goes. The grip and the … button share the
+   feed's corner pill (.research-feed-rail), hidden while a row is dragged. */
 .research-msg-row.is-dragging {
   opacity: 0.4;
 }
@@ -846,8 +846,8 @@
   bottom: -2px;
 }
 
-.research-msg-row:is(:hover, :focus-within) > .research-msg-rail {
-  opacity: 0.85;
+.is-research-dragging .research-msg-row > .research-feed-rail {
+  opacity: 0;
 }
 
 .research-msg-row[data-research-card] {
@@ -856,7 +856,8 @@
 }
 
 /* One button under the row's content selects the message; links in the
-   message and the meta line's buttons stay their own targets above it. */
+   message, the meta line's buttons and the corner pill stay their own
+   targets above it. */
 .research-msg-hit {
   position: absolute;
   inset: 0;
@@ -887,6 +888,11 @@
   pointer-events: auto;
 }
 
+/* A row with no meta line ends 10px below its text, as it starts. */
+.research-msg-row:not(:has(> .research-msg-meta)) > .research-msg-content {
+  padding-bottom: 10px;
+}
+
 .research-msg-content .research-prompt {
   width: auto;
   max-width: none;
@@ -914,8 +920,9 @@
   color: var(--text-muted);
 }
 
-/* Time, pill, star, branch count and … with even gaps: the 22px buttons
-   inset their 13px icons by 4.5px, and the time takes the same margin. */
+/* Provenance, pill, starred mark and branch count with even gaps: the 22px
+   button insets its 13px icon by 4.5px, and the labels and the mark take
+   the same margin. */
 .research-msg-meta {
   position: relative;
   z-index: 1;
@@ -934,9 +941,17 @@
   pointer-events: auto;
 }
 
-.research-msg-meta > time {
+.research-msg-provenance {
   margin-right: 4.5px;
-  pointer-events: none;
+}
+
+.research-msg-starred {
+  display: inline-flex;
+  width: 22px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
 }
 
 .research-msg-row.is-selected .research-msg-meta {
@@ -1289,46 +1304,6 @@
 
 .research-turn-run .research-turn-button {
   margin-left: auto;
-}
-
-/* A running answer ends in a block caret, blinking unless motion is
-   reduced. A pseudo-element, so the answer's text (and the offsets anchors
-   are stored at) stays unchanged. */
-.research-response.is-running .research-response-content-root .turn-markdown > p:last-child::after,
-.research-response.is-running
-  .research-response-content-root
-  .turn-markdown
-  > :is(ul, ol):last-child
-  > li:last-child::after {
-  display: inline-block;
-  width: 7px;
-  height: 14px;
-  margin-left: 2px;
-  vertical-align: -2px;
-  background: var(--text-muted);
-  content: "";
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .app-shell:not(.reduce-motion)
-    .research-response.is-running
-    .research-response-content-root
-    .turn-markdown
-    > p:last-child::after,
-  .app-shell:not(.reduce-motion)
-    .research-response.is-running
-    .research-response-content-root
-    .turn-markdown
-    > :is(ul, ol):last-child
-    > li:last-child::after {
-    animation: research-caret 1s steps(2) infinite;
-  }
-}
-
-@keyframes research-caret {
-  50% {
-    opacity: 0;
-  }
 }
 
 .research-turn-run .research-turn-trace {
