@@ -24,7 +24,8 @@ still use process and compatibility infrastructure inherited from session intern
 ## Install
 
 Session currently requires macOS 13 or later. Install and authenticate at least one
-supported provider before opening **Settings → Agents**.
+supported provider, then check it in **Agent setup…** from the Agents menu at the
+bottom of the sidebar. One research-ready provider is enough.
 
 | Provider | Sign in | Research support |
 | --- | --- | --- |

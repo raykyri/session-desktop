@@ -344,3 +344,38 @@
   display: block;
   margin-top: 2px;
 }
+
+/* Details: the last check's executable, version, time and reported problem.
+   Also shown in the sign-in repair panel under a failed run. */
+.agent-setup-details {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.agent-setup-details summary {
+  width: fit-content;
+  cursor: default;
+  color: var(--control-fg-muted);
+  font-size: var(--fs-sm);
+}
+
+.agent-setup-details dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 8px 0 0;
+}
+
+.agent-setup-details dl > div {
+  display: contents;
+}
+
+.agent-setup-details dt {
+  color: var(--text-faint);
+}
+
+.agent-setup-details dd {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}

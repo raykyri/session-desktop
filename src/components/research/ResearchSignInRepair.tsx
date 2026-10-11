@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState } from "r
 import { LoaderCircle, RefreshCw, RotateCcw } from "lucide-react";
 import type { AgentAdapterMetadata } from "../../types";
 import AgentSetupCommand from "../AgentSetupCommand";
+import AgentDiagnostics from "../AgentDiagnostics";
 import {
   agentResearchState,
   agentSetupStatusLabel,
@@ -97,6 +98,8 @@ export function signInRepairOutcome(
 interface SignInRepairViewProps {
   label: string;
   loginCommand: string | null;
+  /** The agent's last probed metadata, for the Details disclosure. */
+  agent?: AgentAdapterMetadata | null;
   checking: boolean;
   outcome: SignInRepairOutcome | null;
   retrying: boolean;
@@ -115,6 +118,7 @@ interface SignInRepairViewProps {
 export function SignInRepairView({
   label,
   loginCommand,
+  agent = null,
   checking,
   outcome,
   retrying,
@@ -148,6 +152,7 @@ export function SignInRepairView({
       >
         {checking ? `Checking ${label}…` : (outcome?.message ?? "")}
       </p>
+      {agent ? <AgentDiagnostics adapter={agent} /> : null}
       <div className="research-turn-actions">
         <button
           ref={verifyRef}
@@ -265,6 +270,7 @@ export default function ResearchSignInRepair({
     <SignInRepairView
       label={label}
       loginCommand={known?.loginCommand ?? null}
+      agent={known}
       checking={checking}
       outcome={outcome}
       retrying={retrying}

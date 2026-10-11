@@ -964,6 +964,12 @@ impl AdapterRegistry {
                     ensure_on_path(&configured_binary).map(|path| path.display().to_string());
                 let installed = resolved_binary.is_some();
                 let login_command = adapter_login_command(adapter.id(), &configured_binary);
+                // The updater runs through the executable Session resolved,
+                // so it updates the installation research launches.
+                let update_command = adapter_update_command(
+                    adapter.id(),
+                    resolved_binary.as_deref().unwrap_or(&configured_binary),
+                );
                 AdapterMetadata {
                     id: adapter.id().to_string(),
                     label: adapter.display_name().to_string(),
@@ -998,10 +1004,7 @@ impl AdapterRegistry {
                     login_command,
                     install_command: adapter_install_command(adapter.id()).map(str::to_string),
                     install_url: adapter_install_url(adapter.id()).map(str::to_string),
-                    update_command: adapter_update_command(
-                        adapter.id(),
-                        adapter.configured_binary(),
-                    ),
+                    update_command,
                     instance_id: format!("local:{}", adapter.id()),
                     target: AdapterTargetMetadata::local(),
                 }
@@ -1141,11 +1144,16 @@ fn adapter_install_url(adapter_id: &str) -> Option<&'static str> {
     }
 }
 
+/// The provider's own update command, run through `binary`. Only Claude Code
+/// has one (`claude update`, which updates the installation it is run from).
+/// Codex has none: a package-manager command such as `npm install -g` would
+/// update an npm installation that need not be the one Session launches, so
+/// no update command is offered and the setup guide asks the user to update
+/// it the way it was installed.
 fn adapter_update_command(adapter_id: &str, binary: &str) -> Option<String> {
     let binary = shell_quote_arg(binary);
     match adapter_id {
         "claude" => Some(format!("{binary} update")),
-        "codex" => Some("npm install -g @openai/codex@latest".to_string()),
         _ => None,
     }
 }
@@ -1505,6 +1513,9 @@ pub fn probe_adapter_metadata_for_config(
             };
             adapter.instance_id = format!("remote:{remote_id}:{}", adapter.id);
             adapter.checked_at = checked_at;
+            // The local resolution does not apply on the remote host.
+            adapter.update_command =
+                adapter_update_command(&adapter.id, &adapter.configured_binary);
             if !adapter.supports_remote {
                 adapter.readiness = AdapterReadiness::Error;
                 adapter.research_readiness = AdapterReadiness::Error;
@@ -2304,6 +2315,30 @@ mod tests {
                 .as_deref()
                 .is_some_and(|message| { message.contains("Claude was not found") })
         );
+    }
+
+    #[test]
+    fn update_commands_target_the_resolved_executable_or_are_omitted() {
+        let mut config = test_config();
+        // Any executable stands in for an installed CLI here.
+        config.adapters.claude.binary = Some("/bin/sh".to_string());
+        let metadata = adapter_registry(&config).metadata();
+        let claude = metadata
+            .iter()
+            .find(|adapter| adapter.id == "claude")
+            .expect("claude metadata");
+        let resolved = claude.resolved_binary.as_deref().expect("/bin/sh resolves");
+        assert_eq!(
+            claude.update_command.as_deref(),
+            Some(format!("{} update", shell_quote_arg(resolved)).as_str())
+        );
+        // No updater is known to own a Codex installation, so none is offered
+        // (in particular, not an npm command for a standalone install).
+        let codex = metadata
+            .iter()
+            .find(|adapter| adapter.id == "codex")
+            .expect("codex metadata");
+        assert_eq!(codex.update_command, None);
     }
 
     #[test]

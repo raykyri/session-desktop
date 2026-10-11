@@ -228,3 +228,17 @@ test("an unclassified failure keeps the plain error and Retry", () => {
   assert.match(html, /<span>Retry<\/span>/);
   assert.doesNotMatch(html, /Repair sign-in|Sign in to/);
 });
+
+test("the repair panel's details describe the run's agent as last checked", () => {
+  const html = renderView({
+    agent: agent("codex", {
+      readiness: "needsAuth",
+      researchReadiness: "needsAuth",
+      auth: "unauthenticated",
+      message: "Codex is not signed in. Run `codex login` and check again.",
+    }),
+  });
+  assert.match(html, /<summary>Details<\/summary>/);
+  assert.match(html, /<dt>Executable<\/dt><dd>\/bin\/codex<\/dd>/);
+  assert.match(html, /<dt>Version<\/dt><dd>1\.0\.0<\/dd>/);
+});

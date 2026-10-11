@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import AgentSetupCommand from "./AgentSetupCommand";
+import AgentDiagnostics from "./AgentDiagnostics";
 import { ArrowRight, Check, CircleCheck, ExternalLink, RefreshCw } from "lucide-react";
 import type { AgentAdapterMetadata } from "../types";
 import { ADAPTER_ICON_BY_ID, adapterIconClassName } from "../lib/adapterIcons";
@@ -215,6 +216,9 @@ export default function AgentSetupGuide({
                   </p>
                 </div>
               </div>
+            ) : null}
+            {state !== "ready" && state !== "unchecked" ? (
+              <AgentDiagnostics adapter={selected} />
             ) : null}
             <div className="agent-setup-foot">
               {selected.installUrl ? (

@@ -1,4 +1,5 @@
 import type { AgentAdapterMetadata } from "../types";
+import { shortWhen } from "./shortTime";
 
 interface AgentSetupStep {
   title: string;
@@ -178,7 +179,13 @@ export function agentSetupSteps(adapter: AgentAdapterMetadata): AgentSetupStep[]
       };
       break;
     default:
-      signInStep = { title: "Sign in", done: ready, command: null, hint: null };
+      // An outdated CLI can still report a verified sign-in.
+      signInStep = {
+        title: "Sign in",
+        done: ready || (state === "needsUpdate" && adapter.auth === "authenticated"),
+        command: null,
+        hint: null,
+      };
   }
   const checkStep: AgentSetupStep =
     state === "researchUnavailable"
@@ -259,4 +266,30 @@ export function agentSetupSummary(
 export function agentSetupMenuDetail(adapter: AgentAdapterMetadata) {
   const status = agentSetupStatusLabel(adapter);
   return adapter.target.kind === "remote" ? `${status} · ${adapter.target.label}` : status;
+}
+
+/** The facts about an agent's last check that help explain a failure, for
+ * the setup and repair panels' Details disclosure: where it runs, the
+ * executable Session launches (or the configured name it could not find),
+ * the version and check time the probe reported, the reported problem, and
+ * why sign-in could not be verified. Fields the probe did not report are
+ * omitted rather than filled in. */
+export function agentDiagnosticRows(adapter: AgentAdapterMetadata, now = Date.now()) {
+  const rows: { label: string; value: string }[] = [
+    { label: "Runs on", value: adapter.target.label },
+    {
+      label: "Executable",
+      value: adapter.resolvedBinary ?? `${adapter.configuredBinary} (not found)`,
+    },
+  ];
+  if (adapter.version) rows.push({ label: "Version", value: adapter.version });
+  if (adapter.checkedAt !== null) {
+    const when = shortWhen(adapter.checkedAt, now);
+    rows.push({ label: "Last checked", value: /^\d/.test(when) ? `${when} ago` : when });
+  }
+  if (adapter.message) rows.push({ label: "Reported", value: adapter.message });
+  if (adapter.auth === "unknown" && adapter.authDetail) {
+    rows.push({ label: "Sign-in check", value: adapter.authDetail });
+  }
+  return rows;
 }

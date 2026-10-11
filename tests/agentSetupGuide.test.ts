@@ -12,6 +12,7 @@ import {
   agentSetupStatusLabel,
   agentSetupSteps,
   agentSetupSummary,
+  agentDiagnosticRows,
 } from "../src/lib/agentSetup";
 import type { AgentAdapterMetadata } from "../src/types";
 
@@ -383,4 +384,74 @@ test("without a chosen agent the guide opens on the first incomplete one", () =>
   assert.match(html, /<h4>Claude Code<\/h4>/);
   assert.match(html, /Next agent/);
   assert.doesNotMatch(html, /Start research with/);
+});
+
+test("an update without a known updater names no command", () => {
+  // Nothing establishes which package manager or installer owns the
+  // executable, so no command is invented for it.
+  const outdated: AgentAdapterMetadata = {
+    ...checked("codex", "unsupportedVersion"),
+    updateCommand: null,
+  };
+  const step = agentSetupSteps(outdated)[0];
+  assert.equal(step.title, "Update the CLI");
+  assert.equal(step.command, null);
+  assert.equal(step.hint, "Update Codex with the method you used to install it, then refresh status.");
+  assert.doesNotMatch(JSON.stringify(agentSetupSteps(outdated)), /npm|brew/);
+
+  // A provider updater runs through the executable Session resolved.
+  const claude: AgentAdapterMetadata = {
+    ...checked("claude", "ready"),
+    researchReadiness: "unsupportedVersion",
+    resolvedBinary: "/Users/demo/.local/bin/claude",
+    updateCommand: "'/Users/demo/.local/bin/claude' update",
+    message: "Claude Code 2.0.5 is installed, but Research requires 2.1.0 or newer.",
+  };
+  assert.equal(agentSetupSteps(claude)[0].command, "'/Users/demo/.local/bin/claude' update");
+});
+
+test("diagnostic details list only what the last check reported", () => {
+  const now = 1_700_000_090_000;
+  const failed: AgentAdapterMetadata = {
+    ...checked("codex", "error"),
+    version: null,
+    message: "`codex --version` timed out",
+  };
+  assert.deepEqual(agentDiagnosticRows(failed, now), [
+    { label: "Runs on", value: "This Mac" },
+    { label: "Executable", value: "/bin/codex" },
+    { label: "Last checked", value: "1 min ago" },
+    { label: "Reported", value: "`codex --version` timed out" },
+  ]);
+  const missing = { ...checked("grok", "missing"), checkedAt: null };
+  assert.deepEqual(agentDiagnosticRows(missing, now), [
+    { label: "Runs on", value: "This Mac" },
+    { label: "Executable", value: "grok (not found)" },
+  ]);
+  const unverified: AgentAdapterMetadata = {
+    ...checked("codex", "ready"),
+    auth: "unknown",
+    version: "codex-cli 0.50.0",
+    authDetail: "The sign-in status check failed: `codex login status` timed out.",
+  };
+  assert.deepEqual(
+    agentDiagnosticRows(unverified, now).map((row) => row.label),
+    ["Runs on", "Executable", "Version", "Last checked", "Sign-in check"],
+  );
+  // A definitive sign-in result needs no sign-in explanation.
+  assert.equal(
+    agentDiagnosticRows({ ...unverified, auth: "authenticated" }, now).some(
+      (row) => row.label === "Sign-in check",
+    ),
+    false,
+  );
+
+  const html = renderGuide([failed], { onStartResearch: () => {} });
+  assert.match(html, /<details class="agent-setup-details"><summary>Details<\/summary>/);
+  assert.match(html, /<dt>Reported<\/dt><dd>`codex --version` timed out<\/dd>/);
+  // A ready agent does not show a diagnostics disclosure.
+  assert.doesNotMatch(
+    renderGuide([checked("codex", "ready")], { onStartResearch: () => {} }),
+    /agent-setup-details/,
+  );
 });
