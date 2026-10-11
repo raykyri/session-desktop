@@ -1626,6 +1626,14 @@ async fn list_recent_activity(
 }
 
 #[tauri::command]
+async fn list_recent_activity_for_trees(
+    state: tauri::State<'_, AppState>,
+    tree_ids: Vec<String>,
+) -> Result<Vec<research::RecentResearchQuery>, String> {
+    state.list_recent_activity_for_trees(&tree_ids)
+}
+
+#[tauri::command]
 async fn get_research_tree(
     state: tauri::State<'_, AppState>,
     tree_id: String,
@@ -2243,6 +2251,17 @@ fn rename_research_node(
 ) -> Result<ResearchNodeView, String> {
     state
         .set_research_node_title(&node_id, title)
+        .map(|node| node.view())
+}
+
+#[tauri::command]
+fn set_research_chain_order(
+    state: tauri::State<'_, AppState>,
+    head_node_id: String,
+    node_ids: Vec<String>,
+) -> Result<ResearchNodeView, String> {
+    state
+        .set_research_chain_order(&head_node_id, node_ids)
         .map(|node| node.view())
 }
 
@@ -3547,6 +3566,7 @@ fn main() {
             list_research_activity,
             list_research_highlights,
             list_recent_activity,
+            list_recent_activity_for_trees,
             get_research_tree,
             create_research_tree,
             read_research_report,
@@ -3568,6 +3588,7 @@ fn main() {
             set_research_tree_bookmarked,
             rename_research_node,
             set_research_node_starred,
+            set_research_chain_order,
             create_research_highlight,
             remove_research_highlights,
             mark_research_tree_viewed,

@@ -2648,6 +2648,16 @@ impl AppState {
                 model.research_tree_order = normalized_research_order;
             }
             model.research_nodes = persisted.research_nodes;
+            // Before version 11, Home listed Unfiled by creation time and
+            // ignored the tree order there.
+            if source_version.is_some_and(|version| version < 11) {
+                let migrated =
+                    order_unfiled_newest_first_in_model(&model, &persisted.research_folders);
+                if migrated != model.research_tree_order {
+                    research_reconciled = true;
+                    model.research_tree_order = migrated;
+                }
+            }
             // Reconcile the grouping against the authoritative tree set now, under
             // the model lock with every recovered tree present — the one place a
             // prune is safe. Membership/stars for trees that vanished while the app
@@ -2892,10 +2902,10 @@ impl AppState {
                 .lock()
                 .map_err(|_| "model lock poisoned".to_string())?;
             PersistedState {
-                // Research nodes (an envelope with a tagged body and
-                // `starredAt`) and `agentComposerText` are read only by builds
-                // that accept version 10; older builds would drop them. A
-                // state without either stays loadable by builds that accept
+                // Research nodes (an envelope with a tagged body, `starredAt`
+                // and `chainOrder`) and `agentComposerText` are read only by
+                // builds that accept version 11; older builds would drop them.
+                // A state without either stays loadable by builds that accept
                 // 2 to 4.
                 version: if model.research_nodes.is_empty() && model.agent_drafts.is_empty() {
                     persistence::STATE_VERSION_WITHOUT_RESEARCH_NODES
@@ -3903,9 +3913,6 @@ impl AppState {
         limit: usize,
         before: Option<RecentResearchQueryCursor>,
     ) -> Result<research::RecentActivityPage, String> {
-        // List every root. Nested documents are invalid, so exclude them from
-        // child and starred rows.
-        let is_feed_child = |node: &ResearchNode| node.node_type() != ResearchNodeType::Document;
         let compare = |left: &&ResearchNode, right: &&ResearchNode| {
             right
                 .created_at
@@ -3946,83 +3953,32 @@ impl AppState {
                 node_id: last.id.clone(),
             }
         });
-        let mut children_by_parent: HashMap<&str, Vec<&ResearchNode>> = HashMap::new();
-        let mut trees_with_stars = HashSet::new();
-        for node in model.research_nodes.values() {
-            if let Some(parent_id) = node.parent_node_id.as_deref() {
-                children_by_parent.entry(parent_id).or_default().push(node);
-            }
-            if node.starred_at.is_some() {
-                trees_with_stars.insert(node.tree_id.as_str());
-            }
-        }
-        let sorted_children = |parent: &ResearchNode| {
-            let mut children = children_by_parent
-                .get(parent.id.as_str())
-                .map(|children| {
-                    children
-                        .iter()
-                        .copied()
-                        .filter(|child| child.tree_id == parent.tree_id)
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default();
-            children.sort_by(|left, right| {
-                left.created_at
-                    .cmp(&right.created_at)
-                    .then_with(|| left.id.cmp(&right.id))
-            });
-            children
-        };
-        let feed_entry = |parent: &ResearchNode, node: &ResearchNode, branch_depth: u32| {
-            let mut entry = RecentResearchQuery::from(node);
-            entry.reply_anchor_author = research::reply_anchor_author(parent, node);
-            entry.branch_depth = branch_depth;
-            entry
-        };
-        let items = roots
-            .into_iter()
-            .map(|root| {
-                let mut query = RecentResearchQuery::from(root);
-                query.children = sorted_children(root)
-                    .iter()
-                    .filter(|child| is_feed_child(child))
-                    .map(|child| feed_entry(root, child, u32::from(!child.inline)))
-                    .collect();
-                if trees_with_stars.contains(root.tree_id.as_str()) {
-                    // Depth-first. A node's branches (oldest first) come before
-                    // its inline continuation, so each starred branch follows
-                    // the turn it was asked from. Stray documents are skipped
-                    // with their subtrees, matching `children`. The stack holds
-                    // each level reversed so the next entry pops first.
-                    let traversal_order = |parent: &ResearchNode| {
-                        let mut children = sorted_children(parent);
-                        children.retain(|child| is_feed_child(child));
-                        // Stable: keeps created_at order within each group.
-                        children.sort_by_key(|child| child.inline);
-                        children
-                    };
-                    let mut stack = traversal_order(root)
-                        .into_iter()
-                        .rev()
-                        .map(|child| (root, child, u32::from(!child.inline)))
-                        .collect::<Vec<_>>();
-                    while let Some((parent, node, depth)) = stack.pop() {
-                        if node.starred_at.is_some() {
-                            query.starred.push(feed_entry(parent, node, depth));
-                        }
-                        stack.extend(
-                            traversal_order(node)
-                                .into_iter()
-                                .rev()
-                                .map(|child| (node, child, depth + u32::from(!child.inline))),
-                        );
-                    }
-                }
-                query
-            })
-            .collect();
+        let items = recent_activity_entries(&model, roots);
         Ok(research::RecentActivityPage { items, next_cursor })
+    }
+
+    /// Home's feed entries for the roots of `tree_ids` (in that order), as
+    /// `list_recent_activity` builds them, for cards whose root is not in a
+    /// loaded page. Unknown and archived trees are skipped.
+    pub fn list_recent_activity_for_trees(
+        &self,
+        tree_ids: &[String],
+    ) -> Result<Vec<RecentResearchQuery>, String> {
+        let model = self
+            .inner
+            .model
+            .lock()
+            .map_err(|_| "model lock poisoned".to_string())?;
+        let mut seen = HashSet::new();
+        let roots = tree_ids
+            .iter()
+            .filter(|tree_id| seen.insert(tree_id.as_str()))
+            .filter_map(|tree_id| model.research_trees.get(tree_id))
+            .filter(|tree| tree.archived_at.is_none())
+            .filter_map(|tree| model.research_nodes.get(&tree.root_node_id))
+            .filter(|root| root.parent_node_id.is_none())
+            .collect::<Vec<_>>();
+        Ok(recent_activity_entries(&model, roots))
     }
 
     pub fn append_notification_log(
@@ -5520,10 +5476,20 @@ impl AppState {
             );
             node.anchor = anchor;
             node.inline = inline;
-            model.research_nodes.insert(node_id, node.clone());
+            model.research_nodes.insert(node_id.clone(), node.clone());
+            // The edited question takes the failed one's place in its
+            // column's stored order.
+            let reordered_head = replaces.filter(|_| inline).and_then(|replaced_id| {
+                let head_id = research_chain_head(&model.research_nodes, parent_node_id);
+                let head = model.research_nodes.get_mut(&head_id)?;
+                let slot = head.chain_order.iter_mut().find(|id| *id == replaced_id)?;
+                *slot = node_id.clone();
+                Some(head.clone())
+            });
             touch_research_tree_locked(&mut model, &node.tree_id, now);
-            node
+            (node, reordered_head)
         };
+        let (node, reordered_head) = node;
         self.persist();
         self.emit(SessionEvent::new(
             "research.node.created",
@@ -5531,6 +5497,14 @@ impl AppState {
             None,
             json!({ "node": node.view() }),
         ));
+        if let Some(head) = reordered_head {
+            self.emit(SessionEvent::new(
+                "research.node.updated",
+                None,
+                None,
+                json!({ "node": head.view() }),
+            ));
+        }
         Ok(node)
     }
 
@@ -6491,6 +6465,70 @@ impl AppState {
             ));
         }
         Ok(node)
+    }
+
+    /// Stores the display order of the messages column whose inline chain
+    /// starts at `head_node_id` (see `ResearchNode::chain_order`). `node_ids`
+    /// must list exactly the chain's current nodes; a chain that changed since
+    /// the caller read it is refused. The inline links are unchanged, so a
+    /// follow-up still continues the chain's last node.
+    pub fn set_research_chain_order(
+        &self,
+        head_node_id: &str,
+        node_ids: Vec<String>,
+    ) -> Result<ResearchNode, String> {
+        let (head, changed) = {
+            let mut model = self
+                .inner
+                .model
+                .lock()
+                .map_err(|_| "model lock poisoned".to_string())?;
+            let head = model
+                .research_nodes
+                .get(head_node_id)
+                .ok_or_else(|| format!("Research node {head_node_id} was not found."))?;
+            if research_chain_head(&model.research_nodes, head_node_id) != head_node_id {
+                return Err(format!(
+                    "Research node {head_node_id} does not start a conversation."
+                ));
+            }
+            if model
+                .research_trees
+                .get(&head.tree_id)
+                .is_some_and(|tree| tree.archived_at.is_some())
+            {
+                return Err("Restore archived research before reordering it.".to_string());
+            }
+            let chain = research_inline_chain(&model.research_nodes, head_node_id);
+            let listed = node_ids.iter().collect::<HashSet<_>>();
+            if node_ids.len() != chain.len()
+                || listed.len() != chain.len()
+                || chain.iter().any(|id| !listed.contains(id))
+            {
+                return Err(
+                    "The conversation changed; refresh before reordering its messages.".to_string(),
+                );
+            }
+            let head = model
+                .research_nodes
+                .get_mut(head_node_id)
+                .expect("the head was found above");
+            let changed = head.chain_order != node_ids;
+            if changed {
+                head.chain_order = node_ids;
+            }
+            (head.clone(), changed)
+        };
+        if changed {
+            self.persist();
+            self.emit(SessionEvent::new(
+                "research.node.updated",
+                None,
+                None,
+                json!({ "node": head.view() }),
+            ));
+        }
+        Ok(head)
     }
 
     pub fn list_research_drafts(
@@ -11644,6 +11682,164 @@ fn ordered_group_ids(model: &Model) -> Vec<String> {
     ids
 }
 
+/// `model.research_tree_order` with Unfiled newest root first (see
+/// `research::order_unfiled_newest_first`), reading membership from
+/// `folders`.
+fn order_unfiled_newest_first_in_model(
+    model: &Model,
+    folders: &research::ResearchFolderState,
+) -> Vec<String> {
+    let is_unfiled = |tree_id: &str| {
+        model
+            .research_trees
+            .get(tree_id)
+            .is_some_and(|tree| tree.archived_at.is_none())
+            && research::research_membership_is_unfiled(
+                folders.membership.get(tree_id).map(String::as_str),
+                &folders.folders,
+            )
+    };
+    let root_created_at = |tree_id: &str| {
+        model
+            .research_trees
+            .get(tree_id)
+            .and_then(|tree| model.research_nodes.get(&tree.root_node_id))
+            .map_or(0, |root| root.created_at)
+    };
+    research::order_unfiled_newest_first(&model.research_tree_order, is_unfiled, root_created_at)
+}
+
+/// The inline chain that starts at `head_id`: the head, then each node's
+/// inline child, the oldest when a store holds more than one (as the
+/// frontend's `inlineChainFor` walks it). Cycle-guarded.
+fn research_inline_chain(nodes: &HashMap<String, ResearchNode>, head_id: &str) -> Vec<String> {
+    let mut child_by_parent: HashMap<&str, &ResearchNode> = HashMap::new();
+    for node in nodes.values() {
+        let Some(parent_id) = node.parent_node_id.as_deref().filter(|_| node.inline) else {
+            continue;
+        };
+        let wins = child_by_parent.get(parent_id).is_none_or(|current| {
+            (node.created_at, node.id.as_str()) < (current.created_at, current.id.as_str())
+        });
+        if wins {
+            child_by_parent.insert(parent_id, node);
+        }
+    }
+    let mut chain = vec![head_id.to_string()];
+    let mut seen = HashSet::from([head_id.to_string()]);
+    let mut current = head_id;
+    while let Some(child) = child_by_parent.get(current) {
+        if !seen.insert(child.id.clone()) {
+            break;
+        }
+        chain.push(child.id.clone());
+        current = child.id.as_str();
+    }
+    chain
+}
+
+/// The first node of the inline chain holding `node_id`: the nearest
+/// ancestor-or-self that is not an inline follow-up of an existing node.
+fn research_chain_head(nodes: &HashMap<String, ResearchNode>, node_id: &str) -> String {
+    let mut current = node_id;
+    let mut seen = HashSet::from([node_id]);
+    while let Some(parent_id) = nodes
+        .get(current)
+        .filter(|node| node.inline)
+        .and_then(|node| node.parent_node_id.as_deref())
+        .filter(|parent_id| nodes.contains_key(*parent_id))
+    {
+        if !seen.insert(parent_id) {
+            break;
+        }
+        current = parent_id;
+    }
+    current.to_string()
+}
+
+/// Home's feed entries for `roots`, in order: each root with its direct
+/// follow-ups oldest first and every starred node in its tree. Nested
+/// documents are invalid, so they are excluded from child and starred rows.
+fn recent_activity_entries(model: &Model, roots: Vec<&ResearchNode>) -> Vec<RecentResearchQuery> {
+    let is_feed_child = |node: &ResearchNode| node.node_type() != ResearchNodeType::Document;
+    let mut children_by_parent: HashMap<&str, Vec<&ResearchNode>> = HashMap::new();
+    let mut trees_with_stars = HashSet::new();
+    for node in model.research_nodes.values() {
+        if let Some(parent_id) = node.parent_node_id.as_deref() {
+            children_by_parent.entry(parent_id).or_default().push(node);
+        }
+        if node.starred_at.is_some() {
+            trees_with_stars.insert(node.tree_id.as_str());
+        }
+    }
+    let sorted_children = |parent: &ResearchNode| {
+        let mut children = children_by_parent
+            .get(parent.id.as_str())
+            .map(|children| {
+                children
+                    .iter()
+                    .copied()
+                    .filter(|child| child.tree_id == parent.tree_id)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        children.sort_by(|left, right| {
+            left.created_at
+                .cmp(&right.created_at)
+                .then_with(|| left.id.cmp(&right.id))
+        });
+        children
+    };
+    let feed_entry = |parent: &ResearchNode, node: &ResearchNode, branch_depth: u32| {
+        let mut entry = RecentResearchQuery::from(node);
+        entry.reply_anchor_author = research::reply_anchor_author(parent, node);
+        entry.branch_depth = branch_depth;
+        entry
+    };
+    roots
+        .into_iter()
+        .map(|root| {
+            let mut query = RecentResearchQuery::from(root);
+            query.children = sorted_children(root)
+                .iter()
+                .filter(|child| is_feed_child(child))
+                .map(|child| feed_entry(root, child, u32::from(!child.inline)))
+                .collect();
+            if trees_with_stars.contains(root.tree_id.as_str()) {
+                // Depth-first. A node's branches (oldest first) come before
+                // its inline continuation, so each starred branch follows
+                // the turn it was asked from. Stray documents are skipped
+                // with their subtrees, matching `children`. The stack holds
+                // each level reversed so the next entry pops first.
+                let traversal_order = |parent: &ResearchNode| {
+                    let mut children = sorted_children(parent);
+                    children.retain(|child| is_feed_child(child));
+                    // Stable: keeps created_at order within each group.
+                    children.sort_by_key(|child| child.inline);
+                    children
+                };
+                let mut stack = traversal_order(root)
+                    .into_iter()
+                    .rev()
+                    .map(|child| (root, child, u32::from(!child.inline)))
+                    .collect::<Vec<_>>();
+                while let Some((parent, node, depth)) = stack.pop() {
+                    if node.starred_at.is_some() {
+                        query.starred.push(feed_entry(parent, node, depth));
+                    }
+                    stack.extend(
+                        traversal_order(node)
+                            .into_iter()
+                            .rev()
+                            .map(|child| (node, child, depth + u32::from(!child.inline))),
+                    );
+                }
+            }
+            query
+        })
+        .collect()
+}
+
 /// The durable Research sidebar order. Older state files have no explicit
 /// vector, so missing ids fall back to the legacy updated-at order once, then
 /// hydration persists that normalized result.
@@ -14122,6 +14318,298 @@ mod tests {
         std::fs::remove_dir_all(workspace).unwrap();
     }
 
+    /// Sets a run complete with a recorded session, so it takes follow-ups.
+    fn settle_research_node(state: &AppState, node_id: &str) {
+        let mut model = state.inner.model.lock().unwrap();
+        let node = model.research_nodes.get_mut(node_id).unwrap();
+        node.run_mut().unwrap().status = ResearchNodeStatus::Complete;
+        node.binding_mut().unwrap().native_session_id = Some(format!("session-{node_id}"));
+        node.run_mut().unwrap().completed_at = Some(research::body_millis(now_millis()));
+    }
+
+    /// A root and two inline follow-ups, each settled: a chain of three.
+    fn research_chain_of_three(state: &AppState) -> (String, Vec<String>) {
+        let detail = state
+            .create_research_tree(research_root_request("Root"))
+            .unwrap();
+        let root_id = detail.tree.root_node_id.clone();
+        settle_research_node(state, &root_id);
+        let first = state
+            .create_research_child(&root_id, "First".to_string(), None, true)
+            .unwrap();
+        settle_research_node(state, &first.id);
+        let second = state
+            .create_research_child(&first.id, "Second".to_string(), None, true)
+            .unwrap();
+        settle_research_node(state, &second.id);
+        (detail.tree.id, vec![root_id, first.id, second.id])
+    }
+
+    #[test]
+    fn research_chain_order_is_validated_stored_and_kept_across_restarts() {
+        let workspace = temp_workspace();
+        let config = test_config(workspace.clone());
+        let state = AppState::new(config.clone());
+        state.restore_session();
+        let mut group = sample_group();
+        group.dir = workspace.display().to_string();
+        group.managed_dir = workspace.join("managed").display().to_string();
+        group.agents.clear();
+        state.insert_group_after(group, None).unwrap();
+        let (tree_id, chain) = research_chain_of_three(&state);
+        let [root, first, second] = [&chain[0], &chain[1], &chain[2]];
+        // A branch of the root heads a chain of its own.
+        let branch = state
+            .create_research_child(root, "Aside".to_string(), None, false)
+            .unwrap();
+        let order = vec![first.clone(), root.clone(), second.clone()];
+
+        // Only a chain's first node takes the order, and only for exactly
+        // the chain's nodes.
+        assert!(
+            state
+                .set_research_chain_order(first, order.clone())
+                .unwrap_err()
+                .contains("does not start")
+        );
+        for stale in [
+            vec![first.clone(), root.clone()],
+            vec![first.clone(), root.clone(), root.clone()],
+            vec![first.clone(), root.clone(), branch.id.clone()],
+        ] {
+            assert!(
+                state
+                    .set_research_chain_order(root, stale)
+                    .unwrap_err()
+                    .contains("changed")
+            );
+        }
+        let head = state.set_research_chain_order(root, order.clone()).unwrap();
+        assert_eq!(head.chain_order, order);
+        assert_eq!(
+            serde_json::to_value(head.view()).unwrap()["chainOrder"],
+            serde_json::json!(order)
+        );
+        // A branch head is a chain of one.
+        state
+            .set_research_chain_order(&branch.id, vec![branch.id.clone()])
+            .unwrap();
+
+        // The order is display-only: the next follow-up still continues the
+        // chain's last node, and lists first as a node the order omits.
+        let third = state
+            .create_research_child(second, "Third".to_string(), None, true)
+            .unwrap();
+        assert!(
+            state
+                .create_research_child(first, "Not the last".to_string(), None, true)
+                .unwrap_err()
+                .contains("already has an inline follow-up")
+        );
+        assert_eq!(third.parent_node_id.as_deref(), Some(second.as_str()));
+        assert_eq!(
+            research_inline_chain(&state.inner.model.lock().unwrap().research_nodes, root),
+            vec![
+                root.clone(),
+                first.clone(),
+                second.clone(),
+                third.id.clone()
+            ]
+        );
+        assert_eq!(state.research_node(root).unwrap().chain_order, order);
+
+        // Archived research is read-only.
+        settle_research_node(&state, &third.id);
+        settle_research_node(&state, &branch.id);
+        state.archive_research_tree(&tree_id).unwrap();
+        assert!(
+            state
+                .set_research_chain_order(root, order.clone())
+                .unwrap_err()
+                .contains("archived")
+        );
+        state.restore_research_tree(&tree_id).unwrap();
+        state.finalize_persistence_for_exit();
+        drop(state);
+
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(persistence::state_path(&workspace)).unwrap())
+                .unwrap();
+        assert_eq!(saved["version"], persistence::STATE_VERSION);
+        assert_eq!(
+            saved["researchNodes"][root]["chainOrder"],
+            serde_json::json!(order)
+        );
+        assert!(saved["researchNodes"][first].get("chainOrder").is_none());
+        let restored = AppState::new(config);
+        restored.restore_session();
+        assert_eq!(restored.research_node(root).unwrap().chain_order, order);
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
+    #[test]
+    fn edited_question_takes_the_failed_questions_place_in_the_chain_order() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let (_, chain) = research_chain_of_three(&state);
+        let [root, first, second] = [&chain[0], &chain[1], &chain[2]];
+        let failed = state
+            .create_research_child(second, "Wrong question".to_string(), None, true)
+            .unwrap();
+        state
+            .fail_research_node(&failed.id, "settled".to_string())
+            .unwrap();
+        let order = vec![
+            first.clone(),
+            failed.id.clone(),
+            root.clone(),
+            second.clone(),
+        ];
+        state.set_research_chain_order(root, order).unwrap();
+        let edited = state
+            .create_research_child_replacing(
+                second,
+                "Edited question".to_string(),
+                None,
+                true,
+                Vec::new(),
+                &failed.id,
+            )
+            .unwrap();
+        state.remove_research_branch(&failed.id).unwrap();
+        assert_eq!(
+            state.research_node(root).unwrap().chain_order,
+            vec![
+                first.clone(),
+                edited.id.clone(),
+                root.clone(),
+                second.clone()
+            ]
+        );
+    }
+
+    #[test]
+    fn feed_entries_load_for_requested_trees_in_their_order() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        let create = |prompt: &str| {
+            state
+                .create_research_tree(research_root_request(prompt))
+                .unwrap()
+                .tree
+        };
+        let (older, newer, archived) = (create("Older"), create("Newer"), create("Archived"));
+        settle_research_node(&state, &archived.root_node_id);
+        state.archive_research_tree(&archived.id).unwrap();
+        let entries = state
+            .list_recent_activity_for_trees(&[
+                older.id.clone(),
+                "missing".to_string(),
+                archived.id.clone(),
+                newer.id.clone(),
+                older.id.clone(),
+            ])
+            .unwrap();
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.node_id.clone())
+                .collect::<Vec<_>>(),
+            vec![older.root_node_id.clone(), newer.root_node_id.clone()]
+        );
+        // The same entries the paged feed builds.
+        let page = state.list_recent_activity(10, None).unwrap();
+        assert_eq!(
+            page.items
+                .iter()
+                .find(|item| item.node_id == older.root_node_id),
+            Some(&entries[0])
+        );
+    }
+
+    /// Before version 11, Home listed Unfiled by creation time. A version-10
+    /// state loads with its Unfiled trees newest root first in their slots of
+    /// the tree order, other trees where they were; later orders are kept.
+    #[test]
+    fn version_ten_state_lists_unfiled_trees_newest_first_once() {
+        let workspace = temp_workspace();
+        let config = test_config(workspace.clone());
+        let state = AppState::new(config.clone());
+        state.restore_session();
+        let mut group = sample_group();
+        group.dir = workspace.display().to_string();
+        group.managed_dir = workspace.join("managed").display().to_string();
+        group.agents.clear();
+        state.insert_group_after(group.clone(), None).unwrap();
+        let create = |prompt: &str| {
+            state
+                .create_research_tree(research_root_request(prompt))
+                .unwrap()
+                .tree
+                .id
+        };
+        let (a, b, c, filed) = (create("A"), create("B"), create("C"), create("Filed"));
+        {
+            // Distinct creation times, in creation order.
+            let mut model = state.inner.model.lock().unwrap();
+            for (index, tree_id) in [&a, &b, &c, &filed].into_iter().enumerate() {
+                let root_id = model.research_trees[tree_id].root_node_id.clone();
+                model.research_nodes.get_mut(&root_id).unwrap().created_at = 100 + index as u128;
+            }
+        }
+        let mut folders = state.research_folders().unwrap();
+        folders.folders.push(research::ResearchFolder {
+            id: "rf-1".to_string(),
+            name: "Reading".to_string(),
+            workspace_id: group.id.clone(),
+        });
+        folders.membership.insert(filed.clone(), "rf-1".to_string());
+        state.set_research_folders(folders).unwrap();
+        let shuffled = vec![a.clone(), filed.clone(), c.clone(), b.clone()];
+        state
+            .reorder_research_trees(&group.id, false, shuffled.clone())
+            .unwrap();
+        state.finalize_persistence_for_exit();
+        drop(state);
+        let order = |state: &AppState| {
+            state
+                .list_research_trees()
+                .unwrap()
+                .into_iter()
+                .map(|tree| tree.id)
+                .collect::<Vec<_>>()
+        };
+
+        // At the current version the order is the user's.
+        let current = AppState::new(config.clone());
+        current.restore_session();
+        assert_eq!(order(&current), shuffled);
+        current.finalize_persistence_for_exit();
+        drop(current);
+
+        let path = persistence::state_path(&workspace);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        raw["version"] = serde_json::json!(10);
+        std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+        let migrated = AppState::new(config.clone());
+        migrated.restore_session();
+        let newest_first = vec![c.clone(), filed.clone(), b.clone(), a.clone()];
+        assert_eq!(order(&migrated), newest_first);
+        assert_eq!(backup_names(&workspace), vec!["state.v10.bak".to_string()]);
+        let reordered = vec![a.clone(), filed.clone(), b.clone(), c.clone()];
+        migrated
+            .reorder_research_trees(&group.id, false, reordered.clone())
+            .unwrap();
+        migrated.finalize_persistence_for_exit();
+        drop(migrated);
+
+        let reloaded = AppState::new(config);
+        reloaded.restore_session();
+        assert_eq!(order(&reloaded), reordered);
+        std::fs::remove_dir_all(workspace).unwrap();
+    }
+
     #[test]
     fn edited_question_is_created_before_failed_node_is_removed() {
         let state = AppState::new(test_config(temp_workspace()));
@@ -15199,6 +15687,7 @@ mod tests {
             created_at: now,
             starred_at: None,
             highlights: Vec::new(),
+            chain_order: Vec::new(),
             body: crate::research::NodeBody::Document(crate::research::DocumentBody {
                 message: None,
                 source: crate::research::DocumentSource::Transcript,
@@ -15968,6 +16457,7 @@ mod tests {
             created_at: 1,
             starred_at: None,
             highlights: Vec::new(),
+            chain_order: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                 message: crate::research::UserMessage {
                     text: "Q".to_string(),
@@ -16097,6 +16587,7 @@ mod tests {
             created_at: 1,
             starred_at: None,
             highlights: Vec::new(),
+            chain_order: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                 message: crate::research::UserMessage {
                     text: "Question".to_string(),
@@ -16202,6 +16693,7 @@ mod tests {
             created_at: 1,
             starred_at: None,
             highlights: Vec::new(),
+            chain_order: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                 message: crate::research::UserMessage {
                     text: "Question".to_string(),
@@ -16317,6 +16809,7 @@ mod tests {
             created_at: 1,
             starred_at: None,
             highlights: Vec::new(),
+            chain_order: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                 message: crate::research::UserMessage {
                     text: "Question".to_string(),
@@ -16407,6 +16900,7 @@ mod tests {
             created_at: 1,
             starred_at: None,
             highlights: Vec::new(),
+            chain_order: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                 message: crate::research::UserMessage {
                     text: "Question".to_string(),
@@ -16506,6 +17000,7 @@ mod tests {
                     created_at: 1,
                     starred_at: None,
                     highlights: Vec::new(),
+                    chain_order: Vec::new(),
                     body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                         message: crate::research::UserMessage {
                             text: "Question".to_string(),
@@ -17684,7 +18179,7 @@ mod tests {
 
         let saved = std::fs::read(&path).unwrap();
         let raw: serde_json::Value = serde_json::from_slice(&saved).unwrap();
-        assert_eq!(raw["version"], serde_json::json!(10));
+        assert_eq!(raw["version"], persistence::STATE_VERSION);
         let text = String::from_utf8(saved.clone()).unwrap();
         assert_eq!(text.matches("\"starredAt\"").count(), 2);
         assert!(!text.contains("promotedAt"));
@@ -17696,7 +18191,8 @@ mod tests {
         assert!(raw["researchFolders"].get("starred").is_none());
         assert_eq!(raw["researchFolders"]["folders"][0]["id"], "rf-1");
 
-        // Idempotent: a version-10 load migrates nothing and backs up nothing.
+        // Idempotent: a current-version load migrates nothing and backs up
+        // nothing.
         let reloaded = AppState::new(test_config(workspace.clone()));
         reloaded.restore_session();
         assert_eq!(research_nodes_by_id(&reloaded), original);
@@ -17893,7 +18389,7 @@ mod tests {
             let raw: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
             assert_eq!(raw["version"], persistence::STATE_VERSION);
-            assert_eq!(persistence::STATE_VERSION, 10);
+            assert_eq!(persistence::STATE_VERSION, 11);
             std::fs::remove_dir_all(workspace).unwrap();
         }
     }
@@ -17908,6 +18404,7 @@ mod tests {
             (7, "state.v7"),
             (8, "state.v8"),
             (9, "state.v9"),
+            (10, "state.v10"),
         ] {
             let workspace = temp_workspace();
             let state = state_with_posts_and_anchors(&workspace);
@@ -17917,7 +18414,9 @@ mod tests {
             let path = persistence::state_path(&workspace);
             let mut raw: serde_json::Value =
                 serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-            if version == 9 {
+            if version == 10 {
+                raw["version"] = serde_json::json!(10);
+            } else if version == 9 {
                 rewrite_with_version_nine_keys(&mut raw);
             } else {
                 rewrite_as_pre_post_state(&mut raw, version);
@@ -17990,9 +18489,10 @@ mod tests {
 
     /// Builds before this one stored edits of a post with replies or
     /// follow-ups as `corrections` in the post body. A version-10 state with
-    /// one loads with the latest correction as the post's text, is saved
-    /// without the key at the same version, and needs no backup: builds at
-    /// version 10 read `corrections` as optional.
+    /// one loads with the latest correction as the post's text and is saved
+    /// without the key at the current version, after its bytes are kept as
+    /// state.v10.bak (builds at version 10 read `corrections` as optional,
+    /// but refuse version 11).
     #[test]
     fn version_ten_state_with_post_corrections_loads_them_as_the_text() {
         let workspace = temp_workspace();
@@ -18002,7 +18502,7 @@ mod tests {
         let path = persistence::state_path(&workspace);
         let mut raw: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        assert_eq!(raw["version"], 10);
+        raw["version"] = serde_json::json!(10);
         let post_id = raw["researchNodes"]
             .as_object()
             .unwrap()
@@ -18026,7 +18526,7 @@ mod tests {
         drop(restored);
         let saved: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        assert_eq!(saved["version"], 10);
+        assert_eq!(saved["version"], persistence::STATE_VERSION);
         assert!(
             saved["researchNodes"][&post_id]["body"]
                 .get("corrections")
@@ -18036,7 +18536,7 @@ mod tests {
             saved["researchNodes"][&post_id]["body"]["message"]["text"],
             "Who has tried X and Y?"
         );
-        assert!(backup_names(&workspace).is_empty());
+        assert_eq!(backup_names(&workspace), vec!["state.v10.bak".to_string()]);
         std::fs::remove_dir_all(workspace).unwrap();
     }
 

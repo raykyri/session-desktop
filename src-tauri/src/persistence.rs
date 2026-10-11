@@ -35,6 +35,14 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 /// Bumped whenever the on-disk shape changes incompatibly. A file written by a
 /// newer or unknown version is treated as empty rather than misinterpreted.
 ///
+/// Version 11 adds a research node's `chainOrder` (the display order of
+/// the messages column its inline chain starts) and makes Home's Unfiled
+/// list follow `researchTreeOrder` instead of creation time. Builds that
+/// accept up to version 10 ignore `chainOrder` and would drop it on their
+/// next save, so they must refuse the file. Loads of an older file put the
+/// Unfiled trees in the order Home showed them, newest root first
+/// (`research::order_unfiled_newest_first`, applied by the state load).
+///
 /// Version 10 renames two keys: a research node's star timestamp
 /// `promotedAt` becomes `starredAt`, and the per-agent composer text
 /// `drafts` becomes `agentComposerText`. Builds that accept up to version 9
@@ -52,7 +60,7 @@ static PREFERENCES_CACHE: LazyLock<Mutex<HashMap<PathBuf, AppPreferences>>> =
 /// conversations, message attachments, imported documents) so older builds
 /// kept reading states without those features; with every node in the body
 /// shape, a state holds either no research nodes or version-9 nodes.
-pub const STATE_VERSION: u32 = 10;
+pub const STATE_VERSION: u32 = 11;
 /// Written when the state contains no research nodes and no agent composer
 /// text (the data whose keys changed in versions 9 and 10), so it stays
 /// loadable by builds that accept versions 2 to 4.
@@ -74,13 +82,18 @@ const PRE_BODY_VERSION_BACKUP_FILE: &str = "state.v8.bak";
 /// The state file as it was before it was rewritten at version 10 (with
 /// `starredAt` and `agentComposerText`), when it was written at version 9.
 const PRE_STARRED_AT_BACKUP_FILE: &str = "state.v9.bak";
+/// The state file as it was before it was rewritten at version 11 (with
+/// chain orders and the user-ordered Home), when it was written at version
+/// 10.
+const PRE_CHAIN_ORDER_BACKUP_FILE: &str = "state.v10.bak";
 /// Every migration backup name; their scratch files are named after them.
-const MIGRATION_BACKUP_FILES: [&str; 5] = [
+const MIGRATION_BACKUP_FILES: [&str; 6] = [
     V2_BACKUP_FILE,
     PRE_DOCUMENT_IMPORTS_BACKUP_FILE,
     PRE_POSTS_BACKUP_FILE,
     PRE_BODY_VERSION_BACKUP_FILE,
     PRE_STARRED_AT_BACKUP_FILE,
+    PRE_CHAIN_ORDER_BACKUP_FILE,
 ];
 pub(crate) const STATE_DIR: &str = ".session";
 
@@ -111,7 +124,7 @@ pub struct PersistedState {
     /// Unsent text in each terminal agent's composer, by agent id. Persisted so
     /// an in-progress message survives a restart, recovered alongside queues
     /// and transcripts. Stored as `drafts` before version 10. Omitted when
-    /// empty; a state that holds any is written at version 10 (see
+    /// empty; a state that holds any is written at the current version (see
     /// `STATE_VERSION_WITHOUT_RESEARCH_NODES`).
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub agent_composer_text: HashMap<String, String>,
@@ -723,7 +736,7 @@ fn migrate_v9_keys(value: &mut Value) {
     }
 }
 
-/// Pure JSON-shape migration of the research nodes to the version-10 shape
+/// Pure JSON-shape migration of the research nodes to the current shape
 /// (see `research::migrate_research_node_values`). Returns whether any node
 /// changed.
 fn migrate_research_nodes(value: &mut Value) -> bool {
@@ -949,13 +962,13 @@ pub fn backup_v2_state_for_migration(workspace_root: &Path) -> Result<Option<Pat
     backup_state_for_migration(workspace_root, V2_BACKUP_FILE, "version-2")
 }
 
-/// Preserves the bytes of a state file written at `source_version` (3 to 9)
-/// before a save rewrites state.json at the current version, which the
+/// Preserves the bytes of a state file written at `source_version` (3 to
+/// 10) before a save rewrites state.json at the current version, which the
 /// source's builds refuse, the way `backup_v2_state_for_migration` does for
 /// version 2: versions 3 to 6 as `state.v6.bak`, version 7 as `state.v7.bak`,
-/// version 8 as `state.v8.bak` and version 9 as `state.v9.bak`. Each backup
-/// is readable by the builds its name gives. A current-version source needs
-/// none.
+/// version 8 as `state.v8.bak`, version 9 as `state.v9.bak` and version 10
+/// as `state.v10.bak`. Each backup is readable by the builds its name gives.
+/// A current-version source needs none.
 pub fn backup_state_for_current_version(
     workspace_root: &Path,
     source_version: u32,
@@ -969,6 +982,7 @@ pub fn backup_state_for_current_version(
         7 => backup_state_for_migration(workspace_root, PRE_POSTS_BACKUP_FILE, "version-7"),
         8 => backup_state_for_migration(workspace_root, PRE_BODY_VERSION_BACKUP_FILE, "version-8"),
         9 => backup_state_for_migration(workspace_root, PRE_STARRED_AT_BACKUP_FILE, "version-9"),
+        10 => backup_state_for_migration(workspace_root, PRE_CHAIN_ORDER_BACKUP_FILE, "version-10"),
         _ => Ok(None),
     }
 }
