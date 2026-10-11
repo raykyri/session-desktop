@@ -175,10 +175,10 @@ import {
   ResearchMenuItem,
   ResearchMenuMeta,
   ResearchMenuSeparator,
-  researchMenuPoint,
   type ResearchMenuAlign,
   type ResearchMenuRect,
 } from "./ResearchMenu";
+import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 
 const EMPTY_RECAP_PENDING_NODE_IDS: ReadonlySet<string> = new Set<string>();
 const EMPTY_BRANCHES: ResearchNode[] = [];
@@ -728,6 +728,35 @@ function highlightActionPlacement(range: Range, size = SELECTION_ACTIONS_SIZE) {
     width: size.width,
     height: size.height,
   });
+}
+
+/** Whether a press is a secondary click (the right button, or Control-click
+ * on macOS) on the selected text: inside one of the selection's line boxes. */
+function secondaryPressOnSelection(event: MouseEvent) {
+  if (event.button !== 2 && !(IS_MAC && event.button === 0 && event.ctrlKey)) {
+    return false;
+  }
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+    return false;
+  }
+  return [...selection.getRangeAt(0).getClientRects()].some(
+    (rect) =>
+      event.clientX >= rect.left &&
+      event.clientX <= rect.right &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom,
+  );
+}
+
+/** The … button of a message's answer menu, in its messages-column row. */
+function answerMenuButton(nodeId: string) {
+  return (
+    document
+      .querySelector(`[data-research-row][data-node-id="${CSS.escape(nodeId)}"]`)
+      ?.closest("li")
+      ?.querySelector<HTMLElement>(".research-turn-more") ?? null
+  );
 }
 
 /** Why no branch can start from `node`, or null when one can. */
@@ -3608,6 +3637,11 @@ function ResearchThreadPage({
       return;
     }
     const dismiss = (event: MouseEvent) => {
+      // A right-click on the selected text opens the webview's menu (Copy)
+      // and keeps the selection, so the bar stays with it.
+      if (secondaryPressOnSelection(event)) {
+        return;
+      }
       if (!(event.target instanceof Element) || !event.target.closest(".research-selection-actions")) {
         setHighlightAction(null);
       }
@@ -3819,8 +3853,10 @@ function ResearchThreadPage({
     // stays over the conversation column.
     setMenu({ kind: "answer", nodeId, anchor: trigger, align: "start", trigger });
   }, []);
-  const openContextMenu = useCallback((nodeId: string, clientX: number, clientY: number) => {
-    setMenu({ kind: "answer", nodeId, anchor: researchMenuPoint(clientX, clientY), align: "point" });
+  // A context menu (see researchUnitMenuProps) is the … menu at another
+  // placement, with no trigger: focus returns to what had it.
+  const openContextMenu = useCallback((nodeId: string, placement: ResearchUnitMenuPlacement) => {
+    setMenu({ kind: "answer", nodeId, ...placement });
   }, []);
 
   const handleEditQuestion = useCallback((nodeId: string) => {
@@ -4811,6 +4847,16 @@ function ResearchThreadPage({
     const editedAt = nodeEditedAt(node);
     const documentEditing = editor?.kind === "document" && editor.nodeId === nodeId ? editor : null;
     const previewing = documentEditing !== null && documentEditing.text !== documentEditing.initialText;
+    // The answer's context menu is its … menu, which its message row shows
+    // unless the question is queued. A text selection in the answer keeps the
+    // Highlight/Branch bar and the webview's menu.
+    const answerMenuProps =
+      nodeStatus(node) !== "queued" && !queuedRetries.has(nodeId)
+        ? researchUnitMenuProps(
+            (placement) => openContextMenu(nodeId, placement),
+            () => ({ element: answerMenuButton(nodeId), align: "start" }),
+          )
+        : null;
     return (
       <section
         key={columnKey(column)}
@@ -4826,6 +4872,7 @@ function ResearchThreadPage({
           // While the editor is open, Shift+Tab from it reaches the preview.
           tabIndex={documentEditing ? 0 : -1}
           onScroll={onColumnScroll(column)}
+          {...answerMenuProps}
         >
           <article className="research-answer research-reading-surface">
             {previewing ? (
@@ -5013,6 +5060,19 @@ function ResearchThreadPage({
           return null;
         }
         const postEditing = editor?.kind === "post" && editor.nodeId === post.id ? editor : null;
+        // Only the thread's root post has a … menu (in the column header);
+        // the column's context menu is the same menu.
+        const hasPostMenu = level === 0 && post.id === rootNodeId;
+        const postMenuProps = hasPostMenu
+          ? researchUnitMenuProps(
+              (placement) => setMenu({ kind: "post", nodeId: post.id, ...placement }),
+              (scroll) => ({
+                element:
+                  scroll.closest("section")?.querySelector<HTMLElement>(".research-head-menu") ?? null,
+                align: "end",
+              }),
+            )
+          : null;
         return (
           <section
             key={columnKey(column)}
@@ -5027,17 +5087,17 @@ function ResearchThreadPage({
               history={level === 0 ? historyNav : null}
               archived={archived}
               menu={
-                level === 0 && post.id === rootNodeId
+                hasPostMenu
                   ? {
                       label: "Post actions",
-                      open: menu?.kind === "post",
+                      open: menu?.kind === "post" && Boolean(menu.trigger),
                       onOpen: (trigger) =>
                         setMenu({ kind: "post", nodeId: post.id, anchor: trigger, align: "end", trigger }),
                     }
                   : null
               }
             />
-            <div className="research-column-scroll" tabIndex={postEditing ? 0 : -1}>
+            <div className="research-column-scroll" tabIndex={postEditing ? 0 : -1} {...postMenuProps}>
               <div className="research-column-content research-reading-surface">
                 {postEditing && !postEditing.correction && postEditing.text !== postEditing.initialText ? (
                   <ResearchEditPreview original={postEditing.initialText} next={editorText} label="Preview" />

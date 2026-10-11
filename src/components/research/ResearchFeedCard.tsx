@@ -2,6 +2,7 @@ import { useRef, type CSSProperties, type ReactNode } from "react";
 import { Ellipsis, GripVertical, Star } from "lucide-react";
 import type { ResearchFeedChild } from "../../lib/researchFolders";
 import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
+import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
 
 export type ResearchFeedCardStatus = "running" | "failed";
 
@@ -48,9 +49,29 @@ interface ResearchFeedCardProps {
   onMenu?: (anchor: HTMLElement) => void;
   /** Opens a child row's … menu below `anchor`. */
   onChildMenu?: (child: ResearchFeedChild, anchor: HTMLElement) => void;
-  onContextMenu?: (clientX: number, clientY: number) => void;
+  /** Opens the card's context menu at `placement`: a right-click on the
+   * card, or Shift+F10 or the ContextMenu key with focus on it. `control` is
+   * the card's open button. */
+  onContextMenu?: (placement: ResearchUnitMenuPlacement, control: HTMLElement) => void;
+  /** Opens a child row's context menu (its … menu) at `placement`. `control`
+   * is the row's open button. */
+  onChildContextMenu?: (
+    child: ResearchFeedChild,
+    placement: ResearchUnitMenuPlacement,
+    control: HTMLElement,
+  ) => void;
   onDragStart?: ResearchCardDragStart;
 }
+
+/** The … button of a feed row (a card or a child row), for placing its
+ * context menu when a key opens it. */
+const feedRowMenuButton = (row: HTMLElement) => ({
+  element: row.querySelector<HTMLElement>(".research-feed-card-menu"),
+  align: "end" as const,
+});
+
+const rowControl = (row: HTMLElement, selector: string) =>
+  row.querySelector<HTMLElement>(selector) ?? row;
 
 const cardSelector = (cardId: string) =>
   `.research-feed-card[data-research-card="${CSS.escape(cardId)}"]`;
@@ -151,6 +172,7 @@ export default function ResearchFeedCard({
   onMenu,
   onChildMenu,
   onContextMenu,
+  onChildContextMenu,
   onDragStart,
 }: ResearchFeedCardProps) {
   const statusLabel = status ? (statusLabelOverride ?? STATUS_LABELS[status]) : null;
@@ -165,16 +187,12 @@ export default function ResearchFeedCard({
         data-research-card={cardId}
         data-research-card-kind={dragKind}
         onPointerDown={onDragStart ? (event) => onDragStart(event, { kind: dragKind, id: cardId, place }) : undefined}
-        onContextMenu={
-          onContextMenu
-            ? (event) => {
-                if (event.defaultPrevented) return;
-                event.preventDefault();
-                event.stopPropagation();
-                onContextMenu(event.clientX, event.clientY);
-              }
-            : undefined
-        }
+        {...(onContextMenu
+          ? researchUnitMenuProps(
+              (placement, card) => onContextMenu(placement, rowControl(card, ".research-feed-card-hit")),
+              feedRowMenuButton,
+            )
+          : null)}
       >
         <button
           type="button"
@@ -223,6 +241,13 @@ export default function ResearchFeedCard({
                 ? (event) => onDragStart(event, { kind: dragKind, id: cardId, place }, cardRef.current)
                 : undefined
             }
+            {...(onChildContextMenu
+              ? researchUnitMenuProps(
+                  (placement, row) =>
+                    onChildContextMenu(child, placement, rowControl(row, ".research-feed-child-open")),
+                  feedRowMenuButton,
+                )
+              : null)}
           >
             <button
               type="button"
