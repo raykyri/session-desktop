@@ -90,7 +90,7 @@ export function TranscriptActivityItem({
   deferPayloads?: boolean;
   showResultTokenCount?: boolean;
   /** Starts the disclosure open. Read on mount only; afterwards it opens and
-   * closes only when the reader toggles it. */
+   * closes only when the user toggles it. */
   defaultOpen?: boolean;
 }) {
   switch (item.type) {
@@ -201,7 +201,7 @@ function uniqueToolEntries(items: ActivityLeafItem[]) {
 function activityGroupLabel(group: ActivityGroupItem) {
   const entries = uniqueToolEntries(group.children);
   if (entries.length === 0) {
-    return "Thought for a while";
+    return "Reasoning";
   }
   return toolActionGroupLabel(entries) ?? calledToolsLabel(group.toolCallCount);
 }
@@ -418,7 +418,7 @@ function ThinkingView({
     >
       <summary>
         {showChevron ? <DisclosureChevron /> : null}
-        <span>Thought for a while</span>
+        <span>Reasoning</span>
       </summary>
       {!deferPayloads || expanded
         ? item.values.map((value, index) => {
@@ -483,7 +483,7 @@ function DisclosureChevron() {
 // Serialized token estimates for the collapsed rows' "~N tok" labels. The
 // label is visible without expanding, so it can't be deferred — but
 // stringifying a large result object costs O(result) and the timeline
-// re-mounts on every tab switch, repaying it for every entry each time. Result
+// re-mounts on every tab switch, repeating that work for every entry. Result
 // objects are immutable and identity-stable across resets (turn reconciliation
 // reuses turn objects), so the formatted estimate is cached per object for the
 // app's lifetime.

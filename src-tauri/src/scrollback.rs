@@ -54,7 +54,7 @@ static REMOTE_HISTORY_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 /// RAII trim slot: `acquire` blocks until one of the `MAX_CONCURRENT_TRIMS`
 /// slots is free, and `Drop` returns it — so an early `?` return or a panic
-/// inside the trim can never leak a slot and permanently shrink the ceiling.
+/// inside the trim cannot leave a slot allocated and permanently reduce the limit.
 /// Acquired while holding the trimming pane's log lock; nothing takes a pane
 /// lock while holding a permit, so the pane-lock → permit order can't deadlock.
 struct TrimPermit;
@@ -120,7 +120,7 @@ impl PaneLog {
     }
 
     /// One append attempt. Returns the post-append file length, or `None` when
-    /// the write landed in an inode that is no longer linked at `path`.
+    /// the write used an inode that is no longer linked at `path`.
     fn append_once(&mut self, path: &Path, chunk: &[u8]) -> Result<Option<u64>, String> {
         if self.file.is_none() {
             prepare_scrollback_dir(path)?;
@@ -139,7 +139,7 @@ impl PaneLog {
             .as_mut()
             .expect("scrollback handle was just opened");
         // The length before the write, so a short write (ENOSPC/EDQUOT/EIO after
-        // some bytes already landed) can be rolled back. A partial chunk left at
+        // some bytes were already written) can be rolled back. A partial chunk at
         // EOF would become a *mid-file* torn escape once the next chunk appends
         // behind it, and replay's unterminated-control scan drops everything
         // from a dangling control to the next terminator — silently eating the
@@ -154,7 +154,7 @@ impl PaneLog {
         if let Err(err) = file.write_all(chunk) {
             // Truncate the partial write back to a clean tail and drop the cached
             // handle so the next append reopens and re-validates. Both are
-            // best-effort: if the truncate itself fails the log keeps a fragment,
+            // If the truncate itself fails, the log retains a fragment,
             // but abandoning the handle still stops this writer from silently
             // appending behind it.
             rollback_partial_append(file, pre_len);
@@ -365,10 +365,10 @@ fn remove_if_present(path: &Path, kind: &str) -> Result<(), String> {
 /// same log's directory hardening treats as secret-bearing. A `<pane_id>.pty`
 /// whose id is neither in `live_pane_ids` nor already reopened by a live append
 /// handle is such an orphan and is deleted. Trim scratch files
-/// (`<pane_id>.trim.<pid>.tmp`) stranded by a process killed between the synced
-/// temp write and the rename are swept by dead writer pid, mirroring the state
-/// dir's own scratch cleanup. Best-effort throughout: leftovers are only
-/// clutter, and a recycled pid just postpones one temp file's removal.
+/// (`<pane_id>.trim.<pid>.tmp`) left by a process killed between the synced
+/// temp write and the rename are removed when their writer pid is no longer
+/// active, matching the state directory's scratch cleanup. Cleanup failures
+/// leave unused files, and a recycled pid postpones removal of one temp file.
 pub fn remove_orphaned_scrollback(workspace_root: &Path, live_pane_ids: &HashSet<String>) {
     let dir = workspace_root.join(STATE_DIR).join(SCROLLBACK_DIR);
     let Ok(entries) = fs::read_dir(&dir) else {
@@ -378,8 +378,7 @@ pub fn remove_orphaned_scrollback(workspace_root: &Path, live_pane_ids: &HashSet
     let remote_history_suffix = format!(".{REMOTE_HISTORY_EXTENSION}");
     // Hold the map lock across the sweep so a pane created in the startup window
     // (its id absent from the captured `live_pane_ids`) is still recognized as
-    // live the moment its reader opens an append handle, instead of racing us to
-    // a delete.
+    // active when its reader opens an append handle, avoiding a concurrent delete.
     let live_logs = PANE_LOGS
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -460,16 +459,13 @@ fn trim_scrollback_file(path: &Path, len: u64) -> Result<(), String> {
     // because the real entry sequence fell off the front of the file.
     let (canonical, alternate_screen, consumed) = sanitize_scrollback_replay_with_state(&captured);
     let marker = alternate_screen.then_some(b"\x1b[?1049h".as_slice());
-    // The log regularly ends mid-sequence at trim time — PTY reads split
-    // escapes and multi-byte scalars across appends — and the sanitizer stops
-    // consuming at the incomplete introducer. Carry those raw bytes through
-    // the rewrite so the continuation the next append brings still joins into
-    // a well-formed sequence, instead of the head being dropped and the
-    // continuation rendering as literal fragments (or, for a split `?1049h`,
-    // the alternate-screen enter being lost entirely). Cap the carried tail so
-    // a pathological never-terminated control can't crowd out retained
-    // history; dropping an oversized tail merely restores the cut-at-EOF
-    // behavior.
+    // The log regularly ends mid-sequence at trim time because PTY reads split
+    // escapes and multi-byte scalars across appends. The sanitizer stops at the
+    // incomplete introducer. Preserve those raw bytes so a later append can
+    // complete the sequence. Otherwise, dropping the prefix would render the
+    // continuation as text or lose a split `?1049h`. Cap this tail so an
+    // unterminated control does not displace retained history. Dropping an
+    // oversized tail restores the cut-at-EOF behavior.
     const INCOMPLETE_TAIL_CAP: usize = 64 * 1024;
     let unconsumed = &captured[consumed..];
     let raw_tail: &[u8] = if unconsumed.len() <= INCOMPLETE_TAIL_CAP {
@@ -479,7 +475,7 @@ fn trim_scrollback_file(path: &Path, len: u64) -> Result<(), String> {
     };
     let retained_cap = SCROLLBACK_LOG_CAP as usize - marker.map_or(0, <[u8]>::len) - raw_tail.len();
     let keep_from = canonical.len().saturating_sub(retained_cap);
-    // The cap is a raw byte offset, so it can land inside a multi-byte UTF-8
+    // The cap is a raw byte offset, so it can occur inside a multi-byte UTF-8
     // scalar or an SGR/cursor escape and leave the retained tail beginning with
     // orphaned continuation bytes (rendered as replacement chars) or a stripped
     // escape's stray parameter digits (rendered literally) at the top of every
@@ -501,8 +497,8 @@ fn trim_scrollback_file(path: &Path, len: u64) -> Result<(), String> {
     // pane's scrollback log lock, so the temp name can't collide with a
     // concurrent trim of the same file.
     let tmp = path.with_extension(format!("trim.{}.tmp", std::process::id()));
-    // fsync the temp before the rename (and the dir after) so a power loss can't order
-    // the rename ahead of the data and surface a zero-length or stale scrollback.
+    // fsync the temp before the rename (and the directory after) so a power loss
+    // cannot persist the rename before the data and expose empty or stale scrollback.
     write_synced(&tmp, &tail)
         .map_err(|err| format!("failed to write scrollback temp {}: {err}", tmp.display()))?;
     fs::rename(&tmp, path).map_err(|err| {
@@ -620,7 +616,7 @@ fn pane_terminal_path(
 }
 
 /// Converts a captured PTY byte stream into inert historical output suitable
-/// for feeding into a fresh terminal surface. String controls can mutate host
+/// for replay in a new terminal. String controls can mutate host
 /// state (title, clipboard, notifications, images), mode changes can leak into
 /// the resumed process, and alternate-screen repaint traffic is not scrollback;
 /// discard all three while preserving ordinary cursor/erase/SGR rendering.
@@ -632,7 +628,7 @@ pub fn sanitize_scrollback_replay(bytes: &[u8]) -> Vec<u8> {
 /// screen, and how many input bytes were consumed. The consumed count falls
 /// short of `bytes.len()` only when the input ends with an incomplete escape
 /// sequence or a torn multi-byte scalar; replay callers drop that tail (its
-/// continuation will never arrive), while the trim rewrite carries it forward
+/// continuation will never arrive), while the trim rewrite preserves it
 /// raw so the continuation the next append brings still joins correctly.
 fn sanitize_scrollback_replay_with_state(bytes: &[u8]) -> (Vec<u8>, bool, usize) {
     const ESC: u8 = 0x1b;
@@ -652,7 +648,7 @@ fn sanitize_scrollback_replay_with_state(bytes: &[u8]) -> (Vec<u8>, bool, usize)
     while index < bytes.len() {
         // Multi-byte UTF-8 text must be consumed whole: its continuation bytes
         // share 0x80-0x9f with raw C1 controls, so scanning them individually
-        // would open a phantom string control inside e.g. an emoji and swallow
+        // would detect a nonexistent string control inside e.g. an emoji and discard
         // everything after it. `c1_control_at` is checked first only so that a
         // C2-prefixed C1 (a real control character in UTF-8) keeps its control
         // handling below.
@@ -668,8 +664,8 @@ fn sanitize_scrollback_replay_with_state(bytes: &[u8]) -> (Vec<u8>, bool, usize)
             // A multi-byte scalar torn by the end of the capture must not fall
             // through to byte-wise handling: its lead byte would be emitted as
             // text and a continuation byte in 0x80-0x9f would then open a
-            // phantom C1 string control. Stop consuming so the caller can
-            // carry the raw tail forward instead.
+            // nonexistent C1 string control. Stop consuming so the caller can
+            // preserve the raw tail instead.
             if utf8_len == 0 && incomplete_utf8_prefix_at(bytes, index) {
                 break;
             }
@@ -687,7 +683,7 @@ fn sanitize_scrollback_replay_with_state(bytes: &[u8]) -> (Vec<u8>, bool, usize)
                     // A torn CSI (a program killed mid-sequence, a `cat`ed
                     // binary): drop the partial introducer + params and re-parse
                     // from the abort point, so the escape that follows it isn't
-                    // swallowed. Emitting nothing matches a real terminal
+                    // discarded. Emitting nothing matches a real terminal
                     // discarding an interrupted control.
                     index = resume;
                     continue;
@@ -706,10 +702,10 @@ fn sanitize_scrollback_replay_with_state(bytes: &[u8]) -> (Vec<u8>, bool, usize)
                 || matches!(csi.final_byte, b'h' | b'l' | b'c' | b'n')
                 // Kitty's keyboard protocol uses private CSI-u forms to
                 // push, pop, set, and query progressive-enhancement flags.
-                // Replaying an agent's historical push into a fresh surface
+                // Replaying an agent's historical push in a new terminal
                 // leaves release-event reporting active after the resumed
                 // agent exits and pops only its own live push. Queries are
-                // stateful too: replaying one writes a reply into the fresh
+                // stateful too: replaying one writes a reply into the new
                 // PTY's input stream. Plain CSI-u remains valid ANSI cursor
                 // restoration, so only discard the private forms.
                 || csi.is_kitty_keyboard_control()
@@ -725,21 +721,21 @@ fn sanitize_scrollback_replay_with_state(bytes: &[u8]) -> (Vec<u8>, bool, usize)
                     && matches!(csi.parameter_prefix, Some(b'>' | b'?')))
                 // DECSTBM (CSI Pt;Pb r) sets the scroll region and XTRESTORE
                 // (CSI ? Pm r) restores saved private modes: both latch
-                // terminal state onto the resumed *live* session, and the
+                // terminal state on the resumed active session, and the
                 // trailing reset can't clear a scroll region without also
-                // homing the cursor and stranding the restored prompt, so
+                // moving the cursor home and displacing the restored prompt, so
                 // strip them from replay. DECCARA (CSI ... $ r) shares the `r`
-                // final but carries a `$` intermediate and is real rectangular
+                // final but includes a `$` intermediate and performs rectangular
                 // rendering, so the empty-intermediate check keeps it.
                 || (csi.final_byte == b'r' && csi.intermediates.is_empty())
                 // DECSCUSR (CSI Ps SP q) sets the cursor style — terminal
-                // state, not rendering. A dead TUI's bar/underline cursor must
+                // state, not rendering. An exited TUI's bar/underline cursor must
                 // not latch onto the restored shell; the reset does not clear
                 // it either.
                 || (csi.final_byte == b'q' && csi.intermediates.as_slice() == b" ")
                 // XTVERSION (CSI > Ps q) asks the terminal to identify itself
                 // (neovim emits it at startup); replaying one makes the fresh
-                // surface type its DCS reply into the resumed shell's input.
+                // terminal write its DCS reply into the resumed shell's input.
                 // Plain CSI q (DECLL) stays.
                 || (csi.final_byte == b'q' && csi.parameter_prefix == Some(b'>'))
                 // XTSMGRAPHICS (CSI ? Pi;Pa;Pv S) sets or *queries* sixel
@@ -791,8 +787,8 @@ fn sanitize_scrollback_replay_with_state(bytes: &[u8]) -> (Vec<u8>, bool, usize)
             }
             // DECKPAM/DECKPNM switch the keypad between application and
             // numeric encoding — terminal mode, not rendering. A TUI that
-            // died with application keypad active must not re-latch it onto
-            // the fresh surface through replayed history.
+            // exited with application keypad active must not re-enable it in
+            // the new terminal through replayed history.
             if next == b'=' || next == b'>' {
                 index += 2;
                 continue;
@@ -978,13 +974,13 @@ fn find_string_control_end(
     // CAN and SUB abort any string/escape sequence in the VT parser, returning
     // the stream to ground. Honoring them here is what keeps a *truncated*
     // string control (an OSC/DCS a program emitted but never terminated before
-    // it was killed, or a raw ESC-] that landed in `cat`ed binary) from
-    // swallowing every byte after it: without an abort, an unterminated control
+    // it was killed, or a raw ESC-] in `cat`ed binary) from
+    // consuming every byte after it: without an abort, an unterminated control
     // scans to the next stray ST/BEL or to EOF, and at EOF the caller drops the
     // entire remainder. Most consequentially, `RESTORED_SCROLLBACK_TERMINAL_RESET`
-    // opens with CAN precisely to cancel a sequence a dead TUI left dangling —
-    // so a sanitizer that ignored CAN would let a dangling control eat the reset
-    // and all the surviving shell's history behind it.
+    // opens with CAN to cancel a sequence left incomplete by an exited TUI.
+    // Ignoring CAN would let the incomplete control consume the reset and the
+    // remaining shell history.
     const CAN: u8 = 0x18;
     const SUB: u8 = 0x1a;
     let mut index = start;
@@ -1009,7 +1005,7 @@ fn find_string_control_end(
             }
             // Any other ESC aborts the string control in the VT parser and
             // starts a new sequence of its own. Resume at the ESC itself so a
-            // dangling OSC/DCS (terminator never written) can't swallow the
+            // dangling OSC/DCS (terminator never written) cannot consume the
             // escape that follows it — most consequentially an
             // alternate-screen toggle, whose loss would mistrack screen state
             // for the rest of the log and be baked in by the next trim.
@@ -1219,7 +1215,7 @@ mod tests {
 
     // A raw byte cut at the cap can split a UTF-8 scalar and leave the restored
     // tail starting with orphaned continuation bytes. The boundary nudge must
-    // land the tail on a line start, keeping it valid UTF-8.
+    // start the tail at a line boundary, keeping it valid UTF-8.
     #[test]
     fn trim_keeps_the_retained_tail_on_a_scalar_boundary() {
         let workspace = temp_workspace();
@@ -1651,7 +1647,7 @@ mod tests {
 
     // A chunk that was only partially written before its append failed must be
     // truncated back to the clean tail, so replay never sees a mid-file torn
-    // control that would swallow the real scrollback behind it.
+    // control that would consume the valid scrollback after it.
     #[test]
     fn rollback_partial_append_truncates_to_the_clean_tail() {
         let workspace = temp_workspace();
@@ -1672,7 +1668,7 @@ mod tests {
             read_pane_scrollback(&workspace, "pane-1").unwrap(),
             b"good\n"
         );
-        // A subsequent normal append lands cleanly on the restored tail.
+        // A subsequent normal append follows the restored tail.
         append_pane_scrollback(&workspace, "pane-1", b"next\n").unwrap();
         assert_eq!(
             read_pane_scrollback(&workspace, "pane-1").unwrap(),
@@ -1688,7 +1684,7 @@ mod tests {
         );
     }
 
-    // An OSC with no terminator must not swallow the output that follows it.
+    // An OSC with no terminator must not consume the output that follows it.
     // CAN/SUB abort the sequence, so the bytes after the abort keep rendering
     // instead of being lost from the very byte the truncated control opened.
     #[test]

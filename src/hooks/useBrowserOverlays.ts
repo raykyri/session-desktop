@@ -24,7 +24,7 @@ import type { PaneInfo, ResearchTreeSummary } from "../types";
 
 // Browser-overlay / link-action owner for a research tree's thread page. Keyed
 // per tree so an overlay opened from one tree's links doesn't follow the user
-// into another tree (each tree keeps its own overlay, like panes do).
+// into another tree. Overlays are scoped to their tree, as they are to panes.
 const RESEARCH_BROWSER_OWNER_PREFIX = "__research_thread__:";
 export function researchBrowserOwnerId(treeId: string) {
   return `${RESEARCH_BROWSER_OWNER_PREFIX}${treeId}`;
@@ -108,7 +108,7 @@ export function useBrowserOverlays({
 
   // Drop overlay state only when its owner disappears. Owners include
   // research trees as well as panes; unrelated pane metadata updates must
-  // not retire a research thread's preserved browser.
+  // not remove a research thread's preserved browser.
   useEffect(() => {
     const ownerIds = new Set(panes.map((pane) => pane.id));
     for (const tree of [...researchTrees, ...archivedResearchTrees]) {
@@ -122,10 +122,9 @@ export function useBrowserOverlays({
     });
   }, [archivedResearchTrees, panes, researchTrees]);
 
-  // A child stays alive while its overlay remains open, including inactive-tab
-  // round trips. Closing the overlay, switching to Agent mode, moving to a
-  // sandboxed preview, or deleting its owner retires it after the child effect
-  // has published its final hidden revision.
+  // Keep a child mounted while its overlay is open, including inactive tabs.
+  // Remove it after its overlay closes and the child effect publishes the
+  // final hidden revision.
   useEffect(() => {
     const nextOwnerIds = nativeHumanBrowserOwnerIds(overlays);
     const retired = [...nativeOwnerIdsRef.current].filter((ownerId) => !nextOwnerIds.has(ownerId));
@@ -196,10 +195,9 @@ export function useBrowserOverlays({
           setOverlays((current) => closeBrowserOverlayState(current, ownerId));
           return;
         }
-        // Absolute filesystem paths from transcript markdown (e.g. an agent
-        // linking `/Users/…/report.html`). Mint a token-scoped file-server URL
-        // and load it sandboxed — never as a fake https:// host or human-browser
-        // navigation, which both mishandle path-shaped hrefs.
+        // For absolute filesystem paths in transcript Markdown, create a
+        // token-scoped file-server URL and load it in a sandbox. HTTPS host
+        // conversion and browser navigation do not handle these paths correctly.
         void browserOpenLocalPath(ownerId, localPath).catch((err) => {
           onErrorRef.current(errorMessage(err));
         });
@@ -222,8 +220,8 @@ export function useBrowserOverlays({
   // a memoized thread page keep their props across unrelated renders.
   const linkActionsByOwnerRef = useRef(new Map<string, LinkActions>());
   // Closed panes never render again, so drop their cached actions. Research
-  // owners are exempt (they aren't panes); the cached closures are tiny and a
-  // session's tree count is small, so they're simply retained.
+  // owners are exempt because they are not panes. Their cached closures remain
+  // small because a session contains few trees.
   useEffect(() => {
     const livePaneIds = new Set(panes.map((pane) => pane.id));
     for (const ownerId of linkActionsByOwnerRef.current.keys()) {

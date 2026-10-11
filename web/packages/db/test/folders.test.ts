@@ -134,7 +134,7 @@ test("deleting a tree takes its membership with it", (t) => {
   t.deepEqual(
     after.folders.map((folder) => folder.id),
     ["f1"],
-    "the empty folder survives",
+    "the empty folder remains",
   );
 });
 

@@ -1,4 +1,4 @@
-// The seam between the API and the agent loop.
+// Integration between the API and the agent loop.
 //
 // The API admits a node: it writes the row, enqueues it in `run_queue`, and
 // emits the events. Everything after that is this module — claiming the queue
@@ -112,7 +112,7 @@ export function createNoopRunsService(): NoopRunsService {
 }
 
 /** How long a metadata run may take before the waiting caller gives up. The
- * job itself is not cancelled: a recap that lands late is still saved. */
+ * job itself is not cancelled: a recap that finishes late is still saved. */
 export const METADATA_TIMEOUT_MS = 60_000;
 
 /** Concurrent metadata runs (`04-agent-runtime.md` §10). */
@@ -275,7 +275,7 @@ export function createRunsService(deps: RunsServiceDeps): AgentRunsService {
       .catch((error: unknown) => {
         logger.error({ nodeId, error }, "run attempt threw");
         queueRepo.release(deps.db, nodeId);
-        // The loop settles the node on every failure it knows about; this is
+        // The loop completes the node for every expected failure; this is
         // the one it does not. A throw past its own handlers — a SQLite write
         // that failed while the last turn was being committed, most likely —
         // would otherwise leave the node `running` with nothing left to move

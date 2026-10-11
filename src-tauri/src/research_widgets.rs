@@ -1,25 +1,25 @@
 //! Inline HTML widgets in research answers.
 //!
-//! An answer carries a widget as a fenced code block whose info string starts
-//! with `session-html`. The answer text stays the only durable copy: when the
-//! frontend displays a block it calls [`store`], which writes the block's HTML
+//! A fenced code block whose info string starts with `session-html` defines a
+//! widget. The answer text is the only durable copy. When the frontend displays
+//! a block, it calls [`store`], which writes the block's HTML
 //! to `<workspace>/.session/research-widgets/<sha256>.html` (idempotent, named
 //! by the content hash), and receives two loopback URLs for it from
 //! [`widget_urls`]. The file server renders either URL through the same page
 //! wrapper and no-network policy as Codex visualization fragments:
 //!
-//! - the *static* URL serves the page under a CSP whose `script-src` admits
-//!   only Session's own height reporter and scroll bridge (by hash), so the
-//!   widget's markup and CSS paint while none of its scripts run;
+//! - the *static* URL serves the page under a CSP whose `script-src` permits
+//!   only Session's height reporter and scroll bridge (by hash), so the
+//!   browser renders the widget's markup and CSS without running its scripts;
 //! - the *run* URL serves the same page with inline scripts allowed.
 //!
-//! Both tokens are random per process. The static page cannot learn the run
-//! token, so a widget cannot promote itself to the run page (for example with
-//! `<meta http-equiv="refresh">`); only the reader's Run click does.
+//! Both tokens are random per process. The run token is unavailable to the
+//! static page, so it cannot navigate to the run page (for example with
+//! `<meta http-equiv="refresh">`). The reader must click Run.
 //!
-//! Widget scripts start only on that click because a sandboxed cross-origin
-//! iframe in WKWebView can share the app's web content process: a script that
-//! never yields would stall the whole interface, not just the frame.
+//! Widget scripts start only on that click. A sandboxed cross-origin iframe in
+//! WKWebView can share the app's web content process, so a script that never
+//! yields would block the entire interface.
 //!
 //! The run page exists only while [`scripts_allowed`]: on macOS, after the
 //! native bridge has turned off WebRTC in the app web view (peer-connection
@@ -159,7 +159,7 @@ fn store_with_cap(
     let dir = widget_dir(workspace_root);
     let path = dir.join(format!("{hash}.html"));
     if fs::read(&path).is_ok_and(|existing| existing == html.as_bytes()) {
-        // Mark it recently used for eviction; failing to is harmless.
+        // Refresh its modification time for eviction. Failure does not affect the result.
         let _ = fs::File::options()
             .write(true)
             .open(&path)
@@ -301,7 +301,7 @@ fn constant_time_eq(left: &str, right: &str) -> bool {
 /// navigate the frame without a click (sandboxed frames that allow scripts
 /// also process automatic refreshes) and no other pragma applies. Attribute
 /// names are not entity-decoded, so the literal spelling is the only form; a
-/// mention of the word in text changes the same way, which is harmless.
+/// mention of the word in text changes the same way but does not affect behavior.
 pub fn neutralize_http_equiv(html: &str) -> Cow<'_, str> {
     const NAME: &[u8] = b"http-equiv";
     let bytes = html.as_bytes();
@@ -482,7 +482,7 @@ mod tests {
             Some((WidgetMode::Run, expected.clone()))
         );
         assert_ne!(urls.static_url, run_url);
-        // Without scripts allowed there is no run URL and the run token is dead.
+        // When scripts are disabled, no run URL is returned and the run token is rejected.
         assert_eq!(widget_urls_with(4100, &hash, false).unwrap().run_url, None);
         assert_eq!(resolve_request_with(&root, &rest(&run_url), false), None);
         assert_eq!(
@@ -526,7 +526,7 @@ mod tests {
             strip_widget_blocks("Text.\n\n```session-html\n<p>par").trim(),
             "Text."
         );
-        // Another language whose name merely starts the same is not a widget.
+        // A different language with the same prefix is not a widget.
         assert!(strip_widget_blocks("```session-htmlx\nkeep\n```").contains("keep"));
     }
 

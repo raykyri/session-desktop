@@ -351,14 +351,13 @@ export function loadSettings(): AppSettings {
 }
 
 /**
- * Persists the application settings. Failures (e.g. storage disabled or over
- * quota) are swallowed: the settings stay live for the session, just not saved.
+ * Persists the application settings. If storage is disabled or full, the
+ * settings remain active for the current session but are not saved.
  */
 export function saveSettings(settings: AppSettings): void {
   try {
-    // Never persist the OpenRouter key to localStorage: it lives in the backend's
-    // owner-only preferences file instead, so an injected script can't read the secret
-    // out of webview storage at rest.
+    // Store the OpenRouter key only in the backend's owner-only preferences file
+    // so scripts cannot read it from webview storage.
     const { openRouterKey: _omitted, ...persistable } = settings;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
   } catch {

@@ -85,7 +85,7 @@ pub struct SavedRemote {
 }
 
 impl SavedRemote {
-    /// Snapshots this entry into the binding a group carries.
+    /// Copies this entry into a group's binding.
     ///
     /// A copy rather than a reference on purpose: a group that already exists
     /// must keep pointing at the machine its worktrees are actually on, even

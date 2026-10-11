@@ -1,4 +1,4 @@
-// The wrappers are the seam ported views call, so what matters is that each
+// Ported views call these wrappers, so each
 // one reaches the procedure `03-api-and-events.md` §2 names, with the input
 // that router's schema accepts. A recording client answers both questions
 // without a server.

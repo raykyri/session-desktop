@@ -110,13 +110,13 @@ test("tree reordering updates all cached lists and reverts upon server error", a
   seenDuringFlight = (client.getQueryData<typeof trees>(activeKey) ?? []).map((tree) => tree.id);
   const applied = await pending;
 
-  t.deepEqual(seenDuringFlight, ["b", "a"], "the move lands before the round trip");
+  t.deepEqual(seenDuringFlight, ["b", "a"], "the move is applied before the round trip");
   t.false(applied);
   for (const key of [activeKey, archivedKey]) {
     t.deepEqual(
       (client.getQueryData<typeof trees>(key) ?? []).map((tree) => tree.id),
       ["a", "b"],
-      "and is undone when the server refuses",
+      "and is undone when the server rejects it",
     );
   }
 });

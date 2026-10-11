@@ -1,7 +1,7 @@
 //! The Session in-pane CLI. On the local machine the Session app binary doubles as
 //! the CLI (the app's `main` dispatches through [`run_cli_if_requested`]
 //! before starting Tauri); the standalone `session-cli` binary built from this
-//! crate carries the same commands without the app, so a host that never runs
+//! crate provides the same commands without the app, so a host that never runs
 //! the app — a remote box reached over ssh — can still service hooks, cwd
 //! reporting, and forks once a transport exists.
 
@@ -177,8 +177,8 @@ pub fn run_cli_if_requested() -> Result<bool, String> {
             // Run by the shell wrapper once an in-shell agent process exits, so the tab
             // reverts to a plain shell rather than keeping the agent's last status. The
             // server detaches the agent bound to this pane's token; the claimed paneId is
-            // advisory. Best-effort — failures (e.g. no agent attached) must not surface
-            // at the prompt, so the wrapper discards this command's output.
+            // advisory. Failures (e.g. no agent attached) must not appear at the
+            // prompt, so the wrapper discards this command's output.
             request_silent(
                 "agent.detach_pane",
                 json!({ "paneId": env::var("SESSION_PANE_ID").ok() }),

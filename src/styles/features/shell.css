@@ -29,15 +29,13 @@
   flex-direction: column;
   gap: var(--sidebar-stack-gap);
   overflow: hidden;
-  /* Mostly-opaque tint over the macOS vibrancy material: just a hint of
-     translucency so it reads as a native source list without the desktop
-     bleeding through. Degrades to a plain dark panel if vibrancy is
-     unavailable. Lower the alpha for a stronger see-through effect. */
+  /* A mostly opaque tint limits desktop bleed through the macOS vibrancy
+     material. Without vibrancy, this renders as a dark panel. */
   background: var(--left-pane-bg);
   /* The 44px title-bar row is reserved: the macOS traffic lights and the
      collapse toggle occupy its left 116px, the header controls its right end. */
   padding: 44px 8px 8px;
-  /* System font (not monospace) so the pane list reads as a native sidebar. */
+  /* Use the system font for the pane list. */
   font-family: var(--font-ui);
 }
 
@@ -283,7 +281,7 @@
   /* Live at app-shell level rather than inside .sidebar: the sidebar must clip
      overflowing tab content, which otherwise also clips this terminal-side
      half of the drag target. Keep it below the browser overlay (z-index 8), so
-     neither the divider nor the drag target pierces an open browser window. */
+     neither the divider nor the drag target overlaps an open browser window. */
   left: calc(var(--sidebar-width, 208px) - 5px);
   z-index: 7;
   width: 10px;
@@ -294,7 +292,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  /* Paint one crisp pixel immediately inside the terminal while keeping the
+  /* Draw a one-pixel line immediately inside the terminal while keeping the
      wider, invisible drag target centered across the column boundary. */
   left: 5px;
   width: 1px;
@@ -693,7 +691,7 @@
 }
 
 /* Selection follows the keyboard (and mouse hover via onMouseMove), so only the
-   is-selected row highlights — no separate :hover style fighting the arrows. */
+   is-selected row highlights; no separate :hover style overrides keyboard selection. */
 .command-palette-item.is-selected {
   background: var(--popover-item-hover-bg);
 }
@@ -1281,7 +1279,7 @@
   opacity: 0.85;
 }
 
-/* A dimmer variant for incidental notes (e.g. the worktree storage path). */
+/* A lower-contrast variant for incidental notes (e.g. the worktree storage path). */
 .settings-hint-weak {
   color: var(--text-faint);
 }
@@ -1509,9 +1507,8 @@
   box-shadow: inset 0 0 0 1px var(--focus-ring);
 }
 
-/* Custom checkbox so the unchecked box reads as quiet chrome (dark fill,
-   hairline border) instead of a bright native control, and the checked state
-   uses the accent. */
+/* Custom checkbox with a dark fill and hairline border when unchecked, and
+   the accent color when checked. */
 .settings-checkbox {
   appearance: none;
   -webkit-appearance: none;
@@ -1651,7 +1648,7 @@ span.launcher-select-icon {
   white-space: nowrap;
 }
 
-/* The submenu row's chosen value (Effort) reads at the row label's size. */
+/* Use the row label's font size for the selected Effort value. */
 .launcher-select-submenu-trigger .launcher-select-item-detail {
   font-size: inherit;
 }

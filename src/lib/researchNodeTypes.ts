@@ -17,8 +17,7 @@ import type {
   RunState,
 } from "../types";
 
-/** A node, or a feed entry, which carries the same tag (absent in hand-built
- * fixtures, where it reads as an exchange). */
+/** Returns the node type tag. Hand-built fixtures without a tag are exchanges. */
 type Typed = { type?: ResearchNodeType; source?: DocumentSource | null };
 
 export function nodeType(node: Typed): ResearchNodeType {
@@ -36,7 +35,7 @@ interface ResearchUserMessage {
  * question, or the question an imported report answers. Null for a
  * transcript and for a document without a message (an authored document),
  * which show as one row for the whole document. A transcript's message is
- * its first user turn, which the transcript itself shows; feed cards read
+ * its first user turn, which the transcript itself shows; feed cards display
  * it through nodePrompt. */
 export function nodeMessage(node: ResearchNode): ResearchUserMessage | null {
   if (!node.message || (node.type === "document" && node.source === "transcript")) {
@@ -59,7 +58,7 @@ export function nodeRun(node: ResearchNode): RunState | null {
   return node.type === "exchange" ? node.run : null;
 }
 
-/** The run's status; posts and documents have no run and read as complete. */
+/** The run's status; posts and documents have no run and are treated as complete. */
 export function nodeStatus(node: ResearchNode): ResearchNodeStatus {
   return node.type === "exchange" ? node.run.status : "complete";
 }

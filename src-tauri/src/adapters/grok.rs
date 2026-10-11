@@ -1281,8 +1281,8 @@ fn write_grok_integration_files(grok_home: &Path) -> Result<(), String> {
     }
 
     // Older Session versions installed hooks into `user-settings.json`, which Grok
-    // does not load. Strip our entries so the dead config does not confuse users
-    // or re-surface after a manual merge; failures here are non-fatal.
+    // does not load. Strip our entries so the invalid config does not confuse users
+    // or reappear after a manual merge; failures here are non-fatal.
     let _ = strip_stale_user_settings_hooks(grok_home, &shim_path);
 
     Ok(())
@@ -1454,7 +1454,7 @@ fn attach_grok_agent_pane(
     Ok(agent)
 }
 
-/// Whether a manual `grok ...` invocation carries a prompt — either a headless
+/// Whether a manual `grok ...` invocation includes a prompt — either a headless
 /// prompt flag (`-p`/`--prompt`/`--single <text>`) or a trailing positional (the
 /// interactive initial message). Value-taking flags and their values are skipped so
 /// `grok --model grok-4` or `grok --resume <id>` is treated as interactive (no
@@ -3472,7 +3472,7 @@ mod tests {
 
         let shim = home.join("session").join("session-grok-hook");
         // Simulate the pre-fix install: hooks only lived in user-settings.json.
-        // Keep a user-owned SessionStart entry that must survive cleanup.
+        // Keep a user-owned SessionStart entry that cleanup must preserve.
         let legacy = json!({
             "model": "grok-code-fast",
             "hooks": {

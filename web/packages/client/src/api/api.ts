@@ -1,6 +1,6 @@
 // Desktop-named wrappers over the tRPC procedures (`03-api-and-events.md` §1).
 //
-// The desktop's `src/lib/api.ts` was one of the two seams against Rust;
+// The desktop's `src/lib/api.ts` was one of the two integration points with Rust;
 // keeping its function names means a ported view calls the same thing it
 // always called, and the only edit in the port is the import path. Inputs are
 // the objects the router's zod schemas accept, which is where they differ from

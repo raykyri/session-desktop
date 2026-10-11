@@ -67,8 +67,8 @@ chown session:session /data/session.db
 ```
 
 A restored database must not be newer than the image's migrations: the server
-applies migrations forward and refuses to start against a database carrying a
-migration it does not know (`UnknownMigrationError`). A current image can use
+applies migrations forward and does not start if the database contains a
+migration unsupported by the image (`UnknownMigrationError`). A current image can use
 an older database snapshot and apply pending migrations. An older image cannot
 use a newer database; deploy an image that supports the restored schema.
 

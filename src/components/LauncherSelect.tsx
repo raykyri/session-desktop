@@ -186,10 +186,8 @@ export function LauncherSelect({
   const match = options.find((option) => option.value === value);
   const selected = match ?? options[0];
 
-  // If the current value matches no option (e.g. a persisted choice that has since
-  // been removed), the trigger would display options[0]'s label while the stored
-  // value stayed orphaned — and launching would still send the stale value. Reconcile
-  // to the displayed default so what's shown is what gets used.
+  // If a stored value no longer matches an option, select the displayed default
+  // so launches use the value shown in the trigger.
   useEffect(() => {
     if (!match && options.length > 0 && options[0].value !== value) {
       onChange(options[0].value);
@@ -211,7 +209,7 @@ export function LauncherSelect({
     }
   };
 
-  // Placed before paint on every open, whichever control opened it.
+  // Measure before paint each time the menu opens.
   useLayoutEffect(() => {
     if (open) {
       measure();
@@ -221,7 +219,7 @@ export function LauncherSelect({
     }
   }, [open]);
 
-  // Focus moves into the menu once it is placed, so the arrow keys work at once.
+  // Focus the menu after positioning it to enable keyboard navigation.
   const shown = open && anchor !== null;
   useEffect(() => {
     if (shown) focusCheckedItem(popoverRef.current);

@@ -3,9 +3,9 @@ type WindowFocusKeyboardOwner =
   | "remembered-web-editable"
   | "current-content";
 
-/** Distinguishes a real app reactivation from WebKit first-responder churn.
- * A remembered editor is restored only when the whole app is returning; on an
- * internal webview focus event the current content keeps ownership. */
+/** Distinguishes app reactivation from WebKit first-responder changes.
+ * Restore a remembered editor only when the app returns to the foreground;
+ * leave an internal webview focus event with the current content. */
 export function windowFocusKeyboardOwner({
   currentWebEditable,
   rememberedWebEditable,

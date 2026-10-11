@@ -1,7 +1,7 @@
 // Composer drafts (07 §4.3, §8). A draft is local-first so typing never waits
 // on the network, mirrored to `sessionStorage` so a reload in the same tab
 // keeps it, and pushed to the server's `interface_drafts` on a 120 ms debounce
-// with a flush on `pagehide` so it survives a new device.
+// with a flush on `pagehide` so it remains available on a new device.
 //
 // Composers restore the server copy on entering their scope. Local edits made
 // in this tab always win over asynchronous restoration.

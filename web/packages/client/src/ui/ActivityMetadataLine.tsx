@@ -17,7 +17,7 @@ export function formatResearchModelSummary(modelId: string, origin?: string | nu
 
 /**
  * The concise action label for Home's chronological feed. The content card
- * carries the provider and object details, so this line only orients the reader
+ * includes the provider and object details, so this line only places the event
  * in time and names the containing thread when a reply belongs to one.
  */
 export function formatActivityMetadataSummary(event: RecentActivityEvent): string {
@@ -44,7 +44,7 @@ export function ActivityMetadataLine({
 }: {
   event: RecentActivityEvent;
   className?: string;
-  /** Research cards carry the time next to the model mark; omit it here. */
+  /** Research cards show the time next to the model mark; omit it here. */
   showTime?: boolean;
 }) {
   const finiteTime = showTime && Number.isFinite(event.occurredAt);

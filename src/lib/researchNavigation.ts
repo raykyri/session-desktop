@@ -1,8 +1,8 @@
 // Research navigation restoration state (selected node and per-node scroll
-// offsets, keyed by tree). Held as a module-level singleton so the workspace
+// offsets, keyed by tree). Stored as a module-level singleton so the workspace
 // (which reads/writes selections) and the app shell (which prunes entries for
-// deleted trees) mutate the same object — pruning localStorage behind a
-// separate in-memory copy would just get resurrected by the next save.
+// deleted trees) mutate the same object. A separate in-memory copy could restore
+// pruned localStorage data on the next save.
 
 import type { ResearchScrollKind } from "./researchColumns";
 import type { ResearchHighlightAnchor } from "../types";
@@ -46,9 +46,8 @@ export interface SavedResearchNavigation {
    * follow from the tree, so this one id restores the whole open path. */
   selectedNodeId?: string;
   scrollByNode: Record<string, SavedResearchScrollPosition>;
-  /** Nodes whose "Show earlier" window the user expanded. Restored together
-   * with the scroll offset — an offset captured against the expanded list
-   * would land in the wrong place in the collapsed one. */
+  /** Nodes whose "Show earlier" window the user expanded. Restore this with
+   * the scroll offset because expanded and collapsed lists use different offsets. */
   expandedByNode?: Record<string, boolean>;
   /** Pending branches, keyed by the parent node they were started on. The
    * stored field keeps the earlier name, "ask". */
@@ -56,12 +55,12 @@ export interface SavedResearchNavigation {
   /** In-progress text in the root follow-up composer. */
   followupDraft?: SavedResearchFollowupDraft;
   /** A highlight to scroll into view on the next page visit (set when a
-   * Highlights feed unit is opened). Cleared once the thread page lands on it. */
+   * Highlights feed unit is opened). Cleared after the thread page selects it. */
   focusHighlight?: { nodeId: string; highlightId: string };
   /** Queued follow-ups per chain, keyed by the chain's head node. */
   queuedFollowups?: Record<string, QueuedResearchFollowup[]>;
   /** Each level's messages column scroll offset, keyed by the head node of
-   * the conversation or branch it shows. (`scrollByNode` holds the answer
+   * the conversation or branch it shows. (`scrollByNode` stores the answer
    * columns', keyed by the message.) The stored field keeps the column's
    * earlier name, "turns". */
   turnsScrollByHead?: Record<string, SavedResearchScrollPosition>;

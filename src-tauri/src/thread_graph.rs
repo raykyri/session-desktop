@@ -340,7 +340,7 @@ fn graph_flusher_loop() {
             prune_global_graph_cache();
             continue;
         }
-        // Let the rest of the burst land; marks made during the sleep are
+        // Wait for the rest of the burst; marks made during the sleep are
         // covered by the flush below, so absorb them instead of re-looping.
         std::thread::sleep(GRAPH_FLUSH_DEBOUNCE);
         {
@@ -365,7 +365,7 @@ pub fn flush_dirty_thread_graphs() {
         .unwrap_or_else(|err| err.into_inner());
     // Snapshot the dirty entries without holding the cache lock across disk
     // writes; clearing the flag in the same critical section means a mutation
-    // racing the write simply re-marks the entry for the next cycle.
+    // racing the write marks the entry again for the next cycle.
     let dirty = {
         let mut cache = GRAPH_CACHE.lock().unwrap_or_else(|err| err.into_inner());
         take_dirty_graphs(&mut cache)
@@ -2242,7 +2242,7 @@ mod tests {
 
     // The hot path — a same-content window re-parse (every Claude typed prompt,
     // every codex abort/rollback marker) — must keep created orders untouched so
-    // graph identity and downstream memoization survive the refresh.
+    // preserve graph identity and downstream memoization across the refresh.
     #[test]
     fn consistent_replace_keeps_created_orders_without_reallocating() {
         let worktree = temp_worktree("session-thread-graph-consistent-replace");
@@ -2315,7 +2315,7 @@ mod tests {
 
     // A truncating replace (a rewind whose shrink the tail observed) keeps the
     // retained prefix in place; the continuation that reuses the dropped line
-    // indexes appends cleanly at the tail.
+    // indexes append at the end without renumbering existing entries.
     #[test]
     fn append_after_truncating_replace_lands_at_the_branch_tail() {
         let worktree = temp_worktree("session-thread-graph-truncating-replace");

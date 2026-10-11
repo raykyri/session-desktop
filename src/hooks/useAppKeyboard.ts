@@ -53,8 +53,8 @@ export function useEscapeDispatcher(overlays: EscapeOverlayState, handlers: Esca
 
   // Escape can originate in two separate AppKit responders while the browser
   // is visible: the outer app webview and the child human-browser WKWebView.
-  // The native monitor funnels both through this dispatcher. The DOM listener
-  // below uses it too so lightbox/browser priority stays single-sourced.
+  // The native monitor sends both through this dispatcher. The DOM listener
+  // uses the same dispatcher to preserve lightbox/browser priority.
   const dispatchBrowserEscape = useCallback((): "exclusive" | null => {
     if (getImageLightbox() !== null) {
       closeImageLightbox();
@@ -71,8 +71,8 @@ export function useEscapeDispatcher(overlays: EscapeOverlayState, handlers: Esca
   // overlays in a fixed order. These used to be independent window listeners
   // whose effects re-registered when their deps changed, so their relative
   // position in the same-target capture order silently followed registration
-  // history; state lives in the ref above so this listener never re-registers
-  // and the order below is the whole story.
+  // history. State lives in the ref above so this listener never re-registers,
+  // and handlers run in the fixed order below.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") {

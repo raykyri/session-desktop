@@ -201,8 +201,8 @@ export function canRerunResearchNode(node: ResearchNode): boolean {
   );
 }
 
-/** Whether a node's answer menu offers Rerun: only an exchange has a run to
- * relaunch. Archived-tree gating stays the caller's job, matching
+/** Whether a node's answer menu shows Rerun. Only exchanges have runs to
+ * relaunch. The caller checks whether the tree is archived, matching
  * canRetryResearchNode. */
 export function researchRerunOffered(node: ResearchNode): boolean {
   return nodeType(node) === "exchange";

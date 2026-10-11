@@ -174,7 +174,7 @@ struct AttachmentState {
 
 /// Stable process-local owner for a sequence of disposable SSH attachments.
 ///
-/// Every asynchronous reader carries the generation returned by
+/// Every asynchronous reader uses the generation returned by
 /// `begin_generation`. It may mutate controller state only while that token is
 /// still current, preventing a late EOF from attachment N from disconnecting
 /// an already-installed attachment N+1.
@@ -334,7 +334,7 @@ impl RemoteAttachmentController {
         (state.generation, previous)
     }
 
-    /// Carries reconnect backoff across short-lived SSH generations. A process
+    /// Preserves reconnect backoff across short-lived SSH generations. A process
     /// that spawns successfully and exits before its tmux client is verified is
     /// still a failed attachment; resetting on spawn would otherwise create a
     /// permanent four-attempts-per-second loop.

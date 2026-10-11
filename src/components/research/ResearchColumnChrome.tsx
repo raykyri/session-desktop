@@ -3,10 +3,9 @@ import { ArrowLeft, ArrowRight, Ellipsis, Terminal } from "lucide-react";
 import { ResearchBranchIcon } from "./ResearchIcons";
 import { columnAttributes } from "../../lib/researchColumns";
 
-/** The header bar of one level's pair. It spans the messages and answer
- * columns: the thread's title (or "Branch · N messages"), clamped to
- * four lines. A note's two columns have a header each ("Note", "Follow-ups · N"). The bar is
- * a window drag region; its buttons are not. */
+/** Header for one column pair. Thread headers span messages and answers; note
+ * columns have separate Note and Follow-ups headers. The header is a window
+ * drag region except for its buttons. */
 export function ResearchPairHeader({
   title,
   branch = null,
@@ -126,9 +125,7 @@ function ResearchHistoryNav({
   );
 }
 
-/** A thread that is loading or failed to load: a pair-wide column with the
- * header bar (back and forward, then the title when there is one) over the
- * given body. */
+/** Pair-wide loading or error state with history controls and an optional title. */
 export function ResearchThreadPlaceholder({
   title = "",
   history = null,

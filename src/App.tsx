@@ -331,8 +331,8 @@ function MainApp() {
     closeRemoval: closeResearchFolderRemoval,
   } = workspaces;
   const renameGroupId = renameRequest?.groupId ?? null;
-  // Menu badges and the folder-replace dialog both count every tree that keeps
-  // a folder alive, so archived trees are included (removal is blocked on them).
+  // Menu badges and the folder-replace dialog count every tree that references
+  // a folder, including archived trees that prevent removal.
   const researchFolderTreeCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const tree of [...researchTrees, ...archivedResearchTrees]) {
@@ -364,16 +364,15 @@ function MainApp() {
     getImageLightbox,
     getImageLightbox,
   );
-  // Same story as the image lightbox: the diagram lightbox lives in a module
-  // store, and subscribing here is what makes an open lightbox participate in
-  // the native input policy below.
+  // Subscribe to the diagram lightbox's module store so the native input
+  // policy below includes its open state, as it does for the image lightbox.
   const diagramLightbox = useSyncExternalStore(
     subscribeDiagramLightbox,
     getDiagramLightbox,
     getDiagramLightbox,
   );
-  // The native browser view draws above the webview, so it yields to any
-  // app-level dialog or menu that would otherwise sit underneath it.
+  // Hide the native browser view while an app-level dialog or menu is open;
+  // native views render above the webview.
   const nativeModalOccluded = Boolean(
     settingsOpen ||
       agentsOpen ||
@@ -691,10 +690,9 @@ function MainApp() {
     (draftId: string, beforeId: string | null) => void moveResearchDraft(draftId, beforeId),
     [moveResearchDraft],
   );
-  // The open conversation's open nodes (the message selected in its root
-  // pair and each open branch's head), whose starred child rows the feed
-  // shows selected. Node ids are unique across trees, so ids left from
-  // another tree match nothing.
+  // Select feed child rows for the root message and each open branch head.
+  // Node ids are unique across trees, so stale ids from another tree have no
+  // effect.
   const [openResearchNodeIds, setOpenResearchNodeIds] = useState<string[]>([]);
   // Remove star on a feed child row; the node update event drops the row.
   const unstarResearchFeedChild = useCallback(
@@ -749,8 +747,7 @@ function MainApp() {
     moveResearchTreeFromFeed,
     openNewResearchFolderDialog,
   ]);
-  // A draft opens in the content column beside the feed, which keeps its
-  // view; opening a thread replaces it.
+  // Open a draft beside the current feed view. Opening a thread closes it.
   const [openResearchDraftId, setOpenResearchDraftId] = useState<string | null>(null);
   const openResearchDraft =
     researchDrafts.find((draft) => draft.id === openResearchDraftId) ?? null;
@@ -784,8 +781,8 @@ function MainApp() {
   const renamingResearchFolder =
     renamingGroup?.scope === "research" ? renamingGroup : undefined;
 
-  // The Home feed stays mounted beside an open thread, where every streamed
-  // update re-renders App; stable props let the memoized feed skip those.
+  // Keep Home mounted beside open threads. Stable props prevent streamed
+  // thread updates from rerendering the memoized feed.
   const feedResearchTrees = useMemo(
     () => [...researchTrees, ...archivedResearchTrees],
     [researchTrees, archivedResearchTrees],
@@ -935,10 +932,9 @@ function MainApp() {
       submitFeedPost,
     ],
   );
-  // "Start research with …" from Agent Setup: select the agent in the feed's
-  // composer and focus its question, keeping the text, workspace and options
-  // already there. Setup opened from the composer returns to it in place;
-  // from elsewhere it goes to Home. Nothing is submitted.
+  // "Start research with …" selects the agent and focuses the feed composer.
+  // Preserve the existing text, workspace, and options without submitting.
+  // If setup opened elsewhere, show Home first.
   const startResearchFromSetup = useCallback(
     (adapter: AgentAdapterMetadata, origin: "composer" | "home" | "other") => {
       setAgentsOpen(false);
@@ -959,10 +955,8 @@ function MainApp() {
     (adapter: AgentAdapterMetadata) => startResearchFromSetup(adapter, "home"),
     [startResearchFromSetup],
   );
-  // Home shows the setup guide while no agent can run research. Once shown,
-  // it stays until its start action is used (or Home gets content), so an
-  // agent becoming ready shows its completion state instead of removing the
-  // guide before its "Start research" action can be used.
+  // Show the setup guide when no agent can run research. Keep it visible after
+  // an agent becomes ready so the user can choose "Start research".
   const noResearchAgent = Boolean(configAdapters) && !configAdapters?.some(adapterCanLaunchResearch);
   const [homeSetupPinned, setHomeSetupPinned] = useState(false);
   useEffect(() => {
@@ -1140,11 +1134,8 @@ function MainApp() {
         ) : null}
 
         <div className="main-stage is-research">
-          {/* The feed column lists Home, a folder, Drafts, Archive, Bookmarks,
-              or Highlights beside the content column, which shows the open
-              thread (or a placeholder). One wrapper for both states keeps the
-              feed mounted, and its scroll position, while threads open and
-              close beside it. */}
+          {/* Keep the selected feed view mounted beside the thread, draft, or
+              placeholder so its scroll position survives content changes. */}
           <ResearchColumns
             hasThread={researchStageView === "thread" || openResearchDraft !== null}
             feed={
@@ -1198,8 +1189,7 @@ function MainApp() {
                     onDeleteDraft={deleteResearchDraftFromFeed}
                     onDragStart={startResearchCardDrag}
                     onRefresh={refreshFeed}
-                    // Mouse buttons and swipes over the feed walk the same
-                    // history as the thread's controls.
+                    // Mouse buttons, swipes, and thread controls share one history.
                     onBack={goResearchBack}
                     onForward={goResearchForward}
                   />
@@ -1209,8 +1199,8 @@ function MainApp() {
           >
             {researchStageView === "thread" && activeResearchTreeId ? (
               // Remount on tree changes to reset selection, fetched content,
-              // and the follow-up draft before paint. Resetting them in effects
-              // would briefly show and refetch the previous tree's node.
+              // and the follow-up draft before rendering the new tree. An
+              // effect would briefly show and refetch the previous tree's node.
               <ResearchInlineWidgetsContext.Provider value={settings.researchInlineWidgets}>
                 <ResearchAgentRepairContext.Provider value={researchAgentRepair}>
                   <ResearchThreadPage

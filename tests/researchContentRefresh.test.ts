@@ -95,7 +95,7 @@ test("requests during a fetch collapse into one trailing fetch", async () => {
   assert.equal(fetch.calls, 2);
 });
 
-test("a trailing fetch starts as soon as a slow fetch settles", async () => {
+test("a trailing fetch starts as soon as a slow fetch completes", async () => {
   const { timers, advance } = manualTimers();
   const fetch = controlledFetch();
   const refresh = createContentRefresh(fetch.fetch, 1000, timers);
@@ -107,7 +107,7 @@ test("a trailing fetch starts as soon as a slow fetch settles", async () => {
   assert.equal(fetch.calls, 2);
 });
 
-test("requests after a quiet period fetch without delay", async () => {
+test("requests after the throttle interval fetch without delay", async () => {
   const { timers, advance } = manualTimers();
   const fetch = controlledFetch();
   const refresh = createContentRefresh(fetch.fetch, 1000, timers);

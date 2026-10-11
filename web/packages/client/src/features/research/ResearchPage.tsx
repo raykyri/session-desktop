@@ -1,9 +1,9 @@
 // The research document (`09-research-document-view.md`).
 //
 // One page renders one *spine*: the chain of inline follow-ups containing the
-// selected node. Branches hang off it as cards in the margin. The page owns
+// selected node. Branches appear as cards in the margin. The page manages
 // what crosses segments — selection, navigation, the composer, the dialogs —
-// while each `ThreadSegment` owns its own content query, so a chain that grows
+// while each `ThreadSegment` manages its own content query, so a chain that grows
 // a segment does not change the number of hooks this component calls.
 //
 // What the desktop needed and this does not: mirror refs, `useStableValue`, a
@@ -609,7 +609,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   const restoredRef = useRef<string | null>(null);
   const pendingScrollNodeIdRef = useRef<string | null>(null);
   // Which focus request has already been honored. Clearing the param is a
-  // navigation, so it lands a render or two later; without the latch the pass
+  // navigation, so it is applied a render or two later; without the latch the pass
   // runs again in between and scrolls a second time.
   const focusedHighlightRef = useRef<string | null>(null);
 
@@ -742,7 +742,7 @@ function ResearchDocument({ treeId }: { treeId: string }) {
 
   // Cmd-J, re-dispatched by the shell (07 §5): bring the composer into view and
   // hand it the caret. The scroll happens even when the field is disabled, so
-  // the chord always lands on the follow-ups area.
+  // the chord always targets the follow-ups area.
   useEffect(() => {
     const onShortcut = (event: Event) => {
       const command = (event as CustomEvent<{ type?: string }>).detail;
@@ -941,8 +941,8 @@ function ResearchDocument({ treeId }: { treeId: string }) {
   const handleRetry = useCallback(
     (nodeId: string) => {
       // The clicked control disables itself, but a second control for the same
-      // node (the composer's Retry beside the menu's) fires before that lands.
-      // This identity changes when a retry starts or settles, which is also
+      // node (the composer's Retry beside the menu's) fires before that update arrives.
+      // This identity changes when a retry starts or completes, which is also
       // when the menu rows' own `retryDisabled` flips — one re-render, not one
       // per delta.
       if (retryingNodeId !== null) return;

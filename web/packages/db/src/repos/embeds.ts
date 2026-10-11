@@ -4,7 +4,7 @@
 // A row is registered when a snapshot is normalized, long before anything is
 // fetched: hydration rewrites each remote image URL to `/embeds/<hash>`, and
 // the bytes arrive only if a reader ever renders that card. The row therefore
-// has two lives — the mapping, which is permanent enough to re-fetch from, and
+// has two parts — the mapping, which is permanent enough to re-fetch from, and
 // the file, which the sweep may take back whenever the volume needs the room.
 
 import { and, asc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";

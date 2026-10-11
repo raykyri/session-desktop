@@ -70,7 +70,7 @@ export interface PreferencesPatch {
 }
 
 /** Merges a patch into the stored preferences. Settings merge field by field
- * so a client that knows fewer fields than the server cannot erase the rest. */
+ * so a client that supports fewer fields than the server cannot erase the rest. */
 export function update(
   db: SessionDatabase,
   userId: string,
@@ -102,7 +102,7 @@ export function update(
   });
 }
 
-/** Trims, drops an empty instruction to null, and refuses one over the cap. */
+/** Trims, drops an empty instruction to null, and rejects one over the cap. */
 export function normalizeLaunchInstruction(value: string | null): string | null {
   if (value === null) {
     return null;

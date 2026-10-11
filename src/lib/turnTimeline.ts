@@ -72,14 +72,13 @@ export interface ThinkingItem {
 // Assistant "raw" blocks become thinking values. A real provider reasoning
 // block arrives as an object like
 // `{ type: "thinking", thinking: "<prose>", signature: "<long base64 blob>" }`;
-// the signature is an opaque verification token of no use to a reader and, at
-// ~10 KB, drowns the actual reasoning when the whole object is JSON-dumped.
-// This pulls out the human-readable reasoning so the renderer can show it as
-// prose. Order matters: the first field that holds a non-empty string wins.
+// the signature is an opaque verification token that can add about 10 KB to a
+// JSON rendering. Extract the human-readable reasoning instead. Order matters:
+// use the first field containing a non-empty string.
 const THINKING_TEXT_KEYS = ["thinking", "text", "thought", "reasoning", "content"] as const;
 
 /**
- * The human-readable reasoning carried by one thinking value, or null when the
+ * The human-readable reasoning in one thinking value, or null when the
  * value has no recognizable prose field (an export marker, a bare number, an
  * unfamiliar shape) and should fall back to serialized JSON.
  */
@@ -926,8 +925,8 @@ export function messageItemCopyText(item: MessageItem): string | null {
  *
  * System messages and fully tagged user-role instructions are omitted without
  * ending the run. Activity-only assistant items and assistant text that
- * sanitizes to empty are likewise skipped, so the menu lands on the first
- * visible copyable message.
+ * sanitizes to empty are also skipped. The first visible copyable message gets
+ * the menu action.
  */
 export function assistantRunCopyTextByItemKey(items: MessageItem[]) {
   const copyTextByKey = new Map<string, string>();

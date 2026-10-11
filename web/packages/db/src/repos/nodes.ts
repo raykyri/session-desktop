@@ -227,7 +227,7 @@ export interface StatusPatch {
   responsePreview?: string | null | undefined;
   /**
    * The sequence number a run has already reached. Set by the agent loop,
-   * which owns the counter for the duration of an attempt: a status write that
+   * which manages the counter for the duration of an attempt: a status write that
    * publishes no `seq`-carrying event must record that number rather than
    * allocate a fresh one, or the client sees its sequence jump and refetches
    * (`docs/03-api-and-events.md` §3, `docs/05` §5). Unset — every caller
@@ -238,7 +238,7 @@ export interface StatusPatch {
 
 /**
  * Moves a node's status, bumping `run_seq` and touching the thread in the same
- * transaction (`docs/02` §5.3). Refuses to leave a terminal status.
+ * transaction (`docs/02` §5.3). Rejects changes from a terminal status.
  */
 export function setStatus(
   db: SessionDatabase,
@@ -499,7 +499,7 @@ export interface BootReconciliation {
 }
 
 /**
- * Settles what the last process left behind (`docs/02` §5.7).
+ * Reconciles what the last process left behind (`docs/02` §5.7).
  *
  * A node whose snapshot row already holds a terminal outcome adopts it — the
  * answer landed, only the node row did not. Whatever is still `running` was

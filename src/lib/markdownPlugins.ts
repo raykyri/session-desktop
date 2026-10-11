@@ -22,7 +22,7 @@ interface MdastNode {
 //
 // - Prices: in "costs $5 and $10 more" it treats "5 and" as inline math.
 //   Mirror GitHub's rule — when the character right after a closing $ is a
-//   digit, the pair reads as currency, so the node reverts to literal text.
+//   digit, treat the pair as currency and revert the node to literal text.
 // - Single-line display math: LLMs routinely emit "$$…$$" on one line, but
 //   micromark only accepts fenced ($$ on its own lines) math as display, so
 //   the one-liner parses as inline math inside a paragraph. A paragraph that

@@ -1,4 +1,4 @@
-/** One startup run owns both hydration phases, cancellation, and window reveal. */
+/** Runs both startup loading phases and returns a cancellation function. */
 export function startAppStartup<Initial, Secondary>(options: {
   loadInitial: () => Promise<Initial>;
   loadSecondary: (initial: Initial) => Promise<Secondary>;

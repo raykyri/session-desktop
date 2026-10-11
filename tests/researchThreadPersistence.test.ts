@@ -82,7 +82,7 @@ test("a tree without a saved draft releases the guard once the composer is empty
   assert.equal(restore.canPersist("tree", "typed after restoring"), true);
 });
 
-test("clearing a draft or explicitly dismissing a pending branch cannot resurrect it after flush", (t) => {
+test("clearing a draft or dismissing a pending branch prevents restoration after flush", (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const store: Record<string, SavedResearchNavigation> = {};
   let saved = "";

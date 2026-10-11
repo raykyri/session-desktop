@@ -144,7 +144,7 @@ impl PaneActivity {
 
 /// A file the spawn backend must write on the host that runs the command,
 /// before the command starts: generated shell rc scripts, per-spawn hook
-/// settings. Declarative so the backend owns where and how files land — the
+/// settings. The backend controls where and how files are written; the
 /// local backend writes them in `materialize_support_files`; a remote backend
 /// must ship them to its host instead.
 #[derive(Debug)]
@@ -425,7 +425,7 @@ pub struct PaneWriteOptions {
 
 /// A pane write failure that records how far the paste-then-submit sequence got.
 /// `data_delivered` distinguishes "the payload never reached the pane" from "the
-/// payload landed but the trailing submit (or a post-payload barrier) failed". The
+/// payload was written but the trailing submit (or a post-payload barrier) failed". The
 /// turn queue uses the flag to requeue a failed turn as possibly-pasted, so its
 /// retry submits a bare Return instead of pasting a second copy of the text onto
 /// the one already sitting in the composer.
@@ -715,7 +715,7 @@ pub fn respawn_shell_pane(state: &AppState, pane: &PaneInfo) -> Result<PaneInfo,
     // session is keyed to the original launch dir (Claude/Codex scope sessions by project
     // dir), and the resume command runs in whatever cwd this shell reopens in, so reopen
     // there rather than the pane's last cwd — which `cd` may have moved away from since
-    // launch (`update_pane_cwd` tracks the live directory). Reopening at the drifted cwd
+    // launch (`update_pane_cwd` tracks the active directory). Reopening at the changed cwd
     // would both fail to resolve the session and miss the agent rebind, minting a
     // duplicate on every restart. The hint is taken (drained) either way so it can't
     // linger and fire on a later relaunch of the same pane id; the resume only proceeds
@@ -1518,7 +1518,7 @@ fn support_file_relative(file: &SupportFile) -> Result<PathBuf, String> {
 }
 
 /// Writes a spec's support files on the local filesystem: the local half of the
-/// `SupportFile` contract. Carries the pruning and O_EXCL semantics of the
+/// `SupportFile` contract. Uses the pruning and O_EXCL semantics of the
 /// inline writers this replaced, and tightens their directory handling: every
 /// level from the shared root down to the file's parent is owner-only from the
 /// moment it exists, and a descriptor whose path does not genuinely resolve
@@ -2734,7 +2734,7 @@ fn remote_health_output(argv: &[String], action: &str) -> Result<Output, String>
 }
 
 fn remote_hook_health(output: Result<Output, String>) -> RemoteHookHealth {
-    // Never surface arbitrary probe output: it could contain credentials or
+    // Never display arbitrary probe output: it could contain credentials or
     // shell startup output. Ping returns a JSON envelope even for rejection.
     let Ok(output) = output else {
         return RemoteHookHealth::Unavailable;
@@ -3190,7 +3190,7 @@ fn attach_remote_generation(
         let argv = host.tmux_session_token_argv(identity)?;
         let output = remote_health_output(&argv, "recover remote hook credential")?;
         if !output.status.success() {
-            // Do not include stdout/stderr: this operation carries a secret.
+            // Do not include stdout/stderr: this operation uses a secret.
             return Err("could not recover remote hook credential".into());
         }
         let token = std::str::from_utf8(&output.stdout)
@@ -3706,7 +3706,7 @@ pub fn kill_pane(state: &AppState, pane_id: String) -> Result<(), String> {
         .pane_child(&pane_id)?
         .ok_or_else(|| format!("pane {pane_id} was not found"))?;
     if let Err(err) = kill_child(&pane_id, child) {
-        // The kill couldn't confirm the child dead. If it has since exited — it may
+        // The kill couldn't confirm that the child exited. If it has since exited — it may
         // have died from the group SIGTERM just after kill_child gave up — reap and
         // reclaim the pane now instead of stranding it in the model. Otherwise leave
         // it in place: the reader thread's EOF path reaps the still-live process when
@@ -4002,7 +4002,7 @@ fn start_child_watcher(
             thread::sleep(CHILD_WATCH_INTERVAL);
             // The pane's child Arc is the liveness handle: once `kill_pane` or the
             // reader's EOF cleanup removes the pane — or a respawn replaces it with
-            // a fresh child under a reused id — this watcher has nothing left to do.
+            // a new child under a reused id; this watcher has nothing left to do.
             match state.pane_child(&pane_id) {
                 Ok(Some(current)) if Arc::ptr_eq(&current, &child) => {}
                 _ => break,

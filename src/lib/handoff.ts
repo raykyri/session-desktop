@@ -2,18 +2,13 @@
 // into a *different* coding agent. Pure and deterministic (no timestamps, no
 // ambient state) so the whole fold is testable without a DOM.
 //
-// The shape is deliberately narrow: message text, a per-run tool-name summary,
-// and the file paths those tools touched. Tool *results* never appear — they
-// are where file contents, command output, and credentials live, and a handoff
-// is on its way to the clipboard and then to a third-party agent. Paths carry
-// the signal without carrying the payload.
+// Include message text, a per-run tool-name summary, and file paths. Exclude
+// tool results because they can contain file contents, command output, and
+// credentials, while a handoff can be copied to a third-party agent.
 //
-// Length is spent, not rationed: the document budget is allocated rather than
-// applied as a blanket per-message cap, so nothing is truncated that the budget
-// could have carried whole. The order of priority is anchor turn, then the last
-// couple of turns, then older history — because the freshest exchanges hold the
-// live state of the work (what was just tried, what broke, what comes next)
-// while older ones have already been distilled into the files on disk.
+// Allocate the document budget across messages rather than applying every cap
+// unconditionally. Prioritize the anchor, recent turns, and then older history.
+// Recent turns contain the latest actions, failures, and next steps.
 
 import type {
   ActivityItem,
@@ -35,20 +30,18 @@ export interface HandoffContext {
 export interface HandoffLimits {
   /**
    * Cap on one older history message, applied only when the whole conversation
-   * does not fit — a relief valve, not a routine trim.
+   * does not fit.
    */
   messageCharacters: number;
   /**
    * The same cap for a message inside the last `recentTurns` turns of history.
-   * Much larger, because a stale summary of the last exchange is exactly what
-   * makes a receiving agent redo work or resume from the wrong state.
+   * This is larger to retain enough detail for the receiving agent to resume.
    */
   recentMessageCharacters: number;
   /** How many trailing history turns are treated as recent. */
   recentTurns: number;
   /**
-   * Cap on the anchor turn — the outstanding request, or the agent's parting
-   * message — which is the one part of the document that must survive intact.
+   * Cap on the anchor turn: the outstanding request or final assistant response.
    */
   requestCharacters: number;
   /** Cap on the whole document. */
@@ -83,8 +76,8 @@ const LAST_TURN_OPEN = "<last-turn>";
 const LAST_TURN_CLOSE = "</last-turn>";
 
 // Tool-input keys that hold a plain filesystem path. Anything else (edit
-// payloads, shell commands, patch bodies) is ignored, so an adapter with an
-// unfamiliar tool shape degrades to "no path" instead of dumping JSON.
+// payloads, shell commands, patch bodies) is ignored. An unfamiliar tool shape
+// therefore produces no path instead of exposing its full JSON input.
 const PATH_KEYS = [
   "file_path",
   "filePath",
@@ -96,8 +89,8 @@ const PATH_KEYS = [
 ] as const;
 
 // Substrings that mark a tool as mutating. Matched against the lowercased tool
-// name, so adapter-specific names (Edit, MultiEdit, apply_patch, str_replace…)
-// land on the right side of the read/write split without an exhaustive list.
+// name, which classifies adapter-specific names (Edit, MultiEdit, apply_patch,
+// str_replace…) without an exhaustive list.
 const MUTATING_TOOL_MARKERS = [
   "write",
   "edit",
@@ -112,15 +105,13 @@ const MUTATING_TOOL_MARKERS = [
 
 const MAX_PATH_LENGTH = 200;
 
-// A truncation notice costs about forty characters of its own, so trimming a
-// message that is barely over its cap makes the document longer rather than
-// shorter — and costs the reader a whole paragraph to save a line.
+// A truncation notice adds about forty characters. Trim only when the message
+// exceeds its cap enough to reduce the final document size meaningfully.
 const TRUNCATION_SLACK = 400;
-// Floor a message is never squeezed below while it is still in the document:
-// past this an entry stops being context and becomes noise with a heading.
+// Minimum retained length for a message that remains in the document.
 const MIN_MESSAGE_CHARACTERS = 500;
-// What the anchor turn keeps, and what the conversation keeps, when a caller's
-// own `totalCharacters` is too small for both to have their full share.
+// Minimum allocations for the anchor and conversation when `totalCharacters`
+// is too small for both preferred allocations.
 const MIN_ANCHOR_CHARACTERS = 2_000;
 const MIN_CONVERSATION_CHARACTERS = 4_000;
 // Slack held back from the budget arithmetic so rounding never pushes the
@@ -159,13 +150,10 @@ interface HandoffAnchor {
  * transcript). The anchor message is *included*, as the trailing section, and
  * its role decides what that section means:
  *
- * - A user anchor is an outstanding ask, so it lands under "Current request"
- *   and the history is context for carrying it out. This is deliberately
- *   unlike "Fork from here", which branches *before* the message because it
- *   re-opens the turn inside session rather than exporting it.
- * - An assistant anchor has no ask to transfer: it is where the previous agent
- *   stopped, so it lands under "Where the previous agent left off" and the
- *   receiving agent is told to carry on from it.
+ * - A user anchor appears under "Current request", with earlier messages as
+ *   context. "Fork from here" instead branches before the selected message.
+ * - An assistant anchor appears under "Where the previous agent left off" and
+ *   tells the receiving agent to continue from that response.
  */
 export function buildHandoffDocument({
   items,
@@ -186,11 +174,8 @@ export function buildHandoffDocument({
   }
   const limits = { ...DEFAULT_HANDOFF_LIMITS, ...limitOverrides };
   const assistantAnchor = items[anchorIndex].role === "assistant";
-  // An assistant anchor covers the agent's whole reply, not just the one card
-  // the menu hangs off: activities split a run into several message items, and
-  // the menu (like "Copy response") belongs to the first of them. Ending the
-  // span at the run's end keeps the copied document matching what the reader
-  // saw as a single response.
+  // Include the entire assistant reply. Activities can split a run across
+  // several message items even though its menu is attached to the first item.
   const anchorEnd = assistantAnchor ? assistantRunEnd(items, anchorIndex) : anchorIndex;
 
   // Superseded branch work and records explicitly removed from active model
@@ -208,10 +193,9 @@ export function buildHandoffDocument({
   // assistant handoff lists the files it touched too.
   const files = collectFilePaths(items.slice(0, assistantAnchor ? anchorEnd + 1 : anchorIndex));
 
-  // Everything but the conversation and the anchor is fixed-size, so measure it
-  // first and let the two variable sections divide what is actually left. The
-  // old arithmetic reserved the anchor's *cap* whether or not the anchor used
-  // it, which spent thousands of characters of history on a one-line request.
+  // Measure the fixed sections first, then divide the remaining space between
+  // the conversation and anchor. Reserving the anchor's full cap can discard
+  // useful history when the request is short.
   const head: string[] = [preamble(assistantAnchor, context)];
   const environment = environmentSection(context);
   if (environment) {
@@ -224,9 +208,8 @@ export function buildHandoffDocument({
   const closing = closingInstruction(assistantAnchor);
   const framing = sectionsLength(head) + sectionsLength([closing]);
 
-  // The anchor turn is the point of the document, so it is served first; it
-  // only gives ground when a caller's own total would otherwise leave the
-  // conversation with nothing at all.
+  // Allocate the anchor first, reducing it only enough to reserve the minimum
+  // conversation space requested by the caller's total limit.
   const anchorCharacters = Math.min(
     limits.requestCharacters,
     Math.max(
@@ -281,8 +264,8 @@ function sectionsLength(sections: string[]) {
 /**
  * Flags the messages belonging to the last `recentTurns` turns of history. A
  * turn is one user message or one assistant reply, and a reply can span several
- * message items (activities split a run), so consecutive assistant items count
- * once — otherwise a single tool-heavy reply would eat the whole window.
+ * message items when activities split a run, so consecutive assistant items
+ * count once.
  */
 function markRecentTurns(history: HandoffMessage[], recentTurns: number) {
   if (history.length === 0 || recentTurns <= 0) {
@@ -304,13 +287,11 @@ function markRecentTurns(history: HandoffMessage[], recentTurns: number) {
 }
 
 /**
- * Anchor for a handoff of the whole transcript as it stands — what the composer
- * menu hands off, as opposed to the per-message menus, which name their own
- * anchor. That is the newest message with something to say: plumbing, dropped
- * branch work, and empty cards are skipped, and a trailing assistant reply
- * resolves to the *start* of its run so the whole reply lands in the closing
- * section instead of arriving split across the transcript. Null when the
- * transcript holds nothing worth handing over.
+ * Returns the anchor used by the composer menu for a full-transcript handoff.
+ * It selects the newest nonempty active message, ignoring internal records and
+ * discarded branch work. For an assistant response, it returns the first item
+ * in the run so the full response appears in the closing section. Returns null
+ * when no eligible message exists.
  */
 export function latestHandoffAnchorKey(items: MessageItem[]): string | null {
   const eligible = (item: MessageItem) =>
@@ -366,9 +347,8 @@ function anchorSection(assistantAnchor: boolean, anchor: HandoffAnchor) {
   if (!assistantAnchor) {
     return ["## Current request", "", REQUEST_OPEN, anchor.text, REQUEST_CLOSE].join("\n");
   }
-  // A run that produced neither prose nor tool calls has nothing to show; the
-  // closing instruction ("pick up from there") still reads against the
-  // transcript above, so the section simply drops out.
+  // Omit the section when the run has no prose or tool calls. The closing
+  // instruction still refers to the transcript above.
   const body = [anchor.text, anchor.toolSummary].filter(Boolean).join("\n");
   if (!body) {
     return null;
@@ -391,11 +371,10 @@ function closingInstruction(assistantAnchor: boolean) {
 }
 
 /**
- * Last item of the assistant run beginning at `start`. Mirrors the run grouping
- * behind "Copy response": a real user message closes the run, while tagged
- * instructions and system messages are plumbing the reader never sees as a
- * boundary. Superseded and rolled-back items belong to abandoned context, so
- * they neither extend the run nor end it.
+ * Returns the last item in the assistant run beginning at `start`, using the
+ * same grouping as "Copy response". A visible user message ends the run;
+ * tagged instructions and system messages do not. Superseded and rolled-back
+ * items neither extend nor end the run.
  */
 function assistantRunEnd(items: MessageItem[], start: number) {
   let end = start;
@@ -424,8 +403,8 @@ function assistantAnchorTurn(
   let interrupted = false;
   for (let index = start; index <= end; index += 1) {
     const item = items[index];
-    // The anchor itself is shown whatever its status — the reader clicked it —
-    // but a superseded item later in the span is abandoned work.
+    // Always include the selected anchor. Exclude later items in the run when
+    // they are superseded or rolled back.
     if (
       item.role !== "assistant" ||
       (index !== start &&
@@ -522,17 +501,14 @@ function conversationSection(
 /**
  * Decides how much of each history message survives, in four passes:
  *
- * 1. If the whole conversation fits, nothing is touched. A handoff that could
- *    have been complete never arrives abridged.
- * 2. Otherwise apply the recency-tiered caps — a hard trim on old messages, a
- *    generous one on the last turns.
- * 3. Still over: drop whole messages from the middle outward, sparing the
- *    original task statement, the recent turns, and the trailing messages.
- * 4. Spend whatever the drops freed by restoring messages to full length,
- *    newest first, so the budget lands on the exchanges that matter most.
+ * 1. Return all messages unchanged when they fit.
+ * 2. Otherwise apply smaller caps to old messages and larger caps to recent ones.
+ * 3. If still over budget, remove messages from the middle outward while
+ *    preserving the original request, recent turns, and trailing messages.
+ * 4. Restore retained messages to full length, newest first, when space permits.
  *
- * A conversation that is *all* protected and still over budget falls through to
- * a proportional squeeze, oldest first, down to `MIN_MESSAGE_CHARACTERS`.
+ * If the protected messages still exceed the budget, reduce their limits down
+ * to `MIN_MESSAGE_CHARACTERS`.
  */
 function fitHistory(history: HandoffMessage[], limits: HandoffLimits, budget: number) {
   const capOf = (index: number) =>
@@ -609,7 +585,7 @@ function fitHistory(history: HandoffMessage[], limits: HandoffLimits, budget: nu
  * Indices the middle elision may drop, in the order it should drop them: from
  * the middle toward the oldest first, then forward again. The first message
  * (the original task statement), the recent turns, and the trailing messages
- * are never offered — they are the two ends worth keeping.
+ * are protected from removal.
  */
 function dropOrder(history: HandoffMessage[], limits: HandoffLimits) {
   const droppable = (index: number) =>
@@ -657,8 +633,8 @@ function handoffMessage(item: MessageItem, assistantLabel: string): HandoffMessa
   if (item.role !== "user" && item.role !== "assistant") {
     return null;
   }
-  // messageItemCopyText strips Session's own tagged instruction blocks, so an
-  // item that was nothing but plumbing sanitizes to null and drops out here.
+  // messageItemCopyText removes Session's tagged instruction blocks. Omit an
+  // item if no display text or tool activity remains.
   const text = messageItemCopyText(item);
   const activities = item.role === "assistant" ? item.activities : [];
   if (!text && toolEntries(activities).length === 0) {
@@ -776,8 +752,7 @@ function formatPathList(paths: string[], limit: number) {
 
 /** Head + tail, so both the setup and the conclusion of a long message survive. */
 function truncateText(text: string, limit: number) {
-  // Cutting a message to save less than the notice costs is pure loss, so a
-  // message that only just overruns its cap travels whole.
+  // Do not truncate when the notice would use more space than it saves.
   if (text.length <= limit + TRUNCATION_SLACK) {
     return text;
   }
@@ -788,11 +763,9 @@ function truncateText(text: string, limit: number) {
   return `${head}\n\n[… ${omitted} characters omitted …]\n\n${tail}`;
 }
 
-// Both halves are pulled back to a line boundary, so the surviving text ends
-// and resumes on whole lines instead of mid-identifier — a cut through the
-// middle of a path or a code fence reads as corruption to the next agent.
-// Neither snap discards more than a quarter of its slice, which bounds the
-// cost of hunting for a newline in prose that has none.
+// Move both cuts to a nearby line boundary to avoid splitting identifiers,
+// paths, or code fences. Neither function discards more than a quarter of its
+// slice when looking for a newline.
 function snapHead(slice: string) {
   const at = slice.lastIndexOf("\n");
   return at >= slice.length * 0.75 ? slice.slice(0, at) : slice;

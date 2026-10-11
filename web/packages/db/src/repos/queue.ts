@@ -19,7 +19,7 @@ import { now } from "../time.js";
  * `RunsService`, because a title or a recap that a restart loses is
  * regenerated from the answer it summarizes and never worth a durable row.
  * The arm stays because `run_queue.pool` is declared with both values and
- * dropping one is a migration; it is the seam a metadata run would use if it
+ * dropping one is a migration; it is the extension point a metadata run would use if it
  * ever had to survive a deploy.
  */
 export type RunPool = "research" | "metadata";

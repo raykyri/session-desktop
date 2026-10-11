@@ -50,7 +50,7 @@ const row = (overrides: NodeFixture = {}, retryQueued = false) =>
     }),
   );
 
-test("the answer's … menu button sits in the row's corner pill, after the meta line", () => {
+test("the answer's … menu button appears in the row's corner pill after the meta line", () => {
   const html = row();
   const meta = html.indexOf('class="research-msg-meta"');
   const branch = html.indexOf('aria-label="2 branches from this answer"');

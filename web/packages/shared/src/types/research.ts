@@ -114,7 +114,7 @@ export type ResearchRecapCandidate = z.infer<typeof researchRecapCandidateSchema
 
 /** Which pipeline produced the snapshot. `xSyndication` is the full payload
  * the desktop reads (media, quotes, cards, counts); `xOembed` is the reduced
- * one the publish endpoint returns when syndication refuses, and carries only
+ * one the publish endpoint returns when syndication rejects a post, and includes only
  * author, text, and date (`journal/oembed.ts`). Stored so a card can be told
  * apart from a full one later without refetching it. */
 export const tweetAttachmentProviderSchema = z.enum(["xSyndication", "xOembed"]);
@@ -184,7 +184,7 @@ export const researchNodeSchema = z.object({
   error: z.string().nullish(),
   /** 1 for the first run; incremented by Retry and by auto-resume. */
   attempt: z.number(),
-  /** Set when the durable response snapshot lands — the viewer's signal to
+  /** Set when the durable response snapshot is stored — the viewer's signal to
    * refetch content it may have read while the run was still streaming. */
   responseSnapshotAt: z.number().nullish(),
   recap: researchRecapSchema.optional(),
@@ -252,7 +252,7 @@ export const researchNodeContentSchema = z.object({
   turns: z.array(turnSchema),
   children: z.array(researchNodeCardSchema),
   /** Text streamed since the last committed turn, for the live tail. Absent
-   * once the run settles. */
+   * once the run completes. */
   inFlightText: z.string().optional(),
   /** Node sequence number this snapshot was taken at. A client applies only
    * run events with a greater `seq` and refetches on a gap. */

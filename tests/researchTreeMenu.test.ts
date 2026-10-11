@@ -76,7 +76,7 @@ test("archived cards' thread actions are Unarchive and Delete only", () => {
   assert.doesNotMatch(html, />Archive</);
 });
 
-test("Delete carries its D shortcut, disabled with a reason while running", () => {
+test("Delete shows its D shortcut and is disabled with a reason while running", () => {
   const html = renderToStaticMarkup(
     createElement(ResearchTreeLifecycleItems, {
       tree: { ...tree, runningCount: 1 },

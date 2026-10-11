@@ -138,10 +138,9 @@
   font-weight: 600;
 }
 
-/* Block rhythm is keyed to the type, not a fixed pixel gap: at 14px/1.5 a line
-   box is 21px, so the old flat 8px was a third of a line and consecutive
-   paragraphs ran together. 0.72em reads as a paragraph break and tracks the
-   transcript font-size setting instead of shrinking against it. */
+/* Scale block spacing with the font. At 14px/1.5, the previous 8px gap was
+   about one-third of a line; 0.72em keeps paragraphs distinct at every
+   transcript font size. */
 .turn-markdown p,
 .turn-markdown ul,
 .turn-markdown ol,
@@ -422,7 +421,7 @@
   content: attr(data-label);
 }
 
-/* A current Codex visualization reference is a first-class transcript object,
+/* A current Codex visualization reference renders as a transcript object,
    rather than exposing the transport marker or its absolute local path. */
 .turn-visualization-attachment {
   appearance: none;
@@ -551,9 +550,9 @@
   white-space: pre;
 }
 
-/* Fenced-code wrapper: anchors its actions menu to the block's top-right corner
-   so it stays put while the <pre> underneath scrolls. Block margin moves here
-   from the <pre> so :last-child margin trimming still works. */
+/* Anchor the fenced-code actions menu to the block's top-right corner while
+   the <pre> scrolls. Keep the block margin on this wrapper so :last-child
+   trimming still works. */
 .turn-markdown-code-block {
   position: relative;
   margin: 0 0 8px;
@@ -612,9 +611,8 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
 }
 
 /* Framed, rounded container. overflow-x stays a scroll fallback for content that
-   genuinely cannot wrap (long tokens, code), but the table below now fits the
-   column width and wraps its cells instead of forcing every wide table to
-   scroll — matching how research answers read top to bottom. */
+   cannot wrap, such as long tokens and code. Tables otherwise fit the column
+   and wrap their cells. */
 .turn-markdown-table-wrap {
   max-width: 100%;
   margin: 0 0 12px;
@@ -812,8 +810,8 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
   background-size: 10px;
 }
 
-/* Tool entries, thinking blocks and activity groups render as quiet,
-   borderless disclosure rows. */
+/* Tool entries, thinking blocks, and activity groups use borderless
+   disclosure rows with transparent backgrounds. */
 .tool-block,
 .thinking-block,
 .activity-group-block {
@@ -900,7 +898,7 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
   background: var(--pane-hover-bg);
 }
 
-/* Errors lost their red box along with every other border; a red left rule on the
+/* Errors use a red left rule instead of a surrounding border; the
    row keeps them glanceable. Drawn with a ::before bar instead of an inset
    box-shadow so the rule stays straight rather than bending around the
    summary's border-radius. */
@@ -966,7 +964,7 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
   color: var(--status-error-fg);
 }
 
-/* Expanded payloads keep a faint full box so raw output stays delineated, indented
+/* Expanded payloads use a faint border to separate raw output, indented
    beneath their tool row. */
 .tool-payload {
   margin: 6px 0 0 14px;

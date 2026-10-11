@@ -811,7 +811,7 @@ export function messageItemCopyText(item: MessageItem): string | null {
  *
  * System messages and fully tagged user-role instructions are omitted without
  * ending the run. Activity-only assistant items and assistant text that
- * sanitizes to empty are likewise skipped, so the menu lands on the first
+ * sanitizes to empty are likewise skipped, so the menu selects the first
  * visible copyable message.
  */
 export function assistantRunCopyTextByItemKey(items: MessageItem[]) {

@@ -78,7 +78,7 @@ export interface LoopDeps {
   logger: Logger;
   caches: ToolCaches;
   fetch: typeof globalThis.fetch;
-  /** Test seam for the SSRF guard's resolver and the loopback fixture host. */
+  /** Test hooks for the SSRF guard's resolver and the loopback fixture host. */
   toolOverrides?: Pick<RunToolContext, "lookup" | "allowHosts">;
 }
 
@@ -89,7 +89,7 @@ export interface RunAttemptInput {
   kind: "fresh" | "resume";
   /** Aborted by cancel and by drain; which one is told apart by `reason`. */
   signal: AbortSignal;
-  /** Set by drain so the attempt settles as `interrupted` rather than failing. */
+  /** Set by drain so the attempt ends as `interrupted` rather than failing. */
   isDraining: () => boolean;
 }
 
@@ -129,7 +129,7 @@ function parentDocumentOf(
 }
 
 /**
- * Runs one attempt to its end and settles the node.
+ * Runs one attempt to its end and updates the node's final state.
  *
  * Returns rather than throws: every failure mode here is a state the node has
  * to end up in, and the caller (`service.ts`) needs to know which one to
@@ -159,11 +159,11 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   }
 
   // ── sequence bookkeeping ────────────────────────────────────────────────
-  // The counter lives here between writes: deltas are forwarded and consume a
+  // The counter remains here between writes: deltas are forwarded and consume a
   // sequence number without writing a row, and `advanceSeq` carries the value
   // back into the node before the next write bumps it.
   //
-  // The loop owns the counter for the length of the attempt, so every number
+  // The loop manages the counter for the length of the attempt, so every number
   // it spends is carried by an event: `advanceSeq` and `commitTurn` are the
   // only allocators, and the writes that publish nothing with a `seq` — the
   // in-flight checkpoint and the status transitions — are handed the current
@@ -176,7 +176,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
   };
   /**
    * The sequence number assigned to a terminal event, persisted and emitted.
-   * Every other number lives only in this variable until a write carries it into the
+   * Every other number remains only in this variable until a write stores it in the
    * row; the last one has no write after it, so a resume or a second attempt
    * would read the node back one short and hand the same number out twice.
    */
@@ -405,7 +405,7 @@ export async function runAttempt(deps: LoopDeps, input: RunAttemptInput): Promis
       stopWhen: stepCountIs(MAX_STEPS),
       abortSignal: signal,
       providerOptions: resolved.providerOptions,
-      // The loop owns retry policy: a 429 re-queues with backoff and keeps its
+      // The loop implements retry policy: a 429 re-queues with backoff and keeps its
       // place in the admission order, which a transport-level retry cannot do.
       maxRetries: 0,
       onError: ({ error }) => {
@@ -618,7 +618,7 @@ function settleFailure(
   try {
     node = nodesRepo.setStatus(db, userId, nodeId, "failed", {
       error: error.message,
-      // Inside a run the loop owns the counter and the `research.run.finished`
+      // Inside a run the loop manages the counter and the `research.run.finished`
       // below is what spends the next number; outside one (a model that will
       // not resolve) this write is the allocator.
       ...(seq === undefined ? {} : { seq }),

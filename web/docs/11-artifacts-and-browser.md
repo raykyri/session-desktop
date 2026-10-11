@@ -44,7 +44,7 @@ to documents:
   shown as source in the same shell; `?raw=1` opts out of rendering and is the
   path that keeps `Range` meaningful. The Markdown is sanitized
   (`remark` → `rehype-sanitize`) rather than passed through as the desktop
-  did: the preview iframe carries `allow-same-origin` against the artifact
+  did: the preview iframe uses `allow-same-origin` against the artifact
   host, so sanitization must remove raw HTML from uploaded documents rather
   than relying only on the CSP.
 - Per-response CSP: `default-src 'none'; img-src 'self' data:; style-src

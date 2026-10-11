@@ -1,6 +1,6 @@
 // The streaming protocol's client half (`05-run-lifecycle-and-streaming.md`
 // §4, §9): a snapshot seeds the buffer, ordered deltas extend it, and when the
-// run settles the durable snapshot replaces the buffer without dropping a turn
+// run completes, the durable snapshot replaces the buffer without dropping a turn
 // on the way through.
 
 import type { SessionEvent, Turn } from "@session/shared";

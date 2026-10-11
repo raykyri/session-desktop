@@ -1,7 +1,7 @@
 // The document's own header (`09-research-document-view.md` §2).
 //
 // The breadcrumb down to the selected node, a chip counting what this page
-// shows, and the full-transcript toggle. Cancel lives on the segment's status
+// shows, and the full-transcript toggle. Cancel appears on the segment's status
 // line (`AnswerPane.tsx`).
 // Node-level back/forward has no buttons here: it is driven by ⌘[ / ⌘] and the
 // mouse back/forward buttons (`ResearchPage.tsx`).
@@ -55,7 +55,7 @@ export function collapseBreadcrumb(path: ResearchNode[]): BreadcrumbEntry[] {
   ];
 }
 
-/** The tree's title is the truncated question until the root run settles and
+/** The tree's title is the truncated question until the root run completes and
  * the metadata model names the thread (`runs/metadata.ts`). Until then the
  * header reads "New thread"; the stored title is untouched, so the sidebar and
  * the tab keep the question. A root that failed or was cancelled never gets a

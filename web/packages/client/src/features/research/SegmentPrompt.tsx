@@ -1,6 +1,6 @@
 // One thread segment's question (`09-research-document-view.md` §2).
 //
-// Index 0 is the page's own question and owns the thread's chrome: the Back
+// Index 0 is the page's own question and contains the thread's chrome: the Back
 // link to the parent it branched from, the Follow / Bookmark pair, the
 // answering model and when it was asked. Every later segment is an inline
 // follow-up and shows only what orients the reader inside the thread — the

@@ -6,7 +6,7 @@ import { cn } from "../lib/cn.js";
 import { CONTEXT_MENU_SURFACE, MENU_ITEM, MENU_ITEM_SIZE, MENU_SEPARATOR } from "./surfaces.js";
 
 export interface ContextMenuProps {
-  /** The region that owns the right-click. */
+  /** The region that handles the right-click. */
   children: ReactNode;
   items: ReactNode;
   className?: string;

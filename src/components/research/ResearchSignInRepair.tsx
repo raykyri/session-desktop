@@ -43,15 +43,12 @@ const ADAPTER_LABELS: Record<string, string> = {
 interface SignInRepairOutcome {
   kind: "verified" | "unverified" | "signedOut" | "blocked" | "checkFailed";
   message: string;
-  /** Retry this research is offered: sign-in is verified, or the check was
-   * inconclusive and the retry is an explicit attempt. */
+  /** Whether Retry is available after a successful or inconclusive check. */
   canRetry: boolean;
 }
 
-/** The result of an explicit sign-in check for the repair panel. `adapter`
- * is the probed agent (null when the probe no longer reports it) and
- * `probeError` the probe's own failure. Only a verified sign-in reads as
- * repaired; an inconclusive one allows a retry as an attempt. */
+/** Result of an explicit sign-in check. `adapter` is null if the probe no
+ * longer reports the agent. Inconclusive checks allow a manual retry. */
 export function signInRepairOutcome(
   label: string,
   adapter: AgentAdapterMetadata | null,
@@ -71,13 +68,13 @@ export function signInRepairOutcome(
     case "ready":
       return {
         kind: "verified",
-        message: `${label} is signed in. Retry runs this question again with ${label}, in place of the failed attempt.`,
+        message: `${label} is signed in. Retry this question with ${label}.`,
         canRetry: true,
       };
     case "unverified":
       return {
         kind: "unverified",
-        message: `${agentSignInUnverifiedText(adapter)} You can retry this research to attempt the connection.`,
+        message: `${agentSignInUnverifiedText(adapter)} Retry this question to try connecting.`,
         canRetry: true,
       };
     case "needsAuth":
@@ -113,8 +110,7 @@ interface SignInRepairViewProps {
   onClose: () => void;
 }
 
-/** The repair panel's markup for one state: the sign-in command, the last
- * check's result, and Verify / Retry this research / Close. */
+/** Sign-in command, latest check result, and repair actions. */
 export function SignInRepairView({
   label,
   loginCommand,
@@ -140,8 +136,8 @@ export function SignInRepairView({
       </h4>
       <p className="research-repair-text">
         {loginCommand
-          ? "Run this command in Terminal and complete sign-in, then verify the connection here."
-          : `Sign in to ${label} with its own sign-in steps, then verify the connection here.`}
+          ? "Run this command in Terminal, finish signing in, then verify here."
+          : `Follow ${label}'s sign-in steps, then verify here.`}
       </p>
       {loginCommand ? (
         <AgentSetupCommand command={loginCommand} onCopied={onCopied} onError={onError} />
@@ -231,8 +227,7 @@ export default function ResearchSignInRepair({
     };
   }, []);
 
-  // A verified sign-in makes Retry the next step: move focus there from the
-  // Verify button.
+  // After a verified sign-in, move focus from Verify to Retry.
   useEffect(() => {
     if (!checking && outcome?.kind === "verified" && document.activeElement === verifyRef.current) {
       retryRef.current?.focus({ preventScroll: true });

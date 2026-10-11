@@ -17,7 +17,7 @@ test.afterEach(() => {
   resetDocumentRoot();
 });
 
-test.serial("the settings store lands on <html> as attributes", (t) => {
+test.serial("the settings store is applied to <html> as attributes", (t) => {
   render(<ThemeEffects />);
   const root = document.documentElement;
 

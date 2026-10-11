@@ -3,7 +3,7 @@
 // What is worth pinning here is the behavior that is not react-markdown's:
 // legacy markers rendering as text, destinations passing `safeHref`, the
 // oversize policy, and TeX staying readable as source until the math chunk
-// lands.
+// loads.
 
 import { cleanup, render, screen } from "@testing-library/react";
 import test from "ava";
@@ -69,7 +69,7 @@ test.serial("the plain-text fallback is itself truncated with a notice", (t) => 
   t.true(text.includes("truncated: showing 20 of 50 characters"));
 });
 
-test.serial("TeX renders as its literal source until the math chunk lands", (t) => {
+test.serial("TeX renders as its literal source until the math chunk loads", (t) => {
   resetMathPluginsForTests();
   render(<ResearchMarkdown markdown="Euler wrote $e^{i\\pi}+1=0$ here." />);
   // The base plugin list has no remark-math, so the dollars are ordinary text.
@@ -104,7 +104,7 @@ test.serial("inline mode drops block wrappers and keeps inline formatting", (t) 
   t.truthy(container.querySelector("strong"));
 });
 
-test.serial("an aliased wikilink survives a GFM table cell", (t) => {
+test.serial("an aliased wikilink remains intact in a GFM table cell", (t) => {
   render(
     <ResearchMarkdown
       markdown={"| Term | Note |\n| --- | --- |\n| [[Collective memory|recall]] | shared |\n"}

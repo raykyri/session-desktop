@@ -26,7 +26,7 @@ import { DIALOG_BACKDROP } from "../../ui/surfaces.js";
 
 /** The sidebar account footer. `auth.logout` deletes the session rows; the
  * Hono layer clears the cookie on the same response, so the navigation that
- * follows lands on `/login` with no session to find. */
+ * follows opens `/login` with no session to find. */
 function AccountMenu() {
   const navigate = useNavigate();
   const me = useMe();

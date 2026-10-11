@@ -6,8 +6,7 @@ import {
   type ResearchDropPosition,
 } from "../lib/researchFolders";
 
-/** What a drag carries: a tree card (any place), a draft card (Drafts only)
- * or a message row (its own messages column only). */
+/** The draggable item: a tree card, a Drafts card, or a message row. */
 interface ResearchDragItem {
   kind: "tree" | "draft" | "message";
   id: string;

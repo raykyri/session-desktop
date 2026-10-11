@@ -15,7 +15,7 @@ test("a server draft restores text, model and attachments without replacing a ne
   t.is(restoreServerDraft(key, JSON.stringify({ ...remote, text: "older", updatedAt: 1 })), null);
 });
 
-test("pending reads cannot overwrite edits or resurrect a cleared draft", (t) => {
+test("pending reads cannot overwrite edits or restore a cleared draft", (t) => {
   const state = useDraftsStore.getState();
   state.setDraft("home:editing", { text: "current edit" });
   const remote = JSON.stringify({ text: "remote", updatedAt: Date.now() + 10_000 });

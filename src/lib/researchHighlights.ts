@@ -162,12 +162,11 @@ function contextSidesAt(
   suffix: string,
 ): { prefix: boolean; suffix: boolean; both: boolean } {
   const end = start + exactLength;
-  // An empty side constrains nothing. Context is captured clamped to the
-  // passage's enclosing message, so a quote reaching that message's edge saves
-  // no context on that side — and a whole conversation turn, which is one
-  // message, saves none on either. Reading emptiness as "must sit at the
-  // projection's own edge" orphaned every such anchor the moment another
-  // message rendered before or after it.
+  // An empty side imposes no constraint. Context is limited to the enclosing
+  // message, so a quote at a message boundary has no context on that side. A
+  // whole-message quote has none on either side. Requiring an empty side to
+  // match the projection boundary would invalidate these anchors when adjacent
+  // messages render.
   const prefixMatches =
     !prefix ||
     projection.slice(Math.max(0, start - prefix.length), start) === prefix;
@@ -182,22 +181,16 @@ function contextSidesAt(
 
 // Locate a highlight's passage in the current rendered-text projection.
 //
-// Two things move the stored offset. A visibility toggle keeps the same
-// snapshot revision but shifts the flat text as tool/thinking rows appear.
-// An edit to the document produces a new revision with genuinely different
-// text. Both are handled the same way — re-locate from the saved quote and
-// its surrounding context instead of trusting the raw offset — so a highlight
-// survives an edit elsewhere in the document rather than being orphaned the
-// moment the revision changes.
+// A visibility toggle shifts projected text within the same revision, while a
+// document edit changes the revision and text. In both cases, locate the saved
+// quote from its context instead of relying only on the stored offset.
 //
 //   1. Same revision: the stored offset addresses the exact text, so accept it
 //      in place once its context still checks out (the fast path).
 //   2. Otherwise scan every occurrence of the quote and keep the nearest one
 //      whose prefix and suffix both still agree.
-//   3. If no occurrence keeps both sides — an edit reached the quote's own
-//      neighbourhood — relocate only to a single occurrence that keeps one
-//      side, so an identical short phrase surviving elsewhere can never be
-//      mistaken for it.
+//   3. If no occurrence matches both sides, accept only one occurrence that
+//      matches either side. This avoids selecting an unrelated duplicate.
 //
 // Returns null when the quote is gone or too ambiguous to place safely; the
 // caller then treats the highlight as orphaned rather than painting a guess.

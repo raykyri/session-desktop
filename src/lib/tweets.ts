@@ -26,8 +26,8 @@ export interface TweetTextRun {
   tco?: string;
 }
 
-/** A link preview the tweet carries — the bordered card X renders under the
- * text for a shared URL. `large` is the wide-image variant. */
+/** The bordered link-preview card displayed under a tweet with a shared URL.
+ * `large` is the wide-image variant. */
 interface TweetLinkCard {
   url: string;
   domain: string;

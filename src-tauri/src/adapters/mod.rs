@@ -250,7 +250,7 @@ pub(crate) fn shell_cli_model(args: &[String]) -> Option<String> {
 
 /// Apply an explicit `--model` from shell args onto a resolved agent when it
 /// differs from the stored value (covers prepared/resumed agents that did not
-/// receive the model at mint time).
+/// receive the model when the request is created).
 pub(crate) fn apply_shell_cli_model(
     state: &AppState,
     agent: AgentInfo,
@@ -871,7 +871,7 @@ pub trait AgentAdapter: Send + Sync {
     }
 
     /// Writes a copy of `transcript_path` truncated to exclude `anchor` and
-    /// everything after it, returning the new session's id. The copy lands
+    /// everything after it, returning the new session's id. The copy is written
     /// beside the source so the CLI discovers it the same way it finds its own
     /// sessions — the id is the only handle a resume needs. Adapters that
     /// cannot be truncated safely keep this default and are reported as such by
@@ -2166,7 +2166,7 @@ fn notification_adapter_id(
 /// Like `notification_adapter_id`, but tolerant of a claimed agent id whose
 /// record no longer exists: SessionStart recovery resolves the adapter from
 /// the remaining hints instead of failing on the stale id. Kept beside the
-/// strict resolver so the two hint chains cannot drift.
+/// strict resolver so the two hint chains remain consistent.
 pub(crate) fn notification_adapter_hint(
     state: &AppState,
     notification: &AdapterNotification,
@@ -2404,7 +2404,7 @@ mod tests {
             }),
         );
         assert_eq!(auth, AdapterAuthState::Unknown);
-        let detail = detail.expect("an unknown result explains itself");
+        let detail = detail.expect("unknown results include diagnostic detail");
         assert!(detail.contains("`codex login status`"), "{detail}");
         assert!(detail.contains("exited with an error"), "{detail}");
         assert!(!detail.contains("user@example.com"), "{detail}");

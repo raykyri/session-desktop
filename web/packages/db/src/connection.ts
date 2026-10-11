@@ -96,7 +96,7 @@ export function unknownMigrations(
 }
 
 /**
- * Opens (or creates) the database at `path`, applies the pragmas, refuses a
+ * Opens (or creates) the database at `path`, applies the pragmas, rejects a
  * database from a newer build, migrates, and runs pending backfills.
  *
  * `":memory:"` gives a private in-memory database for tests where file

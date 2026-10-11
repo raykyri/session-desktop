@@ -732,10 +732,9 @@ export function patchResearchSummaryForCreatedNode(
   };
 }
 
-/** Remove every cached node contribution available for a branch deletion.
- * Attention stays conservative because another node may still own the flag;
- * the debounced tree read resolves counts when some removed nodes were not in
- * the local cache. */
+/** Removes cached node contributions for a branch deletion. Attention flags
+ * remain set because another node may require them. The debounced tree read
+ * resolves counts when the local cache did not contain every removed node. */
 export function patchResearchSummaryForRemovedNodes(
   summary: ResearchTreeSummary,
   treeId: string,

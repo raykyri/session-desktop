@@ -1,10 +1,5 @@
-// Browser-style visit history for the research surface's back/forward
-// controls. One history covers every thread: each entry is the message
-// selected in a thread (or Home, with no thread open), so switching between
-// questions within a thread and across threads replays in the order it
-// happened. A pure, immutable reducer: the app shell holds one
-// `ResearchVisitHistory` value and swaps it for the result of these
-// transitions, so the branch/cursor semantics live here and are unit-tested.
+// Browser-style history for research navigation. Entries record Home or the
+// selected message in a thread. These pure functions update the shared stack.
 
 /** One step of research navigation. `home`: no thread open (the feed column
  * beside an empty content column). `node`: a thread with `nodeId` as its
@@ -64,9 +59,7 @@ export function initResearchVisits(visit: ResearchVisit | null): ResearchVisitHi
   return visit ? { entries: [visit], index: 0 } : EMPTY_RESEARCH_VISITS;
 }
 
-/** Seeds an empty history with the state restored at startup. A history the
- * reader already added to (by navigating before the restore finished) is
- * kept as it is. */
+/** Seeds an empty history with restored state. Existing navigation takes precedence. */
 export function seedResearchVisits(
   history: ResearchVisitHistory,
   visit: ResearchVisit,
@@ -74,9 +67,7 @@ export function seedResearchVisits(
   return history.index < 0 ? initResearchVisits(visit) : history;
 }
 
-/** Whether two visits show the same thing. A thread visit without a node
- * matches any visit to that thread: it stands for "the thread as it
- * restores", which the thread page fills in once it has opened. */
+/** Compares visits. A thread visit without a node matches any visit to that thread. */
 function sameResearchVisit(left: ResearchVisit, right: ResearchVisit): boolean {
   if (left.kind === "home" || right.kind === "home") {
     return left.kind === right.kind;
@@ -99,10 +90,8 @@ export function currentResearchVisit(history: ResearchVisitHistory): ResearchVis
 
 /**
  * Records fresh navigation to `visit`: entries beyond the cursor are
- * discarded, in this thread or any other, and the visit is appended — how a
- * browser drops the forward stack when you follow a new link. Navigating to
- * the visit already on screen changes nothing, except that a thread visit
- * without a node takes the node now named.
+ * discarded and the visit is appended. Navigating to the current visit changes
+ * nothing, except that a thread visit without a node adopts the specified node.
  */
 export function pushResearchVisit(
   history: ResearchVisitHistory,
@@ -167,9 +156,7 @@ export function researchVisitForward(history: ResearchVisitHistory): ResearchVis
   return { history: { entries: history.entries, index }, visit: history.entries[index] };
 }
 
-/** Merges adjacent matching entries, keeping the cursor on the entry that
- * held it. Stepping between two entries that show the same thing would
- * re-apply what is already on screen. */
+/** Merges adjacent matching entries and preserves the cursor position. */
 function collapseResearchVisits(source: readonly ResearchVisit[], sourceIndex: number): ResearchVisitHistory {
   const entries: ResearchVisit[] = [];
   let index = -1;

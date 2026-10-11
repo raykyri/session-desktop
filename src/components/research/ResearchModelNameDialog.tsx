@@ -2,10 +2,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 
-/** Custom model: a small modal over the window with the model name field
- * focused, opened by choosing Custom in the Ask model menu. Enter or Use
- * model confirms; Esc, Cancel, or a click outside closes it and leaves the
- * model choice unchanged. Uses the folder dialog's styles. */
+/** Dialog for a custom model name. Enter and Use model submit; Escape, Cancel,
+ * and outside clicks close it without changing the model. */
 export function ResearchModelNameDialog({
   agentLabel,
   initialName,
@@ -74,7 +72,7 @@ export function ResearchModelNameDialog({
         }}
       >
         <h3 id={titleId}>Custom model</h3>
-        <p className="research-folder-dialog-sub">The model name {agentLabel} is launched with.</p>
+        <p className="research-folder-dialog-sub">Enter the model name to use with {agentLabel}.</p>
         <label className="research-visually-hidden" htmlFor={inputId}>
           Model name
         </label>

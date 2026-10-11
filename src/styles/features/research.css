@@ -171,9 +171,9 @@
   color: var(--text-heading);
 }
 
-/* Workspace switcher: pinned beneath the research list, scoping the sidebar
-   to one research workspace. Workspace management actions live at the bottom
-   of its menu (a ResearchMenu) and always apply to the scoped workspace. */
+/* The workspace switcher is pinned below the research list and scopes the
+   sidebar to one research workspace. Its menu lists workspace management
+   actions last; these actions apply to the selected workspace. */
 .research-workspace-switcher {
   position: relative;
   flex: none;
@@ -627,10 +627,10 @@
 
 /* — Column pairs: one [messages | answer] pair per level — */
 
-/* The pairs are flex items of the column strip (research-surface.css):
-   the open thread's wrapper takes no box of its own. Widths come from the
-   strip's width or the columns' resize handles (ResearchColumns), so
-   opening or closing a level never resizes a column. */
+/* Pairs are flex items in the column strip (research-surface.css); the open
+   thread wrapper does not generate a box. The strip width and resize handles
+   (ResearchColumns) determine column widths, so opening or closing a level
+   does not resize a column. */
 .research-pairs {
   display: contents;
 }
@@ -798,8 +798,8 @@
   margin-left: -8px;
 }
 
-/* The bar's padding already places its line; the arrows' own -1px nudge
-   would lift them above the title. */
+/* Reset the arrows' -1px translation because the bar padding already aligns
+   them with the title. */
 .research-column-header .research-history-button {
   transform: none;
 }
@@ -2416,8 +2416,8 @@
   margin: 0 0 28px;
 }
 
-/* Holds the recap's slot while the recap generates, so the text lands in
-   place instead of pushing the answer down when it arrives. */
+/* Reserve the recap height during generation to prevent the answer from
+   shifting when the recap appears. */
 .research-recap-pending {
   display: flex;
   align-items: center;

@@ -1,4 +1,4 @@
-// SSE connection status (07 §4.2). Drives the subtle indicator in the stage
+// SSE connection status (07 §4.2). Controls the status indicator in the stage
 // header and, while the stream is down, the snapshot-poll fallback for
 // displayed active nodes (05 §9).
 

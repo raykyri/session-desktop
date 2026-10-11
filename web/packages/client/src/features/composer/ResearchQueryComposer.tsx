@@ -423,7 +423,7 @@ export function ResearchQueryComposer({
         onChange={(event) => updatePrompt(event.currentTarget.value)}
         onKeyDown={(event) => {
           // One dimension left: Tab steps models when there are models to step
-          // (`launcherKeyboard`). It lives on the field rather than on the form
+          // (`launcherKeyboard`). It is attached to the field rather than the form
           // because that is where the caret is when it is pressed.
           if (launcherTabAction(event, models.length > 1) === "cycle-model") {
             event.preventDefault();

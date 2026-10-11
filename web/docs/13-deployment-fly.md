@@ -126,7 +126,7 @@ fly deploy web -c web/fly.toml
 Create the storage volume prior to running the initial deployment: with `strategy = "immediate"`, the deployment will fail if the required volume does not already exist when the machine starts.
 
 Granting administrative privileges (which provides access to `claude-fable` and the `/admin` dashboard) is performed after the user's initial sign-in and requires different commands depending on the environment. Locally it is `npm run db:admin -- <github login>`. On
-the machine it is not: the runtime image carries the server bundle and
+the machine it is not: the runtime image contains the server bundle and
 production `node_modules` only, so neither `packages/db/bin/admin.ts` nor `tsx`
 is there to run. Instead, update the database directly using `better-sqlite3`:
 
@@ -240,7 +240,7 @@ Startup reconciliation also resolves inconsistent states that can occur if the s
   and not reconciled against a table the way `/data/documents` is. It holds
   the images of embedded posts, keyed by the SHA-256 of the origin URL
   (`GET /embeds/:hash`, `03-api-and-events.md` §5), and every file in it can
-  be fetched again from the URL its `embed_assets` row remembers. Losing it
+  be fetched again from the URL stored in its `embed_assets` row. Losing it
   costs one round trip per image, so it is a cache, not data.
 - The same maintenance interval sweeps that cache
   (`embeds/storage.ts:sweepEmbeds`): assets not served in 30 days are

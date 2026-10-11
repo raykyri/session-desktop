@@ -83,8 +83,8 @@ impl ResearchFolderState {
     }
 }
 
-/// Membership value that files a tree in the built-in Drafts folder. No
-/// `ResearchFolder` record carries this id.
+/// Membership value that files a tree in the built-in Drafts folder. This id
+/// has no `ResearchFolder` record.
 pub const RESEARCH_DRAFTS_FOLDER_ID: &str = "system:drafts";
 /// Built-in sidebar sections whose collapsed flag is stored in
 /// `ResearchFolderState::collapsed` next to user folder ids.
@@ -333,7 +333,7 @@ impl ResearchNodeStatus {
 
     /// A settled outcome. Terminal statuses are monotonic: native hooks and
     /// transcript tailing deliver agent events asynchronously, so a delayed
-    /// generic update must never resurrect or rewrite an explicit outcome.
+    /// generic update must never reactivate or rewrite an explicit outcome.
     pub fn is_terminal(self) -> bool {
         matches!(self, Self::Complete | Self::Failed | Self::Cancelled)
     }
@@ -472,7 +472,7 @@ pub enum NodeAnchor {
 /// Byte cap for a post's text and for each reply.
 pub const MAX_POST_TEXT_BYTES: usize = 64 * 1024;
 pub const MAX_POST_REPLIES: usize = 1_000;
-/// Top-level replies the Home feed carries per post; the card fetches the
+/// Top-level replies included per post in the Home feed; the card fetches the
 /// rest from the full node when the user expands it.
 pub const RECENT_ACTIVITY_POST_REPLY_LIMIT: usize = 5;
 
@@ -522,7 +522,7 @@ pub struct RunRecord {
     pub started_at: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<u64>,
-    /// When the durable response snapshot landed. The completion status can
+    /// When the durable response snapshot was written. The completion status can
     /// precede the final transcript flush, so viewers use this changing as
     /// their signal to refetch content they may have read too early.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -571,7 +571,7 @@ pub struct RunBinding {
 }
 
 /// A post, shown in the UI as a note: text or a saved link written by the
-/// user, private unless it carries a `delivery` record. It is a tree root or
+/// user, private unless it has a `delivery` record. It is a tree root or
 /// a child of another post (a follow-up note); its other children are
 /// exchanges launched with the post as context.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -1059,7 +1059,7 @@ pub fn sign_in_error_message(agent_label: &str, login_command: &str) -> String {
     )
 }
 
-/// The marker every sign-in failure message carries: the run-time form from
+/// The marker included in every sign-in failure message: the run-time form from
 /// `sign_in_error_message`, and the readiness check's
 /// "<agent> is not signed in. Run `<command>` and check again."
 const SIGN_IN_ERROR_MARKER: &str = " is not signed in. Run `";
@@ -3104,7 +3104,7 @@ pub fn prune_response_snapshots(
             let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
                 continue;
             };
-            // Scratch files stranded by a writer that died between
+            // Scratch files left by a writer that exited between
             // write_synced and rename (`<node>.json.<pid>.tmp`) can never be
             // renamed into place, and nothing else revisits them — at up to
             // 16MB each they are worse than clutter. Same pid-liveness
@@ -3490,7 +3490,7 @@ pub fn document_markdown_from_turns(turns: &[crate::transcript::Turn]) -> Option
     })
 }
 
-/// The launch prompt for a follow-up run on a document: the document rides
+/// The launch prompt for a follow-up run on a document: the prompt includes
 /// along as context so a fresh session (there is no parent session to fork)
 /// can answer questions about it. Refused above the document word cap —
 /// possible only for imported archives, since creation enforces the same cap.
@@ -3511,7 +3511,7 @@ pub fn document_followup_prompt(
             "this document is too large to include in a follow-up prompt ({words} words; the limit is {MAX_RESEARCH_DOCUMENT_WORDS})"
         ));
     }
-    // The title lands inside a quoted attribute: strip quotes and collapse
+    // The title is inserted into a quoted attribute: strip quotes and collapse
     // whitespace so it cannot break out of the tag.
     let title = title
         .replace(['"', '\n', '\r'], " ")
@@ -3614,7 +3614,7 @@ fn neutralized_tag_markup(text: &str, names: &[&str]) -> String {
 }
 
 /// The launch prompt for a follow-up on an exported conversation: the
-/// conversation rides along, serialized turn by turn, so a fresh session
+/// conversation is serialized turn by turn so a fresh session
 /// (exports are severed — there is no source session to fork) can answer
 /// questions about it. Only user and assistant text is serialized — tool
 /// activity markers and other blocks stay out of the prompt. Over the word
@@ -3758,7 +3758,7 @@ pub fn query_followup_prompt(exact: &str, question: &str) -> String {
 const POST_CONTEXT_TAGS: [&str; 4] = ["note", "post", "replies", "reply"];
 
 /// The launch prompt for an AI follow-up under a post. A post has no session
-/// to fork, so the post body and its replies ride along as context. Reply
+/// to fork, so the prompt includes the post body and its replies as context. Reply
 /// bodies are other people's words, so they (and the post body, which can
 /// quote them) pass through [`neutralized_tag_markup`] for the tags this
 /// serialization uses. `anchored_reply` is the reply the question is about;
@@ -3839,7 +3839,7 @@ pub fn post_followup_prompt(
 ///
 /// The passage is verbatim conversation content — which can include third-party
 /// text the source terminal session captured, such as a fetched page or a
-/// dependency's source — and it lands in the same prompt as the serialized
+/// dependency's source — and it is included in the same prompt as the serialized
 /// `<conversation>`/`<turn>` structure the fresh agent is told to trust. The
 /// serialized turns are already neutralized; without this the anchored quote
 /// would be the one way that content re-entered the prompt able to forge or
@@ -6257,7 +6257,7 @@ mod tests {
         assert_eq!(visible[0].id, "working");
         assert_eq!(visible[1].id, "tool-result");
 
-        // A later rolled-back copy of the prompt must not steal the response
+        // A later rolled-back copy of the prompt must not receive the response
         // boundary from the surviving exchange.
         let mut rolled_back_prompt = turn("discarded-user", "user", "New question");
         rolled_back_prompt.context_status = Some(crate::transcript::TurnContextStatus::RolledBack);
@@ -6342,7 +6342,7 @@ mod tests {
         // While a follow-up's answer is being generated, the forked session's
         // transcript can hold only the replayed ancestor exchange — the
         // node's own prompt has not reached it yet. The positional fallback
-        // then lands on the ancestor's prompt, which used to surface the
+        // then matches the ancestor's prompt, which previously displayed the
         // ancestor's (main query's) answer as this node's response. With the
         // ancestor prompts supplied, the response must stay empty instead.
         let ancestors = vec!["Ancestor question".to_string()];
@@ -6367,7 +6367,7 @@ mod tests {
             response_turns(&replayed_wrapped, None, "Follow-up question", &ancestors).is_empty()
         );
 
-        // Once the node's own prompt lands — even rewritten beyond both text
+        // Once the node's own prompt appears — even rewritten beyond both text
         // matches — the positional fallback works as before: the response is
         // everything after the last user turn.
         let with_child = vec![

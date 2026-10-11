@@ -232,7 +232,7 @@ export function researchSidebarUnitId(unit: ResearchSidebarUnit): string {
   return unit.kind === "tree" ? unit.tree.id : unit.folder.id;
 }
 
-/** The workspace a tree list is displaying, when the list itself settles it.
+/** The workspace a tree list is displaying, when the list determines it.
  * An empty folder has no member to place it beside, so it can only be shown
  * once the workspace is known. */
 function inferWorkspaceId(trees: ResearchTreeSummary[]): string | null {

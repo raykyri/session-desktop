@@ -37,7 +37,7 @@ export interface TrpcClientOptions {
 /**
  * Queries and mutations go over `httpBatchLink`; `events.subscribe` goes over
  * `httpSubscriptionLink`, which is an `EventSource` and therefore a GET. The
- * subscription carries no `X-Requested-With`: the server guards safe methods
+ * subscription has no `X-Requested-With`: the server protects safe methods
  * by origin alone, and an `EventSource` cannot set a header anyway.
  *
  * The link reconnects on its own with backoff, so the bridge listens for

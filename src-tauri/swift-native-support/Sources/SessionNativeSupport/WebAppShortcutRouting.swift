@@ -48,7 +48,7 @@ func shouldClaimWebAppShortcut(
 /// These are the only app shortcuts whose DOM classifier depends on whether
 /// the focused target is editable. AppKit exposes only WKContentView here, not
 /// the child document's focused DOM node, so leave these chords with every
-/// human-browser page instead of risking stealing an editing command.
+/// human-browser page to avoid intercepting an editing command.
 func humanBrowserDefersEditableSensitiveShortcut(
     key: String,
     shift: Bool,

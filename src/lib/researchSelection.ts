@@ -106,14 +106,14 @@ function segmenterConstructor() {
 /** Cuts every unit that straddles a hard boundary into per-side pieces.
  *
  * The flat rendered-text projection concatenates messages (and the rows
- * between them) with no separator, so word segmentation reads across the seam
- * and fuses one message's last word with the next one's first: `"…faster"` +
+ * between them) with no separator, so word segmentation can combine one
+ * message's last word with the next one's first: `"…faster"` +
  * `"I rewrote…"` is one unit, and so is `"…faster."` + `"I…"` — a period
  * between letters does not break a word. Snapping to such a unit would drag a
  * selection into a neighbouring message, which for a conversation turn means a
- * quote spanning two speakers. Splitting at the seams keeps snapping to what it
- * advertises: each endpoint moves by at most a partial word, and which
- * messages a selection touches never changes. */
+ * quote spanning two speakers. Splitting at the boundaries preserves the
+ * documented behavior: each endpoint moves by at most a partial word, and the
+ * set of messages touched by a selection never changes. */
 function unitsSplitAtBoundaries(units: SelectionUnit[], boundaries: number[]) {
   if (boundaries.length === 0) {
     return units;
@@ -256,12 +256,12 @@ function expandAttachedPunctuation(
 }
 
 /** Expands a drag's flat rendered-text offsets to linguistic word boundaries.
- * The returned offsets are normalized, while `direction` preserves which end
- * owns the live focus. Equal offsets deliberately select one whole unit once
+ * The returned offsets are normalized, while `direction` identifies the focus
+ * endpoint. Equal offsets select one whole unit once
  * the caller's pointer-distance threshold has activated the drag.
  *
- * `boundaries` are flat offsets no unit may straddle — the seams between the
- * projection's messages and the rows around them, which carry no separating
+ * `boundaries` are flat offsets no unit may cross: the boundaries between the
+ * projection's messages and the rows around them, which contain no separating
  * whitespace of their own (see `unitsSplitAtBoundaries`). */
 export function createResearchSelectionSnapper(
   text: string,
@@ -287,8 +287,8 @@ export function createResearchSelectionSnapper(
     const first = leadingUnit(units, rawStart);
     const last = trailingUnit(units, rawEnd);
 
-    // A short drag can land in the whitespace immediately beside its anchor.
-    // Keep the anchor's whole word selected rather than producing no range.
+    // If a short drag ends in whitespace beside its anchor, select the anchor's
+    // whole word instead of producing no range.
     if (!first || !last || first.start > last.start) {
       const anchor =
         leadingUnit(units, anchorOffset) ?? trailingUnit(units, anchorOffset);

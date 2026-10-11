@@ -2,7 +2,7 @@
 // cards share.
 //
 // The thread rows themselves come from `features/research/treeMenu.tsx`, which
-// the research document view owns; what is left here is the leading-glyph row,
+// the research document view handles; what is left here is the leading-glyph row,
 // because a journal entry's menu is not a thread menu and has no home over
 // there.
 //

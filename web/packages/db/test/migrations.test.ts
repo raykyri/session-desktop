@@ -69,7 +69,7 @@ test("an in-memory database skips WAL but keeps the rest", (t) => {
   closeDatabase(db);
 });
 
-test("refuses a database carrying a migration this build does not know", (t) => {
+test("rejects a database containing a migration unsupported by this build", (t) => {
   const directory = mkdtempSync(join(tmpdir(), "session-unknown-"));
   const path = join(directory, "session.db");
   try {

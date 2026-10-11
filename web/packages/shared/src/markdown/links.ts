@@ -10,7 +10,7 @@
 // — is gone: the web has no local filesystem to serve and no panes to resolve
 // against.
 
-// Sentinel scheme for content that lives in the artifact store rather than at a
+// Sentinel scheme for content stored in the artifact store rather than at a
 // URL. Agents still write `[preview](/Users/.../report.html)`-style absolute
 // paths, and imported transcripts carry them; the renderer recognizes the
 // scheme and hands the reference to the artifact resolver instead of treating

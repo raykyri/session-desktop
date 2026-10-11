@@ -880,7 +880,7 @@ form.ready .btn.primary .ent { display: inline; }
 <ul><li>"Save draft" uses a faint grey fill instead of a borderless ghost style.</li></ul>
 <ul><li>Folder icons in the feed's folder headers are 14px instead of 16px.</li></ul>
 <ul><li>Conversation titles in column headers use the same type and colour as the feed heading: 15px, weight 600, on a 20px line. Header text and header icons share one centre line across the feed, conversation, and branch columns.</li></ul>
-<ul><li>The separate "N branches" link is gone. The fork button under an answer carries the count (for example ⑂ 2), stays visible while the answer has branches, and opens a menu of those branches with "New branch from this answer" at the end. With no branches it still creates one directly, on hover.</li></ul>
+<ul><li>The separate "N branches" link is gone. The fork button under an answer shows the count (for example ⑂ 2), stays visible while the answer has branches, and opens a menu of those branches with "New branch from this answer" at the end. With no branches it still creates one directly, on hover.</li></ul>
 <ul><li>Removed the Tiled column layout. Focus stack is the only layout; the notes keep Tiled in the options table as a considered alternative.</li></ul>
 <ul><li>The follow-up composer's spacing matches the turn grid: 16–18px above, 20–22px below, and the same side insets as the turns. Its field text is centred on the 30px send button. The feed composer's "Write a question first." error is right-aligned under the buttons.</li></ul>
 <ul><li>New folder and Rename folder open a modal dialog (dimmed window, centred dialog, focus kept inside) instead of a popover.</li></ul>
@@ -1496,7 +1496,7 @@ function trayList(f) {
   return items.length ? cardsHTML(items) : `<p class="tray-empty">${emptyText(f.id)}</p>`;
 }
 // Empty trays and folder views say how questions get there.
-const emptyText = (f) => (f === 'inbox' ? 'Nothing unfiled. New questions land here.' : f === 'archive' ? 'Archive is empty. Archived questions stop sending follow-up notifications.'
+const emptyText = (f) => (f === 'inbox' ? 'Nothing unfiled. New questions appear here.' : f === 'archive' ? 'Archive is empty. Archived questions stop sending follow-up notifications.'
   : f === 'drafts' ? 'No drafts. Use Save draft under the ask box to keep a question for later.' : 'Empty folder. Drag or file questions here.');
 function trayHTML(f) {
   if (f.id === 'inbox') return `<section class="tray inbox" data-drop="inbox" aria-label="Unfiled">${trayList(f)}</section>`;
@@ -2246,7 +2246,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !pop.hidden) { const m = S.menu; hidePop(); if (m && m.btn && m.btn.isConnected) m.btn.focus(); e.stopPropagation(); return; }
   if (!Pd || !Pd.armed || e.defaultPrevented) return;
   if (e.key.length !== 1 || e.metaKey || e.ctrlKey || e.altKey || e.target.closest('textarea, input')) return;
-  commitPending(); // focus moves to the new pair's ask box, so the keystroke lands there
+  commitPending(); // focus moves to the new pair's ask box, so it receives the keystroke
 });
 document.addEventListener('mousedown', (e) => {
   if (pop.hidden || pop.contains(e.target) || pop.dataset.kind !== 'menu') return;
@@ -2422,7 +2422,7 @@ function toast(html, opts = {}) {
   renderChrome();
 }
 
-// Focus survives a chrome re-render: the active element is found again by its id or by the data
+// Focus is preserved across a chrome re-render: the active element is found again by its id or by the data
 // attributes that identify it. (The column strip keeps its own elements and restores its own focus.)
 const KEY_ATTRS = ['a', 'id', 'f', 'view'];
 function keyOf(el) {
@@ -2660,7 +2660,7 @@ document.getElementById('controls').addEventListener('change', (e) => {
   }
   renderAll();
 });
-// After the window narrows, the strip settles again so the open columns' right edges (markers, "+ Ask") stay in view.
+// After the window narrows, reposition the strip so the open columns' right edges (markers, "+ Ask") stay in view.
 function resize(apply) {
   const before = strip.clientWidth;
   apply(); renderAll();

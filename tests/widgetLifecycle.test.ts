@@ -105,7 +105,7 @@ test("a stopped widget can still open its static preview without reauthorizing s
   });
 });
 
-test("focus protection in expanded previews stops inline copies and survives remount", async () => {
+test("focus protection in expanded previews stops inline copies and persists across remount", async () => {
   await withWidgetDom(async (window) => {
     const urls = urlsFor("3");
     const html = "<button onclick='this.textContent=42'>focus regression</button>";

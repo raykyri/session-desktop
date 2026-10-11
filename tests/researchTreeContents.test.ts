@@ -79,7 +79,7 @@ test("a document's follow-ups: inline ones and passage branches", () => {
   );
 });
 
-test("one item reads in the singular, and a single kind of message is named", () => {
+test("one item uses singular copy and one message kind is named", () => {
   const bare = researchNode({ id: "post", type: "post", delivery: null });
   assert.equal(
     researchTreeContentsSentence(researchTreeContents([bare, aiFollowUp], "post")!),
@@ -100,7 +100,7 @@ test("an empty thread has no follow-ups, whatever its root type", () => {
   assert.equal(researchTreeContentsSentence(researchTreeContents([question], "q")!), "It has no follow-ups.");
 });
 
-test("nodes outside the root's subtree are ignored, and a missing root reads as null", () => {
+test("nodes outside the root's subtree are ignored and a missing root returns null", () => {
   const stray = researchNode({ id: "stray", parentNodeId: "elsewhere", inline: true });
   const other = researchNode({ id: "other-root", treeId: "other" });
   assert.deepEqual(researchTreeContents([post, stray, other], "post"), { followUps: 0, branches: 0 });
@@ -113,7 +113,7 @@ const summary: ResearchTreeSummary = {
   hasUnseenUpdate: false, hasUnseenFailure: false,
 };
 
-test("the delete offer names the thread, states its contents, and offers Keep and Delete…", () => {
+test("the delete prompt names the thread, states its contents, and shows Keep and Delete…", () => {
   const contents = researchTreeContents([post, aiFollowUp], "post")!;
   const html = renderOffer(summary, contents);
   assert.match(html, /Delete the original thread\?/);
@@ -125,7 +125,7 @@ test("the delete offer names the thread, states its contents, and offers Keep an
   assert.doesNotMatch(html, /active runs/);
 });
 
-test("the delete offer disables Delete… while the thread has active runs", () => {
+test("the delete prompt disables Delete… while the thread has active runs", () => {
   const html = renderOffer({ ...summary, runningCount: 1 }, researchTreeContents([post], "post")!);
   assert.match(html, /It has active runs, which must finish or be cancelled before it can be deleted\./);
   assert.match(html, /<button[^>]*disabled=""[^>]*>Delete…<\/button>/);

@@ -253,8 +253,8 @@ export function useResearchWorkspaces(
     if (scopeWasRemoved) {
       changeResearchWorkspaceScope(nextScope);
     }
-    // Removing the selected folder/tree should land on an available research
-    // item in the surviving scope, not leave an unexplained empty thread page.
+    // After removing the selected folder or tree, select an available item in
+    // the remaining scope so the thread page is not empty.
     if (scopeWasRemoved || activeTreeWasRemoved) {
       const nextTree = treeForResearchScope(
         remainingTrees,

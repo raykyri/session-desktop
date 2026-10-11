@@ -157,7 +157,7 @@ export function collectSearchRanges(
 }
 
 // The first match visible in (or below) the viewport, so opening the bar or
-// retyping the term lands on a nearby match instead of jumping to the top of a
+// retyping the term selects a nearby match instead of jumping to the top of a
 // long transcript. Falls back to the last match when all matches sit above.
 export function nearestSearchRangeIndex(viewport: HTMLElement, ranges: Range[]): number {
   if (ranges.length === 0) {

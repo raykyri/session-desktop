@@ -58,7 +58,7 @@
   animation: spinner-spin 0.9s linear infinite;
 }
 
-/* Nudge the enter (↵) glyph down 1px so it sits optically centered next to ⌘. */
+/* Move the enter (↵) glyph down 1px to align it with ⌘. */
 .enter-glyph {
   display: inline-block;
   transform: translateY(1px);

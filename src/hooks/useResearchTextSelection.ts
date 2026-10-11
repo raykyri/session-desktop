@@ -41,7 +41,7 @@ import {
 
 /** A text selection in an answer that the selection toolbar acts on. */
 export interface ResearchSelectionAction {
-  /** The turn (node) the selection landed in. */
+  /** The turn (node) containing the selection. */
   nodeId: string;
   /** A selection in an answer that is still streaming: it can be copied, but
    * not highlighted or branched from until the answer has a revision. */
@@ -79,13 +79,9 @@ interface ResearchSelectionDrag {
   frame: number | null;
 }
 
-/** Text selection in the thread page's answers: live whole-word snapping
- * while a mouse drag runs, the selection captured as a passage anchor when
- * it ends (or a key extends it), the selection tone over the saved
- * highlights it overlaps, and the selection toolbar's actions — Highlight
- * (create, merge or remove), Branch and Copy. The captured action
- * is cleared whenever `viewKey` changes: transcript visibility and loaded
- * content can invalidate its offsets. */
+/** Manages answer selection, whole-word drag snapping, passage anchors,
+ * highlight overlap, and the Highlight, Branch, and Copy actions. A `viewKey`
+ * change clears captured selection because its offsets may be invalid. */
 export function useResearchTextSelection({
   viewKey,
   detailRef,
@@ -144,8 +140,8 @@ export function useResearchTextSelection({
       return;
     }
     const range = selection.getRangeAt(0);
-    // Resolve which turn the selection landed in; a selection that spans
-    // turns anchors nowhere.
+    // Find the turn containing the selection. Selections spanning turns cannot
+    // produce an anchor.
     const container =
       range.commonAncestorContainer instanceof Element
         ? range.commonAncestorContainer
@@ -173,8 +169,7 @@ export function useResearchTextSelection({
     }
     const projection = researchTextProjection(root);
     const copyText = projection.slice(offsets.start, offsets.end);
-    // A highlight or branch passage stays within one paragraph: a selection
-    // that runs into the next one is cut at the end of the first.
+    // Limit highlight and branch passages to the first selected paragraph.
     const startBlock = passageBlockAt(root, range.startContainer);
     const { crossed, ...clipped } = clipResearchSelectionToParagraph(
       projection,
@@ -292,7 +287,7 @@ export function useResearchTextSelection({
         return;
       }
       // Keep the live focus on the pointer side, so a subsequent keyboard
-      // extension continues from the end the reader last moved.
+      // extension continues from the endpoint most recently moved.
       applyDirectionalSelectionRange(range, snapped.direction);
     },
     [],
@@ -319,8 +314,8 @@ export function useResearchTextSelection({
         lastX: event.clientX,
         lastY: event.clientY,
         active: false,
-        // The snapper splits its word units at every message seam, so it
-        // moves each endpoint by at most a partial word within one turn.
+        // Word units do not cross message boundaries, so snapping moves each
+        // endpoint by at most a partial word within one turn.
         snapEligible: Boolean(
           researchHighlightApi() &&
             nodeId &&

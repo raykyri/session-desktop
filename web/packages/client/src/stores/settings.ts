@@ -12,7 +12,7 @@
 // `DEFAULT_USER_SETTINGS` comes from `shared`: the server writes the same
 // object into `user_preferences` on first access, and a second copy here would
 // drift the moment a field is added. Guests paint from `GUEST_USER_SETTINGS`
-// until a session lands.
+// until a session loads.
 
 import {
   APP_TEXT_SIZE_MAX,

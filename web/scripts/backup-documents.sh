@@ -40,7 +40,7 @@ fi
 started_at="$(date -u +%Y%m%dT%H%M%SZ)"
 # The marker is stamped with the moment the file list was taken, not with the
 # moment the upload finished: a document written while the archive was building
-# is then still newer than the marker and lands in the next run.
+# remains newer than the marker and is included in the next run.
 started_epoch="$(date -u +%s)"
 archive="$WORK_DIR/documents-$started_at.tar.gz"
 list="$WORK_DIR/documents-$started_at.list"

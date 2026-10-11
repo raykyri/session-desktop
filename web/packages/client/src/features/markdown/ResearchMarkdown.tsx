@@ -3,7 +3,7 @@
 // Everything that renders model-authored prose — a research answer, a recap, a
 // feed preview — goes through this component, so the
 // parse is identical everywhere and typography is chosen on the renderer
-// rather than inherited from whatever layout root the text lands in.
+// rather than inherited from the layout root that contains the text.
 //
 // Plugins: the base lists come from `shared/markdown/plugins`, and the math
 // lists are swapped in through `useSyncExternalStore` once the lazy chunk
@@ -15,7 +15,7 @@
 // never fetched (`BlockedMarkdownImage`), and the image markers pasted into
 // transcripts collapse to an inert `[Image]` chip rather than anything
 // navigable. Inline-code file links are recognized but not promoted: the
-// artifact store they would open lands in Phase 7.
+// artifact store they would open is implemented in Phase 7.
 
 import {
   isSessionWidgetClassName,

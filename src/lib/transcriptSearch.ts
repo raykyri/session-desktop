@@ -54,15 +54,12 @@ function buildHighlight(Highlight: new () => HighlightLike, ranges: Range[]): Hi
   return highlight;
 }
 
-// The registry keys are global and there is one painted slot per name, so only one
-// rendered pane can own the highlights at a time. Multiple searchable panes can
-// remain mounted; without an owner, one pane's cleanup would silently wipe
-// another's paint. Only the current owner may repaint or clear the registry.
+// Registry keys are global, with one painted slot per name. Track the rendered
+// pane that set the highlights so another pane's cleanup cannot clear them.
 let highlightOwner: object | null = null;
 
-// Paints all matches plus the active match for `owner`, taking ownership of the
-// registry slots. On webviews without the Highlight API this is a no-op: search still
-// navigates by scrolling, just unpainted.
+// Paints all matches plus the active match and records `owner`. On webviews
+// without the Highlight API, search still navigates by scrolling.
 export function applySearchHighlights(owner: object, ranges: Range[], activeIndex: number) {
   const registry = highlightRegistry();
   const Highlight = highlightConstructor();
@@ -84,8 +81,8 @@ export function applySearchHighlights(owner: object, ranges: Range[], activeInde
   }
 }
 
-// Clears the highlights, but only when `owner` still holds them — so a background
-// overlay's effect cleanup can't erase the highlights the active overlay just painted.
+// Clears highlights only when `owner` last painted them, preventing a background
+// overlay's cleanup from clearing the active overlay's highlights.
 export function clearSearchHighlights(owner: object) {
   if (highlightOwner !== null && highlightOwner !== owner) {
     return;
@@ -111,8 +108,8 @@ function buildSearchPattern(term: string, options: TranscriptSearchOptions): Reg
 
 // Collects a Range per match, in document order. Matches stay within a single
 // text node (like the terminal's per-line search). Matches with no client rects
-// are dropped: they sit in unrendered content (e.g. a collapsed <details>), so
-// they can be neither highlighted nor scrolled to.
+// are omitted because unrendered content (such as a collapsed <details>) cannot
+// be highlighted or scrolled to.
 export function collectSearchRanges(
   root: HTMLElement,
   term: string,
@@ -167,9 +164,8 @@ export function mergeSearchMatches<T>(
   return { matches, index: kept >= 0 ? kept : nearest(matches) };
 }
 
-// The first match visible in (or below) the viewport, so opening the bar or
-// retyping the term lands on a nearby match instead of jumping to the top of a
-// long transcript. Falls back to the last match when all matches sit above.
+// Select the first match visible in or below the viewport when the search opens
+// or the query changes. Use the last match when all matches are above it.
 export function nearestSearchRangeIndex(viewport: HTMLElement, ranges: Range[]): number {
   if (ranges.length === 0) {
     return -1;

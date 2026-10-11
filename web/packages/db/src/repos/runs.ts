@@ -137,7 +137,7 @@ function writeTurn(
       )
       .get();
     const position = input.position ?? existing?.position ?? nextPosition(tx, node.id, attempt);
-    // `recordSeq` writes a number the caller already owns; without one this is
+    // `recordSeq` writes a number the caller already manages; without one this is
     // the allocator for a committed turn, whose event carries the number it
     // takes here.
     const seq = recordSeq === undefined ? node.runSeq + 1 : Math.max(recordSeq, node.runSeq);
@@ -293,7 +293,7 @@ export function listAttempts(
  * The runtime emits more run events than it writes rows: text deltas are
  * forwarded, not persisted, and every one of them consumes a sequence number
  * the client orders by (`docs/03-api-and-events.md` §3). The counter therefore
- * lives in the loop's memory between writes, and this call carries it back
+ * remains in the loop's memory between writes, and this call writes it back
  * into the row before the next write bumps it again — without which a
  * `getNodeContent` taken after a burst of deltas would report a sequence lower
  * than the client has already applied, and every further delta would look like

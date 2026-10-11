@@ -1,6 +1,6 @@
 // A segment's answer (`09-research-document-view.md` §2, §7).
 //
-// Everything about one node's response lives here: its loading and failure
+// This component handles every aspect of one node's response: its loading and failure
 // states, the recap, the collapsed-fold empty-state cascade, the "show earlier"
 // window, the selection root the highlight machinery measures against, the
 // sources, the status line with its Cancel link while the run is active, and
@@ -66,7 +66,7 @@ export interface AnswerPaneProps {
   view: SegmentView;
   node: ResearchNode;
   turns: readonly Turn[];
-  /** Null until the snapshot lands; a string when the read failed. */
+  /** Null until the snapshot loads; a string when the read failed. */
   contentError: string | null;
   contentLoading: boolean;
   /** `queued` or `running`. */

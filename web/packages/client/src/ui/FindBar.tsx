@@ -29,7 +29,7 @@ export interface FindBarProps {
 
 /**
  * The find bar, ported from the desktop `PaneSearchBar.tsx` (08 §4 renames it
- * `FindBar`). It owns presentation and the Enter / Shift-Enter / Escape keys;
+ * `FindBar`). It handles presentation and the Enter / Shift-Enter / Escape keys;
  * matching and focus stay with the host (`DomSearchBar`).
  */
 export function FindBar({
@@ -82,7 +82,7 @@ export function FindBar({
 
   // Keep the bar holding a live focus target after one of its buttons runs;
   // without this the click leaves focus on <body> and the next keystroke falls
-  // through to whatever owns the keyboard.
+  // through to the active keyboard handler.
   const refocusInput = () => inputRef?.current?.focus();
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {

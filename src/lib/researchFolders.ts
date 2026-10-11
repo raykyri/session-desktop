@@ -46,9 +46,8 @@ export function researchPlaceName(place: string, folders: ResearchFolder[]): str
   return folders.find((folder) => folder.id === place)?.name ?? "Unfiled";
 }
 
-/** Where a tree is listed. An archived tree shows only in Archive even when
- * it keeps a folder membership; a membership whose folder no longer exists
- * reads as Unfiled. */
+/** Where a tree is listed. An archived tree appears only in Archive even if it
+ * retains a folder membership. A missing folder is treated as Unfiled. */
 export function researchTreePlace(
   tree: Pick<ResearchTreeSummary, "id" | "archivedAt">,
   state: ResearchFolderState,
@@ -224,9 +223,8 @@ export function reorderedIds(ids: string[], movedId: string, beforeId: string | 
   return index < 0 ? [...rest, movedId] : [...rest.slice(0, index), movedId, ...rest.slice(index)];
 }
 
-/** Where a keyboard move of `id` one step up (-1) or down (1) in `ids` puts
- * it: before the id it lands in front of, null for the end; null when it is
- * already first or last (or not listed). */
+/** Returns the id that follows `id` after a one-step keyboard move, or null
+ * for the end. Returns null when `id` cannot move in the requested direction. */
 export function stepReorderTarget(
   ids: readonly string[],
   id: string,

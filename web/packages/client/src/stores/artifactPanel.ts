@@ -1,7 +1,7 @@
 // The document preview panel's geometry and contents
 // (`11-artifacts-and-browser.md` §3).
 //
-// What survives from the desktop's `browserOverlay.ts` is the part that was
+// This retains the part of the desktop's `browserOverlay.ts` that was
 // pure DOM state and therefore testable: one panel at a time, a remembered
 // size, a full-width toggle, and "is this link already showing". What is gone
 // is everything that existed to drive a native view — `mode`, screencast

@@ -4,7 +4,7 @@
 // The Drizzle schema is one `schema` namespace and each repository is a
 // namespace of its own, so a caller writes `trees.admitRoot(...)` or
 // `schema.nodes` and never has to know which file a table or an invariant
-// lives in.
+// is defined in.
 
 export * from "./backfills/index.js";
 export * from "./connection.js";

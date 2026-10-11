@@ -228,7 +228,7 @@
   --placeholder-color: #6b726d;
   /* Extended text ramp. --text-max is the maximum-contrast state text used by
      selected rows and hovered actions; tertiary sits between secondary and
-     muted; dim/ghost are for hints that should barely register. */
+     muted; dim/ghost are for low-prominence hints. */
   --text-max: #ffffff;
   --text-tertiary: #aab1ad;
   --text-dim: #5a615e;
@@ -279,7 +279,7 @@
   --attention-badge-bg-strong: #a8842f;
   --attention-badge-fg-strong: #111315;
   --attention-marker-bg: #e0a96d;
-  /* Warm warning callout (composer capacity / stale-session notices). */
+  /* Warning callout (composer capacity / stale-session notices). */
   --warning-callout-fg: #ffdca8;
   --warning-callout-bg: #241f18;
   --warning-callout-border: #5b4630;

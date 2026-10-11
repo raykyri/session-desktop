@@ -1,6 +1,6 @@
 // Turning a registry id into a language model (`04-agent-runtime.md` §1, §11).
 //
-// Everything provider-specific lives here: how a provider is constructed from
+// This module contains all provider-specific behavior: how a provider is constructed from
 // the deployment's credentials, which provider-executed tools a model entry
 // adds, and the `providerOptions` that ask each provider for medium reasoning
 // effort and — on OpenRouter — for zero-retention, no-collection routing. The

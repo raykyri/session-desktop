@@ -182,7 +182,7 @@ pub struct MoveQueuedAgentTurnResult {
 /// behavior; if the handoff fails it is rolled back to its original position in the
 /// source queue. Because the removal and the add happen in one backend call, a
 /// failure can never leave the turn in both queues (the duplication the previous
-/// two-call frontend dance risked) nor silently lose it.
+/// two-call frontend sequence risked) nor silently lose it.
 pub fn move_queued_agent_turn(
     state: &AppState,
     request: MoveQueuedAgentTurnRequest,
@@ -327,7 +327,8 @@ pub fn submit_agent_turn(
             if agent.paused || policy.should_queue(agent.status) || has_pending_queue {
                 let turn = QueuedTurn::new(data);
                 let result = queue_agent_turn(state, &agent, turn.clone())?;
-                // Rescue only a *newly* stranded turn. When the queue was already
+                // Retry only a turn that became blocked during this operation.
+                // When the queue was already
                 // non-empty we preserve strict append order and let the normal drain
                 // triggers (idle hook, typing-clear, unpause) send it. But when the
                 // queue was empty, this turn was queued solely on `agent.status`, which
@@ -416,7 +417,7 @@ pub fn queue_wait_agent_turn(
     }
     // Same invariant as queue_agent_turn below: a research run never drains a
     // queue, so a wait-for turn accepted here would sit forever and its
-    // non-empty queue would park the agent as an orphaned-queue zombie
+    // non-empty queue would leave the agent in the orphaned-queue state
     // instead of letting retirement reclaim it.
     if state.agent_is_research_run(&agent.id)? {
         return Err("research runs are read-only; create a follow-up branch instead".to_string());
@@ -459,7 +460,7 @@ pub fn queue_wait_agent_turn(
 /// agent's own composer: a fork of the session (optionally in a fresh worktree) or
 /// a brand-new session of the same adapter in the same directory. Fork preconditions
 /// that can already be checked (adapter support) fail fast here; ones that can only
-/// be known at dispatch time (a recorded session id) surface as `agent.queue_error`.
+/// be known at dispatch time (a recorded session id) emit `agent.queue_error`.
 pub fn queue_delivery_agent_turn(
     state: &AppState,
     request: QueueDeliveryAgentTurnRequest,
@@ -595,7 +596,7 @@ pub fn reorder_queued_agent_turn(
 }
 
 /// Drains the agent's queue: dispatches ready turns until one runs on the agent
-/// itself, the queue empties/blocks, or a pause lands. Returns whether the agent is
+/// itself, the queue empties or blocks, or a pause is requested. Returns whether the agent is
 /// now running a turn of its own — delivery turns dispatched along the way go to
 /// new panes and leave it idle, so they don't count, keeping callers'
 /// `agent.running` emissions and `sent` flags truthful.
@@ -771,7 +772,7 @@ fn send_claimed_turn(
     let outcome = match send_result {
         Ok(outcome) => outcome,
         Err(err) => {
-            // When the turn's text already reached the pane (the paste landed and
+            // When the turn's text already reached the pane (the paste succeeded and
             // only the submit leg failed), tag the requeued turn so its retry
             // submits a bare Return instead of pasting a second copy that would
             // concatenate onto the one sitting in the composer.
@@ -916,7 +917,7 @@ fn advance_after_settlement(
     // pause state, so a pause-after delivery turn still halts the queue.
     loop {
         // The pause branches settle with the caller's status and waiter policy
-        // too: an *interrupted* turn that lands on a pausing agent was still
+        // too: an *interrupted* turn received while an agent is pausing was still
         // aborted, so presenting it as Done — and releasing dependents that
         // asked to wait for actual completion — would defeat the interruption
         // settlement path.
@@ -1354,7 +1355,7 @@ fn queue_agent_turn_with_admission(
 
 /// After a turn was enqueued, attempt the guarded drain the enqueue may have raced
 /// against: if the agent has since gone idle-and-ready (not paused, not mid-typing),
-/// send the head of the queue now rather than leaving it stranded until the next
+/// send the head of the queue now rather than leaving it blocked until the next
 /// trigger. Mirrors the post-enqueue drain in `queue_wait_agent_turn`.
 ///
 /// `drain_agent_turn_queue` claims under the model lock and only sends a genuinely
@@ -1455,7 +1456,7 @@ fn begin_queued_fork_barrier(
 }
 
 /// A failed turn send. `text_delivered` reports whether the turn's text had
-/// already reached the pane when the failure occurred (the paste landed; only the
+/// already reached the pane when the failure occurred (the paste succeeded; only the
 /// submit leg failed), so the requeue can tag the turn `possibly_pasted` and its
 /// retry can avoid pasting a duplicate copy.
 struct TurnSendError {
@@ -1509,7 +1510,7 @@ fn grok_typed_turn_data(text: &str) -> String {
 /// The pane write for one turn: a `possibly_pasted` turn's text is (very likely)
 /// already sitting in the composer from a failed prior attempt, so it submits a
 /// bare Return instead of pasting a second copy — the concatenation that tag
-/// exists to prevent. The outstanding-send record still carries the full text, so
+/// exists to prevent. The outstanding-send record still contains the full text, so
 /// the prompt-submit echo of the already-pasted content confirms it normally.
 fn turn_write_options(agent: &AgentInfo, pane_id: String, turn: &QueuedTurn) -> PaneWriteOptions {
     if turn.possibly_pasted {
@@ -1611,7 +1612,7 @@ fn send_agent_turn(
             .map_err(delivered_err)?;
     }
     // A plain-text turn is pasted then submitted with a trailing Return. The paste is
-    // durable (it lands in the composer) but the lone Return can be dropped, leaving
+    // durable (it appears in the composer) but the lone Return can be dropped, leaving
     // the turn typed-but-unsubmitted. Arm a watchdog to detect and nudge that. Skip
     // TUI commands: they can run hooklessly, so they never echo the UserPromptSubmit
     // the watchdog keys on, and a spurious Return after one could misfire.
@@ -1664,11 +1665,11 @@ fn decide_submit_watch(status: SubmitWatchStatus, final_check: bool) -> SubmitWa
 }
 
 /// After a queued/direct turn is pasted-and-submitted into an agent's own pane,
-/// verify the submit landed and recover if it did not. The failure this recovers:
+/// verify the submit succeeded and recover if it did not. The failure this recovers:
 /// the bracketed paste reaches the TUI (visible in the composer) but the trailing
 /// Return is dropped — because it arrives before the composer is re-armed to
-/// submit, or, on the native surface, races the still-in-flight paste — leaving the
-/// turn stranded with the tab stuck at a false "Working…". Recovery escalates: a
+/// submit, or, in the native terminal, races the still-in-flight paste, leaving the
+/// turn blocked with the tab stuck at a false "Working…". Recovery escalates: a
 /// bare Return is re-sent at each non-final check, and a turn still showing no sign
 /// of having started by the final check is returned to the queue (tagged
 /// possibly-pasted so its retry cannot duplicate the text). Only turns that go into
@@ -1763,7 +1764,7 @@ fn run_agent_submit_watch(
 /// rather than pasting a duplicate copy onto the text already in the composer. The
 /// agent's optimistic Running from the failed send is demoted so the tab doesn't
 /// sit at a false "Working…" and future drain triggers aren't gated off. Removing
-/// the outstanding-send record and requeueing are atomic; if the prompt echo lands
+/// the outstanding-send record and requeueing are atomic; if the prompt echo arrives
 /// in the race window the whole reclaim is a no-op.
 fn reclaim_unconfirmed_send(
     state: &AppState,
@@ -3114,7 +3115,7 @@ mod tests {
         ));
     }
 
-    // An interrupted turn that lands on a pausing agent is still aborted work:
+    // An interrupted turn received while an agent is pausing is still aborted work:
     // the pause branch must not present it as Done, and a dependent that asked
     // to wait for the target's actual completion must stay queued.
     #[test]

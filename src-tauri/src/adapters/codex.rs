@@ -1444,7 +1444,7 @@ fn codex_effective_cwd(host: &Host, shell_cwd: &Path, args: &[String]) -> Result
     }
 }
 
-/// Whether a manual `codex ...` invocation carries an inline prompt. Value-taking
+/// Whether a manual `codex ...` invocation includes an inline prompt. Value-taking
 /// flags are skipped so `codex --model gpt-5` is treated as interactive.
 fn args_contain_prompt(args: &[String]) -> bool {
     let mut index = 0;
@@ -2800,7 +2800,7 @@ fn codex_payload_turn_id(payload: &Value) -> Option<String> {
 /// `codex resume` appends in place rather than branching a file — so the cut is
 /// positional.
 ///
-/// The cut lands on the `task_started` event that opens the anchored turn, not
+/// The cut begins at the `task_started` event that opens the anchored turn, not
 /// on the anchor's own line. A Codex turn spans several records (`task_started`,
 /// `turn_context`, the `response_item` the anchor points at, and the
 /// `event_msg` mirror of it); cutting at the anchor itself would leave the
@@ -3963,7 +3963,7 @@ trusted_hash = "sha256:trusted"
         let agent = state.agent("agent-1").unwrap().expect("agent exists");
         assert_eq!(agent.session_id, None);
         // SessionStart neither commits an unverified identity nor promotes status:
-        // the agent remains Starting until a real prompt/tool hook lands.
+        // the agent remains Starting until a real prompt/tool hook arrives.
         assert!(matches!(agent.status, AgentStatus::Starting));
     }
 
@@ -5608,8 +5608,8 @@ trusted_hash = "sha256:trusted"
         // Turn anchors to, since only `response_item` records become Turns.
         let result = synthesize_truncated_codex_session(&source, &codex_anchor(10)).unwrap();
 
-        // The cut lands on the second turn's `task_started` (index 8), so none
-        // of that turn's opening records survive to replay a duplicate prompt.
+        // The cut begins at the second turn's `task_started` (index 8), so none
+        // of that turn's opening records remain to replay a duplicate prompt.
         let seed = dir.join(format!("rollout-2026-06-21T20-08-03-{result}.jsonl"));
         assert_eq!(
             rollout_record_kinds(&seed),

@@ -1,7 +1,7 @@
 // Deployment configuration: every variable in `web/.env.example`, validated
 // once at boot (`04-agent-runtime.md` §11, `13-deployment-fly.md` §5).
 //
-// The process refuses to start on a malformed value rather than discovering it
+// The process does not start with a malformed value rather than discovering it
 // on the first request: a bad `SESSION_PUBLIC_ORIGIN` is a broken OAuth
 // callback and a broken CSRF check, and both fail in ways that look like
 // something else.

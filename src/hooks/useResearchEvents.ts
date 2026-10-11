@@ -291,9 +291,9 @@ export function useResearchEvents(
         researchNavRefreshSeqRef.current += 1;
         recentActivityRootRequestSeqRef.current += 1;
         if (needsRecovery) {
-          // An event invalidated a pre-event collection snapshot. Retry once
-          // after the event stream goes quiet; resetting this timer prevents a
-          // streaming run from turning recovery into repeated list IPC.
+          // An event invalidated a pre-event collection snapshot. Retry after
+          // the timeout passes without another event. Resetting the timer
+          // prevents repeated list IPC during a streaming run.
           scheduleResearchNavigationRecovery();
         }
       };

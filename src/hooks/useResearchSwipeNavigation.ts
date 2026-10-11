@@ -142,8 +142,7 @@ export function useResearchSwipeNavigation(
       if (direction === 0) {
         return;
       }
-      // A surface without history in this direction leaves the gesture to
-      // whatever else handles it.
+      // Do not consume a gesture when history cannot move in that direction.
       const navigate = direction < 0 ? onBackRef.current : onForwardRef.current;
       if (!navigate) {
         return;

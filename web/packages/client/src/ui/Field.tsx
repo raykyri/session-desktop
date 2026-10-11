@@ -57,7 +57,7 @@ export function Textarea({ ref, className, ...props }: TextareaProps) {
 
 export interface ShortcutHintProps {
   /** A rendered chord, e.g. `⇧⌘H`. Formatting belongs to the caller: the
-   * shared shortcut table already owns the labels. */
+   * shared shortcut table already defines the labels. */
   children: ReactNode;
   className?: string;
 }

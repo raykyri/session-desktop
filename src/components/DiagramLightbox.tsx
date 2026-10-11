@@ -6,14 +6,10 @@ import {
   subscribeDiagramLightbox,
 } from "../lib/diagramLightbox";
 
-// Mounted once at the app root, mirroring ImageLightbox: renders the sanitized
-// SVG openDiagramLightbox last set, full-page over a dimmed backdrop; dismissed
-// by clicking the backdrop or the close button. Escape is handled by the
-// app-level Escape dispatcher in App (which reads this component's module
-// store), so there is no keydown listener here — the dispatcher stays the
-// single source of truth for overlay order. The SVG is already rendered and
-// sanitized by DiagramBlock, so there is no loading state — expansion reuses
-// the exact bytes already on screen.
+// Mounted once at the app root. Displays the selected sanitized SVG over a
+// backdrop. The app-level dispatcher handles Escape according to overlay order.
+// DiagramBlock has already rendered and sanitized the SVG, so the lightbox
+// reuses it without a loading state.
 export default function DiagramLightbox() {
   const state = useSyncExternalStore(
     subscribeDiagramLightbox,

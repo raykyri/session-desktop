@@ -257,7 +257,7 @@ test.serial("context overflow and a mid-stream error are classified apart", asyn
   const node = nodesRepo.get(harness.db, dropped.user.id, dropped.nodeId);
   t.is(node?.status, "failed");
   t.is(runsRepo.listAttempts(harness.db, dropped.nodeId)[0]?.errorClass, "network");
-  // The partial text survives for the reader.
+  // The partial text remains available to the reader.
   const live = runsRepo.liveWindow(harness.db, dropped.user.id, dropped.nodeId);
   t.true(
     live.turns.some((turn) =>
@@ -507,7 +507,7 @@ test.serial("streamed tool input and provider-executed tools reach the transcrip
 test.serial("a wake-up during a claim round is not lost", async (t) => {
   setFixtureScenario("success");
   // `autoStart` is what makes `start()` a real wake-up. The claim interval is
-  // 250 ms and everything below settles within microtasks, so what this
+  // 250 ms and everything below completes within microtasks, so what this
   // asserts is the wake-up rather than the timer.
   const harness = createAgentHarness(t, { autoStart: true });
   const user = harness.addUser("waker");
@@ -551,7 +551,7 @@ test.serial("persists rate limit retry counts across service restarts", async (t
     await process.settle();
     const node = nodesRepo.get(harness.db, user.id, nodeId);
     t.is(node?.status, "queued", `429 number ${round + 1} re-queues`);
-    t.is(node?.attempt, round + 2, "and opens a new attempt so its row survives");
+    t.is(node?.attempt, round + 2, "and opens a new attempt so its row remains");
     const row = harness.db.$client
       .prepare("SELECT not_before FROM run_queue WHERE node_id = ?")
       .get(nodeId) as { not_before: number };

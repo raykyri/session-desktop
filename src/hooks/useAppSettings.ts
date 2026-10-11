@@ -50,7 +50,7 @@ export function useAppSettings(onError: (message: string) => void) {
   const [availableBodyFonts, setAvailableBodyFonts] = useState<BodyFontOption[] | null>(null);
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
-  // Set once the backend copies are loaded, so the mirror effects don't push
+  // Set once the backend copies are loaded, so the synchronization effects do not write
   // the pre-hydration localStorage values back over them.
   const openRouterKeyHydratedRef = useRef(false);
   const useLoginShellHydratedRef = useRef(false);
@@ -70,8 +70,8 @@ export function useAppSettings(onError: (message: string) => void) {
   }, [settings.colorTheme]);
 
   // Light/dark is independent of the system appearance. The root attribute
-  // drives every token override; the window theme keeps the native pieces the
-  // CSS cannot reach in step (sidebar vibrancy material, prefers-color-scheme
+  // drives every token override; the window theme synchronizes native pieces
+  // that CSS cannot reach (sidebar vibrancy material, prefers-color-scheme
   // inside sandboxed preview iframes, native form controls and scrollbars).
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -157,8 +157,8 @@ export function useAppSettings(onError: (message: string) => void) {
     void setOpenRouterKey(settings.openRouterKey).catch(() => undefined);
   }, [settings.openRouterKey]);
 
-  // The backend keeps its own copy of the login-shell preference, read on the
-  // spawn path, including startup recovery that runs before this fires.
+  // The backend stores the login-shell preference for the spawn path, including
+  // startup recovery that runs before this fires.
   useEffect(() => {
     if (!useLoginShellHydratedRef.current) {
       return;

@@ -22,7 +22,7 @@ import { Sidebar } from "./Sidebar.js";
 const TAB_ROUTES = ["/", "/bookmarks", "/highlights"] as const;
 
 /** An open Base UI dialog, popover, menu or select popup, if there is one.
- * Every Base UI layer carries `data-open` while it is mounted and open; the
+ * Every Base UI layer has `data-open` while it is mounted and open; the
  * role narrows the match to the layers that own dismissal, so a hovering
  * tooltip (also `data-open`, but not dismissable) does not count. */
 const BASE_UI_LAYER_SELECTOR =
@@ -134,7 +134,7 @@ export function AppShell() {
           : false;
 
       // `editableTarget` is passed in, not acted on here: which chords a text
-      // field swallows is a property of the chord, and the shared table owns
+      // field consumes is a property of the chord, and the shared table defines
       // it (`shared/app/shortcuts.ts`). A blanket return would kill Cmd-K and
       // Cmd-J exactly where they are most used.
       const command = resolveAppShortcut({

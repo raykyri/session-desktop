@@ -23,7 +23,7 @@ export const SESSION_SETTINGS_SYNC_DEBOUNCE_MS = 300;
 
 /** Every field of `UserSettings`, taken from the schema rather than listed
  * here. A key missing from the comparison below is a preference that silently
- * stops syncing, and a second copy of the field list is a copy that drifts the
+ * stops syncing, and a second copy of the field list can diverge from the
  * moment a field is added or removed. */
 const SETTINGS_KEYS = Object.keys(userSettingsSchema.shape) as (keyof UserSettings)[];
 
@@ -172,7 +172,7 @@ function useSettingsSync(): void {
  * The account's running and queued nodes, held for the whole session.
  *
  * This is a cache the event reducers write rather than a list any view
- * renders, which is why it is mounted here: `cachedNode` is what tells a node
+ * renders, which is why it is mounted here: `cachedNode` determines whether a node
  * update whether its predecessor is known, and without this query the answer
  * is "no" for every node outside the thread the reader has open. A "no" sends
  * `research.node.updated` down the `invalidate(["trees"])` branch, and the run

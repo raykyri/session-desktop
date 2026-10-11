@@ -19,22 +19,19 @@ import {
   sessionWidgetOpenUrl,
 } from "../lib/sessionWidgets";
 
-// Displays one complete `session-html` block from a research answer in a
-// sandboxed frame. The backend stores the HTML under its content hash and
-// returns its URLs (src-tauri/src/research_widgets.rs): a static page whose
-// CSP blocks the widget's scripts, and, while widget scripts are allowed, a
-// run page that admits them. The frame starts on the static page; the
-// widget's scripts start only when the reader clicks Run scripts, because a
-// sandboxed cross-origin frame in WKWebView can share the app's web content
-// process and a script that never yields would stall the whole interface.
+// Displays a complete `session-html` block in a sandboxed frame. The backend
+// stores the HTML by content hash and returns static and executable URLs
+// (src-tauri/src/research_widgets.rs). The static page blocks scripts with
+// CSP. Run scripts loads the executable page on request because WKWebView may
+// run a sandboxed cross-origin frame in the app's web content process, where
+// a non-yielding script would block the interface.
 //
 // The widget subtree is excluded from the answer text projection so changing
 // view modes and controls does not move stored highlights or branch anchors.
 
-/** Whether the answer containing a widget block is still being written. An
- * unclosed block shows a placeholder while it is, and its source with a notice
- * once the answer has settled (a cancelled or truncated run, or a closing
- * fence CommonMark does not accept). */
+/** Whether the answer containing a widget block is still streaming. An
+ * unclosed block shows a placeholder during streaming, then its source with a
+ * notice after cancellation, truncation, or an invalid CommonMark fence. */
 export const SessionWidgetStreamingContext = createContext(false);
 
 const MAX_PREPARED_WIDGETS = 64;
@@ -56,8 +53,7 @@ function prepareWidget(html: string): Promise<ResearchWidgetUrls> {
   return prepared;
 }
 
-/** How long after Run or Reload focus entering the new frame is Session's own
- * move rather than the widget's. */
+/** Time after Run or Reload during which frame focus counts as app-initiated. */
 const PROGRAMMATIC_FOCUS_MS = 1500;
 
 /** The frame URL with the app's body font, which the widget page's wrapper
@@ -97,15 +93,14 @@ export default function SessionWidget({
   const [actionStatus, setActionStatus] = useState("");
   const action = async (work: () => Promise<unknown>, success: string) => {
     try { const result = await work(); setActionStatus(result === false ? "" : success); }
-    catch { setActionStatus("Action failed. Please try again."); }
+    catch { setActionStatus("Action failed. Try again."); }
   };
   const [frame, dispatch] = useReducer(sessionWidgetFrameReducer, SESSION_WIDGET_FRAME_INITIAL);
   const [height, setHeight] = useState(SESSION_WIDGET_INITIAL_HEIGHT);
   const [prepareAttempt, setPrepareAttempt] = useState(0);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
-  // Set by Run and Reload, whose buttons the new frame replaces or hides:
-  // keyboard focus moves to the new frame instead of falling to the page. This
-  // is the only programmatic focus move into a widget frame.
+  // Run and Reload replace or hide their buttons, so move keyboard focus to
+  // the new frame. This is the only programmatic focus of a widget frame.
   const focusFrameRef = useRef(false);
   const programmaticFocusUntilRef = useRef(0);
   const hasScripts = sessionWidgetHasScripts(html);
@@ -136,8 +131,8 @@ export default function SessionWidget({
     () => readWidgetExecution(frame.urls?.staticUrl),
     () => null,
   );
-  // Stopping an expanded copy also stops this instance. A stopped choice is
-  // retained across remounts until the reader explicitly runs it again.
+  // Stopping an expanded copy also stops this instance. Preserve that state
+  // across remounts until the user runs it again.
   useEffect(() => {
     if (execution === "focus") dispatch({ type: "stop", reason: "focus" });
   }, [execution]);
@@ -257,9 +252,8 @@ export default function SessionWidget({
           referrerPolicy="no-referrer"
           loading="lazy"
           style={{ height }}
-          // The first load is the widget page. A later one means the page
-          // navigated itself (a link, a refresh), which would show content
-          // Session did not serve; the reducer drops the frame instead.
+          // The first load is the widget page. A later load indicates internal
+          // navigation to content Session did not serve, so remove the frame.
           onLoad={() => dispatch({ type: "load" })}
         />
       ) : (
@@ -288,15 +282,15 @@ export default function SessionWidget({
   );
 }
 
-/** Placeholder for a widget block whose closing fence has not arrived yet. */
+/** Placeholder for an incomplete widget block in a streaming answer. */
 export function SessionWidgetPending() {
   return (
     <figure className="session-widget" data-state="pending" aria-label="Answer widget">
       <div
         className="session-widget-placeholder"
         role="status"
-        aria-label="Widget is being written"
-        data-label="Widget is being written"
+        aria-label="Waiting for complete widget code"
+        data-label="Waiting for complete widget code"
       />
     </figure>
   );

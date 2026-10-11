@@ -5,7 +5,7 @@
 #   docker build -f web/Dockerfile web
 #
 # Three stages: `deps` installs the workspace, `build` compiles the client
-# bundle and the server bundle, `runtime` carries production `node_modules`,
+# bundle and the server bundle, `runtime` contains production `node_modules`,
 # the two bundles, the migrations, the fonts the artifact origin serves,
 # `tini`, and Litestream. No agent CLIs, no browsers, no per-user OS accounts.
 

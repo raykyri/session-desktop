@@ -756,7 +756,7 @@ impl ChromiumRuntime {
         result
     }
 
-    /// Send a CDP command whose reply carries nothing worth waiting for.
+    /// Send a CDP command whose reply has no needed data.
     ///
     /// Screencast acknowledgements arrive at frame rate and gate the next
     /// frame, so blocking the controller on each one would cost more latency

@@ -964,8 +964,8 @@ impl ClaudeAdapter {
                     .as_deref()
                     .and_then(|pane_id| state.agent_by_pane(pane_id).ok().flatten())
             });
-        // Heal a forked agent whose SessionStart carried the source session's stale
-        // metadata (rejected above in the SessionStart arm): every later hook carries
+        // Repair a forked agent whose SessionStart included the source session's stale
+        // metadata (rejected above in the SessionStart arm): every later hook includes
         // the current session's id/transcript, so the fork's first turn binds the real
         // identity. Runs before the event match so even this event's own side effects
         // (e.g. a Stop drain) act on the corrected binding.
@@ -1185,7 +1185,7 @@ impl ClaudeAdapter {
             }
             "StopFailure" => {
                 // A failed stop is not a successful turn boundary: hold any queued
-                // follow-ups so they are not pasted into a dead or recovering TUI.
+                // follow-ups so they are not pasted into an exited or recovering TUI.
                 if let Some(agent) = agent.as_mut() {
                     finish_agent_after_failure(state, agent)?;
                 }
@@ -1332,7 +1332,7 @@ impl ClaudeAdapter {
     }
 }
 
-/// Whether a manual `claude …` invocation carries an inline prompt — a positional
+/// Whether a manual `claude …` invocation includes an inline prompt — a positional
 /// argument — as opposed to a bare or flags-only launch that drops into Claude's
 /// interactive mode and waits for input. Flags that consume a separate value are
 /// skipped so e.g. `claude --model sonnet` is not mistaken for carrying a prompt.
@@ -1668,7 +1668,7 @@ fn hook_settings_nonce() -> Result<String, String> {
 /// pane loaded. Because that path was stable and writable by any process running as
 /// the desktop user, a prompt-injected agent in one pane could overwrite it to inject
 /// a lifecycle-hook command into *another* pane's Claude — which runs with that pane's
-/// `SESSION_TOKEN` — crossing Session's per-pane authority boundary. Writing a fresh,
+/// `SESSION_TOKEN` — crossing Session's per-pane authority boundary. Writing a new,
 /// unpredictably-named file per spawn under a `0700` `.session/hooks/` dir, created with
 /// `O_EXCL` at `0600`, removes the shared target and the pre-planted-file/symlink
 /// race: there is no stable path to overwrite, and a file planted at our random path
@@ -1680,7 +1680,7 @@ fn hook_settings_nonce() -> Result<String, String> {
 /// `--settings`, and the `SupportFile` the spawn backend materializes before
 /// the process starts. Declarative on purpose — nothing is written here, so a
 /// future remote backend can ship the same file to its host. The support-file
-/// contract carries the previous inline writer's security behavior: owner-only
+/// contract preserves the previous inline writer's security behavior: owner-only
 /// directory chain, per-pane prefix pruning, and O_EXCL creation at 0600.
 pub fn hook_settings_support_file(
     config: &SessionConfig,
@@ -1935,7 +1935,7 @@ fn adopt_forked_session_identity(
             agent.transcript_path = Some(transcript_path.clone());
         }
     })?;
-    // Tail only if our pair actually landed (ours, or an identical concurrent
+    // Tail only if our pair was written (ours, or an identical concurrent
     // adoption — start_transcript_tail dedupes per path either way).
     if agent_runs_locally(state, current)
         && updated
@@ -1988,7 +1988,7 @@ fn agent_runs_locally(state: &AppState, agent: &AgentInfo) -> bool {
 /// relocate the tail to an unrelated file.
 fn hook_transcript_path_acceptable(current: Option<&str>, candidate: &str) -> bool {
     // Single-sourced in the adapters module so the Claude inline callsite and the shared
-    // hook handling can never drift apart.
+    // hook handling remain consistent.
     super::hook_transcript_path_acceptable(current, candidate)
 }
 
@@ -2256,7 +2256,7 @@ fn claude_ancestor_set(
 /// the session id from the filename, so the copy needs no registration beyond
 /// existing at `<project>/<uuid>.jsonl`.
 ///
-/// Records are copied opaquely apart from `sessionId`: the format carries
+/// Records are copied opaquely apart from `sessionId`: the format contains
 /// fields we neither model nor need to understand, and rewriting only the one
 /// field that must change keeps this tolerant of upstream additions.
 ///
@@ -2917,7 +2917,7 @@ mod tests {
         assert!(!project_dir.join(".session/session-hooks.json").exists());
 
         // A second spawn for the same pane prunes the first file so the dir stays
-        // bounded to one file per pane, and mints a fresh unguessable name.
+        // bounded to one file per pane, and generates a new unguessable name.
         let (second_path, second_file) = hook_settings_support_file(&config, "pane-1").unwrap();
         crate::pty::materialize_support_files(&[second_file]).unwrap();
         assert_ne!(second_path, settings_path);
@@ -4518,7 +4518,7 @@ mod tests {
             synthesize_truncated_claude_session(&source, &anchor_at("u2", Some("a1"), 2)).unwrap();
 
         // Claude derives the session id from the filename, so the seed must
-        // land at <project>/<id>.jsonl for `--resume <id>` to find it.
+        // be written to <project>/<id>.jsonl for `--resume <id>` to find it.
         let seed = dir.join(format!("{result}.jsonl"));
         assert_eq!(read_uuids(&seed), vec!["u1", "a1"]);
         // Every copied record is re-stamped with the new session id, or the

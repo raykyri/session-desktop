@@ -5,7 +5,7 @@
 //
 // The `answer-v1` projection is `root.textContent` of a segment's response
 // content root: every rendered text node in DOM order, no separators. That is
-// also why the seams between messages have to be supplied to the word snapper
+// also why the boundaries between messages have to be supplied to the word snapper
 // explicitly: there is no whitespace between one message's last word and the
 // next one's first.
 
@@ -16,7 +16,7 @@ export const NON_TEXT_ROW_SELECTOR =
   ".tool-block, .thinking-block, .activity-group-block, [data-research-widget]";
 
 /** The class the message wrapper carries, used both to clamp anchor context to
- * one message and to find the seams between them. */
+ * one message and to find the boundaries between them. */
 export const RESPONSE_MESSAGE_CLASS = "research-response-message";
 
 /**
@@ -213,7 +213,7 @@ export function flatOffsetAtPoint(
   return null;
 }
 
-/** Flat offsets where the enclosing message changes: every seam between one
+/** Flat offsets where the enclosing message changes: every boundary between one
  * message and the next, or between a message and the rows around it. The
  * projection concatenates these with no separating whitespace, so the word
  * snapper needs them to avoid fusing a message's last word onto its

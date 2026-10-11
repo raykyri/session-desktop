@@ -92,7 +92,7 @@ struct SupervisorShared {
     transitions: Mutex<Vec<String>>,
 }
 
-/// Owns the control-socket supervisor thread. Shutdown must stop and join this
+/// Manages the control-socket supervisor thread. Shutdown must stop and join this
 /// before removing the socket file; otherwise the watchdog can recreate the
 /// path while the process is exiting.
 pub struct ControlSocketRuntime {
@@ -231,8 +231,8 @@ fn bind_control_socket(socket_path: &Path) -> Result<(UnixListener, (u64, u64)),
     // With the directory untraversable by other accounts, the socket is never
     // reachable by them even during the brief window between bind() and the
     // explicit chmod below, and no other user can pre-create the socket path.
-    // Config sets this best-effort at startup; enforce it strictly here so we
-    // fail loudly rather than expose the control plane on a world-traversable dir.
+    // Config attempts this at startup; enforce it strictly here to prevent
+    // exposing the control plane through a world-traversable directory.
     if let Some(parent) = socket_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| format!("failed to create socket dir {}: {err}", parent.display()))?;
@@ -1020,9 +1020,9 @@ fn handle_request_with_peer(
                 .map_err(|err| format!("failed to encode prepared agent launch: {err}"))
         }
         "agent.detach_pane" => {
-            // A shell-launched agent's process has exited while its host shell — and so
-            // this pane — lives on. Detach the agent bound to the authenticated pane so
-            // the tab reverts to a plain shell instead of lingering with a stale agent
+            // A shell-launched agent's process has exited while its host shell and pane
+            // remain active. Detach the agent bound to the authenticated pane so the
+            // tab reverts to a plain shell instead of retaining a stale agent
             // status. Scoped to the authed pane like pane.set_cwd; any claimed paneId is
             // advisory, so the wrapper can only ever detach its own pane's agent.
             #[derive(Deserialize)]
@@ -1049,10 +1049,10 @@ fn handle_request_with_peer(
                 _ => crate::workspace::detach_pane_agent(state, &authed_pane)?,
             };
             // The exited agent may have left its TUI's terminal modes active in
-            // the surviving shell's surface (kitty keyboard flags, mouse/focus
+            // the remaining shell's terminal state (kitty keyboard flags, mouse/focus
             // reporting, the alternate screen) — this detach is the only moment
             // the host learns the foreground program is gone, so clear them
-            // here. Best-effort: the detach itself already succeeded.
+            // here. Failure to clear the modes does not undo the detach.
             if detached.is_some()
                 && let Err(err) = crate::pty::reset_pane_terminal_modes(state, &authed_pane)
             {
@@ -1186,7 +1186,7 @@ fn handle_request_with_peer(
             // The tail may not be running yet on a recovered pane, and starting
             // it is what turns these lines into turns. It is idempotent, but it
             // also rebuilds the adapter registry to validate, so only pay for
-            // that when a line actually landed.
+            // that after a line was appended.
             if appended > 0 {
                 crate::transcript::start_transcript_tail(
                     state.clone(),
@@ -1214,8 +1214,8 @@ fn handle_request_with_peer(
             // payload), so a token can never spawn off another pane's session. This is
             // the same authority the user already has acting in their own terminal.
             // Always forks at the session head: anchoring at a message is a UI
-            // action, and the payload carries no anchor to honour. Keeping it
-            // that way means the control plane cannot ask for a synthesized
+            // action, and the payload includes no anchor. This prevents the
+            // control plane from requesting a synthesized
             // transcript, so this path never writes into an agent's own state
             // directory.
             let pane = agent_fork(
@@ -1263,10 +1263,10 @@ fn handle_request_with_peer(
             ));
             // Panes with an attached agent also collect the target into the
             // workspace artifact tray. This deliberately covers both callers a
-            // pane token can represent: the agent itself, and the user typing
-            // `session open` while that agent is backgrounded — the PTY offers no
-            // way to tell them apart, and both belong in the tray. Best-effort:
-            // a tray failure must not fail the open.
+            // pane token can represent: the agent itself and the user typing
+            // `session open` while that agent is backgrounded. The PTY cannot
+            // distinguish them, and both belong in the tray. A tray failure
+            // must not fail the open.
             if state.agent_by_pane(&authed_pane)?.is_some() {
                 let path = resolved
                     .path
@@ -1464,7 +1464,7 @@ fn validate_control_launch_workspace(state: &AppState, pane_id: &str) -> Result<
     Ok(())
 }
 
-/// A browser-overlay target resolved for one pane. `path` carries the canonical
+/// A browser-overlay target resolved for one pane. `path` contains the canonical
 /// filesystem path for file targets — the artifact tray persists that instead of
 /// `url`, whose file-server token goes stale across runs — and is None for
 /// loopback http(s) URLs.

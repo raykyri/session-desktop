@@ -1,6 +1,5 @@
-/* Notes (post nodes): text notes and saved links, on Home cards and on a
-   note's page. Follow-ups are items with a glyph gutter; a note's page lists
-   them as rows in its follow-ups column. */
+/* Notes (post nodes) appear as Home cards and on note pages. Note pages list
+   follow-ups in rows with a glyph gutter. */
 
 /* — Outline — */
 
@@ -130,8 +129,7 @@
   text-decoration: none;
 }
 
-/* A URL has no break points of its own, so it breaks anywhere: a feed
-   card's glyph (feed.css) and the URL's start share the first line. */
+/* Allow long URLs to wrap beside the feed-card glyph (feed.css). */
 .post-link-card-url {
   font-size: var(--research-body-font-size);
   overflow-wrap: anywhere;
@@ -153,10 +151,9 @@
 
 /* — Note page — */
 
-/* A note's page is two columns. The note column holds the note laid out as
-   one turn (research.css): the note where a question sits, its time line
-   below it. The follow-ups column holds the follow-up composer and the
-   follow-ups. */
+/* A note page has a note column and a follow-ups column. The note uses the
+   turn layout from research.css; the other column contains the composer and
+   follow-up rows. */
 .post-parent {
   display: block;
   margin-bottom: 6px;
@@ -176,9 +173,8 @@
   text-underline-offset: 2px;
 }
 
-/* Show the Ask/Note switch and Send on a row under the text once the
-   composer is focused or filled: the switch at the leading edge, Send at the
-   trailing edge, as in the Home ask box. */
+/* When the composer is focused or filled, show the Ask/Note switch and Send
+   below the text, matching the Home composer. */
 .post-composer-row {
   display: flex;
   flex-basis: 100%;
@@ -211,10 +207,9 @@
   line-height: var(--research-meta-line-height);
 }
 
-/* Rows are bubbles, as message rows are (research.css): no fill at rest, the
-   open follow-up filled, a faint accent ring on the row the keys act on.
-   An item's glyph sits on its name line and its text takes the row's full
-   width. */
+/* Match message rows in research.css: no resting fill, a fill on the selected
+   follow-up, and an accent ring on the keyboard target. Place the glyph beside
+   the name and let the body use the full row width. */
 .post-thread-rows {
   --post-gutter: 16px;
   gap: 2px;
@@ -241,8 +236,7 @@
   border-radius: 10px;
 }
 
-/* The focused row, or the row ⌃Tab made current while focus stayed in a
-   text field (data-current). */
+/* Mark the focused row or the row selected by ⌃Tab (`data-current`). */
 .post-thread-rows > .post-thread-item[data-current] {
   outline: none;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
@@ -260,8 +254,8 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
 }
 
-/* One button under a follow-up row's content opens the follow-up; Retry
-   stays its own target above it. */
+/* Use a full-row button to open the follow-up, with Retry above it as a
+   separate target. */
 .post-thread-hit {
   position: absolute;
   inset: 0;
@@ -305,8 +299,7 @@
   color: var(--text-heading);
 }
 
-/* The note's time line sits 4px further below the note than an answer's
-   meta line sits below the answer. */
+/* Add 4px more space above note metadata than answer metadata. */
 .research-turn-meta.research-post-meta {
   margin-top: 8px;
 }

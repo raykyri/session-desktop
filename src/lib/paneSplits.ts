@@ -259,9 +259,8 @@ function joinedPaneIntent(
  *
  * A split's geometry is either flat (no `root`: `paneIds` laid out along
  * `axis`) or nested (`root`: a tree whose in-order leaves are exactly
- * `paneIds`). Keeping that invariant means tab order and geometry can never
- * disagree, so every consumer of the flat pane list — sidebar bracketing, drag
- * reorder, close-selection — keeps working untouched.
+ * `paneIds`). This invariant keeps tab order and geometry consistent while
+ * existing consumers continue to use the flat pane list.
  *
  * `root` is only ever present when the layout is genuinely nested; a tree whose
  * children are all panes is stored flat so nothing changes for existing splits.
@@ -454,10 +453,9 @@ function sanitizedSplitNode(value: unknown, depth = 0): PaneSplitNode | null {
     : { kind: "split", axis, size, children };
 }
 
-/** Splices a same-axis child branch into its parent, scaling the grandchildren
- * by the child's own share. Keeps one layout from having two representations,
- * which matters because collapsing a pruned branch can produce one. Returns the
- * same node when there is nothing to merge, so normalization stays idempotent. */
+/** Merges a same-axis child branch into its parent and scales the grandchildren
+ * by the child's fraction. This gives each layout one representation after
+ * branch pruning. Returns the same node when no merge is needed. */
 function mergedSameAxisChildren(node: PaneSplitBranchNode): PaneSplitBranchNode {
   const nested = node.children.some(
     (child) => child.kind === "split" && child.axis === node.axis,
@@ -632,11 +630,10 @@ function splitBranchOffsets(branch: SplitBranchLayout): number[] {
   return offsets;
 }
 
-/** A box inside a branch spanning `span` of its content starting at `offset`,
- * sitting after `dividerIndex` gutters. Span 0 is a divider; a positive span is
- * the region a divider has swept. The branch's own extent has to give up a
- * gutter per boundary before its children divide what is left, which is why the
- * pixel term is separate from the fraction term all the way down. */
+/** Returns a box spanning `span` of a branch from `offset`, after
+ * `dividerIndex` gutters. A zero span represents a divider; a positive span
+ * represents its drag region. Pixel calculations subtract each gutter before
+ * dividing the remaining branch extent among children. */
 function splitBranchSpanRect(
   branch: SplitBranchLayout,
   offset: number,
@@ -704,8 +701,8 @@ function layoutSplitNode(
   const offsets = splitBranchOffsets(branch);
   node.children.forEach((child, index) => {
     const slot = splitBranchSpanRect(branch, offsets[index], branch.fractions[index], index, gutter);
-    // `splitBranchSpanRect` adds a trailing gutter (it is shaped for dividers and
-    // swept regions); a child owns only the content before it.
+    // `splitBranchSpanRect` includes a trailing gutter for divider drag regions;
+    // exclude that gutter from the child's rectangle.
     const childRect = horizontal
       ? { ...slot, widthPx: slot.widthPx - gutter }
       : { ...slot, heightPx: slot.heightPx - gutter };
@@ -761,9 +758,8 @@ export function splitRectOffsets(rect: SplitRect) {
   };
 }
 
-/** Which pane the point lands in, in stage-relative pixels. Replaces the
- * single-axis cursor walk the drop target used to do, which had no way to tell
- * nested panes apart. */
+/** Returns the pane at a point in stage-relative pixels. This handles nested
+ * panes that the previous single-axis lookup could not distinguish. */
 export function paneAtStagePoint(
   layout: PaneSplitLayout,
   stage: { width: number; height: number },
@@ -818,7 +814,7 @@ export function resizeSplitNodeFractions(
  * sibling; otherwise the anchor leaf becomes a two-child branch — the nesting
  * step.
  *
- * `position` must match where the new tab lands relative to the anchor in the
+ * `position` must match the new tab's position relative to the anchor in the
  * sidebar. In-order leaves have to equal the tab order or normalization rejects
  * the tree, so a dragged pane dropped on a pane's leading half inserts before
  * its anchor, not after. */
@@ -932,9 +928,9 @@ export function canSplitPaneInTree({
   return smallest * content >= minExtent;
 }
 
-/** How many children the pane's own branch has, so a spawn can estimate its
- * grid before the layout lands. A wrong estimate forces an immediate resize on
- * the fresh PTY. */
+/** Returns the number of children in a pane's parent branch so a spawn can
+ * estimate its initial grid. An incorrect estimate immediately resizes the new
+ * PTY. */
 export function splitBranchChildCountForPane(
   split: PaneSplitInfo,
   paneId: string,
@@ -989,10 +985,9 @@ export function normalizePaneSplitsForPanes(
       used.add(paneId);
     }
     usedSplitIds.add(split.id);
-    // A nested tree owns the geometry: `axis` mirrors its root (so a collapse
-    // can flip the split from columns to rows) and `sizes` is derived from its
-    // leaves. `normalizedSplitRoot` returns undefined for a flat or untrusted
-    // tree, which lands on exactly the pre-nesting behaviour below.
+    // For a nested tree, `axis` mirrors its root and `sizes` comes from its
+    // leaves. `normalizedSplitRoot` returns undefined for a flat or invalid
+    // tree, which uses the original flat-layout behavior below.
     const tree = normalizedSplitRoot(split, paneIds);
     const normalizedSplit: PaneSplitInfo = {
       id: split.id,

@@ -19,28 +19,15 @@ import {
 import type { ExitPreflightRequest } from "../appTypes";
 import type { ActiveWorkspace, AgentInfo, GroupInfo, PaneInfo, SessionEvent } from "../types";
 
-// How long events accumulate before the batch is handled. A busy agent emits
-// bursts of hook/status/turn events (dozens per second), and handling each in
-// its own listener callback commits a separate React render of the whole app —
-// which is what makes typing lag while an agent streams. Coalescing is
-// trailing-only: every event (including the first of a burst) waits for the
-// window, then the whole batch is processed in arrival order in one synchronous
-// block, which React commits as a single render. Under a sustained stream that
-// caps handling at one render per window; the old leading-edge variant handled
-// the first event of every burst synchronously and committed roughly two
-// renders per window under exactly the load the coalescing was built for.
-// Interactive events (app shortcuts, browser requests) share the window and
-// so run up to one frame late — kept deliberately, since reordering them ahead
-// of queued pane/agent events would let a shortcut act on state the queued
-// events are about to change, and one frame is imperceptible for those actions.
+// Accumulate events for one frame, then process them in arrival order in one
+// synchronous block. This limits sustained streams to one React render per
+// window. Interactive events use the same queue so they run after earlier
+// pane and agent updates, with at most one frame of added latency.
 const EVENT_COALESCE_MS = 16;
 
 // The backend event stream drives most of the app's live state. This hook owns
-// the single global subscription: it is intentionally set up once (empty deps),
-// so every callback it touches is passed in and captured at first render,
-// matching how the inline effect behaved before it was extracted. State setters
-// from useState are stable, and the callbacks read the state they need through
-// refs, so the first-render capture stays correct.
+// the single global subscription, created once with empty dependencies. State
+// setters are stable, and callbacks read current state through refs.
 interface UseSessionEventsHandlers {
   setPanes: Dispatch<SetStateAction<PaneInfo[]>>;
   setExitPreflightRequest: Dispatch<SetStateAction<ExitPreflightRequest | null>>;
@@ -104,8 +91,8 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
         if (typeof generation === "number" && Number.isSafeInteger(generation)) {
           // Waiting for two animation frames makes the acknowledgement prove
           // more than a live JavaScript event loop: WebKit must still be able
-          // to schedule a paint after suspension/GPU-process churn. If rAF is
-          // wedged, the native watchdog reloads the document instead.
+          // to schedule a paint after suspension or GPU-process restarts. If
+          // rAF remains blocked, the native watchdog reloads the document.
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               void acknowledgeInterfaceHealthProbe(generation).catch(() => undefined);
@@ -205,7 +192,7 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
         event.type !== "agent.shell_job_state_changed" &&
         event.type !== "agent.shell_job_removed"
       ) {
-        // Status events now carry the updated agent: apply it surgically so a busy
+        // Status events include the updated agent: apply it directly so a busy
         // agent's stream of hook events doesn't refetch and replace the entire list
         // (with the re-renders and ordering hazards that caused). Events without an
         // agent fall back to a sequenced refetch.
@@ -270,7 +257,7 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
         // The fork — or a queue-dispatched new-session or research-root spawn —
         // created a new pane backend-side with no frontend caller holding it;
         // refetch the ordered list so the newly placed tab appears
-        // without stealing focus from the source.
+        // without changing focus.
         const seq = (panesRefreshSeq += 1);
         void listPanes()
           .then((latest) => {

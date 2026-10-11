@@ -186,8 +186,8 @@ test("treats composed emoji as indivisible selectable units", (t) => {
   });
 });
 
-test("never snaps across a message seam", (t) => {
-  // The projection carries no separator between messages, so without the seam
+test("never snaps across a message boundary", (t) => {
+  // The projection has no separator between messages, so without the boundary
   // segmentation fuses this message's last word with the next one's first.
   const message = "Make it faster";
   const text = `${message}I rewrote the loop`;
@@ -214,7 +214,7 @@ test("never snaps across a message seam", (t) => {
     snapResearchDragSelection(punctuatedText, 8, punctuated.length, undefined, [punctuated.length]),
     { start: 8, end: punctuated.length, direction: "forward" },
   );
-  // Dragging back from inside the next message stays inside it: the seam ends
+  // Dragging back from inside the next message stays inside it: the boundary ends
   // the leading unit at the message's first character rather than the previous
   // message's last word.
   t.deepEqual(
@@ -224,7 +224,7 @@ test("never snaps across a message seam", (t) => {
     { start: message.length, end: message.length + 9, direction: "backward" },
   );
   // A drag that genuinely spans two messages still snaps on both outer edges;
-  // the seam only stops snapping from creating the crossing.
+  // the boundary only stops snapping from creating the crossing.
   t.deepEqual(
     snapResearchDragSelection(text, 10, message.length + 3, undefined, [message.length]),
     {

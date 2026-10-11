@@ -334,7 +334,7 @@ export function errorText(error: unknown): string {
     try {
       return JSON.stringify(error);
     } catch {
-      // Circular, or a value `JSON` refuses: there is nothing left to say
+      // Circular, or a value `JSON` rejects: there is nothing left to report
       // about it that is more useful than that it failed.
       return "the tool reported an error that could not be read";
     }

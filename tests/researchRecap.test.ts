@@ -36,7 +36,7 @@ test("imported reports show their recap; other documents and posts do not", () =
   assert.equal(render(content({ type: "post" })), "");
 });
 
-test("a pending recap job holds the recap slot with a spinner", () => {
+test("a pending recap job shows a spinner in the recap area", () => {
   const pending = (input: ResearchNodeContent) =>
     renderToStaticMarkup(createElement(ResearchRecap, { content: input, pending: true }));
   // A current recap always wins over the placeholder.

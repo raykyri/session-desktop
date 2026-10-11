@@ -276,8 +276,8 @@ fn start_transcript_tail_inner(
             // Stop once the agent has rotated to a different transcript file (resume,
             // compact, a fresh session) or has gone away entirely. Claude only ever
             // changes the path alongside a freshly started tail for the new file, so
-            // this tail exiting leaves exactly one live tail rather than two racing on
-            // the same agent. Without this the tail stays pinned to a now-dead file
+            // this tail exiting leaves exactly one active tail rather than two reading
+            // the same agent. Without this the tail remains assigned to an inactive file
             // and the timeline silently stops advancing while the agent runs on.
             // A poisoned model lock (the implicit Err case) is transient from this
             // thread's view, so it falls through and we keep polling rather than
@@ -375,9 +375,9 @@ fn start_transcript_tail_inner(
                         &raw_lines,
                         native_leaf_id.as_deref(),
                     );
-                    // Bound-checked write: a rebind can land between this tail's
+                    // Bound-checked write: a rebind can occur between this tail's
                     // loop-top binding check and here, and an unconditional replace
-                    // would swap the new transcript's timeline for this dead file's
+                    // would replace the new transcript's timeline with this old file's
                     // parse. A skipped write emits nothing; the next loop-top check
                     // retires this tail.
                     match state.replace_turns_for_transcript(
@@ -478,8 +478,8 @@ fn start_transcript_tail_inner(
                                 adapter.parse_transcript_line(&agent_id, line_index, &line)
                         {
                             // Surface a persistence failure rather than silently emitting a
-                            // turn the store never recorded, which would drift the UI
-                            // timeline from recovered state. A write skipped because the
+                            // turn the store never recorded, which would make the UI
+                            // timeline differ from recovered state. A write skipped because the
                             // agent rebound mid-poll emits nothing.
                             match state.append_turn_for_transcript(turn.clone(), &transcript_path) {
                                 Err(err) => {
@@ -627,9 +627,9 @@ fn transcript_lifecycle_agent_event(
     };
     if lifecycle_event == TranscriptLifecycleEvent::TurnStarted {
         // Codex can append the replacement turn immediately after an abort while its
-        // UserPromptSubmit hook races the 350ms transcript poll. Only revive the
+        // UserPromptSubmit hook races the 350ms transcript poll. Only update the
         // interruption state we set ourselves: a delayed task_started from a turn
-        // whose idle signal already reached Done must not resurrect completed work.
+        // whose idle signal already reached Done must not return to a running state.
         if !matches!(agent.status, AgentStatus::AwaitingInput) {
             return Ok(None);
         }
@@ -887,7 +887,7 @@ fn gather_transcript_candidates_in(
 }
 
 /// Transcript paths bound to agents other than `agent_id`, so recovery can avoid
-/// stealing a sibling agent's live session.
+/// selecting a sibling agent's active session.
 fn other_agent_transcript_paths(state: &AppState, agent_id: &str) -> HashSet<String> {
     state
         .list_agents()
@@ -1153,7 +1153,7 @@ fn transcript_persist_error(agent_id: &str, path: &str, error: &str) -> SessionE
 /// object per line ending in '\n', so content past the last newline is a record
 /// still being written: parsing it would either be dropped as invalid JSON or,
 /// once it completes, differ from the stored partial line and churn a full
-/// timeline reset. Deferring it until its newline lands keeps the tail purely
+/// timeline reset. Deferring it until its newline arrives keeps the tail
 /// append-driven.
 fn complete_lines(raw: &str) -> Vec<String> {
     let complete = raw.rfind('\n').map_or("", |idx| &raw[..=idx]);
@@ -1182,7 +1182,7 @@ struct TranscriptRead {
 /// Reads a transcript incrementally: only the bytes appended past `offset`. When
 /// the file has shrunk below `offset` it reads the whole file and flags a reset so
 /// the caller rebuilds the timeline. `offset` is always a newline boundary, so the
-/// read starts on a valid-UTF-8 boundary; the *end* may land mid-record, so the read
+/// read starts on a valid UTF-8 boundary; the *end* may occur mid-record, so the read
 /// holds back any unterminated trailing bytes (see `read_complete_lines_utf8`).
 fn read_transcript_from(path: &Path, offset: u64) -> std::io::Result<TranscriptRead> {
     let mut file = fs::File::open(path)?;
@@ -1293,7 +1293,7 @@ fn read_complete_tail_utf8(file: &mut fs::File) -> std::io::Result<(String, u64,
     ))
 }
 
-/// Reads the single byte at `offset - 1` to check the tail offset still lands just
+/// Reads the single byte at `offset - 1` to check the tail offset remains just
 /// after a newline. Caller guarantees `0 < offset <= len`, so the byte exists.
 fn byte_before_is_newline(file: &mut fs::File, offset: u64) -> std::io::Result<bool> {
     file.seek(SeekFrom::Start(offset - 1))?;
@@ -1763,7 +1763,7 @@ mod tests {
             vec!["{\"a\":1}".to_string(), "{\"b\":2}".to_string()]
         );
         // A record still being written (no trailing newline) is withheld until
-        // its newline lands, so it is never parsed as a partial line.
+        // its newline arrives, so it is never parsed as a partial line.
         assert_eq!(
             complete_lines("{\"a\":1}\n{\"b\":2"),
             vec!["{\"a\":1}".to_string()]

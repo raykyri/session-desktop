@@ -121,7 +121,7 @@ impl PaneBackend {
     }
 }
 
-/// Upper bound on a pane's reported working directory. Comfortably above any
+/// Upper bound on a pane's reported working directory. Above the expected
 /// real filesystem path (PATH_MAX is typically 1024–4096) while bounding what an
 /// in-pane process can push into persisted state via the control socket.
 const MAX_PANE_CWD_LEN: usize = 8192;
@@ -334,7 +334,7 @@ struct AppStateInner {
     persist_enabled: AtomicBool,
     // Serializes the whole snapshot->write->rename in persist() so concurrent
     // saves commit in snapshot order. Without it, a slower older snapshot's
-    // rename can land after a newer one and clobber it, losing the last change
+    // rename can complete after a newer one and overwrite it, losing the last change
     // (or re-sending an already-drained queued turn) across a restart.
     persist_lock: Mutex<()>,
     // Serializes document snapshot replacement with highlight mutations and
@@ -486,9 +486,8 @@ struct Model {
     research_tree_order: Vec<String>,
     research_nodes: HashMap<String, ResearchNode>,
     /// Client-authored grouping of research trees into folders (plus stars and
-    /// collapsed flags). Persisted with the trees it references so the two can
-    /// never drift; reconciled against the live tree set at load and scrubbed
-    /// when a tree is removed.
+    /// collapsed flags). Persisted with the trees it references, reconciled
+    /// against the live tree set at load, and updated when a tree is removed.
     research_folders: research::ResearchFolderState,
     /// Unsent research questions from the composer, all workspaces in one
     /// vector; each workspace's subsequence is its display order.
@@ -504,7 +503,7 @@ struct Model {
     /// A queued turn claimed for delivery but not yet confirmed on the PTY, per agent
     /// (at most one — `agent_draining` serializes drains). Popped out of the queue at
     /// claim and persisted here so a crash mid-delivery re-queues it on restart
-    /// instead of losing it; cleared once the write lands. At-most-one per agent.
+    /// instead of losing it; cleared once the write completes. At most one per agent.
     agent_inflight: HashMap<String, QueuedTurn>,
     agent_send_tracking: HashMap<String, AgentSendTracking>,
     /// Monotonic per-agent counter bumped on every agent mutation and transcript
@@ -527,7 +526,7 @@ struct Model {
     /// for background work that never emits Subagent hooks, and it must also
     /// hold the agent open at the idle-prompt boundary — otherwise the ~60s
     /// idle notification would settle Done and silently cancel the wait the
-    /// Stop handler just established. Refreshed by every Stop that carries the
+    /// Stop handler just established. Refreshed by every Stop that includes the
     /// field; cleared when a Stop reports no running tasks, on SessionEnd, and
     /// with the agent's other transient state. Transient (not persisted).
     agents_with_reported_background_tasks: HashSet<String>,
@@ -623,7 +622,7 @@ pub struct ClosedPaneSnapshot {
 
 /// One artifact-tray entry: a file or loopback URL a pane's agent (or its user,
 /// while the agent was backgrounded) opened via `session open`. File artifacts keep
-/// the canonical path — file-server URLs are minted per run and would go stale —
+/// the canonical path — file-server URLs are generated per run and would go stale —
 /// while URL artifacts keep the loopback URL itself.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -730,8 +729,8 @@ struct AgentSendTracking {
 /// turn is drained into it. Pruning such a live send too early disarms the
 /// double-drain guard at `transcript.rs` (`agent_has_outstanding_send_source`),
 /// letting a late transcript abort marker drain a second turn on top of the first.
-/// Five minutes comfortably clears any realistic single-turn delay while still
-/// reaping a truly dead entry.
+/// Five minutes exceeds the expected single-turn delay while still
+/// reaping an entry whose process has exited.
 const OUTSTANDING_SEND_TTL_MS: u128 = 5 * 60 * 1_000;
 
 impl AgentSendTracking {
@@ -1617,7 +1616,7 @@ fn merged_same_axis_children(
 
 /// Drops leaves outside `keep`, removes emptied branches, collapses single-child
 /// branches into their child, and merges same-axis nesting. This is what lets a
-/// nested layout survive a pane exiting instead of reverting to flat.
+/// preserve a nested layout when a pane exits instead of reverting to flat.
 fn pruned_split_node(
     node: PaneSplitNode,
     keep: &HashSet<String>,
@@ -2088,7 +2087,7 @@ impl AppState {
     /// activation from the frontend, so it must stay cheap: it mutates in memory
     /// only and deliberately does not `persist()` (a disk write per focus would be a
     /// write storm) nor emit an event (nothing renders off this yet). The fresh
-    /// timestamp rides along on the next persist triggered by other activity; losing
+    /// timestamp is included in the next persist triggered by other activity; losing
     /// the last few stamps to a crash only nudges the spawn-cwd heuristic.
     pub fn touch_pane_active(&self, pane_id: &str) {
         if let Ok(mut model) = self.inner.model.lock()
@@ -2862,7 +2861,7 @@ impl AppState {
                     *dirty = false;
                 }
                 // Coalescing window: let the rest of the burst (status hooks,
-                // transcript appends, a resize storm) land before snapshotting.
+                // transcript appends, a resize storm) complete before snapshotting.
                 std::thread::sleep(PERSIST_DEBOUNCE);
                 // Absorb marks made during the window — the snapshot below will
                 // include them, so they must not schedule another write.
@@ -3041,7 +3040,7 @@ impl AppState {
         if let Some(existing) = tokens.get(pane_id) {
             return Ok(existing.clone());
         }
-        // Mint outside the entry API so a CSPRNG failure returns an error to this one
+        // Generate outside the entry API so a CSPRNG failure returns an error to this one
         // call rather than panicking inside or_insert_with and aborting the whole
         // app (killing every running agent and unsaved draft).
         let token = random_token()?;
@@ -4304,7 +4303,7 @@ impl AppState {
         let node_id = self.next_id("research-node");
         let now = now_millis();
         let turns = vec![research::document_turn(&node_id, &markdown)];
-        // Durable content lands before the records that point at it: a crash
+        // Write durable content before the records that point at it: a crash
         // here strands only an orphan snapshot, which prune_response_snapshots
         // reclaims. The reverse order would commit a document whose body never
         // existed. The verified write keeps the records from ever pointing at
@@ -4805,7 +4804,7 @@ impl AppState {
         let node_id = self.next_id("research-node");
         let now = now_millis();
         let turns = vec![research::document_turn(&node_id, &markdown)];
-        // Durable content lands before the records that point at it: a crash
+        // Write durable content before the records that point at it: a crash
         // here strands only an orphan snapshot, which prune_response_snapshots
         // reclaims. The reverse order would commit a document whose body never
         // existed. The verified write keeps the records from ever pointing at
@@ -5139,8 +5138,8 @@ impl AppState {
     }
 
     /// The launch prompt for a follow-up on a transcript (an exported
-    /// conversation) or an imported report. Its saved content rides along as
-    /// context because neither has a native session to fork. An imported
+    /// conversation) or an imported report. The prompt includes its saved content
+    /// as context because neither has a native session to fork. An imported
     /// report is an editable document, so the document lock is held while
     /// its title and body are read, as in `research_document_followup_prompt`;
     /// a transcript snapshot is immutable and takes the same lock only to
@@ -5497,7 +5496,7 @@ impl AppState {
             // An instantly-exiting process (missing binary, adapter arg error)
             // can EOF and run the whole remove_pane teardown before the launch
             // path gets here. That teardown's research detach found nothing
-            // bound — this bind hadn't happened — so binding the dead pane id
+            // bound — this bind hadn't happened — so binding the inactive pane id
             // now would create a run nothing ever settles or unbinds: a
             // phantom "active" node that pins its tree (blocking
             // archive/remove and folder changes) until the user cancels it by
@@ -5516,7 +5515,7 @@ impl AppState {
                 .expect("research node was checked above");
             node.binding_mut().unwrap().agent_id = Some(agent.id.clone());
             // Recorded whether or not the pane survived: the run's agent
-            // minted its thread record during launch either way, and tree
+            // created its thread record during launch either way, and tree
             // removal reaps that record through this link.
             node.binding_mut().unwrap().thread_id = agent.thread_id.clone();
             node.binding_mut().unwrap().native_session_id = agent.session_id.clone();
@@ -5531,7 +5530,7 @@ impl AppState {
                 // Launch and cancellation race: the user can settle a Queued node
                 // while its spawn is still in flight. Binding must still record the
                 // pane and agent — the caller reclaims them — but a settled outcome
-                // is monotonic and the bind must not resurrect the run.
+                // is monotonic and the bind must not return the run to an active state.
                 if !node.status().is_terminal() {
                     node.run_mut().unwrap().status =
                         research_status_for_agent(agent.status, has_active_subagents);
@@ -6935,7 +6934,7 @@ impl AppState {
                 .filter(|node| node.tree_id == tree_id)
                 .map(|node| node.id.clone())
                 .collect::<Vec<_>>();
-            // Each run minted a thread record (and an on-disk graph snapshot)
+            // Each run created a thread record (and an on-disk graph snapshot)
             // via the ordinary agent machinery, and nothing else ever reaps
             // them once the run's agent is pruned — deleting the tree is the
             // last point where the node still links run to record. Skip any
@@ -7611,7 +7610,7 @@ impl AppState {
             .filter_map(|tree_id| tree_map.get(tree_id).cloned())
             .collect::<Vec<_>>();
         // Remap folder ids the same way trees are: keep the archive's id unless
-        // it collides with a local folder, then mint a fresh one. Folders are
+        // it collides with a local folder, then generate a new one. Folders are
         // re-homed onto the imported workspace, and membership is retargeted
         // through both id maps. Membership whose tree or folder didn't survive
         // the archive is dropped rather than dangling.
@@ -9045,8 +9044,8 @@ impl AppState {
                 binding.thread_id = agent.thread_id.clone();
             }
             // A sync is built from an agent snapshot taken under a previously
-            // released lock, so it can land after pane teardown already ran
-            // detach_research_pane. Rewriting pane_id would re-bind the dead
+            // released lock, so it can complete after pane teardown already ran
+            // detach_research_pane. Rewriting pane_id would re-bind the inactive
             // pane to a settled node — a state nothing clears until restart,
             // and one that pins the tree (archive/remove/folder ops treat a
             // bound pane as an active run). Terminal nodes keep whatever
@@ -9063,7 +9062,7 @@ impl AppState {
             // Hooks and transcript tailing deliver agent events asynchronously,
             // so a generic Running/Idle update can arrive after the run has
             // settled — most visibly after a user cancellation, where rewriting
-            // the status would resurrect the run and let the pane teardown
+            // the status would return the run to an active state and let pane teardown
             // re-settle it as Failed. Terminal outcomes stay as written.
             if !run.status.is_terminal() {
                 run.status = research_status_for_agent(agent.status, has_active_subagents);
@@ -9427,7 +9426,7 @@ impl AppState {
     }
 
     /// Unconditional append, kept for tests: production tails go through
-    /// [`Self::append_turn_for_transcript`] so a rebind can't splice a dead
+    /// [`Self::append_turn_for_transcript`] so a rebind can't splice an old
     /// file's parse over the new timeline.
     #[cfg(test)]
     pub fn append_turn(&self, turn: Turn) -> Result<(), String> {
@@ -9437,8 +9436,8 @@ impl AppState {
     /// Tail-scoped append: applies only while `transcript_path` is still the
     /// agent's bound transcript, and reports whether it applied. A tail checks
     /// its binding at the top of each poll, but a rebind (rewind rotation,
-    /// recovery) can land between that check and this
-    /// write — an unconditional write would splice the dead file's parse over
+    /// recovery) can occur between that check and this
+    /// write — an unconditional write would splice the old file's parse over
     /// the new tail's timeline. Checking under the model lock closes that race.
     pub fn append_turn_for_transcript(
         &self,
@@ -9533,7 +9532,7 @@ impl AppState {
     /// agent's bound transcript, and reports whether it applied. See
     /// [`Self::append_turn_for_transcript`] for the race this closes — for a
     /// replace the stakes are higher, since a stale tail's late full-window
-    /// refresh would wholesale swap the new transcript's timeline for the dead
+    /// refresh would replace the new transcript's timeline with the old
     /// file's parse.
     pub fn replace_turns_for_transcript(
         &self,
@@ -12851,7 +12850,7 @@ mod tests {
         }));
 
         // Hydration commits the cleanup immediately, so a crash before another
-        // mutation cannot resurrect discarded workspace-intelligence rows.
+        // mutation cannot restore discarded workspace-intelligence rows.
         let saved = persistence::load_with_diagnostics(&workspace).state;
         assert_eq!(saved.artifacts, artifacts);
     }
@@ -15675,7 +15674,7 @@ mod tests {
         );
         assert!(node.pane_id().is_none());
         // The agent is reclaimed with its pane, exactly as remove_pane would
-        // have done — a dropped run must not leave a dead AgentInfo behind.
+        // have done — a dropped run must not leave an obsolete AgentInfo behind.
         assert!(restored.agent("research-agent").unwrap().is_none());
         // Nothing active or bound remains, so the tree is immediately removable.
         restored.remove_research_tree(&detail.tree.id).unwrap();
@@ -15940,7 +15939,7 @@ mod tests {
         // A targeted ask is always a branch, never the inline continuation.
         assert!(!anchored.inline);
 
-        // The quoted passage rides along neutralized: it is conversation
+        // The quoted passage is included in neutralized form because it is conversation
         // content sitting beside the serialized turns, so it must not be able
         // to forge or break their structure. The bare question still ends the
         // prompt for response-boundary matching.
@@ -19648,7 +19647,7 @@ mod tests {
         assert!(node.status().is_terminal());
         assert!(node.pane_id().is_none());
         // ...then a hook-thread sync built from a snapshot taken before the
-        // teardown lands late. It must not re-bind the removed pane: nothing
+        // teardown completes late. It must not re-bind the removed pane: nothing
         // would ever clear it again, and the tree would count as having an
         // active run (blocking removal) until restart.
         state.sync_research_node_from_agent(&agent).unwrap();
@@ -19683,7 +19682,7 @@ mod tests {
         state.insert_agent(target).unwrap();
 
         // A research run never drains its queue, so a wait-for turn accepted
-        // here would park the agent as an orphaned-queue zombie at retirement.
+        // here would leave the agent in the orphaned-queue state at retirement.
         let err = crate::turn_queue::queue_wait_agent_turn(
             &state,
             crate::turn_queue::QueueWaitAgentTurnRequest {
@@ -19724,7 +19723,7 @@ mod tests {
         agent.thread_id = Some("thread-research".to_string());
         agent.branch_id = Some("branch-research".to_string());
         state.insert_agent(agent.clone()).unwrap();
-        // Mint the thread record and graph snapshot the way a live run does:
+        // Create the thread record and graph snapshot the way an active run does:
         // the transcript tail appends turns through the thread store.
         state
             .append_turn(sample_user_turn("research-agent", "Root"))
@@ -19860,7 +19859,7 @@ mod tests {
         // An instantly-exiting process (missing binary, adapter arg error):
         // the reader thread's EOF teardown ran the whole remove_pane —
         // including its research detach, which found nothing bound — before
-        // the launch path could bind. The bind must not resurrect the dead
+        // the launch path could bind. The bind must not reactivate the exited
         // pane id: nothing would ever settle or unbind the node again, and
         // the phantom "active" run would pin the tree until a manual cancel
         // or restart.
@@ -20301,8 +20300,8 @@ mod tests {
     }
 
     // A tail re-checks its binding inside the write: a rebind (rewind
-    // rotation, recovery) landing between a tail's
-    // loop-top check and its write must not let the dead file's parse land
+    // rotation, recovery) occurring between a tail's
+    // loop-top check and its write must not let the old file's parse overwrite
     // over the new transcript's timeline.
     #[test]
     fn transcript_scoped_turn_writes_apply_only_while_bound() {
@@ -22057,7 +22056,7 @@ mod tests {
         );
 
         // An agent whose cwd is inside the group dir is followed too — new
-        // tabs from that tab should land next to its work, not at the group root.
+        // tabs from that tab should be placed next to its work, not at the group root.
         let mut agent = sample_pane_runtime("pane-agent");
         agent.info.group_id = group.id.clone();
         agent.info.kind = PaneKind::Agent;
@@ -22072,7 +22071,7 @@ mod tests {
             nested
         );
 
-        // An agent outside the group dir does not steal the spawn: fall back to
+        // An agent outside the group dir is not selected: fall back to
         // the group's most-recently-active shell.
         let mut agent_out = sample_pane_runtime("pane-agent-out");
         agent_out.info.group_id = group.id.clone();
@@ -22657,7 +22656,7 @@ mod tests {
         state.insert_pane(sample_pane_runtime("pane-1")).unwrap();
         state.set_pane_layout(layout(&[("pane-1", 0)])).unwrap();
         // Well past the undo cap so the snapshot must keep only the tail rather
-        // than pin the whole log. Line-delimited so the cut lands cleanly.
+        // than retain the whole log. Line delimiters provide an exact cut point.
         let line = b"scrollback line of terminal output\n";
         let mut big = Vec::new();
         while big.len() < MAX_UNDO_SCROLLBACK_BYTES + line.len() * 2 {
@@ -22753,7 +22752,7 @@ mod tests {
             .insert_group_after(sample_terminal_group(), None)
             .unwrap();
         state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
-        // A pane-less sibling with no queue: restoring it would only resurrect an
+        // A pane-less sibling with no queue: restoring it would only recreate an
         // invisible, unreachable agent, so it must not be captured.
         let mut idle_sibling = sample_agent("agent-1");
         idle_sibling.pane_id = None;
@@ -22792,7 +22791,7 @@ mod tests {
                 .unwrap()
         );
 
-        // A sibling pane keeps the group alive, so nothing is stranded.
+        // A sibling pane keeps the group active, so no state is left without a pane.
         state.insert_pane(sample_pane_runtime("pane-8")).unwrap();
         assert!(
             !state
@@ -23268,7 +23267,7 @@ mod tests {
         let workspace = temp_workspace();
         let state = AppState::new(test_config(workspace));
 
-        // A dead send at the front of the queue (never echoed) used to make every
+        // An unacknowledged send at the front of the queue used to make every
         // later prompt report Mismatched; once expired, the next real send matches.
         state
             .record_agent_send("agent-1", "/model".to_string(), AgentSendSource::DirectSend)

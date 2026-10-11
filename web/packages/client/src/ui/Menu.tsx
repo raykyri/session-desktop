@@ -18,7 +18,7 @@ export type MenuSize = "sm" | "md";
 const MenuSizeContext = createContext<MenuSize>("md");
 
 export interface MenuProps {
-  /** The element the menu hangs off. Base UI merges the trigger props onto it
+  /** The element that opens the menu. Base UI merges the trigger props onto it
    * through `render`, rather than wrapping it — a wrapper would nest a second
    * `role="button"` around the caller's own button. */
   trigger: ReactElement;
@@ -38,7 +38,7 @@ export interface MenuProps {
 
 /**
  * Dropdown menus (08 §4): tree row menus, the settings menu, journal card
- * menus. Base UI owns roving focus, typeahead, and Escape, so the desktop's
+ * menus. Base UI handles roving focus, typeahead, and Escape, so the desktop's
  * `clampContextMenuToViewport` math is gone (ADR-9).
  */
 export function Menu({

@@ -130,8 +130,8 @@ test.serial("toggleAppearance flips between the two appearances", (t) => {
   t.is(useSettingsStore.getState().settings.appearance, "dark");
 });
 
-// The default record lives in `shared`, which cannot import the client's font
-// list and so repeats the id as a literal. This is the seam where that would
+// The default record is defined in `shared`, which cannot import the client's font
+// list and so repeats the id as a literal. This test detects when that value would
 // drift unnoticed.
 test("the shared default font identifier exists in the client font options", (t) => {
   t.is(DEFAULT_USER_SETTINGS.bodyFontId, DEFAULT_BODY_FONT_ID);

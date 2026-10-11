@@ -109,7 +109,7 @@ type NodeRemovedEvent = {
 
 /** An attempt opened its provider stream. `attempt` distinguishes a retry or
  * auto-resume from the original run, so a viewer showing a stale attempt's
- * output knows to drop it. */
+ * output can drop it. */
 type RunStartedEvent = {
   type: "research.run.started";
   nodeId: string;
@@ -166,7 +166,7 @@ type ModelsUpdatedEvent = {
   timestamp: number;
 };
 
-/** Every event this build knows how to apply. Keeping this a closed union
+/** Every event this build can apply. Keeping this a closed union
  * makes a new server event take the explicit recovery path until its client
  * state effects are intentionally implemented. */
 export type ParsedResearchEvent =
@@ -204,11 +204,11 @@ const RESEARCH_STATUSES = new Set<ResearchNodeStatus>([
 
 const MODEL_PROVIDERS = new Set<ModelProvider>(["vertex", "openrouter", "anthropic"]);
 
-/** Types this parser owns that are not under the `research.` prefix.
+/** Types handled by this parser that are not under the `research.` prefix.
  *
  * `models.updated` is one of them, so the prefix guard is widened by this set
  * rather than split into a second parser. One entry point keeps the caller
- * from having to know which parser owns a type, and keeps the `unsupported`
+ * from having to select a parser for each type, and keeps the `unsupported`
  * classification meaningful: with two parsers, an event one of them did not
  * recognize would be reported as `notResearch` by the other, and the scoped
  * refetch that `unsupported` exists to trigger would never happen. */
@@ -585,7 +585,7 @@ export interface ResearchStatusContribution {
  * `interrupted` contributes to none of them: the summary has no interrupted
  * column, and an interrupted node has neither a live run to count as running
  * nor an outcome to bucket. When the server resumes it the node returns to
- * `running` and lands in `runningCount` again. */
+ * `running` and is included in `runningCount` again. */
 export function researchStatusContribution(status: ResearchNodeStatus): ResearchStatusContribution {
   return {
     runningCount: status === "queued" || status === "running" ? 1 : 0,

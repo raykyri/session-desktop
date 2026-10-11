@@ -28,11 +28,11 @@ export interface SaveRecapInput {
    * The recap id the node carried when the generation started, or null when it
    * carried none.
    *
-   * The other three guards all key on the *answer*, and applying a recap the
+   * The other three checks all key on the *answer*, and applying a recap the
    * user previewed changes neither the snapshot nor the revision — so an
    * automatic recap that started before the dialog was opened would come back
    * seconds later and silently replace the summary the user just wrote,
-   * instructions and all. `applyCandidate` already refuses on exactly this
+   * instructions and all. `applyCandidate` already rejects exactly this
    * comparison; here it is a no-op, as the rest of `save` is.
    */
   expectedCurrentRecapId?: string | null | undefined;

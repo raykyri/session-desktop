@@ -102,7 +102,7 @@ test("prompts exceeding word or byte limits return standardized validation error
   t.is(
     oversizeRefusal("x", "report", 11 * 1024 * 1024),
     "The report exceeds the 10 MiB size limit.",
-    "the byte ceiling is checked against the size the caller already knows",
+    "the byte ceiling is checked against the size already available to the caller",
   );
   // Same numbers on both surfaces: the import dialog documents them as "the
   // same limits the composer applies".

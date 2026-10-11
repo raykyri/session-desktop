@@ -77,7 +77,7 @@ test.serial("a local change is pushed once, after the debounce", async (t) => {
     "settings.update": serverSettings({ textSize: 18 }),
   });
   mount(stub);
-  // A change made before the account's copy lands would be overwritten by it,
+  // A change made before the account's copy loads would be overwritten by it,
   // which is what "server wins on load" means; the test waits for the load.
   await waitUntil(
     t,

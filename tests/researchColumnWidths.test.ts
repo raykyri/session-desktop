@@ -119,7 +119,7 @@ test("when the strip can't scroll back far enough, the column's left edge moves 
   assert.equal(Math.min(0, 20 + (result.width - 300)) + (result.width - 300), -80);
 });
 
-test("the strip keeps trailing space only while its view reaches past the last column", () => {
+test("the strip preserves trailing space only when scrolled past the last column", () => {
   assert.equal(researchStripSlack(500, 1000, 1600), 0);
   assert.equal(researchStripSlack(700, 1000, 1600), 100);
   // Content narrower than the view: at offset 0 the filler fills the view;
@@ -161,7 +161,7 @@ test("a handle outside the column area renders nothing", () => {
   assert.equal(renderToStaticMarkup(createElement(ResearchColumnResizer, { kind: "messages", label: "Resize" })), "");
 });
 
-test("the feed column carries its handle, and the strip sets the three width properties", () => {
+test("the feed column has a resize handle and the strip sets all three width properties", () => {
   const html = renderToStaticMarkup(
     createElement(ResearchColumns, { hasThread: false, feed: createElement("p", null, "Feed"), children: null }),
   );

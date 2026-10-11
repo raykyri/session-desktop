@@ -17,9 +17,8 @@ export function formatGroupDir(rawPath: string, roots: GroupDirRoots): string {
   if (workspaceRoot && rawPath.startsWith(`${workspaceRoot}/`)) {
     const relative = rawPath.slice(workspaceRoot.length + 1);
     // When the workspace root is the home directory itself, the path is being
-    // shown relative to home, so anchor it with ~/ instead of leaving bare
-    // segments. A root that is a deeper child of home already reads clearly as
-    // a relative path, so it is left unchanged.
+    // shown relative to home, so prefix it with ~/. Deeper roots already
+    // produce relative paths and remain unchanged.
     return homeDir && workspaceRoot === homeDir ? `~/${relative}` : relative;
   }
   if (homeDir && rawPath === homeDir) {

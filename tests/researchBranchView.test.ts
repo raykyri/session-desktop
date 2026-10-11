@@ -115,7 +115,7 @@ test("after a send the queue waits until the new child is in the tree, then foll
   assert.deepEqual(researchQueueAction(complete, "h", rest, "c"), { kind: "send", item: queued("q2"), tailId: "c" });
 });
 
-test("a refused question holds the queue, a stopped tail stalls it, and a removed head clears it", () => {
+test("a refused question blocks the queue, a stopped tail pauses it, and removing the head clears it", () => {
   const chain = [node("h"), node("t", { parentNodeId: "h", inline: true })];
   assert.deepEqual(researchQueueAction(chain, "h", [queued("q1", "refused"), queued("q2")], undefined), {
     kind: "wait",

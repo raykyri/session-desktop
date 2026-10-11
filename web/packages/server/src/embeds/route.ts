@@ -3,7 +3,7 @@
 // The image half of an embedded post. A hydrated snapshot points here instead
 // of at `pbs.twimg.com` (`storage.ts`), so the card's pictures come from this
 // origin: one `img-src` for the page, no request to X from the reader's
-// browser, and a picture that survives the post it belongs to.
+// browser, and a picture retained with the post it belongs to.
 //
 // Public, like the cards themselves — the Home feed is readable signed out —
 // and it can only ever serve a URL some snapshot was hydrated from, because

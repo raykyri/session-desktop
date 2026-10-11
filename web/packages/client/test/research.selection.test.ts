@@ -57,7 +57,7 @@ test("a flat range round-trips through offsets", (t) => {
   t.deepEqual(selectionOffsets(root, range as Range), { start: 0, end: 5 });
 });
 
-test("message seams are reported where the enclosing message changes", (t) => {
+test("message boundaries are reported where the enclosing message changes", (t) => {
   const root = fixture();
   const boundaries = messageFlatBoundaries(root);
   // "Alpha beta gamma." ends at 17, "web_search" ends at 27.
@@ -69,7 +69,7 @@ test("prevents word expansion across message boundaries", (t) => {
   const projection = root.textContent ?? "";
   const snapper = createResearchSelectionSnapper(projection, "en", messageFlatBoundaries(root));
   t.truthy(snapper);
-  // A caret inside "gamma" dragged one character past the seam: without the
+  // A caret inside "gamma" dragged one character past the boundary: without the
   // boundaries, "gamma.web_search" segments as one unit.
   const snapped = snapper?.(13, 18);
   t.truthy(snapped);

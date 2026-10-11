@@ -69,7 +69,7 @@ test("blocks private, loopback, and reserved IP addresses in web_fetch", (t) => 
   }
 });
 
-test("the guard refuses non-http schemes, credentials, and private names", async (t) => {
+test("the guard rejects non-http schemes, credentials, and private names", async (t) => {
   await t.throwsAsync(assertFetchableUrl("file:///etc/passwd"), {
     instanceOf: BlockedUrlError,
     message: /Protocol 'file:' is unsupported/,
@@ -110,7 +110,7 @@ test("the guard refuses non-http schemes, credentials, and private names", async
   t.is(allowed.host, "example.com");
 });
 
-test("web_fetch reads a public page, caps it, and refuses a redirect to loopback", async (t) => {
+test("web_fetch reads a public page, caps it, and rejects a redirect to loopback", async (t) => {
   const server = createServer((request, response) => {
     const url = request.url ?? "/";
     if (url === "/page") {
@@ -157,7 +157,7 @@ test("web_fetch reads a public page, caps it, and refuses a redirect to loopback
   t.false(page.truncated);
 
   // A redirect is re-checked: the allow-list covers the first host, and the
-  // hop is to an address the policy refuses on its own terms.
+  // hop is to an address the policy rejects directly.
   const redirecting: RunToolContext = { ...base, allowHosts: [host] };
   const hop = await fetchReadablePage(
     { ...redirecting, allowHosts: [] },

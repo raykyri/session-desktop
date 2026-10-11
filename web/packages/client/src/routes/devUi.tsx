@@ -82,7 +82,7 @@ function Row({ title, children }: { title: string; children: React.ReactNode }) 
  * side by side: tokens are declared on `:root` but inherit, so a subtree that
  * redeclares them re-resolves every `var()` beneath it. Portalled layers
  * (menus, dialogs, tooltips) escape to `document.body` and therefore follow the
- * app's real theme, not the panel's — that is the honest result, since that is
+ * app's real theme, not the panel's, because that is
  * where they render in production too.
  *
  * Development only: the route is registered behind `import.meta.env.DEV` and

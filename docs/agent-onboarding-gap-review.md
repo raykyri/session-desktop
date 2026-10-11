@@ -1,6 +1,6 @@
 # Session agent onboarding and maintenance review
 
-Session should keep its research application foundation and selectively adopt T3 Code's provider setup and maintenance patterns. The immediate opportunities are truthful readiness, a clear transition from setup to research, and repair actions that return users to their investigation. A full fork would provide substantial provider infrastructure, but would also require integrating or rebuilding Session's research domain and hosted API runtime.
+Session should keep its research application and selectively adopt T3 Code's provider setup and maintenance patterns. The priorities are accurate readiness states, a clear transition from setup to research, and repair actions that let users retry failed research. A full fork would add provider infrastructure but require integrating or rebuilding Session's research domain and hosted API runtime.
 
 This review covers onboarding, agent setup, and maintaining long-running research. It does not recommend expanding Session into a general agent orchestrator. Git worktrees, pull requests, terminal tabs, a marketplace of providers, and fleet administration are outside the proposed scope.
 
@@ -18,7 +18,7 @@ Session has two materially different execution models. [Desktop](../README.md) u
 
 ## Round one findings
 
-The initial review found a useful desktop setup foundation: install, sign in, and refresh steps; copyable commands; links to provider setup guides; research launch checks; and retained prompts after failure. T3 goes further with a first-run progression, integrated setup/authentication paths, provider account details, and installer-aware maintenance.
+The initial review found that desktop setup already provides install, sign-in, and refresh steps; copyable commands; links to provider setup guides; research launch checks; and retained prompts after failure. T3 adds a first-run sequence, integrated setup/authentication paths, provider account details, and installer-aware maintenance.
 
 The first candidate gaps were completion of onboarding, uncertainty hidden by readiness labels, incorrect repair instructions, installation-channel mismatch, maintenance diagnostics, and separation of desktop from hosted provider readiness. The fork investigation added questions about credential ownership, runtime changes during active research, capability policy, and research-data migration.
 
@@ -32,7 +32,7 @@ Three independent subagents examined desktop setup, hosted lifecycle, and fork f
 | Hosted onboarding and lifecycle | Submit readiness is weaker than picker readiness; credential presence substitutes for health; search degradation and context maintenance are poorly surfaced. | Session already has usage totals, quota enforcement, rate-limit retries, compaction, and restart recovery. Improve their visibility and user controls. |
 | Full-fork feasibility | Provider setup infrastructure is reusable, but research state, hosted identity/admission, and distribution need explicit ownership. | Managed ChatGPT uses dynamic registration, not a fixed T3 OAuth client ID. Own-brand authorization is unverified, not proven impossible. |
 
-Existing strengths to preserve include [readiness refresh](../src/App.tsx) on startup, opening agent setup, focus/visibility after five minutes, and new research submission; the backend's [30-second probe cache](../src-tauri/src/adapters/mod.rs); [Retry](../src/components/research/ResearchTurn.tsx); durable research history; and the hosted runtime's [retries and recovery](../web/docs/05-run-lifecycle-and-streaming.md). Session also already exposes research capability flags; the proposed work makes their use more consistent and visible.
+Keep the existing [readiness refresh](../src/App.tsx) on startup, when opening agent setup, after five minutes of focus/visibility, and on new research submission; the backend's [30-second probe cache](../src-tauri/src/adapters/mod.rs); [Retry](../src/components/research/ResearchTurn.tsx); durable research history; and the hosted runtime's [retries and recovery](../web/docs/05-run-lifecycle-and-streaming.md). Session also exposes research capability flags; the proposed work makes their use consistent and visible.
 
 ## Consolidated gap list
 
@@ -44,7 +44,7 @@ P1 means address in the next onboarding/reliability work. P2 means valuable subs
 
 [agentSetup.ts](../src/lib/agentSetup.ts) creates a “ready for research” instruction, but [AgentSetupGuide](../src/components/AgentSetupGuide.tsx) displays hints only for the active incomplete step. When all steps are complete, `activeIndex` becomes `-1`, so that instruction disappears. The footer offers Next agent and refresh. Home also removes its setup guide once a research provider is ready. On web, [login](../web/packages/client/src/routes/login.tsx) leads into the [Home composer](../web/packages/client/src/routes/home.tsx) without a research-specific orientation.
 
-T3's [WelcomeWizard](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/web/src/components/onboarding/WelcomeWizard.tsx) progresses through connection, agents, and project import, with later stages skippable. Session should adapt the progression to workspace/audience → working research capability → first question, without requiring repository import.
+T3's [WelcomeWizard](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/web/src/components/onboarding/WelcomeWizard.tsx) steps through connection, agents, and project import, with later stages skippable. Session should use the sequence workspace/audience → working research capability → first question, without requiring repository import.
 
 **Done when:** successful desktop setup visibly offers “Start research with [provider]” and returns to the retained question; one usable provider is sufficient. First-time hosted users understand the question's audience and can ask a useful question without configuring a machine or provider account. Existing users can skip orientation.
 
@@ -78,9 +78,9 @@ T3's [maintenance resolver](https://github.com/pingdotgg/t3code/blob/8d199b4f7b9
 
 ### G5 Expose compact diagnostics and execution ownership
 
-**P1. Workflow gap sharpened by the fork investigation.**
+**P1. Workflow gap confirmed by the fork investigation.**
 
-Session [metadata](../src/types.ts) already includes configured/resolved binary, version, auth state, check time, and local/remote target. [AgentSetupGuide](../src/components/AgentSetupGuide.tsx) does not surface most of them. T3's [provider card](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/web/src/components/settings/ProviderInstanceCard.tsx) provides richer status, account, version, and maintenance feedback.
+Session [metadata](../src/types.ts) already includes configured/resolved binary, version, auth state, check time, and local/remote target. [AgentSetupGuide](../src/components/AgentSetupGuide.tsx) does not display most of them. T3's [provider card](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/web/src/components/settings/ProviderInstanceCard.tsx) displays status, account, version, and maintenance details.
 
 **Done when:** a details view explains where research runs, which installation/account supplies it where known, when it was checked, and who can fix it. Desktop offers sanitized diagnostic copying. Hosted users see service availability and an administrator repair route; deployment credentials and account secrets remain administrative. If managed installation is later added, clearly distinguish it from an existing external CLI.
 
@@ -88,13 +88,13 @@ Session [metadata](../src/types.ts) already includes configured/resolved binary,
 
 **P2; prerequisite for broadening supported runtimes. Desktop maintenance gap and fork-derived requirement.**
 
-Desktop [model presets](../src/lib/launcherModels.ts) and [effort options](../src/adapters/codex.tsx) are code-defined, with a custom-model escape hatch. Research capability flags exist, but installation/authentication alone do not prove the selected model supports every research operation or effort setting.
+Desktop [model presets](../src/lib/launcherModels.ts) and [effort options](../src/adapters/codex.tsx) are code-defined, with an option to enter a custom model. Research capability flags exist, but installation/authentication alone do not prove the selected model supports every research operation or effort setting.
 
 T3 separates provider capability policy and maintains a [model manifest](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/server/src/provider/ModelManifest.ts). Its default remote metadata comes from upstream `main`, with cached/bundled fallbacks. A fork must deliberately own or pin that policy.
 
 **Done when:** Session defines supported research functions per runtime/version and explains unsupported choices before launch where evidence exists. Retired models and stale metadata have a recoverable path. Custom models remain possible with clearly stated uncertainty. A capability refresh cannot silently change the identity or context of an existing investigation.
 
-### G7 Make hosted launch readiness truthful
+### G7 Report hosted launch readiness accurately
 
 **P1. Hosted correctness and service-maintenance gap.**
 
@@ -118,7 +118,7 @@ Separately, [runtime model availability](../web/packages/server/src/trpc/routers
 
 Hosted [Settings](../web/packages/client/src/routes/settings.tsx) already shows usage, costs, and daily limits; [admission](../web/packages/server/src/research/admission.ts) explains daily reset, and [provider throttling](../web/packages/server/src/runs/errors.ts) retries with backoff. T3's [usage recovery banner](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/web/src/components/chat/UsageLimitRecoveryBanner.tsx) provides additional reset/resume controls.
 
-**Done when:** users can distinguish a Session daily cap from provider throttling, see known reset times in local time, and retain their question after rejection. Surface allowance near launch when reliably known. Explicit cancellable deferred retry is optional; never invent a provider allowance or promise a reset time the provider did not supply.
+**Done when:** users can distinguish a Session daily cap from provider throttling, see known reset times in local time, and retain their question after rejection. Display the remaining allowance near launch when it is reliably known. Explicit cancellable deferred retry is optional; never invent a provider allowance or promise a reset time the provider did not supply.
 
 ### G10 Show how context maintenance affects continuing research
 
@@ -132,7 +132,7 @@ Session already [elides old tool results and summarizes older exchanges](../web/
 
 **P1 before adding managed accounts or account switching; P2 for current external-account detection. Fork-derived lifecycle requirement.**
 
-Session currently relies on external CLI credentials. That keeps setup ownership small but leaves account changes outside the application. T3's actual [auth service](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/server/src/provider/ProviderAuthService.ts) releases native sessions based on their credential bindings when authentication changes, rather than relying only on the currently selected model.
+Session currently relies on external CLI credentials, so account changes occur outside the application. T3's [auth service](https://github.com/pingdotgg/t3code/blob/8d199b4f7b918079161d5f43e0146c099301be08/apps/server/src/provider/ProviderAuthService.ts) releases native sessions based on their credential bindings when authentication changes, rather than relying only on the currently selected model.
 
 **Done when:** any Session-managed sign-out, account replacement, or destructive runtime maintenance identifies affected investigations and defines whether they stop, resume, or require a fresh continuation. Retain historical provider/account provenance where available. Do not silently continue using a different account. This does not require adding multiple-account management now.
 
@@ -156,7 +156,7 @@ Session's [research records](../src-tauri/src/research.rs) include tree relation
 
 | Flow | Infrastructure a full fork could inherit | Session work still required |
 | --- | --- | --- |
-| First use | Environment connection, first-run gating, provider setup, project/history import UI. | Replace coding-project progression with first research, audience, and evidence. Do not force repository selection. |
+| First use | Environment connection, first-run gating, provider setup, project/history import UI. | Replace the coding-project sequence with first research, audience, and evidence. Do not force repository selection. |
 | Install and authenticate | Managed Codex installation/authentication, existing-CLI paths, provider authentication controllers, instance configuration. | Choose installation/credential ownership, remove upstream product identity, verify external authorization, and supply a terminal-free Session flow where needed. |
 | Maintain providers | Installer-aware updates, status/account display, capability metadata, diagnostics. | Own compatibility policy and endpoints; define effects on active research. Provider-specific process protections are not a universal updater guarantee. |
 | Continue investigations | Thread/runtime primitives and durable provider lifecycle machinery. | Map Session nodes, branches, artifacts, provenance, recaps, and native continuation handles; satisfy G11 and G13. |
@@ -173,7 +173,7 @@ A fork also needs an inventory of metadata and update endpoints, signing/release
 
 ### Recommendation and decision gates
 
-Prefer selective adoption: implement G1–G5 and G7–G8 in Session, then evaluate G6 and the longer-running research improvements. This retains the existing research domain and avoids a platform migration just to gain better setup screens. Treat managed installation as a separate scoped experiment.
+Prefer selective adoption: implement G1–G5 and G7–G8 in Session, then evaluate G6 and the longer-running research improvements. This retains the existing research domain without requiring a platform migration for setup changes. Evaluate managed installation separately.
 
 Before choosing a full or server-only fork, require these concrete demonstrations:
 

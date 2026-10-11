@@ -1,4 +1,4 @@
-// The canonical conversation the app owns (`docs/04-agent-runtime.md` §4).
+// The canonical conversation stored by the app (`docs/04-agent-runtime.md` §4).
 //
 // Append-only design: conversation messages are recorded upon node completion and remain immutable across all providers.
 

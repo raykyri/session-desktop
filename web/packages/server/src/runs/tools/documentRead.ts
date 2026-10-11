@@ -2,7 +2,7 @@
 //
 // Gemini, Claude, and Luna receive an attached PDF or image as a file part and
 // never need this; DeepSeek has no file input, and every model has a limit on
-// what can be inlined. This is the escape hatch for both: the extracted text
+// what can be inlined. This tool handles both cases: the extracted text
 // of one attached document, in 30k-character chunks, scoped to the run's
 // account so a document id from another user is simply not found.
 

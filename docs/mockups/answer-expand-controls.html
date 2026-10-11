@@ -215,7 +215,7 @@ const V = [
     pro: "Reads as part of the text; no extra row.", con: "Accent text inside an answer can be confused with a link in the content.",
     ctl: (o) => o ? ["", `<button class="link less" data-x aria-expanded="true">less</button>`] : [`<span class="more-in">…&nbsp;<button class="link" data-x aria-expanded="false" aria-label="Show more">more</button></span>`, ""] },
   { id: "pill", name: "Count pill", desc: "A small pill on the fade says how much is hidden, for example “Show 46 more words”.",
-    pro: "Tells you what you get before you click.", con: "Pills on several answers in a row add visual weight.",
+    pro: "Describes the result before you click.", con: "Pills on several answers in a row add visual weight.",
     ctl: (o, hidden) => o ? ["", `<button class="link less" data-x aria-expanded="true">${UP}Show less</button>`] : [`<button class="pill" data-x aria-expanded="false">${DOWN}Show ${hidden} more words</button>`, ""] },
   { id: "dots", name: "Length dots as the control", desc: "No text at all: the length dots in the gutter are the button. Hover shows the share that is hidden.",
     pro: "Zero added chrome; the dots already describe the length.", con: "Least discoverable; depends on length dots being on.",

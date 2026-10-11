@@ -32,7 +32,7 @@ interface ResearchActionContext {
   groups: GroupInfo[];
   setGroups: Dispatch<SetStateAction<GroupInfo[]>>;
   config: RuntimeConfig | null;
-  /** The sidebar's workspace, where an imported report lands. */
+  /** The sidebar workspace that receives an imported report. */
   researchScope: ResearchWorkspaceScope;
   /** Probes the adapters (re-probing with `force`) and returns them. */
   refreshAdapterReadiness: (options?: { force?: boolean }) => Promise<RuntimeConfig["adapters"]>;
@@ -120,8 +120,8 @@ export function useResearchActions(
     },
     [generateResearchTitle],
   );
-  // Shared by the research and document composers: the folder the item lands
-  // in — the picked one, or the default folder (created on first use).
+  // Shared by the research and document composers: use the selected folder or
+  // create the default folder on first use.
   const resolveResearchComposerWorkspace = useCallback(
     async (workspaceId: string | null): Promise<GroupInfo> => {
       const group = workspaceId

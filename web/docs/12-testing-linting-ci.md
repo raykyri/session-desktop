@@ -32,7 +32,7 @@ db:admin                  tsx packages/db/bin/admin.ts <github login>   (sets us
 ```
 
 `test:e2e` pins the project because the Chromium browser is the only one CI
-installs and the only one carrying visual baselines; a machine with WebKit can
+installs and the only one containing visual baselines; a machine with WebKit can
 run the same behavioral specs through `test:e2e:webkit`. The Playwright web
 server command builds the client itself, so `test:e2e` needs no prior build.
 
@@ -109,7 +109,7 @@ insertion, cross-model fork dropping reasoning metadata, medium-effort
 `providerOptions` per provider, Google grounding metadata mapped to
 synthetic `google_search` tool blocks with Search Suggestions preserved,
 usage recording including grounding query counts, daily-limit admission
-holds, and the Anthropic escape hatch adapter producing the same stream
+holds, and the direct Anthropic adapter producing the same stream
 shape as `@ai-sdk/anthropic`.
 
 ### 3.4 Server

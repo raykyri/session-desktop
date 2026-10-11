@@ -72,7 +72,7 @@ test("canUseModel gates admin-only models", (t) => {
   t.true(canUseModel(admin, "claude-fable"));
 });
 
-test("canUseModel refuses an unknown id for everyone", (t) => {
+test("canUseModel rejects an unknown id for everyone", (t) => {
   t.false(canUseModel(admin, "gpt-astra"));
   t.false(canUseModel(member, "gpt-astra"));
 });

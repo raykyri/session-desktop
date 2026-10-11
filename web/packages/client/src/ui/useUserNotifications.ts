@@ -11,7 +11,7 @@ export interface UserNotificationsApi {
  * ported from the desktop `hooks/useUserNotifications.ts`.
  *
  * The desktop hook owned the list in `useState` and decided on arrival whether
- * a toast was wanted. Here the list lives in the store so the SSE bridge can
+ * a toast was requested. Here the list is stored so the SSE bridge can
  * push to it without a React tree, the bridge enforces the `showNotifications`
  * preference at the one ingress (`api/events.ts`), and the hook is only the
  * read side.

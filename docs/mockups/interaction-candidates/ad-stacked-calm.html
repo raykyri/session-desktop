@@ -991,7 +991,7 @@ form.ready .btn.primary .ent { display: inline; }
 <ul><li>"Save draft" uses a faint grey fill instead of a borderless ghost style.</li></ul>
 <ul><li>Folder icons in the feed's folder headers are 14px instead of 16px.</li></ul>
 <ul><li>Conversation titles in column headers use the same type and colour as the feed heading: 15px, weight 600, on a 20px line. Header text and header icons share one centre line across the feed, conversation, and branch columns.</li></ul>
-<ul><li>The separate "N branches" link is gone. The fork button under an answer carries the count (for example ⑂ 2), stays visible while the answer has branches, and opens a menu of those branches with "New branch from this answer" at the end. With no branches it still creates one directly, on hover.</li></ul>
+<ul><li>The separate "N branches" link is gone. The fork button under an answer shows the count (for example ⑂ 2), stays visible while the answer has branches, and opens a menu of those branches with "New branch from this answer" at the end. With no branches it still creates one directly, on hover.</li></ul>
 <ul><li>Removed the Tiled column layout. Focus stack is the only layout; the notes keep Tiled in the options table as a considered alternative.</li></ul>
 <ul><li>The follow-up composer's spacing matches the turn grid: 16–18px above, 20–22px below, and the same side insets as the turns. Its field text is centred on the 30px send button. The feed composer's "Write a question first." error is right-aligned under the buttons.</li></ul>
 <ul><li>New folder and Rename folder open a modal dialog (dimmed window, centred dialog, focus kept inside) instead of a popover.</li></ul>
@@ -1483,7 +1483,7 @@ function trayHTML(fid, opts = {}) {
   const items = inFolder(fid);
   const f = S.folders.find((x) => x.id === fid);
   const collapsed = !opts.solo && S.collapsed.has(fid);
-  const empty = fid === "inbox" ? "Nothing unfiled. New questions land here." : fid === "archive" ? "Archive is empty. Archived questions stop sending follow-up notifications." : fid === "drafts" ? "No drafts. Use Save draft in the composer to keep a question for later." : "Empty folder. Drag or file questions here.";
+  const empty = fid === "inbox" ? "Nothing unfiled. New questions appear here." : fid === "archive" ? "Archive is empty. Archived questions stop sending follow-up notifications." : fid === "drafts" ? "No drafts. Use Save draft in the composer to keep a question for later." : "Empty folder. Drag or file questions here.";
   const body = `<div class="tray-b" data-drop="${fid}">${items.map(cardWithKids).join("") || `<div class="tray-empty">${empty}</div>`}</div>`;
   if (fid === "inbox" && !opts.solo) return `<section class="tray inbox" data-drop="inbox" aria-label="Unfiled">${body}</section>`;
   if (opts.solo) return `<section class="tray solo" data-drop="${fid}">${body}</section>`;
@@ -1698,7 +1698,7 @@ const win = document.getElementById("win");
 const stage = document.getElementById("stage");
 function frameWidth() { const avail = stage.clientWidth; return Math.max(320, Math.min(S.winW || avail, avail)); }
 
-// Focus survives a re-render: the active element is found again by its id or by
+// Focus is preserved across a re-render: the active element is found again by its id or by
 // the data attributes that identify it, preferring the same column.
 const KEY_ATTRS = ["a", "id", "f", "k", "i", "view", "h", "d", "card", "b"];
 function keyOf(el) {

@@ -133,7 +133,7 @@ test("prose typography is declared on the renderer, not on the surfaces that pla
   t.regex(prose, /line-height:\s*var\(--research-body-line-height\)/);
 
   const surface = ruleBody(proseCss, ".research-reading-surface");
-  t.notRegex(surface, /--transcript-/, "the scale lives here; the deltas do not");
+  t.notRegex(surface, /--transcript-/, "the scale is defined here; the deltas are not");
 
   const summary = ruleBody(proseCss, ".research-summary-text");
   t.regex(summary, /font-size:\s*var\(--research-summary-font-size\)/);

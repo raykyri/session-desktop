@@ -5,7 +5,7 @@
 // `notifyManager.batch` so a burst of twenty patches yields one render rather
 // than twenty.
 //
-// Where an event lands is decided once, here: run events go to the `liveTurns`
+// Event routing is defined once, here: run events go to the `liveTurns`
 // store and never touch the query cache (a run at 30 events/s would invalidate
 // list queries thirty times a second), everything else is a targeted
 // `setQueryData` through the reducers in `@session/shared`, and anything the
@@ -244,7 +244,7 @@ function applyResearchEvent(client: QueryClient, event: ParsedResearchEvent): vo
           patchResearchDetailHighlightCreated(detail, event.nodeId, event.highlight),
         );
       }
-      // The feed row carries the tree and node labels, which the event does not.
+      // The feed row includes the tree and node labels, which the event does not.
       invalidate(client, ["highlightsFeed"]);
       return;
     }
@@ -605,7 +605,7 @@ export function interestedNodeIds(): string[] {
   return [...interest.keys()];
 }
 
-/** Test seam: drops the registry and any pending publish. */
+/** Test helper: drops the registry and any pending publish. */
 export function resetNodeInterest(): void {
   interest.clear();
   if (interestTimer !== null) clearTimeout(interestTimer);
@@ -637,7 +637,7 @@ export interface EventBridgeOptions {
 /**
  * Whether a subscription error is the server saying the session is gone.
  *
- * `TRPCClientError` carries the formatter's `data.code`; the raw shape is read
+ * `TRPCClientError` includes the formatter's `data.code`; the raw shape is read
  * too, because an error that crossed the SSE framing keeps `shape` and not
  * always `data`. Only an explicit unauthorized code signs the tab out; a
  * transient connection drop instead goes through the link's own reconnect.

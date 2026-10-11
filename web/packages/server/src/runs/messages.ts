@@ -1,7 +1,7 @@
 // The canonical message store ↔ AI SDK conversion (`04-agent-runtime.md` §4,
 // §8).
 //
-// The app owns the conversation: a node's context is its ancestors' stored
+// The app stores the conversation: a node's context is its ancestors' stored
 // `ModelMessage`s along the tree path, plus the new user message this attempt
 // is asking. Three things happen on the way out — provider reasoning metadata
 // is dropped when the thread changed model, attached documents become the

@@ -5,7 +5,7 @@
 // writers so they produce identical summary objects.
 //
 // `queries.ts` re-exports `queryKeys`, which is the import path the rest of
-// the client uses; the factory lives here so the writers can use it without a
+// the client uses; the factory is defined here so the writers can use it without a
 // cycle through the hooks.
 
 import type {
@@ -128,7 +128,7 @@ export function cachedTreeTitle(client: QueryClient, treeId: string): string | u
 }
 
 /**
- * The highlights feed carries the thread and node titles on every row
+ * The highlights feed includes the thread and node titles on every row
  * (`ResearchHighlightFeedItem`), and a rename does not say what the new label
  * of a document node is — that rule is the server's (`highlights.listFeed`).
  * So a renamed thread refetches the feed instead of being patched into it, and
@@ -179,7 +179,7 @@ export function treeIdForNode(client: QueryClient, nodeId: string): string | nul
 }
 
 /**
- * The Home feed carries a compact projection of a run, not the node row, so
+ * The Home feed includes a compact projection of a run, not the node row, so
  * the shared node reducers do not apply to it. The three fields a node event
  * is authoritative for in that projection are patched in place; anything
  * structural (a new question, a removed branch) invalidates instead, because

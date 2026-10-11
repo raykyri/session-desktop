@@ -12,8 +12,8 @@
 // The strip is a pure function of the tree's nodes, the deepest selection and
 // the unsent branch, so it is computed once per render and every consumer
 // (rendering, keyboard, focus, scroll persistence, the feed's selection)
-// reads the same columns. The DOM carries each column's identity through
-// columnAttributes, and code that has to find a column element uses
+// reads the same columns. `columnAttributes` stores each column's identity in
+// the DOM, and code that has to find a column element uses
 // columnSelector.
 
 import { nodeType, passageAnchor } from "./researchNodeTypes";

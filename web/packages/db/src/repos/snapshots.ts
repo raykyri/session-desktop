@@ -33,7 +33,7 @@ export interface CommitInput {
   turns: readonly Turn[];
   /** The attempt's terminal outcome. `completedAt` defaults to now. */
   outcome: { status: ResearchNodeStatus; error?: string | null; completedAt?: number };
-  /** The run's current sequence number, when a run owns the counter. The
+  /** The run's current sequence number, when a run manages the counter. The
    * commit publishes no `seq`-carrying event of its own — the loop's
    * `research.run.finished` is the next one — so it records the number rather
    * than allocating one the client would then see as a hole
@@ -66,14 +66,14 @@ function assistantTextExists(turns: readonly Turn[]): boolean {
 }
 
 /**
- * Writes the answer and settles the node.
+ * Writes the answer and updates the node's final state.
  *
  * The two-guard rule — an assistant text turn exists, and two consecutive
  * reads of the live turns agreed — is split: the second guard is the
  * runtime's, because only it can read the same buffer twice; the first is
  * here, because a snapshot without an answer is not a snapshot.
  *
- * Everything lands in one transaction committed under `synchronous = FULL`
+ * Everything is written in one transaction committed under `synchronous = FULL`
  * (`docs/00-plan.md` §6): the snapshot, the terminal status, the timestamps,
  * the thread's `updated_at`, and the removal of the live turns the snapshot
  * replaces. A crash between any two of those would show a finished run with
@@ -188,7 +188,7 @@ export function read(db: SessionDatabase, userId: string, nodeId: string): Store
   };
 }
 
-/** The revision alone, for the guards that only compare it. */
+/** The revision alone, for checks that only compare it. */
 export function revision(db: SessionDatabase, userId: string, nodeId: string): string | null {
   const row = db
     .select({ revision: responseSnapshots.revision })

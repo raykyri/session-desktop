@@ -159,7 +159,7 @@ test("an edited note's follow-ups column lists only its follow-ups", () => {
   assert.doesNotMatch(html, /[Cc]orrection|wit-bindgen 0\.30/);
 });
 
-test("the follow-up box asks by default and adds a note in Note mode", () => {
+test("the follow-up box uses Ask mode by default and adds a note in Note mode", () => {
   assert.deepEqual(postFollowUpCopy(false, "Ask a follow-up", "Ask Claude Fable"), {
     placeholder: "Ask a follow-up",
     sendName: "Ask",

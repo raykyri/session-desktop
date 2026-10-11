@@ -429,7 +429,7 @@ test("quoted artifact titles round-trip in revision prompts", async () => {
   assert.equal(sessionWidgetMetadata(`title=${JSON.stringify(title)}`).title, title);
 });
 
-test("fence metadata survives CommonMark escape processing", async () => {
+test("fence metadata remains after CommonMark escape processing", async () => {
   const { fromMarkdown } = await import('mdast-util-from-markdown');
   const { remarkSessionWidgetFences, sessionWidgetMetadata } = await import('../src/lib/sessionWidgets');
   const title = 'A "quoted" chart \\ legend';

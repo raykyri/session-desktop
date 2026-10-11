@@ -5,10 +5,10 @@ The desktop app executed research turns by spawning coding-agent CLIs
 (`src-tauri/src/research_runtime.rs`, `claude_sdk.rs`, `headless_process.rs`).
 The web app does not run any CLI. It runs the agent loop itself, in the web
 server process, against provider APIs through the Vercel AI SDK, with tools
-the app owns. This document specifies that runtime; where runs execute and
+the app controls. This document specifies that runtime; where runs execute and
 how clients observe them is `05-run-lifecycle-and-streaming.md`.
 
-What carries over from the desktop is the research *product* behavior:
+The web implementation preserves the desktop research *product* behavior:
 read-only tools, the launch
 prompt assembly, response-boundary rules, the `Turn`/`TurnBlock` durable
 format and its timeline projection, recap and title generation, and tweet attachments.
@@ -16,7 +16,7 @@ format and its timeline projection, recap and title generation, and tweet attach
 ## 1. Models
 
 Registered in code (`packages/shared/src/models/registry.ts`, which also
-carries per-model prices per million tokens used for
+defines per-model prices per million tokens used for
 `usage_events.cost_estimate_micros`: Gemini 0.75/3.75, DeepSeek 0.15/0.60,
 Luna 0.20/1.20, Fable 10/50) and exposed by `system.runtimeConfig`:
 
@@ -25,7 +25,7 @@ Luna 0.20/1.20, Fable 10/50) and exposed by `system.runtimeConfig`:
 | `gemini-flash` | Gemini 3.8 Flash | Vertex AI, service account | `@ai-sdk/google-vertex` with the `google_search` provider tool | all users, default | native grounding (§6.2) |
 | `deepseek-flash` | DeepSeek V4.1 Flash | OpenRouter `deepseek/deepseek-v4.1-flash`, `provider: { zdr: true, data_collection: "deny" }` | `@openrouter/ai-sdk-provider` | all users | owned tools |
 | `gpt-luna` | GPT-5.6 Luna | OpenRouter `~openai/gpt-luna-latest` (falls back to `openai/gpt-5.6-luna` if the alias is absent), `provider: { zdr: true, data_collection: "deny" }` | `@openrouter/ai-sdk-provider` | all users | owned tools |
-| `claude-fable` | Claude Fable 5.1 (`claude-fable-5-1`) | Anthropic API | `@ai-sdk/anthropic`, `@anthropic-ai/sdk` escape hatch (§7) | admin only | owned tools |
+| `claude-fable` | Claude Fable 5.1 (`claude-fable-5-1`) | Anthropic API | `@ai-sdk/anthropic`, direct `@anthropic-ai/sdk` adapter (§7) | admin only | application tools |
 
 Metadata runs (titles and recaps) always use
 `gemini-flash` (§9). GPT-6 Astra is not included in this iteration.
@@ -101,7 +101,7 @@ One attempt of one node:
    providerOptions })`. `MAX_STEPS = 25`; wall-clock cap 15 minutes
    (`SESSION_RUN_TIMEOUT_SECONDS`); per-run tool caps 20 searches and 20
    fetches, enforced inside the tools (a capped tool returns an error result
-   telling the model the budget is spent, which it handles gracefully).
+   telling the model the budget is spent, after which it stops generating).
 4. Consume `fullStream`: `text-delta` → mapper `pushTextDelta` → coalesced
    `research.turn.delta`; `reasoning-delta` → dropped from the durable format
    (desktop parity: reasoning was never shown), but a "thinking" activity
@@ -246,7 +246,7 @@ instead of the owned `web_search`. Behavior differences the runtime handles:
 - Billing is per search query, several per prompt; usage is recorded as
   `search` events from `webSearchQueries.length`.
 
-## 7. Anthropic escape hatch
+## 7. Direct Anthropic adapter
 
 `@ai-sdk/anthropic` is used by default. If a Fable 5.1 requirement is not
 expressible through it, `providers.ts` swaps in a small adapter over
@@ -355,7 +355,7 @@ Where the built runtime departs from the sketch above, and why.
   plus reasoning — so `reasoning_tokens` is stored as a breakdown of it and is
   added neither to the cost estimate nor to the daily token limit
   (`06-auth-and-users.md` §8).
-- **Retries.** `streamText` runs with `maxRetries: 0`. The loop owns the retry
+- **Retries.** `streamText` runs with `maxRetries: 0`. The loop handles the retry
   policy: a 429 re-queues the node with backoff and keeps its place in the
   admission order, which a transport-level retry cannot do, and every other
   class is a classified failure the user can act on. The backoff is counted
@@ -367,8 +367,8 @@ Where the built runtime departs from the sketch above, and why.
   needs the cache to survive a deploy, and a table would put a write on the hot
   path of every tool call and need its own eviction job.
 - **Sequence numbers.** Run events consume a sequence number whether or not
-  they are persisted, so the counter lives in the loop between writes and
-  `runs.advanceSeq` carries it back into `nodes.run_seq` before the next write.
+  they are persisted, so the loop retains the counter between writes and
+  `runs.advanceSeq` writes it to `nodes.run_seq` before the next write.
   Without that, a `getNodeContent` taken after a burst of deltas would report a
   sequence the client had already passed.
 - **Auto-resume.** Boot reconciliation only re-queues `resume_pending` nodes; the queue processor opens the new attempt (`nodes.resumeAttempt`), resuming the interrupted node using its committed message exchanges as context. The cap of two auto-resumes is counted from `run_attempts` rows of
@@ -393,12 +393,12 @@ Where the built runtime departs from the sketch above, and why.
   for `gpt-luna` and falls back to the pinned `openai/gpt-5.6-luna` when
   OpenRouter returns 404 or "not a valid model". The swap is a wrapper around the language model
   rather than a branch in the loop, because a missing route is rejected at the
-  call and never mid-stream; the route it settles on is remembered for the
+  call and never mid-stream; the selected route is retained for the
   process. A 400 refusal on the data policy is *not* a missing route and stays
   `provider_unavailable`: falling back in that case would merely resubmit the prompt to an alternate provider subject to the same policy constraints.
 - **Including user prompts in message history.** A node's `node_messages` open with the user
   message the attempt asked, followed by the provider's response messages. The
-  AI SDK's `responseMessages` carries only what the model produced, so without
+  AI SDK's `responseMessages` contains only what the model produced, so without
   this a descendant would replay a history of answers with no questions — and
   on Anthropic, a request whose first message is an assistant turn. Only the
   text is stored: document parts are rebuilt from the node's ancestors on every

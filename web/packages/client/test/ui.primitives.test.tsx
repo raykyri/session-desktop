@@ -351,7 +351,7 @@ test.serial("the launcher submenu opens with ArrowRight and reports its own valu
   fireEvent.click(screen.getByRole("button", { name: /^Launch model: / }));
   await screen.findAllByRole("menuitemradio");
 
-  // ArrowRight opens the submenu; Base UI supplies this without extra wiring.
+  // ArrowRight opens the submenu; Base UI supplies this without extra handlers.
   const submenuTrigger = screen.getByRole("menuitem", { name: /Reasoning/ });
   key(submenuTrigger, "ArrowRight");
 
@@ -549,7 +549,7 @@ test.serial("the image lightbox opens from its module store and dismisses itself
   t.is(
     useOverlaysStore.getState().entries.length,
     0,
-    "a Base UI layer owns its own dismissal and must not also sit on the escape stack",
+    "a Base UI layer handles its own dismissal and must not also sit on the escape stack",
   );
 
   key(lightbox, "Escape");

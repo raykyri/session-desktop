@@ -75,7 +75,7 @@ export function resolveAppShortcut(input: AppShortcutInput): AppShortcutCommand 
     return { type: "focusResearchHome" };
   }
   // Added for the web: the browser keeps Cmd-N and Cmd-T for its own windows
-  // and tabs, so Home needs a chord that survives to the page.
+  // and tabs, so Home needs a chord that reaches the page.
   if (command && !control && !option && shift && key === "h") {
     return { type: "focusResearchHome" };
   }

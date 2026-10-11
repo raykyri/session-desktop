@@ -62,11 +62,11 @@ test("repair targets the failed run's own agent, not another selection", () => {
   assert.equal(repairAgentFor(adapters, "grok"), null);
 });
 
-test("only a verified sign-in reads as repaired", () => {
+test("only a verified sign-in reports a successful repair", () => {
   const verified = signInRepairOutcome("Codex", agent("codex"), null);
   assert.equal(verified.kind, "verified");
   assert.equal(verified.canRetry, true);
-  assert.match(verified.message, /^Codex is signed in\. Retry runs this question again with Codex/);
+  assert.equal(verified.message, "Codex is signed in. Retry this question with Codex.");
 
   const stillSignedOut = signInRepairOutcome(
     "Codex",
@@ -124,7 +124,7 @@ function renderView(props: Partial<Parameters<typeof SignInRepairView>[0]> = {})
 test("the repair panel names the sign-in command and verification, nothing else", () => {
   const html = renderView();
   assert.match(html, /Sign in to Codex/);
-  assert.match(html, /Run this command in Terminal and complete sign-in, then verify the connection here\./);
+  assert.match(html, /Run this command in Terminal, finish signing in, then verify here\./);
   assert.match(html, /<code>&#x27;codex&#x27; login<\/code>/);
   assert.match(html, /Verify sign-in/);
   assert.doesNotMatch(html, /Retry this research/);
@@ -133,7 +133,7 @@ test("the repair panel names the sign-in command and verification, nothing else"
   assert.doesNotMatch(html, /keeps ownership|credentials/i);
 });
 
-test("a failed verification keeps the panel open without a retry", () => {
+test("a failed verification leaves the panel open and hides Retry", () => {
   const html = renderView({
     outcome: signInRepairOutcome(
       "Codex",
@@ -146,12 +146,12 @@ test("a failed verification keeps the panel open without a retry", () => {
   assert.doesNotMatch(html, /Retry this research/);
 });
 
-test("a verified sign-in offers Retry this research, once", () => {
+test("a verified sign-in shows one Retry this research action", () => {
   const verified = signInRepairOutcome("Codex", agent("codex"), null);
   const ready = renderView({ outcome: verified });
   assert.match(ready, /<button class="control-button research-turn-button" type="button">.*Retry this research/);
   // While the retry request is pending the button reports it and ignores
-  // further clicks (the thread's retry control guards the request as well).
+  // further clicks (the thread's retry control also blocks duplicate requests).
   const pending = renderView({ outcome: verified, retrying: true });
   assert.match(pending, /aria-disabled="true"[^>]*>.*Retrying…/);
   assert.doesNotMatch(pending, /Retry this research/);
@@ -203,7 +203,7 @@ function renderPane(node: ResearchNode, options: { canRetry?: boolean } = {}) {
   );
 }
 
-test("a recognized sign-in failure offers Repair sign-in beside Retry", () => {
+test("a recognized sign-in failure shows Repair sign-in beside Retry", () => {
   const failed = withRun(researchNode({ adapter: "codex", status: "failed", error: SIGN_IN_ERROR }), {
     errorKind: "auth",
   });
@@ -217,7 +217,7 @@ test("a recognized sign-in failure offers Repair sign-in beside Retry", () => {
   assert.doesNotMatch(renderPane(failed, { canRetry: false }), /Repair sign-in/);
 });
 
-test("an unclassified failure keeps the plain error and Retry", () => {
+test("an unclassified failure shows the plain error and Retry", () => {
   const failed = researchNode({
     adapter: "codex",
     status: "failed",

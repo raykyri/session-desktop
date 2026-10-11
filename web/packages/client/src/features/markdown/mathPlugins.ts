@@ -6,7 +6,7 @@
 // rehype plugins run synchronously inside `ReactMarkdown`, so the chunk cannot
 // be awaited at render time: a mounted renderer subscribes here through
 // `useSyncExternalStore` and re-renders with the combined plugin lists once the
-// chunk lands. Until then — and forever, if the chunk fails to load — TeX
+// chunk loads. Until then — and indefinitely if the chunk fails to load — TeX
 // renders as its literal source, which is readable rather than blank.
 //
 // The load is requested by the first renderer whose source actually looks like
@@ -60,7 +60,7 @@ export function readMathPlugins(): MathPlugins | null {
   return plugins;
 }
 
-/** Test seam: drops the loaded plugins so a case can assert the pre-load
+/** Test helper: drops the loaded plugins so a case can assert the pre-load
  * rendering (TeX as source). */
 export function resetMathPluginsForTests(): void {
   plugins = null;

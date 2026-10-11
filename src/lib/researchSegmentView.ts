@@ -58,9 +58,8 @@ export function buildSegmentView(
   const answerTimelineItems = timelineItemsAfterLastToolCall(timelineItems);
   const hasTranscriptActivity = !isConversation && timelineItemsContainTranscriptActivity(timelineItems);
   const displayedTimelineItems = isConversation || showFullTrace ? timelineItems : answerTimelineItems;
-  // A run trace reads bottom-up (the answer is the tail), so its window
-  // keeps the newest items; a conversation reads top-down from its opening
-  // question, so its window keeps the head.
+  // Run traces show the newest items because the answer is at the end.
+  // Conversations show the first items beginning with the opening question.
   const visibleTimelineItems =
     showAllTurns || displayedTimelineItems.length <= TIMELINE_ITEM_RENDER_WINDOW
       ? displayedTimelineItems
@@ -70,8 +69,7 @@ export function buildSegmentView(
   const rawAnswer = assistantTextFromTimelineItems(answerTimelineItems);
   const conversationCopyText =
     isConversation && content ? formatPlainTextTranscript(content.turns, "Assistant") : null;
-  // Only an imported or authored document holds editable Markdown; a
-  // transcript's snapshot is a conversation.
+  // Only imported or authored documents contain editable Markdown.
   let editableDocumentMarkdown: string | null = null;
   if (content && documentHoldsMarkdown(content.node)) {
     for (const turn of content.turns) {

@@ -422,7 +422,7 @@ export function TranscriptActivityItem({
   }
 }
 
-/** The `raw` block escape hatch: a provider payload the timeline could not
+/** The `raw` block fallback: a provider payload the timeline could not
  * classify, kept verbatim behind a disclosure so nothing is lost. */
 export function RawTranscriptDisclosure({
   value,

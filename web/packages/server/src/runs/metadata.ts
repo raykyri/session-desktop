@@ -271,7 +271,7 @@ export function createMetadataRunner(deps: MetadataDeps): MetadataRunner {
         return saved !== null;
       } finally {
         pendingRecaps.delete(key);
-        // Every exit path settles the flag (`04-agent-runtime.md` §9).
+        // Every exit path clears the flag (`04-agent-runtime.md` §9).
         emit(userId, "research.recap.pending", { nodeId, pending: false });
       }
     },

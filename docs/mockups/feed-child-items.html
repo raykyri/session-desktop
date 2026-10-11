@@ -307,7 +307,7 @@ let sel = "c1t1";
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ v: { ind: S.ind, conn: S.conn, div: S.div, text: S.text, mk: S.mk, coll: S.coll }, w: S.w })); } catch { /* storage unavailable */ } };
 
 /* ---------- flatten the tree into visible rows ---------- */
-// Each row knows its level, whether it is the last of its siblings, which ancestor
+// Each row records its level, whether it is the last of its siblings, which ancestor
 // rails continue past it, and whether it ends its top-level group.
 function rowsFor(items) {
   const out = [];

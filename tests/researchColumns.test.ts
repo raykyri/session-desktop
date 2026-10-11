@@ -32,13 +32,13 @@ test("a pair's header is one drag-region bar with the title, and no + Ask, Answe
   assert.doesNotMatch(html, / of \d/);
 });
 
-test("a branch's header reads Branch with its message count; a new branch reads New branch", () => {
+test("branch headers show Branch with a message count or New branch", () => {
   assert.match(header({ branch: 2 }), /Branch<span class="research-column-count"> · 2 messages<\/span>/);
   assert.match(header({ branch: 1 }), / · 1 message</);
   assert.match(header({ branch: "new" }), /New branch<\/h2>/);
 });
 
-test("only the root conversation's header carries back and forward", () => {
+test("only the root conversation header shows back and forward controls", () => {
   const history = {
     canGoBack: true,
     canGoForward: false,
@@ -53,7 +53,7 @@ test("only the root conversation's header carries back and forward", () => {
   assert.doesNotMatch(header({ branch: 1 }), /research-history-nav/);
 });
 
-test("a loading thread's header keeps back and forward in place", () => {
+test("a loading thread header preserves the back and forward controls", () => {
   const noop = () => {};
   const html = renderToStaticMarkup(
     createElement(ResearchThreadPlaceholder, {

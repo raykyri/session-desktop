@@ -26,8 +26,7 @@ function ResearchRecapLine({
   );
 }
 
-/** Placeholder in the recap's own slot while a background recap job runs, so
- * the recap lands where the spinner sat rather than shifting the answer. */
+/** Reserve the recap's space while generation runs to avoid shifting the answer. */
 function ResearchRecapPendingLine() {
   return (
     <p

@@ -169,7 +169,7 @@ test("context bounds: the enclosing message clamps every kind", () => {
   );
 });
 
-test("context bounds: only a conversation refuses a selection spanning messages", () => {
+test("context bounds: only a conversation rejects a selection spanning messages", () => {
   // No enclosing message means the selection crossed one. A run's messages are
   // one speaker, so the whole projection is fair context; a conversation's are
   // separate turns, which is not anchorable at all.
@@ -191,12 +191,10 @@ test("context bounds: only a conversation refuses a selection spanning messages"
   );
 });
 
-test("resolve: a whole-message quote keeps its place without either context", () => {
+test("resolve: a whole-message quote resolves without surrounding context", () => {
   // Context is clamped to the enclosing message, so selecting a whole
   // conversation turn saves no prefix and no suffix. The turn is neither at the
-  // start nor at the end of the projection, and the anchor must still resolve —
-  // treating an empty side as "must sit at the projection edge" orphaned it the
-  // moment it was created.
+  // start nor at the end of the projection, and the anchor must still resolve.
   const turns = ["Make it faster", "I rewrote the loop", "Why is that faster"];
   const projection = turns.join("");
   const start = turns[0].length;
@@ -204,8 +202,7 @@ test("resolve: a whole-message quote keeps its place without either context", ()
     resolveResearchHighlightOffset(projection, "rev", highlight(turns[1], start)),
     { start, end: start + turns[1].length },
   );
-  // Still located after the view shifted the offsets, since the quote itself
-  // carries the anchor.
+  // The quote still resolves after preceding content shifts its offset.
   assert.deepEqual(
     resolveResearchHighlightOffset(
       `Earlier turn${projection}`,
@@ -228,8 +225,7 @@ test("resolve: one clamped side still discriminates between repeats", () => {
     ),
     { start: 27, end: 30 },
   );
-  // No occurrence keeps the context: the highlight is orphaned rather than
-  // painted on a guess.
+  // No occurrence matches the context, so do not paint a guessed location.
   assert.equal(
     resolveResearchHighlightOffset(
       projection,

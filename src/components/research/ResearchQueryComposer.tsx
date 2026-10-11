@@ -155,7 +155,7 @@ interface ResearchQueryComposerProps {
    * model, and effort choice stays. */
   onSaveDraft?: (prompt: string) => Promise<void>;
   placeholder?: string;
-  /** Filled with a reader of the selected agent, model, and effort, so a draft
+  /** Filled with an accessor for the selected agent, model, and effort, so a draft
    * sent from Drafts launches with the composer's current choice. */
   launchChoiceRef?: MutableRefObject<(() => ResearchLaunchChoice | null) | null>;
 }
@@ -304,10 +304,9 @@ export default function ResearchQueryComposer({
     };
   }, [draftKey]);
 
-  // Apply a focus request from Agent Setup after the draft restore above, so
-  // the requested agent wins over the stored one. The request is cleared
-  // through onFocusRequestHandled; the focus itself waits a frame for the
-  // dialog to unmount.
+  // Apply Agent Setup's selection after restoring the draft so it overrides
+  // the stored agent. Clear the request through onFocusRequestHandled, then
+  // wait one frame for the dialog to unmount before focusing the composer.
   const focusRequestSeq = focusRequest?.seq ?? null;
   useEffect(() => {
     if (!focusRequest) return;

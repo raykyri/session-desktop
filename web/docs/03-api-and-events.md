@@ -9,17 +9,17 @@ document is the contract frozen at the end of Phase 3.
 
 - Base path `/api/trpc`. Queries and mutations share one `httpBatchLink`;
   `events.subscribe` has its own `httpSubscriptionLink` (an `EventSource`, so a
-  GET, which the origin check guards and the `X-Requested-With` header does
+  GET, which the origin check protects and the `X-Requested-With` header does
   not apply to).
 - Auth: session cookie (`06-auth-and-users.md`). Every procedure except
   `auth.*` and `system.health` requires a user; `ctx.userId` scopes all repos.
-- Reconnection: the subscription carries no replay cursor. Run events carry
+- Reconnection: the subscription has no replay cursor. Run events include
   per-node `seq`; clients resynchronize from `research.getNodeContent`
   (`05-run-lifecycle-and-streaming.md` §4).
 - CSRF: mutations and subscriptions require `Origin` (or `Sec-Fetch-Site:
   same-origin`) to match `SESSION_PUBLIC_ORIGIN`; the cookie is `SameSite=Lax`.
 - Input validation: zod schemas from `shared`; output types inferred.
-- Errors: tRPC error codes; `message` carries the desktop's user-facing text
+- Errors: tRPC error codes; `message` contains the desktop's user-facing text
   (for example "The research response has been updated; please reselect the text.").
   Codes used: `BAD_REQUEST` (validation), `NOT_FOUND`, `CONFLICT`
   (optimistic-concurrency and slot conflicts), `PRECONDITION_FAILED`

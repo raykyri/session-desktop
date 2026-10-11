@@ -215,7 +215,7 @@ test("a stored settings blob carrying a removed key still parses", (t) => {
   // `showShortcutHints` was dropped with the sidebar's Cmd-held badges. Rows
   // written before that are still in `user_preferences.settings_json` and in
   // every browser's `session.settings.v2`, and the loader reads them through
-  // this schema — so a key the shape no longer knows has to be ignored, not
+  // this schema — so a key no longer defined by the shape has to be ignored, not
   // rejected.
   const stored = { ...DEFAULT_USER_SETTINGS, showShortcutHints: true };
   const parsed = userSettingsSchema.safeParse(stored);

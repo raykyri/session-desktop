@@ -255,7 +255,7 @@ export function eventItemForNode(db: SessionDatabase, nodeId: string): FeedEvent
  * Raw `SELECT *` gives snake_case columns and SQLite's integers for booleans
  * and JSON text for the JSON columns; the drizzle mappers expect the shapes
  * the query builder produces. This is the one place raw rows are used for the
- * feed's `IN (…)` lookups, so the conversion lives here rather than in the
+ * feed's `IN (…)` lookups, so the conversion is defined here rather than in the
  * mapper.
  */
 function normalizeNodeRow(row: Record<string, unknown>): NodeRow {

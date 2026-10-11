@@ -14,7 +14,7 @@ import {
 import { IconButton } from "./Button.js";
 
 // Both lightboxes are Base UI dialogs rather than hand-rolled overlays, so the
-// library owns the focus trap, the scroll lock, the portal, and Escape with
+// library handles the focus trap, the scroll lock, the portal, and Escape with
 // correct nesting (07 §4.4, ADR-9). That is also why neither registers on the
 // `overlays` escape stack: the stack is for the layers Base UI does *not* own,
 // and a library layer that also registered would be dismissed twice.

@@ -36,7 +36,7 @@ for (const name of ["localStorage", "sessionStorage"] as const) {
   });
 }
 
-// React 19 refuses to run `act` without this, and Testing Library wraps every
+// React 19 requires this before running `act`, and Testing Library wraps every
 // render in it.
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

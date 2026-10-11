@@ -196,7 +196,7 @@ function tokenRow(label: string, value: number) {
 
 /**
  * Usage (07 §3). `usage.summary` is one UTC day of totals against the
- * account's limits; it carries no per-model dimension, so this is a totals
+ * account's limits; it has no per-model dimension, so this is a totals
  * table rather than the by-model breakdown `03-api-and-events.md` §2
  * describes.
  */

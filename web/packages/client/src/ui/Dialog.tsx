@@ -26,7 +26,7 @@ export interface DialogProps {
 }
 
 /**
- * The app's one dialog shape (08 §4). Base UI owns focus trapping, scroll
+ * The app's one dialog shape (08 §4). Base UI handles focus trapping, scroll
  * locking, portalling, and — the reason the desktop's hand-ordered Escape
  * dispatcher goes away — nested dismissal, so a menu inside a dialog closes
  * before the dialog does.

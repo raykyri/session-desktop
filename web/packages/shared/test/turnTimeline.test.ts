@@ -258,7 +258,7 @@ test("final answer view starts after the last tool call group", (t) => {
   t.is(assistantTextFromTimelineItems(answerItems), "Final **answer**.");
 });
 
-test("final answer survives when trailing tool activity attaches to the answer item", (t) => {
+test("retains the final answer when trailing tool activity attaches to the answer item", (t) => {
   nextIndex = 0;
   // The run ends with a wrap-up tool call after its final text (a TodoWrite,
   // a post-answer check). The trailing call attaches to the same timeline
@@ -545,7 +545,7 @@ test("duplicate tool ids count once in an activity-group label count", (t) => {
   }
 });
 
-test("running, error, superseded, interrupted, and uncertain activity metadata survives", (t) => {
+test("retains running, error, superseded, interrupted, and uncertain activity metadata", (t) => {
   nextIndex = 0;
   const items = buildTimelineItems([
     turn("assistant", [toolUse("running", "Bash")]),

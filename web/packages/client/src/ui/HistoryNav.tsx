@@ -18,7 +18,7 @@ export interface HistoryNavProps {
  * The back/forward pair in a stage header, ported from the desktop
  * `.research-history-nav`. Cross-page history is the browser's now (ADR-7), so
  * the header wires these to `router.history.back()/forward()`; inside a
- * research document the same component drives the per-node history stack.
+ * research document the same component controls the per-node history stack.
  */
 export function HistoryNav({
   canGoBack,

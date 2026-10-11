@@ -20,7 +20,7 @@ export interface CommitAnswerInput {
   error?: string | null;
   /** Reads the live turns; called twice, and the two results must agree.
    *
-   * A seam rather than a fixed read because in this process they always do:
+   * An injectable read because in this process they always do:
    * SQLite reads are synchronous and the loop is the only writer, so the guard
    * is the desktop's rule carried over (`state.rs:8870`) and cannot fail here.
    * The test that has to prove the refusal works supplies a reader that
@@ -57,7 +57,7 @@ export function readStableTurns(
 const NO_ANSWER = "Research completed without generating response content";
 
 /**
- * Freezes the attempt's committed turns as the node's answer and settles the
+ * Stores the attempt's committed turns as the node's answer and completes the
  * node, or reports why it could not.
  *
  * A failure here is the one inconsistency this domain cannot repair — a run

@@ -31,8 +31,8 @@ export function deriveComposerGating(
   const canSteer = Boolean(policy && status && policy.steerStatuses.includes(status));
   const hasQueue = queueLength > 0;
   const canAppendQueue = Boolean(status && status !== "failed" && (canQueue || hasQueue));
-  // Where the submit shortcut lands: send to a ready agent with an empty
-  // queue, queue behind everything else.
+  // Send immediately when the agent is ready and its queue is empty;
+  // otherwise add the message to the queue.
   const submitShortcutWouldTargetSend = !submitting && canSend && !hasQueue;
   const submitShortcutWouldTargetQueue =
     !submitShortcutWouldTargetSend && !submitting && canAppendQueue;

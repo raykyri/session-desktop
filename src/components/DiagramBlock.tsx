@@ -6,7 +6,7 @@ import { safeHref } from "../lib/links";
 
 // Renders fenced ```mermaid and ```dot/```graphviz blocks from transcript markdown as SVG,
 // entirely in the webview (no server, no external fetch). Both libraries are dynamically
-// imported so they land in their own chunk and only load once a diagram actually scrolls
+// imported into a separate chunk and load only when a diagram scrolls
 // into view. On any parse/render failure we fall back to the raw source so no content is lost.
 
 type DiagramLang = "mermaid" | "dot";
@@ -104,7 +104,7 @@ function getViz(): Promise<Viz> {
 
 // The rendered SVG is agent-authored and injected via dangerouslySetInnerHTML into the
 // (privileged) main webview, so it is sanitized with DOMPurify's SVG profile — a
-// maintained sanitizer that handles the mutation-XSS foot-guns (XML-serialize →
+// maintained sanitizer that handles mutation-XSS risks (XML serialization followed by
 // HTML-reparse, namespace confusion) a hand-rolled denylist misses. DOMPurify strips
 // scripts, event handlers, foreignObject, and javascript:/data: URIs; the hook below
 // additionally routes anchor destinations through our safeHref allowlist and the
@@ -168,7 +168,7 @@ function sanitizeSvg(svg: string): string {
 // sanitization, and DOM insertion. Reject an over-budget graph before layout,
 // and an over-budget generated SVG before it is sanitized and inserted.
 const MAX_DIAGRAM_SOURCE_CHARS = 20_000;
-// Non-blank source lines — a cheap proxy for node/edge count that bounds the
+// Non-blank source lines approximate the node and edge count, bounding the
 // graph the engines lay out without parsing either dialect.
 const MAX_DIAGRAM_STATEMENTS = 500;
 const MAX_DIAGRAM_SVG_CHARS = 2_000_000;
@@ -220,7 +220,7 @@ async function renderDiagram(
   return sanitizeSvg(assertRenderedSvgWithinLimits(viz.renderString(code, { format: "svg" })));
 }
 
-// Defers work until the element is near the viewport so long transcripts don't pay to build
+// Defers work until the element is near the viewport so long transcripts do not render
 // every diagram (and the WASM/mermaid chunks) up front.
 function useInView(ref: RefObject<Element | null>): boolean {
   const [inView, setInView] = useState(false);

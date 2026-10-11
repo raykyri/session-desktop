@@ -13,7 +13,7 @@ export interface RecentActivityPage {
   nextCursor?: RecentResearchQueryCursor | null;
 }
 
-/** Top-level replies Home carries per post; mirrors the backend's
+/** Number of top-level replies included per post on Home; mirrors the backend's
  * `RECENT_ACTIVITY_POST_REPLY_LIMIT`. */
 const RECENT_ACTIVITY_POST_REPLY_LIMIT = 5;
 

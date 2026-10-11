@@ -1,4 +1,4 @@
-// Inline HTML widgets in research answers: an answer carries one as a fenced
+// Inline HTML widgets in research answers use fenced
 // code block whose language is `session-html`. The Markdown renderer marks each
 // such block complete or still streaming (`remarkSessionWidgetFences`), and
 // `SessionWidget` displays a complete one in a sandboxed frame served by the
@@ -190,11 +190,10 @@ export function sessionWidgetFrameMessage(
   return height === null ? null : { type: "height", height };
 }
 
-/** The answer pings a loaded widget page once a second; the page's guard
- * answers. This many pings in a row without an answer mean another document
- * has replaced the widget page (a navigation the page could not cancel), and
- * the frame is removed. Counted in pings rather than elapsed time, so a pause
- * of the app's own timers (a long task, a hidden window) is not a miss. */
+/** Send a ping to each loaded widget once per second. Remove the frame after
+ * this many unanswered pings because another document has probably replaced
+ * the widget page. Count ping attempts instead of elapsed time so a paused app
+ * timer does not count as a missed response. */
 export const SESSION_WIDGET_PING_INTERVAL_MS = 1000;
 const SESSION_WIDGET_MISSED_PINGS_TO_DROP = 4;
 

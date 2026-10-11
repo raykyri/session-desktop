@@ -9,7 +9,7 @@ export interface SidebarRestoreButtonProps {
   onRestore: () => void;
   className?: string;
   /** Rendered next to the icon so the chord stays discoverable while the
-   * sidebar — where the hint normally lives — is hidden. */
+   * sidebar — where the hint normally appears — is hidden. */
   shortcutLabel?: string;
 }
 

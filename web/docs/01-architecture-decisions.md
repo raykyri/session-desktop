@@ -6,7 +6,7 @@ documents (ADR-n).
 
 ## ADR-1 Repository layout: npm workspaces inside `web/`
 
-Requirement: the web app lives in `web/`, uses npm, and keeps ORM/database code
+Requirement: the web app is in `web/`, uses npm, and keeps ORM/database code
 isolated from HTTP and UI code.
 
 Options
@@ -74,7 +74,7 @@ Options
 Choice: option 3. Procedures mirror the Tauri command names in camelCase
 (`research.createTree`, `research.forkNode`, `journal.fetchTweet`). The event
 stream is a tRPC subscription (`events.subscribe`) transported over SSE using
-tRPC's `httpSubscriptionLink`. Reconnection does not replay: run events carry
+tRPC's `httpSubscriptionLink`. Reconnection does not replay: run events include
 per-node sequence numbers and clients resynchronize from a snapshot
 (`05-run-lifecycle-and-streaming.md` §4), so no server-side event buffer
 exists.
@@ -247,7 +247,7 @@ Why: unstyled, composable, Tailwind-friendly, portal and focus management,
 nested dismissal handled by the library, `render` prop for custom elements
 (the `LauncherSelect` submenu row), and active maintenance by the MUI team.
 Radix is equivalent in capability and serves as a fallback if Base UI lacks a required primitive; the abstraction wrappers ensure any future replacement is isolated to a single module. shadcn/ui
-was rejected because its copied components carry their own token scheme.
+was rejected because its copied components use their own token scheme.
 Native `<dialog>` is kept for the report-import and confirm dialogs where it
 already works, wrapped in the same `Dialog` API.
 
@@ -269,7 +269,7 @@ Options
 
 Choice: option 2, implemented with the Vercel AI SDK (`streamText`,
 `stopWhen`, `tool()`, provider packages for Vertex, OpenRouter, Anthropic),
-with `@anthropic-ai/sdk` as a per-provider escape hatch if a Fable
+with `@anthropic-ai/sdk` as a direct provider adapter if a Fable
 5.1 requirement is not expressible through the SDK (`04-agent-runtime.md`
 §7).
 
@@ -290,7 +290,7 @@ level.
 Requirement: stream answers, let any tab join or rejoin, keep output across
 deploys.
 
-Choice: every run event carries a per-node `seq`; `getNodeContent` returns
+Choice: every run event includes a per-node `seq`; `getNodeContent` returns
 committed turns, the in-flight checkpoint, and the `seq` they reflect;
 clients apply only `seq + 1`, drop replays, refetch on gaps, mount,
 visibility, and reconnect. Committed turns persist immediately, in-flight
@@ -313,7 +313,7 @@ Why AVA: the desktop's tests are plain `node:test` files with `node:assert`;
 AVA keeps that flavor (isolated processes per file, no globals, `t.is`/`t.deepEqual`,
 first-class TypeScript through `--import=tsx`) and its per-file process
 isolation suits tests that open temp SQLite files and run fixture providers. The
-desktop's `tests/svgStubLoader.mjs` loader hook carries over unchanged for
+desktop's `tests/svgStubLoader.mjs` loader hook is reused unchanged for
 component tests. Vitest was considered for its Vite pipeline integration and
 rejected by the owner's preference.
 

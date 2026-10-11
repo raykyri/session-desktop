@@ -62,7 +62,7 @@ test("array order is preserved and entries JSON cannot represent become null", (
   t.regex(canonicalTurnsJson([turn("assistant", blocks)]), /"value":\[1,null,"three"\]/);
   // A hole is not the same thing as an `undefined` entry, and only the hole
   // can turn the encoding into invalid JSON. Built by assignment rather than
-  // `[1, , "three"]` so the gap survives lint.
+  // `[1, , "three"]` so lint preserves the gap.
   const sparse = [1];
   sparse[2] = 3;
   t.is(

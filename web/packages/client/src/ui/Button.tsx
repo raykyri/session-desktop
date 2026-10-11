@@ -42,7 +42,7 @@ export function ControlButton({
 
 export interface IconButtonProps extends NativeButtonProps {
   ref?: Ref<HTMLButtonElement>;
-  /** Icon buttons carry no text, so a label is required rather than optional
+  /** Icon buttons have no text, so a label is required rather than optional
    * (08 §7). */
   label: string;
   children: ReactNode;

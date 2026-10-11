@@ -41,7 +41,7 @@ export function useResearchContentLoader({
   levels: readonly ResearchLevel[];
   /** The answers on screen, with a stable identity while they do not change. */
   chainNodeIds: readonly string[];
-  /** The nodes of `chainNodeIds` that the tree holds. */
+  /** The `chainNodeIds` present in the tree. */
   chainNodes: readonly ResearchNode[];
 }) {
   // Loaded answers, keyed by node id. Pruned to the open levels' chains.

@@ -992,7 +992,7 @@ test("paneAtStagePoint distinguishes nested panes a single axis cannot", () => {
     GUTTER,
   );
   const stage = { width: 1000, height: 1000 };
-  // `a` and `b` share every column of x; only y tells them apart.
+  // `a` and `b` share every column of x; only y distinguishes them.
   assert.equal(paneAtStagePoint(layout, stage, 100, 100), "a");
   assert.equal(paneAtStagePoint(layout, stage, 100, 900), "b");
   assert.equal(paneAtStagePoint(layout, stage, 900, 100), "c");
@@ -1356,7 +1356,7 @@ test("reservedTerminalStageWidth charges a nested layout only for its widest row
   assert.equal(reservedTerminalStageWidth(common), 616);
 });
 
-test("canSplitPaneInTree refuses a split that would breach the pane floor", () => {
+test("canSplitPaneInTree rejects a split that would breach the pane floor", () => {
   const stage = { width: 1000, height: 1000 };
   const guard = {
     stage,
@@ -1486,7 +1486,7 @@ test("paneSplitRootNode ignores a tree that no longer matches its members", () =
   };
   const root = paneSplitRootNode(stale);
 
-  // An optimistic drag result can carry a detached pane. Rendering it would hand
+  // An optimistic drag result can include a detached pane. Rendering it would hand
   // stage space to a pane with no surface.
   assert.deepEqual(splitNodePaneIds(root), ["a", "c"]);
   assert.equal(root.children.every((child) => child.kind === "pane"), true);
@@ -1504,7 +1504,7 @@ test("joinPaneSplit inserts before the anchor when the newcomer leads the pair",
     ],
     panes(["a", "b", "c"]),
   );
-  // A drag dropped on b's leading half: the tab lands before b, so the tree has
+  // A drag dropped on b's leading half: the tab is inserted before b, so the tree has
   // to insert before it too or the in-order check rejects the whole tree.
   const [joined] = normalizePaneSplitsForPanes(
     joinPaneSplit(nested, panes(["a", "d", "b", "c"]), "d", "b", {
@@ -1784,7 +1784,7 @@ function assertSplitInvariants(
   );
 }
 
-/** Drives the gestures the app performs, refusing a split exactly where
+/** Performs the same gestures as the app, rejecting a split exactly where
  * `splitTerminal` would, and asserting the invariants after every step. The
  * property under test is that any layout the app *lets* you build still tiles
  * the stage with usable panes. */

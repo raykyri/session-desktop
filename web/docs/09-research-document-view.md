@@ -29,11 +29,11 @@ deletes the WebKit and Tauri workarounds.
 
 | Component | Source | Responsibility |
 | --- | --- | --- |
-| `ResearchPage` (route) | `App.tsx:11929` wiring + `ResearchDocument:1760` | Loads `tree` and route params, owns per-tree stores, renders header, search bar, scroller, portals |
+| `ResearchPage` (route) | `App.tsx:11929` integration + `ResearchDocument:1760` | Loads `tree` and route params, manages per-tree stores, renders header, search bar, scroller, portals |
 | `DocumentHeader` | `:5105` | `HistoryNav`, breadcrumb, "N in thread · M branches" chip, sidebar restore, full-transcript toggle |
 | `ThreadSegment` (memo) | `:1621` | One spine node: `SegmentPrompt` + grid of `ConnectorOverlay`, `AnswerPane`, `FollowupRail`; registers anchor and grid elements |
 | `SegmentPrompt` (memo) | `:1514` | Back link (index 0), "Reply to" snippet (index > 0), quoted passage blockquote, `ResearchUserMessage`, the question's embedded posts (`TweetAttachments`), root footer with `ThreadActions` (Follow/Bookmark), model summary, relative time |
-| `AnswerPane` (memo, custom comparator) | `:1118` | Loading/error/failure states, `Recap`, empty-state copy cascade, "Show N earlier response items", the selection root, footer (word count, duration, hidden-highlights notice, copy, answer menu) once the run settles; while it is active a single status line replaces the footer, carrying the queue position, "Working…"/"Thinking…", the elapsed time and a confirmed Cancel link |
+| `AnswerPane` (memo, custom comparator) | `:1118` | Loading/error/failure states, `Recap`, empty-state copy cascade, "Show N earlier response items", the selection root, footer (word count, duration, hidden-highlights notice, copy, answer menu) after the run stops; while it is active a single status line replaces the footer, showing the queue position, "Working…"/"Thinking…", the elapsed time and a confirmed Cancel link |
 | `TimelineItem` (memo) | `:782` | One timeline message: markdown body, raw disclosures, activity disclosures, "Excluded from active context" chip |
 | `FollowupRail` (memo) | `:1391` | Docked ask composer slot, stacked cards, anchored cards (absolute `top`) |
 | `ConnectorOverlay` (memo) | `:1485` | SVG paths and endpoint dots per connector |
@@ -156,7 +156,7 @@ and the DOM glue in `features/research/selection/`:
 2. Past a 3 px drag threshold, each rAF snaps the native selection with
    `createResearchSelectionSnapper(root.textContent, lang, boundaries)`
    (`Intl.Segmenter` words, pictographic graphemes as units, units split at
-   message seams, attached punctuation expanded) and re-applies it with
+   message boundaries, attached punctuation expanded) and re-applies it with
    `setBaseAndExtent` keeping focus on the pointer side. The
    `selectionchange` re-snap pass (WebKit) is kept; it is harmless elsewhere.
 3. `mouseup` → `captureHighlightSelection`: exactly one segment root; not
@@ -268,7 +268,7 @@ Composer gating (`:4755-4830`): target = ask node, or last complete chain
 node (branch mode), or the tail (thread mode); `canFollowUpFrom` requires
 `complete`; `canContinueThread` also needs a free inline slot; hints for
 failed/cancelled/interrupted tail and branch-from-last-complete. The
-follow-up composer carries a model chip defaulting to the parent's model
+follow-up composer includes a model chip defaulting to the parent's model
 (gated models hidden for non-admins) and an attach button for documents.
 Cmd-Enter submits in the selected mode, Shift-Cmd-Enter always branches.
 
@@ -281,7 +281,7 @@ rail card), answer `⋯` menu, mode menu, `RecapDialog`, `DeleteBranchDialog`,
 
 ## 9. Removed
 
-`paneId` plumbing, the `conversation` kind and `terminalExport` badge,
+`paneId` handling, the `conversation` kind and `terminalExport` badge,
 `legacyFollowupCount` label, WebKit literal-640px and `scrollLeft` pin, `overflow: hidden auto`
 (replaced by `overflow-x: clip`), mirror refs, `useStableValue`,
 `segmentViewCacheRef`, and custom prop comparators made unnecessary by the

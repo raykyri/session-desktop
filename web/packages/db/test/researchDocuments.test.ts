@@ -81,7 +81,7 @@ test("a markdown change writes a new revision and drops every highlight", (t) =>
   );
 });
 
-test("each of the four guards refuses with its own message", (t) => {
+test("each of the four checks rejects with its own message", (t) => {
   const fixture = createFixture(t);
   const document = importedDocument(fixture);
   const highlight = highlights.create(

@@ -1049,7 +1049,7 @@ fn split_leave(state: &AppState, context: &ControlContext, arguments: Value) -> 
                 sizes,
                 intent: HashMap::new(),
                 axis: split.axis,
-                // Carried through so leaving from an edge keeps a nested layout;
+                // Preserve this value so leaving from an edge keeps a nested layout;
                 // normalization drops the tree if the remaining panes no longer
                 // match it.
                 root: split.root.clone(),

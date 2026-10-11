@@ -165,9 +165,9 @@ export function useResearchSelectionDrag(
       lastY: event.clientY,
       active: false,
       // Turn membership is deliberately not part of this test: the snapper
-      // splits its units at every message seam, so it moves each endpoint by at
+      // splits its units at every message boundary, so it moves each endpoint by at
       // most a partial word inside one message and can neither carry a
-      // selection across a seam nor pull a crossing one back inside.
+      // selection across a boundary nor pull a crossing one back inside.
       snapEligible: Boolean(
         supportsHighlightApi() &&
         nodeId &&

@@ -18,9 +18,9 @@ after failures, and how clients observe it.
 
 Two properties follow: run state is server-authoritative and reconstructable
 from one request, and a run is resumable from persisted state because the
-app owns the conversation (`04-agent-runtime.md` §4).
+app stores the conversation (`04-agent-runtime.md` §4).
 
-## 2. Where state lives
+## 2. State storage
 
 | State | Storage | Lifetime |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ queued ──► running ──► complete
    └────────────────► cancelled
 ```
 
-- `queued`: waiting for an admission slot; payload carries `queuePosition`.
+- `queued`: waiting for an admission slot; payload includes `queuePosition`.
 - `running`: the provider stream is open (the desktop's `starting` state is
   unnecessary; there is no process to spawn).
 - `complete`, `failed`, `cancelled`: terminal, monotonic.
@@ -56,7 +56,7 @@ queued ──► running ──► complete
   two failed auto-resumes the node stays `interrupted` with Retry.
 
 Every transition writes the node row and emits `research.node.updated`.
-Every run-scoped event carries `seq`, per node, incremented for every event
+Every run-scoped event includes `seq`, per node, incremented for every event
 the server persists or forwards.
 
 ## 4. Streaming protocol: snapshot plus ordered deltas

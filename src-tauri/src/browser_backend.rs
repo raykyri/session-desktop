@@ -554,7 +554,7 @@ fn scope_result_to_pane(
             && live_tab_ids.contains(&viewport.tab_id)
     });
     // A selected-tab change invalidates the viewport cache, but the active
-    // screencast record must survive until the heartbeat stops that old tab.
+    // retain the screencast record until the heartbeat stops that old tab.
     // Targets already gone need no stop; streams owned by panes that vanished
     // unexpectedly are actively reaped instead of merely forgotten.
     let orphaned_screencasts = {

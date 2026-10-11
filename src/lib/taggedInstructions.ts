@@ -20,7 +20,7 @@ export function stripTaggedUserInstructionBlocks(text: string): string {
 // Like stripTaggedUserInstructionBlocks, but without protecting fenced/indented
 // code. The home rail cards are compact previews, so any tagged block should be
 // dropped — including a slash command's indented <command-args> block, which the
-// copy-safe filter leaves in place because indentation reads as a code block.
+// copy-safe filter retains because indentation makes it a code block.
 export function stripTaggedInstructionBlocksForPreview(text: string): string {
   const unwrapped = unwrapUserQueryEnvelope(text);
   const leading = stripLeadingTaggedInstructionBlocks(unwrapped);

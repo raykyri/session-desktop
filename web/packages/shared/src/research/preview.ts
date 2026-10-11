@@ -10,7 +10,7 @@
 // against the limit.
 //
 // The desktop resolved a response boundary first, because a node's turns were
-// a slice of a long-lived terminal session's transcript. On the web a run owns
+// a slice of a long-lived terminal session's transcript. On the web a run has
 // its turns, so the whole list is the response (`04-agent-runtime.md` §5) and
 // the boundary argument is gone.
 

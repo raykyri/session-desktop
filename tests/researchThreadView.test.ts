@@ -81,7 +81,7 @@ test("surrogateSafeSlice clamps and never splits a surrogate pair", () => {
   assert.equal(surrogateSafeSlice("plain", 1, 3), "la");
 });
 
-test("researchSubtreeIds and researchSubtreeBusy walk every descendant", () => {
+test("researchSubtreeIds and researchSubtreeBusy visit every descendant", () => {
   const nodes = [
     node("root"),
     node("a", { parentNodeId: "root" }),

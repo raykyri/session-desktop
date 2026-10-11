@@ -184,7 +184,7 @@ test.serial("refetches after a node update with no cached predecessor", (t) => {
   t.true(queryClient.getQueryState(queryKeys.trees(TREES_SCOPE))?.isInvalidated);
 });
 
-test.serial("a created thread lands in every tree list and in the detail cache", (t) => {
+test.serial("a created thread is added to every tree list and the detail cache", (t) => {
   const queryClient = client();
   queryClient.setQueryData(queryKeys.trees(TREES_SCOPE), []);
   queryClient.setQueryData(queryKeys.activeNodes(), []);
@@ -424,7 +424,7 @@ test.serial("an ordinary stream error asks whether the session survived", async 
 
   t.is(stub.calls.filter((call) => call.path === "auth.me").length, 1, "asked once per drop");
   t.is(signedOut, 1);
-  t.is(queryClient.getQueryData(queryKeys.me()), null, "and the answer lands in the cache");
+  t.is(queryClient.getQueryData(queryKeys.me()), null, "and the answer is stored in the cache");
   bridge.close();
 });
 

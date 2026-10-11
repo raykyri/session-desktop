@@ -7,9 +7,9 @@ import {
 } from "../../lib/researchFolders";
 import { ResearchPlaceIcon } from "./ResearchFeedChrome";
 
-/** What an empty place says about how questions get there. */
+/** Message shown when a research location is empty. */
 export function researchPlaceEmptyText(place: string): string {
-  if (place === RESEARCH_UNFILED_FOLDER_ID) return "Nothing unfiled. New questions land here.";
+  if (place === RESEARCH_UNFILED_FOLDER_ID) return "Nothing unfiled. New questions appear here.";
   if (place === RESEARCH_ARCHIVE_FOLDER_ID) {
     return "Archive is empty. Archived questions stop sending follow-up notifications.";
   }
@@ -19,9 +19,8 @@ export function researchPlaceEmptyText(place: string): string {
   return "Empty folder. Drag or file questions here.";
 }
 
-/** A folder's box on Home. The name opens the folder; a click anywhere else in
- * the header, or on the chevron, collapses it. The whole tray is a drop
- * target, and a collapsed tray opens when a drag rests on it. */
+/** Home folder tray. The name opens the folder, while the remaining header
+ * toggles the tray. The tray accepts drops and expands during drag hover. */
 export default function ResearchFeedTray({
   place,
   name,

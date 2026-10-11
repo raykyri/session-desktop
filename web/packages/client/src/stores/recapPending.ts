@@ -2,7 +2,7 @@
 // (`09-research-document-view.md` §2, `04-agent-runtime.md` §9).
 //
 // `research.recap.pending` is purely a viewer hint — the recap itself arrives
-// as a node update — so it has no cache entry behind it. It lives in a store
+// as a node update — so it has no cache entry behind it. It is kept in a store
 // rather than in the query cache for the same reason `liveTurns` does: it
 // changes several times per run and is read by exactly one subtree, and
 // invalidating a list query for it would re-render the sidebar to move a
@@ -10,7 +10,7 @@
 //
 // Nothing here is persisted: a job that was running when the tab closed is
 // either finished or abandoned by the time it opens again, and either way the
-// node update is what settles it.
+// node update clears it.
 
 import { create } from "zustand";
 

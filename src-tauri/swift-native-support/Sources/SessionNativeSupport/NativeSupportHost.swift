@@ -413,7 +413,8 @@ final class NativeSupportHost {
 
     private func startInterfaceHealthCheck(in window: NSWindow, generation: UInt64) {
         // This event requires an acknowledgement from the current document, so
-        // it catches a dead JavaScript event loop even when WebKit did not report
+        // it detects an unresponsive JavaScript event loop even when WebKit did
+        // not report
         // a WebContent process termination.
         let rustGeneration = nativeSupportDidBeginInterfaceHealthCheck()
         webViewHealthRustGeneration = rustGeneration == 0 ? nil : rustGeneration
@@ -801,7 +802,7 @@ final class NativeSupportHost {
             guard let scalar = key.unicodeScalars.first,
                   key.unicodeScalars.count == 1,
                   scalar.value >= 0x20,
-                  // Function keys land in the Unicode private use area.
+                  // Function keys use the Unicode private use area.
                   scalar.value < 0xF700
             else {
                 return nil

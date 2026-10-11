@@ -99,7 +99,7 @@ test("attaches highlight anchor to follow-up prompt and executes on selected mod
   await expect(page.getByTitle("Model for this follow-up")).toContainText("GPT-5.6 Luna");
 
   await followup.fill("Why is the rate tunable?");
-  // The submit button's name carries its chord ("Send Command Enter").
+  // The submit button's name includes its chord ("Send Command Enter").
   await page.getByRole("button", { name: /^Send/ }).click();
 
   // A targeted question branches: it becomes a card in the rail beside the

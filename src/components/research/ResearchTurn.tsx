@@ -43,11 +43,9 @@ import {
   type ResearchRowState,
 } from "../../lib/researchRowGlyph";
 
-// The backend caps snapshots at 64MB, which is still far beyond what markdown
-// parsing and eager React element creation can absorb without freezing the
-// interface. Blocks past this size render as plain preformatted text — itself
-// display-capped, since laying out a multi-megabyte text node freezes the interface
-// too — and long transcripts render only their tail until expanded.
+// The backend's 64MB snapshot limit is too large for synchronous Markdown
+// rendering. Content above these limits uses capped preformatted text, and long
+// transcripts render only their final portion until expanded.
 const MARKDOWN_CHAR_LIMIT = 100_000;
 const PLAINTEXT_DISPLAY_CHAR_LIMIT = 1_000_000;
 const ACTIVITY_PAYLOAD_CHAR_LIMIT = 200_000;
@@ -86,7 +84,7 @@ function ResearchMessageBlock({
 }) {
   const owner = useContext(WidgetAnswerContext);
   if (block.type === "text") {
-    // In a transcript document every turn is first-class content: user
+    // In a transcript document every turn is included as content: user
     // messages render as markdown prompts, not as unexpected-content
     // callouts (that framing exists for run responses, where a mid-response
     // user turn signals leakage).

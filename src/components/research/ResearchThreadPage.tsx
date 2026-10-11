@@ -204,8 +204,7 @@ interface ResearchThreadPageProps {
   onBack?: () => void;
   onForward?: () => void;
   /** Reports the deepest selected message for the visit history: "push" for
-   * the reader's own navigation, "replace" for a selection the page made
-   * itself (the message it restored on opening). */
+   * user navigation, or "replace" for the message restored on opening. */
   onNavigate?: (treeId: string, nodeId: string, mode: "push" | "replace") => void;
   /** Removes visits to this tree's messages that `keepNode` rejects (removed
    * messages). With `selection`, that message is on screen afterwards. */
@@ -265,8 +264,8 @@ function ResearchThreadPage({
   const columnsLayout = useContext(ResearchColumnsContext);
   const treeId = detail?.tree.id ?? null;
   const rootNodeId = detail?.tree.rootNodeId ?? null;
-  // The deepest open level's selected message. It determines every level
-  // before it (see researchLevelPath). Back/forward walk these visits.
+  // The selected message at the deepest open level determines every preceding
+  // level (see researchLevelPath). Back and Forward navigate these visits.
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingBranch | null>(null);
   const onNavigateRef = useRef(onNavigate);
@@ -323,8 +322,8 @@ function ResearchThreadPage({
   // (persisted per tree) and which show the full transcript (per visit).
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [fullTraceNodes, setFullTraceNodes] = useState<Record<string, boolean>>({});
-  // Branches whose answer finished while this thread was open and that
-  // the reader has not opened carry an unread dot on their branch count.
+  // Show an unread dot for branches completed while this thread was open but
+  // not yet viewed.
   // `firstSeenComplete` records each branch's status the first time it is
   // seen, so a branch that was already complete when the tree loaded is read.
   const firstSeenCompleteRef = useRef<Map<string, boolean>>(new Map());
@@ -857,10 +856,9 @@ function ResearchThreadPage({
     }
   };
 
-  // The column (and with it the scroller that carries swipe navigation)
-  // renders once there is a detail, a root and a selection. A thread page
-  // mounted for a new tree first renders the placeholder, so the swipe
-  // listeners attach when this turns true.
+  // Render the column and enable its swipe-navigation scroller after the
+  // detail, root, and selection are available. A new tree initially renders
+  // the placeholder, so attach swipe listeners when this becomes true.
   const hasColumn = Boolean(detail && rootNodeId && selectedNodeId);
   useResearchSwipeNavigation(workspaceRef, goBack, goForward, hasColumn);
 
@@ -1125,7 +1123,7 @@ function ResearchThreadPage({
     [annotationsAtPoint, clearHighlightAction, goBranch],
   );
 
-  /** Whether a press or click lands on the passage whose menu is open: the
+  /** Whether a press or click targets the passage whose menu is open: the
    * same branches and highlight at the same turn. Such a click closes the
    * menu rather than opening it again. */
   const pressOnMenuPassage = (
@@ -1956,8 +1954,7 @@ function ResearchThreadPage({
           }
         });
       },
-      // Editing moves the question into the ask box. Text already there is
-      // never replaced or merged into it: the reader clears it first.
+      // Editing moves the question into the ask box only when it is empty.
       onEdit: (item) => {
         if ((composerTextRef.current[headId] ?? "").trim()) {
           onToast("Clear the ask box to edit this question.");

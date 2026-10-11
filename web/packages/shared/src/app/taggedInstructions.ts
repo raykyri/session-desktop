@@ -9,7 +9,7 @@
 // The parser is deliberately literal: a block is a balanced `<tag>…</tag>`
 // pair whose tag name is a bare identifier, starting at the beginning of a
 // line. Anything that fails that shape stays as written, so prose that merely
-// mentions a tag survives.
+// mentions a tag remains.
 
 export interface TaggedUserInstructionDetails {
   label: string;

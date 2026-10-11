@@ -368,7 +368,7 @@ test("Home with only drafts says Unfiled is empty instead of the first-run text"
     drafts: [{ id: "d1", workspaceId: "ws", prompt: "An unsent draft", createdAt: 1, updatedAt: 1 }],
     setupGuide: createElement("div", null, "Agent setup guide"),
   });
-  assert.match(html, /Nothing unfiled\. New questions land here\./);
+  assert.match(html, /Nothing unfiled\. New questions appear here\./);
   assert.doesNotMatch(html, /Agent setup guide|appear here\. New ones start at the top/);
 });
 

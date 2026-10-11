@@ -1,7 +1,7 @@
 // The bytes behind a document row (`03-api-and-events.md` §5,
 // `13-deployment-fly.md` §6).
 //
-// `documents` is metadata; the file lives at
+// `documents` is metadata; the file is stored at
 // `${SESSION_DATA_DIR}/documents/<userId>/<sha256>` and nothing in SQLite can
 // remove it. Deleting a row without unlinking the file leaks the volume: the
 // per-user quota is summed from rows, so an account can delete and re-upload

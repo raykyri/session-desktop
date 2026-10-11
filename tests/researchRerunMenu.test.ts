@@ -70,7 +70,7 @@ test("a rerun needs the answer it follows to be complete, unless it can wait beh
   const branch = node("branch", { parentNodeId: "parent" });
   const inline = node("inline", { parentNodeId: "parent", inline: true });
   const running = node("parent", { status: "running" });
-  // A branch's parent sits in another column: no queue waits on it there.
+  // A branch's parent appears in another column, where it has no queue.
   assert.equal(researchRerunBlocker(branch, running), "Wait for the answer this follows to finish");
   // An inline follow-up queues behind the running answer, as Retry does.
   assert.equal(researchRerunBlocker(inline, running), null);
@@ -81,7 +81,7 @@ test("a rerun needs the answer it follows to be complete, unless it can wait beh
     );
   }
   assert.equal(researchRerunBlocker(branch, node("parent")), null);
-  // A note or document parent reads as complete.
+  // A note or document parent is treated as complete.
   assert.equal(researchRerunBlocker(branch, node("parent", { type: "post" })), null);
   assert.ok(enabled(item(inline, { parent: running })));
 });

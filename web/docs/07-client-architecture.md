@@ -131,7 +131,7 @@ Query keys (factory in `api/queries.ts`):
 ["adminUsers"]                           admin.listUsers
 ```
 
-The factory lives in `api/cache.ts` and is re-exported from `api/queries.ts`,
+The factory is defined in `api/cache.ts` and re-exported from `api/queries.ts`,
 which is the import path the rest of the client uses: the cache writers the
 bridge and the mutations share need the keys, and the hooks need the writers,
 so the keys sit below both rather than beside one of them.
@@ -149,7 +149,7 @@ Because the originating tab receives broadcast events for its own mutations, cac
 both writers may run; the count reducers on a tree summary are deltas and have
 exactly one writer per change: the mutation applies the delta from the node it
 is replacing (which it must read before overwriting it), and the event skips
-its own delta when the node it carries is already in the caches. Mutations therefore avoid invalidating lists whose count fields are patched by events, preventing race conditions where a full refetch and an event delta might double-increment a counter.
+its own delta when the referenced node is already in the caches. Mutations therefore avoid invalidating lists whose count fields are patched by events, preventing race conditions where a full refetch and an event delta might double-increment a counter.
 
 ### 4.2 Event bridge (`api/events.ts`)
 
@@ -174,12 +174,12 @@ Per event type:
   (`05-run-lifecycle-and-streaming.md` §4, §9). The bridge also publishes the
   interest set (`events.setInterest`, debounced 200 ms) from a reference-counted
   registry the mounted document views join through `useNodeInterest`.
-- The first event of every connection is `connection.ready`, carrying the
+- The first event of every connection is `connection.ready`, with the
   `connectionId` that `events.setInterest` addresses; a second one means the
   link reconnected, which is what triggers the invalidation and the snapshot
   re-read above.
 
-Connection status (`connection` store) drives a subtle indicator and enables
+Connection status (`connection` store) controls a status indicator and enables
 the snapshot-poll fallback for displayed active nodes when SSE is down, once
 the 10 s grace in `connection.shouldPollSnapshots` has passed
 (`05-run-lifecycle-and-streaming.md` §9). A subscription error that names
@@ -217,7 +217,7 @@ This replaces `App.tsx:9094-9220`.
 
 `shared/app/shortcuts.ts` is the ported `resolveAppShortcut`
 (`src/lib/appShortcuts.ts`). `AppShell` registers a single capture-phase keydown listener that is bypassed when a Base UI overlay is active (allowing the library to manage nested dialog and menu dismissals natively), delegating all other key events to the shared shortcut table. Whether
-a text field swallows a chord is decided per chord there, not for the listener
+whether a text field consumes a chord is decided per chord there, not for the listener
 as a whole: users spend most of their time in composer inputs, and shortcuts like Cmd-J ("focus follow-ups") are explicitly intended to be triggered while editing text. Only the chords that
 compete with text editing or with the caret's own navigation require a
 non-editable target — Cmd/Ctrl-1..9, Ctrl-Tab, Shift-Cmd-[ / ], and

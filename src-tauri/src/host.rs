@@ -34,10 +34,10 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::{LazyLock, Mutex};
 
-/// Refuse to sit on a dead connection: a worktree call is on the path to
+/// Reject an unresponsive connection: a worktree call is on the path to
 /// opening a pane, so failing fast beats hanging the launch.
 const CONNECT_TIMEOUT_SECONDS: u32 = 10;
-/// Where worktrees land on a host that does not name a `workspaceRoot`.
+/// Worktree parent on a host that does not specify a `workspaceRoot`.
 const DEFAULT_REMOTE_WORKSPACE_ROOT: &str = "~/.session/workspaces";
 /// How the Session CLI is invoked on a host that does not name one.
 const DEFAULT_REMOTE_CLI: &str = "session-cli";
@@ -96,7 +96,7 @@ pub fn for_group(remote: Option<&RemoteRef>) -> Host {
 ///
 /// Only `Batch` has a caller today — the worktree git calls. `Interactive` is
 /// here because the distinction is a correctness one worth pinning down with a
-/// test now: the pane spawn that lands next must *not* run in batch mode, or
+/// test now: the next pane spawn must *not* run in batch mode, or
 /// ssh will fail outright instead of letting the user answer a passphrase.
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -111,7 +111,7 @@ pub enum Interaction {
 
 /// A local socket to expose on the remote side, as `ssh -R`.
 ///
-/// Unused until the pane spawn lands; it is how a remote agent's lifecycle
+/// Unused until pane spawning is implemented; it is how a remote agent's lifecycle
 /// hooks reach the local control socket without the pane token ever becoming a
 /// network credential.
 #[allow(dead_code)]
@@ -136,7 +136,7 @@ pub struct RemoteCommand<'a> {
 /// Fully quoted SSH invocations for one durable Session tmux session.
 ///
 /// Creation and attachment are deliberately separate. Only `create_argv` may
-/// create the named session; every recovery path uses `attach_argv`, so a dead
+/// create the named session; every recovery path uses `attach_argv`, so a missing
 /// remote process can never be silently replaced by an empty shell.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RemoteTmuxCommands {
@@ -538,7 +538,7 @@ exec "${{cli#SESSION_CLI=}}" ping
     /// Rewrites a prepared pane environment for execution inside an existing
     /// remote tmux session. This is also used by shell-level agent launches:
     /// their command is prepared by the local control server, so its freshly
-    /// minted credentials initially name the local Session CLI/socket and must be
+    /// generated credentials initially name the local Session CLI/socket and must be
     /// rebound to the already-forwarded remote endpoint before exec.
     pub fn tmux_pane_envs(
         &self,
@@ -692,7 +692,7 @@ exec "${{cli#SESSION_CLI=}}" ping
             // this client option only to locally-bound sockets.
             argv.push("-o".to_string());
             argv.push("StreamLocalBindUnlink=yes".to_string());
-            // The forwarded control socket carries a pane capability. Keep it
+            // The forwarded control socket includes a pane capability. Keep it
             // owner-only on the remote host, and refuse to report an attached
             // terminal when the hook transport could not be established.
             argv.push("-o".to_string());
@@ -1818,7 +1818,7 @@ printf '{"ok":true,"data":{"status":"ok"}}\n'
     #[test]
     fn the_default_workspace_root_is_expanded_against_the_remotes_home() {
         // Every token this module sends is quoted, so a `~` would arrive at the
-        // far side's shell literally: the worktree would land in a directory
+        // far side's shell literally: the worktree would be created in a directory
         // actually *named* `~`, and the path handed to the agent would not be
         // absolute. Resolving it here is what stops that.
         seed_remote_home("user@devbox", "/home/dev");

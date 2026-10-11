@@ -64,9 +64,9 @@ that a registered backend command or persisted field can safely be removed.
 The remaining application controller still coordinates substantial research and
 native integration logic. Startup snapshot reads, detached secondary hydration,
 cancellation, and window reveal now belong to `useAppStartup` and its startup
-runner; App applies the snapshots and owns workspace selection and migration.
+runner; App applies the snapshots and handles workspace selection and migration.
 Research document navigation writes now share one persistence owner, while a
-composer hook owns ordinary and targeted draft restoration and persistence.
+composer hook handles ordinary and targeted draft restoration and persistence.
 The owner flushes on pagehide/unmount and preserves the existing storage format.
 Future extractions can address browser/native-surface ownership together with
 its lifecycle effects. The
@@ -86,6 +86,6 @@ confirmed live example. No persisted-state or protocol migration is included her
 
 Self-review checked extracted hook state and callback freshness, preserved research
 storage keys, terminal attachment sequencing, the removal of unused event contracts,
-and release/test wiring. The earlier stale settings assertion and descriptor test
+and release/test integration. The earlier stale settings assertion and descriptor test
 isolation failure are fixed. Native desktop code was validated on Linux; this pass
 did not include an interactive macOS smoke test.

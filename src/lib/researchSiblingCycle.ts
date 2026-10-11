@@ -2,8 +2,8 @@
 // the column the person last interacted with, wrapping at both ends. The
 // feed cycles its cards (or a card's child rows), a messages column its
 // chain, and a note's follow-ups column its rows. ResearchColumns tracks the
-// column and dispatches the key; the feed and the document do the moves.
-// This module holds the parts that need no DOM.
+// column and dispatches the key; the feed and the document perform the moves.
+// This module contains the DOM-independent logic.
 
 import type { ResearchColumnId } from "./researchColumns";
 

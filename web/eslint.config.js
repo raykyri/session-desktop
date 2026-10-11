@@ -116,7 +116,7 @@ export default tseslint.config(
   ...boundaries,
   // The one sanctioned crossing of the client ──► server boundary: the tRPC
   // client is typed by the router, and `verbatimModuleSyntax` erases an
-  // `import type` at emit, so the bundle carries no edge (ADR-1,
+  // `import type` at emit, so the bundle has no edge (ADR-1,
   // `07-client-architecture.md` §1). It is scoped to this file and to the
   // `/router` subpath, and `@session/db` stays forbidden, so the exception
   // cannot widen into a runtime dependency without an edit here.

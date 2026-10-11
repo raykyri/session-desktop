@@ -83,7 +83,7 @@ test("renders the sections a receiving agent needs", () => {
   assert.match(document, /<transcript>/);
   assert.match(document, /### User\nAdd retries to the fetch helper\./);
   assert.match(document, /### Claude\nDone — I added a backoff loop\./);
-  // The clicked message is the outstanding ask, so it lands in the request
+  // The clicked message is the outstanding ask, so it is included in the request
   // section rather than in the history.
   assert.match(document, /## Current request\n\n<request>\nNow cover it with a test\.\n<\/request>/);
   assert.equal(document.includes("### User\nNow cover it with a test."), false);
@@ -248,7 +248,7 @@ test("spans an assistant run split by activity and counts its work as done", () 
     ]),
   ];
 
-  // The menu hangs off the first card of the run; the handoff covers all of it.
+  // The menu is attached to the first card of the run; the handoff covers all of it.
   const document = buildFromAssistant(turns, 0);
 
   assert.ok(document);
@@ -358,7 +358,7 @@ test("anchors on the start of a trailing assistant run", () => {
   assert.match(document, /<last-turn>\nLooking now\.\n\nFixed it\./);
 });
 
-test("skips plumbing and dropped work when anchoring the newest turn", () => {
+test("skips infrastructure messages and dropped work when anchoring the newest turn", () => {
   const turns = [
     turn("user", [text("Real ask.")]),
     turn("assistant", [text("Abandoned.")], { status: "superseded" }),
@@ -376,7 +376,7 @@ test("has no anchor for an empty transcript", () => {
   assert.equal(latestHandoffAnchorKey([]), null);
 });
 
-test("carries an oversized history message whole when the budget allows", () => {
+test("includes an oversized history message in full when the budget allows", () => {
   const long = "x".repeat(20_000);
   const request = "y".repeat(3_000);
   const turns = [
@@ -497,7 +497,7 @@ test("truncates on line boundaries", () => {
   const document = build(turns, 1, { limits: { messageCharacters: 1_000, recentTurns: 0, totalCharacters: 4_000 } });
 
   assert.ok(document);
-  // Neither half of the cut lands mid-line.
+  // Neither half of the cut ends mid-line.
   assert.match(document, / end\n\n\[… \d+ characters omitted …\]\n\nline \d{4} end/);
 });
 

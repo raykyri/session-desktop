@@ -54,7 +54,7 @@ export const runAttempts = sqliteTable(
   (table) => [primaryKey({ columns: [table.nodeId, table.attempt] })],
 );
 
-/** The canonical conversation the app owns (`docs/04-agent-runtime.md` §4).
+/** The canonical conversation stored by the app (`docs/04-agent-runtime.md` §4).
  * Append-only: written once when a node completes, never updated. */
 export const nodeMessages = sqliteTable(
   "node_messages",
@@ -64,7 +64,7 @@ export const nodeMessages = sqliteTable(
       .references(() => nodes.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
     messageJson: text("message_json", { mode: "json" }).$type<NodeMessage>().notNull(),
-    /** Which model produced an assistant message, so a cross-model fork knows
+    /** Which model produced an assistant message, so a cross-model fork can determine
      * to drop its reasoning metadata. */
     model: text("model"),
     createdAt: integer("created_at").notNull(),

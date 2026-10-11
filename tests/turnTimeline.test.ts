@@ -257,7 +257,7 @@ test("final answer view starts after the last tool call group", () => {
   assert.equal(assistantTextFromTimelineItems(answerItems), "Final **answer**.");
 });
 
-test("final answer survives when trailing tool activity attaches to the answer item", () => {
+test("retains the final answer when trailing tool activity attaches to the answer item", () => {
   nextIndex = 0;
   // The run ends with a wrap-up tool call after its final text (a TodoWrite,
   // a post-answer check). The trailing call attaches to the same timeline
@@ -380,7 +380,7 @@ test("assistant text, tool activity, and continued text retain response order", 
   }
 });
 
-test("an activity-only assistant item carries no empty message blocks", () => {
+test("an activity-only assistant item has no empty message blocks", () => {
   nextIndex = 0;
   const items = buildTimelineItems([
     turn("user", [text("go")]),
@@ -392,7 +392,7 @@ test("an activity-only assistant item carries no empty message blocks", () => {
   assert.equal(activityOnly.activities.length, 1);
 });
 
-test("tool results pair independently of the turn role carrying the result", () => {
+test("tool results pair independently of the turn role containing the result", () => {
   nextIndex = 0;
   const items = buildTimelineItems([
     turn("assistant", [toolUse("claude", "Read")]),
@@ -540,7 +540,7 @@ test("duplicate tool ids count once in an activity-group label count", () => {
   }
 });
 
-test("running, error, superseded, interrupted, and uncertain activity metadata survives", () => {
+test("retains running, error, superseded, interrupted, and uncertain activity metadata", () => {
   nextIndex = 0;
   const items = buildTimelineItems([
     turn("assistant", [toolUse("running", "Bash")]),
@@ -636,8 +636,8 @@ test("assistant raw blocks become thinking while non-assistant raw blocks remain
 });
 
 test("thinkingProseText pulls reasoning out of a provider thinking block", () => {
-  // A real reasoning block carries the prose alongside a long opaque signature;
-  // the reader wants the prose, never the signature.
+  // A real reasoning block contains prose alongside a long opaque signature;
+  // only the prose is displayed, never the signature.
   const value = {
     type: "thinking",
     thinking: "First I check the layout, then republish.",
@@ -680,7 +680,7 @@ test("adding a result preserves the originating tool key", () => {
   assert.equal(beforeActivity.key, afterActivity.key);
 });
 
-test("message items carry the latest folded turn timestamp", () => {
+test("message items include the latest folded turn timestamp", () => {
   nextIndex = 0;
   const items = buildTimelineItems([
     turn("user", [text("hi")], { timestamp: 1_000 }),

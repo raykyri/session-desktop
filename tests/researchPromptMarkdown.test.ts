@@ -286,7 +286,7 @@ test("imported reports hide ChatGPT citation handles and preserve Markdown sourc
   assert.doesNotMatch(html, /turn25view0|turn22view1|turn19search24|[\uE200-\uE202]/);
 });
 
-test("a running answer's trace opens its root-level activities; a settled one keeps them closed", () => {
+test("root activities are expanded for running answers and collapsed for settled answers", () => {
   const item = {
     type: "message" as const, key: "trace", role: "assistant" as const, blocks: [],
     activities: [

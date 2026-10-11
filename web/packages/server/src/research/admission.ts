@@ -89,7 +89,7 @@ export function assertQueueHasRoom(ctx: LaunchContext): void {
 }
 
 /** Puts an admitted node in the run queue and wakes the agent loop. The
- * database row is what survives a restart; `runs.start` is only a nudge. */
+ * database row persists across restarts; `runs.start` only starts processing. */
 export function enqueueRun(ctx: LaunchContext, nodeId: string, modelId: string): void {
   const provider = findModel(modelId)?.provider ?? modelId;
   repo(() => queue.enqueue(ctx.db, ctx.user.id, { nodeId, pool: "research", provider }));

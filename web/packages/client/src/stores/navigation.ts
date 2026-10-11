@@ -134,7 +134,7 @@ export const useNavigationStore = create<NavigationState>()(
           scrollByNode: { ...state.scrollByNode, [nodeId]: { top, updatedAt: now } },
         })),
       // Offsets expire: a position captured against content that has since
-      // streamed further lands in the wrong place, and after a quarter hour the
+      // streamed further is added in the wrong place, and after a quarter hour the
       // reader is starting over anyway.
       restoreScroll: (nodeId, now = Date.now()) => {
         const saved = get().scrollByNode[nodeId];

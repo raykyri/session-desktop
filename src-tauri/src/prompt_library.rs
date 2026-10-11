@@ -27,13 +27,13 @@ const PROMPTS_DIR: &str = "prompts";
 const PROJECTS_DIR: &str = "projects";
 const META_FILE: &str = "meta.json";
 const PROMPT_EXTENSION: &str = "md";
-/// Filenames land in menus and Finder; anything longer is a paragraph, not a name.
+/// Limit names displayed in menus and Finder.
 const MAX_NAME_CHARS: usize = 120;
-/// Store dir names stay scannable in Finder: a readable basename prefix plus the
-/// hash suffix, comfortably under filesystem name limits.
+/// Store directory names use a readable basename prefix plus the hash suffix
+/// and remain under filesystem name limits.
 const MAX_BASENAME_CHARS: usize = 40;
-/// 12 hex chars (48 bits) of the canonical-path SHA-256: far beyond collision
-/// range for the number of projects one user has, while keeping names short.
+/// Use 12 hex characters (48 bits) of the canonical-path SHA-256 to keep names
+/// short while avoiding collisions at the expected number of projects.
 const HASH_CHARS: usize = 12;
 
 /// Serializes save/delete pairs (a rename's or move's write-then-remove) so two UI
@@ -69,7 +69,7 @@ pub struct PromptLibrary {
 }
 
 /// Recorded next to each project's prompts so the hashed dir name can be mapped
-/// back to the project it belongs to (by tooling, future GC, or a curious user).
+/// back to the project it belongs to (by tooling, future GC, or manual inspection).
 #[derive(Serialize)]
 struct ProjectMeta<'a> {
     path: &'a str,
@@ -146,9 +146,9 @@ impl ProjectStore {
         self.dir.join(PROMPTS_DIR)
     }
 
-    /// Writes the store's meta.json if it doesn't exist yet, so a hashed dir is
-    /// never left unexplained. Best-effort: failing to record the path must not
-    /// block the prompt operation itself.
+    /// Writes the store's meta.json if it doesn't exist yet, recording the path
+    /// represented by the hashed directory. Failure does not block the prompt
+    /// operation itself.
     fn ensure_meta(&self) {
         let meta_path = self.dir.join(META_FILE);
         if meta_path.exists() {

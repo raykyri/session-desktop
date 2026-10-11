@@ -228,7 +228,7 @@ export function flatOffsetAtPoint(root: HTMLElement, clientX: number, clientY: n
 }
 
 /** Flat offsets where the enclosing `.research-response-message` changes —
- * every seam between one message and the next, or between a message and the
+ * every boundary between messages, or between a message and the
  * tool/thinking rows around it. The projection concatenates these with no
  * separating whitespace, so word snapping needs them to avoid fusing a
  * message's last word to its neighbour's first (see

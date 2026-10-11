@@ -56,7 +56,7 @@ const RESEARCH_SELECTED_PRIORITY = 5;
  * Custom Highlight API without rewriting the Markdown DOM: saved highlights,
  * branch passages (underlined for open branches, dashed for the unsent
  * branch), overlaps, the passage under the pointer, a flash on the passage a
- * reader lands on, and the branch margin markers. The hook also keeps the
+ * user opened, and the branch margin markers. The hook also tracks the
  * registry of each answer's response root, the flat-offset ranges the
  * annotations resolved to (for clicks, hover, ordering and the selection
  * toolbar), and reveals the highlight opened from the Highlights feed. */
@@ -120,8 +120,8 @@ export function useResearchAnnotations({
   // Bumped after each highlight paint so the focus-highlight effect below
   // observes freshly resolved ranges.
   const [highlightPaintVersion, setHighlightPaintVersion] = useState(0);
-  // Flat-offset ranges of the branch passages that resolved, tagged with the
-  // answer they sit in. Consulted by passage clicks, hover, markers and order.
+  // Flat-offset ranges of resolved branch passages, tagged with their answer.
+  // Used by passage clicks, hover, markers, and ordering.
   const branchRangeOffsetsRef = useRef<
     { segmentId: string; id: string; start: number; end: number }[]
   >([]);
@@ -393,7 +393,7 @@ export function useResearchAnnotations({
   // Paint branch passages (blue) and resolve their offsets for clicks, hover,
   // and reveal. The passages of open branches are also underlined; a new
   // branch's passage has only a dashed underline. Anchors that no longer
-  // locate a passage simply drop out.
+  // locate a passage are omitted.
   useLayoutEffect(() => {
     const api = researchHighlightApi();
     api?.registry.delete(RESEARCH_BRANCH_NAME);
@@ -639,7 +639,7 @@ export function useResearchAnnotations({
     };
   }, [highlightDomNonce, hoveredAnnotation, segmentRoot]);
 
-  // A passage flash (jumping to a branch's source, landing on a highlight).
+  // Flashes a branch source or highlight after navigation.
   useLayoutEffect(() => {
     const api = researchHighlightApi();
     api?.registry.delete(RESEARCH_FLASH_NAME);

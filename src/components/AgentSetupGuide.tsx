@@ -58,8 +58,8 @@ export default function AgentSetupGuide({
     adapters.find((adapter) => adapter.instanceId === selectedInstanceId) ??
     adapters.find((adapter) => adapter.instanceId === firstIncompleteInstanceId(adapters)) ??
     null;
-  // Keep the shown agent selected: without this, an agent that became ready
-  // would hand the panel to the next incomplete one and hide its completion.
+  // Keep the selected agent visible after it becomes ready instead of
+  // automatically selecting the next incomplete agent.
   useEffect(() => {
     if (selected && selected.instanceId !== selectedInstanceId) {
       setSelectedInstanceId(selected.instanceId);

@@ -17,7 +17,7 @@ Session uses global CSS with cascade layers. The application imports one entrypo
 - Put a value in `tokens.css` when its semantic role is shared or theme-dependent.
 - Put a rule in `base.css` only when it applies to native elements or the entire app.
 - Put a reusable, context-independent control in `primitives.css`.
-- Put shared Home/research page chrome, reading typography, and content-card recipes in
+- Put shared Home/research controls, reading typography, and content-card styles in
   `features/research-surface.css`.
 - Keep research-thread and research-sidebar details in `features/research.css`, Home feed
   details in `features/feed.css`, notes (post nodes: the note column, saved-link cards,
@@ -25,7 +25,7 @@ Session uses global CSS with cascade layers. The application imports one entrypo
   application/sidebar layout in `features/shell.css`.
 
 Feature styles should not rely on an unrelated file loading later to complete or correct
-their layout. When two destinations share a visual contract, give that contract a shared
+their layout. When two destinations use the same layout and appearance, define a shared
 class instead of copying its declarations.
 
 ## Naming and composition
@@ -45,12 +45,12 @@ Use semantic tokens (`--text-*`, `--surface-*`, `--control-*`, `--status-*`) bef
 literal colors. Literal colors are appropriate for external brand colors or documented
 browser limitations, and should carry a comment when the reason is not obvious.
 
-Home and research threads are one reading surface. Their main content roots must include
-`.research-reading-surface`. Primary Markdown uses `.research-prose`, derived summaries use
-`.research-summary-text`, and authored user messages use the unboxed `ResearchUserMessage`
-primitive. Destination styles may position those components, but must not override their
-font metrics. Compact previews and annotations must select an explicit prose variant so
-moving content does not change its type scale or rhythm.
+Home and research threads use the same reading typography. Their main content roots must
+include `.research-reading-surface`. Primary Markdown uses `.research-prose`, derived
+summaries use `.research-summary-text`, and authored user messages use the unboxed
+`ResearchUserMessage` primitive. Destination styles may position those components, but
+must not override their font metrics. Compact previews and annotations must select an
+explicit prose variant so moving content does not change its font size or line height.
 
 ## Responsive and accessibility behavior
 

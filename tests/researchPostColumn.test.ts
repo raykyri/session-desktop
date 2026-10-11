@@ -34,7 +34,7 @@ test("a note's column uses the turn layout for the note only", () => {
   assert.match(html, /class="research-turn-question"/);
   assert.match(html, /research-prompt research-turn-prompt"/);
   assert.doesNotMatch(html, /research-turn-answer|post-status|Posted to your network|No replies yet/);
-  // The column header carries the title and history, so the body repeats
+  // The column header contains the title and history, so the body repeats
   // neither; follow-ups and the composer are in the follow-ups column.
   assert.doesNotMatch(html, /research-thread-actions|research-breadcrumb/);
   assert.doesNotMatch(html, /research-composer|post-thread/);

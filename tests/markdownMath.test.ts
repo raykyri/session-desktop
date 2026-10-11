@@ -6,7 +6,7 @@ import TranscriptMarkdown, {
   transcriptMathPluginsReady,
 } from "../src/components/TranscriptMarkdown";
 
-// The math pipeline lives in a lazy-loaded chunk; server-side renders (and
+// The math pipeline is in a lazy-loaded chunk; server-side renders (and
 // these tests) must wait for it before the first render includes MathJax.
 await transcriptMathPluginsReady;
 

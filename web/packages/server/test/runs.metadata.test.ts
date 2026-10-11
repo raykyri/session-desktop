@@ -191,7 +191,7 @@ test.serial("a grounded run records the searches the provider billed", async (t)
 test.serial("a rename during title generation is not overwritten", async (t) => {
   // The model takes seconds and the rename is a deliberate act; a generated
   // title is a default, and a default must not replace a decision. The rename
-  // lands while `generateTitle` is awaiting the model, which is exactly the
+  // arrives while `generateTitle` is awaiting the model, which is exactly the
   // handles concurrent thread renaming while initial response generation completes.
   const harness = createAgentHarness(t);
   const { user, caller, nodeId } = await completedNode(harness, "renamer");

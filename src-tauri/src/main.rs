@@ -1859,7 +1859,7 @@ async fn save_pasted_image(data_base64: String, extension: String) -> Result<Str
 
 /// The tree is committed before its root run launches so a crash mid-launch is
 /// recoverable, but a root that never launched holds nothing durable. Leaving
-/// it behind on a launch failure accumulated dead entries the caller could not
+/// retaining it after a launch failure accumulated obsolete entries the caller could not
 /// even identify — the command returns the error, not the tree id — while the
 /// dialog keeps the prompt for a retry. Best-effort: if the removal itself
 /// fails, the failed tree remains visible (and removable) in the sidebar.
@@ -2009,7 +2009,7 @@ fn launch_research_child_run(
     let prompt =
         tweets::prompt_with_research_attachments(child.prompt().to_string(), child.attachments());
     // A highlight-targeted follow-up sends the quoted passage with the
-    // question. Only the sent prompt carries the quote — the child's
+    // question. Only the sent prompt includes the quote; the child's
     // displayed prompt stays the bare question, which boundary matching
     // still finds as a normalized substring of the sent prompt.
     let question = match child.passage_anchor() {
@@ -3407,7 +3407,7 @@ fn main() {
     let exit_state = state.clone();
 
     let builder = tauri::Builder::default()
-        // Registered first so a duplicate launch exits before setup() can steal the
+        // Registered first so a duplicate launch exits before setup() can replace the
         // control socket and respawn the persisted session alongside the running
         // instance. Instances are deduped per app identifier and user session; the
         // second launch hands off to this callback in the surviving process, which
@@ -3553,7 +3553,7 @@ fn main() {
                     notify_fatal_startup(&err);
                     std::process::exit(1);
                 }
-                // Sweep scratch files stranded by earlier processes that were killed
+                // Remove scratch files left by earlier processes that were killed
                 // mid-save (most commonly the final persist racing process exit).
                 // Backgrounded: it scans the state dir and only ever removes files
                 // whose unique pid-tagged names no live save can be using, so it

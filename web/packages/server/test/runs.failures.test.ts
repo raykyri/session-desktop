@@ -96,43 +96,46 @@ test.serial("a run that outlasts the wall-clock cap is stopped and classified", 
   t.is(content.responseRevision, undefined, "a stopped run has no durable snapshot");
 });
 
-test.serial("an attempt that throws where the loop does not expect it still settles", async (t) => {
-  setFixtureScenario("success");
-  const harness = createAgentHarness(t);
-  const { user, nodeId } = await launch(harness, "stranded");
+test.serial(
+  "an attempt that throws where the loop does not expect it still reaches a final state",
+  async (t) => {
+    setFixtureScenario("success");
+    const harness = createAgentHarness(t);
+    const { user, nodeId } = await launch(harness, "stranded");
 
-  // An event bus that fails is the cheapest stand-in for the class of throw
-  // this guard exists for — a SQLite write that fails while the last turn is
-  // committed is the realistic one, and neither is reachable through the
-  // loop's own error handling.
-  const hostile: EventBus = Object.create(harness.eventBus) as EventBus;
-  hostile.emit = (userId: string, event: SessionEvent): void => {
-    if (event.type === "research.run.started") {
-      throw new Error("the event bus fell over");
-    }
-    harness.eventBus.emit(userId, event);
-  };
+    // An event bus that fails is the cheapest stand-in for the class of throw
+    // this guard exists for — a SQLite write that fails while the last turn is
+    // committed is the realistic one, and neither is reachable through the
+    // loop's own error handling.
+    const hostile: EventBus = Object.create(harness.eventBus) as EventBus;
+    hostile.emit = (userId: string, event: SessionEvent): void => {
+      if (event.type === "research.run.started") {
+        throw new Error("the event bus fell over");
+      }
+      harness.eventBus.emit(userId, event);
+    };
 
-  const service = createRunsService({
-    config: harness.config,
-    db: harness.db,
-    eventBus: hostile,
-    logger: harness.logger,
-    autoStart: false,
-  });
-  t.teardown(() => service.drain());
-  await service.tick();
-  await service.idle();
+    const service = createRunsService({
+      config: harness.config,
+      db: harness.db,
+      eventBus: hostile,
+      logger: harness.logger,
+      autoStart: false,
+    });
+    t.teardown(() => service.drain());
+    await service.tick();
+    await service.idle();
 
-  const node = nodesRepo.get(harness.db, user.id, nodeId);
-  t.is(node?.status, "failed", "a node nothing is running must not stay `running`");
-  t.regex(node?.error ?? "", /Research execution terminated unexpectedly/);
-  t.is(
-    harness.db.$client.prepare(`SELECT 1 FROM run_queue WHERE node_id = ?`).get(nodeId),
-    undefined,
-    "and its queue slot is freed",
-  );
-});
+    const node = nodesRepo.get(harness.db, user.id, nodeId);
+    t.is(node?.status, "failed", "a node nothing is running must not stay `running`");
+    t.regex(node?.error ?? "", /Research execution terminated unexpectedly/);
+    t.is(
+      harness.db.$client.prepare(`SELECT 1 FROM run_queue WHERE node_id = ?`).get(nodeId),
+      undefined,
+      "and its queue slot is freed",
+    );
+  },
+);
 
 test.serial("prevents snapshot commit while the response stream remains active", async (t) => {
   const harness = createAgentHarness(t);

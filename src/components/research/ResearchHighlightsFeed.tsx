@@ -38,10 +38,8 @@ export function highlightExcerptContext(
   return { text: context, cut };
 }
 
-/** Groups highlights by thread, threads in the order their newest highlight
- * appears; within a thread, highlights in the order they were made, which
- * follows the reading order for most threads (the feed items carry no turn
- * position). */
+/** Group highlights by thread. Preserve thread order from the feed and sort
+ * each group by creation time because feed items contain no turn position. */
 export function groupHighlightsByThread(items: ResearchHighlightFeedItem[]) {
   const groups = new Map<string, { treeId: string; title: string; items: ResearchHighlightFeedItem[] }>();
   for (const item of items) {
@@ -55,10 +53,8 @@ export function groupHighlightsByThread(items: ResearchHighlightFeedItem[]) {
   }));
 }
 
-/** The Highlights view in the feed column: saved passages grouped by thread,
- * each under the question it answers and shown inside its surrounding
- * sentence. Opening one selects the thread at that node and scrolls to the
- * passage; the remove button deletes the highlight. */
+/** Highlights grouped by thread with surrounding text. Opening a highlight
+ * selects its node and scrolls to the passage. */
 export default function ResearchHighlightsFeed({
   items,
   loading,
@@ -68,8 +64,8 @@ export default function ResearchHighlightsFeed({
   onRefresh,
 }: ResearchHighlightsFeedProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  // A removed highlight takes its focused button along: focus moves to the
-  // highlight now at its place (or the last one), else to Refresh.
+  // After removing a focused highlight, focus its successor, the final row,
+  // or Refresh when no rows remain.
   const removedIndexRef = useRef<number | null>(null);
   useEffect(() => {
     const index = removedIndexRef.current;

@@ -72,7 +72,7 @@ test("summaries count statuses and raise attention flags only for unseen ones", 
   const [seen] = trees.summaries(fixture.db, fixture.userId);
   t.false(seen?.hasUnseenUpdate);
   t.false(seen?.hasUnseenFailure);
-  t.is(seen?.failedCount, 1, "the lifetime count survives the acknowledgement");
+  t.is(seen?.failedCount, 1, "the lifetime count remains after acknowledgement");
 });
 
 test("excludes interrupted runs from attention summary counts and status flags", (t) => {

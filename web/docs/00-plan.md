@@ -82,7 +82,7 @@ account), OpenRouter (zero-retention providers only), and Anthropic.
 | Server | Hono on Node 22; tRPC v11; SSE subscription for events |
 | Database | SQLite via `better-sqlite3`, WAL; Drizzle ORM; drizzle-kit migrations |
 | Auth | GitHub OAuth (PKCE) via `arctic`; DB sessions; `users.is_admin` set manually |
-| Agents | Vercel AI SDK `streamText` loop with owned `web_search`, `web_fetch`, `document_read` tools; `@anthropic-ai/sdk` escape hatch if needed; app owns conversation history |
+| Agents | Vercel AI SDK `streamText` loop with built-in `web_search`, `web_fetch`, `document_read` tools; direct `@anthropic-ai/sdk` adapter if needed; app stores conversation history |
 | Models | `gemini-flash` (default, Google Search grounding), `deepseek-flash` and `gpt-luna` via OpenRouter ZDR/no-collection routing, all users; `claude-fable` admin only; effort fixed at medium; metadata runs on `gemini-flash` |
 | Streaming | Snapshot + per-node ordered deltas; durable checkpoints; `interrupted` with auto-resume on deploy |
 | Client state | TanStack Query (event-patched) + Zustand; TanStack Router |
@@ -93,7 +93,7 @@ account), OpenRouter (zero-retention providers only), and Anthropic.
 
 ## 4. Sequencing rationale
 
-Two seams in the desktop code drive the order: `src/lib/api.ts` and
+Two desktop integration points determine the order: `src/lib/api.ts` and
 `useSessionEvents.ts` are the only frontend touch points with Rust, and the
 Rust research core is pure logic that ports to TypeScript with fixtures.
 Order: shared domain → database → server API → agent loop → client
@@ -148,7 +148,7 @@ Spec: `04-agent-runtime.md`, `05-run-lifecycle-and-streaming.md`.
   parts, snapshots, `interrupted` auto-resume, admission and per-provider
   caps, usage recording, metadata runs on `gemini-flash`, fixture providers.
 - Spike first: Fable 5.1 through `@ai-sdk/anthropic` (effort, refusal,
-  append-only history, long turns); decide the escape hatch.
+  append-only history, long turns); decide whether a direct provider adapter is needed.
 - Exit: Phase 3 suite passes against fixture providers; kill and restart the
   server mid-run and see it resume; a manual run on each real provider
   produces a document with sources, a recap, and a title.
@@ -192,9 +192,9 @@ Spec: `13-deployment-fly.md`.
   reconnect.
 - Every active node is renderable from one `getNodeContent` call.
 - Every mutation is a transaction; snapshot commits use `synchronous=FULL`.
-- The app owns conversation history; it is append-only.
+- The app stores append-only conversation history.
 - Terminal status transitions are irreversible; response revision hashes serve as concurrency tokens.
-- Pure logic lives in `shared` with fixtures.
+- Pure logic is in `shared` with fixtures.
 - One toolset for every model so the UI and evaluation are uniform.
 
 ## 7. Risks and mitigations
@@ -202,10 +202,10 @@ Spec: `13-deployment-fly.md`.
 | Risk | Mitigation |
 | --- | --- |
 | Research quality below the desktop's tuned CLI agents | Eval set of real questions before Phase 4 exit; tool descriptions and system prompt iterated against it; model comparison built in |
-| Four heterogeneous providers behind one SDK | Fixture-driven loop tests per provider; Fable-specific spike; Anthropic escape hatch |
+| Four heterogeneous providers behind one SDK | Fixture-driven loop tests per provider; Fable-specific spike; direct Anthropic adapter if needed |
 | Cost: app pays for all tokens, Fable at $10/$50 per MTok | Admin-only gating for Fable; usage recorded per attempt; daily token and run limits per account on the same schema |
 | OpenRouter ZDR routing leaves a model with no eligible provider | Account-wide and per-request enforcement; `provider_unavailable` surfaced; provider pins if needed |
-| Provider rate limits and outages | Per-provider concurrency caps; 429 re-queue with backoff; tool errors degrade gracefully |
+| Provider rate limits and outages | Per-provider concurrency caps; 429 re-queue with backoff; explicit tool-error handling |
 | Search vendor cost and quotas | Two vendors (Parallel, Tavily) with fallback; caching by query and URL; per-run caps; runs degrade to fetch-only without keys |
 | Deploys interrupting runs | Persisted context and auto-resume (`05` §7) |
 | `App.tsx` coupling | Port by view; state into query cache and stores |
@@ -228,13 +228,13 @@ specs under `e2e/`.
 
 - [x] **Verified** — Compose and launch with a model choice (Fable hidden for
       non-admins; Gemini grounded variant available) and attached documents;
-      draft survives reload.
+      draft remains after reload.
       `features/composer/ResearchQueryComposer.tsx`; `composer.test.tsx`
       ("Tab steps to the next launchable model and wraps", "the model list
       hides admin-only models from everyone else", "the draft keeps the
       prompt, the model and the attached document ids"); `admin.spec.ts` both
       tests; `artifacts.spec.ts` attaches through this composer;
-      `library.spec.ts` "a half-written question survives a reload".
+      `library.spec.ts` "retains a half-written question after reload".
 - [ ] **Partial** — Mixed activity feed with keyset pagination, load older,
       retry, refresh, new-activity button, restored scroll anchor.
       All implemented in `features/home/ActivityFeed.tsx` and

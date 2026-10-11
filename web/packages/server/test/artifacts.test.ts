@@ -116,7 +116,7 @@ test("Markdown that carries HTML is sanitized before it is served", async (t) =>
   t.false(html.toLowerCase().includes("<script>fetch"));
   t.true(html.includes("<h1>Title</h1>"));
   t.true(html.includes("Ok."));
-  // Only the bridge survives as a script element.
+  // Only the bridge remains as a script element.
   t.is(html.split("<script>").length - 1, 1);
 });
 
@@ -211,7 +211,7 @@ test("the renderer and its helpers are conservative on their own", (t) => {
   t.not(readFont("Inter-Variable-Latin.woff2"), null);
 });
 
-test("the artifact host serves artifacts and refuses the rest of the app", async (t) => {
+test("the artifact host serves artifacts and rejects requests for the rest of the app", async (t) => {
   const harness = createHarness(t);
 
   // The two routes that belong to this host still answer on it.

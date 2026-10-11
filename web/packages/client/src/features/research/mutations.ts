@@ -1,4 +1,4 @@
-// The mutations the document view owns and no other surface needs
+// Mutations used only by the document view
 // (`09-research-document-view.md` §4).
 //
 // The thread-level mutations (fork, cancel, retry, rename, remove, follow,

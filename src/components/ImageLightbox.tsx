@@ -6,13 +6,9 @@ import {
   subscribeImageLightbox,
 } from "../lib/imageLightbox";
 
-// Mounted once at the app root. Renders whatever image openImageLightbox last
-// set, full-size over a dimmed backdrop; dismissed by clicking anywhere or the
-// close button. Escape is handled by the app-level Escape dispatcher in App
-// (which reads this component's module store), so there is no keydown listener
-// here — the dispatcher stays the single source of truth for overlay order. The
-// image is already a loaded data URL, so there is no loading state here — the
-// thumbnail the user clicked shares the same cached bytes.
+// Mounted once at the app root. Displays the selected image over a backdrop.
+// The app-level dispatcher handles Escape according to overlay order. The
+// selected data URL is already loaded, so the lightbox needs no loading state.
 export default function ImageLightbox() {
   const state = useSyncExternalStore(subscribeImageLightbox, getImageLightbox, getImageLightbox);
 

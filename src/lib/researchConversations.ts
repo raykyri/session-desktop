@@ -12,7 +12,7 @@ import type { ActivityItem } from "./turnTimeline";
 /** Mirror of research.rs CONVERSATION_TOOL_ACTIVITY_TYPE. */
 export const CONVERSATION_TOOL_ACTIVITY_TYPE = "sessionToolActivity";
 
-/** The collapsed tool-call count carried by one marker value, or null when
+/** The collapsed tool-call count stored in one marker value, or null when
  * the value is not an export activity marker. A marker with a malformed
  * count still identifies as a marker (count 0) so it renders as a chip
  * rather than leaking raw JSON into the document. */
@@ -31,7 +31,7 @@ export function conversationToolCallCount(value: unknown): number | null {
     : 0;
 }
 
-/** Total collapsed tool calls carried by a timeline activity when every leaf
+/** Total collapsed tool calls in a timeline activity when every leaf
  * value is an export activity marker; null when anything else is present, so
  * the caller falls back to ordinary activity rendering. */
 export function conversationActivityToolCalls(activity: ActivityItem): number | null {

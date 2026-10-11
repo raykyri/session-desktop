@@ -4,7 +4,7 @@
 // A chip names the file and opens it in the preview panel
 // (`11-artifacts-and-browser.md` §3): the click mints a single-document token
 // and hands the URL to `ArtifactPanel`, which frames it. "Open in new tab"
-// lives in the panel's address row, so the chip no longer has to open a window
+// is in the panel's address row, so the chip no longer has to open a window
 // before the mint resolves to keep the user gesture alive.
 
 import { FileText } from "lucide-react";

@@ -67,7 +67,7 @@ test("malformed or unavailable session storage falls back safely and can be repa
   );
 });
 
-test("clearing the anchor leaves the feed at the top on the next visit", () => {
+test("clearing the anchor restores the feed at the top", () => {
   const saved = storage();
   saveActivityFeedState({ scroll: { key: "research:node-9", offset: 40 } }, saved);
   saveActivityFeedState({ scroll: null }, saved);

@@ -116,7 +116,7 @@ export function researchNode(fields: NodeFixture = {}): ResearchNode {
   }
 }
 
-/** `node` (an exchange) with its run patched, as a later event carries it. */
+/** Returns an exchange with the run changes supplied by a later event. */
 export function withRun(node: ResearchNode, patch: Partial<RunState>): ResearchNode {
   if (node.type !== "exchange") {
     throw new Error(`${node.id} has no run`);

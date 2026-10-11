@@ -26,7 +26,7 @@ export const BACKFILLS: readonly Backfill[] = [
   },
 ];
 
-/** Applies every backfill this build knows that the database has not recorded.
+/** Applies every backfill supported by this build that the database has not recorded.
  * Returns the ids applied, so boot can log them. */
 export function runBackfills(
   db: SessionDatabase,

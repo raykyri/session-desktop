@@ -49,7 +49,7 @@ const state: ResearchFolderState = {
 test("a tree's place: Archive by archivedAt, then its folder or Drafts, else Unfiled", () => {
   assert.equal(researchTreePlace(tree("a"), state), "f-read");
   assert.equal(researchTreePlace(tree("b"), state), RESEARCH_DRAFTS_FOLDER_ID);
-  // A membership whose folder no longer exists reads as Unfiled.
+  // A membership whose folder no longer exists is classified as Unfiled.
   assert.equal(researchTreePlace(tree("c"), state), RESEARCH_UNFILED_FOLDER_ID);
   assert.equal(researchTreePlace(tree("d"), state), RESEARCH_UNFILED_FOLDER_ID);
   // Archived trees show only in Archive, even while they keep a folder.
@@ -200,7 +200,7 @@ test("starred children list follow-ups as text rows and branches with a level", 
       { nodeId: "f", label: "Follow-up", branch: false, indent: 1, state: "answered" },
       { nodeId: "b", label: "Branch title", branch: true, indent: 1, state: "running" },
       { nodeId: "bb", label: "Deeper", branch: true, indent: 2, state: "answered" },
-      // A branch from a starred follow-up sits under it.
+      // A branch from a starred follow-up appears under it.
       { nodeId: "fb", label: "From the starred follow-up", branch: true, indent: 2, state: "answered" },
       { nodeId: "ub", label: "From another follow-up", branch: true, indent: 1, state: "answered" },
     ],

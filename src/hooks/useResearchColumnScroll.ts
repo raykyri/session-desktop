@@ -36,7 +36,7 @@ export function useResearchColumnScroll({
   const treeIdRef = useRef(treeId);
   treeIdRef.current = treeId;
   // Answer scroll offsets, per node, for this mount; the persisted store
-  // carries them across mounts.
+  // persists them across mounts.
   const answerScrollRef = useRef(new Map<string, number>());
   // Answers whose scroll offset has been restored since their column mounted.
   const restoredAnswerScrollRef = useRef(new Set<string>());
@@ -175,7 +175,7 @@ export function useResearchColumnScroll({
     /** Answers whose scroll offset has been restored since their column
      * mounted. */
     restoredAnswerScrollRef,
-    /** The scroll handler of a column that keeps its offset, else undefined. */
+    /** The scroll handler for a persisted column, or undefined. */
     onColumnScroll,
     captureScroll,
   };

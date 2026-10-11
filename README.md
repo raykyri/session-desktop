@@ -137,7 +137,7 @@ Plans and specifications are in [web/docs](web/docs), starting with
 
 ## Architecture
 
-The React frontend lives under `src/`. Research views, including the in-app
+The React frontend is under `src/`. Research views, including the in-app
 Home feed, are in `src/components/research/`. Durable research state
 and execution are implemented by `src-tauri/src/research.rs`,
 `research_runtime.rs`, and `state.rs`.

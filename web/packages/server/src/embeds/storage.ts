@@ -180,7 +180,7 @@ export interface EmbedStoreOptions {
 
 /**
  * The read path behind `GET /embeds/:hash`: the stored file, or one fetch of
- * the origin URL the row remembers. Concurrent requests for the same cold
+ * the origin URL stored in the row. Concurrent requests for the same cold
  * asset share one fetch — a feed of cards from one author asks for the same
  * avatar as many times as there are cards on screen.
  */

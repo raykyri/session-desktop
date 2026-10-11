@@ -105,7 +105,7 @@ New wire types: `User` (with `isAdmin`), `Workspace` (replaces `GroupInfo`),
 
 Column types are SQLite affinities via Drizzle (`text`, `integer`, `real`).
 `PK` = primary key, `FK` = foreign key with `ON DELETE CASCADE` unless noted.
-Every user-owned table carries `user_id` even where derivable, so scoping is
+Every user-owned table includes `user_id` even where derivable, so scoping is
 one predicate and indexes are simple.
 
 ### 3.1 Accounts
@@ -282,7 +282,7 @@ tree, as in `membership: HashMap<treeId, folderId>`.
 
 `embed_assets`
 - `hash` PK (SHA-256 of `source_url`, hex — the `/embeds/<hash>` a stored
-  snapshot carries), `source_url` text, `content_type` text null, `bytes`
+  snapshot includes), `source_url` text, `content_type` text null, `bytes`
   integer, `stored_at` integer null, `last_access_at`, `created_at`
 - Index: (`last_access_at`) — the sweep's eviction order
 - The mapping from a snapshot's rewritten image URL back to the origin one.
@@ -329,7 +329,7 @@ PK (`node_id`, `document_id`)
   review the SQL, commit both. CI fails if `db:generate` would produce a diff
   (`drizzle-kit check` plus a generate-and-git-diff step).
 - `openDatabase()` runs `migrate(db, { migrationsFolder })` before returning.
-  Server boot refuses to start if the database reports a migration the code
+  Server boot stops if the database reports a migration the code
   does not know (the desktop's "newer version ⇒ abort startup" contract,
   `persistence.rs:403`), by comparing `__drizzle_migrations` against the
   bundled journal.

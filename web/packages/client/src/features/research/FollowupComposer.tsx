@@ -4,7 +4,7 @@
 // beside a selected passage and creates a branch attached to that text. Docked
 // mode omits the mode picker.
 //
-// Mode is a property of the submission, so it lives on the control that
+// Mode is a property of the submission, so it is stored on the control that
 // submits rather than as a tab strip above the field: ⌘↵ sends in the selected
 // mode (which is what the button says), ⇧⌘↵ always branches.
 //

@@ -34,8 +34,8 @@ export function useSessionWidgetGuards({
       } else if (message?.type === "pong") {
         unansweredPingsRef.current = 0;
       } else if (message?.type === "unload") {
-        // The page's own guard saw its document unload: it navigated, possibly
-        // to a response that never completes (and so never fires load).
+        // The page guard detected that its document unloaded during navigation.
+        // The new response may never complete or fire a load event.
         callbacks.current.onNavigate();
       }
     };
@@ -43,7 +43,7 @@ export function useSessionWidgetGuards({
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
-  // Liveness: once the widget page has loaded, ping it every second. A
+  // Once the widget page has loaded, ping it every second. A
   // document that replaced it (a navigation the page could not cancel, even
   // one whose response never completes and so never fires load) does not
   // answer, and the frame is removed.
@@ -66,7 +66,7 @@ export function useSessionWidgetGuards({
     return () => window.clearInterval(timer);
   }, [pageLoaded, frameUrl, generation]);
 
-  // While the frame has focus, app shortcuts are claimed natively (the same
+  // While the frame has focus, the native layer handles app shortcuts (the same
   // fallback the browser overlay uses), since keys go to the framed document.
   useEffect(() => {
     const element = frameRef.current;
@@ -74,11 +74,11 @@ export function useSessionWidgetGuards({
   }, [frameUrl, generation]);
 
   // A running widget can call focus() on itself and take keyboard focus from
-  // whatever the reader is using in the app. Focus that enters the frame
-  // without the reader moving it there is handed back to the element that had
-  // it; a widget that takes it repeatedly has its scripts stopped (it returns
+  // another app control. Focus that enters the frame
+  // without a pointer or keyboard action returns to the previously focused
+  // element. If a widget repeatedly takes focus, its scripts are stopped (it returns
   // to its static page with a notice), since it would otherwise capture the
-  // reader's typing and keep the app's own keys away from it.
+  // user's typing and prevent app shortcuts.
   useEffect(() => {
     if (!running || !frameUrl) {
       return;

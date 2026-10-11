@@ -217,7 +217,7 @@ export function documentFollowupPrompt(title: string, markdown: string, question
       `Document exceeds maximum word count for follow-up prompts (${words} words; limit is ${MAX_RESEARCH_DOCUMENT_WORDS} words).`,
     );
   }
-  // The title lands inside a quoted attribute: strip quotes and collapse
+  // The title is inserted into a quoted attribute: strip quotes and collapse
   // whitespace so it cannot break out of the tag.
   const safeTitle = normalizedText(title.replace(/["\n\r]/g, " "));
   const document = `<document title="${safeTitle}">\n${markdown}\n</document>`;

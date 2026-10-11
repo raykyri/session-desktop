@@ -214,7 +214,7 @@ export function ResearchMenu({
    * Without either, Escape returns focus to what had it when the menu opened. */
   trigger?: HTMLElement | null;
   /** For a menu opened from something that is not an element, such as a
-   * highlighted passage: whether a pointerdown or click event lands on it.
+   * highlighted passage: whether a pointerdown or click event targets it.
    * Such a click closes the menu, as a click on `trigger` does. */
   isTriggerPress?: (event: MouseEvent) => boolean;
   label: string;

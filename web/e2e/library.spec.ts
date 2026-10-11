@@ -30,7 +30,7 @@ test("a bookmarked thread shows in Home and Bookmarks, and archiving hides it", 
   const bookmarks = page.getByRole("feed", { name: "Bookmarks" });
   await expect(bookmarks.getByRole("article").filter({ hasText: title }).first()).toBeVisible();
 
-  // Archive lives in the thread menu, which the sidebar row and the Home card
+  // Archive is in the thread menu, which the sidebar row and the Home card
   // share (`features/research/treeMenu.tsx`).
   const sidebar = page.getByRole("region", { name: "Research" });
   // The sidebar labels a row with the generated thread title, not the prompt,

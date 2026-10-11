@@ -510,7 +510,7 @@ pub fn preflight_state(workspace_root: &Path) -> Result<Option<Vec<u8>>, String>
 
     // Non-UTF-8, unparseable JSON, or a missing/older version is left for
     // `load_with_diagnostics`, which preserves the file as a `.bak` before starting
-    // fresh. `from_slice` rejects non-UTF-8 as a parse error, so it lands here too.
+    // current. `from_slice` rejects non-UTF-8 as a parse error, so it reaches this path too.
     let newer_version = serde_json::from_slice::<Value>(&raw)
         .ok()
         .and_then(|value| value.get("version").and_then(Value::as_u64))
@@ -999,14 +999,11 @@ pub fn backup_state_for_current_version(
 }
 
 /// Copies state.json to `backup_name` before a migration's save replaces it.
-/// An existing backup is never overwritten: it holds a state an earlier
-/// migration preserved (for example, this workspace's state before a
-/// downgrade and a later upgrade). When it holds other bytes, the source is
-/// copied to a sibling `<stem>.<millis>.bak` instead (`state.v7.<millis>.bak`
-/// beside `state.v7.bak`). No copy is written when the backup or one of its
-/// timestamped siblings already holds the source's bytes, so a migration
-/// that repeats because its save did not land adds no file, and a launch
-/// without a migration never calls this.
+/// An existing backup is never overwritten because it preserves state from an
+/// earlier migration, such as a downgrade followed by an upgrade. If it has
+/// different bytes, copy the source to a sibling `<stem>.<millis>.bak`
+/// (`state.v7.<millis>.bak` beside `state.v7.bak`). Do not add a copy when the
+/// source bytes already exist in the main backup or a timestamped sibling.
 fn backup_state_for_migration(
     workspace_root: &Path,
     backup_name: &str,
@@ -1193,7 +1190,7 @@ pub fn save(workspace_root: &Path, state: &PersistedState) -> Result<(), String>
     Ok(())
 }
 
-/// Removes scratch files stranded by earlier processes. A `save` interrupted
+/// Removes scratch files left by earlier processes. A `save` interrupted
 /// between writing its temp file and renaming it into place (process killed
 /// mid-quit, crash, …) leaves `state.json.<pid>.<seq>.tmp` behind forever. A
 /// scratch file whose writer pid is no longer alive can never be renamed into
@@ -1978,15 +1975,15 @@ mod tests {
         fs::write(&path, br#"{"version":7,"a":1}"#).unwrap();
         let first = backup_state_for_current_version(&root, 7).unwrap().unwrap();
         assert_eq!(first, dir.join("state.v7.bak"));
-        // The same source again (its save did not land): nothing new.
+        // The same source after an incomplete save does not add a backup.
         assert_eq!(
             backup_state_for_current_version(&root, 7).unwrap(),
             Some(first.clone())
         );
         assert_eq!(backups(), ["state.v7.bak"]);
 
-        // Another source while state.v7.bak holds the first: a timestamped
-        // sibling, and the first backup stays as it was.
+        // A different source creates a timestamped sibling without changing
+        // state.v7.bak.
         fs::write(&path, br#"{"version":7,"a":2}"#).unwrap();
         let second = backup_state_for_current_version(&root, 7).unwrap().unwrap();
         assert_ne!(second, first);
@@ -2054,7 +2051,7 @@ mod tests {
             handle.join().unwrap();
         }
 
-        // A complete, parseable snapshot survives and nothing is stranded.
+        // A complete, parseable snapshot remains and no scratch file is left.
         assert_eq!(load_with_diagnostics(&root).state.version, STATE_VERSION);
         let leftover_temps: Vec<_> = fs::read_dir(&parent)
             .unwrap()

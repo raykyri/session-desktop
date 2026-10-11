@@ -177,7 +177,7 @@ export interface LauncherSelectProps extends Omit<SelectProps, "placeholder"> {
  * and two focus scopes. `Menu` has `SubmenuRoot`/`SubmenuTrigger` built for
  * exactly this shape, so the primary options render as a `RadioGroup` (one
  * checked row, `menuitemradio` semantics) and the secondary choice as a
- * submenu. The library then owns the ArrowRight-opens / ArrowLeft-closes
+ * submenu. The library then handles the ArrowRight-opens / ArrowLeft-closes
  * behavior the desktop hand-rolled with `submenuAnchor` measurement.
  */
 export function LauncherSelect({

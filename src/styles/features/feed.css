@@ -644,10 +644,10 @@
   border-style: dashed;
 }
 
-/* — Cards: bubble rows. No fill or separators at rest; hover is an inset
-   rounded bubble (8px from the column edge, 6px in a folder tray) at 55% of
-   the selected fill; the row the keys act on has a faint accent ring. The
-   row text sits 20px from the column edge (14px in a folder tray). — */
+/* — Cards —
+   Rows have no default fill or separators. Hover uses 55% of the selected
+   fill, and keyboard focus adds an accent ring. Folder rows use smaller
+   horizontal insets than top-level rows. */
 
 .research-feed-card,
 .research-feed-child {
@@ -722,8 +722,8 @@
   bottom: -2px;
 }
 
-/* The whole card is one button under its content; links and embeds in the
-   content stay their own targets above it. */
+/* Place the open button behind the content so nested links and embeds remain
+   independent targets. */
 .research-feed-card-hit {
   position: absolute;
   inset: 0;
@@ -779,14 +779,9 @@
 
 /* — Row glyphs (ResearchRowGlyph) — */
 
-/* A 14px float at the start of the row's first line: the title when there is
-   one, else the question, a link card's URL or a tweet's header. It is
-   shorter than one line box, so the first line's text starts 6px after it
-   and every later line uses the full width. It is centered on the line by
-   its own line height (1lh), which it inherits from that line; 3px where
-   `lh` is not supported. A first word that does not fit beside the float
-   breaks there (overflow-wrap: anywhere on the row's text) rather than moving
-   below it; URLs, which have no other break points, break anywhere. */
+/* Float the 14px glyph beside the first line and allow later lines to use the
+   full width. The `1lh` margin centers it within the inherited line height;
+   3px is the fallback. Text and URLs may break beside the float. */
 .research-row-glyph {
   float: left;
   display: flex;
@@ -820,9 +815,8 @@
   color: var(--status-failed-fg);
 }
 
-/* The running pie pulses (1.4s, to 30% opacity); a row of another kind
-   whose thread is running pulses its whole shape. reduced-motion.css stops
-   both. */
+/* The running pie pulses to 30% opacity over 1.4 seconds. Other running row
+   types pulse the full glyph. reduced-motion.css disables both animations. */
 .research-row-glyph-pulse {
   animation: research-feed-pulse 1.4s ease-in-out infinite;
 }
@@ -864,7 +858,7 @@
   white-space: pre-line;
 }
 
-/* Under a title, the question's text is a tint weaker, as the starred child
+/* Under a title, the question uses a lower-contrast color, as the starred child
    rows' text is, and shows at most two lines. The clamp is on the text's own
    block, so link cards and embeds after it are not clamped and keep their
    colors. */
@@ -889,10 +883,9 @@
   margin-top: 6px;
 }
 
-/* The row's controls: the drag handle and the … button in one pill inside
-   the row's top-right corner. The pill shows on hover and focus; the text
-   runs under it, so no margin is reserved for it. The handle is not a target of its own: a press
-   on it reaches the row, which starts the drag. */
+/* The drag handle and … button share a pill in the row's top-right corner.
+   The pill appears on hover and focus and overlays the text without reserving
+   space. Pointer events on the handle reach the row to start dragging. */
 .research-feed-rail {
   position: absolute;
   top: 5px;
@@ -911,8 +904,8 @@
   pointer-events: none;
 }
 
-/* Shown at 85% opacity so the text under the pill stays faintly visible. A
-   thread's message rows use the same pill (see research.css). */
+/* Use 85% opacity to keep overlaid text visible. Message rows use the same
+   control pill (see research.css). */
 :is(.research-feed-card, .research-feed-child, .research-msg-row):is(:hover, :focus-within, .has-open-menu)
   > .research-feed-rail {
   opacity: 0.85;
@@ -1182,8 +1175,7 @@
   white-space: nowrap;
 }
 
-/* The text runs the full width; Remove floats over its top-right corner on
-   hover, in a pill like the feed rows' (.research-feed-rail). */
+/* Overlay Remove at the top right on hover, using the feed-row control style. */
 .research-highlight-item {
   position: relative;
 }

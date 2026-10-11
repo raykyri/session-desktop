@@ -1,6 +1,6 @@
 // Keys typed into a framed document never reach the app document's window
-// handlers, so app shortcuts go dead while a frame has focus. The native key
-// monitor claims ⌘ chords for Session while told a frame holds focus. Several
+// handlers, so app shortcuts do not fire while a frame has focus. The native
+// key monitor claims ⌘ chords for Session while a frame has focus. Several
 // frames can claim that (the browser overlay, answer widgets); this registry
 // samples which element has focus and reports one combined value, so one
 // frame's blur cannot clear another's claim.
@@ -42,7 +42,7 @@ export function createShortcutFallbackRegistry(environment: ShortcutFallbackEnvi
   };
   const events = ["blur", "focus", "focusin"] as const;
   return {
-    /** Claims the fallback while `frame` holds focus; returns the release. */
+    /** Claims the fallback while `frame` has focus; returns the release. */
     register(frame: unknown): () => void {
       if (frames.size === 0) {
         for (const type of events) environment.listen(type, schedule);
@@ -59,8 +59,8 @@ export function createShortcutFallbackRegistry(environment: ShortcutFallbackEnvi
             environment.cancelFrame(pending);
             pending = null;
           }
-          // WebKit fires no focus event for a removed element; release the
-          // claim explicitly instead of leaving it wedged on.
+          // WebKit fires no focus event for a removed element, so release the
+          // claim explicitly.
           report(false);
         } else {
           schedule();

@@ -123,7 +123,7 @@ test("the Ask picker lists each ready agent's models and one row per unready age
       ["codex:", "codex", true],
     ],
   );
-  // Agents are separated, and every row carries its agent's icon.
+  // Agents are separated, and every row includes its agent's icon.
   assert.equal(options[4].dividerBefore, true);
   assert.ok(options.every((option) => option.iconSrc !== undefined));
 });

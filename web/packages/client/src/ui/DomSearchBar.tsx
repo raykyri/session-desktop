@@ -32,7 +32,7 @@ export interface DomSearchBarProps {
 
 /**
  * Cmd-F search over rendered content, ported from the desktop `DomSearchBar.tsx`
- * (07 §7, 08 §4). The host supplies the text root and its viewport; this owns
+ * (07 §7, 08 §4). The host supplies the text root and its viewport; this handles
  * Range collection, Custom Highlight API painting, navigation, and rescans when
  * streaming content changes underneath.
  *
@@ -151,7 +151,7 @@ export function DomSearchBar({
     return () => window.clearTimeout(handle);
   }, [term]);
 
-  // The rescan reads refs and writes state, so it lives behind a ref that is
+  // The rescan reads refs and writes state, so a ref provides
   // refreshed on every commit rather than being memoized: a `useCallback` over
   // `rootRef.current` would claim a dependency it cannot actually observe.
   // This effect is declared first so the callback is current before the two
@@ -180,7 +180,7 @@ export function DomSearchBar({
     if (open) rescanRef.current(false);
   }, [open, debouncedTerm, caseSensitive, useRegex]);
 
-  // Rendered markdown changes without a prop this controller knows about
+  // Rendered markdown changes without changing a prop observed by this controller
   // (streaming text, diagrams, expanded details). Observe the DOM and coalesce
   // those rescans without moving the reader's viewport.
   useEffect(() => {

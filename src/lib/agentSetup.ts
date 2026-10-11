@@ -216,13 +216,9 @@ export function agentSetupIntro(adapters: readonly AgentAdapterMetadata[]) {
 
 type AgentSetupSummaryTone = "ready" | "attention" | "failed" | "neutral";
 
-/** The one-line readiness summary under "Agents" in the sidebar module.
- * `adapters` is null until the runtime config has loaded, and `probeError` is
- * the last readiness probe's error. Every probe sets checkedAt on the agents it
- * reports, so agents with none set are still waiting for the first probe.
- * Readiness counts use adapterSetupIsComplete, as the Agent Setup dialog's
- * heading does, so the sidebar and the dialog agree: an unverified sign-in or
- * an agent that cannot run research is not counted as ready. */
+/** Returns the readiness summary shown under Agents in the sidebar.
+ * `adapters` is null while runtime config loads. Agents without `checkedAt`
+ * have not been probed. The ready count uses the same rule as Agent Setup. */
 export function agentSetupSummary(
   adapters: readonly AgentAdapterMetadata[] | null,
   probeError: string | null,
@@ -268,12 +264,7 @@ export function agentSetupMenuDetail(adapter: AgentAdapterMetadata) {
   return adapter.target.kind === "remote" ? `${status} · ${adapter.target.label}` : status;
 }
 
-/** The facts about an agent's last check that help explain a failure, for
- * the setup and repair panels' Details disclosure: where it runs, the
- * executable Session launches (or the configured name it could not find),
- * the version and check time the probe reported, the reported problem, and
- * why sign-in could not be verified. Fields the probe did not report are
- * omitted rather than filled in. */
+/** Returns available probe details for setup and repair panels. */
 export function agentDiagnosticRows(adapter: AgentAdapterMetadata, now = Date.now()) {
   const rows: { label: string; value: string }[] = [
     { label: "Runs on", value: adapter.target.label },

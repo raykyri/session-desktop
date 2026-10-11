@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { clampSidebarWidth, maxSidebarWidth, SIDEBAR_MIN_WIDTH } from "../src/lib/sidebarLayout";
 
-test("the sidebar leaves the stage its minimum width, up to an absolute cap", () => {
+test("sidebar width preserves the minimum stage width up to the maximum sidebar width", () => {
   assert.equal(maxSidebarWidth(1600), 420);
   assert.equal(maxSidebarWidth(700.6), 320);
   assert.equal(maxSidebarWidth(500), SIDEBAR_MIN_WIDTH);

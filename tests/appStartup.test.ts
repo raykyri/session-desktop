@@ -71,7 +71,7 @@ test("cancelled initial reads cannot hydrate or reveal a later mount", async () 
   await settled();
 });
 
-test("cancellation guards pending selection application and detached secondary errors", async () => {
+test("cancellation prevents pending selection application and detached secondary errors", async () => {
   const selection = deferred<void>();
   const secondary = deferred<string>();
   let checkedCancellation = false;

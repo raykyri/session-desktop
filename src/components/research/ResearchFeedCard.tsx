@@ -92,10 +92,8 @@ export function researchFeedCardControl(
   );
 }
 
-/** The next step for focus waiting on a moved card's old … button
- * (`anchor`): wait while that button is still listed and focused; once it is
- * gone with focus left on the page body, focus the card in its new place;
- * drop it once focus went anywhere else. */
+/** Determine whether to wait for the old menu button to unmount, focus the
+ * moved card, or cancel because focus moved elsewhere. */
 export function researchCardRefocus(
   anchor: { isConnected: boolean },
   active: unknown,
@@ -105,17 +103,10 @@ export function researchCardRefocus(
   return active === null || active === body ? "focus" : "drop";
 }
 
-/** One thread in the feed, whatever its root is (a question, a post or a
- * document): the thread title (when it differs) and the root's message, with
- * no metadata row. Rows are bubbles: no fill at rest, an inset
- * rounded fill on hover and selection, and a faint ring on the focused row.
- * A separate column holds the row's glyph (ResearchRowGlyph): the root's
- * kind and the thread's state. The drag handle and … button show in a pill
- * in the top-right corner on hover and focus. The whole card opens the
- * thread; links and embeds inside it stay their own targets. Starred
- * children follow as indented rows of their own, each with a glyph for its
- * own state and the same margin controls; dragging one drags its
- * question. */
+/** Feed card for a thread rooted in a question, post, or document. It shows
+ * the title when distinct, the root content, a type/status glyph, and controls
+ * on hover or focus. The card opens the thread while nested links and embeds
+ * remain separate targets. Starred children appear as indented rows. */
 export default function ResearchFeedCard({
   cardId,
   dragKind = "tree",

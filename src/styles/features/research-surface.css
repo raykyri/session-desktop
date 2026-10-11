@@ -1,4 +1,4 @@
-/* Shared page chrome and reading recipes for Home and research threads.
+/* Shared layout and text styles for Home and research threads.
    Surface-specific layout belongs in research.css or feed.css; rules here
    should apply to both destinations without depending on import order. */
 
@@ -219,8 +219,8 @@
   --research-markdown-line-height-delta: 0.12;
 }
 
-/* Shared saved-item surface. Authored user messages deliberately remain
-   unboxed; link posts opt into this card recipe directly. */
+/* Shared card styling for saved items and link posts. User messages remain
+   unboxed. */
 .research-content-card {
   padding: 10px 14px;
   border-radius: 10px;
@@ -420,8 +420,7 @@ a.tweet-embed-author:hover {
   text-decoration: underline;
 }
 
-/* The timeline's own affordance for a post that runs past its preview, on
-   its own line under the text. */
+/* Show the timeline's More button below a post when its preview is truncated. */
 .tweet-embed-more {
   display: block;
   width: fit-content;
@@ -655,9 +654,8 @@ a.tweet-embed-more:hover {
   height: 13px;
 }
 
-/* Tweet attachments reuse the shared embed without inheriting the Home entry
-   wrapper. Each attachment gets its own inset outline so it reads as an embed,
-   rather than being separated from the authored prompt by a horizontal rule. */
+/* Tweet attachments reuse the shared embed without the Home entry wrapper.
+   An inset outline separates each embed from the prompt. */
 .research-message-attachments {
   margin-bottom: 2px;
 }

@@ -4,7 +4,7 @@
 // Pure, so the projection is testable without a DOM. The desktop kept the same
 // derivation behind a per-node cache keyed on content identity; here the query
 // cache already hands back a stable `Turn[]` unless the node changed, so the
-// memo lives on the component instead (09 §4, §9).
+// memo is attached to the component instead (09 §4, §9).
 
 import {
   stripSessionWidgetBlocks,

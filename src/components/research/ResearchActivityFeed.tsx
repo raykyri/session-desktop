@@ -196,10 +196,8 @@ interface ResearchFeedRow {
   position: number;
 }
 
-/** The cards of Home (Unfiled trees) or Bookmarks (bookmarked active
- * trees), in the tree order of `trees`. A loaded root whose tree is not in
- * `trees` yet (just created) lists first on Home, newest first. `roots` has
- * one root per tree. */
+/** Build Home or Bookmarks rows in tree order. On Home, newly loaded roots
+ * without a corresponding tree appear first in newest-first order. */
 export function researchFeedRows(
   view: "home" | "bookmarks",
   roots: ReadonlyMap<string, RecentResearchQuery>,
@@ -486,8 +484,7 @@ function ResearchActivityFeed({
   const [measurementVersion, setMeasurementVersion] = useState(0);
   const measurementFrameRef = useRef(0);
   const [viewport, setViewport] = useState({ scrollTop: 0, height: 800 });
-  // Skips the render when nothing moved; the anchor effect runs on every
-  // feed render and would otherwise schedule a second one.
+  // Avoid a second render when the anchor effect reports unchanged geometry.
   const updateViewport = useCallback((scrollTop: number, height: number) => {
     setViewport((current) =>
       current.scrollTop === scrollTop && current.height === height
@@ -537,9 +534,8 @@ function ResearchActivityFeed({
   const knownItemIdsRef = useRef(new Set(items.map((item) => item.nodeId)));
   const previousTopItemIdRef = useRef(items[0]?.nodeId ?? null);
 
-  // The feed column hides (display: none) while a narrow stage shows a thread.
-  // A hidden scroller reads as empty, so it saves nothing; when it shows
-  // again, it returns to the row it held before hiding.
+  // A narrow thread view hides the feed with display: none. Preserve its
+  // previous row because hidden scrollers report zero dimensions.
   const scrollerHiddenRef = useRef(false);
   const captureScrollState = useCallback(() => {
     const scroller = scrollRef.current;
@@ -702,9 +698,8 @@ function ResearchActivityFeed({
     }
   }, [rows]);
 
-  // Cards in and near the viewport whose root is not loaded ask for it, in
-  // one request per render. An id is asked once while it stays unloaded; a
-  // failed request is asked again by Retry.
+  // Load missing roots for cards in or near the viewport once per render.
+  // Keep ids pending until they load; Retry clears failed ids for another request.
   const requestedRootsRef = useRef(new Set<string>());
   const [rootLoadError, setRootLoadError] = useState<string | null>(null);
   const [rootLoadAttempt, setRootLoadAttempt] = useState(0);
@@ -748,9 +743,8 @@ function ResearchActivityFeed({
     }
   }, []);
 
-  // A card moved by ⌥↑/⌥↓ keeps focus and stays in view while the new order
-  // renders (the move applies after the folder store's write settles),
-  // unless focus went elsewhere.
+  // Preserve focus and visibility after an ⌥↑/⌥↓ reorder unless focus moved
+  // elsewhere while the folder update completed.
   const movedCardRef = useRef<{ cardId: string; until: number; revealed: boolean } | null>(null);
   const keepCardFocus = (cardId: string) => {
     movedCardRef.current = { cardId, until: performance.now() + 2000, revealed: false };
@@ -766,7 +760,7 @@ function ResearchActivityFeed({
     const active = document.activeElement;
     if (!hit || (active !== hit && active !== null && active !== document.body)) return;
     // Scrolls only when the card regains focus or first renders moved, so
-    // a later scroll by the reader is not undone.
+    // a later user scroll is not undone.
     if (active === hit && moved.revealed) return;
     moved.revealed = true;
     if (active !== hit) hit.focus({ preventScroll: true });

@@ -449,8 +449,8 @@ export interface AgentSpec {
   effort?: string | null;
 }
 
-/** An exchange's run. The run binding (session, agent, pane) stays in the
- * backend; these two flags carry what the interface needs from it. */
+/** An exchange's run. The backend stores the session, agent, and pane binding;
+ * these flags describe the state needed by the interface. */
 export interface RunState {
   status: ResearchNodeStatus;
   error?: string | null;
@@ -459,8 +459,8 @@ export interface RunState {
   errorKind?: "auth" | null;
   startedAt?: number | null;
   completedAt?: number | null;
-  /** Set when the durable response snapshot lands — the viewer's signal to
-   * refetch content it may have read before the adapter finished flushing. */
+  /** Set after the durable response snapshot is written so viewers can refetch
+   * content they may have read before the adapter finished flushing. */
   responseSnapshotAt?: number | null;
   /** The native session was recorded, so a follow-up can fork it. */
   sessionReady: boolean;

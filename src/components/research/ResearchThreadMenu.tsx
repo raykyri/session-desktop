@@ -121,7 +121,7 @@ export function ResearchThreadMenu({
   openBranchIds: ReadonlySet<string>;
   /** A retry or rerun request is in flight. */
   relaunchPending: boolean;
-  /** Whether a press lands on the passage a passage menu was opened from. */
+  /** Whether a press targets the passage that opened the passage menu. */
   isPassagePress: (
     event: MouseEvent,
     passage: { nodeId: string; branchIds: string[]; highlightId: string | null },
@@ -302,7 +302,7 @@ export function ResearchThreadMenu({
         <div id="research-answer-menu-meta">
           {stats ? <ResearchMenuMeta>{stats}</ResearchMenuMeta> : null}
           {hiddenHighlights > 0 ? (
-            <ResearchMenuMeta title="These saved highlights couldn't be located in the current view. Their passages may sit in content that isn't rendered right now.">
+            <ResearchMenuMeta title="These saved highlights aren't in the current view. They may refer to content that isn't currently displayed.">
               {hiddenHighlights} {hiddenHighlights === 1 ? "highlight" : "highlights"} not visible in this view
             </ResearchMenuMeta>
           ) : null}

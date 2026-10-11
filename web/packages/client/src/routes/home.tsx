@@ -1,5 +1,5 @@
 // Home (`10-home-feed-journal.md` §1): the reading-surface column
-// with the composer (which carries the report import control) and the
+// with the composer (which includes the report import control) and the
 // activity feed.
 
 import { useRef } from "react";

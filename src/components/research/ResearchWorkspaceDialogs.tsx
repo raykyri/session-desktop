@@ -81,8 +81,7 @@ export function ResearchWorkspaceRenameDialog({
 }) {
   const [value, setValue] = useState(initialName);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  // Focus and select the name when the dialog opens, so the user can type a
-  // new name straight away.
+  // Focus and select the name when the dialog opens for immediate editing.
   useEffect(() => {
     const input = inputRef.current;
     input?.focus();

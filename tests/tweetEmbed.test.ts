@@ -51,7 +51,7 @@ test("tweet card offers Show more on a long post", () => {
   assert.match(html, /…/);
 });
 
-test("tweet card in Home opens nothing on X, so a click reaches the feed row", () => {
+test("clicking a Home tweet card activates the feed row without opening X", () => {
   const long = renderToStaticMarkup(
     createElement(TweetEmbed, { tweet: snapshot("1623411400545632256"), compact: true, openable: false }),
   );
@@ -69,7 +69,7 @@ test("tweet card in Home opens nothing on X, so a click reaches the feed row", (
 
 test("tweet card lays out one compact header line, full-width text, and a footer of timestamp and counts", () => {
   const html = renderTweet(snapshot("20"));
-  // The header is one line: a 20px avatar, the name (its tooltip carries the
+  // The header is one line: a 20px avatar, the name (its tooltip contains the
   // handle), the badge and the handle for screen readers. The timestamp
   // starts the footer, before the counts.
   assert.match(html, /tweet-embed-head"><a class="tweet-embed-avatar-link"/);

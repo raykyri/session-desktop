@@ -126,7 +126,7 @@ expire on their own.
 | `npm run db:admin -- <github login>` | Grants admin, which unlocks Claude Fable and the user list |
 | `npm run db:studio`                  | Browse the database                                        |
 
-State lives in `web/.data` — the database, uploaded documents, temp files.
+Runtime state is stored in `web/.data` — the database, uploaded documents, temp files.
 Delete the directory to start clean.
 
 ### Running with no credentials (for testing, etc.)
@@ -247,7 +247,7 @@ routing into a process that cannot finish what it accepts.
 
 Sign in once through the browser so the account exists, then flip the flag on
 the machine. `npm run db:admin` does not work there — the runtime image
-carries the server bundle and production dependencies only, with no sources
+contains the server bundle and production dependencies only, with no sources
 and no `tsx`:
 
 ```sh
@@ -291,7 +291,7 @@ marked `interrupted`, re-queued at the head and resumed automatically on boot.
 Users see a pause, not a loss.
 
 **There is no rollback path.** Migrations run forward on boot and the server
-refuses a database carrying a migration it does not know, so redeploying an
+does not start if the database has a migration unsupported by the image, so redeploying an
 older image after a migration will not start. Roll forward instead.
 
 **Limits are on.** `SESSION_ENFORCE_LIMITS=1` in `fly.toml` caps daily tokens

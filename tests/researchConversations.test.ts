@@ -55,7 +55,7 @@ test("exported marker turns surface as countable activities on the timeline", ()
   const activities = items.flatMap((item) => item.activities);
   assert.equal(activities.length, 1);
   assert.equal(conversationActivityToolCalls(activities[0]), 2);
-  // Every text turn survives as a message item in order.
+  // Every text turn remains a message item in order.
   assert.deepEqual(
     items.filter((item) => item.blocks.length > 0).map((item) => item.role),
     ["user", "assistant", "user", "assistant"],

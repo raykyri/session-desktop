@@ -42,21 +42,21 @@ const MIN_BROWSER_OVERLAY_WIDTH = 360;
 const MIN_BROWSER_OVERLAY_HEIGHT = 240;
 const BROWSER_OVERLAY_LEFT_INSET_FALLBACK = 64;
 const BROWSER_OVERLAY_BOTTOM_INSET = 50;
-// Chromium pushes a frame whenever the mirrored page composites, so the only
-// polling left is a metadata refresh: it keeps the address bar current and
+// Chromium sends a frame whenever the mirrored page composites. Polling only
+// refreshes metadata to update the address bar and
 // restarts the stream after the overlay is resized or its tab is replaced.
 const SCREENCAST_HEARTBEAT_MS = 1000;
-// A headless build that refuses to composite would leave the mirror blank
-// forever, so give the first frame a deadline and fall back to screenshots.
+// If a headless build does not composite, switch to screenshots when the first
+// frame misses this deadline.
 const SCREENCAST_FIRST_FRAME_MS = 2500;
 // Screencast frames are always CSS-resolution — Chromium's screencast scale
 // only ever shrinks a frame, so no device scale makes it stream at 2x. Once
 // the page stops compositing, replace the last frame with a screenshot, which
-// does honour the emulated scale and comes back Retina-sharp.
+// honors the emulated scale and uses the display resolution.
 const SCREENCAST_SETTLE_MS = 250;
 // Chromium occasionally composites once more just after a capture. That frame
 // shows what the capture already shows, at half the resolution, so displaying
-// it would soften a settled mirror for no reason.
+// it would replace the higher-resolution screenshot with a lower-resolution frame.
 const SCREENCAST_SETTLE_ECHO_MS = 200;
 const SNAPSHOT_POLL_MS = 500;
 const HUMAN_BROWSER_LOCATION_POLL_MS = 500;
@@ -89,14 +89,14 @@ function cssPixelValue(value: string, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-// The browser overlay floats over the sidebar + center terminal (leaving a left
+// The browser overlay is positioned over the sidebar and center terminal (leaving a left
 // strip of the tabs visible) and renders a URL bound to the active tab. A minimal
 // navigation bar at the top shows the current URL and lets the user navigate. The
 // close control stays on the left while browser-engine selection stays on the right.
 interface BrowserOverlayProps {
   paneId: string;
   url: string | null;
-  // Bumped when a URL must be replayed. Human-browser Refresh uses the native
+  // Bumped when a URL must be replayed. Browser Refresh uses the native
   // reload command directly so a just-changed page URL cannot be overwritten.
   reloadNonce: number;
   // True for token-bearing file-server URLs: sandbox the frame so served (possibly
@@ -152,8 +152,8 @@ export default function BrowserOverlay({
   onResize,
   onFullWidthChange,
 }: BrowserOverlayProps) {
-  // Editable copy of the address, re-synced whenever the loaded URL changes so the
-  // bar tracks navigation without clobbering what the user is mid-typing.
+  // Editable copy of the address, updated when the loaded URL changes without
+  // replacing text while the user is editing it.
   const [draft, setDraft] = useState(url ?? "");
   const [resizing, setResizing] = useState(false);
   const [humanBrowserError, setHumanBrowserError] = useState<string | null>(null);
@@ -163,9 +163,9 @@ export default function BrowserOverlay({
   const [automationSnapshot, setAutomationSnapshot] = useState<BrowserAutomationSnapshot | null>(
     null,
   );
-  // The live mirror image — a streamed frame, or the sharper capture it
-  // settles on. Held apart from the metadata above so a heartbeat that carries
-  // no screenshot can't blank the view between frames.
+  // The displayed browser image: either a streamed frame or a higher-resolution
+  // screenshot. It is separate from metadata so an update without an image does
+  // not clear the current frame.
   const [mirrorFrame, setMirrorFrame] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -441,8 +441,8 @@ export default function BrowserOverlay({
     let snapshotTimer: number | null = null;
     let requestInFlight = false;
     let streaming = false;
-    // Bumped by every streamed frame so a slow refinement capture can tell it
-    // has been overtaken by newer motion and drop its result.
+    // Incremented for every streamed frame so an older screenshot request can
+    // discard its result after a newer frame arrives.
     let frameSequence = 0;
     let settledAt = 0;
 
@@ -513,9 +513,9 @@ export default function BrowserOverlay({
       snapshotTimer = window.setInterval(() => void pollSnapshot(), SNAPSHOT_POLL_MS);
     };
 
-    // Trade the last streamed frame for a screenshot at the display's scale.
-    // A capture occasionally nudges Chromium into compositing once more; the
-    // echo window below keeps that from softening the mirror back down.
+    // Replace the last streamed frame with a screenshot at the display scale.
+    // A capture can cause one more Chromium composite; ignore that duplicate
+    // frame briefly to preserve the screenshot's resolution.
     const settleAtDisplayScale = async () => {
       if (cancelled || snapshotTimer !== null) {
         return;
@@ -536,7 +536,7 @@ export default function BrowserOverlay({
         setMirrorFrame(snapshot.imageDataUrl);
         settledAt = performance.now();
       } catch {
-        // The stream is still the source of truth; the next quiet moment retries.
+        // Keep the streamed frame and retry after the next pause between frames.
       } finally {
         requestInFlight = false;
       }
@@ -598,15 +598,14 @@ export default function BrowserOverlay({
         window.clearTimeout(firstFrameTimer);
         firstFrameTimer = null;
       }
-      // An echo is still worth re-settling on — if the page genuinely changed,
-      // the capture that follows picks it up sharply — it just isn't worth
-      // showing in place of the capture it echoes.
+      // After a screenshot, ignore a duplicate lower-resolution stream frame.
+      // The following screenshot still records any page change.
       if (performance.now() - settledAt >= SCREENCAST_SETTLE_ECHO_MS) {
         setMirrorFrame(frame.imageDataUrl);
       }
       armSettle();
-      // Frames carry the tab's current identity, so navigation shows up in the
-      // address bar as soon as it paints rather than on the next heartbeat.
+      // Frames include the tab URL and title, so update the address bar without
+      // waiting for the next metadata poll.
       setAutomationSnapshot((previous) =>
         previous && (previous.url !== frame.url || previous.title !== frame.title)
           ? { ...previous, url: frame.url, title: frame.title }
@@ -657,10 +656,10 @@ export default function BrowserOverlay({
 
   // Keys typed into the framed page belong to its document: the host
   // document's window-level shortcut handlers never fire, and the native key
-  // monitor deliberately leaves keys to a healthy WKWebView responder — so
+  // monitor leaves keys to a responsive WKWebView, so
   // every app shortcut (⌘-backtick, the ⌘⇧E toggle that closes this overlay…)
-  // goes dead the moment a click lands inside the frame. The shared registry
-  // reports frame focus to the native layer, which then claims ⌘ chords for
+  // stops working after the frame receives focus. The shared registry reports
+  // frame focus to the native layer, which then handles ⌘ chords for
   // Session (see lib/iframeShortcutFallback). Answer widget frames register
   // with the same registry.
   useEffect(() => {

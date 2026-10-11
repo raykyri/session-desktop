@@ -1,7 +1,7 @@
 // The sidebar's dialogs (`ResearchFolderDialog.tsx`, the rename and delete
 // dialogs inside `ResearchSidebarSection.tsx`), on the shared `Dialog` wrapper.
 //
-// Base UI owns focus trapping, scroll locking and nested dismissal, so these
+// Base UI handles focus trapping, scroll locking and nested dismissal, so these
 // are the copy and the one field each — the desktop's hand-built backdrops,
 // `showModal()` calls and Escape handlers are gone (08 §4, ADR-9).
 

@@ -40,7 +40,7 @@ const MAX_INLINE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_CODEX_INLINE_VIS_BYTES: u64 = 2 * 1024 * 1024;
 const HTML_PREVIEW_SCROLL_SCRIPT: &str = r#"(()=>{let f=0;addEventListener('scroll',()=>{cancelAnimationFrame(f);f=requestAnimationFrame(()=>parent.postMessage({type:'session-preview-scroll',x:scrollX,y:scrollY},'*'))},{passive:true});addEventListener('message',e=>{const d=e.data;if(d?.type!=='session-preview-scroll-restore'||!Number.isFinite(d.x)||!Number.isFinite(d.y))return;requestAnimationFrame(()=>requestAnimationFrame(()=>scrollTo(d.x,d.y)))})})();"#;
 /// Cap on concurrent connection-handler threads. Each connection serves one
-/// request then closes, so this bounds in-flight requests; 64 comfortably covers
+/// request then closes, so this bounds in-flight requests; 64 covers
 /// a browser overlay fetching a page full of assets in parallel while keeping a
 /// connection-spamming local process from exhausting threads/FDs. At the cap the
 /// accept loop blocks and excess connections wait in the kernel listen backlog.
@@ -928,9 +928,9 @@ fn render_codex_inline_visualization_page(
 /// Reports the widget page's content height to the embedding answer, which sizes
 /// its frame to fit. With the navigation guard and the scroll bridge, it is the
 /// only script the static page's CSP admits (by hash). It runs from `<head>`,
-/// before the widget's HTML, so markup the widget leaves open (`<textarea>`,
-/// `<!--`, `<script>`) cannot swallow it, and starts observing `<body>` once
-/// parsing has created it.
+/// before the widget's HTML, so unclosed widget markup (`<textarea>`, `<!--`,
+/// `<script>`) cannot affect it. It starts observing `<body>` once parsing has
+/// created the element.
 ///
 /// - Content sized from the viewport (`100vh`) grows with every report: the
 ///   frame grows by the reported height, the content by the same amount. When
@@ -948,16 +948,16 @@ const WIDGET_HEIGHT_SCRIPT: &str = r#"(()=>{let h=-1,gap=-1,repeats=0,cap=Infini
 /// any widget code:
 /// - cancels link and area activations (`click`, also from the keyboard) whose
 ///   target is not a `#fragment`, so a click inside the widget sends nothing;
-/// - answers the answer's liveness pings (`session-widget-ping`) with a pong
-///   through the parent captured at startup. A document that replaced the
+/// - responds to the embedding answer's liveness messages (`session-widget-ping`)
+///   through the parent captured at startup. A replacement document
 ///   widget page (`location = …` on the run page, which no script can cancel:
 ///   the Navigation API's navigate event is disabled for opaque origins) does
 ///   not answer, including one whose response never completes and so never
 ///   fires `load`; the answer then removes the frame;
 /// - tells the answer when the document unloads (`session-widget-unload`, from
 ///   `pagehide`), where the engine delivers that message.
-/// The listeners are registered before any widget code can register its own,
-/// so a widget cannot stop them from seeing a click or a ping.
+/// The listeners are registered before widget code, so widget handlers cannot
+/// prevent them from receiving a click or ping.
 const WIDGET_NAVIGATION_GUARD_SCRIPT: &str = r#"(()=>{const p=parent;addEventListener('pagehide',()=>p.postMessage({type:'session-widget-unload'},'*'));addEventListener('message',(e)=>{const d=e.data;if(e.source===p&&d&&d.type==='session-widget-ping')p.postMessage({type:'session-widget-pong',id:d.id},'*')});const local=(h)=>typeof h==='string'&&h.trim().startsWith('#');addEventListener('click',(e)=>{const t=e.target;const a=t&&t.closest?t.closest('a[href],a[*|href],area[href]'):null;if(a&&!local(a.getAttribute('href')))e.preventDefault()},true)})();"#;
 
 /// Run page only, before any widget script: removes the WebRTC constructors
@@ -975,8 +975,7 @@ const WIDGET_PRELUDE_SCRIPT: &str = r#"(()=>{for(const n of["RTCPeerConnection",
 /// its element to `<body>` on the first error.
 const WIDGET_ERROR_SCRIPT: &str = r#"(()=>{const reveal=(m)=>{let n=document.getElementById('session-visualization-error');if(!n){if(!document.body)return;n=document.createElement('div');n.id='session-visualization-error';n.className='session-visualization-error';n.setAttribute('role','alert');document.body.prepend(n)}n.textContent=m;n.hidden=false};addEventListener('error',(e)=>reveal(e.target===window?'This widget encountered an error.':'This widget could not load one of its resources.'),true);addEventListener('unhandledrejection',()=>reveal('This widget encountered an error.'))})();"#;
 
-/// Powerful features a widget never needs, denied for the widget page and
-/// everything it embeds.
+/// Browser features disabled for the widget page and its embedded content.
 const WIDGET_PERMISSIONS_POLICY: &str = "camera=(), microphone=(), geolocation=(), \
      display-capture=(), usb=(), serial=(), hid=(), payment=(), midi=(), \
      clipboard-read=(), clipboard-write=(), fullscreen=(), screen-wake-lock=(), \
@@ -1028,7 +1027,7 @@ fn widget_csp(port: u16, mode: WidgetMode) -> String {
 /// The page for one answer widget: the Codex fragment wrapper (theme tokens,
 /// body font, utility classes) with Session's scripts in `<head>` and the
 /// widget's HTML, with `http-equiv` neutralised, as the whole `<body>`. The
-/// navigation guard comes first; the run page also carries the WebRTC prelude
+/// navigation guard comes first; the run page also includes the WebRTC prelude
 /// and the error reporter.
 fn render_widget_page(source: &str, body_font_id: Option<&str>, mode: WidgetMode) -> String {
     let css = CODEX_INLINE_VIS_CSS
@@ -1902,8 +1901,8 @@ mod tests {
             // The only http-equiv left is Session's own DNS-prefetch pragma.
             assert_eq!(page.matches("http-equiv").count(), 1, "{page}");
             assert!(page[body_start..].contains("data-HTTP-EQUIV=\"refresh\""));
-            // The unclosed <textarea> can only swallow what follows it, which
-            // is no Session script.
+            // The unclosed <textarea> can affect only the following markup,
+            // which contains no Session script.
             assert!(!page[body_start..].contains("<script>"), "{page}");
         }
     }

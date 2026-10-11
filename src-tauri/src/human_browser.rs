@@ -754,7 +754,7 @@ pub fn human_browser_navigate_history(
 
 /// A main-document reload destroys the frontend authority for child visibility.
 /// Close every child and advance the document generation so commands already
-/// in flight from the old document cannot resurrect one over the reload.
+/// in flight from the old document cannot replace one created after the reload.
 pub fn reset_all(app: &AppHandle) {
     let Some(manager) = app.try_state::<HumanBrowserManager>() else {
         return;

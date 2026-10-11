@@ -49,7 +49,7 @@ const researchSearchSchema = z.object({
   ws: z.string().optional(),
   /** The node the document view is showing. */
   node: z.string().optional(),
-  /** A highlight to scroll to and focus once the document lands. */
+  /** A highlight to scroll to and focus once the document loads. */
   highlight: z.string().optional(),
   filter: z.enum(["active", "archived", "all"]).optional(),
   feed: z.string().optional(),
@@ -74,7 +74,7 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({ component: Outle
 
 /** The kitchen sink (08 §4) is registered only in development and loaded
  * lazily, so the module is a chunk production never references. `import.meta`
- * carries no `env` outside the bundler, and AVA imports this module directly,
+ * has no `env` outside the bundler, and AVA imports this module directly,
  * so the check tolerates its absence. */
 const isDevelopment = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
 

@@ -65,7 +65,7 @@ export interface AnchoredCardPlacement {
  * desired-top order, each no higher than the previous card's bottom plus a gap.
  *
  * Heights depend only on card content — never on the tops this assigns — so a
- * single downward pass settles the layout with no feedback loop. Ties break on
+ * single downward pass computes the layout with no feedback loop. Ties break on
  * id so equal desired tops keep a stable order across renders.
  */
 export function resolveAnchoredCardTops(

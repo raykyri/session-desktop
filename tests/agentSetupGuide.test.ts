@@ -352,7 +352,7 @@ test("the start action is offered only where the guide can return to research", 
   assert.doesNotMatch(html, /Start research with/);
 });
 
-test("an unverified agent offers an explicit attempt, not a completed state", () => {
+test("an unverified agent shows a start action and remains incomplete", () => {
   const unverified: AgentAdapterMetadata = {
     ...checked("codex", "ready"),
     auth: "unknown",
@@ -368,7 +368,7 @@ test("an unverified agent offers an explicit attempt, not a completed state", ()
   assert.match(html, /Set up an agent/);
 });
 
-test("an agent that cannot run research offers no research action", () => {
+test("an agent that cannot run research shows no research action", () => {
   const remote: AgentAdapterMetadata = {
     ...checked("codex", "ready"),
     researchReadiness: "error",
@@ -387,7 +387,7 @@ test("without a chosen agent the guide opens on the first incomplete one", () =>
 });
 
 test("an update without a known updater names no command", () => {
-  // Nothing establishes which package manager or installer owns the
+  // Nothing establishes which package manager or installer supplied the
   // executable, so no command is invented for it.
   const outdated: AgentAdapterMetadata = {
     ...checked("codex", "unsupportedVersion"),

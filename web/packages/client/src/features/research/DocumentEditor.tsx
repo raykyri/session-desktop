@@ -3,7 +3,7 @@
 // Document *creation* is not exposed — legacy imported reports are the only
 // documents that exist — but editing one is, so a pasted report can be fixed
 // without losing the thread hanging off it. The save carries the revision, the
-// title and the highlight ids the editor opened with: the server refuses the
+// title and the highlight ids the editor opened with: the server rejects the
 // write if any of them moved, which is what keeps two tabs from silently
 // overwriting each other.
 //

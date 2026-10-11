@@ -158,13 +158,9 @@ export function useResearchNavigation(
   const refreshResearchNavigation = useCallback(async (
     options: { resetLoadedTail?: boolean } = {},
   ): Promise<ResearchTreeSummary[] | null> => {
-    // Bump-and-check like every other refetch here (agents, panes, groups,
-    // the research detail): refreshes overlap — the debounced event refresh
-    // races the direct calls from archive/remove/submit — and the two list
-    // invokes below resolve independently, so without the guard a slower,
-    // older snapshot can be applied last and sit there (a stale "running"
-    // badge, a resurrected unseen flag, a re-listed removed tree) until the
-    // next research event.
+    // Refreshes can overlap, and the list calls below resolve independently.
+    // Apply only the latest request so an older snapshot cannot restore a
+    // running badge, unseen flag, or removed tree.
     const requestSeq = researchNavRefreshSeqRef.current + 1;
     researchNavRefreshSeqRef.current = requestSeq;
     const activityRequestSeq = recentActivityHeadRequestSeqRef.current + 1;
@@ -209,10 +205,8 @@ export function useResearchNavigation(
           return next;
         });
       }
-      // The backend can remove the selected tree out from under the UI (a root
-      // launch that failed removes its never-launched tree). Left selected, the
-      // thread page would spin on a tree that no longer exists with nothing able to
-      // recover it — clear the selection so the empty state takes over.
+      // A failed root launch can remove the selected tree. Clear the selection
+      // so the thread page does not keep loading a tree that no longer exists.
       const activeTreeId = activeResearchTreeIdRef.current;
       if (activeTreeId && !trees.some((tree) => tree.id === activeTreeId)) {
         recordResearchVisit({ kind: "home" });
@@ -258,9 +252,9 @@ export function useResearchNavigation(
         return;
       }
       if (researchViewAckInFlightRef.current.has(treeId)) {
-        // A navigation result that discovered a newer settlement while an
-        // exposure-edge acknowledgment was in flight needs one trailing scan.
-        // Plain focus/visibility duplicates can share the current request.
+        // If a navigation result found unseen activity during an acknowledgment,
+        // schedule another check. Focus and visibility duplicates reuse the
+        // current request.
         if (options.knownUnseen) {
           researchViewAckPendingRef.current.add(treeId);
         }
@@ -269,19 +263,14 @@ export function useResearchNavigation(
       researchViewAckInFlightRef.current.add(treeId);
       try {
         await markResearchTreeViewed(treeId);
-        // A refresh can already hold a pre-view snapshot even when its unseen
-        // flag has not reached React state yet. Capture that after the mark
-        // completes: if the request finishes before this continuation, the
-        // local clear below corrects its result; if it is still running, the
-        // replacement refresh supersedes it by sequence number.
+        // A refresh may contain a snapshot from before the acknowledgment even
+        // if its unseen flag has not reached React state. Check for it after the
+        // acknowledgment completes.
         const staleNavigationMayStillLand = researchNavRefreshInFlightRef.current > 0;
         clearResearchUnseen(treeId);
-        // A navigation refresh started before the view was recorded holds a
-        // snapshot with the badges still lit; applied after the local clear it
-        // would resurrect them — and with the run settled, no later event would
-        // ever correct it. Refetch when a badge was already lit or a navigation
-        // request can still land: the fresh request supersedes any pre-view
-        // snapshot (bump-and-check above) and carries the acknowledged flags.
+        // Refetch if a badge was set or an older navigation request is pending.
+        // The request sequence prevents a pre-acknowledgment snapshot from
+        // restoring cleared badges.
         if (hadUnseen || staleNavigationMayStillLand) {
           void refreshResearchNavigation().catch(() => undefined);
         }
@@ -413,8 +402,8 @@ export function useResearchNavigation(
   );
   const openResearchHighlight = useCallback(
     (item: ResearchHighlightFeedItem) => {
-      // Recorded before navigation so the thread page's visit restore can
-      // land on the passage instead of the saved scroll offset.
+      // Record the highlight before navigation so visit restoration selects it
+      // instead of applying the saved scroll offset.
       const navigationStore = researchNavigationStore();
       const navigation = (navigationStore[item.treeId] ??= { scrollByNode: {} });
       navigation.focusHighlight = { nodeId: item.nodeId, highlightId: item.highlightId };
@@ -514,8 +503,8 @@ export function useResearchNavigation(
     updateResearchVisits(() => step.history);
     applyResearchVisit(step.visit);
   }, [applyResearchVisit, researchVisitsRef, updateResearchVisits]);
-  // The thread page's reports: the reader's own navigation pushes a visit;
-  // a selection the page made itself (the message it restored on opening)
+  // User navigation in the thread page pushes a visit; an automatic selection
+  // (the message restored on opening)
   // replaces the visit on screen when that is a visit to this thread.
   const reportResearchNavigation = useCallback(
     (treeId: string, nodeId: string, mode: "push" | "replace") => {

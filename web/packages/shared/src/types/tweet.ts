@@ -1,7 +1,7 @@
 // The hydrated form of an X post, stored on a journal entry or a research
 // message attachment. Ported from the desktop `src/lib/journalTweets.ts`.
 // The snapshot — not the raw syndication payload — is the persisted format,
-// so its shape changes deliberately; `journal/tweets.ts` owns the
+// so its shape changes deliberately; `journal/tweets.ts` defines the
 // normalization that produces it.
 
 import { z } from "zod";

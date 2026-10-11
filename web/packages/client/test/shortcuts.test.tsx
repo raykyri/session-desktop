@@ -149,7 +149,7 @@ test.serial(
     const palette = await screen.findByRole("dialog", { name: "Command palette" });
 
     press("Escape", {}, palette);
-    t.deepEqual(dismissed, [], "Base UI owns dismissal while its layer is open (07 §4.4)");
+    t.deepEqual(dismissed, [], "Base UI handles dismissal while its layer is open (07 §4.4)");
     await waitUntil(
       t,
       () => screen.queryByRole("dialog", { name: "Command palette" }) === null,

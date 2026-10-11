@@ -257,7 +257,7 @@ export function useActivityFeed(scope: {
 export interface NodeContentView {
   content: ResearchNodeContent | undefined;
   /** Committed turns, from the live buffer while a run streams and from the
-   * durable snapshot once it settles. */
+   * durable snapshot once it completes. */
   turns: Turn[];
   /** Text produced since the last committed turn. */
   inFlightText: string;
@@ -302,7 +302,7 @@ function useSnapshotPollFallback(): boolean {
  * The snapshot seeds the live buffer with the sequence number it was taken at,
  * and the bridge applies only the next delta in sequence, refetching the
  * snapshot on a gap rather than rendering content with a piece missing. When
- * the run settles the buffer is dropped in the same pass that installs the
+ * the run completes, the buffer is dropped in the same pass that installs the
  * durable snapshot, so the timeline does not flash: both paths produce the
  * same `Turn[]`.
  */

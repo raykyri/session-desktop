@@ -536,7 +536,7 @@ test.serial("the new-activity counter offers the way back to the head", async (t
   await waitUntil(
     t,
     () => screen.queryAllByText("An older question?").length > 0,
-    "the older page lands",
+    "the older page loads",
   );
   await scrollFeedTo(900);
 

@@ -46,7 +46,7 @@ import SessionWidget, { SessionWidgetPending, SessionWidgetStreamingContext } fr
 // chunk instead of the startup bundle. Unlike diagrams it cannot load on
 // demand — rehype plugins run synchronously inside ReactMarkdown — so the
 // chunk starts fetching as soon as this module loads and mounted transcripts
-// swap the plugins in via useSyncExternalStore once it lands. Until then
+// enable the plugins through useSyncExternalStore after the chunk loads. Until then
 // (and if the chunk fails to load) text renders with the base plugins and
 // TeX stays visible as its literal source.
 type MarkdownPluginList = NonNullable<Options["remarkPlugins"]>;
@@ -202,7 +202,7 @@ interface MathPlugins {
   rehype: MarkdownPluginList;
 }
 
-// The wikilink transform rides in both lists so key terms render as links from
+// The wikilink transform is included in both lists so key terms render as links from
 // the first paint instead of appearing once the math chunk swaps in.
 const baseRemarkPlugins: MarkdownPluginList = [
   remarkGfm,
@@ -414,8 +414,8 @@ function CodexVisualizationAttachment({
           await onOpen(reference);
           setOpenState("idle");
         } catch {
-          // The owning app action keeps the detailed failure in Session's global
-          // error surface; this local state leaves an obvious retry affordance
+          // The app action reports the detailed failure in Session's global
+          // error surface; this local state provides a retry control
           // exactly where the user clicked without exposing the absolute path.
           setOpenState("error");
         }
@@ -681,8 +681,8 @@ function MarkdownCodeBlock({ children, ...props }: ComponentPropsWithoutRef<"pre
   }, [open, positionMenu]);
 
   // Snapshot the global preference when the menu opens (or re-renders while
-  // open). The root CSS class is the source of truth for layout; this value is
-  // only for the checkbox label/aria state.
+  // open). The root CSS class controls layout; this value only supplies the
+  // checkbox label and aria state.
   const wrap = wrapCodeBlocks;
 
   return (

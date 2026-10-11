@@ -1,7 +1,7 @@
 /**
  * Serializes native human-browser lifecycle calls across all overlay owners.
- * A rejection is deliberately swallowed only by the internal tail so one
- * failed WebKit operation cannot permanently stall later cleanup requests.
+ * The internal tail handles rejections so one failed WebKit operation cannot
+ * permanently stall later cleanup requests. The returned promise still rejects.
  */
 export class HumanBrowserLifecycleQueue {
   private tail: Promise<void> = Promise.resolve();

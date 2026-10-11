@@ -57,9 +57,8 @@ export function researchScrollBehavior(): ScrollBehavior {
   return interacted && !prefersReducedMotion() ? "smooth" : "auto";
 }
 
-/** Scrolls the strip by the least distance that shows `first` through
- * `last` (one column, or a pair), keeping `first`'s left edge in view when
- * they don't fit. Nothing moves when they are already in view. */
+/** Scroll the minimum distance needed to show `first` through `last`. If they
+ * exceed the viewport width, align `first` to the left edge. */
 export function revealResearchColumns(
   row: HTMLElement | null,
   first: HTMLElement | null,
@@ -76,8 +75,8 @@ export function revealResearchColumns(
   row.scrollTo({ left: target, behavior });
 }
 
-/** After a level opens or closes: shows the strip's last column at its right
- * edge, adjusted so the column `focusId` stays in view. */
+/** Align the final column to the right after a level changes, then adjust the
+ * position to keep `focusId` visible. */
 export function settleResearchStrip(
   row: HTMLElement | null,
   focusId: ResearchColumnId | null,
@@ -104,8 +103,7 @@ export function settleResearchStrip(
 interface ResearchColumnsLayout {
   /** The horizontally scrolling strip: the feed, then each level's pair. */
   row: HTMLElement | null;
-  /** A layer over the column area, outside the strip, for the find bar: it
-   * stays put while the strip scrolls. */
+  /** Fixed layer above the scrolling strip for the find bar. */
   overlay: HTMLElement | null;
   /** Focus is in the feed column. */
   feedCurrent: boolean;
@@ -127,11 +125,9 @@ type ResearchCycleHandler = (request: ResearchCycleRequest) => boolean;
 
 export const ResearchColumnsContext = createContext<ResearchColumnsLayout | null>(null);
 
-/** The column area: one horizontally scrolling strip with the feed column,
- * then the content (the open thread's column pairs, or a filler). Column
- * widths come from the area's width until a column's resize handle sets
- * them (researchColumnWidths.ts), and the strip scrolls sideways when the
- * pairs don't fit. */
+/** Horizontal strip containing the feed and either thread columns or a
+ * placeholder. The viewport determines initial widths; resize handles store
+ * overrides in researchColumnWidths.ts. */
 export default function ResearchColumns({
   hasThread,
   feed,

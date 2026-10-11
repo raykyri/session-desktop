@@ -219,7 +219,7 @@ test("run tails need the session checkpoint; documents and conversations do not"
   assert.equal(canContinueChain([conversation], conversation), true);
 });
 
-test("every document asks about itself until its first follow-up", () => {
+test("every document targets itself until its first follow-up", () => {
   const authored = node("doc", { type: "document", source: "authored" });
   const imported = node("report", { type: "document", source: "imported" });
   const transcript = node("conv", { type: "document", source: "transcript" });

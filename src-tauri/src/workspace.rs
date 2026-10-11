@@ -734,17 +734,12 @@ pub fn remove_research_workspace(
         } else if node.post().is_none()
             && node.status() == crate::research::ResearchNodeStatus::Complete
         {
-            // Only a completed exchange's answer or a document's body
-            // justifies refusing the detach: it is real data the archive
-            // would silently lose. A post reads as complete but has no
-            // response snapshot; its text travels in the node record. A
-            // failed or cancelled run with a transcript_path whose file is
-            // gone (the adapter owns those files and prunes them on its own
-            // schedule) has nothing durable left to lose — the node record
-            // itself, with its prompt and error, still travels in the
-            // archive, and import does not require responses for
-            // non-complete nodes. Refusing in either case made the folder
-            // permanently unremovable while protecting nothing.
+            // Reject detachment only when it would omit a completed exchange's
+            // answer or a document's body. Posts store their text in the node
+            // record and have no response snapshot. Failed and cancelled runs
+            // can also lack a snapshot after the adapter prunes their transcript;
+            // their node record preserves the prompt and error, and imports do
+            // not require responses for incomplete nodes.
             return Err(format!(
                 "research item '{}' has no durable response to detach",
                 node.prompt().chars().take(80).collect::<String>()
@@ -759,7 +754,7 @@ pub fn remove_research_workspace(
     if let Err(err) = crate::research::commit_detached_research(folder) {
         // The verified pending form is intentionally importable: after the
         // global commit there is no data-loss reason to report removal as a
-        // failure merely because the final directory rename did not land.
+        // failure merely because the final directory rename did not complete.
         eprintln!("session: detached research remains in recoverable pending form: {err}");
     }
     for node_id in node_ids {
@@ -1225,7 +1220,7 @@ pub fn recover_shell_agent_from_session_start(
         }
         existing
     } else {
-        // Retain a session-minted id when the record itself disappeared. The running
+        // Retain a Session-generated id when the record itself disappeared. The running
         // shell supervisor and every later hook still carry that id; changing it
         // here would prevent the supervisor from detaching this recovered binding
         // when the native agent process exits. Never accept an arbitrary id as a
@@ -1513,11 +1508,11 @@ pub fn clear_agent_working_status(state: &AppState, agent_id: &str) -> Result<Ag
     }
     // Treat a manual clear as the agent having gone idle and route it through the same
     // completion path the adapters use, instead of blindly forcing a fresh Idle. Forcing
-    // Idle leaves a queued turn stranded (the next idle that would have drained it never
+    // Idle leaves a queued turn blocked (the next idle that would have drained it never
     // fires), drops pending-pause handling, and persists a "ready to send" status that
     // sends the user's next turn straight into the process rather than queuing it.
     // advance_after_idle drains a queued turn, honors a pending pause / active typing, and
-    // lands on Done (or Running if a turn drained) with field-scoped writes.
+    // reaches Done (or Running if a turn drained) with field-scoped writes.
     crate::turn_queue::advance_after_idle(state, agent_id)?;
     let agent = state
         .agent(agent_id)?
@@ -1551,7 +1546,7 @@ fn adapter_interrupts_on_lone_escape(adapter: &str) -> bool {
 /// so nothing would ever demote the agent from Running and the transcript pane would
 /// show "Working…" forever.
 ///
-/// Watch the agent for a short grace window; if no hook or transcript activity lands,
+/// Watch the agent for a short grace window; if no hook or transcript activity arrives,
 /// mark it AwaitingInput and hold any queued follow-ups (same as a transcript
 /// interrupt). AwaitingInput is a ready status, so without the pause a later
 /// typing-clear or idle_prompt would auto-send. The residual risk is a *wrong*
@@ -1634,8 +1629,8 @@ pub struct CapturedWorktreeRemoval {
 /// The host an agent's work runs on, which is its group's.
 ///
 /// Derived rather than stored: the workspace is what is bound to a machine, so
-/// reading it from the group is what makes it impossible for an agent to drift
-/// onto a different host from its own worktree.
+/// reading it from the group keeps the agent value consistent with its
+/// worktree's host.
 fn agent_host(state: &AppState, agent: &AgentInfo) -> Result<Host, String> {
     let group = state
         .group(&agent.group_id)?
@@ -2585,7 +2580,7 @@ pub(crate) fn write_group_manifest(group: &GroupInfo) -> Result<(), String> {
     Ok(())
 }
 
-/// Removes manifest scratch files (`.group.json.tmp-<pid>-<seq>`) stranded by
+/// Removes manifest scratch files (`.group.json.tmp-<pid>-<seq>`) left by
 /// a writer that died between creating its temp and renaming it into place —
 /// nothing else ever revisits them. Runs on the next manifest write for the
 /// group, with the same best-effort pid-liveness contract as
@@ -2863,7 +2858,7 @@ mod tests {
         let state = test_state_with_workspace(root);
         // The default root is `~/.session/workspaces`, and every argument sent
         // over ssh is quoted, so it has to be expanded here or the worktree
-        // lands in a directory literally named `~`.
+        // creates a directory literally named `~`.
         host::seed_remote_home("user@devbox", "/home/dev");
         let dir = allocate_agent_worktree_dir(
             &state,
@@ -3576,8 +3571,8 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
-    /// A post has no response snapshot and no run, and reads as complete;
-    /// it must not make its folder unremovable.
+    /// A post has no response snapshot or run and is treated as complete. It
+    /// must not prevent removal of its folder.
     #[test]
     fn removing_a_research_folder_with_a_post_detaches_and_restores_it() {
         let root = temp_workspace("remove-post-research");
@@ -4453,7 +4448,7 @@ mod tests {
         let waiting = clear_agent_working_status(&state, "agent-waiting").unwrap();
 
         // Working states are routed through the idle completion path, so with no queued
-        // turn they land on Done (a finished status), not a fresh Idle. A non-working
+        // turn they reach Done (a finished status), not a new Idle. A non-working
         // state (AwaitingInput) is left untouched.
         assert!(matches!(running.status, AgentStatus::Done));
         assert!(matches!(starting.status, AgentStatus::Done));
@@ -4512,7 +4507,7 @@ mod tests {
             .unwrap();
         let baseline = state.agent_activity_seq("agent-1").unwrap();
 
-        // A hook event landing during the grace window (e.g. a PostToolUse
+        // A hook event received during the grace window (e.g. a PostToolUse
         // re-marking Running) bumps the activity counter: the watch stands down.
         state
             .set_agent_status("agent-1", AgentStatus::Running)

@@ -1,6 +1,6 @@
 // Geometry and anchoring for saved research highlights: which stored
 // annotations a selection touches, where overlapping paints stack, and where a
-// stored anchor lands in the current rendered-text projection.
+// stored anchor maps to the current rendered-text projection.
 //
 // Ported from the desktop `src/lib/researchHighlights.ts`. The projection is
 // the same `answer-v1` flat text on the web, so the anchoring rules are
@@ -177,7 +177,7 @@ function contextSidesAt(
 // An edit to the document produces a new revision with genuinely different
 // text. Both are handled the same way — re-locate from the saved quote and
 // its surrounding context instead of trusting the raw offset — so a highlight
-// survives an edit elsewhere in the document rather than being orphaned the
+// remains valid after an edit elsewhere in the document rather than being orphaned the
 // moment the revision changes.
 //
 //   1. Same revision: the stored offset addresses the exact text, so accept it

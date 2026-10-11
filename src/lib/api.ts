@@ -792,7 +792,7 @@ export function confirmAppExit() {
   return invoke<void>("app_confirm_exit");
 }
 
-/** Arms (or releases) the macOS wake lock that keeps the machine awake. */
+/** Enables or disables the macOS wake lock. */
 export function setPreventSleep(active: boolean) {
   return invoke<void>("app_set_prevent_sleep", { active });
 }
@@ -802,10 +802,9 @@ export function listenToEvents(onEvent: (event: SessionEvent) => void): Promise<
 }
 
 /**
- * Tells the backend the session-event subscription is live. Until then the native
- * shortcut classifiers decline to consume chords, since the events they emit
- * would be dropped with nobody listening. The backend clears the flag itself
- * on every page navigation.
+ * Marks the session-event subscription as ready. Until then, native shortcut
+ * classifiers do not consume chords because no listener can receive their
+ * events. The backend clears the flag on every page navigation.
  */
 export function markEventsListenerReady() {
   return invoke<void>("mark_events_listener_ready");

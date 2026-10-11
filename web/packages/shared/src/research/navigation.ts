@@ -6,7 +6,7 @@
 // layer. The desktop held one module-level singleton hydrated from
 // localStorage; `shared` has no storage, so only the value semantics live
 // here: every function takes the record it operates on and either returns a
-// value or reports whether the record changed. The client owns the store, its
+// value or reports whether the record changed. The client manages the store, its
 // hydration (using `isSavedResearchAnchor` to validate persisted anchors) and
 // its persistence.
 
@@ -47,7 +47,7 @@ export interface SavedResearchNavigation {
   /** In-progress text in the ordinary thread/branch composer. */
   followupDraft?: SavedResearchFollowupDraft;
   /** A highlight to scroll into view on the next page visit (set when a
-   * Highlights feed unit is opened). Cleared once the document lands on it. */
+   * Highlights feed unit is opened). Cleared once the document scrolls to it. */
   focusHighlight?: { nodeId: string; highlightId: string };
 }
 
@@ -115,7 +115,7 @@ export function restoreResearchScrollPosition(
 
 /** Updates the ordinary composer draft and reports whether the stored value
  * changed. Empty text removes the draft so successful sends and manual clears
- * do not resurrect an empty composer mode. */
+ * do not restore an empty composer mode. */
 export function recordResearchFollowupDraft(
   navigation: SavedResearchNavigation,
   text: string,

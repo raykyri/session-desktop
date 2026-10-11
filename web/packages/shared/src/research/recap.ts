@@ -159,7 +159,7 @@ export function extractRecapSource(turns: readonly Turn[], imported: boolean): s
   return withinBounds ? plain : undefined;
 }
 
-/** {@link extractRecapSource} for a node, which knows whether it was imported. */
+/** {@link extractRecapSource} for a node, accounting for imported nodes. */
 export function recapSourceForNode(
   node: Pick<ResearchNode, "origin">,
   turns: readonly Turn[],

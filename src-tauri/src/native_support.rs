@@ -145,8 +145,9 @@ mod imp {
         }
     }
 
-    /// Turns off WebRTC peer connections in the app web view; true when the
-    /// preference now reads as off. See NativeSupportHost.disablePeerConnections.
+    /// Turns off WebRTC peer connections in the app web view. Returns true
+    /// when the preference reports that WebRTC is disabled. See
+    /// NativeSupportHost.disablePeerConnections.
     pub fn disable_peer_connections() -> bool {
         // SAFETY: no arguments; Swift reads its weakly held app web view on the
         // main actor.

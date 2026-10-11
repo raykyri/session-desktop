@@ -244,7 +244,7 @@ export default function DomSearchBar({
 
   // Rendered markdown can change without a corresponding React prop change
   // (streaming text, diagrams, expanded details). Observe the DOM
-  // and coalesce those rescans without moving the reader's viewport.
+  // and coalesce those rescans without changing the viewport position.
   useEffect(() => {
     if (!open) {
       return;

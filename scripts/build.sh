@@ -81,7 +81,7 @@ else
   unset APPLE_PROVIDER_SHORT_NAME || true
 fi
 
-# `tauri` lives in node_modules/.bin; put it on PATH so this script also works
+# `tauri` is installed in node_modules/.bin; put it on PATH so this script also works
 # when invoked directly (e.g. from release.sh) rather than through `npm run`.
 export PATH="$repo_root/node_modules/.bin:$PATH"
 
@@ -140,7 +140,7 @@ fi
 
 # Tauri's DMG bundler runs an AppleScript step that drives Finder to lay out the
 # disk-image window. Run that normal path by default, matching Trajectories, so
-# successful local and release builds always carry the polished window and icon
+# successful local and release builds always use the configured window and icon
 # placement. Headless callers can explicitly set CI=true; Tauri then passes
 # --skip-jenkins and produces the plain, non-interactive fallback instead.
 exec tauri build --target "$build_target"

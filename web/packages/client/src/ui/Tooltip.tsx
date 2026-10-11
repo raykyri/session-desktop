@@ -5,7 +5,7 @@ import { cn } from "../lib/cn.js";
 
 export interface TooltipProps {
   /** The control the tip describes. Substituted into `Tooltip.Trigger` through
-   * `render` so the tip's aria wiring lands on the control itself. */
+   * `render` so the tip's ARIA attributes are applied to the control itself. */
   children: ReactElement;
   content: ReactNode;
   side?: "top" | "bottom" | "left" | "right";

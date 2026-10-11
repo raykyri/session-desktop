@@ -36,24 +36,24 @@ test("a right-click on a unit opens its menu", () => {
   assert.equal(researchUnitMenuOpens(opens), true);
 });
 
-test("a right-click a nested handler took, or on a link, image or field, keeps that menu", () => {
+test("handled right-clicks and native targets do not open the unit menu", () => {
   assert.equal(researchUnitMenuOpens({ ...opens, handled: true }), false);
   assert.equal(researchUnitMenuOpens({ ...opens, nativeTarget: true }), false);
 });
 
-test("a text selection in the unit keeps the selection and the webview's menu", () => {
+test("a text selection in the unit does not open the unit menu", () => {
   assert.equal(
     researchUnitMenuOpens({ ...opens, selectionText: "a passage", selectionInUnit: true }),
     false,
   );
 });
 
-test("a selection elsewhere, or of whitespace only, does not stop the unit's menu", () => {
+test("a selection elsewhere or containing only whitespace allows the unit menu", () => {
   assert.equal(researchUnitMenuOpens({ ...opens, selectionText: "a passage" }), true);
   assert.equal(researchUnitMenuOpens({ ...opens, selectionText: " \n ", selectionInUnit: true }), true);
 });
 
-test("a menu opened from the keyboard opens against the unit's … button, aligned as its click", () => {
+test("keyboard invocation anchors the menu to the unit's … button", () => {
   const button = { rect: { left: 400, top: 100, right: 426, bottom: 126 }, align: "start" as const };
   assert.deepEqual(
     researchUnitKeyboardPlacement(button, { left: 0, top: 80, right: 500, bottom: 140 }, viewport),
@@ -61,7 +61,7 @@ test("a menu opened from the keyboard opens against the unit's … button, align
   );
 });
 
-test("without a visible … button, it opens at the top-left of the unit's part on screen", () => {
+test("without a visible … button, keyboard invocation uses the visible unit corner", () => {
   assert.deepEqual(
     researchUnitKeyboardPlacement(null, { left: 320, top: 140, right: 900, bottom: 600 }, viewport),
     { anchor: researchMenuPoint(320, 140), align: "point" },

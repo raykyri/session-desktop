@@ -123,9 +123,9 @@ export function researchRowGlyph({
   return { shape: showUnread ? "unread" : state, tone, label };
 }
 
-/** A feed card's kind: its root's, read from the root entry when it is
- * loaded, else from the tree's root type (a post reads as a note and a
- * document as an authored one until the entry loads). */
+/** A feed card uses the root entry's kind when loaded, otherwise the tree's
+ * root type. Posts display as notes and documents as authored documents until
+ * the entry loads. */
 export function researchThreadKind(
   tree: Pick<ResearchTreeSummary, "rootNodeId" | "type"> | undefined,
   query: (KindSource & { nodeId: string }) | undefined,
