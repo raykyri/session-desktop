@@ -5,9 +5,10 @@ import type { ResearchTreeSummary } from "../../types";
 import { ResearchMenuItem, ResearchMenuSeparator } from "./ResearchMenu";
 import { trapResearchDialogTab, useResearchDialogReturnFocus } from "./researchFocus";
 
-/** The items of a feed card's context menu. A and D select Archive and
- * Delete while the menu is open. */
-export function ResearchTreeMenuItems({
+/** A feed card's thread actions, the end of its menu: Generate recap and
+ * Rename, a separator, then Archive (Unarchive on an archived card) and
+ * Delete. A and D select Archive and Delete while the menu is open. */
+export function ResearchTreeLifecycleItems({
   tree,
   archived,
   onClose,
@@ -20,31 +21,40 @@ export function ResearchTreeMenuItems({
   tree: ResearchTreeSummary;
   archived: boolean;
   onClose: () => void;
-  /** Each lifecycle action renders only when its handler is passed: Rename
-   * and Archive on active rows, Unarchive on archived rows. */
+  /** Each action renders only when its handler is passed and it applies:
+   * Rename and Archive on active cards, Unarchive on archived cards. */
   onRename?: (tree: ResearchTreeSummary) => void;
   onArchive?: (treeId: string) => void;
   onRestore?: (treeId: string) => void;
   onDelete: (tree: ResearchTreeSummary) => void;
-  /** Query-specific action used by Home's research activity menu. */
+  /** Generate recap, for a card whose root has a recap. */
   onRegenerateRecap?: () => void;
 }) {
   const running = tree.runningCount > 0;
+  const rename = archived ? undefined : onRename;
   return (
     <>
       {onRegenerateRecap ? (
-        <>
-          <ResearchMenuItem
-            icon={<RefreshCw size={15} aria-hidden="true" />}
-            label="Generate recap"
-            onSelect={() => {
-              onClose();
-              onRegenerateRecap();
-            }}
-          />
-          <ResearchMenuSeparator />
-        </>
+        <ResearchMenuItem
+          icon={<RefreshCw size={15} aria-hidden="true" />}
+          label="Generate recap"
+          onSelect={() => {
+            onClose();
+            onRegenerateRecap();
+          }}
+        />
       ) : null}
+      {rename ? (
+        <ResearchMenuItem
+          icon={<Pencil size={15} aria-hidden="true" />}
+          label="Rename"
+          onSelect={() => {
+            onClose();
+            rename(tree);
+          }}
+        />
+      ) : null}
+      {onRegenerateRecap || rename ? <ResearchMenuSeparator /> : null}
       {archived ? (
         onRestore ? (
           <ResearchMenuItem
@@ -56,36 +66,19 @@ export function ResearchTreeMenuItems({
             }}
           />
         ) : null
-      ) : (
-        <>
-          {onRename ? (
-            <ResearchMenuItem
-              icon={<Pencil size={15} aria-hidden="true" />}
-              label="Rename"
-              onSelect={() => {
-                onClose();
-                onRename(tree);
-              }}
-            />
-          ) : null}
-          {onArchive ? (
-            <>
-              <ResearchMenuSeparator />
-              <ResearchMenuItem
-                icon={<Archive size={15} aria-hidden="true" />}
-                label="Archive"
-                shortcut="A"
-                disabled={running}
-                title={running ? "Research with active runs cannot be archived" : undefined}
-                onSelect={() => {
-                  onClose();
-                  onArchive(tree.id);
-                }}
-              />
-            </>
-          ) : null}
-        </>
-      )}
+      ) : onArchive ? (
+        <ResearchMenuItem
+          icon={<Archive size={15} aria-hidden="true" />}
+          label="Archive"
+          shortcut="A"
+          disabled={running}
+          title={running ? "Research with active runs cannot be archived" : undefined}
+          onSelect={() => {
+            onClose();
+            onArchive(tree.id);
+          }}
+        />
+      ) : null}
       <ResearchMenuItem
         icon={<Trash2 size={15} aria-hidden="true" />}
         label="Delete"

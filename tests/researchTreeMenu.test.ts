@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ResearchTreeMenuItems } from "../src/components/research/ResearchTreeMenu";
+import { ResearchFeedRowMenuItems } from "../src/components/research/ResearchMoveMenu";
+import { ResearchTreeLifecycleItems } from "../src/components/research/ResearchTreeMenu";
 import type { ResearchTreeSummary } from "../src/types";
 
 const tree: ResearchTreeSummary = {
@@ -25,7 +26,7 @@ const noop = () => {};
 test("research tree menus omit regenerate title for every node type", () => {
   for (const type of ["post", "exchange", "document"] as const) {
     const html = renderToStaticMarkup(
-      createElement(ResearchTreeMenuItems, {
+      createElement(ResearchTreeLifecycleItems, {
         tree: { ...tree, type },
         archived: false,
         onClose: noop,
@@ -46,7 +47,7 @@ test("research tree menus omit regenerate title for every node type", () => {
 
 test("research tree menus can expose recap regeneration", () => {
   const html = renderToStaticMarkup(
-    createElement(ResearchTreeMenuItems, {
+    createElement(ResearchTreeLifecycleItems, {
       tree,
       archived: false,
       onClose: noop,
@@ -60,9 +61,9 @@ test("research tree menus can expose recap regeneration", () => {
   assert.match(html, /Generate recap/);
 });
 
-test("archived rows offer Unarchive and Delete only", () => {
+test("archived cards' thread actions are Unarchive and Delete only", () => {
   const html = renderToStaticMarkup(
-    createElement(ResearchTreeMenuItems, {
+    createElement(ResearchTreeLifecycleItems, {
       tree: { ...tree, archivedAt: 300 },
       archived: true,
       onClose: noop,
@@ -78,7 +79,7 @@ test("archived rows offer Unarchive and Delete only", () => {
 
 test("Archive and Delete carry their A and D shortcuts, disabled with a reason while running", () => {
   const html = renderToStaticMarkup(
-    createElement(ResearchTreeMenuItems, {
+    createElement(ResearchTreeLifecycleItems, {
       tree: { ...tree, runningCount: 1 },
       archived: false,
       onClose: noop,
@@ -90,4 +91,124 @@ test("Archive and Delete carry their A and D shortcuts, disabled with a reason w
   assert.match(html, /disabled="" title="Research with active runs cannot be archived" data-shortcut="a"/);
   assert.match(html, /disabled="" title="Research with active runs cannot be deleted" data-shortcut="d"/);
   assert.equal(html.match(/role="separator"/g)?.length, 1);
+});
+
+/** The menu's items in order, with "|" for a separator and a "Move to"
+ * heading. */
+function menuOutline(html: string): string[] {
+  return [
+    ...html.matchAll(
+      /role="separator"|class="research-menu-title"[^>]*>([^<]+)<|<button[^>]*role="menuitem(?:radio)?"[^>]*>[^]*?<span class="research-menu-label">([^<]+)</g,
+    ),
+  ].map((match) => (match[0] === 'role="separator"' ? "|" : (match[1] ?? match[2])));
+}
+
+const folders = [{ id: "f-read", name: "Reading list", workspaceId: "workspace" }];
+
+function feedCardMenu(overrides: { archived?: boolean; recap?: boolean } = {}) {
+  const archived = overrides.archived ?? false;
+  return renderToStaticMarkup(
+    createElement(
+      ResearchFeedRowMenuItems,
+      {
+        currentPlace: archived ? "system:archive" : "system:unfiled",
+        folders,
+        onToggleBookmark: noop,
+        followDisabledReason: archived ? "Archived questions don't send notifications" : null,
+        onToggleFollow: noop,
+        onMove: noop,
+        onNewFolder: noop,
+      },
+      createElement(ResearchTreeLifecycleItems, {
+        tree: archived ? { ...tree, archivedAt: 300 } : tree,
+        archived,
+        onClose: noop,
+        onRename: noop,
+        onArchive: noop,
+        onRestore: noop,
+        onDelete: noop,
+        onRegenerateRecap: overrides.recap === false || archived ? undefined : noop,
+      }),
+    ),
+  );
+}
+
+test("a feed card's one menu lists the question's actions, then the thread's, Delete last", () => {
+  assert.deepEqual(menuOutline(feedCardMenu()), [
+    "Bookmark",
+    "Follow",
+    "|",
+    "Move to",
+    "Unfiled",
+    "Drafts",
+    "Reading list",
+    "Archive",
+    "|",
+    "New folder…",
+    "|",
+    "Generate recap",
+    "Rename",
+    "|",
+    "Archive",
+    "Delete",
+  ]);
+  // Without a recap, Rename alone precedes the separator.
+  assert.deepEqual(menuOutline(feedCardMenu({ recap: false })).slice(10), [
+    "|",
+    "Rename",
+    "|",
+    "Archive",
+    "Delete",
+  ]);
+  const html = feedCardMenu();
+  assert.match(html, /class="research-menu-item is-danger"[^>]*data-shortcut="d"/);
+  assert.match(html, /data-shortcut="a"/);
+});
+
+test("an archived card's menu ends with Unarchive and Delete", () => {
+  const html = feedCardMenu({ archived: true });
+  assert.deepEqual(menuOutline(html), [
+    "Bookmark",
+    "Follow",
+    "|",
+    "Move to",
+    "Unfiled",
+    "Drafts",
+    "Reading list",
+    "Archive",
+    "|",
+    "New folder…",
+    "|",
+    "Unarchive research",
+    "Delete",
+  ]);
+  assert.match(html, /disabled="" title="Archived questions don&#x27;t send notifications"/);
+});
+
+test("a starred child row's menu has Remove star and the question's actions, no thread actions", () => {
+  const html = renderToStaticMarkup(
+    createElement(ResearchFeedRowMenuItems, {
+      currentPlace: "system:unfiled",
+      folders,
+      onRemoveStar: noop,
+      onToggleBookmark: noop,
+      onToggleFollow: noop,
+      onMove: noop,
+      onNewFolder: noop,
+    }),
+  );
+  assert.deepEqual(menuOutline(html), [
+    "Remove star",
+    "|",
+    "Bookmark",
+    "Follow",
+    "|",
+    "Move to",
+    "Unfiled",
+    "Drafts",
+    "Reading list",
+    "Archive",
+    "|",
+    "New folder…",
+  ]);
 });

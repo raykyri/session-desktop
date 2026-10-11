@@ -271,11 +271,12 @@ interface ResearchThreadPageProps {
 }
 
 export interface ResearchThreadTreeMenu
-  extends Omit<ResearchTreeMenuProps, "onToggleBookmark" | "onToggleFollow" | "onNewFolder"> {
+  extends Omit<ResearchTreeMenuProps, "onToggleBookmark" | "onToggleFollow" | "onMove" | "onNewFolder"> {
   bookmarked: boolean;
   followed: boolean;
   onSetBookmarked: (bookmarked: boolean) => void;
   onSetFollowed: (followed: boolean) => void;
+  onMove: (place: string) => void;
   /** `trigger` is where focus returns when the folder dialog closes. */
   onNewFolder: (trigger: HTMLElement | undefined) => void;
 }

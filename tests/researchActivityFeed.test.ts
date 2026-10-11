@@ -86,8 +86,9 @@ test("cards have no metadata row: no time, counts, recap, Follow or Bookmark", (
   assert.doesNotMatch(html, /<time|research-thread-actions|Recap: |follow-up<\/button>/);
   // Direct follow-ups are not rows of their own unless starred.
   assert.doesNotMatch(html, /Follow up question here/);
-  // Bookmarking and moving live in the card's … menu.
-  assert.match(html, /title="Bookmark, follow or move" aria-label="Bookmark, follow or move" aria-haspopup="menu"/);
+  // Bookmarking, moving and the thread's actions live in the card's … menu,
+  // which its context menu also opens.
+  assert.match(html, /title="Thread actions" aria-label="Thread actions" aria-haspopup="menu"/);
   // A title that only repeats the question is not shown above it.
   const echoed = renderFeed({
     items: [question],
@@ -174,7 +175,7 @@ test("starred follow-ups and branches are indented rows under their question", (
   }
   assert.equal((html.match(/class="research-feed-child-open"/g) ?? []).length, 3);
   // The question row has the same margin.
-  assert.match(html, /class="research-feed-rail"><span class="research-feed-card-grip"[^]*title="Bookmark, follow or move"/);
+  assert.match(html, /class="research-feed-rail"><span class="research-feed-card-grip"[^]*title="Thread actions"/);
 
   // The open nodes' rows are marked (a follow-up whose message is selected
   // in the root pair, an open branch); other cards' rows are not.

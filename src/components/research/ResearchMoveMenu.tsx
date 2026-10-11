@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Bell, Bookmark, Check, House, Plus, Star } from "lucide-react";
 import type { ResearchFolder } from "../../types";
 import {
@@ -36,15 +37,17 @@ export interface ResearchTreeMenuProps {
   /** Why Follow is unavailable (an archived question). */
   followDisabledReason?: string | null;
   onToggleFollow?: () => void;
-  onMove: (place: string) => void;
-  onNewFolder: () => void;
+  /** Given with `onNewFolder`: adds Move to and New folder…. */
+  onMove?: (place: string) => void;
+  onNewFolder?: () => void;
 }
 
 /** The actions on a whole question: Bookmark and Follow when given, then
  * Move to with every folder (the current one disabled and checked), then New
  * folder…, which creates a folder and moves the question into it. A feed
- * row's menu holds only these; the root answer's menu adds them below its
- * own actions. */
+ * card's menu follows them with the thread's own actions (Generate recap,
+ * Rename, Archive, Delete); the root answer's menu adds them below its own
+ * actions. */
 export function ResearchTreeMenuItems({
   currentPlace,
   folders,
@@ -56,6 +59,7 @@ export function ResearchTreeMenuItems({
   onMove,
   onNewFolder,
 }: ResearchTreeMenuProps) {
+  const move = onMove && onNewFolder ? { onMove, onNewFolder } : null;
   return (
     <>
       {onToggleBookmark ? (
@@ -67,7 +71,7 @@ export function ResearchTreeMenuItems({
             label={bookmarked ? "Remove bookmark" : "Bookmark"}
             onSelect={onToggleBookmark}
           />
-          {onToggleFollow ? null : <ResearchMenuSeparator />}
+          {onToggleFollow || !move ? null : <ResearchMenuSeparator />}
         </>
       ) : null}
       {onToggleFollow ? (
@@ -85,9 +89,27 @@ export function ResearchTreeMenuItems({
             title={followDisabledReason ?? undefined}
             onSelect={onToggleFollow}
           />
-          <ResearchMenuSeparator />
+          {move ? <ResearchMenuSeparator /> : null}
         </>
       ) : null}
+      {move ? <ResearchMoveItems currentPlace={currentPlace} folders={folders} {...move} /> : null}
+    </>
+  );
+}
+
+function ResearchMoveItems({
+  currentPlace,
+  folders,
+  onMove,
+  onNewFolder,
+}: {
+  currentPlace: string;
+  folders: ResearchFolder[];
+  onMove: (place: string) => void;
+  onNewFolder: () => void;
+}) {
+  return (
+    <>
       <ResearchMenuTitle>Move to</ResearchMenuTitle>
       <div role="group" aria-label="Move to">
         {researchMoveTargets(folders).map((target) => {
@@ -123,31 +145,20 @@ export function ResearchTreeMenuItems({
   );
 }
 
-/** A feed row's menu: the question's actions. A starred child row's menu
- * starts with Remove star, then its question's actions. */
-export default function ResearchMoveMenu({
-  anchor,
-  align,
-  onRemoveStar,
-  onClose,
-  ...items
-}: ResearchTreeMenuProps & {
-  /** The row's … button, or for a context menu the pointer or the button's
-   * rectangle. */
-  anchor: HTMLElement | ResearchMenuRect;
-  align?: ResearchMenuAlign;
+interface ResearchFeedRowMenuItemsProps extends ResearchTreeMenuProps {
   /** Given for a starred child row: unstars the follow-up or branch. */
   onRemoveStar?: () => void;
-  onClose: () => void;
-}) {
+  /** The thread's actions, after the question's. */
+  children?: ReactNode;
+}
+
+/** A feed row's menu items. A card's menu holds its question's actions
+ * (Bookmark, Follow, Move to), then after a separator the thread's actions
+ * passed as `children` (Generate recap, Rename, Archive, Delete). A starred
+ * child row's menu starts with Remove star, then its question's actions. */
+export function ResearchFeedRowMenuItems({ onRemoveStar, children, ...items }: ResearchFeedRowMenuItemsProps) {
   return (
-    <ResearchMenu
-      anchor={anchor}
-      align={align}
-      label={onRemoveStar ? "Starred item actions" : "Bookmark, follow or move"}
-      width={MENU_WIDTH}
-      onClose={onClose}
-    >
+    <>
       {onRemoveStar ? (
         <>
           <ResearchMenuItem
@@ -159,6 +170,35 @@ export default function ResearchMoveMenu({
         </>
       ) : null}
       <ResearchTreeMenuItems {...items} />
+      {children ? (
+        <>
+          <ResearchMenuSeparator />
+          {children}
+        </>
+      ) : null}
+    </>
+  );
+}
+
+/** A feed row's menu (see ResearchFeedRowMenuItems). The row's … button and
+ * its context menu open this same menu. */
+export default function ResearchFeedRowMenu({
+  anchor,
+  align,
+  label,
+  onClose,
+  ...items
+}: ResearchFeedRowMenuItemsProps & {
+  /** The row's … button, or for a context menu the pointer or the button's
+   * rectangle. */
+  anchor: HTMLElement | ResearchMenuRect;
+  align?: ResearchMenuAlign;
+  label: string;
+  onClose: () => void;
+}) {
+  return (
+    <ResearchMenu anchor={anchor} align={align} label={label} width={MENU_WIDTH} onClose={onClose}>
+      <ResearchFeedRowMenuItems {...items} />
     </ResearchMenu>
   );
 }

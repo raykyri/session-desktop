@@ -8,8 +8,6 @@ import ResearchArchivedFeed, {
 } from "../src/components/research/ResearchArchivedFeed";
 import type { ResearchTreeSummary } from "../src/types";
 
-const asyncNoop = async () => {};
-
 function tree(id: string, overrides: Partial<ResearchTreeSummary> = {}): ResearchTreeSummary {
   return {
     id,
@@ -34,8 +32,6 @@ function renderArchived(overrides: Partial<ResearchArchivedFeedProps> = {}) {
     createElement(ResearchArchivedFeed, {
       trees: [],
       onOpen: () => {},
-      onRestore: asyncNoop,
-      onRemove: asyncNoop,
       ...overrides,
     }),
   );
@@ -67,9 +63,9 @@ test("Archive renders one card per archived thread, newest archived first", () =
   assert.equal((html.match(/research-feed-card is-selected/g) ?? []).length, 1);
   assert.ok(html.indexOf("Terminal session") < html.indexOf("Thread run"));
   // Archived cards are drop sources for moving out of Archive, and carry the
-  // … menu but no Follow or Bookmark controls.
+  // … menu (the thread's actions) but no Follow or Bookmark controls.
   assert.match(html, /data-research-card="run"/);
-  assert.match(html, /aria-label="Bookmark, follow or move"/);
+  assert.match(html, /aria-label="Thread actions"/);
   // The archive time is in the card's tooltip.
   assert.match(html, /aria-label="Thread run"[^>]*title="Archived [^"]+"/);
   assert.doesNotMatch(html, /research-thread-actions/);
