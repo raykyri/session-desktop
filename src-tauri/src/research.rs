@@ -18,12 +18,17 @@ pub const MAX_RESEARCH_DOCUMENT_WORDS: usize = 10_000;
 /// Backstop for word-sparse documents (one giant token counts as one word).
 /// Imports and the composer both advertise this exact limit.
 pub const MAX_RESEARCH_DOCUMENT_BYTES: usize = 10 * 1024 * 1024;
-/// Every archive is written at this version. Version 12 stores a node's star
-/// timestamp as `starredAt` (`promotedAt` before); builds that accept up to
+/// Every archive is written at this version. Version 13 adds a node's
+/// `chainOrder` (see `ResearchNode::chain_order`), which builds that accept
+/// up to version 12 would drop, and a tree order whose Unfiled trees list in
+/// that order; reads of an older archive put its Unfiled trees newest root
+/// first ([`order_unfiled_newest_first`]), the order Home showed. Version 12
+/// stores a node's star timestamp as `starredAt` (`promotedAt` before);
+/// builds that accept up to
 /// version 11 ignore the new key and would drop every star. Archives store
 /// research nodes as an envelope with a tagged body (see `ResearchNode`)
 /// since version 11; builds that accept versions 1 to 10 read flat records
-/// and would drop every node. Reads accept versions 1 to 12 and migrate older
+/// and would drop every node. Reads accept versions 1 to 13 and migrate older
 /// nodes (`migrate_research_node_values`). Version 10 denotes two shapes, both
 /// written only by unreleased builds: flat records with posts and one merged
 /// anchor, and, from later builds, the body shape; the shape-based migration
@@ -31,7 +36,7 @@ pub const MAX_RESEARCH_DOCUMENT_BYTES: usize = 10 * 1024 * 1024;
 /// archive held (3 runs only, 4 documents, 5 terminal conversations, 6 inline
 /// follow-ups, 7 attachments, 8 notes, 9 imported documents), so older builds
 /// kept reading archives without those features.
-pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 12;
+pub const DETACHED_RESEARCH_ARCHIVE_VERSION: u32 = 13;
 const DETACHED_RESEARCH_DIR: &str = "research-v1";
 const DETACHED_RESEARCH_PENDING_DIR: &str = "research-v1.pending";
 const DETACHED_RESEARCH_MANIFEST: &str = "manifest.json";
@@ -687,6 +692,15 @@ pub struct ResearchNode {
     pub starred_at: Option<u128>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub highlights: Vec<ResearchHighlight>,
+    /// On the first node of an inline chain: the chain's node ids in the
+    /// order its messages column lists them, set by reordering the column.
+    /// Display order only: the inline links still decide which message a
+    /// follow-up continues (the chain's last). Chain nodes missing from the
+    /// list were added after it was set and list last, oldest first; ids
+    /// no longer in the chain are ignored. Empty means oldest first. Added
+    /// in state version 11 and archive version 13.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub chain_order: Vec<String>,
     pub body: NodeBody,
 }
 
@@ -986,6 +1000,8 @@ pub struct ResearchNodeView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub starred_at: Option<u128>,
     pub highlights: Vec<ResearchHighlight>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub chain_order: Vec<String>,
     #[serde(flatten)]
     pub body: NodeBodyView,
 }
@@ -1047,6 +1063,7 @@ impl ResearchNode {
             created_at: self.created_at,
             starred_at: self.starred_at,
             highlights: self.highlights.clone(),
+            chain_order: self.chain_order.clone(),
             body,
         }
     }
@@ -1261,7 +1278,7 @@ pub fn reply_anchor_author(parent: &ResearchNode, child: &ResearchNode) -> Optio
 
 impl ResearchNode {
     /// A node with the envelope defaults: no anchor, inline slot, title,
-    /// star or highlights.
+    /// star, highlights or chain order.
     pub fn new(
         id: String,
         tree_id: String,
@@ -1281,6 +1298,7 @@ impl ResearchNode {
             created_at,
             starred_at: None,
             highlights: Vec::new(),
+            chain_order: Vec::new(),
             body,
         }
     }
@@ -1329,6 +1347,45 @@ impl ExchangeBody {
 /// and detached archive version 9.
 pub fn is_imported_document(node: &ResearchNode) -> bool {
     node.document_source() == Some(DocumentSource::Imported)
+}
+
+/// Whether a tree with this folder membership lists in Unfiled (Home's
+/// list): it has no membership, or one naming neither Drafts nor an existing
+/// folder (as the frontend's `researchTreePlace` reads it).
+pub fn research_membership_is_unfiled(member: Option<&str>, folders: &[ResearchFolder]) -> bool {
+    member.is_none_or(|member| {
+        member != RESEARCH_DRAFTS_FOLDER_ID && !folders.iter().any(|folder| folder.id == member)
+    })
+}
+
+/// The one-time Home order migration for state files before version 11 and
+/// archives before version 13. Home listed Unfiled by its roots' creation
+/// time, newest first; it now lists the tree order, which the user can
+/// change. `order` keeps every other tree in its slot, and the slots of the
+/// trees `is_unfiled` selects get those trees newest root first (by
+/// `root_created_at`, ties by id), so the first load shows Home as before.
+pub fn order_unfiled_newest_first(
+    order: &[String],
+    is_unfiled: impl Fn(&str) -> bool,
+    root_created_at: impl Fn(&str) -> u128,
+) -> Vec<String> {
+    let mut unfiled = order.iter().filter(|id| is_unfiled(id)).collect::<Vec<_>>();
+    unfiled.sort_by(|left, right| {
+        root_created_at(right)
+            .cmp(&root_created_at(left))
+            .then_with(|| left.cmp(right))
+    });
+    let mut refill = unfiled.into_iter();
+    order
+        .iter()
+        .map(|id| {
+            if is_unfiled(id) {
+                refill.next().expect("one refill per unfiled slot").clone()
+            } else {
+                id.clone()
+            }
+        })
+        .collect()
 }
 
 /// JSON-shape migration for one stored node, used for state files before
@@ -2531,6 +2588,9 @@ fn read_detached_research_from_path(
                 .collect::<String>()
         );
     }
+    if raw_version < 13 {
+        reorder_archive_unfiled_newest_first(&mut archive);
+    }
     // The nodes now have the current shape, which only this version
     // describes. Restamp before callers rewrite the bundle, such as when
     // moving a research folder, and after deriving the legacy identity,
@@ -2553,6 +2613,40 @@ fn read_detached_research_from_path(
         responses,
         pending,
     })
+}
+
+/// Archives before version 13 were written while Home listed Unfiled by
+/// creation time; see [`order_unfiled_newest_first`]. An archive without a
+/// tree order is left for the attach path's fallback.
+fn reorder_archive_unfiled_newest_first(archive: &mut DetachedResearchArchive) {
+    let trees = archive
+        .trees
+        .iter()
+        .map(|tree| (tree.id.as_str(), tree))
+        .collect::<HashMap<_, _>>();
+    let created = archive
+        .nodes
+        .iter()
+        .map(|node| (node.id.as_str(), node.created_at))
+        .collect::<HashMap<_, _>>();
+    let is_unfiled = |tree_id: &str| {
+        trees
+            .get(tree_id)
+            .is_some_and(|tree| tree.archived_at.is_none())
+            && research_membership_is_unfiled(
+                archive.membership.get(tree_id).map(String::as_str),
+                &archive.folders,
+            )
+    };
+    let root_created_at = |tree_id: &str| {
+        trees
+            .get(tree_id)
+            .and_then(|tree| created.get(tree.root_node_id.as_str()))
+            .copied()
+            .unwrap_or(0)
+    };
+    archive.tree_order =
+        order_unfiled_newest_first(&archive.tree_order, is_unfiled, root_created_at);
 }
 
 /// Where the folder's detached research archive lives, for user-facing
@@ -4140,6 +4234,7 @@ mod tests {
             created_at: 1,
             starred_at: None,
             highlights: Vec::new(),
+            chain_order: Vec::new(),
             body: crate::research::NodeBody::Exchange(crate::research::ExchangeBody {
                 message: crate::research::UserMessage {
                     text: "Question".to_string(),
@@ -5091,8 +5186,9 @@ mod tests {
     }
 
     /// Version 11 stored a star as `promotedAt`. A version-11 archive reads
-    /// back with `starredAt`, is stamped version 12, and is rewritten with
-    /// only the new key; reading the rewritten archive changes nothing.
+    /// back with `starredAt`, is stamped the current version, and is
+    /// rewritten with only the new key; reading the rewritten archive changes
+    /// nothing.
     #[test]
     fn version_eleven_archives_read_stars_as_starred_at() {
         let folder = temp_workspace();
@@ -5110,7 +5206,7 @@ mod tests {
         let manifest = detached_archive_path(&folder, true).join(DETACHED_RESEARCH_MANIFEST);
         let current: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
-        assert_eq!(current["version"], serde_json::json!(12));
+        assert_eq!(current["version"], DETACHED_RESEARCH_ARCHIVE_VERSION);
         assert_eq!(current["nodes"][1]["starredAt"], serde_json::json!(7));
         assert!(current["nodes"][1].get("promotedAt").is_none());
 
@@ -5127,10 +5223,85 @@ mod tests {
         write_detached_research_pending(&folder, &bundle.archive, &HashMap::new()).unwrap();
         let rewritten: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
-        assert_eq!(rewritten["version"], serde_json::json!(12));
+        assert_eq!(rewritten["version"], DETACHED_RESEARCH_ARCHIVE_VERSION);
         assert_eq!(rewritten["nodes"], current["nodes"]);
         let again = read_detached_research(&folder).unwrap().unwrap();
         assert_eq!(again.archive.nodes, archive.nodes);
+        std::fs::remove_dir_all(folder).unwrap();
+    }
+
+    #[test]
+    fn unfiled_slots_are_refilled_newest_root_first() {
+        let order = ["a", "filed", "b", "c", "archived"].map(String::from);
+        let created = HashMap::from([("a", 1), ("b", 3), ("c", 2)]);
+        let ordered =
+            order_unfiled_newest_first(&order, |id| created.contains_key(id), |id| created[id]);
+        assert_eq!(ordered, ["b", "filed", "c", "a", "archived"]);
+        // Equal times order by id; an order without Unfiled trees is kept.
+        let tied = order_unfiled_newest_first(&order, |id| id != "filed", |_| 0);
+        assert_eq!(tied, ["a", "filed", "archived", "b", "c"]);
+        assert_eq!(order_unfiled_newest_first(&order, |_| false, |_| 0), order);
+        let folders = [ResearchFolder {
+            id: "rf".to_string(),
+            name: "Reading".to_string(),
+            workspace_id: "w".to_string(),
+        }];
+        assert!(research_membership_is_unfiled(None, &folders));
+        assert!(research_membership_is_unfiled(Some("gone"), &folders));
+        assert!(!research_membership_is_unfiled(Some("rf"), &folders));
+        assert!(!research_membership_is_unfiled(
+            Some(RESEARCH_DRAFTS_FOLDER_ID),
+            &folders
+        ));
+    }
+
+    /// Archives before version 13 were written while Home listed Unfiled by
+    /// creation time: a read puts the Unfiled trees newest root first and
+    /// leaves filed trees in their slots. A current archive keeps its order.
+    #[test]
+    fn version_twelve_archives_list_unfiled_trees_newest_first() {
+        let folder = temp_workspace();
+        let mut archive = sample_detached_archive(&folder);
+        let first = archive.trees[0].clone();
+        let root = archive.nodes[0].clone();
+        for (index, created_at) in [(2, 5), (3, 9)] {
+            let mut tree = first.clone();
+            tree.id = format!("research-{index}");
+            tree.root_node_id = format!("research-node-{index}");
+            let mut node = root.clone();
+            node.id = tree.root_node_id.clone();
+            node.tree_id = tree.id.clone();
+            node.created_at = created_at;
+            archive.trees.push(tree);
+            archive.nodes.push(node);
+        }
+        archive.folders.push(ResearchFolder {
+            id: "rf".to_string(),
+            name: "Reading".to_string(),
+            workspace_id: archive.workspace.id.clone(),
+        });
+        // The sample files its tree in a folder; here it is Unfiled.
+        archive.membership.clear();
+        archive
+            .membership
+            .insert("research-3".to_string(), "rf".to_string());
+        let order = ["research-1", "research-3", "research-2"].map(String::from);
+        archive.tree_order = order.to_vec();
+        write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap();
+        let bundle = read_detached_research(&folder).unwrap().unwrap();
+        assert_eq!(bundle.archive.tree_order, order);
+
+        let manifest = detached_archive_path(&folder, true).join(DETACHED_RESEARCH_MANIFEST);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+        raw["version"] = serde_json::json!(12);
+        std::fs::write(&manifest, serde_json::to_vec(&raw).unwrap()).unwrap();
+        let bundle = read_detached_research(&folder).unwrap().unwrap();
+        assert_eq!(bundle.archive.version, DETACHED_RESEARCH_ARCHIVE_VERSION);
+        assert_eq!(
+            bundle.archive.tree_order,
+            ["research-2", "research-3", "research-1"]
+        );
         std::fs::remove_dir_all(folder).unwrap();
     }
 

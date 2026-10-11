@@ -33,8 +33,11 @@ import {
   getResearchNodeContent,
   removeResearchHighlights,
   renameResearchNode,
+  setResearchChainOrder,
   setResearchNodeStarred,
 } from "../../lib/api";
+import { useResearchCardDrag } from "../../hooks/useResearchCardDrag";
+import { reorderedIds, stepReorderTarget } from "../../lib/researchFolders";
 import { writeClipboardText } from "../../lib/clipboard";
 import ResearchPostColumn from "./ResearchPostColumn";
 import ResearchPostThread, { postThreadEntries, type ResearchPostThreadHandle } from "./ResearchPostThread";
@@ -90,6 +93,7 @@ import {
   canContinueChain,
   canFollowUpFrom,
   canRetryResearchNode,
+  chainDisplayOrder,
   inlineChainFor,
   isActiveResearchStatus,
   chainComposerPlaceholder,
@@ -779,6 +783,9 @@ function sameNumberRecord(a: Record<string, number>, b: Record<string, number>) 
   );
 }
 
+/** The drop zone of the messages column whose chain starts at `headId`. */
+const chainDropPlace = (headId: string) => `chain:${headId}`;
+
 /** Removes the given keys from a record, keeping the identity when none are
  * present — the shape every per-node cache invalidation here needs. */
 function withoutKeys<T>(record: Record<string, T>, keys: Iterable<string>): Record<string, T> {
@@ -1197,15 +1204,34 @@ function ResearchThreadPage({
     }
   });
 
+  // A messages column's new order, by chain head, until the head's update
+  // event brings the stored one.
+  const [pendingChainOrders, setPendingChainOrders] = useState<Record<string, string[]>>({});
   // The tree's nodes, with nodes created a moment ago that the detail has
-  // not delivered yet.
+  // not delivered yet, and pending chain orders.
   const nodes = useMemo(() => {
     const base = detail?.nodes ?? [];
     const extra = createdNodes
       .map((entry) => entry.node)
       .filter((node) => node.treeId === detail?.tree.id && !base.some((candidate) => candidate.id === node.id));
-    return extra.length > 0 ? [...base, ...extra] : base;
-  }, [createdNodes, detail]);
+    const merged = extra.length > 0 ? [...base, ...extra] : base;
+    if (Object.keys(pendingChainOrders).length === 0) {
+      return merged;
+    }
+    return merged.map((node) =>
+      pendingChainOrders[node.id] ? { ...node, chainOrder: pendingChainOrders[node.id] } : node,
+    );
+  }, [createdNodes, detail, pendingChainOrders]);
+  // A pending order is dropped once the detail holds it.
+  useEffect(() => {
+    setPendingChainOrders((current) => {
+      const settled = Object.keys(current).filter((headId) => {
+        const head = detail?.nodes.find((node) => node.id === headId);
+        return !head || sameIds(head.chainOrder ?? [], current[headId]);
+      });
+      return settled.length > 0 ? withoutKeys(current, settled) : current;
+    });
+  }, [detail]);
   const nodesRef = useRef(nodes);
   nodesRef.current = nodes;
   // Every node's parent as last seen, kept after the node is removed, so a
@@ -1635,12 +1661,17 @@ function ResearchThreadPage({
       if (!end && open && chain.includes(open)) {
         return;
       }
+      // `end` is the top or bottom row as listed; without one, the message
+      // last selected in the branch, else its newest.
       const remembered = chainMemoryRef.current.get(headId);
+      const listed = end
+        ? chainDisplayOrder(chain, nodesNow.find((node) => node.id === chain[0])?.chainOrder)
+        : chain;
       const message =
         end === "first"
-          ? chain[0]
+          ? listed[0]
           : end === "last" || !remembered || !chain.includes(remembered)
-            ? chain[chain.length - 1]
+            ? listed[listed.length - 1]
             : remembered;
       if (!message) {
         return;
@@ -2006,10 +2037,24 @@ function ResearchThreadPage({
    * same answer), Enter opens a message's answer, → selects a row in the
    * branch column, ← goes to the parent message (or the feed). */
   const onPairsKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    // ⌥↑ and ⌥↓ move a message up or down its column.
+    if (
+      target?.matches("[data-research-row]") &&
+      (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+      event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey &&
+      !event.defaultPrevented
+    ) {
+      const level = columnLevelIndex(columnIdOf(target));
+      if (level !== null) {
+        event.preventDefault();
+        moveFocusedMessage(target, level, event.key === "ArrowUp" ? -1 : 1);
+      }
+      return;
+    }
     if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) {
       return;
     }
-    const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target) {
       return;
     }
@@ -2257,7 +2302,7 @@ function ResearchThreadPage({
       const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const stripRow = columnsLayoutRef.current?.row ?? null;
       if (column.role === "messages") {
-        const ids = column.level.chainIds;
+        const ids = column.level.displayIds;
         const focusedId =
           active?.matches("[data-research-row]") && element.contains(active) ? active.dataset.nodeId : undefined;
         const nextId = ids[cycleIndex(ids.length, ids.indexOf(focusedId ?? column.level.selectedId), request.direction)];
@@ -3863,6 +3908,86 @@ function ResearchThreadPage({
     requestFocus({ kind: "composer", key: headId }, "reveal");
   }, [requestFocus]);
 
+  // ---- reordering a messages column ----------------------------------------
+
+  // Read by screen readers after a keyboard move.
+  const [announcement, setAnnouncement] = useState("");
+  const announce = useCallback((message: string) => {
+    setAnnouncement((current) => (current === message ? `${message}\u00a0` : message));
+  }, []);
+
+  /** Moves `nodeId` before `beforeId` (the end for null) in the column whose
+   * chain starts at `headId`, and stores the new order. Display only: the
+   * next follow-up still continues the chain's last message. Returns the
+   * new order, or null when nothing changed. */
+  const reorderChain = useCallback(
+    (headId: string, nodeId: string, beforeId: string | null): string[] | null => {
+      const level = stripRef.current.levels.find((candidate) => candidate.headId === headId);
+      if (!level || archived || !level.displayIds.includes(nodeId)) {
+        return null;
+      }
+      const next = reorderedIds([...level.displayIds], nodeId, beforeId);
+      if (sameIds(next, level.displayIds)) {
+        return null;
+      }
+      setPendingChainOrders((current) => ({ ...current, [headId]: next }));
+      setResearchChainOrder(headId, next).catch((err: unknown) => {
+        setPendingChainOrders((current) => (current[headId] === next ? withoutKeys(current, [headId]) : current));
+        onErrorRef.current(err instanceof Error ? err.message : String(err));
+      });
+      return next;
+    },
+    [archived],
+  );
+  const startMessageDrag = useResearchCardDrag({
+    onMoveMessage: (nodeId, place, beforeId) => {
+      if (place.startsWith("chain:")) {
+        reorderChain(place.slice("chain:".length), nodeId, beforeId);
+      }
+    },
+  });
+
+  /** ⌥↑/⌥↓ on a message row: moves it one row up or down its column; the
+   * row keeps focus and the new position is announced. */
+  const moveFocusedMessage = useCallback(
+    (row: HTMLElement, level: number, step: -1 | 1) => {
+      const levelNow = stripRef.current.levels[level];
+      const nodeId = row.dataset.nodeId;
+      if (!levelNow || !nodeId || archived) {
+        return;
+      }
+      const ids = levelNow.displayIds;
+      const target = stepReorderTarget(ids, nodeId, step);
+      if (!target) {
+        announce(ids.length > 1 ? (step < 0 ? "Already first." : "Already last.") : "Only message.");
+        return;
+      }
+      if (!reorderChain(levelNow.headId, nodeId, target.beforeId)) {
+        return;
+      }
+      announce(`Moved to position ${ids.indexOf(nodeId) + step + 1} of ${ids.length}.`);
+      // The row's element moves with the new order; focus follows it.
+      const started = performance.now();
+      const refocus = () => {
+        const current = pairColumn("messages", level)?.querySelector<HTMLElement>(
+          `[data-research-row][data-node-id="${CSS.escape(nodeId)}"]`,
+        );
+        if (current && document.activeElement !== current) {
+          current.tabIndex = 0;
+          current.focus({ preventScroll: true });
+        }
+        if (current) {
+          scrollIntoColumn(current);
+        }
+        if (performance.now() - started < 300) {
+          window.requestAnimationFrame(refocus);
+        }
+      };
+      window.requestAnimationFrame(refocus);
+    },
+    [announce, archived, pairColumn, reorderChain],
+  );
+
   // The branch count beside a message: selects the message and moves focus to
   // its answer's margin markers (the open one, else the first).
   const showBranches = useCallback(
@@ -4516,8 +4641,11 @@ function ResearchThreadPage({
     firstSeenCompleteRef.current.get(branch.id) === false &&
     !openedNodeIds.has(branch.id);
 
-  const renderRows = (chainIds: readonly string[], level: number) =>
-    chainIds.map((id, index) => {
+  /** A level's message rows, `ids` in the order the column lists them.
+   * With more than one row (and the tree not archived) they reorder by
+   * drag. */
+  const renderRows = (ids: readonly string[], level: number, headId: string) =>
+    ids.map((id) => {
       const node = nodeById.get(id);
       if (!node) {
         return null;
@@ -4542,7 +4670,7 @@ function ResearchThreadPage({
           replyQuote={replyQuote}
           selected={selected}
           now={minuteNow}
-          starrable={level === 0 ? index > 0 && Boolean(node.inline) : index === 0}
+          starrable={level === 0 ? id !== headId && Boolean(node.inline) : id === headId}
           retryQueued={queuedRetries.has(id)}
           branchCount={branches.length}
           branchOpen={selected && (levelPath.length > level + 1 || activePending?.parentNodeId === id)}
@@ -4554,10 +4682,14 @@ function ResearchThreadPage({
           onShowBranches={showBranches}
           onOpenAnswerMenu={openAnswerMenu}
           onOpenContextMenu={openContextMenu}
+          dragPlace={!archived && ids.length > 1 ? chainDropPlace(headId) : null}
+          onDragStart={startMessageDrag}
         />
       );
     });
 
+  /** The chain's client-side queue, listed below its messages in the order
+   * it sends (the next to send is first). */
   const renderQueue = (headId: string) =>
     (queues[headId] ?? EMPTY_QUEUE).map((item, index) => {
       const chain = inlineChainFor(nodes, headId);
@@ -4608,7 +4740,7 @@ function ResearchThreadPage({
           </div>
           {item.failed || stalled ? (
             <p className="research-msg-note" role={item.failed ? "alert" : undefined}>
-              {item.failed ?? "The answer above stopped; retry it, or edit this question."}
+              {item.failed ?? "The last answer stopped; retry it, or edit this question."}
             </p>
           ) : null}
           <div className="research-turn-actions research-msg-actions">
@@ -5125,7 +5257,7 @@ function ResearchThreadPage({
         );
       }
       case "messages": {
-        const { index: level, chainIds, headId } = column.level;
+        const { index: level, chainIds, displayIds, headId } = column.level;
         const head = nodeById.get(headId);
         const title = level === 0 ? treeTitleText : nodeLabel(head, "Branch");
         return (
@@ -5148,14 +5280,18 @@ function ResearchThreadPage({
                   : undefined
               }
             />
-            <div className="research-column-scroll" onScroll={onColumnScroll(column)}>
+            <div className="research-column-scroll" data-research-scroll onScroll={onColumnScroll(column)}>
               <div className="research-column-content research-reading-surface">
                 {level > 0 && head?.parentNodeId ? sourceBlock(passageAnchor(head), head.parentNodeId, head) : null}
-                <ul className="research-msg-list">
-                  {renderRows(chainIds, level)}
+                {renderChainComposer(headId, chainIds, level)}
+                <ul
+                  className="research-msg-list"
+                  data-research-drop={chainDropPlace(headId)}
+                  data-research-drop-kinds="message"
+                >
+                  {renderRows(displayIds, level, headId)}
                   {renderQueue(headId)}
                 </ul>
-                {renderChainComposer(headId, chainIds, level)}
               </div>
             </div>
             <ResearchColumnResizer kind="messages" label="Resize messages column" belowHeader />
@@ -5596,6 +5732,9 @@ function ResearchThreadPage({
         </div>
       </div>
       {columnsLayout?.overlay ? createPortal(searchBar, columnsLayout.overlay) : searchBar}
+      <div className="research-visually-hidden" role="status" aria-live="polite">
+        {announcement}
+      </div>
       {renderMenu()}
       {markerTip ? (
         <ResearchMarkerTip

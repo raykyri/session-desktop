@@ -21,10 +21,10 @@ export function emptyResearchFolderState(): ResearchFolderState {
   return { folders: [], membership: {}, collapsed: [] };
 }
 
-/** Only Drafts and user folders keep a manual order: Unfiled follows the
- * feed's chronology and Archive lists the most recently archived first. */
+/** Unfiled (Home's list), Drafts and user folders keep a manual order;
+ * Archive lists the most recently archived first. */
 export function researchPlaceIsReorderable(place: string): boolean {
-  return place !== RESEARCH_UNFILED_FOLDER_ID && place !== RESEARCH_ARCHIVE_FOLDER_ID;
+  return place !== RESEARCH_ARCHIVE_FOLDER_ID;
 }
 
 export function workspaceResearchFolders(
@@ -195,11 +195,41 @@ export function researchTreeOrderAfterMove(
     : [...rest.slice(0, lastIndex + 1), treeId, ...rest.slice(lastIndex + 1)];
 }
 
+/** Where a tree goes in a place that keeps an order: before `beforeId` (at
+ * the end for null), or right after `afterId`. */
+export type ResearchDropPosition = { beforeId: string | null } | { afterId: string };
+
+/** The id a tree placed per `position` goes before, among `memberIds` (the
+ * place's trees in display order): null for the end. */
+export function researchDropBeforeId(
+  memberIds: readonly string[],
+  treeId: string,
+  position: ResearchDropPosition,
+): string | null {
+  if ("beforeId" in position) return position.beforeId;
+  const others = memberIds.filter((id) => id !== treeId);
+  const index = others.indexOf(position.afterId);
+  return index < 0 ? null : (others[index + 1] ?? null);
+}
+
 /** Moves one id in a list before another, or to the end. */
 export function reorderedIds(ids: string[], movedId: string, beforeId: string | null): string[] {
   const rest = ids.filter((id) => id !== movedId);
   const index = beforeId ? rest.indexOf(beforeId) : -1;
   return index < 0 ? [...rest, movedId] : [...rest.slice(0, index), movedId, ...rest.slice(index)];
+}
+
+/** Where a keyboard move of `id` one step up (-1) or down (1) in `ids` puts
+ * it: before the id it lands in front of, null for the end; null when it is
+ * already first or last (or not listed). */
+export function stepReorderTarget(
+  ids: readonly string[],
+  id: string,
+  step: -1 | 1,
+): { beforeId: string | null } | null {
+  const index = ids.indexOf(id);
+  if (index < 0 || index + step < 0 || index + step >= ids.length) return null;
+  return { beforeId: step < 0 ? ids[index - 1] : (ids[index + 2] ?? null) };
 }
 
 const normalizedText = (text: string) => text.replace(/\s+/g, " ").trim().toLowerCase();

@@ -19,11 +19,13 @@ import {
   researchFolderStateWithNewFolder,
   researchFolderStateWithoutFolder,
   newResearchFolderId,
+  researchDropBeforeId,
   researchPlaceIsReorderable,
   researchPlaceName,
   researchTreeOrderAfterMove,
   researchTreePlace,
   workspaceResearchFolders,
+  type ResearchDropPosition,
 } from "../lib/researchFolders";
 
 const errorMessage = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -120,16 +122,19 @@ export function useResearchFiling({
     [],
   );
 
-  /** Files `treeId` in `place`, before `beforeId` when the place keeps an
-   * order. A move to another place shows a toast with Undo; a reorder
-   * within the same place shows none. With `newFolderName`, `place` is the
-   * id of a folder created by the same write. A failure is reported, or
-   * with `rejects` passed to the caller. */
+  /** Files `treeId` in `place`. With `position` (a drop between cards, or a
+   * keyboard move) it goes before `position.beforeId`, or to the end for
+   * null, when the place keeps an order. Without one, a tree filed in a
+   * folder or Drafts goes to its end, and one moved to Unfiled keeps its slot
+   * in the tree order. A move to another place shows a toast with Undo; a
+   * reorder within the same place shows none. With `newFolderName`, `place`
+   * is the id of a folder created by the same write. A failure is reported,
+   * or with `rejects` passed to the caller. */
   const moveTree = useCallback(
     async (
       treeId: string,
       place: string,
-      beforeId: string | null = null,
+      position: ResearchDropPosition | null = null,
       {
         toast = true,
         newFolderName = null,
@@ -141,7 +146,7 @@ export function useResearchFiling({
       const state = store.getState();
       const from = researchTreePlace(tree, state);
       const reorderable = researchPlaceIsReorderable(place);
-      if (from === place && (!beforeId || !reorderable)) return;
+      if (from === place && (!position || !reorderable)) return;
       const wasArchived = tree.archivedAt != null;
       const previousMember = state.membership[treeId] ?? null;
       const previousOrder = workspaceOrder(tree.workspaceId);
@@ -163,7 +168,7 @@ export function useResearchFiling({
         } else if (place !== RESEARCH_ARCHIVE_FOLDER_ID && wasArchived) {
           await restoreResearchTree(treeId);
         }
-        if (reorderable && (beforeId || from !== place)) {
+        if (reorderable && (position || (from !== place && place !== RESEARCH_UNFILED_FOLDER_ID))) {
           const flat = previousOrder.includes(treeId) ? previousOrder : [treeId, ...previousOrder];
           const members = (activeTreesRef.current ?? [])
             .filter(
@@ -172,7 +177,12 @@ export function useResearchFiling({
                 researchTreePlace(candidate, store.getState()) === place,
             )
             .map((candidate) => candidate.id);
-          const order = researchTreeOrderAfterMove(flat, members, treeId, beforeId);
+          const order = researchTreeOrderAfterMove(
+            flat,
+            members,
+            treeId,
+            position ? researchDropBeforeId(members, treeId, position) : null,
+          );
           if (order.some((id, index) => id !== flat[index])) {
             await writeOrder(tree.workspaceId, order);
           }

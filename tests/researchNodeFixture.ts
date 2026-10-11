@@ -27,6 +27,7 @@ export interface NodeFixture {
   createdAt?: number;
   starredAt?: number | null;
   highlights?: ResearchHighlight[];
+  chainOrder?: string[];
   /** Defaults to "exchange". */
   type?: ResearchNodeType;
   /** Documents only; defaults to "authored". */
@@ -61,6 +62,7 @@ export function researchNode(fields: NodeFixture = {}): ResearchNode {
     createdAt: fields.createdAt ?? 1,
     starredAt: fields.starredAt ?? null,
     highlights: fields.highlights ?? [],
+    ...(fields.chainOrder ? { chainOrder: fields.chainOrder } : {}),
   };
   const message = { text: fields.prompt ?? "Question", attachments: fields.attachments ?? [] };
   const agent = {

@@ -21,6 +21,7 @@ import type {
   SessionEvent,
   QueuedTurn,
   ResearchBranchRemoval,
+  RecentResearchQuery,
   RecentResearchQueryCursor,
   ResearchDraft,
   ResearchFolderState,
@@ -255,6 +256,13 @@ export function listRecentActivity(
   });
 }
 
+/** Home's feed entries for these trees' roots, in this order, for cards
+ * whose root is not in a loaded page. Unknown and archived trees are
+ * skipped. */
+export function listRecentActivityForTrees(treeIds: string[]) {
+  return invoke<RecentResearchQuery[]>("list_recent_activity_for_trees", { treeIds });
+}
+
 /** Creates a post tree. `askNetwork` posts are published to the network (no
  * transport yet); a body that is a single URL can be saved with
  * `askNetwork: false` as a link or post. The agent fields are the default
@@ -399,6 +407,13 @@ export function setResearchTreeBookmarked(treeId: string, bookmarked: boolean) {
 
 export function renameResearchNode(nodeId: string, title: string) {
   return invoke<ResearchNode>("rename_research_node", { nodeId, title });
+}
+
+/** Stores the display order of the messages column whose chain starts at
+ * `headNodeId`; `nodeIds` lists exactly the chain's nodes. Resolves with the
+ * updated head. */
+export function setResearchChainOrder(headNodeId: string, nodeIds: string[]) {
+  return invoke<ResearchNode>("set_research_chain_order", { headNodeId, nodeIds });
 }
 
 export function setResearchNodeStarred(nodeId: string, starred: boolean) {

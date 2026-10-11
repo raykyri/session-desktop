@@ -5,6 +5,7 @@ import {
   canFollowUpFrom,
   canRetryResearchNode,
   canStopResearchNode,
+  chainDisplayOrder,
   inlineChainFor,
   inlineChildOf,
   isActiveResearchStatus,
@@ -229,4 +230,33 @@ test("every document asks about itself until its first follow-up", () => {
   assert.equal(chainComposerPlaceholder(imported, 2, false), "Ask a follow-up");
   assert.equal(chainComposerPlaceholder(node("q"), 1, false), "Ask a follow-up");
   assert.equal(chainComposerPlaceholder(node("q"), 1, true), "Ask a follow-up (queued)");
+});
+
+test("a messages column lists its chain oldest first, or in the stored order", () => {
+  const chain = ["root", "c1", "c2", "c3"];
+  assert.deepEqual(chainDisplayOrder(chain, undefined), ["root", "c1", "c2", "c3"]);
+  assert.deepEqual(chainDisplayOrder(chain, []), ["root", "c1", "c2", "c3"]);
+  // Stored after c2: c3, asked since, lists last; ids no longer in the
+  // chain and repeats are dropped.
+  assert.deepEqual(
+    chainDisplayOrder(chain, ["c1", "gone", "root", "c2", "c1"]),
+    ["c1", "root", "c2", "c3"],
+  );
+  assert.deepEqual(chainDisplayOrder(["root"], ["root"]), ["root"]);
+});
+
+test("a follow-up continues the chain's last message, wherever it lists", () => {
+  const nodes = [
+    node("root", { createdAt: 0, chainOrder: ["c2", "root", "c1"] }),
+    node("c1", { parentNodeId: "root", inline: true, createdAt: 1 }),
+    node("c2", { parentNodeId: "c1", inline: true, createdAt: 2 }),
+  ];
+  const chain = inlineChainFor(nodes, "root");
+  assert.deepEqual(chain, ["root", "c1", "c2"]);
+  assert.deepEqual(chainDisplayOrder(chain, nodes[0].chainOrder), ["c2", "root", "c1"]);
+  // The ask box sends from the chain's tail, c2, not from the bottom row.
+  const tail = nodes.find((candidate) => candidate.id === chain[chain.length - 1])!;
+  assert.equal(tail.id, "c2");
+  assert.equal(canContinueChain(nodes, tail), true);
+  assert.equal(canContinueChain(nodes, nodes.find((candidate) => candidate.id === "c1")!), false);
 });

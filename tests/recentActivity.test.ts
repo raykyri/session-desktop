@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  activityEventFromResearchQuery,
-  buildRecentActivityFromItems,
   cappedPostDelivery,
   mergeRecentActivityItems,
   reconcileRecentActivityHead,
@@ -12,7 +10,7 @@ import {
 } from "../src/lib/activity";
 import { formatResearchModelSummary } from "../src/lib/researchModelSummary";
 import {
-  buildRecentActivityVirtualRows,
+  researchFeedRows,
   virtualActivityRange,
 } from "../src/components/research/ResearchActivityFeed";
 import type {
@@ -50,17 +48,6 @@ const query: RecentResearchQuery = {
   createdAt: 200,
 };
 
-test("research metadata follows the shared actor/action/object grammar", () => {
-  const event = activityEventFromResearchQuery(query, tree);
-  assert.deepEqual(event.actor, { kind: "user", label: "You" });
-  assert.deepEqual(event.action, { kind: "asked", label: "asked" });
-  assert.equal(event.object.kind, "research-query");
-  assert.equal(event.relationship?.label, "Follow-up");
-  assert.equal(event.context?.label, tree.title);
-  assert.deepEqual(event.execution, { adapter: "codex", model: "gpt-5" });
-  assert.equal(event.state?.label, "Running");
-});
-
 test("model summaries use readable model names where available", () => {
   assert.equal(formatResearchModelSummary("claude", "fable"), "Claude Fable");
   assert.equal(formatResearchModelSummary("claude", null), "Claude");
@@ -68,52 +55,30 @@ test("model summaries use readable model names where available", () => {
   assert.equal(formatResearchModelSummary("", null), "");
 });
 
-test("posts name delivery and saved sources", () => {
-  const networkPost: RecentResearchQuery = {
-    ...query, nodeId: "post", parentNodeId: null, type: "post", status: "complete",
-    prompt: "Who has shipped this?", delivery: { status: "posted", postedAt: 1 }, replyCount: 3,
-  };
-  const posted = activityEventFromResearchQuery(networkPost, tree);
-  assert.deepEqual(posted.action, { kind: "posted", label: "Posted to network" });
-  assert.equal(posted.object.kind, "network-post");
-
-  const link = activityEventFromResearchQuery({
-    ...networkPost, prompt: "https://example.com/paper", delivery: null, replyCount: 0,
+test("Home lists Unfiled trees in the tree order, a just-created root first", () => {
+  const root = (treeId: string, createdAt: number): RecentResearchQuery => ({
+    ...query, nodeId: `${treeId}-root`, treeId, parentNodeId: null, createdAt,
   });
-  assert.equal(link.object.kind, "link");
-  assert.equal(link.context?.label, "example.com");
-  assert.equal(link.state, undefined);
-
-  const xPost = activityEventFromResearchQuery({
-    ...networkPost, prompt: "https://x.com/jack/status/20", delivery: null, replyCount: 0,
-    attachments: [{
-      kind: "tweet", schemaVersion: 1, sourceUrl: "https://x.com/jack/status/20", tweetId: "20",
-      placement: "trailing", provider: "xSyndication", status: "resolved", attemptedAt: 1,
-      tweet: {
-        id: "20", url: "https://x.com/jack/status/20", author: { name: "jack", handle: "jack" },
-        runs: [], partial: false, media: [],
-      },
-    }],
-  });
-  assert.equal(xPost.object.kind, "post");
-});
-
-test("Home hides archived research and shows it again when restored", () => {
-  const items: RecentResearchQuery[] = [
-    query,
-    { ...query, nodeId: "active", treeId: "active-tree", createdAt: 150 },
-    { ...query, nodeId: "saved", treeId: "active-tree", type: "post", createdAt: 100 },
-  ];
-  const activeTree = { ...tree, id: "active-tree" };
-  assert.deepEqual(
-    buildRecentActivityFromItems(items, [{ ...tree, archivedAt: 300 }, activeTree])
-      .map((event) => event.id),
-    ["research:active", "research:saved"],
+  const trees = ["a", "b", "filed", "archived", "c"].map((id) => ({
+    ...tree, id, rootNodeId: `${id}-root`, archivedAt: id === "archived" ? 300 : null,
+    bookmarked: id === "b" || id === "filed",
+  }));
+  const roots = new Map(
+    [root("a", 100), root("c", 300), root("new", 400), root("filed", 200)].map((item) => [item.treeId, item]),
   );
+  const placeOf = (candidate: ResearchTreeSummary) => (candidate.id === "filed" ? "f-read" : "system:unfiled");
+  const home = researchFeedRows("home", roots, trees.filter((candidate) => !candidate.archivedAt), placeOf);
+  // Not by creation time: "a" before "c". An unloaded root ("b") still lists.
+  assert.deepEqual(home.map((row) => row.treeId), ["new", "a", "b", "c"]);
+  assert.deepEqual(home.map((row) => row.key), ["tree:new", "tree:a", "tree:b", "tree:c"]);
+  assert.deepEqual(home.map((row) => row.position), [1, 2, 3, 4]);
+  assert.equal(home[0].tree, undefined);
+  assert.equal(home[2].query, undefined);
+  assert.equal(home[3].query?.nodeId, "c-root");
+  // Bookmarks: bookmarked active trees in the tree order, from any place.
   assert.deepEqual(
-    buildRecentActivityFromItems(items, [{ ...tree, archivedAt: null }, activeTree])
-      .map((event) => event.id),
-    ["research:child", "research:active", "research:saved"],
+    researchFeedRows("bookmarks", roots, trees, placeOf).map((row) => row.treeId),
+    ["b", "filed"],
   );
 });
 
@@ -228,18 +193,6 @@ test("variable-height virtualization returns a small overscanned window", () => 
   assert.ok(range.end - range.start < 50);
 });
 
-test("virtual feed rows omit day dividers and retain feed positions", () => {
-  const events = buildRecentActivityFromItems(
-    [{ ...query, nodeId: "link", type: "post", prompt: "https://example.com", createdAt: 300 }, query],
-    [tree],
-  );
-  const rows = buildRecentActivityVirtualRows(events);
-  assert.equal(rows.length, 2);
-  assert.deepEqual(rows.map((row) => row.position), [1, 2]);
-  assert.deepEqual(rows.map((row) => row.key), events.map((event) => event.id));
-});
-
-
 test("live summary events retain imported report provenance", () => {
   const fields = {
     id: "imported", treeId: "imported-tree", prompt: "Original prompt", adapter: "codex",
@@ -253,7 +206,7 @@ test("live summary events retain imported report provenance", () => {
     items,
     researchNode({ ...fields, recap: { text: "Summary", responseRevision: "revision" } }),
   );
-  assert.equal(activityEventFromResearchQuery(updated[0]).execution?.origin, "imported");
+  assert.equal(updated[0].source, "imported");
   assert.equal(updated[0].model, null);
 });
 

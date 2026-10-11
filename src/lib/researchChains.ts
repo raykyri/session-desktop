@@ -145,6 +145,30 @@ export function inlineChainFor(nodes: readonly ResearchNode[], nodeId: string): 
   return chain;
 }
 
+/** The order a messages column lists its chain in (`chainIds`, oldest first,
+ * as `inlineChainFor` returns it): the chain head's stored `chainOrder`, then
+ * the chain nodes it does not list, oldest first. Those were added after the
+ * order was stored, so a new follow-up lists last. Ids no longer in the
+ * chain are dropped. Without a stored order, oldest first. The order is
+ * display only: a follow-up continues the chain's last node in `chainIds`,
+ * wherever that node lists. */
+export function chainDisplayOrder(
+  chainIds: readonly string[],
+  stored: readonly string[] | undefined,
+): string[] {
+  const members = new Set(chainIds);
+  const listed: string[] = [];
+  const seen = new Set<string>();
+  for (const id of stored ?? []) {
+    if (members.has(id) && !seen.has(id)) {
+      seen.add(id);
+      listed.push(id);
+    }
+  }
+  const unlisted = chainIds.filter((id) => !seen.has(id));
+  return [...listed, ...unlisted];
+}
+
 /** Whether a settled node can be retried in place (same node id, same launch
  * inputs, relaunched through the ordinary machinery): it failed or was
  * cancelled, and no pane from the previous run lingers — an unfinished cancel

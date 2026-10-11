@@ -17,7 +17,7 @@
 
 import { nodeType, passageAnchor } from "./researchNodeTypes";
 import { researchLevelPath } from "./researchBranchView";
-import { inlineChainFor } from "./researchChains";
+import { chainDisplayOrder, inlineChainFor } from "./researchChains";
 import type { ResearchHighlightAnchor, ResearchNode } from "../types";
 
 export interface ResearchLevel {
@@ -26,8 +26,12 @@ export interface ResearchLevel {
   /** The chain's first node: the key for the messages column's scroll
    * position, its follow-up queue and its ask box. */
   headId: string;
-  /** The level's messages, oldest first. */
+  /** The level's messages, oldest first: the order the inline links give
+   * (a follow-up continues the last). */
   chainIds: readonly string[];
+  /** The same messages in the order the messages column lists them (see
+   * `chainDisplayOrder`), which the keys and ⌃Tab follow. */
+  displayIds: readonly string[];
   /** The message whose answer the level shows. */
   selectedId: string;
   /** The message in the previous level this branch was asked from; null for
@@ -112,6 +116,7 @@ export function researchStrip(
       index,
       headId,
       chainIds,
+      displayIds: chainDisplayOrder(chainIds, head?.chainOrder),
       selectedId,
       sourceId: index === 0 ? null : (head?.parentNodeId ?? null),
       anchor: index === 0 || !head ? null : passageAnchor(head),
@@ -148,6 +153,9 @@ export function researchStrip(
   };
 }
 
+const sameIds = (left: readonly string[], right: readonly string[]) =>
+  left.length === right.length && left.every((id, position) => id === right[position]);
+
 /** Whether two level lists show the same chains and selections. A branch's
  * anchor is fixed when the branch is created, so levels compare by their
  * node ids. */
@@ -164,8 +172,8 @@ export function sameResearchLevels(
         level.selectedId === other.selectedId &&
         level.sourceId === other.sourceId &&
         level.kind === other.kind &&
-        level.chainIds.length === other.chainIds.length &&
-        level.chainIds.every((id, position) => id === other.chainIds[position])
+        sameIds(level.chainIds, other.chainIds) &&
+        sameIds(level.displayIds, other.displayIds)
       );
     })
   );

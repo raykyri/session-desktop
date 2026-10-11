@@ -15,10 +15,12 @@ import {
   researchFolderStateWithMembership,
   researchFolderStateWithNewFolder,
   researchFolderStateWithoutFolder,
+  researchDropBeforeId,
   researchPlaceIsReorderable,
   researchPlaceName,
   researchTreeOrderAfterMove,
   researchTreePlace,
+  stepReorderTarget,
   treesWithWorkspaceOrder,
   workspaceResearchFolders,
 } from "../src/lib/researchFolders";
@@ -118,10 +120,41 @@ test("moving within or into a folder changes only the moved tree's flat position
   assert.deepEqual(researchTreeOrderAfterMove(flat, [], "u2", null), flat);
   assert.deepEqual(reorderedIds(["a", "b", "c"], "c", "a"), ["c", "a", "b"]);
   assert.deepEqual(reorderedIds(["a", "b", "c"], "a", null), ["b", "c", "a"]);
-  assert.equal(researchPlaceIsReorderable(RESEARCH_UNFILED_FOLDER_ID), false);
+  // Home's Unfiled list keeps the user's order; Archive keeps archive time.
+  assert.equal(researchPlaceIsReorderable(RESEARCH_UNFILED_FOLDER_ID), true);
   assert.equal(researchPlaceIsReorderable(RESEARCH_ARCHIVE_FOLDER_ID), false);
   assert.equal(researchPlaceIsReorderable(RESEARCH_DRAFTS_FOLDER_ID), true);
   assert.equal(researchPlaceIsReorderable("f-read"), true);
+});
+
+test("a keyboard move steps one place up or down, and stops at the ends", () => {
+  const ids = ["a", "b", "c", "d"];
+  assert.deepEqual(stepReorderTarget(ids, "c", -1), { beforeId: "b" });
+  assert.deepEqual(stepReorderTarget(ids, "b", 1), { beforeId: "d" });
+  // Down from the second-to-last goes to the end.
+  assert.deepEqual(stepReorderTarget(ids, "c", 1), { beforeId: null });
+  assert.equal(stepReorderTarget(ids, "a", -1), null);
+  assert.equal(stepReorderTarget(ids, "d", 1), null);
+  assert.equal(stepReorderTarget(ids, "missing", 1), null);
+  // Applied to the list, each move swaps the item with its neighbor.
+  assert.deepEqual(reorderedIds(ids, "c", stepReorderTarget(ids, "c", -1)!.beforeId), ["a", "c", "b", "d"]);
+  assert.deepEqual(reorderedIds(ids, "c", stepReorderTarget(ids, "c", 1)!.beforeId), ["a", "b", "d", "c"]);
+});
+
+test("a drop after a card goes before the card that follows it in the place", () => {
+  const members = ["a", "b", "c"];
+  assert.equal(researchDropBeforeId(members, "a", { afterId: "b" }), "c");
+  assert.equal(researchDropBeforeId(members, "a", { afterId: "c" }), null);
+  // The moved tree itself is skipped: after "a" (which follows "c") is the end.
+  assert.equal(researchDropBeforeId(members, "b", { afterId: "a" }), "c");
+  assert.equal(researchDropBeforeId(members, "c", { afterId: "b" }), null);
+  assert.equal(researchDropBeforeId(members, "a", { beforeId: "c" }), "c");
+  // Applied to the flat order, a positioned drop in Unfiled moves only the tree.
+  const flat = ["u1", "f1", "u2", "u3"];
+  assert.deepEqual(
+    researchTreeOrderAfterMove(flat, ["u1", "u2", "u3"], "u3", researchDropBeforeId(["u1", "u2", "u3"], "u3", { beforeId: "u1" })),
+    ["u3", "u1", "f1", "u2"],
+  );
 });
 
 test("a local reorder touches only the workspace's own slots", () => {

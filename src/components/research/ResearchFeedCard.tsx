@@ -61,6 +61,8 @@ interface ResearchFeedCardProps {
     control: HTMLElement,
   ) => void;
   onDragStart?: ResearchCardDragStart;
+  /** A card of a virtualized list, which may not render its neighbors. */
+  virtual?: boolean;
 }
 
 /** The … button of a feed row (a card or a child row), for placing its
@@ -174,6 +176,7 @@ export default function ResearchFeedCard({
   onContextMenu,
   onChildContextMenu,
   onDragStart,
+  virtual = false,
 }: ResearchFeedCardProps) {
   const statusLabel = status ? (statusLabelOverride ?? STATUS_LABELS[status]) : null;
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -186,6 +189,8 @@ export default function ResearchFeedCard({
         }${childRows.length > 0 ? " has-children" : ""}`}
         data-research-card={cardId}
         data-research-card-kind={dragKind}
+        data-research-place={place}
+        data-research-card-virtual={virtual ? "" : undefined}
         onPointerDown={onDragStart ? (event) => onDragStart(event, { kind: dragKind, id: cardId, place }) : undefined}
         {...(onContextMenu
           ? researchUnitMenuProps(

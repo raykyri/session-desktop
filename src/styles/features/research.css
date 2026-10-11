@@ -811,6 +811,42 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 35%, transparent);
 }
 
+/* Dragging a row to reorder the column: the row dims, and a line in the gap
+   between rows shows where it goes. The grip shows on hover and focus, in
+   the feed's corner pill. */
+.research-msg-row.is-dragging {
+  opacity: 0.4;
+}
+
+.research-msg-row.is-insert-before::before,
+.research-msg-row.is-insert-after::after {
+  position: absolute;
+  right: -4px;
+  left: -4px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent-color);
+  content: "";
+  pointer-events: none;
+}
+
+.research-msg-row.is-insert-before::before {
+  top: -2px;
+}
+
+.research-msg-row.is-insert-after::after {
+  bottom: -2px;
+}
+
+.research-msg-row:is(:hover, :focus-within) > .research-msg-rail {
+  opacity: 0.85;
+}
+
+.research-msg-row[data-research-card] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* One button under the row's content selects the message; links in the
    message and the meta line's buttons stay their own targets above it. */
 .research-msg-hit {
@@ -1391,9 +1427,14 @@
   background: var(--surface-fill-hover);
 }
 
-/* — The ask box at the end of each messages column — */
+/* — The ask box at the top of each messages column — */
 .research-composer-wrap {
   padding: 14px 12px 20px;
+}
+
+/* Above the messages, the box sits closer to the first row. */
+.research-pair-messages .research-composer-wrap + .research-msg-list {
+  margin-top: -12px;
 }
 
 .research-composer-mode {

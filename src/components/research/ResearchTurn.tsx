@@ -1,6 +1,7 @@
 import { memo, useCallback, useId } from "react";
 import type { ReactNode } from "react";
 import {
+  GripVertical,
   LoaderCircle,
   MoreHorizontal,
   RotateCcw,
@@ -26,6 +27,7 @@ import {
 import ResearchRecap from "./ResearchRecap";
 import { ResearchMarkdown, ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
+import type { ResearchCardDragStart } from "../../hooks/useResearchCardDrag";
 import { documentSource, nodeAdapter, nodeAgent, nodeAttachments, nodePrompt, nodeRun, nodeStatus } from "../../lib/researchNodeTypes";
 
 // The backend caps snapshots at 64MB, which is still far beyond what markdown
@@ -606,7 +608,10 @@ export function researchMessagePill(
  * answer has branches) and the answer's … menu. The row is a bubble: one
  * button under its content selects the message; links in the message and
  * the meta line's buttons stay their own targets. Only the selected row is
- * in the tab order (the column's keys move between rows). */
+ * in the tab order (the column's keys move between rows). With `dragPlace`
+ * (the column's drop zone), a press on the row starts a drag that reorders
+ * the column, and a grip shows in the row's top-right corner on hover and
+ * focus, as on a feed card. */
 export const ResearchMessageRow = memo(function ResearchMessageRow({
   node,
   level,
@@ -627,6 +632,8 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   onShowBranches,
   onOpenAnswerMenu,
   onOpenContextMenu,
+  dragPlace = null,
+  onDragStart,
 }: {
   node: ResearchNode;
   level: number;
@@ -654,8 +661,11 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
   /** Opens the answer's menu at `placement`: a right-click on the row, or
    * Shift+F10 or the ContextMenu key with focus in it. */
   onOpenContextMenu: (nodeId: string, placement: ResearchUnitMenuPlacement) => void;
+  dragPlace?: string | null;
+  onDragStart?: ResearchCardDragStart;
 }) {
   const labelId = useId();
+  const draggable = Boolean(dragPlace && onDragStart);
   const settled = nodeStatus(node) === "complete" || nodeStatus(node) === "failed" || nodeStatus(node) === "cancelled";
   const starred = Boolean(node.starredAt);
   const pill = researchMessagePill(nodeStatus(node), retryQueued);
@@ -683,6 +693,13 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
       ref={(element) => registerSegmentElement(node.id, "anchor", element)}
       className={`research-msg-row is-status-${retryQueued ? "queued" : nodeStatus(node)}${selected ? " is-selected" : ""}`}
       data-segment-anchor={node.id}
+      data-research-card={draggable ? node.id : undefined}
+      data-research-card-kind={draggable ? "message" : undefined}
+      onPointerDown={
+        draggable
+          ? (event) => onDragStart?.(event, { kind: "message", id: node.id, place: dragPlace ?? "" })
+          : undefined
+      }
       {...unitMenuProps}
     >
       <button
@@ -695,7 +712,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
         tabIndex={tabIndex}
         onClick={(event) => onSelect(node.id, level, event.currentTarget)}
       />
-      <div id={labelId} className="research-msg-content">
+      <div id={labelId} className="research-msg-content" data-research-drag-label="">
         {showPrompt && replyQuote ? (
           <blockquote className="research-prompt-quote">{replyQuote.split(/\s+/).join(" ").trim()}</blockquote>
         ) : null}
@@ -717,6 +734,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
           <button
             type="button"
             className={`control-button research-msg-button research-msg-star${starred ? " is-on" : ""}`}
+            data-research-no-drag=""
             aria-pressed={starred}
             aria-label="Star"
             title={starred ? "Unstar" : "Star: list this under its question in the feed"}
@@ -730,6 +748,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
           <button
             type="button"
             className={`control-button research-msg-button research-msg-branches${branchOpen ? " is-open" : ""}`}
+            data-research-no-drag=""
             aria-label={`${branchLabel} from this answer${branchUnread ? ", one with a new answer" : ""}`}
             title={`${branchLabel}: marked in the answer's right margin`}
             data-research-branch-trigger={node.id}
@@ -745,6 +764,7 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
           <button
             type="button"
             className="control-button research-msg-button research-turn-more"
+            data-research-no-drag=""
             aria-haspopup="menu"
             aria-expanded={answerMenuOpen}
             aria-label="Answer actions"
@@ -756,6 +776,13 @@ export const ResearchMessageRow = memo(function ResearchMessageRow({
           </button>
         ) : null}
       </div>
+      {draggable ? (
+        <span className="research-feed-rail research-msg-rail" aria-hidden="true">
+          <span className="research-feed-card-grip">
+            <GripVertical size={14} />
+          </span>
+        </span>
+      ) : null}
     </li>
   );
 }, propsEqualExceptNode);
