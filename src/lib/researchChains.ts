@@ -216,5 +216,5 @@ export function chainComposerPlaceholder(
   if (source !== null && chainLength === 1) {
     return source === "transcript" ? "Ask about this conversation" : "Ask about this document";
   }
-  return waiting ? "Ask a follow-up (queued)" : "Ask a follow-up";
+  return waiting ? "Queue a follow-up" : "Ask a follow-up";
 }

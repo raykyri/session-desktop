@@ -230,7 +230,7 @@ test("every document asks about itself until its first follow-up", () => {
   assert.equal(chainComposerPlaceholder(transcript, 1, false), "Ask about this conversation");
   assert.equal(chainComposerPlaceholder(imported, 2, false), "Ask a follow-up");
   assert.equal(chainComposerPlaceholder(node("q"), 1, false), "Ask a follow-up");
-  assert.equal(chainComposerPlaceholder(node("q"), 1, true), "Ask a follow-up (queued)");
+  assert.equal(chainComposerPlaceholder(node("q"), 1, true), "Queue a follow-up");
 });
 
 test("a messages column lists its chain oldest first, or in the stored order", () => {
