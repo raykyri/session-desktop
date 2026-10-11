@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   availableRemoteId,
+  copiedRemoteSettingsDraft,
+  newRemoteSettingsDraft,
   remoteDraftFromSshAlias,
   remoteIdFromLabel,
+  remoteSettingsDraft,
+  remoteSettingsDraftError,
+  savedRemoteFromSettingsDraft,
   unconfiguredSshAliases,
 } from "../src/lib/remoteSettings";
 import type { RemoteChoice } from "../src/types";
@@ -56,4 +61,52 @@ test("configured SSH aliases are omitted case-insensitively, including user over
     unconfiguredSshAliases(["devbox", "prod-west", "STAGING"], remotes),
     ["devbox"],
   );
+});
+
+test("listed remotes edit as drafts and save trimmed, with empty fields as null", () => {
+  const listed: RemoteChoice = {
+    ...remote("devbox"),
+    label: "Dev box",
+    host: "dev@devbox",
+    workspaceRoot: "~/work",
+    sessionCli: null,
+  };
+  const draft = remoteSettingsDraft(listed);
+  assert.deepEqual(draft, {
+    id: "devbox",
+    label: "Dev box",
+    host: "dev@devbox",
+    workspaceRoot: "~/work",
+    sessionCli: "",
+    multiplexer: "tmux",
+  });
+  assert.deepEqual(
+    savedRemoteFromSettingsDraft({ ...draft, label: "  ", host: " dev@devbox ", workspaceRoot: " " }),
+    { host: "dev@devbox", label: null, multiplexer: "tmux", sessionCli: null, workspaceRoot: null },
+  );
+});
+
+test("new and copied drafts take unused ids, and copies are driveable", () => {
+  assert.equal(newRemoteSettingsDraft([remote("remote")]).id, "remote-2");
+  const copy = copiedRemoteSettingsDraft(
+    { ...remote("shared"), label: "Shared", multiplexer: "herdr", source: "config" },
+    [remote("shared"), remote("shared-copy")],
+  );
+  assert.equal(copy.id, "shared-copy-2");
+  assert.equal(copy.label, "Shared copy");
+  assert.equal(copy.multiplexer, "tmux");
+});
+
+test("drafts need a name, id and host, and new drafts a free id", () => {
+  const draft = remoteDraftFromSshAlias("devbox", []);
+  assert.equal(remoteSettingsDraftError(draft, true, []), null);
+  assert.equal(
+    remoteSettingsDraftError({ ...draft, host: " " }, true, []),
+    "Name, ID, and SSH host are required.",
+  );
+  assert.equal(
+    remoteSettingsDraftError(draft, true, [remote("devbox")]),
+    "A remote with the ID “devbox” already exists.",
+  );
+  assert.equal(remoteSettingsDraftError(draft, false, [remote("devbox")]), null);
 });

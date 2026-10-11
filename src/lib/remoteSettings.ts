@@ -1,4 +1,4 @@
-import type { RemoteChoice } from "../types";
+import type { RemoteChoice, SavedRemote } from "../types";
 
 export interface RemoteSettingsDraft {
   id: string;
@@ -61,4 +61,70 @@ export function unconfiguredSshAliases(
     }
   }
   return aliases.filter((alias) => !configuredHosts.has(alias.trim().toLowerCase()));
+}
+
+/** The editable form of a listed remote. */
+export function remoteSettingsDraft(remote: RemoteChoice): RemoteSettingsDraft {
+  return {
+    id: remote.id,
+    label: remote.label,
+    host: remote.host,
+    workspaceRoot: remote.workspaceRoot ?? "",
+    sessionCli: remote.sessionCli ?? "",
+    multiplexer: remote.multiplexer,
+  };
+}
+
+/** A draft for a new remote with an unused id. */
+export function newRemoteSettingsDraft(remotes: RemoteChoice[]): RemoteSettingsDraft {
+  return {
+    id: availableRemoteId("remote", remotes),
+    label: "",
+    host: "",
+    workspaceRoot: "",
+    sessionCli: "",
+    multiplexer: "tmux",
+  };
+}
+
+/** A new draft copied from a remote. The UI only creates driveable remotes: a
+ * config entry may retain the documented future-facing `herdr` multiplexer,
+ * but its editable copy uses tmux so session can drive it. */
+export function copiedRemoteSettingsDraft(
+  remote: RemoteChoice,
+  remotes: RemoteChoice[],
+): RemoteSettingsDraft {
+  return {
+    ...remoteSettingsDraft(remote),
+    id: availableRemoteId(`${remote.id}-copy`, remotes),
+    label: `${remote.label} copy`,
+    multiplexer: "tmux",
+  };
+}
+
+/** The saved form of a draft: trimmed, with empty optional fields as null. */
+export function savedRemoteFromSettingsDraft(draft: RemoteSettingsDraft): SavedRemote {
+  return {
+    host: draft.host.trim(),
+    label: draft.label.trim() || null,
+    multiplexer: draft.multiplexer,
+    sessionCli: draft.sessionCli.trim() || null,
+    workspaceRoot: draft.workspaceRoot.trim() || null,
+  };
+}
+
+/** Why a draft cannot be saved, or null when it can. */
+export function remoteSettingsDraftError(
+  draft: RemoteSettingsDraft,
+  isNew: boolean,
+  remotes: RemoteChoice[],
+): string | null {
+  const id = draft.id.trim();
+  if (!id || !draft.label.trim() || !draft.host.trim()) {
+    return "Name, ID, and SSH host are required.";
+  }
+  if (isNew && remotes.some((remote) => remote.id === id)) {
+    return `A remote with the ID “${id}” already exists.`;
+  }
+  return null;
 }

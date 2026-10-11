@@ -488,3 +488,10 @@ export function agentStatusTone(status: AgentInfo["status"]): AgentStatusTone {
       return "idle";
   }
 }
+
+/** Resolves after the next frame has painted. */
+export function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
