@@ -633,10 +633,18 @@
 }
 
 /* A pair's header spans its messages and answer columns: the messages
-   column's header is widened across the answer column, over its empty one. */
+   column's header is widened across the answer column, over its empty one.
+   It stops 2px short (the messages column's left border, and the answer
+   column's right border) so the answer column's right border stays
+   visible. The answer's own header takes the same fill, so where that
+   border is transparent (another pair follows) the 1px left over matches. */
 .research-pair-messages:not(.is-pending, .research-draft-view) > .research-column-header {
   z-index: 1;
-  width: calc(var(--research-messages-width) + var(--research-answer-width) - 1px);
+  width: calc(var(--research-messages-width) + var(--research-answer-width) - 2px);
+  background: var(--research-feed-bg);
+}
+
+.research-pair-answer > .research-column-header {
   background: var(--research-feed-bg);
 }
 
