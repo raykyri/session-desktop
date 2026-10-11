@@ -13,9 +13,9 @@ export const ADAPTER_ICON_BY_ID: Record<string, string> = {
   [GROK_ADAPTER_ID]: grokModelIconUrl,
 };
 
-// Codex's mark is dark-on-transparent, so invert it for the launcher's dark surface.
+// The Codex and Grok marks are dark-on-transparent, so invert them on dark surfaces.
 export function adapterIconClassName(adapterId: string): string | undefined {
-  if (adapterId === CODEX_ADAPTER_ID) {
+  if (adapterId === CODEX_ADAPTER_ID || adapterId === GROK_ADAPTER_ID) {
     return "is-mono-light";
   }
   return undefined;
