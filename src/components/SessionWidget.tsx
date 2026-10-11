@@ -1,6 +1,8 @@
-import { createContext, useEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
-import { ExternalLink, Play, RotateCcw } from "lucide-react";
-import { prepareResearchWidget, type ResearchWidgetUrls } from "../lib/api";
+import { createContext, useContext, useEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import { Copy, Download, MessageSquare, ExternalLink, Play, RotateCcw } from "lucide-react";
+import { downloadResearchWidget, prepareResearchWidget, type ResearchWidgetUrls } from "../lib/api";
+import { writeClipboardText } from "../lib/clipboard";
+import { WidgetAnswerContext, WidgetChangeContext } from "../lib/sessionWidgetActions";
 import { useSessionWidgetGuards } from "../hooks/useSessionWidgetGuards";
 import { readWidgetExecution, registerWidgetUrls, rememberWidgetExecution, subscribeWidgetExecution } from "../lib/sessionWidgetExecution";
 import {
@@ -21,9 +23,8 @@ import {
 // sandboxed cross-origin frame in WKWebView can share the app's web content
 // process and a script that never yields would stall the whole interface.
 //
-// The frame's chrome holds no text nodes (labels are CSS generated content and
-// ARIA attributes), so the answer's text projection, which highlights and
-// branch anchors are stored against, and find-in-page see only answer prose.
+// The widget subtree is excluded from the answer text projection so changing
+// view modes and controls does not move stored highlights or branch anchors.
 
 /** Whether the answer containing a widget block is still being written. An
  * unclosed block shows a placeholder while it is, and its source with a notice
@@ -79,6 +80,14 @@ export default function SessionWidget({
   /** Opens a widget URL in the thread's sandboxed browser overlay. */
   onOpen: (url: string) => void;
 }) {
+  const answer = useContext(WidgetAnswerContext);
+  const askForChanges = useContext(WidgetChangeContext);
+  const [source, setSource] = useState(false);
+  const [actionStatus, setActionStatus] = useState("");
+  const action = async (work: () => Promise<unknown>, success: string) => {
+    try { const result = await work(); setActionStatus(result === false ? "" : success); }
+    catch { setActionStatus("Action failed. Please try again."); }
+  };
   const [frame, dispatch] = useReducer(sessionWidgetFrameReducer, SESSION_WIDGET_FRAME_INITIAL);
   const [height, setHeight] = useState(SESSION_WIDGET_INITIAL_HEIGHT);
   const [prepareAttempt, setPrepareAttempt] = useState(0);
@@ -150,6 +159,7 @@ export default function SessionWidget({
 
   return (
     <figure
+      data-research-widget=""
       className="session-widget"
       data-state={frame.phase}
       data-running={frame.running || undefined}
@@ -157,6 +167,11 @@ export default function SessionWidget({
       aria-label="Answer widget"
     >
       <div className="session-widget-bar">
+        <button type="button" className="session-widget-run" aria-pressed={!source} onClick={() => setSource(false)}>Preview</button>
+        <button type="button" className="session-widget-run" aria-pressed={source} onClick={() => setSource(true)}>Source</button>
+        <button type="button" className="icon-button session-widget-action" title="Copy HTML" aria-label="Copy widget HTML" onClick={() => void action(() => writeClipboardText(html), "HTML copied")}><Copy /></button>
+        <button type="button" className="icon-button session-widget-action" title="Download HTML" aria-label="Download widget HTML" onClick={() => void action(() => downloadResearchWidget(html), "HTML downloaded")}><Download /></button>
+        {answer && askForChanges ? <button type="button" className="icon-button session-widget-action" disabled={Boolean(answer.blocked)} title={answer.blocked ?? "Ask for changes"} aria-label="Ask for widget changes" onClick={() => askForChanges(answer, html)}><MessageSquare /></button> : null}
         {frame.phase === "failed" ? (
           <button
             type="button"
@@ -212,6 +227,9 @@ export default function SessionWidget({
           </button>
         ) : null}
       </div>
+      {actionStatus ? <div className="session-widget-feedback" role="status">{actionStatus}</div> : null}
+      {source ? <pre className="session-widget-source"><code>{html}</code></pre> : null}
+      <div hidden={source}>
       {frameUrl ? (
         <iframe
           key={`${frameUrl}:${frame.generation}`}
@@ -249,6 +267,7 @@ export default function SessionWidget({
           style={{ height: frame.phase === "loading" ? height : undefined }}
         />
       )}
+      </div>
     </figure>
   );
 }

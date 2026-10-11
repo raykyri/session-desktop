@@ -48,7 +48,7 @@ function render(text: string, widgets = true, inline = false, streaming = false)
 }
 
 function isFrame(html: string) {
-  return /<figure class="session-widget" data-state="loading"/.test(html);
+  return /<figure[^>]*class="session-widget" data-state="loading"/.test(html);
 }
 
 test("a complete session-html block renders a widget frame, not its source", () => {
@@ -131,8 +131,9 @@ test("inline previews drop widget HTML entirely", () => {
 
 test("the frame chrome adds no text to the answer's text projection", () => {
   const html = render(WIDGET);
-  const text = html.replace(/<[^>]*>/g, "");
-  assert.equal(text, "");
+  assert.match(html, /data-research-widget=""/);
+  // Projection excludes the entire widget subtree, including its actions.
+  // DOM range behavior is covered in widgetAnnotations.test.ts.
 });
 
 test("ResearchMarkdown shows widgets only for opted-in body text with the setting on", () => {

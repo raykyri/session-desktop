@@ -2504,6 +2504,30 @@ fn research_inline_widgets_set(
     })
 }
 
+/// Exports the exact authored HTML only after the reader chooses a destination.
+#[tauri::command(async)]
+fn research_widget_download(app: tauri::AppHandle, html: String) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+    if html.len() > research_widgets::MAX_WIDGET_BYTES {
+        return Err("widget exceeds the HTML size limit".into());
+    }
+    let mut dialog = app
+        .dialog()
+        .file()
+        .set_title("Download widget HTML")
+        .set_file_name("session-widget.html")
+        .add_filter("HTML", &["html"]);
+    if let Some(window) = app.get_webview_window("main") {
+        dialog = dialog.set_parent(&window);
+    }
+    let Some(path) = dialog.blocking_save_file() else {
+        return Ok(false);
+    };
+    let path = path.into_path().map_err(|err| err.to_string())?;
+    std::fs::write(path, html).map_err(|err| format!("could not save widget: {err}"))?;
+    Ok(true)
+}
+
 /// Stores one `session-html` block from a research answer under its content
 /// hash and returns its static and run URLs on the file server. The HTML comes
 /// from answer text the frontend already displays; the URLs only ever load in
@@ -3639,6 +3663,7 @@ fn main() {
             research_inline_widgets_get,
             research_inline_widgets_set,
             research_widget_prepare,
+            research_widget_download,
             worktree_location_get,
             worktree_location_set,
             pane_write,

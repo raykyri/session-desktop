@@ -1061,3 +1061,8 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
   margin-top: 2px;
   padding-left: 10px;
 }
+
+.session-widget-bar { flex-wrap: wrap; }
+.session-widget-source { margin: 0; padding: 12px; max-height: 440px; overflow: auto; white-space: pre; font-size: var(--fs-sm); }
+.session-widget-feedback { padding: 4px 10px; font-size: var(--fs-sm); color: var(--text-body-soft); }
+.session-widget-run[aria-pressed="true"] { background: var(--surface-fill-hover); color: var(--text-body); }

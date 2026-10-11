@@ -1,3 +1,5 @@
+import { researchBranchBlocker } from "../../lib/researchThreadView";
+import { WidgetChangeContext, widgetChangePrompt } from "../../lib/sessionWidgetActions";
 import {
   useResearchComposerDrafts,
   useResearchThreadNavigation,
@@ -2215,6 +2217,12 @@ function ResearchThreadPage({
   );
 
   return (
+    <WidgetChangeContext.Provider value={archived ? null : (answer, html) => {
+      if (researchBranchBlocker(detail.nodes.find((node) => node.id === answer.nodeId), archived)) return;
+      openPendingBranch(answer.nodeId, null);
+      const key = `pending:${answer.nodeId}`;
+      setComposerText((current) => ({ ...current, [key]: [current[key], widgetChangePrompt(answer, html)].filter(Boolean).join("\n\n") }));
+    }}>
     <TranscriptLinkActionsProvider actions={linkActions}>
       <div
         ref={workspaceRef}
@@ -2341,6 +2349,7 @@ function ResearchThreadPage({
         />
       ) : null}
     </TranscriptLinkActionsProvider>
+    </WidgetChangeContext.Provider>
   );
 }
 

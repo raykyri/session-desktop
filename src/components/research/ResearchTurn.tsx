@@ -1,3 +1,4 @@
+import { researchBranchBlocker } from "../../lib/researchThreadView";
 import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -29,6 +30,7 @@ import type { SegmentView } from "../../lib/researchSegmentView";
 import ResearchRecap from "./ResearchRecap";
 import ResearchRowRail from "./ResearchRowRail";
 import ResearchRowGlyph from "./ResearchRowGlyph";
+import { WidgetAnswerContext } from "../../lib/sessionWidgetActions";
 import { SessionWidgetStreamingContext } from "../SessionWidget";
 import { ResearchMarkdown, ResearchMessageBody, ResearchUserMessage } from "./ResearchMessage";
 import { researchUnitMenuProps, type ResearchUnitMenuPlacement } from "./researchUnitMenu";
@@ -603,14 +605,15 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
           >
             <SessionWidgetStreamingContext.Provider value={active}>
               {view.visibleTimelineItems.map((item) => (
+                <WidgetAnswerContext.Provider key={item.key} value={{ nodeId: node.id, blocked: researchBranchBlocker(node, false), answer: item.blocks.filter((block) => block.type === "text").map((block) => block.type === "text" ? block.text : "").join("\n\n") }}>
                 <ResearchTimelineItem
-                  key={item.key}
                   item={item}
                   conversation={view.isConversation}
                   // Provenance: the document source records it.
                   imported={documentSource(node) === "imported"}
                   expandActivities={active}
                 />
+                </WidgetAnswerContext.Provider>
               ))}
             </SessionWidgetStreamingContext.Provider>
           </div>

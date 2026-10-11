@@ -828,3 +828,7 @@ export function importResearchReport(request: {
 }): Promise<ResearchTreeDetail> {
   return invoke<ResearchTreeDetail>("import_research_report", { request });
 }
+
+export function downloadResearchWidget(html: string) {
+  return invoke<boolean>("research_widget_download", { html });
+}

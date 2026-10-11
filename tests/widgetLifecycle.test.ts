@@ -149,3 +149,43 @@ test("focus protection in expanded previews stops inline copies and survives rem
     }
   });
 });
+
+test("widget actions preserve the preview and pass the selected source and answer", async () => {
+  const { WidgetAnswerContext, WidgetChangeContext } = await import("../src/lib/sessionWidgetActions");
+  await withWidgetDom(async (window) => {
+    const html = '<p>Action test</p>';
+    const answer = { nodeId: 'answer-1', answer: 'The result.\n```session-html\n' + html + '\n```' };
+    let selected: unknown;
+    let exported: unknown;
+    Object.assign(window, { __TAURI_INTERNALS__: { invoke: async (command: string, args: unknown) => {
+      if (command === 'research_widget_download') { exported = args; return true; }
+      return urlsFor('6');
+    } } });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => root.render(createElement(WidgetAnswerContext.Provider, { value: answer },
+        createElement(WidgetChangeContext.Provider, { value: (context, source) => { selected = { context, source }; } },
+          createElement(SessionWidget, { html, onOpen: () => undefined })))));
+      const frame = container.querySelector('iframe');
+      await act(async () => [...container.querySelectorAll('button')].find((button) => button.textContent === 'Source')!.click());
+      assert.equal(container.querySelector('pre code')?.textContent, html);
+      assert.equal(container.querySelector('iframe'), frame);
+      assert.equal(frame?.parentElement?.hidden, true);
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Ask for widget changes"]')!.click());
+      assert.deepEqual(selected, { context: answer, source: html });
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Download widget HTML"]')!.click());
+      assert.deepEqual(exported, { html });
+    } finally { await act(async () => root.unmount()); }
+  });
+});
+
+test("change prompts include large widget source once and bound answer context", async () => {
+  const { widgetChangePrompt } = await import("../src/lib/sessionWidgetActions");
+  const html = `<p>${'x'.repeat(62_000)}</p>`;
+  const prompt = widgetChangePrompt({ nodeId: 'n', answer: 'Prose.\n```session-html\n' + html + '\n```\n' + 'z'.repeat(50_000) }, html);
+  assert.equal(prompt.split(html).length, 2);
+  assert.ok(new TextEncoder().encode(prompt).length < 75_000);
+  assert.match(prompt, /Prose/);
+});
