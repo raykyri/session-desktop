@@ -18,12 +18,12 @@ try {
 const root = dirname(fileURLToPath(import.meta.url));
 const slugs = ["ulysses", "macos", "notes", "obsidian", "notion", "inbox", "tana", "linear"];
 const only = new Set(process.argv.slice(2));
-const manifest = { generated: new Date().toISOString(), rounds: { 1: {}, 2: {} } };
+const manifest = { generated: new Date().toISOString(), rounds: { 1: {}, 2: {}, 3: {} } };
 mkdirSync(join(root, "thumbs"), { recursive: true });
 
 const browser = await playwright.chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1400, height: 860 } });
-for (const round of [1, 2]) {
+for (const round of [1, 2, 3]) {
   for (const slug of slugs) {
     const file = join(root, `r${round}`, `${slug}.html`);
     if (!existsSync(file)) continue;
