@@ -20,6 +20,10 @@ import {
   upsertAgent,
 } from "../lib/appHelpers";
 import { parseAppShortcutCommand, type AppShortcutCommand } from "../lib/appShortcuts";
+import {
+  publishResearchContentChanged,
+  RESEARCH_CONTENT_CHANGED_EVENT,
+} from "../lib/researchContentRefresh";
 import type { ExitPreflightRequest } from "../appTypes";
 import type {
   ActiveWorkspace,
@@ -169,7 +173,14 @@ export function useSessionEvents(handlers: UseSessionEventsHandlers) {
           });
         }
       }
-      if (event.type.startsWith("research.")) {
+      if (event.type === RESEARCH_CONTENT_CHANGED_EVENT) {
+        // A per-turn-write signal for open thread pages; it carries no
+        // research state for the App-level reducer.
+        const nodeId = stringField(event.payload, "nodeId");
+        if (nodeId) {
+          publishResearchContentChanged(nodeId);
+        }
+      } else if (event.type.startsWith("research.")) {
         onResearchChanged?.(event);
       }
       if (event.type === "app.notification_requested") {

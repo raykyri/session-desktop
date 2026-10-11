@@ -1149,6 +1149,15 @@ fn ensure_agent_thread_metadata(state: &AppState, model: &mut Model, agent: &mut
     }
 }
 
+/// The research node whose run is bound to `agent_id`, if any.
+fn research_node_id_for_agent_locked(model: &Model, agent_id: &str) -> Option<String> {
+    model
+        .research_nodes
+        .values()
+        .find(|node| node.agent_id() == Some(agent_id))
+        .map(|node| node.id.clone())
+}
+
 fn thread_store_for_agent_locked(
     model: &mut Model,
     agent: &AgentInfo,
@@ -9444,7 +9453,7 @@ impl AppState {
         turn: Turn,
         bound_transcript_path: Option<&str>,
     ) -> Result<bool, String> {
-        let (should_persist_state, agent_for_graph, graph_store) = {
+        let (should_persist_state, agent_for_graph, graph_store, research_node_id) = {
             let mut model = self
                 .inner
                 .model
@@ -9477,6 +9486,9 @@ impl AppState {
                     .get(&agent.group_id)
                     .is_some_and(|group| group.scope == WorkspaceScope::Research)
             });
+            let research_node_id = agent_is_research
+                .then(|| research_node_id_for_agent_locked(&model, &agent_id))
+                .flatten();
             let mut graph_store = None;
             let mut created_thread_record = false;
             if let Some(agent) = agent_for_graph.as_ref().filter(|_| !agent_is_research) {
@@ -9488,7 +9500,12 @@ impl AppState {
                 graph_store = Some(store);
                 created_thread_record = created;
             }
-            (created_thread_record, agent_for_graph, graph_store)
+            (
+                created_thread_record,
+                agent_for_graph,
+                graph_store,
+                research_node_id,
+            )
         };
         if let (Some(agent), Some(store)) = (agent_for_graph, graph_store)
             && let Err(err) = store.append_turn_node(&agent, &turn)
@@ -9505,6 +9522,9 @@ impl AppState {
             && self.sync_research_node_from_agent(&agent)?
         {
             self.persist();
+        }
+        if let Some(node_id) = research_node_id {
+            self.emit_research_content_changed(&node_id, &turn.agent_id);
         }
         Ok(true)
     }
@@ -9531,7 +9551,7 @@ impl AppState {
         bound_transcript_path: Option<&str>,
     ) -> Result<bool, String> {
         let turns_for_graph = turns.clone();
-        let (should_persist_state, agent_for_graph, graph_store) = {
+        let (should_persist_state, agent_for_graph, graph_store, research_node_id) = {
             let mut model = self
                 .inner
                 .model
@@ -9558,6 +9578,9 @@ impl AppState {
                     .get(&agent.group_id)
                     .is_some_and(|group| group.scope == WorkspaceScope::Research)
             });
+            let research_node_id = agent_is_research
+                .then(|| research_node_id_for_agent_locked(&model, agent_id))
+                .flatten();
             let mut graph_store = None;
             let mut created_thread_record = false;
             if let Some(agent) = agent_for_graph.as_ref().filter(|_| !agent_is_research) {
@@ -9569,7 +9592,12 @@ impl AppState {
                 graph_store = Some(store);
                 created_thread_record = created;
             }
-            (created_thread_record, agent_for_graph, graph_store)
+            (
+                created_thread_record,
+                agent_for_graph,
+                graph_store,
+                research_node_id,
+            )
         };
         if let (Some(agent), Some(store)) = (agent_for_graph, graph_store)
             && let Err(err) = store.replace_agent_branch_turns(&agent, &turns_for_graph)
@@ -9587,7 +9615,25 @@ impl AppState {
         {
             self.persist();
         }
+        if let Some(node_id) = research_node_id {
+            self.emit_research_content_changed(&node_id, agent_id);
+        }
         Ok(true)
+    }
+
+    /// Signals that the live turns behind `node_id`'s answer changed. The
+    /// payload carries only the node id: viewers refetch the content with
+    /// `get_research_node_content` and throttle that refetch themselves.
+    /// Emitted for every write to a research agent's turns, including the
+    /// harness runtimes' per-delta in-flight turn updates, which emit no
+    /// `turn.*` event.
+    fn emit_research_content_changed(&self, node_id: &str, agent_id: &str) {
+        self.emit(SessionEvent::new(
+            "research.content.changed",
+            None,
+            Some(agent_id.to_string()),
+            json!({ "nodeId": node_id }),
+        ));
     }
 
     /// Test convenience: queues a plain text turn with no directives. Production
@@ -15139,6 +15185,88 @@ mod tests {
         assert_eq!(content.node.status(), ResearchNodeStatus::Complete);
         assert_eq!(content.turns.len(), 1);
         assert_eq!(content.turns[0].role, "assistant");
+    }
+
+    // A research viewer refetches a running answer when its turns change
+    // instead of polling; every turn write for a bound research agent has to
+    // signal the node, including writes that emit no `turn.*` event.
+    #[test]
+    fn research_agent_turn_writes_signal_content_changed() {
+        let state = AppState::new(test_config(temp_workspace()));
+        state.insert_group_after(sample_group(), None).unwrap();
+        state.insert_pane(sample_pane_runtime("pane-7")).unwrap();
+        let detail = state
+            .create_research_tree(research_root_request("Question"))
+            .unwrap();
+        let root_id = detail.tree.root_node_id;
+        let agent = sample_agent("research-agent");
+        state.insert_agent(agent.clone()).unwrap();
+        state
+            .bind_research_node_run(&root_id, &agent, "pane-7")
+            .unwrap();
+        let content_signals = |events: Vec<SessionEvent>| {
+            events
+                .into_iter()
+                .filter(|event| event.event_type == "research.content.changed")
+                .map(|event| (event.agent_id, event.payload))
+                .collect::<Vec<_>>()
+        };
+        state.take_emitted_events();
+
+        state
+            .append_turn(sample_user_turn("research-agent", "Question"))
+            .unwrap();
+        let mut answer = sample_user_turn("research-agent", "Partial");
+        answer.id = "research-agent-1".to_string();
+        answer.role = "assistant".to_string();
+        answer.source_index = 1;
+        state.append_harness_turn(answer.clone()).unwrap();
+        let expected = (
+            Some("research-agent".to_string()),
+            json!({ "nodeId": root_id }),
+        );
+        assert_eq!(
+            content_signals(state.take_emitted_events()),
+            vec![expected.clone(), expected.clone()]
+        );
+
+        answer.blocks = vec![crate::transcript::TurnBlock::Text {
+            text: "Partial answer".to_string(),
+        }];
+        assert!(
+            state
+                .replace_turns_for_transcript(
+                    "research-agent",
+                    "/tmp/transcript.jsonl",
+                    vec![sample_user_turn("research-agent", "Question"), answer],
+                )
+                .unwrap()
+        );
+        assert_eq!(content_signals(state.take_emitted_events()), vec![expected]);
+
+        // An agent outside a Research workspace has no node to signal.
+        state
+            .insert_group_after(
+                GroupInfo {
+                    id: "group-2".to_string(),
+                    scope: WorkspaceScope::Terminal,
+                    ..sample_group()
+                },
+                None,
+            )
+            .unwrap();
+        state
+            .insert_agent(AgentInfo {
+                group_id: "group-2".to_string(),
+                pane_id: None,
+                ..sample_agent("terminal-agent")
+            })
+            .unwrap();
+        state.take_emitted_events();
+        state
+            .append_turn(sample_user_turn("terminal-agent", "Hello"))
+            .unwrap();
+        assert!(content_signals(state.take_emitted_events()).is_empty());
     }
 
     #[test]

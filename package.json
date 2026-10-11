@@ -24,6 +24,7 @@
     "test:research-highlights-feed": "npm run test:node -- tests/researchHighlightsFeed.test.ts",
     "test:research-navigation": "npm run test:node -- tests/researchNavigation.test.ts",
     "test:research-events": "npm run test:node -- tests/researchEvents.test.ts",
+    "test:research-content-refresh": "npm run test:node -- tests/researchContentRefresh.test.ts",
     "test:research-history": "npm run test:node -- tests/researchHistory.test.ts",
     "test:tweet-embed": "npm run test:node -- tests/tweetEmbed.test.ts",
     "test:research-documents": "npm run test:node -- tests/researchDocuments.test.ts",

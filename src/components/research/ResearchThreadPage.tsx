@@ -37,6 +37,12 @@ import {
   setResearchChainOrder,
   setResearchNodeStarred,
 } from "../../lib/api";
+import {
+  createContentRefresh,
+  reuseUnchangedContent,
+  subscribeResearchContentChanged,
+  type ContentRefresh,
+} from "../../lib/researchContentRefresh";
 import { useResearchCardDrag } from "../../hooks/useResearchCardDrag";
 import { reorderedIds, stepReorderTarget } from "../../lib/researchFolders";
 import { writeClipboardText } from "../../lib/clipboard";
@@ -198,6 +204,13 @@ const QUEUE_CHILD_WAIT_MS = 15_000;
 const PENDING_NODE_TTL_MS = 30_000;
 /** How long a focus request waits for its element to render. */
 const FOCUS_REQUEST_TTL_MS = 2_000;
+/** Minimum spacing between full content fetches of one answer while
+ * `research.content.changed` signals arrive (every streamed delta for SDK
+ * runs, every transcript line for pane runs). */
+const CONTENT_REFETCH_MIN_INTERVAL_MS = 1_000;
+/** While a run is active, how long after its last fetch the content is
+ * refetched without a signal. */
+const ACTIVE_CONTENT_FALLBACK_POLL_MS = 10_000;
 
 interface ResearchThreadPageProps {
   detail: ResearchTreeDetail | null;
@@ -2415,18 +2428,39 @@ function ResearchThreadPage({
       return;
     }
     let cancelled = false;
+    // Fallback-poll and error-retry timers; each fires a refresh request.
     const timers = new Map<string, number>();
     const errorCounts = new Map<string, number>();
+    const refreshes = new Map<string, ContentRefresh>();
     const stampFor = (nodeId: string) => {
       const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
       return node ? `${nodeStatus(node)}:${nodeResponseSnapshotAt(node) ?? 0}:${nodeRecap(node)?.id ?? nodeRecap(node)?.responseRevision ?? ""}` : "";
     };
     const clearError = (nodeId: string) =>
       setContentErrorByNode((current) => withoutKeys(current, [nodeId]));
+    const clearTimer = (nodeId: string) => {
+      const timer = timers.get(nodeId);
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        timers.delete(nodeId);
+      }
+    };
+    const requestRefresh = (nodeId: string) => refreshFor(nodeId).request();
+    const armTimer = (nodeId: string, delay: number) => {
+      clearTimer(nodeId);
+      timers.set(
+        nodeId,
+        window.setTimeout(() => {
+          timers.delete(nodeId);
+          requestRefresh(nodeId);
+        }, delay),
+      );
+    };
     const load = async (nodeId: string) => {
       // Capture the stamp before fetching. A state transition during the fetch
       // restarts this effect and refetches with the new stamp.
       const stamp = stampFor(nodeId);
+      clearTimer(nodeId);
       try {
         const next = await getResearchNodeContent(nodeId);
         if (cancelled) {
@@ -2435,9 +2469,14 @@ function ResearchThreadPage({
         errorCounts.delete(nodeId);
         fetchStampByNodeRef.current.set(nodeId, stamp);
         clearError(nodeId);
-        setContentByNode((current) => ({ ...current, [nodeId]: next }));
+        setContentByNode((current) => {
+          const merged = reuseUnchangedContent(current[nodeId], next);
+          return merged === current[nodeId] ? current : { ...current, [nodeId]: merged };
+        });
         if (isActiveResearchStatus(nodeStatus(next.node))) {
-          timers.set(nodeId, window.setTimeout(() => void load(nodeId), 1000));
+          // `research.content.changed` drives refetches while the answer
+          // streams; this only covers a signal that never arrives.
+          armTimer(nodeId, ACTIVE_CONTENT_FALLBACK_POLL_MS);
         }
       } catch (err) {
         if (cancelled) {
@@ -2454,13 +2493,27 @@ function ResearchThreadPage({
         errorCounts.set(nodeId, attempts);
         const isActive = knownNode && isActiveResearchStatus(nodeStatus(knownNode));
         if (isActive || attempts <= 5) {
-          timers.set(
-            nodeId,
-            window.setTimeout(() => void load(nodeId), Math.min(5000, 1000 * attempts)),
-          );
+          armTimer(nodeId, Math.min(5000, 1000 * attempts));
         }
       }
     };
+    const refreshFor = (nodeId: string) => {
+      let refresh = refreshes.get(nodeId);
+      if (!refresh) {
+        refresh = createContentRefresh(() => load(nodeId), CONTENT_REFETCH_MIN_INTERVAL_MS, {
+          now: () => performance.now(),
+          setTimeout: (callback, ms) => window.setTimeout(callback, ms),
+          clearTimeout: (handle) => window.clearTimeout(handle as number),
+        });
+        refreshes.set(nodeId, refresh);
+      }
+      return refresh;
+    };
+    const unsubscribe = subscribeResearchContentChanged((nodeId) => {
+      if (chainNodeIds.includes(nodeId)) {
+        requestRefresh(nodeId);
+      }
+    });
     for (const nodeId of chainNodeIds) {
       const node = detailRef.current?.nodes.find((candidate) => candidate.id === nodeId);
       if (!node) {
@@ -2478,16 +2531,21 @@ function ResearchThreadPage({
         // snapshot landing, retry): a failure reported by the previous run
         // must not sit on screen while this one is in flight.
         clearError(nodeId);
-        void load(nodeId);
+        requestRefresh(nodeId);
       } else if (isActiveResearchStatus(nodeStatus(node))) {
-        // The cleanup above cancelled this still-streaming turn's pending
-        // poll timer. Re-arm it, or its live transcript freezes until its
-        // own status finally changes.
-        void load(nodeId);
+        // The cleanup above dropped this still-streaming turn's fallback
+        // timer and any trailing refetch for a signal that arrived during an
+        // in-flight fetch. Fetch once to cover that signal; the fetch re-arms
+        // the fallback timer.
+        requestRefresh(nodeId);
       }
     }
     return () => {
       cancelled = true;
+      unsubscribe();
+      for (const refresh of refreshes.values()) {
+        refresh.dispose();
+      }
       for (const timer of timers.values()) {
         window.clearTimeout(timer);
       }
