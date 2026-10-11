@@ -50,7 +50,7 @@
         "round": 1,
         "title": "Mac system app",
         "influence": "Apple macOS system app idioms (HIG; Finder, Mail, Messages, Freeform, System Settings)",
-        "summary": "Session becomes a standard Mac document app: a glass sidebar of folders, one toolbar view switch (Page, Outline, Columns, Map) over the same library, and an inspector (⌥⌘I) that holds a chat's branches and links. Chats read like Messages, notes are collapsible outlines with [[links]], and the first window offers one field — ask a question — with the agent check done in the background.",
+        "summary": "Session becomes a standard Mac document app: a glass sidebar of folders, one toolbar view switch (Page, Outline, Columns, Map) over the same library, and an inspector (\u2325\u2318I) that holds a chat's branches and links. Chats read like Messages, notes are collapsible outlines with [[links]], and the first window offers one field \u2014 ask a question \u2014 with the agent check done in the background.",
         "nouns": [
           "Chat",
           "Branch",
@@ -67,7 +67,7 @@
           {
             "id": "b",
             "label": "Column browser",
-            "summary": "Opens in Columns view: folders → items → branches and bullets → Quick Look preview, replacing the column strip."
+            "summary": "Opens in Columns view: folders \u2192 items \u2192 branches and bullets \u2192 Quick Look preview, replacing the column strip."
           },
           {
             "id": "c",
@@ -93,7 +93,7 @@
         "round": 1,
         "title": "Notes with Ask",
         "influence": "Apple Notes (macOS)",
-        "summary": "Session becomes a three-pane notes app: folders, a dated note list, and a note whose first line is its title. Any note can run a model inline (⌘J); answers stay in the note as editable text, and selecting a passage branches it into a linked sub-note. Outline and Link Map are two more views of the same notes, so there is one object to learn.",
+        "summary": "Session becomes a three-pane notes app: folders, a dated note list, and a note whose first line is its title. Any note can run a model inline (\u2318J); answers stay in the note as editable text, and selecting a passage branches it into a linked sub-note. Outline and Link Map are two more views of the same notes, so there is one object to learn.",
         "nouns": [
           "Note",
           "Chat",
@@ -131,98 +131,12 @@
         "file": "r1/notes.html",
         "thumb": "thumbs/r1-notes.jpg"
       },
-      "obsidian": {
-        "slug": "obsidian",
-        "round": 1,
-        "title": "Vault of linked notes",
-        "influence": "Obsidian",
-        "summary": "Everything is a Markdown note in a local vault: a chat is a note whose body holds Ask blocks, a branch is a new note linked to the highlighted passage it came from, and backlinks, the outline pane and the graph are computed from those links. Every empty tab and the first-run screen lead with one Ask box, and agent sign-in never blocks writing or queueing.",
-        "nouns": [
-          "Vault",
-          "Note",
-          "Ask",
-          "Link",
-          "Highlight"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "Asks as callouts",
-            "summary": "Chats are notes; each question and answer renders as a foldable callout, with backlinks over a local graph in the right sidebar."
-          },
-          {
-            "id": "b",
-            "label": "Chat in sidebar",
-            "summary": "Composing moves to a right-sidebar Chat pane bound to the open note; answers are inserted into notes as callouts on request."
-          },
-          {
-            "id": "c",
-            "label": "Transcript blocks",
-            "summary": "Same structure as A, but asks render as a plain transcript (labelled question, ruled answer) instead of tinted callouts."
-          },
-          {
-            "id": "d",
-            "label": "Graph split pane",
-            "summary": "The global graph opens beside the note in a split pane and follows the active note; the right sidebar starts closed."
-          },
-          {
-            "id": "e",
-            "label": "Starter vault",
-            "summary": "First launch shows an ask-first welcome screen; the sample vault opens on a Start here note with a checklist tracked in the sidebar."
-          }
-        ],
-        "file": "r1/obsidian.html",
-        "thumb": "thumbs/r1-obsidian.jpg"
-      },
-      "notion": {
-        "slug": "notion",
-        "round": 1,
-        "title": "Pages & blocks",
-        "influence": "Notion",
-        "summary": "Everything is a page made of blocks: a chat is a page whose blocks are questions and answers, a note is a page you write, and a branch is a sub-chat nested under the passage it came from. One sidebar tree, @-links with backlinks, a Questions database (table/board/list/gallery) and a link map replace folders, feeds and three save gestures. First run opens a Getting started page with a single Ask box; agent setup is a non-blocking checklist item.",
-        "nouns": [
-          "Page",
-          "Chat",
-          "Sub-chat",
-          "Highlight",
-          "Link"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "Chat pages",
-            "summary": "Chats are pages in the tree; branches are sub-chat pages listed under the passage they came from; first run lands on Getting started."
-          },
-          {
-            "id": "b",
-            "label": "Questions database",
-            "summary": "Every chat is a row in a Questions database with Status, Agent and Model properties; the database is the landing view and chat pages show their properties."
-          },
-          {
-            "id": "c",
-            "label": "Branches as toggles",
-            "summary": "Sub-chats render inline as toggle blocks under the passage instead of separate pages, so one investigation reads as one page."
-          },
-          {
-            "id": "d",
-            "label": "Side peek",
-            "summary": "Outline-first: the Chapter 3 note is the landing page and chats open in a side peek beside it, keeping the note in view."
-          },
-          {
-            "id": "e",
-            "label": "Inline AI blocks",
-            "summary": "Questions are asked from an inline AI block at the end of any page; the chat composer is a block in the page flow rather than a docked bar."
-          }
-        ],
-        "file": "r1/notion.html",
-        "thumb": "thumbs/r1-notion.jpg"
-      },
       "inbox": {
         "slug": "inbox",
         "round": 1,
         "title": "Research inbox",
         "influence": "Front / Missive / Superhuman / Hey (shared email inbox apps)",
-        "summary": "Every question is a Conversation that runs in the background and lands in an Inbox as “Ready to read”; queued and running ones sit in Waiting. Follow-ups are Ask replies, your own writing is a Note (the internal-comment idiom), and a passage can start a Fork. Tags, [[links]], backlinks and a Knowledge view with outline and graph replace folders, stars, bookmarks and the feed, so the first screen has one action: ask.",
+        "summary": "Every question is a Conversation that runs in the background and lands in an Inbox as \u201cReady to read\u201d; queued and running ones sit in Waiting. Follow-ups are Ask replies, your own writing is a Note (the internal-comment idiom), and a passage can start a Fork. Tags, [[links]], backlinks and a Knowledge view with outline and graph replace folders, stars, bookmarks and the feed, so the first screen has one action: ask.",
         "nouns": [
           "Conversation",
           "Fork",
@@ -265,7 +179,7 @@
         "round": 1,
         "title": "Everything is a node",
         "influence": "Tana (with nods to Roam Research, Logseq, Workflowy)",
-        "summary": "Chats and notes live in one outline. A question is a node tagged #question: ⌘↵ runs it, the answer arrives as child nodes, follow-ups are child questions, and a selected passage becomes a #claim node that can be referenced anywhere. Home is today's page with one input line (⌘↵ asks, ↵ saves a note), so there is one first action and one place where everything lands.",
+        "summary": "Chats and notes live in one outline. A question is a node tagged #question: \u2318\u21b5 runs it, the answer arrives as child nodes, follow-ups are child questions, and a selected passage becomes a #claim node that can be referenced anywhere. Home is today's page with one input line (\u2318\u21b5 asks, \u21b5 saves a note), so there is one first action and one place where everything lands.",
         "nouns": [
           "Node",
           "Question",
@@ -390,18 +304,18 @@
         ],
         "changes": [
           "Docked the question line to the bottom of the editor; in round 1 it sat after the last answer and was off-screen on long sheets.",
-          "Added File in… to passage actions and answer footers: it adds a linked bullet under a chosen heading of the Chapter 3 outline. Round 1 could only glue whole sheets or copy to Drafts.",
-          "Added [[ autocomplete in the question line and a Link… action on outline rows; round 1 had no way to create a link.",
-          "Paragraph gutter button (¶) opens Mark / Ask / Branch / File without selecting text; round 1 relied on selection.",
+          "Added File in\u2026 to passage actions and answer footers: it adds a linked bullet under a chosen heading of the Chapter 3 outline. Round 1 could only glue whole sheets or copy to Drafts.",
+          "Added [[ autocomplete in the question line and a Link\u2026 action on outline rows; round 1 had no way to create a link.",
+          "Paragraph gutter button (\u00b6) opens Mark / Ask / Branch / File without selecting text; round 1 relied on selection.",
           "Branches are numbered in reading order and branches from a whole answer sit at its end; round 1 showed 2 above 1.",
           "Replaced the Chat bubbles variant with Inline branches; bubbles broke the typographic idiom and changed nothing about organizing.",
-          "First run: library shows only Inbox, missing agents show a copyable command and re-check automatically; the main workspace gains a dismissible ‘how sheets work’ tip and a visible Search field.",
+          "First run: library shows only Inbox, missing agents show a copyable command and re-check automatically; the main workspace gains a dismissible \u2018how sheets work\u2019 tip and a visible Search field.",
           "Fixed controls that did nothing: Retry with another model now picks a model, New group creates a group, Glue is disabled where it does not apply."
         ],
         "decisions": [
-          "Does the ? / ¶ glyph make the difference between asking and writing clear without reading the tip?",
+          "Does the ? / \u00b6 glyph make the difference between asking and writing clear without reading the tip?",
           "Margin notes (A), inline strips (B) or attachments (C): which lets people find a branch again after a day?",
-          "Is File in… (linked bullet) understood as different from Glue (whole sheet joins the manuscript)?",
+          "Is File in\u2026 (linked bullet) understood as different from Glue (whole sheet joins the manuscript)?",
           "Do people use the Links map, or only the References lists under it?"
         ],
         "file": "r2/ulysses.html",
@@ -412,7 +326,7 @@
         "round": 2,
         "title": "Mac system app",
         "influence": "Apple macOS system app idioms (HIG; Finder, Mail, Messages, Freeform, System Settings, TipKit)",
-        "summary": "Session as a standard Mac document app: a glass sidebar of folders, an always-visible “Ask a question” field at the top of the item list, and one toolbar switch (Page, Outline, Columns, Map) over the same library. Chats read like Messages, notes are outlines with [[links]], and three short tips walk a new user from first question to branch to links; agents are detected in the background and never block writing notes.",
+        "summary": "Session as a standard Mac document app: a glass sidebar of folders, an always-visible \u201cAsk a question\u201d field at the top of the item list, and one toolbar switch (Page, Outline, Columns, Map) over the same library. Chats read like Messages, notes are outlines with [[links]], and three short tips walk a new user from first question to branch to links; agents are detected in the background and never block writing notes.",
         "nouns": [
           "Chat",
           "Branch",
@@ -424,12 +338,12 @@
           {
             "id": "a",
             "label": "Page + inspector",
-            "summary": "Mail-style list with a docked Ask field, the chat page, and an inspector (⌥⌘I) with Info, Branches and Links; first-run tips are shown."
+            "summary": "Mail-style list with a docked Ask field, the chat page, and an inspector (\u2325\u2318I) with Info, Branches and Links; first-run tips are shown."
           },
           {
             "id": "b",
             "label": "Column browser",
-            "summary": "Opens in Columns view: folders → items → branches and bullets → a Quick Look preview with the passage actions, replacing the column strip."
+            "summary": "Opens in Columns view: folders \u2192 items \u2192 branches and bullets \u2192 a Quick Look preview with the passage actions, replacing the column strip."
           },
           {
             "id": "c",
@@ -448,20 +362,20 @@
           }
         ],
         "changes": [
-          "Added a docked “Ask a question” field above every item list; in round 1 the only way to start a chat was an unlabeled toolbar icon",
-          "Added three TipKit-style tips (ask → branch → links) with Next and dismiss; round 1 had no guidance outside the empty Personal workspace",
+          "Added a docked \u201cAsk a question\u201d field above every item list; in round 1 the only way to start a chat was an unlabeled toolbar icon",
+          "Added three TipKit-style tips (ask \u2192 branch \u2192 links) with Next and dismiss; round 1 had no guidance outside the empty Personal workspace",
           "Branch composer now opens as a popover on the passage in every variant; in round 1 it opened in the inspector, far from the selected text",
           "Add to Note lists the outline's sections and the confirmation has a Show button that opens the note at the new bullet; round 1 appended silently to the end",
-          "Added Link to… in the Links inspector, so any two chats or notes can be linked without writing a note; links appear in both items and on the map",
+          "Added Link to\u2026 in the Links inspector, so any two chats or notes can be linked without writing a note; links appear in both items and on the map",
           "First-run workspace now shows only the welcome page (no empty list or empty inspector) and checks agents live, re-checking when the window becomes active",
-          "Return sends in every composer (⌥↩ new line, ⇧⌘↩ branch), matching Messages; round 1 required ⌘↩ and the hint was easy to miss",
-          "Replaced the weak “Popover branches” variant with “Messages threads”; fixed narrow-width navigation (no way back to the list), flat-list bolding, “1 items”, and passage keys ignored while the search field had focus"
+          "Return sends in every composer (\u2325\u21a9 new line, \u21e7\u2318\u21a9 branch), matching Messages; round 1 required \u2318\u21a9 and the hint was easy to miss",
+          "Replaced the weak \u201cPopover branches\u201d variant with \u201cMessages threads\u201d; fixed narrow-width navigation (no way back to the list), flat-list bolding, \u201c1 items\u201d, and passage keys ignored while the search field had focus"
         ],
         "decisions": [
           "Is the docked Ask field in the list pane found before the toolbar compose button, and does Return-to-send surprise people writing long questions?",
           "Do people understand that Page, Outline, Columns and Map show the same items, or do they expect four separate places?",
           "Branch as inspector cards (a) or as reply threads under the answer (d): which do first-time users find and reopen faster?",
-          "Is “Link to…” in the inspector used, or do people only link by typing [[ in notes?",
+          "Is \u201cLink to\u2026\u201d in the inspector used, or do people only link by typing [[ in notes?",
           "Do three sequential tips help, or are they dismissed unread?"
         ],
         "file": "r2/macos.html",
@@ -472,7 +386,7 @@
         "round": 2,
         "title": "Notes with Ask",
         "influence": "Apple Notes (macOS)",
-        "summary": "Session becomes a three-pane notes app: folders, a dated note list, and a note whose first line is its title. It opens on a pinned Start Here note with one ask box; any note can run a model inline (⌘J), and every answer paragraph has a margin button to ask about it, branch it into a sub-note, or add it to another note. Outline and Link Map are two more views of the same notes, so there is one object to learn.",
+        "summary": "Session becomes a three-pane notes app: folders, a dated note list, and a note whose first line is its title. It opens on a pinned Start Here note with one ask box; any note can run a model inline (\u2318J), and every answer paragraph has a margin button to ask about it, branch it into a sub-note, or add it to another note. Outline and Link Map are two more views of the same notes, so there is one object to learn.",
         "nouns": [
           "Note",
           "Chat",
@@ -509,150 +423,30 @@
         ],
         "changes": [
           "Opens on a pinned Start Here note with one ask box and a five-step checklist that ticks itself off; round 1 opened on a finished answer with no starting point.",
-          "Every answer paragraph has a margin ↳ button (Ask, Ask in New Note, Highlight, Add to Note); in round 1 branching existed only on text selection (issue S-07).",
-          "Add to Note… files a passage as a linked bullet into a chosen note and section; round 1 could not file part of an answer, and its Link button only showed a toast.",
-          "Split New Note (⌘N) from New Chat (⇧⌘N) and kept ⌘J as Ask in This Note; in round 1 ⌘J was the only entry and appended to whichever note was open.",
+          "Every answer paragraph has a margin \u21b3 button (Ask, Ask in New Note, Highlight, Add to Note); in round 1 branching existed only on text selection (issue S-07).",
+          "Add to Note\u2026 files a passage as a linked bullet into a chosen note and section; round 1 could not file part of an answer, and its Link button only showed a toast.",
+          "Split New Note (\u2318N) from New Chat (\u21e7\u2318N) and kept \u2318J as Ask in This Note; in round 1 \u2318J was the only entry and appended to whichever note was open.",
           "Links made with >> or from a selection are saved and update Linked Notes, the outline and the Link Map; opening a search result highlights the match in the note.",
           "Format, Table, Lock, Share and New Folder now act (Lock = never sent to a model); in round 1 five toolbar buttons did nothing.",
-          "Replaced Gallery home (thumbnail text was unreadable) with Ask-first notes; Quick Note moved from ⌃⌘Q, which is the macOS Lock Screen shortcut, to fn Q.",
+          "Replaced Gallery home (thumbnail text was unreadable) with Ask-first notes; Quick Note moved from \u2303\u2318Q, which is the macOS Lock Screen shortcut, to fn Q.",
           "Model setup re-checks by itself after sign-in and starts the queued chat (issue S-08); round 1 needed a manual Check Again."
         ],
         "decisions": [
-          "Should a new note start as a chat (d) or as plain text with ⌘J to ask (a)?",
+          "Should a new note start as a chat (d) or as plain text with \u2318J to ask (a)?",
           "Inline chat blocks (a) or a conversation panel (b): which makes it clearer what is model output and what is your own writing?",
           "Do sub-notes belong in the note list (a) or only as Replies inside the parent note (c)?",
-          "Is the margin ↳ button found without the Start Here checklist pointing at it?",
-          "Is “Lock: never sent to a model” understood without explanation?"
+          "Is the margin \u21b3 button found without the Start Here checklist pointing at it?",
+          "Is \u201cLock: never sent to a model\u201d understood without explanation?"
         ],
         "file": "r2/notes.html",
         "thumb": "thumbs/r2-notes.jpg"
-      },
-      "obsidian": {
-        "slug": "obsidian",
-        "round": 2,
-        "title": "Vault of linked notes",
-        "influence": "Obsidian",
-        "summary": "Everything is a Markdown note in a local vault: a chat is a note whose body holds Ask blocks, a branch is a new note linked to the passage it came from, and filing a passage puts a linked bullet under a chosen outline heading. The Ask box is pinned to the bottom of every note and every empty tab, each paragraph has a margin button for branch, ask and file, and agent sign-in never blocks writing or queueing.",
-        "nouns": [
-          "Vault",
-          "Note",
-          "Ask",
-          "Link",
-          "Highlight"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "Asks as callouts",
-            "summary": "Chats are notes; each question and answer is a foldable callout, with backlinks over a local graph in the right sidebar."
-          },
-          {
-            "id": "b",
-            "label": "Chat in sidebar",
-            "summary": "Composing moves to a right-sidebar Chat pane bound to the open note; answers enter notes only when inserted or filed."
-          },
-          {
-            "id": "c",
-            "label": "Outline beside chat",
-            "summary": "The vault opens with the Chapter 3 outline and the chat side by side; drag a paragraph's margin handle onto a bullet to file it."
-          },
-          {
-            "id": "d",
-            "label": "Graph split pane",
-            "summary": "The global graph sits beside the note in a split pane and follows the active note; the right sidebar starts closed."
-          },
-          {
-            "id": "e",
-            "label": "Starter vault",
-            "summary": "First launch shows an ask-first welcome screen; the sample vault opens on a Start here note with a tracked checklist."
-          }
-        ],
-        "changes": [
-          "Added a branch button in the left margin of every paragraph with Branch, Ask, File and Copy link; in round 1 these appeared only after selecting text.",
-          "File to note now asks for a section and inserts a linked bullet under it; round 1 could only append an embed after the outline.",
-          "Pinned the Ask box to the bottom of each note; in round 1 it sat after the last answer, about 1,400 px below the fold.",
-          "Getting started card in every variant's sidebar and in empty vaults; round 1 explained the app only in variant E.",
-          "Replaced the cosmetic Transcript variant with Outline beside chat, where paragraphs drag from an answer onto outline bullets.",
-          "Outline bullets keep typed edits, autocomplete [[links]] and have a Link to… menu; round 1 lost edits on re-render.",
-          "Graph labels skip overlaps; notes take aliases, so search or ⌘O for “recap” finds the CAISO summary.",
-          "Mobile bottom toolbar, Tab-trapped dialogs, 4.5:1 placeholder text, and menus that say why an item is disabled."
-        ],
-        "decisions": [
-          "Does “a chat is a note” hold up when a note mixes writing and asks, or do people look for a separate chat list?",
-          "Which do first-time users find first: the margin button or the selection popover?",
-          "Should filing insert a linked bullet (current) or transclude the passage inline?",
-          "Is “Answer in: This note / New note” enough to predict where an answer is saved?",
-          "Does today’s daily note work as Home, or do people want a vault-wide activity list?"
-        ],
-        "file": "r2/obsidian.html",
-        "thumb": "thumbs/r2-obsidian.jpg"
-      },
-      "notion": {
-        "slug": "notion",
-        "round": 2,
-        "title": "Pages & blocks",
-        "influence": "Notion",
-        "summary": "Everything is a page made of blocks: a chat is a page whose blocks are questions and answers, a note is a page you write, and a branch is a sub-chat attached to the passage it came from. Answers file into an outline section as synced bullets that link back, any bullet takes @-links, and backlinks, a local graph and a Map show how pages relate. An empty workspace opens on one Getting started page whose first block is the Ask box; agent status is an inline block, never a gate.",
-        "nouns": [
-          "Page",
-          "Chat",
-          "Sub-chat",
-          "Highlight",
-          "Link"
-        ],
-        "variants": [
-          {
-            "id": "a",
-            "label": "Chat pages",
-            "summary": "Sub-chats are pages listed under the passage they came from and nested in the sidebar; first run lands on Getting started."
-          },
-          {
-            "id": "b",
-            "label": "Home + database",
-            "summary": "Home is the landing page: the Ask box sits above a linked Questions database (table or board), and chat pages show Status, Agent and Model as properties."
-          },
-          {
-            "id": "c",
-            "label": "Branches as toggles",
-            "summary": "Sub-chats render inline as toggle blocks under the passage instead of separate pages, so one investigation reads as one page."
-          },
-          {
-            "id": "d",
-            "label": "Side peek",
-            "summary": "Outline-first: the Chapter 3 note is the landing page and chats open in a side peek beside it, keeping the note in view."
-          },
-          {
-            "id": "e",
-            "label": "Branches in margin",
-            "summary": "Anchored sub-chats run as margin threads beside their highlight, like comments, with a reply box; the page shifts left to make room."
-          }
-        ],
-        "changes": [
-          "Added a branch button (⑂) in every answer paragraph's gutter and a Branch button under each answer; in round 1 branching was found only by selecting text (S-07).",
-          "Add to page… now files into a chosen outline section as a synced bullet that links back to the chat; in round 1 it appended a block below the outline where it was not visible.",
-          "Outline bullets are editable and @ / [[ opens a filtered page picker in any bullet; in round 1 only the empty last line accepted links.",
-          "The Personal workspace is actually empty: its own Getting started, no Thesis pages in Search, Map, Highlights or Home; round 1 leaked Thesis content into it.",
-          "Getting started steps have Show me buttons that open the right page and point at the control; agent setup is an inline status block with Check again (S-04, S-08).",
-          "Links panel gains a local graph and Map gains a focus mode from Show on map; round 1 showed only lists and an unfocused full map.",
-          "Replaced the database-landing variant with Home + linked database so the Ask box stays first, and replaced inline AI blocks with margin threads, a stronger alternative for anchored branches.",
-          "Placeholder contrast raised to 4.5:1, dialogs trap Tab, the selection toolbar collapses to icons at narrow widths, and a ? button explains the five nouns (S-14, S-17)."
-        ],
-        "decisions": [
-          "Sub-chat as a page (a), a toggle (c), or a margin thread (e): which do first-time users follow back to its passage most reliably?",
-          "Does the ⑂ gutter button get found without the Getting started hint, or is the Branch button under the answer what people use?",
-          "Is filing an answer as a synced outline bullet understood as a live copy, or do users expect a one-time paste?",
-          "Should the landing view be Getting started (a), Home with the Questions database (b) or the outline (d) once the workspace has content?",
-          "Are Page and Chat enough as top-level words, or do people still look for folders?"
-        ],
-        "file": "r2/notion.html",
-        "thumb": "thumbs/r2-notion.jpg"
       },
       "inbox": {
         "slug": "inbox",
         "round": 2,
         "title": "Research inbox",
         "influence": "Front / Missive / Superhuman / Hey (shared email inbox apps)",
-        "summary": "Every question is a Conversation that runs in the background and lands in an Inbox as “Ready to read”; queued and running ones sit in Waiting. Follow-ups are Ask replies, your own writing is a Note (the internal-comment idiom), and a passage can start a Fork. Tags, [[links]], backlinks and a Knowledge view with outline and graph replace folders, stars, bookmarks and the feed, so the first screen has one action: ask.",
+        "summary": "Every question is a Conversation that runs in the background and lands in an Inbox as \u201cReady to read\u201d; queued and running ones sit in Waiting. Follow-ups are Ask replies, your own writing is a Note (the internal-comment idiom), and a passage can start a Fork. Tags, [[links]], backlinks and a Knowledge view with outline and graph replace folders, stars, bookmarks and the feed, so the first screen has one action: ask.",
         "nouns": [
           "Conversation",
           "Fork",
@@ -712,7 +506,7 @@
         "round": 2,
         "title": "Everything is a node",
         "influence": "Tana (with nods to Roam Research, Logseq, Workflowy)",
-        "summary": "Chats and notes live in one outline. A question is a node tagged #question: ⌘↵ runs it, the answer arrives as child nodes, follow-ups are child questions, and any passage can be added to another node as a reference with one key (R). Every page ends in the same input line (⌘↵ asks, ↵ adds a note), and the first run states what Session does and which agent is ready.",
+        "summary": "Chats and notes live in one outline. A question is a node tagged #question: \u2318\u21b5 runs it, the answer arrives as child nodes, follow-ups are child questions, and any passage can be added to another node as a reference with one key (R). Every page ends in the same input line (\u2318\u21b5 asks, \u21b5 adds a note), and the first run states what Session does and which agent is ready.",
         "nouns": [
           "Node",
           "Question",
@@ -749,8 +543,8 @@
         ],
         "changes": [
           "The input line is now the last line of every page (pinned to the window in C); in round 1 it was at the top of daily pages and at the bottom elsewhere (S-10).",
-          "Paragraph actions moved into the right margin, and a passage with follow-ups shows a persistent '↳ 1 follow-up' marker; in round 1 hover buttons covered the text and anchored follow-ups were invisible at the passage (S-07).",
-          "Added 'Add to…' (R on a selection, or in the margin) that puts a reference to a passage or node into any outline node; round 1 had no direct way to file part of an answer into Chapter 3.",
+          "Paragraph actions moved into the right margin, and a passage with follow-ups shows a persistent '\u21b3 1 follow-up' marker; in round 1 hover buttons covered the text and anchored follow-ups were invisible at the passage (S-07).",
+          "Added 'Add to\u2026' (R on a selection, or in the margin) that puts a reference to a passage or node into any outline node; round 1 had no direct way to file part of an answer into Chapter 3.",
           "Search matches Summary fields and retired terms ('recap', 'highlight', 'bookmark', 'branch') and says what replaced them; in round 1 'recap' found nothing.",
           "First run states what Session does, shows the detected agent as Ready, and keeps a 0/4 checklist above the focused input; round 1 relied on a bullet list.",
           "Today's live search no longer repeats items already on the page, map labels no longer overlap, and placeholder text meets 4.5:1 (S-17).",
@@ -813,7 +607,7 @@
           "Search matches answer and recap text with a snippet (\"11.8 TWh\" finds CAISO); round 1 matched titles only.",
           "Graph regrouped into project regions with labels below nodes, legend chips that filter link types, and select-then-open; round 1 was a tangled hub with clipped labels.",
           "Standing passage hint under each answer names Highlight / Ask sub-question / File in note with keys; round 1 relied on selection or an unlabeled hover icon.",
-          "Replaced the Board-home variant (it duplicated Display → Board) with Project home, which tests an outline-first start.",
+          "Replaced the Board-home variant (it duplicated Display \u2192 Board) with Project home, which tests an outline-first start.",
           "Filter, Move to project, Archive (with Undo) and New project now work; agents recheck sign-in automatically while a question waits."
         ],
         "decisions": [
@@ -826,6 +620,7 @@
         "file": "r2/linear.html",
         "thumb": "thumbs/r2-linear.jpg"
       }
-    }
+    },
+    "3": {}
   }
 }
