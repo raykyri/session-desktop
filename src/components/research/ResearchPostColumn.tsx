@@ -60,9 +60,8 @@ export default function ResearchPostColumn({
             {editedAt ? (
               <>
                 <span aria-hidden="true">·</span>
-                <span title={new Date(editedAt).toLocaleString()}>
-                  Edited {shortWhen(editedAt, Date.now())}
-                </span>
+                {/* The edit time is in the tooltip; the line reads "3h · Edited". */}
+                <span title={`Edited ${new Date(editedAt).toLocaleString()}`}>Edited</span>
               </>
             ) : null}
           </div>

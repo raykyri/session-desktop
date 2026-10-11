@@ -6266,7 +6266,7 @@ function MainApp() {
     [],
   );
   const editResearchPost = useCallback(
-    async (input: { nodeId: string; text: string; expectedText: string; correction: boolean }) => {
+    async (input: { nodeId: string; text: string; expectedText: string }) => {
       const result = await updateResearchPost(input);
       if (activeResearchTreeIdRef.current === result.tree.id) {
         setActiveResearchDetail((current) =>

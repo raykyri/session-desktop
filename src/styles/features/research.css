@@ -2187,41 +2187,9 @@
   white-space: nowrap;
 }
 
-/* In the post column, the preview and the corrections take the post's
-   (a turn's) insets. */
+/* In the post column, the preview takes the post's (a turn's) insets. */
 .research-pair-post .research-edit-preview {
   padding: 18px 26px 14px 24px;
-}
-
-/* A post's corrections, under the post. */
-.research-post-corrections {
-  margin: 4px 26px 14px 24px;
-  padding: 0;
-  list-style: none;
-}
-
-.research-post-correction {
-  padding: 10px 12px;
-  border-left: 3px solid var(--accent-strong);
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
-  background: var(--accent-subtle);
-}
-
-.research-post-correction + .research-post-correction {
-  margin-top: 8px;
-}
-
-.research-post-correction-meta {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 4px;
-  color: var(--text-muted);
-  font-size: var(--fs-sm);
-}
-
-.research-post-correction-label {
-  color: var(--accent-color);
-  font-weight: 600;
 }
 
 .research-head-menu {

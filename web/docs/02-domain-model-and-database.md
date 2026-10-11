@@ -76,8 +76,8 @@ adminOnly, available, supportsFiles, supportsImages }`.
 The desktop has since changed its node model (state version 8): a node is an
 envelope (`id`, `treeId`, `parentNodeId`, `inline`, `anchor`, `title`,
 `groupId`, `createdAt`, `promotedAt`, `highlights`) plus a body tagged by
-`type`: `post` (a note with `format: text | link`, `delivery`, `corrections`,
-`editedAt`), `exchange` (a question with a run), or `document` (`source:
+`type`: `post` (a note with `format: text | link`, `delivery`, `editedAt`),
+`exchange` (a question with a run), or `document` (`source:
 imported | authored | transcript`). `queryAnchor` and `replyAnchor` became one
 `anchor` (`{ kind: "passage", anchor } | { kind: "reply", replyId }`), and the
 frontend receives `ResearchNodeView`, which replaces the run's process
@@ -86,7 +86,7 @@ with it and keeps the flat `run | document` node described here, because:
 
 - The web app has no posts. Saved links and tweets are `journal_entries` rows
   (`JournalLinkEntry`, `JournalTweetEntry`), not research nodes, and there is
-  no network delivery, replies or corrections.
+  no network delivery or replies.
 - It has no terminal transcripts, so `source: transcript` has nothing to hold.
 - It has no local process bindings; the fields the desktop moved into the
   exchange binding were already dropped from the web wire type.

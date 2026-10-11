@@ -5,7 +5,6 @@
 import type {
   DocumentSource,
   NodeAnchor,
-  PostCorrection,
   PostDelivery,
   PostFormat,
   ResearchHighlight,
@@ -47,7 +46,6 @@ export interface NodeFixture {
   recap?: ResearchRecap | null;
   delivery?: PostDelivery | null;
   format?: PostFormat;
-  corrections?: PostCorrection[];
   editedAt?: number | null;
 }
 
@@ -79,7 +77,6 @@ export function researchNode(fields: NodeFixture = {}): ResearchNode {
         format: fields.format ?? "text",
         delivery: fields.delivery ?? null,
         followUpAgent: agent,
-        corrections: fields.corrections ?? [],
         editedAt: fields.editedAt ?? null,
       };
     case "document": {

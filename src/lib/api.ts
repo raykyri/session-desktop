@@ -338,13 +338,12 @@ export function updateResearchDocument(request: {
   return invoke<UpdateResearchDocumentResult>("update_research_document", { request });
 }
 
-/** Edits a thread's own post: replaces its text when it has no replies or
- * follow-ups (`correction: false`), else appends a correction. */
+/** Edits a thread's own post: replaces its text and marks it edited.
+ * Refused when the post's text is no longer `expectedText`. */
 export function updateResearchPost(request: {
   nodeId: string;
   text: string;
   expectedText: string;
-  correction: boolean;
 }) {
   return invoke<UpdateResearchPostResult>("update_research_post", { request });
 }

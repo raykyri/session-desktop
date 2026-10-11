@@ -157,27 +157,15 @@ test("thread entries skip documents and responses and break time ties by id", ()
   );
 });
 
-test("corrections are Thread rows ordered by time with the replies and follow-ups", () => {
-  const corrected = researchNode({
-    ...withRepliesFields,
-    corrections: [{ id: "c1", body: "It ships **wit-bindgen 0.30**.", createdAt: 135 }],
-  });
+test("an edited post's Thread has only its replies and follow-ups", () => {
+  const edited = researchNode({ ...withRepliesFields, prompt: "Who ships wit-bindgen 0.30 plugins?", editedAt: 135 });
+  const nodes = [edited, about, answered];
+  // The Thread header's count is the number of entries.
   assert.deepEqual(
-    postThreadEntries([corrected, about, answered], corrected).map((entry) => entry.key),
-    ["reply:r1", "about", "correction:c1", "reply:r2", "answered"],
+    postThreadEntries(nodes, edited).map((entry) => entry.key),
+    ["reply:r1", "about", "reply:r2", "answered"],
   );
-  const html = renderToStaticMarkup(
-    createElement(ResearchPostThread, {
-      nodes: [corrected],
-      post: corrected,
-      archived: false,
-      actions: { onAskFollowUp: asyncNoop, onRespond: asyncNoop, onDeleteResponse: asyncNoop, onRetry: asyncNoop },
-      requireCmdEnterToSend: false,
-      openNodeId: null,
-      onOpenFollowUp: noop,
-    }),
-  );
-  assert.match(html, /data-type="correction"[^>]*data-research-thread-row="" data-thread-key="correction:/);
-  assert.match(html, /post-correction-label">Correction</);
-  assert.match(html, /<strong>wit-bindgen 0.30<\/strong>/);
+  const html = render(nodes);
+  assert.equal(html.match(/data-research-thread-row=""/g)?.length, 4);
+  assert.doesNotMatch(html, /[Cc]orrection|wit-bindgen 0\.30/);
 });

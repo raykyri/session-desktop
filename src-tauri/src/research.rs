@@ -579,11 +579,6 @@ pub struct PostBody {
     /// Default agent for AI follow-ups. Not provenance: the post itself is
     /// user-authored.
     pub follow_up_agent: AgentSpec,
-    /// Corrections the author appended to a post that already had replies
-    /// or follow-ups, oldest first; the text stays as it was when those were
-    /// written.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub corrections: Vec<PostCorrection>,
     /// When the text was last replaced by an edit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub edited_at: Option<u64>,
@@ -694,18 +689,6 @@ pub struct ResearchNode {
     pub highlights: Vec<ResearchHighlight>,
     pub body: NodeBody,
 }
-
-/// A correction appended to a post (see `PostBody::corrections`).
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PostCorrection {
-    pub id: String,
-    pub body: String,
-    pub created_at: u64,
-}
-
-/// Corrections a post may carry.
-pub const MAX_POST_CORRECTIONS: usize = 100;
 
 /// A node's type, the tag of its body.
 ///
@@ -1321,7 +1304,6 @@ impl PostBody {
                 replies: Vec::new(),
             }),
             follow_up_agent,
-            corrections: Vec::new(),
             edited_at: None,
         }
     }
@@ -1383,9 +1365,10 @@ pub fn migrate_imported_report_node(node: &mut serde_json::Value) -> bool {
 /// Every JSON-shape migration for stored nodes, oldest first: imported
 /// reports become documents, notes become posts with merged anchors, every
 /// flat record gets the envelope-and-body shape (state version 9, archive
-/// version 11), and `promotedAt` becomes `starredAt` (state version 10,
-/// archive version 12). Shared by state loads and archive reads so both paths
-/// convert the same shapes. Each step only rewrites nodes in its own old
+/// version 11), `promotedAt` becomes `starredAt` (state version 10, archive
+/// version 12), and a post's `corrections` become its text
+/// ([`migrate_post_corrections_to_text`]; no version change). Shared by state
+/// loads and archive reads so both paths convert the same shapes. Each step only rewrites nodes in its own old
 /// shape, so the whole migration is idempotent and runs on files of any
 /// supported version, including version-8 and version-10 files, which hold
 /// either shape.
@@ -1407,8 +1390,105 @@ pub fn migrate_research_node_values(nodes: &mut [&mut serde_json::Value]) -> boo
     for node in nodes.iter_mut() {
         changed |= migrate_flat_node_to_body(node);
         changed |= migrate_promoted_at_to_starred_at(node);
+        changed |= migrate_post_corrections_to_text(node);
     }
     changed
+}
+
+/// Step five of [`migrate_research_node_values`], after every record has the
+/// body shape. Builds before this one kept the text of a post that had
+/// replies or follow-ups and stored each later edit as a correction in the
+/// post body (`corrections: [{ id, body, createdAt }]`); edits now always
+/// replace the text. A post body with a `corrections` key gets the edit that
+/// replacing the text would have made with its latest correction (greatest
+/// `createdAt`; the later one in the list on a tie):
+///
+/// - `message.text` becomes the correction's body, and `format` follows it
+///   ([`PostFormat::of`], as in `update_research_post`).
+/// - `editedAt` becomes the later of its current value and the correction's
+///   `createdAt`.
+/// - Highlights move to their quote in the new text or are removed
+///   ([`crate::research_anchors::reanchor_highlights`]), as an edit moves
+///   them.
+/// - Attachments are kept. An edit may not remove a captured post's link from
+///   the text; a correction could, and the attachment still describes what
+///   the post was captured from.
+///
+/// The key is then removed, also when it holds no correction with a
+/// non-blank body. Builds at state version 10 and archive version 12 read
+/// `corrections` as optional, so they load the result unchanged. Returns
+/// whether the node changed.
+pub fn migrate_post_corrections_to_text(node: &mut serde_json::Value) -> bool {
+    use serde_json::{Map, Value};
+    let Some(object) = node.as_object_mut() else {
+        return false;
+    };
+    let Some(body) = object.get_mut("body").and_then(Value::as_object_mut) else {
+        return false;
+    };
+    if body.get("type").and_then(Value::as_str) != Some("post") {
+        return false;
+    }
+    let Some(corrections) = body.remove("corrections") else {
+        return false;
+    };
+    let millis = |value: Option<&Value>| {
+        value.and_then(|value| {
+            value.as_u64().or_else(|| {
+                value
+                    .as_f64()
+                    .filter(|millis| millis.is_finite() && *millis >= 0.0)
+                    .map(|millis| millis as u64)
+            })
+        })
+    };
+    let latest = corrections
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|correction| {
+            let text = correction.get("body")?.as_str()?;
+            (!text.trim().is_empty())
+                .then(|| (millis(correction.get("createdAt")).unwrap_or(0), text))
+        })
+        .max_by_key(|(created_at, _)| *created_at);
+    let Some((corrected_at, text)) = latest else {
+        return true;
+    };
+    let text = text.to_string();
+    let message = body
+        .entry("message")
+        .or_insert_with(|| Value::Object(Map::new()));
+    if !message.is_object() {
+        *message = Value::Object(Map::new());
+    }
+    let message = message.as_object_mut().expect("set to an object above");
+    let old_text = message
+        .insert("text".to_string(), Value::from(text.clone()))
+        .and_then(|old| old.as_str().map(str::to_string))
+        .unwrap_or_default();
+    body.insert(
+        "format".to_string(),
+        serde_json::to_value(PostFormat::of(&text)).expect("a unit variant serializes"),
+    );
+    let edited_at = millis(body.get("editedAt")).map_or(corrected_at, |at| at.max(corrected_at));
+    body.insert("editedAt".to_string(), Value::from(edited_at));
+    if let Some(Ok(highlights)) = object
+        .get("highlights")
+        .map(|highlights| serde_json::from_value::<Vec<ResearchHighlight>>(highlights.clone()))
+    {
+        let (kept, _) =
+            crate::research_anchors::reanchor_highlights(&highlights, &old_text, &text, None);
+        if kept.is_empty() {
+            object.remove("highlights");
+        } else {
+            object.insert(
+                "highlights".to_string(),
+                serde_json::to_value(kept).expect("highlights serialize"),
+            );
+        }
+    }
+    true
 }
 
 /// Step four of [`migrate_research_node_values`], after flat records have the
@@ -1538,7 +1618,7 @@ const ENVELOPE_FIELDS: [&str; 11] = [
 ///   (which the import path never created) stays an exchange and loses its
 ///   `origin`.
 /// - `post`: `message`, `format`, `delivery`, `followUpAgent`,
-///   `corrections` and `editedAt`.
+///   `corrections` (which step five converts) and `editedAt`.
 /// - `document`: `source` (`imported` from the origin, else `authored`), the
 ///   question as `message` unless it is empty, `followUpAgent` when the
 ///   record names an adapter, the snapshot time, recap and `editedAt`.
@@ -1672,8 +1752,8 @@ pub fn migrate_flat_node_to_body(node: &mut serde_json::Value) -> bool {
 
 /// Structural rules the create paths maintain beyond what the body types
 /// express: a post's parent is a post, a reply anchor sits on an exchange
-/// whose parent is a post, replies nest at most one level, and corrections
-/// are bounded. Checked for archives, which come from outside this process.
+/// whose parent is a post, and replies nest at most one level and are
+/// bounded. Checked for archives, which come from outside this process.
 pub fn validate_node_shape(
     node: &ResearchNode,
     node_by_id: &HashMap<&str, &ResearchNode>,
@@ -1700,32 +1780,9 @@ pub fn validate_node_shape(
             node.id
         ));
     }
-    if let Some(post) = node.post() {
-        if let Some(delivery) = &post.delivery {
-            validate_post_replies(&delivery.replies)
-                .map_err(|err| format!("research post {}: {err}", node.id))?;
-        }
-        validate_post_corrections(&post.corrections)
+    if let Some(delivery) = node.delivery() {
+        validate_post_replies(&delivery.replies)
             .map_err(|err| format!("research post {}: {err}", node.id))?;
-    }
-    Ok(())
-}
-
-pub fn validate_post_corrections(corrections: &[PostCorrection]) -> Result<(), String> {
-    if corrections.len() > MAX_POST_CORRECTIONS {
-        return Err(format!("more than {MAX_POST_CORRECTIONS} corrections"));
-    }
-    let mut seen = HashSet::new();
-    for correction in corrections {
-        if correction.id.is_empty() || !seen.insert(correction.id.as_str()) {
-            return Err("correction ids must be unique and non-empty".to_string());
-        }
-        if correction.body.trim().is_empty() || correction.body.len() > MAX_POST_TEXT_BYTES {
-            return Err(format!(
-                "correction {} has an empty or oversized body",
-                correction.id
-            ));
-        }
     }
     Ok(())
 }
@@ -1913,10 +1970,6 @@ pub struct UpdateResearchPostRequest {
     pub text: String,
     /// The post's text when the editor opened.
     pub expected_text: String,
-    /// True when the editor saves a correction (the post had replies or
-    /// follow-ups when it opened), false when it replaces the text. A
-    /// mismatch with the post's current state is refused.
-    pub correction: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -3541,7 +3594,7 @@ pub fn query_followup_prompt(exact: &str, question: &str) -> String {
     }
 }
 
-const POST_CONTEXT_TAGS: [&str; 5] = ["post", "replies", "reply", "corrections", "correction"];
+const POST_CONTEXT_TAGS: [&str; 3] = ["post", "replies", "reply"];
 
 /// The launch prompt for an AI follow-up under a post. A post has no session
 /// to fork, so the post body and its replies ride along as context. Reply
@@ -3552,7 +3605,6 @@ const POST_CONTEXT_TAGS: [&str; 5] = ["post", "replies", "reply", "corrections",
 /// [`document_followup_prompt`].
 pub fn post_followup_prompt(
     post_body: &str,
-    corrections: &[PostCorrection],
     replies: &[PostReply],
     anchored_reply: Option<&PostReply>,
     question: &str,
@@ -3568,18 +3620,6 @@ pub fn post_followup_prompt(
             .join(" ")
     };
     let mut context = format!("<post>\n{}\n</post>", clean(post_body.trim()));
-    if !corrections.is_empty() {
-        // Appended by the author after the post was published; the post text
-        // above is the version the replies refer to.
-        context.push_str("\n<corrections>");
-        for correction in corrections {
-            context.push_str(&format!(
-                "\n<correction>\n{}\n</correction>",
-                clean(correction.body.trim())
-            ));
-        }
-        context.push_str("\n</corrections>");
-    }
     if !replies.is_empty() {
         let by_id = replies
             .iter()
@@ -3617,15 +3657,11 @@ pub fn post_followup_prompt(
         }
         None => question.to_string(),
     };
-    let mut preamble = if replies.is_empty() {
-        "The user wrote the post below.".to_string()
+    let preamble = if replies.is_empty() {
+        "The user wrote the post below."
     } else {
         "The user posted the post below to people in their network; their replies follow it."
-            .to_string()
     };
-    if !corrections.is_empty() {
-        preamble.push_str(" Corrections the user added later follow the post.");
-    }
     if question.starts_with('/') {
         format!(
             "{question}\n\n{preamble} It is provided as context for the request above.\n\n{context}"
@@ -4892,11 +4928,13 @@ mod tests {
         assert_eq!(typed[0].starred_at, Some(9));
         assert_eq!(typed[0].highlights.len(), 1);
 
+        // The flat post's correction becomes its text (step five); its edit
+        // time is the later of the two.
         let post = typed[1].post().unwrap();
-        assert_eq!(post.message.text, "Who?");
+        assert_eq!(post.message.text, "Fixed");
         assert_eq!(post.delivery.as_ref().unwrap().replies[0].created_at, 8);
-        assert_eq!(post.corrections[0].body, "Fixed");
         assert_eq!(post.edited_at, Some(10));
+        assert!(nodes[1]["body"].get("corrections").is_none());
         assert_eq!(post.follow_up_agent.adapter, "claude");
 
         let imported = typed[2].document().unwrap();
@@ -5132,9 +5170,207 @@ mod tests {
         assert_eq!(both, serde_json::json!({"id": "n", "starredAt": 6}));
     }
 
+    /// A body-shaped post node with `text` and the given extra body fields.
+    fn post_value(text: &str, extra: serde_json::Value) -> serde_json::Value {
+        let mut node = serde_json::json!({
+            "id": "post", "treeId": "tree", "groupId": "group", "createdAt": 1,
+            "body": {
+                "type": "post", "message": {"text": text}, "format": PostFormat::of(text),
+                "followUpAgent": {"adapter": "claude"},
+            },
+        });
+        for (key, value) in extra.as_object().unwrap() {
+            node["body"][key] = value.clone();
+        }
+        node
+    }
+
+    fn highlight_value(id: &str, exact: &str, start: usize) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "anchor": {
+                "version": 1, "projection": "answer-v1", "responseRevision": "rev",
+                "start": start, "end": start + exact.encode_utf16().count(),
+                "exact": exact, "prefix": "", "suffix": "",
+            },
+            "createdAt": 2,
+        })
+    }
+
+    #[test]
+    fn a_post_correction_becomes_its_text_and_marks_it_edited() {
+        let reply = serde_json::json!({
+            "id": "r1", "author": {"kind": "member", "id": "m", "displayName": "Ana", "handle": "ana"},
+            "body": "I will be there.", "createdAt": 10,
+        });
+        let mut nodes = vec![post_value(
+            "The meeting is on Monday.",
+            serde_json::json!({
+                "delivery": {"status": "posted", "postedAt": 1, "replies": [reply]},
+                "corrections": [{"id": "c1", "body": "The meeting is on Tuesday.", "createdAt": 20}],
+            }),
+        )];
+        assert!(migrate_values(&mut nodes));
+        assert_eq!(
+            nodes[0]["body"],
+            serde_json::json!({
+                "type": "post", "message": {"text": "The meeting is on Tuesday."},
+                "format": "text", "followUpAgent": {"adapter": "claude"},
+                "delivery": {"status": "posted", "postedAt": 1, "replies": [reply]},
+                "editedAt": 20,
+            })
+        );
+        let node: ResearchNode = serde_json::from_value(nodes[0].clone()).unwrap();
+        assert_eq!(node.prompt(), "The meeting is on Tuesday.");
+        assert_eq!(node.post().unwrap().edited_at, Some(20));
+        assert_eq!(serde_json::to_value(&node).unwrap(), nodes[0]);
+        // Idempotent: a second pass changes nothing.
+        let migrated = nodes.clone();
+        assert!(!migrate_values(&mut nodes));
+        assert_eq!(nodes, migrated);
+    }
+
+    #[test]
+    fn the_latest_correction_wins_and_the_later_edit_time_is_kept() {
+        // Listed out of order: the greatest createdAt wins.
+        let corrections = serde_json::json!([
+            {"id": "c2", "body": "Second", "createdAt": 30},
+            {"id": "c1", "body": "First", "createdAt": 20},
+        ]);
+        let mut earlier_edit = vec![post_value(
+            "Original",
+            serde_json::json!({"corrections": corrections, "editedAt": 10}),
+        )];
+        assert!(migrate_values(&mut earlier_edit));
+        assert_eq!(earlier_edit[0]["body"]["message"]["text"], "Second");
+        assert_eq!(earlier_edit[0]["body"]["editedAt"], 30);
+        // An edit stored after the latest correction keeps its time.
+        let mut later_edit = vec![post_value(
+            "Original",
+            serde_json::json!({"corrections": corrections, "editedAt": 40}),
+        )];
+        assert!(migrate_values(&mut later_edit));
+        assert_eq!(later_edit[0]["body"]["message"]["text"], "Second");
+        assert_eq!(later_edit[0]["body"]["editedAt"], 40);
+        // A tie goes to the later entry; blank bodies are skipped.
+        let mut tied = vec![post_value(
+            "Original",
+            serde_json::json!({"corrections": [
+                {"id": "c1", "body": "Earlier entry", "createdAt": 5},
+                {"id": "c2", "body": "Later entry", "createdAt": 5},
+                {"id": "c3", "body": "  ", "createdAt": 9},
+            ]}),
+        )];
+        assert!(migrate_values(&mut tied));
+        assert_eq!(tied[0]["body"]["message"]["text"], "Later entry");
+        assert_eq!(tied[0]["body"]["editedAt"], 5);
+        // No usable correction: the key goes and the text stays.
+        let mut empty = vec![post_value(
+            "Original",
+            serde_json::json!({"corrections": []}),
+        )];
+        assert!(migrate_values(&mut empty));
+        assert_eq!(empty[0], post_value("Original", serde_json::json!({})));
+    }
+
+    #[test]
+    fn a_corrected_post_takes_the_format_its_new_text_implies() {
+        let mut nodes = vec![
+            post_value(
+                "https://example.com/a",
+                serde_json::json!({"corrections": [
+                    {"id": "c1", "body": "It moved: https://example.com/b", "createdAt": 3},
+                ]}),
+            ),
+            post_value(
+                "See https://example.com/a",
+                serde_json::json!({"corrections": [
+                    {"id": "c1", "body": "https://example.com/b", "createdAt": 3},
+                ]}),
+            ),
+        ];
+        assert_eq!(nodes[0]["body"]["format"], "link");
+        assert!(migrate_values(&mut nodes));
+        assert_eq!(nodes[0]["body"]["format"], "text");
+        assert_eq!(nodes[1]["body"]["format"], "link");
+    }
+
+    #[test]
+    fn a_corrected_posts_highlights_move_with_its_text() {
+        let mut node = post_value(
+            "Kept quote. Lost quote.",
+            serde_json::json!({"corrections": [
+                {"id": "c1", "body": "New intro. Kept quote.", "createdAt": 3},
+            ]}),
+        );
+        node["highlights"] = serde_json::json!([
+            highlight_value("kept", "Kept quote", 0),
+            highlight_value("lost", "Lost quote", 12),
+        ]);
+        let mut nodes = vec![node];
+        assert!(migrate_values(&mut nodes));
+        assert_eq!(
+            nodes[0]["highlights"],
+            serde_json::json!([highlight_value("kept", "Kept quote", 11)])
+        );
+        // A post whose only highlight no longer matches has none.
+        let mut node = post_value(
+            "Lost quote.",
+            serde_json::json!({"corrections": [{"id": "c1", "body": "Other.", "createdAt": 3}]}),
+        );
+        node["highlights"] = serde_json::json!([highlight_value("lost", "Lost quote", 0)]);
+        let mut nodes = vec![node];
+        assert!(migrate_values(&mut nodes));
+        assert!(nodes[0].get("highlights").is_none());
+    }
+
+    #[test]
+    fn corrections_on_other_node_types_are_left_alone() {
+        let mut document = serde_json::json!({
+            "id": "d", "body": {"type": "document", "source": "authored", "corrections": []},
+        });
+        let before = document.clone();
+        assert!(!migrate_post_corrections_to_text(&mut document));
+        assert_eq!(document, before);
+    }
+
+    /// Archives go through the same migration: a version-12 archive with a
+    /// corrected post reads back with the correction as the post's text.
+    #[test]
+    fn archives_with_corrected_posts_read_with_the_correction_as_text() {
+        let folder = temp_workspace();
+        let mut archive = sample_detached_archive(&folder);
+        let root = archive.nodes[0].clone();
+        archive.nodes[0] = with_body(&root, post_body("Who has tried X?", None));
+        write_detached_research_pending(&folder, &archive, &HashMap::new()).unwrap();
+        let manifest = detached_archive_path(&folder, true).join(DETACHED_RESEARCH_MANIFEST);
+        let mut raw: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+        assert_eq!(raw["version"], DETACHED_RESEARCH_ARCHIVE_VERSION);
+        raw["nodes"][0]["body"]["corrections"] =
+            serde_json::json!([{"id": "c1", "body": "Who has tried Y?", "createdAt": 7}]);
+        std::fs::write(&manifest, serde_json::to_vec(&raw).unwrap()).unwrap();
+
+        let bundle = read_detached_research(&folder).unwrap().unwrap();
+        let post = bundle.archive.nodes[0].post().unwrap();
+        assert_eq!(post.message.text, "Who has tried Y?");
+        assert_eq!(post.edited_at, Some(7));
+        let moved = temp_workspace();
+        write_detached_research_pending(&moved, &bundle.archive, &bundle.responses).unwrap();
+        let raw: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(detached_archive_path(&moved, true).join(DETACHED_RESEARCH_MANIFEST))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(raw["version"], DETACHED_RESEARCH_ARCHIVE_VERSION);
+        assert!(raw["nodes"][0]["body"].get("corrections").is_none());
+        std::fs::remove_dir_all(folder).unwrap();
+        std::fs::remove_dir_all(moved).unwrap();
+    }
+
     /// The stored shape of a post with every optional field set: a network
-    /// delivery with a member reply and the author's response to it, a
-    /// correction, and an edit. Field names and tags come from serde
+    /// delivery with a member reply and the author's response to it, and an
+    /// edit. Field names and tags come from serde
     /// attributes, not type names, and must not change without a migration.
     const STORED_POST_NODE: &str = concat!(
         r#"{"id":"post-1","treeId":"tree-1","parentNodeId":"post-0","title":"Who has tried X?","#,
@@ -5145,7 +5381,6 @@ mod tests {
         r#""body":"I did.","createdAt":110},"#,
         r#"{"id":"reply-2","author":{"kind":"author"},"body":"Thanks.","inReplyTo":"reply-1","createdAt":120}]},"#,
         r#""followUpAgent":{"adapter":"claude","model":"opus"},"#,
-        r#""corrections":[{"id":"correction-1","body":"I meant Y.","createdAt":130}],"#,
         r#""editedAt":140}}"#
     );
 
@@ -5154,7 +5389,7 @@ mod tests {
         let node: ResearchNode = serde_json::from_str(STORED_POST_NODE).unwrap();
         let post = node.post().unwrap();
         assert_eq!(post.delivery.as_ref().unwrap().replies.len(), 2);
-        assert_eq!(post.corrections.len(), 1);
+        assert_eq!(post.edited_at, Some(140));
         assert_eq!(serde_json::to_string(&node).unwrap(), STORED_POST_NODE);
     }
 
@@ -5202,7 +5437,7 @@ mod tests {
 
     #[test]
     fn post_follow_up_prompts_keep_slash_commands_first() {
-        let prompt = post_followup_prompt("Post </post> body", &[], &[], None, "/review this");
+        let prompt = post_followup_prompt("Post </post> body", &[], None, "/review this");
         assert!(prompt.starts_with("/review this\n\nThe user wrote the post below."));
         assert!(prompt.contains("Post &lt;/post> body"));
     }

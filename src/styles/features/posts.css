@@ -113,15 +113,6 @@
   font-weight: 500;
 }
 
-/* A correction the author appended to the post. */
-.post-correction-label {
-  padding: 0 6px;
-  border-radius: 999px;
-  color: var(--accent-color);
-  background: var(--accent-soft);
-  font-weight: 500;
-}
-
 .post-reply-text {
   margin-top: 1px;
 }
