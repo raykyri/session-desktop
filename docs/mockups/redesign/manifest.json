@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-11T06:31:40.820Z",
+  "generated": "2026-10-11T06:47:57.953Z",
   "rounds": {
     "1": {
       "ulysses": {
@@ -50,7 +50,7 @@
         "round": 1,
         "title": "Mac system app",
         "influence": "Apple macOS system app idioms (HIG; Finder, Mail, Messages, Freeform, System Settings)",
-        "summary": "Session becomes a standard Mac document app: a glass sidebar of folders, one toolbar view switch (Page, Outline, Columns, Map) over the same library, and an inspector (\u2325\u2318I) that holds a chat's branches and links. Chats read like Messages, notes are collapsible outlines with [[links]], and the first window offers one field \u2014 ask a question \u2014 with the agent check done in the background.",
+        "summary": "Session becomes a standard Mac document app: a glass sidebar of folders, one toolbar view switch (Page, Outline, Columns, Map) over the same library, and an inspector (⌥⌘I) that holds a chat's branches and links. Chats read like Messages, notes are collapsible outlines with [[links]], and the first window offers one field — ask a question — with the agent check done in the background.",
         "nouns": [
           "Chat",
           "Branch",
@@ -67,7 +67,7 @@
           {
             "id": "b",
             "label": "Column browser",
-            "summary": "Opens in Columns view: folders \u2192 items \u2192 branches and bullets \u2192 Quick Look preview, replacing the column strip."
+            "summary": "Opens in Columns view: folders → items → branches and bullets → Quick Look preview, replacing the column strip."
           },
           {
             "id": "c",
@@ -93,7 +93,7 @@
         "round": 1,
         "title": "Research inbox",
         "influence": "Front / Missive / Superhuman / Hey (shared email inbox apps)",
-        "summary": "Every question is a Conversation that runs in the background and lands in an Inbox as \u201cReady to read\u201d; queued and running ones sit in Waiting. Follow-ups are Ask replies, your own writing is a Note (the internal-comment idiom), and a passage can start a Fork. Tags, [[links]], backlinks and a Knowledge view with outline and graph replace folders, stars, bookmarks and the feed, so the first screen has one action: ask.",
+        "summary": "Every question is a Conversation that runs in the background and lands in an Inbox as “Ready to read”; queued and running ones sit in Waiting. Follow-ups are Ask replies, your own writing is a Note (the internal-comment idiom), and a passage can start a Fork. Tags, [[links]], backlinks and a Knowledge view with outline and graph replace folders, stars, bookmarks and the feed, so the first screen has one action: ask.",
         "nouns": [
           "Conversation",
           "Fork",
@@ -218,18 +218,18 @@
         ],
         "changes": [
           "Docked the question line to the bottom of the editor; in round 1 it sat after the last answer and was off-screen on long sheets.",
-          "Added File in\u2026 to passage actions and answer footers: it adds a linked bullet under a chosen heading of the Chapter 3 outline. Round 1 could only glue whole sheets or copy to Drafts.",
-          "Added [[ autocomplete in the question line and a Link\u2026 action on outline rows; round 1 had no way to create a link.",
-          "Paragraph gutter button (\u00b6) opens Mark / Ask / Branch / File without selecting text; round 1 relied on selection.",
+          "Added File in… to passage actions and answer footers: it adds a linked bullet under a chosen heading of the Chapter 3 outline. Round 1 could only glue whole sheets or copy to Drafts.",
+          "Added [[ autocomplete in the question line and a Link… action on outline rows; round 1 had no way to create a link.",
+          "Paragraph gutter button (¶) opens Mark / Ask / Branch / File without selecting text; round 1 relied on selection.",
           "Branches are numbered in reading order and branches from a whole answer sit at its end; round 1 showed 2 above 1.",
           "Replaced the Chat bubbles variant with Inline branches; bubbles broke the typographic idiom and changed nothing about organizing.",
-          "First run: library shows only Inbox, missing agents show a copyable command and re-check automatically; the main workspace gains a dismissible \u2018how sheets work\u2019 tip and a visible Search field.",
+          "First run: library shows only Inbox, missing agents show a copyable command and re-check automatically; the main workspace gains a dismissible ‘how sheets work’ tip and a visible Search field.",
           "Fixed controls that did nothing: Retry with another model now picks a model, New group creates a group, Glue is disabled where it does not apply."
         ],
         "decisions": [
-          "Does the ? / \u00b6 glyph make the difference between asking and writing clear without reading the tip?",
+          "Does the ? / ¶ glyph make the difference between asking and writing clear without reading the tip?",
           "Margin notes (A), inline strips (B) or attachments (C): which lets people find a branch again after a day?",
-          "Is File in\u2026 (linked bullet) understood as different from Glue (whole sheet joins the manuscript)?",
+          "Is File in… (linked bullet) understood as different from Glue (whole sheet joins the manuscript)?",
           "Do people use the Links map, or only the References lists under it?"
         ],
         "file": "r2/ulysses.html",
@@ -240,7 +240,7 @@
         "round": 2,
         "title": "Mac system app",
         "influence": "Apple macOS system app idioms (HIG; Finder, Mail, Messages, Freeform, System Settings, TipKit)",
-        "summary": "Session as a standard Mac document app: a glass sidebar of folders, an always-visible \u201cAsk a question\u201d field at the top of the item list, and one toolbar switch (Page, Outline, Columns, Map) over the same library. Chats read like Messages, notes are outlines with [[links]], and three short tips walk a new user from first question to branch to links; agents are detected in the background and never block writing notes.",
+        "summary": "Session as a standard Mac document app: a glass sidebar of folders, an always-visible “Ask a question” field at the top of the item list, and one toolbar switch (Page, Outline, Columns, Map) over the same library. Chats read like Messages, notes are outlines with [[links]], and three short tips walk a new user from first question to branch to links; agents are detected in the background and never block writing notes.",
         "nouns": [
           "Chat",
           "Branch",
@@ -252,12 +252,22 @@
           {
             "id": "a",
             "label": "Page + inspector",
-            "summary": "Mail-style list with a docked Ask field, the chat page, and an inspector (\u2325\u2318I) with Info, Branches and Links; first-run tips are shown."
+            "summary": "Mail-style list with a docked Ask field, the chat page, and an inspector (⌥⌘I) with Info, Branches and Links; first-run tips are shown."
           },
           {
             "id": "b",
             "label": "Column browser",
-            "summary": "Opens in Columns view: folders \u2192 items \u2192 branches and bullets \u2192 a Quick Look preview with the passage actions, replacing the column strip."
+            "summary": "Opens in Columns view: folders → items → branches and bullets → a Quick Look preview with the passage actions, replacing the column strip."
+          },
+          {
+            "id": "b2",
+            "label": "Excerpt columns",
+            "summary": "Column browser where each chat, branch and message cell shows a role line and a 4-line excerpt; the selected cell expands and the last column shows the full message."
+          },
+          {
+            "id": "b3",
+            "label": "Full-message columns",
+            "summary": "Column strip of whole conversations at reading width: each chat or branch column scrolls on its own, and branching from a passage opens the branch as the next column."
           },
           {
             "id": "c",
@@ -276,20 +286,21 @@
           }
         ],
         "changes": [
-          "Added a docked \u201cAsk a question\u201d field above every item list; in round 1 the only way to start a chat was an unlabeled toolbar icon",
-          "Added three TipKit-style tips (ask \u2192 branch \u2192 links) with Next and dismiss; round 1 had no guidance outside the empty Personal workspace",
+          "Added a docked “Ask a question” field above every item list; in round 1 the only way to start a chat was an unlabeled toolbar icon",
+          "Added three TipKit-style tips (ask → branch → links) with Next and dismiss; round 1 had no guidance outside the empty Personal workspace",
           "Branch composer now opens as a popover on the passage in every variant; in round 1 it opened in the inspector, far from the selected text",
           "Add to Note lists the outline's sections and the confirmation has a Show button that opens the note at the new bullet; round 1 appended silently to the end",
-          "Added Link to\u2026 in the Links inspector, so any two chats or notes can be linked without writing a note; links appear in both items and on the map",
+          "Added Link to… in the Links inspector, so any two chats or notes can be linked without writing a note; links appear in both items and on the map",
           "First-run workspace now shows only the welcome page (no empty list or empty inspector) and checks agents live, re-checking when the window becomes active",
-          "Return sends in every composer (\u2325\u21a9 new line, \u21e7\u2318\u21a9 branch), matching Messages; round 1 required \u2318\u21a9 and the hint was easy to miss",
-          "Replaced the weak \u201cPopover branches\u201d variant with \u201cMessages threads\u201d; fixed narrow-width navigation (no way back to the list), flat-list bolding, \u201c1 items\u201d, and passage keys ignored while the search field had focus"
+          "Return sends in every composer (⌥↩ new line, ⇧⌘↩ branch), matching Messages; round 1 required ⌘↩ and the hint was easy to miss",
+          "Added two column-browser variants (b2 Excerpt columns, b3 Full-message columns) with multi-line or full message cells, draggable column dividers and arrow-key navigation, because one-line Finder rows hid the answers that the current app's column strip shows",
+          "Replaced the weak “Popover branches” variant with “Messages threads”; fixed narrow-width navigation (no way back to the list), flat-list bolding, “1 items”, and passage keys ignored while the search field had focus"
         ],
         "decisions": [
           "Is the docked Ask field in the list pane found before the toolbar compose button, and does Return-to-send surprise people writing long questions?",
           "Do people understand that Page, Outline, Columns and Map show the same items, or do they expect four separate places?",
           "Branch as inspector cards (a) or as reply threads under the answer (d): which do first-time users find and reopen faster?",
-          "Is \u201cLink to\u2026\u201d in the inspector used, or do people only link by typing [[ in notes?",
+          "Is “Link to…” in the inspector used, or do people only link by typing [[ in notes?",
           "Do three sequential tips help, or are they dismissed unread?"
         ],
         "file": "r2/macos.html",
@@ -300,7 +311,7 @@
         "round": 2,
         "title": "Research inbox",
         "influence": "Front / Missive / Superhuman / Hey (shared email inbox apps)",
-        "summary": "Every question is a Conversation that runs in the background and lands in an Inbox as \u201cReady to read\u201d; queued and running ones sit in Waiting. Follow-ups are Ask replies, your own writing is a Note (the internal-comment idiom), and a passage can start a Fork. Tags, [[links]], backlinks and a Knowledge view with outline and graph replace folders, stars, bookmarks and the feed, so the first screen has one action: ask.",
+        "summary": "Every question is a Conversation that runs in the background and lands in an Inbox as “Ready to read”; queued and running ones sit in Waiting. Follow-ups are Ask replies, your own writing is a Note (the internal-comment idiom), and a passage can start a Fork. Tags, [[links]], backlinks and a Knowledge view with outline and graph replace folders, stars, bookmarks and the feed, so the first screen has one action: ask.",
         "nouns": [
           "Conversation",
           "Fork",
@@ -402,7 +413,7 @@
           "Search matches answer and recap text with a snippet (\"11.8 TWh\" finds CAISO); round 1 matched titles only.",
           "Graph regrouped into project regions with labels below nodes, legend chips that filter link types, and select-then-open; round 1 was a tangled hub with clipped labels.",
           "Standing passage hint under each answer names Highlight / Ask sub-question / File in note with keys; round 1 relied on selection or an unlabeled hover icon.",
-          "Replaced the Board-home variant (it duplicated Display \u2192 Board) with Project home, which tests an outline-first start.",
+          "Replaced the Board-home variant (it duplicated Display → Board) with Project home, which tests an outline-first start.",
           "Filter, Move to project, Archive (with Undo) and New project now work; agents recheck sign-in automatically while a question waits."
         ],
         "decisions": [
