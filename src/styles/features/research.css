@@ -550,6 +550,25 @@
   background: #a9cbf2; /* highlight-pseudo-literal */
 }
 
+/* orange-blob, dark: branch passages, the pending branch and selected highlights in
+   the theme's accent instead of the default sky blue. */
+:root[data-color-theme="orange-blob"]:not([data-appearance="light"]) *::highlight(session-research-branch-passages) {
+  background: rgba(77, 127, 242, 0.16); /* highlight-pseudo-literal */
+}
+
+:root[data-color-theme="orange-blob"]:not([data-appearance="light"]) *::highlight(session-research-branch-hover) {
+  background: rgba(77, 127, 242, 0.3); /* highlight-pseudo-literal */
+}
+
+:root[data-color-theme="orange-blob"]:not([data-appearance="light"]) *::highlight(session-research-pending-branch) {
+  text-decoration: underline dashed 1.5px rgba(104, 144, 245, 0.7); /* highlight-pseudo-literal */
+}
+
+:root[data-color-theme="orange-blob"]:not([data-appearance="light"]) *::highlight(session-research-selected-highlights) {
+  color: #0e1016; /* highlight-pseudo-literal */
+  background: #8fb0ff; /* highlight-pseudo-literal */
+}
+
 /* — Column pairs: one [messages | answer] pair per level — */
 
 /* The pairs are flex items of the column strip (research-surface.css):

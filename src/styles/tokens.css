@@ -588,6 +588,21 @@
   --research-feed-popover-bg: #25262b;
   --research-feed-switch-raised-bg: #34353c;
   --research-feed-switch-raised-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+
+  /* Info states (including Home's unseen-update dot) and saved passages
+     follow this palette: Front's blue, and an amber strong enough to read on
+     its neutrals. */
+  --status-info-fg: #6890f5;
+  --status-info-bg: rgba(104, 144, 245, 0.08);
+  --status-info-bg-hover: rgba(104, 144, 245, 0.14);
+  --status-info-border: rgba(104, 144, 245, 0.25);
+  --status-info-border-strong: rgba(104, 144, 245, 0.5);
+  --wait-target-preview-border: rgba(104, 144, 245, 0.7);
+  --status-info-fg-soft: #b9cbf9;
+  --status-info-fg-link: #8fb0ff;
+  --status-info-bg-strong: rgba(77, 127, 242, 0.16);
+  --research-highlight-bg: rgba(240, 178, 70, 0.3);
+  --research-highlight-bg-hover: rgba(240, 178, 70, 0.48);
 }
 
 /* ------------------------------------------------------------------ */
