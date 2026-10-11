@@ -5,6 +5,9 @@ import {
 } from "../lib/researchHistory";
 
 const RESEARCH_SWIPE_IDLE_MS = 180;
+// Ignore tiny startup jitter, but reserve a clearly vertical gesture for
+// scrolling well before it can reach the history-navigation threshold.
+const RESEARCH_SCROLL_INTENT_PX = 16;
 
 // Prevent residual swipe momentum from triggering a second navigation when the
 // scroller element swaps mid-gesture.
@@ -66,7 +69,9 @@ export function useResearchSwipeNavigation(
       return;
     }
     let accumulatedX = 0;
-    let accumulatedY = 0;
+    let horizontalTravel = 0;
+    let verticalTravel = 0;
+    let scrolling = false;
     let blockedByScroller = false;
     let resetTimer: number | null = null;
     const resetGesture = () => {
@@ -74,7 +79,9 @@ export function useResearchSwipeNavigation(
         window.clearTimeout(resetTimer);
       }
       accumulatedX = 0;
-      accumulatedY = 0;
+      horizontalTravel = 0;
+      verticalTravel = 0;
+      scrolling = false;
       blockedByScroller = false;
       resetTimer = null;
     };
@@ -119,9 +126,19 @@ export function useResearchSwipeNavigation(
         return;
       }
       scheduleReset();
+      if (scrolling) {
+        return;
+      }
       accumulatedX += deltaX;
-      accumulatedY += deltaY;
-      const direction = researchSwipeDirection(accumulatedX, accumulatedY);
+      horizontalTravel += Math.abs(deltaX);
+      verticalTravel += Math.abs(deltaY);
+      // Reversing vertical direction must not erase scrolling intent. Once
+      // established, keep it until idle, even if later momentum is horizontal.
+      if (verticalTravel >= RESEARCH_SCROLL_INTENT_PX && verticalTravel > horizontalTravel * 1.25) {
+        scrolling = true;
+        return;
+      }
+      const direction = researchSwipeDirection(accumulatedX, verticalTravel);
       if (direction === 0) {
         return;
       }
