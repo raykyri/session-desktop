@@ -34,7 +34,12 @@ import {
   sameCardTops,
 } from "./layout.js";
 import type { ConnectorGeometry, SegmentConnector } from "./layout.js";
-import { flatOffsetAtPoint, rangeForTextOffsets, responseRootNodeId } from "./selection/dom.js";
+import {
+  researchTextProjection,
+  flatOffsetAtPoint,
+  rangeForTextOffsets,
+  responseRootNodeId,
+} from "./selection/dom.js";
 import {
   ResearchHighlightPainter,
   RESEARCH_HIGHLIGHT_LAYER,
@@ -268,7 +273,7 @@ export function useResearchAnnotations(input: ResearchAnnotationsInput): Researc
       const revision = revisionByNode[nodeId];
       const highlights = highlightsByNode[nodeId] ?? [];
       if (!root || !revision) continue;
-      const projection = root.textContent ?? "";
+      const projection = researchTextProjection(root);
       const resolved: ResolvedResearchHighlightRange[] = [];
       const segmentRanges: Range[] = [];
       for (const highlight of highlights) {
@@ -335,7 +340,7 @@ export function useResearchAnnotations(input: ResearchAnnotationsInput): Researc
       const root = segmentElement(nodeId, "root");
       const revision = revisionByNode[nodeId];
       if (!root || !revision) continue;
-      const projection = root.textContent ?? "";
+      const projection = researchTextProjection(root);
       const aside = segmentElement(nodeId, "aside");
       const asideTop = aside?.getBoundingClientRect().top ?? 0;
       for (const entry of anchoredEntries) {

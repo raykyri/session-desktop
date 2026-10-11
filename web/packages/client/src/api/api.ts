@@ -476,3 +476,7 @@ export function uploadDocuments(
     request.send(body);
   });
 }
+
+export function prepareWidgetPreview(html: string) {
+  return trpc().artifacts.prepareWidget.mutate({ html });
+}

@@ -22,6 +22,7 @@ import { RESEARCH_SELECTION_DRAG_THRESHOLD } from "./layout.js";
 import { captureResearchSelection } from "./selection/capture.js";
 import type { CapturedResearchSelection } from "./selection/capture.js";
 import {
+  researchTextProjection,
   NON_TEXT_ROW_SELECTOR,
   RESPONSE_ROOT_SELECTOR,
   applyDirectionalSelectionRange,
@@ -137,7 +138,7 @@ export function useResearchSelectionDrag(
     }
     if (drag.snapper === undefined) {
       drag.snapper = createResearchSelectionSnapper(
-        drag.root.textContent ?? "",
+        researchTextProjection(drag.root),
         document.documentElement.lang || navigator.language,
         messageFlatBoundaries(drag.root),
       );

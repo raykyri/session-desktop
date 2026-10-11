@@ -612,11 +612,12 @@ test.serial("a long paced answer emits a sequence with no hole in it", async (t)
 });
 
 test("research prompts omit linking guidance and retain custom instructions", (t) => {
-  t.is(researchSystemPrompt(), RESEARCH_SYSTEM_PROMPT);
-  t.is(researchSystemPrompt("  "), RESEARCH_SYSTEM_PROMPT);
+  t.true(researchSystemPrompt().startsWith(RESEARCH_SYSTEM_PROMPT));
+  t.true(researchSystemPrompt().includes("Web previews do not run scripts"));
+  t.is(researchSystemPrompt("  "), researchSystemPrompt());
   t.is(
     researchSystemPrompt("Be concise."),
-    `${RESEARCH_SYSTEM_PROMPT}\n\n<research-instructions>\nBe concise.\n</research-instructions>`,
+    `${researchSystemPrompt()}\n\n<research-instructions>\nBe concise.\n</research-instructions>`,
   );
   t.false(researchSystemPrompt().includes("research-linking"));
 });

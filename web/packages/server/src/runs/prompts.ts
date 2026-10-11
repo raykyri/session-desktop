@@ -32,7 +32,10 @@ function taggedBlock(tag: string, body: string): string {
  * have the remainder read as Session's own words.
  */
 export function researchSystemPrompt(instruction?: string | null): string {
-  const blocks = [RESEARCH_SYSTEM_PROMPT];
+  const blocks = [
+    RESEARCH_SYSTEM_PROMPT,
+    'Session can render a self-contained HTML fragment in a session-html fenced block as a static preview. Use one only when a visual figure or diagram materially helps explain the answer. Keep it under 20 KB (64 KB hard limit), with inline CSS, readable light/dark colors, and no external resources. Web previews do not run scripts: show the meaningful final/default state in HTML and CSS. Always state conclusions in prose. Optional fence metadata: id=stable-id title="Descriptive title". Do not claim readers can interact with scripted controls on web.',
+  ];
   const trimmed = (instruction ?? "").trim();
   if (trimmed !== "") {
     blocks.push(

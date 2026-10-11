@@ -18,6 +18,11 @@
 // artifact store they would open lands in Phase 7.
 
 import {
+  isSessionWidgetClassName,
+  MAX_SESSION_WIDGET_BYTES,
+  remarkSessionWidgetFences,
+  sessionWidgetByteLength,
+  sessionWidgetMetadata,
   baseRehypePlugins,
   baseRemarkPlugins,
   collapseImageMarkers,
@@ -26,7 +31,14 @@ import {
   normalizeLatexMathDelimiters,
   safeHref,
 } from "@session/shared";
-import { isValidElement, memo, useEffect, useSyncExternalStore } from "react";
+import {
+  createContext,
+  useContext,
+  isValidElement,
+  memo,
+  useEffect,
+  useSyncExternalStore,
+} from "react";
 import type { ComponentPropsWithoutRef, ReactElement, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
@@ -34,6 +46,7 @@ import type { Components } from "react-markdown";
 import { cn } from "../../lib/cn.js";
 
 import { DiagramBlock, diagramLangFromClassName, nodeText } from "./DiagramBlock.js";
+import { SessionWidget } from "./SessionWidget.js";
 import {
   ensureMathPlugins,
   readMathPlugins,
@@ -142,6 +155,43 @@ function MarkdownCode({
   );
 }
 
+const WidgetContext = createContext(false);
+function WidgetBlock({
+  code,
+  state,
+  meta,
+  children,
+}: {
+  code: string;
+  state: unknown;
+  meta: string;
+  children: ReactNode;
+}) {
+  const enabled = useContext(WidgetContext);
+  const html = code.endsWith("\n") ? code.slice(0, -1) : code;
+  const complete = state === "complete";
+  const withinLimit = sessionWidgetByteLength(html) <= MAX_SESSION_WIDGET_BYTES;
+  if (enabled && complete && withinLimit)
+    return (
+      <SessionWidget
+        key={html}
+        html={html}
+        title={sessionWidgetMetadata(meta).title ?? "Answer widget"}
+      />
+    );
+  return (
+    <div data-research-widget="" className="research-prose-code-block">
+      {enabled ? (
+        <p className="text-fg-muted text-xs">
+          {complete
+            ? "Widget exceeds the 64 KiB preview limit"
+            : "Widget preview awaits a complete closing fence"}
+        </p>
+      ) : null}
+      <pre>{children}</pre>
+    </div>
+  );
+}
 const markdownComponents: Components = {
   a: ({ node, href, ...props }) => (
     <MarkdownLink node={node as TranscriptHastNode | undefined} href={href} {...props} />
@@ -161,6 +211,22 @@ const markdownComponents: Components = {
     const codeElement = isValidElement(children)
       ? (children as ReactElement<{ className?: string; children?: ReactNode }>)
       : null;
+    if (codeElement && isSessionWidgetClassName(codeElement.props.className)) {
+      const props = codeElement.props as Record<string, unknown>;
+      return (
+        <WidgetBlock
+          code={nodeText(codeElement.props.children)}
+          state={props["data-session-widget"]}
+          meta={
+            typeof props["data-session-widget-meta"] === "string"
+              ? props["data-session-widget-meta"]
+              : ""
+          }
+        >
+          {children}
+        </WidgetBlock>
+      );
+    }
     const lang = diagramLangFromClassName(codeElement?.props.className);
     if (codeElement && lang) {
       return <DiagramBlock lang={lang} code={nodeText(codeElement.props.children)} />;
@@ -181,7 +247,8 @@ const inlineComponents: Components = {
   ...markdownComponents,
   p: ({ children }) => <span>{children} </span>,
   br: () => <span> </span>,
-  code: ({ children }) => <span>{children}</span>,
+  code: ({ children, className }) =>
+    isSessionWidgetClassName(className) ? null : <span>{children}</span>,
 };
 
 /** Block-level elements whose wrapper is dropped in inline mode (their inline
@@ -212,6 +279,7 @@ export type ResearchMarkdownVariant = "prose" | "summary" | "compact";
 
 export interface ResearchMarkdownProps {
   markdown: string;
+  widgets?: boolean;
   /** `prose` for answers, `summary` for recap text, `compact` for previews. */
   variant?: ResearchMarkdownVariant;
   className?: string;
@@ -236,6 +304,7 @@ const VARIANT_CLASS: Record<ResearchMarkdownVariant, string> = {
  */
 export const ResearchMarkdown = memo(function ResearchMarkdown({
   markdown,
+  widgets = false,
   variant = "prose",
   className,
   inline = false,
@@ -260,18 +329,24 @@ export const ResearchMarkdown = memo(function ResearchMarkdown({
   }
 
   return (
-    <div className={cn(VARIANT_CLASS[variant], className)}>
-      <ReactMarkdown
-        components={inline ? inlineComponents : markdownComponents}
-        remarkPlugins={math ? [...baseRemarkPlugins, ...math.remarkPlugins] : baseRemarkPlugins}
-        rehypePlugins={
-          math ? [...CLIENT_REHYPE_PLUGINS, ...math.rehypePlugins] : CLIENT_REHYPE_PLUGINS
-        }
-        disallowedElements={inline ? INLINE_DISALLOWED_ELEMENTS : undefined}
-        unwrapDisallowed={inline}
-      >
-        {math ? normalizeLatexMathDelimiters(source) : source}
-      </ReactMarkdown>
-    </div>
+    <WidgetContext.Provider value={widgets && !inline && variant === "prose"}>
+      <div className={cn(VARIANT_CLASS[variant], className)}>
+        <ReactMarkdown
+          components={inline ? inlineComponents : markdownComponents}
+          remarkPlugins={
+            math
+              ? [...baseRemarkPlugins, ...math.remarkPlugins, remarkSessionWidgetFences]
+              : [...baseRemarkPlugins, remarkSessionWidgetFences]
+          }
+          rehypePlugins={
+            math ? [...CLIENT_REHYPE_PLUGINS, ...math.rehypePlugins] : CLIENT_REHYPE_PLUGINS
+          }
+          disallowedElements={inline ? INLINE_DISALLOWED_ELEMENTS : undefined}
+          unwrapDisallowed={inline}
+        >
+          {math ? normalizeLatexMathDelimiters(source) : source}
+        </ReactMarkdown>
+      </div>
+    </WidgetContext.Provider>
   );
 });

@@ -61,3 +61,6 @@ export * from "./types/tweet.js";
 
 export * from "./util/sha256.js";
 export * from "./util/tokenEstimate.js";
+
+export * from "./markdown/sessionWidgets.js";
+export * from "./markdown/widgetProjection.js";

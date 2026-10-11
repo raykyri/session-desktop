@@ -439,3 +439,19 @@ test("fence metadata survives CommonMark escape processing", async () => {
   const properties = tree.children[0].data?.hProperties;
   assert.equal(sessionWidgetMetadata(String(properties?.dataSessionWidgetMeta)).title, title);
 });
+
+test("desktop executes the shared web fence contract", async () => {
+  const { sessionWidgetFixtures } = await import('../web/packages/shared/test/sessionWidgetFixtures');
+  const { fromMarkdown } = await import('mdast-util-from-markdown');
+  const { remarkSessionWidgetFences, sessionWidgetMetadata } = await import('../src/lib/sessionWidgets');
+  type Node = Parameters<ReturnType<typeof remarkSessionWidgetFences>>[0];
+  for (const fixture of sessionWidgetFixtures) {
+    const tree = fromMarkdown(fixture.markdown);
+    remarkSessionWidgetFences()(tree, { value: fixture.markdown });
+    const states: unknown[] = []; const titles: unknown[] = [];
+    const visit = (node: Node) => { const props = node.data?.hProperties; if (props?.dataSessionWidget) { states.push(props.dataSessionWidget); titles.push(sessionWidgetMetadata(String(props.dataSessionWidgetMeta)).title); } node.children?.forEach(visit); };
+    visit(tree);
+    assert.deepEqual(states, fixture.states, fixture.name);
+    assert.deepEqual(titles, fixture.titles, fixture.name);
+  }
+});

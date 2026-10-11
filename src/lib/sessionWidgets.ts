@@ -6,112 +6,16 @@
 
 import type { ResearchWidgetUrls } from "./api";
 import { fromMarkdown } from "mdast-util-from-markdown";
-import { closesFence, markerRunAtLineStart } from "./markdownMathDelimiters";
 
-const SESSION_WIDGET_LANGUAGE = "session-html";
-/** Mirrors `MAX_WIDGET_BYTES` in src-tauri/src/research_widgets.rs. */
-export const MAX_SESSION_WIDGET_BYTES = 64 * 1024;
-/** Property the remark plugin sets on a widget block's `code` element. */
-export const SESSION_WIDGET_STATE_ATTRIBUTE = "data-session-widget";
-
-type SessionWidgetState = "complete" | "partial";
-
-/** Whether a fenced code block's info string marks a widget: its first word
- * is exactly `session-html`. */
-export function isSessionWidgetInfo(info: string | null | undefined): boolean {
-  return info?.trim().split(/\s+/u)[0] === SESSION_WIDGET_LANGUAGE;
-}
-
-/** Whether react-markdown's `language-…` class on a `code` element marks a
- * widget. */
-export function isSessionWidgetClassName(className: unknown): boolean {
-  return (
-    typeof className === "string" &&
-    className.split(/\s+/u).includes(`language-${SESSION_WIDGET_LANGUAGE}`)
-  );
-}
-
-export function sessionWidgetByteLength(html: string): number {
-  return new TextEncoder().encode(html).length;
-}
-
-/** Whether the widget's HTML contains anything that only runs on the run page:
- * a script element, an inline event handler or a `javascript:` URL. Without
- * these the static page already shows the whole widget. */
-export function sessionWidgetHasScripts(html: string): boolean {
-  return /<script\b|\son[a-z]+\s*=|javascript:/iu.test(html);
-}
-
-interface MdastCode {
-  type: string;
-  lang?: string | null;
-  meta?: string | null;
-  value?: string;
-  data?: { hProperties?: Record<string, unknown> };
-  position?: { start: { offset?: number }; end: { offset?: number } };
-  children?: MdastCode[];
-}
-
-/** Whether a fenced code block was closed by a closing fence. `raw` is the
- * block's source slice (opening fence through its end, container prefixes
- * included) and `value` the parser's code text. A closed block's slice is the
- * opening fence, the value's lines and the closing fence; an unclosed one (an
- * answer still streaming, or a closing fence CommonMark does not accept, such
- * as one indented four or more spaces past its container) has no extra line,
- * or ends with a line that is not a fence. An answer still streaming leaves
- * its last block open, and CommonMark then runs the block to the end of its
- * container. */
-export function fencedBlockIsClosed(raw: string, value: string): boolean {
-  const lines = raw.split("\n");
-  const fence = markerRunAtLineStart(lines[0]?.trimStart() ?? "");
-  if (!fence || lines.length < 2) {
-    return false;
-  }
-  const valueLines = value === "" ? 0 : value.split("\n").length;
-  if (valueLines !== lines.length - 2) {
-    return false;
-  }
-  // The slice's last line is now known not to be code text; strip its
-  // container prefix (block quote markers, list indentation).
-  const last = lines[lines.length - 1].replace(/^[\s>]*/u, "");
-  return closesFence(last, fence);
-}
-
-/** Remark plugin: marks each `session-html` code block as complete or partial
- * on the rendered `code` element, so the renderer can show a placeholder for a
- * block that is still streaming instead of a frame around half a page. */
-export function remarkSessionWidgetFences() {
-  return (tree: MdastCode, file: { value?: unknown }) => {
-    const source = typeof file.value === "string" ? file.value : String(file.value ?? "");
-    const visit = (node: MdastCode) => {
-      if (node.type === "code" && isSessionWidgetInfo(node.lang)) {
-        const start = node.position?.start.offset;
-        const end = node.position?.end.offset;
-        const state: SessionWidgetState =
-          start !== undefined && end !== undefined && fencedBlockIsClosed(source.slice(start, end), node.value ?? "")
-            ? "complete"
-            : "partial";
-        const opening = start === undefined || end === undefined ? "" : source.slice(start, end).split(/\r?\n/u)[0];
-        const rawMeta = opening.includes("session-html") ? opening.slice(opening.indexOf("session-html") + "session-html".length).trim() : node.meta ?? "";
-        node.data = {
-          ...node.data,
-          hProperties: { ...node.data?.hProperties, dataSessionWidget: state, dataSessionWidgetMeta: rawMeta, dataSessionWidgetSlot: String(start ?? 0) },
-        };
-        return;
-      }
-      for (const child of node.children ?? []) {
-        visit(child);
-      }
-    };
-    visit(tree);
-  };
-}
+export { MAX_SESSION_WIDGET_BYTES, SESSION_WIDGET_STATE_ATTRIBUTE, isSessionWidgetInfo, isSessionWidgetClassName, sessionWidgetByteLength, sessionWidgetHasScripts, fencedBlockIsClosed, remarkSessionWidgetFences, sessionWidgetMetadata } from "../../web/packages/shared/src/markdown/sessionWidgets";
+import { isSessionWidgetInfo } from "../../web/packages/shared/src/markdown/sessionWidgets";
+import type { WidgetMarkdownNode } from "../../web/packages/shared/src/markdown/sessionWidgets";
 
 /** Remove only parsed widget blocks, including fences immediately after list
  * markers. Using CommonMark also preserves indented code and samples inside
  * another fence, and ends unclosed blocks at their container's boundary. */
 export function stripSessionWidgetBlocks(markdown: string): string {
-  if (!markdown.includes(SESSION_WIDGET_LANGUAGE)) {
+  if (!markdown.includes("session-html")) {
     return markdown;
   }
   const kept: string[] = [];
@@ -119,7 +23,7 @@ export function stripSessionWidgetBlocks(markdown: string): string {
   interface SourceNode {
     type: string;
     lang?: string | null;
-    position?: MdastCode["position"];
+    position?: WidgetMarkdownNode["position"];
     children?: SourceNode[];
   }
   const visit = (node: SourceNode) => {
@@ -328,17 +232,4 @@ export function sessionWidgetTookFocus(input: {
 export function sessionWidgetRecordFocusTake(takes: number[], now: number): { takes: number[]; stop: boolean } {
   const recent = [...takes.filter((at) => now - at < SESSION_WIDGET_FOCUS_TAKE_WINDOW_MS), now];
   return { takes: recent, stop: recent.length >= SESSION_WIDGET_FOCUS_TAKES_TO_STOP };
-}
-
-/** Optional metadata does not change the legacy fence format. */
-export function sessionWidgetMetadata(meta: string): { artifactId?: string; title?: string; parentRevision?: string } {
-  const fields: Record<string, string> = {};
-  for (const match of meta.matchAll(/(?:^|\s)(id|title|parent)=("(?:\\.|[^"\\\r\n])*"|[^\s]+)/gu)) {
-    try { fields[match[1]] = match[2].startsWith('"') ? JSON.parse(match[2]) as string : match[2]; } catch { /* Ignore malformed metadata. */ }
-  }
-  return {
-    artifactId: /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/u.test(fields.id ?? "") ? fields.id : undefined,
-    title: fields.title?.slice(0, 120),
-    parentRevision: /^[a-f0-9]{64}$/u.test(fields.parent ?? "") ? fields.parent : undefined,
-  };
 }

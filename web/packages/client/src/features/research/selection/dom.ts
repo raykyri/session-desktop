@@ -12,7 +12,8 @@
 import { isEditableTarget, stripWikilinks } from "@session/shared";
 
 /** Excludes non-content UI elements (tool inputs/outputs, thinking disclosures) from text selection anchors. */
-export const NON_TEXT_ROW_SELECTOR = ".tool-block, .thinking-block, .activity-group-block";
+export const NON_TEXT_ROW_SELECTOR =
+  ".tool-block, .thinking-block, .activity-group-block, [data-research-widget]";
 
 /** The class the message wrapper carries, used both to clamp anchor context to
  * one message and to find the seams between them. */
@@ -35,15 +36,26 @@ export function responseRootNodeId(root: HTMLElement | null | undefined): string
   return root?.getAttribute(RESPONSE_ROOT_ATTRIBUTE) || null;
 }
 
-export function textNodesWithin(root: HTMLElement): Text[] {
+export function textNodesWithin(root: Node): Text[] {
   const nodes: Text[] = [];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) =>
+      node.parentElement?.closest("[data-research-widget]")
+        ? NodeFilter.FILTER_REJECT
+        : NodeFilter.FILTER_ACCEPT,
+  });
   let node = walker.nextNode();
   while (node) {
     nodes.push(node as Text);
     node = walker.nextNode();
   }
   return nodes;
+}
+
+export function researchTextProjection(root: Node): string {
+  return textNodesWithin(root)
+    .map((node) => node.data)
+    .join("");
 }
 
 /** A `Range` over the flat projection's `[start, end)`, or null when the
@@ -56,7 +68,7 @@ export function rangeForTextOffsets(root: HTMLElement, start: number, end: numbe
   let endPoint: { node: Text; offset: number } | null = null;
   for (const node of nodes) {
     const next = consumed + node.data.length;
-    if (!startPoint && start <= next) startPoint = { node, offset: start - consumed };
+    if (!startPoint && start < next) startPoint = { node, offset: start - consumed };
     if (end <= next) {
       endPoint = { node, offset: end - consumed };
       break;
@@ -142,15 +154,9 @@ export function selectionOffsets(
   range: Range,
 ): { start: number; end: number } | null {
   if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
-  const beforeStart = document.createRange();
-  beforeStart.selectNodeContents(root);
-  beforeStart.setEnd(range.startContainer, range.startOffset);
-  const throughEnd = document.createRange();
-  throughEnd.selectNodeContents(root);
-  throughEnd.setEnd(range.endContainer, range.endOffset);
-  const start = beforeStart.cloneContents().textContent?.length ?? 0;
-  const end = throughEnd.cloneContents().textContent?.length ?? 0;
-  return end > start ? { start, end } : null;
+  const start = flatTextOffsetAt(root, range.startContainer, range.startOffset);
+  const end = flatTextOffsetAt(root, range.endContainer, range.endOffset);
+  return start !== null && end !== null && end > start ? { start, end } : null;
 }
 
 /** The flat offset of a caret position, or null when it sits outside `root`.
@@ -162,6 +168,8 @@ export function flatTextOffsetAt(
   offsetInNode: number,
 ): number | null {
   if (!root.contains(node)) return null;
+  if ((node instanceof Element ? node : node.parentElement)?.closest("[data-research-widget]"))
+    return null;
   if (node.nodeType === Node.TEXT_NODE) {
     let consumed = 0;
     for (const textNode of textNodesWithin(root)) {
@@ -177,7 +185,7 @@ export function flatTextOffsetAt(
   } catch {
     return null;
   }
-  return probe.cloneContents().textContent?.length ?? 0;
+  return researchTextProjection(probe.cloneContents()).length;
 }
 
 interface CaretDocument {

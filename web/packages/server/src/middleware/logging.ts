@@ -13,7 +13,7 @@ export function requestLogging(): MiddlewareHandler<AppEnv> {
       const logger = c.get("logger");
       const fields = {
         method: c.req.method,
-        path: new URL(c.req.url).pathname,
+        path: new URL(c.req.url).pathname.replace(/^\/(a|w)\/[^/]+$/u, "/$1/[redacted]"),
         status: c.res.status,
         durationMs: Date.now() - startedAt,
         userId: c.get("user")?.id ?? null,

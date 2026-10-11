@@ -7,10 +7,24 @@ import { artifacts } from "@session/db";
 import type { SessionEvent } from "@session/shared";
 import { z } from "zod";
 
+import { mintWidgetPreview } from "../../artifacts/widgets.js";
 import { protectedProcedure, router } from "../base.js";
 import { repo, required } from "../errors.js";
 
 export const artifactsRouter = router({
+  prepareWidget: protectedProcedure
+    .input(
+      z.object({
+        html: z
+          .string()
+          .max(64 * 1024)
+          .refine((html) => Buffer.byteLength(html, "utf8") <= 64 * 1024, "widget exceeds 64 KiB"),
+      }),
+    )
+    .mutation(({ ctx, input }) => {
+      const minted = mintWidgetPreview(ctx.db, ctx.user.id, input.html);
+      return { url: `${ctx.config.artifactOrigin}/w/${minted.token}`, expiresAt: minted.expiresAt };
+    }),
   /** A one-hour, single-document URL on the artifact origin. The client
    * re-mints on 404 or 410 (`11-artifacts-and-browser.md` §2). */
   mintToken: protectedProcedure

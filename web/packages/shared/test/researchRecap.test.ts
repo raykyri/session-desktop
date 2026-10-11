@@ -183,3 +183,11 @@ test("the job key changes only with a new answer", (t) => {
   t.not(recapJobKey(node()), recapJobKey(node({ responseSnapshotAt: 2 })));
   t.not(recapJobKey(node()), recapJobKey(node({ id: "node-2" })));
 });
+
+test("widget HTML does not enter recap prose or its eligibility budget", (t) => {
+  const prose = "A useful conclusion.";
+  const widget =
+    "```session-html\n<style>body{color:red}</style><p>" + "source ".repeat(500) + "</p>\n```";
+  t.is(extractRecapSource([turn("assistant", [text(prose + "\n\n" + widget)])], true), prose);
+  t.is(extractRecapSource([turn("assistant", [text(widget)])], false), undefined);
+});

@@ -844,7 +844,7 @@ export interface ResearchArtifactRevision {
   parentRevision: string | null;
   html: string;
 }
-export interface ResearchArtifactInput {
+interface ResearchArtifactInput {
   treeId: string;
   nodeId: string;
   slot: string;

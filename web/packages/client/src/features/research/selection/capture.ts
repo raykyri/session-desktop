@@ -15,6 +15,7 @@ import type { ResearchHighlightAnchor, ResolvedResearchHighlightRange } from "@s
 import { RESEARCH_HIGHLIGHT_CONTEXT_LENGTH } from "../layout.js";
 
 import {
+  researchTextProjection,
   enclosingMessageFlatBounds,
   selectionOffsets,
   selectionTouchesNonTextRow,
@@ -77,7 +78,7 @@ export function captureResearchSelection(input: {
   const offsets = selectionOffsets(root, range);
   if (!offsets) return null;
 
-  const projection = root.textContent ?? "";
+  const projection = researchTextProjection(root);
   const exact = projection.slice(offsets.start, offsets.end);
   const highlightIds = intersectingResearchHighlightIds(offsets, [...resolved]);
   // Whitespace cannot form a useful new highlight, but it can be a selected

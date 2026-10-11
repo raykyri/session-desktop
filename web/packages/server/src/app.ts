@@ -11,6 +11,7 @@ import type { Context } from "hono";
 import { Hono } from "hono";
 
 import { artifactRoutes } from "./artifacts/route.js";
+import { widgetRoutes } from "./artifacts/widgets.js";
 import type { OAuthClient } from "./auth/github.js";
 import { githubRoutes } from "./auth/github.js";
 import { clearSessionCookie, sessionLoader } from "./auth/session.js";
@@ -74,6 +75,7 @@ export function createApp(options: CreateAppOptions): Hono<AppEnv> {
   // The artifact origin is a different host with its own headers and no
   // session; it is mounted before the CSRF guard and the session loader so a
   // token URL never carries either.
+  app.route("/", widgetRoutes(deps));
   app.route("/", artifactRoutes(deps));
   // Nothing below belongs to that host.
   app.use("*", artifactHostOnly(deps.config));

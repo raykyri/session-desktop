@@ -32,7 +32,9 @@ function unexpectedRoleLabel(role: string): string {
 function MessageBlockView({ block, role }: { block: MessageBlock; role: string }) {
   if (block.type === "text") {
     if (role === "assistant") {
-      return <ResearchMarkdown markdown={block.text} oversized={OVERSIZED_MARKDOWN_POLICY} />;
+      return (
+        <ResearchMarkdown widgets markdown={block.text} oversized={OVERSIZED_MARKDOWN_POLICY} />
+      );
     }
     // Display unexpected user turns inside responses as raw text callouts to distinguish them from model output.
     return <p className="text-fg-muted text-sm whitespace-pre-wrap">{block.text}</p>;

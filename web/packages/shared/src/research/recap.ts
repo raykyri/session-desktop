@@ -12,6 +12,7 @@
 // Recaps are derived metadata: generation never delays research completion,
 // and every rejection here is silent — the answer simply has no summary.
 
+import { stripSessionWidgetBlocks } from "../markdown/widgetProjection.js";
 import { stripWikilinks } from "../markdown/wikilinks.js";
 import type { ResearchNode } from "../types/research.js";
 import type { Turn } from "../types/turn.js";
@@ -92,7 +93,7 @@ function inlinePlainText(line: string): string {
 
 function plainText(markdown: string): string {
   // `[[Term]]` markers are renderer machinery; the summarizer sees words.
-  const lines = stripWikilinks(markdown).split("\n");
+  const lines = stripWikilinks(stripSessionWidgetBlocks(markdown)).split("\n");
   const parts: string[] = [];
   let inFence = false;
   for (const line of lines) {

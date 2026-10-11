@@ -7,6 +7,7 @@
 // memo lives on the component instead (09 §4, §9).
 
 import {
+  stripSessionWidgetBlocks,
   assistantTextFromTimelineItems,
   buildTimelineItems,
   countResearchDocumentWords,
@@ -119,7 +120,7 @@ export function buildSegmentView(input: {
     hiddenTimelineItemCount: displayedTimelineItems.length - visibleTimelineItems.length,
     hasTranscriptActivity,
     rawAnswer,
-    answerWordCount: countResearchDocumentWords(rawAnswer),
+    answerWordCount: countResearchDocumentWords(stripSessionWidgetBlocks(rawAnswer)),
     editableDocumentMarkdown,
   };
 }
