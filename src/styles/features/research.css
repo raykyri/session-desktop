@@ -491,7 +491,7 @@
 }
 
 :root[data-color-theme="orange-blob"] *::highlight(session-research-open-branch) {
-  text-decoration: underline 2px #33adff; /* highlight-pseudo-literal */
+  text-decoration: underline 2px #7380ea; /* highlight-pseudo-literal */
 }
 
 :root[data-appearance="light"] *::highlight(session-research-open-branch) {
@@ -499,7 +499,7 @@
 }
 
 :root[data-appearance="light"][data-color-theme="orange-blob"] *::highlight(session-research-open-branch) {
-  text-decoration: underline 2px #0a6fb8; /* highlight-pseudo-literal */
+  text-decoration: underline 2px #5e6ad2; /* highlight-pseudo-literal */
 }
 
 /* The passage of a new branch being written: a dashed blue underline and no

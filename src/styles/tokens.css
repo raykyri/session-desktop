@@ -495,76 +495,100 @@
 }
 
 :root[data-color-theme="orange-blob"] {
-  --left-pane-bg: #171716;
-  --terminal-pane-bg: #161514;
-  --right-pane-bg: #1c1b1a;
-  --right-pane-bg-transparent: rgba(28, 27, 26, 0);
-  --right-pane-active-bg: #1b1a19;
+  /* Near-black layered greys with an indigo accent, after Linear's dark
+     theme. */
+  --left-pane-bg: #08090a;
+  --terminal-pane-bg: #0b0c0e;
+  --right-pane-bg: #0f1012;
+  --right-pane-bg-transparent: rgba(15, 16, 18, 0);
+  --right-pane-active-bg: #111214;
 
-  --workspace-bg: #1c1b1a;
+  --workspace-bg: #0f1012;
   --research-thread-page-bg: var(--right-pane-bg);
-  --research-page-bg: #121110;
-  --field-bg: #171615;
-  --field-bg-hover: #1e1d1a;
-  --panel-bg: var(--field-bg);
-  --popover-bg: var(--field-bg);
-  --content-card-bg: #222120;
-  --content-inset-bg: #1d1c19;
-  --context-menu-bg: #23221f;
+  --research-page-bg: #08090a;
+  --field-bg: #131417;
+  --field-bg-hover: #17181b;
+  --panel-bg: #121316;
+  --popover-bg: #1a1b1e;
+  --content-card-bg: #141518;
+  --content-inset-bg: #121316;
+  --context-menu-bg: #1a1b1e;
   --popover-item-hover-bg: var(--pane-tab-hover-bg);
-  --chrome-header-bg: #171716;
-  --pane-hover-bg: #23211f;
-  --pane-tab-hover-bg: var(--right-pane-bg);
+  --chrome-header-bg: #0c0d0f;
+  --pane-hover-bg: #18191c;
+  --pane-tab-hover-bg: #141518;
   --markdown-table-header-bg: color-mix(
     in srgb,
     var(--pane-hover-bg) 75%,
     var(--right-pane-bg) 25%
   );
-  --markdown-table-border: #302d2a;
-  --markdown-table-frame-border: #36332f;
-  --markdown-table-header-border: #403a35;
-  --markdown-blockquote-border: #45484a;
-  --transcript-code-bg: #171512;
-  --transcript-code-header-bg: #12110f;
-  --surface-divider: #2d2d2c;
-  --surface-border-strong: #373634;
-  --dialog-border: #3f3c37;
-  --chrome-control-bg: rgba(31, 29, 27, 0.9);
-  --chrome-control-bg-hover: rgba(44, 41, 37, 0.95);
-  --chrome-control-bg-disabled: rgba(31, 29, 26, 0.65);
+  --markdown-table-border: #1d1e22;
+  --markdown-table-frame-border: #232428;
+  --markdown-table-header-border: #2a2b30;
+  --markdown-blockquote-border: #2f3036;
+  --transcript-code-bg: #0c0d0f;
+  --transcript-code-header-bg: #08090a;
+  --surface-divider: #1b1c1f;
+  --surface-border-strong: #26272b;
+  --dialog-border: #2b2c31;
+  --chrome-control-bg: rgba(19, 20, 23, 0.9);
+  --chrome-control-bg-hover: rgba(30, 31, 35, 0.95);
+  --chrome-control-bg-disabled: rgba(19, 20, 23, 0.65);
 
-  --settings-tab-active-bg: #322f2b;
-  --recovered-queue-divider: #34312d;
-  --pane-status-active-dot: #b3ada3;
-  --folder-picker-status-border: #49423a;
-  --queued-turn-border: #48413a;
+  --settings-tab-active-bg: #1e1f23;
+  --recovered-queue-divider: #222327;
+  --pane-status-active-dot: #8a8e97;
+  --folder-picker-status-border: #2b2c31;
+  --queued-turn-border: #2b2c31;
 
-  --accent-color: #33adff;
-  --accent-shadow: rgba(51, 173, 255, 0.35);
-  --accent-soft: rgba(51, 173, 255, 0.13);
-  --accent-subtle: rgba(51, 173, 255, 0.08);
-  --accent-active-bg: #263a49;
-  --accent-strong: #268fd6;
+  /* #7380ea keeps 4.5:1 as text on the pane surfaces; --accent-strong is
+     Linear's indigo for fills. */
+  --accent-color: #7380ea;
+  --accent-shadow: rgba(115, 128, 234, 0.35);
+  --accent-soft: rgba(110, 121, 230, 0.16);
+  --accent-subtle: rgba(110, 121, 230, 0.08);
+  --accent-active-bg: #1e2140;
+  --accent-strong: #5e6ad2;
 
-  --control-bg: #282827;
-  --control-bg-hover: #313130;
-  --control-border: #3d3d3c;
-  --control-border-hover: #4a4946;
-  --control-border-hover-accent: #57544f;
-  --focus-ring: #33adff;
+  --control-bg: #1a1b1e;
+  --control-bg-hover: #212226;
+  --control-border: #2a2b30;
+  --control-border-hover: #36373d;
+  --control-border-hover-accent: #3f4580;
+  --focus-ring: #7380ea;
+
+  /* Text roles are theme-invariant elsewhere; this theme uses Linear's
+     neutral greys. The light appearance block still overrides them. */
+  --text-primary: #e4e5e9;
+  --text-strong: #f1f1f3;
+  --text-secondary: #c4c6cc;
+  --text-body-soft: #d6d7dc;
+  --text-muted: #8a8e97;
+  --text-activity: #868a93;
+  --text-interactive: #e8e9ec;
+  --text-heading: #f2f2f4;
+  --text-subtle: #80848d;
+  --text-faint: #767a83;
+  --text-disabled: #6d717a;
+  --placeholder-color: #5e626b;
+  --text-tertiary: #a3a7af;
+  --text-dim: #5e626b;
+  --text-ghost: #484b52;
+  --text-on-accent: #0b0c10;
+  --selection-bg: rgba(110, 121, 230, 0.42);
 
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
      the card of the open thread, and the fields and popovers over the feed,
      which sit one step above it (--field-bg sits below it). The
      conversation's composers, buttons, menus, and selection actions use the
      same field and popover colours. */
-  --research-feed-bg: #1a1918;
-  --research-tray-bg: #1d1c1b;
-  --research-card-selected-bg: #2b2927;
-  --research-feed-field-bg: #232220;
-  --research-feed-popover-bg: #23221f;
-  --research-feed-switch-raised-bg: var(--control-bg);
-  --research-feed-switch-raised-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  --research-feed-bg: #0c0d0f;
+  --research-tray-bg: #0f1012;
+  --research-card-selected-bg: #1a1b1e;
+  --research-feed-field-bg: #141518;
+  --research-feed-popover-bg: #1a1b1e;
+  --research-feed-switch-raised-bg: #26272b;
+  --research-feed-switch-raised-shadow: 0 1px 1px rgba(0, 0, 0, 0.4);
 }
 
 /* ------------------------------------------------------------------ */
@@ -791,76 +815,89 @@
 }
 
 :root[data-appearance="light"][data-color-theme="orange-blob"] {
-  --left-pane-bg: rgba(244, 242, 239, 0.72);
-  --terminal-pane-bg: #f8f6f3;
-  --right-pane-bg: #fcfbf9;
-  --right-pane-bg-transparent: rgba(252, 251, 249, 0);
-  --right-pane-active-bg: #fbf9f7;
-
-  --workspace-bg: #f5f3f0;
+  /* Cool off-whites and an indigo accent, after Linear's light theme. */
+  --left-pane-bg: #f1f1f2;
+  --terminal-pane-bg: #f8f8f9;
+  --right-pane-bg: #fdfdfd;
+  --right-pane-bg-transparent: rgba(253, 253, 253, 0);
+  --right-pane-active-bg: #fcfcfc;
+  --workspace-bg: #f8f8f9;
   --research-thread-page-bg: var(--right-pane-bg);
-  --research-page-bg: #e9e6e1;
-  --field-bg: #fbfaf8;
-  --field-bg-hover: #f5f2ee;
-  --panel-bg: var(--field-bg);
-  --popover-bg: var(--field-bg);
+  --research-page-bg: #ebebed;
+  --field-bg: #ffffff;
+  --field-bg-hover: #f8f8f9;
+  --panel-bg: #f8f8f9;
+  --popover-bg: #ffffff;
   --content-card-bg: #ffffff;
-  --content-inset-bg: #f2efeb;
-  --context-menu-bg: #f1ede8;
+  --content-inset-bg: #f4f4f5;
+  --context-menu-bg: #ffffff;
   --popover-item-hover-bg: var(--pane-tab-hover-bg);
-  --chrome-header-bg: #f4f2ef;
-  --pane-hover-bg: #ece8e3;
-  --pane-tab-hover-bg: var(--right-pane-bg);
+  --chrome-header-bg: #f6f6f7;
+  --pane-hover-bg: #efeff1;
+  --pane-tab-hover-bg: #f4f4f5;
   --markdown-table-header-bg: color-mix(
     in srgb,
     var(--pane-hover-bg) 75%,
     var(--right-pane-bg) 25%
   );
-  --markdown-table-border: #e2ddd7;
-  --markdown-table-frame-border: #d8d2cb;
-  --markdown-table-header-border: #cbc4bc;
-  --markdown-blockquote-border: #c9c3bb;
-  --transcript-code-bg: #f4f1ed;
-  --transcript-code-header-bg: #ebe6e0;
-  --surface-divider: #e0dbd5;
-  --surface-border-strong: #d2ccc5;
-  --dialog-border: #c8c1b9;
-  --chrome-control-bg: rgba(244, 242, 239, 0.9);
-  --chrome-control-bg-hover: rgba(232, 228, 222, 0.95);
-  --chrome-control-bg-disabled: rgba(244, 242, 239, 0.65);
-
-  --settings-tab-active-bg: #e6e1da;
-  --recovered-queue-divider: #d8d2ca;
-  --pane-status-active-dot: #7d746a;
-  --folder-picker-status-border: #cdc3b7;
-  --queued-turn-border: #cdc4ba;
-
+  --markdown-table-border: #e7e7ea;
+  --markdown-table-frame-border: #dcdce0;
+  --markdown-table-header-border: #d0d0d5;
+  --markdown-blockquote-border: #c9c9cf;
+  --transcript-code-bg: #f6f6f7;
+  --transcript-code-header-bg: #eeeef0;
+  --surface-divider: #e7e7ea;
+  --surface-border-strong: #dcdce0;
+  --dialog-border: #d4d4d9;
+  --chrome-control-bg: rgba(248, 248, 249, 0.9);
+  --chrome-control-bg-hover: rgba(236, 236, 239, 0.95);
+  --chrome-control-bg-disabled: rgba(248, 248, 249, 0.65);
+  --settings-tab-active-bg: #e8e8eb;
+  --recovered-queue-divider: #dcdce0;
+  --pane-status-active-dot: #6b6e77;
+  --folder-picker-status-border: #c9c9cf;
+  --queued-turn-border: #d0d0d5;
   /* White on the accent, and the accent as text on the light surfaces, are
      at least 4.5:1. */
-  --accent-color: #0a6fb8;
-  --accent-shadow: rgba(11, 127, 209, 0.3);
-  --accent-soft: rgba(11, 127, 209, 0.12);
-  --accent-subtle: rgba(11, 127, 209, 0.07);
-  --accent-active-bg: #dcebf7;
-  --accent-strong: #095c98;
-
-  --control-bg: #efece8;
-  --control-bg-hover: #e6e2dc;
-  --control-border: #d3cdc5;
-  --control-border-hover: #c1bab0;
-  --control-border-hover-accent: #a9c6dc;
-  --focus-ring: #0a6fb8;
-
+  --accent-color: #5e6ad2;
+  --accent-shadow: rgba(94, 106, 210, 0.3);
+  --accent-soft: rgba(94, 106, 210, 0.11);
+  --accent-subtle: rgba(94, 106, 210, 0.06);
+  --accent-active-bg: #e7e9f8;
+  --accent-strong: #4a54bd;
+  --control-bg: #f4f4f5;
+  --control-bg-hover: #ececef;
+  --control-border: #dcdce0;
+  --control-border-hover: #c9c9cf;
+  --control-border-hover-accent: #b4b9e8;
+  --focus-ring: #5e6ad2;
+  /* Linear's neutral text greys in place of the green-tinted defaults. */
+  --text-primary: #1c1d21;
+  --text-strong: #111216;
+  --text-secondary: #3b3d44;
+  --text-body-soft: #2a2c31;
+  --text-muted: #5f626b;
+  --text-activity: #6b6e77;
+  --text-interactive: #1c1d21;
+  --text-heading: #111216;
+  --text-subtle: #62656e;
+  --text-faint: #6b6e77;
+  --text-disabled: #9a9da5;
+  --placeholder-color: #9a9da5;
+  --text-tertiary: #5f626b;
+  --text-dim: #a3a6ad;
+  --text-ghost: #b6b8be;
+  --selection-bg: rgba(94, 106, 210, 0.2);
   /* Feed column (B1): the column behind the cards, the boxed folder trays,
      the card of the open thread, and the fields and popovers over the feed,
      which sit one step above it (--field-bg sits below it). The
      conversation's composers, buttons, menus, and selection actions use the
      same field and popover colours. */
-  --research-feed-bg: #f8f6f3;
-  --research-tray-bg: #f3f1ed;
-  --research-card-selected-bg: #ebe7e1;
+  --research-feed-bg: #f8f8f9;
+  --research-tray-bg: #f4f4f5;
+  --research-card-selected-bg: #ececef;
   --research-feed-field-bg: #ffffff;
   --research-feed-popover-bg: #ffffff;
   --research-feed-switch-raised-bg: var(--research-feed-field-bg);
-  --research-feed-switch-raised-shadow: 0 1px 2px rgba(20, 24, 26, 0.12);
+  --research-feed-switch-raised-shadow: 0 1px 2px rgba(15, 15, 20, 0.12);
 }
