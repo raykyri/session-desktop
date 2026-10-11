@@ -1,5 +1,5 @@
 import { researchBranchBlocker } from "../../lib/researchThreadView";
-import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
+import { memo, useCallback, useContext, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   KeyRound,
@@ -73,15 +73,18 @@ function unexpectedRoleLabel(role: string) {
 
 function ResearchMessageBlock({
   block,
+  blockIndex,
   role,
   conversation = false,
   imported = false,
 }: {
   block: MessageBlock;
+  blockIndex: number;
   role: string;
   conversation?: boolean;
   imported?: boolean;
 }) {
+  const owner = useContext(WidgetAnswerContext);
   if (block.type === "text") {
     // In a transcript document every turn is first-class content: user
     // messages render as markdown prompts, not as unexpected-content
@@ -89,11 +92,13 @@ function ResearchMessageBlock({
     // user turn signals leakage).
     if (role === "assistant" || conversation) {
       return (
+        <WidgetAnswerContext.Provider value={owner ? { ...owner, messageKey: `${owner.messageKey}:${blockIndex}` } : null}>
         <ResearchMarkdown
           text={imported ? stripImportedReportCitations(block.text) : block.text}
           oversizedContent={imported ? undefined : OVERSIZED_MARKDOWN_POLICY}
           widgets={role === "assistant"}
         />
+        </WidgetAnswerContext.Provider>
       );
     }
     return <p className="research-unexpected-text">{block.text}</p>;
@@ -145,6 +150,7 @@ export const ResearchTimelineItem = memo(function ResearchTimelineItem({
               <ResearchMessageBlock
                 key={`${item.key}-${index}`}
                 block={block}
+                blockIndex={index}
                 role={item.role}
                 conversation
               />
@@ -156,6 +162,7 @@ export const ResearchTimelineItem = memo(function ResearchTimelineItem({
               <ResearchMessageBlock
                 key={`${item.key}-${index}`}
                 block={block}
+                blockIndex={index}
                 role={item.role}
                 conversation
               />
@@ -215,6 +222,7 @@ export const ResearchTimelineItem = memo(function ResearchTimelineItem({
             <ResearchMessageBlock
               key={`${item.key}-${index}`}
               block={block}
+                blockIndex={index}
               role={item.role}
               imported={imported}
             />
@@ -605,7 +613,7 @@ export const ResearchAnswerPane = memo(function ResearchAnswerPane({
           >
             <SessionWidgetStreamingContext.Provider value={active}>
               {view.visibleTimelineItems.map((item) => (
-                <WidgetAnswerContext.Provider key={item.key} value={{ nodeId: node.id, blocked: researchBranchBlocker(node, false), answer: item.blocks.filter((block) => block.type === "text").map((block) => block.type === "text" ? block.text : "").join("\n\n") }}>
+                <WidgetAnswerContext.Provider key={item.key} value={{ nodeId: node.id, treeId: node.treeId, messageKey: item.key, blocked: researchBranchBlocker(node, false), answer: item.blocks.filter((block) => block.type === "text").map((block) => block.type === "text" ? block.text : "").join("\n\n") }}>
                 <ResearchTimelineItem
                   item={item}
                   conversation={view.isConversation}

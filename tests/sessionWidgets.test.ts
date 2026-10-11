@@ -414,3 +414,28 @@ test("frames share one native shortcut-fallback claim", async () => {
   assert.deepEqual(reports, [true, false, true, false], "the last release clears the claim");
   assert.equal(listeners.size, 0);
 });
+
+test("artifact metadata is optional, bounded, and carried through the fence", async () => {
+  const { sessionWidgetMetadata } = await import('../src/lib/sessionWidgets');
+  assert.deepEqual(sessionWidgetMetadata('id="chart" title="Growth chart" parent="' + 'a'.repeat(64) + '"'), { artifactId: 'chart', title: 'Growth chart', parentRevision: 'a'.repeat(64) });
+  assert.equal(sessionWidgetMetadata('id="../../x" parent=latest').artifactId, undefined);
+  assert.equal(sessionWidgetMetadata('id="../../x" parent=latest').parentRevision, undefined);
+  assert.equal(sessionWidgetMetadata('').artifactId, undefined);
+});
+
+test("quoted artifact titles round-trip in revision prompts", async () => {
+  const { sessionWidgetMetadata } = await import('../src/lib/sessionWidgets');
+  const title = 'A "quoted" chart \\ legend';
+  assert.equal(sessionWidgetMetadata(`title=${JSON.stringify(title)}`).title, title);
+});
+
+test("fence metadata survives CommonMark escape processing", async () => {
+  const { fromMarkdown } = await import('mdast-util-from-markdown');
+  const { remarkSessionWidgetFences, sessionWidgetMetadata } = await import('../src/lib/sessionWidgets');
+  const title = 'A "quoted" chart \\ legend';
+  const markdown = '```session-html id=chart title=' + JSON.stringify(title) + '\n<p>hello</p>\n```';
+  const tree = fromMarkdown(markdown);
+  remarkSessionWidgetFences()(tree, { value: markdown });
+  const properties = tree.children[0].data?.hProperties;
+  assert.equal(sessionWidgetMetadata(String(properties?.dataSessionWidgetMeta)).title, title);
+});

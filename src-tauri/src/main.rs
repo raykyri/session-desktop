@@ -26,6 +26,7 @@ mod remote_terminal;
 mod remote_transcript;
 mod research;
 mod research_anchors;
+mod research_artifacts;
 mod research_recap;
 mod research_runtime;
 mod research_widgets;
@@ -1868,71 +1869,72 @@ fn remove_unlaunched_research_tree(state: &AppState, tree_id: &str) {
     }
 }
 
+fn load_research_node_content(
+    state: &AppState,
+    node_id: &str,
+) -> Result<ResearchNodeContent, String> {
+    let mut content = state.research_node_content(&node_id)?;
+    // A corrupt or oversized snapshot must not wedge the node: fall back to
+    // the transcript exactly as if no snapshot existed, keeping the read
+    // failure only as diagnostic context if nothing else is viewable.
+    let snapshot_error = match research::read_response_snapshot_with_revision(
+        &state.config().workspace_root,
+        &node_id,
+    ) {
+        Ok(Some(snapshot)) => {
+            content.response_revision = Some(snapshot.revision);
+            content.turns = snapshot.turns;
+            return Ok(content);
+        }
+        Ok(None) => None,
+        Err(err) => {
+            eprintln!("session: unreadable research response snapshot {node_id}: {err}");
+            Some(err)
+        }
+    };
+    if content
+        .node
+        .binding()
+        .is_some_and(|binding| binding.transcript_path.is_some())
+        && matches!(
+            content.node.status(),
+            research::ResearchNodeStatus::Complete
+                | research::ResearchNodeStatus::Failed
+                | research::ResearchNodeStatus::Cancelled
+        )
+    {
+        let ancestor_prompts = state
+            .research_node_ancestor_prompts(&node_id)
+            .unwrap_or_default();
+        match research::load_transcript_response(state.config(), &content.node, &ancestor_prompts) {
+            Ok(turns) => content.turns = turns,
+            // No snapshot, no live turns, and the adapter transcript is
+            // unreadable: return the node with the failure recorded rather
+            // than erroring, which would wedge the workspace on a retry
+            // loop that can never succeed and hide the node entirely.
+            Err(err) if content.turns.is_empty() => {
+                content.source_error = Some(match snapshot_error {
+                    Some(snapshot_error) => format!("{snapshot_error}; {err}"),
+                    None => err,
+                });
+            }
+            Err(_) => {}
+        }
+    } else if content.turns.is_empty() {
+        content.source_error = snapshot_error;
+    }
+    Ok(content)
+}
+
 #[tauri::command]
 async fn get_research_node_content(
     state: tauri::State<'_, AppState>,
     node_id: String,
 ) -> Result<ResearchNodeContent, String> {
     let state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut content = state.research_node_content(&node_id)?;
-        // A corrupt or oversized snapshot must not wedge the node: fall back to
-        // the transcript exactly as if no snapshot existed, keeping the read
-        // failure only as diagnostic context if nothing else is viewable.
-        let snapshot_error = match research::read_response_snapshot_with_revision(
-            &state.config().workspace_root,
-            &node_id,
-        ) {
-            Ok(Some(snapshot)) => {
-                content.response_revision = Some(snapshot.revision);
-                content.turns = snapshot.turns;
-                return Ok(content);
-            }
-            Ok(None) => None,
-            Err(err) => {
-                eprintln!("session: unreadable research response snapshot {node_id}: {err}");
-                Some(err)
-            }
-        };
-        if content
-            .node
-            .binding()
-            .is_some_and(|binding| binding.transcript_path.is_some())
-            && matches!(
-                content.node.status(),
-                research::ResearchNodeStatus::Complete
-                    | research::ResearchNodeStatus::Failed
-                    | research::ResearchNodeStatus::Cancelled
-            )
-        {
-            let ancestor_prompts = state
-                .research_node_ancestor_prompts(&node_id)
-                .unwrap_or_default();
-            match research::load_transcript_response(
-                state.config(),
-                &content.node,
-                &ancestor_prompts,
-            ) {
-                Ok(turns) => content.turns = turns,
-                // No snapshot, no live turns, and the adapter transcript is
-                // unreadable: return the node with the failure recorded rather
-                // than erroring, which would wedge the workspace on a retry
-                // loop that can never succeed and hide the node entirely.
-                Err(err) if content.turns.is_empty() => {
-                    content.source_error = Some(match snapshot_error {
-                        Some(snapshot_error) => format!("{snapshot_error}; {err}"),
-                        None => err,
-                    });
-                }
-                Err(_) => {}
-            }
-        } else if content.turns.is_empty() {
-            content.source_error = snapshot_error;
-        }
-        Ok(content)
-    })
-    .await
-    .map_err(|err| format!("get_research_node_content task failed: {err}"))?
+    tauri::async_runtime::spawn_blocking(move || load_research_node_content(&state, &node_id))
+        .await
+        .map_err(|err| format!("get_research_node_content task failed: {err}"))?
 }
 
 #[tauri::command]
@@ -2502,6 +2504,70 @@ fn research_inline_widgets_set(
     persistence::update_preferences(&state.config().workspace_root, move |preferences| {
         preferences.research_inline_widgets = Some(enabled);
     })
+}
+
+// Read saved sources before registering/listing revisions so folding an answer
+// or turning widgets off cannot remove it from a named artifact's history.
+fn index_research_artifact(
+    state: &AppState,
+    tree_id: &str,
+    artifact_id: &str,
+) -> Result<usize, String> {
+    let tree = state.research_tree(tree_id)?;
+    let mut pending = Vec::new();
+    for node in tree.nodes {
+        if node.status().is_active() {
+            continue;
+        }
+        let content = load_research_node_content(state, &node.id)?;
+        for turn in content.turns.iter().filter(|turn| turn.role == "assistant") {
+            for block in &turn.blocks {
+                if let transcript::TurnBlock::Text { text } = block {
+                    pending.extend(research_artifacts::named_sources(
+                        tree_id,
+                        &node.id,
+                        text,
+                        artifact_id,
+                    ));
+                }
+            }
+        }
+    }
+    // Parents may sort after their children in the tree. Only resolvable
+    // sources enter durable history; malformed/dangling metadata stays source.
+    loop {
+        let before = pending.len();
+        pending.retain(|input| {
+            research_artifacts::register(&state.config().workspace_root, input.clone()).is_err()
+        });
+        if pending.is_empty() || pending.len() == before {
+            break;
+        }
+    }
+    Ok(pending.len())
+}
+
+#[tauri::command(async)]
+fn research_artifact_register(
+    state: tauri::State<'_, AppState>,
+    input: research_artifacts::ArtifactInput,
+) -> Result<research_artifacts::ArtifactRevision, String> {
+    if let Some(id) = &input.artifact_id {
+        index_research_artifact(&state, &input.tree_id, id)?;
+    }
+    research_artifacts::register(&state.config().workspace_root, input)
+}
+
+#[tauri::command(async)]
+fn research_artifact_history(
+    state: tauri::State<'_, AppState>,
+    tree_id: String,
+    artifact_id: String,
+) -> Result<serde_json::Value, String> {
+    let unresolved = index_research_artifact(&state, &tree_id, &artifact_id)?;
+    let revisions =
+        research_artifacts::history(&state.config().workspace_root, &tree_id, &artifact_id)?;
+    Ok(serde_json::json!({ "revisions": revisions, "unresolved": unresolved }))
 }
 
 /// Exports the exact authored HTML only after the reader chooses a destination.
@@ -3664,6 +3730,8 @@ fn main() {
             research_inline_widgets_set,
             research_widget_prepare,
             research_widget_download,
+            research_artifact_register,
+            research_artifact_history,
             worktree_location_get,
             worktree_location_set,
             pane_write,

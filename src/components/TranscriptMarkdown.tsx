@@ -511,7 +511,11 @@ function MarkdownWidgetBlock({
   code,
   state,
   codeBlock,
+  meta,
+  slot,
 }: {
+  meta: string;
+  slot: string;
   code: string;
   state: unknown;
   codeBlock: ReactNode;
@@ -540,7 +544,7 @@ function MarkdownWidgetBlock({
       />
     );
   }
-  return <SessionWidget html={html} onOpen={openLink} />;
+  return <SessionWidget html={html} meta={meta} slot={slot} onOpen={openLink} />;
 }
 
 /** A widget block shown as its source, under a notice saying why. */
@@ -786,6 +790,8 @@ const markdownComponents: Components = {
             code={nodeText(codeElement.props.children)}
             state={(codeElement.props as Record<string, unknown>)[SESSION_WIDGET_STATE_ATTRIBUTE]}
             codeBlock={codeBlock}
+            meta={String((codeElement.props as Record<string, unknown>)["data-session-widget-meta"] ?? "")}
+            slot={String((codeElement.props as Record<string, unknown>)["data-session-widget-slot"] ?? "0")}
           />
         </div>
       );

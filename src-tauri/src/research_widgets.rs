@@ -61,7 +61,7 @@ A widget is an HTML fragment that Session places inside the <body> of a sandboxe
 - Session starts the widget's scripts only when the reader asks it to, so the HTML and CSS must show a meaningful initial state (default values, labels, a static figure) before any script runs.
 - The answer must be complete without the widget: state every conclusion in the prose; the widget illustrates it. Readers without widgets see the block as code, so do not mention Session's frame or how to start the widget.
 
-Write the block as ```session-html, then the fragment, then ``` on its own line."#;
+Write the block as ```session-html, then the fragment, then ``` on its own line. Optional fence metadata: id="short-stable-id" title="Descriptive title" parent="64-character revision ID". When revising a selected artifact, keep its id and use the supplied revision hash as parent; never invent a parent hash. Legacy fences without metadata remain supported."#;
 
 static SCRIPTS_ALLOWED: AtomicBool = AtomicBool::new(false);
 

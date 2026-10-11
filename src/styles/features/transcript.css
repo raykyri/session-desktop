@@ -1066,3 +1066,10 @@ html.wrap-code-blocks .turn-markdown-code-block pre code {
 .session-widget-source { margin: 0; padding: 12px; max-height: 440px; overflow: auto; white-space: pre; font-size: var(--fs-sm); }
 .session-widget-feedback { padding: 4px 10px; font-size: var(--fs-sm); color: var(--text-body-soft); }
 .session-widget-run[aria-pressed="true"] { background: var(--surface-fill-hover); color: var(--text-body); }
+
+.session-artifact-details { border-bottom: 1px solid var(--surface-border-subtle); padding: 8px 10px; font-size: var(--fs-sm); }
+.session-artifact-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.session-artifact-heading strong { margin-right: auto; }
+.session-artifact-heading span, .session-artifact-details li span { color: var(--text-faint); }
+.session-artifact-details ul { margin: 8px 0 0; padding: 0; list-style: none; }
+.session-artifact-details li { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0; }

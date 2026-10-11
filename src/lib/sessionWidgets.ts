@@ -47,7 +47,7 @@ interface MdastCode {
   lang?: string | null;
   meta?: string | null;
   value?: string;
-  data?: { hProperties?: Record<string, unknown> } & Record<string, unknown>;
+  data?: { hProperties?: Record<string, unknown> };
   position?: { start: { offset?: number }; end: { offset?: number } };
   children?: MdastCode[];
 }
@@ -91,9 +91,11 @@ export function remarkSessionWidgetFences() {
           start !== undefined && end !== undefined && fencedBlockIsClosed(source.slice(start, end), node.value ?? "")
             ? "complete"
             : "partial";
+        const opening = start === undefined || end === undefined ? "" : source.slice(start, end).split(/\r?\n/u)[0];
+        const rawMeta = opening.includes("session-html") ? opening.slice(opening.indexOf("session-html") + "session-html".length).trim() : node.meta ?? "";
         node.data = {
           ...node.data,
-          hProperties: { ...node.data?.hProperties, dataSessionWidget: state },
+          hProperties: { ...node.data?.hProperties, dataSessionWidget: state, dataSessionWidgetMeta: rawMeta, dataSessionWidgetSlot: String(start ?? 0) },
         };
         return;
       }
@@ -326,4 +328,17 @@ export function sessionWidgetTookFocus(input: {
 export function sessionWidgetRecordFocusTake(takes: number[], now: number): { takes: number[]; stop: boolean } {
   const recent = [...takes.filter((at) => now - at < SESSION_WIDGET_FOCUS_TAKE_WINDOW_MS), now];
   return { takes: recent, stop: recent.length >= SESSION_WIDGET_FOCUS_TAKES_TO_STOP };
+}
+
+/** Optional metadata does not change the legacy fence format. */
+export function sessionWidgetMetadata(meta: string): { artifactId?: string; title?: string; parentRevision?: string } {
+  const fields: Record<string, string> = {};
+  for (const match of meta.matchAll(/(?:^|\s)(id|title|parent)=("(?:\\.|[^"\\\r\n])*"|[^\s]+)/gu)) {
+    try { fields[match[1]] = match[2].startsWith('"') ? JSON.parse(match[2]) as string : match[2]; } catch { /* Ignore malformed metadata. */ }
+  }
+  return {
+    artifactId: /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$/u.test(fields.id ?? "") ? fields.id : undefined,
+    title: fields.title?.slice(0, 120),
+    parentRevision: /^[a-f0-9]{64}$/u.test(fields.parent ?? "") ? fields.parent : undefined,
+  };
 }

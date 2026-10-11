@@ -1,3 +1,5 @@
+import { useResearchArtifact } from "../hooks/useResearchArtifact";
+import SessionArtifactDetails from "./SessionArtifactDetails";
 import { createContext, useContext, useEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { Copy, Download, MessageSquare, ExternalLink, Play, RotateCcw } from "lucide-react";
 import { downloadResearchWidget, prepareResearchWidget, type ResearchWidgetUrls } from "../lib/api";
@@ -75,12 +77,18 @@ function withBodyFont(url: string): string {
 export default function SessionWidget({
   html,
   onOpen,
+  meta = "",
+  slot = "0",
 }: {
   html: string;
+  meta?: string;
+  slot?: string;
   /** Opens a widget URL in the thread's sandboxed browser overlay. */
   onOpen: (url: string) => void;
 }) {
   const answer = useContext(WidgetAnswerContext);
+  const streaming = useContext(SessionWidgetStreamingContext);
+  const artifact = useResearchArtifact(answer, html, meta, slot, streaming);
   const askForChanges = useContext(WidgetChangeContext);
   const [source, setSource] = useState(false);
   const [actionStatus, setActionStatus] = useState("");
@@ -166,12 +174,14 @@ export default function SessionWidget({
       data-scripts={scriptsUnavailable ? "unavailable" : frame.stopped ? "stopped" : undefined}
       aria-label="Answer widget"
     >
+      {artifact.revision ? <SessionArtifactDetails key={`${artifact.revision.artifactId}:${artifact.revision.revision}`} revision={artifact.revision} onOpen={onOpen} /> : null}
+      {artifact.error ? <div className="session-widget-feedback" role="status">{artifact.error} <button type="button" onClick={artifact.retry}>Retry saving revision</button></div> : null}
       <div className="session-widget-bar">
         <button type="button" className="session-widget-run" aria-pressed={!source} onClick={() => setSource(false)}>Preview</button>
         <button type="button" className="session-widget-run" aria-pressed={source} onClick={() => setSource(true)}>Source</button>
         <button type="button" className="icon-button session-widget-action" title="Copy HTML" aria-label="Copy widget HTML" onClick={() => void action(() => writeClipboardText(html), "HTML copied")}><Copy /></button>
         <button type="button" className="icon-button session-widget-action" title="Download HTML" aria-label="Download widget HTML" onClick={() => void action(() => downloadResearchWidget(html), "HTML downloaded")}><Download /></button>
-        {answer && askForChanges ? <button type="button" className="icon-button session-widget-action" disabled={Boolean(answer.blocked)} title={answer.blocked ?? "Ask for changes"} aria-label="Ask for widget changes" onClick={() => askForChanges(answer, html)}><MessageSquare /></button> : null}
+        {answer && askForChanges ? <button type="button" className="icon-button session-widget-action" disabled={Boolean(answer.blocked) || Boolean(answer.treeId && !artifact.revision)} title={answer.blocked ?? (answer.treeId && !artifact.revision ? "Waiting for the revision to be saved" : "Ask for changes")} aria-label="Ask for widget changes" onClick={() => askForChanges(artifact.revision ? { ...answer, artifact: artifact.revision } : answer, html)}><MessageSquare /></button> : null}
         {frame.phase === "failed" ? (
           <button
             type="button"

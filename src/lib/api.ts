@@ -832,3 +832,30 @@ export function importResearchReport(request: {
 export function downloadResearchWidget(html: string) {
   return invoke<boolean>("research_widget_download", { html });
 }
+
+export interface ResearchArtifactRevision {
+  artifactId: string;
+  title: string;
+  treeId: string;
+  nodeId: string;
+  slot: string;
+  revision: string;
+  contentHash: string;
+  parentRevision: string | null;
+  html: string;
+}
+export interface ResearchArtifactInput {
+  treeId: string;
+  nodeId: string;
+  slot: string;
+  artifactId?: string;
+  title?: string;
+  parentRevision?: string;
+  html: string;
+}
+export function registerResearchArtifact(input: ResearchArtifactInput) {
+  return invoke<ResearchArtifactRevision>("research_artifact_register", { input });
+}
+export function researchArtifactHistory(treeId: string, artifactId: string) {
+  return invoke<{ revisions: ResearchArtifactRevision[]; unresolved: number }>("research_artifact_history", { treeId, artifactId });
+}
