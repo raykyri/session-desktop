@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-11T06:12:49.236Z",
+  "generated": "2026-10-11T06:16:18.894Z",
   "rounds": {
     "1": {
       "ulysses": {
@@ -216,6 +216,49 @@
         ],
         "file": "r1/inbox.html",
         "thumb": "thumbs/r1-inbox.jpg"
+      },
+      "tana": {
+        "slug": "tana",
+        "round": 1,
+        "title": "Everything is a node",
+        "influence": "Tana (with nods to Roam Research, Logseq, Workflowy)",
+        "summary": "Chats and notes live in one outline. A question is a node tagged #question: ⌘↵ runs it, the answer arrives as child nodes, follow-ups are child questions, and a selected passage becomes a #claim node that can be referenced anywhere. Home is today's page with one input line (⌘↵ asks, ↵ saves a note), so there is one first action and one place where everything lands.",
+        "nouns": [
+          "Node",
+          "Question",
+          "Tag",
+          "Reference",
+          "Workspace"
+        ],
+        "variants": [
+          {
+            "id": "a",
+            "label": "Prose answers",
+            "summary": "Answers arrive as one node per paragraph, tag fields render inline, and references are listed at the bottom of each page."
+          },
+          {
+            "id": "b",
+            "label": "Claim answers",
+            "summary": "The same answer is split into #claim nodes grouped under topic nodes, each with its source shown beside it."
+          },
+          {
+            "id": "c",
+            "label": "Fields as table",
+            "summary": "Tag fields render as a bordered field table, and live searches inside the outline render as tables."
+          },
+          {
+            "id": "d",
+            "label": "Workspace home",
+            "summary": "Home is the workspace outline instead of today's page, and the sidebar shows the outline tree instead of pins."
+          },
+          {
+            "id": "e",
+            "label": "References panel",
+            "summary": "A persistent side panel shows references and a local map for the current node, and bullets carry reference counts."
+          }
+        ],
+        "file": "r1/tana.html",
+        "thumb": "thumbs/r1-tana.jpg"
       },
       "linear": {
         "slug": "linear",

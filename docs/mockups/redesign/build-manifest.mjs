@@ -1,6 +1,7 @@
 // Builds manifest.json and thumbs/ for the redesign compilation (index.html).
 // Loads each candidate file in headless Chromium, reads its MOCK object, and
-// takes a 1400x860 screenshot. Run: node docs/mockups/redesign/build-manifest.mjs
+// takes a 1400x860 screenshot. Run: node docs/mockups/redesign/build-manifest.mjs [r1/slug ...]
+// With arguments, only the listed files are included (to skip files still being written).
 import { createRequire } from "node:module";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -16,6 +17,7 @@ try {
 
 const root = dirname(fileURLToPath(import.meta.url));
 const slugs = ["ulysses", "macos", "notes", "obsidian", "notion", "inbox", "tana", "linear"];
+const only = new Set(process.argv.slice(2));
 const manifest = { generated: new Date().toISOString(), rounds: { 1: {}, 2: {} } };
 mkdirSync(join(root, "thumbs"), { recursive: true });
 
@@ -25,6 +27,7 @@ for (const round of [1, 2]) {
   for (const slug of slugs) {
     const file = join(root, `r${round}`, `${slug}.html`);
     if (!existsSync(file)) continue;
+    if (only.size && !only.has(`r${round}/${slug}`)) continue;
     const errors = [];
     const onError = (e) => errors.push(String(e));
     const onConsole = (m) => m.type() === "error" && errors.push(m.text());
