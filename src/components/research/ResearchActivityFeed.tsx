@@ -1446,7 +1446,6 @@ function ResearchActivityFeed({
               </div>
             </section>
           ) : null}
-          {listed && view.kind !== "home" ? composerBlock : null}
           {view.kind === "home"
             ? trayPlaces.map((place) => (
                 <ResearchFeedTray
@@ -1479,7 +1478,7 @@ function ResearchActivityFeed({
               {renderPlaceCards(soloPlace)}
             </section>
           ) : null}
-          {soloPlace ? composerBlock : null}
+          {soloPlace && view.kind !== "archive" ? composerBlock : null}
         </div>
       </div>
       <ResearchFeedScrollThumb scrollRef={scrollRef} />

@@ -479,3 +479,9 @@ test("a network post is an untitled card showing its body", () => {
   // Replies open with the post; the card shows only the question.
   assert.doesNotMatch(html, /We moved in March\.|7 replies/);
 });
+
+test("Bookmarks and Archive have no ask box; Home keeps it", () => {
+  assert.doesNotMatch(renderFeed({ view: { kind: "archive" } }), /Query composer/);
+  assert.doesNotMatch(renderFeed({ view: { kind: "bookmarks" } }), /Query composer/);
+  assert.match(renderFeed({}), /Query composer/);
+});
