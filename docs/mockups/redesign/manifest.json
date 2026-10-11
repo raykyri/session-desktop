@@ -1,0 +1,266 @@
+{
+  "generated": "2026-10-11T06:12:49.236Z",
+  "rounds": {
+    "1": {
+      "ulysses": {
+        "slug": "ulysses",
+        "round": 1,
+        "title": "Library & sheets",
+        "influence": "Ulysses (ulysses.app)",
+        "summary": "Everything is a sheet in a three-pane library (groups, sheet list, editor). A line that starts with ? runs an agent and the answer is written into the same sheet as plain prose, so a chat and a note are the same object. Branches attach to marked passages, glued sheets form a manuscript whose headings are the outline, and [[links]] plus keywords populate a References view.",
+        "nouns": [
+          "Sheet",
+          "Group",
+          "Branch",
+          "Mark",
+          "Keyword"
+        ],
+        "variants": [
+          {
+            "id": "a",
+            "label": "Prose, margin branches",
+            "summary": "Questions and answers read as one continuous text with markup in the margin; branches are numbered margin notes beside the marked passage."
+          },
+          {
+            "id": "b",
+            "label": "Chat bubbles",
+            "summary": "Questions render as right-aligned bubbles under a sheet title; answers stay plain prose; everything else matches A."
+          },
+          {
+            "id": "c",
+            "label": "Branches as attachments",
+            "summary": "Branches leave the margin and are listed as attached sheets in the open attachments panel; passages keep a numbered marker."
+          },
+          {
+            "id": "d",
+            "label": "Two panes",
+            "summary": "The library collapses into a group menu above the sheet list and the attachments panel stays open, which leaves more room on small screens."
+          },
+          {
+            "id": "e",
+            "label": "Outline first",
+            "summary": "Opens on the Chapter 3 manuscript in Outline view; chats are reached from outline rows rather than from the sheet list."
+          }
+        ],
+        "file": "r1/ulysses.html",
+        "thumb": "thumbs/r1-ulysses.jpg"
+      },
+      "macos": {
+        "slug": "macos",
+        "round": 1,
+        "title": "Mac system app",
+        "influence": "Apple macOS system app idioms (HIG; Finder, Mail, Messages, Freeform, System Settings)",
+        "summary": "Session becomes a standard Mac document app: a glass sidebar of folders, one toolbar view switch (Page, Outline, Columns, Map) over the same library, and an inspector (⌥⌘I) that holds a chat's branches and links. Chats read like Messages, notes are collapsible outlines with [[links]], and the first window offers one field — ask a question — with the agent check done in the background.",
+        "nouns": [
+          "Chat",
+          "Branch",
+          "Note",
+          "Highlight",
+          "Folder"
+        ],
+        "variants": [
+          {
+            "id": "a",
+            "label": "Page + inspector",
+            "summary": "Opens on a chat in Page view with a Mail-style item list and an inspector holding Info, Branches and Links."
+          },
+          {
+            "id": "b",
+            "label": "Column browser",
+            "summary": "Opens in Columns view: folders → items → branches and bullets → Quick Look preview, replacing the column strip."
+          },
+          {
+            "id": "c",
+            "label": "Outline list",
+            "summary": "Opens in Outline view: one disclosure-triangle list of folders, chats, branches and note bullets; Space opens Quick Look."
+          },
+          {
+            "id": "d",
+            "label": "Popover branches",
+            "summary": "No inspector by default; numbered passage markers open branches in popovers, with an opaque, denser sidebar."
+          },
+          {
+            "id": "e",
+            "label": "Map canvas",
+            "summary": "Opens on a canvas map of chats, notes, highlights and links grouped by folder; the inspector follows the selected card."
+          }
+        ],
+        "file": "r1/macos.html",
+        "thumb": "thumbs/r1-macos.jpg"
+      },
+      "notes": {
+        "slug": "notes",
+        "round": 1,
+        "title": "Notes with Ask",
+        "influence": "Apple Notes (macOS)",
+        "summary": "Session becomes a three-pane notes app: folders, a dated note list, and a note whose first line is its title. Any note can run a model inline (⌘J); answers stay in the note as editable text, and selecting a passage branches it into a linked sub-note. Outline and Link Map are two more views of the same notes, so there is one object to learn.",
+        "nouns": [
+          "Note",
+          "Chat",
+          "Folder",
+          "Tag",
+          "Link"
+        ],
+        "variants": [
+          {
+            "id": "a",
+            "label": "Inline chats",
+            "summary": "Chats run as blocks inside the note; branches nest as sub-notes in the list; Linked Notes sits at the bottom of each note."
+          },
+          {
+            "id": "b",
+            "label": "Chat side panel",
+            "summary": "The note holds only the answer text; the conversation (questions, run status, follow-up box) lives in a panel beside it."
+          },
+          {
+            "id": "c",
+            "label": "Replies section",
+            "summary": "Branches do not appear in the note list; they are numbered on the passage and listed in a Replies section at the end of the note."
+          },
+          {
+            "id": "d",
+            "label": "Gallery home",
+            "summary": "Folders open in gallery view with run status on each thumbnail; Quick Note is the primary capture path."
+          },
+          {
+            "id": "e",
+            "label": "Link inspector",
+            "summary": "A right-hand inspector shows a mini link map, backlinks and tags for the open note; the tag browser shows counts."
+          }
+        ],
+        "file": "r1/notes.html",
+        "thumb": "thumbs/r1-notes.jpg"
+      },
+      "notion": {
+        "slug": "notion",
+        "round": 1,
+        "title": "Pages & blocks",
+        "influence": "Notion",
+        "summary": "Everything is a page made of blocks: a chat is a page whose blocks are questions and answers, a note is a page you write, and a branch is a sub-chat nested under the passage it came from. One sidebar tree, @-links with backlinks, a Questions database (table/board/list/gallery) and a link map replace folders, feeds and three save gestures. First run opens a Getting started page with a single Ask box; agent setup is a non-blocking checklist item.",
+        "nouns": [
+          "Page",
+          "Chat",
+          "Sub-chat",
+          "Highlight",
+          "Link"
+        ],
+        "variants": [
+          {
+            "id": "a",
+            "label": "Chat pages",
+            "summary": "Chats are pages in the tree; branches are sub-chat pages listed under the passage they came from; first run lands on Getting started."
+          },
+          {
+            "id": "b",
+            "label": "Questions database",
+            "summary": "Every chat is a row in a Questions database with Status, Agent and Model properties; the database is the landing view and chat pages show their properties."
+          },
+          {
+            "id": "c",
+            "label": "Branches as toggles",
+            "summary": "Sub-chats render inline as toggle blocks under the passage instead of separate pages, so one investigation reads as one page."
+          },
+          {
+            "id": "d",
+            "label": "Side peek",
+            "summary": "Outline-first: the Chapter 3 note is the landing page and chats open in a side peek beside it, keeping the note in view."
+          },
+          {
+            "id": "e",
+            "label": "Inline AI blocks",
+            "summary": "Questions are asked from an inline AI block at the end of any page; the chat composer is a block in the page flow rather than a docked bar."
+          }
+        ],
+        "file": "r1/notion.html",
+        "thumb": "thumbs/r1-notion.jpg"
+      },
+      "inbox": {
+        "slug": "inbox",
+        "round": 1,
+        "title": "Research inbox",
+        "influence": "Front / Missive / Superhuman / Hey (shared email inbox apps)",
+        "summary": "Every question is a Conversation that runs in the background and lands in an Inbox as “Ready to read”; queued and running ones sit in Waiting. Follow-ups are Ask replies, your own writing is a Note (the internal-comment idiom), and a passage can start a Fork. Tags, [[links]], backlinks and a Knowledge view with outline and graph replace folders, stars, bookmarks and the feed, so the first screen has one action: ask.",
+        "nouns": [
+          "Conversation",
+          "Fork",
+          "Note",
+          "Tag",
+          "Link"
+        ],
+        "variants": [
+          {
+            "id": "a",
+            "label": "Triage inbox",
+            "summary": "Three panes: mailboxes, one list per mailbox (Inbox, Waiting, Done), conversation, and a details sidebar with links and forks."
+          },
+          {
+            "id": "b",
+            "label": "Split inbox",
+            "summary": "The Inbox list is split into Ready to read, Waiting and Read sections, so running work is visible without switching mailboxes."
+          },
+          {
+            "id": "c",
+            "label": "Compose-first home",
+            "summary": "Inbox opens on a New conversation pane with suggestions from your notes, and the list has an inline quick-ask box."
+          },
+          {
+            "id": "d",
+            "label": "Notes in sidebar",
+            "summary": "No separate Knowledge view: notes and the outline open in a sidebar tab beside the conversation; the graph opens as an overlay."
+          },
+          {
+            "id": "e",
+            "label": "Compact, keyboard",
+            "summary": "Single-line rows, details sidebar closed by default, and a persistent shortcut bar for j/k, e, s, r, n, f triage."
+          }
+        ],
+        "file": "r1/inbox.html",
+        "thumb": "thumbs/r1-inbox.jpg"
+      },
+      "linear": {
+        "slug": "linear",
+        "round": 1,
+        "title": "Questions & Notes",
+        "influence": "Linear",
+        "summary": "Every investigation is a Question with one visible status (Queued, Running, Ready, Reviewed) and an agent as its assignee; sub-questions replace branches, Notes are outline documents, and Links are typed connections you can list or graph. One dense, keyboard-first list replaces the mixed chat-and-feed Home, so the first action is always the same: press C and ask.",
+        "nouns": [
+          "Question",
+          "Note",
+          "Project",
+          "Link",
+          "Agent"
+        ],
+        "variants": [
+          {
+            "id": "a",
+            "label": "List + document",
+            "summary": "Home is a status-grouped list; a question opens as a document with sub-questions and an activity log below the answer."
+          },
+          {
+            "id": "b",
+            "label": "Board home",
+            "summary": "Home is a status board (Queued, Running, Ready, Reviewed) instead of a grouped list; the question page is unchanged."
+          },
+          {
+            "id": "c",
+            "label": "Conversation page",
+            "summary": "The question page is chat-centric: question, answers, follow-ups and run events read as one timeline, with sub-questions inline as events."
+          },
+          {
+            "id": "d",
+            "label": "Peek split",
+            "summary": "Clicking a row opens a docked preview beside the list (triage-style); Enter or double-click opens the full page."
+          },
+          {
+            "id": "e",
+            "label": "Links as graph",
+            "summary": "Links render as a graph: the question sidebar shows a local mini-graph, and the Links view opens on the workspace graph."
+          }
+        ],
+        "file": "r1/linear.html",
+        "thumb": "thumbs/r1-linear.jpg"
+      }
+    },
+    "2": {}
+  }
+}
