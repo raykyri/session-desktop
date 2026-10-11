@@ -29,7 +29,7 @@
     set(k, v) { try { localStorage.setItem("sx." + k, JSON.stringify(v)); } catch { /* storage unavailable */ } },
   };
 
-  const state = { view: "mock", id: null, round: 1, variant: null, theme: null, zoom: "fit", sev: "all", src: "all" };
+  const state = { view: "mock", id: null, round: 2, variant: null, theme: null, zoom: "fit", sev: "all", src: "all" };
   let cleanup = null;
   let mountedKey = null;
   const injectedCss = new Set();
@@ -55,6 +55,10 @@
   function get(id, round) { return SM.candidates.find((c) => c.id === id && c.round === round); }
   function rounds(id) { return SM.candidates.filter((c) => c.id === id).map((c) => c.round).sort(); }
   function current() { return get(state.id, state.round) || get(state.id, rounds(state.id).slice(-1)[0]); }
+
+  function cloneData() {
+    try { return structuredClone(SM.data); } catch { return SM.data; }
+  }
 
   function effectiveTheme() {
     if (state.theme) return state.theme;
@@ -162,7 +166,7 @@
     }
     try {
       const r = c.mount(root, {
-        variant: state.variant, theme, data: SM.data, scope: c.scope,
+        variant: state.variant, theme, data: cloneData(), scope: c.scope,
         setVariant: (v) => { state.variant = v; render(); },
       });
       cleanup = typeof r === "function" ? r : r && r.unmount ? () => r.unmount() : null;
@@ -250,7 +254,7 @@
     const head = el("div", { class: "sx-head" }, el("div", { class: "sx-head-title" },
       el("span", { class: "sx-label" }, "Compilation"),
       el("h2", null, "Redesign candidates"),
-      el("p", null, SM.intro || "Each candidate redesigns Session after one reference application. Every candidate offers several variants. Round 2 is each candidate's revision after a self-review of round 1.")));
+      el("p", null, SM.intro || "Each candidate redesigns Session after one reference application. Every candidate offers several variants. Round 2 is each candidate's revision after a self-review of round 1; each round 2 lists what changed. Use the R1 / R2 switch to compare.")));
     const cards = ids().map((id) => {
       const rs = rounds(id);
       const c = get(id, rs.slice(-1)[0]);
