@@ -163,7 +163,7 @@ const store = {
 };
 
 const state = {
-  round: store.get("round", 1),
+  round: store.get("round", null),
   tab: store.get("tab", "overview"),
   theme: store.get("theme", "system"),
   notes: store.get("notes", true),
@@ -383,7 +383,8 @@ async function load() {
   readHash();
   try { const r = await fetch("manifest.json", { cache: "no-store" }); if (r.ok) state.manifest = await r.json(); } catch {}
   try { const r = await fetch("issues.json", { cache: "no-store" }); if (r.ok) state.issues = await r.json(); } catch {}
-  if (!roundAvailable(state.round)) state.round = roundAvailable(1) ? 1 : state.round;
+  // Open on the newest round unless the viewer picked one or the link names one.
+  if (state.round == null || !roundAvailable(state.round)) state.round = roundAvailable(2) ? 2 : 1;
   const n = CANDIDATES.length;
   $("#brandSub").textContent = roundAvailable(2) ? `${n} candidates · 2 rounds` : `${n} candidates · round 1`;
   render();
